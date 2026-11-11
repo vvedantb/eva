@@ -744,10 +744,11 @@
   }
 
   /*
-   * Smooth anchor scrolling for the marketing page only — `#top` is the
-   * landing page root, so in-app routes keep instant scrolling.
+   * Smooth anchor scrolling for the marketing page only — `data-landing` is
+   * set by the landing root (`markLandingRoot`), so in-app routes keep instant
+   * scrolling. Never `html:has(...)`: see `markLandingRoot` for the cost.
    */
-  html:has(#top) {
+  html[data-landing] {
     scroll-behavior: smooth;
   }
   ::selection {
@@ -823,10 +824,10 @@
    * The app has its own scroll panes and live data, so a pull past the top
    * must not reload the page (Android pull-to-refresh) or bounce the shell.
    * Y only: `x` would also turn off trackpad swipe-back on desktop. The landing
-   * page (`#top`) is a document, so it keeps both.
+   * page (`data-landing`) is a document, so it keeps both.
    */
-  html:not(:has(#top)),
-  html:not(:has(#top)) body {
+  html:not([data-landing]),
+  html:not([data-landing]) body {
     overscroll-behavior-y: none;
   }
 

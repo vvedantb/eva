@@ -85,11 +85,17 @@ interface SandboxPaneSlotsProps {
    */
   viewState: SandboxViewState | undefined;
   /**
-   * Whether this host is the one on screen. Sessions keep up to five shells
+   * Whether this host is the one on screen. Sessions keep up to three shells
    * mounted and every host may collapse its rail; only a visible host may hold the
    * idle-pause presence beacon or auto-wake. Defaults to true.
    */
   presenceEnabled?: boolean;
+  /**
+   * False while this host sits hidden in the session cache. Iframe tabs
+   * (Editor, Browser, custom tabs) unmount then to free their browser
+   * processes; they reload when the session is shown again. Defaults to true.
+   */
+  onScreen?: boolean;
   /**
    * The sandbox is closed and the host would allow a Start: no last-start
    * error, not read-only, no run or build owning it. Combined
@@ -160,6 +166,7 @@ export function SandboxPaneSlots({
   previewPortOptions,
   viewState,
   presenceEnabled = true,
+  onScreen = true,
   autoWakeEligible,
 }: SandboxPaneSlotsProps) {
   const simpleView = useSimpleView();
@@ -354,7 +361,11 @@ export function SandboxPaneSlots({
           )}
         </SandboxPaneBoundary>
       </div>
-      <KeepAlivePane active={resolvedTab === "editor"} className="h-full">
+      <KeepAlivePane
+        active={resolvedTab === "editor"}
+        discard={!onScreen}
+        className="h-full"
+      >
         <SandboxPaneBoundary label="Editor">
           <EditorPanel
             cacheKey={cacheKey}
@@ -368,6 +379,7 @@ export function SandboxPaneSlots({
       </KeepAlivePane>
       <KeepAlivePane
         active={resolvedTab === "browser" || resolvedTab === "computer"}
+        discard={!onScreen}
         className="h-full"
       >
         <SandboxPaneBoundary
@@ -404,6 +416,7 @@ export function SandboxPaneSlots({
               <KeepAlivePane
                 key={tab._id}
                 active={resolvedTab === slug}
+                discard={!onScreen}
                 className="h-full"
               >
                 <SandboxPaneBoundary label={tab.name}>
