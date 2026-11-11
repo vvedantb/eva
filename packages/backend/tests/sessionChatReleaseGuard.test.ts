@@ -42,7 +42,6 @@ async function sessionChatWithProcess(status: SessionStatus) {
       title: "Main",
       number: 1,
       isMain: true,
-      activeWorkflowId: "chat-workflow",
     });
     const processId = await ctx.db.insert("backgroundProcesses", {
       sessionId,
@@ -60,7 +59,6 @@ async function sessionChatWithProcess(status: SessionStatus) {
   const read = () =>
     t.run(async (ctx) => ({
       session: await ctx.db.get(ids.sessionId),
-      chat: await ctx.db.get(ids.chatId),
       process: await ctx.db.get(ids.processId),
     }));
   return { release, read };
@@ -76,7 +74,6 @@ describe("session chat release", () => {
       expect(rows.session?.status).toBe("closed");
       expect(rows.process?.status).toBe("exited");
       expect(rows.process?.exitedAt).toBeTypeOf("number");
-      expect(rows.chat?.activeWorkflowId).toBeUndefined();
     },
     TIMEOUT_MS,
   );
@@ -90,8 +87,6 @@ describe("session chat release", () => {
         const rows = await read();
         expect(rows.session?.status, status).toBe(status);
         expect(rows.process?.status, status).toBe("running");
-        // The chat's own turn slot is still released.
-        expect(rows.chat?.activeWorkflowId, status).toBeUndefined();
       }
     },
     TIMEOUT_MS,

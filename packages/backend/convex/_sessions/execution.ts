@@ -37,6 +37,10 @@ import { cancelChatTurn } from "../_chat/cancelRace";
 import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 import { touchUserActivity } from "../_sandbox/activity";
 import { bindTurnWorkflow, openSessionChatTurn } from "../_chat/turnStore";
+import {
+  hasOpenChatTurn,
+  openTurnWorkflowId,
+} from "../_chat/turnProjection";
 import { emptyStallRetryPrompt } from "../_chat/stallRetry";
 import {
   getSessionChatOrThrow,
@@ -261,7 +265,7 @@ export const retryEmptyStalledSessionTurn = internalMutation({
     const lastUserContent = await emptyStallRetryPrompt(ctx.db, {
       parentId: chat._id,
       sandboxStopped: args.sandboxStopped,
-      hasActiveWorkflow: chat.activeWorkflowId !== undefined,
+      hasActiveWorkflow: await hasOpenChatTurn(ctx.db, chat._id),
     });
     if (lastUserContent === null) return null;
 
@@ -315,7 +319,7 @@ export const retryLastTurnWithAccount = authMutation({
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
     if (
-      chat.activeWorkflowId !== undefined ||
+      (await hasOpenChatTurn(ctx.db, chat._id)) ||
       chat.pendingTurn !== undefined
     ) {
       throw new Error("A turn is already running");
@@ -417,7 +421,8 @@ export const startExecute = authMutation({
     // burst of sends can all reach here before the composer sees the first
     // turn, and starting each one ran two turns at once.
     const chatBusy =
-      chat.activeWorkflowId !== undefined || chat.pendingTurn !== undefined;
+      (await hasOpenChatTurn(ctx.db, chat._id)) ||
+      chat.pendingTurn !== undefined;
     if (chatBusy || !(await sessionChatHasFreeSlot(ctx.db, context))) {
       await enqueueChatMessage(ctx, {
         context,
@@ -683,7 +688,7 @@ export async function cancelChatExecution(
   const cancelled = await cancelChatTurn(ctx, {
     id: chat._id,
     entity: chat,
-    activeWorkflowId: (c) => c.activeWorkflowId,
+    activeWorkflowId: () => openTurnWorkflowId(ctx, chat._id),
     streamingEntityId: sessionChatStreamingEntityId(chat._id),
     interrupt: async () => {
       if (usesChatDaemon(normalizeAIModel(chat.lastModel))) {
@@ -702,12 +707,10 @@ export async function cancelChatExecution(
   if (!cancelled) return;
 
   const chatPatch: {
-    activeWorkflowId?: undefined;
     pendingTurn?: undefined;
     syntheticTurnMessageId?: undefined;
     updatedAt: number;
   } = { updatedAt: Date.now() };
-  if (cancelled.clearsWorkflow) chatPatch.activeWorkflowId = undefined;
   if (cancelled.clearsPendingTurn) chatPatch.pendingTurn = undefined;
   if (cancelled.cancelOwnsCurrentTurn) {
     chatPatch.syntheticTurnMessageId = undefined;

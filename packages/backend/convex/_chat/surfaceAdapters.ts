@@ -1,5 +1,10 @@
 import type { Doc, Id } from "../_generated/dataModel";
-import type { DatabaseReader, MutationCtx } from "../_generated/server";
+import type {
+  DatabaseReader,
+  MutationCtx,
+  QueryCtx,
+} from "../_generated/server";
+import { openTurnWorkflowId } from "./turnProjection";
 import { internal } from "../_generated/api";
 import {
   getAIModelProvider,
@@ -63,7 +68,11 @@ export type ChatSurfaceAdapter<TId extends ChatEntityId, TEntity> = {
   /** This surface's id when `raw` names a row of its table, else null. */
   parseId: (db: DatabaseReader, raw: string) => TId | null;
   getEntity: (ctx: MutationCtx, id: TId) => Promise<TEntity | null>;
-  activeWorkflowId: (entity: TEntity) => string | undefined;
+  /** The workflow running the entity's chat turn (a session chat reads its open turn). */
+  activeWorkflowId: (
+    entity: TEntity,
+    ctx: QueryCtx,
+  ) => string | undefined | Promise<string | undefined>;
   /** Entity id used for the turn's own streamingActivity row. */
   streamingEntityId: (id: TId) => string;
   /** Inverse of `streamingEntityId`: null when the row is not this surface's turn row. */
@@ -139,7 +148,7 @@ const sessionChatAdapter: ChatSurfaceAdapter<
   idLogLabel: "chatId",
   parseId: (db, raw) => db.normalizeId("sessionChats", raw),
   getEntity: (ctx, id) => loadSessionChat(ctx.db, id),
-  activeWorkflowId: ({ chat }) => chat.activeWorkflowId,
+  activeWorkflowId: ({ chat }, ctx) => openTurnWorkflowId(ctx, chat._id),
   streamingEntityId: (id) => sessionChatStreamingEntityId(id),
   parseStreamingEntityId: (db, streamingEntityId) =>
     db.normalizeId("sessionChats", streamingEntityId),
@@ -174,7 +183,6 @@ const sessionChatAdapter: ChatSurfaceAdapter<
     // opens turns no daemon can claim and stalls each one out forever.
     // Cleared before `drainQueue` restages the next message.
     await ctx.db.patch(id, {
-      activeWorkflowId: undefined,
       syntheticTurnMessageId: undefined,
       pendingTurn: undefined,
       updatedAt: Date.now(),
@@ -492,8 +500,10 @@ export function turnAdapterForEntity<R>(
 }
 
 /**
- * Records a workflow as the active workflow for a session chat and schedules
- * the 2-hour backstop. The turn lease (`turns.reconcile`) is the stall check.
+ * Schedules the 2-hour backstop for a session chat workflow. The caller has
+ * already bound the workflow to the chat's open turn (`bindTurnWorkflow`):
+ * that turn is the only record of it. The turn lease (`turns.reconcile`) is
+ * the stall check.
  */
 export async function trackSessionChatWorkflow(
   ctx: MutationCtx,
@@ -501,19 +511,17 @@ export async function trackSessionChatWorkflow(
   workflowId: WorkflowId,
   timeoutMs: number = RUN_TIMEOUT_MS,
 ): Promise<void> {
-  const id = String(workflowId);
-  await ctx.db.patch(chatId, { activeWorkflowId: id });
   await ctx.scheduler.runAfter(
     timeoutMs,
     internal.workflowWatchdog.handleStaleSessionChat,
-    { chatId, workflowId: id },
+    { chatId, workflowId: String(workflowId) },
   );
 }
 
 /**
- * Records a session-level workflow (the summary) as the session's active
- * workflow and schedules the 2-hour backstop. Chat turns track on their chat
- * (`trackSessionChatWorkflow`); this slot is only for work on the session row.
+ * Schedules the 2-hour backstop for a session-level workflow (the summary).
+ * The session row keeps no workflow slot: the summary's lane turn holds the
+ * id once the agent launches, and the backstop asks the workflow itself.
  */
 export async function trackSessionWorkflow(
   ctx: MutationCtx,
@@ -522,7 +530,6 @@ export async function trackSessionWorkflow(
   timeoutMs: number = RUN_TIMEOUT_MS,
 ): Promise<void> {
   const id = String(workflowId);
-  await ctx.db.patch(sessionId, { activeWorkflowId: id });
   await ctx.scheduler.runAfter(
     timeoutMs,
     internal.workflowWatchdog.handleStaleSession,

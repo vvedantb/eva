@@ -3,7 +3,10 @@ import { type MutationCtx, internalMutation } from "./_generated/server";
 import { type WorkflowId } from "@convex-dev/workflow";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
-import { cancelTrackedWorkflow } from "./workflowManager";
+import {
+  cancelTrackedWorkflow,
+  isTrackedWorkflowRunning,
+} from "./workflowManager";
 import { RUN_TIMEOUT_MS } from "./_taskWorkflow/staleness";
 import { scheduleArenaCheckCompletion } from "./_arena/browserRun";
 import {
@@ -143,7 +146,7 @@ export const handleStaleSession = internalMutation({
 /**
  * Tears down a session-level workflow (the summary — chat turns live on their
  * chat) the 2-hour backstop or the lease reconciler gave up on. No-op once
- * the session tracks another workflow. The alert lands in the Main chat.
+ * that workflow has ended. The alert lands in the Main chat.
  */
 export async function tearDownStaleSessionWorkflow(
   ctx: MutationCtx,
@@ -152,7 +155,7 @@ export async function tearDownStaleSessionWorkflow(
   alert: ChatAlert,
 ): Promise<void> {
   const session = await ctx.db.get(sessionId);
-  if (!session || session.activeWorkflowId !== workflowId) return;
+  if (!session || !(await isTrackedWorkflowRunning(ctx, workflowId))) return;
   await cancelStaleWorkflow(ctx, workflowId, [
     sessionSummaryStreamingEntityId(sessionId),
   ]);
@@ -165,10 +168,7 @@ export async function tearDownStaleSessionWorkflow(
     isSystemAlert: true,
     ...(alert.detail !== undefined ? { errorDetail: alert.detail } : {}),
   });
-  await ctx.db.patch(sessionId, {
-    activeWorkflowId: undefined,
-    updatedAt: Date.now(),
-  });
+  await ctx.db.patch(sessionId, { updatedAt: Date.now() });
 }
 
 /** Cancels a stale session chat workflow and starts the next queued message. */
@@ -182,7 +182,8 @@ export const handleStaleSessionChat = internalMutation({
     const context = await sessionChatAdapter.getEntity(ctx, args.chatId);
     if (
       !context ||
-      sessionChatAdapter.activeWorkflowId(context) !== args.workflowId
+      (await sessionChatAdapter.activeWorkflowId(context, ctx)) !==
+        args.workflowId
     ) {
       return null;
     }
@@ -317,7 +318,8 @@ export const handleStaleProjectChat = internalMutation({
     const project = await projectChatAdapter.getEntity(ctx, args.projectId);
     if (
       !project ||
-      projectChatAdapter.activeWorkflowId(project) !== args.workflowId
+      (await projectChatAdapter.activeWorkflowId(project, ctx)) !==
+        args.workflowId
     )
       return null;
 
@@ -345,7 +347,10 @@ export const handleStaleAgentTaskChat = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const task = await taskChatAdapter.getEntity(ctx, args.taskId);
-    if (!task || taskChatAdapter.activeWorkflowId(task) !== args.workflowId)
+    if (
+      !task ||
+      (await taskChatAdapter.activeWorkflowId(task, ctx)) !== args.workflowId
+    )
       return null;
 
     await finalizeStaleChatTurn(
