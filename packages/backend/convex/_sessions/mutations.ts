@@ -37,6 +37,7 @@ import {
   reopenArchivedPullRequests,
 } from "../_pullRequests/store";
 import { composerTraitFields } from "../_shared/composerTraits";
+import { buildSessionBranchName } from "../_git/branchNames";
 import {
   assertValidRepoGroupMembers,
   getRepoGroupForSession,
@@ -199,7 +200,7 @@ export async function createSession(
         }
       : {}),
   });
-  const branchName = `eva/session-${sessionId}`;
+  const branchName = buildSessionBranchName(sessionId);
   await ctx.db.patch(sessionId, { branchName });
   const created = await ctx.db.get(sessionId);
   if (!created) throw new Error("Session was not created");

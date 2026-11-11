@@ -7,7 +7,12 @@ import type {
   prStateValidator,
 } from "../validators";
 import type { SandboxOwner } from "../_sandbox/owner";
-import { buildProjectBranchName } from "../_git/branchNames";
+import {
+  buildProjectBranchName,
+  buildSessionBranchName,
+  buildTaskBranchName,
+  EVA_BRANCH_PREFIX,
+} from "../_git/branchNames";
 import { extractPrNumber } from "../_github/prUrl";
 import {
   schedulePrLifecycleActions,
@@ -447,7 +452,9 @@ export async function clearArchivedPrStates(
  * Convex ids never contain a hyphen, so the first hyphen ends the id; the
  * caller still validates it with `normalizeId`.
  */
-const EVA_OWNER_BRANCH = /^eva\/(session|task|project)-([^-/]+)(-.+)?$/;
+const EVA_OWNER_BRANCH = new RegExp(
+  `^${EVA_BRANCH_PREFIX}(session|task|project)-([^-/]+)(-.+)?$`,
+);
 
 export function parseEvaOwnerBranch(
   branch: string,
@@ -496,7 +503,7 @@ export async function resolvePrOwnerFromBranch(
     const sessionId = db.normalizeId("sessions", parsed.id);
     const session = sessionId ? await db.get(sessionId) : null;
     if (!session) return null;
-    const mainBranch = session.branchName ?? `eva/session-${session._id}`;
+    const mainBranch = session.branchName ?? buildSessionBranchName(session._id);
     const isMainBranch = args.branch === mainBranch;
     if (await repoMatches(db, session.repoId, repo)) {
       return {
@@ -537,7 +544,7 @@ export async function resolvePrOwnerFromBranch(
     return {
       owner: { kind: "task", taskId: task._id },
       repoId: task.repoId,
-      isMainBranch: args.branch === `eva/task-${task._id}`,
+      isMainBranch: args.branch === buildTaskBranchName(task._id),
     };
   }
 

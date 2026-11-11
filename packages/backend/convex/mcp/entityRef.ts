@@ -3,7 +3,7 @@ import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
-import { repoBasePath } from "../_githubRepos/helpers";
+import { entityHref } from "@eva/shared";
 import { canonicalPrUrl } from "./sessionRef";
 import {
   matchRepoByName,
@@ -19,13 +19,6 @@ import {
 /** The three chat surfaces an MCP caller can name. */
 export const ENTITY_KINDS = ["session", "task", "project"] as const;
 export type EntityKind = (typeof ENTITY_KINDS)[number];
-
-/** Eva url segment for each surface, for the path echoed back to the caller. */
-export const ENTITY_PATH_SEGMENT: Record<EntityKind, string> = {
-  session: "sessions",
-  task: "quick-tasks",
-  project: "projects",
-};
 
 /**
  * Repo selector shared by the repo-scoped tools. `repoId` is the normal path;
@@ -126,12 +119,15 @@ export interface EntityLocation {
 /** The `owner/name/sessions/42` path a caller can open in Eva, when numbered. */
 export function entityPath(location: EntityLocation): string | undefined {
   if (location.numId === undefined) return undefined;
-  const basePath = repoBasePath({
-    owner: location.repoOwner,
-    name: location.repoName,
-    rootDirectory: location.repoRootDirectory,
-  });
-  return `${basePath}/${ENTITY_PATH_SEGMENT[location.kind]}/${location.numId}`;
+  return entityHref(
+    location.kind,
+    {
+      owner: location.repoOwner,
+      name: location.repoName,
+      rootDirectory: location.repoRootDirectory,
+    },
+    location.numId,
+  );
 }
 
 /**

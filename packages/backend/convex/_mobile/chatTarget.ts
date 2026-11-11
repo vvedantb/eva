@@ -6,7 +6,7 @@ import {
   loadSessionChat,
   type SessionChatContext,
 } from "../_sessionChats/helpers";
-import { getRepoHref } from "../notifications";
+import { entityHref, repoBasePath } from "@eva/shared";
 import { storedComposerTraits } from "../_shared/composerTraits";
 import { aiModelValidator, reasoningLevelValidator } from "../validators";
 
@@ -110,7 +110,7 @@ export function repoLabel(repo: Doc<"githubRepos">): string {
 
 /** A session's page on the web app (its Main chat), as the web sidebar row links it. */
 export function sessionWebPath(repo: Doc<"githubRepos">, session: Doc<"sessions">): string {
-  return `${getRepoHref(repo.owner, repo.name, repo.rootDirectory)}/sessions/${session.numId ?? ""}`;
+  return entityHref("session", repo, session.numId);
 }
 
 /**
@@ -166,7 +166,7 @@ export async function resolveMobileChat(
     const repoId = task?.repoId ?? project?.repoId;
     const repo = repoId ? await db.get(repoId) : null;
     if (!task || !repo) return null;
-    const base = getRepoHref(repo.owner, repo.name, repo.rootDirectory);
+    const base = repoBasePath(repo);
     const sandboxActive = task.reviewTaskSandboxStatus === "active";
     return {
       repoId: repo._id,
@@ -190,7 +190,7 @@ export async function resolveMobileChat(
         webPath:
           project?.numId !== undefined
             ? `${base}/projects/${project.numId}/${task.numId ?? ""}/activity`
-            : `${base}/quick-tasks/${task.numId ?? ""}`,
+            : entityHref("task", repo, task.numId),
       },
     };
   }
@@ -220,7 +220,7 @@ export async function resolveMobileChat(
         sandboxBranch: sandboxActive ? project.sandboxBranch : undefined,
         intendedBranch: project.branchName,
         prUrl: project.prUrl,
-        webPath: `${getRepoHref(repo.owner, repo.name, repo.rootDirectory)}/projects/${project.numId ?? ""}`,
+        webPath: entityHref("project", repo, project.numId),
       },
     };
   }

@@ -26,7 +26,8 @@ import {
   buildChangelogEmailHtml,
 } from "../emailTemplates";
 import { authMutation, authQuery } from "../functions";
-import { createNotification, getRepoHref } from "../notifications";
+import { createNotification } from "../notifications";
+import { repoBasePath } from "@eva/shared";
 import { findChangelogAutomation } from "../changelog";
 import {
   collectEmailRecipients,
@@ -167,7 +168,7 @@ export async function queueRunEmail(
     repoId: automation.repoId,
     href:
       repo && automation.numId !== undefined
-        ? `${getRepoHref(repo.owner, repo.name, repo.rootDirectory)}/automations/${automation.numId}/latest`
+        ? `${repoBasePath(repo)}/automations/${automation.numId}/latest`
         : undefined,
   });
 }
