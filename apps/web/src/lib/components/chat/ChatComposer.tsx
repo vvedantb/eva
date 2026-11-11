@@ -189,7 +189,10 @@ export function ChatComposer({
   // The composer's text lives inside PromptInput; the readiness verdict is
   // keyed by the exact text it judged, so the last draft is mirrored here.
   const [draftText, setDraftText] = useState("");
-  const readinessResult = readiness.resultFor(draftText);
+  // A follow-up leans on the thread above it, so "too vague" is a false
+  // alarm there. Only the opening message of a chat is judged.
+  const judgesDraft = messageHistory.length === 0;
+  const readinessResult = judgesDraft ? readiness.resultFor(draftText) : null;
   const {
     updateQueuedMessage,
     deleteQueuedMessage,
@@ -372,7 +375,7 @@ export function ChatComposer({
       onDraftChange={(text) => {
         suggestions.noteDraft(text);
         setDraftText(text);
-        readiness.noteChange(text);
+        if (judgesDraft) readiness.noteChange(text);
       }}
     />
   );

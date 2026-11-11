@@ -9,6 +9,7 @@ import {
 import { IconSparkles } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import type { SlashItem } from "@/lib/components/mentions";
+import { COMPOSER_CHIP_CLASS } from "../composerChip";
 
 /**
  * Skills Eva thinks fit the draft, offered as chips on the composer's top
@@ -38,7 +39,7 @@ export function SkillSuggestionChips({
                 transition={tokenTransition.fast}
                 onClick={() => onPick(chip)}
                 aria-label={`Add /${chip.label} to your message`}
-                className="max-sm:hit-target mb-2 inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs text-foreground hover:bg-muted"
+                className={COMPOSER_CHIP_CLASS}
               >
                 <IconSparkles size={14} className="shrink-0 text-primary" />
                 <span className="truncate">{chip.label}</span>
