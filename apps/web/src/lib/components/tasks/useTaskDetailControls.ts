@@ -251,10 +251,28 @@ export function useTaskSandboxControls({
     const { sessionId } = await taskSession.ensure();
     return await stopSessionSandbox({ sessionId });
   };
-  const runDevServerMutation = useMutation(api.agentTasks.runDevServer);
-  const runBackgroundCommandsMutation = useMutation(
+  const runTaskDevServer = useMutation(api.agentTasks.runDevServer);
+  const runTaskBackgroundCommands = useMutation(
     api.agentTasks.runBackgroundCommands,
   );
+  const runSessionDevServer = useMutation(api.sessions.runDevServer);
+  const runSessionBackgroundCommands = useMutation(
+    api.sessions.runBackgroundCommands,
+  );
+  // A quick task's sandbox is its session's; a running one implies the
+  // session exists, so `ensure` only reads it.
+  const runDevServerMutation = async () => {
+    if (!taskSession.isQuickTask) return await runTaskDevServer({ taskId });
+    const { sessionId } = await taskSession.ensure();
+    return await runSessionDevServer({ sessionId });
+  };
+  const runBackgroundCommandsMutation = async () => {
+    if (!taskSession.isQuickTask) {
+      return await runTaskBackgroundCommands({ taskId });
+    }
+    const { sessionId } = await taskSession.ensure();
+    return await runSessionBackgroundCommands({ sessionId });
+  };
 
   const [embeddedShowSandbox, setEmbeddedShowSandbox] = useState(false);
   const lifecycle = useSandboxLifecycle(sandbox.status);
@@ -303,7 +321,7 @@ export function useTaskSandboxControls({
   const handleRunDevServer = async () => {
     setIsRunningDevServer(true);
     try {
-      await runDevServerMutation({ taskId });
+      await runDevServerMutation();
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to run dev server";
@@ -315,7 +333,7 @@ export function useTaskSandboxControls({
   const handleRunBackgroundCommands = async () => {
     setIsRunningBackgroundCommands(true);
     try {
-      await runBackgroundCommandsMutation({ taskId });
+      await runBackgroundCommandsMutation();
     } catch (err) {
       const message =
         err instanceof Error
