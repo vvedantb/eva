@@ -15,6 +15,7 @@ import { recordPullRequest } from "./_pullRequests/store";
 import { recordRunPullRequest } from "./_taskWorkflow/helpers";
 import { pruneSettledBackgroundAgents } from "./_sessions/backgroundAgents";
 import type { BackgroundAgentEntry } from "./_validators/tableFields";
+import { migrateQuickTaskToSession } from "./_migrations/quickTaskChatsToSessions";
 
 /**
  * Convex Migrations component — batched online migrations with progress,
@@ -382,5 +383,26 @@ export const backfillSessionOwner = dataMigrations.define({
   migrateOne: (_ctx, session) => {
     if (session.owner !== undefined) return;
     return { owner: STANDALONE_SESSION_OWNER };
+  },
+});
+
+/**
+ * PR 1b: moves every quick task (no `projectId`) onto its owned session —
+ * sandbox fields, Main chat model/traits/transcript seed, transcript rows —
+ * and archives the session of a done/cancelled/deleted task. See
+ * `_migrations/quickTaskChatsToSessions.ts`. Skips a task mid-turn, mid-run,
+ * with a queued message or a starting/stopping sandbox (logged
+ * `[quickTaskMigration] skipped`). Idempotent: rerun with `{reset: true}`
+ * until `migrations:quickTaskChatsLeft` reports 0 left.
+ *
+ * `npx convex run --prod dataMigrations:migrateQuickTaskChatsToSessions '{dryRun: true}'`
+ * `npx convex run --prod dataMigrations:migrateQuickTaskChatsToSessions`
+ */
+export const migrateQuickTaskChatsToSessions = dataMigrations.define({
+  table: "agentTasks",
+  // Each task may move a transcript page (up to 2 MiB) and insert a session.
+  batchSize: 10,
+  migrateOne: async (ctx, task) => {
+    await migrateQuickTaskToSession(ctx, task);
   },
 });

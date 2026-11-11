@@ -552,8 +552,11 @@ export const sessionChatFields = {
   lastFastMode: v.optional(v.boolean()),
   // A Main chat backfilled from an existing session keeps the session id as
   // its provider-transcript seed so it resumes the conversation Claude
-  // already holds instead of starting cold. New chats hash their own id.
-  claudePersistenceSeed: v.optional(v.id("sessions")),
+  // already holds instead of starting cold; a quick task's Main chat keeps the
+  // task id its old task chat ran under. New chats hash their own id.
+  claudePersistenceSeed: v.optional(
+    v.union(v.id("sessions"), v.id("agentTasks")),
+  ),
   ...chatDaemonEntityFields,
 };
 
@@ -717,6 +720,12 @@ export const agentRunFields = {
   // media on — it renders as the quick task's first chat turn or as a timeline
   // row, both built from this doc — so the ids live here instead.
   mediaStorageIds: v.optional(v.array(v.id("_storage"))),
+  /**
+   * The start attempt a quick task run's claim took on its session
+   * (`sessions.claimSandboxForTaskRun`), so a cancel before the attach can
+   * fail exactly that start. Absent when the run reused an active session.
+   */
+  sessionStartAttempt: v.optional(v.number()),
 };
 
 export const sessionFields = {

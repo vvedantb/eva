@@ -50,6 +50,7 @@ import {
 import { findOpenChatQuestion } from "../pendingQuestions";
 import { requestSessionSandboxStart } from "../_sessions/sandbox";
 import { buildSessionPrompt } from "../_sessions/sessionPrompt";
+import { sessionOwnerTaskId } from "../_sessions/owner";
 import {
   buildDaemonPendingTurn,
   scheduleChatDaemonPrewarm,
@@ -197,13 +198,15 @@ type ChatQueueConfig<TId extends ChatQueueId, TEntity, TPrepared> = {
   /**
    * The wake-up payload for the master session watching this entity, or
    * `undefined` when it is unwatched (or when the surface cannot be watched at
-   * all). Read off the already-loaded entity, so the shared core below pays no
-   * extra read and never has to guess a field name per surface.
+   * all). Read off the already-loaded entity, so the shared core below never
+   * has to guess a field name per surface. A task's session reads its task,
+   * which holds the watch.
    */
   orchestratorNotifyChild: (
+    ctx: MutationCtx,
     entity: TEntity,
     id: TId,
-  ) => OrchestratorNotifyChild | undefined;
+  ) => Promise<OrchestratorNotifyChild | undefined>;
   defaultStartErrorMessage: string;
 };
 
@@ -416,7 +419,7 @@ async function startNextQueuedChatMessage<
    */
   const watchedChild =
     trigger === "turn-ended"
-      ? config.orchestratorNotifyChild(entity, id)
+      ? await config.orchestratorNotifyChild(ctx, entity, id)
       : undefined;
   async function notifyWatchingOrchestrator(status: string): Promise<void> {
     if (!watchedChild) return;
@@ -785,10 +788,19 @@ const sessionChatQueueConfig: ChatQueueConfig<
     });
     await ctx.db.patch(id, { updatedAt: Date.now() });
   },
-  orchestratorNotifyChild: ({ session }, id) =>
-    session.watchedByAve === undefined
+  orchestratorNotifyChild: async (ctx, { session }, id) => {
+    // A task's session reports as its task: the watch lives on the task.
+    const ownerTaskId = sessionOwnerTaskId(session);
+    if (ownerTaskId) {
+      const task = await ctx.db.get(ownerTaskId);
+      return task?.watchedByAve === undefined
+        ? undefined
+        : { kind: "task", taskId: ownerTaskId };
+    }
+    return session.watchedByAve === undefined
       ? undefined
-      : { kind: "session", sessionId: session._id, chatId: id },
+      : { kind: "session", sessionId: session._id, chatId: id };
+  },
   defaultStartErrorMessage: "Failed to start queued message.",
 };
 
@@ -900,7 +912,7 @@ const projectChatQueueConfig: ChatQueueConfig<
     });
     await ctx.db.patch(id, { updatedAt: Date.now() });
   },
-  orchestratorNotifyChild: (project, id) =>
+  orchestratorNotifyChild: async (_ctx, project, id) =>
     project.watchedByAve === undefined
       ? undefined
       : { kind: "project", projectId: id },
@@ -1018,7 +1030,7 @@ const taskChatQueueConfig: ChatQueueConfig<
     });
     await ctx.db.patch(id, { updatedAt: Date.now() });
   },
-  orchestratorNotifyChild: (task, id) =>
+  orchestratorNotifyChild: async (_ctx, task, id) =>
     task.watchedByAve === undefined ? undefined : { kind: "task", taskId: id },
   defaultStartErrorMessage: "Failed to start queued chat message.",
 };

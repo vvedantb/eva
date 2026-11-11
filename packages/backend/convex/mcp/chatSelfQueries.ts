@@ -12,6 +12,7 @@ import {
 import { slugifyAppTabName } from "@eva/shared/appTabSlug";
 import { previewConsoleSessionName } from "../_pty/consoleSessionName";
 import { sandboxOwnerKey } from "@eva/shared";
+import { findQuickTaskSession } from "../_sessions/ownedSession";
 
 // Backs the chat-self MCP tools (chatSelfTools.ts). Internal on purpose: the
 // tool has already resolved the chat through `resolveEntityTarget`, which is
@@ -89,15 +90,23 @@ async function ownerFields(
     const taskId = ctx.db.normalizeId("agentTasks", id);
     const task = taskId ? await ctx.db.get(taskId) : null;
     if (!task) return null;
+    // A quick task's sandbox (preview port, path, owner key) is its
+    // session's; its PRs stay the task's.
+    const session = await findQuickTaskSession(ctx.db, task);
+    const sandbox = session ?? task;
     return {
       owner: { kind: "task", taskId: task._id },
-      ownerKey: sandboxOwnerKey({ kind: "task", taskId: task._id }),
+      ownerKey: sandboxOwnerKey(
+        session
+          ? { kind: "session", sessionId: session._id }
+          : { kind: "task", taskId: task._id },
+      ),
       baseBranch: task.baseBranch,
       prUrl: await taskPrUrl(ctx.db, task),
       prState: task.prState,
-      devPort: task.devPort,
-      devCommand: task.devCommand,
-      previewPath: task.previewPath,
+      devPort: sandbox.devPort,
+      devCommand: sandbox.devCommand,
+      previewPath: sandbox.previewPath,
     };
   }
   const projectId = ctx.db.normalizeId("projects", id);

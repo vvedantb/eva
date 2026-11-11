@@ -36,6 +36,9 @@ import {
   useAvailableAiModels,
   useTaskOwnerProviderAccounts,
 } from "@/lib/hooks/useAvailableAiModels";
+import { useChatModel } from "@/lib/hooks/useChatModel";
+import { useSessionTurnPorts } from "@/routes/_repo/$owner/$repo/sessions/_components/useSessionTurnPorts";
+import { useTaskSession, type TaskSession } from "./useTaskSession";
 
 type TaskChatTask = FunctionReturnType<typeof api.agentTasks.get> | undefined;
 type TaskChatRun =
@@ -51,19 +54,122 @@ export function TaskSandboxChatPanel({
 }
 
 /**
- * The task side of the sandbox chat. Model, account and traits stay on the
- * task doc (shared with the activity composer); traits are sticky on Convex
- * like sessions. A quick task also brings its first run as the opening turn.
+ * The task side of the sandbox chat. A quick task chats in its owned session's
+ * Main chat, whose own sticky model, traits and account drive the composer;
+ * its first run shows as the opening turn. A project task keeps its task-row
+ * chat. Both variants bind their hooks up front; hooks cannot be conditional.
  */
 export function useTaskChatBinding(
   taskId: Id<"agentTasks">,
 ): SandboxChatBinding {
-  const { repo } = useRepo();
   const task = useQuery(api.agentTasks.get, { id: taskId });
+  const taskSession = useTaskSession(taskId, task);
   const firstRun = useTaskFirstRunChatTurn(taskId, task);
+  const accounts = useTaskOwnerProviderAccounts(taskId);
+  const currentUserId = useQuery(api.auth.me);
+  const isOwner =
+    currentUserId !== undefined &&
+    task?.createdBy !== undefined &&
+    currentUserId === task.createdBy;
+  const common = {
+    firstRun,
+    accounts: accounts.options,
+    pickerAccounts: accounts.options,
+    resolveAccountId: accounts.resolveId,
+    isOwner,
+  };
+  const sessionBinding = useTaskSessionChatBinding({
+    taskId,
+    task,
+    taskSession,
+    common,
+  });
+  const rowBinding = useTaskRowChatBinding({ taskId, task, common });
+  return taskSession.isQuickTask ? sessionBinding : rowBinding;
+}
 
-  const { options: accounts, resolveId: resolveAccountId } =
-    useTaskOwnerProviderAccounts(taskId);
+type BindingCommon = Pick<
+  SandboxChatBinding,
+  "accounts" | "pickerAccounts" | "resolveAccountId" | "isOwner"
+> & { firstRun: NonNullable<SandboxChatBinding["firstRun"]> };
+
+/** A quick task: its owned session's Main chat (created on first need). */
+function useTaskSessionChatBinding({
+  taskId,
+  task,
+  taskSession,
+  common,
+}: {
+  taskId: Id<"agentTasks">;
+  task: TaskChatTask;
+  taskSession: TaskSession;
+  common: BindingCommon;
+}): SandboxChatBinding {
+  const { repo } = useRepo();
+  const { owned, session, chatSource } = taskSession;
+  // Before the session exists, the same seed `ensureOwned` gives its chat.
+  const chatModel = useChatModel(
+    chatSource,
+    normalizeAIModel(
+      task?.lastChatModel ?? task?.model ?? repo.defaultModel ?? DEFAULT_AI_MODEL,
+    ),
+  );
+  const ports = useSessionTurnPorts(chatSource, common.accounts);
+  const cancelChat = useMutation(api.sessionWorkflow.cancelExecution);
+  // The first run is its own workflow, not a chat turn, so Stop has to reach
+  // the task workflow while it owns the bubble.
+  const cancelFirstRun = useMutation(api.taskWorkflow.cancelExecution);
+  const { model, chat } = chatModel;
+  const { options: modelOptions } = useAvailableAiModels(repo._id, model);
+
+  return {
+    ...common,
+    // No session yet means no transcript yet: the task keys read empty.
+    entity: owned
+      ? { kind: "session", sessionId: owned.sessionId, chatId: owned.chatId }
+      : { kind: "task", taskId },
+    doc: task && {
+      title: task.title,
+      sandboxBranch: session?.sandboxBranch,
+      backgroundAgents: chat?.backgroundAgents,
+      goal: chat?.goal,
+      providerAccountId: chat?.providerAccountId,
+    },
+    intendedBranch: session?.branchName,
+    model,
+    setModel: chatModel.setModel,
+    modelOptions,
+    displayTraits: resolveTraitsForDisplay(model, chatModel.traits),
+    executionTraits: buildTraitsExecutionPayload(model, chatModel.traits),
+    onTraitsChange: chatModel.setTraits,
+    providerAccountId: chatModel.providerAccountId ?? null,
+    persistAccount: chatModel.persistProviderAccountId,
+    prewarm: chatModel.prewarm,
+    ports,
+    cancel: () =>
+      common.firstRun.isInProgress
+        ? cancelFirstRun({ taskId })
+        : owned
+          ? cancelChat({ chatId: owned.chatId })
+          : Promise.resolve(null),
+  };
+}
+
+/**
+ * A project task: model, account and traits stay on the task doc (shared with
+ * the activity composer); traits are sticky on Convex like sessions.
+ */
+function useTaskRowChatBinding({
+  taskId,
+  task,
+  common,
+}: {
+  taskId: Id<"agentTasks">;
+  task: TaskChatTask;
+  common: BindingCommon;
+}): SandboxChatBinding {
+  const { repo } = useRepo();
+  const { accounts, firstRun } = common;
   const addMessage = useMutation(
     api.agentTaskChatWorkflow.addMessage,
   ).withOptimisticUpdate((localStore, args) =>
@@ -101,13 +207,9 @@ export function useTaskChatBinding(
   );
   const storedTraits: StoredModelTraits = storedComposerTraits(task);
   const { options: modelOptions } = useAvailableAiModels(repo._id, model);
-  const currentUserId = useQuery(api.auth.me);
-  const isOwner =
-    currentUserId !== undefined &&
-    task?.createdBy !== undefined &&
-    currentUserId === task.createdBy;
 
   return {
+    ...common,
     entity: { kind: "task", taskId },
     doc: task,
     model,
@@ -121,10 +223,6 @@ export function useTaskChatBinding(
       void setTraits({ id: taskId, ...toRunTraitArgs(partial) });
     },
     providerAccountId: task?.providerAccountId ?? null,
-    accounts,
-    pickerAccounts: accounts,
-    resolveAccountId,
-    isOwner,
     persistAccount: (providerAccountId) =>
       updateTask({ id: taskId, providerAccountId }),
     prewarm: () => prewarmChatDaemonNow({ taskId }),
@@ -137,7 +235,6 @@ export function useTaskChatBinding(
       firstRun.isInProgress
         ? cancelFirstRun({ taskId })
         : cancelExecution({ taskId }),
-    firstRun,
   };
 }
 

@@ -70,6 +70,8 @@ export const getTaskData = internalQuery({
     repoId: v.id("githubRepos"),
     runId: v.id("agentRuns"),
     projectId: v.optional(v.id("projects")),
+    /** A quick task's session: its sandbox is the one the run reuses. */
+    ownedSessionId: v.optional(v.id("sessions")),
     branchName: v.optional(v.string()),
     mode: v.optional(runModeValidator),
   },
@@ -156,11 +158,13 @@ export const getTaskData = internalQuery({
       task.description ?? undefined,
     );
 
-    // Non-project (quick) tasks persist their sandbox on the task itself so
-    // change-request / resolve_conflicts runs reuse the same paused filesystem.
-    const taskSandboxId = args.projectId ? undefined : task.sandboxId;
+    // A run from before tasks had sessions reuses the task's own paused
+    // filesystem. A run on a session claims the session's sandbox itself
+    // (`sessions.claimSandboxForTaskRun`), so nothing is read here for it.
+    const usesTaskRow = !args.projectId && !args.ownedSessionId;
+    const taskSandboxId = usesTaskRow ? task.sandboxId : undefined;
     const keepTaskSandboxActiveAfterRun =
-      !args.projectId && task.reviewTaskSandboxStatus === "active";
+      usesTaskRow && task.reviewTaskSandboxStatus === "active";
 
     // Only surface comments the last successful run hasn't already addressed,
     // so subsequent "Make changes" runs focus on NEW feedback. Cutoff is the

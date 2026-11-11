@@ -36,32 +36,22 @@ import {
 } from "../_sandbox/transitions";
 import { settleOrphanedBackgroundAgents } from "../_sessions/backgroundAgents";
 import { buildTaskBranchName } from "../_git/branchNames";
+import { findQuickTaskSession } from "../_sessions/owner";
+import {
+  isPreviewSandboxAllowed,
+  previewSandboxNotAllowedError,
+} from "./previewGate";
 import { errorMessage } from "@vvedantb/server";
 
-const PREVIEW_ALLOWED_STATUSES = [
-  "code_review",
-  "business_review",
-  "done",
-] as const;
-
 /**
- * Review statuses always allow a preview. A task moved back to `todo` after it
- * already ran keeps its branch, so it previews like a reviewed task instead of
- * offering a first run again (mirrors `canStartSandbox` in `useTaskDetail`).
+ * A quick task with a session keeps its sandbox there: a task-row start would
+ * boot a second VM for the same task.
  */
-async function isPreviewSandboxAllowed(
+async function runsOnSession(
   db: MutationCtx["db"],
   task: Doc<"agentTasks">,
 ): Promise<boolean> {
-  if (PREVIEW_ALLOWED_STATUSES.some((status) => status === task.status)) {
-    return true;
-  }
-  if (task.status !== "todo") return false;
-  const run = await db
-    .query("agentRuns")
-    .withIndex("by_task", (q) => q.eq("taskId", task._id))
-    .first();
-  return run !== null;
+  return (await findQuickTaskSession(db, task)) !== null;
 }
 
 async function assertPreviewSandboxAllowed(
@@ -72,9 +62,7 @@ async function assertPreviewSandboxAllowed(
     return;
   }
   if (!(await isPreviewSandboxAllowed(db, task))) {
-    throw new Error(
-      `Task must be in code_review, business_review or done status, or have run before, to start sandbox. Current status: ${task.status}`,
-    );
+    throw previewSandboxNotAllowedError(task);
   }
 }
 
@@ -89,6 +77,11 @@ export const startTaskSandbox = authMutation({
     if (!task) throw new Error("Task not found");
 
     if (!task.repoId) throw new Error("Task has no associated repository");
+    if (await runsOnSession(ctx.db, task)) {
+      throw new Error(
+        "This task's sandbox runs on its session: start it with sessions.startSandbox.",
+      );
+    }
 
     await assertPreviewSandboxAllowed(ctx.db, task);
 
@@ -113,6 +106,14 @@ export async function requestTaskSandboxStart(
   task: Doc<"agentTasks">,
   repo: Doc<"githubRepos">,
 ): Promise<void> {
+  // A quick task with a session starts that session's sandbox instead; a
+  // second, task-row VM would split the task's work across two machines.
+  if (await runsOnSession(ctx.db, task)) {
+    console.log(
+      `[tasks] startTaskSandbox skipped taskId=${task._id}: the task runs on its session`,
+    );
+    return;
+  }
   if (!canRequestSandboxStart(task.reviewTaskSandboxStatus)) {
     console.log(
       `[tasks] startTaskSandbox skipped taskId=${task._id} status=${task.reviewTaskSandboxStatus}`,
@@ -211,6 +212,11 @@ export const retryStartupCommands = authMutation({
     if (!task) throw new Error("Task not found");
 
     if (!task.repoId) throw new Error("Task has no associated repository");
+    if (await runsOnSession(ctx.db, task)) {
+      throw new Error(
+        "This task's sandbox runs on its session: start it with sessions.startSandbox.",
+      );
+    }
 
     await assertPreviewSandboxAllowed(ctx.db, task);
 
@@ -300,9 +306,9 @@ export const runDevServer = authMutation({
 
     await ctx.scheduler.runAfter(
       0,
-      internal.sandbox.runDevServerInTaskSandbox,
+      internal.sandbox.runDevServerInSandbox,
       {
-        taskId: args.taskId,
+        owner: { kind: "task", taskId: args.taskId },
         sandboxId: task.sandboxId,
         repoId: task.repoId,
       },

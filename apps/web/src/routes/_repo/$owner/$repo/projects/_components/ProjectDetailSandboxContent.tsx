@@ -118,8 +118,7 @@ export function ProjectDetailSandboxContent({
       onOpenDiffsTab={() => openDiffs()}
     >
       <SandboxWorkspace
-        ownerKind="project"
-        ownerId={projectId}
+        owner={{ kind: "project", projectId }}
         storageScope={`project:${projectId}`}
         sandboxId={projectSandboxId}
         isActive={isSandboxActive}

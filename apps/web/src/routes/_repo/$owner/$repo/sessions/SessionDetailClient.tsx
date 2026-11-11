@@ -335,8 +335,7 @@ export function SessionDetailClient({
       onOpenDiffsTab={handleViewDiff}
     >
       <SandboxWorkspace
-        ownerKind="session"
-        ownerId={sessionId}
+        owner={{ kind: "session", sessionId }}
         storageScope={`session:${sessionId}`}
         sandboxId={session.sandboxId}
         isActive={isSandboxActive}

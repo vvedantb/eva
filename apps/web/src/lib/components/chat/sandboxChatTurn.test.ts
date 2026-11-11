@@ -141,4 +141,15 @@ describe("sandboxChatKeys", () => {
       draftTarget: { kind: "projectChat", projectId },
     });
   });
+
+  test("a quick task's session chat is addressed by the chat, not the session", () => {
+    const sessionId = z.custom<Id<"sessions">>().parse("session_1");
+    const chatId = z.custom<Id<"sessionChats">>().parse("chat_1");
+    // The stream id must match the backend's `sessionChatStreamingEntityId`.
+    expect(sandboxChatKeys({ kind: "session", sessionId, chatId })).toEqual({
+      parentId: chatId,
+      streamingEntityId: "chat_1",
+      draftTarget: { kind: "sessionChat", sessionId, chatId },
+    });
+  });
 });

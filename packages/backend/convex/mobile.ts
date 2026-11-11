@@ -2,7 +2,16 @@ import { isTaskRunning } from "./_agentTasks/runState";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { authMutation, authQuery, getSessionWithAccess, hasRepoAccess } from "./functions";
-import { awaitingAnswerEntityIdsForRepo } from "./_chat/turnProjection";
+import {
+  awaitingAnswerEntityIdsForRepo,
+  hasOpenChatTurn,
+} from "./_chat/turnProjection";
+import { assertStandaloneSession, sessionOwnerTaskId } from "./_sessions/owner";
+import type { SessionChatContext } from "./_sessionChats/helpers";
+import {
+  ensureOwnedSession,
+  taskUsesOwnedSession,
+} from "./_sessions/ownedSession";
 import { gatherAccessibleRepos } from "./_githubRepos/helpers";
 import {
   mobileChatValidator,
@@ -92,21 +101,37 @@ export const sendMessage = authMutation({
     if (!chat.canReply) throw new Error("This chat is closed");
     const model = normalizeAIModel(chat.model);
     const { attachmentStorageIds } = args;
+    // A reply in a session chat runs on that chat's sticky picks.
+    const sendToSessionChat = (
+      context: SessionChatContext,
+      chatModel: typeof model,
+    ) =>
+      sendSessionChatMessage(ctx, {
+        context,
+        userId: ctx.userId,
+        content: message,
+        settings: {
+          model: chatModel,
+          ...storedTraits(chatModel, context.chat),
+          providerAccountId: context.chat.providerAccountId,
+          attachmentStorageIds,
+        },
+      });
     switch (entity.kind) {
       case "session":
-        await sendSessionChatMessage(ctx, {
-          context: entity.context,
-          userId: ctx.userId,
-          content: message,
-          settings: {
-            model,
-            ...storedTraits(model, entity.context.chat),
-            providerAccountId: entity.context.chat.providerAccountId,
-            attachmentStorageIds,
-          },
-        });
+        await sendToSessionChat(entity.context, model);
         return null;
-      case "task":
+      case "task": {
+        // A quick task's first send creates its session; later sends resolve
+        // as that session chat directly (`resolveMobileChat`).
+        if (taskUsesOwnedSession(entity.task)) {
+          const owned = await ensureOwnedSession(ctx, entity.task);
+          await sendToSessionChat(
+            { chat: owned.mainChat, session: owned.session },
+            normalizeAIModel(owned.mainChat.lastModel),
+          );
+          return null;
+        }
         await sendTaskChatMessage(ctx, entity.task, {
           message,
           userId: ctx.userId,
@@ -115,6 +140,7 @@ export const sendMessage = authMutation({
           attachmentStorageIds,
         });
         return null;
+      }
       case "project":
         await sendProjectChatMessage(ctx, entity.project, {
           message,
@@ -173,9 +199,22 @@ export const stopTurn = authMutation({
   handler: async (ctx, args) => {
     const { entity } = await resolveWritableChat(ctx, args.target);
     switch (entity.kind) {
-      case "session":
+      case "session": {
+        // A quick task's run owns its chat while it runs (the web Stop calls
+        // `taskWorkflow.cancelExecution` for it).
+        const ownerTaskId = sessionOwnerTaskId(entity.context.session);
+        const task = ownerTaskId ? await ctx.db.get(ownerTaskId) : null;
+        if (
+          task &&
+          isTaskRunning(task) &&
+          !(await hasOpenChatTurn(ctx.db, entity.context.chat._id))
+        ) {
+          await cancelTaskRun(ctx, task);
+          return null;
+        }
         await cancelChatExecution(ctx, entity.context);
         return null;
+      }
       case "task": {
         const { task } = entity;
         // A quick task's first run is an agent run, not a chat turn: the web
@@ -317,6 +356,7 @@ export const archiveSession = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await getSessionWithAccess(ctx.db, args.sessionId, ctx.userId);
+    assertStandaloneSession(session, "be archived on its own");
     if (session.sandboxId) await requestSessionSandboxStop(ctx, session._id);
     // Re-read: the stop moves the status, and the archive patches from this doc.
     await archiveSessionDoc(ctx, await getSessionWithAccess(ctx.db, args.sessionId, ctx.userId));

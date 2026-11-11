@@ -10,7 +10,7 @@ import {
   usePanelRef,
 } from "react-resizable-panels";
 import { IconGripHorizontal } from "@tabler/icons-react";
-import type { Id, SandboxOwner } from "@eva/backend";
+import type { SandboxOwner } from "@eva/backend";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import {
   BOTTOM_PANEL_ID,
@@ -40,7 +40,9 @@ export interface TerminalPanelApi {
   newTerminalDisabled: boolean;
 }
 
-interface SandboxWorkspaceCommonProps {
+interface SandboxWorkspaceProps {
+  /** Keys the panes, preview and PTYs (a quick task's is its session). */
+  owner: SandboxOwner;
   storageScope: string;
   sandboxId: string | undefined;
   isActive: boolean;
@@ -53,33 +55,20 @@ interface SandboxWorkspaceCommonProps {
   ) => ReactNode;
 }
 
-type SandboxWorkspaceProps = SandboxWorkspaceCommonProps &
-  (
-    | { ownerKind: "session"; ownerId: Id<"sessions"> }
-    | { ownerKind: "project"; ownerId: Id<"projects"> }
-    | { ownerKind: "task"; ownerId: Id<"agentTasks"> }
-  );
-
 const DEFAULT_BOTTOM_SIZE = "35%";
 const DEFAULT_TOP_SIZE = "65%";
 
 /** Adds the shared terminal bottom panel around a sandbox's two-column shell. */
-export function SandboxWorkspace(props: SandboxWorkspaceProps) {
-  const {
-    storageScope,
-    sandboxId,
-    isActive,
-    terminalPanes,
-    hotkeyEnabled = true,
-    children,
-  } = props;
+export function SandboxWorkspace({
+  owner,
+  storageScope,
+  sandboxId,
+  isActive,
+  terminalPanes,
+  hotkeyEnabled = true,
+  children,
+}: SandboxWorkspaceProps) {
   const simpleView = useSimpleView();
-  const owner: SandboxOwner =
-    props.ownerKind === "session"
-      ? { kind: "session", sessionId: props.ownerId }
-      : props.ownerKind === "project"
-        ? { kind: "project", projectId: props.ownerId }
-        : { kind: "task", taskId: props.ownerId };
   const panes = useSandboxPanes({
     owner,
     storageScope,

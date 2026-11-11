@@ -31,9 +31,10 @@ function mergeTraits(
 /**
  * The chat composer's model chip, wired as the web chat it opens: a session
  * or project chat picks through `mobile.setChatModel` (the web
- * `sessionChats` / `projects` writes), a quick task through the web task
- * chat's own `agentTasks.update` and `agentTasks.setTraits`, so the phone
- * sends on the `agentTasks.model` the web picks. The account rows list what
+ * `sessionChats` / `projects` writes), and so does a quick task on its
+ * session (its Main chat keeps the model). A quick task with no session yet
+ * picks through the task chat's own `agentTasks.update` and
+ * `agentTasks.setTraits`. The account rows list what
  * the web picker lists (the session's or task's owner's accounts, the
  * viewer's own for a project) and only for whoever the web lets change it; a
  * switch saves the account, then waits for the new daemon (the web
@@ -69,9 +70,14 @@ export function useChatModelPick(target: string, chat: Chat | null | undefined, 
   const prewarmProject = useAction(api.projectChatWorkflow.prewarmChatDaemonNow);
 
   if (!chat) return { pick: undefined, switching };
-  const { session, task, project } = chat;
+  const { session, project } = chat;
+  // A quick task on its session chats in that session's Main chat: picks go
+  // through the session chat writes. Only a task with no session yet keeps
+  // the task chat's own `agentTasks` writes.
+  const sessionChatId = session?.chatId ?? chat.task?.sessionChatId;
+  const task = chat.task?.sessionChatId === undefined ? chat.task : undefined;
   // A task chat from a backend without `task` cannot reach the task mutations.
-  if (chat.kind === "task" && !task) return { pick: undefined, switching };
+  if (chat.kind === "task" && !chat.task) return { pick: undefined, switching };
 
   const failed = () => toast.error("Couldn't change the model");
   const pickTraits = (partial: StoredModelTraits) => {
@@ -93,10 +99,10 @@ export function useChatModelPick(target: string, chat: Chat | null | undefined, 
       .then(() => setSwitching(false));
   };
   const changeAccount = (providerAccountId: Id<"userProviderAccounts"> | null) => {
-    if (session) {
+    if (sessionChatId) {
       switchAccount(
-        () => setSessionAccount({ chatId: session.chatId, providerAccountId }),
-        () => prewarmSession({ chatId: session.chatId }),
+        () => setSessionAccount({ chatId: sessionChatId, providerAccountId }),
+        () => prewarmSession({ chatId: sessionChatId }),
       );
     } else if (task) {
       switchAccount(() => updateTask({ id: task.id, providerAccountId }), () => prewarmTask({ taskId: task.id }));

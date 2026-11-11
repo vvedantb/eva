@@ -19,6 +19,7 @@ import { scheduleTaskOrchestratorNotify } from "../orchestratorShared";
 import { deriveLogUsage } from "../_logs/usage";
 import { touchAgentFinished } from "../_sandbox/activity";
 import { TASK_RUN_STREAM_PREFIX } from "../_chat/agentStreamIds";
+import { findQuickTaskSession } from "../_sessions/owner";
 
 export const llmJson = new LlmJson({ attemptCorrection: true });
 
@@ -47,8 +48,10 @@ export async function resolveTaskSandboxIdForRun(
       sandboxId: project?.sandboxId ?? run.sandboxId,
     });
   }
+  // A quick task's sandbox lives on its session.
+  const session = await findQuickTaskSession(db, task);
   return preferPersistedSandboxId({
-    sandboxId: run.sandboxId ?? task.sandboxId,
+    sandboxId: run.sandboxId ?? (session ? session.sandboxId : task.sandboxId),
   });
 }
 

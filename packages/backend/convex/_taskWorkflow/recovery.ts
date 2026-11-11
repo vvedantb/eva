@@ -11,6 +11,18 @@ const QUICK_TASK_AUTO_RETRY_BASE_DELAY_MS = 20_000;
 const QUICK_TASK_AUTO_RETRY_JITTER_MS = 20_000;
 
 /** Checks whether an error message indicates a sandbox infrastructure/network issue. */
+/**
+ * Why a quick task run did not start or claim its sandbox: the task's
+ * session chat holds it, or a start/stop is in flight. A user start is refused
+ * with it; a scheduled or already-running run retries in
+ * `TASK_CHAT_BUSY_RETRY_MS`.
+ */
+export const TASK_CHAT_BUSY_ERROR =
+  "Eva is still replying in this task's chat, or its sandbox is starting or stopping. Try the run again in a moment.";
+
+/** How long a run held back by a busy task chat waits before trying again. */
+export const TASK_CHAT_BUSY_RETRY_MS = 60_000;
+
 export function isDaytonaNetworkIssue(errorMsg: string): boolean {
   const message = errorMsg.toLowerCase();
   if (

@@ -6,7 +6,12 @@ import {
   hasActiveRun,
   isFirstTaskOnBranch,
 } from "../functions";
-import { isDaytonaNetworkIssue, buildQuickTaskRetryDelayMs } from "./recovery";
+import {
+  buildQuickTaskRetryDelayMs,
+  isDaytonaNetworkIssue,
+  TASK_CHAT_BUSY_ERROR,
+  TASK_CHAT_BUSY_RETRY_MS,
+} from "./recovery";
 import { resolveProjectBranchName } from "../_git/branchNames";
 import { resolveTaskWorkflowBaseBranchForTask } from "./resolveBaseBranch";
 import {
@@ -15,6 +20,7 @@ import {
   scheduleTaskRun,
 } from "../_agentTasks/runState";
 import { startNextQueuedTaskChatMessage } from "../_queues/helpers";
+import { taskSessionBusy } from "../_sessions/ownedSession";
 
 /** Schedules an automatic retry for a failed quick task if the failure looks transient. */
 export const maybeScheduleQuickTaskRetry = internalMutation({
@@ -35,8 +41,12 @@ export const maybeScheduleQuickTaskRetry = internalMutation({
     if (run.exitReason === "auto_retry_scheduled") return null;
 
     const errorMessage = args.error ?? run.error ?? "";
+    // A run held back by a busy task chat (its session's sandbox was mid
+    // start/stop at claim time) waits, like a scheduled run, then retries.
+    const chatBusy = errorMessage === TASK_CHAT_BUSY_ERROR;
     const retryableFailure =
-      errorMessage.length > 0 && isDaytonaNetworkIssue(errorMessage);
+      chatBusy ||
+      (errorMessage.length > 0 && isDaytonaNetworkIssue(errorMessage));
     if (!retryableFailure) return null;
 
     const runs = await ctx.db
@@ -63,7 +73,9 @@ export const maybeScheduleQuickTaskRetry = internalMutation({
     );
     if (hasOtherActiveRun) return null;
 
-    const delayMs = args.delayMs ?? buildQuickTaskRetryDelayMs();
+    const delayMs = chatBusy
+      ? TASK_CHAT_BUSY_RETRY_MS
+      : (args.delayMs ?? buildQuickTaskRetryDelayMs());
     const retry = await scheduleTaskRun(
       ctx,
       args.taskId,
@@ -99,6 +111,20 @@ export const executeScheduledTask = internalMutation({
 
     if (task.status !== "todo" || !task.repoId || !task.createdBy) return null;
     if (await hasActiveRun(ctx.db, args.taskId)) return null;
+    // The task's chat is mid-reply on the shared sandbox: try again shortly
+    // instead of failing the schedule (`startTaskRun` refuses a busy chat).
+    if (
+      task.projectId === undefined &&
+      (await taskSessionBusy(ctx.db, args.taskId))
+    ) {
+      await scheduleTaskRun(
+        ctx,
+        args.taskId,
+        "scheduleRetry",
+        Date.now() + TASK_CHAT_BUSY_RETRY_MS,
+      );
+      return null;
+    }
 
     const repo = await ctx.db.get(task.repoId);
     if (!repo) return null;
