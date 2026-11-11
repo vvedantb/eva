@@ -35,6 +35,15 @@ export const EVA_THEME = {
     border: "#dddedf",
     input: "#dddedf",
     ring: "#09090b",
+    // The muted categorical ramp (`--cat-1` … `--cat-8`): repo tiles, tab groups.
+    cat1: "#486aa8", // blue
+    cat2: "#7860aa", // violet
+    cat3: "#367a76", // teal
+    cat4: "#966c2a", // amber
+    cat5: "#a05264", // rose
+    cat6: "#3e7a54", // emerald
+    cat7: "#387096", // sky
+    cat8: "#a2603e", // orange
   },
   dark: {
     background: "#020202",
@@ -67,6 +76,15 @@ export const EVA_THEME = {
     border: "#242424",
     input: "#242424",
     ring: "#fafafa",
+    // The muted categorical ramp (`--cat-1` … `--cat-8`): repo tiles, tab groups.
+    cat1: "#8aa5d6", // blue
+    cat2: "#aa98d6", // violet
+    cat3: "#78b0ac", // teal
+    cat4: "#caa060", // amber
+    cat5: "#d28e9e", // rose
+    cat6: "#7eb290", // emerald
+    cat7: "#80acc8", // sky
+    cat8: "#d49876", // orange
   },
 } as const;
 

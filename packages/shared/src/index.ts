@@ -228,3 +228,4 @@ export {
   type StatusTone,
   type SummaryComment,
 } from "./prReview";
+export { appLeafName, repoDisplayLabel, repoTileSlot, type RepoTileSlot } from "./repoTile";

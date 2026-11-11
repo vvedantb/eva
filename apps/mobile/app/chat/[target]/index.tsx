@@ -159,6 +159,7 @@ export default function ChatScreen() {
   return (
     <View className="flex-1">
       <ChatHeader
+        repoId={chat.repoId}
         repoLabel={chat.repoLabel}
         title={chat.title}
         onBack={() => goBackOrReplace(router)}

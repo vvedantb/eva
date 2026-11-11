@@ -1,33 +1,48 @@
 import { describe, expect, test } from "vitest";
 import { collectChangedFiles } from "@eva/shared";
-import {
-  hasStepDetail,
-  parseToolSteps,
-  parseTraceSegments,
-  summariseToolSteps,
-} from "@eva/shared/activityTrace";
+import { parseActivityLog } from "@eva/shared/activityTrace";
 
-/** The mobile chat's tool trace reads `messages.activityLog` with no web types. */
-describe("activity trace", () => {
-  const log = JSON.stringify([
-    { type: "thinking", label: "Thought", status: "complete" },
-    { type: "read", label: "Read file", detail: "src/App.tsx", status: "complete" },
-    { type: "bash", label: "Ran command", detail: "pnpm test", status: "complete" },
-    { type: "read", label: "Read file", detail: "src/theme.ts", status: "active" },
-    { type: "edit", status: "complete" },
-    { type: "response", label: "Response", status: "complete" },
-  ]);
-
-  test("keeps tool steps in order and drops other or malformed steps", () => {
-    expect(parseToolSteps(log).map((step) => step.detail)).toEqual(["src/App.tsx", "pnpm test", "src/theme.ts"]);
+/** The mobile chat reads `messages.activityLog` with Zod, then draws it with the native-ui copy of the web timeline. */
+describe("activity log", () => {
+  test("keeps every step kind in order and drops malformed steps", () => {
+    const steps = parseActivityLog(
+      JSON.stringify([
+        { type: "reasoning", label: "Thought", detail: "Find the table.", status: "complete" },
+        { type: "read", label: "Read file", detail: "src/App.tsx", status: "complete" },
+        { type: "edit", status: "complete" },
+        { type: "todos", label: "Task list", status: "active", todos: [{ content: "Write it", status: "in_progress" }] },
+        { type: "hook", label: "PreToolUse", status: "complete" },
+        { type: "future_kind", label: "Unknown", status: "complete" },
+        { type: "response", label: "Response", detail: "Done.", status: "complete" },
+      ]),
+    );
+    expect(steps.map((step) => step.type)).toEqual(["reasoning", "read", "todos", "hook", "response"]);
+    expect(steps[2]?.todos).toEqual([{ content: "Write it", status: "in_progress" }]);
   });
 
-  test("summarises each kind of work once, as the web does", () => {
-    expect(summariseToolSteps(parseToolSteps(log))).toBe("Read files, ran commands");
+  test("keeps the fields the rows read: nesting, timing, errors and detail", () => {
+    const [agent, child, command] = parseActivityLog(
+      JSON.stringify([
+        { type: "subtask", label: "Ran agent", detail: "Audit", status: "complete", toolUseId: "toolu_1" },
+        { type: "read", label: "Read file", status: "complete", parentToolUseId: "toolu_1", hasHiddenDetail: true },
+        {
+          type: "bash",
+          label: "Ran command",
+          status: "complete",
+          command: "pnpm test",
+          output: { text: "1 failed", exitCode: 1 },
+          isError: true,
+          durationMs: 5400,
+        },
+      ]),
+    );
+    expect(agent?.toolUseId).toBe("toolu_1");
+    expect(child).toMatchObject({ parentToolUseId: "toolu_1", hasHiddenDetail: true });
+    expect(command).toMatchObject({ output: { text: "1 failed", exitCode: 1 }, isError: true, durationMs: 5400 });
   });
 
   test("keeps an edited file's path for the phone's Changed files card", () => {
-    const steps = parseToolSteps(
+    const steps = parseActivityLog(
       JSON.stringify([
         { type: "write", label: "Created file", path: "/tmp/repo/src/toCsv.ts", status: "complete" },
         { type: "read", label: "Read file", path: "/tmp/repo/src/App.tsx", status: "complete" },
@@ -39,72 +54,10 @@ describe("activity trace", () => {
     ]);
   });
 
-  test("legacy plain text, empty and missing logs give no steps", () => {
-    expect(parseToolSteps("Ran the tests")).toEqual([]);
-    expect(parseToolSteps("[]")).toEqual([]);
-    expect(parseToolSteps(undefined)).toEqual([]);
-  });
-
-  test("keeps step detail (command, output, edits) and flags trimmed detail", () => {
-    const steps = parseToolSteps(
-      JSON.stringify([
-        { type: "bash", label: "Ran command", status: "complete", command: "pnpm test", output: { text: "ok", exitCode: 0 } },
-        { type: "edit", label: "Edited file", status: "complete", edits: [{ oldText: "a", newText: "b" }] },
-        { type: "read", label: "Read file", status: "complete", hasHiddenDetail: true },
-        { type: "read", label: "Read file", status: "complete" },
-      ]),
-    );
-    expect(steps[0]?.output).toEqual({ text: "ok", exitCode: 0 });
-    expect(steps[1]?.edits).toEqual([{ oldText: "a", newText: "b" }]);
-    expect(steps.map(hasStepDetail)).toEqual([true, true, true, false]);
-  });
-});
-
-describe("trace segments", () => {
-  const segmentsOf = (steps: object[]) =>
-    parseTraceSegments(JSON.stringify(steps)).map((segment) =>
-      segment.kind === "reasoning"
-        ? `reasoning: ${segment.text}`
-        : `${summariseToolSteps(segment.steps.map(({ step }) => step))} [${segment.steps.map(({ index }) => index).join(",")}]`,
-    );
-
-  test("keeps reasoning as prose and folds the tool steps after it into one run", () => {
-    expect(
-      segmentsOf([
-        { type: "reasoning", label: "Thought", detail: " Find the table. ", status: "complete" },
-        { type: "search_code", label: "Searched code", status: "complete" },
-        { type: "response", label: "Response", detail: "On it.", status: "complete" },
-        { type: "read", label: "Read file", status: "complete" },
-        { type: "thinking", label: "Thought", detail: "Now write it.", status: "complete" },
-        { type: "write", label: "Created file", status: "complete" },
-        { type: "bash", label: "Ran command", status: "active" },
-      ]),
-    ).toEqual([
-      "reasoning: Find the table.",
-      // The reply text is hidden in the folded trace, so it does not split the run.
-      "Searched the code, read files [0,1]",
-      "reasoning: Now write it.",
-      "Created files, ran commands [2,3]",
-    ]);
-  });
-
-  test("a narration step ends a run; filler thinking and status lines do not", () => {
-    expect(
-      segmentsOf([
-        { type: "read", label: "Read file", status: "complete" },
-        { type: "thinking", label: "Thought", detail: "Claude is reasoning...", status: "complete" },
-        { type: "thinking", label: "Generated response", status: "complete" },
-        { type: "read", label: "Read file", status: "complete" },
-        { type: "todos", label: "Task list", status: "complete" },
-        { type: "tool", label: "File change", status: "complete" },
-        { type: "reasoning", label: "Thought", status: "complete" },
-        { type: "bash", label: "Ran command", status: "complete" },
-      ]),
-    ).toEqual(["Read files [0,1]", "Edited files [2]", "reasoning: ", "Ran commands [3]"]);
-  });
-
-  test("a legacy or malformed log has no segments", () => {
-    expect(parseTraceSegments("Ran the tests")).toEqual([]);
-    expect(parseTraceSegments(undefined)).toEqual([]);
+  test("legacy plain text, a non-list, empty and missing logs give no steps", () => {
+    expect(parseActivityLog("Ran the tests")).toEqual([]);
+    expect(parseActivityLog('{"type":"read"}')).toEqual([]);
+    expect(parseActivityLog("[]")).toEqual([]);
+    expect(parseActivityLog(undefined)).toEqual([]);
   });
 });
