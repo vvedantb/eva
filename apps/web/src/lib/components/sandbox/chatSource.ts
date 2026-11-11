@@ -19,21 +19,12 @@ export type ChatSource = NonNullable<
 
 export type ChatSourceKind = ChatSource["kind"];
 
-/** "Session" / "Task" / "Project". */
-export function chatSourceKindLabel(kind: ChatSourceKind): string {
-  return kind === "session" ? "Session" : kind === "task" ? "Task" : "Project";
-}
-
-/** Badge text: chat kind and number, e.g. "Task #12". */
-export function chatSourceShortLabel(source: ChatSource): string {
-  const kind = chatSourceKindLabel(source.kind);
-  return source.numId !== undefined ? `${kind} #${source.numId}` : kind;
-}
-
-/** Full label: "Task #12 · Fix login". */
-export function chatSourceLabel(source: ChatSource): string {
-  return `${chatSourceShortLabel(source)} · ${source.title}`;
-}
+// The labels are shared with the phone Documents list.
+export {
+  chatSourceKindLabel,
+  chatSourceLabel,
+  chatSourceShortLabel,
+} from "@eva/shared";
 
 /** Route into the source chat's sandbox tab, or null when numId is missing. */
 export function chatSourceRoute<Tab extends "documents" | "artifacts">(

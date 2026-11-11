@@ -7,6 +7,7 @@ import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
+import { EVA_BRANCH_PREFIX } from "./_git/branchNames";
 import { authMutation, hasRepoAccess } from "./functions";
 import {
   completionCallbackArgs,
@@ -754,7 +755,7 @@ export const startFix = authMutation({
 
     // Retries need a unique branch — the previous push is not forced, so reusing
     // the name would fail if the prior attempt already pushed.
-    const base = `eva/eval-fix-${String(args.reportId).slice(-8)}`;
+    const base = `${EVA_BRANCH_PREFIX}eval-fix-${String(args.reportId).slice(-8)}`;
     const fixBranchName = report.fixBranchName
       ? `${base}-r${Date.now().toString(36)}`
       : base;

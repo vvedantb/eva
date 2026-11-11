@@ -4,6 +4,7 @@ import type {
   GenericDatabaseWriter,
 } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
+import { SANDBOX_STARTUP_PREFIX, sandboxOwnerKey } from "@eva/shared";
 import { hasRepoAccess, hasTaskAccess } from "../functions";
 
 /**
@@ -45,29 +46,6 @@ export type ResolvedSandboxOwner =
       doc: Doc<"projects">;
     };
 
-export function sandboxOwnerKey(owner: SandboxOwner): string {
-  if (owner.kind === "session") return `session-${owner.sessionId}`;
-  if (owner.kind === "task") return `task-${owner.taskId}`;
-  return `project-${owner.projectId}`;
-}
-
-/**
- * streamingActivity entityId for sandbox startup progress. These strings are
- * persisted and subscribed to by apps/web (session detail, task detail,
- * project sandbox); do not change them.
- */
-const SESSION_STARTUP_PREFIX = "session-startup-";
-const TASK_STARTUP_PREFIX = "task-sandbox-startup-";
-const PROJECT_STARTUP_PREFIX = "project-sandbox-startup-";
-
-export function sandboxStartupEntityId(owner: SandboxOwner): string {
-  if (owner.kind === "session") {
-    return `${SESSION_STARTUP_PREFIX}${owner.sessionId}`;
-  }
-  if (owner.kind === "task") return `${TASK_STARTUP_PREFIX}${owner.taskId}`;
-  return `${PROJECT_STARTUP_PREFIX}${owner.projectId}`;
-}
-
 /** Inverse of `sandboxStartupEntityId`: null when `entityId` is not a startup row. */
 export function parseSandboxStartupEntityId(
   db: Pick<GenericDatabaseReader<DataModel>, "normalizeId">,
@@ -75,17 +53,17 @@ export function parseSandboxStartupEntityId(
 ): SandboxOwner | null {
   const after = (prefix: string) =>
     entityId.startsWith(prefix) ? entityId.slice(prefix.length) : null;
-  const session = after(SESSION_STARTUP_PREFIX);
+  const session = after(SANDBOX_STARTUP_PREFIX.session);
   if (session !== null) {
     const sessionId = db.normalizeId("sessions", session);
     return sessionId ? { kind: "session", sessionId } : null;
   }
-  const task = after(TASK_STARTUP_PREFIX);
+  const task = after(SANDBOX_STARTUP_PREFIX.task);
   if (task !== null) {
     const taskId = db.normalizeId("agentTasks", task);
     return taskId ? { kind: "task", taskId } : null;
   }
-  const project = after(PROJECT_STARTUP_PREFIX);
+  const project = after(SANDBOX_STARTUP_PREFIX.project);
   if (project !== null) {
     const projectId = db.normalizeId("projects", project);
     return projectId ? { kind: "project", projectId } : null;
@@ -196,6 +174,7 @@ type SandboxOwnerPatch = Partial<
     Doc<"sessions">,
     | "terminalPanes"
     | "previewPath"
+    | "previewPanePaths"
     | "devPort"
     | "terminalHistoryTail"
     | "agentBrowsingAt"

@@ -6,9 +6,13 @@ import {
   loadSessionChat,
   type SessionChatContext,
 } from "../_sessionChats/helpers";
-import { getRepoHref } from "../notifications";
+import { entityHref, repoBasePath } from "@eva/shared";
 import { storedComposerTraits } from "../_shared/composerTraits";
-import { aiModelValidator, reasoningLevelValidator } from "../validators";
+import {
+  aiModelValidator,
+  chatEntityKindValidator,
+  reasoningLevelValidator,
+} from "../validators";
 
 /**
  * Chat targets for the Eva mobile app (apps/mobile). The app opens every chat
@@ -19,14 +23,8 @@ import { aiModelValidator, reasoningLevelValidator } from "../validators";
  * without importing the chat workflows `mobile.ts` sends through.
  */
 
-const chatKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
-
 export const mobileChatValidator = v.object({
-  kind: chatKindValidator,
+  kind: chatEntityKindValidator,
   title: v.string(),
   repoLabel: v.string(),
   /** The chat's repo, for starting a session from it (fork). */
@@ -62,6 +60,12 @@ export const mobileChatValidator = v.object({
     use1mContext: v.optional(v.boolean()),
     fastMode: v.optional(v.boolean()),
   }),
+  /**
+   * Whether the chat's sandbox runs, as the web reads it (a session's
+   * `status`, a task's or project's review sandbox status is "active"). The
+   * composer placeholder says a send wakes Eva up when it is false.
+   */
+  sandboxActive: v.boolean(),
   /**
    * The branch the sandbox worktree is on, only while the sandbox runs: the
    * web composer's read-only `SandboxBranchChip`.
@@ -104,7 +108,7 @@ export function repoLabel(repo: Doc<"githubRepos">): string {
 
 /** A session's page on the web app (its Main chat), as the web sidebar row links it. */
 export function sessionWebPath(repo: Doc<"githubRepos">, session: Doc<"sessions">): string {
-  return `${getRepoHref(repo.owner, repo.name, repo.rootDirectory)}/sessions/${session.numId ?? ""}`;
+  return entityHref("session", repo, session.numId);
 }
 
 /**
@@ -129,6 +133,7 @@ export async function resolveMobileChat(
     const repo = await db.get(session.repoId);
     if (!repo) return null;
     const base = sessionWebPath(repo, session);
+    const sandboxActive = session.status === "active";
     return {
       repoId: repo._id,
       entity: { kind: "session", context },
@@ -142,7 +147,8 @@ export async function resolveMobileChat(
         model: chat.lastModel ?? session.lastModel,
         providerAccountId: chat.providerAccountId,
         traits: storedComposerTraits(chat),
-        sandboxBranch: session.status === "active" ? session.sandboxBranch : undefined,
+        sandboxActive,
+        sandboxBranch: sandboxActive ? session.sandboxBranch : undefined,
         intendedBranch: session.branchName,
         prUrl: session.prUrl,
         webPath: chat.isMain ? base : `${base}?chat=${chat.number}`,
@@ -158,7 +164,8 @@ export async function resolveMobileChat(
     const repoId = task?.repoId ?? project?.repoId;
     const repo = repoId ? await db.get(repoId) : null;
     if (!task || !repo) return null;
-    const base = getRepoHref(repo.owner, repo.name, repo.rootDirectory);
+    const base = repoBasePath(repo);
+    const sandboxActive = task.reviewTaskSandboxStatus === "active";
     return {
       repoId: repo._id,
       entity: { kind: "task", task },
@@ -175,12 +182,13 @@ export async function resolveMobileChat(
         accountOwnerId: task.createdBy,
         task: { id: task._id },
         traits: storedComposerTraits(task),
-        sandboxBranch: task.reviewTaskSandboxStatus === "active" ? task.sandboxBranch : undefined,
+        sandboxActive,
+        sandboxBranch: sandboxActive ? task.sandboxBranch : undefined,
         prUrl: task.projectId === undefined ? task.prUrl : project?.prUrl,
         webPath:
           project?.numId !== undefined
             ? `${base}/projects/${project.numId}/${task.numId ?? ""}/activity`
-            : `${base}/quick-tasks/${task.numId ?? ""}`,
+            : entityHref("task", repo, task.numId),
       },
     };
   }
@@ -190,6 +198,7 @@ export async function resolveMobileChat(
     const project = await db.get(projectId);
     const repo = project ? await db.get(project.repoId) : null;
     if (!project || !repo) return null;
+    const sandboxActive = project.reviewProjectSandboxStatus === "active";
     return {
       repoId: repo._id,
       entity: { kind: "project", project },
@@ -205,10 +214,11 @@ export async function resolveMobileChat(
         accountOwnerId: project.userId,
         project: { id: project._id },
         traits: storedComposerTraits(project),
-        sandboxBranch: project.reviewProjectSandboxStatus === "active" ? project.sandboxBranch : undefined,
+        sandboxActive,
+        sandboxBranch: sandboxActive ? project.sandboxBranch : undefined,
         intendedBranch: project.branchName,
         prUrl: project.prUrl,
-        webPath: `${getRepoHref(repo.owner, repo.name, repo.rootDirectory)}/projects/${project.numId ?? ""}`,
+        webPath: entityHref("project", repo, project.numId),
       },
     };
   }

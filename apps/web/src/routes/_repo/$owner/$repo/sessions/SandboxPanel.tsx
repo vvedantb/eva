@@ -13,7 +13,7 @@ import {
   isSessionSandboxTab,
   sandboxTabIdFromParam,
 } from "@/lib/search-params";
-import { slugifyAppTabName } from "@/lib/utils/appTabSlug";
+import { slugifyAppTabName } from "@eva/shared/appTabSlug";
 import { IconClipboardList } from "@tabler/icons-react";
 import { SandboxTabBar } from "./_components/SandboxTabBar";
 import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel";
@@ -36,10 +36,8 @@ import { ReviewChatTargetProvider } from "@/lib/contexts/ReviewChatTargetContext
 import { SandboxPaneSlots } from "@/lib/components/sandbox/SandboxPaneSlots";
 import { type SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import type { TerminalPanelApi } from "@/lib/components/sandbox/SandboxWorkspace";
-import {
-  DEFAULT_PREVIEW_PORT,
-  useSandboxPreview,
-} from "@/lib/components/sandbox/useSandboxPreview";
+import { DEFAULT_PREVIEW_PORT } from "@eva/shared";
+import { useSandboxPreview } from "@/lib/components/sandbox/useSandboxPreview";
 import { useSandboxFileList } from "@/lib/components/sandbox/useSandboxFileList";
 import { withBrowserTab } from "@/lib/components/sandbox/withBrowserTab";
 import {
@@ -56,7 +54,6 @@ import {
   type SessionDesignMessage,
 } from "./_utils/designVariations";
 import { isChatTurnExecuting } from "@/lib/components/chat/chatBodyUtils";
-import { chatTurnOpenFromStatus } from "@/lib/components/chat/useChatTurnOpen";
 import { previewPortOptions } from "./_utils";
 import { designVariationPrompt } from "./_utils/composerPrompts";
 
@@ -175,14 +172,14 @@ export function SandboxPanel({
   const artifactSource = { kind: "session" as const, sessionId };
   const { artifactCount } = useSourceArtifacts(artifactSource);
   const { documentCount } = useSourceDocuments(artifactSource);
-  // Same subscription as the chat's `useChatSend`, so the panel and the
+  // Same subscription as the chat's `ChatPanel`, so the panel and the
   // composer read one turn status.
   const turnStatus = useHeldQuery(
     api.turns.getChatStatus,
     isRouteActive ? { entityId: chatId } : "skip",
   );
   const isDesignExecuting = isChatTurnExecuting({
-    turnOpen: chatTurnOpenFromStatus(turnStatus),
+    status: turnStatus,
     messages,
   });
   // Streaming payloads can outlive their turn; only fold them in while one runs.
@@ -202,21 +199,14 @@ export function SandboxPanel({
     api.sandboxPanes.getViewState,
     isRouteActive ? { owner } : "skip",
   );
-  const setPreviewPath = useMutation(api.sandboxPanes.setPreviewPath);
-  const setPreviewPort = useMutation(api.sandboxPanes.setPreviewPort);
-  const setTerminalHistoryTail = useMutation(
-    api.sandboxPanes.setTerminalHistoryTail,
-  );
   const releaseBrowserLock = useMutation(api.sandboxPanes.releaseBrowserLock);
   const preview = useSandboxPreview({
+    owner,
     sandboxId,
     isActive,
     isRouteActive,
     repoId,
     devPort,
-    onPortPersist: (port) => {
-      void setPreviewPort({ owner, port });
-    },
   });
   // Multi-repo sessions: which checkout the Files tab browses. "" is the
   // primary repo; a linked repo's `sessionRepos.path` otherwise.
@@ -421,6 +411,7 @@ export function SandboxPanel({
             // Only the session on screen holds the idle-pause presence beacon;
             // cached siblings and a collapsed rail must not keep a VM awake.
             presenceEnabled={isRouteActive && !collapsed}
+            onScreen={isRouteActive}
             autoWakeEligible={autoWakeEligible}
             // Multi-repo sessions run a dev server per repo; the Preview port
             // control offers each one instead of only the primary's.
@@ -435,18 +426,7 @@ export function SandboxPanel({
                 ? { ...miniPlayer, owner: { kind: "session", sessionId } }
                 : undefined
             }
-            stickyPreviewPath={viewState?.previewPath}
-            onStickyPreviewPathChange={(path) => {
-              void setPreviewPath({ owner, path });
-            }}
-            stickyTerminalHistoryTail={
-              viewState === undefined
-                ? undefined
-                : (viewState?.terminalHistoryTail ?? "")
-            }
-            onStickyTerminalHistoryTailChange={(tail) => {
-              void setTerminalHistoryTail({ owner, tail });
-            }}
+            viewState={viewState}
           />
         </ReviewChatTargetProvider>
       </div>

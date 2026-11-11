@@ -42,7 +42,6 @@ import {
   snapshotScheduleValidator,
   taskActivityFieldValidator,
   taskSandboxEventValidator,
-  taskSandboxStatusValidator,
   taskStatusValidator,
   teamMemberRoleValidator,
   themeValidator,
@@ -64,6 +63,7 @@ import {
   sandboxGitSyncValidator,
   scopeCheckValidator,
   terminalPaneValidator,
+  previewPanePathValidator,
   usageLimitWindowValidator,
   userFlowValidator,
   variationValidator,
@@ -602,7 +602,7 @@ export const agentTaskFields = {
   // its main run workflow.
   activeChatWorkflowId: v.optional(v.string()),
   // UI state for the reviewer-facing Start/Stop sandbox button.
-  reviewTaskSandboxStatus: v.optional(taskSandboxStatusValidator),
+  reviewTaskSandboxStatus: v.optional(sessionStatusValidator),
   /** Bumped by every start request; see `_sandbox/transitions.ts`. */
   sandboxStartAttempt: v.optional(v.number()),
   // Resolved dev server port + full command for the current sandbox. Stored
@@ -614,6 +614,7 @@ export const agentTaskFields = {
   devCommand: v.optional(v.string()),
   // Sticky Preview URL path for this task sandbox (e.g. "/dashboard").
   previewPath: v.optional(v.string()),
+  previewPanePaths: v.optional(v.array(previewPanePathValidator)),
   // Last ~500 lines of the Preview Console PTY (debounced client writes).
   terminalHistoryTail: v.optional(v.string()),
   terminalPanes: v.optional(v.array(terminalPaneValidator)),
@@ -776,6 +777,7 @@ export const sessionFields = {
   // Sticky Preview URL path for this session (e.g. "/dashboard"). Device
   // viewport stays tab-local; port reuses `devPort` below.
   previewPath: v.optional(v.string()),
+  previewPanePaths: v.optional(v.array(previewPanePathValidator)),
   // Last ~500 lines of the Preview Console PTY (debounced client writes). Cap
   // keeps sessions.get reads small; full scrollback stays in sessionStorage.
   terminalHistoryTail: v.optional(v.string()),
@@ -1125,7 +1127,7 @@ export const projectFields = {
   lastSandboxActivity: v.optional(v.number()),
   // UI state for the project-level Start/Stop preview sandbox button.
   // Mirrors `agentTasks.reviewTaskSandboxStatus` lifecycle.
-  reviewProjectSandboxStatus: v.optional(taskSandboxStatusValidator),
+  reviewProjectSandboxStatus: v.optional(sessionStatusValidator),
   /** Bumped by every start request; see `_sandbox/transitions.ts`. */
   sandboxStartAttempt: v.optional(v.number()),
   // Dev port + full command for the active project preview sandbox.
@@ -1135,6 +1137,7 @@ export const projectFields = {
   devCommand: v.optional(v.string()),
   // Sticky Preview URL path for this project sandbox (e.g. "/dashboard").
   previewPath: v.optional(v.string()),
+  previewPanePaths: v.optional(v.array(previewPanePathValidator)),
   // Last ~500 lines of the Preview Console PTY (debounced client writes).
   terminalHistoryTail: v.optional(v.string()),
   terminalPanes: v.optional(v.array(terminalPaneValidator)),
@@ -1213,6 +1216,7 @@ export const repoEventKindValidator = v.union(
   v.literal("issue_labeled"),
   v.literal("pr_opened"),
   v.literal("pr_merged"),
+  v.literal("production_alert"),
 );
 
 /** What starts an automation: its cron schedule, or a repo event. */
@@ -1243,6 +1247,12 @@ export const automationFields = {
   // When true, a successful run emails its result summary to every user with
   // email notifications enabled (see _automations/email.ts).
   sendEmail: v.optional(v.boolean()),
+  // `create_task` presets only. Missing means true: a created task starts
+  // at once. False leaves it in To do for a person to start.
+  autoStartTasks: v.optional(v.boolean()),
+  // `production_alert` presets only. SHA-256 hex of the bearer secret the
+  // alert webhook must send. The plain secret is shown once, never stored.
+  alertSecretHash: v.optional(v.string()),
   // True skips review and sends straight away. Missing means each email waits
   // on its run as a draft until someone sends it, so review is the default.
   emailAutoSend: v.optional(v.boolean()),

@@ -484,7 +484,7 @@ Use it when list_env_vars shows a secret is missing. Never ask the user to paste
   tools.push(
     defineTool({
       name: "set_preview_path",
-      description: `Point the user's Preview tab at a route and/or port, the same as typing it into the Preview address bar. Use it to show the user the page you just built ("/settings/billing") or an app on another port.
+      description: `Point the user's main (first) Preview pane at a route and/or port, the same as typing it into its address bar. Use it to show the user the page you just built ("/settings/billing") or an app on another port.
 
 Name no chat and it steers your own. Pass "path", "port" or both. The choice sticks for that chat. Changing "port" also changes which port Eva treats as the app port for that chat (get_preview_url, restart_dev_server), so only set it to a port something is serving.`,
       mutating: true,

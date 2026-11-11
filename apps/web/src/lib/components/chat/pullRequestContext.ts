@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { prNumberFromGithubUrl } from "@eva/shared";
+import { prNumberFromGithubUrl, type PrState } from "@eva/shared";
 
 /**
  * A pull request attached to the next prompt as context. Dragging a PR row
@@ -48,7 +48,7 @@ export function pullRequestContextFromRow(row: {
   title?: string;
   headBranch?: string;
   baseBranch?: string;
-  state: "draft" | "open" | "merged" | "closed";
+  state: PrState;
 }): PullRequestContext {
   return {
     number: row.prNumber,

@@ -4,8 +4,15 @@ import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { recordPullRequest } from "../convex/_pullRequests/store";
 import type { Id } from "../convex/_generated/dataModel";
-import type { RepoEvent } from "../convex/_automationEvents/events";
-import { EVENT_RUN_MAX_WAIT_MS } from "../convex/_automationEvents/events";
+import { sha256Hex } from "@vvedantb/server";
+import type {
+  AlertEvent,
+  RepoEvent,
+} from "../convex/_automationEvents/events";
+import {
+  ALERT_DEDUPE_WINDOW_MS,
+  EVENT_RUN_MAX_WAIT_MS,
+} from "../convex/_automationEvents/events";
 import { collectFeedback } from "../convex/_automationEvents/messages";
 import { pickOnePerPreset } from "../convex/_automationEvents/select";
 
@@ -346,6 +353,148 @@ describe("event run lifecycle", () => {
       ]);
       expect(waiting?.status).toBe("queued");
       expect(gaveUp?.status).toBe("error");
+    },
+    TIMEOUT_MS,
+  );
+});
+
+describe("alert webhook", () => {
+  const alert: AlertEvent = {
+    kind: "production_alert",
+    source: "axiom",
+    monitorId: "mon_1",
+    title: "5xx spike",
+    description: "",
+    body: "Current value of 12 is above the threshold of 5",
+    value: 12,
+  };
+
+  async function alertFixture() {
+    const fx = await fixture();
+    const automationId = await fx.install(
+      fx.ids.rootRepoId,
+      "axiom-alert-to-task",
+      { kind: "event", event: "production_alert" },
+    );
+    const secretHash = await sha256Hex("s3cret");
+    await fx.t.run((ctx) =>
+      ctx.db.patch(automationId, { alertSecretHash: secretHash }),
+    );
+    const receive = (hash: string | null, body: AlertEvent | null = alert) =>
+      fx.t.mutation(internal._automationEvents.dispatch.receiveAlert, {
+        automationId: String(automationId),
+        secretHash: hash,
+        alert: body,
+      });
+    return { ...fx, automationId, secretHash, receive };
+  }
+
+  test(
+    "only the right secret queues a run",
+    async () => {
+      const { automationId, secretHash, receive, runsOf } =
+        await alertFixture();
+      expect(await receive(null)).toBe("unauthorized");
+      expect(await receive(await sha256Hex("wrong"))).toBe("unauthorized");
+      expect(await runsOf(automationId)).toHaveLength(0);
+
+      expect(await receive(secretHash)).toBe("queued");
+      const [run] = await runsOf(automationId);
+      expect(run.eventKind).toBe("production_alert");
+      expect(run.eventKey).toBe("axiom:mon_1");
+      expect(run.targetUrl).toBeUndefined();
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "an unknown id or a non-alert automation is not found",
+    async () => {
+      const { t, ids, install, secretHash, receive } = await alertFixture();
+      const other = await install(ids.rootRepoId, "issue-to-task", {
+        kind: "event",
+        event: "issue_labeled",
+      });
+      expect(
+        await t.mutation(internal._automationEvents.dispatch.receiveAlert, {
+          automationId: String(other),
+          secretHash,
+          alert,
+        }),
+      ).toBe("not_found");
+      expect(
+        await t.mutation(internal._automationEvents.dispatch.receiveAlert, {
+          automationId: "not-an-id",
+          secretHash,
+          alert,
+        }),
+      ).toBe("not_found");
+      expect(await receive(secretHash)).toBe("queued");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "one monitor makes one run per hour, finished or not",
+    async () => {
+      const { t, automationId, secretHash, receive, runsOf } =
+        await alertFixture();
+      expect(await receive(secretHash)).toBe("queued");
+      const [first] = await runsOf(automationId);
+      await t.run((ctx) =>
+        ctx.db.patch(first._id, { status: "success", finishedAt: Date.now() }),
+      );
+
+      expect(await receive(secretHash)).toBe("deduped");
+      // A different monitor is a different problem.
+      expect(await receive(secretHash, { ...alert, monitorId: "mon_2" })).toBe(
+        "queued",
+      );
+
+      vi.setSystemTime(Date.now() + ALERT_DEDUPE_WINDOW_MS + 1);
+      expect(await receive(secretHash)).toBe("queued");
+      expect(await runsOf(automationId)).toHaveLength(3);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a resolve, or a switched-off automation, is accepted and ignored",
+    async () => {
+      const { t, automationId, secretHash, receive, runsOf } =
+        await alertFixture();
+      expect(await receive(secretHash, null)).toBe("ignored");
+      await t.run((ctx) => ctx.db.patch(automationId, { enabled: false }));
+      expect(await receive(secretHash)).toBe("ignored");
+      expect(await runsOf(automationId)).toHaveLength(0);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "with auto-start off, the task is created but not started",
+    async () => {
+      const { t, automationId, secretHash, receive, runsOf } =
+        await alertFixture();
+      await t.run((ctx) =>
+        ctx.db.patch(automationId, { autoStartTasks: false }),
+      );
+      await receive(secretHash);
+      const [run] = await runsOf(automationId);
+      await t.mutation(internal._automationEvents.dispatch.claimEventRun, {
+        runId: run._id,
+      });
+      const created = await t.mutation(
+        internal._automationEvents.dispatch.createTaskForEvent,
+        { runId: run._id, title: "Axiom alert: 5xx spike", description: "x" },
+      );
+      expect(created).not.toBeNull();
+      const scheduled = await t.run((ctx) =>
+        ctx.db.system.query("_scheduled_functions").collect(),
+      );
+      expect(
+        scheduled.some((job) => job.name.includes("autoStartTask")),
+      ).toBe(false);
     },
     TIMEOUT_MS,
   );

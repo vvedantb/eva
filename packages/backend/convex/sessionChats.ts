@@ -1,6 +1,5 @@
 export {
   listForSession,
-  listExtraForRepo,
   get,
   resolveForSession,
   getInternal,
@@ -11,7 +10,6 @@ export {
   ensureMain,
   create,
   rename,
-  archive,
   setModel,
   setProviderAccountId,
   setTraits,

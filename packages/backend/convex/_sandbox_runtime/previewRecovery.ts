@@ -7,6 +7,7 @@ import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { getSandboxHandle } from "./helpers";
 import { launchPreviewDevServer } from "./sessions";
+import { sandboxOwnerKey } from "@eva/shared";
 
 type SandboxStatus = "closed" | "stopping" | "starting" | string;
 
@@ -27,21 +28,23 @@ const sessionOwnerConfig: PreviewOwnerConfig<Doc<"sessions">> = {
   status: (session) => session.status,
   devPort: (session) => session.devPort,
   devCommand: (session) => session.devCommand,
-  ownerKey: (session) => `session-${session._id}`,
+  ownerKey: (session) =>
+    sandboxOwnerKey({ kind: "session", sessionId: session._id }),
 };
 
 const taskOwnerConfig: PreviewOwnerConfig<Doc<"agentTasks">> = {
   status: (task) => task.reviewTaskSandboxStatus,
   devPort: (task) => task.devPort,
   devCommand: (task) => task.devCommand,
-  ownerKey: (task) => `task-${task._id}`,
+  ownerKey: (task) => sandboxOwnerKey({ kind: "task", taskId: task._id }),
 };
 
 const projectOwnerConfig: PreviewOwnerConfig<Doc<"projects">> = {
   status: (project) => project.reviewProjectSandboxStatus,
   devPort: (project) => project.devPort,
   devCommand: (project) => project.devCommand,
-  ownerKey: (project) => `project-${project._id}`,
+  ownerKey: (project) =>
+    sandboxOwnerKey({ kind: "project", projectId: project._id }),
 };
 
 /**

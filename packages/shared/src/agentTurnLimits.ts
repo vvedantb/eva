@@ -15,6 +15,9 @@ export const TURN_BACKSTOP_MS = TURN_MAX_RUNTIME_MS + 30 * 60 * 1000;
 
 const TURN_MAX_RUNTIME_HOURS = TURN_MAX_RUNTIME_MS / 3_600_000;
 
+/** Error Convex stores when a turn reaches `TURN_BACKSTOP_MS`. */
+export const TURN_BACKSTOP_ERROR = `Turn exceeded the ${TURN_BACKSTOP_MS / 3_600_000}-hour limit`;
+
 /** Error the warm daemons report when a turn reaches `TURN_MAX_RUNTIME_MS`. */
 export const TURN_MAX_RUNTIME_ERROR =
   "The assistant exceeded the maximum turn runtime.";

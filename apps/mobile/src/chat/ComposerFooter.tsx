@@ -40,7 +40,14 @@ export function ComposerHeader({ attachments, composer }: { attachments: Compose
   );
 }
 
-/** The web footer chips: `text-xs font-normal text-muted-foreground`, as Eva overrides the `ModelPicker` trigger. */
+/**
+ * Every footer chip's shape: the web `text-xs font-normal`, as Eva overrides
+ * the `ModelPicker` trigger, at the kit's phone size (36 high in a 44 bar, so
+ * a tap lands on the chip, not the field above) in place of the web 28.
+ */
+export const FOOTER_CHIP = { size: "touch", weight: "normal" } as const;
+
+/** The web footer chips' `text-muted-foreground`. */
 export function useFooterChipColor() {
   return EVA_THEME[useScheme()].mutedForeground;
 }
@@ -54,7 +61,8 @@ export function useFooterChipColor() {
  * Nothing to hold: no bar, as the web.
  *
  * Each chip opens a bottom sheet in place of the web popover. The chips are
- * the web 28 high and reach 44 with slop, so the bar keeps the web 32.
+ * 36 high (`FOOTER_CHIP`) and the bar 44 (`py-1`), so each chip's 44 target
+ * stays inside the bar; the web 28 chips in a 32 bar are a mouse's density.
  */
 export function ComposerFooter({
   leading,
@@ -85,14 +93,17 @@ export function ComposerFooter({
   if (!leading && !stash && !modelChip) return null;
   return (
     <View
-      className="mx-3 flex-row items-center gap-0.5 px-2 py-0.5"
+      className="mx-3 flex-row items-center gap-0.5 px-2 py-1"
       style={{ backgroundColor: withAlpha(theme.muted, 0.7), borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}
     >
-      {/* 390 wide, the three chips want a few points more than the bar. The
-          model gives them up: its name stays and the trait summary truncates.
-          A long branch truncates at 40%, the web `max-w-[min(220px,40vw)]`. */}
+      {/* As the web phone bar: the leading control takes what the stash and
+          the model leave (`flex-1 basis-0`), so its label truncates first and
+          the model keeps its name and trait ("· High"). It never goes below
+          an icon and a chevron, and never past 40% (the web branch chip's
+          `max-w-[min(220px,40vw)]`). The model truncates only when it alone
+          does not fit. */}
       {leading ? (
-        <View className="shrink-0" style={{ maxWidth: "40%" }}>
+        <View className="flex-1 flex-row" style={{ minWidth: LEADING_MIN_WIDTH, maxWidth: "40%" }}>
           {leading}
         </View>
       ) : null}
@@ -101,6 +112,10 @@ export function ComposerFooter({
     </View>
   );
 }
+
+/** A chip squeezed to its icon and chevron, as the web branch chip at 390: `px-2`, 14 icon, two 6 gaps, 12 chevron. */
+const LEADING_MIN_WIDTH =
+  2 * PROMPT_INPUT_CHIP.paddingX + PROMPT_INPUT_CHIP.iconSize + 2 * PROMPT_INPUT_CHIP.gap + PROMPT_INPUT_CHIP.chevronSize;
 
 /** The web Simple view opt-in (`auth.getExperimentalFlags`); false while it loads. */
 export function useSimpleView(): boolean {
@@ -216,7 +231,7 @@ function StashChip({
         label="Stash"
         count={entries.length > 0 ? entries.length : undefined}
         chevron={false}
-        weight="normal"
+        {...FOOTER_CHIP}
         color={color}
         accessibilityLabel={`Prompt stash, ${entries.length} saved`}
         expanded={open}

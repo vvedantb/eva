@@ -1,7 +1,7 @@
 import { internalQuery, type QueryCtx } from "../_generated/server";
 import { v, type Infer } from "convex/values";
 import type { Doc } from "../_generated/dataModel";
-import { prStateValidator } from "../validators";
+import { chatEntityKindValidator, prStateValidator } from "../validators";
 import { mcpPullRequestValidator, toMcpPullRequests } from "./queries";
 import {
   listOwnerPullRequests,
@@ -9,18 +9,13 @@ import {
   taskPrUrl,
   type PrOwnerRef,
 } from "../_pullRequests/store";
-import { slugifyAppTabName } from "../appTabSlug";
+import { slugifyAppTabName } from "@eva/shared/appTabSlug";
 import { previewConsoleSessionName } from "../_pty/consoleSessionName";
+import { sandboxOwnerKey } from "@eva/shared";
 
 // Backs the chat-self MCP tools (chatSelfTools.ts). Internal on purpose: the
 // tool has already resolved the chat through `resolveEntityTarget`, which is
 // where the per-user access check lives, so this only reads what it was named.
-
-const chatKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
 
 const chatDetailsValidator = v.object({
   baseBranch: v.optional(v.string()),
@@ -72,7 +67,7 @@ type ChatOwnerFields = Pick<
 /** The per-surface fields; everything else is shared repo config. */
 async function ownerFields(
   ctx: QueryCtx,
-  kind: Infer<typeof chatKindValidator>,
+  kind: Infer<typeof chatEntityKindValidator>,
   id: string,
 ): Promise<ChatOwnerFields | null> {
   if (kind === "session") {
@@ -81,7 +76,7 @@ async function ownerFields(
     if (!session) return null;
     return {
       owner: { kind: "session", sessionId: session._id },
-      ownerKey: `session-${session._id}`,
+      ownerKey: sandboxOwnerKey({ kind: "session", sessionId: session._id }),
       baseBranch: session.baseBranch,
       prUrl: session.prUrl,
       prState: session.prState,
@@ -96,7 +91,7 @@ async function ownerFields(
     if (!task) return null;
     return {
       owner: { kind: "task", taskId: task._id },
-      ownerKey: `task-${task._id}`,
+      ownerKey: sandboxOwnerKey({ kind: "task", taskId: task._id }),
       baseBranch: task.baseBranch,
       prUrl: await taskPrUrl(ctx.db, task),
       prState: task.prState,
@@ -110,7 +105,7 @@ async function ownerFields(
   if (!project) return null;
   return {
     owner: { kind: "project", projectId: project._id },
-    ownerKey: `project-${project._id}`,
+    ownerKey: sandboxOwnerKey({ kind: "project", projectId: project._id }),
     baseBranch: project.baseBranch,
     prUrl: project.prUrl,
     prState: project.prState,
@@ -145,7 +140,7 @@ function linkedRepoRow(
  */
 export const getChatDetails = internalQuery({
   args: {
-    kind: chatKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
     /** The repo `resolveEntityTarget` settled on (a project task's comes from its project). */
     repoId: v.id("githubRepos"),

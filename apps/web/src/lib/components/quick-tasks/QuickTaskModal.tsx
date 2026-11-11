@@ -183,14 +183,22 @@ function useDraftAttachmentHydration(
   return setHydratedDraftId;
 }
 
-/** Model, traits and provider account picks, seeded from the repo defaults. */
+/**
+ * Model, traits and provider account picks. Unpicked fields follow the repo
+ * defaults live (like useNewSessionComposerState), so a repo switch or a
+ * default change never leaves a stale copy behind.
+ */
 function useModelAndAccount(repo: Repo) {
   const defaultModel = normalizeAIModel(repo.defaultModel ?? DEFAULT_AI_MODEL);
   const defaultTraits = storedTraitsFromRepoDefaults(repo);
-  const [model, setModel] = useState<AIModel>(defaultModel);
+  const [pickedModel, setPickedModel] = useState<AIModel | null>(null);
   // Absent traits fall back to each model's own defaults, so an untouched menu
   // sends nothing and the task runs exactly as it does today.
-  const [traits, setTraits] = useState<StoredModelTraits>(defaultTraits);
+  const [pickedTraits, setPickedTraits] = useState<Partial<StoredModelTraits>>(
+    {},
+  );
+  const model = pickedModel ?? defaultModel;
+  const traits: StoredModelTraits = { ...defaultTraits, ...pickedTraits };
   const [providerAccountId, setProviderAccountId] = useState<string | null>(
     null,
   );
@@ -214,11 +222,10 @@ function useModelAndAccount(repo: Repo) {
 
   return {
     defaultModel,
-    defaultTraits,
     model,
-    setModel,
+    setPickedModel,
     traits,
-    setTraits,
+    setPickedTraits,
     providerAccountId,
     setProviderAccountId,
     setAccountDefaulted,
@@ -641,11 +648,10 @@ export function QuickTaskModal({
 
   const {
     defaultModel,
-    defaultTraits,
     model,
-    setModel,
+    setPickedModel,
     traits,
-    setTraits,
+    setPickedTraits,
     providerAccountId,
     setProviderAccountId,
     setAccountDefaulted,
@@ -673,8 +679,8 @@ export function QuickTaskModal({
     setTitle("");
     setDescription("");
     setBaseBranch(defaultBranch);
-    setModel(defaultModel);
-    setTraits(defaultTraits);
+    setPickedModel(null);
+    setPickedTraits({});
     setProviderAccountId(defaultProviderAccountId(accounts, defaultModel));
     setAccountDefaulted(accounts.length > 0);
     setActiveDraftId(null);
@@ -936,7 +942,7 @@ export function QuickTaskModal({
                 value={model}
                 options={modelOptions}
                 onValueChange={(next) => {
-                  setModel(next);
+                  setPickedModel(next);
                   setProviderAccountId(
                     providerAccountIdForModel(
                       accounts,
@@ -950,7 +956,7 @@ export function QuickTaskModal({
                 onAccountChange={setProviderAccountId}
                 traits={traits}
                 onTraitsChange={(partial) =>
-                  setTraits((prev) => ({ ...prev, ...partial }))
+                  setPickedTraits((prev) => ({ ...prev, ...partial }))
                 }
                 className={QUICK_TASK_OPTION_BADGE_CLASS}
               />

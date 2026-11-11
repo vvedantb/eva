@@ -2,6 +2,7 @@
 
 // useEffect: subscribe to the preview iframe's postMessages.
 import { useEffect, useState } from "react";
+import { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
 import { isFromFrame, postToFrame } from "@/lib/utils/frameMessaging";
 
 /**
@@ -19,11 +20,14 @@ export function usePreviewFreeze(iframeElement: HTMLIFrameElement | null) {
       if (typeof event.data !== "object" || event.data === null) return;
       const data: object = event.data;
       const type = Reflect.get(data, "type");
-      if (type === "eva-preview-annotate-frozen") {
+      if (type === PREVIEW_FRAME_MESSAGE.annotateFrozen) {
         setFrozen(Reflect.get(data, "frozen") === true);
       }
       // A reload or navigation brings up a fresh page, which is not frozen.
-      if (type === "eva-preview-annotate-ready" || type === "navigation") {
+      if (
+        type === PREVIEW_FRAME_MESSAGE.annotateReady ||
+        type === PREVIEW_FRAME_MESSAGE.navigation
+      ) {
         setFrozen(false);
       }
     }
@@ -33,7 +37,7 @@ export function usePreviewFreeze(iframeElement: HTMLIFrameElement | null) {
 
   function toggle() {
     postToFrame(iframeElement, {
-      type: "eva-preview-annotate-freeze",
+      type: PREVIEW_FRAME_MESSAGE.annotateFreeze,
       active: !frozen,
     });
   }

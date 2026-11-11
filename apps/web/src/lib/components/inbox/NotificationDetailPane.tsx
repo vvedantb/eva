@@ -7,7 +7,7 @@ import { IconArrowUpRight, IconInbox } from "@tabler/icons-react";
 import { type Notification } from "@/lib/components/notifications/notification-config";
 import { splitNotificationTitle } from "@eva/shared/notificationTitle";
 import { MarkdownMentionText } from "@/lib/components/chat/MarkdownMentionText";
-import { embedReadyMessage } from "@/lib/embed/embedded";
+import { embedNavigate, embedReadyMessage } from "@/lib/embed/embedded";
 import { isInternalAppHref } from "@eva/shared/safeUrl";
 import { type RepoWithLogo } from "@/lib/utils/repoGrouping";
 import { repoHref, toInternalRepoHref } from "@/lib/utils/repoUrl";
@@ -35,7 +35,7 @@ function NotificationPagePreview({ href }: { href: string }) {
     if (!frame) return;
     if (readyRef.current && frame.contentWindow) {
       frame.contentWindow.postMessage(
-        { type: "eva:embed-navigate", href },
+        embedNavigate(href),
         window.location.origin,
       );
       return;

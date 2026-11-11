@@ -30,6 +30,7 @@ import {
   getMoreMenuVisibility,
   TaskFooterMoreMenu,
 } from "./TaskFooterMoreMenu";
+import { TaskHeaderMenu } from "./TaskHeaderMenu";
 
 type RunDoc = NonNullable<
   FunctionReturnType<typeof api.agentRuns.listByTask>
@@ -52,7 +53,6 @@ interface TaskFooterProps {
   isSandboxActive: boolean;
   isSandboxStarting: boolean;
   isSandboxStopping: boolean;
-  isRetryingStartupCommands: boolean;
   isRunningDevServer: boolean;
   isRunningBackgroundCommands: boolean;
   canCreatePr: boolean;
@@ -60,7 +60,6 @@ interface TaskFooterProps {
   onCreatePr: () => void;
   onStartSandbox: () => void;
   onStopSandbox: () => void;
-  onRunStartupCommands: () => void;
   onRunDevServer: () => void;
   onRunBackgroundCommands: () => void;
   onStartExecution: () => void;
@@ -161,7 +160,6 @@ export function TaskFooter({
   isSandboxActive,
   isSandboxStarting,
   isSandboxStopping,
-  isRetryingStartupCommands,
   isRunningDevServer,
   isRunningBackgroundCommands,
   canCreatePr,
@@ -169,7 +167,6 @@ export function TaskFooter({
   onCreatePr,
   onStartSandbox,
   onStopSandbox,
-  onRunStartupCommands,
   onRunDevServer,
   onRunBackgroundCommands,
   onStartExecution,
@@ -261,23 +258,38 @@ export function TaskFooter({
           {isHeader ? (
             <PrMergeConfetti owner={{ kind: "task", taskId }} />
           ) : null}
-          {moreMenu.showMoreMenu && (
-            <TaskFooterMoreMenu
-              visibility={moreMenu}
-              prLinks={prLinks}
-              isHeader={isHeader}
+          {isHeader && task ? (
+            <TaskHeaderMenu
+              task={task}
               buttonSize={buttonSize}
               iconSize={iconSize}
+              createPr={{
+                enabled: canCreatePr,
+                isCreating: isCreatingPr,
+                onCreate: onCreatePr,
+              }}
+              visibility={moreMenu}
               isStarting={isStarting}
-              isRetryingStartupCommands={isRetryingStartupCommands}
               isRunningDevServer={isRunningDevServer}
               isRunningBackgroundCommands={isRunningBackgroundCommands}
               onResolveConfirm={onResolveConfirm}
-              onRunStartupCommands={onRunStartupCommands}
               onRunDevServer={onRunDevServer}
               onRunBackgroundCommands={onRunBackgroundCommands}
             />
-          )}
+          ) : moreMenu.showMoreMenu ? (
+            <TaskFooterMoreMenu
+              visibility={moreMenu}
+              prLinks={prLinks}
+              buttonSize={buttonSize}
+              iconSize={iconSize}
+              isStarting={isStarting}
+              isRunningDevServer={isRunningDevServer}
+              isRunningBackgroundCommands={isRunningBackgroundCommands}
+              onResolveConfirm={onResolveConfirm}
+              onRunDevServer={onRunDevServer}
+              onRunBackgroundCommands={onRunBackgroundCommands}
+            />
+          ) : null}
           <SandboxCommitPushButton
             gitSync={task?.sandboxGitSync}
             isSandboxActive={isSandboxActive}

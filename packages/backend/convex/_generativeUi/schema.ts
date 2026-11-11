@@ -12,7 +12,11 @@
  */
 
 import { z } from "zod";
-import { CHAT_UI_TONES } from "@eva/shared/generativeUi";
+import {
+  CHAT_UI_BUTTON_VARIANTS,
+  CHAT_UI_TEXT_STYLES,
+  CHAT_UI_TONES,
+} from "@eva/shared/generativeUi";
 import { isHttpUrl } from "@eva/shared/safeUrl";
 
 export const MAX_BLOCKS = 24;
@@ -49,7 +53,7 @@ const headingBlock = z.object({
 const textBlock = z.object({
   kind: z.literal("text"),
   text: bodyText,
-  emphasis: z.enum(["body", "lead", "muted"]).default("body"),
+  emphasis: z.enum(CHAT_UI_TEXT_STYLES).default("body"),
 });
 
 const metricBlock = z.object({
@@ -120,7 +124,7 @@ const buttonBlock = z.object({
   reply: z.string().min(1).max(MAX_TEXT_CHARS).optional(),
   /** Opened in a new tab when pressed. Ignored when `reply` is set. */
   url: httpUrl.optional(),
-  variant: z.enum(["primary", "secondary", "ghost"]).default("secondary"),
+  variant: z.enum(CHAT_UI_BUTTON_VARIANTS).default("secondary"),
 });
 
 export const chatUiBlock = z.discriminatedUnion("kind", [

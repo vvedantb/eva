@@ -58,7 +58,7 @@ const AGENT_PROCESS_LIVENESS_COMMAND =
  *
  * Conservative failure handling: if we cannot reach the sandbox to determine state,
  * we report `alive: true` with reason `probe_unreachable` so the watchdog does
- * NOT kill on our inability to verify. The hard 2-hour timeout (`handleStaleRun`)
+ * NOT kill on our inability to verify. The hard `TURN_BACKSTOP_MS` timeout (`handleStaleRun`)
  * remains a backstop.
  */
 export const verifySandboxLiveness = internalAction({
