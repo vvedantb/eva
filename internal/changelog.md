@@ -1,5 +1,13 @@
 # Changelog
 
+## PR menus: three or more PRs fold into one submenu
+
+Date: 2026-11-11
+
+WHY: A session with nine PRs filled its menu with PR rows and pushed the session actions out of view.
+
+Architectural: `PrActionsSubmenus` shows up to `INLINE_PR_LIMIT` (2) PR rows inline; more fold into one "Pull requests (N)" submenu. Open and draft PRs sort first (stable sort keeps the query order within each half). Menu rows drop the branch line, since a chat's PRs mostly share one session branch; the stack popover keeps it. Every chat menu (sessions, quick tasks, projects) gets this.
+
 ## Sessions: one menu for the sidebar row, the session tab and the chat header
 
 Date: 2026-11-11
