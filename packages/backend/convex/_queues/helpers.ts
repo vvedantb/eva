@@ -89,7 +89,7 @@ type QueueSandboxState = "awake" | "asleep" | "transitioning";
  * now would race the stop, so the message waits for the next wake.
  */
 function sandboxStateFromStatus(
-  status: "active" | "starting" | "stopping" | "closed" | undefined,
+  status: Doc<"sessions">["status"] | undefined,
 ): QueueSandboxState {
   if (status === "active") return "awake";
   if (status === "starting" || status === "stopping") return "transitioning";

@@ -123,8 +123,10 @@ export {
   type ChatUserAttribution,
 } from "./teammateMessages";
 export {
+  isLivePrState,
   prStateLabel,
   prStateTone,
+  type LivePrState,
   type PrState,
   type PrStateTone,
 } from "./prState";

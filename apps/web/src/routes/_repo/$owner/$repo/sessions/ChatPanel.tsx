@@ -1,3 +1,4 @@
+import type { PrState } from "@eva/shared";
 import { api, normalizeAIModel, type Doc, type Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
@@ -75,7 +76,7 @@ interface ChatPanelProps {
   sandboxBranch?: string;
   sandboxGitSync?: Doc<"sessions">["sandboxGitSync"];
   prUrl?: string;
-  prState?: "draft" | "open" | "merged" | "closed";
+  prState?: PrState;
   summary?: string[];
   messages: SessionMessage[];
   /** The transcript has not loaded: show the loader, not the empty state. */
