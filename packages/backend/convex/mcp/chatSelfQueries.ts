@@ -11,6 +11,7 @@ import {
 } from "../_pullRequests/store";
 import { slugifyAppTabName } from "../appTabSlug";
 import { previewConsoleSessionName } from "../_pty/consoleSessionName";
+import { sandboxOwnerKey } from "@eva/shared";
 
 // Backs the chat-self MCP tools (chatSelfTools.ts). Internal on purpose: the
 // tool has already resolved the chat through `resolveEntityTarget`, which is
@@ -81,7 +82,7 @@ async function ownerFields(
     if (!session) return null;
     return {
       owner: { kind: "session", sessionId: session._id },
-      ownerKey: `session-${session._id}`,
+      ownerKey: sandboxOwnerKey({ kind: "session", sessionId: session._id }),
       baseBranch: session.baseBranch,
       prUrl: session.prUrl,
       prState: session.prState,
@@ -96,7 +97,7 @@ async function ownerFields(
     if (!task) return null;
     return {
       owner: { kind: "task", taskId: task._id },
-      ownerKey: `task-${task._id}`,
+      ownerKey: sandboxOwnerKey({ kind: "task", taskId: task._id }),
       baseBranch: task.baseBranch,
       prUrl: await taskPrUrl(ctx.db, task),
       prState: task.prState,
@@ -110,7 +111,7 @@ async function ownerFields(
   if (!project) return null;
   return {
     owner: { kind: "project", projectId: project._id },
-    ownerKey: `project-${project._id}`,
+    ownerKey: sandboxOwnerKey({ kind: "project", projectId: project._id }),
     baseBranch: project.baseBranch,
     prUrl: project.prUrl,
     prState: project.prState,

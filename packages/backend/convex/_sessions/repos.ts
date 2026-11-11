@@ -8,6 +8,7 @@ import {
   listOwnerPullRequests,
   sessionRepoPullRequest,
 } from "../_pullRequests/store";
+import { buildSessionBranchName } from "../_git/branchNames";
 
 /**
  * The repos checked out in one session's sandbox: the primary (`sessions.repoId`,
@@ -58,7 +59,7 @@ export const listRepos = authQuery({
 
     const repo = await ctx.db.get(session.repoId);
     if (!repo) return [];
-    const branchName = session.branchName ?? `eva/session-${session._id}`;
+    const branchName = session.branchName ?? buildSessionBranchName(session._id);
     const prs = await listOwnerPullRequests(ctx.db, {
       kind: "session",
       sessionId: session._id,
