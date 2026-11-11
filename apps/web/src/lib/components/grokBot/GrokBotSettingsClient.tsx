@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { api } from "@eva/backend";
 import {
@@ -19,14 +19,12 @@ export function GrokBotSettingsClient() {
   const setWebhook = useAction(api.grokBotActions.setWebhook);
   const clearSettings = useMutation(api.grokBot.clearSettings);
 
-  const [url, setUrl] = useState("");
+  // The saved URL owns the field until the user types; `null` = untouched.
+  // Kept after Save (the action can resolve before the query catches up, so
+  // dropping it would flash the old URL); it then equals the saved value.
+  const [urlDraft, setUrlDraft] = useState<string | null>(null);
   const [key, setKey] = useState("");
-
-  useEffect(() => {
-    if (settings) {
-      setUrl(settings.url ?? "");
-    }
-  }, [settings]);
+  const url = urlDraft ?? settings?.url ?? "";
 
   if (settings === undefined) {
     return (
@@ -58,7 +56,7 @@ export function GrokBotSettingsClient() {
   const handleClear = () => {
     void clearSettings({})
       .then(() => {
-        setUrl("");
+        setUrlDraft(null);
         setKey("");
         mutationSuccess("Grok Bot webhook cleared", "grok-bot-webhook-clear");
       })
@@ -101,7 +99,7 @@ export function GrokBotSettingsClient() {
               spellCheck={false}
               placeholder="https://api2.cursor.sh/automations/webhook/…"
               value={url}
-              onChange={(event) => setUrl(event.target.value)}
+              onChange={(event) => setUrlDraft(event.target.value)}
             />
           </SettingsField>
           <SettingsField

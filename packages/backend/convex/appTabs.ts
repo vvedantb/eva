@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { authQuery, authMutation, hasRepoAccess } from "./functions";
 import { appTabFields } from "./validators";
-import { RESERVED_APP_TAB_SLUGS, slugifyAppTabName } from "./appTabSlug";
+import { RESERVED_APP_TAB_SLUGS, slugifyAppTabName } from "@eva/shared/appTabSlug";
 import type { Doc, Id } from "./_generated/dataModel";
 
 const appTabValidator = v.object({

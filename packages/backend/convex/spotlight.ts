@@ -6,6 +6,7 @@ import {
   repoDisplayLabel,
 } from "./_githubRepos/helpers";
 import { filterActiveEntities, isEntityDeleted } from "./numId";
+import { entityHref } from "@eva/shared";
 import type { Doc } from "./_generated/dataModel";
 import { resolveExperimentalFlags } from "./_auth/experimentalFlags";
 
@@ -343,7 +344,7 @@ export const search = authQuery({
                 type: "project",
                 title: project.title,
                 subtitle: label,
-                href: `${base}/projects/${project.numId}`,
+                href: entityHref("project", repo, project.numId),
                 rank: rankMatch(project.title, query) + 20,
               },
               limit,
@@ -361,7 +362,7 @@ export const search = authQuery({
                 type: "session",
                 title: session.title,
                 subtitle: label,
-                href: `${base}/sessions/${session.numId}`,
+                href: entityHref("session", repo, session.numId),
                 rank: rankMatch(session.title, query) + 20,
               },
               limit,
@@ -397,7 +398,7 @@ export const search = authQuery({
                 type: "task",
                 title: task.title,
                 subtitle: label,
-                href: `${base}/quick-tasks/${task.numId}`,
+                href: entityHref("task", repo, task.numId),
                 rank: rankMatch(task.title, query) + 20,
               },
               limit,

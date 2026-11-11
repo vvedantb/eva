@@ -15,7 +15,10 @@ import {
   useSandboxChatTranscript,
   type SandboxChatBinding,
 } from "./sandboxChatBinding";
-import { SandboxChatPreInput } from "./SandboxChatPreInput";
+import {
+  SandboxChatPreInput,
+  SandboxChatStatusChips,
+} from "./SandboxChatPreInput";
 import {
   buildSandboxChatSurface,
   startSandboxHandler,
@@ -213,6 +216,7 @@ export function SandboxChatPanel({
           onSend={handleSend}
           onCancel={handleCancel}
           preInputContent={<SandboxChatPreInput surface={chatSurface} />}
+          composerChips={<SandboxChatStatusChips surface={chatSurface} />}
           underCardLeading={
             <SandboxBranchChip
               branch={doc?.sandboxBranch}

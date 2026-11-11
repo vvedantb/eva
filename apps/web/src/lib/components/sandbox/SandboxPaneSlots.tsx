@@ -3,8 +3,8 @@
 import { useQuery } from "convex/react";
 import { api, type Doc, type Id, type SandboxOwner } from "@eva/backend";
 import { cn } from "@eva/ui";
-import { previewWakePath } from "@eva/shared";
-import { slugifyAppTabName } from "@/lib/utils/appTabSlug";
+import { DESKTOP_PORT, EDITOR_PORT, previewWakePath } from "@eva/shared";
+import { slugifyAppTabName } from "@eva/shared/appTabSlug";
 import { isSandboxVmTab } from "@/lib/search-params";
 import { SandboxPresenceBeacon } from "./SandboxPresenceBeacon";
 import { SandboxAutoWake } from "./SandboxAutoWake";
@@ -305,7 +305,7 @@ export function SandboxPaneSlots({
             sandboxId={sandboxId}
             isActive={isActive}
             repoId={repoId}
-            externalHref={wakeHrefForPath?.("/", 8080)}
+            externalHref={wakeHrefForPath?.("/", EDITOR_PORT)}
             wake={wake}
           />
         </SandboxPaneBoundary>
@@ -325,7 +325,7 @@ export function SandboxPaneSlots({
             surface={resolvedTab === "browser" ? "browser" : "desktop"}
             agentBrowsingAt={agentBrowsingAt}
             onReleaseLock={onReleaseBrowserLock}
-            externalHref={wakeHrefForPath?.("/", 6080)}
+            externalHref={wakeHrefForPath?.("/", DESKTOP_PORT)}
             wake={wake}
           />
         </SandboxPaneBoundary>
