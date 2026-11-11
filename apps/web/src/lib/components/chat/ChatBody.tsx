@@ -15,6 +15,7 @@ import { ChatLastTurn } from "@/lib/components/chat/ChatLastTurn";
 import { ChatDayDivider } from "@/lib/components/chat/_components/ChatDayDivider";
 import { ChatNewDivider } from "@/lib/components/chat/_components/ChatNewDivider";
 import { ChatNewMessagesPill } from "@/lib/components/chat/_components/ChatNewMessagesPill";
+import { ChatBottomPin } from "@/lib/components/chat/_components/ChatBottomPin";
 import {
   ChatEarlierTurnsLoader,
   type TranscriptScrollAnchor,
@@ -435,6 +436,11 @@ function ChatBodyInner({
   // on the loading spinner and then commit the whole backlog in the render
   // that first has data.
   const backlogReady = useDeferredValue(displayMessages.length > 0, false);
+  // Rows already there when the chat opens (or finishes loading) render in
+  // place; only rows that arrive later slide in. Fading the last turn in on
+  // every open read as a flicker. Deferred for the same reason as
+  // `backlogReady`: the render that first has rows still sees false.
+  const rowsAnimateIn = useDeferredValue(!isLoadingMessages, false);
   // Keyed on `displayMessages`, which keeps its identity while a turn streams,
   // so the rail's observer is not rebuilt on every token.
   const jumpRailTicks = buildChatJumpRailTicks(
@@ -873,7 +879,7 @@ function ChatBodyInner({
         ) : null}
         <ChatMessage
           message={message}
-          animateIn={!isBacklog}
+          animateIn={!isBacklog && rowsAnimateIn}
           repo={repo}
           isLatestAssistantTurn={message._id === latestAssistantMessageId}
           showChangedFiles={!simpleView}
@@ -1016,6 +1022,11 @@ function ChatBodyInner({
           />
         ) : null}
         <ConversationScrollButton resetKey={conversationId} />
+        {/* A reply glides only once the chat has opened: the rows it opens
+            with land at the bottom without a scroll. */}
+        <ChatBottomPin
+          glide={streamingTargetId !== undefined && rowsAnimateIn}
+        />
         {/* Mounted with the backlog, so a linked row above the last turn is
             already in the DOM when this scrolls to it. */}
         {backlogReady && linkedMessageId !== undefined ? (
