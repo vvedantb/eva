@@ -52,7 +52,7 @@ type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
  */
 export default function NewQuickTaskScreen() {
   const router = useRouter();
-  const { repoId: repoParam } = useLocalSearchParams<{ repoId?: string }>();
+  const { repoId: repoParam, projectId: projectParam } = useLocalSearchParams<{ repoId?: string; projectId?: string }>();
   const leave = () => goBackOrReplace(router, "/sessions?section=quick-tasks");
   const repos = useQuery(api.githubRepos.list, {});
   const first = repos?.find((candidate) => candidate._id === repoParam) ?? repos?.[0];
@@ -64,11 +64,24 @@ export default function NewQuickTaskScreen() {
       </Screen>
     );
   }
-  return <NewQuickTaskForm repos={repos} initialRepo={first} onLeave={leave} />;
+  return <NewQuickTaskForm repos={repos} initialRepo={first} projectParam={projectParam} onLeave={leave} />;
 }
 
-/** The form, once the repos are in: the screen's repo starts as the link's (else the first). */
-function NewQuickTaskForm({ repos, initialRepo, onLeave: leave }: { repos: Repo[]; initialRepo: Repo; onLeave: () => void }) {
+/**
+ * The form, once the repos are in: the screen's repo starts as the link's
+ * (else the first), and the project as the link's (a project's To Do "+").
+ */
+function NewQuickTaskForm({
+  repos,
+  initialRepo,
+  projectParam,
+  onLeave: leave,
+}: {
+  repos: Repo[];
+  initialRepo: Repo;
+  projectParam: string | undefined;
+  onLeave: () => void;
+}) {
   const scheme = useScheme();
   const theme = EVA_THEME[scheme];
   const insets = useSafeAreaInsets();
@@ -94,7 +107,10 @@ function NewQuickTaskForm({ repos, initialRepo, onLeave: leave }: { repos: Repo[
   const [priority, setPriority] = useState<Priority | undefined>(undefined);
   const [assignedTo, setAssignedTo] = useState<Id<"users"> | undefined>(undefined);
   const [tags, setTags] = useState<string[]>([]);
-  const [projectId, setProjectId] = useState<Id<"projects"> | undefined>(undefined);
+  // A pick wins; until then, the link's project once the repo's projects resolve it (route params are strings).
+  const [pickedProject, setPickedProject] = useState<{ id: Id<"projects"> | undefined } | null>(null);
+  const projectId = pickedProject ? pickedProject.id : projects?.find((candidate) => candidate._id === projectParam)?._id;
+  const setProjectId = (id: Id<"projects"> | undefined) => setPickedProject({ id });
   // As the new-session screen: model and traits start from the repo defaults
   // and a pick overrides them; the base branch is kept with its repo.
   const [pickedModel, setPickedModel] = useState<AIModel | null>(null);

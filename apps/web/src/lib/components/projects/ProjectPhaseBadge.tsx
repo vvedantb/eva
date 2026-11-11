@@ -3,6 +3,7 @@
 import { AnimatePresence, m } from "motion/react";
 import { Badge, tokenTransition } from "@vvedantb/ui";
 import type { Doc } from "@eva/backend";
+import { PROJECT_PHASE_LABELS } from "@eva/shared";
 import {
   IconNotes,
   IconCheck,
@@ -18,22 +19,7 @@ export type ProjectPhase = Doc<"projects">["phase"];
 
 export { PROJECT_PHASES } from "@eva/backend";
 
-/** Phases a user can manually switch to via the status dropdown.
- *  Excludes draft/finalized — those are driven by the planning/interview flow. */
-export const ACTIVE_PROJECT_PHASES: ProjectPhase[] = [
-  "in_progress",
-  "business_review",
-  "code_review",
-  "completed",
-  "cancelled",
-];
-
-/** Phases where the autonomous "Build Project" workflow can be started. */
-export const BUILDABLE_PROJECT_PHASES: ProjectPhase[] = [
-  "in_progress",
-  "business_review",
-  "code_review",
-];
+export { ACTIVE_PROJECT_PHASES, BUILDABLE_PROJECT_PHASES } from "@eva/shared";
 
 export const phaseConfig: Record<
   ProjectPhase,
@@ -54,7 +40,7 @@ export const phaseConfig: Record<
     bar: "bg-muted-foreground/50",
     barColor: "rgb(var(--muted-foreground) / 0.5)",
     text: "text-muted-foreground",
-    label: "Draft",
+    label: PROJECT_PHASE_LABELS.draft,
     icon: IconNotes,
   },
   finalized: {
@@ -63,7 +49,7 @@ export const phaseConfig: Record<
     bar: "bg-blue-500",
     barColor: "rgb(59 130 246)",
     text: "text-blue-600 dark:text-blue-400",
-    label: "Finalized",
+    label: PROJECT_PHASE_LABELS.finalized,
     icon: IconCheck,
   },
   in_progress: {
@@ -72,7 +58,7 @@ export const phaseConfig: Record<
     bar: "bg-status-progress-bar",
     barColor: "rgb(var(--status-progress-bar))",
     text: "text-status-progress",
-    label: "In Progress",
+    label: PROJECT_PHASE_LABELS.in_progress,
     icon: IconClock,
   },
   business_review: {
@@ -81,7 +67,7 @@ export const phaseConfig: Record<
     bar: "bg-status-business-review-bar",
     barColor: "rgb(var(--status-business-review-bar))",
     text: "text-status-business-review",
-    label: "Business Review",
+    label: PROJECT_PHASE_LABELS.business_review,
     icon: IconClipboardCheck,
   },
   code_review: {
@@ -90,7 +76,7 @@ export const phaseConfig: Record<
     bar: "bg-status-code-review-bar",
     barColor: "rgb(var(--status-code-review-bar))",
     text: "text-status-code-review",
-    label: "Code Review",
+    label: PROJECT_PHASE_LABELS.code_review,
     icon: IconEye,
   },
   completed: {
@@ -99,7 +85,7 @@ export const phaseConfig: Record<
     bar: "bg-status-done-bar",
     barColor: "rgb(var(--status-done-bar))",
     text: "text-status-done",
-    label: "Merged",
+    label: PROJECT_PHASE_LABELS.completed,
     icon: IconCircleCheck,
   },
   cancelled: {
@@ -108,7 +94,7 @@ export const phaseConfig: Record<
     bar: "bg-status-cancelled-bar",
     barColor: "rgb(var(--status-cancelled-bar))",
     text: "text-status-cancelled",
-    label: "Cancelled",
+    label: PROJECT_PHASE_LABELS.cancelled,
     icon: IconCircleX,
   },
 };

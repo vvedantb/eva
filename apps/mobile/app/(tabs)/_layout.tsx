@@ -1,6 +1,7 @@
 import { useAuth } from "@clerk/clerk-expo";
 import {
   IconInbox,
+  IconLayoutKanban,
   IconSettings,
   IconTerminal2,
 } from "@tabler/icons-react-native";
@@ -24,12 +25,16 @@ const iconColor = (color: ColorValue) =>
 const renderTabBar = (props: FloatingTabBarProps) => (
   <FloatingTabBar {...props} />
 );
-// Same icons as the web rail: inbox arrow, terminal for Sessions, gear.
+// Same icons as the web rail: inbox arrow, terminal for Sessions, gear; the
+// web Projects empty state's board for Projects.
 const inboxIcon = ({ color, size }: TabIconProps) => (
   <IconInbox color={iconColor(color)} size={size} />
 );
 const sessionsIcon = ({ color, size }: TabIconProps) => (
   <IconTerminal2 color={iconColor(color)} size={size} />
+);
+const projectsIcon = ({ color, size }: TabIconProps) => (
+  <IconLayoutKanban color={iconColor(color)} size={size} />
 );
 const settingsIcon = ({ color, size }: TabIconProps) => (
   <IconSettings color={iconColor(color)} size={size} />
@@ -57,6 +62,10 @@ export default function TabsLayout() {
           <Tabs.Screen
             name="sessions"
             options={{ title: "Sessions", tabBarIcon: sessionsIcon }}
+          />
+          <Tabs.Screen
+            name="projects"
+            options={{ title: "Projects", tabBarIcon: projectsIcon }}
           />
           <Tabs.Screen
             name="settings"
