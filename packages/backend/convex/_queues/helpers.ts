@@ -211,7 +211,7 @@ type ChatQueueConfig<TId extends ChatQueueId, TEntity, TPrepared> = {
  *
  * Subagents only count on an awake sandbox: they die with their VM, and a stop
  * never settles them. Counting them on a sleeping sandbox held the message
- * without waking Eva, so it sat in "Queued" until the 2-hour cap.
+ * without waking Eva, so it sat in "Queued" until the `TURN_BACKSTOP_MS` cap.
  */
 async function isSurfaceBusy<TId extends ChatQueueId, TEntity, TPrepared>(
   ctx: MutationCtx,

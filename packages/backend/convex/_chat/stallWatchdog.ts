@@ -112,7 +112,7 @@ export async function finalizeStaleChatTurn<TId extends ChatId, TEntity>(
     await adapter.interrupt(ctx, entity);
   }
 
-  // The 2-hour backstop and the lease reconciler can both reach one turn.
+  // The `TURN_BACKSTOP_MS` backstop and the lease reconciler can both reach one turn.
   // Closing the durable turn here stops the reconciler from tearing the same
   // turn down a second time.
   await closeTurnForWorkflow(ctx, id, workflowId, "error", {

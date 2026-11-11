@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./activityTrace": "./src/activityTrace.ts",
     "./agentTurnLimits": "./src/agentTurnLimits.ts",
+    "./appTabSlug": "./src/appTabSlug.ts",
     "./chatFeedback": "./src/chatFeedback.ts",
     "./chatLog": "./src/chatLog.ts",
     "./dates": "./src/utils/dates.ts",

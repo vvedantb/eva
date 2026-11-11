@@ -4,6 +4,7 @@ import {
   QUICK_TASK_SORT_FIELDS,
   QUICK_TASK_TIME_RANGES,
 } from "@eva/shared";
+import { SANDBOX_TABS, type SandboxTab } from "@eva/shared/appTabSlug";
 import {
   parseAsString,
   parseAsStringLiteral,
@@ -105,20 +106,7 @@ export const projectSortFieldParser = parseAsStringLiteral(projectSortFields)
   .withDefault("created")
   .withOptions(searchOptions);
 
-const sandboxTabs = [
-  "preview",
-  "browser",
-  "editor",
-  "computer",
-  "review",
-  "files",
-  "agents",
-  "prd",
-  "designs",
-  "artifacts",
-  "documents",
-] as const;
-export type SandboxTab = (typeof sandboxTabs)[number];
+export type { SandboxTab };
 
 // Full sandbox path of the file open in the session File Viewer tab, persisted
 // in the URL so a viewed file survives reload and is shareable.
@@ -134,7 +122,7 @@ export const markdownViewParser = parseAsStringLiteral(markdownViews)
   .withOptions(searchOptions);
 
 export function isSessionSandboxTab(s: string): s is SandboxTab {
-  return sandboxTabs.some((tab) => tab === s);
+  return SANDBOX_TABS.some((tab) => tab === s);
 }
 
 /** Tabs that only mean anything while the VM is up: Review, Agents, PRD, … do not. */
