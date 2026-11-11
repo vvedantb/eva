@@ -17,6 +17,7 @@ import {
   assertProviderAccountUsableBy,
   reconcileProviderAccountForModel,
 } from "../_userProviderAccounts/defaults";
+import { isSessionArchived } from "../_sessions/archive";
 import { cancelChatExecution } from "../_sessions/execution";
 import {
   createSessionChat,
@@ -84,7 +85,7 @@ export const create = authMutation({
       args.sessionId,
       ctx.userId,
     );
-    if (session.archived === true) {
+    if (isSessionArchived(session)) {
       throw new Error("This session is archived");
     }
     await ensureMainChat(ctx, session);
