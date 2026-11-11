@@ -14,11 +14,7 @@ import {
   reasoningLevelValidator,
 } from "../validators";
 import { sessionValidator } from "./helpers";
-import {
-  isSessionArchived,
-  listRepoSessionsByArchive,
-  withResolvedArchive,
-} from "./archive";
+import { isSessionArchived, listRepoSessionsByArchive } from "./archive";
 import {
   chatTurnFlagsForRepos,
   sessionIsExecuting,
@@ -467,7 +463,7 @@ export const get = authQuery({
     const session = await ctx.db.get(args.id);
     if (!session) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return null;
-    return withResolvedArchive(entityVisible(session));
+    return entityVisible(session);
   },
 });
 
@@ -486,6 +482,6 @@ export const getByNumId = authQuery({
         q.eq("repoId", args.repoId).eq("numId", args.numId),
       )
       .first();
-    return withResolvedArchive(entityVisible(session));
+    return entityVisible(session);
   },
 });

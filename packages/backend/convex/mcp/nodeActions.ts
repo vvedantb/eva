@@ -776,21 +776,17 @@ const projectDocSchema = z.object({
   updatedAt: z.number().optional(),
   activeWorkflowId: z.string().optional(),
   build: z.object({ state: z.enum(["scheduled", "running"]) }).optional(),
-  /** Legacy build state for unmigrated rows; 0e drops it. */
-  activeBuildWorkflowId: z.string().optional(),
   activeChatWorkflowId: z.string().optional(),
   reviewProjectSandboxStatus: z.string().optional(),
   model: z.string().optional(),
   lastChatModel: z.string().optional(),
 });
 
-/** `isProjectBuilding` for a parsed doc; the legacy field only counts without `build`. */
+/** `isProjectBuilding` for a parsed doc. */
 function projectDocBuildRunning(
   project: z.infer<typeof projectDocSchema>,
 ): boolean {
-  return project.build
-    ? project.build.state === "running"
-    : project.activeBuildWorkflowId !== undefined;
+  return project.build?.state === "running";
 }
 
 /** `sessionChats:resolveDeliveryChat` — the chat a session message lands in. */

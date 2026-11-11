@@ -537,11 +537,7 @@ export const sessionChatFields = {
   archived: v.optional(v.boolean()),
   createdBy: v.optional(v.id("users")),
   updatedAt: v.optional(v.number()),
-  /**
-   * Legacy, unused: the open turn (`turns.workflowId`) is the only record.
-   * Cleared by `dataMigrations:clearSessionWorkflowSlots`; 0e drops it.
-   */
-  activeWorkflowId: v.optional(v.string()),
+  // `activeWorkflowId` removed. schema-narrowing-ok: clearSessionWorkflowSlots
   /** Unread watermark, set when one of this chat's turns closes (see chatReads). */
   lastTurnFinishedAt: v.optional(v.number()),
   // Composer settings, sticky per chat (see the matching session comments
@@ -616,21 +612,14 @@ export const agentTaskFields = {
   baseBranch: v.optional(v.string()),
   /** The task's own run lifecycle; absent = idle. Written only by `_agentTasks/runState.ts`. */
   run: v.optional(taskRunValidator),
-  /** @deprecated Legacy run state; read via `taskRunState`, cleared by `migrateTaskRunState`. */
-  activeWorkflowId: v.optional(v.string()),
-  /** @deprecated Never written; cleared by `migrateTaskRunState`. */
-  scheduledRetryAt: v.optional(v.number()),
-  /** @deprecated Legacy run state; read via `taskRunState`, cleared by `migrateTaskRunState`. */
-  scheduledAt: v.optional(v.number()),
-  /** @deprecated Legacy run state; read via `taskRunState`, cleared by `migrateTaskRunState`. */
-  scheduledFunctionId: v.optional(v.id("_scheduled_functions")),
+  // Legacy run fields removed. schema-narrowing-ok: migrateTaskRunState
   // Canonical sandbox shared across run/preview/resolve_conflicts. Persists
   // across the task lifecycle so reviewers can resume in-sandbox state (DB,
   // generated fixtures) instead of re-bootstrapping from the branch.
   sandboxId: v.optional(v.string()),
   /** Earliest time a dead task's sandbox may be deleted (grace after done/cancelled). */
   sandboxDeleteAfter: v.optional(v.number()),
-  // Separate from `activeWorkflowId` so a task can host an in-sandbox chat
+  // Separate from `run` so a task can host an in-sandbox chat
   // (via the sandbox view) concurrently with — and without conflicting with —
   // its main run workflow.
   activeChatWorkflowId: v.optional(v.string()),
@@ -763,15 +752,12 @@ export const sessionFields = {
    * sandbox — a grey dot with no explanation and no retry.
    */
   sandboxError: v.optional(v.string()),
-  /** @deprecated Moved to `archive.sandboxDeleteAfter`; cleared by `backfillSessionArchive`. */
-  sandboxDeleteAfter: v.optional(v.number()),
   ptySessionId: v.optional(v.string()),
   updatedAt: v.optional(v.number()),
   status: sessionStatusValidator,
   /** Bumped by every start request; see `_sandbox/transitions.ts`. */
   sandboxStartAttempt: v.optional(v.number()),
-  /** @deprecated Moved to `archive`; cleared by `backfillSessionArchive`. */
-  archived: v.optional(v.boolean()),
+  // Legacy `archived` / `sandboxDeleteAfter` removed. schema-narrowing-ok: backfillSessionArchive
   /**
    * Set while the session is archived; absent while it is live. Owned by
    * `_sessions/archive.ts` — read it through `isSessionArchived`.
@@ -791,14 +777,7 @@ export const sessionFields = {
   planContent: v.optional(v.string()),
   /** Sticky Plan/Build toggle. Absent sessions are Build. */
   lastInteractionMode: v.optional(interactionModeValidator),
-  /**
-   * Legacy, unused: busy is the open turn, and the summary's workflow id sits
-   * on its `summary` lane turn. So is `turnLifecycleVersion`, the old durable-
-   * turn cutover marker. Both are cleared by
-   * `dataMigrations:clearSessionWorkflowSlots`; 0e drops them.
-   */
-  activeWorkflowId: v.optional(v.string()),
-  turnLifecycleVersion: v.optional(v.literal(2)),
+  // `activeWorkflowId` / `turnLifecycleVersion` removed. schema-narrowing-ok: clearSessionWorkflowSlots
   // The user provider account chosen for this session's runs (overriding the
   // team credential). Session-scoped so the page-open daemon prewarm — which
   // has no per-message context — still injects the right account. Absent = team
@@ -1225,15 +1204,10 @@ export const projectFields = {
   activeWorkflowId: v.optional(v.string()),
   /** The project build lifecycle; absent = idle. Written only by `_projects/buildState.ts`. */
   build: v.optional(projectBuildValidator),
-  /** @deprecated Legacy build state; read via `projectBuildState`, cleared by `migrateProjectBuildState`. */
-  activeBuildWorkflowId: v.optional(v.string()),
+  // Legacy build fields removed. schema-narrowing-ok: migrateProjectBuildState
   // Separate from build + spec workflows so the in-sandbox chat can run
   // independently of the project's other lifecycle workflows.
   activeChatWorkflowId: v.optional(v.string()),
-  /** @deprecated Legacy build state; read via `projectBuildState`, cleared by `migrateProjectBuildState`. */
-  scheduledBuildAt: v.optional(v.number()),
-  /** @deprecated Legacy build state; read via `projectBuildState`, cleared by `migrateProjectBuildState`. */
-  scheduledBuildFunctionId: v.optional(v.id("_scheduled_functions")),
   lastBuildError: v.optional(v.string()),
   branchVersion: v.optional(v.number()),
   // Set when chat or other queue helpers touch the project. Mirrors

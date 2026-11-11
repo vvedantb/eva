@@ -55,27 +55,16 @@ function liveProjectsForRepo(
 }
 
 /** A repo's projects with a build workflow running (deleted rows included). */
-async function buildingProjectsForRepo(
+function buildingProjectsForRepo(
   db: GenericDatabaseReader<DataModel>,
   repoId: Id<"githubRepos">,
 ) {
-  const [building, legacy] = await Promise.all([
-    db
-      .query("projects")
-      .withIndex("by_repo_and_build_state", (q) =>
-        q.eq("repoId", repoId).eq("build.state", "running"),
-      )
-      .collect(),
-    // Rows `migrateProjectBuildState` has not reached yet; 0e drops this.
-    // Every string sorts at or after "", and `undefined` sorts before it.
-    db
-      .query("projects")
-      .withIndex("by_repo_and_build_workflow", (q) =>
-        q.eq("repoId", repoId).gte("activeBuildWorkflowId", ""),
-      )
-      .collect(),
-  ]);
-  return [...building, ...legacy];
+  return db
+    .query("projects")
+    .withIndex("by_repo_and_build_state", (q) =>
+      q.eq("repoId", repoId).eq("build.state", "running"),
+    )
+    .collect();
 }
 
 /** Lists all projects for a repo. */

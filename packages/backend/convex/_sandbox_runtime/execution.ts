@@ -1598,7 +1598,6 @@ type PrewarmEntityDaemonBaseParams = {
   credentialOwnerUserId?: Id<"users">;
   sessionPersistenceId?: Infer<typeof sessionPersistenceIdValidator>;
   streamingEntityId?: string;
-  activeWorkflowField: "activeWorkflowId" | "activeChatWorkflowId";
   skipPrewarm?: boolean;
 };
 
@@ -1959,10 +1958,6 @@ export const prewarmEntityDaemon = internalAction({
     credentialOwnerUserId: v.optional(v.id("users")),
     sessionPersistenceId: v.optional(sessionPersistenceIdValidator),
     streamingEntityId: v.optional(v.string()),
-    activeWorkflowField: v.union(
-      v.literal("activeWorkflowId"),
-      v.literal("activeChatWorkflowId"),
-    ),
     skipPrewarm: v.optional(v.boolean()),
     entityTable: v.union(
       v.literal("sessionChats"),
@@ -2161,7 +2156,6 @@ export const prewarmSessionDaemon = internalAction({
       providerAccountId: args.providerAccountId,
       credentialOwnerUserId: args.credentialOwnerUserId,
       sessionPersistenceId: args.sessionPersistenceId,
-      activeWorkflowField: "activeWorkflowId",
       skipPrewarm,
       entityTable: "sessionChats",
     });

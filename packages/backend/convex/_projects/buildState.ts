@@ -19,48 +19,18 @@ import { cancelScheduledFunction } from "../_scheduling/helpers";
  * the build is on is not stored here: it is the project task whose own `run`
  * is `running` (`_agentTasks/runState.ts`).
  *
- * Every write of `build` goes through this module, and each write clears the
- * legacy fields (`activeBuildWorkflowId`, `scheduledBuildAt`,
- * `scheduledBuildFunctionId`). Reads go through `projectBuildState`, which
- * falls back to the legacy fields for rows `migrateProjectBuildState` has not
- * reached yet.
+ * Every write of `build` goes through this module.
  */
 export type ProjectBuild = Infer<typeof projectBuildValidator>;
 type ScheduledBuild = { at: number; jobId: Id<"_scheduled_functions"> };
 
-export type ProjectBuildSource = Pick<
-  Doc<"projects">,
-  | "build"
-  | "activeBuildWorkflowId"
-  | "scheduledBuildAt"
-  | "scheduledBuildFunctionId"
->;
+export type ProjectBuildSource = Pick<Doc<"projects">, "build">;
 
-/**
- * The project's build state; `undefined` is idle. Legacy rows: a schedule
- * needs both its time and its job, and a schedule next to a running build
- * waits behind it. 0e drops the fallback with the legacy fields.
- */
+/** The project's build state; `undefined` is idle. */
 export function projectBuildState(
   project: ProjectBuildSource,
 ): ProjectBuild | undefined {
-  if (project.build !== undefined) return project.build;
-  const scheduled =
-    project.scheduledBuildAt !== undefined &&
-    project.scheduledBuildFunctionId !== undefined
-      ? {
-          at: project.scheduledBuildAt,
-          jobId: project.scheduledBuildFunctionId,
-        }
-      : undefined;
-  if (project.activeBuildWorkflowId !== undefined) {
-    return {
-      state: "running",
-      workflowId: project.activeBuildWorkflowId,
-      scheduled,
-    };
-  }
-  return scheduled && { state: "scheduled", ...scheduled };
+  return project.build;
 }
 
 /** The pending scheduled build, alone or behind a running one. */
@@ -193,12 +163,7 @@ async function applyProjectBuildEvent(
   const previous = projectBuildState(project);
   const result = nextProjectBuild(previous, event);
   if (result.ok) {
-    await ctx.db.patch(projectId, {
-      build: result.next,
-      activeBuildWorkflowId: undefined,
-      scheduledBuildAt: undefined,
-      scheduledBuildFunctionId: undefined,
-    });
+    await ctx.db.patch(projectId, { build: result.next });
   }
   return { ...result, previous };
 }
