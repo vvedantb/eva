@@ -111,6 +111,13 @@ export {
 export { MESSAGE_LINK_PARAM, messageLinkHref } from "./messageLink";
 export { buildPrecedingUserTurns } from "./precedingUserTurns";
 export {
+  firstNameByUserId,
+  firstNameFromUser,
+  isOtherUserChatMessage,
+  otherUserIdsInChat,
+  type ChatUserAttribution,
+} from "./teammateMessages";
+export {
   prStateLabel,
   prStateTone,
   type PrState,
