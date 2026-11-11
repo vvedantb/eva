@@ -65,6 +65,8 @@ export interface TaskCardMenuItemsProps {
   showOpenInNewTab?: boolean;
   /** Task header only: its sandbox and PR commands, above the shared items. */
   leading?: ReactNode;
+  /** Off in the task header, which has its own Run Eva button. */
+  showRunEva?: boolean;
   assignedTo?: Id<"users">;
   projectId?: Id<"projects">;
   repoId?: Id<"githubRepos">;
@@ -90,6 +92,7 @@ export function TaskCardMenuItems({
   href,
   showOpenInNewTab = false,
   leading,
+  showRunEva = true,
   assignedTo,
   projectId,
   repoId,
@@ -176,7 +179,7 @@ export function TaskCardMenuItems({
         </>
       ) : null}
 
-      {!projectId && (
+      {showRunEva && !projectId && (
         <>
           <Item
             disabled={!canRun}

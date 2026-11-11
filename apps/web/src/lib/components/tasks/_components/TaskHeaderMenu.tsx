@@ -94,6 +94,7 @@ export function TaskHeaderMenu({
           <TaskCardMenuItems
             variant="dropdown"
             {...menuProps}
+            showRunEva={false}
             leading={
               hasCommands || createPrItem.hasItems ? (
                 <>

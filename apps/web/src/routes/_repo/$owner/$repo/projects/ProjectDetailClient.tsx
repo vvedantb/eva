@@ -215,19 +215,19 @@ export function ProjectDetailClient({
     setIsCreatingPr(false);
   };
 
-  const { hasDeployedPreview, canCreatePr } = getProjectPrFlags(
+  const { canCreatePr } = getProjectPrFlags(
     project,
     latestDeployment,
   );
+  // Create PR only: the header menu draws the PR rows (`ProjectCardMenuItems`).
   const prLinks = usePrLinkMenuItems({
     createPr: {
       enabled: canCreatePr,
       isCreating: isCreatingPr,
       onCreate: handleCreatePr,
     },
-    prUrl: project?.prUrl,
-    owner: { kind: "project", projectId },
-    hasDeployment: hasDeployedPreview,
+    prUrl: undefined,
+    hasDeployment: false,
   });
 
   const handleResolveConflicts = async () => {
