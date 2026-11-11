@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useConvexAuth } from "convex/react";
-import { api } from "@eva/backend";
+import { DEFAULT_ACCENT_COLOR, api } from "@eva/backend";
 import {
   ACCENT_COLORS,
   lookupAccent,
@@ -69,7 +69,7 @@ export function FaviconController() {
     api.auth.getCustomTheme,
     isAuthenticated ? {} : "skip",
   );
-  const accentColor = customTheme?.accentColor ?? "zinc";
+  const accentColor = customTheme?.accentColor ?? DEFAULT_ACCENT_COLOR;
 
   useEffect(() => {
     // The tab title carries the same count as the badge ("(3) … | Eva"), so it

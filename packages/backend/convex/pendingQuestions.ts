@@ -79,6 +79,28 @@ export async function detachPendingQuestions(
   }
 }
 
+/**
+ * The chat's open after-turn question: the newest message is an assistant
+ * reply that carries `pendingQuestion`. The card renders only there, so any
+ * later message — the answer, or anything else — closes it.
+ */
+export async function findOpenChatQuestion(
+  db: GenericDatabaseReader<DataModel>,
+  parentId: Doc<"messages">["parentId"],
+): Promise<Doc<"messages"> | null> {
+  const tail = await db
+    .query("messages")
+    .withIndex("by_parent", (q) => q.eq("parentId", parentId))
+    .order("desc")
+    .first();
+  const open =
+    tail !== null &&
+    tail.role === "assistant" &&
+    tail.isSystemAlert !== true &&
+    Boolean(tail.pendingQuestion);
+  return open ? tail : null;
+}
+
 /** One-off ops escape hatch: detach stale rows for an entity via `npx convex run`. */
 export const clearForEntity = internalMutation({
   args: { entityId: v.string() },

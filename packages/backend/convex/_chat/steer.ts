@@ -2,6 +2,7 @@ import type { Doc } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { normalizeAIModel, supportsNativeSteer } from "../validators";
 import { drainChatQueueQuietly } from "../_queues/helpers";
+import { findOpenChatQuestion } from "../pendingQuestions";
 import { loadSessionChat } from "../_sessionChats/helpers";
 import { cancelChatExecution } from "../_sessions/execution";
 import { cancelTaskChatExecution } from "../agentTaskChatWorkflow";
@@ -141,6 +142,12 @@ export async function steerQueuedMessage(
   } else if (delivery === "interrupt") {
     await target.interrupt();
   } else {
+    // Steer is "send this now": it skips an open question, which would
+    // otherwise hold every message queued before it.
+    const question = await findOpenChatQuestion(ctx.db, target.entityId);
+    if (question) {
+      await ctx.db.patch(question._id, { pendingQuestion: undefined });
+    }
     await drainChatQueueQuietly(ctx, target.entityId);
   }
   return delivery;

@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   duplicateFromChoice,
   duplicateOptionKey,
-  FINDING_SEVERITIES,
   MAX_DUPLICATE_CANDIDATES,
   SEVERITY_LEVELS,
   severityFromScore,
   type DuplicateCandidate,
 } from "../convex/_automations/triageMapping";
+import { FINDING_SEVERITIES } from "../convex/_validators/enums";
 
 // The mapping is generic over the id type, so plain strings stand in for the
 // `Id<"agentTasks">` the action passes.

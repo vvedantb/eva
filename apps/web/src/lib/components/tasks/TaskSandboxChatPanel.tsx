@@ -13,8 +13,13 @@ import {
   type StoredModelTraits,
 } from "@eva/backend";
 import { patchLoadedQuery } from "@vvedantb/server";
-import { composerTraitFields, storedComposerTraits, toRunTraitArgs } from "@eva/shared";
+import {
+  composerTraitFields,
+  storedComposerTraits,
+  toRunTraitArgs,
+} from "@eva/shared";
 import { openChatTurnOptimistically } from "@/lib/components/chat/useChatTurnOpen";
+import { insertSentTurnOptimistically } from "@/lib/components/chat/useChatSend";
 import {
   SandboxChatPanel,
   type SandboxChatPanelProps,
@@ -57,7 +62,13 @@ export function useTaskChatBinding(
   const task = useQuery(api.agentTasks.get, { id: taskId });
   const firstRun = useTaskFirstRunChatTurn(taskId, task);
 
-  const addMessage = useMutation(api.agentTaskChatWorkflow.addMessage);
+  const { options: accounts, resolveId: resolveAccountId } =
+    useTaskOwnerProviderAccounts(taskId);
+  const addMessage = useMutation(
+    api.agentTaskChatWorkflow.addMessage,
+  ).withOptimisticUpdate((localStore, args) =>
+    insertSentTurnOptimistically(localStore, args.taskId, args, accounts),
+  );
   const startExecute = useMutation(
     api.agentTaskChatWorkflow.startExecute,
   ).withOptimisticUpdate((localStore, args) =>
@@ -90,8 +101,6 @@ export function useTaskChatBinding(
   );
   const storedTraits: StoredModelTraits = storedComposerTraits(task);
   const { options: modelOptions } = useAvailableAiModels(repo._id, model);
-  const { options: accounts, resolveId: resolveAccountId } =
-    useTaskOwnerProviderAccounts(taskId);
   const currentUserId = useQuery(api.auth.me);
   const isOwner =
     currentUserId !== undefined &&

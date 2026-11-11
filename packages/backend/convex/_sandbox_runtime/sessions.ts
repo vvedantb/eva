@@ -38,11 +38,8 @@ import {
 } from "./gitCredentials";
 import { ensureSwapFile } from "./swap";
 import type { SandboxClient, SandboxHandle } from "../_sandbox/provider";
-import {
-  sandboxOwnerKey,
-  sandboxStartupEntityId,
-  type SandboxOwner,
-} from "../_sandbox/owner";
+import { sandboxOwnerKey, sandboxStartupEntityId } from "@eva/shared";
+import type { SandboxOwner } from "../_sandbox/owner";
 import type { ProgressStep } from "./startupProgress";
 import { isSupersededStart } from "../_sandbox/transitions";
 import {
@@ -1016,7 +1013,7 @@ async function prepareSessionSandboxInternal(
               () =>
                 launchPreviewDevServer(
                   handle,
-                  `session-${args.sessionId}`,
+                  sandboxOwnerKey({ kind: "session", sessionId: args.sessionId }),
                   devCommand,
                   devPort,
                   rootDir,
@@ -1040,7 +1037,7 @@ async function prepareSessionSandboxInternal(
               () =>
                 launchLinkedRepoDevServerInVercelConsole(
                   handle,
-                  `session-${args.sessionId}-${linkedRow.name}`,
+                  `${sandboxOwnerKey({ kind: "session", sessionId: args.sessionId })}-${linkedRow.name}`,
                   linkedRow.path,
                   linkedRow.devCommand ?? "",
                   linkedRow.devPort ?? 0,
@@ -1501,7 +1498,7 @@ async function prepareSessionSandboxInternal(
         () =>
           launchPreviewDevServer(
             handle,
-            `session-${args.sessionId}`,
+            sandboxOwnerKey({ kind: "session", sessionId: args.sessionId }),
             command,
             port,
             rootDir,
@@ -1546,7 +1543,7 @@ async function prepareSessionSandboxInternal(
         try {
           await launchPreviewDevServer(
             handle,
-            `session-${args.sessionId}`,
+            sandboxOwnerKey({ kind: "session", sessionId: args.sessionId }),
             resolvedDevCommand,
             resolvedDevPort,
             rootDir,

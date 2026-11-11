@@ -246,8 +246,7 @@ const schema = defineSchema({
   sessionChats: defineTable(sessionChatFields)
     .index("by_session", ["sessionId"])
     .index("by_session_and_number", ["sessionId", "number"])
-    .index("by_repo", ["repoId"])
-    .index("by_repo_main_and_archived", ["repoId", "isMain", "archived"]),
+    .index("by_repo", ["repoId"]),
   // Legacy daemon-poll mirror. Chat daemons poll their `sessionChats` row
   // directly; `backfillSessionChats` empties this table and it can then be
   // dropped from the schema.

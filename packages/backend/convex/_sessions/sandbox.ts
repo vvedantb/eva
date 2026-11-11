@@ -34,7 +34,7 @@ import {
   type StopReason,
 } from "../_sandbox/stopReason";
 import { touchUserActivity } from "../_sandbox/activity";
-import { sandboxStartupEntityId } from "../_sandbox/owner";
+import { sandboxStartupEntityId } from "@eva/shared";
 import {
   canRequestSandboxStart,
   discardUntrackedSandbox,
@@ -44,6 +44,7 @@ import {
   shouldApplySandboxStartFailure,
 } from "../_sandbox/transitions";
 import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
+import { buildSessionBranchName } from "../_git/branchNames";
 import { errorMessage } from "@vvedantb/server";
 
 /** Longest `sandboxError` we persist — it is read as one line of chat header copy. */
@@ -102,7 +103,7 @@ export async function requestSessionSandboxStart(
   }
   const repo = await ctx.db.get(session.repoId);
   if (!repo) throw new Error("Repository not found");
-  const branchName = session.branchName || `eva/session-${session._id}`;
+  const branchName = session.branchName || buildSessionBranchName(session._id);
   const baseBranch = resolveSessionBaseBranch(session, repo);
   const startAttempt = nextSandboxStartAttempt(session.sandboxStartAttempt);
   await ctx.db.patch(session._id, {

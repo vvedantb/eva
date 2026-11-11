@@ -2,6 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
+import { mergeDrafts } from "@eva/shared";
 import {
   CenteredSpinner,
   tokenTransition,
@@ -13,7 +14,6 @@ import { IconFileText } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import { DraftCard } from "./_components/DraftCard";
-import { mergeDrafts } from "./_utils";
 
 export function DraftsClient() {
   const { repo, basePath } = useRepo();

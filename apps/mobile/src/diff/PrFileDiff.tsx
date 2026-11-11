@@ -53,13 +53,17 @@ const DIFF_LINE_CHUNK = 400;
  */
 export function PrDiffGate({
   state,
+  loading,
   children,
 }: {
   state: PrDiffState;
+  /** Drawn while the diff loads, in place of the spinner line (a list's placeholder rows). */
+  loading?: ReactNode;
   children: (diff: ReadyDiff) => ReactNode;
 }) {
   const scheme = useScheme();
   const muted = textColor(scheme, "muted");
+  if (state.status === "loading" && loading) return loading;
   if (state.status === "loading") {
     return (
       <View className="flex-1 flex-row items-center justify-center gap-2">
@@ -232,6 +236,9 @@ export function PrFileDiff({
           <FileNote text={entry.renamedFrom ? "File renamed without content changes." : "No content changes in this file."} />
         ) : (
           <>
+            {/* The line rows stay the kit's 22, below the 44 rule on purpose:
+                taller rows would spread the code apart, and each tap opens the
+                comment sheet, which names the lines ("Comment on lines ..."). */}
             <UnifiedDiff
               lines={hidden > 0 ? lines.slice(0, shown) : lines}
               onLinePress={commentable ? pressLine : undefined}

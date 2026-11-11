@@ -8,6 +8,7 @@ import {
   hasTeamAccess,
 } from "./functions";
 import { createNotification } from "./notifications";
+import { entityHref } from "@eva/shared";
 import { isEntityDeleted } from "./numId";
 import { isSessionArchived } from "./_sessions/archive";
 import {
@@ -22,6 +23,7 @@ import {
   roleUserValidator,
   routedSourceKindValidator,
   routedThreadStatusValidator,
+  type RoleUser,
 } from "./validators";
 import type { Infer } from "convex/values";
 
@@ -163,26 +165,13 @@ function displayName(user: {
   return user.fullName || user.firstName || user.email || "Teammate";
 }
 
-function repoHref(
-  owner: string,
-  name: string,
-  rootDirectory?: string,
-): string {
-  if (!rootDirectory) return `/${owner}/${name}`;
-  const appName = rootDirectory.split("/").pop();
-  return `/${owner}/${name}/${appName}`;
-}
-
 function sourceHref(
   repo: { owner: string; name: string; rootDirectory?: string },
   kind: SourceKind,
   numId: number | undefined,
 ): string | undefined {
   if (numId === undefined) return undefined;
-  const base = repoHref(repo.owner, repo.name, repo.rootDirectory);
-  if (kind === "session") return `${base}/sessions/${numId}`;
-  if (kind === "task") return `${base}/quick-tasks/${numId}`;
-  return `${base}/projects/${numId}`;
+  return entityHref(kind, repo, numId);
 }
 
 /**
@@ -449,7 +438,7 @@ async function enqueueSourceWake(
 type DirectoryMember = {
   userId: Id<"users">;
   name: string;
-  role: "business" | "dev" | "designer" | null;
+  role: RoleUser | null;
 };
 
 /**
@@ -462,7 +451,7 @@ async function resolveParticipants(
     teamId: Id<"teams">;
     actorUserId: Id<"users">;
     userIds?: Id<"users">[];
-    role?: "business" | "dev" | "designer";
+    role?: RoleUser;
   },
 ): Promise<
   | { ok: true; users: DirectoryMember[] }
@@ -838,7 +827,7 @@ async function askCore(
     question: string;
     context: string;
     topicKey: string;
-    role?: "business" | "dev" | "designer";
+    role?: RoleUser;
     assigneeUserIds?: Id<"users">[];
   },
 ): Promise<Infer<typeof askResult>> {

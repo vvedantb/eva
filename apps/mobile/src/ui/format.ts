@@ -16,3 +16,8 @@ export function timeAgo(timestamp: number): string {
 export function fromNow(timestamp: number): string {
   return dayjs(timestamp).fromNow();
 }
+
+/** A row or header title: the stored one, or "Untitled" when it is empty or blank (the web drafts' word). */
+export function displayTitle(title: string): string {
+  return title.trim() || "Untitled";
+}

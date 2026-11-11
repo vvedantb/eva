@@ -2,6 +2,7 @@ import { useMutation } from "convex/react";
 import { CenteredSpinner } from "@vvedantb/ui";
 import { api } from "@eva/backend";
 import type { Doc, Id } from "@eva/backend";
+import { sandboxStartupEntityId } from "@eva/shared";
 import { useEffect, useRef, useState } from "react";
 import { useChatTranscript } from "@/lib/hooks/useChatTranscript";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
@@ -13,15 +14,16 @@ import { SandboxWorkspace } from "@/lib/components/sandbox/SandboxWorkspace";
 import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { useRepo } from "@/lib/contexts/RepoContext";
-import { PendingReviewCommentsProvider } from "@/lib/contexts/PendingReviewCommentsContext";
-import { PendingPreviewSnapshotsProvider } from "@/lib/contexts/PendingPreviewSnapshotsContext";
-import { PendingWebMcpProvider } from "@/lib/contexts/PendingWebMcpContext";
-import { OpenSandboxFileProvider } from "@/lib/contexts/OpenSandboxFileContext";
+import { SandboxSurfaceProviders } from "@/lib/components/sandbox/SandboxSurfaceProviders";
 import {
   catchMutationError,
   withMutationToast,
 } from "@/lib/utils/mutationToast";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import {
+  useAgentBrowsingAutoSwitch,
+  useSandboxLifecycle,
+} from "@/lib/components/sandbox/useSandboxLifecycle";
 
 export function SessionDetailClient({
   sessionId,
@@ -79,9 +81,7 @@ export function SessionDetailClient({
     isRouteActive ? { sessionId } : "skip",
   );
   const chatId = activeChat?._id;
-  const messages = useChatTranscript(
-    isRouteActive && chatId ? chatId : "skip",
-  );
+  const messages = useChatTranscript(isRouteActive && chatId ? chatId : "skip");
   const queuedMessages = useHeldQuery(
     api.queuedMessages.listByParent,
     isRouteActive && chatId ? { parentId: chatId } : "skip",
@@ -96,9 +96,11 @@ export function SessionDetailClient({
   );
   const startupStreaming = useHeldQuery(
     api.streaming.get,
-    isRouteActive ? { entityId: `session-startup-${sessionId}` } : "skip",
+    isRouteActive
+      ? { entityId: sandboxStartupEntityId({ kind: "session", sessionId }) }
+      : "skip",
   );
-  // Names the browser tab. Gated on `isRouteActive`: up to five session shells
+  // Names the browser tab. Gated on `isRouteActive`: up to three session shells
   // stay mounted at once, and a hidden one must not title the tab.
   useEntityDocumentTitle(session?.title, isRouteActive);
   const startSandboxMutation = useMutation(api.sessions.startSandbox);
@@ -181,40 +183,32 @@ export function SessionDetailClient({
     void stopSandboxMutation({ sessionId });
   }, [session, sessionId, stopSandboxMutation]);
   /* eslint-enable no-effect/no-event-handler */
-  const isSandboxStarting = session?.status === "starting";
   // `stopping` is a transient backend state set synchronously by `stopSandbox`,
   // cleared once the Vercel sandbox's stop call completes. Showing the spinner
   // (and disabling Start) for its full duration prevents the stop/start race
   // that previously orphaned sandboxes.
-  const isSandboxStopping = session?.status === "stopping";
-  const [isStopPending, setIsStopPending] = useState(false);
+  const lifecycle = useSandboxLifecycle(session?.status);
+  const isSandboxStarting = lifecycle.isStarting;
+  const isSandboxStopping = lifecycle.isStopping;
   const simpleView = useSimpleView();
-  const handleSandboxToggle = async (action: "start" | "stop") => {
-    if (action === "start") {
-      await catchMutationError(
-        startSandboxMutation({ sessionId }),
-        "Couldn't start sandbox",
-        "session-sandbox-start",
-      );
-    } else {
-      setIsStopPending(true);
-      try {
-        await catchMutationError(
-          stopSandboxMutation({ sessionId }),
-          "Couldn't stop sandbox",
-          "session-sandbox-stop",
-        );
-      } catch {
-        setIsStopPending(false);
-        return;
-      }
-      setIsStopPending(false);
-    }
-  };
+  const handleSandboxToggle = (action: "start" | "stop") =>
+    lifecycle.run(action, async () => {
+      // The toast is the error report; nothing else to do on failure.
+      await (
+        action === "start"
+          ? catchMutationError(
+              startSandboxMutation({ sessionId }),
+              "Couldn't start sandbox",
+              "session-sandbox-start",
+            )
+          : catchMutationError(
+              stopSandboxMutation({ sessionId }),
+              "Couldn't stop sandbox",
+              "session-sandbox-stop",
+            )
+      ).catch(() => undefined);
+    });
 
-  // Auto-switch to Browser + expand sandbox panel on lock transition only
-  // (undefined → set). Don't fight the user if they switch away mid-lock.
-  const prevAgentBrowsingAt = useRef<number | undefined>(undefined);
   const [expandRightSignal, setExpandRightSignal] = useState(0);
 
   // Must stay above loading/null early returns — Phase 3 review comments
@@ -264,22 +258,14 @@ export function SessionDetailClient({
     onChatChange(chat.number);
   };
 
-  const agentBrowsingAt =
-    session === null || session === undefined
-      ? undefined
-      : session.agentBrowsingAt;
-  /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change --
-     The agent taking the browser happens inside the sandbox and arrives as a
-     live query change; there is no local event to switch the tab from. */
-  useEffect(() => {
-    const prev = prevAgentBrowsingAt.current;
-    prevAgentBrowsingAt.current = agentBrowsingAt;
-    if (!isRouteActive) return;
-    if (agentBrowsingAt === undefined || prev !== undefined) return;
-    onSandboxTabChange("browser");
-    setExpandRightSignal((n) => n + 1);
-  }, [agentBrowsingAt, onSandboxTabChange, isRouteActive]);
-  /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
+  useAgentBrowsingAutoSwitch(
+    session?.agentBrowsingAt,
+    () => {
+      onSandboxTabChange("browser");
+      setExpandRightSignal((n) => n + 1);
+    },
+    isRouteActive,
+  );
 
   if (session === undefined || activeChat === undefined) {
     return <CenteredSpinner label="Loading session" />;
@@ -301,12 +287,13 @@ export function SessionDetailClient({
   // through auto-archive, which the owner can turn off.
   const isArchived = session.archive !== undefined;
 
-  const chatPanel = (sandboxCollapsed?: boolean) => (
+  const chatPanel = (
     <ChatPanel
       // One mount per chat: composer draft, attachments and local state must
       // not carry over to another tab.
       key={activeChat._id}
       sessionId={sessionId}
+      session={session}
       chat={activeChat}
       chats={chats ?? []}
       chatStatuses={chatStatuses ?? []}
@@ -317,7 +304,6 @@ export function SessionDetailClient({
       branchName={session.branchName}
       sandboxBranch={session.sandboxBranch}
       sandboxGitSync={session.sandboxGitSync}
-      prUrl={session.prUrl}
       prState={session.prState}
       summary={session.summary}
       messages={messages ?? []}
@@ -329,15 +315,11 @@ export function SessionDetailClient({
       summaryStreamingActivity={summaryStreaming?.currentActivity}
       startupStreamingActivity={startupStreaming?.currentActivity}
       isSandboxActive={isSandboxActive}
-      isSandboxToggling={
-        isSandboxStarting || isSandboxStopping || isStopPending
-      }
-      isSandboxStopping={isSandboxStopping || isStopPending}
+      isSandboxToggling={isSandboxStarting || isSandboxStopping}
+      isSandboxStopping={isSandboxStopping}
       onSandboxToggle={handleSandboxToggle}
       isArchived={isArchived}
       isReadOnly={isArchived}
-      deploymentStatus={session.deploymentStatus}
-      sandboxCollapsed={sandboxCollapsed}
       isRouteActive={isRouteActive}
       onOpenFile={onOpenFile}
       onViewDiff={handleViewDiff}
@@ -348,88 +330,83 @@ export function SessionDetailClient({
   );
 
   return (
-    <PendingReviewCommentsProvider onOpenDiffsTab={handleViewDiff}>
-      <PendingPreviewSnapshotsProvider>
-        <PendingWebMcpProvider>
-          <OpenSandboxFileProvider onOpenFile={onOpenFile}>
-            <SandboxWorkspace
-              ownerKind="session"
-              ownerId={sessionId}
-              storageScope={`session:${sessionId}`}
-              sandboxId={session.sandboxId}
-              isActive={isSandboxActive}
-              terminalPanes={session.terminalPanes}
-              hotkeyEnabled={isRouteActive}
-            >
-              {(panes, owner, terminalPanel) => (
-                <ResizablePanelLayout
-                  leftPanel={({ rightPanelCollapsed }) =>
-                    chatPanel(rightPanelCollapsed)
-                  }
-                  rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) => (
-                    <SandboxPanel
-                      sessionId={sessionId}
-                      chatId={activeChat._id}
-                      sandboxId={session.sandboxId}
-                      isActive={isSandboxActive}
-                      isRouteActive={isRouteActive}
-                      repoId={session.repoId}
-                      prUrl={session.prUrl}
-                      // Prefer session (set after services start); fall back to app
-                      // settings so preview doesn't default to 3000 before that lands.
-                      devPort={session.devPort ?? repo.devPort}
-                      devCommand={session.devCommand ?? repo.devCommand}
-                      owner={owner}
-                      panes={panes}
-                      terminalPanel={terminalPanel}
-                      planContent={session.planContent}
-                      messages={messages ?? []}
-                      backgroundAgents={activeChat.backgroundAgents}
-                      streamingActivity={streaming?.currentActivity}
-                      isArchived={isArchived}
-                      activeTab={activeSandboxTab}
-                      onTabChange={onSandboxTabChange}
-                      agentBrowsingAt={session.agentBrowsingAt}
-                      onStartSandbox={
-                        isArchived || isSandboxStopping || isStopPending
-                          ? undefined
-                          : () => {
-                              void handleSandboxToggle("start");
-                            }
+    <SandboxSurfaceProviders
+      onOpenFile={onOpenFile}
+      onOpenDiffsTab={handleViewDiff}
+    >
+      <SandboxWorkspace
+        ownerKind="session"
+        ownerId={sessionId}
+        storageScope={`session:${sessionId}`}
+        sandboxId={session.sandboxId}
+        isActive={isSandboxActive}
+        terminalPanes={session.terminalPanes}
+        hotkeyEnabled={isRouteActive}
+      >
+        {(panes, owner, terminalPanel) => (
+          <ResizablePanelLayout
+            leftPanel={() => chatPanel}
+            rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) => (
+              <SandboxPanel
+                sessionId={sessionId}
+                chatId={activeChat._id}
+                sandboxId={session.sandboxId}
+                isActive={isSandboxActive}
+                isRouteActive={isRouteActive}
+                repoId={session.repoId}
+                prUrl={session.prUrl}
+                // Prefer session (set after services start); fall back to app
+                // settings so preview doesn't default to 3000 before that lands.
+                devPort={session.devPort ?? repo.devPort}
+                devCommand={session.devCommand ?? repo.devCommand}
+                owner={owner}
+                panes={panes}
+                terminalPanel={terminalPanel}
+                planContent={session.planContent}
+                messages={messages ?? []}
+                backgroundAgents={activeChat.backgroundAgents}
+                streamingActivity={streaming?.currentActivity}
+                isArchived={isArchived}
+                activeTab={activeSandboxTab}
+                onTabChange={onSandboxTabChange}
+                agentBrowsingAt={session.agentBrowsingAt}
+                onStartSandbox={
+                  isArchived || isSandboxStopping
+                    ? undefined
+                    : () => {
+                        void handleSandboxToggle("start");
                       }
-                      isSandboxStarting={isSandboxStarting}
-                      autoWakeEligible={
-                        session.status === "closed" &&
-                        session.sandboxId !== undefined &&
-                        session.sandboxError === undefined &&
-                        !isArchived
+                }
+                isSandboxStarting={isSandboxStarting}
+                autoWakeEligible={
+                  session.status === "closed" &&
+                  session.sandboxId !== undefined &&
+                  session.sandboxError === undefined &&
+                  !isArchived
+                }
+                collapsed={rightPanelCollapsed}
+                onToggle={onToggleRightPanel}
+                miniPlayer={
+                  session.numId !== undefined
+                    ? {
+                        returnTo: `${basePath}/sessions/${session.numId}/preview`,
+                        title: session.title,
                       }
-                      collapsed={rightPanelCollapsed}
-                      onToggle={onToggleRightPanel}
-                      miniPlayer={
-                        session.numId !== undefined
-                          ? {
-                              returnTo: `${basePath}/sessions/${session.numId}/preview`,
-                              title: session.title,
-                            }
-                          : undefined
-                      }
-                    />
-                  )}
-                  leftDefaultSize="40%"
-                  leftMinWidthPx={350}
-                  rightMinWidthPx={300}
-                  rightCollapsedSizePx={sandboxRailWidthPx}
-                  storageKey="sandbox-collapsed"
-                  expandRightSignal={expandRightSignal}
-                  hotkeyEnabled={isRouteActive}
-                  mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
-                />
-              )}
-            </SandboxWorkspace>
-          </OpenSandboxFileProvider>
-        </PendingWebMcpProvider>
-      </PendingPreviewSnapshotsProvider>
-    </PendingReviewCommentsProvider>
+                    : undefined
+                }
+              />
+            )}
+            leftDefaultSize="40%"
+            leftMinWidthPx={350}
+            rightMinWidthPx={300}
+            rightCollapsedSizePx={sandboxRailWidthPx}
+            storageKey="sandbox-collapsed"
+            expandRightSignal={expandRightSignal}
+            hotkeyEnabled={isRouteActive}
+            mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
+          />
+        )}
+      </SandboxWorkspace>
+    </SandboxSurfaceProviders>
   );
 }

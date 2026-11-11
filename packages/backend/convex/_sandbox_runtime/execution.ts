@@ -2,6 +2,7 @@
 
 import { ConvexError, v, type Infer } from "convex/values";
 import { quote } from "shell-quote";
+import { DESKTOP_PORT, EDITOR_PORT } from "@eva/shared";
 import { redactSecrets } from "@eva/shared/redactSecrets";
 import { SandboxProviderError, type SandboxHandle } from "../_sandbox/provider";
 import type { ActionCtx } from "../_generated/server";
@@ -870,8 +871,8 @@ async function buildPreviewUrl(
     // 3000/6080/8080 are the proxy's own exposed slots, never an upstream.
     const reserved =
       customTabPort === VERCEL_PREVIEW_PROXY_PORT ||
-      customTabPort === 6080 ||
-      customTabPort === 8080;
+      customTabPort === DESKTOP_PORT ||
+      customTabPort === EDITOR_PORT;
     if (
       !Number.isInteger(customTabPort) ||
       customTabPort <= 0 ||
@@ -879,7 +880,7 @@ async function buildPreviewUrl(
       reserved
     ) {
       throw new Error(
-        `Invalid custom tab port: ${customTabPort} (must be 1-65535 and not a reserved proxy port 3000/6080/8080)`,
+        `Invalid custom tab port: ${customTabPort} (must be 1-65535 and not a reserved proxy port ${VERCEL_PREVIEW_PROXY_PORT}/${DESKTOP_PORT}/${EDITOR_PORT})`,
       );
     }
   }
@@ -893,9 +894,9 @@ async function buildPreviewUrl(
   // port (desktop 16080→6080, editor 18080→8080, app listen→3000). Probe
   // the upstream service port for readiness, not the proxy port.
   const upstreamPort =
-    args.port === 6080
+    args.port === DESKTOP_PORT
       ? VERCEL_DESKTOP_INTERNAL_PORT
-      : args.port === 8080
+      : args.port === EDITOR_PORT
         ? VERCEL_EDITOR_INTERNAL_PORT
         : vercelAppListenPort(args.port);
 
@@ -958,7 +959,8 @@ async function buildPreviewUrl(
   //   editor  → proxy on 8080  (upstream 18080)
   //   desktop → proxy on 6080  (upstream 16080)
   const previewPublicJwk = getPreviewGrantPublicJwk();
-  const isVercelDesktopOrEditor = args.port === 6080 || args.port === 8080;
+  const isVercelDesktopOrEditor =
+    args.port === DESKTOP_PORT || args.port === EDITOR_PORT;
   const fixedVercelProxyPort = isVercelDesktopOrEditor
     ? args.port
     : VERCEL_PREVIEW_PROXY_PORT;

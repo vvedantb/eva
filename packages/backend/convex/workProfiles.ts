@@ -3,7 +3,7 @@ import { internalQuery } from "./_generated/server";
 import type { QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { authMutation, authQuery, hasTeamAccess } from "./functions";
-import { roleUserValidator } from "./validators";
+import { roleUserValidator, type RoleUser } from "./validators";
 
 const profileReturn = v.object({
   role: v.union(roleUserValidator, v.null()),
@@ -167,7 +167,7 @@ export async function listDirectoryForTeam(
   Array<{
     userId: Id<"users">;
     name: string;
-    role: "business" | "dev" | "designer" | null;
+    role: RoleUser | null;
     headline: string;
     owns: string;
     askMeAbout: string;

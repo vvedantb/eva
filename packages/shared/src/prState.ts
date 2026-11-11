@@ -1,5 +1,17 @@
+import type { Doc } from "@eva/backend";
+
 /** Lifecycle of a pull request Eva tracks (the backend `prStateValidator`). */
-export type PrState = "draft" | "open" | "merged" | "closed";
+export type PrState = Doc<"pullRequests">["state"];
+
+/** A PR that is still open or draft. */
+export type LivePrState = Extract<PrState, "draft" | "open">;
+
+/** True for a PR that is still open or draft. */
+export function isLivePrState(
+  state: PrState | undefined,
+): state is LivePrState {
+  return state === "draft" || state === "open";
+}
 
 /**
  * Colour tone of a PR icon. Each surface maps a tone to its own colour: the

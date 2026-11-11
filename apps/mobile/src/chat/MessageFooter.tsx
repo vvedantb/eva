@@ -16,9 +16,13 @@ export type Sentiment = "positive" | "negative";
  * The row under a message, as Eva's web chat: the provider mark of the turn's
  * model on an agent reply, copy (a check for 2s once copied), copy link, fork
  * from here, thumbs on agent replies, then the clock
- * ("10:21 PM · 1m" for a finished reply, the web `formatDuration`). The web
- * `icon-xs` buttons (28, 14 icons) sit 2 apart; the groups and the clock are
- * 8 apart on a reply (`gap-2`) and 12 on a user message (`gap-3`).
+ * ("10:21 PM · 1m" for a finished reply, the web `formatDuration`, at the
+ * 12 caption size). The buttons are whole 44 squares (`touch`, 16 icons) side
+ * by side, so no tap lands on a neighbour; the web `icon-xs` 28s 2 apart are a
+ * mouse's density. The groups and the clock are 4 apart on a reply (web
+ * `gap-2`, so the wider buttons leave the clock room) and 12 on a user
+ * message (`gap-3`). A long clock ("3:06 PM · 1h 23m") wraps whole to its own
+ * line rather than breaking.
  */
 export function MessageFooter({
   text,
@@ -28,6 +32,7 @@ export function MessageFooter({
   onFork,
   rating,
   turn,
+  className,
 }: {
   text: string;
   at: number;
@@ -40,6 +45,8 @@ export function MessageFooter({
   rating?: { sentiment: Sentiment | undefined; onRate: (sentiment: Sentiment | null) => void };
   /** Agent replies: the user turn before it (`buildPrecedingUserTurns`), which holds the model it ran on. */
   turn?: { model?: string; reasoningLevel?: string; credentialSourceLabel?: string };
+  /** Extra classes for the row, such as a teammate's inset. */
+  className?: string;
 }) {
   const [copied, setCopied] = useState<"text" | "link" | null>(null);
   const copy = async (what: "text" | "link") => {
@@ -49,41 +56,41 @@ export function MessageFooter({
   };
   const meta = finishedAt ? `${formatClockTime(finishedAt)} · ${formatDuration(at, finishedAt)}` : formatClockTime(at);
   return (
-    <MessageActionsBar className={rating ? "mt-0.5 gap-2" : "gap-3"}>
+    <MessageActionsBar className={`flex-wrap ${rating ? "gap-1" : "gap-3"} ${className ?? ""}`}>
       {turn?.model ? <ModelIcon {...turn} model={turn.model} /> : null}
-      <MessageActionsBar className={rating ? "ml-0.5 gap-0.5" : "gap-0.5"}>
+      <MessageActionsBar className="gap-0">
         <MessageAction
           kind="copy"
-          size="xs"
+          size="touch"
           label={copied === "text" ? "Copied" : "Copy message"}
           icon={copied === "text" ? SuccessCheck : undefined}
           onPress={() => void copy("text")}
         />
         <MessageAction
-          size="xs"
+          size="touch"
           icon={copied === "link" ? SuccessCheck : IconLink}
           label={copied === "link" ? "Link copied" : "Copy link to message"}
           onPress={() => void copy("link")}
         />
-        {onFork ? <MessageAction size="xs" icon={IconGitFork} label="Fork from here" onPress={onFork} /> : null}
+        {onFork ? <MessageAction size="touch" icon={IconGitFork} label="Fork from here" onPress={onFork} /> : null}
       </MessageActionsBar>
       {rating ? (
-        <MessageActionsBar className="gap-0.5">
+        <MessageActionsBar className="gap-0">
           <MessageAction
             kind="like"
-            size="xs"
+            size="touch"
             selected={rating.sentiment === "positive"}
             onPress={() => rating.onRate(rating.sentiment === "positive" ? null : "positive")}
           />
           <MessageAction
             kind="dislike"
-            size="xs"
+            size="touch"
             selected={rating.sentiment === "negative"}
             onPress={() => rating.onRate(rating.sentiment === "negative" ? null : "negative")}
           />
         </MessageActionsBar>
       ) : null}
-      <MessageMeta size="2xs">{meta}</MessageMeta>
+      <MessageMeta>{meta}</MessageMeta>
     </MessageActionsBar>
   );
 }

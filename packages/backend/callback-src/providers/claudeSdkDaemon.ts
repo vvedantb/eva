@@ -1020,10 +1020,16 @@ function handleCancelRequested(agentRunner: WarmRunner): void {
   });
 }
 
-/** A real turn is live, so a pushed message joins it instead of starting one. */
+/**
+ * A real turn is live, so a pushed message joins it instead of starting one.
+ * Not while it waits on a blocking question: only the card's answer may
+ * resume it, so the steer waits and runs after the answer.
+ */
 function canTakeSteer(): boolean {
   return (
-    supervisor.phase === "running" && supervisor.currentTurn?.kind === "real"
+    supervisor.phase === "running" &&
+    supervisor.currentTurn?.kind === "real" &&
+    !S.awaitingQuestionAnswer
   );
 }
 

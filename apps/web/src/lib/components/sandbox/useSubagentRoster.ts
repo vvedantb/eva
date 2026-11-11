@@ -4,7 +4,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useChatTranscript } from "@/lib/hooks/useChatTranscript";
 import { api, type BackgroundAgentEntry, type Id } from "@eva/backend";
 import { isChatTurnExecuting } from "@/lib/components/chat/chatBodyUtils";
-import { useChatTurnOpen } from "@/lib/components/chat/useChatTurnOpen";
+import { useChatTurnStatus } from "@/lib/components/chat/useChatTurnOpen";
 import {
   deriveSubagents,
   subagentTone,
@@ -42,12 +42,12 @@ export function useSubagentRoster({
   const streaming = useQuery(api.streaming.get, {
     entityId: streamingEntityId,
   });
-  const turnOpen = useChatTurnOpen(parentId);
+  const status = useChatTurnStatus(parentId);
 
   // Streaming payloads can outlive their turn; only fold them while one runs.
   // No first-run input: this stream is the chat's, not a quick task's first
   // run, so a running first run must not fold it.
-  const isExecuting = isChatTurnExecuting({ turnOpen, messages });
+  const isExecuting = isChatTurnExecuting({ status, messages });
   const agents = deriveSubagents({
     activityLogs: (messages ?? []).map((message) => message.activityLog),
     streamingActivity: isExecuting ? streaming?.currentActivity : undefined,

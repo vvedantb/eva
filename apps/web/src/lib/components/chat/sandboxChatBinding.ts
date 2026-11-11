@@ -10,21 +10,18 @@ import {
   type StoredModelTraits,
 } from "@eva/backend";
 import type { ModelAccount } from "@vvedantb/ui";
-import {
-  annotationSender,
-  type AnnotationSubmit,
-} from "@/lib/components/sandbox/annotationSend";
+import type { AnnotationSubmit } from "@/lib/components/sandbox/annotationSend";
 import type { ChatModelPicker } from "./ChatComposer";
 import { isChatTurnExecuting, type ChatBodyMessage } from "./chatBodyUtils";
 import type { SandboxChatOwnerDoc } from "./sandboxChatSurface";
 import {
+  sandboxAnnotationSender,
   sandboxChatKeys,
-  sendSandboxTurn,
   type SandboxChatEntity,
   type SandboxTurnPorts,
   type SandboxTurnSettings,
 } from "./sandboxChatTurn";
-import { useChatTurnOpen } from "./useChatTurnOpen";
+import { useChatTurnStatus } from "./useChatTurnOpen";
 
 type StreamingRow = FunctionReturnType<typeof api.streaming.get>;
 
@@ -54,7 +51,9 @@ export interface SandboxChatBinding {
   accounts: ReadonlyArray<ModelAccount>;
   /** What the picker lists; may add a read-only owner row for a teammate. */
   pickerAccounts: ReadonlyArray<ModelAccount>;
-  resolveAccountId: (id: string | null) => Id<"userProviderAccounts"> | undefined;
+  resolveAccountId: (
+    id: string | null,
+  ) => Id<"userProviderAccounts"> | undefined;
   /** Only the owner can change the account (chat is owner-sticky). */
   isOwner: boolean;
   persistAccount: (id: Id<"userProviderAccounts"> | null) => Promise<unknown>;
@@ -88,10 +87,10 @@ export function sandboxTurnSettings(
  */
 export function useSandboxChatTranscript(binding: SandboxChatBinding) {
   const { parentId } = sandboxChatKeys(binding.entity);
-  const turnOpen = useChatTurnOpen(parentId);
+  const status = useChatTurnStatus(parentId);
   const messages = useChatTranscript(parentId);
   const isExecuting = isChatTurnExecuting({
-    turnOpen,
+    status,
     messages,
     isFirstRunInProgress: binding.firstRun?.isInProgress,
   });
@@ -106,23 +105,9 @@ export function useSandboxAnnotationSend(
   binding: SandboxChatBinding,
 ): AnnotationSubmit {
   const { isExecuting } = useSandboxChatTranscript(binding);
-  const settings = sandboxTurnSettings(binding);
-  return annotationSender({
+  return sandboxAnnotationSender(
+    binding.ports,
+    sandboxTurnSettings(binding),
     isExecuting,
-    enqueue: (display, full) =>
-      sendSandboxTurn(
-        binding.ports,
-        settings,
-        { message: full, displayContent: display },
-        "queue",
-      ),
-    send: (display, full) =>
-      sendSandboxTurn(
-        binding.ports,
-        settings,
-        { message: full, displayContent: display },
-        "start",
-      ),
-    postError: (content) => binding.ports.add({ role: "assistant", content }),
-  });
+  );
 }

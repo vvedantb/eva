@@ -27,13 +27,13 @@ import {
 } from "@tabler/icons-react-native";
 import { SheetRow } from "@vvedantb/native-ui/primitives";
 import { SearchInput } from "@vvedantb/native-ui/search-input";
-import { withAlpha } from "@vvedantb/native-ui/theme";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, View } from "react-native";
+import { FilterChipsBar } from "@/ui/FilterChipsBar";
 import { MenuDivider, MenuSheet, SubmenuRow } from "@/ui/MenuSheet";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
-import { useScheme, XS_TRACKING } from "@/ui/theme";
+import { useScheme } from "@/ui/theme";
 
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 type Project = FunctionReturnType<typeof api.projects.list>[number];
@@ -212,6 +212,7 @@ export function QuickTaskToolbar({
               leading={<Icon size={20} color={text} />}
               title={TASK_STATUS_LABELS[status]}
               active={filters.statuses.includes(status)}
+              multiple
               onPress={() => onChange({ statuses: toggleQuickTaskStatus(filters.statuses, status) })}
             />
           );
@@ -222,6 +223,7 @@ export function QuickTaskToolbar({
             key={tag}
             title={tag}
             active={filters.tags.includes(tag)}
+            multiple
             onPress={() =>
               onChange({ tags: filters.tags.includes(tag) ? filters.tags.filter((entry) => entry !== tag) : [...filters.tags, tag] })
             }
@@ -277,10 +279,7 @@ export function QuickTaskToolbar({
   );
 }
 
-/**
- * The web `ActiveFiltersBar` below `sm`: "Filtered by", then a 40-high chip
- * per active filter that clears it, and "Clear all" with two or more.
- */
+/** The web `ActiveFiltersBar` for the quick-task filters (`FilterChipsBar`). */
 export function ActiveFiltersBar({
   filters,
   onChange,
@@ -292,53 +291,18 @@ export function ActiveFiltersBar({
   projects: Project[] | undefined;
   users: User[] | undefined;
 }) {
-  const theme = EVA_THEME[useScheme()];
-  const muted = theme.mutedForeground;
   const chips = quickTaskFilterChips(filters, {
     project: (id) => projects?.find((project) => project._id === id)?.title,
     user: (id) => userLabel(users?.find((user) => user._id === id)),
   });
-  if (chips.length === 0) return null;
-  const textStyle = { color: muted, letterSpacing: XS_TRACKING };
   return (
-    <View className="flex-row flex-wrap items-center gap-1.5 px-4 pb-2">
-      <Text className="font-instrument-sans mr-0.5 text-xs" style={textStyle}>
-        Filtered by
-      </Text>
-      {chips.map((chip) => {
-        const label = `${chip.text}${chip.person ?? ""}`;
-        return (
-          <Pressable
-            key={chip.key}
-            accessibilityRole="button"
-            accessibilityLabel={`Remove filter ${label}`}
-            onPress={() => onChange(clearedQuickTaskFilter(chip.key))}
-            // 40 high as the web chip below `sm`; 2 of slop above and below reach 44 without reaching a wrapped row 6 away.
-            hitSlop={{ top: 2, bottom: 2 }}
-            className="min-h-10 max-w-full flex-row items-center gap-1 rounded-md px-2 active:opacity-70"
-            style={{ backgroundColor: withAlpha(theme.muted, 0.6) }}
-          >
-            <Text numberOfLines={1} className="font-instrument-sans shrink text-xs" style={textStyle}>
-              {label}
-            </Text>
-            <View style={{ opacity: 0.5 }}>
-              <IconX size={12} color={muted} />
-            </View>
-          </Pressable>
-        );
-      })}
-      {chips.length > 1 ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => onChange(clearedQuickTaskFilters())}
-          hitSlop={{ top: 2, bottom: 2 }}
-          className="ml-1 min-h-10 justify-center active:opacity-70"
-        >
-          <Text className="font-instrument-sans text-xs" style={textStyle}>
-            Clear all
-          </Text>
-        </Pressable>
-      ) : null}
-    </View>
+    <FilterChipsBar
+      chips={chips.map((chip) => ({ key: chip.key, label: `${chip.text}${chip.person ?? ""}` }))}
+      onClear={(key) => {
+        const chip = chips.find((candidate) => candidate.key === key);
+        if (chip) onChange(clearedQuickTaskFilter(chip.key));
+      }}
+      onClearAll={() => onChange(clearedQuickTaskFilters())}
+    />
   );
 }

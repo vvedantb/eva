@@ -1,3 +1,4 @@
+import type { PrState } from "@eva/shared";
 import { api, normalizeAIModel, type Doc, type Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
@@ -10,15 +11,23 @@ import { ChatPageWrapper } from "@/lib/components/ChatPageWrapper";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
 import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
 import {
+  MAX_PARALLEL_CHATS,
   sandboxComposerState,
   SANDBOX_CHAT_COPY,
-} from "@/lib/components/chat/chatBodyUtils";
+} from "@eva/shared";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
-import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
+import {
+  SandboxChatPreInput,
+  SandboxChatStatusChips,
+} from "@/lib/components/chat/SandboxChatPreInput";
 import { useChatQueueGate } from "@/lib/components/chat/useChatQueueGate";
-import type { SandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
+import { buildSandboxChatSurface } from "@/lib/components/chat/sandboxChatSurface";
 import { SubagentThreadLayer } from "@/lib/components/chat/SubagentThreadLayer";
-import { BackgroundProcessesPanel } from "./_components/BackgroundProcessesPanel";
+import { useChatSend } from "@/lib/components/chat/useChatSend";
+import { useSandboxChatDraft } from "@/lib/components/chat/useSandboxChatDraft";
+import { isChatTurnExecuting } from "@/lib/components/chat/chatBodyUtils";
+import type { TranscriptMessage } from "@/lib/hooks/useChatTranscript";
+import { BackgroundProcessesChip } from "./_components/BackgroundProcessesChip";
 import { PublishRecoveryBanner } from "./_components/PublishRecoveryBanner";
 import { useSessionChatHeader } from "./_components/SessionChatHeader";
 import { SessionSummaryAccordion } from "./_components/SessionSummaryAccordion";
@@ -30,7 +39,7 @@ import {
   SessionReviewModal,
   useSendSessionForReview,
 } from "./_components/SessionReviewModal";
-import { useChatSend, type SessionMessage } from "./_components/useChatSend";
+import { useSessionTurnPorts } from "./_components/useSessionTurnPorts";
 import { ChatTabsBar } from "./_components/ChatTabsBar";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { useSessionSettings } from "@/lib/hooks/useSessionSettings";
@@ -40,10 +49,7 @@ import {
   useAvailableAiModels,
   useSessionOwnerProviderAccounts,
 } from "@/lib/hooks/useAvailableAiModels";
-import { useChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
-import { PendingReviewCommentChips } from "@/lib/components/chat/PendingReviewCommentChips";
 import { toast, useRequestConfirm } from "@vvedantb/ui";
-import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
 import { getSessionReadOnlyMessage } from "./_utils/sessionReadOnly";
 import { ProposedPlanCard } from "./_components/ProposedPlanCard";
 import { proposedPlanForMessage } from "./_components/proposedPlanLogic";
@@ -60,6 +66,8 @@ type ChatTurnStatus = FunctionReturnType<
 
 interface ChatPanelProps {
   sessionId: Id<"sessions">;
+  /** The session row; the header "…" menu reads its fields. */
+  session: Doc<"sessions">;
   /** The chat tab this panel shows; the transcript, turn and model are its own. */
   chat: Doc<"sessionChats">;
   /** Every live chat of the session, for the tab strip. */
@@ -74,10 +82,9 @@ interface ChatPanelProps {
   /** Branch the sandbox worktree is on right now, reported by its daemon. */
   sandboxBranch?: string;
   sandboxGitSync?: Doc<"sessions">["sandboxGitSync"];
-  prUrl?: string;
-  prState?: "draft" | "open" | "merged" | "closed";
+  prState?: PrState;
   summary?: string[];
-  messages: SessionMessage[];
+  messages: TranscriptMessage[];
   /** The transcript has not loaded: show the loader, not the empty state. */
   isLoadingMessages: boolean;
   queuedMessages: QueuedSessionMessage[];
@@ -94,8 +101,6 @@ interface ChatPanelProps {
   isArchived?: boolean;
   /** Archive or PR merged/closed — hides composer and shows read-only banner. */
   isReadOnly?: boolean;
-  deploymentStatus?: "queued" | "building" | "deployed" | "error";
-  sandboxCollapsed?: boolean;
   /** Opens a file (by full sandbox path) in the File Viewer tab. */
   onOpenFile?: (path: string) => void;
   /** Opens the Diffs tab; optional repo-relative path scrolls to that file. */
@@ -112,11 +117,9 @@ interface ChatPanelProps {
   isRouteActive?: boolean;
 }
 
-/** Sessions run at most this many chats at once; mirrors the server cap. */
-const MAX_PARALLEL_CHATS = 3;
-
 export function ChatPanel({
   sessionId,
+  session,
   chat,
   chats,
   chatStatuses,
@@ -127,7 +130,6 @@ export function ChatPanel({
   branchName,
   sandboxBranch,
   sandboxGitSync,
-  prUrl,
   prState,
   summary,
   messages,
@@ -144,7 +146,6 @@ export function ChatPanel({
   onSandboxToggle,
   isArchived = false,
   isReadOnly = false,
-  deploymentStatus,
   onOpenFile,
   onViewDiff,
   onOpenAgentsTab,
@@ -192,18 +193,7 @@ export function ChatPanel({
   const { options: modelOptions } = useAvailableAiModels(repo._id, model);
 
   const draftTarget = { kind: "sessionChat" as const, sessionId, chatId };
-  const draftSeed = useChatDraftSeed(draftTarget);
-  const draftBundle = draftSeed.isReady
-    ? {
-        target: draftTarget,
-        initialDisplay: draftSeed.initialDisplay,
-        mentionMap: draftSeed.mentionMap,
-        skillMap: draftSeed.skillMap,
-      }
-    : undefined;
-
-  const review = usePendingReviewComments();
-  const hasPendingReviewComments = (review?.comments.length ?? 0) > 0;
+  const { draftBundle, isDraftLoading } = useSandboxChatDraft(draftTarget);
 
   const handleForkTranscript = async (input: {
     throughMessageId: string;
@@ -250,20 +240,36 @@ export function ChatPanel({
         next === null ? null : (resolveAccountId(next) ?? null),
       ),
   });
-  const { isExecuting, handleSend, handleCancel } = useChatSend({
-    sessionId,
-    chatId,
-    model,
-    executionTraits,
-    reasoningLevel: displayTraits.effortLevel,
-    providerAccountId,
-    resolveAccountId,
-    accounts,
+  // Cached-hidden shells skip the turn-status subscription. The persisted open
+  // turn is canonical; see `isChatTurnExecuting`.
+  const turnStatus = useHeldQuery(
+    api.turns.getChatStatus,
+    isRouteActive ? { entityId: chatId } : "skip",
+  );
+  const isExecuting = isChatTurnExecuting({
+    status: turnStatus,
     messages,
-    // A running turn queues regardless, so this is `composer.queuesSends`
-    // without the `isExecuting` it cannot know before this hook returns.
-    queuesSends: !isSandboxActive || queueGate.isUsageLimitHeld,
-    isRouteActive,
+  });
+  const composer = sandboxComposerState({
+    isSandboxActive,
+    isSwitchingAccount,
+    isExecuting,
+    isUsageLimitHeld: queueGate.isUsageLimitHeld,
+  });
+  const turnPorts = useSessionTurnPorts(chatId, accounts);
+  const cancelExecution = useMutation(api.sessionWorkflow.cancelExecution);
+  const { handleSend, handleCancel, hasPendingReviewComments } = useChatSend({
+    ports: turnPorts,
+    settings: {
+      model,
+      effortLevel: displayTraits.effortLevel,
+      executionTraits,
+      providerAccountId: resolveAccountId(providerAccountId),
+    },
+    cancel: () => cancelExecution({ chatId }),
+    draftTarget,
+    isExecuting,
+    queuesSends: composer.queuesSends,
   });
   const proposedPlans = useHeldQuery(
     api.proposedPlans.listBySession,
@@ -284,32 +290,30 @@ export function ChatPanel({
     isSaving,
     isSavingDoc,
   } = useSessionPlanDocument(sessionId);
-  const chatSurface: SandboxChatSurface = {
+  const chatSurface = buildSandboxChatSurface({
     entity: { kind: "session", sessionId, chatId },
     repoId: repo._id,
     model,
     isExecuting,
     isReadOnly,
-    // A stopped session sandbox still gets the offer: sending wakes it.
-    backgroundAgents,
-    usageLimitRecovery: isReadOnly
-      ? undefined
-      : {
-          messages,
-          accounts,
-          resolveAccountId,
-          currentAccountId: stickyProviderAccountId,
-          onSwitchAccount: setStickyProviderAccountId,
-          isSandboxActive,
-        },
-    goal: chat.goal,
-    // Review comments are appended to normal sends; a slash command has to
-    // reach the harness verbatim.
+    doc: {
+      backgroundAgents,
+      goal: chat.goal,
+      providerAccountId: stickyProviderAccountId ?? undefined,
+    },
+    // A stopped session sandbox still gets the offer: sending wakes it. Until
+    // the sticky account loads there is no account to exclude, so no offer.
+    canSwitchAccount: !isReadOnly && stickyProviderAccountId !== undefined,
+    messages,
+    accounts,
+    resolveAccountId,
+    switchProviderAccount: setStickyProviderAccountId,
+    isSandboxActive,
     sendCommand: isReadOnly
       ? undefined
       : (command) =>
           handleSend(command, undefined, { skipReviewComments: true }),
-  };
+  });
 
   const activeQuestion = useHeldQuery(
     api.pendingQuestions.getActive,
@@ -366,20 +370,15 @@ export function ChatPanel({
 
   const { headerLeft, headerRight } = useSessionChatHeader({
     repoId: repo._id,
-    sessionId,
+    session,
     chatId,
-    title,
-    branchName,
-    prUrl,
-    prState,
+    isAnyChatExecuting: runningChatIds.size > 0,
     hasSummary,
     messageCount: messages.length,
     isSandboxActive,
     isSandboxToggling,
     sandboxGitSync,
     isAssistantResponding: isExecuting,
-    deploymentStatus,
-    simpleView,
     model,
     providerAccountId: stickyProviderAccountId,
     usageAccountLabel,
@@ -413,12 +412,6 @@ export function ChatPanel({
       surface={chatSurface}
       beforeBanner={
         <>
-          {simpleView ? null : (
-            <BackgroundProcessesPanel
-              sessionId={sessionId}
-              isRouteActive={isRouteActive}
-            />
-          )}
           {!isReadOnly ? (
             <PublishRecoveryBanner
               sessionId={sessionId}
@@ -426,10 +419,20 @@ export function ChatPanel({
               isSandboxActive={isSandboxActive}
             />
           ) : null}
-          <PendingReviewCommentChips />
         </>
       }
     />
+  );
+
+  const composerChips = (
+    <SandboxChatStatusChips surface={chatSurface}>
+      {simpleView ? null : (
+        <BackgroundProcessesChip
+          sessionId={sessionId}
+          isRouteActive={isRouteActive}
+        />
+      )}
+    </SandboxChatStatusChips>
   );
 
   const emptyStateTitle = isSandboxActive
@@ -447,13 +450,6 @@ export function ChatPanel({
         // only restate the title.
         ""
       : SANDBOX_CHAT_COPY.asleepDescription;
-
-  const composer = sandboxComposerState({
-    isSandboxActive,
-    isSwitchingAccount,
-    isExecuting,
-    isUsageLimitHeld: queueGate.isUsageLimitHeld,
-  });
 
   const readOnlyMessage = getSessionReadOnlyMessage({
     isArchived,
@@ -511,6 +507,7 @@ export function ChatPanel({
             />
           }
           preInputContent={preInputContent}
+          composerChips={composerChips}
           preConversationContent={
             <SessionSummaryAccordion
               summary={summary}
@@ -560,7 +557,7 @@ export function ChatPanel({
             );
           }}
           draft={draftBundle}
-          isDraftLoading={!draftSeed.isReady}
+          isDraftLoading={isDraftLoading}
           onOpenFile={onOpenFile}
           onViewDiff={onViewDiff}
           hasPendingContext={hasPendingReviewComments}
