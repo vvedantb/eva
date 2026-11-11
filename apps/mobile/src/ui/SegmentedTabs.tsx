@@ -5,8 +5,9 @@ import { useScheme } from "@/ui/theme";
 
 /**
  * A full-width list switch, the web `tabs-segmented` list (`SessionsListModeTabs`,
- * `ReviewsListStateTabs`): its look and dark card trough, with 32-high
- * triggers for a thumb in place of the web `sm` 24 (the slop reaches 44).
+ * `ReviewsListStateTabs`): its track, raised thumb and dark card trough, with
+ * 14 px labels on 40-high triggers for a thumb in place of the web `sm` 24
+ * (the 2 slop above and below reaches 44).
  */
 export function SegmentedTabs<Value extends string>({
   value,
@@ -31,7 +32,7 @@ export function SegmentedTabs<Value extends string>({
         style={scheme === "dark" ? { backgroundColor: EVA_THEME.dark.card } : undefined}
       >
         {options.map((option) => (
-          <TabsTrigger key={option.value} value={option.value} className="flex-1" minHeight={largerText ? undefined : 32}>
+          <TabsTrigger key={option.value} value={option.value} className="flex-1" minHeight={largerText ? undefined : 40}>
             {option.label}
           </TabsTrigger>
         ))}

@@ -276,6 +276,7 @@ function ProjectsToolbar({
               leading={<Icon size={20} color={text} />}
               title={PROJECT_PHASE_LABELS[phase]}
               active={!filters.hiddenPhases.includes(phase)}
+              multiple
               onPress={() => onChange({ hiddenPhases: toggleHiddenProjectPhase(filters.hiddenPhases, phase, PROJECT_PHASES) })}
             />
           );

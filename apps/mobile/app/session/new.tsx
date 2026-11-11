@@ -172,7 +172,7 @@ export default function NewSessionScreen() {
             status={sending ? "submitted" : "ready"}
             value={composer.text}
             onChangeText={composer.setText}
-            menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} /> : null}
+            menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} onDismiss={composer.dismiss} /> : null}
             onSubmit={(prompt) => void handleSend(prompt)}
             placeholder="Ask Eva anything..."
             leading={
