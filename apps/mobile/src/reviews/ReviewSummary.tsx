@@ -403,6 +403,7 @@ function Comments({ overview, scheme }: { overview: PrOverview; scheme: Scheme }
           size="sm"
           variant="ghost"
           fullWidth={false}
+          className="self-center"
           leftIcon={<IconArrowsSort size={14} color={muted} />}
           accessibilityLabel={order === "newest" ? "Show oldest comments first" : "Show newest comments first"}
           onPress={() => setOrder(order === "newest" ? "oldest" : "newest")}

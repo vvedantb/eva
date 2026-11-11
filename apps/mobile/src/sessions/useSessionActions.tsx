@@ -20,21 +20,17 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
-  Sheet,
-  SheetBody,
-  SheetContent,
-  SheetHeader,
   SheetRow,
-  SheetTitle,
 } from "@vvedantb/native-ui/primitives";
 import { tokens } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useAction, useMutation } from "convex/react";
 import * as Clipboard from "expo-clipboard";
-import { useRef, useState, type ComponentType } from "react";
+import { Fragment, useRef, useState, type ComponentType } from "react";
 import { Linking, Text, type TextInput } from "react-native";
 import { useSimpleView } from "@/chat/ComposerFooter";
 import { WEB_URL } from "@/config";
+import { MenuDivider, MenuSheet } from "@/ui/MenuSheet";
 import { useScheme } from "@/ui/theme";
 
 /** The session a menu acts on: a Sessions row or the open chat's session. */
@@ -163,38 +159,35 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
 
   const dialogs = (
     <>
-      <Sheet
+      {/* Up to eight rows: they scroll in a short window, under the title. */}
+      <MenuSheet
         open={sheetTarget !== null}
         onOpenChange={(open) => {
           if (!open) setSheetTarget(null);
         }}
+        title={sheetTarget?.title ?? ""}
       >
-        <SheetContent className="gap-3 px-3">
-          <SheetHeader className="px-2">
-            <SheetTitle numberOfLines={1}>{sheetTarget?.title ?? ""}</SheetTitle>
-          </SheetHeader>
-          {/* Up to eight rows: they scroll in a short window, under the title. */}
-          <SheetBody contentContainerClassName="gap-3">
-            {sheetTarget
-              ? actionsFor(sheetTarget).map((action) => {
-                  const item = SESSION_ACTION_ITEMS[action];
-                  return (
-                    <SheetRow
-                      key={action}
-                      icon={item.icon}
-                      title={item.label}
-                      warning={item.warning}
-                      onPress={() => {
-                        setSheetTarget(null);
-                        run(action, sheetTarget);
-                      }}
-                    />
-                  );
-                })
-              : null}
-          </SheetBody>
-        </SheetContent>
-      </Sheet>
+        {sheetTarget
+          ? actionsFor(sheetTarget).map((action) => {
+              const item = SESSION_ACTION_ITEMS[action];
+              return (
+                <Fragment key={action}>
+                  {/* The web separator above Archive and Unarchive. */}
+                  {action === "archive" || action === "unarchive" ? <MenuDivider /> : null}
+                  <SheetRow
+                    icon={item.icon}
+                    title={item.label}
+                    warning={item.warning}
+                    onPress={() => {
+                      setSheetTarget(null);
+                      run(action, sheetTarget);
+                    }}
+                  />
+                </Fragment>
+              );
+            })
+          : null}
+      </MenuSheet>
       {/* The web "Rename session" dialog; the kit draws it as a bottom sheet at phone size. */}
       <Dialog
         open={renameTarget !== null}

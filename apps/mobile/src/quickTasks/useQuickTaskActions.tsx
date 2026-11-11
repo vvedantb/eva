@@ -18,7 +18,7 @@ import * as Clipboard from "expo-clipboard";
 import { useState } from "react";
 import { Text, type TextStyle } from "react-native";
 import { WEB_URL } from "@/config";
-import { MenuDivider, MenuSheet, SubmenuRow } from "@/quickTasks/MenuSheet";
+import { MenuDivider, MenuSheet, SubmenuRow } from "@/ui/MenuSheet";
 import { userLabel } from "@/quickTasks/QuickTaskListOptions";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
 import { useScheme } from "@/ui/theme";

@@ -90,6 +90,7 @@ export function ReviewRecap({
         size="sm"
         variant={variant}
         fullWidth={false}
+        className="self-center"
         loading={generating}
         disabled={disabled || generating}
         leftIcon={<IconRefresh size={14} color={variant === "primary" ? theme.primaryForeground : theme.foreground} />}
@@ -284,7 +285,7 @@ function StepFile({ path, state, scheme }: { path: string; state: PrDiffState; s
       <UnifiedDiff lines={hidden > 0 ? lines.slice(0, shown) : lines} />
       {hidden > 0 ? (
         <View className="items-center p-3">
-          <Button size="sm" variant="secondary" fullWidth={false} onPress={() => setShown(shown + STEP_LINE_CHUNK)}>
+          <Button size="sm" variant="secondary" fullWidth={false} className="self-center" onPress={() => setShown(shown + STEP_LINE_CHUNK)}>
             {`Show ${Math.min(hidden, STEP_LINE_CHUNK).toLocaleString()} more lines`}
           </Button>
         </View>

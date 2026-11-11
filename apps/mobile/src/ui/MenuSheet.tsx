@@ -6,9 +6,11 @@ import { Pressable, View } from "react-native";
 import { useScheme } from "@/ui/theme";
 
 /**
- * A web dropdown menu with submenus, as one bottom sheet: the root page lists
- * the items, and an item with a submenu swaps the sheet to that page, whose
- * header has a 44 back button to the root. `onBack` is set on a submenu page.
+ * A web dropdown or context menu as one bottom sheet, so every menu sheet has
+ * the same title and 56-high `SheetRow`s with no gap between them. With
+ * submenus, the root page lists the items, and an item with a submenu swaps
+ * the sheet to that page, whose header has a 44 back button to the root.
+ * `onBack` is set on a submenu page.
  */
 export function MenuSheet({
   open,

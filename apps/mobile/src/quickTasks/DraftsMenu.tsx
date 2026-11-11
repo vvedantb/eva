@@ -55,6 +55,7 @@ export function DraftsMenu({
         variant="ghost"
         size="sm"
         fullWidth={false}
+        className="self-center"
         leftIcon={<IconFileText size={16} color={theme.foreground} />}
         onPress={() => setOpen(true)}
       >

@@ -31,7 +31,7 @@ import { withAlpha } from "@vvedantb/native-ui/theme";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { MenuDivider, MenuSheet, SubmenuRow } from "@/quickTasks/MenuSheet";
+import { MenuDivider, MenuSheet, SubmenuRow } from "@/ui/MenuSheet";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 
@@ -251,14 +251,14 @@ export function QuickTaskToolbar({
           returnKeyType="search"
         />
       </View>
-      {/* The web `secondary` Options button, icon only below `sm`: 40 high, reaching 44 with its slop. */}
+      {/* The web `secondary` Options button, icon only below `sm`: a pill (a circle here), 40 high, reaching 44 with its slop. */}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Options"
         accessibilityState={{ expanded: page !== null }}
         onPress={() => setPage("root")}
         hitSlop={2}
-        className="h-10 w-10 items-center justify-center rounded-lg active:opacity-70"
+        className="h-10 w-10 items-center justify-center rounded-full active:opacity-70"
         style={{ backgroundColor: theme.secondary }}
       >
         <IconSettings size={16} color={theme.secondaryForeground} />
