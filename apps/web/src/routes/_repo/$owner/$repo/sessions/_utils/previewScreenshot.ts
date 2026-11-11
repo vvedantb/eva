@@ -1,3 +1,4 @@
+import { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
 import { isFromFrame, postToFrame } from "@/lib/utils/frameMessaging";
 
 export type PreviewScreenshotInbound =
@@ -9,7 +10,7 @@ export function parseScreenshotInbound(
 ): PreviewScreenshotInbound | null {
   if (!("type" in data) || typeof data.type !== "string") return null;
   if (!("requestId" in data) || typeof data.requestId !== "string") return null;
-  if (data.type === "eva-preview-screenshot") {
+  if (data.type === PREVIEW_FRAME_MESSAGE.screenshot) {
     if (!("dataUrl" in data) || typeof data.dataUrl !== "string") return null;
     if (!data.dataUrl.startsWith("data:image/")) return null;
     return {
@@ -18,7 +19,7 @@ export function parseScreenshotInbound(
       dataUrl: data.dataUrl,
     };
   }
-  if (data.type === "eva-preview-screenshot-error") {
+  if (data.type === PREVIEW_FRAME_MESSAGE.screenshotError) {
     if (!("message" in data) || typeof data.message !== "string") return null;
     return { type: "error", requestId: data.requestId, message: data.message };
   }
@@ -65,6 +66,9 @@ export function requestPreviewScreenshot(
     }
 
     window.addEventListener("message", onMessage);
-    postToFrame(frame, { type: "eva-preview-screenshot-capture", requestId });
+    postToFrame(frame, {
+      type: PREVIEW_FRAME_MESSAGE.screenshotCapture,
+      requestId,
+    });
   });
 }

@@ -57,7 +57,7 @@ async function expireStaleBuild(
   if (Date.now() - runningBuild.startedAt > STALE_BUILD_MS) {
     await ctx.db.patch(runningBuild._id, {
       status: "error",
-      error: "Build timed out (exceeded 20 minutes)",
+      error: `Build timed out (exceeded ${STALE_BUILD_MS / 60_000} minutes)`,
       completedAt: Date.now(),
     });
     return false;

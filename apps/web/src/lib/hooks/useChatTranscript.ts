@@ -2,13 +2,17 @@
 
 import { api } from "@eva/backend";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import type { FunctionArgs } from "convex/server";
-import { useHeldResult } from "@vvedantb/ui";
+import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useHeldQuery } from "./useHeldQuery";
 
-type TranscriptParentId = FunctionArgs<
+export type TranscriptParentId = FunctionArgs<
   typeof api.messages.listByParent
 >["parentId"];
+
+/** One row of a chat transcript (session chat tab, quick task or project). */
+export type TranscriptMessage = FunctionReturnType<
+  typeof api.messages.listByParent
+>[number];
 
 /**
  * Messages a chat opens with. 30 covers the last turn (the only one in the
@@ -34,7 +38,10 @@ export function transcriptTailArgs(parentId: TranscriptParentId) {
  * The full list subscribes only after the tail resolved: two queries sent
  * together would answer together, and the tail would wait for the full list.
  *
- * `"skip"` holds the last result, like `useHeldQuery` (hidden session shells).
+ * `"skip"` (hidden session shells) holds only the tail, like `useHeldQuery`.
+ * The full list of a heavy chat is megabytes, and holding it for every
+ * hidden shell kept it all in memory. On return the tail paints at once and
+ * the full list swaps in by row id, as on open.
  */
 export function useChatTranscript(parentId: TranscriptParentId | "skip") {
   const skipped = parentId === "skip";
@@ -42,10 +49,9 @@ export function useChatTranscript(parentId: TranscriptParentId | "skip") {
     api.messages.listByParent,
     skipped ? "skip" : transcriptTailArgs(parentId),
   );
-  const liveFull = useQuery(
+  const full = useQuery(
     api.messages.listByParent,
     skipped || tail === undefined ? "skip" : { parentId },
   );
-  const full = useHeldResult(liveFull, skipped ? null : parentId);
   return full ?? tail;
 }

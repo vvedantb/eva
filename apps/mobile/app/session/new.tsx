@@ -140,12 +140,14 @@ export default function NewSessionScreen() {
               onPress={() => setPickingRepo(true)}
               // The headline keeps its 28 line; the slop makes the target 44.
               hitSlop={{ top: 8, bottom: 8 }}
-              className="flex-row items-center gap-1.5 active:opacity-70"
+              // `max-w-full` and a shrinking name: a long repo name (GitHub allows 100 characters) truncates on its own line.
+              className="max-w-full flex-row items-center gap-1.5 active:opacity-70"
             >
               {/* The web `CodebasesPicker`: the logo at 28, else the GitHub mark. */}
               <RepoLogo logoUrl={repo?.logoUrl} size={28} fallback={<IconBrandGithub size={28} color={muted} />} />
               <Text
-                className="font-instrument-sans-semibold text-xl"
+                numberOfLines={1}
+                className="font-instrument-sans-semibold min-w-0 shrink text-xl"
                 style={{
                   color: foreground,
                   fontWeight: "600",
@@ -170,7 +172,7 @@ export default function NewSessionScreen() {
             status={sending ? "submitted" : "ready"}
             value={composer.text}
             onChangeText={composer.setText}
-            menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} /> : null}
+            menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} onDismiss={composer.dismiss} /> : null}
             onSubmit={(prompt) => void handleSend(prompt)}
             placeholder="Ask Eva anything..."
             leading={

@@ -24,6 +24,16 @@ export const CHAT_UI_TONES = [
 ] as const;
 export type ChatUiTone = (typeof CHAT_UI_TONES)[number];
 
+/** Text styles: the catalog's `Text.variant` and a text block's `emphasis`. */
+export const CHAT_UI_TEXT_STYLES = ["body", "muted", "lead"] as const;
+
+/** Button styles, shared by the catalog and the button content block. */
+export const CHAT_UI_BUTTON_VARIANTS = [
+  "primary",
+  "secondary",
+  "ghost",
+] as const;
+
 const tone = z.enum(CHAT_UI_TONES);
 const nullableText = z.string().nullable();
 
@@ -64,7 +74,7 @@ export const chatUiCatalog = defineCatalog(schema, {
     Text: {
       props: z.object({
         text: z.string(),
-        variant: z.enum(["body", "muted", "lead"]),
+        variant: z.enum(CHAT_UI_TEXT_STYLES),
       }),
       description: "A paragraph of read-only prose.",
     },
@@ -122,7 +132,7 @@ export const chatUiCatalog = defineCatalog(schema, {
     Button: {
       props: z.object({
         label: z.string(),
-        variant: z.enum(["primary", "secondary", "ghost"]),
+        variant: z.enum(CHAT_UI_BUTTON_VARIANTS),
       }),
       events: ["press"],
       description: "Clickable button that replies in the chat or opens a link.",

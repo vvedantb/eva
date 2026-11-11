@@ -10,13 +10,13 @@ import { MONO_FONT } from "@vvedantb/native-ui/ai";
 import { tokens, withAlpha } from "@vvedantb/native-ui/theme";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { useScheme, XS_TRACKING } from "@/ui/theme";
+import { useScheme } from "@/ui/theme";
 
-/** Web `text-xs` (12 / 16). */
-const XS = { fontSize: 12, lineHeight: 16, letterSpacing: XS_TRACKING } as const;
+/** `text-sm` (14 / 20): every label here is tappable, so the phone floor, not the web `text-xs`. */
+const LABEL = { fontSize: 14, lineHeight: 20 } as const;
 
 /**
- * The header's 16-high fold and "View diff" reach 44: 20 up (the card's
+ * The header's 20-high fold and "View diff" reach 48: 20 up (the card's
  * `mt-2` and the reply above) and 8 down, to the row's edge, so they never
  * cover the file rows under them.
  */
@@ -69,12 +69,12 @@ export function ChangedFilesCard({
           <View style={{ transform: [{ rotate: isExpanded ? "0deg" : "-90deg" }] }}>
             <IconChevronDown size={14} color={muted} />
           </View>
-          <Text className="font-instrument-sans-medium" style={[XS, { color: foreground, fontWeight: "500" }]}>
+          <Text className="font-instrument-sans-medium" style={[LABEL, { color: foreground, fontWeight: "500" }]}>
             {`Changed files (${files.length})`}
           </Text>
         </Pressable>
         <Pressable accessibilityRole="button" hitSlop={{ ...HEADER_SLOP, left: 8, right: 8 }} onPress={() => onOpenDiff(files[0]?.path)}>
-          <Text className="font-instrument-sans" style={[XS, { color: muted }]}>
+          <Text className="font-instrument-sans" style={[LABEL, { color: muted }]}>
             View diff
           </Text>
         </Pressable>
@@ -103,7 +103,7 @@ export function ChangedFilesCard({
                   style={({ pressed }) => (pressed ? { backgroundColor: tokens.color.surfaceSecondary[scheme] } : null)}
                 >
                   <IconFileText size={14} color={muted} />
-                  <Text numberOfLines={1} className="min-w-0 shrink" style={[XS, { color: foreground, fontFamily: MONO_FONT }]}>
+                  <Text numberOfLines={1} className="min-w-0 shrink" style={[LABEL, { color: foreground, fontFamily: MONO_FONT }]}>
                     {file.name}
                   </Text>
                 </Pressable>
@@ -117,7 +117,7 @@ export function ChangedFilesCard({
               className="min-h-11 justify-center rounded-md px-1.5"
               style={({ pressed }) => (pressed ? { backgroundColor: tokens.color.surfaceSecondary[scheme] } : null)}
             >
-              <Text className="font-instrument-sans" style={[XS, { color: muted }]}>
+              <Text className="font-instrument-sans" style={[LABEL, { color: muted }]}>
                 {`Show all ${files.length} files`}
               </Text>
             </Pressable>

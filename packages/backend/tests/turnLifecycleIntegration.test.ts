@@ -1,3 +1,4 @@
+import { TURN_BACKSTOP_ERROR } from "@eva/shared/agentTurnLimits";
 import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
 import { internal } from "../convex/_generated/api";
@@ -327,10 +328,10 @@ describe("turn lifecycle integration", () => {
   /**
    * Grace is the only path that extends a lease without the daemon asking, so
    * it is also the only one that could keep a wedged turn open forever. The
-   * 2-hour backstop must win even while the probe still reports the process
+   * `TURN_BACKSTOP_MS` backstop must win even while the probe still reports the process
    * alive.
    */
-  test("grace closes a turn that passed the absolute 2-hour limit", async () => {
+  test("grace closes a turn that passed the absolute backstop limit", async () => {
     const { t, turnId } = await createSessionFixture();
     await t.run(async (ctx) => {
       await ctx.db.patch(turnId, {
@@ -346,7 +347,7 @@ describe("turn lifecycle integration", () => {
     const turn = await t.run(async (ctx) => await ctx.db.get(turnId));
     expect(turn?.open).toBe(false);
     expect(turn?.state).toBe("error");
-    expect(turn?.error).toContain("2-hour limit");
+    expect(turn?.error).toBe(TURN_BACKSTOP_ERROR);
     // No silent marker on a closed turn: nothing is waiting for it any more.
     expect(turn?.silentSince).toBeUndefined();
   });

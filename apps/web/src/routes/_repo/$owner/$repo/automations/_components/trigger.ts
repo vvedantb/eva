@@ -23,6 +23,14 @@ export function describeTrigger(trigger: AutomationTrigger): string | null {
   return `Runs when an issue is labelled "${trigger.label ?? DEFAULT_ISSUE_LABEL}"`;
 }
 
+/** Event presets whose run creates a quick task rather than a chat message. */
+export function createsTasks(trigger: AutomationTrigger): boolean {
+  return (
+    trigger.kind === "event" &&
+    (trigger.event === "issue_labeled" || trigger.event === "production_alert")
+  );
+}
+
 /** Sentence-cases an event label for the dropdown. */
 export function capitalise(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);

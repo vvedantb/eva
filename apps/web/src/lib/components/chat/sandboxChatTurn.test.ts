@@ -97,9 +97,10 @@ describe("sendSandboxTurn", () => {
       content: "hello",
       reasoningLevel: "low",
     });
+    // The picker's effort wins over the execution payload on both rows.
     expect(calls[1]?.args).toMatchObject({
       message: "hello",
-      reasoningLevel: "high",
+      reasoningLevel: "low",
     });
   });
 

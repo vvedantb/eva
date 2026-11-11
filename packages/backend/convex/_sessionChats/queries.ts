@@ -24,34 +24,6 @@ export const listForSession = authQuery({
   },
 });
 
-/**
- * Every open chat beyond Main across a repo, for the sidebar's indented rows.
- * One subscription per repo group rather than one per session row. Indexed on
- * isMain/archived so the read set excludes every session's Main chat, whose
- * daemon-poll writes would otherwise re-run this query repo-wide.
- */
-export const listExtraForRepo = authQuery({
-  args: { repoId: v.id("githubRepos") },
-  returns: v.array(sessionChatValidator),
-  handler: async (ctx, args) => {
-    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const groups = await Promise.all(
-      [undefined, false].map((archived) =>
-        ctx.db
-          .query("sessionChats")
-          .withIndex("by_repo_main_and_archived", (q) =>
-            q
-              .eq("repoId", args.repoId)
-              .eq("isMain", false)
-              .eq("archived", archived),
-          )
-          .collect(),
-      ),
-    );
-    return groups.flat().toSorted((a, b) => a.number - b.number);
-  },
-});
-
 export const get = authQuery({
   args: { chatId: v.id("sessionChats") },
   returns: v.union(sessionChatValidator, v.null()),

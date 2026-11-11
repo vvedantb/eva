@@ -19,6 +19,10 @@
 
 <!-- Who and what the change touches, and why it is safe or risky. -->
 
+## Rollback
+
+<!-- How to undo it: is a revert enough, or must data, config or external services be undone too? Start with "One-way:" when a revert cannot restore the old state. -->
+
 ## ELI5
 
 <!-- Two or three plain sentences someone outside the project would follow. -->

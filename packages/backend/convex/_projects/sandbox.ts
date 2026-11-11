@@ -16,7 +16,7 @@ import {
 } from "../_sandbox/stopRecovery";
 import { authMutation, getProjectWithAccess, hasActiveRun } from "../functions";
 import { workflow } from "../workflowManager";
-import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
+import { FALLBACK_GIT_BASE_BRANCH, sandboxStartupEntityId } from "@eva/shared";
 import {
   seedSandboxStartupActivity,
   clearSandboxStartupActivity,
@@ -29,7 +29,6 @@ import {
   type StopReason,
 } from "../_sandbox/stopReason";
 import { touchUserActivity } from "../_sandbox/activity";
-import { sandboxStartupEntityId } from "../_sandbox/owner";
 import {
   canRequestSandboxStart,
   canStartActionMarkStarting,

@@ -181,32 +181,6 @@ export const listSessionChatStatuses = authQuery({
   },
 });
 
-/**
- * Every session chat in a repo with a turn open, for the sidebar's indented
- * chat rows. One indexed read per repo group, like the session rows' own
- * executing projection.
- */
-export const listRunningChatIdsForRepo = authQuery({
-  args: { repoId: v.id("githubRepos") },
-  returns: v.array(v.id("sessionChats")),
-  handler: async (ctx, args) => {
-    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const turns = await ctx.db
-      .query("turns")
-      .withIndex("by_repo_open", (q) =>
-        q.eq("repoId", args.repoId).eq("open", true),
-      )
-      .collect();
-    const chatIds = [];
-    for (const turn of turns) {
-      if (turn.lane !== undefined) continue;
-      const chatId = ctx.db.normalizeId("sessionChats", turn.entityId);
-      if (chatId) chatIds.push(chatId);
-    }
-    return chatIds;
-  },
-});
-
 const leaseIdentityValidator = v.object({
   turnId: v.id("turns"),
   leaseGeneration: v.number(),
@@ -489,7 +463,7 @@ async function finalizeExpiredChatTurn<TId extends ChatEntityId, TEntity>(
 /**
  * Finalises one expired agent turn (a quick-task run or a one-shot agent)
  * through that agent's own stall teardown: the run's `cleanUpStaleRun`, or the
- * teardown the 2-hour backstop uses for the others.
+ * teardown the `TURN_BACKSTOP_MS` backstop uses for the others.
  */
 async function finalizeExpiredAgentTurn(
   ctx: MutationCtx,

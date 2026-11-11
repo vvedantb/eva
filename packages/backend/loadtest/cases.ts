@@ -70,7 +70,6 @@ export const CASES: ReadonlyArray<QueryCase> = [
   q("githubRepos.listActiveSandboxCounts", "sidebar badges", api.githubRepos.listActiveSandboxCounts, () => ({})),
   q("sessions.list", "sessions sidebar", api.sessions.list, (r) => ({ repoId: r.repoId })),
   q("sessions.listRepos", "session header", api.sessions.listRepos, (r) => ({ sessionId: r.sessionId })),
-  q("sessionChats.listExtraForRepo", "sessions sidebar", api.sessionChats.listExtraForRepo, (r) => ({ repoId: r.repoId })),
   q("messages.listByParent", "chat transcript", api.messages.listByParent, (r) => ({ parentId: r.mainChatId })),
   // Opening a session: what `SessionDetailClient`, `ChatPanel` and `ChatBody`
   // subscribe to for the focal (heavy) chat.

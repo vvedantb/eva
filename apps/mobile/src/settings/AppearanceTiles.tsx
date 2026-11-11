@@ -4,7 +4,7 @@ import { palette, tokens, withAlpha } from "@vvedantb/native-ui/theme";
 import type { ComponentType } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
-import { useScheme, XS_TRACKING } from "@/ui/theme";
+import { useScheme } from "@/ui/theme";
 import { setColorSchemeChoice, useColorSchemeChoice, type ColorSchemeChoice } from "./colorScheme";
 
 /**
@@ -90,11 +90,11 @@ export function AppearanceTiles() {
                 <IconCheck size={10} strokeWidth={3} color={palette.primaryForeground[scheme]} />
               </View>
             ) : null}
+            {/* `text-sm` (web `text-xs`): a tappable title. The muted colour off the pick stays, as it marks the choice. */}
             <Text
-              className="font-instrument-sans-medium text-xs"
+              className="font-instrument-sans-medium text-sm"
               style={{
                 fontWeight: "500",
-                letterSpacing: XS_TRACKING,
                 color: active ? palette.primary[scheme] : tokens.color.muted[scheme],
               }}
             >

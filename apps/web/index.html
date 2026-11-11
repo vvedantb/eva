@@ -2,9 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- `interactive-widget=resizes-content`: the Android keyboard shrinks the
+         layout viewport (as iOS does), so the `h-dvh` shell and its bottom
+         composer move above the keyboard instead of under it. -->
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
     />
     <!-- Light-theme --app-shell; the script below and FaviconController
          retarget this to the active theme. -->

@@ -1,5 +1,6 @@
 import { isTaskRunning } from "../_agentTasks/runState";
 import { isProjectBuilding } from "../_projects/buildState";
+import { TURN_BACKSTOP_ERROR } from "@eva/shared/agentTurnLimits";
 import type { Doc, Id } from "../_generated/dataModel";
 import type {
   DatabaseReader,
@@ -135,10 +136,10 @@ export function stalledAlert(
   };
 }
 
-/** Alert text shared by every surface for the 2-hour workflow-timeout backstop. */
+/** Alert text shared by every surface for the `TURN_BACKSTOP_MS` workflow-timeout backstop. */
 const timeoutAlert: ChatAlert = {
   text: "Execution timed out.",
-  detail: "Turn exceeded the 2-hour workflow limit.",
+  detail: `${TURN_BACKSTOP_ERROR}.`,
 };
 
 const sessionChatAdapter: ChatSurfaceAdapter<
@@ -502,7 +503,7 @@ export function turnAdapterForEntity<R>(
 }
 
 /**
- * Schedules the 2-hour backstop for a session chat workflow. The caller has
+ * Schedules the `TURN_BACKSTOP_MS` backstop for a session chat workflow. The caller has
  * already bound the workflow to the chat's open turn (`bindTurnWorkflow`):
  * that turn is the only record of it. The turn lease (`turns.reconcile`) is
  * the stall check.
@@ -521,7 +522,7 @@ export async function trackSessionChatWorkflow(
 }
 
 /**
- * Schedules the 2-hour backstop for a session-level workflow (the summary).
+ * Schedules the `TURN_BACKSTOP_MS` backstop for a session-level workflow (the summary).
  * The session row keeps no workflow slot: the summary's lane turn holds the
  * id once the agent launches, and the backstop asks the workflow itself.
  */

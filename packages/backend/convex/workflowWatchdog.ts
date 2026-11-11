@@ -149,7 +149,7 @@ export const handleStaleSession = internalMutation({
 
 /**
  * Tears down a session-level workflow (the summary — chat turns live on their
- * chat) the 2-hour backstop or the lease reconciler gave up on. No-op once
+ * chat) the `TURN_BACKSTOP_MS` backstop or the lease reconciler gave up on. No-op once
  * that workflow has ended. The alert lands in the Main chat.
  */
 export async function tearDownStaleSessionWorkflow(
@@ -311,7 +311,7 @@ export async function tearDownStaleProjectWorkflow(
   });
 }
 
-/** Cancels a stale project chat workflow via the 2-hour workflow-timeout backstop. */
+/** Cancels a stale project chat workflow via the `TURN_BACKSTOP_MS` workflow-timeout backstop. */
 export const handleStaleProjectChat = internalMutation({
   args: {
     projectId: v.id("projects"),
@@ -342,7 +342,7 @@ export const handleStaleProjectChat = internalMutation({
 
 
 
-/** Cancels a stale task chat workflow via the 2-hour workflow-timeout backstop. */
+/** Cancels a stale task chat workflow via the `TURN_BACKSTOP_MS` workflow-timeout backstop. */
 export const handleStaleAgentTaskChat = internalMutation({
   args: {
     taskId: v.id("agentTasks"),

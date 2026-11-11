@@ -3,7 +3,7 @@ import { findLivePullRequestOnBranch } from "../_pullRequests/store";
 import { authQuery, hasRepoAccess } from "../functions";
 import { internalQuery } from "../_generated/server";
 import { entityVisible, filterActiveEntities } from "../numId";
-import { taskSandboxStatusValidator } from "../_validators/enums";
+import { sessionStatusValidator } from "../_validators/enums";
 import { listRow } from "../_validators/listRows";
 import {
   taskProgressValidator,
@@ -170,7 +170,7 @@ export const getActive = authQuery({
       numId: v.optional(v.number()),
       title: v.string(),
       isBuilding: v.boolean(),
-      reviewProjectSandboxStatus: v.optional(taskSandboxStatusValidator),
+      reviewProjectSandboxStatus: v.optional(sessionStatusValidator),
     }),
   ),
   handler: async (ctx, args) => {

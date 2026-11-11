@@ -169,7 +169,7 @@ export async function cleanUpStaleRun(
   }
 
   // Every stop path ends here: the old chain, the lease reconciler and the
-  // 2-hour backstop. Closing the run's turn keeps the two stall systems from
+  // `TURN_BACKSTOP_MS` backstop. Closing the run's turn keeps the two stall systems from
   // both acting on one run.
   await closeOpenTurn(ctx, params.runId, "error", {
     error: params.errorMessage,

@@ -53,17 +53,12 @@ import {
 import { Markdown } from "@vvedantb/native-ui/markdown";
 import { Spinner, Text } from "@vvedantb/native-ui/primitives";
 import { tokens } from "@vvedantb/native-ui/theme";
-import * as Clipboard from "expo-clipboard";
 import { useState, type ComponentType, type ReactNode } from "react";
 import { Pressable, View } from "react-native";
+import { copyText } from "@/ui/copyText";
 import { textColor, useScheme } from "@/ui/theme";
 import { ChangedFilesCard } from "./ChangedFilesCard";
 import { StepDetail } from "./StepDetail";
-
-/** The code block's and table's copy buttons, as the web. */
-const copyText = async (text: string) => {
-  await Clipboard.setStringAsync(text);
-};
 
 /** Same icon per step type as the web trace (`activityStepConfig` in @vvedantb/ui). `status` draws a spinner. */
 const STEP_ICONS: Record<Exclude<ActivityLogStep["type"], "status">, ComponentType<IconProps>> = {
@@ -263,7 +258,8 @@ function StepRow({ row, steps, messageId }: RowProps) {
           {chip ? null : descriptionText}
         </AgentTraceLine>
       </AgentTraceCollapsibleTrigger>
-      <AgentTraceCollapsibleContent className="gap-2">
+      {/* The 28 high rows bring their own 4 above and below, so 4 more keeps the detail 8 clear of them. */}
+      <AgentTraceCollapsibleContent className="gap-1">
         {hasDetail ? <StepDetail step={step} index={index} messageId={messageId} /> : null}
         {children.shown.map((child, childIndex) => (
           <StepRow key={activityRowKey(child, childIndex)} row={child} steps={steps} messageId={messageId} />
@@ -291,7 +287,8 @@ function StepRun({ rows, steps, messageId }: { rows: ActivityRow[]; steps: Activ
           <AgentTraceTitle shimmer={active}>{deriveActionGroupSummary(rows.map(({ step }) => step))}</AgentTraceTitle>
         </AgentTraceLine>
       </AgentTraceCollapsibleTrigger>
-      <AgentTraceCollapsibleContent className="gap-2">
+      {/* The rows stack at the trace's 28 pitch, each line its own whole target. */}
+      <AgentTraceCollapsibleContent>
         {rows.map((row, index) => (
           <StepRow key={activityRowKey(row, index)} row={row} steps={steps} messageId={messageId} />
         ))}

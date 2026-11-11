@@ -46,6 +46,11 @@ export function resolveProjectBranchName(
   );
 }
 
+/** Session branch; also the default when a session has no stored branch. */
+export function buildSessionBranchName(sessionId: Id<"sessions">): string {
+  return `${EVA_BRANCH_PREFIX}session-${String(sessionId)}`;
+}
+
 /** Standalone (quick) task branch. */
 export function buildTaskBranchName(taskId: Id<"agentTasks">): string {
   return `${EVA_BRANCH_PREFIX}task-${String(taskId)}`;

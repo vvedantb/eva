@@ -5,12 +5,12 @@ import type { OptimisticLocalStore } from "convex/browser";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { z } from "zod";
 import { patchLoadedQuery } from "@vvedantb/server";
-import { api } from "@eva/backend";
+import { api, ARTIFACT_STATE_SCOPES } from "@eva/backend";
 import type { Id } from "@eva/backend";
 
 // Messages the sandboxed artifact may post. Parsed at the boundary: the frame
 // runs untrusted code, so anything that does not match is ignored.
-const stateScope = z.enum(["user", "shared"]);
+const stateScope = z.enum(ARTIFACT_STATE_SCOPES);
 const bridgeMessage = z.discriminatedUnion("type", [
   z.object({ type: z.literal("eva-bridge-hello") }),
   z.object({
