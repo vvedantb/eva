@@ -16,15 +16,12 @@ import {
   ownedSessionBusy,
   taskWorkSessionOwner,
 } from "../_sessions/ownedSession";
-
-/** Why a run did not start: the task's chat holds the sandbox. */
-export const TASK_CHAT_BUSY_ERROR =
-  "This sandbox is busy: Eva is replying in its chat, a run or build holds it, or it is starting or stopping. Try the run again in a moment.";
+import { TASK_CHAT_BUSY_ERROR } from "./recovery";
 
 /**
  * True while the session a task works on (its own, or its project's) holds
- * its sandbox for a chat turn, a run or a start/stop. A run waits then, as a
- * chat message waits behind a run.
+ * its sandbox for a chat turn, a run, a build or a start/stop. A run waits
+ * then, as a chat message waits behind a run.
  */
 export async function taskWorkSessionBusy(
   db: MutationCtx["db"],

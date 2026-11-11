@@ -490,7 +490,13 @@ const taskRunClaimValidator = v.object({
 
 /** Claims the session's sandbox for a task run: `closed` → `starting`. */
 export const claimSandboxForTaskRun = internalMutation({
-  args: { sessionId: v.id("sessions") },
+  args: {
+    sessionId: v.id("sessions"),
+    /** A task run's claim. */
+    runId: v.optional(v.id("agentRuns")),
+    /** A project interview's claim (`projects.interviewSandboxClaim`). */
+    projectId: v.optional(v.id("projects")),
+  },
   returns: v.union(taskRunClaimValidator, v.null()),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
@@ -510,6 +516,16 @@ export const claimSandboxForTaskRun = internalMutation({
       sandboxError: undefined,
       updatedAt: Date.now(),
     });
+    // The claimer records its attempt, so a cancel before the attach fails
+    // exactly this start (`abandonTaskRunSandbox`).
+    if (args.runId !== undefined) {
+      await ctx.db.patch(args.runId, { sessionStartAttempt: attempt });
+    }
+    if (args.projectId !== undefined) {
+      await ctx.db.patch(args.projectId, {
+        interviewSandboxClaim: { sessionStartAttempt: attempt },
+      });
+    }
     await scheduleStuckStartExpiry(
       ctx,
       { kind: "session", id: args.sessionId },
@@ -576,6 +592,49 @@ export async function finishTaskRunSandbox(
   await requestSessionSandboxStop(ctx, sessionId, {
     stopReason: { kind: "task" },
   });
+}
+
+/**
+ * A task run (or a project interview) was cancelled. Before its attach, the
+ * start it claimed fails through the normal start-failure transition (fenced
+ * by its recorded attempt, `shouldApplySandboxStartFailure`) and any VM it
+ * already prepared stops; after it, the VM finishes like at a run's end.
+ */
+export async function abandonTaskRunSandbox(
+  ctx: MutationCtx,
+  sessionId: Id<"sessions">,
+  run: { sandboxId?: string; sessionStartAttempt?: number },
+  /** A project's VM stays up after the attach (its chat and builds reuse it). */
+  options: { keepActive: boolean } = { keepActive: false },
+): Promise<void> {
+  const session = await ctx.db.get(sessionId);
+  if (!session) return;
+  const claimPending =
+    run.sessionStartAttempt !== undefined &&
+    shouldApplySandboxStartFailure(session.status) &&
+    isCurrentSandboxStartAttempt(
+      session.sandboxStartAttempt,
+      run.sessionStartAttempt,
+    );
+  if (!claimPending) {
+    if (run.sandboxId) {
+      await finishTaskRunSandbox(ctx, sessionId, run.sandboxId, {
+        keepActive: options.keepActive,
+      });
+    }
+    return;
+  }
+  await ctx.runMutation(internal.sessions.sandboxError, {
+    sessionId,
+    error: "The run was cancelled before its sandbox was ready.",
+    startAttempt: run.sessionStartAttempt,
+  });
+  if (run.sandboxId) {
+    await ctx.scheduler.runAfter(0, internal.sandbox.stopSandbox, {
+      sandboxId: run.sandboxId,
+      repoId: session.repoId,
+    });
+  }
 }
 
 export const finishTaskRunSandboxMutation = internalMutation({

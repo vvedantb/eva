@@ -728,6 +728,12 @@ export const agentRunFields = {
   // media on — it renders as the quick task's first chat turn or as a timeline
   // row, both built from this doc — so the ids live here instead.
   mediaStorageIds: v.optional(v.array(v.id("_storage"))),
+  /**
+   * The start attempt a quick task run's claim took on its session
+   * (`sessions.claimSandboxForTaskRun`), so a cancel before the attach can
+   * fail exactly that start. Absent when the run reused an active session.
+   */
+  sessionStartAttempt: v.optional(v.number()),
 };
 
 export const sessionFields = {
@@ -1223,6 +1229,18 @@ export const projectFields = {
   projectStartDate: v.optional(v.number()),
   projectEndDate: v.optional(v.number()),
   activeWorkflowId: v.optional(v.string()),
+  /**
+   * The interview / spec agent's claim on the project session's sandbox,
+   * from claim to release: the start attempt it owns and, once prepared, its
+   * VM. A cancel before the attach fails exactly that start and stops the VM
+   * (`abandonTaskRunSandbox`), as `agentRuns.sessionStartAttempt` does for runs.
+   */
+  interviewSandboxClaim: v.optional(
+    v.object({
+      sessionStartAttempt: v.number(),
+      sandboxId: v.optional(v.string()),
+    }),
+  ),
   /** The project build lifecycle; absent = idle. Written only by `_projects/buildState.ts`. */
   build: v.optional(projectBuildValidator),
   // Legacy build fields removed. schema-narrowing-ok: migrateProjectBuildState

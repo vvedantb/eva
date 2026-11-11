@@ -32,6 +32,10 @@ import {
 } from "./_projects/helpers";
 import { sandboxStartupEntityId } from "@eva/shared";
 import { errorMessage } from "@vvedantb/server";
+import {
+  TASK_CHAT_BUSY_ERROR,
+  TASK_CHAT_BUSY_RETRY_MS,
+} from "./_taskWorkflow/recovery";
 
 const projectInterviewCompleteEvent = defineEvent({
   name: "projectInterviewComplete",
@@ -206,6 +210,7 @@ export const projectInterviewWorkflow = workflow.define({
 /** What `ensureInterviewSession` returns. */
 const interviewSessionValidator = v.object({
   sessionId: v.id("sessions"),
+  projectId: v.id("projects"),
   repoOwner: v.string(),
   repoName: v.string(),
   repoId: v.id("githubRepos"),
@@ -234,6 +239,7 @@ export const ensureInterviewSession = internalMutation({
     });
     return {
       sessionId: session._id,
+      projectId: project._id,
       repoOwner: repo.owner,
       repoName: repo.name,
       repoId: project.repoId,
@@ -250,28 +256,49 @@ type InterviewSandbox = {
   wasActive: boolean;
 };
 
+/** How many times an interview waits out a busy session before it fails. */
+const INTERVIEW_CLAIM_MAX_WAITS = 10;
+
 /**
  * The sandbox an interview or spec agent runs on, through the same session
- * lifecycle as a task run: the session is claimed (`closed` → `starting`),
- * its VM resumed or a fresh one prepared, then attached (`starting` →
+ * lifecycle as a task run: the session is claimed (`closed` → `starting`,
+ * the attempt recorded in `projects.interviewSandboxClaim`), its VM resumed
+ * or a fresh one prepared and recorded, then attached (`starting` →
  * `active`, fenced by the claim's attempt), so the row never reads `closed`
- * over a running VM. A failed prepare is the claim's start failure. No claim
- * (a start or stop in flight): a VM of the workflow's own. Interview agents
- * only read the repo, so the repo's startup commands are skipped.
+ * over a running VM and no VM goes unrecorded. A start or stop in flight is
+ * waited out (then the busy error). A failed prepare is the claim's start
+ * failure. Interview agents only read the repo, so the repo's startup
+ * commands are skipped.
  */
 async function prepareInterviewSandbox(
   step: WorkflowCtx,
   target: InterviewTarget,
   installationId: number,
 ): Promise<InterviewSandbox> {
-  const claim = await step.runMutation(
+  const claimArgs = {
+    sessionId: target.sessionId,
+    projectId: target.projectId,
+  };
+  let claim = await step.runMutation(
     internal.sessions.claimSandboxForTaskRun,
-    { sessionId: target.sessionId },
+    claimArgs,
   );
+  for (
+    let wait = 0;
+    claim === null && wait < INTERVIEW_CLAIM_MAX_WAITS;
+    wait++
+  ) {
+    claim = await step.runMutation(
+      internal.sessions.claimSandboxForTaskRun,
+      claimArgs,
+      { runAfter: TASK_CHAT_BUSY_RETRY_MS },
+    );
+  }
+  if (claim === null) throw new Error(TASK_CHAT_BUSY_ERROR);
   let sandboxId: string;
   try {
     ({ sandboxId } = await prepareSandboxSteps(step, {
-      existingSandboxId: claim?.sandboxId,
+      existingSandboxId: claim.sandboxId,
       installationId,
       repoOwner: target.repoOwner,
       repoName: target.repoName,
@@ -286,42 +313,81 @@ async function prepareInterviewSandbox(
       skipStartupCommands: true,
     }));
   } catch (prepareError) {
-    if (claim && !claim.wasActive) {
+    if (!claim.wasActive) {
       await step.runMutation(internal.sessions.sandboxError, {
         sessionId: target.sessionId,
         error: errorMessage(prepareError),
         startAttempt: claim.attempt,
       });
     }
+    await step.runMutation(
+      internal.projectInterviewWorkflow.clearInterviewSandboxClaim,
+      { projectId: target.projectId },
+    );
     throw prepareError;
   }
-  if (claim) {
-    await step.runMutation(internal.sessions.attachTaskRunSandbox, {
-      sessionId: target.sessionId,
-      sandboxId,
-      attempt: claim.attempt,
-    });
-  }
-  return { sandboxId, wasActive: claim?.wasActive ?? false };
+  await step.runMutation(
+    internal.projectInterviewWorkflow.recordInterviewSandbox,
+    { projectId: target.projectId, sandboxId },
+  );
+  await step.runMutation(internal.sessions.attachTaskRunSandbox, {
+    sessionId: target.sessionId,
+    sandboxId,
+    attempt: claim.attempt,
+  });
+  return { sandboxId, wasActive: claim.wasActive };
 }
 
 /**
  * The agent is done: the session's VM stops through the session stop path
  * unless the session was already `active` (the reviewer has it open); a VM
- * the session never took stops directly (`finishTaskRunSandbox`).
+ * the session never took stops directly (`finishTaskRunSandbox`). The claim
+ * record is cleared either way.
  */
 async function releaseInterviewSandbox(
   step: WorkflowCtx,
   target: InterviewTarget,
   held: InterviewSandbox | undefined,
 ): Promise<void> {
-  if (held === undefined) return;
-  await step.runMutation(internal.sessions.finishTaskRunSandboxMutation, {
-    sessionId: target.sessionId,
-    sandboxId: held.sandboxId,
-    keepActive: held.wasActive,
-  });
+  if (held !== undefined) {
+    await step.runMutation(internal.sessions.finishTaskRunSandboxMutation, {
+      sessionId: target.sessionId,
+      sandboxId: held.sandboxId,
+      keepActive: held.wasActive,
+    });
+  }
+  await step.runMutation(
+    internal.projectInterviewWorkflow.clearInterviewSandboxClaim,
+    { projectId: target.projectId },
+  );
 }
+
+/** Records the VM the interview prepared on its claim, before the attach. */
+export const recordInterviewSandbox = internalMutation({
+  args: { projectId: v.id("projects"), sandboxId: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    const claim = project?.interviewSandboxClaim;
+    if (!claim) return null;
+    await ctx.db.patch(args.projectId, {
+      interviewSandboxClaim: { ...claim, sandboxId: args.sandboxId },
+    });
+    return null;
+  },
+});
+
+/** The interview released (or never got) the session's sandbox. */
+export const clearInterviewSandboxClaim = internalMutation({
+  args: { projectId: v.id("projects") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    if (project?.interviewSandboxClaim === undefined) return null;
+    await ctx.db.patch(args.projectId, { interviewSandboxClaim: undefined });
+    return null;
+  },
+});
 
 /** Appends an empty assistant entry to the project conversation for streaming updates. */
 export const addEmptyAssistant = internalMutation({

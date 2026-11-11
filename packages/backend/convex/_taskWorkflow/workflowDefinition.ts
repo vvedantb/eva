@@ -8,7 +8,14 @@ import {
   runModeValidator,
 } from "../validators";
 import { taskCompleteEvent } from "./events";
-import { buildQuickTaskRetryDelayMs } from "./recovery";
+import {
+  buildQuickTaskRetryDelayMs,
+  TASK_CHAT_BUSY_ERROR,
+  TASK_CHAT_BUSY_RETRY_MS,
+} from "./recovery";
+
+/** How many times a project run waits out a busy session before it fails. */
+const PROJECT_CLAIM_MAX_WAITS = 10;
 import { getTaskRunStreamingEntityId } from "./helpers";
 import { prepareSandboxSteps } from "../_sandbox_runtime/prepareSandboxSteps";
 import { formatDelayedPublishFailureError } from "../_sessions/resultTarget";
@@ -111,17 +118,36 @@ export const taskExecutionWorkflow = workflow.define({
       // A quick task's session lends its sandbox through the session
       // lifecycle: claimed (`closed` → `starting`, or reused while `active`)
       // before the VM is touched, so the row never reads `closed` over a
-      // running VM. No claim (a start/stop in flight): a VM of the run's own.
+      // running VM. A start or stop in flight refuses the claim: the run
+      // fails with the busy error and retries shortly (one busy rule with
+      // `startTaskRun`), so it never boots a VM no session row records.
       if (args.ownedSessionId) {
         sessionClaim = await step.runMutation(
           internal.sessions.claimSandboxForTaskRun,
-          { sessionId: args.ownedSessionId },
+          { sessionId: args.ownedSessionId, runId: args.runId },
         );
+        // A project run waits out a start or stop in flight on its project's
+        // session (a build must not fail on the reviewer's Start); a quick
+        // task's run fails with the busy error and retries.
+        for (
+          let wait = 0;
+          sessionClaim === null &&
+          args.projectId !== undefined &&
+          wait < PROJECT_CLAIM_MAX_WAITS;
+          wait++
+        ) {
+          sessionClaim = await step.runMutation(
+            internal.sessions.claimSandboxForTaskRun,
+            { sessionId: args.ownedSessionId, runId: args.runId },
+            { runAfter: TASK_CHAT_BUSY_RETRY_MS },
+          );
+        }
+        if (sessionClaim === null) throw new Error(TASK_CHAT_BUSY_ERROR);
         // A project's VM stays up (`active`) after a run, as the project
         // sandbox always did: the build's next task and the chat resume it,
         // and idle pause stops it once nothing holds the session.
         keepTaskSandboxActiveAfterRun =
-          args.projectId !== undefined || (sessionClaim?.wasActive ?? false);
+          args.projectId !== undefined || sessionClaim.wasActive;
       }
       const reusableSandboxId = args.ownedSessionId
         ? sessionClaim?.sandboxId

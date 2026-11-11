@@ -8,6 +8,8 @@ import {
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { closeOpenTurn } from "./_chat/turnStore";
+import { findProjectSession } from "./_sessions/owner";
+import { abandonTaskRunSandbox } from "./_sessions/sandbox";
 import { internal } from "./_generated/api";
 import { workflow, cancelTrackedWorkflow } from "./workflowManager";
 import {
@@ -396,6 +398,8 @@ async function cancelRunningBuild(
 ): Promise<void> {
   await cancelTrackedWorkflow(ctx, buildWorkflowId);
 
+  const projectSession = await findProjectSession(ctx.db, projectId);
+
   const tasks = await ctx.db
     .query("agentTasks")
     .withIndex("by_project", (q) => q.eq("projectId", projectId))
@@ -408,6 +412,12 @@ async function cancelRunningBuild(
 
     const run = await getActiveTaskRun(ctx.db, task._id);
 
+    if (run && projectSession) {
+      // The claimed start fails, or the attached VM stays up for the chat.
+      await abandonTaskRunSandbox(ctx, projectSession._id, run, {
+        keepActive: true,
+      });
+    }
     if (run) {
       await ctx.db.patch(run._id, {
         status: "error",
@@ -479,6 +489,17 @@ export const releaseProjectSessionForRetire = internalMutation({
         lane: "interview",
       });
       await ctx.db.patch(args.projectId, { activeWorkflowId: undefined });
+      // Fail the start the interview claimed, or finish its VM (no VM left
+      // unrecorded), then drop the claim.
+      const session = await findProjectSession(ctx.db, args.projectId);
+      if (session && project.interviewSandboxClaim) {
+        await abandonTaskRunSandbox(
+          ctx,
+          session._id,
+          project.interviewSandboxClaim,
+        );
+      }
+      await ctx.db.patch(args.projectId, { interviewSandboxClaim: undefined });
     }
     await syncProjectSession(ctx, args.projectId);
     return null;
