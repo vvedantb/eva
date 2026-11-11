@@ -214,7 +214,15 @@ const schema = defineSchema({
     "taskId",
   ]),
   taskActivity: defineTable(taskActivityFields).index("by_task", ["taskId"]),
-  messages: defineTable(messageFields).index("by_parent", ["parentId"]),
+  messages: defineTable(messageFields)
+    .index("by_parent", ["parentId"])
+    // User rows only: the jump rail and up-arrow recall (listUserMessagesByParent).
+    .index("by_parent_and_role", ["parentId", "role"])
+    // Find-in-chat above the loaded history (searchOlderByParent).
+    .searchIndex("search_content", {
+      searchField: "content",
+      filterFields: ["parentId"],
+    }),
   aveThreads: defineTable(aveThreadFields).index("by_user_and_archived", [
     "userId",
     "archivedAt",

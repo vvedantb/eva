@@ -28,14 +28,24 @@ export function useLinkedMessageId(): string | null {
 }
 
 /**
- * Scrolls a linked message into view once its row is in the DOM. Mount it
+ * Scrolls one message into view once its row is in the DOM: a shared link
+ * (`?message=`, centred) or a jump-rail tick (`start`, smooth). Mount it
  * inside `<Conversation>`, keyed by the message id, after the row renders.
  *
  * A ref callback, not an effect: this node mounts in the same commit as the
  * rows, so its attach is the "the row exists now" signal. `stopScroll` comes
- * first, or stick-to-bottom pulls an opening chat back down to the end.
+ * first, or stick-to-bottom pulls the chat back down to the end; a jump that
+ * waited on older history may find the chat locked to the bottom again.
  */
-export function ChatLinkedMessageScroll({ messageId }: { messageId: string }) {
+export function ChatMessageScroll({
+  messageId,
+  block,
+  smooth = false,
+}: {
+  messageId: string;
+  block: ScrollLogicalPosition;
+  smooth?: boolean;
+}) {
   const { scrollRef, stopScroll } = useStickToBottomContext();
   // React re-attaches a ref whose callback identity changes; scroll only once.
   const scrolledRef = useRef(false);
@@ -50,7 +60,7 @@ export function ChatLinkedMessageScroll({ messageId }: { messageId: string }) {
         ?.querySelector<HTMLElement>(
           `[data-message-id="${CSS.escape(messageId)}"]`,
         )
-        ?.scrollIntoView({ block: "center" });
+        ?.scrollIntoView({ block, behavior: smooth ? "smooth" : "auto" });
     });
   };
 
