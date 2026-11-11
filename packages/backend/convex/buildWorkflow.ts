@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { startTaskRun } from "./_taskWorkflow/startRun";
+import { finishTaskRun, taskRunWorkflowId } from "./_agentTasks/runState";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { workflow, cancelTrackedWorkflow } from "./workflowManager";
@@ -346,7 +347,7 @@ export const cancelBuild = authMutation({
     for (const task of tasks) {
       if (task.status !== "in_progress") continue;
 
-      await cancelTrackedWorkflow(ctx, task.activeWorkflowId);
+      await cancelTrackedWorkflow(ctx, taskRunWorkflowId(task));
 
       const run = await getActiveTaskRun(ctx.db, task._id);
 
@@ -360,9 +361,9 @@ export const cancelBuild = authMutation({
 
       await ctx.db.patch(task._id, {
         status: "todo",
-        activeWorkflowId: undefined,
         updatedAt: Date.now(),
       });
+      await finishTaskRun(ctx, task._id, undefined);
     }
 
     await ctx.db.patch(args.projectId, {

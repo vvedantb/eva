@@ -24,7 +24,7 @@ import {
   buildTaskBranchName,
   resolveProjectBranchName,
 } from "./_git/branchNames";
-import { cancelScheduledFunction } from "./_scheduling/helpers";
+import { cancelTaskRunSchedule } from "./_agentTasks/runState";
 import {
   allPullRequestsTerminal,
   findLivePullRequestOnBranch,
@@ -441,7 +441,7 @@ export async function deleteTaskRelatedData(
   taskId: Id<"agentTasks">,
 ): Promise<void> {
   const task = await ctx.db.get(taskId);
-  await cancelScheduledFunction(ctx, task?.scheduledFunctionId);
+  await cancelTaskRunSchedule(ctx, taskId);
   // Quick tasks persist a sandbox; clean it up so we don't leak compute.
   // Project tasks share their sandbox via `project.sandboxId` — leave that alone.
   if (task && !task.projectId && task.sandboxId && task.repoId) {
@@ -497,7 +497,7 @@ export async function softDeleteAgentTask(
 ): Promise<void> {
   const task = await ctx.db.get(taskId);
   if (!task || isEntityDeleted(task)) return;
-  await cancelScheduledFunction(ctx, task.scheduledFunctionId);
+  await cancelTaskRunSchedule(ctx, taskId);
   if (!task.projectId && task.sandboxId && task.repoId) {
     await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
       sandboxId: task.sandboxId,

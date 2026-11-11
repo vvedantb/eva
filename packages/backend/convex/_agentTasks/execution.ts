@@ -9,10 +9,7 @@ import {
 } from "../functions";
 import { resolveProjectBranchName } from "../_git/branchNames";
 import { resolveTaskWorkflowBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
-import {
-  cancelScheduledFunction,
-  scheduleTaskExecutionAt,
-} from "../_scheduling/helpers";
+import { cancelTaskRunSchedule, scheduleTaskRun } from "./runState";
 
 /** Starts task execution by creating a run and launching the workflow. */
 export const startExecution = authMutation({
@@ -46,14 +43,7 @@ export const startExecution = authMutation({
     if (!repo) {
       throw new Error("Repository not found");
     }
-    if (task.scheduledFunctionId) {
-      await cancelScheduledFunction(ctx, task.scheduledFunctionId);
-      await ctx.db.patch(args.id, {
-        scheduledAt: undefined,
-        scheduledFunctionId: undefined,
-      });
-    }
-
+    // A pending schedule is cancelled when the run starts (`markTaskRunStarted`).
     if (await hasActiveRun(ctx.db, args.id)) {
       throw new Error("Task already has an active execution");
     }
@@ -161,7 +151,13 @@ export const scheduleExecution = authMutation({
       throw new Error("Scheduled time must be in the future");
     }
 
-    await scheduleTaskExecutionAt(ctx, args.id, args.scheduledAt);
+    const result = await scheduleTaskRun(
+      ctx,
+      args.id,
+      "schedule",
+      args.scheduledAt,
+    );
+    if (!result.ok) throw new Error(result.reason);
     return null;
   },
 });
@@ -174,16 +170,9 @@ export const cancelScheduledExecution = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
-    if (!task.scheduledFunctionId) {
-      throw new Error("Task is not scheduled");
-    }
-
-    await cancelScheduledFunction(ctx, task.scheduledFunctionId);
-    await ctx.db.patch(args.id, {
-      scheduledAt: undefined,
-      scheduledFunctionId: undefined,
-      updatedAt: Date.now(),
-    });
+    const result = await cancelTaskRunSchedule(ctx, args.id);
+    if (!result.ok) throw new Error(result.reason);
+    await ctx.db.patch(args.id, { updatedAt: Date.now() });
     return null;
   },
 });
@@ -203,8 +192,13 @@ export const updateScheduledExecution = authMutation({
       throw new Error("Scheduled time must be in the future");
     }
 
-    await cancelScheduledFunction(ctx, task.scheduledFunctionId);
-    await scheduleTaskExecutionAt(ctx, args.id, args.scheduledAt);
+    const result = await scheduleTaskRun(
+      ctx,
+      args.id,
+      "schedule",
+      args.scheduledAt,
+    );
+    if (!result.ok) throw new Error(result.reason);
     return null;
   },
 });

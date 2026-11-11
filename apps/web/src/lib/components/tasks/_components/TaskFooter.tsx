@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import type { api, Doc, Id } from "@eva/backend";
+import { taskScheduledAt, type api, type Doc, type Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import {
   Button,
@@ -243,7 +243,7 @@ export function TaskFooter({
             >
               <SplitRunButton
                 taskId={taskId}
-                scheduledAt={task?.scheduledAt}
+                scheduledAt={task ? taskScheduledAt(task) : undefined}
                 isStarting={isStarting}
                 onStartExecution={onStartExecution}
                 size={buttonSize}

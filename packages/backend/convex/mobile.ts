@@ -1,3 +1,4 @@
+import { isTaskRunning } from "./_agentTasks/runState";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { authMutation, authQuery, getSessionWithAccess, hasRepoAccess } from "./functions";
@@ -181,7 +182,7 @@ export const stopTurn = authMutation({
         // Stop calls `taskWorkflow.cancelExecution` for it.
         const isFirstRun =
           task.projectId === undefined &&
-          task.activeWorkflowId !== undefined &&
+          isTaskRunning(task) &&
           task.activeChatWorkflowId === undefined &&
           task.pendingTurn === undefined;
         if (isFirstRun) await cancelTaskRun(ctx, task);

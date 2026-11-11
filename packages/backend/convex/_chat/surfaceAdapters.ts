@@ -1,4 +1,5 @@
 import { TURN_BACKSTOP_ERROR } from "@eva/shared/agentTurnLimits";
+import { isTaskRunning } from "../_agentTasks/runState";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
@@ -255,7 +256,7 @@ const taskChatAdapter: ChatSurfaceAdapter<
     ) {
       await ctx.db.patch(task._id, { cancelRequestedAt: Date.now() });
     } else if (task.sandboxId && task.repoId) {
-      if (task.activeWorkflowId) {
+      if (isTaskRunning(task)) {
         await ctx.scheduler.runAfter(0, internal.sandbox.killEntityDaemon, {
           sandboxId: task.sandboxId,
           repoId: task.repoId,

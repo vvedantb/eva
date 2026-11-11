@@ -1,4 +1,4 @@
-import type { api } from "@eva/backend";
+import { taskScheduledAt, type api } from "@eva/backend";
 import { TASK_STATUS_LABELS, firstNameFromUser, formatEntityNumLabel, type DisplayTaskStatus } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconClock, IconTag } from "@tabler/icons-react-native";
@@ -75,8 +75,9 @@ export function QuickTaskRow({
   const showUnread = task.hasUnread && !task.isExecuting;
   const numLabel = formatEntityNumLabel({ numId: task.numId, projectNumId });
   const creatorFirstName = creator ? firstNameFromUser(creator) : null;
-  const scheduled = task.scheduledAt
-    ? `${status === "todo" ? "Scheduled for" : "Was scheduled for"} ${dayjs(task.scheduledAt).format("MMM D, h:mm A")}`
+  const scheduledAt = taskScheduledAt(task);
+  const scheduled = scheduledAt
+    ? `${status === "todo" ? "Scheduled for" : "Was scheduled for"} ${dayjs(scheduledAt).format("MMM D, h:mm A")}`
     : undefined;
   const hint = [
     TASK_STATUS_LABELS[status],

@@ -1,3 +1,4 @@
+import { isTaskRunning } from "../_agentTasks/runState";
 import { v } from "convex/values";
 import {
   queueRuntimeContinue,
@@ -912,7 +913,7 @@ const taskChatQueueConfig: ChatQueueConfig<
   // a chat turn on top of it would have two agents in one sandbox.
   hasActiveWorkflow: (task) =>
     task.activeChatWorkflowId !== undefined ||
-    task.activeWorkflowId !== undefined,
+    isTaskRunning(task),
   hasCapacity: async () => true,
   activityParentId: (_task, id) => String(id),
   sandboxState: (task) => sandboxStateFromStatus(task.reviewTaskSandboxStatus),

@@ -533,7 +533,7 @@ describe("mobile api", () => {
         priority: "high",
         tags: ["frontend"],
       });
-      expect(task?.activeWorkflowId).toBeUndefined();
+      expect(task?.run).toBeUndefined();
       // A task in a project is not in the list the web opens with.
       await asUser.mutation(api.agentTasks.createQuickTask, {
         repoId: ids.repoId,

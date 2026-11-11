@@ -18,6 +18,7 @@ import {
   sendCompletionEvent,
 } from "./helpers";
 import { scheduleTaskOrchestratorNotify } from "../orchestratorShared";
+import { finishTaskRun, taskRunWorkflowId } from "../_agentTasks/runState";
 import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { errorMessage } from "@vvedantb/server";
@@ -28,8 +29,8 @@ async function getActiveWorkflowId(
   taskId: Id<"agentTasks">,
 ): Promise<WorkflowId | null> {
   const task = await ctx.db.get(taskId);
-  if (!task?.activeWorkflowId) return null;
-  return toWorkflowId(task.activeWorkflowId);
+  const workflowId = task ? taskRunWorkflowId(task) : undefined;
+  return workflowId === undefined ? null : toWorkflowId(workflowId);
 }
 
 /** Returns the most recently started running task run for a task, or null if none remain. */
@@ -193,7 +194,7 @@ export async function cancelTaskRun(
   ctx: MutationCtx,
   task: Doc<"agentTasks">,
 ): Promise<void> {
-  await cancelTrackedWorkflow(ctx, task.activeWorkflowId);
+  await cancelTrackedWorkflow(ctx, taskRunWorkflowId(task));
 
   const run = await getActiveTaskRun(ctx.db, task._id);
 
@@ -224,8 +225,8 @@ export async function cancelTaskRun(
   await ctx.db.patch(task._id, {
     // Same rule as run completion: only the run's own `in_progress` resets.
     ...(task.status === "in_progress" ? { status: "todo" as const } : {}),
-    activeWorkflowId: undefined,
     updatedAt: Date.now(),
   });
+  await finishTaskRun(ctx, task._id, undefined);
 }
 

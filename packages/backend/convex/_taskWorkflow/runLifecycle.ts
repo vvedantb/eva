@@ -11,10 +11,8 @@ import { RUN_TIMEOUT_MS } from "../workflowWatchdog";
 import { buildTaskDoneEvent } from "./events";
 import { closeOpenTurn } from "../_chat/turnStore";
 import { isUsageLimitError, parseUsageLimitResetTime } from "./recovery";
-import {
-  scheduleProjectBuildAt,
-  scheduleTaskExecutionAt,
-} from "../_scheduling/helpers";
+import { scheduleProjectBuildAt } from "../_scheduling/helpers";
+import { finishTaskRun, scheduleTaskRun } from "../_agentTasks/runState";
 import {
   clearTaskRunStreaming,
   getTaskRunStreamingEntityId,
@@ -314,15 +312,15 @@ export const completeRun = internalMutation({
           ? { status: args.success ? "business_review" : "todo" }
           : {}),
         updatedAt: now,
-        // Released with the status, not in the workflow's `finally`: the
-        // remaining steps (PR description, sandbox stop) run for tens of
-        // seconds after this patch, and a set `activeWorkflowId` on a task that
-        // has already left `in_progress` shows the card the "Eva is replying"
-        // grid long after eva stopped. The `finally` stays as the safety net
-        // for runs that never reach here. Guarded by `staleCompletion`, so a
-        // queued or superseding run keeps its own id.
-        activeWorkflowId: undefined,
       });
+      // Released with the status, not in the workflow's `finally`: the
+      // remaining steps (PR description, sandbox stop) run for tens of
+      // seconds after this, and a `running` task that has already left
+      // `in_progress` shows the card the "Eva is replying" grid long after eva
+      // stopped. The `finally` stays as the safety net for runs that never
+      // reach here. Guarded by `staleCompletion`, so a queued or superseding
+      // run keeps its own state.
+      await finishTaskRun(ctx, args.taskId, args.runId);
       if (task.projectId) {
         await recomputeProjectPhase(ctx, task.projectId);
       }
@@ -349,12 +347,20 @@ export const completeRun = internalMutation({
           if (proj && !proj.scheduledBuildFunctionId) {
             await scheduleProjectBuildAt(ctx, task.projectId, resetAt);
           }
-        } else if (task && !task.scheduledFunctionId) {
-          // Quick task: schedule the task to retry at the reset time
-          await scheduleTaskExecutionAt(ctx, args.taskId, resetAt);
-          await ctx.db.patch(args.runId, {
-            exitReason: "auto_retry_scheduled",
-          });
+        } else if (task) {
+          // Quick task: retry at the reset time, unless a schedule or a
+          // newer run already owns the task.
+          const retry = await scheduleTaskRun(
+            ctx,
+            args.taskId,
+            "scheduleRetry",
+            resetAt,
+          );
+          if (retry.ok) {
+            await ctx.db.patch(args.runId, {
+              exitReason: "auto_retry_scheduled",
+            });
+          }
         }
       }
     }

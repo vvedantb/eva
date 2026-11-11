@@ -1,5 +1,6 @@
 import type { DatabaseReader } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
+import { isTaskRunning, type TaskRunSource } from "../_agentTasks/runState";
 
 /**
  * Deployment bridge for workflows that started before durable Turns existed.
@@ -205,17 +206,14 @@ export function taskIsExecuting(
   task: Pick<
     Doc<"agentTasks">,
     | "_id"
-    | "activeWorkflowId"
     | "activeChatWorkflowId"
     | "syntheticTurnMessageId"
     | "chatTurnLifecycleVersion"
-  >,
+  > &
+    TaskRunSource,
   openChatEntityIds: ReadonlySet<string>,
 ): boolean {
-  return (
-    task.activeWorkflowId !== undefined ||
-    chatTurnIsOpen(task, openChatEntityIds)
-  );
+  return isTaskRunning(task) || chatTurnIsOpen(task, openChatEntityIds);
 }
 
 /** A project adds a build workflow to the same pair of slots. */

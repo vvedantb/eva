@@ -39,6 +39,7 @@ async function taskWithRun(status: Doc<"agentTasks">["status"]) {
       createdAt: 0,
       updatedAt: 0,
       createdBy: userId,
+      // Legacy run field on purpose: an un-migrated row still ends its run.
       activeWorkflowId: "wf_run",
     });
     const runId = await ctx.db.insert("agentRuns", {
@@ -74,6 +75,7 @@ describe("task status during a run", () => {
       });
       const task = await f.readTask();
       expect(task?.status).toBe("done");
+      expect(task?.run).toBeUndefined();
       expect(task?.activeWorkflowId).toBeUndefined();
     },
     TIMEOUT_MS,
@@ -102,6 +104,7 @@ describe("task status during a run", () => {
         .mutation(api.taskWorkflow.cancelExecution, { taskId: f.taskId });
       const task = await f.readTask();
       expect(task?.status).toBe("code_review");
+      expect(task?.run).toBeUndefined();
       expect(task?.activeWorkflowId).toBeUndefined();
       const run = await f.t.run(async (ctx) => ctx.db.get(f.runId));
       expect(run?.status).toBe("cancelled");
@@ -131,6 +134,7 @@ describe("task status during a run", () => {
       });
       const task = await f.readTask();
       expect(task?.status).toBe("code_review");
+      expect(task?.run).toBeUndefined();
       expect(task?.activeWorkflowId).toBeUndefined();
       const run = await f.t.run(async (ctx) => ctx.db.get(f.runId));
       expect(run?.status).toBe("error");
