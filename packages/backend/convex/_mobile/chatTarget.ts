@@ -39,8 +39,19 @@ export const mobileChatValidator = v.object({
    * session or session chat (read-only, as the web) or a deleted task / project.
    */
   canReply: v.boolean(),
-  /** The chat's sticky model, which a reply uses. */
+  /**
+   * The chat's model, which a reply uses: as the web composer reads it (a
+   * session or project chat's sticky `lastModel` / `lastChatModel`, a quick
+   * task's `agentTasks.model` or the repo default).
+   */
   model: v.optional(aiModelValidator),
+  /** The chat's sticky provider account, which a reply runs on; absent is Team. */
+  providerAccountId: v.optional(v.id("userProviderAccounts")),
+  /**
+   * The one user who may change the account (a task's or project's owner, as
+   * the web picker); absent when anyone in the session may (a session chat).
+   */
+  accountOwnerId: v.optional(v.id("users")),
   /**
    * The chat's sticky traits in the web traits menu shape: absent fields fall
    * back to the model's defaults (`resolveTraitsForDisplay`). A reply uses them.
@@ -66,8 +77,17 @@ export const mobileChatValidator = v.object({
   prUrl: v.optional(v.string()),
   /** Path on the web app, for "Open on web" and message links. */
   webPath: v.string(),
-  /** Session chats only: the session the web session menu (rename, archive) acts on. */
-  session: v.optional(v.object({ id: v.id("sessions"), title: v.string(), archived: v.boolean() })),
+  /**
+   * Session chats only: the session the web session menu (rename, archive)
+   * acts on, and the chat the web picker's `sessionChats` calls take.
+   */
+  session: v.optional(
+    v.object({ id: v.id("sessions"), chatId: v.id("sessionChats"), title: v.string(), archived: v.boolean() }),
+  ),
+  /** Quick task chats only: the task the web task chat's model, traits and account calls take. */
+  task: v.optional(v.object({ id: v.id("agentTasks") })),
+  /** Project chats only: the project the web project chat's account calls take. */
+  project: v.optional(v.object({ id: v.id("projects") })),
 });
 
 export type MobileChat = typeof mobileChatValidator.type;
@@ -120,12 +140,13 @@ export async function resolveMobileChat(
         parentId: chat._id,
         canReply: chat.archived !== true && session.archived !== true && session.deletedAt === undefined,
         model: chat.lastModel ?? session.lastModel,
+        providerAccountId: chat.providerAccountId,
         traits: storedComposerTraits(chat),
         sandboxBranch: session.status === "active" ? session.sandboxBranch : undefined,
         intendedBranch: session.branchName,
         prUrl: session.prUrl,
         webPath: chat.isMain ? base : `${base}?chat=${chat.number}`,
-        session: { id: session._id, title: session.title, archived: session.archived === true },
+        session: { id: session._id, chatId: chat._id, title: session.title, archived: session.archived === true },
       },
     };
   }
@@ -148,7 +169,11 @@ export async function resolveMobileChat(
         repoId: repo._id,
         parentId: task._id,
         canReply: task.deletedAt === undefined,
-        model: task.lastChatModel ?? task.model,
+        // The web task chat picks and sends `agentTasks.model`, not the `lastChatModel` a turn records.
+        model: task.model ?? repo.defaultModel,
+        providerAccountId: task.providerAccountId,
+        accountOwnerId: task.createdBy,
+        task: { id: task._id },
         traits: storedComposerTraits(task),
         sandboxBranch: task.reviewTaskSandboxStatus === "active" ? task.sandboxBranch : undefined,
         prUrl: task.projectId === undefined ? task.prUrl : project?.prUrl,
@@ -176,6 +201,9 @@ export async function resolveMobileChat(
         parentId: project._id,
         canReply: project.deletedAt === undefined,
         model: project.lastChatModel ?? project.model,
+        providerAccountId: project.providerAccountId,
+        accountOwnerId: project.userId,
+        project: { id: project._id },
         traits: storedComposerTraits(project),
         sandboxBranch: project.reviewProjectSandboxStatus === "active" ? project.sandboxBranch : undefined,
         intendedBranch: project.branchName,

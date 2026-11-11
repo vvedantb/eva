@@ -8,10 +8,11 @@ import {
   type Id,
   type StoredModelTraits,
 } from "@eva/backend";
+import { carriedAccountForProvider, defaultAccountForProvider, toPickerAccounts } from "@eva/shared";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared/gitDefaults";
 import { useUser } from "@clerk/clerk-expo";
 import { IconBrandGithub, IconChevronDown } from "@tabler/icons-react-native";
-import { Attachment, Attachments, PromptInput } from "@vvedantb/native-ui/ai";
+import { PromptInput } from "@vvedantb/native-ui/ai";
 import { RouterStackPageHeader } from "@vvedantb/native-ui/expo-router";
 import { CenteredSpinner, EmptyState } from "@vvedantb/native-ui/primitives";
 import { tokens, withAlpha } from "@vvedantb/native-ui/theme";
@@ -22,7 +23,7 @@ import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { AttachButton } from "@/chat/AttachButton";
 import { BaseBranchChip } from "@/chat/BranchChips";
-import { ComposerFooter } from "@/chat/ComposerFooter";
+import { ComposerFooter, ComposerHeader } from "@/chat/ComposerFooter";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { ModelChip } from "@/chat/ModelChip";
 import { useAttachments } from "@/chat/useAttachments";
@@ -33,7 +34,7 @@ import { useScheme } from "@/ui/theme";
 /**
  * A new session, as the web sessions landing (`NewSessionComposer`): "Sam,
  * what are we building for <repo ⌄>?" over the composer, and under it the
- * web footer: base branch, stash and model, and the web `@` / `/` picker. Sends with those picks
+ * web footer: base branch, stash and model (with its account), and the web `@` / `/` picker. Sends with those picks
  * (`mobile.startSession`), then opens the chat in place of this screen, so
  * Back from the chat does not return to a sent form. `?repo=<id>` (a Sessions
  * group "+", as the web group "+" opens that repo's composer) picks the repo
@@ -58,6 +59,10 @@ export default function NewSessionScreen() {
   const [pickedModel, setPickedModel] = useState<AIModel | null>(null);
   const [pickedTraits, setPickedTraits] = useState<StoredModelTraits>({});
   const [pickedBranch, setPickedBranch] = useState<{ repoId: Id<"githubRepos">; branch: string } | null>(null);
+  // The web landing's account: undefined follows the user's own account for
+  // the model's provider (else Team), a pick holds; null is Team.
+  const [pickedAccount, setPickedAccount] = useState<Id<"userProviderAccounts"> | null | undefined>(undefined);
+  const accounts = toPickerAccounts(useQuery(api.userProviderAccounts.listSelectable, {}) ?? []);
   const repo = repos?.find((candidate) => candidate._id === (picked ?? repoParam)) ?? repos?.[0];
   const firstName = user?.firstName?.trim();
   const foreground = tokens.color.foreground[scheme];
@@ -70,6 +75,7 @@ export default function NewSessionScreen() {
       ? pickedBranch.branch
       : (repo?.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH);
   const composer = useMentionComposer(repo?._id, getAIModelProvider(model));
+  const providerAccountId = pickedAccount === undefined ? defaultAccountForProvider(accounts, getAIModelProvider(model)) : pickedAccount;
 
   const handleSend = async (prompt: string) => {
     if (!repo || sending) return;
@@ -91,6 +97,7 @@ export default function NewSessionScreen() {
         thinkingEnabled: display.thinkingEnabled,
         use1mContext: display.use1mContext,
         fastMode: display.fastMode,
+        providerAccountId,
       });
       router.replace({ pathname: "/chat/[target]", params: { target: sessionId } });
     } catch (error) {
@@ -157,20 +164,13 @@ export default function NewSessionScreen() {
             leading={
               <AttachButton onPress={() => void attachments.pick()} />
             }
-            header={
-              attachments.items.length > 0 ? (
-                <Attachments>
-                  {attachments.items.map((item) => (
-                    <Attachment key={item.id} data={item} onRemove={() => attachments.remove(item.id)} />
-                  ))}
-                </Attachments>
-              ) : null
-            }
+            header={<ComposerHeader attachments={attachments} composer={composer} />}
             footer={
               repo ? (
                 <ComposerFooter
                   repoId={repo._id}
-                  onRestore={composer.restore}
+                  composer={composer}
+                attachments={attachments}
                   leading={
                     <BaseBranchChip
                       repoId={repo._id}
@@ -184,7 +184,12 @@ export default function NewSessionScreen() {
                       repoId={repo._id}
                       model={model}
                       traits={traits}
-                      onModelChange={setPickedModel}
+                      onModelChange={(next) => {
+                        setPickedModel(next);
+                        // An explicit account survives a switch within its provider, as the web.
+                        if (pickedAccount !== undefined) setPickedAccount(carriedAccountForProvider(accounts, pickedAccount, getAIModelProvider(next)));
+                      }}
+                      account={{ accounts, value: providerAccountId, onChange: setPickedAccount }}
                       onTraitsChange={(partial) => setPickedTraits((current) => ({ ...current, ...partial }))}
                     />
                   }

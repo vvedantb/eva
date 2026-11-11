@@ -6,7 +6,14 @@ import schema from "../convex/schema";
 import type { Id } from "../convex/_generated/dataModel";
 import { DEFAULT_AI_MODEL, normalizeAIModel } from "../convex/_validators/aiModels";
 import { messageLinkHref } from "@eva/shared/messageLink";
-import { defaultQuickTaskSections, sessionMenuActions, systemSkillTokenId, tokenizeMentionText } from "@eva/shared";
+import {
+  defaultQuickTaskSections,
+  mentionTokensToChipLinks,
+  parseMentionChipHref,
+  sessionMenuActions,
+  systemSkillTokenId,
+  tokenizeMentionText,
+} from "@eva/shared";
 import { MENTION_TOKEN_REGEX } from "../convex/_mentions/mentionToken";
 import { SKILL_TOKEN_REGEX } from "../convex/_mentions/skillToken";
 
@@ -73,7 +80,9 @@ async function fixture() {
       createdAt: now,
       updatedAt: now,
       createdBy: userId,
-      lastChatModel: "claude:opus",
+      // The web task chat picks and sends `model`; a turn records `lastChatModel`.
+      model: "claude:opus",
+      lastChatModel: "codex:gpt-5.6-sol",
     });
     const projectId = await ctx.db.insert("projects", {
       repoId,
@@ -323,13 +332,96 @@ describe("mobile api", () => {
       expect(await sent(t, ids.chatId)).toEqual([{ content: "hi", model: "claude:opus", userId: ids.userId }]);
       await expect(
         asUser.mutation(api.mobile.setChatModel, { target: ids.taskId, model: "claude:opus" }),
-      ).rejects.toThrow("on the web");
+      ).rejects.toThrow("agentTasks.update");
       await expect(
         asUser.mutation(api.mobile.setChatModel, { target: ids.archivedChatId, model: "claude:opus" }),
       ).rejects.toThrow("This chat is closed");
       await expect(
         asUser.mutation(api.mobile.setChatModel, { target: ids.strangerTaskId, model: "claude:opus" }),
       ).rejects.toThrow("Not authorized");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a quick task chat picks its model, traits and account with the web task chat's mutations, and a reply runs on them",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const accountId = await t.run((ctx) =>
+        ctx.db.insert("userProviderAccounts", {
+          userId: ids.userId,
+          provider: "codex",
+          label: "Mine",
+          credentials: [],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }),
+      );
+      // What the phone model sheet calls for a task, as the web `useTaskChatBinding`.
+      await asUser.mutation(api.agentTasks.update, { id: ids.taskId, model: "codex:gpt-5.6-sol", providerAccountId: accountId });
+      await asUser.mutation(api.agentTasks.setTraits, { id: ids.taskId, reasoningLevel: "low" });
+      await t.run((ctx) => ctx.db.patch(ids.taskId, { lastChatModel: "claude:opus" }));
+      expect(await asUser.query(api.mobile.getChat, { target: ids.taskId })).toMatchObject({
+        model: "codex:gpt-5.6-sol",
+        traits: { effortLevel: "low" },
+        providerAccountId: accountId,
+        accountOwnerId: ids.userId,
+        task: { id: ids.taskId },
+      });
+      await asUser.mutation(api.mobile.sendMessage, { target: ids.taskId, message: "hi" });
+      expect(await sent(t, ids.taskId)).toEqual([{ content: "hi", model: "codex:gpt-5.6-sol", userId: ids.userId }]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "getChat carries a session chat's sticky account, which anyone in the session may change",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const accountId = await t.run((ctx) =>
+        ctx.db.insert("userProviderAccounts", {
+          userId: ids.userId,
+          provider: "codex",
+          label: "Mine",
+          credentials: [],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }),
+      );
+      // The web session picker's own mutation.
+      await asUser.mutation(api.sessionChats.setProviderAccountId, { chatId: ids.chatId, providerAccountId: accountId });
+      const chat = await asUser.query(api.mobile.getChat, { target: ids.sessionId });
+      expect(chat).toMatchObject({ providerAccountId: accountId, session: { chatId: ids.chatId } });
+      expect(chat).not.toHaveProperty("accountOwnerId");
+      expect(await asUser.query(api.mobile.getChat, { target: ids.projectId })).toMatchObject({
+        accountOwnerId: ids.userId,
+        project: { id: ids.projectId },
+      });
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "startSession takes the model picker's account: null is Team, absent the user's own default",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const accountId = await t.run((ctx) =>
+        ctx.db.insert("userProviderAccounts", {
+          userId: ids.userId,
+          provider: "codex",
+          label: "Mine",
+          credentials: [],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }),
+      );
+      const accountOf = async (sessionId: Id<"sessions">) =>
+        (await asUser.query(api.mobile.getChat, { target: sessionId }))?.providerAccountId;
+      const model = "codex:gpt-5.6-sol";
+      const picked = await asUser.mutation(api.mobile.startSession, { repoId: ids.repoId, prompt: "a", model, providerAccountId: accountId });
+      const team = await asUser.mutation(api.mobile.startSession, { repoId: ids.repoId, prompt: "b", model, providerAccountId: null });
+      expect(await accountOf(picked.sessionId)).toBe(accountId);
+      expect(await accountOf(team.sessionId)).toBeUndefined();
     },
     TIMEOUT_MS,
   );
@@ -518,6 +610,18 @@ describe("mobile api", () => {
       "copyLink",
       "archive",
     ]);
+  });
+
+  test("mentionTokensToChipLinks marks each sent token as a chip link and leaves code as typed", () => {
+    const graceId = "k17grace00000000000000000000000g";
+    const skillId = systemSkillTokenId("eva-capture");
+    const content = `ask @[Grace](${graceId}) to /[eva-capture](${skillId}), not \`@[Grace](${graceId})\``;
+    const marked = mentionTokensToChipLinks(content);
+    expect(marked).toBe(
+      `ask [Grace](#mention:at:${graceId}) to [eva-capture](#mention:slash:${skillId}), not \`@[Grace](${graceId})\``,
+    );
+    expect(parseMentionChipHref(`#mention:slash:${skillId}`)).toEqual({ kind: "slash", id: skillId });
+    expect(parseMentionChipHref("https://example.com")).toBeNull();
   });
 
   test("messageLinkHref aims a web path or URL at one message", () => {

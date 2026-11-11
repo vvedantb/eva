@@ -9,6 +9,7 @@ import {
   normalizeAIModel,
   type Id,
 } from "@eva/backend";
+import { toPickerAccounts } from "@eva/shared";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 
@@ -48,28 +49,14 @@ export function useAvailableAiModels(
  * resolve to undefined — the run falls back to the team credential.
  */
 function toModelAccounts(
-  accounts:
-    | ReadonlyArray<{
-        _id: Id<"userProviderAccounts">;
-        provider: ModelAccount["provider"];
-        label: string;
-        isOwn: boolean;
-        updatedAt: number;
-      }>
-    | undefined,
+  accounts: Parameters<typeof toPickerAccounts>[0] | undefined,
 ): {
   options: ReadonlyArray<ModelAccount>;
   resolveId: (id: string | null) => Id<"userProviderAccounts"> | undefined;
   ready: boolean;
 } {
   // Most recently updated first so create-time defaults prefer the latest.
-  const sorted = (accounts ?? []).toSorted((a, b) => b.updatedAt - a.updatedAt);
-  const options: ReadonlyArray<ModelAccount> = sorted.map((account) => ({
-    id: account._id,
-    provider: account.provider,
-    label: account.label,
-    isOwn: account.isOwn,
-  }));
+  const options: ReadonlyArray<ModelAccount> = toPickerAccounts(accounts ?? []);
   const resolveId = (
     id: string | null,
   ): Id<"userProviderAccounts"> | undefined =>
