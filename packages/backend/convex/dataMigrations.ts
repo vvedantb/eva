@@ -4,6 +4,7 @@ import type { DataModel } from "./_generated/dataModel";
 import schema from "./schema";
 import { deriveLogUsage } from "./_logs/usage";
 import { archiveSessionDoc } from "./_sessions/mutations";
+import { isSessionArchived, legacyArchiveMigrationPatch } from "./_sessions/archive";
 import type { MutationCtx } from "./_generated/server";
 import { buildProjectBranchName } from "./_git/branchNames";
 import { recordPullRequest } from "./_pullRequests/store";
@@ -129,7 +130,7 @@ export const retireOrchestratorSessions = dataMigrations.define({
     if (user.orchestratorSessionId === undefined) return;
     const session = await ctx.db.get(user.orchestratorSessionId);
     if (session) {
-      if (session.archived !== true) await archiveSessionDoc(ctx, session);
+      if (!isSessionArchived(session)) await archiveSessionDoc(ctx, session);
       // A wake-up queued behind a busy old master would otherwise drain into
       // the archived chat and restart its sandbox.
       const queued = await ctx.db
@@ -448,4 +449,19 @@ export const migrateProjectBuildState = dataMigrations.define({
       scheduledBuildFunctionId: undefined,
     };
   },
+});
+
+/**
+ * `backfillSessionArchive`: moves the legacy `sessions.archived` /
+ * `sandboxDeleteAfter` pair into the single `archive` field and clears the
+ * pair. Run once per deployment after the deploy that adds `archive`:
+ *
+ *   npx convex run dataMigrations:backfillSessionArchive
+ *
+ * Idempotent. Reads fall back to the legacy pair until it has run; the fields
+ * and the fallback are removed afterwards (0e).
+ */
+export const backfillSessionArchive = dataMigrations.define({
+  table: "sessions",
+  migrateOne: (_ctx, session) => legacyArchiveMigrationPatch(session),
 });

@@ -231,8 +231,14 @@ const schema = defineSchema({
     .index("by_user", ["userId"])
     .index("by_repo_and_status", ["repoId", "status"])
     .index("by_status", ["status"])
-    .index("by_repo_and_archived", ["repoId", "archived"])
+    // Legacy `archived` reads until `backfillSessionArchive` has run; see
+    // `_sessions/archive.ts`. Dropped with the field.
     .index("by_repo_archived_and_deleted", ["repoId", "archived", "deletedAt"])
+    .index("by_repo_deleted_and_archived_at", [
+      "repoId",
+      "deletedAt",
+      "archive.archivedAt",
+    ])
     .index("by_repo_and_numId", ["repoId", "numId"])
     .index("by_sandbox", ["sandboxId"])
     .index("by_forked_from", ["forkedFromSessionId"])

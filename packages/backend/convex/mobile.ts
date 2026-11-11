@@ -13,6 +13,7 @@ import {
 import { cancelChatExecution, sendSessionChatMessage } from "./_sessions/execution";
 import { archiveSessionDoc, createSession, type AuthMutationCtx } from "./_sessions/mutations";
 import { requestSessionSandboxStop } from "./_sessions/sandbox";
+import { listRepoSessionsByArchive } from "./_sessions/archive";
 import { setSessionChatModel, setSessionChatTraits } from "./_sessionChats/mutations";
 import { setProjectChatModel, setProjectTraits } from "./_projects/mutations";
 import { cancelTaskChatExecution, sendTaskChatMessage } from "./agentTaskChatWorkflow";
@@ -263,19 +264,13 @@ export const listChats = authQuery({
     const repos = await gatherAccessibleRepos(ctx.db, ctx.userId, false);
     const perRepo = await Promise.all(
       repos.map(async (repo) => {
-        // Open sessions store `archived` as undefined or false; read both.
-        const readSessions = (archived: boolean | undefined) =>
-          ctx.db
-            .query("sessions")
-            .withIndex("by_repo_archived_and_deleted", (q) =>
-              q.eq("repoId", repo._id).eq("archived", archived).eq("deletedAt", undefined),
-            )
-            .order("desc")
-            .take(SESSIONS_PER_REPO);
-        const groups = await Promise.all(
-          args.archived === true ? [readSessions(true)] : [readSessions(undefined), readSessions(false)],
+        const sessions = await listRepoSessionsByArchive(
+          ctx.db,
+          repo._id,
+          args.archived === true,
+          SESSIONS_PER_REPO,
         );
-        return groups.flat().map((session) => ({ session, repo }));
+        return sessions.map((session) => ({ session, repo }));
       }),
     );
     const rows = perRepo

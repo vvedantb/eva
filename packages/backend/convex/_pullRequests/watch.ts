@@ -3,6 +3,7 @@ import { internalMutation, type MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Doc } from "../_generated/dataModel";
 import { isEntityDeleted } from "../numId";
+import { isSessionArchived } from "../_sessions/archive";
 import { prWatchValidator } from "../validators";
 import {
   isLivePrState,
@@ -265,7 +266,7 @@ async function wakeTarget(
 
   if (owner.kind === "session") {
     const session = await ctx.db.get(owner.sessionId);
-    if (!session || session.archived === true || isEntityDeleted(session)) {
+    if (!session || isSessionArchived(session) || isEntityDeleted(session)) {
       return null;
     }
     let chat: string | undefined;

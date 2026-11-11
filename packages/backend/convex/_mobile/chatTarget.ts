@@ -7,6 +7,7 @@ import {
   type SessionChatContext,
 } from "../_sessionChats/helpers";
 import { getRepoHref } from "../notifications";
+import { isSessionArchived } from "../_sessions/archive";
 import { storedComposerTraits } from "../_shared/composerTraits";
 import { aiModelValidator, reasoningLevelValidator } from "../validators";
 
@@ -138,7 +139,7 @@ export async function resolveMobileChat(
         repoLabel: repoLabel(repo),
         repoId: repo._id,
         parentId: chat._id,
-        canReply: chat.archived !== true && session.archived !== true && session.deletedAt === undefined,
+        canReply: chat.archived !== true && !isSessionArchived(session) && session.deletedAt === undefined,
         model: chat.lastModel ?? session.lastModel,
         providerAccountId: chat.providerAccountId,
         traits: storedComposerTraits(chat),
@@ -146,7 +147,7 @@ export async function resolveMobileChat(
         intendedBranch: session.branchName,
         prUrl: session.prUrl,
         webPath: chat.isMain ? base : `${base}?chat=${chat.number}`,
-        session: { id: session._id, chatId: chat._id, title: session.title, archived: session.archived === true },
+        session: { id: session._id, chatId: chat._id, title: session.title, archived: isSessionArchived(session) },
       },
     };
   }

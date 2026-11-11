@@ -4,6 +4,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 import { hasRepoAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
+import { isSessionArchived } from "../_sessions/archive";
 import { prOriginValidator, prStateValidator } from "../validators";
 import {
   findPullRequestByUrl,
@@ -614,7 +615,7 @@ export const listEntitiesForUser = internalQuery({
                   status: doc.status,
                   sandboxStatus: doc.status,
                   isExecuting: sessionIsExecuting(doc, openChatEntityIds),
-                  archived: doc.archived,
+                  archived: isSessionArchived(doc),
                   prUrl: doc.prUrl,
                   branchName: doc.branchName,
                   updatedAt: doc.updatedAt ?? doc._creationTime,
