@@ -65,6 +65,7 @@ import {
   openSessionChatTurn,
   resolveCompletionTurn,
 } from "../_chat/turnStore";
+import { openTurnWorkflowId } from "../_chat/turnProjection";
 import {
   daemonChatTargetArgs,
   ensureMainChat,
@@ -375,7 +376,7 @@ export const sessionExecuteWorkflow = workflow.define({
     } else {
       // A failed launch must finalize the turn: without this catch the
       // workflow dies after its step retries with no saveResult, leaving the
-      // empty placeholder (and activeWorkflowId) stuck on "Working…" until
+      // empty placeholder (and the open turn) stuck on "Working…" until
       // the 2-hour backstop.
       try {
         // One-shot providers push the prompt at launch, so hold it until the
@@ -711,7 +712,6 @@ export const clearStuckWorkingState = internalMutation({
     }
     await clearStreamingActivity(ctx, sessionChatStreamingEntityId(args.chatId));
     await ctx.db.patch(args.chatId, {
-      activeWorkflowId: undefined,
       pendingTurn: undefined,
       syntheticTurnMessageId: undefined,
       updatedAt: Date.now(),
@@ -926,7 +926,11 @@ export const saveResult = internalMutation({
     if (!context) return null;
     const { chat, session } = context;
     const turn = await ctx.db.get(args.turnId);
-    if (isSupersededChatResult(turn, chat.activeWorkflowId)) return null;
+    if (
+      isSupersededChatResult(turn, await openTurnWorkflowId(ctx, chat._id))
+    ) {
+      return null;
+    }
 
     // Any successful turn may have ended with the eva-design JSON, so this is
     // keyed on the reply's content rather than on what the turn was asked to do.
@@ -965,7 +969,7 @@ export const saveResult = internalMutation({
     if (outcome === "publish-failure" || outcome === "no-target") return null;
 
     const now = Date.now();
-    await ctx.db.patch(chat._id, { activeWorkflowId: undefined, updatedAt: now });
+    await ctx.db.patch(chat._id, { updatedAt: now });
     const sessionPatch: {
       updatedAt: number;
       planContent?: string;
@@ -1604,7 +1608,7 @@ export const handleCompletion = authMutation({
     const context = await loadSessionChat(ctx.db, chatId);
     if (!context) return null;
     const { chat, session } = context;
-    const activeWorkflowId = chat.activeWorkflowId;
+    const activeWorkflowId = await openTurnWorkflowId(ctx, chat._id);
     if (activeWorkflowId === undefined) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");

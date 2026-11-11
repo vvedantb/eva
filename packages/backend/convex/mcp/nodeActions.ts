@@ -798,7 +798,6 @@ const deliveryChatSchema = z.object({
   chatId: z.string(),
   title: z.string(),
   number: z.number(),
-  activeWorkflowId: z.string().optional(),
   lastModel: z.string().optional(),
 });
 
@@ -832,7 +831,6 @@ const sessionDocSchema = z.object({
   status: z.string(),
   updatedAt: z.number().optional(),
   lastModel: z.string().optional(),
-  activeWorkflowId: z.string().optional(),
   deploymentUrl: z.string().optional(),
   deploymentStatus: z.string().optional(),
   linkedRepoCount: z.number().optional(),
@@ -1107,8 +1105,8 @@ export const orchestratorGetAgentState = internalAction({
 
     // A session's transcript is its Main chat's (parallel chats keep their
     // own); the streaming row is that chat's too.
-    // Same rule as list_agents / stop_sandbox: a daemon `/loop` continuation
-    // never sets `activeWorkflowId`, so that field alone is not "is executing".
+    // Same rule as list_agents / stop_sandbox: the open turn is "is executing",
+    // daemon `/loop` continuations included.
     const [sessionChats, isExecuting, pullRequests] = await Promise.all([
       kind === "session" ? loadSessionChatsAsUser(clerkUserId, id) : [],
       ctx.runQuery(internal.mcp.queries.entityIsExecuting, { kind, id }),

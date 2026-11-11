@@ -154,16 +154,12 @@ export async function openSessionChatTurn(
   },
 ): Promise<Id<"turns">> {
   const { chatId, sessionId, ...turn } = params;
-  const turnId = await openTurn(ctx, { ...turn, entityId: chatId, sessionId });
-  // Marks the session as a durable-turn user so the legacy "activeWorkflowId
-  // means executing" bridge never becomes authoritative for it again.
-  await ctx.db.patch(sessionId, { turnLifecycleVersion: 2 });
-  return turnId;
+  return await openTurn(ctx, { ...turn, entityId: chatId, sessionId });
 }
 
 /**
  * Opens a task-chat or project-chat turn and marks the entity as a durable-turn
- * user (`chatTurnLifecycleVersion`), as `openSessionTurn` does for sessions.
+ * user (`chatTurnLifecycleVersion`).
  */
 export async function openChatTurn(
   ctx: MutationCtx,
@@ -411,6 +407,7 @@ export async function resolveCompletionTurn(
  * write into the newer turn's reply and clear its slot, so the queue starts a
  * third turn on top of the live one. Every chat surface binds the turn's
  * workflow id before it fills the slot, so a mismatch means "not mine".
+ * Session chats pass their open turn's workflow (`openTurnWorkflowId`).
  */
 export function isSupersededChatResult(
   turn: Doc<"turns"> | null,

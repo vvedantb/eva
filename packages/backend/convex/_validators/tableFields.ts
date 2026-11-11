@@ -370,8 +370,8 @@ export const sessionDaemonStateFields = {
 };
 
 /**
- * Task and project chat counterpart of `sessions.turnLifecycleVersion`: set
- * the first time the chat opens a durable Turn, so projections stop trusting
+ * Task and project chat durable-turn cutover marker: set the first time the
+ * chat opens a durable Turn, so projections stop trusting
  * the legacy `activeChatWorkflowId` / `syntheticTurnMessageId` fields.
  */
 const chatTurnLifecycleFields = {
@@ -537,6 +537,10 @@ export const sessionChatFields = {
   archived: v.optional(v.boolean()),
   createdBy: v.optional(v.id("users")),
   updatedAt: v.optional(v.number()),
+  /**
+   * Legacy, unused: the open turn (`turns.workflowId`) is the only record.
+   * Cleared by `dataMigrations:clearSessionWorkflowSlots`; 0e drops it.
+   */
   activeWorkflowId: v.optional(v.string()),
   /** Unread watermark, set when one of this chat's turns closes (see chatReads). */
   lastTurnFinishedAt: v.optional(v.number()),
@@ -787,12 +791,13 @@ export const sessionFields = {
   planContent: v.optional(v.string()),
   /** Sticky Plan/Build toggle. Absent sessions are Build. */
   lastInteractionMode: v.optional(interactionModeValidator),
-  activeWorkflowId: v.optional(v.string()),
   /**
-   * Set the first time this session opens a durable Turn. Missing sessions may
-   * still have a pre-cutover workflow in flight, so projections temporarily
-   * consult the legacy workflow fields until this marker is written.
+   * Legacy, unused: busy is the open turn, and the summary's workflow id sits
+   * on its `summary` lane turn. So is `turnLifecycleVersion`, the old durable-
+   * turn cutover marker. Both are cleared by
+   * `dataMigrations:clearSessionWorkflowSlots`; 0e drops them.
    */
+  activeWorkflowId: v.optional(v.string()),
   turnLifecycleVersion: v.optional(v.literal(2)),
   // The user provider account chosen for this session's runs (overriding the
   // team credential). Session-scoped so the page-open daemon prewarm — which

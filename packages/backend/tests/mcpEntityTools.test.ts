@@ -3,6 +3,7 @@ import { describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { recordPullRequest } from "../convex/_pullRequests/store";
+import { findOpenTurn } from "../convex/_chat/turnStore";
 import {
   decideSandboxStartPlan,
   SANDBOX_SURFACES,
@@ -54,7 +55,19 @@ async function fixture() {
       numId: 11,
       updatedAt: now - 1_000,
       branchName: "eva/session-login",
-      activeWorkflowId: "wf_session",
+    });
+    // The session's turn in flight.
+    await ctx.db.insert("turns", {
+      entityId: sessionId,
+      streamingEntityId: String(sessionId),
+      state: "running",
+      open: true,
+      turnStartedAt: now,
+      leaseExpiresAt: now + 120_000,
+      leaseGeneration: 1,
+      model: "claude:sonnet",
+      repoId,
+      workflowId: "wf_session",
     });
     const closedSessionId = await ctx.db.insert("sessions", {
       repoId,
@@ -414,7 +427,7 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
 
   test("a session running a daemon continuation counts as executing", async () => {
     const f = await fixture();
-    // A `/loop` turn: an open row in `turns`, and no activeWorkflowId at all.
+    // A `/loop` turn: an open row in `turns` with no workflow bound.
     const loopingSessionId = await f.t.run(async (ctx) => {
       const sessionId = await ctx.db.insert("sessions", {
         repoId: f.repoId,
@@ -422,7 +435,6 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
         title: "Looping",
         status: "active",
         numId: 13,
-        turnLifecycleVersion: 2,
       });
       await ctx.db.insert("turns", {
         entityId: sessionId,
@@ -514,8 +526,8 @@ describe("cancel_queued_message only touches the queue", () => {
     expect(remaining.map((message) => message._id)).toEqual([f.queuedIds[1]]);
 
     // The turn in flight is untouched — that is stop_agent's job, not this.
-    const session = await f.t.run(async (ctx) => ctx.db.get(f.sessionId));
-    expect(session?.activeWorkflowId).toBe("wf_session");
+    const turn = await f.t.run(async (ctx) => findOpenTurn(ctx, f.sessionId));
+    expect(turn?.workflowId).toBe("wf_session");
   });
 
   test("clearing every pending message empties the queue", async () => {
