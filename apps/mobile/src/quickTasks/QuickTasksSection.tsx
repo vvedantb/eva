@@ -12,21 +12,22 @@ import {
   type QuickTaskListFilters,
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconChecklist, IconChevronRight, IconPlayerPlay, IconPlus } from "@tabler/icons-react-native";
+import { IconChecklist, IconPlayerPlay, IconPlus } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
 import { Button, ConfirmDialog, EmptyState, SkeletonList, SkeletonRow } from "@vvedantb/native-ui/primitives";
-import { useLargerText, withAlpha } from "@vvedantb/native-ui/theme";
+import { useLargerText } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, SectionList, Text, View } from "react-native";
+import { SectionList, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ActiveFiltersBar, QuickTaskToolbar } from "@/quickTasks/QuickTaskListOptions";
 import { QuickTaskRow } from "@/quickTasks/QuickTaskRow";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
 import { useQuickTaskActions } from "@/quickTasks/useQuickTaskActions";
+import { CardGap, FoldFooter, FoldHeader } from "@/ui/FoldHeader";
 import { RepoPicker, useRepoParam } from "@/ui/RepoPicker";
 import { useScheme } from "@/ui/theme";
 
@@ -176,8 +177,8 @@ function QuickTaskList({ repo }: { repo: Repo }) {
               runningAll={runningAll}
             />
           )}
-          // Web: the rows `space-y-1.5`.
-          ItemSeparatorComponent={RowGap}
+          // 8 between cards (web `space-y-1.5`, 6), so each reads as its own target.
+          ItemSeparatorComponent={CardGap}
           renderItem={({ item: task, section }) => (
             <QuickTaskRow
               task={task}
@@ -187,7 +188,7 @@ function QuickTaskList({ repo }: { repo: Repo }) {
               onLongPress={() => actions.openSheet(task)}
             />
           )}
-          renderSectionFooter={({ section }) => <StatusFooter open={section.open} count={section.count} />}
+          renderSectionFooter={({ section }) => <FoldFooter open={section.open} count={section.count} empty="No tasks" />}
           // Web: the list `p-3 pt-0`.
           contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: tabBarReserve(largerText, insets.bottom) }}
         />
@@ -204,7 +205,7 @@ function QuickTaskList({ repo }: { repo: Repo }) {
   );
 }
 
-/** While the tasks load: cards shaped as `QuickTaskRow` (title over tags and age), 6 apart, on the list's `px-3`. */
+/** While the tasks load: cards shaped as `QuickTaskRow` (title over tags and age), 8 apart, on the list's `px-3`. */
 function QuickTaskPlaceholders() {
   const card = EVA_THEME[useScheme()].card;
   return (
@@ -213,7 +214,7 @@ function QuickTaskPlaceholders() {
       divided={false}
       className="px-3"
       renderRow={(row) => (
-        <View className="mb-1.5 rounded-lg" style={{ backgroundColor: card }}>
+        <View className="mb-2 rounded-lg" style={{ backgroundColor: card }}>
           <SkeletonRow index={row} lines={2} trailing={false} minHeight={72} className="px-3" />
         </View>
       )}
@@ -264,11 +265,7 @@ function RunAllDialog({
   );
 }
 
-/**
- * One web status section's header: a 44 high button (chevron that turns open,
- * the status icon and label in its colour, the count at 60% muted). Its rows
- * follow 6 apart, then `StatusFooter`.
- */
+/** One status section's header (`FoldHeader`), with To Do's web "Run All" ("Run" below `sm`) while it has tasks. */
 function StatusHeader({
   status,
   count,
@@ -281,67 +278,37 @@ function StatusHeader({
   count: number;
   open: boolean;
   onToggle: () => void;
-  /** To Do's web "Run All" button ("Run" below `sm`), shown while it has tasks. */
   onRunAll?: () => void;
   runningAll: boolean;
 }) {
   const scheme = useScheme();
-  const muted = EVA_THEME[scheme].mutedForeground;
-  const { icon: Icon, text } = statusAppearance(status, scheme);
-  const label = TASK_STATUS_LABELS[status];
+  const { icon, text } = statusAppearance(status, scheme);
   return (
-    <View className="flex-row items-center">
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${label}, ${count} ${count === 1 ? "task" : "tasks"}`}
-      accessibilityState={{ expanded: open }}
-      onPress={onToggle}
-      className="min-h-11 flex-1 flex-row items-center gap-2 rounded-lg px-2 active:opacity-70"
-    >
-      <View style={open ? { transform: [{ rotate: "90deg" }] } : undefined}>
-        <IconChevronRight size={14} color={muted} />
-      </View>
-      <Icon size={14} color={text} />
-      <Text className="font-instrument-sans-medium text-sm" style={{ color: text, fontWeight: "500" }}>
-        {label}
-      </Text>
-      <Text className="font-instrument-sans text-xs" style={{ color: withAlpha(muted, 0.6), fontVariant: ["tabular-nums"] }}>
-        {count}
-      </Text>
-    </Pressable>
-      {onRunAll ? (
-        // Web: a `sm` primary button, 36 high, `mr-2`, a 14 play icon (a spinner while starting).
-        <Button
-          size="sm"
-          fullWidth={false}
-          accessibilityLabel="Run All"
-          loading={runningAll}
-          disabled={runningAll}
-          leftIcon={<IconPlayerPlay size={14} color={EVA_THEME[scheme].primaryForeground} />}
-          onPress={onRunAll}
-          className="mr-2 self-center"
-        >
-          Run
-        </Button>
-      ) : null}
-    </View>
+    <FoldHeader
+      icon={icon}
+      color={text}
+      label={TASK_STATUS_LABELS[status]}
+      count={count}
+      noun="task"
+      open={open}
+      onToggle={onToggle}
+      trailing={
+        onRunAll ? (
+          // Web: a `sm` primary button, 36 high, `mr-2`, a 14 play icon (a spinner while starting).
+          <Button
+            size="sm"
+            fullWidth={false}
+            accessibilityLabel="Run All"
+            loading={runningAll}
+            disabled={runningAll}
+            leftIcon={<IconPlayerPlay size={14} color={EVA_THEME[scheme].primaryForeground} />}
+            onPress={onRunAll}
+            className="mr-2 self-center"
+          >
+            Run
+          </Button>
+        ) : undefined
+      }
+    />
   );
-}
-
-/** Under a section: "No tasks" when it is open and empty, the rows' `pb-1.5` when it has rows, then the web `space-y-1` to the next section. */
-function StatusFooter({ open, count }: { open: boolean; count: number }) {
-  const muted = EVA_THEME[useScheme()].mutedForeground;
-  if (open && count === 0) {
-    return (
-      <Text className="font-instrument-sans mb-1 py-4 text-center text-xs" style={{ color: muted }}>
-        No tasks
-      </Text>
-    );
-  }
-  return <View className={open ? "mb-1 pb-1.5" : "mb-1"} />;
-}
-
-/** The 6 between two task rows. */
-function RowGap() {
-  return <View className="h-1.5" />;
 }

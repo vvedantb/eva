@@ -25,7 +25,7 @@ import {
   type IconProps,
 } from "@tabler/icons-react-native";
 import { Markdown } from "@vvedantb/native-ui/markdown";
-import { Avatar, AvatarFallback, AvatarImage, Button } from "@vvedantb/native-ui/primitives";
+import { Avatar, AvatarFallback, AvatarImage, Button, ListDivider } from "@vvedantb/native-ui/primitives";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import { useQuery } from "convex/react";
 import { useState, type ComponentType, type ReactNode } from "react";
@@ -39,10 +39,10 @@ import { type Scheme, useScheme, XS_TRACKING } from "@/ui/theme";
 /** What a first render carries, as the web: the recent remarks are the ones worth arriving for. */
 const COMMENT_PAGE = 10;
 
-/** The web `text-xs` (12 / 16). */
+/** The web `text-sm` (14 / 20): titles a thumb taps, and the meta rows' labels and values. */
+export const TEXT_SM = { fontSize: 14, lineHeight: 20 };
+/** The web `text-xs` (12 / 16): the smallest text on these tabs (the web's 10 and 11 are a desktop size). */
 export const TEXT_XS = { fontSize: 12, lineHeight: 16, letterSpacing: XS_TRACKING };
-/** The web `text-2xs` (11 / 16, 0.01em). */
-export const TEXT_2XS = { fontSize: 11, lineHeight: 16, letterSpacing: 0.11 };
 
 /** The web reviewer ring: the verdict rides the face that earned it. */
 const VERDICT_RING: Record<string, keyof (typeof EVA_THEME)["light"]> = {
@@ -157,9 +157,9 @@ function MetaRows({
   const edit = usePrMetaEdit(repoId, overview.number, onChanged);
   const theme = EVA_THEME[scheme];
   const reviewers = prReviewers(overview);
-  const none = <Text style={[TEXT_XS, { color: theme.mutedForeground }]}>None</Text>;
+  const none = <Text style={[TEXT_SM, { color: theme.mutedForeground }]}>None</Text>;
   return (
-    <View className="gap-1 px-4 pb-1 pt-3">
+    <View className="px-4 pb-1 pt-1">
       <MetaRow
         icon={IconUsers}
         label="Reviewers"
@@ -180,6 +180,7 @@ function MetaRows({
               />
             ))}
       </MetaRow>
+      <ListDivider />
       <MetaRow
         icon={IconUserCheck}
         label="Assignees"
@@ -192,6 +193,7 @@ function MetaRows({
               <Person key={assignee.login} login={assignee.login} avatarUrl={assignee.avatarUrl} scheme={scheme} />
             ))}
       </MetaRow>
+      <ListDivider />
       <MetaRow
         icon={IconTag}
         label="Labels"
@@ -204,7 +206,7 @@ function MetaRows({
               // Web `LabelChip`: `bg-muted/60` pill, the GitHub colour kept to a dot.
               <View
                 key={label.name}
-                className="max-w-48 flex-row items-center gap-1.5 rounded-full px-2 py-0.5"
+                className="max-w-48 flex-row items-center gap-1.5 rounded-full px-2.5 py-1"
                 style={{ backgroundColor: withAlpha(theme.muted, 0.6) }}
               >
                 <LabelDot color={label.color} />
@@ -215,11 +217,13 @@ function MetaRows({
             ))}
       </MetaRow>
       {overview.previews.length === 0 ? null : (
+        <>
+        <ListDivider />
         <MetaRow icon={IconRocket} label="Previews" scheme={scheme}>
           <View className="min-w-0 flex-1">
             {overview.previews.map((preview) => (
               <LinkRow key={`${preview.environment}-${preview.updatedAt}`} url={preview.url} label={previewLabel(preview)}>
-                <Text numberOfLines={1} className="min-w-0 flex-1" style={[TEXT_XS, { color: theme.foreground }]}>
+                <Text numberOfLines={1} className="min-w-0 flex-1" style={[TEXT_SM, { color: theme.foreground }]}>
                   {previewLabel(preview)}
                 </Text>
                 <Text style={[TEXT_XS, { color: theme.mutedForeground }]}>{timeAgo(new Date(preview.updatedAt).getTime())}</Text>
@@ -228,6 +232,7 @@ function MetaRows({
             ))}
           </View>
         </MetaRow>
+        </>
       )}
     </View>
   );
@@ -243,19 +248,22 @@ function MetaRow({
   icon: ComponentType<IconProps>;
   label: string;
   scheme: Scheme;
-  /** At the row's end: the pencil, a 44 square, so an editable row is 44 high. */
+  /** At the row's end: the pencil, a 44 square. */
   action?: ReactNode;
   children: ReactNode;
 }) {
   const muted = EVA_THEME[scheme].mutedForeground;
+  // A divided 56 row at the Inbox sizes (14 label and values, 16 icon); the
+  // label and pencil stay on the first line when the values wrap. The web 28
+  // rows with 12 text are a desktop density.
   return (
-    <View className="min-h-7 flex-row items-center gap-2">
-      <View className={action ? "w-24 flex-row items-center gap-1.5 self-start pt-3.5" : "w-24 flex-row items-center gap-1.5 self-start pt-1.5"}>
-        <Icon size={13} color={muted} />
-        <Text style={[TEXT_XS, { color: muted }]}>{label}</Text>
+    <View className="min-h-14 flex-row items-center gap-2 py-1.5">
+      <View className="w-28 flex-row items-center gap-2 self-start" style={{ minHeight: 44 }}>
+        <Icon size={16} color={muted} />
+        <Text style={[TEXT_SM, { color: muted }]}>{label}</Text>
       </View>
-      <View className="min-w-0 flex-1 flex-row flex-wrap items-center gap-1.5 py-1">{children}</View>
-      {action}
+      <View className="min-w-0 flex-1 flex-row flex-wrap items-center gap-x-2 gap-y-1.5 py-2.5">{children}</View>
+      {action ? <View className="self-start">{action}</View> : null}
     </View>
   );
 }
@@ -281,13 +289,15 @@ function Person({
     <View
       accessible
       accessibilityLabel={hint ? `${login}, ${hint}` : login}
-      className="flex-row items-center gap-1"
+      className="min-w-0 flex-row items-center gap-1.5"
       style={{ opacity: faded ? 0.6 : 1 }}
     >
       <View className="rounded-full" style={ring ? { borderWidth: 2, borderColor: theme[ring] } : undefined}>
-        <PrAvatar login={login} avatarUrl={avatarUrl} size={16} />
+        <PrAvatar login={login} avatarUrl={avatarUrl} size={20} />
       </View>
-      <Text style={[TEXT_XS, { color: theme.foreground }]}>{login}</Text>
+      <Text numberOfLines={1} className="min-w-0 shrink" style={[TEXT_SM, { color: theme.foreground }]}>
+        {login}
+      </Text>
     </View>
   );
 }
@@ -302,15 +312,15 @@ export function PrAvatar({ login, avatarUrl, size }: { login: string | null; ava
   );
 }
 
-/** A 44 high row that opens `url` on GitHub (or the deploy), or a plain row when there is none. */
+/** A 56 high row (the Sessions row) that opens `url` on GitHub (or the deploy), or a plain row when there is none. */
 function LinkRow({ url, label, children }: { url: string | null; label: string; children: ReactNode }) {
-  if (url === null) return <View className="min-h-11 flex-row items-center gap-2 px-1.5">{children}</View>;
+  if (url === null) return <View className="min-h-14 flex-row items-center gap-2 px-1.5">{children}</View>;
   return (
     <Pressable
       accessibilityRole="link"
       accessibilityLabel={label}
       onPress={() => void Linking.openURL(url)}
-      className="min-h-11 flex-row items-center gap-2 rounded-md px-1.5 active:opacity-70"
+      className="min-h-14 flex-row items-center gap-2 rounded-md px-1.5 active:opacity-70"
     >
       {children}
     </Pressable>
@@ -328,7 +338,8 @@ function previewLabel(preview: PrOverview["previews"][number]): string {
 }
 
 /**
- * The web `SummarySection`: a quiet 44 high heading (muted `text-xs` medium
+ * The web `SummarySection`: a 48 high heading (`text-sm` medium in the
+ * foreground, a tappable title, where the web has a quiet muted `text-xs`,
  * and a chevron that turns open) that folds its body. `actions` sit beside it.
  */
 function Section({
@@ -343,7 +354,8 @@ function Section({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const muted = EVA_THEME[useScheme()].mutedForeground;
+  const theme = EVA_THEME[useScheme()];
+  const muted = theme.mutedForeground;
   return (
     <View>
       <View className="flex-row items-center pr-4">
@@ -352,13 +364,13 @@ function Section({
           accessibilityLabel={title}
           accessibilityState={{ expanded: open }}
           onPress={() => setOpen(!open)}
-          className="min-h-11 min-w-0 flex-1 flex-row items-center gap-1.5 px-4 active:opacity-70"
+          className="min-h-12 min-w-0 flex-1 flex-row items-center gap-1.5 px-4 active:opacity-70"
         >
-          <Text numberOfLines={1} className="font-instrument-sans-medium shrink" style={[TEXT_XS, { color: muted, fontWeight: "500" }]}>
+          <Text numberOfLines={1} className="font-instrument-sans-medium shrink" style={[TEXT_SM, { color: theme.foreground, fontWeight: "500" }]}>
             {title}
           </Text>
           <View style={open ? { transform: [{ rotate: "90deg" }] } : undefined}>
-            <IconChevronRight size={13} color={withAlpha(muted, 0.6)} />
+            <IconChevronRight size={14} color={withAlpha(muted, 0.6)} />
           </View>
         </Pressable>
         {actions}
@@ -457,22 +469,22 @@ export function CommentCard({ comment, scheme, framed }: { comment: SummaryComme
         </View>
         <View className="min-w-0 flex-1">
           <View className="flex-row flex-wrap items-center gap-x-1.5">
-            <Text className="font-instrument-sans-semibold" style={[TEXT_XS, { color: theme.foreground, fontWeight: "600" }]}>
+            <Text className="font-instrument-sans-semibold" style={[TEXT_SM, { color: theme.foreground, fontWeight: "600" }]}>
               {comment.authorLogin ?? "ghost"}
             </Text>
-            <Text style={[TEXT_XS, { color: muted }]}>{comment.action}</Text>
+            <Text style={[TEXT_SM, { color: muted }]}>{comment.action}</Text>
             {comment.verdict === null ? null : (
-              <Text className="font-instrument-sans-medium" style={{ fontSize: 10, lineHeight: 14, color: muted, fontWeight: "500" }}>
+              <Text className="font-instrument-sans-medium" style={[TEXT_XS, { color: muted, fontWeight: "500" }]}>
                 {comment.verdict}
               </Text>
             )}
           </View>
           <View className="mt-0.5 flex-row flex-wrap items-center gap-x-2">
-            {comment.at === null ? null : <Text style={[TEXT_2XS, { color: muted }]}>{timeAgo(new Date(comment.at).getTime())}</Text>}
+            {comment.at === null ? null : <Text style={[TEXT_XS, { color: muted }]}>{timeAgo(new Date(comment.at).getTime())}</Text>}
             {comment.path ? (
-              <View className="min-w-0 flex-row items-center gap-1">
-                <IconFileCode size={11} color={muted} />
-                <Text numberOfLines={1} className="min-w-0 shrink" style={[TEXT_2XS, { color: muted, fontFamily: "monospace" }]}>
+              <View className="min-w-0 shrink flex-row items-center gap-1">
+                <IconFileCode size={12} color={muted} />
+                <Text numberOfLines={1} ellipsizeMode="middle" className="min-w-0 shrink" style={[TEXT_XS, { color: muted, fontFamily: "monospace" }]}>
                   {`${comment.path}${comment.line === undefined || comment.line === null ? "" : `:${comment.line}`}`}
                 </Text>
               </View>
@@ -503,7 +515,7 @@ function BotGroup({ comments, scheme }: { comments: readonly SummaryComment[]; s
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
         onPress={() => setOpen(!open)}
-        className="min-h-11 flex-row items-center gap-3 px-3 py-2.5 active:opacity-70"
+        className="min-h-16 flex-row items-center gap-3 px-3 py-3 active:opacity-70"
       >
         <View className="flex-row">
           {authors.slice(0, 3).map((author, index) => (
@@ -513,10 +525,10 @@ function BotGroup({ comments, scheme }: { comments: readonly SummaryComment[]; s
           ))}
         </View>
         <View className="min-w-0 flex-1">
-          <Text className="font-instrument-sans-medium" style={[TEXT_XS, { color: theme.foreground, fontWeight: "500" }]}>
+          <Text className="font-instrument-sans-medium" style={[TEXT_SM, { color: theme.foreground, fontWeight: "500" }]}>
             {`${comments.length} bot ${comments.length === 1 ? "comment" : "comments"}`}
           </Text>
-          <Text style={[TEXT_2XS, { color: muted }]}>
+          <Text style={[TEXT_XS, { color: muted }]}>
             {`${authors.length} ${authors.length === 1 ? "author" : "authors"}${latest === null ? "" : ` · Latest ${timeAgo(new Date(latest).getTime())}`}`}
           </Text>
         </View>

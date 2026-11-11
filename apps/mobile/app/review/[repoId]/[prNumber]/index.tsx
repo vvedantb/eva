@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
   EmptyState,
   HeaderIconButton,
+  Pager,
   Spinner,
   Tabs,
   TabsList,
@@ -43,7 +44,8 @@ import { useAction, useQuery } from "convex/react";
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState, type ReactNode } from "react";
-import { Linking, Pressable, ScrollView, Text, View, type ViewStyle } from "react-native";
+import { Linking, Pressable, ScrollView, Text, View } from "react-native";
+import { useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DiffOptions } from "@/diff/DiffOptions";
 import { usePendingLineComments, usePrDiff } from "@/diff/prDiffStore";
@@ -134,11 +136,13 @@ export default function ReviewScreen() {
 }
 
 /**
- * The loaded pull request: the header with the tab row, both tabs, and the
- * bottom bar. The tab is a route param set in place (`setParams`), so a switch
- * adds no history and Back still leaves the pull request. Timeline and Code
- * mount on their first visit, so reading Summary does not download the diff,
- * and then stay mounted with their scroll, as the web keeps every tab mounted.
+ * The loaded pull request: the header with the tab row, the tabs on a `Pager`
+ * (a sideways swipe moves between them, as Sessions and Projects; the tab
+ * fill follows the pages), and the bottom bar. The tab is a route param set
+ * in place (`setParams`), so a switch adds no history and Back still leaves
+ * the pull request. A tab mounts once visited or swiped toward, and then
+ * stays mounted with its scroll, as the web keeps every tab mounted; the diff
+ * downloads only once Code is visited, so reading Summary does not fetch it.
  */
 function ReviewTabs({
   repo,
@@ -166,25 +170,22 @@ function ReviewTabs({
   const [visited, setVisited] = useState<ReadonlySet<ReviewTab>>(new Set([tab]));
   const [composing, setComposing] = useState(false);
   const [composerMode, setComposerMode] = useState<ComposerMode>("comment");
-  const codeMounted = visited.has("code") || tab === "code";
-  const timelineMounted = visited.has("timeline") || tab === "timeline";
-  const diff = usePrDiff(codeMounted ? pr : null);
+  const index = Math.max(0, REVIEW_TABS.indexOf(tab));
+  const progress = useSharedValue(index);
+  const diff = usePrDiff(visited.has("code") || tab === "code" ? pr : null);
   const pending = usePendingLineComments(pr).comments.length;
   const isOpen = overview.status === "open";
+  const select = (next: ReviewTab) => {
+    if (!visited.has(next)) setVisited(new Set([...visited, next]));
+    onTabChange(next);
+  };
 
   const nav = (
     // As high as Code's ⋯ (a `HeaderIconButton`, 48; 56 with larger text) on
     // every tab, so the tabs and the content do not move when it shows.
     <View className={`${largerText ? "min-h-14" : "min-h-12"} flex-row items-center gap-2 px-1`}>
-      <Tabs
-        value={tab}
-        onValueChange={(value: string) => {
-          const next = REVIEW_TABS.find((candidate) => candidate === value) ?? "summary";
-          if (!visited.has(next)) setVisited(new Set([...visited, next]));
-          onTabChange(next);
-        }}
-      >
-        <TabsList size="sm" className="self-start">
+      <Tabs value={tab} onValueChange={(value: string) => select(REVIEW_TABS.find((candidate) => candidate === value) ?? "summary")}>
+        <TabsList size="sm" className="self-start" progress={progress}>
           {REVIEW_TABS.map((value) => (
             <TabsTrigger key={value} value={value}>
               {TAB_LABEL[value]}
@@ -204,39 +205,43 @@ function ReviewTabs({
   return (
     <View className="flex-1">
       <ReviewHeader repoId={repoId} overview={overview} refreshing={refreshing} onRefresh={onRefresh} onBack={onBack} scheme={scheme} nav={nav} />
-      <ScrollView
-        className="flex-1"
-        style={tab === "summary" ? undefined : HIDDEN}
-        contentContainerStyle={{ paddingBottom: 16 }}
-        keyboardShouldPersistTaps="handled"
-      >
-        <ReviewSummary
-          repoId={repoId}
-          overview={overview}
-          prUrl={githubPrUrl(repo.owner, repo.name, overview.number)}
-          defaultModel={repo.defaultModel}
-          onChanged={onRefresh}
-        />
-      </ScrollView>
-      {timelineMounted ? (
-        <View className="flex-1" style={tab === "timeline" ? undefined : HIDDEN}>
-          <ReviewTimeline repoId={repoId} overview={overview} />
-        </View>
-      ) : null}
-      {codeMounted ? (
-        <View className="flex-1" style={tab === "code" ? undefined : HIDDEN}>
-          <ReviewCode
-            pr={pr}
-            state={diff.state}
-            onOpenFile={(path) =>
-              router.push({
-                pathname: "/review/[repoId]/[prNumber]/file",
-                params: { repoId, prNumber: String(overview.number), path },
-              })
-            }
-          />
-        </View>
-      ) : null}
+      <Pager
+        index={index}
+        count={REVIEW_TABS.length}
+        progress={progress}
+        onIndexChange={(page) => select(REVIEW_TABS[page] ?? "summary")}
+        renderPage={(page) => {
+          switch (REVIEW_TABS[page]) {
+            case "timeline":
+              return <ReviewTimeline repoId={repoId} overview={overview} />;
+            case "code":
+              return (
+                <ReviewCode
+                  pr={pr}
+                  state={diff.state}
+                  onOpenFile={(path) =>
+                    router.push({
+                      pathname: "/review/[repoId]/[prNumber]/file",
+                      params: { repoId, prNumber: String(overview.number), path },
+                    })
+                  }
+                />
+              );
+            default:
+              return (
+                <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 16 }} keyboardShouldPersistTaps="handled">
+                  <ReviewSummary
+                    repoId={repoId}
+                    overview={overview}
+                    prUrl={githubPrUrl(repo.owner, repo.name, overview.number)}
+                    defaultModel={repo.defaultModel}
+                    onChanged={onRefresh}
+                  />
+                </ScrollView>
+              );
+          }
+        }}
+      />
       {/* The web header's Merge and its floating composer, in thumb reach. */}
       <View
         className="flex-row items-center gap-2 px-4 pt-2"
@@ -284,9 +289,6 @@ function ReviewTabs({
     </View>
   );
 }
-
-/** A tab kept mounted while another shows. */
-const HIDDEN: ViewStyle = { display: "none" };
 
 /**
  * The web `ReviewHeader`: Back (phones expect one), the state pill, `head →
@@ -507,7 +509,8 @@ function RemedyLink({ label, colour, starting, onPress }: { label: string; colou
       className="ml-auto min-h-11 min-w-11 flex-row items-center gap-1 self-stretch pl-2 active:opacity-70"
       style={{ opacity: starting ? 0.7 : 1 }}
     >
-      <Text className="font-instrument-sans-medium text-xs" style={{ color: colour, fontWeight: "500" }}>
+      {/* `text-sm`, the phone floor for tappable text (the web link is `text-xs`). */}
+      <Text className="font-instrument-sans-medium text-sm" style={{ color: colour, fontWeight: "500" }}>
         {label}
       </Text>
       {starting ? <Spinner size="sm" decorative /> : <IconArrowUpRight size={13} color={colour} />}

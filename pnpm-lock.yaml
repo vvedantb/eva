@@ -240,8 +240,8 @@ importers:
         specifier: ^3.49.0
         version: 3.50.0(react-native-svg@15.15.4(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7)(bufferutil@4.1.0))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3))(react@19.2.3))(react@19.2.3)
       '@vvedantb/native-ui':
-        specifier: github:vvedantb/packages#a8d76e75b29d4a563ba393763a1376005b13f16e&path:/packages/native-ui
-        version: https://codeload.github.com/vvedantb/packages/tar.gz/a8d76e75b29d4a563ba393763a1376005b13f16e#path:/packages/native-ui(803690cce3f5dcd98b8bb6432f285ac6)
+        specifier: github:vvedantb/packages#b1dd10f92b03526bde718a83dadc9e823be87a0c&path:/packages/native-ui
+        version: https://codeload.github.com/vvedantb/packages/tar.gz/b1dd10f92b03526bde718a83dadc9e823be87a0c#path:/packages/native-ui(803690cce3f5dcd98b8bb6432f285ac6)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -534,6 +534,9 @@ importers:
       '@xterm/addon-web-links':
         specifier: ^0.12.0
         version: 0.12.0
+      '@xterm/addon-webgl':
+        specifier: ^0.19.0
+        version: 0.19.0
       '@xterm/xterm':
         specifier: ^6.0.0
         version: 6.0.0
@@ -6368,8 +6371,8 @@ packages:
       '@electron/asar':
         optional: true
 
-  '@vvedantb/native-ui@https://codeload.github.com/vvedantb/packages/tar.gz/a8d76e75b29d4a563ba393763a1376005b13f16e#path:/packages/native-ui':
-    resolution: {path: /packages/native-ui, tarball: https://codeload.github.com/vvedantb/packages/tar.gz/a8d76e75b29d4a563ba393763a1376005b13f16e}
+  '@vvedantb/native-ui@https://codeload.github.com/vvedantb/packages/tar.gz/b1dd10f92b03526bde718a83dadc9e823be87a0c#path:/packages/native-ui':
+    resolution: {path: /packages/native-ui, tarball: https://codeload.github.com/vvedantb/packages/tar.gz/b1dd10f92b03526bde718a83dadc9e823be87a0c}
     version: 0.15.0
     peerDependencies:
       '@clerk/clerk-expo': '*'
@@ -6634,6 +6637,9 @@ packages:
 
   '@xterm/addon-web-links@0.12.0':
     resolution: {integrity: sha512-4Smom3RPyVp7ZMYOYDoC/9eGJJJqYhnPLGGqJ6wOBfB8VxPViJNSKdgRYb8NpaM6YSelEKbA2SStD7lGyqaobw==}
+
+  '@xterm/addon-webgl@0.19.0':
+    resolution: {integrity: sha512-b3fMOsyLVuCeNJWxolACEUED0vm7qC0cy4wRvf3oURSzDTYVQiGPhTnhWZwIHdvC48Y+oLhvYXnY4XDXPoJo6A==}
 
   '@xterm/xterm@6.0.0':
     resolution: {integrity: sha512-TQwDdQGtwwDt+2cgKDLn0IRaSxYu1tSUjgKarSDkUM0ZNiSRXFpjxEsvc/Zgc5kq5omJ+V0a8/kIM2WD3sMOYg==}
@@ -17746,7 +17752,7 @@ snapshots:
 
   '@vvedantb/config@0.4.0': {}
 
-  '@vvedantb/native-ui@https://codeload.github.com/vvedantb/packages/tar.gz/a8d76e75b29d4a563ba393763a1376005b13f16e#path:/packages/native-ui(803690cce3f5dcd98b8bb6432f285ac6)':
+  '@vvedantb/native-ui@https://codeload.github.com/vvedantb/packages/tar.gz/b1dd10f92b03526bde718a83dadc9e823be87a0c#path:/packages/native-ui(803690cce3f5dcd98b8bb6432f285ac6)':
     dependencies:
       '@expo/vector-icons': 15.1.1(expo-font@57.0.4)(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7)(bufferutil@4.1.0))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3))(react@19.2.3)
       '@rn-primitives/select': 1.5.2(@rn-primitives/portal@1.5.3(@types/react@19.3.0)(react-native-web@0.21.4(encoding@0.1.13)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7)(bufferutil@4.1.0))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3))(react@19.2.3)(use-sync-external-store@1.6.0(react@19.2.3)))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.4(encoding@0.1.13)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7)(bufferutil@4.1.0))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3))(react@19.2.3)
@@ -18115,6 +18121,8 @@ snapshots:
   '@xterm/addon-fit@0.11.0': {}
 
   '@xterm/addon-web-links@0.12.0': {}
+
+  '@xterm/addon-webgl@0.19.0': {}
 
   '@xterm/xterm@6.0.0': {}
 

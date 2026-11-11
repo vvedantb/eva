@@ -154,6 +154,7 @@ async function sessionWithStatus(
       connectedBy: userId,
     });
     return ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Fix the login bug",

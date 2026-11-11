@@ -17,8 +17,9 @@ type Project = FunctionReturnType<typeof api.projects.list>[number];
 
 /**
  * The web quick-task option chip (`QUICK_TASK_OPTION_BADGE_CLASS` below `sm`):
- * 40 high, fully round, `bg-secondary`, `px-2.5 gap-1.5`, `text-xs` medium,
- * muted until it holds a value, then the value in the foreground colour.
+ * 40 high, fully round, `bg-secondary`, `px-2.5 gap-1.5`, medium (`text-sm`,
+ * up from the web `text-xs`), muted until it holds a value, then the value in
+ * the foreground colour.
  */
 export function OptionPill({
   icon,
@@ -54,7 +55,7 @@ export function OptionPill({
       {icon}
       <Text
         numberOfLines={1}
-        className="font-instrument-sans-medium shrink text-xs"
+        className="font-instrument-sans-medium shrink text-sm"
         style={{ fontWeight: "500", color: set ? theme.foreground : theme.mutedForeground }}
       >
         {label}
@@ -234,7 +235,7 @@ export function TagsChip({
         {typed && !allTags.includes(typed) ? <SheetRow icon={IconPlus} title={`Create "${typed}"`} onPress={create} /> : null}
         {/* Tags made here are not in `allTags` yet; list them so they can be removed. */}
         {[...value.filter((tag) => !allTags.includes(tag)), ...shown].map((tag) => (
-          <SheetRow key={tag} icon={IconTag} title={tag} active={value.includes(tag)} onPress={() => toggle(tag)} />
+          <SheetRow key={tag} icon={IconTag} title={tag} active={value.includes(tag)} multiple onPress={() => toggle(tag)} />
         ))}
         {shown.length === 0 && !typed ? (
           <Text variant="muted" className="py-6 text-center" style={textColor(scheme, "muted")}>

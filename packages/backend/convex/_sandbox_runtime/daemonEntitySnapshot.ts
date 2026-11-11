@@ -7,6 +7,7 @@ import {
 import type { Id } from "../_generated/dataModel";
 import { pendingTurnValidator } from "../_validators/tableFields";
 import { DAEMON_CLAIM_PAUSE_MS } from "../_chat/daemonClaimPause";
+import { openTurnWorkflowId } from "../_chat/turnProjection";
 
 const emptyDaemonEntitySnapshot = {
   pendingTurn: undefined,
@@ -141,7 +142,7 @@ export const readDaemonEntitySnapshot = internalQuery({
       if (!doc) return emptyDaemonEntitySnapshot;
       return {
         pendingTurn: doc.pendingTurn,
-        activeWorkflow: doc.activeWorkflowId,
+        activeWorkflow: await openTurnWorkflowId(ctx, id),
         syntheticTurnMessageId: doc.syntheticTurnMessageId,
       };
     }
@@ -152,7 +153,7 @@ export const readDaemonEntitySnapshot = internalQuery({
       if (!doc) return emptyDaemonEntitySnapshot;
       return {
         pendingTurn: doc.pendingTurn,
-        activeWorkflow: doc.activeWorkflowId,
+        activeWorkflow: await openTurnWorkflowId(ctx, id),
         syntheticTurnMessageId: doc.syntheticTurnMessageId,
       };
     }

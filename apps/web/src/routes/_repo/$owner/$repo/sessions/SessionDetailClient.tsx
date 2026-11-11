@@ -100,7 +100,7 @@ export function SessionDetailClient({
       ? { entityId: sandboxStartupEntityId({ kind: "session", sessionId }) }
       : "skip",
   );
-  // Names the browser tab. Gated on `isRouteActive`: up to five session shells
+  // Names the browser tab. Gated on `isRouteActive`: up to three session shells
   // stay mounted at once, and a hidden one must not title the tab.
   useEntityDocumentTitle(session?.title, isRouteActive);
   const startSandboxMutation = useMutation(api.sessions.startSandbox);
@@ -138,7 +138,7 @@ export function SessionDetailClient({
   // re-fired this on every patch to the doc (status flips, updatedAt, PR
   // state…), and a burst of prewarms can race the server's alive-check into
   // launching duplicate daemons (observed in prod: 5 daemons on one session).
-  const sessionArchived = session?.archived === true;
+  const sessionArchived = session?.archive !== undefined;
   /* eslint-disable no-effect/no-event-handler --
      Prewarms the sandbox daemon for the session the route landed on; the
      trigger is navigation plus server-side status, not a click. */
@@ -170,7 +170,7 @@ export function SessionDetailClient({
      to follow the live query. The key ref keeps it to one call per state. */
   useEffect(() => {
     if (session === null || session === undefined) return;
-    if (session.archived !== true) {
+    if (session.archive === undefined) {
       archiveAutoStopKey.current = null;
       return;
     }
@@ -283,9 +283,9 @@ export function SessionDetailClient({
   }
 
   const isSandboxActive = session.status === "active";
-  // `archived` is the one lock: a merged/closed PR locks the session only
+  // `archive` is the one lock: a merged/closed PR locks the session only
   // through auto-archive, which the owner can turn off.
-  const isArchived = session.archived === true;
+  const isArchived = session.archive !== undefined;
 
   const chatPanel = (
     <ChatPanel
@@ -293,6 +293,7 @@ export function SessionDetailClient({
       // not carry over to another tab.
       key={activeChat._id}
       sessionId={sessionId}
+      session={session}
       chat={activeChat}
       chats={chats ?? []}
       chatStatuses={chatStatuses ?? []}
@@ -303,7 +304,6 @@ export function SessionDetailClient({
       branchName={session.branchName}
       sandboxBranch={session.sandboxBranch}
       sandboxGitSync={session.sandboxGitSync}
-      prUrl={session.prUrl}
       prState={session.prState}
       summary={session.summary}
       messages={messages ?? []}
@@ -320,7 +320,6 @@ export function SessionDetailClient({
       onSandboxToggle={handleSandboxToggle}
       isArchived={isArchived}
       isReadOnly={isArchived}
-      deploymentStatus={session.deploymentStatus}
       isRouteActive={isRouteActive}
       onOpenFile={onOpenFile}
       onViewDiff={handleViewDiff}

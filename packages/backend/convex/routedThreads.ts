@@ -10,6 +10,7 @@ import {
 import { createNotification } from "./notifications";
 import { entityHref } from "@eva/shared";
 import { isEntityDeleted } from "./numId";
+import { isSessionArchived } from "./_sessions/archive";
 import {
   drainSessionChatQueues,
   startNextQueuedProjectChatMessage,
@@ -216,7 +217,7 @@ async function loadSource(
       ownerUserId: session.userId,
       lastModel: session.lastModel,
       deleted: isEntityDeleted(session),
-      archived: session.archived === true,
+      archived: isSessionArchived(session),
     };
   }
   if (sourceKind === "task") {

@@ -78,7 +78,6 @@ const deliveryChatValidator = v.object({
   chatId: v.id("sessionChats"),
   title: v.string(),
   number: v.number(),
-  activeWorkflowId: v.optional(v.string()),
   lastModel: v.optional(v.string()),
 });
 
@@ -123,7 +122,6 @@ export const resolveDeliveryChat = authQuery({
       chatId: chat._id,
       title: chat.title,
       number: chat.number,
-      activeWorkflowId: chat.activeWorkflowId,
       lastModel: chat.lastModel,
     };
   },
@@ -133,6 +131,5 @@ export type DeliveryChat = {
   chatId: Id<"sessionChats">;
   title: string;
   number: number;
-  activeWorkflowId?: string;
   lastModel?: string;
 };

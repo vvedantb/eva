@@ -111,7 +111,7 @@ const schema = defineSchema({
     .index("by_user", ["userId"])
     .index("by_repo_and_phase", ["repoId", "phase"])
     .index("by_repo_and_numId", ["repoId", "numId"])
-    .index("by_repo_and_build_workflow", ["repoId", "activeBuildWorkflowId"])
+    .index("by_repo_and_build_state", ["repoId", "build.state"])
     .index("by_repo_and_sandbox_status", [
       "repoId",
       "reviewProjectSandboxStatus",
@@ -214,7 +214,15 @@ const schema = defineSchema({
     "taskId",
   ]),
   taskActivity: defineTable(taskActivityFields).index("by_task", ["taskId"]),
-  messages: defineTable(messageFields).index("by_parent", ["parentId"]),
+  messages: defineTable(messageFields)
+    .index("by_parent", ["parentId"])
+    // User rows only: the jump rail and up-arrow recall (listUserMessagesByParent).
+    .index("by_parent_and_role", ["parentId", "role"])
+    // Find-in-chat above the loaded history (searchOlderByParent).
+    .searchIndex("search_content", {
+      searchField: "content",
+      filterFields: ["parentId"],
+    }),
   aveThreads: defineTable(aveThreadFields).index("by_user_and_archived", [
     "userId",
     "archivedAt",
@@ -229,12 +237,18 @@ const schema = defineSchema({
     .index("by_user", ["userId"])
     .index("by_repo_and_status", ["repoId", "status"])
     .index("by_status", ["status"])
-    .index("by_repo_and_archived", ["repoId", "archived"])
-    .index("by_repo_archived_and_deleted", ["repoId", "archived", "deletedAt"])
+    .index("by_repo_deleted_and_archived_at", [
+      "repoId",
+      "deletedAt",
+      "archive.archivedAt",
+    ])
     .index("by_repo_and_numId", ["repoId", "numId"])
     .index("by_sandbox", ["sandboxId"])
     .index("by_forked_from", ["forkedFromSessionId"])
-    .index("by_session_group", ["sessionGroupId"]),
+    .index("by_session_group", ["sessionGroupId"])
+    // The hidden session a task or project owns (`_sessions/owner.ts`).
+    .index("by_owner_task", ["owner.taskId"])
+    .index("by_owner_project", ["owner.projectId"]),
   // Chat threads inside a session (Main + parallel chats). See
   // `sessionChatFields` for the session/chat ownership split.
   sessionChats: defineTable(sessionChatFields)

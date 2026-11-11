@@ -9,6 +9,7 @@ import { bindTurnWorkflow, closeOpenTurn, openTurn } from "../_chat/turnStore";
 import { getTaskRunStreamingEntityId } from "./helpers";
 import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
 import { setTaskLastRunStartedAt } from "../_agentTasks/runSummary";
+import { markTaskRunStarted } from "../_agentTasks/runState";
 import type { taskExecutionWorkflowArgs } from "./workflowDefinition";
 
 /**
@@ -87,7 +88,6 @@ export async function startTaskRun(
     });
     await ctx.db.patch(task._id, {
       status: p.rollbackStatus,
-      activeWorkflowId: undefined,
       updatedAt: Date.now(),
     });
     throw error;
@@ -126,6 +126,9 @@ async function startTaskRunWorkflow(
     throw error;
   }
   await bindTurnWorkflow(ctx, turnId, String(workflowId));
-  await ctx.db.patch(args.taskId, { activeWorkflowId: String(workflowId) });
+  await markTaskRunStarted(ctx, args.taskId, {
+    workflowId: String(workflowId),
+    runId: args.runId,
+  });
   return workflowId;
 }

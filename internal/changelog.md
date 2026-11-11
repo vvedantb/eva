@@ -8,6 +8,191 @@ WHY: A domain-model audit found five ternary chains on one status, a duration fi
 
 Architectural: `ComposerTasksPanel` uses the activity trace's todo item type directly (no `in_progress` → `inProgress` rename). `TASK_STATUS_STYLE` (a `Record` on status) holds each status's colours, icon and trailing label, so a new status fails the type check. `durationMs` and `formatTaskDuration` are gone. `deriveProgress` takes the first step, so it cannot see an empty list. The panel needs a `turnId`; the old `"current"` fallback key let one dismissal hide every later turn without an id.
 
+## Sessions: one owner field (1a)
+
+Date: 2026-11-11
+
+WHY: Quick tasks and projects will move onto sessions as the one chat, sandbox and PR engine. A task will own one hidden session; a project and its tasks will share one. A session must say who owns it before any code can create or hide such sessions.
+
+Architectural: `sessions.owner` is one union (`standalone`, `task` with `taskId`, `project` with `projectId`). `_sessions/owner.ts` owns it: the validator, `STANDALONE_SESSION_OWNER`, `sessionOwner` (absent reads as standalone), `isStandaloneSession` and `findOwnedSession`. New indexes `by_owner_task` (`owner.taskId`) and `by_owner_project` (`owner.projectId`). `createSession` (create, fork, MCP `create_session`), the load-test seed and the test fixtures write `standalone`. `dataMigrations:backfillSessionOwner` sets `standalone` on older rows; run it after deploy. No behaviour change: list, count and search queries still return every session. 1b hides owned sessions; 3b makes the field required.
+
+## Drop the legacy state fields (0e)
+
+Date: 2026-11-11
+
+WHY: 0a–0d moved four lifecycles to one field each and kept the old fields, with read fallbacks, until their migrations ran. Once those migrations have run in prod, the old fields are dead data and the fallbacks are dead code.
+
+Architectural: removed `sessions.archived`, `sessions.sandboxDeleteAfter`, `sessions.activeWorkflowId`, `sessions.turnLifecycleVersion`, `sessionChats.activeWorkflowId`, `agentTasks.activeWorkflowId` / `scheduledAt` / `scheduledRetryAt` / `scheduledFunctionId`, and `projects.activeBuildWorkflowId` / `scheduledBuildAt` / `scheduledBuildFunctionId`. Removed the indexes `sessions.by_repo_archived_and_deleted` and `projects.by_repo_and_build_workflow`. `taskRunState` and `projectBuildState` now return the new field as is; `sessionArchive`, `withResolvedArchive`, the legacy-clearing writes and the unused prewarm arg `activeWorkflowField` are gone. The four migrations (`backfillSessionArchive`, `migrateTaskRunState`, `migrateProjectBuildState`, `clearSessionWorkflowSlots`) are deleted. `sessionChats.create` read `session.archived` directly; it now uses `isSessionArchived`. Deploy only after the four migrations have run, or schema validation fails.
+
+
+## Projects: one explicit build state (0c)
+
+Date: 2026-11-11
+
+WHY: A project build (idle, scheduled, running) lived in three fields that had to agree (`activeBuildWorkflowId`, `scheduledBuildAt`, `scheduledBuildFunctionId`), patched from `buildWorkflow.ts`, `workflowWatchdog.ts`, `_scheduling/helpers.ts` and `runLifecycle.ts`.
+
+Architectural: `projects.build` is one union (`scheduled` with `at` + `jobId`; `running` with `workflowId` and an optional `scheduled` that waits behind it, for usage-limit retries; absent = idle). `_projects/buildState.ts` holds the transition table (`nextProjectBuild`) and the only writers (`scheduleProjectBuild`, `cancelProjectBuildSchedule`, `fireProjectBuildSchedule`, `markProjectBuildStarted`, `finishProjectBuild`); each write clears the legacy fields. The task a build is on is not stored: it is the project task whose `run` is `running`. Reads use `projectBuildState` / `isProjectBuilding` / `projectScheduledBuildAt` (the last two exported to web), which fall back to the legacy fields until `dataMigrations:migrateProjectBuildState` runs after deploy. New index `by_repo_and_build_state`; `projects.getActive` returns `isBuilding` instead of `activeBuildWorkflowId`. 0e drops the legacy fields, the `by_repo_and_build_workflow` index and the fallback.
+
+## Tasks: one explicit run state (0b)
+
+Date: 2026-11-11
+
+WHY: A quick task's run lifecycle (idle, scheduled, retry pending, running) lived in four fields that had to agree (`activeWorkflowId`, `scheduledAt`, `scheduledFunctionId`, `scheduledRetryAt`), patched from a dozen files.
+
+Architectural: `agentTasks.run` is one union (`scheduled` / `retry_pending` with `at` + `jobId`, `running` with `workflowId` + `runId`; absent = idle). `_agentTasks/runState.ts` holds the transition table (`nextTaskRun`) and the only writers (`scheduleTaskRun`, `cancelTaskRunSchedule`, `fireTaskRunSchedule`, `markTaskRunStarted`, `finishTaskRun`); each write clears the legacy fields. Reads use `taskRunState` / `taskScheduledAt` / `isTaskRunning` (also exported to web and mobile), which fall back to the legacy fields until `dataMigrations:migrateTaskRunState` runs after deploy. 0e drops the legacy fields and the fallback.
+
+## Sessions: one explicit archive state (0a)
+
+Date: 2026-11-11
+
+WHY: A session's archive lived in two fields, `archived` and `sandboxDeleteAfter`, that had to agree. A delete time on a live session, or an archive without one, could be written but meant nothing. This is the first of the PRs (0a–0e) that replace such pairs with one state field before the chat engines merge.
+
+Architectural: `sessions.archive` (`{ archivedAt, sandboxDeleteAfter? }`) is the one field; unset means live. `_sessions/archive.ts` owns it: `archiveSession`, `unarchiveSession`, `clearDeletedSessionSandbox`, `isSessionArchived`, `sessionDeleteAfter` and the indexed list read. Every write clears the legacy pair, and reads fall back to it until `dataMigrations:backfillSessionArchive` runs after deploy. The delete time stays optional: a session with no sandbox at archive time has nothing to delete, and the time is cleared once the sandbox goes. New index `by_repo_deleted_and_archived_at` replaces the unused `by_repo_and_archived`; `by_repo_archived_and_deleted` stays for the fallback. The stale one-off `backfillArchivedFromPrState` is removed. 0e drops the legacy fields, the fallback and the old index.
+
+## Segmented tabs: lighter active pill in dark (web and phone)
+
+Date: 2026-11-11
+
+WHY: The phone tab bar pill went back to #474747 in dark. The web segmented pill was `bg-card` (#101010) on a #101010 trough, so it hardly showed, and the phone segmented thumb copied the web #202020.
+
+Architectural: New `--segment-active` (white light, #474747 dark, #444548 neutral dark) in globals.css and `segmentActive` in `EVA_THEME`. `.tabs-segmented .t-tabs-pill` uses it; the old `[data-state="active"]` rules never matched the sliding pill and are gone. The phone themes `segment` and the dark `tabBarPill` from it.
+
+## Phone: bottom tab pill slides again and is lighter in dark
+
+Date: 2026-11-11
+
+WHY: The remove-animations pass took out the bottom tab bar slide, which the owner wanted to keep. In dark, the app themed `segment` to the web #202020, which also darkened the bar pill on the #101010 glass.
+
+Architectural: native-ui restores the 200 ms `FloatingTabBar` pill slide (instant under Reduce Motion) and gives the pill its own `palette.tabBarPill`. `applyEvaTheme` sets it to Eva's secondary in light (no change) and the package #474747 in dark. The segmented `Tabs` thumb keeps #202020.
+
+## Sessions: lower tab memory from the session cache
+
+Date: 2026-11-11
+
+WHY: A single Eva tab used 1.3 GB or more. Hidden sessions kept their Editor and Browser iframes, full transcripts and idle query subscriptions alive.
+
+Architectural: The sessions layout keeps 3 shells, not 5 (`MAX_CACHED_SESSIONS`). `KeepAlivePane` takes `discard`, and `SandboxPaneSlots` sets it from the new `onScreen` prop for Editor, Browser/Computer and custom tabs, so a hidden session unmounts its iframes; they reload on return. `useChatTranscript` holds only the 30-message tail while skipped; the full list swaps back in by row id. `ConvexQueryCacheProvider` keeps idle queries for 60 s (was 5 min) and at most 50 (was 250).
+
+## Phone: phone-tuned tabs, PR tabs swipe, separate tap areas, back and Return
+
+Date: 2026-11-11
+
+WHY: At larger text the Projects pills wrapped and the fill cut between rows. Labels changed colour only when a swipe settled. A tab press made the page jump. Small buttons and agent trace rows had overlapping tap areas. Android back ignored the `@` / `/` picker. Return did not move between sign-in fields.
+
+Architectural: The kit (`@vvedantb/native-ui`, not yet pinned) makes `PillTabs` one sideways row that keeps the active pill centred, 36 high, with the label colour following the pager's `progress`. `TabsList` takes `progress`, so the PR page (Summary, Timeline, Code) now sits on a `Pager` and swipes like Sessions and Projects; the diff still loads only once Code is visited. A tab press slides the `Pager` in 220 ms. `SegmentedTabs` (Active/Archived, Open/Closed) has 40-high triggers with 14 px labels. `useMentionComposer` gains `dismiss` (shut until the next edit, as the web Escape), wired to the picker's `onDismiss` in the chat and new-session composers. Trace content rows stack with no gap at the kit's 28 pitch.
+
+## Phone: TalkBack rows, Inbox filter sheet and 14 px tappable labels
+
+Date: 2026-11-11
+
+WHY: A kit review found rows that TalkBack read wrong or could not reach, an Inbox filter that opened as a corner popover, and tappable labels at the web desktop 12 px.
+
+Architectural: The Settings email row is one `switch` row (`SettingsToggleRow` `onCheckedChange`). Pickers built from `SheetRow active` read as radios, and the multi-select ones pass `multiple` (checkboxes). The Inbox "Show" and "Group by" filter is a `Sheet` of `SheetRow`s with a selection haptic, with the same wording. The session group header, "Show more (N)", Changed files labels, composer mention chips, quick-task option pills, filter chips and the review remedy link are `text-sm`. The kit pin brings `Button` `sm` at 36 with a 14 label, 44-high inputs, 48-high dropdown items, radio choice questions and long-press haptics.
+
+## Sessions sidebar: linked session groups follow the sidebar options
+
+Date: 2026-11-11
+
+WHY: Linked session groups ignored "Sort projects", "Sort threads" and "Visible threads". They always sat above every project, listed every member oldest first, and had no cap.
+
+Architectural: `GlobalSessionsSidebar` sorts groups and repos as one `SidebarEntry` list through `sortAppsForSidebar`. A group sorts by `createdAt` (oldest member) or `latestAt`; a repo sorts by the rows it still shows, so a session that moved into a group no longer lifts its repo. Groups go in first, so "Manual" (input order) pins them on top. `LinkedSessionGroupSection` sorts members with `sortSessionsForSidebar` and caps them with `previewSessions` and `SessionListShowMore`, like `GlobalSessionGroup`. `members` stays oldest first because the oldest names the group.
+
+## Phone: Documents, Drafts and Today
+
+Date: 2026-11-11
+
+WHY: Documents, Drafts and Today were web per-repo pages the phone lacked. The phone now reads a repo's documents, lists and opens or deletes drafts, and shows the Daily standup timeline, with the web's own queries and mutations.
+
+Architectural: they are pills beside Projects in the Projects tab (`?section=docs|drafts|today`, a `Pager` swipe as the Sessions tab), sharing `?repo=` through a new `RepoSection` shell. Today shows while the standup is on or has history (the phone has no URL bar to reach a paused one). `/doc/[docId]?repo=` renders the doc's Markdown read-only, with Copy PRD and View Tests PR; editing, comments and the HTML tab stay web-only. A draft card opens its chat, or `/quick-task/new?draftId=` with the draft loaded. The draft list and card labels (`draftList.ts`), the chat source labels (`chatSourceLabel.ts`) and the standup heading (`standup.ts`) moved to `@eva/shared`; the web Drafts page, Today page and `chatSource.ts` use them. The kit `Markdown` takes `headings="label"` for the standup cards.
+
+## Cached sessions: hidden shells pause in `<Activity>`
+
+Date: 2026-11-11
+
+WHY: Up to five cached session shells stayed mounted under `display: none` with all effects live. Their terminals kept sockets open and redrew on every line of output, which fed the page freezes.
+
+Architectural: The sessions layout wraps each cached `CachedSessionShell` in React `<Activity>`. A hidden shell keeps its DOM and state, so Preview iframes stay loaded, but its effects are torn down: terminal sockets close and reconnect on show. Convex cache-hook queries survive the 5-minute cache expiry, so a quick switch back still paints at once. The opt-in reply chime no longer sounds for a hidden session. `KeepAlivePane` (Editor, Browser, Review, Files, docs, artifacts, custom tabs) uses the same `<Activity>` for hidden tabs. Terminal panes keep a `hidden` class because they must keep streaming; the WebGL renderer keeps them cheap.
+
+## Terminals: WebGL renderer stops the page freezes
+
+Date: 2026-11-11
+
+WHY: The prod web app froze ("Page Unresponsive") in eva and carepulse sessions. A profile showed 12.9 s of style recalculation from xterm's DOM renderer. Background terminals stay mounted under `display: none`, so the renderer measured each glyph as 0px wide, never cached the width, and forced a full-page style recalc for every character on each redraw.
+
+Architectural: `TerminalPanel` loads `@xterm/addon-webgl` (0.19, the xterm 6 release) after `terminal.open()`. The canvas renderer makes no DOM layout reads. Without WebGL2, or after a context loss, the addon is disposed and xterm keeps its DOM renderer.
+
+## Phone: Projects tab, project page and new project
+
+Date: 2026-11-11
+
+WHY: Projects was the largest web section the phone lacked. The phone now lists a repo's projects, opens a project (overview, tasks, plan, project chat) and creates one with the web's own queries and mutations.
+
+Architectural: a fourth bottom tab, Projects (a fourth Sessions pill did not fit at 390 pt), with `ProjectsSection` (repo picker, search, Options sheet, phase sections), `/project/[projectId]?repo=` (Overview | Tasks or Plan in `?tab=`, a Chat and Build bottom bar behind the web confirms) and `/project/new`. The list, task-section, progress, spec and interview-turn rules moved to `@eva/shared` (`projectMeta.ts`); the web projects list, task panel, progress bar, new-project dialog and plan tab use them, and `lib/utils/parseSpec.ts` is gone. Phone `FoldHeader` and `FilterChipsBar` replace the Quick Tasks copies. `/quick-task/new` takes `projectId`.
+
+## Menus: Run Startup Commands removed; PR rows narrower
+
+Date: 2026-11-11
+
+WHY: Run Startup Commands can reseed a sandbox and reset its local data, which is too risky one click away in a general menu, and session menus never had it. The menus also looked wide.
+
+Architectural: `SandboxCommandMenuItems` drops `startupCommands`; the task and project flags, handlers, busy state and `StartupCommandsConfirmDialog` go with it. The backend mutations stay: the Eva MCP `rerun_startup_commands` tool calls them. `PrActionsSubmenus` rows cap at `max-w-56` (was `max-w-64`).
+
+## Quick task and project menus: one menu per card and header
+
+Date: 2026-11-11
+
+WHY: The card right-click menu and the header "…" menu showed different actions for the same task or project. The header menus had only sandbox commands, PRs and Copy link.
+
+Architectural: `TaskCardMenuItems` and `ProjectCardMenuItems` now render in the card's right-click menu, the card kebab and the header (`TaskHeaderMenu`, `ProjectDetailHeaderActions`). The header passes its sandbox commands and Create PR as `leading`; the project header passes View Plan and View Interview History as `planItems`. New hooks `useTaskMenu` and `useProjectMenu` own the delete, move and edit dialogs for both surfaces; a delete or move from a header returns to the list. Tasks drop Model and Project (set on the task page); projects drop View Branch. Copy is a submenu (Title, Link, Branch name) as on sessions. Icon sizes follow the menu type (16 context, 14 dropdown). The headers no longer show the flagged, disabled View Preview hint or a legacy URL-only View PR. `QuickTaskCard` drops `model` and `providerAccountId`; `ProjectCard` drops `repoFullName`.
+
+## Session menu: three groups, Copy is a submenu
+
+Date: 2026-11-11
+
+WHY: The session menu ran seven mixed items in one block and set Send for Review apart on its own. The owner asked for one Copy item instead of three.
+
+Architectural: `SessionMenuItems` groups session actions (Rename, Regenerate title, Fork, then a Copy submenu with Title, Link and Branch name), PR actions (PR rows, Open PR, Send for Review), then Archive. A divider opens the PR group only when it has items (`hasPrGroup`). Applies to the sidebar row, session tab and chat header. The sidebar row and session tab also lead with Open in new tab (`showOpenInNewTab`); the chat header omits it, since it already is the session.
+
+## PR menus: three or more PRs fold into one submenu
+
+Date: 2026-11-11
+
+WHY: A session with nine PRs filled its menu with PR rows and pushed the session actions out of view.
+
+Architectural: `PrActionsSubmenus` shows up to `INLINE_PR_LIMIT` (2) PR rows inline; more fold into one "Pull requests (N)" submenu. Open and draft PRs sort first (stable sort keeps the query order within each half). Menu rows drop the branch line, since a chat's PRs mostly share one session branch; the stack popover keeps it. Every chat menu (sessions, quick tasks, projects) gets this. PR rows cap at `max-w-64` (was `max-w-80`) so the menus are narrower.
+
+## Sessions: one menu for the sidebar row, the session tab and the chat header
+
+Date: 2026-11-11
+
+WHY: The chat header "…" menu and the sidebar right-click menu showed different actions for the same session. The header had only Summarise, the PRs, Send for Review and Copy link.
+
+Architectural: `SessionMenuItems` takes `variant: "context" | "dropdown"` (same pattern as `PrActionsSubmenus`) and an optional `summary` item. The new `SessionHeaderMenu` renders it in the chat header with Rename, Regenerate title, Fork, Copy title, link and branch, PRs, Send for Review and Archive (Unarchive when archived). `SessionTabsDialogs` became `sidebar/SessionDialogs` with narrow target types; `GlobalSessionsSidebar` and the header use it, so the rename and archive dialogs have one home. `ChatPanel` takes the `session` doc and drops `prUrl` and `deploymentStatus`. The session header no longer uses `usePrLinkMenuItems`, so its flagged, disabled "View Preview" hint is gone.
+
+## Mobile: no slide on tab switches, no fade on chat folds
+
+Date: 2026-11-11
+
+WHY: A remove-animations pass put every phone animation through the gate. Two failed. The tab bar pill slid for 200 ms on every tab switch, a surface used many times a day. The chat folds faded in each time a list mounted an open fold: on chat open, on a streamed step and on a virtualised row scrolled back.
+
+Architectural: Both changes are in native-ui (changeset `remove-frequent-motion`): `FloatingTabBar` draws its pill at the tab offset with a plain `View`, and `CollapsibleContent` is a plain `View`. The chevron turn stays. Sheets, swipes, the section pager, the keyboard, push transitions, press scale, toasts, the bulk bar, skeletons and the live shimmer stay. Re-pin after the kit merges. No native module, so no new APK.
+
+## Web on a phone: no input zoom, no pull-to-refresh, no drawer scroll bleed
+
+Date: 2026-11-11
+
+WHY: A mobile-native pass on the web app in a phone browser found five tells. The composer and about thirty fields are 12–14 px, so iOS Safari zooms the page on focus. A pull past the top can reload the app (Android pull-to-refresh). A scroll in the open sidebar drawer moved the page behind it (measured: 600 px on Settings). A long press selected button labels. Nothing kept the bottom of the shell clear of the home indicator in an installed app.
+
+Architectural: All CSS-first, by capability, not by width or user agent. `globals.css`: an unlayered `@media (pointer: coarse)` rule sets editable fields to 16 px (fields at `text-lg` or larger keep their size); a base rule gives controls `touch-action: manipulation`, and buttons, tabs, options, menu items and switches `user-select: none` (links and fields stay selectable; opt back in with `select-text`); `html`/`body` get `overscroll-behavior-y: none`, except on the landing page (`#top`). Y only, so desktop trackpad swipe-back still works. The two drawer scrollers (`SidebarPanel`, `RepoRail`) get `max-lg:overscroll-y-contain`. `useSidebarContentOffset` adds `pb-[env(safe-area-inset-bottom)]`. `index.html` adds `interactive-widget=resizes-content`, so the Android keyboard shrinks the `h-dvh` shell the same way iOS does.
+
+## Mobile: phone sizing on every list and control; worst-case data fixes
+
+Date: 2026-11-11
+
+WHY: The owner rule is the web's look, not its desktop density. Several phone lists and controls still had web sizes: 58 pt Reviews rows with 11 px meta, 28 pt PR summary rows, 48 pt Timeline rows with 12 px titles, Quick Tasks cards with 13/11/10 px text, 28 pt message actions at a 30 pt pitch, and 28 pt Inbox header pills and composer chips that relied on slop. A break-ui pass with worst-case rows found empty titles, a wall of tags, a squeezed tag icon and a wrapped message clock.
+
+Architectural: Lists follow the Inbox and Sessions sizes: one-line rows 56, two-line rows 64, 14 px titles in the foreground, 12 px secondary text, dividers or 8 pt card gaps. `SegmentedTabs` (`src/ui`) is the one segmented list switch for Sessions and Reviews, with 32 pt triggers. `FOOTER_CHIP` holds every composer footer chip's shape (`size: "touch"`, 36 pt in a 44 pt bar). Message actions use the kit `size="touch"` (whole 44 pt squares, no slop) and the clock wraps whole. `displayTitle` (`ui/format.ts`) shows "Untitled" for an empty session, chat or task title; an empty inbox title falls back to its type label. Quick task cards show three tags and "+N". The PR diff line rows stay 22 pt on purpose. Needs native-ui with changeset `phone-touch-sizes`; re-pin after it merges. No native module, so no new APK.
+
 ## Single source of truth audit (split PRs)
 
 Date: 2026-11-11

@@ -56,6 +56,7 @@ async function fixture() {
       teamId: team,
     });
     await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId: repo,
       userId: ann,
       title: "Preview",

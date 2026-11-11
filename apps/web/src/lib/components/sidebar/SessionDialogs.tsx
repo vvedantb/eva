@@ -1,8 +1,7 @@
 "use client";
 
 import { useMutation } from "convex/react";
-import { api } from "@eva/backend";
-import type { FunctionReturnType } from "convex/server";
+import { api, type Id } from "@eva/backend";
 import { useState } from "react";
 import {
   Button,
@@ -14,23 +13,20 @@ import {
   Input,
 } from "@vvedantb/ui";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
-import { useArchiveSession } from "@/lib/components/sidebar/useArchiveSession";
-
-type SessionListItem = FunctionReturnType<typeof api.sessions.list>[number];
-type RepoRow = FunctionReturnType<typeof api.githubRepos.list>[number];
+import {
+  useArchiveSession,
+  type ArchiveSessionTarget,
+} from "@/lib/components/sidebar/useArchiveSession";
 
 export interface SessionRenameTarget {
-  session: SessionListItem;
-  repo: RepoRow;
+  session: { _id: Id<"sessions"> };
 }
 
-export interface SessionArchiveTarget {
-  session: SessionListItem;
-  repo: RepoRow;
-  pathSegment: string;
+export interface SessionArchiveTarget extends ArchiveSessionTarget {
+  session: ArchiveSessionTarget["session"] & { title: string };
 }
 
-interface SessionTabsDialogsProps {
+interface SessionDialogsProps {
   pathname: string;
   renameTarget: SessionRenameTarget | null;
   renameValue: string;
@@ -38,10 +34,15 @@ interface SessionTabsDialogsProps {
   onCloseRename: () => void;
   archiveTarget: SessionArchiveTarget | null;
   onCloseArchive: () => void;
+  /** After a successful archive, e.g. to close the mobile sidebar drawer. */
+  onArchived?: () => void;
 }
 
-/** Rename / archive confirm dialogs shared by the Chrome session tab strip. */
-export function SessionTabsDialogs({
+/**
+ * Rename and archive confirm dialogs shared by every session menu: the
+ * sessions sidebar, the Chrome session tab strip and the chat header.
+ */
+export function SessionDialogs({
   pathname,
   renameTarget,
   renameValue,
@@ -49,7 +50,8 @@ export function SessionTabsDialogs({
   onCloseRename,
   archiveTarget,
   onCloseArchive,
-}: SessionTabsDialogsProps) {
+  onArchived,
+}: SessionDialogsProps) {
   const [isRenaming, setIsRenaming] = useState(false);
   const { archive, isArchiving } = useArchiveSession();
   const updateSession = useMutation(api.sessions.update);
@@ -130,7 +132,7 @@ export function SessionTabsDialogs({
             <span className="font-medium text-foreground">
               {archiveTarget?.session.title}
             </span>{" "}
-            from the active tabs. An open or draft PR will be closed, and
+            from the active list. An open or draft PR will be closed, and
             reopened if you unarchive.
           </p>
           <DialogFooter>
@@ -146,7 +148,10 @@ export function SessionTabsDialogs({
               disabled={isArchiving}
               onClick={() => {
                 if (!archiveTarget) return;
-                void archive(archiveTarget, pathname, onCloseArchive);
+                void archive(archiveTarget, pathname, () => {
+                  onCloseArchive();
+                  if (onArchived) onArchived();
+                });
               }}
             >
               {isArchiving ? "Archiving…" : "Archive"}

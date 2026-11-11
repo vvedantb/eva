@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
+import { findOpenTurn } from "../convex/_chat/turnStore";
 
 /**
  * The composer picks send or queue from its own subscription, so a burst of
@@ -39,6 +40,7 @@ type Row = { role: "user" | "assistant"; content: string; finished?: true };
 function busySessionChat(f: Fixture, rows: Row[]) {
   return f.t.run(async (ctx) => {
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId: f.repoId,
       userId: f.userId,
       title: "Send burst",
@@ -52,9 +54,21 @@ function busySessionChat(f: Fixture, rows: Row[]) {
       title: "Main",
       number: 1,
       isMain: true,
-      activeWorkflowId: "wf-first-send",
     });
     const start = Date.now();
+    await ctx.db.insert("turns", {
+      entityId: id,
+      sessionId,
+      streamingEntityId: String(id),
+      state: "running",
+      open: true,
+      turnStartedAt: start,
+      leaseExpiresAt: start + 120_000,
+      leaseGeneration: 1,
+      model: "claude:sonnet",
+      repoId: f.repoId,
+      workflowId: "wf-first-send",
+    });
     for (const [index, row] of rows.entries()) {
       await ctx.db.insert("messages", {
         parentId: id,
@@ -108,8 +122,8 @@ describe("a send that lands behind a running turn", () => {
         queued: [BURST_MESSAGE],
         userRows: [],
       });
-      const chat = await f.t.run((ctx) => ctx.db.get(chatId));
-      expect(chat?.activeWorkflowId).toBe("wf-first-send");
+      const turn = await f.t.run((ctx) => findOpenTurn(ctx, chatId));
+      expect(turn?.workflowId).toBe("wf-first-send");
     },
     TIMEOUT_MS,
   );

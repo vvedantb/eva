@@ -25,9 +25,11 @@ import { buildSandboxChatSurface } from "@/lib/components/chat/sandboxChatSurfac
 import { SubagentThreadLayer } from "@/lib/components/chat/SubagentThreadLayer";
 import { useChatSend } from "@/lib/components/chat/useChatSend";
 import { useSandboxChatDraft } from "@/lib/components/chat/useSandboxChatDraft";
-import { chatTurnOpenFromStatus } from "@/lib/components/chat/useChatTurnOpen";
 import { isChatTurnExecuting } from "@/lib/components/chat/chatBodyUtils";
-import type { TranscriptMessage } from "@/lib/hooks/useChatTranscript";
+import {
+  useOlderTranscript,
+  type TranscriptMessage,
+} from "@/lib/hooks/useChatTranscript";
 import { BackgroundProcessesChip } from "./_components/BackgroundProcessesChip";
 import { PublishRecoveryBanner } from "./_components/PublishRecoveryBanner";
 import { useSessionChatHeader } from "./_components/SessionChatHeader";
@@ -67,6 +69,8 @@ type ChatTurnStatus = FunctionReturnType<
 
 interface ChatPanelProps {
   sessionId: Id<"sessions">;
+  /** The session row; the header "…" menu reads its fields. */
+  session: Doc<"sessions">;
   /** The chat tab this panel shows; the transcript, turn and model are its own. */
   chat: Doc<"sessionChats">;
   /** Every live chat of the session, for the tab strip. */
@@ -81,7 +85,6 @@ interface ChatPanelProps {
   /** Branch the sandbox worktree is on right now, reported by its daemon. */
   sandboxBranch?: string;
   sandboxGitSync?: Doc<"sessions">["sandboxGitSync"];
-  prUrl?: string;
   prState?: PrState;
   summary?: string[];
   messages: TranscriptMessage[];
@@ -101,7 +104,6 @@ interface ChatPanelProps {
   isArchived?: boolean;
   /** Archive or PR merged/closed — hides composer and shows read-only banner. */
   isReadOnly?: boolean;
-  deploymentStatus?: "queued" | "building" | "deployed" | "error";
   /** Opens a file (by full sandbox path) in the File Viewer tab. */
   onOpenFile?: (path: string) => void;
   /** Opens the Diffs tab; optional repo-relative path scrolls to that file. */
@@ -120,6 +122,7 @@ interface ChatPanelProps {
 
 export function ChatPanel({
   sessionId,
+  session,
   chat,
   chats,
   chatStatuses,
@@ -130,7 +133,6 @@ export function ChatPanel({
   branchName,
   sandboxBranch,
   sandboxGitSync,
-  prUrl,
   prState,
   summary,
   messages,
@@ -147,7 +149,6 @@ export function ChatPanel({
   onSandboxToggle,
   isArchived = false,
   isReadOnly = false,
-  deploymentStatus,
   onOpenFile,
   onViewDiff,
   onOpenAgentsTab,
@@ -156,6 +157,14 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const { repo, basePath } = useRepo();
   const chatId = chat._id;
+  // `messages` is the live part; the rendered transcript adds the history
+  // above it once the reader goes there.
+  const history = useOlderTranscript({
+    parentId: isRouteActive ? chatId : "skip",
+    live: isLoadingMessages ? undefined : messages,
+    active: isRouteActive,
+  });
+  const transcript = history.messages ?? messages;
   const navigate = useNavigate();
   const createSession = useMutation(api.sessions.create);
   const simpleView = useSimpleView();
@@ -249,7 +258,7 @@ export function ChatPanel({
     isRouteActive ? { entityId: chatId } : "skip",
   );
   const isExecuting = isChatTurnExecuting({
-    turnOpen: chatTurnOpenFromStatus(turnStatus),
+    status: turnStatus,
     messages,
   });
   const composer = sandboxComposerState({
@@ -372,20 +381,15 @@ export function ChatPanel({
 
   const { headerLeft, headerRight } = useSessionChatHeader({
     repoId: repo._id,
-    sessionId,
+    session,
     chatId,
-    title,
-    branchName,
-    prUrl,
-    prState,
+    isAnyChatExecuting: runningChatIds.size > 0,
     hasSummary,
     messageCount: messages.length,
     isSandboxActive,
     isSandboxToggling,
     sandboxGitSync,
     isAssistantResponding: isExecuting,
-    deploymentStatus,
-    simpleView,
     model,
     providerAccountId: stickyProviderAccountId,
     usageAccountLabel,
@@ -474,7 +478,7 @@ export function ChatPanel({
       <SubagentThreadLayer
         surface={chatSurface}
         parentTitle={title}
-        messages={messages}
+        messages={transcript}
         streamingActivity={streamingActivity}
         sandboxRunning={isSandboxActive}
         onOpenFile={onOpenFile}
@@ -484,8 +488,12 @@ export function ChatPanel({
           conversationId={chatId}
           chatParentId={chatId}
           isRouteActive={isRouteActive}
-          messages={messages}
+          messages={transcript}
           isLoadingMessages={isLoadingMessages}
+          hasOlderHistory={history.hasOlder}
+          onLoadOlderHistory={history.loadOlder}
+          onReachHistory={history.reach}
+          isReachingHistory={history.isReaching}
           queuedMessages={queuedMessages}
           queueLabel={queueGate.queueLabel(isExecuting)}
           streamingActivity={streamingActivity}

@@ -1,4 +1,5 @@
-import { getAIModelProvider, type Doc, type Id } from "@eva/backend";
+import { getAIModelProvider, type api, type Doc, type Id } from "@eva/backend";
+import type { FunctionReturnType } from "convex/server";
 import { getProviderLabel } from "@vvedantb/ui";
 import type { ActivityStep } from "@vvedantb/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
@@ -287,7 +288,11 @@ export function findStreamingTargetMessage<
 }
 
 /** Previously sent user messages as editable display text, newest-first. */
-export function buildMessageHistory(messages: ChatBodyMessage[]): string[] {
+export function buildMessageHistory(
+  messages: ReadonlyArray<
+    Pick<ChatBodyMessage, "role" | "isSystemAlert" | "content">
+  >,
+): string[] {
   return messages
     .flatMap((m) => {
       if (m.role !== "user" || m.isSystemAlert || !m.content) return [];
@@ -354,6 +359,10 @@ export function findTurnWindowStart(
 type TurnShapeMessage = Pick<
   ChatBodyMessage,
   "role" | "content" | "isSystemAlert" | "finishedAt"
+> & { _id: string };
+
+type ChatTurnStatus = NonNullable<
+  FunctionReturnType<typeof api.turns.getChatStatus>
 >;
 
 /**
@@ -364,25 +373,36 @@ type TurnShapeMessage = Pick<
  * - a run the surface renders as a turn (a quick task's first run) counts
  *   while it runs;
  * - otherwise the chat's durable turn is canonical, synthetic turns included;
+ * - except when that turn's own reply bubble has finished: the server closes
+ *   the turn and finishes its bubble in one mutation, so a finished bubble
+ *   proves the turn is over even if the status the client holds is stale
+ *   (seen in prod: Stop button and beam stayed until a refresh);
  * - message shape only covers the first render while that status loads, so a
  *   stale empty bubble cannot keep a settled turn "executing".
  * Streaming rows are not an input: they can outlive their turn, so callers
  * gate them on this result instead.
  */
 export function isChatTurnExecuting({
-  turnOpen,
+  status,
   messages,
   isFirstRunInProgress = false,
 }: {
-  /** The chat's durable turn is open; `undefined` while its status loads. */
-  turnOpen: boolean | undefined;
+  /** `api.turns.getChatStatus`: `null` = no open turn, `undefined` = loading. */
+  status: ChatTurnStatus | null | undefined;
   /** The chat transcript; `undefined` while it loads. */
   messages: ReadonlyArray<TurnShapeMessage> | undefined;
   /** A quick task's first run, rendered as this chat's first turn. */
   isFirstRunInProgress?: boolean;
 }): boolean {
   if (isFirstRunInProgress) return true;
-  return turnOpen ?? isAssistantTurnInProgress(messages ?? []);
+  if (status === undefined) return isAssistantTurnInProgress(messages ?? []);
+  if (status === null) return false;
+  if (status.source !== "durable" || status.placeholderMessageId === undefined) {
+    return true;
+  }
+  // Not in the transcript yet (or deleted): trust the open turn.
+  const reply = messages?.find((m) => m._id === status.placeholderMessageId);
+  return reply?.finishedAt === undefined;
 }
 
 /**

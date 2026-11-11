@@ -1,4 +1,4 @@
-import type { api } from "@eva/backend";
+import { taskScheduledAt, type api } from "@eva/backend";
 import { TASK_STATUS_LABELS, firstNameFromUser, formatEntityNumLabel, type DisplayTaskStatus } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconClock, IconTag } from "@tabler/icons-react-native";
@@ -11,20 +11,22 @@ import { Text, View } from "react-native";
 import { useSimpleView } from "@/chat/ComposerFooter";
 import { PriorityIcon } from "@/quickTasks/PriorityIcon";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
-import { timeAgo } from "@/ui/format";
+import { displayTitle, timeAgo } from "@/ui/format";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { AwaitingAnswerMark } from "@/ui/RowStatus";
-import { useScheme } from "@/ui/theme";
+import { useScheme, XS_TRACKING } from "@/ui/theme";
 
 type QuickTask = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 
-/** The web `text-2xs` (11 / 16, 0.01em) and `text-3xs` (10 / 14). */
-const TEXT_2XS = { fontSize: 11, lineHeight: 16, letterSpacing: 0.11 };
-const TEXT_3XS = { fontSize: 10, lineHeight: 14, letterSpacing: 0.1 };
+/** Tags drawn on a card; the rest are a "+N", so a task with a dozen tags keeps one line of them. */
+const MAX_TAGS = 3;
+
+/** The card's secondary text (number, tags, creator, age): the Inbox `text-xs` (12 / 16), not the web 10 and 11. */
+export const META_TEXT = { fontSize: 12, lineHeight: 16, letterSpacing: XS_TRACKING };
 
 /** The web sandbox dot: Awake emerald, waking or going to sleep amber, asleep muted. */
-const SANDBOX_DOT = {
+export const SANDBOX_DOT = {
   active: { light: "#10b981", dark: "#10b981", label: "Awake" },
   starting: { light: "#fbbf24", dark: "#fbbf24", label: "Waking up" },
   stopping: { light: "#fbbf24", dark: "#fbbf24", label: "Going to sleep" },
@@ -35,7 +37,9 @@ const SANDBOX_DOT = {
  * One quick task, as the web `QuickTaskCard` at phone width: a card with the
  * status stripe (red with a tinted border when the latest run failed), then
  * the number and title with the priority, live mark, unread dot and schedule
- * clock; the tags; and the creator and age. A tap opens the task chat; a
+ * clock; the tags; and the creator and age. Sized for a thumb, not the web
+ * board: a 14 title, 12 secondary text, `py-3`, at least 72 high and 8 apart
+ * (`QuickTasksSection`). A tap opens the task chat; a
  * long press opens the row menu (`onLongPress`), as the web kebab and
  * right-click. The web hover tooltips are spoken in the row's hint instead.
  */
@@ -44,12 +48,15 @@ export function QuickTaskRow({
   status,
   hasError,
   creator,
+  projectNumId,
   onLongPress,
 }: {
   task: QuickTask;
   status: DisplayTaskStatus;
   hasError: boolean;
   creator: User | undefined;
+  /** In a project's task list: the number reads "#project/task", as the web card. */
+  projectNumId?: number;
   onLongPress: () => void;
 }) {
   const router = useRouter();
@@ -66,10 +73,11 @@ export function QuickTaskRow({
   const sandbox = task.reviewTaskSandboxStatus ? SANDBOX_DOT[task.reviewTaskSandboxStatus] : undefined;
   const showSandbox = sandbox !== undefined && !simpleView;
   const showUnread = task.hasUnread && !task.isExecuting;
-  const numLabel = formatEntityNumLabel({ numId: task.numId });
+  const numLabel = formatEntityNumLabel({ numId: task.numId, projectNumId });
   const creatorFirstName = creator ? firstNameFromUser(creator) : null;
-  const scheduled = task.scheduledAt
-    ? `${status === "todo" ? "Scheduled for" : "Was scheduled for"} ${dayjs(task.scheduledAt).format("MMM D, h:mm A")}`
+  const scheduledAt = taskScheduledAt(task);
+  const scheduled = scheduledAt
+    ? `${status === "todo" ? "Scheduled for" : "Was scheduled for"} ${dayjs(scheduledAt).format("MMM D, h:mm A")}`
     : undefined;
   const hint = [
     TASK_STATUS_LABELS[status],
@@ -84,13 +92,13 @@ export function QuickTaskRow({
 
   return (
     <SurfaceRow
-      accessibilityLabel={task.title}
+      accessibilityLabel={displayTitle(task.title)}
       accessibilityHint={hint}
       accentColor={showError ? theme.destructive : appearance.bar}
       backgroundColor={showError ? withAlpha(theme.destructive, 0.05) : theme.card}
       borderColor={showError ? withAlpha(theme.destructive, 0.3) : undefined}
-      // Web: `px-2.5 py-2 pl-3`, the three lines `gap-1.5`.
-      className="gap-1.5 px-2.5 py-2 pl-3"
+      // The web `px-2.5 pl-3` and `gap-1.5`; `py-3` (web `py-2`) for a thumb.
+      className="min-h-[72px] gap-1.5 px-3 py-3 pl-3.5"
       onPress={() => router.push({ pathname: "/chat/[target]", params: { target: task._id } })}
       onLongPress={onLongPress}
       longPressLabel="Task actions"
@@ -98,17 +106,17 @@ export function QuickTaskRow({
       <View className="flex-row items-start gap-2">
         <View className="min-w-0 flex-1 flex-row items-baseline gap-1.5">
           {numLabel ? (
-            <Text style={{ ...TEXT_2XS, fontFamily: "monospace", color: withAlpha(muted, 0.55), fontVariant: ["tabular-nums"] }}>
+            <Text style={{ ...META_TEXT, fontFamily: "monospace", color: withAlpha(muted, 0.55), fontVariant: ["tabular-nums"] }}>
               {numLabel}
             </Text>
           ) : null}
-          {/* Web: `text-2sm font-medium leading-5 tracking-[-0.01em]`. */}
+          {/* The web medium title at the Inbox row's 14 / 20 (web `text-2sm`, 13). */}
           <Text
             numberOfLines={1}
-            className="font-instrument-sans-medium min-w-0 flex-1"
-            style={{ fontSize: 13, lineHeight: 20, letterSpacing: -0.13, fontWeight: "500", color: theme.foreground }}
+            className="font-instrument-sans-medium min-w-0 flex-1 text-sm"
+            style={{ fontWeight: "500", color: theme.foreground }}
           >
-            {task.title}
+            {displayTitle(task.title)}
           </Text>
         </View>
         <View className="shrink-0 flex-row items-center gap-1.5 pt-0.5">
@@ -130,19 +138,30 @@ export function QuickTaskRow({
 
       {task.tags && task.tags.length > 0 ? (
         <View className="flex-row flex-wrap items-center gap-1">
-          {task.tags.map((tag) => (
-            // Web: a `secondary` badge, `px-1.5 text-3xs font-medium`, a 10 tag icon.
+          {task.tags.slice(0, MAX_TAGS).map((tag) => (
+            // Web: a `secondary` badge, `px-1.5 font-medium`, a tag icon; 12 text and a 12 icon (web 10).
             <View
               key={tag}
-              className="max-w-28 flex-row items-center gap-0.5 rounded-full border px-1.5"
+              className="max-w-36 flex-row items-center gap-1 rounded-full border px-2 py-0.5"
               style={{ backgroundColor: theme.secondary, borderColor: theme.border }}
             >
-              <IconTag size={10} color={theme.secondaryForeground} />
-              <Text numberOfLines={1} className="font-instrument-sans-medium" style={{ ...TEXT_3XS, fontWeight: "500", color: theme.secondaryForeground }}>
+              <View className="shrink-0">
+                <IconTag size={12} color={theme.secondaryForeground} />
+              </View>
+              <Text numberOfLines={1} className="font-instrument-sans-medium shrink" style={{ ...META_TEXT, fontWeight: "500", color: theme.secondaryForeground }}>
                 {tag}
               </Text>
             </View>
           ))}
+          {task.tags.length > MAX_TAGS ? (
+            <Text
+              accessibilityLabel={`${task.tags.length - MAX_TAGS} more tags`}
+              className="font-instrument-sans-medium"
+              style={{ ...META_TEXT, fontWeight: "500", color: muted, fontVariant: ["tabular-nums"] }}
+            >
+              {`+${task.tags.length - MAX_TAGS}`}
+            </Text>
+          ) : null}
         </View>
       ) : null}
 
@@ -152,14 +171,14 @@ export function QuickTaskRow({
             <>
               <InitialsAvatar user={creator} size={16} />
               {creatorFirstName ? (
-                <Text numberOfLines={1} className="font-instrument-sans min-w-0" style={{ ...TEXT_2XS, color: withAlpha(muted, 0.75) }}>
+                <Text numberOfLines={1} className="font-instrument-sans min-w-0" style={{ ...META_TEXT, color: withAlpha(muted, 0.75) }}>
                   {creatorFirstName}
                 </Text>
               ) : null}
             </>
           ) : null}
         </View>
-        <Text className="font-instrument-sans" style={{ ...TEXT_2XS, color: withAlpha(muted, 0.7), fontVariant: ["tabular-nums"] }}>
+        <Text className="font-instrument-sans" style={{ ...META_TEXT, color: withAlpha(muted, 0.7), fontVariant: ["tabular-nums"] }}>
           {timeAgo(task.createdAt)}
         </Text>
       </View>

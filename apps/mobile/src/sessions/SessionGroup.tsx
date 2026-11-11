@@ -8,7 +8,7 @@ import type { FunctionReturnType } from "convex/server";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { timeAgo } from "@/ui/format";
+import { displayTitle, timeAgo } from "@/ui/format";
 import { RepoLogo } from "@/ui/RepoLogo";
 import { RowStatus } from "@/ui/RowStatus";
 import { type Scheme, useScheme, XS_TRACKING } from "@/ui/theme";
@@ -102,8 +102,9 @@ export function SessionGroupHeader({
   const muted = tokens.color.muted[scheme];
   const { repoLabel, open } = section;
   return (
-    // The web header (the 18 logo or initial on `bg-muted`, then the text-xs
-    // medium muted name, live count and a 14 chevron), 44 high: a whole touch target.
+    // The web header (the 18 logo or initial on `bg-muted`, then the medium
+    // muted name, live count and a 14 chevron), 44 high: a whole touch target.
+    // The name is `text-sm`, the phone floor for tappable text (the web is `text-xs`).
     <View className="flex-row items-center pr-2">
       <Pressable
         accessibilityRole="button"
@@ -130,10 +131,12 @@ export function SessionGroupHeader({
             </View>
           }
         />
-        <View className="flex-row items-center gap-1.5">
+        {/* `shrink`: a long repo name truncates, and the count, chevron and "+" stay on screen. */}
+        <View className="min-w-0 shrink flex-row items-center gap-1.5">
           <Text
-            className="font-instrument-sans-medium text-xs"
-            style={{ color: muted, fontWeight: "500", letterSpacing: XS_TRACKING }}
+            numberOfLines={1}
+            className="font-instrument-sans-medium min-w-0 shrink text-sm"
+            style={{ color: muted, fontWeight: "500" }}
           >
             {repoLabel}
           </Text>
@@ -171,8 +174,9 @@ export function SessionGroupHeader({
 
 /**
  * Under an open group's rows: the web `SessionListShowMore` past three rows
- * (text-xs medium muted, a 12 dots icon in the 18 status slot), a 44 high
- * row, then the group's `pb-1`. A folded group has neither.
+ * (medium muted, a 12 dots icon in the 18 status slot), a 44 high row, then
+ * the group's `pb-1`. The label is `text-sm` (the web `text-xs`), as the
+ * header. A folded group has neither.
  */
 export function SessionGroupFooter({ section, onToggleExpanded }: { section: SessionGroupSection; onToggleExpanded: () => void }) {
   const muted = tokens.color.muted[useScheme()];
@@ -191,8 +195,8 @@ export function SessionGroupFooter({ section, onToggleExpanded }: { section: Ses
             <IconDots size={12} color={muted} />
           </View>
           <Text
-            className="font-instrument-sans-medium text-xs"
-            style={{ color: muted, fontWeight: "500", letterSpacing: XS_TRACKING }}
+            className="font-instrument-sans-medium text-sm"
+            style={{ color: muted, fontWeight: "500" }}
           >
             {section.expanded ? "Show less" : `Show more (${hiddenCount})`}
           </Text>
@@ -226,7 +230,7 @@ export function SessionListRow({
     <SwipeableRow trailingActions={[swipeAction]}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={session.title}
+        accessibilityLabel={displayTitle(session.title)}
         onPress={() => router.push({ pathname: "/chat/[target]", params: { target: session.sessionId } })}
         onLongPress={onLongPress}
         // VoiceOver and TalkBack reach the menu and the swipe action through the actions rotor.
@@ -248,7 +252,7 @@ export function SessionListRow({
           className="font-instrument-sans flex-1 text-sm"
           style={{ color: tokens.color.foreground[scheme] }}
         >
-          {session.title}
+          {displayTitle(session.title)}
         </Text>
         {session.prUrl ? <PrIcon state={session.prState} scheme={scheme} /> : null}
         <Text

@@ -761,19 +761,25 @@ const projectDocSchema = z.object({
   phase: z.string(),
   updatedAt: z.number().optional(),
   activeWorkflowId: z.string().optional(),
-  activeBuildWorkflowId: z.string().optional(),
+  build: z.object({ state: z.enum(["scheduled", "running"]) }).optional(),
   activeChatWorkflowId: z.string().optional(),
   reviewProjectSandboxStatus: z.string().optional(),
   model: z.string().optional(),
   lastChatModel: z.string().optional(),
 });
 
+/** `isProjectBuilding` for a parsed doc. */
+function projectDocBuildRunning(
+  project: z.infer<typeof projectDocSchema>,
+): boolean {
+  return project.build?.state === "running";
+}
+
 /** `sessionChats:resolveDeliveryChat` — the chat a session message lands in. */
 const deliveryChatSchema = z.object({
   chatId: z.string(),
   title: z.string(),
   number: z.number(),
-  activeWorkflowId: z.string().optional(),
   lastModel: z.string().optional(),
 });
 
@@ -807,7 +813,6 @@ const sessionDocSchema = z.object({
   status: z.string(),
   updatedAt: z.number().optional(),
   lastModel: z.string().optional(),
-  activeWorkflowId: z.string().optional(),
   deploymentUrl: z.string().optional(),
   deploymentStatus: z.string().optional(),
   linkedRepoCount: z.number().optional(),
@@ -1082,8 +1087,8 @@ export const orchestratorGetAgentState = internalAction({
 
     // A session's transcript is its Main chat's (parallel chats keep their
     // own); the streaming row is that chat's too.
-    // Same rule as list_agents / stop_sandbox: a daemon `/loop` continuation
-    // never sets `activeWorkflowId`, so that field alone is not "is executing".
+    // Same rule as list_agents / stop_sandbox: the open turn is "is executing",
+    // daemon `/loop` continuations included.
     const [sessionChats, isExecuting, pullRequests] = await Promise.all([
       kind === "session" ? loadSessionChatsAsUser(clerkUserId, id) : [],
       ctx.runQuery(internal.mcp.queries.entityIsExecuting, { kind, id }),
@@ -1165,7 +1170,7 @@ export const orchestratorGetAgentState = internalAction({
         updatedAt: project.updatedAt ?? project._creationTime,
         deploymentUrl: undefined,
         deploymentStatus: undefined,
-        buildRunning: project.activeBuildWorkflowId !== undefined,
+        buildRunning: projectDocBuildRunning(project),
       };
     }
 
@@ -1474,7 +1479,7 @@ export const orchestratorStopAgent = internalAction({
         "projectChatWorkflow:cancelExecution",
         { projectId: id },
       );
-      return { buildRunning: project.activeBuildWorkflowId !== undefined };
+      return { buildRunning: projectDocBuildRunning(project) };
     }
     // A task has two independent workflow slots: its main run and its sandbox
     // chat. Cancelling only the chat one reported success while a run kept

@@ -436,6 +436,7 @@ export const taskExecutionWorkflow = workflow.define({
     } finally {
       await step.runMutation(internal.taskWorkflow.clearActiveWorkflow, {
         taskId: args.taskId,
+        runId: args.runId,
       });
       await step.runMutation(internal.taskWorkflow.closeRunTurn, {
         runId: args.runId,

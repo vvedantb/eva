@@ -1,3 +1,4 @@
+import { isTaskRunning } from "../_agentTasks/runState";
 import { v } from "convex/values";
 import {
   queueRuntimeContinue,
@@ -35,6 +36,7 @@ import { resolveMessageCredential } from "../_userProviderAccounts/credentialSou
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
+import { hasOpenChatTurn } from "../_chat/turnProjection";
 import {
   activityRefForParentId,
   touchUserActivity,
@@ -114,7 +116,11 @@ type ChatQueueId = Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">;
 
 type ChatQueueConfig<TId extends ChatQueueId, TEntity, TPrepared> = {
   getEntity: (ctx: MutationCtx, id: TId) => Promise<TEntity | null>;
-  hasActiveWorkflow: (entity: TEntity) => boolean;
+  /** A turn is running. A session chat reads its open turn; ctx is for that read. */
+  hasActiveWorkflow: (
+    entity: TEntity,
+    ctx: MutationCtx,
+  ) => boolean | Promise<boolean>;
   /**
    * Whether the surface may start a turn right now even though it is idle.
    * Session chats share a per-session cap on concurrently running chats
@@ -202,8 +208,8 @@ type ChatQueueConfig<TId extends ChatQueueId, TEntity, TPrepared> = {
 };
 
 /**
- * True while the surface is still working on the previous turn. `activeWorkflowId`
- * alone is not enough: a backgrounded Agent/Task subagent keeps running after
+ * True while the surface is still working on the previous turn. A running
+ * workflow (`hasActiveWorkflow`) alone is not enough: a backgrounded Agent/Task subagent keeps running after
  * the turn that spawned it completes, and the daemon opens a synthetic turn to
  * process whatever that subagent reports back. Dequeuing in either window
  * starts the queued message on top of work the user is still waiting on — the
@@ -218,7 +224,7 @@ async function isSurfaceBusy<TId extends ChatQueueId, TEntity, TPrepared>(
   entity: TEntity,
   config: ChatQueueConfig<TId, TEntity, TPrepared>,
 ): Promise<boolean> {
-  if (config.hasActiveWorkflow(entity)) {
+  if (await config.hasActiveWorkflow(entity, ctx)) {
     return true;
   }
   if (!(await config.hasCapacity(ctx, entity))) {
@@ -260,7 +266,7 @@ async function scheduleDrainAtBackgroundAgentExpiry<
   entity: TEntity,
   config: ChatQueueConfig<TId, TEntity, TPrepared>,
 ): Promise<void> {
-  if (config.hasActiveWorkflow(entity)) return;
+  if (await config.hasActiveWorkflow(entity, ctx)) return;
   if (config.sandboxState(entity) !== "awake") return;
   const now = Date.now();
   const expiresAt = backgroundAgentsExpireAt(
@@ -626,7 +632,7 @@ const sessionChatQueueConfig: ChatQueueConfig<
   SessionQueuePrepared
 > = {
   getEntity: (ctx, id) => loadSessionChat(ctx.db, id),
-  hasActiveWorkflow: ({ chat }) => chat.activeWorkflowId !== undefined,
+  hasActiveWorkflow: ({ chat }, ctx) => hasOpenChatTurn(ctx.db, chat._id),
   // One slot check for both the send path and the dequeue, so the cap cannot
   // drift between them.
   hasCapacity: (ctx, context) => sessionChatHasFreeSlot(ctx.db, context),
@@ -907,12 +913,12 @@ const taskChatQueueConfig: ChatQueueConfig<
   ChatQueuePrepared
 > = {
   getEntity: (ctx, id) => ctx.db.get(id),
-  // `activeWorkflowId` counts too: the task's own run owns the sandbox, and a
+  // The task's own `run` counts too: it owns the sandbox, and a
   // follow-up may now be queued while that first run is still going. Starting
   // a chat turn on top of it would have two agents in one sandbox.
   hasActiveWorkflow: (task) =>
     task.activeChatWorkflowId !== undefined ||
-    task.activeWorkflowId !== undefined,
+    isTaskRunning(task),
   hasCapacity: async () => true,
   activityParentId: (_task, id) => String(id),
   sandboxState: (task) => sandboxStateFromStatus(task.reviewTaskSandboxStatus),

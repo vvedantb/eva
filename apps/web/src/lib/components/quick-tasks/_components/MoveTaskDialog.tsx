@@ -30,6 +30,8 @@ interface MoveTaskDialogProps {
   targetId: Id<"githubRepos"> | null;
   targetAppName: string;
   onClose: () => void;
+  /** After a successful move, once the dialog has closed. */
+  onDone?: () => void;
   taskId: Id<"agentTasks">;
   taskTitle: string;
 }
@@ -38,6 +40,7 @@ export function MoveTaskDialog({
   targetId,
   targetAppName,
   onClose,
+  onDone,
   taskId,
   taskTitle,
 }: MoveTaskDialogProps) {
@@ -50,6 +53,7 @@ export function MoveTaskDialog({
     try {
       await updateTask({ id: taskId, repoId: targetId });
       onClose();
+      if (onDone) onDone();
     } catch (err) {
       console.error("Failed to move task:", err);
       toast.error("Could not move the task. Try again.");
