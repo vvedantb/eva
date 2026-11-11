@@ -1,5 +1,13 @@
 # Changelog
 
+## Sessions: lower tab memory from the session cache
+
+Date: 2026-11-11
+
+WHY: A single Eva tab used 1.3 GB or more. Hidden sessions kept their Editor and Browser iframes, full transcripts and idle query subscriptions alive.
+
+Architectural: The sessions layout keeps 3 shells, not 5 (`MAX_CACHED_SESSIONS`). `KeepAlivePane` takes `discard`, and `SandboxPaneSlots` sets it from the new `onScreen` prop for Editor, Browser/Computer and custom tabs, so a hidden session unmounts its iframes; they reload on return. `useChatTranscript` holds only the 30-message tail while skipped; the full list swaps back in by row id. `ConvexQueryCacheProvider` keeps idle queries for 60 s (was 5 min) and at most 50 (was 250).
+
 ## Phone: phone-tuned tabs, PR tabs swipe, separate tap areas, back and Return
 
 Date: 2026-11-11

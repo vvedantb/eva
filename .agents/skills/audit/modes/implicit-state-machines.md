@@ -1,24 +1,14 @@
----
-name: find-implicit-state-machines
-description: "Audit a codebase for implicit state machines: lifecycles spread across boolean flags, status fields patched from many files, timestamps that can disagree with status, effect chains, and ad-hoc retry or polling flags. Use when the user asks to find implicit state machines, hunt race conditions or stuck states, or audit stateful logic. Read-only by default; produces a ranked findings list. For writing new stateful code, use principle-model-the-domain instead."
----
-
-# Find Implicit State Machines
+# Mode: implicit state machines
 
 An implicit state machine is a lifecycle whose states and transitions are not written down in one place. The states live in a mix of flags, optional fields and status strings. The transitions are writes scattered across files. Nothing says which combinations are legal, so illegal ones happen: a cancelled run marked successful, a stop undone by a slow start, a spinner that never ends.
 
-This skill finds them, ranks them, and proposes the fix. It does not edit code unless the user asks.
+## Search split
 
-## 1. Scope the search
-
-Split the codebase by layer and search each in parallel (one subagent per layer when the repo is large):
-
-- **Server / data layer**: schema first. List every table or model with a `status`, `state`, `phase` or `kind` field, or with lifecycle timestamps (`startedAt`, `finishedAt`, `cancelledAt`, `archivedAt`, `deletedAt`). Then find every write to those fields.
+- **Server / data layer**: schema first. List every table with a `status`, `state`, `phase` or `kind` field, or lifecycle timestamps (`startedAt`, `finishedAt`, `cancelledAt`, `archivedAt`). Then find every write to those fields.
 - **Client / UI layer**: components and hooks with several `useState` / `useRef` values that change together, and hooks that drive async flows.
+- In a large backend, split the server by domain (sandbox and sessions; tasks, projects and automations).
 
-Tell each searcher what is already ruled out, and ask for file:line evidence on every claim.
-
-## 2. Signals
+## Signals
 
 ### Server
 
@@ -51,34 +41,11 @@ Tell each searcher what is already ruled out, and ask for file:line evidence on 
 | Same derivation in many places | "Is it running?" computed differently in several components, so they disagree on screen |
 | Clear after await | Snapshot input, await upload, then `clear()`: anything typed during the await is lost |
 
-## 3. Verify before reporting
+## Report additions
 
-Read the code for every finding before you report it. Searchers miss guards in helpers and misread line numbers. For each finding confirm:
+For each finding also give: **States** (listed), **Triggers** (what moves between them), **What makes it implicit** (which flags or conditions), and a concrete bad sequence: "A happens, then B, result C". Close with the explicit models already in the codebase to copy, and a fix order: quick deletions first, then shared guards, then refactors.
 
-1. The exact writes (file:line) and whether any guard exists.
-2. A concrete bad sequence: "A happens, then B, result C".
-3. Whether a test or comment already documents the behaviour as intended.
-
-Mark findings you verified by reading code, and those you have not. Never present a race as reproduced unless you ran it.
-
-## 4. Report
-
-Group by feature area, most severe first. For each finding:
-
-- **Where**: file:line of the field and of the key writers.
-- **States**: the implied states, listed.
-- **Triggers**: what moves between them.
-- **What makes it implicit**: which flags or conditions.
-- **Risk**: the concrete bad sequence.
-- **Severity**: high (data loss, duplicate side effects, security, stuck UI likely), medium (reachable bad state), low (design smell).
-
-Close with:
-- the explicit models already in the codebase (a transition table, a fenced writer) to copy;
-- a suggested fix order (quick deletions first, then shared guards, then refactors).
-
-A table is good for the top ten; prose for the rest.
-
-## 5. Fix patterns
+## Fix patterns
 
 Offer these when the user asks to fix. Each one has a regression test that drives the bad sequence.
 
@@ -98,10 +65,13 @@ Offer these when the user asks to fix. Each one has a regression test that drive
 | Re-derived checks | One shared function with explicit inputs; surface-specific extras become named parameters, never silent differences |
 | Public setters with no callers | Delete them |
 
-## 6. Pitfalls seen in practice
+## Pitfalls
 
 - Fixing a guard can break an untokened caller that relied on the old loose rule. Grep every caller of a mutation before tightening it.
 - A cleanup that deletes "untracked" resources can delete one a caller is about to use. Only delete when the caller has a token proving the resource is its own.
 - A new import between modules can add an import cycle. Put shared helpers in a leaf module.
 - Contract tests that grep source text break on harmless moves. Update the anchor; keep the guarantee.
 - Access checks are often missing on the same functions as state guards. When a public function takes an id, check it verifies the caller can access that entity.
+- A durable workflow step may still run after its workflow was cancelled. Check this before you rely on cancel to stop a write.
+- New arguments and fields must be optional so workflows already in flight replay unchanged after deploy. Say so in the report.
+- Unit tests do not reach real races. When a fix touches a sandbox, VM or other paid resource, ask before a real end-to-end test, name the resource you will use, and stop it afterwards. In one past run that test found a bug the unit tests missed.

@@ -54,7 +54,6 @@ import {
   type SessionDesignMessage,
 } from "./_utils/designVariations";
 import { isChatTurnExecuting } from "@/lib/components/chat/chatBodyUtils";
-import { chatTurnOpenFromStatus } from "@/lib/components/chat/useChatTurnOpen";
 import { previewPortOptions } from "./_utils";
 import { designVariationPrompt } from "./_utils/composerPrompts";
 
@@ -180,7 +179,7 @@ export function SandboxPanel({
     isRouteActive ? { entityId: chatId } : "skip",
   );
   const isDesignExecuting = isChatTurnExecuting({
-    turnOpen: chatTurnOpenFromStatus(turnStatus),
+    status: turnStatus,
     messages,
   });
   // Streaming payloads can outlive their turn; only fold them in while one runs.
@@ -412,6 +411,7 @@ export function SandboxPanel({
             // Only the session on screen holds the idle-pause presence beacon;
             // cached siblings and a collapsed rail must not keep a VM awake.
             presenceEnabled={isRouteActive && !collapsed}
+            onScreen={isRouteActive}
             autoWakeEligible={autoWakeEligible}
             // Multi-repo sessions run a dev server per repo; the Preview port
             // control offers each one instead of only the primary's.

@@ -100,7 +100,7 @@ export function SessionDetailClient({
       ? { entityId: sandboxStartupEntityId({ kind: "session", sessionId }) }
       : "skip",
   );
-  // Names the browser tab. Gated on `isRouteActive`: up to five session shells
+  // Names the browser tab. Gated on `isRouteActive`: up to three session shells
   // stay mounted at once, and a hidden one must not title the tab.
   useEntityDocumentTitle(session?.title, isRouteActive);
   const startSandboxMutation = useMutation(api.sessions.startSandbox);
