@@ -54,7 +54,6 @@ import {
   type SessionDesignMessage,
 } from "./_utils/designVariations";
 import { isChatTurnExecuting } from "@/lib/components/chat/chatBodyUtils";
-import { chatTurnOpenFromStatus } from "@/lib/components/chat/useChatTurnOpen";
 import { previewPortOptions } from "./_utils";
 import { designVariationPrompt } from "./_utils/composerPrompts";
 
@@ -180,7 +179,7 @@ export function SandboxPanel({
     isRouteActive ? { entityId: chatId } : "skip",
   );
   const isDesignExecuting = isChatTurnExecuting({
-    turnOpen: chatTurnOpenFromStatus(turnStatus),
+    status: turnStatus,
     messages,
   });
   // Streaming payloads can outlive their turn; only fold them in while one runs.
