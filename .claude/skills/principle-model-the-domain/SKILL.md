@@ -7,7 +7,7 @@ description: "Apply when writing stateful logic, or when code branches a lot or 
 
 Encode the real domain in a data structure instead of scattering it across conditionals.
 
-**Why:** Scattered booleans, repeated shape assumptions, and branching spread across files are accidental complexity. A structure that matches the domain makes invalid states unrepresentable and deletes branches. Choosing it at write time is cheap; recovering it later reads as a refactor and gets deferred.
+**Why:** Scattered booleans, repeated shape assumptions, and branching spread across files are accidental complexity. A structure that matches the domain makes invalid states unrepresentable and deletes branches. Edge cases disappear instead of getting handled, and properties become easy to state and check, because each rule lives in one place. Choosing it at write time is cheap; recovering it later reads as a refactor and gets deferred.
 
 **Reach for structures like these:**
 

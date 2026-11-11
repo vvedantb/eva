@@ -1,5 +1,21 @@
 # Changelog
 
+## Composer tasks panel: model the todo status once
+
+Date: 2026-11-11
+
+WHY: A domain-model audit found five ternary chains on one status, a duration field nothing set, a renamed status, and guards for states that cannot occur.
+
+Architectural: `ComposerTasksPanel` uses the activity trace's todo item type directly (no `in_progress` → `inProgress` rename). `TASK_STATUS_STYLE` (a `Record` on status) holds each status's colours, icon and trailing label, so a new status fails the type check. `durationMs` and `formatTaskDuration` are gone. `deriveProgress` takes the first step, so it cannot see an empty list. The panel needs a `turnId`; the old `"current"` fallback key let one dismissal hide every later turn without an id.
+
+## Phone: chats open at the end; chat menu matches the web
+
+Date: 2026-11-11
+
+WHY: A chat drew its first messages for a frame and then jumped to the end. The session chat menu showed only Rename and Archive, not the web More menu's items.
+
+Architectural: native-ui `ConversationList` stays hidden until its first jump to the measured end. The chat header menu takes every `sessionMenuActions` item except the session Copy link (the header has its own), in the web groups: Rename and Regenerate title; Copy title, Copy link, Copy branch name, Open PR, Open on web; Archive; Stop. The session target now carries the branch and PR.
+
 ## Sessions: one owner field (1a)
 
 Date: 2026-11-11

@@ -58,7 +58,8 @@ import { useSessionActions } from "@/sessions/useSessionActions";
 import { textColor, useScheme } from "@/ui/theme";
 
 /** The session actions the chat header ⋯ adds; it has Copy link of its own. */
-const HEADER_SESSION_ACTIONS: ReadonlySet<SessionMenuAction> = new Set(["rename", "archive", "unarchive"]);
+// The header has its own Copy link (every chat kind), so the session's is left out.
+const HEADER_HIDDEN_ACTIONS: ReadonlySet<SessionMenuAction> = new Set(["copyLink"]);
 
 /**
  * One chat (session, quick task or project): the transcript with the web
@@ -147,7 +148,14 @@ export default function ChatScreen() {
         router.push({ pathname: "/chat/[target]/diff", params: path ? { target, file: toRepoRelativePath(path) } : { target } });
   const webUrl = (path: string) => `${WEB_URL}${path}`;
   const sessionTarget = chat.session
-    ? { sessionId: chat.session.id, title: chat.session.title, archived: chat.session.archived, webPath: chat.webPath }
+    ? {
+        sessionId: chat.session.id,
+        title: chat.session.title,
+        archived: chat.session.archived,
+        webPath: chat.webPath,
+        branchName: chat.intendedBranch,
+        prUrl: chat.prUrl,
+      }
     : null;
 
   const handleSend = (text: string) => {
@@ -201,7 +209,7 @@ export default function ChatScreen() {
             ? {
                 groups: sessionActions
                   .actionsFor(sessionTarget)
-                  .map((group) => group.filter((action) => HEADER_SESSION_ACTIONS.has(action))),
+                  .map((group) => group.filter((action) => !HEADER_HIDDEN_ACTIONS.has(action))),
                 onSelect: (action) => sessionActions.run(action, sessionTarget),
               }
             : undefined
