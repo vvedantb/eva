@@ -230,9 +230,6 @@ export function useTaskSandboxControls({
 }) {
   const startTaskSandboxMutation = useMutation(api.agentTasks.startTaskSandbox);
   const stopTaskSandboxMutation = useMutation(api.agentTasks.stopTaskSandbox);
-  const retryStartupCommandsMutation = useMutation(
-    api.agentTasks.retryStartupCommands,
-  );
   const runDevServerMutation = useMutation(api.agentTasks.runDevServer);
   const runBackgroundCommandsMutation = useMutation(
     api.agentTasks.runBackgroundCommands,
@@ -240,14 +237,10 @@ export function useTaskSandboxControls({
 
   const [embeddedShowSandbox, setEmbeddedShowSandbox] = useState(false);
   const lifecycle = useSandboxLifecycle(task?.reviewTaskSandboxStatus);
-  const [isRetryingStartupCommands, setIsRetryingStartupCommands] =
-    useState(false);
   const [isRunningDevServer, setIsRunningDevServer] = useState(false);
   const [isRunningBackgroundCommands, setIsRunningBackgroundCommands] =
     useState(false);
   const [showRunDevServerConfirm, setShowRunDevServerConfirm] = useState(false);
-  const [showStartupCommandsConfirm, setShowStartupCommandsConfirm] =
-    useState(false);
 
   const flags = deriveSandboxFlags(task, hasRuns);
   const sandboxStartupStreaming = useQuery(
@@ -286,18 +279,6 @@ export function useTaskSandboxControls({
       }
     });
 
-  const handleRetryStartupCommands = async () => {
-    setIsRetryingStartupCommands(true);
-    try {
-      await retryStartupCommandsMutation({ taskId });
-      openSandboxAfterStart();
-    } catch (err) {
-      console.error("Failed to retry startup commands:", err);
-      toast.error("Could not rerun the startup commands. Try again.");
-    }
-    setIsRetryingStartupCommands(false);
-  };
-
   const handleRunDevServer = async () => {
     setIsRunningDevServer(true);
     try {
@@ -325,8 +306,6 @@ export function useTaskSandboxControls({
   };
 
   return {
-    showStartupCommandsConfirm,
-    setShowStartupCommandsConfirm,
     showRunDevServerConfirm,
     setShowRunDevServerConfirm,
 
@@ -340,8 +319,6 @@ export function useTaskSandboxControls({
     handleStartSandbox,
     handleStopSandbox,
     handleSelectSurface: createSurfaceSelector(routing, setEmbeddedShowSandbox),
-    handleRetryStartupCommands,
-    isRetryingStartupCommands,
     handleRunDevServer,
     isRunningDevServer,
     handleRunBackgroundCommands,

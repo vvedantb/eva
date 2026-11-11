@@ -248,6 +248,8 @@ export function SessionChromeTab({
         </ContextMenuTrigger>
         <ContextMenuContent onClick={(e) => e.stopPropagation()}>
           <SessionMenuItems
+            variant="context"
+            showOpenInNewTab
             session={session}
             href={href}
             isRegeneratingTitle={isRegeneratingTitle}
