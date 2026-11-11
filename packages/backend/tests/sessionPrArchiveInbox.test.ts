@@ -133,7 +133,7 @@ describe("inbox notification when a session auto-archives on PR close/merge", ()
       });
 
       const session = await t.run(async (ctx) => ctx.db.get(sessionId));
-      expect(session?.archived).toBe(true);
+      expect(session?.archive).toBeDefined();
       expect(session?.prState).toBe("merged");
     },
     TIMEOUT_MS,
@@ -329,7 +329,7 @@ describe("a session holding several pull requests", () => {
         merged: true,
       });
       let session = await t.run(async (ctx) => ctx.db.get(sessionId));
-      expect(session?.archived).not.toBe(true);
+      expect(session?.archive).toBeUndefined();
       expect(session?.prState).toBe("open");
       expect(await listOwnerNotifications(t, ownerUserId)).toHaveLength(0);
 
@@ -339,7 +339,7 @@ describe("a session holding several pull requests", () => {
         merged: true,
       });
       session = await t.run(async (ctx) => ctx.db.get(sessionId));
-      expect(session?.archived).toBe(true);
+      expect(session?.archive).toBeDefined();
       expect(session?.prState).toBe("merged");
       const notifications = await listOwnerNotifications(t, ownerUserId);
       expect(notifications).toHaveLength(1);
@@ -367,7 +367,7 @@ describe("disableAutoArchive experimental flag", () => {
       });
 
       const session = await t.run(async (ctx) => ctx.db.get(sessionId));
-      expect(session?.archived).not.toBe(true);
+      expect(session?.archive).toBeUndefined();
       expect(session?.prState).toBe("merged");
       expect(await listOwnerNotifications(t, ownerUserId)).toHaveLength(0);
     },
