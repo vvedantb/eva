@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: bottom tab pill slides again and is lighter in dark
+
+Date: 2026-11-11
+
+WHY: The remove-animations pass took out the bottom tab bar slide, which the owner wanted to keep. In dark, the app themed `segment` to the web #202020, which also darkened the bar pill on the #101010 glass.
+
+Architectural: native-ui restores the 200 ms `FloatingTabBar` pill slide (instant under Reduce Motion) and gives the pill its own `palette.tabBarPill`. `applyEvaTheme` sets it to Eva's secondary in light (no change) and the package #474747 in dark. The segmented `Tabs` thumb keeps #202020.
+
 ## Sessions: lower tab memory from the session cache
 
 Date: 2026-11-11
