@@ -1213,6 +1213,7 @@ export const repoEventKindValidator = v.union(
   v.literal("issue_labeled"),
   v.literal("pr_opened"),
   v.literal("pr_merged"),
+  v.literal("production_alert"),
 );
 
 /** What starts an automation: its cron schedule, or a repo event. */
@@ -1243,6 +1244,12 @@ export const automationFields = {
   // When true, a successful run emails its result summary to every user with
   // email notifications enabled (see _automations/email.ts).
   sendEmail: v.optional(v.boolean()),
+  // `create_task` presets only. Missing means true: a created task starts
+  // at once. False leaves it in To do for a person to start.
+  autoStartTasks: v.optional(v.boolean()),
+  // `production_alert` presets only. SHA-256 hex of the bearer secret the
+  // alert webhook must send. The plain secret is shown once, never stored.
+  alertSecretHash: v.optional(v.string()),
   // True skips review and sends straight away. Missing means each email waits
   // on its run as a draft until someone sends it, so review is the default.
   emailAutoSend: v.optional(v.boolean()),
