@@ -53,7 +53,7 @@ export function SandboxChatStatusChips({
   /** Surface-specific chips after the agents chip. */
   children?: ReactNode;
 }) {
-  const requestStop = useStopBackgroundAgent(surface.entity);
+  const { requestStop, stopDialog } = useStopBackgroundAgent(surface.entity);
   // Simple view hides agent internals (reasoning, tool detail), and the
   // subagent chip is that family of machinery.
   const simpleView = useSimpleView();
@@ -68,6 +68,8 @@ export function SandboxChatStatusChips({
         />
       )}
       {children}
+      {/* Outside the chip's popover, which closes when the dialog opens. */}
+      {stopDialog}
     </>
   );
 }
