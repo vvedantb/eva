@@ -40,6 +40,7 @@ import {
 } from "../_chat/chatResult";
 import { resolveStorageUrls } from "../_chat/storageUrls";
 import { buildSessionPrompt, SESSION_TOOLS } from "./sessionPrompt";
+import { buildSessionBranchName } from "../_git/branchNames";
 import { scheduleScopeCheck } from "../_scopeCheck/mutations";
 import {
   isPendingTurnLive,
@@ -310,7 +311,7 @@ export const sessionExecuteWorkflow = workflow.define({
           installationId: args.installationId,
           repoOwner: data.repoOwner,
           repoName: data.repoName,
-          branchName: data.branchName ?? `eva/session-${sessionId}`,
+          branchName: data.branchName ?? buildSessionBranchName(sessionId),
           baseBranch: data.baseBranch,
           repoId: data.repoId,
           startDesktop: false,
@@ -339,7 +340,7 @@ export const sessionExecuteWorkflow = workflow.define({
       sandboxId,
       repoId: data.repoId,
       userId: args.userId,
-      branchName: data.branchName ?? `eva/session-${sessionId}`,
+      branchName: data.branchName ?? buildSessionBranchName(sessionId),
     });
     await step.runMutation(internal.sessionWorkflow.clearSessionClosedStatus, {
       sessionId,
@@ -377,7 +378,7 @@ export const sessionExecuteWorkflow = workflow.define({
       // A failed launch must finalize the turn: without this catch the
       // workflow dies after its step retries with no saveResult, leaving the
       // empty placeholder (and the open turn) stuck on "Working…" until
-      // the 2-hour backstop.
+      // the `TURN_BACKSTOP_MS` backstop.
       try {
         // One-shot providers push the prompt at launch, so hold it until the
         // new sandbox is on the latest base (daemons get this from the

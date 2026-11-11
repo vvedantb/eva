@@ -34,7 +34,7 @@ export function DiffOptions({ pr, refreshing, onRefresh }: { pr: PrRef; refreshi
         {refreshing ? <Spinner size="sm" decorative /> : <IconDots size={18} color={tokens.color.foreground[scheme]} />}
       </HeaderIconButton>
       <MenuSheet open={open} onOpenChange={setOpen} title="Diff options">
-        <SheetRow icon={IconSpaceOff} title="Hide whitespace changes" active={ignoreWhitespace} onPress={toggleWhitespace} />
+        <SheetRow icon={IconSpaceOff} title="Hide whitespace changes" active={ignoreWhitespace} multiple onPress={toggleWhitespace} />
         <SheetRow
           icon={IconRefresh}
           title="Refresh diff"

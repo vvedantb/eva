@@ -69,6 +69,19 @@ export {
   sandboxPresenceRoomId,
 } from "./sandboxPresence";
 export {
+  DEFAULT_PREVIEW_PORT,
+  DESKTOP_PORT,
+  EDITOR_PORT,
+} from "./sandboxPorts";
+export { MAX_PARALLEL_CHATS } from "./sessionChats";
+export { terminalHistoryTail } from "./terminalHistory";
+export { isAgentBrowsingActive } from "./agentBrowsing";
+export {
+  SANDBOX_STARTUP_PREFIX,
+  sandboxOwnerKey,
+  sandboxStartupEntityId,
+} from "./sandboxOwnerKeys";
+export {
   PREVIEW_WAKE_KINDS,
   previewWakePath,
   previewWakeSearchSchema,
@@ -111,13 +124,39 @@ export {
 export { MESSAGE_LINK_PARAM, messageLinkHref } from "./messageLink";
 export { buildPrecedingUserTurns } from "./precedingUserTurns";
 export {
+  firstNameByUserId,
+  firstNameFromUser,
+  isOtherUserChatMessage,
+  otherUserIdsInChat,
+  type ChatUserAttribution,
+} from "./teammateMessages";
+export {
+  isLivePrState,
   prStateLabel,
   prStateTone,
+  type LivePrState,
   type PrState,
   type PrStateTone,
 } from "./prState";
 export { sessionMenuActions, type SessionMenuAction } from "./sessionMenu";
 export { draftCountAfterRemove, draftsAfterRemove, visibleDrafts } from "./draftVisibility";
+export {
+  draftContextTitle,
+  draftKindLabel,
+  draftSnippet,
+  mergeDrafts,
+  type CommentDraftFields,
+  type DraftListItem,
+  type TaskDraftFields,
+} from "./draftList";
+export {
+  chatSourceKindLabel,
+  chatSourceLabel,
+  chatSourceShortLabel,
+  type ChatSourceKind,
+  type ChatSourceLabelFields,
+} from "./chatSourceLabel";
+export { standupEntryHeading, standupEntryTime } from "./standup";
 export {
   QUICK_TASK_FILTER_DEFAULTS,
   QUICK_TASK_LIST_DEFAULTS,
@@ -143,7 +182,7 @@ export {
   type QuickTaskSortField,
   type QuickTaskTimeRange,
 } from "./quickTaskFilters";
-export { repoBasePath } from "./repoPath";
+export { ENTITY_SECTION, entityHref, repoBasePath } from "./repoPath";
 export {
   PRIORITY_LABELS,
   PRIORITY_ORDER,
@@ -241,3 +280,33 @@ export {
   type TimelineEvent,
   type TimelineRow,
 } from "./prTimeline";
+export { SANDBOX_CHAT_COPY, sandboxComposerState } from "./sandboxComposer";
+export {
+  ACTIVE_PROJECT_PHASES,
+  BUILDABLE_PROJECT_PHASES,
+  PROJECT_LIST_DEFAULTS,
+  PROJECT_PHASE_LABELS,
+  PROJECT_SORT_FIELDS,
+  PROJECT_SORT_FIELD_LABELS,
+  clearedProjectFilter,
+  clearedProjectFilters,
+  filterAndSortProjects,
+  interviewTurnText,
+  isProjectPlanning,
+  newProjectSubmitBlocker,
+  parseProjectSpec,
+  projectFilterChips,
+  projectProgressSegments,
+  projectTaskSections,
+  toggleHiddenProjectPhase,
+  type FilterableProject,
+  type ProjectFilterKey,
+  type ProjectListFilters,
+  type ProjectPhase,
+  type ProjectSortDir,
+  type ProjectSortField,
+  type ProjectSpec,
+  type ProjectSpecTask,
+  type ProjectTaskProgress,
+  type SectionableProjectTask,
+} from "./projectMeta";

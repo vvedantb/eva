@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useChatTurnOpen } from "@/lib/components/chat/useChatTurnOpen";
 import { useChatUnread } from "@/lib/components/sandbox/useChatUnread";
@@ -17,6 +17,7 @@ import {
   type ProjectMainTab,
 } from "@/lib/components/projects/ProjectMainTabs";
 import { useProjectSandbox } from "@/lib/components/projects/useProjectSandbox";
+import { useAgentBrowsingAutoSwitch } from "@/lib/components/sandbox/useSandboxLifecycle";
 import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
@@ -26,7 +27,6 @@ import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import {
   StopConfirmDialog,
   ResolveConfirmDialog,
-  StartupCommandsConfirmDialog,
 } from "@/lib/components/tasks/_components/TaskConfirmDialogs";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";
 import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
@@ -76,8 +76,6 @@ export function ProjectDetailClient({
   const [isStoppingBuild, setIsStoppingBuild] = useState(false);
   const [showStopBuildConfirm, setShowStopBuildConfirm] = useState(false);
   const [showResolveConfirm, setShowResolveConfirm] = useState(false);
-  const [showStartupCommandsConfirm, setShowStartupCommandsConfirm] =
-    useState(false);
   const [isCreatingPr, setIsCreatingPr] = useState(false);
   const [isResolvingConflicts, setIsResolvingConflicts] = useState(false);
   const [prError, setPrError] = useState<string | null>(null);
@@ -114,8 +112,6 @@ export function ProjectDetailClient({
     isSandboxStopping,
     sandboxStartupActivity,
     sandboxId: projectSandboxId,
-    handleRetryStartupCommands,
-    isRetryingStartupCommands,
   } = sandbox;
 
   const prewarmChatDaemon = useMutation(
@@ -158,15 +154,7 @@ export function ProjectDetailClient({
     setExpandRightSignal((n) => n + 1);
   };
 
-  // Auto-switch to Browser + expand sandbox panel on lock transition only
-  // (undefined → set). Mirrors SessionDetailClient's pattern. Don't fight the
-  // user if they switch away mid-lock.
-  const prevAgentBrowsingAt = useRef<number | undefined>(undefined);
-  const agentBrowsingAt = getAgentBrowsingAt(project);
-  useEffect(() => {
-    const prev = prevAgentBrowsingAt.current;
-    prevAgentBrowsingAt.current = agentBrowsingAt;
-    if (agentBrowsingAt === undefined || prev !== undefined) return;
+  useAgentBrowsingAutoSwitch(getAgentBrowsingAt(project), () => {
     if (!projectPathSegment) return;
     void navigate({
       to: toInternalRepoHref(
@@ -175,9 +163,7 @@ export function ProjectDetailClient({
       search: true,
     });
     setExpandRightSignal((n) => n + 1);
-    // Full deps are safe: the ref guard above makes re-runs no-ops, and a
-    // disable comment here makes React Compiler skip the whole file.
-  }, [agentBrowsingAt, basePath, navigate, projectPathSegment]);
+  });
 
   // Chat sub-agent CTA row → Agents tab + expand the sandbox pane (same shape
   // as SessionDetailClient's onOpenAgentsTab; the tab is a route segment here).
@@ -215,19 +201,19 @@ export function ProjectDetailClient({
     setIsCreatingPr(false);
   };
 
-  const { hasDeployedPreview, canCreatePr } = getProjectPrFlags(
+  const { canCreatePr } = getProjectPrFlags(
     project,
     latestDeployment,
   );
+  // Create PR only: the header menu draws the PR rows (`ProjectCardMenuItems`).
   const prLinks = usePrLinkMenuItems({
     createPr: {
       enabled: canCreatePr,
       isCreating: isCreatingPr,
       onCreate: handleCreatePr,
     },
-    prUrl: project?.prUrl,
-    owner: { kind: "project", projectId },
-    hasDeployment: hasDeployedPreview,
+    prUrl: undefined,
+    hasDeployment: false,
   });
 
   const handleResolveConflicts = async () => {
@@ -296,7 +282,6 @@ export function ProjectDetailClient({
             onResolveConflicts={handleResolveConflicts}
             onStopBuild={handleStopBuild}
             setShowResolveConfirm={setShowResolveConfirm}
-            setShowStartupCommandsConfirm={setShowStartupCommandsConfirm}
             setShowStopBuildConfirm={setShowStopBuildConfirm}
             setShowPlanModal={setShowPlanModal}
             setShowChatModal={setShowChatModal}
@@ -356,13 +341,6 @@ export function ProjectDetailClient({
         onOpenChange={setShowResolveConfirm}
         onConfirm={handleResolveConflicts}
         isLoading={isResolvingConflicts}
-      />
-
-      <StartupCommandsConfirmDialog
-        open={showStartupCommandsConfirm}
-        onOpenChange={setShowStartupCommandsConfirm}
-        onConfirm={handleRetryStartupCommands}
-        isLoading={isRetryingStartupCommands}
       />
 
       {parsedSpec && (

@@ -1,3 +1,5 @@
+import { repoBasePath } from "@eva/shared";
+
 /**
  * Monorepo apps use one `$repo` path segment internally (`repo--app`). The
  * router rewrite in `main.tsx` maps that to slash URLs in the address bar
@@ -50,10 +52,7 @@ export function repoHref(
   name: string,
   rootDirectory?: string,
 ): string {
-  if (!rootDirectory) return `/${owner}/${name}`;
-  const appName = rootDirectory.split("/").pop();
-  if (!appName) return `/${owner}/${name}`;
-  return `/${owner}/${name}/${appName}`;
+  return repoBasePath({ owner, name, rootDirectory });
 }
 
 /** @deprecated Alias of {@link repoHref} — both are slash form now. */

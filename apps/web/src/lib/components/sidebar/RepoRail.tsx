@@ -285,7 +285,8 @@ function RepoRailView({
             (`AveLauncherProvider`), which owns the orchestrator query too. */}
         <div className="h-px w-8 bg-sidebar-border" aria-hidden />
       </div>
-      <div className="scrollbar scroll-fade flex w-full flex-1 flex-col items-center gap-1.5 overflow-y-auto py-2">
+      {/* Drawer below `lg`: keep a scroll here off the page behind. */}
+      <div className="scrollbar scroll-fade flex w-full flex-1 flex-col items-center gap-1.5 overflow-y-auto py-2 max-lg:overscroll-y-contain">
         {repos.map((row, index) => {
           const displayName = repoDisplayLabel(row);
           // Mirrors RailAppHotkeys: only the first nine tiles get a slot.

@@ -4,8 +4,16 @@ import { groupNotifications, type InboxGroup } from "@eva/shared/notificationGro
 import { IconArchive, IconArchiveOff, IconInbox, IconMail, IconMailOpened } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
 import { PageHeader, SectionLabel } from "@vvedantb/native-ui/layout";
-import { BulkActionBar, CenteredSpinner, EmptyState, ListDivider } from "@vvedantb/native-ui/primitives";
+import {
+  BulkActionBar,
+  closeSwipeRows,
+  EmptyState,
+  ListDivider,
+  SkeletonList,
+  SkeletonRow,
+} from "@vvedantb/native-ui/primitives";
 import { tokens, useLargerText } from "@vvedantb/native-ui/theme";
+import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
@@ -20,8 +28,9 @@ import { useScheme, XS_TRACKING } from "@/ui/theme";
 /**
  * The web inbox at phone width: All / Unread / Archived, grouped by day,
  * repo, type or urgency (`@eva/shared/notificationGroups`), sticky group
- * headers, and select mode with the web bulk bar. A `SectionList`: the inbox
- * holds up to 100 rows, and only those near the view are drawn.
+ * headers, and select mode with the web bulk bar. The web row menu is a
+ * swipe on each row (`NotificationRow`). A `SectionList`: the inbox holds up
+ * to 100 rows, and only those near the view are drawn.
  */
 export default function InboxScreen() {
   const [filter, setFilter] = useState<InboxFilter>("all");
@@ -32,6 +41,7 @@ export default function InboxScreen() {
   const unreadCount = useQuery(api.notifications.countUnread, {}) ?? 0;
   const repos = useQuery(api.githubRepos.list, {});
   const markAsRead = useMutation(api.notifications.markAsRead);
+  const markAsUnread = useMutation(api.notifications.markAsUnread);
   const markAllAsRead = useMutation(api.notifications.markAllAsRead);
   const markManyAsRead = useMutation(api.notifications.markManyAsRead);
   const markManyAsUnread = useMutation(api.notifications.markManyAsUnread);
@@ -75,9 +85,30 @@ export default function InboxScreen() {
     else next.add(id);
     setSelected(next);
   };
-  const bulk = (run: (args: { ids: Id<"notifications">[] }) => Promise<null>) => () => {
-    void run({ ids: [...selected] });
+  const bulk = (run: (ids: Id<"notifications">[]) => Promise<unknown>) => () => {
+    void run([...selected]);
     exitSelect();
+  };
+  // The web `useInboxActions` writes and toasts. Archive offers Undo at once,
+  // as the rows have already left the list.
+  const unarchive = (ids: Id<"notifications">[]) => {
+    const done = unarchiveMany({ ids });
+    done.catch(() => toast.error("Couldn't unarchive", { id: "inbox-unarchive" }));
+    return done;
+  };
+  const archive = (ids: Id<"notifications">[]) => {
+    const done = archiveMany({ ids });
+    done.catch(() => toast.error("Couldn't archive", { id: "inbox-archive" }));
+    toast.success(`${ids.length} archived`, { action: { label: "Undo", onPress: () => void unarchive(ids) } });
+    return done;
+  };
+  const toggleRead = (notification: Doc<"notifications">) => {
+    const id = notification._id;
+    if (notification.read) {
+      markAsUnread({ id }).catch(() => toast.error("Couldn't mark as unread", { id: "inbox-mark-unread" }));
+    } else {
+      markAsRead({ id }).catch(() => toast.error("Couldn't mark as read", { id: "inbox-mark-read" }));
+    }
   };
   const open = (notification: Doc<"notifications">) => {
     if (!notification.read) void markAsRead({ id: notification._id });
@@ -105,12 +136,21 @@ export default function InboxScreen() {
             unreadCount={unreadCount}
             onMarkAllRead={() => void markAllAsRead({})}
             selecting={selecting}
-            onToggleSelecting={() => (selecting ? exitSelect() : setSelecting(true))}
+            onToggleSelecting={() => {
+              closeSwipeRows();
+              if (selecting) exitSelect();
+              else setSelecting(true);
+            }}
           />
         }
       />
       {notifications === undefined ? (
-        <CenteredSpinner label="Loading notifications" />
+        // Rows shaped as `NotificationRow`: the 28 mark, subject over event line, the time.
+        <SkeletonList
+          label="Loading notifications"
+          count={8}
+          renderRow={(row) => <SkeletonRow index={row} leading={28} lines={2} minHeight={64} />}
+        />
       ) : notifications.length === 0 ? (
         <EmptyState
           icon={IconInbox}
@@ -144,6 +184,10 @@ export default function InboxScreen() {
               repo={repoOf(notification)}
               onPress={() => open(notification)}
               onMarkRead={() => void markAsRead({ id: notification._id })}
+              onToggleRead={() => toggleRead(notification)}
+              onToggleArchive={() =>
+                notification.archivedAt === undefined ? archive([notification._id]) : unarchive([notification._id])
+              }
               selection={
                 selecting
                   ? { checked: selected.has(notification._id), onToggle: () => toggle(notification._id) }
@@ -151,6 +195,8 @@ export default function InboxScreen() {
               }
             />
           )}
+          // A scroll closes a row swiped open.
+          onScrollBeginDrag={closeSwipeRows}
           contentContainerStyle={{ paddingBottom: tabBarReserve(largerText, insets.bottom) + (selecting ? 72 : 0) }}
         />
       )}
@@ -167,11 +213,11 @@ export default function InboxScreen() {
         pinCancel
         // The web `InboxBulkBar` actions; Archive is reversible, so not destructive.
         primaryActions={[
-          { key: "read", label: "Mark read", icon: IconMailOpened, onClick: bulk(markManyAsRead) },
-          { key: "unread", label: "Mark unread", icon: IconMail, onClick: bulk(markManyAsUnread) },
+          { key: "read", label: "Mark read", icon: IconMailOpened, onClick: bulk((ids) => markManyAsRead({ ids })) },
+          { key: "unread", label: "Mark unread", icon: IconMail, onClick: bulk((ids) => markManyAsUnread({ ids })) },
           filter === "archived"
-            ? { key: "unarchive", label: "Unarchive", icon: IconArchiveOff, onClick: bulk(unarchiveMany) }
-            : { key: "archive", label: "Archive", icon: IconArchive, onClick: bulk(archiveMany) },
+            ? { key: "unarchive", label: "Unarchive", icon: IconArchiveOff, onClick: bulk(unarchive) }
+            : { key: "archive", label: "Archive", icon: IconArchive, onClick: bulk(archive) },
         ]}
       />
     </TabScreen>

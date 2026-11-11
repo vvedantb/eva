@@ -7,14 +7,13 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
-  ContextMenuSeparator,
   ContextMenuTrigger,
   LoadingState,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@vvedantb/ui";
-import { IconPencil, IconPlus, IconX } from "@tabler/icons-react";
+import { IconPencil, IconPlus } from "@tabler/icons-react";
 import { ChatRenameDialog } from "@/lib/components/chat/ChatRenameDialog";
 import { useSessionChatActions } from "@/lib/components/chat/useSessionChatActions";
 
@@ -25,15 +24,16 @@ interface ChatTabsBarProps {
   runningChatIds: ReadonlySet<string>;
   onSelect: (chat: Doc<"sessionChats">) => void;
   onCreate: () => void;
-  /** Hides `+` and close while the session is archived or its PR is closed. */
+  /** Hides `+` while the session is archived or its PR is closed. */
   isReadOnly: boolean;
   isCreating: boolean;
 }
 
 /**
  * One tab per chat of the session, Main first, always visible so the `+`
- * that opens a parallel chat is discoverable. Anatomy follows
- * `PreviewPaneTabs` (tone-only selected tab, close revealed on hover); the
+ * that opens a parallel chat is discoverable. Tabs never close: a chat lives
+ * as long as its session, so its history and agent are never lost by a stray
+ * click. Anatomy follows `PreviewPaneTabs` (tone-only selected tab); the
  * running indicator is the sidebar's Drive grid so "working" reads the same
  * everywhere.
  */
@@ -46,22 +46,12 @@ export function ChatTabsBar({
   isReadOnly,
   isCreating,
 }: ChatTabsBarProps) {
-  const { renameChat, closeChat } = useSessionChatActions();
+  const { renameChat } = useSessionChatActions();
   const [renameTarget, setRenameTarget] = useState<Doc<"sessionChats"> | null>(
     null,
   );
+  // Chats closed before tabs became permanent stay hidden.
   const openChats = chats.filter((chat) => chat.archived !== true);
-
-  // Closing the selected tab moves to its left neighbour, like browser tabs.
-  // Main is first and cannot close, so a neighbour always exists.
-  const handleClose = (chat: Doc<"sessionChats">) => {
-    if (chat._id === activeChatId) {
-      const index = openChats.findIndex((open) => open._id === chat._id);
-      const neighbour = openChats[index - 1] ?? openChats[index + 1];
-      if (neighbour) onSelect(neighbour);
-    }
-    void closeChat(chat._id);
-  };
 
   return (
     <>
@@ -78,7 +68,7 @@ export function ChatTabsBar({
               <ContextMenuTrigger asChild>
                 <div
                   className={cn(
-                    "group flex h-8 shrink-0 items-center rounded-lg motion-base",
+                    "flex h-8 shrink-0 items-center rounded-lg motion-base",
                     selected ? "bg-card" : "hover:bg-muted/80",
                   )}
                 >
@@ -109,19 +99,6 @@ export function ChatTabsBar({
                     ) : null}
                     <span className="truncate">{chat.title}</span>
                   </button>
-                  {!chat.isMain && !isReadOnly ? (
-                    <button
-                      type="button"
-                      className="hit-target motion-press mr-1 flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-70 hover:bg-muted hover:text-foreground hover:opacity-100 active:scale-[0.96] group-hover:opacity-100"
-                      aria-label={`Close ${chat.title}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleClose(chat);
-                      }}
-                    >
-                      <IconX className="size-3.5" />
-                    </button>
-                  ) : null}
                 </div>
               </ContextMenuTrigger>
               <ContextMenuContent onClick={(e) => e.stopPropagation()}>
@@ -129,18 +106,6 @@ export function ChatTabsBar({
                   <IconPencil size={16} />
                   Rename
                 </ContextMenuItem>
-                {!chat.isMain && !isReadOnly ? (
-                  <>
-                    <ContextMenuSeparator />
-                    <ContextMenuItem
-                      className="text-warning"
-                      onSelect={() => handleClose(chat)}
-                    >
-                      <IconX size={16} />
-                      Close chat
-                    </ContextMenuItem>
-                  </>
-                ) : null}
               </ContextMenuContent>
             </ContextMenu>
           );

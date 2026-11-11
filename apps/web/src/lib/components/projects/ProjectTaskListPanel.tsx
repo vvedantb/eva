@@ -3,6 +3,7 @@
 import type { Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "@eva/backend";
+import { projectTaskSections, type DisplayTaskStatus } from "@eva/shared";
 import { useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { Virtuoso } from "react-virtuoso";
@@ -35,7 +36,6 @@ import {
 import { IconGripVertical, IconPlus } from "@tabler/icons-react";
 
 type Task = FunctionReturnType<typeof api.agentTasks.listByProject>[number];
-type TaskStatus = Task["status"];
 
 function SortableTaskWrapper({
   task,
@@ -113,8 +113,6 @@ function SortableTaskWrapper({
               onSelectTask(task._id);
             }}
             assignedTo={task.assignedTo}
-            model={task.model}
-            providerAccountId={task.providerAccountId}
             projectId={task.projectId}
             repoId={task.repoId}
           />
@@ -154,40 +152,20 @@ export function ProjectTaskListPanel({
   });
   const errorTaskIdSet = new Set(errorTaskIds ?? []);
 
-  const groupedTasks: Record<TaskStatus, Task[]> = {
-    draft: [],
-    todo: [],
-    in_progress: [],
-    code_review: [],
-    business_review: [],
-    done: [],
-    cancelled: [],
-  };
-  for (const task of tasks) {
-    groupedTasks[task.status].push(task);
-  }
-  // Sort non-todo groups by latest run date (descending), falling back to createdAt
-  const sortByLastRun = (a: Task, b: Task) => {
-    const aTime = a.lastRunStartedAt ?? a.createdAt;
-    const bTime = b.lastRunStartedAt ?? b.createdAt;
-    return bTime - aTime;
-  };
-  for (const [status, group] of Object.entries(groupedTasks)) {
-    if (status !== "todo") {
-      group.sort(sortByLastRun);
-    }
-  }
+  const sections = projectTaskSections(tasks);
+  const tasksFor = (status: DisplayTaskStatus) =>
+    sections.find((section) => section.status === status)?.tasks ?? [];
 
-  let todoTasks = groupedTasks.todo;
+  let todoTasks = tasksFor("todo");
   if (localTodoOrder) {
-    const taskMap = new Map(groupedTasks.todo.map((t) => [t._id, t]));
+    const taskMap = new Map(todoTasks.map((t) => [t._id, t]));
     const orderSet = new Set(localTodoOrder);
     const ordered: Task[] = [];
     for (const id of localTodoOrder) {
       const task = taskMap.get(id);
       if (task) ordered.push(task);
     }
-    for (const task of groupedTasks.todo) {
+    for (const task of tasksFor("todo")) {
       if (!orderSet.has(task._id)) ordered.push(task);
     }
     todoTasks = ordered;
@@ -221,12 +199,9 @@ export function ProjectTaskListPanel({
     }
   };
 
-  const nonEmptyStatuses = TASK_STATUSES.filter(
-    (status) => groupedTasks[status].length > 0,
-  );
-  const defaultExpandedKeys = nonEmptyStatuses.filter(
-    (s) => s !== "done" && s !== "cancelled",
-  );
+  const defaultExpandedKeys = sections
+    .filter((section) => section.defaultOpen)
+    .map((section) => section.status);
 
   return (
     <div
@@ -244,7 +219,7 @@ export function ProjectTaskListPanel({
           const config = statusConfig[status];
           const StatusIcon = config.icon;
           const statusTasks =
-            status === "todo" ? todoTasks : groupedTasks[status];
+            status === "todo" ? todoTasks : tasksFor(status);
 
           if (status === "todo" && statusTasks.length > 0) {
             return (
@@ -375,8 +350,6 @@ export function ProjectTaskListPanel({
                               onSelectTask(task._id);
                             }}
                             assignedTo={task.assignedTo}
-                            model={task.model}
-                            providerAccountId={task.providerAccountId}
                             projectId={task.projectId}
                             repoId={task.repoId}
                           />

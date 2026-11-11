@@ -82,8 +82,8 @@ export function statusMeta(
   if (status === "merged") {
     return {
       label: "Merged",
-      className: "bg-violet-500/10 text-violet-700 dark:text-violet-300",
-      textClassName: "text-violet-700 dark:text-violet-300",
+      className: "bg-status-code-review/10 text-status-code-review",
+      textClassName: "text-status-code-review",
       icon: IconGitMerge,
     };
   }

@@ -1,7 +1,11 @@
 import { v } from "convex/values";
+import { terminalHistoryTail } from "@eva/shared";
 import { authMutation, authQuery } from "./functions";
 import type { Doc } from "./_generated/dataModel";
-import { terminalPaneValidator } from "./validators";
+import {
+  previewPanePathValidator,
+  terminalPaneValidator,
+} from "./validators";
 import {
   patchSandboxOwner,
   resolveSandboxOwnerForUser,
@@ -12,13 +16,21 @@ import {
 import {
   assertStickyPreviewPort,
   normalizeStickyPreviewPath,
-  truncateTerminalHistoryTail,
 } from "./_sandbox/stickyPreview";
 
 type TerminalPane = NonNullable<Doc<"sessions">["terminalPanes"]>[number];
 
+/**
+ * Extra preview panes kept per owner. Pane ids are per-browser UUIDs, so old
+ * ids pile up; the oldest writes drop off past this cap.
+ */
+const MAX_PREVIEW_PANE_PATHS = 16;
+
 const viewStateValidator = v.object({
+  /** Main (first) preview pane path; the agent's set_preview_path writes it. */
   previewPath: v.optional(v.string()),
+  /** Paths of extra preview panes, keyed by the client pane id. */
+  previewPanePaths: v.optional(v.array(previewPanePathValidator)),
   terminalHistoryTail: v.optional(v.string()),
   agentBrowsingAt: v.optional(v.number()),
 });
@@ -129,14 +141,24 @@ export const getViewState = authQuery({
     if (!owner) return null;
     return {
       previewPath: owner.doc.previewPath,
+      previewPanePaths: owner.doc.previewPanePaths,
       terminalHistoryTail: owner.doc.terminalHistoryTail,
       agentBrowsingAt: owner.doc.agentBrowsingAt,
     };
   },
 });
 
+/**
+ * Sticky Preview path of one pane. No `paneId` writes the main pane (the
+ * agent's set_preview_path); a `paneId` writes that extra pane only, so one
+ * pane's navigation never moves the others.
+ */
 export const setPreviewPath = authMutation({
-  args: { owner: sandboxOwnerValidator, path: v.string() },
+  args: {
+    owner: sandboxOwnerValidator,
+    path: v.string(),
+    paneId: v.optional(v.string()),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     const owner = await resolveSandboxOwnerOrThrow(
@@ -144,8 +166,20 @@ export const setPreviewPath = authMutation({
       ctx.userId,
       args.owner,
     );
-    const previewPath = normalizeStickyPreviewPath(args.path);
-    await patchSandboxOwner(ctx.db, owner, { previewPath });
+    const path = normalizeStickyPreviewPath(args.path);
+    const { paneId } = args;
+    if (paneId === undefined) {
+      await patchSandboxOwner(ctx.db, owner, { previewPath: path });
+      return null;
+    }
+    const others = (owner.doc.previewPanePaths ?? []).filter(
+      (entry) => entry.paneId !== paneId,
+    );
+    await patchSandboxOwner(ctx.db, owner, {
+      previewPanePaths: [...others, { paneId, path }].slice(
+        -MAX_PREVIEW_PANE_PATHS,
+      ),
+    });
     return null;
   },
 });
@@ -174,8 +208,10 @@ export const setTerminalHistoryTail = authMutation({
       ctx.userId,
       args.owner,
     );
-    const terminalHistoryTail = truncateTerminalHistoryTail(args.tail);
-    await patchSandboxOwner(ctx.db, owner, { terminalHistoryTail });
+    // Server-side trim too, so a buggy client cannot inflate entity docs.
+    await patchSandboxOwner(ctx.db, owner, {
+      terminalHistoryTail: terminalHistoryTail(args.tail),
+    });
     return null;
   },
 });

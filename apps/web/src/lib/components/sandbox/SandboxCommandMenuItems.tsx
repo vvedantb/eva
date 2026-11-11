@@ -7,7 +7,6 @@ import {
 } from "@vvedantb/ui";
 import {
   IconPlayerPlay,
-  IconRefresh,
   IconServerBolt,
 } from "@tabler/icons-react";
 
@@ -19,34 +18,19 @@ export interface SandboxCommandMenuItem {
 }
 
 /**
- * The sandbox command rows of the task and project "More" menus. Startup and
- * dev server are confirmed actions (Alt skips the dialog); background commands
- * run directly. Omit `devServer` where the surface has no dev server runner.
+ * The sandbox command rows of the task and project "More" menus. Dev server
+ * is a confirmed action (Alt skips the dialog); background commands run
+ * directly. Omit `devServer` where the surface has no dev server runner.
  */
 export function SandboxCommandMenuItems({
-  startupCommands,
   devServer,
   backgroundCommands,
 }: {
-  startupCommands: SandboxCommandMenuItem;
   devServer?: SandboxCommandMenuItem;
   backgroundCommands: SandboxCommandMenuItem;
 }) {
   return (
     <>
-      {startupCommands.show ? (
-        <DropdownMenuItem
-          onClick={startupCommands.onRun}
-          disabled={startupCommands.busy}
-          title={skipConfirmTitle("Run Startup Commands")}
-        >
-          <BusyMenuIcon busy={startupCommands.busy}>
-            <IconRefresh size={14} />
-          </BusyMenuIcon>
-          Run Startup Commands
-          <ConfirmSkipHint />
-        </DropdownMenuItem>
-      ) : null}
       {devServer?.show ? (
         <DropdownMenuItem
           onClick={devServer.onRun}
