@@ -8,12 +8,12 @@ import { tokens, useLargerText } from "@vvedantb/native-ui/theme";
 import { useQuery } from "convex/react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import { Pressable, SectionList, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { QuickTasksSection, useQuickTaskRepo } from "@/quickTasks/QuickTasksSection";
 import { useSimpleView } from "@/chat/ComposerFooter";
 import { ReviewsSection } from "@/reviews/ReviewsSection";
-import { SessionGroup } from "@/sessions/SessionGroup";
+import { SessionGroupFooter, SessionGroupHeader, SessionListRow, useSessionGroups } from "@/sessions/SessionGroup";
 import { useSessionActions } from "@/sessions/useSessionActions";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme } from "@/ui/theme";
@@ -74,23 +74,21 @@ export default function SessionsScreen() {
 /**
  * Sessions across every repo the user can access, as the web sessions sidebar
  * at phone width: Active and Archived tabs, then one collapsible group per
- * repo (`SessionGroup`) with compact rows and "Show more". A long press on a
- * row opens the web row menu as a sheet (`useSessionActions`).
+ * repo (`useSessionGroups`) with compact rows and "Show more", in a
+ * `SectionList`. A long press on a row opens the web row menu as a sheet
+ * (`useSessionActions`).
  */
 function SessionsSection() {
   const router = useRouter();
   const [tab, setTab] = useState<SessionTab>("active");
   const sessionActions = useSessionActions();
   const sessions = useQuery(api.mobile.listChats, { archived: tab === "archived" });
+  // The repo logos for the group headers, from the list the web sidebar reads.
+  const repos = useQuery(api.githubRepos.list, {});
   const scheme = useScheme();
   const largerText = useLargerText();
   const insets = useSafeAreaInsets();
-
-  // Repos in order of their newest session; sessions stay newest first.
-  const groups = new Map<string, NonNullable<typeof sessions>>();
-  for (const session of sessions ?? []) {
-    groups.set(session.repoId, [...(groups.get(session.repoId) ?? []), session]);
-  }
+  const { sections, toggleOpen, toggleExpanded } = useSessionGroups(sessions);
 
   return (
     <>
@@ -115,31 +113,51 @@ function SessionsSection() {
       {sessions === undefined ? (
         <CenteredSpinner label="Loading sessions" />
       ) : sessions.length === 0 ? (
+        // The web sidebar's empty copy (`GlobalSessionGroup`).
         <EmptyState
           icon={IconTerminal2}
-          title={tab === "archived" ? "No archived sessions" : "No sessions"}
-          description={tab === "archived" ? undefined : "Start a session on the web. It shows up here."}
+          title={tab === "archived" ? "No archived sessions" : "No sessions yet"}
+          description={tab === "archived" ? "Archive a thread from its menu." : "Press + to start one."}
         />
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: tabBarReserve(largerText, insets.bottom) }}>
-          {[...groups].map(([repoId, rows]) => (
-            <SessionGroup
-              key={repoId}
-              repoLabel={rows[0]?.repoLabel ?? ""}
-              rows={rows}
+        <SectionList
+          sections={sections}
+          keyExtractor={(session) => session.sessionId}
+          stickySectionHeadersEnabled={false}
+          renderSectionHeader={({ section }) => (
+            <SessionGroupHeader
+              section={section}
+              logoUrl={repos?.find((repo) => repo._id === section.repoId)?.logoUrl}
               // The web counts running sessions, and offers "+", in the Active list only.
-              live={tab === "active" ? rows.filter((row) => row.status === "active").length : 0}
+              live={tab === "active" ? section.rows.filter((row) => row.status === "active").length : 0}
+              onToggle={() => toggleOpen(section.repoId)}
               onNew={
                 tab === "active"
-                  ? () => router.push({ pathname: "/session/new", params: { repo: repoId } })
+                  ? () => router.push({ pathname: "/session/new", params: { repo: section.repoId } })
                   : undefined
               }
-              onRowLongPress={(row) => sessionActions.openSheet({ ...row, archived: tab === "archived" })}
             />
-          ))}
-        </ScrollView>
+          )}
+          // Web: `space-y-0.5` between rows.
+          ItemSeparatorComponent={RowGap}
+          renderItem={({ item: session }) => (
+            <SessionListRow
+              session={session}
+              onLongPress={() => sessionActions.openSheet({ ...session, archived: tab === "archived" })}
+            />
+          )}
+          renderSectionFooter={({ section }) => (
+            <SessionGroupFooter section={section} onToggleExpanded={() => toggleExpanded(section.repoId)} />
+          )}
+          contentContainerStyle={{ paddingBottom: tabBarReserve(largerText, insets.bottom) }}
+        />
       )}
       {sessionActions.dialogs}
     </>
   );
+}
+
+/** The 2 between two session rows. */
+function RowGap() {
+  return <View className="h-0.5" />;
 }

@@ -139,8 +139,8 @@ const traitArgs = {
  * `sendMessage` then uses. Shares the writes of the web picker's mutations
  * (`sessionChats.setModel` / `setTraits`, `projects.setChatModel` /
  * `setTraits`), so a pick reconciles the sticky account as on the web. Session and project
- * chats only: the web task chat picks `agentTasks.model`, which is not the
- * `lastChatModel` a phone task reply uses.
+ * chats only: for a quick task the phone calls the web task chat's own
+ * `agentTasks.update` and `agentTasks.setTraits`.
  */
 export const setChatModel = authMutation({
   args: { target: v.string(), model: v.optional(aiModelValidator), ...traitArgs },
@@ -159,7 +159,7 @@ export const setChatModel = authMutation({
         await setProjectTraits(ctx, entity.project._id, traits);
         return null;
       case "task":
-        throw new Error("Pick a quick task's model on the web");
+        throw new Error("Set a quick task's model with agentTasks.update");
     }
   },
 });
@@ -196,8 +196,8 @@ export const stopTurn = authMutation({
 
 /**
  * Starts a session from the phone, as the web sessions landing composer does:
- * `prompt` is the first message. The composer footer's model, traits and base
- * branch are optional; each absent one is the repo default, as on the web.
+ * `prompt` is the first message. The composer footer's model, traits, account
+ * and base branch are optional; each absent one is the default, as on the web.
  * Open the returned `sessionId` as the chat target.
  */
 export const startSession = authMutation({
@@ -209,7 +209,11 @@ export const startSession = authMutation({
     attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
     model: v.optional(aiModelValidator),
     ...traitArgs,
+    /** The model picker's account, as the web landing sends it: null is Team; absent is the user's default. */
+    providerAccountId: v.optional(v.union(v.id("userProviderAccounts"), v.null())),
     baseBranch: v.optional(v.string()),
+    /** "Stack a new session" on a pull request: the session's PR joins that PR's stack, as the web composer sends. */
+    stackOnPrNumber: v.optional(v.number()),
   },
   returns: v.object({ sessionId: v.id("sessions"), numId: v.number() }),
   handler: async (ctx, { prompt: rawPrompt, ...args }) => {

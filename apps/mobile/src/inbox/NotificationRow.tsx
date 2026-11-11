@@ -5,8 +5,9 @@ import { splitNotificationTitle } from "@eva/shared/notificationTitle";
 import { IconCheck } from "@tabler/icons-react-native";
 import { Avatar, AvatarFallback, Checkbox } from "@vvedantb/native-ui/primitives";
 import { palette, tokens } from "@vvedantb/native-ui/theme";
-import { Image, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { timeAgo } from "@/ui/format";
+import { RepoLogo } from "@/ui/RepoLogo";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 import { NOTIFICATION_ICONS, toneColors } from "./notificationAppearance";
 
@@ -120,27 +121,17 @@ export function NotificationRow({
 /** The web `RepoLogo` at 28: the uploaded logo, else the repo initial on the muted fill. */
 function RepoMark({ repo }: { repo: NotificationRepo }) {
   const scheme = useScheme();
-  if (repo.logoUrl) {
-    return (
-      <Image
-        source={{ uri: repo.logoUrl }}
-        accessibilityIgnoresInvertColors
-        className="h-7 w-7 rounded-full border"
-        style={{ borderColor: tokens.color.border[scheme] }}
-      />
-    );
-  }
   return (
-    <View
-      className="h-7 w-7 items-center justify-center rounded-full"
-      style={{ backgroundColor: EVA_THEME[scheme].muted }}
-    >
-      <Text
-        className="font-instrument-sans-semibold text-xs"
-        style={{ color: tokens.color.muted[scheme], fontWeight: "600" }}
-      >
-        {repo.label.charAt(0).toUpperCase()}
-      </Text>
-    </View>
+    <RepoLogo
+      logoUrl={repo.logoUrl}
+      size={28}
+      fallback={
+        <View className="h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: EVA_THEME[scheme].muted }}>
+          <Text className="font-instrument-sans-semibold text-xs" style={{ color: tokens.color.muted[scheme], fontWeight: "600" }}>
+            {repo.label.charAt(0).toUpperCase()}
+          </Text>
+        </View>
+      }
+    />
   );
 }

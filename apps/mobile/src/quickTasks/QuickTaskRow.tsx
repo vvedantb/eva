@@ -1,5 +1,5 @@
 import type { api } from "@eva/backend";
-import { TASK_STATUS_LABELS, formatEntityNumLabel, getUserInitials, type DisplayTaskStatus } from "@eva/shared";
+import { TASK_STATUS_LABELS, firstNameFromUser, formatEntityNumLabel, type DisplayTaskStatus } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconClock, IconTag } from "@tabler/icons-react-native";
 import { Spinner, SurfaceRow } from "@vvedantb/native-ui/primitives";
@@ -12,6 +12,7 @@ import { useSimpleView } from "@/chat/ComposerFooter";
 import { PriorityIcon } from "@/quickTasks/PriorityIcon";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
 import { timeAgo } from "@/ui/format";
+import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { AwaitingAnswerMark } from "@/ui/RowStatus";
 import { useScheme } from "@/ui/theme";
 
@@ -34,20 +35,22 @@ const SANDBOX_DOT = {
  * One quick task, as the web `QuickTaskCard` at phone width: a card with the
  * status stripe (red with a tinted border when the latest run failed), then
  * the number and title with the priority, live mark, unread dot and schedule
- * clock; the tags; and the creator and age. A tap opens the task chat. The
- * web hover tooltips are spoken in the row's hint instead. The web kebab and
- * context menu (move, delete, status) are not on the phone.
+ * clock; the tags; and the creator and age. A tap opens the task chat; a
+ * long press opens the row menu (`onLongPress`), as the web kebab and
+ * right-click. The web hover tooltips are spoken in the row's hint instead.
  */
 export function QuickTaskRow({
   task,
   status,
   hasError,
   creator,
+  onLongPress,
 }: {
   task: QuickTask;
   status: DisplayTaskStatus;
   hasError: boolean;
   creator: User | undefined;
+  onLongPress: () => void;
 }) {
   const router = useRouter();
   const scheme = useScheme();
@@ -64,7 +67,7 @@ export function QuickTaskRow({
   const showSandbox = sandbox !== undefined && !simpleView;
   const showUnread = task.hasUnread && !task.isExecuting;
   const numLabel = formatEntityNumLabel({ numId: task.numId });
-  const creatorFirstName = creator?.firstName ?? creator?.fullName?.split(/\s+/)[0];
+  const creatorFirstName = creator ? firstNameFromUser(creator) : null;
   const scheduled = task.scheduledAt
     ? `${status === "todo" ? "Scheduled for" : "Was scheduled for"} ${dayjs(task.scheduledAt).format("MMM D, h:mm A")}`
     : undefined;
@@ -89,6 +92,8 @@ export function QuickTaskRow({
       // Web: `px-2.5 py-2 pl-3`, the three lines `gap-1.5`.
       className="gap-1.5 px-2.5 py-2 pl-3"
       onPress={() => router.push({ pathname: "/chat/[target]", params: { target: task._id } })}
+      onLongPress={onLongPress}
+      longPressLabel="Task actions"
     >
       <View className="flex-row items-start gap-2">
         <View className="min-w-0 flex-1 flex-row items-baseline gap-1.5">
@@ -145,9 +150,7 @@ export function QuickTaskRow({
         <View className="min-w-0 flex-row items-center gap-1.5">
           {creator ? (
             <>
-              <View className="size-4 items-center justify-center rounded-full" style={{ backgroundColor: theme.muted }}>
-                <Text style={{ fontSize: 8, lineHeight: 10, fontWeight: "600", color: muted }}>{getUserInitials(creator)}</Text>
-              </View>
+              <InitialsAvatar user={creator} size={16} />
               {creatorFirstName ? (
                 <Text numberOfLines={1} className="font-instrument-sans min-w-0" style={{ ...TEXT_2XS, color: withAlpha(muted, 0.75) }}>
                   {creatorFirstName}

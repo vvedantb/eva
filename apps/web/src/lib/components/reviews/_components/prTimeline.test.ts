@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { buildPrTimeline, groupTimelineRows } from "./prTimelineItems";
+import { buildPrTimeline, groupTimelineRows } from "@eva/shared";
 import { overview } from "./prOverviewFixture";
 import type { PrComment, PrCommit, PrReviewEvent } from "./prOverviewMeta";
 

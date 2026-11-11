@@ -1,11 +1,12 @@
 import { convexTest } from "convex-test";
+import actionCache from "@convex-dev/action-cache/test";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import type * as GithubAuth from "../convex/githubAuth";
 
 /**
- * The Reviews writes and list read that both the web and the phone review
+ * The Reviews writes and reads that both the web and the phone review
  * screens call (apps/mobile has no wrapper: it calls these actions as the web
  * does). GitHub is faked at `getInstallationOctokit`, so each test checks what
  * would be sent to GitHub, and that a caller without the repo sends nothing.
@@ -16,6 +17,14 @@ const github = vi.hoisted(() => ({
   createReview: vi.fn(),
   merge: vi.fn(),
   createComment: vi.fn(),
+  update: vi.fn(),
+  get: vi.fn(),
+  requestReviewers: vi.fn(),
+  removeRequestedReviewers: vi.fn(),
+  updateIssue: vi.fn(),
+  setLabels: vi.fn(),
+  listCollaborators: vi.fn(),
+  listLabelsForRepo: vi.fn(),
   // No stack: the merge goes through `pulls.merge`.
   graphql: vi.fn(),
 }));
@@ -24,8 +33,22 @@ vi.mock("../convex/githubAuth", async (importOriginal) => ({
   ...(await importOriginal<typeof GithubAuth>()),
   getInstallationOctokit: async () => ({
     rest: {
-      pulls: { list: github.list, createReview: github.createReview, merge: github.merge },
-      issues: { createComment: github.createComment },
+      pulls: {
+        list: github.list,
+        createReview: github.createReview,
+        merge: github.merge,
+        update: github.update,
+        get: github.get,
+        requestReviewers: github.requestReviewers,
+        removeRequestedReviewers: github.removeRequestedReviewers,
+      },
+      issues: {
+        createComment: github.createComment,
+        update: github.updateIssue,
+        setLabels: github.setLabels,
+        listLabelsForRepo: github.listLabelsForRepo,
+      },
+      repos: { listCollaborators: github.listCollaborators },
     },
     graphql: github.graphql,
   }),
@@ -37,6 +60,8 @@ const TIMEOUT_MS = 30_000;
 
 async function fixture() {
   const t = convexTest(schema, modules);
+  // Every write drops the cached overview.
+  actionCache.register(t);
   const ids = await t.run(async (ctx) => {
     const userId = await ctx.db.insert("users", { clerkId: CLERK_ID });
     const strangerId = await ctx.db.insert("users", {});
@@ -191,6 +216,96 @@ describe("pull request review actions", () => {
   );
 
   test(
+    "a range comment sends its start line and side; a one-line comment sends neither",
+    async () => {
+      const { ids, asUser } = await fixture();
+      github.createReview.mockResolvedValue({ data: { id: 10, html_url: "https://example.test/r/10", state: "COMMENTED" } });
+
+      await asUser.action(api.github.submitPrReview, {
+        repoId: ids.repoId,
+        prNumber: 12,
+        event: "COMMENT",
+        body: "",
+        comments: [
+          { path: "src/a.ts", body: "Split these", line: 14, side: "RIGHT", startLine: 10, startSide: "LEFT" },
+          { path: "src/a.ts", body: "Typo", line: 20, side: "RIGHT", startLine: null, startSide: null },
+        ],
+      });
+
+      expect(github.createReview).toHaveBeenCalledWith(
+        expect.objectContaining({
+          comments: [
+            { path: "src/a.ts", body: "Split these", line: 14, side: "RIGHT", start_line: 10, start_side: "LEFT" },
+            { path: "src/a.ts", body: "Typo", line: 20, side: "RIGHT", start_line: undefined, start_side: undefined },
+          ],
+        }),
+      );
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "close, reopen, rename and a new description each patch only their own field",
+    async () => {
+      const { ids, asUser } = await fixture();
+      github.update.mockResolvedValue({ data: { title: "Add widgets", body: "Body" } });
+      const target = { owner: "acme", repo: "widgets", pull_number: 12 };
+
+      await asUser.action(api.github.updatePullRequest, { repoId: ids.repoId, prNumber: 12, state: "closed" });
+      await asUser.action(api.github.updatePullRequest, { repoId: ids.repoId, prNumber: 12, state: "open" });
+      const renamed = await asUser.action(api.github.updatePullRequest, { repoId: ids.repoId, prNumber: 12, title: "  Add widgets " });
+      await asUser.action(api.github.updatePullRequest, { repoId: ids.repoId, prNumber: 12, body: "" });
+
+      expect(github.update.mock.calls).toEqual([
+        [{ ...target, state: "closed" }],
+        [{ ...target, state: "open" }],
+        [{ ...target, title: "Add widgets" }],
+        [{ ...target, body: "" }],
+      ]);
+      expect(renamed).toEqual({ title: "Add widgets", body: "Body" });
+
+      github.update.mockClear();
+      await expect(asUser.action(api.github.updatePullRequest, { repoId: ids.repoId, prNumber: 12, title: "  " })).rejects.toThrow(
+        "Title cannot be empty",
+      );
+      expect(github.update).not.toHaveBeenCalled();
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "reviewers, assignees and labels are set as whole sets, from the candidates list",
+    async () => {
+      const { ids, asUser } = await fixture();
+      github.listCollaborators.mockResolvedValue({ data: [{ login: "octocat", avatar_url: "https://example.test/o.png" }, { login: "hubot" }] });
+      github.listLabelsForRepo.mockResolvedValue({ data: [{ name: "bug", color: "d73a4a", description: null }, { name: "docs" }] });
+      expect(await asUser.action(api.github.listPullRequestCandidates, { repoId: ids.repoId })).toEqual({
+        users: [
+          { login: "octocat", avatarUrl: "https://example.test/o.png" },
+          { login: "hubot", avatarUrl: null },
+        ],
+        labels: [
+          { name: "bug", color: "d73a4a", description: null },
+          { name: "docs", color: "cccccc", description: null },
+        ],
+      });
+
+      // Reviewers: GitHub has no set call, so the delta goes out as a removal and an addition.
+      github.get.mockResolvedValue({ data: { requested_reviewers: [{ login: "octocat" }, { login: "hubot" }] } });
+      await asUser.action(api.github.setPullRequestReviewers, { repoId: ids.repoId, prNumber: 12, logins: ["hubot", "monalisa"] });
+      expect(github.removeRequestedReviewers).toHaveBeenCalledWith({ owner: "acme", repo: "widgets", pull_number: 12, reviewers: ["octocat"] });
+      expect(github.requestReviewers).toHaveBeenCalledWith({ owner: "acme", repo: "widgets", pull_number: 12, reviewers: ["monalisa"] });
+
+      await asUser.action(api.github.setPullRequestAssignees, { repoId: ids.repoId, prNumber: 12, logins: [] });
+      expect(github.updateIssue).toHaveBeenCalledWith({ owner: "acme", repo: "widgets", issue_number: 12, assignees: [] });
+
+      await asUser.action(api.github.setPullRequestLabels, { repoId: ids.repoId, prNumber: 12, names: ["bug"] });
+      expect(github.setLabels).toHaveBeenCalledWith({ owner: "acme", repo: "widgets", issue_number: 12, labels: ["bug"] });
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "a caller without the repo is refused before anything is sent",
     async () => {
       const { ids, asUser } = await fixture();
@@ -203,9 +318,17 @@ describe("pull request review actions", () => {
       await expect(asUser.action(api.github.mergePullRequest, { repoId, prNumber: 1, method: "squash" })).rejects.toThrow(
         "Not authorized",
       );
+      await expect(asUser.action(api.github.updatePullRequest, { repoId, prNumber: 1, state: "closed" })).rejects.toThrow(
+        "Not authorized",
+      );
+      await expect(asUser.action(api.github.setPullRequestLabels, { repoId, prNumber: 1, names: [] })).rejects.toThrow(
+        "Not authorized",
+      );
       expect(github.createReview).not.toHaveBeenCalled();
       expect(github.createComment).not.toHaveBeenCalled();
       expect(github.merge).not.toHaveBeenCalled();
+      expect(github.update).not.toHaveBeenCalled();
+      expect(github.setLabels).not.toHaveBeenCalled();
     },
     TIMEOUT_MS,
   );

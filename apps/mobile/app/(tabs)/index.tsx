@@ -4,12 +4,12 @@ import { groupNotifications, type InboxGroup } from "@eva/shared/notificationGro
 import { IconArchive, IconArchiveOff, IconInbox, IconMail, IconMailOpened } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
 import { PageHeader, SectionLabel } from "@vvedantb/native-ui/layout";
-import { BulkActionBar, CenteredSpinner, DividedList, EmptyState } from "@vvedantb/native-ui/primitives";
+import { BulkActionBar, CenteredSpinner, EmptyState, ListDivider } from "@vvedantb/native-ui/primitives";
 import { tokens, useLargerText } from "@vvedantb/native-ui/theme";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "expo-router";
-import { useState } from "react";
-import { Linking, ScrollView, View } from "react-native";
+import { useEffect, useState } from "react";
+import { BackHandler, Linking, SectionList, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WEB_URL } from "@/config";
 import { InboxHeaderActions, type InboxFilter } from "@/inbox/InboxHeaderActions";
@@ -20,7 +20,8 @@ import { useScheme, XS_TRACKING } from "@/ui/theme";
 /**
  * The web inbox at phone width: All / Unread / Archived, grouped by day,
  * repo, type or urgency (`@eva/shared/notificationGroups`), sticky group
- * headers, and select mode with the web bulk bar.
+ * headers, and select mode with the web bulk bar. A `SectionList`: the inbox
+ * holds up to 100 rows, and only those near the view are drawn.
  */
 export default function InboxScreen() {
   const [filter, setFilter] = useState<InboxFilter>("all");
@@ -57,6 +58,17 @@ export default function InboxScreen() {
     setSelecting(false);
     setSelected(new Set());
   };
+  // Android back leaves select mode first, as it closes a sheet first. An
+  // effect because the hardware back button is a subscription outside React.
+  useEffect(() => {
+    if (!selecting) return;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      setSelecting(false);
+      setSelected(new Set());
+      return true;
+    });
+    return () => subscription.remove();
+  }, [selecting]);
   const toggle = (id: Id<"notifications">) => {
     const next = new Set(selected);
     if (next.has(id)) next.delete(id);
@@ -106,14 +118,13 @@ export default function InboxScreen() {
           description={filter === "all" ? "Mentions and agent questions show up here." : undefined}
         />
       ) : (
-        <ScrollView
+        <SectionList
+          sections={groups.map((section) => ({ label: section.label, data: section.items }))}
+          keyExtractor={(notification) => notification._id}
           // Each group header sticks while its rows scroll, as the web `sticky top-0` header.
-          stickyHeaderIndices={groups.map((_, index) => index * 2)}
-          contentContainerStyle={{ paddingBottom: tabBarReserve(largerText, insets.bottom) + (selecting ? 72 : 0) }}
-        >
-          {groups.flatMap((section) => [
+          stickySectionHeadersEnabled
+          renderSectionHeader={({ section }) => (
             <View
-              key={`${section.label}-header`}
               className="px-4 py-1.5"
               style={{
                 backgroundColor: tokens.color.background[scheme],
@@ -123,25 +134,25 @@ export default function InboxScreen() {
             >
               {/* The web label is an inline `text-xs` span in a 24 line box. */}
               <SectionLabel style={{ letterSpacing: XS_TRACKING, lineHeight: 24 }}>{section.label}</SectionLabel>
-            </View>,
-            <DividedList key={`${section.label}-rows`}>
-              {section.items.map((notification) => (
-                <NotificationRow
-                  key={notification._id}
-                  notification={notification}
-                  repo={repoOf(notification)}
-                  onPress={() => open(notification)}
-                  onMarkRead={() => void markAsRead({ id: notification._id })}
-                  selection={
-                    selecting
-                      ? { checked: selected.has(notification._id), onToggle: () => toggle(notification._id) }
-                      : undefined
-                  }
-                />
-              ))}
-            </DividedList>,
-          ])}
-        </ScrollView>
+            </View>
+          )}
+          // The `DividedList` hairline between the rows of a group.
+          ItemSeparatorComponent={ListDivider}
+          renderItem={({ item: notification }) => (
+            <NotificationRow
+              notification={notification}
+              repo={repoOf(notification)}
+              onPress={() => open(notification)}
+              onMarkRead={() => void markAsRead({ id: notification._id })}
+              selection={
+                selecting
+                  ? { checked: selected.has(notification._id), onToggle: () => toggle(notification._id) }
+                  : undefined
+              }
+            />
+          )}
+          contentContainerStyle={{ paddingBottom: tabBarReserve(largerText, insets.bottom) + (selecting ? 72 : 0) }}
+        />
       )}
       <BulkActionBar
         barKey="inbox-bulk-bar"
@@ -152,6 +163,8 @@ export default function InboxScreen() {
         onSelectAll={() => setSelected(new Set((notifications ?? []).map((notification) => notification._id)))}
         onClearSelection={() => setSelected(new Set())}
         bottomOffset={tabBarReserve(largerText, insets.bottom) - 24}
+        // At 390 the bar is wider than the screen: Cancel stays in view, the rest scrolls.
+        pinCancel
         // The web `InboxBulkBar` actions; Archive is reversible, so not destructive.
         primaryActions={[
           { key: "read", label: "Mark read", icon: IconMailOpened, onClick: bulk(markManyAsRead) },

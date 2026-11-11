@@ -9,7 +9,7 @@ import { useAction } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { FlatList, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { prListIconColour } from "@/reviews/prAppearance";
 import { useActionResult } from "@/reviews/useActionResult";
@@ -27,9 +27,9 @@ const TEXT_2XS = { fontSize: 11, lineHeight: 16, letterSpacing: 0.11 };
 /**
  * The web Reviews sidebar at phone width, for one repo: the repo picker (the
  * web reads the repo from its path), the Open / Closed / All switch, then the
- * repo's GitHub pull requests, recently updated first (`github.listPullRequests`).
- * A tap opens the review screen. The web hover prefetch, the right-click
- * Rename and the "open PRs on GitHub" click setting are not on the phone.
+ * repo's GitHub pull requests, recently updated first (`github.listPullRequests`,
+ * every page of them, so a `FlatList`). A tap opens the review screen. The web hover prefetch and the "open
+ * PRs on GitHub" click setting are not on the phone; the right-click Rename is in the review screen's ⋯ menu.
  */
 export function ReviewsSection() {
   const { repos, repo, setRepo } = useRepoParam();
@@ -93,11 +93,12 @@ export function ReviewsSection() {
           title={`No ${listState === "all" ? "" : `${listState} `}pull requests`}
         />
       ) : (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 8, paddingBottom: tabBarReserve(largerText, insets.bottom) }}>
-          {state.data.map((pr) => (
-            <PullRequestRow key={pr.number} pr={pr} repoId={repo._id} />
-          ))}
-        </ScrollView>
+        <FlatList
+          data={state.data}
+          keyExtractor={(pr) => String(pr.number)}
+          renderItem={({ item: pr }) => <PullRequestRow pr={pr} repoId={repo._id} />}
+          contentContainerStyle={{ paddingHorizontal: 8, paddingBottom: tabBarReserve(largerText, insets.bottom) }}
+        />
       )}
     </View>
   );

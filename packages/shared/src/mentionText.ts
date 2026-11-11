@@ -32,6 +32,50 @@ export function tokenizedToDisplayText(content: string): string {
   );
 }
 
+/**
+ * A chip's link in rendered markdown: `#mention:at:<id>` (an `@` mention) or
+ * `#mention:slash:<id>` (a `/` skill). A hash keeps it past link sanitising.
+ */
+export const MENTION_HREF_REGEX = /^#mention:(at|slash):([a-z0-9_]{16,40})$/;
+
+export type MentionChipKind = "at" | "slash";
+
+export function mentionChipHref(kind: MentionChipKind, id: string): string {
+  return `#mention:${kind}:${id}`;
+}
+
+/** A chip link's kind and id, or null for any other link. */
+export function parseMentionChipHref(href: string): { kind: MentionChipKind; id: string } | null {
+  const match = MENTION_HREF_REGEX.exec(href);
+  const kind = match?.[1];
+  const id = match?.[2];
+  if (!id || (kind !== "at" && kind !== "slash")) return null;
+  return { kind, id };
+}
+
+/** Fenced and inline code, which keeps its tokens as typed. */
+const CODE_SPAN_REGEX = /(```[\s\S]*?```|`[^`\n]*`)/;
+
+/**
+ * Stored markdown → the same markdown with each `@[Label](id)` and
+ * `/[Label](id)` as a link `[Label](#mention:…)` a renderer can draw as a
+ * chip, as the web `remarkMentionChips` marks them. Code is left as typed.
+ */
+export function mentionTokensToChipLinks(markdown: string): string {
+  return markdown
+    .split(CODE_SPAN_REGEX)
+    .map((part, index) =>
+      // `split` with a capture group puts the code spans at the odd indexes.
+      index % 2 === 1
+        ? part
+        : part
+            // `replace` starts a `/g` regex from 0, so the shared ones are safe here.
+            .replace(MENTION_TOKEN_REGEX, (_match, label: string, id: string) => `[${label}](${mentionChipHref("at", id)})`)
+            .replace(SKILL_TOKEN_REGEX, (_match, label: string, id: string) => `[${label}](${mentionChipHref("slash", id)})`),
+    )
+    .join("");
+}
+
 /** Label → id for the `@` chips and the `/` chips of one draft. */
 export interface MentionTokenMaps {
   mentionMap: ReadonlyMap<string, string>;

@@ -185,6 +185,76 @@ export function unifiedDiffLines(patch: string): UnifiedDiffLine[] {
   return rows;
 }
 
+/**
+ * Where a review comment on one unified diff row attaches in GitHub's review
+ * model, and the web range label for it. A removed line is on the base side
+ * (`LEFT`, its old number); an added or context line is on the head side
+ * (`RIGHT`, its new number), as the web Code tab anchors a one-line
+ * selection. The label is the number with the row's `+`/`-` marker, so `+12`,
+ * `-4` or `9`. Null for a hunk header, which takes no comment.
+ */
+export function lineCommentTarget(
+  row: UnifiedDiffLine,
+): { line: number; side: "LEFT" | "RIGHT"; label: string } | null {
+  if (row.kind === "hunk") return null;
+  const line = row.kind === "removed" ? row.oldLine : row.newLine;
+  if (line === null) return null;
+  const marker = row.kind === "added" ? "+" : row.kind === "removed" ? "-" : "";
+  return {
+    line,
+    side: row.kind === "removed" ? "LEFT" : "RIGHT",
+    label: `${marker}${line}`,
+  };
+}
+
+/**
+ * Where a review comment on the rows `from` to `to` (indexes into one file's
+ * `unifiedDiffLines`, either order) attaches in GitHub's review model, as the
+ * web Code tab anchors a selected range: the last row carries the comment,
+ * and `startLine` / `startSide` are set only when the range covers more than
+ * that one line (GitHub rejects a start equal to the end). The label is the
+ * web range label: `+3 to +5` when every row is the same kind of change,
+ * `3 to 7` otherwise, or the one row's label. Null when the range touches a
+ * hunk header, since a GitHub range stays inside one hunk.
+ */
+export function lineRangeCommentTarget(
+  rows: readonly UnifiedDiffLine[],
+  from: number,
+  to: number,
+): {
+  line: number;
+  side: "LEFT" | "RIGHT";
+  startLine: number | null;
+  startSide: "LEFT" | "RIGHT" | null;
+  label: string;
+} | null {
+  const span = rows.slice(Math.min(from, to), Math.max(from, to) + 1);
+  const first = span[0];
+  const last = span.at(-1);
+  if (first === undefined || last === undefined) return null;
+  if (span.some((row) => row.kind === "hunk")) return null;
+  const start = lineCommentTarget(first);
+  const end = lineCommentTarget(last);
+  if (start === null || end === null) return null;
+  const multiLine = start.side !== end.side || start.line < end.line;
+  if (!multiLine) return { ...end, startLine: null, startSide: null };
+  const marker =
+    first.kind !== "context" && span.every((row) => row.kind === first.kind)
+      ? first.kind === "added"
+        ? "+"
+        : "-"
+      : "";
+  const number = (row: UnifiedDiffLine) =>
+    row.kind === "hunk" ? null : (row.newLine ?? row.oldLine);
+  return {
+    line: end.line,
+    side: end.side,
+    startLine: start.line,
+    startSide: start.side,
+    label: `${marker}${number(first)} to ${marker}${number(last)}`,
+  };
+}
+
 /** What a changed file is, for splitting a PR's size the way t3code does. */
 export type DiffFileKind = "code" | "tests" | "mocks" | "generated";
 

@@ -4,6 +4,8 @@ import {
   buildDiffFileEntries,
   diffFileKind,
   ignoreWhitespaceInPatch,
+  lineCommentTarget,
+  lineRangeCommentTarget,
   summarizeDiffSize,
   unifiedDiffLines,
 } from "@eva/shared";
@@ -325,5 +327,70 @@ describe("unifiedDiffLines", () => {
       { kind: "hunk", text: "@@ -40 +40,2 @@" },
       { kind: "added", text: "---", oldLine: null, newLine: 40 },
     ]);
+  });
+});
+
+describe("lineCommentTarget", () => {
+  it("anchors removed rows on the base side and the rest on the head side", () => {
+    const rows = unifiedDiffLines(
+      [
+        "@@ -9,2 +9,2 @@",
+        " const a = 1;",
+        "-const b = 2;",
+        "+const b = 3;",
+      ].join("\n"),
+    );
+    expect(rows.map(lineCommentTarget)).toEqual([
+      null,
+      { line: 9, side: "RIGHT", label: "9" },
+      { line: 10, side: "LEFT", label: "-10" },
+      { line: 10, side: "RIGHT", label: "+10" },
+    ]);
+  });
+});
+
+describe("lineRangeCommentTarget", () => {
+  const rows = unifiedDiffLines(
+    [
+      "@@ -9,4 +9,4 @@",
+      " const a = 1;",
+      "-const b = 2;",
+      "+const b = 3;",
+      "+const c = 4;",
+      "@@ -40 +40 @@",
+      "+const z = 0;",
+    ].join("\n"),
+  );
+
+  it("anchors on the last row and sends a start only for a real range", () => {
+    expect(lineRangeCommentTarget(rows, 3, 4)).toEqual({
+      line: 11,
+      side: "RIGHT",
+      startLine: 10,
+      startSide: "RIGHT",
+      label: "+10 to +11",
+    });
+    // Either tap order, and a mixed range drops the marker.
+    expect(lineRangeCommentTarget(rows, 4, 1)).toEqual({
+      line: 11,
+      side: "RIGHT",
+      startLine: 9,
+      startSide: "RIGHT",
+      label: "9 to 11",
+    });
+    // A removed line to the added line beside it shares a number but not a side.
+    expect(lineRangeCommentTarget(rows, 2, 3)).toMatchObject({ line: 10, side: "RIGHT", startLine: 10, startSide: "LEFT" });
+    expect(lineRangeCommentTarget(rows, 2, 2)).toEqual({
+      line: 10,
+      side: "LEFT",
+      startLine: null,
+      startSide: null,
+      label: "-10",
+    });
+  });
+
+  it("refuses a range across a hunk header", () => {
+    expect(lineRangeCommentTarget(rows, 4, 6)).toBeNull();
+    expect(lineRangeCommentTarget(rows, 0, 1)).toBeNull();
   });
 });

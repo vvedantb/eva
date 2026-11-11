@@ -6,7 +6,19 @@ import schema from "../convex/schema";
 import type { Id } from "../convex/_generated/dataModel";
 import { DEFAULT_AI_MODEL, normalizeAIModel } from "../convex/_validators/aiModels";
 import { messageLinkHref } from "@eva/shared/messageLink";
-import { defaultQuickTaskSections, sessionMenuActions, systemSkillTokenId, tokenizeMentionText } from "@eva/shared";
+import {
+  mentionTokensToChipLinks,
+  parseMentionChipHref,
+  sessionMenuActions,
+  systemSkillTokenId,
+  tokenizeMentionText,
+  QUICK_TASK_LIST_DEFAULTS,
+  applyQuickTaskFilters,
+  groupByTaskStatus,
+  runAllPlan,
+  startAll,
+  visibleDrafts,
+} from "@eva/shared";
 import { MENTION_TOKEN_REGEX } from "../convex/_mentions/mentionToken";
 import { SKILL_TOKEN_REGEX } from "../convex/_mentions/skillToken";
 
@@ -73,7 +85,9 @@ async function fixture() {
       createdAt: now,
       updatedAt: now,
       createdBy: userId,
-      lastChatModel: "claude:opus",
+      // The web task chat picks and sends `model`; a turn records `lastChatModel`.
+      model: "claude:opus",
+      lastChatModel: "codex:gpt-5.6-sol",
     });
     const projectId = await ctx.db.insert("projects", {
       repoId,
@@ -323,13 +337,96 @@ describe("mobile api", () => {
       expect(await sent(t, ids.chatId)).toEqual([{ content: "hi", model: "claude:opus", userId: ids.userId }]);
       await expect(
         asUser.mutation(api.mobile.setChatModel, { target: ids.taskId, model: "claude:opus" }),
-      ).rejects.toThrow("on the web");
+      ).rejects.toThrow("agentTasks.update");
       await expect(
         asUser.mutation(api.mobile.setChatModel, { target: ids.archivedChatId, model: "claude:opus" }),
       ).rejects.toThrow("This chat is closed");
       await expect(
         asUser.mutation(api.mobile.setChatModel, { target: ids.strangerTaskId, model: "claude:opus" }),
       ).rejects.toThrow("Not authorized");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a quick task chat picks its model, traits and account with the web task chat's mutations, and a reply runs on them",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const accountId = await t.run((ctx) =>
+        ctx.db.insert("userProviderAccounts", {
+          userId: ids.userId,
+          provider: "codex",
+          label: "Mine",
+          credentials: [],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }),
+      );
+      // What the phone model sheet calls for a task, as the web `useTaskChatBinding`.
+      await asUser.mutation(api.agentTasks.update, { id: ids.taskId, model: "codex:gpt-5.6-sol", providerAccountId: accountId });
+      await asUser.mutation(api.agentTasks.setTraits, { id: ids.taskId, reasoningLevel: "low" });
+      await t.run((ctx) => ctx.db.patch(ids.taskId, { lastChatModel: "claude:opus" }));
+      expect(await asUser.query(api.mobile.getChat, { target: ids.taskId })).toMatchObject({
+        model: "codex:gpt-5.6-sol",
+        traits: { effortLevel: "low" },
+        providerAccountId: accountId,
+        accountOwnerId: ids.userId,
+        task: { id: ids.taskId },
+      });
+      await asUser.mutation(api.mobile.sendMessage, { target: ids.taskId, message: "hi" });
+      expect(await sent(t, ids.taskId)).toEqual([{ content: "hi", model: "codex:gpt-5.6-sol", userId: ids.userId }]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "getChat carries a session chat's sticky account, which anyone in the session may change",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const accountId = await t.run((ctx) =>
+        ctx.db.insert("userProviderAccounts", {
+          userId: ids.userId,
+          provider: "codex",
+          label: "Mine",
+          credentials: [],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }),
+      );
+      // The web session picker's own mutation.
+      await asUser.mutation(api.sessionChats.setProviderAccountId, { chatId: ids.chatId, providerAccountId: accountId });
+      const chat = await asUser.query(api.mobile.getChat, { target: ids.sessionId });
+      expect(chat).toMatchObject({ providerAccountId: accountId, session: { chatId: ids.chatId } });
+      expect(chat).not.toHaveProperty("accountOwnerId");
+      expect(await asUser.query(api.mobile.getChat, { target: ids.projectId })).toMatchObject({
+        accountOwnerId: ids.userId,
+        project: { id: ids.projectId },
+      });
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "startSession takes the model picker's account: null is Team, absent the user's own default",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const accountId = await t.run((ctx) =>
+        ctx.db.insert("userProviderAccounts", {
+          userId: ids.userId,
+          provider: "codex",
+          label: "Mine",
+          credentials: [],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        }),
+      );
+      const accountOf = async (sessionId: Id<"sessions">) =>
+        (await asUser.query(api.mobile.getChat, { target: sessionId }))?.providerAccountId;
+      const model = "codex:gpt-5.6-sol";
+      const picked = await asUser.mutation(api.mobile.startSession, { repoId: ids.repoId, prompt: "a", model, providerAccountId: accountId });
+      const team = await asUser.mutation(api.mobile.startSession, { repoId: ids.repoId, prompt: "b", model, providerAccountId: null });
+      expect(await accountOf(picked.sessionId)).toBe(accountId);
+      expect(await accountOf(team.sessionId)).toBeUndefined();
     },
     TIMEOUT_MS,
   );
@@ -352,6 +449,36 @@ describe("mobile api", () => {
       expect(await sent(t, chat.parentId)).toEqual([
         { content: "Add dark mode", model: "claude:opus", userId: ids.userId },
       ]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "the review screen's Revert, blocker fix and Stack start sessions as the web does",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      // Revert (and a blocker fix): a titled session on the branch it must land on,
+      // with the shared `revertSessionRequest` (or `PrRemedy`) prompt.
+      const revert = { title: "Revert #7", message: "Revert merge commit `abc123` on `staging`.", baseBranch: "staging" };
+      const reverted = await asUser.mutation(api.mobile.startSession, {
+        repoId: ids.repoId,
+        title: revert.title,
+        prompt: revert.message,
+        baseBranch: revert.baseBranch,
+      });
+      expect(await t.run((ctx) => ctx.db.get(reverted.sessionId))).toMatchObject({ title: "Revert #7", baseBranch: "staging" });
+      const chat = await asUser.query(api.mobile.getChat, { target: reverted.sessionId });
+      if (!chat) throw new Error("no chat");
+      expect((await sent(t, chat.parentId))[0]?.content).toBe(revert.message);
+
+      // Stack: on the PR's head branch, and the session remembers the PR it stacks on.
+      const stacked = await asUser.mutation(api.mobile.startSession, {
+        repoId: ids.repoId,
+        prompt: "Follow up",
+        baseBranch: "feature",
+        stackOnPrNumber: 7,
+      });
+      expect(await t.run((ctx) => ctx.db.get(stacked.sessionId))).toMatchObject({ baseBranch: "feature", stackOnPrNumber: 7 });
     },
     TIMEOUT_MS,
   );
@@ -387,7 +514,8 @@ describe("mobile api", () => {
         title: "Billing step",
         projectId: ids.projectId,
       });
-      const sections = defaultQuickTaskSections(await asUser.query(api.agentTasks.getAllTasks, { repoId: ids.repoId }));
+      const listed = await asUser.query(api.agentTasks.getAllTasks, { repoId: ids.repoId });
+      const sections = groupByTaskStatus(applyQuickTaskFilters(listed, QUICK_TASK_LIST_DEFAULTS, Date.now()));
       expect(sections.map((section) => [section.status, section.tasks.map((row) => row.title)])).toEqual([
         ["todo", ["Fix the footer"]],
         ["in_progress", []],
@@ -397,6 +525,65 @@ describe("mobile api", () => {
         ["cancelled", []],
       ]);
       expect(await asUser.query(api.mobile.getChat, { target: taskId })).toMatchObject({ kind: "task", canReply: true });
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "Run All on the Quick Tasks list starts the user's own To Do tasks with the web startExecution and skips a teammate's",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const mine = await asUser.mutation(api.agentTasks.createQuickTask, { repoId: ids.repoId, title: "Fix the footer" });
+      const theirs = await t.run(async (ctx) => {
+        const teammate = await ctx.db.insert("users", {});
+        return await ctx.db.insert("agentTasks", {
+          repoId: ids.repoId,
+          title: "Not mine",
+          status: "todo",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          createdBy: teammate,
+        });
+      });
+      const listed = await asUser.query(api.agentTasks.getAllTasks, { repoId: ids.repoId });
+      const plan = runAllPlan(listed, await asUser.query(api.auth.me, {}));
+      expect(plan.owned.map((task) => task._id)).toEqual([mine]);
+      expect(plan.skippedCount).toBe(1);
+      const failed = await startAll(plan.owned, (task) => asUser.mutation(api.agentTasks.startExecution, { id: task._id }));
+      expect(failed).toBe(0);
+      const runsOf = (taskId: Id<"agentTasks">) =>
+        t.run((ctx) => ctx.db.query("agentRuns").withIndex("by_task", (q) => q.eq("taskId", taskId)).collect());
+      expect(await runsOf(mine)).toHaveLength(1);
+      expect(await runsOf(theirs)).toHaveLength(0);
+      // A second Run (the row menu's "Run Eva") on a task that is running fails and is counted, not thrown.
+      expect(await startAll(plan.owned, (task) => asUser.mutation(api.agentTasks.startExecution, { id: task._id }))).toBe(1);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a quick-task draft saved on the phone is listed on any device and becomes a To Do task on Create",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      // What the phone saves when the form is left with text in it: the web `saveDraft` fields.
+      const draftId = await asUser.mutation(api.agentTasks.saveDraft, {
+        repoId: ids.repoId,
+        title: "Half an idea",
+        description: "More later",
+        baseBranch: "staging",
+      });
+      // Left again after an edit: the same draft, not a second one.
+      await asUser.mutation(api.agentTasks.saveDraft, { id: draftId, repoId: ids.repoId, title: "Half an idea, v2" });
+      const drafts = visibleDrafts(await asUser.query(api.agentTasks.listDrafts, { repoId: ids.repoId }));
+      expect(drafts.map((draft) => draft.title)).toEqual(["Half an idea, v2"]);
+      // Drafts are not on the list.
+      const listed = await asUser.query(api.agentTasks.getAllTasks, { repoId: ids.repoId });
+      expect(applyQuickTaskFilters(listed, QUICK_TASK_LIST_DEFAULTS, Date.now()).map((task) => task.title)).not.toContain(
+        "Half an idea, v2",
+      );
+      await asUser.mutation(api.agentTasks.activateDraft, { id: draftId, title: "Whole idea", tags: ["ui"] });
+      expect(await t.run((ctx) => ctx.db.get(draftId))).toMatchObject({ status: "todo", title: "Whole idea" });
+      expect(await asUser.query(api.agentTasks.listDrafts, { repoId: ids.repoId })).toEqual([]);
     },
     TIMEOUT_MS,
   );
@@ -493,31 +680,32 @@ describe("mobile api", () => {
     TIMEOUT_MS,
   );
 
-  test("sessionMenuActions lists the web row menu in its order, per list and view", () => {
+  test("sessionMenuActions lists the web row menu in its order and groups, per list and view", () => {
     const pr = { branchName: "eva/login", prUrl: "https://github.com/vvedantb/eva/pull/1" };
     expect(sessionMenuActions({ archived: false, simpleView: false, ...pr })).toEqual([
-      "rename",
-      "regenerateTitle",
-      "copyTitle",
-      "copyLink",
-      "copyBranchName",
-      "openPr",
-      "archive",
+      ["rename", "regenerateTitle", "copyTitle", "copyLink", "copyBranchName", "openPr"],
+      ["archive"],
     ]);
     expect(sessionMenuActions({ archived: true, simpleView: false, ...pr })).toEqual([
-      "copyTitle",
-      "copyLink",
-      "copyBranchName",
-      "openPr",
-      "unarchive",
+      ["copyTitle", "copyLink", "copyBranchName", "openPr"],
+      ["unarchive"],
     ]);
     expect(sessionMenuActions({ archived: false, simpleView: true, ...pr })).toEqual([
-      "rename",
-      "regenerateTitle",
-      "copyTitle",
-      "copyLink",
-      "archive",
+      ["rename", "regenerateTitle", "copyTitle", "copyLink"],
+      ["archive"],
     ]);
+  });
+
+  test("mentionTokensToChipLinks marks each sent token as a chip link and leaves code as typed", () => {
+    const graceId = "k17grace00000000000000000000000g";
+    const skillId = systemSkillTokenId("eva-capture");
+    const content = `ask @[Grace](${graceId}) to /[eva-capture](${skillId}), not \`@[Grace](${graceId})\``;
+    const marked = mentionTokensToChipLinks(content);
+    expect(marked).toBe(
+      `ask [Grace](#mention:at:${graceId}) to [eva-capture](#mention:slash:${skillId}), not \`@[Grace](${graceId})\``,
+    );
+    expect(parseMentionChipHref(`#mention:slash:${skillId}`)).toEqual({ kind: "slash", id: skillId });
+    expect(parseMentionChipHref("https://example.com")).toBeNull();
   });
 
   test("messageLinkHref aims a web path or URL at one message", () => {

@@ -20,20 +20,17 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
-  Sheet,
-  SheetContent,
-  SheetHeader,
   SheetRow,
-  SheetTitle,
 } from "@vvedantb/native-ui/primitives";
 import { tokens } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useAction, useMutation } from "convex/react";
 import * as Clipboard from "expo-clipboard";
-import { useState, type ComponentType } from "react";
-import { Linking, Text } from "react-native";
+import { Fragment, useRef, useState, type ComponentType } from "react";
+import { Linking, Text, type TextInput } from "react-native";
 import { useSimpleView } from "@/chat/ComposerFooter";
 import { WEB_URL } from "@/config";
+import { MenuDivider, MenuSheet } from "@/ui/MenuSheet";
 import { useScheme } from "@/ui/theme";
 
 /** The session a menu acts on: a Sessions row or the open chat's session. */
@@ -81,8 +78,10 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
   const [renameValue, setRenameValue] = useState("");
   const [isRenaming, setIsRenaming] = useState(false);
   const [archiveTarget, setArchiveTarget] = useState<SessionActionTarget | null>(null);
+  // The Rename field, focused once its dialog is on screen (`onShow`): focus is imperative.
+  const renameInput = useRef<TextInput>(null);
 
-  /** The actions for one session, in the web order (`sessionMenuActions`). */
+  /** The actions for one session, in the web order and groups (`sessionMenuActions`). */
   const actionsFor = (target: SessionActionTarget) => sessionMenuActions({ ...target, simpleView });
 
   const unarchive = (sessionId: Id<"sessions">) => {
@@ -160,35 +159,38 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
 
   const dialogs = (
     <>
-      <Sheet
+      {/* Up to eight rows: they scroll in a short window, under the title. */}
+      <MenuSheet
         open={sheetTarget !== null}
         onOpenChange={(open) => {
           if (!open) setSheetTarget(null);
         }}
+        title={sheetTarget?.title ?? ""}
       >
-        <SheetContent className="gap-3 px-3">
-          <SheetHeader className="px-2">
-            <SheetTitle numberOfLines={1}>{sheetTarget?.title ?? ""}</SheetTitle>
-          </SheetHeader>
-          {sheetTarget
-            ? actionsFor(sheetTarget).map((action) => {
-                const item = SESSION_ACTION_ITEMS[action];
-                return (
-                  <SheetRow
-                    key={action}
-                    icon={item.icon}
-                    title={item.label}
-                    warning={item.warning}
-                    onPress={() => {
-                      setSheetTarget(null);
-                      run(action, sheetTarget);
-                    }}
-                  />
-                );
-              })
-            : null}
-        </SheetContent>
-      </Sheet>
+        {sheetTarget
+          ? actionsFor(sheetTarget).map((group, index) => (
+              <Fragment key={group.join()}>
+                {/* A line parts the groups, as the web separators. */}
+                {index > 0 ? <MenuDivider /> : null}
+                {group.map((action) => {
+                  const item = SESSION_ACTION_ITEMS[action];
+                  return (
+                    <SheetRow
+                      key={action}
+                      icon={item.icon}
+                      title={item.label}
+                      warning={item.warning}
+                      onPress={() => {
+                        setSheetTarget(null);
+                        run(action, sheetTarget);
+                      }}
+                    />
+                  );
+                })}
+              </Fragment>
+            ))
+          : null}
+      </MenuSheet>
       {/* The web "Rename session" dialog; the kit draws it as a bottom sheet at phone size. */}
       <Dialog
         open={renameTarget !== null}
@@ -196,17 +198,17 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
           if (!open) setRenameTarget(null);
         }}
       >
-        <DialogContent>
+        <DialogContent onShow={() => renameInput.current?.focus()}>
           <DialogHeader>
             <DialogTitle>Rename session</DialogTitle>
           </DialogHeader>
           <Input
+            ref={renameInput}
             accessibilityLabel="Session title"
             value={renameValue}
             onChangeText={setRenameValue}
             onSubmitEditing={() => void saveRename()}
             returnKeyType="done"
-            autoFocus
             selectTextOnFocus
           />
           <DialogFooter>

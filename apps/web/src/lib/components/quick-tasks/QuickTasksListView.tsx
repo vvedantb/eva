@@ -5,6 +5,7 @@ import { Virtuoso } from "react-virtuoso";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
+import { runAllPlan, startAll } from "@eva/shared";
 import type { Id } from "@eva/backend";
 import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
@@ -145,8 +146,10 @@ export function QuickTasksListView({
   })();
 
   const todoTasks = tasks.filter((t) => t.status === "todo");
-  const ownedTodoTasks = todoTasks.filter((t) => t.createdBy === currentUserId);
-  const skippedCount = todoTasks.length - ownedTodoTasks.length;
+  const { owned: ownedTodoTasks, skippedCount } = runAllPlan(
+    tasks,
+    currentUserId,
+  );
 
   const toggleSection = (status: DisplayTaskStatus) => {
     setOpenSections((prev) => {
@@ -182,29 +185,16 @@ export function QuickTasksListView({
   const handleRunAll = async () => {
     if (ownedTodoTasks.length === 0) return;
     setIsRunningAll(true);
-    try {
-      const results = await Promise.all(
-        ownedTodoTasks.map(async (task) => {
-          try {
-            await startExecution({ id: task._id });
-            return true;
-          } catch (err) {
-            console.error(`Failed to start task ${task._id}:`, err);
-            return false;
-          }
-        }),
+    const failedCount = await startAll(ownedTodoTasks, (task) =>
+      startExecution({ id: task._id }),
+    );
+    if (failedCount > 0) {
+      console.error(
+        `Run All started ${ownedTodoTasks.length - failedCount} of ${ownedTodoTasks.length} tasks`,
       );
-      const failedCount = results.filter((started) => !started).length;
-      if (failedCount > 0) {
-        console.error(
-          `Run All started ${ownedTodoTasks.length - failedCount} of ${ownedTodoTasks.length} tasks`,
-        );
-        toast.error(
-          `Could not start ${failedCount} of ${ownedTodoTasks.length} tasks.`,
-        );
-      }
-    } catch (err) {
-      console.error("Failed to run all:", err);
+      toast.error(
+        `Could not start ${failedCount} of ${ownedTodoTasks.length} tasks.`,
+      );
     }
     setIsRunningAll(false);
   };

@@ -1,3 +1,4 @@
+import { api, isViewableRecap, type Id } from "@eva/backend";
 import {
   buildSummaryComments,
   checkTone,
@@ -16,6 +17,7 @@ import {
   IconChevronRight,
   IconExternalLink,
   IconFileCode,
+  IconPencil,
   IconRocket,
   IconTag,
   IconUserCheck,
@@ -25,9 +27,12 @@ import {
 import { Markdown } from "@vvedantb/native-ui/markdown";
 import { Avatar, AvatarFallback, AvatarImage, Button } from "@vvedantb/native-ui/primitives";
 import { withAlpha } from "@vvedantb/native-ui/theme";
+import { useQuery } from "convex/react";
 import { useState, type ComponentType, type ReactNode } from "react";
 import { Linking, Pressable, Text, View } from "react-native";
 import { ToneIcon } from "@/reviews/prAppearance";
+import { DescriptionEditSheet, LabelDot, PrMetaEditButton, usePrMetaEdit } from "@/reviews/PrMetaEdit";
+import { ReviewRecap } from "@/reviews/ReviewRecap";
 import { timeAgo } from "@/ui/format";
 import { type Scheme, useScheme, XS_TRACKING } from "@/ui/theme";
 
@@ -35,9 +40,9 @@ import { type Scheme, useScheme, XS_TRACKING } from "@/ui/theme";
 const COMMENT_PAGE = 10;
 
 /** The web `text-xs` (12 / 16). */
-const TEXT_XS = { fontSize: 12, lineHeight: 16, letterSpacing: XS_TRACKING };
+export const TEXT_XS = { fontSize: 12, lineHeight: 16, letterSpacing: XS_TRACKING };
 /** The web `text-2xs` (11 / 16, 0.01em). */
-const TEXT_2XS = { fontSize: 11, lineHeight: 16, letterSpacing: 0.11 };
+export const TEXT_2XS = { fontSize: 11, lineHeight: 16, letterSpacing: 0.11 };
 
 /** The web reviewer ring: the verdict rides the face that earned it. */
 const VERDICT_RING: Record<string, keyof (typeof EVA_THEME)["light"]> = {
@@ -47,26 +52,69 @@ const VERDICT_RING: Record<string, keyof (typeof EVA_THEME)["light"]> = {
 
 /**
  * The web Summary tab at phone width: the label rows (reviewers, assignees,
- * labels, previews), then folding sections: Description, Checks (folded) and
- * Comments. Read-only: the web pencils that edit the description, reviewers,
- * assignees and labels, and the Recap walkthrough, are not on the phone.
+ * labels, previews), each set with its pencil; then folding sections: Recap
+ * (open when there is a walkthrough to read), Description (with its pencil),
+ * Checks (folded) and Comments. Every edit reads the overview again
+ * (`onChanged`).
  */
-export function ReviewSummary({ overview }: { overview: PrOverview }) {
+export function ReviewSummary({
+  repoId,
+  overview,
+  prUrl,
+  defaultModel,
+  onChanged,
+}: {
+  repoId: Id<"githubRepos">;
+  overview: PrOverview;
+  /** The key the recap is stored under (`githubPrUrl`, as the web builds it). */
+  prUrl: string;
+  /** The repo's model: the recap's first pick, as the web. */
+  defaultModel: string | undefined;
+  onChanged: () => void;
+}) {
   const scheme = useScheme();
+  const muted = EVA_THEME[scheme].mutedForeground;
   const checks = countChecks(overview.checks);
   const body = overview.body ?? "";
+  const recapDoc = useQuery(api.docs.getRecapByPrUrl, { repoId, prUrl });
+  const hasRecap = recapDoc !== undefined && recapDoc !== null && isViewableRecap(recapDoc);
+  const [editingBody, setEditingBody] = useState(false);
   return (
     <View>
-      <MetaRows overview={overview} scheme={scheme} />
-      <Section title="Description">
+      <MetaRows repoId={repoId} overview={overview} onChanged={onChanged} scheme={scheme} />
+      {/* Keyed on whether there is a walkthrough, so the default re-applies once the query settles. */}
+      <Section key={`recap:${hasRecap}`} title="Recap" defaultOpen={hasRecap}>
+        <ReviewRecap pr={{ repoId, prNumber: overview.number }} prUrl={prUrl} recapDoc={recapDoc} defaultModel={defaultModel} />
+      </Section>
+      <Section
+        title="Description"
+        actions={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Edit description"
+            onPress={() => setEditingBody(true)}
+            className="size-11 items-center justify-center rounded-full active:opacity-70"
+          >
+            <IconPencil size={13} color={muted} />
+          </Pressable>
+        }
+      >
         {body.trim().length > 0 ? (
           <Markdown>{body}</Markdown>
         ) : (
-          <Text className="font-instrument-sans text-sm italic" style={{ color: EVA_THEME[scheme].mutedForeground }}>
+          <Text className="font-instrument-sans text-sm italic" style={{ color: muted }}>
             No description provided.
           </Text>
         )}
       </Section>
+      <DescriptionEditSheet
+        open={editingBody}
+        onOpenChange={setEditingBody}
+        repoId={repoId}
+        prNumber={overview.number}
+        body={body}
+        onSaved={onChanged}
+      />
       <Section title={checks.total === 0 ? "Checks" : `Checks · ${checksHeadline(checks)}`} defaultOpen={false}>
         {checks.total === 0 ? (
           <Note scheme={scheme}>No checks reported.</Note>
@@ -77,7 +125,7 @@ export function ReviewSummary({ overview }: { overview: PrOverview }) {
               <Text numberOfLines={1} className="font-instrument-sans min-w-0 flex-1 text-sm" style={{ color: EVA_THEME[scheme].foreground }}>
                 {check.name}
               </Text>
-              {check.htmlUrl ? <IconExternalLink size={12} color={EVA_THEME[scheme].mutedForeground} /> : null}
+              {check.htmlUrl ? <IconExternalLink size={12} color={muted} /> : null}
             </LinkRow>
           ))
         )}
@@ -90,14 +138,34 @@ export function ReviewSummary({ overview }: { overview: PrOverview }) {
   );
 }
 
-/** The web `SummaryMetaRows`: a 96 label column (icon and label), then the value. */
-function MetaRows({ overview, scheme }: { overview: PrOverview; scheme: Scheme }) {
+/**
+ * The web `SummaryMetaRows`: a 96 label column (icon and label), then the
+ * value, then the pencil that edits the set (`PrMetaEditButton`). Only
+ * requested reviewers can be un-asked, so the reviewer picker ticks those.
+ */
+function MetaRows({
+  repoId,
+  overview,
+  onChanged,
+  scheme,
+}: {
+  repoId: Id<"githubRepos">;
+  overview: PrOverview;
+  onChanged: () => void;
+  scheme: Scheme;
+}) {
+  const edit = usePrMetaEdit(repoId, overview.number, onChanged);
   const theme = EVA_THEME[scheme];
   const reviewers = prReviewers(overview);
   const none = <Text style={[TEXT_XS, { color: theme.mutedForeground }]}>None</Text>;
   return (
     <View className="gap-1 px-4 pb-1 pt-3">
-      <MetaRow icon={IconUsers} label="Reviewers" scheme={scheme}>
+      <MetaRow
+        icon={IconUsers}
+        label="Reviewers"
+        scheme={scheme}
+        action={<PrMetaEditButton field="reviewers" selected={overview.requestedReviewers.map((reviewer) => reviewer.login)} edit={edit} />}
+      >
         {reviewers.length === 0
           ? none
           : reviewers.map((reviewer) => (
@@ -112,14 +180,24 @@ function MetaRows({ overview, scheme }: { overview: PrOverview; scheme: Scheme }
               />
             ))}
       </MetaRow>
-      <MetaRow icon={IconUserCheck} label="Assignees" scheme={scheme}>
+      <MetaRow
+        icon={IconUserCheck}
+        label="Assignees"
+        scheme={scheme}
+        action={<PrMetaEditButton field="assignees" selected={overview.assignees.map((assignee) => assignee.login)} edit={edit} />}
+      >
         {overview.assignees.length === 0
           ? none
           : overview.assignees.map((assignee) => (
               <Person key={assignee.login} login={assignee.login} avatarUrl={assignee.avatarUrl} scheme={scheme} />
             ))}
       </MetaRow>
-      <MetaRow icon={IconTag} label="Labels" scheme={scheme}>
+      <MetaRow
+        icon={IconTag}
+        label="Labels"
+        scheme={scheme}
+        action={<PrMetaEditButton field="labels" selected={overview.labels.map((label) => label.name)} edit={edit} />}
+      >
         {overview.labels.length === 0
           ? none
           : overview.labels.map((label) => (
@@ -129,7 +207,7 @@ function MetaRows({ overview, scheme }: { overview: PrOverview; scheme: Scheme }
                 className="max-w-48 flex-row items-center gap-1.5 rounded-full px-2 py-0.5"
                 style={{ backgroundColor: withAlpha(theme.muted, 0.6) }}
               >
-                <View className="size-2 rounded-full" style={{ backgroundColor: `#${label.color}` }} />
+                <LabelDot color={label.color} />
                 <Text numberOfLines={1} style={[TEXT_XS, { color: theme.foreground }]}>
                   {label.name}
                 </Text>
@@ -159,21 +237,25 @@ function MetaRow({
   icon: Icon,
   label,
   scheme,
+  action,
   children,
 }: {
   icon: ComponentType<IconProps>;
   label: string;
   scheme: Scheme;
+  /** At the row's end: the pencil, a 44 square, so an editable row is 44 high. */
+  action?: ReactNode;
   children: ReactNode;
 }) {
   const muted = EVA_THEME[scheme].mutedForeground;
   return (
     <View className="min-h-7 flex-row items-center gap-2">
-      <View className="w-24 flex-row items-center gap-1.5 self-start pt-1.5">
+      <View className={action ? "w-24 flex-row items-center gap-1.5 self-start pt-3.5" : "w-24 flex-row items-center gap-1.5 self-start pt-1.5"}>
         <Icon size={13} color={muted} />
         <Text style={[TEXT_XS, { color: muted }]}>{label}</Text>
       </View>
       <View className="min-w-0 flex-1 flex-row flex-wrap items-center gap-1.5 py-1">{children}</View>
+      {action}
     </View>
   );
 }
@@ -211,7 +293,7 @@ function Person({
 }
 
 /** The web `PrAvatar`: the GitHub avatar, or the login's first two letters. */
-function PrAvatar({ login, avatarUrl, size }: { login: string | null; avatarUrl: string | null; size: number }) {
+export function PrAvatar({ login, avatarUrl, size }: { login: string | null; avatarUrl: string | null; size: number }) {
   return (
     <Avatar size={size}>
       {avatarUrl ? <AvatarImage source={{ uri: avatarUrl }} /> : null}
@@ -321,6 +403,7 @@ function Comments({ overview, scheme }: { overview: PrOverview; scheme: Scheme }
           size="sm"
           variant="ghost"
           fullWidth={false}
+          className="self-center"
           leftIcon={<IconArrowsSort size={14} color={muted} />}
           accessibilityLabel={order === "newest" ? "Show oldest comments first" : "Show newest comments first"}
           onPress={() => setOrder(order === "newest" ? "oldest" : "newest")}
@@ -358,7 +441,7 @@ function Comments({ overview, scheme }: { overview: PrOverview; scheme: Scheme }
  * any verdict; then the age and the file and line; then the markdown. The
  * GitHub link is the card's own press, as a phone has no hover to reveal it.
  */
-function CommentCard({ comment, scheme, framed }: { comment: SummaryComment; scheme: Scheme; framed: boolean }) {
+export function CommentCard({ comment, scheme, framed }: { comment: SummaryComment; scheme: Scheme; framed: boolean }) {
   const theme = EVA_THEME[scheme];
   const muted = theme.mutedForeground;
   return (
