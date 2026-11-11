@@ -560,6 +560,29 @@ export const sessionChatFields = {
   ...chatDaemonEntityFields,
 };
 
+/**
+ * A task's own run: waiting on a scheduled job, or running a workflow.
+ * Transitions live in `_agentTasks/runState.ts`.
+ */
+export const taskRunValidator = v.union(
+  v.object({
+    state: v.literal("scheduled"),
+    at: v.number(),
+    jobId: v.id("_scheduled_functions"),
+  }),
+  v.object({
+    state: v.literal("retry_pending"),
+    at: v.number(),
+    jobId: v.id("_scheduled_functions"),
+  }),
+  v.object({
+    state: v.literal("running"),
+    workflowId: v.string(),
+    /** Absent only on rows migrated from the legacy `activeWorkflowId`. */
+    runId: v.optional(v.id("agentRuns")),
+  }),
+);
+
 export const agentTaskFields = {
   ...entityNumIdFields,
   title: v.string(),
@@ -591,9 +614,15 @@ export const agentTaskFields = {
   use1mContext: v.optional(v.boolean()),
   fastMode: v.optional(v.boolean()),
   baseBranch: v.optional(v.string()),
+  /** The task's own run lifecycle; absent = idle. Written only by `_agentTasks/runState.ts`. */
+  run: v.optional(taskRunValidator),
+  /** @deprecated Legacy run state; read via `taskRunState`, cleared by `migrateTaskRunState`. */
   activeWorkflowId: v.optional(v.string()),
+  /** @deprecated Never written; cleared by `migrateTaskRunState`. */
   scheduledRetryAt: v.optional(v.number()),
+  /** @deprecated Legacy run state; read via `taskRunState`, cleared by `migrateTaskRunState`. */
   scheduledAt: v.optional(v.number()),
+  /** @deprecated Legacy run state; read via `taskRunState`, cleared by `migrateTaskRunState`. */
   scheduledFunctionId: v.optional(v.id("_scheduled_functions")),
   // Canonical sandbox shared across run/preview/resolve_conflicts. Persists
   // across the task lifecycle so reviewers can resume in-sandbox state (DB,
@@ -735,14 +764,29 @@ export const sessionFields = {
    * sandbox — a grey dot with no explanation and no retry.
    */
   sandboxError: v.optional(v.string()),
-  /** Earliest time an archived session's sandbox may be deleted (48h grace). */
+  /** @deprecated Moved to `archive.sandboxDeleteAfter`; cleared by `backfillSessionArchive`. */
   sandboxDeleteAfter: v.optional(v.number()),
   ptySessionId: v.optional(v.string()),
   updatedAt: v.optional(v.number()),
   status: sessionStatusValidator,
   /** Bumped by every start request; see `_sandbox/transitions.ts`. */
   sandboxStartAttempt: v.optional(v.number()),
+  /** @deprecated Moved to `archive`; cleared by `backfillSessionArchive`. */
   archived: v.optional(v.boolean()),
+  /**
+   * Set while the session is archived; absent while it is live. Owned by
+   * `_sessions/archive.ts` — read it through `isSessionArchived`.
+   */
+  archive: v.optional(
+    v.object({
+      archivedAt: v.number(),
+      /**
+       * Earliest time the sandbox may be deleted (48h grace). Absent when the
+       * session had no sandbox at archive time, or once it was deleted.
+       */
+      sandboxDeleteAfter: v.optional(v.number()),
+    }),
+  ),
   summary: v.optional(v.array(v.string())),
   createdBy: v.optional(v.id("users")),
   planContent: v.optional(v.string()),
@@ -1119,6 +1163,30 @@ export const teamFields = {
   backgroundStorageId: v.optional(v.id("_storage")),
 };
 
+/** A build waiting on its scheduled job. */
+const scheduledBuildValidator = v.object({
+  at: v.number(),
+  jobId: v.id("_scheduled_functions"),
+});
+
+/**
+ * A project build: waiting on a scheduled job, or running the build
+ * workflow. Transitions live in `_projects/buildState.ts`.
+ */
+export const projectBuildValidator = v.union(
+  v.object({ state: v.literal("scheduled"), ...scheduledBuildValidator.fields }),
+  v.object({
+    state: v.literal("running"),
+    workflowId: v.string(),
+    /**
+     * A schedule waiting behind this build (a usage-limit retry, or one set
+     * before or during it). Its job is live; when the build ends the project
+     * becomes `scheduled` with it.
+     */
+    scheduled: v.optional(scheduledBuildValidator),
+  }),
+);
+
 export const projectFields = {
   ...entityNumIdFields,
   repoId: v.id("githubRepos"),
@@ -1158,11 +1226,16 @@ export const projectFields = {
   projectStartDate: v.optional(v.number()),
   projectEndDate: v.optional(v.number()),
   activeWorkflowId: v.optional(v.string()),
+  /** The project build lifecycle; absent = idle. Written only by `_projects/buildState.ts`. */
+  build: v.optional(projectBuildValidator),
+  /** @deprecated Legacy build state; read via `projectBuildState`, cleared by `migrateProjectBuildState`. */
   activeBuildWorkflowId: v.optional(v.string()),
   // Separate from build + spec workflows so the in-sandbox chat can run
   // independently of the project's other lifecycle workflows.
   activeChatWorkflowId: v.optional(v.string()),
+  /** @deprecated Legacy build state; read via `projectBuildState`, cleared by `migrateProjectBuildState`. */
   scheduledBuildAt: v.optional(v.number()),
+  /** @deprecated Legacy build state; read via `projectBuildState`, cleared by `migrateProjectBuildState`. */
   scheduledBuildFunctionId: v.optional(v.id("_scheduled_functions")),
   lastBuildError: v.optional(v.string()),
   branchVersion: v.optional(v.number()),

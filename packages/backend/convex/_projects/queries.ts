@@ -21,6 +21,7 @@ import { resolveProjectBranchName } from "../_git/branchNames";
 import { resolveProjectBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { unreadLookupForList } from "../chatReads";
 import { awaitingAnswerEntityIdsForRepo } from "../_chat/turnProjection";
+import { isProjectBuilding } from "./buildState";
 
 /** Builds a project's detail payload (conversation history + optional generated
  *  spec) from a single projectDetails read, matching projectWithDetailsValidator.
@@ -54,17 +55,27 @@ function liveProjectsForRepo(
 }
 
 /** A repo's projects with a build workflow running (deleted rows included). */
-function buildingProjectsForRepo(
+async function buildingProjectsForRepo(
   db: GenericDatabaseReader<DataModel>,
   repoId: Id<"githubRepos">,
 ) {
-  // Every string sorts at or after "", and `undefined` sorts before it.
-  return db
-    .query("projects")
-    .withIndex("by_repo_and_build_workflow", (q) =>
-      q.eq("repoId", repoId).gte("activeBuildWorkflowId", ""),
-    )
-    .collect();
+  const [building, legacy] = await Promise.all([
+    db
+      .query("projects")
+      .withIndex("by_repo_and_build_state", (q) =>
+        q.eq("repoId", repoId).eq("build.state", "running"),
+      )
+      .collect(),
+    // Rows `migrateProjectBuildState` has not reached yet; 0e drops this.
+    // Every string sorts at or after "", and `undefined` sorts before it.
+    db
+      .query("projects")
+      .withIndex("by_repo_and_build_workflow", (q) =>
+        q.eq("repoId", repoId).gte("activeBuildWorkflowId", ""),
+      )
+      .collect(),
+  ]);
+  return [...building, ...legacy];
 }
 
 /** Lists all projects for a repo. */
@@ -169,7 +180,7 @@ export const getActive = authQuery({
       _id: v.id("projects"),
       numId: v.optional(v.number()),
       title: v.string(),
-      activeBuildWorkflowId: v.optional(v.string()),
+      isBuilding: v.boolean(),
       reviewProjectSandboxStatus: v.optional(sessionStatusValidator),
     }),
   ),
@@ -199,7 +210,7 @@ export const getActive = authQuery({
         _id: p._id,
         numId: p.numId,
         title: p.title,
-        activeBuildWorkflowId: p.activeBuildWorkflowId,
+        isBuilding: isProjectBuilding(p),
         reviewProjectSandboxStatus: p.reviewProjectSandboxStatus,
       }));
   },

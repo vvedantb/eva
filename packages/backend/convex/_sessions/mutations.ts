@@ -27,10 +27,7 @@ import { schedulePrTitleSync } from "../_github/prTitleSync";
 import { DEFAULT_SESSION_TITLE } from "./helpers";
 import { ensureSessionGroup } from "./groups";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
-import {
-  cancelSessionSandboxGraceDelete,
-  scheduleSessionSandboxGraceDelete,
-} from "../sandboxCleanup";
+import { archiveSession, unarchiveSession } from "./archive";
 import {
   closeLivePullRequests,
   findPrimaryPullRequest,
@@ -432,16 +429,8 @@ export async function archiveSessionDoc(
   }
 
   await closeLivePullRequests(ctx, { kind: "session", sessionId: session._id });
-  await ctx.db.patch(session._id, {
-    archived: true,
-    status: "closed",
-    updatedAt: Date.now(),
-  });
-  await scheduleSessionSandboxGraceDelete(ctx, {
-    ...session,
-    archived: true,
-    status: "closed",
-  });
+  await ctx.db.patch(session._id, { status: "closed" });
+  await archiveSession(ctx, session);
 }
 
 /** Archives a session so it no longer appears in the active list.
@@ -469,8 +458,7 @@ export const unarchive = authMutation({
       kind: "session",
       sessionId: args.id,
     });
-    await ctx.db.patch(args.id, { archived: false });
-    await cancelSessionSandboxGraceDelete(ctx, args.id);
+    await unarchiveSession(ctx, args.id, { touch: false });
     return null;
   },
 });

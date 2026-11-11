@@ -475,7 +475,7 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
     await f.t.run(async (ctx) => {
       await ctx.db.patch(f.taskId, { activeChatWorkflowId: "wf_task_chat" });
       await ctx.db.patch(f.projectId, {
-        activeBuildWorkflowId: "wf_project_build",
+        build: { state: "running", workflowId: "wf_project_build" },
       });
     });
 

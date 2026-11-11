@@ -2,6 +2,11 @@ import type { DatabaseReader, QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { TurnLane } from "../validators";
 import { findOpenTurn, type TurnEntityId } from "./turnStore";
+import { isTaskRunning, type TaskRunSource } from "../_agentTasks/runState";
+import {
+  isProjectBuilding,
+  type ProjectBuildSource,
+} from "../_projects/buildState";
 
 /**
  * Deployment bridge for task and project chats whose workflow started before
@@ -194,17 +199,14 @@ export function taskIsExecuting(
   task: Pick<
     Doc<"agentTasks">,
     | "_id"
-    | "activeWorkflowId"
     | "activeChatWorkflowId"
     | "syntheticTurnMessageId"
     | "chatTurnLifecycleVersion"
-  >,
+  > &
+    TaskRunSource,
   openChatEntityIds: ReadonlySet<string>,
 ): boolean {
-  return (
-    task.activeWorkflowId !== undefined ||
-    chatTurnIsOpen(task, openChatEntityIds)
-  );
+  return isTaskRunning(task) || chatTurnIsOpen(task, openChatEntityIds);
 }
 
 /** A project adds a build workflow to the same pair of slots. */
@@ -213,16 +215,16 @@ export function projectIsExecuting(
     Doc<"projects">,
     | "_id"
     | "activeWorkflowId"
-    | "activeBuildWorkflowId"
     | "activeChatWorkflowId"
     | "syntheticTurnMessageId"
     | "chatTurnLifecycleVersion"
-  >,
+  > &
+    ProjectBuildSource,
   openChatEntityIds: ReadonlySet<string>,
 ): boolean {
   return (
     project.activeWorkflowId !== undefined ||
-    project.activeBuildWorkflowId !== undefined ||
+    isProjectBuilding(project) ||
     chatTurnIsOpen(project, openChatEntityIds)
   );
 }

@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { startTaskRun } from "./_taskWorkflow/startRun";
+import { finishTaskRun, taskRunWorkflowId } from "./_agentTasks/runState";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { workflow, cancelTrackedWorkflow } from "./workflowManager";
@@ -14,9 +15,14 @@ import { trackProjectBuildWorkflow } from "./workflowWatchdog";
 import { resolveProjectBranchName } from "./_git/branchNames";
 import { resolveProjectBaseBranch } from "./_taskWorkflow/resolveBaseBranch";
 import {
-  cancelScheduledFunction,
-  scheduleProjectBuildAt,
-} from "./_scheduling/helpers";
+  cancelProjectBuildSchedule,
+  finishProjectBuild,
+  fireProjectBuildSchedule,
+  isProjectBuilding,
+  projectBuildWorkflowId,
+  projectScheduledBuildAt,
+  scheduleProjectBuild,
+} from "./_projects/buildState";
 
 // --- Workflow ---
 
@@ -174,8 +180,8 @@ export const completeBuild = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await finishProjectBuild(ctx, args.projectId, undefined);
     await ctx.db.patch(args.projectId, {
-      activeBuildWorkflowId: undefined,
       lastBuildError: args.failedTaskId
         ? `Build stopped: task ${args.failedTaskId} failed`
         : undefined,
@@ -201,7 +207,7 @@ export const startBuild = authMutation({
     if (!project || !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId)))
       throw new Error("Project not found");
 
-    if (project.activeBuildWorkflowId) {
+    if (isProjectBuilding(project)) {
       throw new Error("Project already has an active build");
     }
 
@@ -241,25 +247,15 @@ export const executeScheduledBuild = internalMutation({
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
     if (!project) return null;
-    const now = Date.now();
 
-    if (project.scheduledBuildAt === undefined) return null;
-    if (project.scheduledBuildAt > now) return null;
-    if (
-      args.scheduledAt !== undefined &&
-      project.scheduledBuildAt !== args.scheduledAt
-    ) {
-      return null;
-    }
-
-    // Clear the due schedule before eligibility checks
-    await ctx.db.patch(args.projectId, {
-      scheduledBuildAt: undefined,
-      scheduledBuildFunctionId: undefined,
-    });
-
-    // Don't start if already building
-    if (project.activeBuildWorkflowId) return null;
+    // Consume the due schedule before eligibility checks. Behind a running
+    // build it is dropped and no build starts.
+    const fired = await fireProjectBuildSchedule(
+      ctx,
+      args.projectId,
+      args.scheduledAt,
+    );
+    if (!fired.ok || fired.next !== undefined) return null;
 
     const repo = await ctx.db.get(project.repoId);
     if (!repo) return null;
@@ -291,14 +287,19 @@ export const scheduleBuild = authMutation({
     const project = await ctx.db.get(args.projectId);
     if (!project || !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId)))
       throw new Error("Project not found");
-    if (project.activeBuildWorkflowId)
+    if (isProjectBuilding(project))
       throw new Error("Project already has an active build");
-    if (project.scheduledBuildFunctionId)
+    if (projectScheduledBuildAt(project) !== undefined)
       throw new Error("Project already has a scheduled build");
     if (args.scheduledAt <= Date.now())
       throw new Error("Scheduled time must be in the future");
 
-    await scheduleProjectBuildAt(ctx, args.projectId, args.scheduledAt);
+    await scheduleProjectBuild(
+      ctx,
+      args.projectId,
+      "schedule",
+      args.scheduledAt,
+    );
     return null;
   },
 });
@@ -311,14 +312,8 @@ export const cancelScheduledBuild = authMutation({
     const project = await ctx.db.get(args.projectId);
     if (!project || !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId)))
       throw new Error("Project not found");
-    if (!project.scheduledBuildFunctionId)
-      throw new Error("Project has no scheduled build");
-
-    await cancelScheduledFunction(ctx, project.scheduledBuildFunctionId);
-    await ctx.db.patch(args.projectId, {
-      scheduledBuildAt: undefined,
-      scheduledBuildFunctionId: undefined,
-    });
+    const cancelled = await cancelProjectBuildSchedule(ctx, args.projectId);
+    if (!cancelled.ok) throw new Error(cancelled.reason);
     return null;
   },
 });
@@ -332,11 +327,12 @@ export const cancelBuild = authMutation({
     if (!project || !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId)))
       throw new Error("Project not found");
 
-    if (!project.activeBuildWorkflowId) {
+    const buildWorkflowId = projectBuildWorkflowId(project);
+    if (buildWorkflowId === undefined) {
       throw new Error("No active build to cancel");
     }
 
-    await cancelTrackedWorkflow(ctx, project.activeBuildWorkflowId);
+    await cancelTrackedWorkflow(ctx, buildWorkflowId);
 
     const tasks = await ctx.db
       .query("agentTasks")
@@ -346,7 +342,7 @@ export const cancelBuild = authMutation({
     for (const task of tasks) {
       if (task.status !== "in_progress") continue;
 
-      await cancelTrackedWorkflow(ctx, task.activeWorkflowId);
+      await cancelTrackedWorkflow(ctx, taskRunWorkflowId(task));
 
       const run = await getActiveTaskRun(ctx.db, task._id);
 
@@ -360,13 +356,13 @@ export const cancelBuild = authMutation({
 
       await ctx.db.patch(task._id, {
         status: "todo",
-        activeWorkflowId: undefined,
         updatedAt: Date.now(),
       });
+      await finishTaskRun(ctx, task._id, undefined);
     }
 
+    await finishProjectBuild(ctx, args.projectId, buildWorkflowId);
     await ctx.db.patch(args.projectId, {
-      activeBuildWorkflowId: undefined,
       lastBuildError: "Build cancelled by user",
     });
     await recomputeProjectPhase(ctx, args.projectId);
@@ -375,7 +371,7 @@ export const cancelBuild = authMutation({
   },
 });
 
-/** Reschedules a project build by cancelling the existing schedule and creating a new one. */
+/** Reschedules a project build; the new schedule replaces (and cancels) the pending one. */
 export const updateScheduledBuild = authMutation({
   args: {
     projectId: v.id("projects"),
@@ -389,8 +385,12 @@ export const updateScheduledBuild = authMutation({
     if (args.scheduledAt <= Date.now())
       throw new Error("Scheduled time must be in the future");
 
-    await cancelScheduledFunction(ctx, project.scheduledBuildFunctionId);
-    await scheduleProjectBuildAt(ctx, args.projectId, args.scheduledAt);
+    await scheduleProjectBuild(
+      ctx,
+      args.projectId,
+      "schedule",
+      args.scheduledAt,
+    );
     return null;
   },
 });
