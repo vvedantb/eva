@@ -3,17 +3,14 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api, type Id } from "@eva/backend";
+import { sandboxComposerState, SANDBOX_CHAT_COPY } from "@eva/shared";
 import { toast } from "@vvedantb/ui";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
 import { SandboxChatHeaderActions } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useProviderAccountHandoff } from "@/lib/hooks/useProviderAccountHandoff";
 import { ChatBody, type ChatSendOptions } from "./ChatBody";
-import {
-  readableSendError,
-  sandboxComposerState,
-  SANDBOX_CHAT_COPY,
-} from "./chatBodyUtils";
+import { readableSendError } from "./chatBodyUtils";
 import { SandboxBranchChip } from "./SandboxBranchChip";
 import {
   sandboxTurnSettings,
