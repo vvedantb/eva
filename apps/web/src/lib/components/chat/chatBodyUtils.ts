@@ -288,7 +288,11 @@ export function findStreamingTargetMessage<
 }
 
 /** Previously sent user messages as editable display text, newest-first. */
-export function buildMessageHistory(messages: ChatBodyMessage[]): string[] {
+export function buildMessageHistory(
+  messages: ReadonlyArray<
+    Pick<ChatBodyMessage, "role" | "isSystemAlert" | "content">
+  >,
+): string[] {
   return messages
     .flatMap((m) => {
       if (m.role !== "user" || m.isSystemAlert || !m.content) return [];
