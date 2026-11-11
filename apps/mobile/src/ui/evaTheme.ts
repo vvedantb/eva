@@ -1,5 +1,5 @@
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { configureTheme, tokens, withAlpha } from "@vvedantb/native-ui/theme";
+import { configureTheme, palette, tokens, withAlpha } from "@vvedantb/native-ui/theme";
 import { EVA_FONT } from "./fonts";
 
 const { light, dark } = EVA_THEME;
@@ -47,6 +47,9 @@ export function applyEvaTheme() {
       // under the foreground label.
       segment: { light: light.card, dark: dark.secondary },
       segmentForeground: pair("foreground"),
+      // The bottom tab bar pill: Eva's secondary in light (as before), and the
+      // package's lighter #474747 in dark so it shows on the dark glass bar.
+      tabBarPill: { light: light.secondary, dark: palette.tabBarPill.dark },
     },
   });
 }
