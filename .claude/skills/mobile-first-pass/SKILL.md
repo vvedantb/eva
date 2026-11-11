@@ -1,6 +1,6 @@
 ---
 name: mobile-first-pass
-description: Audit the Eva phone app (apps/mobile) against a 10-point mobile-first checklist and fix what fails, without changing the look. Use after building or changing phone screens, before shipping a mobile PR, or when the user asks for a "mobile-first pass", "mobile checklist", "check it works on a phone", or back/keyboard/touch/list issues on mobile.
+description: Audit the Eva phone app (apps/mobile) against a 20-point mobile-first and native-feel checklist (back, sheets, keyboard, touch targets, gestures, swipes, haptics, motion) and fix what fails, without changing the look. Use after building or changing phone screens, before shipping a mobile PR, or when the user asks for a "mobile-first pass", "mobile checklist", "check it works on a phone", or back/keyboard/touch/list issues on mobile.
 ---
 
 # Mobile-first pass
@@ -30,6 +30,21 @@ Record each screen × item as pass, fixed or left, with evidence (a measurement,
 8. **Long lists.** Any list that can pass about 50 rows is virtualised with React Native's `FlatList` or `SectionList`, with stable keys. Add no new list dependency. For a chat, use native-ui `ConversationList`: `FlatList.scrollToEnd` uses estimated row heights, so a long thread can open at the top. Long diffs render in chunks with "Show N more lines".
 9. **Light and dark.** Spot-check every changed screen in both themes.
 10. **States.** Each data screen has loading, empty and error states. Use the web's wording where the web has one. Loading keeps the header and back.
+
+## Native feel
+
+These rules make the app feel like a phone app, not a web page in a frame. Check them on every screen you change. Read the `gestures` and `animate-expo` skills before you build a gesture.
+
+11. **Gestures run on the UI thread.** Build drags with Gesture Handler through the kit: use the parts handed over by `@vvedantb/native-ui/gesture-handler` (`GestureHandlerProvider`); never import `react-native-gesture-handler` in a shared kit part. A drag writes shared values only: no React state per move.
+12. **Gesture physics.** While the finger is down, the element follows it 1:1. On release, a spring starts at the finger's speed. Commit on distance OR velocity. Rubber-band past an edge. A moving element can be caught. A linked value (backdrop, icon) derives from the same shared value. An element leaves the way it came in.
+13. **Hover actions become swipes.** Where the web shows row actions on hover, the phone row uses the kit `SwipeableRow`, for frequent, safe actions only (read/unread, archive). Destructive ones keep the web confirm and an Undo toast. Every swipe action is also a screen-reader action and stays in the long-press menu.
+14. **The keyboard follows the finger.** Chat and form screens use the kit parts from `@vvedantb/native-ui/keyboard-controller` (`KeyboardControllerProvider`): the transcript scrolls with the keyboard, a drag down moves it, and the composer dock follows it frame by frame. Never add a raw `KeyboardAvoidingView` to a screen; use the kit one.
+15. **Sheets drag to close.** Every bottom sheet is the kit `SheetContent` (or compact `DialogContent`), so it slides in, drags, can be caught and slides out on one spring. Do not build a one-off sheet.
+16. **Haptics mark results, not taps.** Use the kit `selectionHaptic` on a segmented change, `impactHaptic` when a gesture crosses its threshold or snaps back, and `notificationHaptic` on success and error. No haptic on a plain button press.
+17. **Press feedback.** Buttons and chips scale to about 0.97 while pressed. With Reduce Motion they dim instead.
+18. **Screens slide in.** Every stack uses the platform push transition (`src/ui/stackOptions.ts`). With Reduce Motion they cross-fade.
+19. **Loading looks like the content.** On list screens, prefer placeholder rows shaped like the real rows over a centred spinner.
+20. **Do not invent gestures.** Add a gesture only for an action the web already has (no swipe-to-reply while the web has no replies). A new native module needs the owner's approval and a new APK; say so in the PR.
 
 ## Where a fix goes
 
