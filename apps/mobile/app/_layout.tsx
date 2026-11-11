@@ -26,6 +26,7 @@ import {
 import { applyEvaTheme } from "@/ui/evaTheme";
 import { EVA_FONT } from "@/ui/fonts";
 import { StartupFailure } from "@/ui/StartupFailure";
+import { useStackScreenOptions } from "@/ui/stackOptions";
 import { navigationTheme, useScheme } from "@/ui/theme";
 
 // Release builds swallow unhandled rejections: log them first.
@@ -96,6 +97,7 @@ function ClerkGate({ children }: { children: ReactNode }) {
 
 export default function RootLayout() {
   const scheme = useScheme();
+  const stackOptions = useStackScreenOptions();
   const fontsTimedOut = useTimedOut(FONT_TIMEOUT_MS);
   // Inter under the names the classes and JS styles use (`@/ui/fonts`).
   const [fontsLoaded, fontError] = useFonts({
@@ -113,8 +115,9 @@ export default function RootLayout() {
           <ClerkGate>
             {/* A stack, not a `Slot`: a `Slot` unmounts the tabs under a pushed chat and
                 drops their state, so Back landed on the Inbox, not the tab it came from.
-                No transition, as before: screens swap at once. */}
-            <Stack screenOptions={{ headerShown: false, animation: "none" }} />
+                A push deeper (a chat, a review, a new session) runs the platform's own
+                transition (`useStackScreenOptions`). */}
+            <Stack screenOptions={stackOptions} />
           </ClerkGate>
           <Toaster />
           <StatusBar style={scheme === "dark" ? "light" : "dark"} />
