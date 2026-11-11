@@ -5,8 +5,11 @@ import { formatDuration } from "@eva/shared/duration";
 import {
   buildPrecedingUserTurns,
   collectForkPrefix,
+  firstNameByUserId,
   forkThreadTitle,
   formatForkPrompt,
+  isOtherUserChatMessage,
+  otherUserIdsInChat,
   type SessionMenuAction,
   toRepoRelativePath,
 } from "@eva/shared";
@@ -47,6 +50,7 @@ import { useAttachments } from "@/chat/useAttachments";
 import { useChatModelPick } from "@/chat/useChatModelPick";
 import { useMentionComposer } from "@/chat/useMentionComposer";
 import { WEB_URL } from "@/config";
+import { TEAMMATE_FOOTER_INSET, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
 import { useSessionActions } from "@/sessions/useSessionActions";
 import { textColor, useScheme } from "@/ui/theme";
 
@@ -55,7 +59,8 @@ const HEADER_SESSION_ACTIONS: ReadonlySet<SessionMenuAction> = new Set(["rename"
 
 /**
  * One chat (session, quick task or project): the transcript with the web
- * message actions, the agent's question when it asks one, and the composer
+ * message actions (a teammate's turn on the left with their avatar and first
+ * name, as the web), the agent's question when it asks one, and the composer
  * (attachments, Stop beside Send while the agent works, the web `@` / `/`
  * picker) with the web footer: the live sandbox branch, the stash and the
  * chat's sticky model. The transcript is a `ConversationList`, so a long chat
@@ -73,6 +78,9 @@ export default function ChatScreen() {
   const pending = useQuery(api.pendingQuestions.getActive, parentId ? { entityId: parentId } : "skip");
   const feedbackRows = useQuery(api.feedback.listForChat, parentId ? { parentId } : "skip");
   const me = useQuery(api.auth.me, {});
+  // A teammate's turn shows their avatar and first name, from the same lookup as the web `ChatBody`.
+  const teammateIds = otherUserIdsInChat(messages ?? [], me ?? undefined);
+  const teammates = useQuery(api.users.getMany, teammateIds.length > 0 ? { ids: teammateIds } : "skip");
   const send = useMutation(api.mobile.sendMessage);
   const stop = useMutation(api.mobile.stopTurn);
   const startSession = useMutation(api.mobile.startSession);
@@ -110,6 +118,8 @@ export default function ChatScreen() {
   const precedingUserTurns = buildPrecedingUserTurns(messages ?? []);
   const questions = pending ? parsePendingQuestion(pending.payload) : null;
   const mine = groupChatFeedback(feedbackRows ?? [], me ?? undefined).mineByMessageId;
+  const teammateNames = firstNameByUserId(teammates ?? []);
+  const teammateById = new Map((teammates ?? []).map((user) => [user._id, user]));
   const latestReplyId = visible.findLast((message) => message.role === "assistant")?._id;
   // A changed file opens the PR diff, as the web Review pane; simple view has no card, as the web.
   const openDiff = simpleView
@@ -202,50 +212,67 @@ export default function ChatScreen() {
               </View>
             ) : null
           }
-          renderItem={({ item: message }) => (
-            <View className="gap-3">
-              {dayStarts.has(message._id) ? <DayDivider timestamp={message.timestamp} /> : null}
-              {/* Web: parts `gap-0.5`; a reply is full width, a user message at most 95%. */}
-              <Message from={message.role} className={message.role === "user" ? "gap-0.5" : "max-w-full gap-0.5"}>
-                {/* Eva's web chat tints the user bubble (bg-primary/10), not the solid default. A reply is `px-1 py-2`. */}
-                <MessageContent bubble="tint" className={message.role === "user" ? undefined : "px-1 py-2"}>
-                  {message.role === "user" ? (
-                    // The web user text is markdown in `text-sm` (14 / 20), its tokens as chips.
-                    <UserMessageText content={message.content} />
+          renderItem={({ item: message }) => {
+            // A teammate's turn is theirs, not yours: on the left with their avatar and name, as the web.
+            const fromTeammate = isOtherUserChatMessage(message, me ?? undefined);
+            const senderName = fromTeammate && message.userId ? teammateNames.get(message.userId) : undefined;
+            return (
+              <View className="gap-3">
+                {dayStarts.has(message._id) ? <DayDivider timestamp={message.timestamp} /> : null}
+                {/* Web: parts `gap-0.5`; a reply is full width, a user message at most 95%. */}
+                <Message
+                  from={message.role}
+                  className={message.role === "user" ? "gap-0.5" : "max-w-full gap-0.5"}
+                  style={fromTeammate ? TEAMMATE_SIDE : undefined}
+                >
+                  {senderName ? <TeammateName name={senderName} /> : null}
+                  {fromTeammate ? (
+                    <TeammateBubble sender={message.userId ? teammateById.get(message.userId) : undefined}>
+                      <UserMessageText content={message.content} />
+                    </TeammateBubble>
                   ) : (
-                    <AssistantMessage
-                      messageId={message._id}
-                      content={message.content}
-                      activityLog={message.activityLog}
-                      duration={message.finishedAt ? formatDuration(message.timestamp, message.finishedAt) : undefined}
-                      isLatestAssistantTurn={message._id === latestReplyId}
-                      onOpenDiff={openDiff}
-                    />
+                    // Eva's web chat tints the user bubble (bg-primary/10), not the solid default. A reply is `px-1 py-2`.
+                    <MessageContent bubble="tint" className={message.role === "user" ? undefined : "px-1 py-2"}>
+                      {message.role === "user" ? (
+                        // The web user text is markdown in `text-sm` (14 / 20), its tokens as chips.
+                        <UserMessageText content={message.content} />
+                      ) : (
+                        <AssistantMessage
+                          messageId={message._id}
+                          content={message.content}
+                          activityLog={message.activityLog}
+                          duration={message.finishedAt ? formatDuration(message.timestamp, message.finishedAt) : undefined}
+                          isLatestAssistantTurn={message._id === latestReplyId}
+                          onOpenDiff={openDiff}
+                        />
+                      )}
+                    </MessageContent>
                   )}
-                </MessageContent>
-                {message.content.trim() !== "" ? (
-                  <MessageFooter
-                    text={message.content}
-                    at={message.timestamp}
-                    finishedAt={message.role === "assistant" ? message.finishedAt : undefined}
-                    link={webUrl(messageLinkHref(chat.webPath, message._id))}
-                    onFork={chat.kind === "session" ? () => void handleFork(message._id) : undefined}
-                    turn={message.role === "assistant" ? precedingUserTurns.get(message._id) : undefined}
-                    rating={
-                      message.role === "assistant"
-                        ? {
-                            sentiment: mine.get(message._id)?.sentiment,
-                            onRate: (sentiment) => {
-                              rate({ messageId: message._id, sentiment }).catch(() => toast.error("Couldn't save your rating"));
-                            },
-                          }
-                        : undefined
-                    }
-                  />
-                ) : null}
-              </Message>
-            </View>
-          )}
+                  {message.content.trim() !== "" ? (
+                    <MessageFooter
+                      className={fromTeammate ? TEAMMATE_FOOTER_INSET : undefined}
+                      text={message.content}
+                      at={message.timestamp}
+                      finishedAt={message.role === "assistant" ? message.finishedAt : undefined}
+                      link={webUrl(messageLinkHref(chat.webPath, message._id))}
+                      onFork={chat.kind === "session" ? () => void handleFork(message._id) : undefined}
+                      turn={message.role === "assistant" ? precedingUserTurns.get(message._id) : undefined}
+                      rating={
+                        message.role === "assistant"
+                          ? {
+                              sentiment: mine.get(message._id)?.sentiment,
+                              onRate: (sentiment) => {
+                                rate({ messageId: message._id, sentiment }).catch(() => toast.error("Couldn't save your rating"));
+                              },
+                            }
+                          : undefined
+                      }
+                    />
+                  ) : null}
+                </Message>
+              </View>
+            );
+          }}
         />
         {/* The composer or the question card: the scroll button rides 16 above it, as the web's `bottom-4` over the dock. */}
         <ConversationDock>

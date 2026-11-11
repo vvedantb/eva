@@ -1,5 +1,5 @@
 import type { api } from "@eva/backend";
-import { TASK_STATUS_LABELS, formatEntityNumLabel, getUserInitials, type DisplayTaskStatus } from "@eva/shared";
+import { TASK_STATUS_LABELS, firstNameFromUser, formatEntityNumLabel, type DisplayTaskStatus } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconClock, IconTag } from "@tabler/icons-react-native";
 import { Spinner, SurfaceRow } from "@vvedantb/native-ui/primitives";
@@ -12,6 +12,7 @@ import { useSimpleView } from "@/chat/ComposerFooter";
 import { PriorityIcon } from "@/quickTasks/PriorityIcon";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
 import { timeAgo } from "@/ui/format";
+import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { AwaitingAnswerMark } from "@/ui/RowStatus";
 import { useScheme } from "@/ui/theme";
 
@@ -66,7 +67,7 @@ export function QuickTaskRow({
   const showSandbox = sandbox !== undefined && !simpleView;
   const showUnread = task.hasUnread && !task.isExecuting;
   const numLabel = formatEntityNumLabel({ numId: task.numId });
-  const creatorFirstName = creator?.firstName ?? creator?.fullName?.split(/\s+/)[0];
+  const creatorFirstName = creator ? firstNameFromUser(creator) : null;
   const scheduled = task.scheduledAt
     ? `${status === "todo" ? "Scheduled for" : "Was scheduled for"} ${dayjs(task.scheduledAt).format("MMM D, h:mm A")}`
     : undefined;
@@ -149,9 +150,7 @@ export function QuickTaskRow({
         <View className="min-w-0 flex-row items-center gap-1.5">
           {creator ? (
             <>
-              <View className="size-4 items-center justify-center rounded-full" style={{ backgroundColor: theme.muted }}>
-                <Text style={{ fontSize: 8, lineHeight: 10, fontWeight: "600", color: muted }}>{getUserInitials(creator)}</Text>
-              </View>
+              <InitialsAvatar user={creator} size={16} />
               {creatorFirstName ? (
                 <Text numberOfLines={1} className="font-instrument-sans min-w-0" style={{ ...TEXT_2XS, color: withAlpha(muted, 0.75) }}>
                   {creatorFirstName}

@@ -28,6 +28,7 @@ export function MessageFooter({
   onFork,
   rating,
   turn,
+  className,
 }: {
   text: string;
   at: number;
@@ -40,6 +41,8 @@ export function MessageFooter({
   rating?: { sentiment: Sentiment | undefined; onRate: (sentiment: Sentiment | null) => void };
   /** Agent replies: the user turn before it (`buildPrecedingUserTurns`), which holds the model it ran on. */
   turn?: { model?: string; reasoningLevel?: string; credentialSourceLabel?: string };
+  /** Extra classes for the row, such as a teammate's inset. */
+  className?: string;
 }) {
   const [copied, setCopied] = useState<"text" | "link" | null>(null);
   const copy = async (what: "text" | "link") => {
@@ -49,7 +52,7 @@ export function MessageFooter({
   };
   const meta = finishedAt ? `${formatClockTime(finishedAt)} · ${formatDuration(at, finishedAt)}` : formatClockTime(at);
   return (
-    <MessageActionsBar className={rating ? "mt-0.5 gap-2" : "gap-3"}>
+    <MessageActionsBar className={`${rating ? "mt-0.5 gap-2" : "gap-3"} ${className ?? ""}`}>
       {turn?.model ? <ModelIcon {...turn} model={turn.model} /> : null}
       <MessageActionsBar className={rating ? "ml-0.5 gap-0.5" : "gap-0.5"}>
         <MessageAction
