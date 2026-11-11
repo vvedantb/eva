@@ -30,6 +30,7 @@ import {
   unreadLookupForRepo,
 } from "../chatReads";
 import { gatherAccessibleRepos } from "../_githubRepos/helpers";
+import { liveTaskSessionStatuses } from "../_sessions/ownedSession";
 
 /**
  * A task list row (`listRow`) enriched with its latest run and busy state. The
@@ -151,11 +152,13 @@ async function enrichTasksWithLastRun(
   const [
     { openIds: openChatEntityIds, awaitingAnswerIds },
     { summariesByTask, hasUnread: unreadOf },
+    sessionStatuses,
   ] = await Promise.all([
     chatTurnFlagsForRepos(db, repoIds),
     tasks.length <= POINT_READ_LIMIT
       ? pointReadLookups(db, userId, tasks, repoIds)
       : repoWideLookups(db, userId, [...repoIds]),
+    liveTaskSessionStatuses(db, repoIds),
   ]);
 
   return Promise.all(
@@ -164,9 +167,16 @@ async function enrichTasksWithLastRun(
       const isExecuting = taskIsExecuting(task, openChatEntityIds);
       const hasUnread = await unreadOf(task);
       const isAwaitingAnswer = awaitingAnswerIds.has(String(task._id));
+      // A quick task's sandbox lives on its session; the card shows that.
+      const row = {
+        ...listRow(task),
+        reviewTaskSandboxStatus:
+          sessionStatuses.get(String(task._id)) ??
+          task.reviewTaskSandboxStatus,
+      };
       if (summary) {
         return {
-          ...listRow(task),
+          ...row,
           lastRunStartedAt: summary.lastRunStartedAt,
           isExecuting,
           hasUnread,
@@ -180,7 +190,7 @@ async function enrichTasksWithLastRun(
         .order("desc")
         .first();
       return {
-        ...listRow(task),
+        ...row,
         lastRunStartedAt: latestRun?.startedAt,
         isExecuting,
         hasUnread,
@@ -325,7 +335,26 @@ export const countSandboxTasks = authQuery({
           .collect(),
       ),
     );
-    return filterActiveEntities(live.flat()).filter(
+    // A quick task's sandbox lives on its session: count those too.
+    const sessionStatuses = await liveTaskSessionStatuses(ctx.db, [
+      args.repoId,
+    ]);
+    const liveSessionTasks = await Promise.all(
+      [...sessionStatuses]
+        .filter(([, status]) => status === "active" || status === "starting")
+        .map(([taskId]) => {
+          const id = ctx.db.normalizeId("agentTasks", taskId);
+          return id ? ctx.db.get(id) : null;
+        }),
+    );
+    const counted = new Map<string, Doc<"agentTasks">>();
+    for (const task of [
+      ...live.flat(),
+      ...liveSessionTasks.filter((task) => task !== null),
+    ]) {
+      counted.set(String(task._id), task);
+    }
+    return filterActiveEntities([...counted.values()]).filter(
       (task) => !task.projectId && ACTIVE_TASK_STATUSES.has(task.status),
     ).length;
   },

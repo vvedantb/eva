@@ -7,7 +7,11 @@ import { composerTraitFields } from "../_shared/composerTraits";
 import { ensureMainChat } from "../_sessionChats/helpers";
 import { resolveSessionBaseBranch } from "./baseBranch";
 import { archiveSession, isSessionArchived, unarchiveSession } from "./archive";
-import { findOwnedSession, type OwnedSessionOwner } from "./owner";
+import {
+  findOwnedSession,
+  sessionOwnerTaskId,
+  type OwnedSessionOwner,
+} from "./owner";
 import { requestSessionSandboxStop } from "./sandbox";
 
 /**
@@ -112,6 +116,39 @@ export async function mirrorTaskIntoOwnedSession(
   );
   if (session.title === task.title && session.baseBranch === baseBranch) return;
   await ctx.db.patch(session._id, { title: task.title, baseBranch });
+}
+
+const LIVE_SANDBOX_STATUSES = ["active", "starting", "stopping"] as const;
+
+/**
+ * Live sandbox status of every task session in these repos, keyed by task id.
+ * Task lists show it as the task's sandbox status: one indexed read per repo
+ * and live status (few rows), never one read per listed task. A task absent
+ * from the map has a closed (or no) session sandbox.
+ */
+export async function liveTaskSessionStatuses(
+  db: DatabaseReader,
+  repoIds: Iterable<Id<"githubRepos">>,
+): Promise<Map<string, Doc<"sessions">["status"]>> {
+  const rows = await Promise.all(
+    [...new Set(repoIds)].flatMap((repoId) =>
+      LIVE_SANDBOX_STATUSES.map((status) =>
+        db
+          .query("sessions")
+          .withIndex("by_repo_and_status", (q) =>
+            q.eq("repoId", repoId).eq("status", status),
+          )
+          .filter((q) => q.eq(q.field("owner.kind"), "task"))
+          .collect(),
+      ),
+    ),
+  );
+  const byTask = new Map<string, Doc<"sessions">["status"]>();
+  for (const session of rows.flat()) {
+    const taskId = sessionOwnerTaskId(session);
+    if (taskId) byTask.set(String(taskId), session.status);
+  }
+  return byTask;
 }
 
 /** The task's session, or null before anything needed one. */

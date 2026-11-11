@@ -90,8 +90,17 @@ export const mobileChatValidator = v.object({
   session: v.optional(
     v.object({ id: v.id("sessions"), chatId: v.id("sessionChats"), title: v.string(), archived: v.boolean() }),
   ),
-  /** Quick task chats only: the task the web task chat's model, traits and account calls take. */
-  task: v.optional(v.object({ id: v.id("agentTasks") })),
+  /**
+   * Quick task chats only: the task. `sessionChatId` is set once the task
+   * chats in its session's Main chat (`parentId` is then that chat): model and
+   * traits picks go through `mobile.setChatModel`, not `agentTasks.update`.
+   */
+  task: v.optional(
+    v.object({
+      id: v.id("agentTasks"),
+      sessionChatId: v.optional(v.id("sessionChats")),
+    }),
+  ),
   /** Project chats only: the project the web project chat's account calls take. */
   project: v.optional(v.object({ id: v.id("projects") })),
 });
@@ -208,7 +217,7 @@ export async function resolveMobileChat(
           model: chat.lastModel ?? session.lastModel,
           providerAccountId: chat.providerAccountId,
           accountOwnerId: task.createdBy,
-          task: { id: task._id },
+          task: { id: task._id, sessionChatId: chat._id },
           traits: storedComposerTraits(chat),
           sandboxActive: ownedSandboxActive,
           sandboxBranch: ownedSandboxActive ? session.sandboxBranch : undefined,
