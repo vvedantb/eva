@@ -69,6 +69,8 @@ interface SessionMenuItemsProps {
   session: SessionMenuSession;
   href: string;
   isRegeneratingTitle: boolean;
+  /** Rows and tabs that link elsewhere; the chat header is already the session. */
+  showOpenInNewTab?: boolean;
   /** Active list only — omitting hides Rename and Regenerate title. */
   onRenameRequest?: () => void;
   /** Shows Fork session; called with the fork's path segment once it exists. */
@@ -96,6 +98,7 @@ export function SessionMenuItems({
   session,
   href,
   isRegeneratingTitle,
+  showOpenInNewTab = false,
   onRenameRequest,
   onForkNavigate,
   onSendForReview,
@@ -153,6 +156,16 @@ export function SessionMenuItems({
           </Item>
           <Separator />
         </>
+      ) : null}
+      {showOpenInNewTab ? (
+        <Item
+          onSelect={() => {
+            window.open(href, "_blank", "noopener,noreferrer");
+          }}
+        >
+          <IconExternalLink size={iconSize} />
+          Open in new tab
+        </Item>
       ) : null}
       {onRenameRequest ? (
         <>
