@@ -1,4 +1,4 @@
-import { api } from "@eva/backend";
+import { api, isProjectBuilding } from "@eva/backend";
 import { BUILDABLE_PROJECT_PHASES, isProjectPlanning } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconDots, IconHammer, IconLayoutKanban, IconMessage, IconPlayerStop } from "@tabler/icons-react-native";
@@ -146,7 +146,7 @@ function ProjectDock({ project }: { project: Project }) {
   const [busy, setBusy] = useState(false);
   const showChat = SANDBOX_PHASES.includes(project.phase);
   const canBuild = BUILDABLE_PROJECT_PHASES.includes(project.phase);
-  const building = project.activeBuildWorkflowId !== undefined;
+  const building = isProjectBuilding(project);
   if (!showChat && !canBuild) return null;
 
   const run = async (action: () => Promise<unknown>, success: string | undefined, failure: string) => {
