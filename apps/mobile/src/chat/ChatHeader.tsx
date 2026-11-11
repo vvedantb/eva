@@ -24,6 +24,7 @@ import { Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SESSION_ACTION_ITEMS } from "@/sessions/useSessionActions";
 import { RepoLogo } from "@/ui/RepoLogo";
+import { displayTitle } from "@/ui/format";
 import { useScheme } from "@/ui/theme";
 
 /** One ⋯ menu item: the `DropdownMenuItem` label, icon and tone. */
@@ -96,7 +97,7 @@ export function ChatHeader({
       <HeaderIconButton label="Back" onPress={onBack}>
         <IconChevronLeft size={20} color={foreground} />
       </HeaderIconButton>
-      <View className="min-w-0 flex-1 flex-row items-center gap-1.5" accessibilityRole="header" accessibilityLabel={`${repoLabel}, ${title}`}>
+      <View className="min-w-0 flex-1 flex-row items-center gap-1.5" accessibilityRole="header" accessibilityLabel={`${repoLabel}, ${displayTitle(title)}`}>
         {/* Web breadcrumb: the logo at 16 with no border, else a 16 initial tile (the cat colour on a 12% tint), the repo in medium muted, a slash at 50%, the title in semibold. */}
         <RepoLogo
           logoUrl={logoUrl}
@@ -113,14 +114,15 @@ export function ChatHeader({
             </View>
           }
         />
-        <Text className="font-instrument-sans-medium text-sm" style={{ color: muted, fontWeight: "500" }}>
+        {/* A long repo name gives up width too, so the title keeps at least half the row. */}
+        <Text numberOfLines={1} className="font-instrument-sans-medium max-w-[50%] shrink text-sm" style={{ color: muted, fontWeight: "500" }}>
           {repoLabel}
         </Text>
         <Text className="font-instrument-sans text-sm" style={{ color: withAlpha(muted, 0.5) }}>
           /
         </Text>
         <Text numberOfLines={1} className="font-instrument-sans-semibold min-w-0 flex-1 text-sm" style={{ color: foreground, fontWeight: "600" }}>
-          {title}
+          {displayTitle(title)}
         </Text>
       </View>
       <DropdownMenu>

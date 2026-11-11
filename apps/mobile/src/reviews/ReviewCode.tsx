@@ -32,7 +32,7 @@ export function ReviewCode({ pr, state, onOpenFile }: { pr: PrRef; state: PrDiff
         <SkeletonList
           label="Loading pull request diff"
           count={8}
-          renderRow={(row) => <SkeletonRow index={row} lines={2} minHeight={56} />}
+          renderRow={(row) => <SkeletonRow index={row} lines={2} minHeight={64} />}
         />
       }
     >
@@ -63,7 +63,8 @@ function FileRow({ pr, entry, onOpen }: { pr: PrRef; entry: DiffFileEntry; onOpe
       accessibilityLabel={entry.path}
       accessibilityHint="Opens the file's diff"
       onPress={onOpen}
-      className="min-h-14 flex-row items-center gap-2 py-1 pr-1 pl-4 active:opacity-70"
+      // The two-line list row a thumb taps: 64, as the Inbox.
+      className="min-h-16 flex-row items-center gap-2 py-1 pr-1 pl-4 active:opacity-70"
     >
       <View className="min-w-0 flex-1 gap-0.5 py-2">
         <Text numberOfLines={1} className="text-sm" style={textColor(scheme)}>

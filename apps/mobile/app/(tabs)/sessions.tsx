@@ -2,7 +2,6 @@ import { api } from "@eva/backend";
 import { IconPlus, IconTerminal2 } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
 import { PageHeader } from "@vvedantb/native-ui/layout";
-import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
   closeSwipeRows,
   EmptyState,
@@ -11,9 +10,6 @@ import {
   PillTabs,
   SkeletonList,
   SkeletonRow,
-  Tabs,
-  TabsList,
-  TabsTrigger,
 } from "@vvedantb/native-ui/primitives";
 import { tokens, useLargerText } from "@vvedantb/native-ui/theme";
 import { useQuery } from "convex/react";
@@ -27,6 +23,7 @@ import { useSimpleView } from "@/chat/ComposerFooter";
 import { ReviewsSection } from "@/reviews/ReviewsSection";
 import { SessionGroupFooter, SessionGroupHeader, SessionListRow, useSessionGroups } from "@/sessions/SessionGroup";
 import { SESSION_ACTION_ITEMS, useSessionActions } from "@/sessions/useSessionActions";
+import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme } from "@/ui/theme";
 
@@ -120,7 +117,6 @@ function SessionsSection() {
   const sessions = useQuery(api.mobile.listChats, { archived: tab === "archived" });
   // The repo logos for the group headers, from the list the web sidebar reads.
   const repos = useQuery(api.githubRepos.list, {});
-  const scheme = useScheme();
   const largerText = useLargerText();
   const insets = useSafeAreaInsets();
   const { sections, toggleOpen, toggleExpanded } = useSessionGroups(sessions);
@@ -128,22 +124,15 @@ function SessionsSection() {
   return (
     <>
       <View className="px-4 pb-2">
-        <Tabs value={tab} onValueChange={(value: string) => setTab(value === "archived" ? "archived" : "active")}>
-          {/* The web `SessionsListModeTabs`: an `h-8` `tabs-segmented` list with
-          `sm` triggers (24 high). Its dark trough is the card colour. */}
-          <TabsList
-            variant="segmented"
-            size="sm"
-            className="gap-0 self-stretch p-1"
-            style={scheme === "dark" ? { backgroundColor: EVA_THEME.dark.card } : undefined}
-          >
-            {(["active", "archived"] as const).map((value) => (
-              <TabsTrigger key={value} value={value} className="flex-1" minHeight={largerText ? undefined : 24}>
-                {value === "active" ? "Active" : "Archived"}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+        {/* The web `SessionsListModeTabs`. */}
+        <SegmentedTabs
+          value={tab}
+          options={[
+            { value: "active", label: "Active" },
+            { value: "archived", label: "Archived" },
+          ]}
+          onChange={setTab}
+        />
       </View>
       {sessions === undefined ? (
         <SkeletonList

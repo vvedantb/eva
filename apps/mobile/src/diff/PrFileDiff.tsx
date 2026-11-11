@@ -236,6 +236,9 @@ export function PrFileDiff({
           <FileNote text={entry.renamedFrom ? "File renamed without content changes." : "No content changes in this file."} />
         ) : (
           <>
+            {/* The line rows stay the kit's 22, below the 44 rule on purpose:
+                taller rows would spread the code apart, and each tap opens the
+                comment sheet, which names the lines ("Comment on lines ..."). */}
             <UnifiedDiff
               lines={hidden > 0 ? lines.slice(0, shown) : lines}
               onLinePress={commentable ? pressLine : undefined}

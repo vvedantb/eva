@@ -8,7 +8,7 @@ import type { FunctionReturnType } from "convex/server";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import { timeAgo } from "@/ui/format";
+import { displayTitle, timeAgo } from "@/ui/format";
 import { RepoLogo } from "@/ui/RepoLogo";
 import { RowStatus } from "@/ui/RowStatus";
 import { type Scheme, useScheme, XS_TRACKING } from "@/ui/theme";
@@ -130,9 +130,11 @@ export function SessionGroupHeader({
             </View>
           }
         />
-        <View className="flex-row items-center gap-1.5">
+        {/* `shrink`: a long repo name truncates, and the count, chevron and "+" stay on screen. */}
+        <View className="min-w-0 shrink flex-row items-center gap-1.5">
           <Text
-            className="font-instrument-sans-medium text-xs"
+            numberOfLines={1}
+            className="font-instrument-sans-medium min-w-0 shrink text-xs"
             style={{ color: muted, fontWeight: "500", letterSpacing: XS_TRACKING }}
           >
             {repoLabel}
@@ -226,7 +228,7 @@ export function SessionListRow({
     <SwipeableRow trailingActions={[swipeAction]}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={session.title}
+        accessibilityLabel={displayTitle(session.title)}
         onPress={() => router.push({ pathname: "/chat/[target]", params: { target: session.sessionId } })}
         onLongPress={onLongPress}
         // VoiceOver and TalkBack reach the menu and the swipe action through the actions rotor.
@@ -248,7 +250,7 @@ export function SessionListRow({
           className="font-instrument-sans flex-1 text-sm"
           style={{ color: tokens.color.foreground[scheme] }}
         >
-          {session.title}
+          {displayTitle(session.title)}
         </Text>
         {session.prUrl ? <PrIcon state={session.prState} scheme={scheme} /> : null}
         <Text

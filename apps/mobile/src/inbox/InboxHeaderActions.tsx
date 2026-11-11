@@ -22,12 +22,11 @@ const GROUPS: readonly InboxGroup[] = ["day", "repo", "type", "urgency"];
 const FILTER_LABELS: Record<InboxFilter, string> = { all: "All", unread: "Unread", archived: "Archived" };
 const GROUP_LABELS: Record<InboxGroup, string> = { day: "Day", repo: "Repo", type: "Type", urgency: "Urgency" };
 
-/** The web `h-7` header buttons are 28 high: 8 above and below reach 44. */
-const PILL_SLOP = { top: 8, bottom: 8, left: 2, right: 2 } as const;
-
 /**
  * A web `Button size="sm"` in the inbox header, icon only at phone width: a
- * 28-high pill, `outline` (1px border, no fill) or `ghost` (neither).
+ * 32-high pill (the web `sm`), `outline` (1px border, no fill) or `ghost` (neither), inside
+ * a whole 44 target. The web `h-7` (28) pills 6 apart needed slop that
+ * reached the neighbour; these targets sit side by side and need none.
  */
 function HeaderPill({
   icon: Icon,
@@ -48,11 +47,14 @@ function HeaderPill({
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
-      hitSlop={PILL_SLOP}
-      className="h-7 items-center justify-center rounded-full px-3 active:opacity-70"
-      style={outline ? { borderWidth: 1, borderColor: tokens.color.border[scheme] } : undefined}
+      className="h-11 min-w-11 items-center justify-center active:opacity-70"
     >
-      <Icon size={16} color={color} />
+      <View
+        className="h-8 items-center justify-center rounded-full px-3"
+        style={outline ? { borderWidth: 1, borderColor: tokens.color.border[scheme] } : undefined}
+      >
+        <Icon size={16} color={color} />
+      </View>
     </Pressable>
   );
 }
@@ -84,7 +86,7 @@ export function InboxHeaderActions({
   const scheme = useScheme();
   const muted = tokens.color.muted[scheme];
   return (
-    <View className="flex-row items-center gap-1.5">
+    <View className="flex-row items-center">
       {unreadCount > 0 ? (
         <HeaderPill icon={IconChecks} label="Mark all as read" outline color={muted} onPress={onMarkAllRead} />
       ) : null}
@@ -98,8 +100,7 @@ export function InboxHeaderActions({
       <DropdownMenu>
         <DropdownMenuTrigger
           accessibilityLabel={`Filter notifications: ${FILTER_LABELS[filter]}, grouped by ${GROUP_LABELS[group]}`}
-          hitSlop={PILL_SLOP}
-          className="h-7 flex-row items-center gap-1.5 rounded-full px-2 active:opacity-70"
+          className="h-11 flex-row items-center gap-1.5 rounded-full px-2 active:opacity-70"
         >
           <IconFilter size={16} color={muted} />
           {/* The web button label: `text-xs` semibold with -0.01em tracking. */}

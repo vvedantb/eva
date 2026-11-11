@@ -74,7 +74,8 @@ export default function SettingsScreen() {
             description="Eva notifies this phone when an agent needs your input or someone mentions you. Turn them off in Android settings."
           />
           <SettingsSection title="Account" description={user?.primaryEmailAddress?.emailAddress ?? "Signed in"}>
-            <Button variant="outline" onPress={() => setConfirmSignOut(true)}>
+            {/* `lg`, a whole 44 target (the web `default` is 40). */}
+            <Button variant="outline" size="lg" onPress={() => setConfirmSignOut(true)}>
               Sign out
             </Button>
           </SettingsSection>
