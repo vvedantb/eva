@@ -7,6 +7,12 @@ import type { ZodTypeAny } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { defineTool, type EvaTool } from "./registry";
+import { entityAccess, repoRefArgs, type RepoRef } from "./entityRef";
+import {
+  mcpGetContext,
+  mcpListUserRepos,
+  type McpCredentials,
+} from "./toolShared";
 
 const SUPABASE_PREFIX = "supabase_";
 const TOOL_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -25,10 +31,98 @@ const READ_ONLY_SUPABASE_TOOLS = new Set([
   "list_edge_functions",
   "list_extensions",
   "list_migrations",
-  "list_projects",
   "list_tables",
   "search_docs",
 ]);
+
+/** Tools with no project argument. Every other tool must take `project_id`. */
+const PROJECT_FREE_TOOLS = new Set(["search_docs"]);
+
+/** One allowed Supabase project: its ref and an optional label ("staging"). */
+export type SupabaseProject = { ref: string; label: string | null };
+
+/** "staging (abc), prod (def)" — how projects are named to the agent. */
+export function describeSupabaseProjects(
+  projects: readonly SupabaseProject[],
+): string {
+  return projects
+    .map(({ ref, label }) => (label ? `${label} (${ref})` : ref))
+    .join(", ");
+}
+
+/**
+ * The repo's allowed Supabase projects: `SUPABASE_PROJECT_ID` (one entry or a
+ * comma-separated list; each entry `ref` or `label:ref`, e.g.
+ * `staging:abc,prod:def`), else the subdomain of `SUPABASE_URL` /
+ * `NEXT_PUBLIC_SUPABASE_URL` (`<ref>.supabase.co`).
+ */
+export function supabaseProjects(
+  vars: Array<{ key: string; value: string }>,
+): SupabaseProject[] {
+  const value = (key: string) =>
+    vars.find((entry) => entry.key === key)?.value.trim();
+  const explicit: SupabaseProject[] = [];
+  for (const entry of (value("SUPABASE_PROJECT_ID") ?? "").split(",")) {
+    const separator = entry.indexOf(":");
+    const label = separator === -1 ? "" : entry.slice(0, separator).trim();
+    const ref = entry.slice(separator + 1).trim();
+    if (ref.length === 0 || explicit.some((project) => project.ref === ref)) {
+      continue;
+    }
+    explicit.push({ ref, label: label.length > 0 ? label : null });
+  }
+  if (explicit.length > 0) return explicit;
+  for (const key of ["SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_URL"]) {
+    let hostname: string;
+    try {
+      hostname = new URL(value(key) ?? "").hostname;
+    } catch {
+      continue;
+    }
+    const ref = /^([a-z0-9]+)\.supabase\.co$/.exec(hostname)?.[1];
+    if (ref) return [{ ref, label: null }];
+  }
+  return [];
+}
+
+/**
+ * Keeps a tool call on one of the repo's projects. `project_id` may be a ref
+ * or a label (any case). With one project it may be omitted; with several,
+ * the caller must pick one. Any other value is rejected, never rewritten to a
+ * different project.
+ */
+export function bindSupabaseProject(
+  args: Record<string, unknown>,
+  projects: readonly SupabaseProject[],
+): { ok: true; args: Record<string, unknown> } | { ok: false; error: string } {
+  const allowed = describeSupabaseProjects(projects);
+  const requested = args.project_id;
+  if (requested === undefined) {
+    const [only] = projects;
+    if (projects.length === 1 && only !== undefined) {
+      return { ok: true, args: { ...args, project_id: only.ref } };
+    }
+    return {
+      ok: false,
+      error: `This repo has several Supabase projects. Pass project_id as one of: ${allowed}.`,
+    };
+  }
+  const match =
+    typeof requested === "string"
+      ? projects.find(
+          ({ ref, label }) =>
+            ref === requested ||
+            (label !== null && label.toLowerCase() === requested.toLowerCase()),
+        )
+      : undefined;
+  if (!match) {
+    return {
+      ok: false,
+      error: `project_id must be one of this repo's Supabase projects: ${allowed}.`,
+    };
+  }
+  return { ok: true, args: { ...args, project_id: match.ref } };
+}
 
 // In-memory cache (reset on action cold starts)
 const toolDefinitionCache = new Map<
@@ -168,36 +262,112 @@ async function discoverTools(token: string): Promise<Tool[]> {
   }
 }
 
-interface McpCredentials {
-  clerkUserId: string;
-  scopedRepoId?: string;
+type SupabaseCredentials = { token: string; projects: SupabaseProject[] };
+
+/** Per user: the repo whose token lists Supabase's tools (null = none). */
+const discoveryRepoCache = new Map<
+  string,
+  { repoId: string | null; expiresAt: number }
+>();
+
+function resolveCredentials(
+  ctx: ActionCtx,
+  repoId: string,
+): Promise<SupabaseCredentials | null> {
+  return ctx.runAction(internal.mcp.nodeActions.resolveSupabaseCredentials, {
+    repoId,
+  });
 }
+
+/**
+ * Credentials used only to list Supabase's tool definitions (names and input
+ * schemas, no data). A sandbox uses its own repo. A user-level connection
+ * (claude.ai) uses the first repo it can reach that has Supabase configured;
+ * every call still runs on the repo the caller names.
+ */
+async function discoveryCredentials(
+  ctx: ActionCtx,
+  credentials: McpCredentials,
+): Promise<SupabaseCredentials | null> {
+  if (credentials.scopedRepoId !== undefined) {
+    return resolveCredentials(ctx, credentials.scopedRepoId);
+  }
+  const { clerkUserId } = credentials;
+  const cached = discoveryRepoCache.get(clerkUserId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.repoId === null
+      ? null
+      : resolveCredentials(ctx, cached.repoId);
+  }
+  const { userId } = await mcpGetContext(ctx, clerkUserId);
+  const repos = await mcpListUserRepos(ctx, userId);
+  // Sequential on purpose: stop at the first configured repo instead of
+  // decrypting every repo's env vars.
+  for (const repo of repos) {
+    const found = await resolveCredentials(ctx, repo.id);
+    if (found) {
+      discoveryRepoCache.set(clerkUserId, {
+        repoId: repo.id,
+        expiresAt: Date.now() + TOOL_CACHE_TTL_MS,
+      });
+      return found;
+    }
+  }
+  discoveryRepoCache.set(clerkUserId, {
+    repoId: null,
+    expiresAt: Date.now() + TOOL_CACHE_TTL_MS,
+  });
+  return null;
+}
+
+const repoRefSchema = z.object(repoRefArgs);
 
 export async function supabaseTools(
   credentials: McpCredentials,
   ctx: ActionCtx,
 ): Promise<EvaTool[]> {
-  const { clerkUserId } = credentials;
+  const { scopedRepoId } = credentials;
+  const { assertRepoAccess, resolveRepoRef } = entityAccess(ctx, credentials);
 
-  // Try to resolve Supabase token
-  let token: string | null;
+  /**
+   * The repo a call runs against: the one the caller names, else the
+   * sandbox's own repo. Same access check as postgres_query, including the
+   * sandbox token's single-repo pin.
+   */
+  async function targetRepo(
+    ref: RepoRef,
+  ): Promise<{ repoId: string } | ReturnType<typeof toolErrorResult>> {
+    if (!ref.repoId && !ref.repoName) {
+      if (scopedRepoId !== undefined) return { repoId: scopedRepoId };
+      return toolErrorResult(
+        "Provide repoId (from list_repos) or repoName for the repo whose Supabase project to use.",
+      );
+    }
+    const { userId } = await mcpGetContext(ctx, credentials.clerkUserId);
+    const resolved = await resolveRepoRef(ref, userId);
+    if ("content" in resolved) return resolved;
+    await assertRepoAccess(resolved.repoId, userId);
+    return resolved;
+  }
+
+  let discovery: SupabaseCredentials | null;
   try {
-    token = await ctx.runAction(internal.mcp.nodeActions.resolveSupabaseToken, {
-      clerkUserId,
-    });
+    discovery = await discoveryCredentials(ctx, credentials);
   } catch (err) {
-    console.error("Supabase: failed to resolve token:", err);
+    console.error("Supabase: failed to resolve credentials:", err);
     return [];
   }
 
-  if (!token) {
-    console.log("Supabase: no SUPABASE_ACCESS_TOKEN found, skipping");
+  if (!discovery) {
+    console.log(
+      "Supabase: no repo with SUPABASE_ACCESS_TOKEN plus SUPABASE_PROJECT_ID/SUPABASE_URL, skipping",
+    );
     return [];
   }
 
   let tools: Tool[];
   try {
-    tools = await discoverTools(token);
+    tools = await discoverTools(discovery.token);
   } catch (err) {
     console.error("Supabase: failed to discover tools:", err);
     return [];
@@ -208,8 +378,11 @@ export async function supabaseTools(
     return [];
   }
 
-  const visibleTools = tools.filter((tool) =>
-    READ_ONLY_SUPABASE_TOOLS.has(tool.name),
+  const visibleTools = tools.filter(
+    (tool) =>
+      READ_ONLY_SUPABASE_TOOLS.has(tool.name) &&
+      (PROJECT_FREE_TOOLS.has(tool.name) ||
+        "project_id" in (tool.inputSchema.properties ?? {})),
   );
 
   if (visibleTools.length === 0) {
@@ -220,31 +393,54 @@ export async function supabaseTools(
   const evaTools: EvaTool[] = [];
   for (const tool of visibleTools) {
     const prefixedName = `${SUPABASE_PREFIX}${tool.name}`;
+    const bindsProject = !PROJECT_FREE_TOOLS.has(tool.name);
     const zodShape = toolSchemaToZodShape(tool.inputSchema);
+    if (bindsProject) {
+      zodShape.project_id = z
+        .string()
+        .optional()
+        .describe(
+          scopedRepoId === undefined
+            ? 'One of the named repo\'s Supabase projects, by label (e.g. "staging", "prod") or ref. May be omitted when the repo has one; otherwise the error lists the allowed labels and refs.'
+            : `One of this repo's Supabase projects, by label or ref: ${describeSupabaseProjects(discovery.projects)}. May be omitted when there is only one.`,
+        );
+    }
 
     evaTools.push(
       defineTool({
         name: prefixedName,
         description: `[Supabase] ${tool.description ?? tool.name}`,
         mutating: false,
-        input: zodShape,
-        handler: async (args: Record<string, unknown>) => {
-          // Re-resolve token in case it expired
-          const currentToken = await ctx.runAction(
-            internal.mcp.nodeActions.resolveSupabaseToken,
-            { clerkUserId },
-          );
-          if (!currentToken) {
+        input: { ...zodShape, ...repoRefArgs },
+        handler: async (input: Record<string, unknown>) => {
+          const {
+            repoId: _repoId,
+            repoName: _repoName,
+            app: _app,
+            ...args
+          } = input;
+          const target = await targetRepo(repoRefSchema.parse(input));
+          if ("content" in target) return target;
+          // Re-resolve in case the token expired or the env changed.
+          const current = await resolveCredentials(ctx, target.repoId);
+          if (!current) {
             return toolErrorResult(
-              "SUPABASE_ACCESS_TOKEN is no longer available.",
+              "This repo has no SUPABASE_ACCESS_TOKEN plus SUPABASE_PROJECT_ID or SUPABASE_URL in Eva.",
             );
           }
+          let callArgs = args;
+          if (bindsProject) {
+            const bound = bindSupabaseProject(args, current.projects);
+            if (!bound.ok) return toolErrorResult(bound.error);
+            callArgs = bound.args;
+          }
+          const currentToken = current.token;
 
           try {
             const client = await connectClient(currentToken);
             try {
               const result = await withTimeout(
-                client.callTool({ name: tool.name, arguments: args }),
+                client.callTool({ name: tool.name, arguments: callArgs }),
                 CALL_TIMEOUT_MS,
                 `Supabase tool ${tool.name}`,
               );
