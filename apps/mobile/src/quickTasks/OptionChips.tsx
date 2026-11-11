@@ -1,5 +1,5 @@
 import type { api, Id } from "@eva/backend";
-import { PRIORITY_LABELS, PRIORITY_ORDER, getUserInitials, type Priority } from "@eva/shared";
+import { PRIORITY_LABELS, PRIORITY_ORDER, type Priority } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconFolder, IconPlus, IconTag, IconUserPlus } from "@tabler/icons-react-native";
 import { SheetRow, Text } from "@vvedantb/native-ui/primitives";
@@ -9,6 +9,7 @@ import { useState, type ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { FooterSheet } from "@/chat/ComposerFooter";
 import { PriorityIcon } from "@/quickTasks/PriorityIcon";
+import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { textColor, useScheme } from "@/ui/theme";
 
 type User = FunctionReturnType<typeof api.users.listAll>[number];
@@ -113,16 +114,6 @@ function displayName(user: User): string {
   return parts.length > 0 ? parts.join(" ") : "Unknown";
 }
 
-/** A 20 initials disc, in place of the web face mark. */
-function Initials({ user }: { user: User }) {
-  const theme = EVA_THEME[useScheme()];
-  return (
-    <View className="size-5 items-center justify-center rounded-full" style={{ backgroundColor: theme.muted }}>
-      <Text style={{ fontSize: 9, lineHeight: 12, fontWeight: "600", color: theme.mutedForeground }}>{getUserInitials(user)}</Text>
-    </View>
-  );
-}
-
 /**
  * The web `AssigneeSelector` ("Code Reviewer"): searchable, "Unassigned",
  * then the teammates with the dev role. A pick closes the sheet.
@@ -151,7 +142,7 @@ export function ReviewerChip({
   return (
     <>
       <OptionPill
-        icon={assigned ? <Initials user={assigned} /> : <IconUserPlus size={14} color={muted} />}
+        icon={assigned ? <InitialsAvatar user={assigned} size={20} /> : <IconUserPlus size={14} color={muted} />}
         label={assigned ? displayName(assigned) : "Code Reviewer"}
         set={assigned !== undefined}
         accessibilityLabel={`Code reviewer: ${assigned ? displayName(assigned) : "Unassigned"}`}
@@ -173,7 +164,7 @@ export function ReviewerChip({
       >
         {"unassigned".includes(query) ? <SheetRow icon={IconUserPlus} title="Unassigned" active={value === undefined} onPress={() => pick(undefined)} /> : null}
         {reviewers.map((user) => (
-          <SheetRow key={user._id} leading={<Initials user={user} />} title={displayName(user)} active={user._id === value} onPress={() => pick(user._id)} />
+          <SheetRow key={user._id} leading={<InitialsAvatar user={user} size={20} />} title={displayName(user)} active={user._id === value} onPress={() => pick(user._id)} />
         ))}
         {reviewers.length === 0 && !"unassigned".includes(query) ? (
           <Text variant="muted" className="py-6 text-center" style={textColor(scheme, "muted")}>

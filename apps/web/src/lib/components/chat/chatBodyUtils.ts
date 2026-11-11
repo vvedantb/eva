@@ -4,14 +4,24 @@ import type { ActivityStep } from "@vvedantb/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import {
   collectChangedFiles,
+  isOtherUserChatMessage,
   isSandboxPausedAlert,
+  otherUserIdsInChat,
   type ChangedFile,
+  type ChatUserAttribution,
 } from "@eva/shared";
 import { tokenizedToEditable } from "@/lib/components/mentions";
 import { stripReviewCommentBlocks } from "@/lib/reviewComments";
 
 // Moved to `@eva/shared` so the mobile chat footer reads the same turn model.
 export { buildPrecedingUserTurns } from "@eva/shared";
+// Moved to `@eva/shared` so the mobile chat draws a teammate's turn as the web.
+export {
+  firstNameByUserId,
+  firstNameFromUser,
+  isOtherUserChatMessage,
+  otherUserIdsInChat,
+} from "@eva/shared";
 
 /**
  * The codebase a chat belongs to. Manager Ave has none, so it passes nothing:
@@ -149,58 +159,12 @@ export function visibleChatMessages<
   return messages.filter((message) => !hidden(message));
 }
 
-/** First name for chat labels; falls back to the first word of full name. */
-export function firstNameFromUser(user: {
-  firstName?: string | null;
-  fullName?: string | null;
-}): string | null {
-  return user.firstName?.trim() || user.fullName?.trim().split(" ")[0] || null;
-}
-
-type ChatUserAttribution = {
-  role: ChatBodyMessage["role"];
-  userId?: string;
-  isSystemAlert?: boolean;
-};
-
-/** Teammate user turn (not yours). Missing ids → treat as own to avoid layout flash. */
-export function isOtherUserChatMessage(
-  message: ChatUserAttribution,
-  currentUserId: string | undefined,
-): boolean {
-  return (
-    !message.isSystemAlert &&
-    message.role === "user" &&
-    message.userId !== undefined &&
-    currentUserId !== undefined &&
-    message.userId !== currentUserId
-  );
-}
-
 /** True when the transcript has a teammate bubble that needs a display name. */
 export function chatNeedsOtherUserDirectory(
   messages: ReadonlyArray<ChatUserAttribution>,
   currentUserId: string | undefined,
 ): boolean {
   return otherUserIdsInChat(messages, currentUserId).length > 0;
-}
-
-/** Sorted unique teammate ids that need a name lookup. Empty → skip the query. */
-export function otherUserIdsInChat<TUserId extends string>(
-  messages: ReadonlyArray<{
-    role: ChatBodyMessage["role"];
-    userId?: TUserId;
-    isSystemAlert?: boolean;
-  }>,
-  currentUserId: TUserId | undefined,
-): TUserId[] {
-  const ids = new Set<TUserId>();
-  for (const message of messages) {
-    if (!isOtherUserChatMessage(message, currentUserId)) continue;
-    if (message.userId === undefined) continue;
-    ids.add(message.userId);
-  }
-  return [...ids].sort();
 }
 
 /**

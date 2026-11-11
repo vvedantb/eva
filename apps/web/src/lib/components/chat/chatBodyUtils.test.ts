@@ -10,7 +10,6 @@ import {
   isChatTurnExecuting,
   visibleChatMessages,
   chatNeedsOtherUserDirectory,
-  otherUserIdsInChat,
   readableSendError,
   sandboxComposerState,
   SANDBOX_CHAT_COPY,
@@ -361,23 +360,6 @@ describe("chatNeedsOtherUserDirectory", () => {
         undefined,
       ),
     ).toBe(false);
-  });
-});
-
-describe("otherUserIdsInChat", () => {
-  test("returns sorted unique teammate ids", () => {
-    expect(
-      otherUserIdsInChat(
-        [
-          { role: "user", userId: "me" },
-          { role: "user", userId: "zoe" },
-          { role: "assistant" },
-          { role: "user", userId: "ann" },
-          { role: "user", userId: "zoe" },
-        ],
-        "me",
-      ),
-    ).toEqual(["ann", "zoe"]);
   });
 });
 
