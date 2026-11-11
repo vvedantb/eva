@@ -411,6 +411,7 @@ export function SandboxPanel({
             // Only the session on screen holds the idle-pause presence beacon;
             // cached siblings and a collapsed rail must not keep a VM awake.
             presenceEnabled={isRouteActive && !collapsed}
+            onScreen={isRouteActive}
             autoWakeEligible={autoWakeEligible}
             // Multi-repo sessions run a dev server per repo; the Preview port
             // control offers each one instead of only the primary's.

@@ -2,8 +2,12 @@ import { Activity, useState } from "react";
 import { createFileRoute, Outlet, useParams } from "@tanstack/react-router";
 import { CachedSessionShell } from "./_components/CachedSessionShell";
 
-/** Cap mounted session shells so Preview iframes / PTYs stay bounded. */
-const MAX_CACHED_SESSIONS = 5;
+/**
+ * Cap mounted session shells. Each hidden shell keeps its whole React tree,
+ * DOM and held query results in the tab's memory; 3 covers back-and-forth
+ * between recent sessions without paying for 5.
+ */
+const MAX_CACHED_SESSIONS = 3;
 
 /**
  * One cached shell's identity. Repo is captured at cache time because bare
