@@ -1,5 +1,13 @@
 # Changelog
 
+## Segmented tabs: lighter active pill in dark (web and phone)
+
+Date: 2026-11-11
+
+WHY: The phone tab bar pill went back to #474747 in dark. The web segmented pill was `bg-card` (#101010) on a #101010 trough, so it hardly showed, and the phone segmented thumb copied the web #202020.
+
+Architectural: New `--segment-active` (white light, #474747 dark, #444548 neutral dark) in globals.css and `segmentActive` in `EVA_THEME`. `.tabs-segmented .t-tabs-pill` uses it; the old `[data-state="active"]` rules never matched the sliding pill and are gone. The phone themes `segment` and the dark `tabBarPill` from it.
+
 ## Phone: bottom tab pill slides again and is lighter in dark
 
 Date: 2026-11-11
