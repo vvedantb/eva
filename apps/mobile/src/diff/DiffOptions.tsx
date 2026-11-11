@@ -1,8 +1,9 @@
 import { IconDots, IconRefresh, IconSpaceOff } from "@tabler/icons-react-native";
-import { HeaderIconButton, Sheet, SheetBody, SheetContent, SheetHeader, SheetRow, SheetTitle, Spinner } from "@vvedantb/native-ui/primitives";
+import { HeaderIconButton, SheetRow, Spinner } from "@vvedantb/native-ui/primitives";
 import { tokens } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useState } from "react";
+import { MenuSheet } from "@/ui/MenuSheet";
 import { useScheme } from "@/ui/theme";
 import { useIgnoreWhitespace, usePendingLineComments, type PrRef } from "./prDiffStore";
 
@@ -32,25 +33,18 @@ export function DiffOptions({ pr, refreshing, onRefresh }: { pr: PrRef; refreshi
       <HeaderIconButton label={refreshing ? "Refreshing diff" : "More diff options"} onPress={() => setOpen(true)}>
         {refreshing ? <Spinner size="sm" decorative /> : <IconDots size={18} color={tokens.color.foreground[scheme]} />}
       </HeaderIconButton>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent className="gap-3 px-3">
-          <SheetHeader className="px-2">
-            <SheetTitle>Diff options</SheetTitle>
-          </SheetHeader>
-          <SheetBody contentContainerClassName="gap-3">
-            <SheetRow icon={IconSpaceOff} title="Hide whitespace changes" active={ignoreWhitespace} onPress={toggleWhitespace} />
-            <SheetRow
-              icon={IconRefresh}
-              title="Refresh diff"
-              disabled={refreshing}
-              onPress={() => {
-                setOpen(false);
-                onRefresh();
-              }}
-            />
-          </SheetBody>
-        </SheetContent>
-      </Sheet>
+      <MenuSheet open={open} onOpenChange={setOpen} title="Diff options">
+        <SheetRow icon={IconSpaceOff} title="Hide whitespace changes" active={ignoreWhitespace} onPress={toggleWhitespace} />
+        <SheetRow
+          icon={IconRefresh}
+          title="Refresh diff"
+          disabled={refreshing}
+          onPress={() => {
+            setOpen(false);
+            onRefresh();
+          }}
+        />
+      </MenuSheet>
     </>
   );
 }

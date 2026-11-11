@@ -680,30 +680,19 @@ describe("mobile api", () => {
     TIMEOUT_MS,
   );
 
-  test("sessionMenuActions lists the web row menu in its order, per list and view", () => {
+  test("sessionMenuActions lists the web row menu in its order and groups, per list and view", () => {
     const pr = { branchName: "eva/login", prUrl: "https://github.com/vvedantb/eva/pull/1" };
     expect(sessionMenuActions({ archived: false, simpleView: false, ...pr })).toEqual([
-      "rename",
-      "regenerateTitle",
-      "copyTitle",
-      "copyLink",
-      "copyBranchName",
-      "openPr",
-      "archive",
+      ["rename", "regenerateTitle", "copyTitle", "copyLink", "copyBranchName", "openPr"],
+      ["archive"],
     ]);
     expect(sessionMenuActions({ archived: true, simpleView: false, ...pr })).toEqual([
-      "copyTitle",
-      "copyLink",
-      "copyBranchName",
-      "openPr",
-      "unarchive",
+      ["copyTitle", "copyLink", "copyBranchName", "openPr"],
+      ["unarchive"],
     ]);
     expect(sessionMenuActions({ archived: false, simpleView: true, ...pr })).toEqual([
-      "rename",
-      "regenerateTitle",
-      "copyTitle",
-      "copyLink",
-      "archive",
+      ["rename", "regenerateTitle", "copyTitle", "copyLink"],
+      ["archive"],
     ]);
   });
 

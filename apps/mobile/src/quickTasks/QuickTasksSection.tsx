@@ -302,7 +302,7 @@ function StatusHeader({
           disabled={runningAll}
           leftIcon={<IconPlayerPlay size={14} color={EVA_THEME[scheme].primaryForeground} />}
           onPress={onRunAll}
-          className="mr-2"
+          className="mr-2 self-center"
         >
           Run
         </Button>

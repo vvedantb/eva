@@ -8,6 +8,7 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { timeAgo } from "@/ui/format";
+import { RepoLogo } from "@/ui/RepoLogo";
 import { RowStatus } from "@/ui/RowStatus";
 import { type Scheme, useScheme, XS_TRACKING } from "@/ui/theme";
 
@@ -85,16 +86,19 @@ export function useSessionGroups(sessions: SessionRow[] | undefined) {
 
 /**
  * One repo's header in the Sessions list, as the web `GlobalSessionGroup` at
- * phone width: a button that folds the group (initial, name, live count,
- * chevron) and the web "+" (a new session in this repo, Active list only).
+ * phone width: a button that folds the group (logo or initial, name, live
+ * count, chevron) and the web "+" (a new session in this repo, Active list only).
  */
 export function SessionGroupHeader({
   section,
+  logoUrl,
   live,
   onToggle,
   onNew,
 }: {
   section: SessionGroupSection;
+  /** The repo's uploaded logo, drawn in place of the initial (the web `RepoLogo` at 18). */
+  logoUrl: string | null | undefined;
   live: number;
   onToggle: () => void;
   /** Set in the Active list: the header "+". */
@@ -104,8 +108,8 @@ export function SessionGroupHeader({
   const muted = tokens.color.muted[scheme];
   const { repoLabel, open } = section;
   return (
-    // Web header: 40 high at phone width (the row of its `size-10` "+"), an 18
-    // initial on `bg-muted`, then the text-xs medium muted name, live count and a 14 chevron.
+    // Web header: 40 high at phone width (the row of its `size-10` "+"), the 18
+    // logo or initial on `bg-muted`, then the text-xs medium muted name, live count and a 14 chevron.
     <View className="flex-row items-center pr-2">
       <Pressable
         accessibilityRole="button"
@@ -116,18 +120,24 @@ export function SessionGroupHeader({
         hitSlop={{ top: 2, bottom: 2 }}
         className="min-h-10 flex-1 flex-row items-center gap-2 pl-4 active:opacity-70"
       >
-        <View
-          className="h-[18px] w-[18px] items-center justify-center rounded-full"
-          style={{ backgroundColor: EVA_THEME[scheme].muted }}
-        >
-          {/* The web `text-3xs` (10 / 14, 0.01em). */}
-          <Text
-            className="font-instrument-sans-semibold"
-            style={{ fontSize: 10, lineHeight: 14, letterSpacing: 0.1, color: muted, fontWeight: "600" }}
-          >
-            {repoLabel.charAt(0).toUpperCase()}
-          </Text>
-        </View>
+        <RepoLogo
+          logoUrl={logoUrl}
+          size={18}
+          fallback={
+            <View
+              className="h-[18px] w-[18px] items-center justify-center rounded-full"
+              style={{ backgroundColor: EVA_THEME[scheme].muted }}
+            >
+              {/* The web `text-3xs` (10 / 14, 0.01em). */}
+              <Text
+                className="font-instrument-sans-semibold"
+                style={{ fontSize: 10, lineHeight: 14, letterSpacing: 0.1, color: muted, fontWeight: "600" }}
+              >
+                {repoLabel.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          }
+        />
         <View className="flex-row items-center gap-1.5">
           <Text
             className="font-instrument-sans-medium text-xs"

@@ -8,6 +8,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, Text } from "react-native";
 import { FooterSheet } from "@/chat/ComposerFooter";
+import { RepoLogo } from "@/ui/RepoLogo";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
@@ -35,8 +36,8 @@ export function repoName(repo: Repo): string {
 }
 
 /**
- * The repo a per-repo screen shows (the web reads it from the URL): the
- * GitHub mark, the name and a chevron, 44 high. It opens a bottom sheet of
+ * The repo a per-repo screen shows (the web reads it from the URL): its logo
+ * (`RepoLogo`, else the GitHub mark), the name and a chevron, 44 high. It opens a bottom sheet of
  * the repos, in place of the web app switcher.
  */
 export function RepoPicker({
@@ -59,7 +60,7 @@ export function RepoPicker({
         onPress={() => setOpen(true)}
         className="min-h-11 flex-row items-center gap-1.5 self-start active:opacity-70"
       >
-        <IconBrandGithub size={16} color={theme.mutedForeground} />
+        <RepoLogo logoUrl={value.logoUrl} size={16} fallback={<IconBrandGithub size={16} color={theme.mutedForeground} />} />
         <Text
           numberOfLines={1}
           className="font-instrument-sans-medium shrink text-sm"
@@ -74,7 +75,10 @@ export function RepoPicker({
   );
 }
 
-/** The bottom sheet of the user's repos (GitHub mark and name, the current one checked); a pick closes it. */
+/**
+ * The bottom sheet of the user's repos (logo, else the GitHub mark, at the
+ * row's 22 icon size, and the name; the current one checked); a pick closes it.
+ */
 export function RepoSheet({
   open,
   onOpenChange,
@@ -94,6 +98,7 @@ export function RepoSheet({
         <SheetRow
           key={repo._id}
           icon={IconBrandGithub}
+          leading={repo.logoUrl ? <RepoLogo logoUrl={repo.logoUrl} size={22} /> : undefined}
           title={repoName(repo)}
           active={repo._id === value?._id}
           onPress={() => {

@@ -18,6 +18,7 @@ export default function SsoCallbackScreen() {
       <Button
         variant="ghost"
         fullWidth={false}
+        className="self-center"
         onPress={() => router.replace("/sign-in")}
       >
         Back to sign in
