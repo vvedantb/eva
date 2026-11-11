@@ -7,7 +7,6 @@ import { useChatModel } from "@/lib/hooks/useChatModel";
 import { useSessionSettings } from "@/lib/hooks/useSessionSettings";
 import { useChatTranscript } from "@/lib/hooks/useChatTranscript";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
-import { chatTurnOpenFromStatus } from "@/lib/components/chat/useChatTurnOpen";
 import { isChatTurnExecuting } from "@/lib/components/chat/chatBodyUtils";
 import { sandboxAnnotationSender } from "@/lib/components/chat/sandboxChatTurn";
 import type { AnnotationSubmit } from "@/lib/components/sandbox/annotationSend";
@@ -51,7 +50,7 @@ export function useSessionAnnotationSend(
   const ports = useSessionTurnPorts(chatId, accounts);
 
   const isExecuting = isChatTurnExecuting({
-    turnOpen: chatTurnOpenFromStatus(turnStatus),
+    status: turnStatus,
     messages,
   });
   return sandboxAnnotationSender(

@@ -25,7 +25,6 @@ import { buildSandboxChatSurface } from "@/lib/components/chat/sandboxChatSurfac
 import { SubagentThreadLayer } from "@/lib/components/chat/SubagentThreadLayer";
 import { useChatSend } from "@/lib/components/chat/useChatSend";
 import { useSandboxChatDraft } from "@/lib/components/chat/useSandboxChatDraft";
-import { chatTurnOpenFromStatus } from "@/lib/components/chat/useChatTurnOpen";
 import { isChatTurnExecuting } from "@/lib/components/chat/chatBodyUtils";
 import type { TranscriptMessage } from "@/lib/hooks/useChatTranscript";
 import { BackgroundProcessesChip } from "./_components/BackgroundProcessesChip";
@@ -248,7 +247,7 @@ export function ChatPanel({
     isRouteActive ? { entityId: chatId } : "skip",
   );
   const isExecuting = isChatTurnExecuting({
-    turnOpen: chatTurnOpenFromStatus(turnStatus),
+    status: turnStatus,
     messages,
   });
   const composer = sandboxComposerState({

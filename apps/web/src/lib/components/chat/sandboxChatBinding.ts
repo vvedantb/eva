@@ -21,7 +21,7 @@ import {
   type SandboxTurnPorts,
   type SandboxTurnSettings,
 } from "./sandboxChatTurn";
-import { useChatTurnOpen } from "./useChatTurnOpen";
+import { useChatTurnStatus } from "./useChatTurnOpen";
 
 type StreamingRow = FunctionReturnType<typeof api.streaming.get>;
 
@@ -87,10 +87,10 @@ export function sandboxTurnSettings(
  */
 export function useSandboxChatTranscript(binding: SandboxChatBinding) {
   const { parentId } = sandboxChatKeys(binding.entity);
-  const turnOpen = useChatTurnOpen(parentId);
+  const status = useChatTurnStatus(parentId);
   const messages = useChatTranscript(parentId);
   const isExecuting = isChatTurnExecuting({
-    turnOpen,
+    status,
     messages,
     isFirstRunInProgress: binding.firstRun?.isInProgress,
   });
