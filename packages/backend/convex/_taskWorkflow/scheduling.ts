@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { startTaskRun } from "./startRun";
+import { startTaskRun, taskWorkSessionBusy } from "./startRun";
 import { internalMutation } from "../_generated/server";
 import {
   getActiveTaskRun,
@@ -20,7 +20,6 @@ import {
   scheduleTaskRun,
 } from "../_agentTasks/runState";
 import { startNextQueuedTaskChatMessage } from "../_queues/helpers";
-import { taskSessionBusy } from "../_sessions/ownedSession";
 
 /** Schedules an automatic retry for a failed quick task if the failure looks transient. */
 export const maybeScheduleQuickTaskRetry = internalMutation({
@@ -111,12 +110,10 @@ export const executeScheduledTask = internalMutation({
 
     if (task.status !== "todo" || !task.repoId || !task.createdBy) return null;
     if (await hasActiveRun(ctx.db, args.taskId)) return null;
-    // The task's chat is mid-reply on the shared sandbox: try again shortly
-    // instead of failing the schedule (`startTaskRun` refuses a busy chat).
-    if (
-      task.projectId === undefined &&
-      (await taskSessionBusy(ctx.db, args.taskId))
-    ) {
+    // The task's (or its project's) chat is mid-reply on the shared sandbox:
+    // try again shortly instead of failing the schedule (`startTaskRun`
+    // refuses a busy chat).
+    if (await taskWorkSessionBusy(ctx.db, task)) {
       await scheduleTaskRun(
         ctx,
         args.taskId,

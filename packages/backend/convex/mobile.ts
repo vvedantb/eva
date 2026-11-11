@@ -8,10 +8,7 @@ import {
 } from "./_chat/turnProjection";
 import { assertStandaloneSession, sessionOwnerTaskId } from "./_sessions/owner";
 import type { SessionChatContext } from "./_sessionChats/helpers";
-import {
-  ensureOwnedSession,
-  taskUsesOwnedSession,
-} from "./_sessions/ownedSession";
+import { ensureOwnerChat } from "./_sessions/ownedSession";
 import { gatherAccessibleRepos } from "./_githubRepos/helpers";
 import {
   mobileChatValidator,
@@ -24,9 +21,8 @@ import { archiveSessionDoc, createSession, type AuthMutationCtx } from "./_sessi
 import { requestSessionSandboxStop } from "./_sessions/sandbox";
 import { listRepoSessionsByArchive } from "./_sessions/archive";
 import { setSessionChatModel, setSessionChatTraits } from "./_sessionChats/mutations";
-import { setProjectChatModel, setProjectTraits } from "./_projects/mutations";
-import { cancelTaskChatExecution, sendTaskChatMessage } from "./agentTaskChatWorkflow";
-import { cancelProjectChatExecution, sendProjectChatMessage } from "./projectChatWorkflow";
+import { cancelTaskChatExecution } from "./agentTaskChatWorkflow";
+import { cancelProjectChatExecution } from "./projectChatWorkflow";
 import { cancelTaskRun } from "./_taskWorkflow/publicMutations";
 import {
   aiModelValidator,
@@ -121,35 +117,17 @@ export const sendMessage = authMutation({
       case "session":
         await sendToSessionChat(entity.context, model);
         return null;
-      case "task": {
-        // A quick task's first send creates its session; later sends resolve
-        // as that session chat directly (`resolveMobileChat`).
-        if (taskUsesOwnedSession(entity.task)) {
-          const owned = await ensureOwnedSession(ctx, entity.task);
-          await sendToSessionChat(
-            { chat: owned.mainChat, session: owned.session },
-            normalizeAIModel(owned.mainChat.lastModel),
-          );
-          return null;
-        }
-        await sendTaskChatMessage(ctx, entity.task, {
-          message,
-          userId: ctx.userId,
-          model,
-          ...storedTraits(model, entity.task),
-          attachmentStorageIds,
-        });
+      case "task":
+      case "project": {
+        // A task's or project's first send creates its session chat; later
+        // sends resolve as that session chat directly (`resolveMobileChat`).
+        const context = await ensureOwnerChat(ctx, entity);
+        await sendToSessionChat(
+          context,
+          normalizeAIModel(context.chat.lastModel),
+        );
         return null;
       }
-      case "project":
-        await sendProjectChatMessage(ctx, entity.project, {
-          message,
-          userId: ctx.userId,
-          model,
-          ...storedTraits(model, entity.project),
-          attachmentStorageIds,
-        });
-        return null;
     }
   },
 });
@@ -182,12 +160,14 @@ export const setChatModel = authMutation({
         if (model !== undefined) await setSessionChatModel(ctx, entity.context, model);
         await setSessionChatTraits(ctx, entity.context.chat._id, traits);
         return null;
-      case "project":
-        if (model !== undefined) await setProjectChatModel(ctx, ctx.userId, entity.project, model);
-        await setProjectTraits(ctx, entity.project._id, traits);
-        return null;
       case "task":
-        throw new Error("Set a quick task's model with agentTasks.update");
+      case "project": {
+        // The pick lands on the owner's session chat, created on first need.
+        const context = await ensureOwnerChat(ctx, entity);
+        if (model !== undefined) await setSessionChatModel(ctx, context, model);
+        await setSessionChatTraits(ctx, context.chat._id, traits);
+        return null;
+      }
     }
   },
 });

@@ -4,7 +4,11 @@ import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { hasRepoAccess, hasTaskAccess } from "../functions";
 import { isEntityDeleted } from "../numId";
-import { sessionOwnerTaskId } from "../_sessions/owner";
+import {
+  chatOwnerEntityId,
+  sessionOwner,
+  sessionOwnerEntityId,
+} from "../_sessions/owner";
 import {
   chatEntityKindValidator,
   chatRefValidator,
@@ -55,17 +59,23 @@ export async function chatSourceFieldsForEntityId(
   const sessionChatId = db.normalizeId("sessionChats", entityId);
   if (sessionChatId) {
     const chat = await db.get(sessionChatId);
-    return chat
-      ? chatSourceFieldsForEntityId(db, String(chat.sessionId))
-      : null;
+    const session = chat ? await db.get(chat.sessionId) : null;
+    if (!chat || !session) return null;
+    // An owned session's chat files under its owner (`chatOwner`; a project
+    // task's own chat under that task).
+    return chatSourceFieldsForEntityId(
+      db,
+      String(chatOwnerEntityId(chat, session) ?? session._id),
+    );
   }
   const sessionId = db.normalizeId("sessions", entityId);
   if (sessionId) {
     const session = await db.get(sessionId);
     if (!session) return null;
-    // A task's session files its docs, artifacts and Log under the task.
-    const ownerTaskId = sessionOwnerTaskId(session);
-    if (ownerTaskId) return chatSourceFieldsForEntityId(db, ownerTaskId);
+    // A task's or project's session files its docs, artifacts and Log under
+    // its owner.
+    const ownerId = sessionOwnerEntityId(session);
+    if (ownerId) return chatSourceFieldsForEntityId(db, ownerId);
     return { sourceKind: "session", sourceSessionId: sessionId };
   }
   const taskId = db.normalizeId("agentTasks", entityId);
@@ -140,13 +150,9 @@ export async function chatSourceFieldsFromArg(
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
       throw denied();
     }
-    const ownerTaskId = sessionOwnerTaskId(session);
-    if (ownerTaskId) {
-      return chatSourceFieldsFromArg(
-        ctx,
-        { kind: "task", taskId: ownerTaskId },
-        noun,
-      );
+    const owner = sessionOwner(session);
+    if (owner.kind !== "standalone") {
+      return chatSourceFieldsFromArg(ctx, owner, noun);
     }
     return { sourceKind: "session", sourceSessionId: sessionId };
   }

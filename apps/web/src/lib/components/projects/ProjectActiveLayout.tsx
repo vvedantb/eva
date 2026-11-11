@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
@@ -53,14 +52,12 @@ export function ProjectActiveLayout({
 }: ProjectActiveLayoutProps) {
   const navigate = useNavigate();
   const { repo } = useRepo();
-  const cleanupTriggeredRef = useRef(false);
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const projectPathSegment = entityPathSegment(project);
 
   const tasks = useQuery(api.agentTasks.listByProject, { projectId });
   const users = useQuery(api.users.listAll);
   const projects = useQuery(api.projects.list, { repoId: repo._id });
-  const clearProjectSandbox = useMutation(api.projects.clearProjectSandbox);
 
   let selectedTaskId: Id<"agentTasks"> | null = null;
   if (selectedTaskIdParam && tasks) {
@@ -130,21 +127,6 @@ export function ProjectActiveLayout({
   }
   const allTags = [...tagSet].sort();
 
-  /* eslint-disable no-effect/no-event-handler --
-     The project can reach a terminal phase from the server (another client, or
-     the workflow itself), so tearing the sandbox down has to follow the live
-     query rather than a local click. */
-  useEffect(() => {
-    if (
-      (project.phase === "completed" || project.phase === "cancelled") &&
-      project.sandboxId &&
-      !cleanupTriggeredRef.current
-    ) {
-      cleanupTriggeredRef.current = true;
-      clearProjectSandbox({ id: project._id }).catch(() => {});
-    }
-  }, [project.phase, project.sandboxId, project._id, clearProjectSandbox]);
-  /* eslint-enable no-effect/no-event-handler */
 
   const notFoundPane = (
     <EntityNotFound

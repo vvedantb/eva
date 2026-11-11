@@ -25,6 +25,11 @@ import {
   buildProjectBranchName,
 } from "./helpers";
 import { scheduleProjectPrSync } from "./prSync";
+import {
+  mirrorOwnerIntoSession,
+  syncProjectSession,
+  syncProjectSessionBranch,
+} from "../_sessions/ownedSession";
 import { schedulePrTitleSync } from "../_github/prTitleSync";
 import {
   assertProviderAccountUsableBy,
@@ -190,6 +195,14 @@ export const update = authMutation({
     if (Object.keys(updates).length > 0) {
       await ctx.db.patch(args.id, updates);
     }
+    // The session mirrors the title and base branch, moves to an edited
+    // branch (the one branch writer), and follows the phase.
+    const edited = await ctx.db.get(args.id);
+    if (edited) {
+      await mirrorOwnerIntoSession(ctx, { kind: "project", project: edited });
+      await syncProjectSessionBranch(ctx, args.id);
+      await syncProjectSession(ctx, args.id);
+    }
     if (args.title !== undefined && args.title !== project.title) {
       const primaryPr = await findPrimaryPullRequest(ctx.db, {
         kind: "project",
@@ -250,6 +263,7 @@ export const remove = authMutation({
   handler: async (ctx, args) => {
     await getProjectWithAccess(ctx.db, args.id, ctx.userId);
     await ctx.db.patch(args.id, { deletedAt: Date.now() });
+    await syncProjectSession(ctx, args.id);
     return null;
   },
 });
@@ -268,6 +282,7 @@ export const deleteCascade = authMutation({
       await softDeleteAgentTask(ctx, task._id);
     }
     await ctx.db.patch(args.id, { deletedAt: Date.now() });
+    await syncProjectSession(ctx, args.id);
     return null;
   },
 });

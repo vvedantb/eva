@@ -12,7 +12,10 @@ import {
 import { slugifyAppTabName } from "@eva/shared/appTabSlug";
 import { previewConsoleSessionName } from "../_pty/consoleSessionName";
 import { sandboxOwnerKey } from "@eva/shared";
-import { findQuickTaskSession } from "../_sessions/ownedSession";
+import {
+  findProjectSession,
+  findTaskWorkSession,
+} from "../_sessions/owner";
 
 // Backs the chat-self MCP tools (chatSelfTools.ts). Internal on purpose: the
 // tool has already resolved the chat through `resolveEntityTarget`, which is
@@ -90,16 +93,23 @@ async function ownerFields(
     const taskId = ctx.db.normalizeId("agentTasks", id);
     const task = taskId ? await ctx.db.get(taskId) : null;
     if (!task) return null;
-    // A quick task's sandbox (preview port, path, owner key) is its
-    // session's; its PRs stay the task's.
-    const session = await findQuickTaskSession(ctx.db, task);
-    const sandbox = session ?? task;
+    // A task's sandbox (preview port, path, owner key) is its session's (a
+    // project task's: the project's; it never had one of its own); its PRs
+    // stay the task's.
+    const session = await findTaskWorkSession(ctx.db, task);
+    const project =
+      !session && task.projectId !== undefined
+        ? await ctx.db.get(task.projectId)
+        : null;
+    const sandbox = session ?? project ?? task;
     return {
       owner: { kind: "task", taskId: task._id },
       ownerKey: sandboxOwnerKey(
         session
           ? { kind: "session", sessionId: session._id }
-          : { kind: "task", taskId: task._id },
+          : project
+            ? { kind: "project", projectId: project._id }
+            : { kind: "task", taskId: task._id },
       ),
       baseBranch: task.baseBranch,
       prUrl: await taskPrUrl(ctx.db, task),
@@ -112,15 +122,22 @@ async function ownerFields(
   const projectId = ctx.db.normalizeId("projects", id);
   const project = projectId ? await ctx.db.get(projectId) : null;
   if (!project) return null;
+  // A project's sandbox is its session's; its PRs stay the project's.
+  const session = await findProjectSession(ctx.db, project._id);
+  const sandbox = session ?? project;
   return {
     owner: { kind: "project", projectId: project._id },
-    ownerKey: sandboxOwnerKey({ kind: "project", projectId: project._id }),
+    ownerKey: sandboxOwnerKey(
+      session
+        ? { kind: "session", sessionId: session._id }
+        : { kind: "project", projectId: project._id },
+    ),
     baseBranch: project.baseBranch,
     prUrl: project.prUrl,
     prState: project.prState,
-    devPort: project.devPort,
-    devCommand: project.devCommand,
-    previewPath: project.previewPath,
+    devPort: sandbox.devPort,
+    devCommand: sandbox.devCommand,
+    previewPath: sandbox.previewPath,
   };
 }
 

@@ -19,7 +19,11 @@ import {
 } from "../validators";
 import { filterActiveEntities } from "../numId";
 import { isSessionArchived } from "../_sessions/archive";
-import { isStandaloneSession } from "../_sessions/owner";
+import {
+  findProjectSession,
+  findQuickTaskSession,
+  isStandaloneSession,
+} from "../_sessions/owner";
 import { listTeammateUserIds } from "../_userProviderAccounts/sharing";
 
 /** How many live sandboxes this app has across quick tasks and projects. */
@@ -47,7 +51,30 @@ async function repoActiveSandboxCount(
       .take(64),
   ).filter((t) => t.sandboxId !== undefined);
 
-  return activeProjects.length + activeTasks.length;
+  // A quick task's or project's sandbox lives on its session once it has one.
+  const activeOwnedSessions = (
+    await db
+      .query("sessions")
+      .withIndex("by_repo_and_status", (q) =>
+        q.eq("repoId", repoId).eq("status", "active"),
+      )
+      .take(64)
+  ).filter(
+    (s) =>
+      !isStandaloneSession(s) &&
+      s.deletedAt === undefined &&
+      s.sandboxId !== undefined,
+  );
+
+  // A row status counts only until its owner has a session (one source each).
+  const [projectSessions, taskSessions] = await Promise.all([
+    Promise.all(activeProjects.map((p) => findProjectSession(db, p._id))),
+    Promise.all(activeTasks.map((t) => findQuickTaskSession(db, t))),
+  ]);
+  const legacyCount = [...projectSessions, ...taskSessions].filter(
+    (session) => session === null,
+  ).length;
+  return legacyCount + activeOwnedSessions.length;
 }
 
 /** Attaches a resolved `logoUrl` (from `logoStorageId`) to each repo. */

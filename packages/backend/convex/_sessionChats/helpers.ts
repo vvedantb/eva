@@ -6,6 +6,8 @@ import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import { hasRepoAccess } from "../functions";
 import { getAIModelProvider } from "../validators";
 import { sessionChatFields } from "../_validators/tableFields";
+import { sessionOwnerProjectId } from "../_sessions/owner";
+import { isProjectBuilding } from "../_projects/buildState";
 
 /** Title of the chat every session starts with. */
 export const MAIN_CHAT_TITLE = "Main";
@@ -138,20 +140,27 @@ export async function findChatByNumber(
  * turn never counts: at send time the new turn supersedes it, and at dequeue
  * time the chat is idle so any open turn of its own is a leftover.
  *
- * A quick task's run is filed under its session too, and it holds the whole
- * sandbox: while one is open no chat may start, so a message sent mid-run
- * queues behind it (the run's `closeTurn` drains the queue).
+ * A task's run is filed under its session too (a project task's under the
+ * project's), and it holds the whole sandbox: while one is open no chat may
+ * start, so a message sent mid-run queues behind it (the run's `closeTurn`
+ * drains the queue). A project's build holds it from start to finish, gaps
+ * between its tasks included (`finishProjectBuild` drains the queue).
  */
 export async function sessionChatHasFreeSlot(
   db: DatabaseReader,
   context: SessionChatContext,
 ): Promise<boolean> {
-  const openTurns = await db
-    .query("turns")
-    .withIndex("by_session_open", (q) =>
-      q.eq("sessionId", context.session._id).eq("open", true),
-    )
-    .collect();
+  const projectId = sessionOwnerProjectId(context.session);
+  const [project, openTurns] = await Promise.all([
+    projectId ? db.get(projectId) : null,
+    db
+      .query("turns")
+      .withIndex("by_session_open", (q) =>
+        q.eq("sessionId", context.session._id).eq("open", true),
+      )
+      .collect(),
+  ]);
+  if (project && isProjectBuilding(project)) return false;
   if (openTurns.some((turn) => db.normalizeId("agentRuns", turn.entityId))) {
     return false;
   }
@@ -166,17 +175,18 @@ export const sessionChatPersistenceIdValidator = v.union(
   v.id("sessions"),
   v.id("sessionChats"),
   v.id("agentTasks"),
+  v.id("projects"),
 );
 
 /**
  * The id Claude's transcript is derived from (`sessionClaudeUuid`). A
  * backfilled Main chat keeps the session's seed, and a migrated quick task's
- * Main chat the task's, so it resumes the conversation Claude already holds;
- * every other chat is its own transcript.
+ * or project's chat its old owner's, so it resumes the conversation Claude
+ * already holds; every other chat is its own transcript.
  */
 export function sessionChatPersistenceId(
   chat: Doc<"sessionChats">,
-): Id<"sessions"> | Id<"sessionChats"> | Id<"agentTasks"> {
+): Id<"sessions"> | Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects"> {
   return chat.claudePersistenceSeed ?? chat._id;
 }
 
@@ -187,7 +197,7 @@ export function sessionChatStreamingEntityId(
   return String(chatId);
 }
 
-type ChatSettingsSource = Pick<
+export type ChatSettingsSource = Pick<
   Doc<"sessionChats">,
   | "providerAccountId"
   | "provider"
@@ -261,14 +271,17 @@ type LegacyChatRowTable =
 
 /**
  * Who held a transcript before chats did: a session predating session chats,
- * or a quick task predating its owned session.
+ * or a task or project predating its owned session.
  */
-export type LegacyTranscriptOwner = Id<"sessions"> | Id<"agentTasks">;
+export type LegacyTranscriptOwner =
+  | Id<"sessions">
+  | Id<"agentTasks">
+  | Id<"projects">;
 
 /**
- * Repoints one bounded page of a legacy chat owner's rows onto a Main chat:
- * the transcript, the queue and the inline cards (UI panels, HTML renders,
- * env var requests). A quick task also moves its thumbs (`feedback`) and its
+ * Repoints one bounded page of a legacy chat owner's rows onto a chat: the
+ * transcript, the queue and the inline cards (UI panels, HTML renders, env
+ * var requests). A task or project also moves its thumbs (`feedback`) and its
  * closed chat turns, which become the chat's turns in its session. Once those
  * are empty a session links the chat owner's pre-chat composer draft. Returns
  * true once no legacy row is left. Moved rows leave the `parentId = from`
@@ -285,7 +298,9 @@ export async function moveLegacyTranscriptPage(
     await ctx.db.patch(row._id, { parentId: chatId });
   };
   const chat = await ctx.db.get(chatId);
-  const taskId = ctx.db.normalizeId("agentTasks", from);
+  const ownerId =
+    ctx.db.normalizeId("agentTasks", from) ??
+    ctx.db.normalizeId("projects", from);
   // Each table reads into what is left of the one byte budget.
   const tables = [
     (left: number) =>
@@ -328,25 +343,26 @@ export async function moveLegacyTranscriptPage(
         left,
         moveParent,
       ),
-    ...(taskId && chat
+    ...(ownerId && chat
       ? [
           (left: number) =>
             repointPage(
               ctx.db
                 .query("feedback")
-                .withIndex("by_parent", (q) => q.eq("parentId", taskId)),
+                .withIndex("by_parent", (q) => q.eq("parentId", ownerId)),
               left,
               moveParent,
             ),
-          // Closed chat turns only: the migration skips a task whose turn is
-          // still open, and a run's turns are keyed on the run.
+          // Closed chat turns only: the migration skips an owner whose turn
+          // is still open, and a run's turns are keyed on the run. Lane turns
+          // (a project's interview) stay on the project.
           (left: number) =>
             repointPage(
               ctx.db
                 .query("turns")
                 .withIndex("by_entity_open", (q) =>
                   q
-                    .eq("entityId", taskId)
+                    .eq("entityId", ownerId)
                     .eq("lane", undefined)
                     .eq("open", false),
                 ),
@@ -457,7 +473,9 @@ export async function createSessionChat(
     session: Doc<"sessions">;
     createdBy: Id<"users">;
     title?: string;
-    inheritFrom?: Doc<"sessionChats">;
+    inheritFrom?: ChatSettingsSource;
+    /** A project task's own chat in its project's session. */
+    taskId?: Id<"agentTasks">;
   },
 ): Promise<Doc<"sessionChats">> {
   const { session } = params;
@@ -482,6 +500,7 @@ export async function createSessionChat(
     createdBy: params.createdBy,
     updatedAt: Date.now(),
     ...copyChatSettings(source),
+    ...(params.taskId !== undefined ? { taskId: params.taskId } : {}),
   });
   const chat = await ctx.db.get(chatId);
   if (!chat) throw new Error("Chat was not created");

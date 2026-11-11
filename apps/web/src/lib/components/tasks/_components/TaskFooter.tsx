@@ -31,7 +31,7 @@ import {
   TaskFooterMoreMenu,
 } from "./TaskFooterMoreMenu";
 import { TaskHeaderMenu } from "./TaskHeaderMenu";
-import type { TaskSandboxFields } from "../useTaskSession";
+import type { OwnedSandboxFields } from "@/lib/components/sandbox/useOwnedSession";
 
 type RunDoc = NonNullable<
   FunctionReturnType<typeof api.agentRuns.listByTask>
@@ -55,7 +55,7 @@ interface TaskFooterProps {
   isSandboxStarting: boolean;
   isSandboxStopping: boolean;
   /** The task's sandbox checkout (a quick task's lives on its session). */
-  sandbox: Pick<TaskSandboxFields, "sandboxGitSync" | "gitTarget">;
+  sandbox: Pick<OwnedSandboxFields, "sandboxGitSync" | "gitTarget">;
   isRunningDevServer: boolean;
   isRunningBackgroundCommands: boolean;
   canCreatePr: boolean;

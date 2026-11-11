@@ -7,7 +7,8 @@ import {
   type SessionChatContext,
 } from "../_sessionChats/helpers";
 import { isSessionArchived } from "../_sessions/archive";
-import { findQuickTaskSession, sessionOwnerTaskId } from "../_sessions/owner";
+import { chatOwnerEntityId } from "../_sessions/owner";
+import { findOwnerChat, type OwnerEntity } from "../_sessions/ownedSession";
 import { entityHref, repoBasePath } from "@eva/shared";
 import { storedComposerTraits } from "../_shared/composerTraits";
 import {
@@ -101,8 +102,16 @@ export const mobileChatValidator = v.object({
       sessionChatId: v.optional(v.id("sessionChats")),
     }),
   ),
-  /** Project chats only: the project the web project chat's account calls take. */
-  project: v.optional(v.object({ id: v.id("projects") })),
+  /**
+   * Project chats only: the project. `sessionChatId` is set once the project
+   * chats in its session's Main chat (`parentId` is then that chat).
+   */
+  project: v.optional(
+    v.object({
+      id: v.id("projects"),
+      sessionChatId: v.optional(v.id("sessionChats")),
+    }),
+  ),
 });
 
 export type MobileChat = typeof mobileChatValidator.type;
@@ -122,14 +131,15 @@ export function sessionWebPath(repo: Doc<"githubRepos">, session: Doc<"sessions"
   return entityHref("session", repo, session.numId);
 }
 
-/** A quick task's session and Main chat, or null before it has one. */
-async function resolveTaskSessionChat(
+/**
+ * The session chat a task or project talks in (`findOwnerChat`), or null
+ * before it has one.
+ */
+async function resolveOwnerSessionChat(
   db: GenericDatabaseReader<DataModel>,
-  task: Doc<"agentTasks">,
+  entity: OwnerEntity,
 ): Promise<SessionChatContext | null> {
-  const session = await findQuickTaskSession(db, task);
-  const mainChat = session ? await findMainChat(db, session._id) : null;
-  return session && mainChat ? { chat: mainChat, session } : null;
+  return await findOwnerChat(db, entity);
 }
 
 /**
@@ -151,9 +161,10 @@ export async function resolveMobileChat(
     const context = chatId ? await loadSessionChat(db, chatId) : null;
     if (!context) return null;
     const { chat, session } = context;
-    // A task's session chat is the task's chat (`parentId` round-trips here).
-    const ownerTaskId = sessionOwnerTaskId(session);
-    if (ownerTaskId) return await resolveMobileChat(db, ownerTaskId);
+    // A task's or project's session chat is that owner's chat (`parentId`
+    // round-trips here); a project task's chat is the task's.
+    const ownerId = chatOwnerEntityId(chat, session);
+    if (ownerId) return await resolveMobileChat(db, ownerId);
     const repo = await db.get(session.repoId);
     if (!repo) return null;
     const base = sessionWebPath(repo, session);
@@ -193,10 +204,11 @@ export async function resolveMobileChat(
       project?.numId !== undefined
         ? `${base}/projects/${project.numId}/${task.numId ?? ""}/activity`
         : entityHref("task", repo, task.numId);
-    // A quick task chats in its session's Main chat. Shown as the task (title,
+    // A task chats in its session chat (a quick task's Main chat, a project
+    // task's own chat in the project's session). Shown as the task (title,
     // link, PR); read, sent and stopped as that session chat. A task with no
-    // session yet resolves as below until its first send creates one.
-    const owned = await resolveTaskSessionChat(db, task);
+    // session chat yet resolves as below until its first send creates one.
+    const owned = await resolveOwnerSessionChat(db, { kind: "task", task });
     if (owned) {
       const { chat, session } = owned;
       const ownedSandboxActive = session.status === "active";
@@ -218,7 +230,7 @@ export async function resolveMobileChat(
           sandboxActive: ownedSandboxActive,
           sandboxBranch: ownedSandboxActive ? session.sandboxBranch : undefined,
           intendedBranch: session.branchName,
-          prUrl: task.prUrl,
+          prUrl: task.projectId === undefined ? task.prUrl : project?.prUrl,
           webPath: taskWebPath,
         },
       };
@@ -253,6 +265,38 @@ export async function resolveMobileChat(
     const project = await db.get(projectId);
     const repo = project ? await db.get(project.repoId) : null;
     if (!project || !repo) return null;
+    // A project chats in its session's Main chat: shown as the project, read,
+    // sent and stopped as that session chat.
+    const owned = await resolveOwnerSessionChat(db, {
+      kind: "project",
+      project,
+    });
+    if (owned) {
+      const { chat, session } = owned;
+      const ownedSandboxActive = session.status === "active";
+      return {
+        repoId: repo._id,
+        entity: { kind: "session", context: owned },
+        chat: {
+          kind: "project",
+          title: project.title,
+          repoLabel: repoLabel(repo),
+          repoId: repo._id,
+          parentId: chat._id,
+          canReply: project.deletedAt === undefined && chat.archived !== true,
+          model: chat.lastModel ?? session.lastModel,
+          providerAccountId: chat.providerAccountId,
+          accountOwnerId: project.userId,
+          project: { id: project._id, sessionChatId: chat._id },
+          traits: storedComposerTraits(chat),
+          sandboxActive: ownedSandboxActive,
+          sandboxBranch: ownedSandboxActive ? session.sandboxBranch : undefined,
+          intendedBranch: session.branchName,
+          prUrl: project.prUrl,
+          webPath: entityHref("project", repo, project.numId),
+        },
+      };
+    }
     const sandboxActive = project.reviewProjectSandboxStatus === "active";
     return {
       repoId: repo._id,

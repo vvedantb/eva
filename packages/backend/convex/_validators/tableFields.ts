@@ -553,10 +553,18 @@ export const sessionChatFields = {
   // A Main chat backfilled from an existing session keeps the session id as
   // its provider-transcript seed so it resumes the conversation Claude
   // already holds instead of starting cold; a quick task's Main chat keeps the
-  // task id its old task chat ran under. New chats hash their own id.
+  // task id its old task chat ran under, a project's Main chat the project id
+  // and a project task's chat the task id. New chats hash their own id.
   claudePersistenceSeed: v.optional(
-    v.union(v.id("sessions"), v.id("agentTasks")),
+    v.union(v.id("sessions"), v.id("agentTasks"), v.id("projects")),
   ),
+  /**
+   * A project task's own chat inside its project's session (never Main). The
+   * one kind of extra chat an owned session holds: it keeps the task's chat
+   * apart from the project's, as before projects ran on sessions. Set at
+   * insert, never changed.
+   */
+  taskId: v.optional(v.id("agentTasks")),
   ...chatDaemonEntityFields,
 };
 
@@ -1221,6 +1229,18 @@ export const projectFields = {
   projectStartDate: v.optional(v.number()),
   projectEndDate: v.optional(v.number()),
   activeWorkflowId: v.optional(v.string()),
+  /**
+   * The interview / spec agent's claim on the project session's sandbox,
+   * from claim to release: the start attempt it owns and, once prepared, its
+   * VM. A cancel before the attach fails exactly that start and stops the VM
+   * (`abandonTaskRunSandbox`), as `agentRuns.sessionStartAttempt` does for runs.
+   */
+  interviewSandboxClaim: v.optional(
+    v.object({
+      sessionStartAttempt: v.number(),
+      sandboxId: v.optional(v.string()),
+    }),
+  ),
   /** The project build lifecycle; absent = idle. Written only by `_projects/buildState.ts`. */
   build: v.optional(projectBuildValidator),
   // Legacy build fields removed. schema-narrowing-ok: migrateProjectBuildState

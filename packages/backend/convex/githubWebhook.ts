@@ -8,7 +8,6 @@ import {
   notifySubscribers,
 } from "./taskSubscribers";
 import { logTaskActivity } from "./taskActivity";
-import { preferPersistedSandboxId } from "./_sandbox/resolveExistingSandboxId";
 import { buildProjectBranchName } from "./_projects/helpers";
 import {
   deriveProjectPhaseFromPrEvent,
@@ -17,7 +16,11 @@ import {
 import { requestTaskSandboxStop } from "./_agentTasks/sandbox";
 import { cancelTaskRunSchedule } from "./_agentTasks/runState";
 import { scheduleTaskSandboxGraceDelete } from "./sandboxCleanup";
-import { syncOwnedSessionWithTaskStatus } from "./_sessions/ownedSession";
+import {
+  rotateProjectBranch,
+  syncOwnedSessionWithTaskStatus,
+  syncProjectSession,
+} from "./_sessions/ownedSession";
 import { reconcileSessionArchiveState } from "./_sessions/prArchive";
 import {
   allPullRequestsTerminal,
@@ -221,20 +224,7 @@ async function applyProjectPrEvent(
     project.branchName ??
     buildProjectBranchName(projectId, project.branchVersion);
   if (row.state === "merged" && row.headBranch === currentBranch) {
-    const nextVersion = (project.branchVersion ?? 1) + 1;
-    const deleteId = preferPersistedSandboxId({ sandboxId: project.sandboxId });
-    if (deleteId) {
-      await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
-        sandboxId: deleteId,
-        repoId: project.repoId,
-      });
-    }
-    await ctx.db.patch(projectId, {
-      sandboxId: undefined,
-      lastSandboxActivity: undefined,
-      branchVersion: nextVersion,
-      branchName: buildProjectBranchName(projectId, nextVersion),
-    });
+    await rotateProjectBranch(ctx, project);
   }
 
   const rows = await listOwnerPullRequests(ctx.db, {
@@ -244,6 +234,7 @@ async function applyProjectPrEvent(
   if (!allPullRequestsTerminal(rows)) return false;
   const merged = rows.some((pr) => pr.state === "merged");
   await ctx.db.patch(projectId, { phase: merged ? "completed" : "cancelled" });
+  await syncProjectSession(ctx, projectId);
 
   // One notification for the project as a whole, never one per task, and a
   // single activity entry on the task that opened the PR so the merge/close

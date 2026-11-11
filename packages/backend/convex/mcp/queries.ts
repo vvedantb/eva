@@ -7,8 +7,11 @@ import { entityVisible, filterActiveEntities } from "../numId";
 import { isSessionArchived } from "../_sessions/archive";
 import { standaloneOnly } from "../_sessions/owner";
 import {
-  findTaskSession,
-  liveTaskSessionStatuses,
+  findProjectSession,
+  findTaskWorkSession,
+  liveTaskSandboxStatuses,
+  projectSandboxStatus,
+  taskSandboxStatus,
 } from "../_sessions/ownedSession";
 import {
   ALL_TASK_STATUSES,
@@ -303,7 +306,7 @@ export const resolveChatTargetForUser = internalQuery({
       sandboxId: v.optional(v.string()),
       /** Port the app dev server listens on, entity setting before repo default. */
       devPort: v.optional(v.number()),
-      /** A quick task on its session: the session that holds its sandbox. */
+      /** A task or project on its session: the session that holds its sandbox. */
       sandboxSessionId: v.optional(v.id("sessions")),
     }),
   ),
@@ -322,11 +325,20 @@ export const resolveChatTargetForUser = internalQuery({
     if (!repo) return null;
 
     const doc = hit.doc;
-    // A quick task's sandbox lives on its session.
+    // A task's or project's sandbox lives on its session (a project task's
+    // on the project's); before that session exists, on the row that still
+    // holds it. A project task never had one of its own.
     const taskSession =
-      hit.kind === "task" && hit.doc.projectId === undefined
-        ? await findTaskSession(ctx.db, hit.doc._id)
-        : null;
+      hit.kind === "task"
+        ? await findTaskWorkSession(ctx.db, hit.doc)
+        : hit.kind === "project"
+          ? await findProjectSession(ctx.db, hit.doc._id)
+          : null;
+    const sandboxRow =
+      taskSession ??
+      (hit.kind === "task" && hit.doc.projectId !== undefined
+        ? await ctx.db.get(hit.doc.projectId)
+        : doc);
     return {
       kind: hit.kind,
       targetId: doc._id,
@@ -341,17 +353,16 @@ export const resolveChatTargetForUser = internalQuery({
       repoOwner: repo.owner,
       repoName: repo.name,
       repoRootDirectory: repo.rootDirectory,
-      // A session's own status IS its sandbox's; the other two park the
-      // reviewer-facing VM state in their own field (see list_entities).
-      sandboxStatus: taskSession
-        ? taskSession.status
-        : hit.kind === "session"
+      // A session's own status IS its sandbox's; a task's or project's is its
+      // session's, the same rule lists use (`taskSandboxStatus`).
+      sandboxStatus:
+        hit.kind === "session"
           ? hit.doc.status
-          : hit.kind === "task"
-            ? (hit.doc.reviewTaskSandboxStatus ?? "closed")
-            : (hit.doc.reviewProjectSandboxStatus ?? "closed"),
-      sandboxId: taskSession ? taskSession.sandboxId : doc.sandboxId,
-      devPort: (taskSession ?? doc).devPort ?? repo.devPort,
+          : ((hit.kind === "task"
+              ? await taskSandboxStatus(ctx.db, hit.doc)
+              : await projectSandboxStatus(ctx.db, hit.doc)) ?? "closed"),
+      sandboxId: sandboxRow?.sandboxId,
+      devPort: sandboxRow?.devPort ?? repo.devPort,
       sandboxSessionId: taskSession?._id,
     };
   },
@@ -594,12 +605,15 @@ export const listEntitiesForUser = internalQuery({
       repoIds.map(async (repoId) => {
         // Access first: a denied repo reads nothing else.
         if (!(await hasRepoAccess(ctx.db, repoId, userId))) return;
-        const [repo, openChatEntityIds, taskSessionStatuses] =
-          await Promise.all([
-            ctx.db.get(repoId),
-            openChatEntityIdsForRepo(ctx.db, repoId),
-            liveTaskSessionStatuses(ctx.db, [repoId]),
-          ]);
+        const [
+          repo,
+          openChatEntityIds,
+          taskSandboxStatus,
+        ] = await Promise.all([
+          ctx.db.get(repoId),
+          openChatEntityIdsForRepo(ctx.db, repoId),
+          liveTaskSandboxStatuses(ctx.db, [repoId]),
+        ]);
         if (!repo) return;
         const columns = repoColumns(repo);
 
@@ -638,10 +652,7 @@ export const listEntitiesForUser = internalQuery({
                   numId: doc.numId,
                   title: doc.title,
                   status: doc.status,
-                  sandboxStatus:
-                    taskSessionStatuses.get(String(doc._id)) ??
-                    doc.reviewTaskSandboxStatus ??
-                    "closed",
+                  sandboxStatus: (await taskSandboxStatus(doc)) ?? "closed",
                   isExecuting: taskIsExecuting(doc, openChatEntityIds),
                   updatedAt: doc.updatedAt,
                   ...columns,
@@ -658,7 +669,8 @@ export const listEntitiesForUser = internalQuery({
                 numId: doc.numId,
                 title: doc.title,
                 status: doc.phase,
-                sandboxStatus: doc.reviewProjectSandboxStatus ?? "closed",
+                sandboxStatus:
+                  (await projectSandboxStatus(ctx.db, doc)) ?? "closed",
                 isExecuting: projectIsExecuting(doc, openChatEntityIds),
                 prUrl: doc.prUrl,
                 branchName: doc.branchName,

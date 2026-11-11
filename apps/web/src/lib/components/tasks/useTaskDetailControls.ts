@@ -12,7 +12,8 @@ import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs
 import type { TaskDetailTab } from "./_components/task-detail-constants";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";
 import { useSandboxLifecycle } from "@/lib/components/sandbox/useSandboxLifecycle";
-import type { TaskSandboxFields, TaskSession } from "./useTaskSession";
+import type { TaskSession } from "./useTaskSession";
+import type { OwnedSandboxFields } from "@/lib/components/sandbox/useOwnedSession";
 
 type QuickTaskDetailRouting = {
   detailTab: TaskDetailTab;
@@ -155,7 +156,7 @@ export function useTaskExecutionControls(taskId: Id<"agentTasks">) {
  */
 function deriveSandboxFlags(
   task: TaskDetailTask,
-  sandbox: TaskSandboxFields,
+  sandbox: OwnedSandboxFields,
   hasRuns: boolean,
 ) {
   const canStartSandbox =
@@ -219,60 +220,41 @@ function createSurfaceSelector(
 
 /**
  * Review sandbox lifecycle, startup / dev-server commands and surface toggle.
- * A quick task's sandbox is its owned session's (`useTaskSession`).
+ * A task's sandbox is its session's: a quick task's own, a project task's
+ * project's (`useTaskSession`).
  */
 export function useTaskSandboxControls({
-  taskId,
   task,
   taskSession,
   hasRuns,
   routing,
   setExecutionError,
 }: {
-  taskId: Id<"agentTasks">;
   task: TaskDetailTask;
   taskSession: TaskSession;
   hasRuns: boolean;
   routing: UseTaskDetailRouting | undefined;
   setExecutionError: (message: string | null) => void;
 }) {
-  const startTaskSandboxMutation = useMutation(api.agentTasks.startTaskSandbox);
-  const stopTaskSandboxMutation = useMutation(api.agentTasks.stopTaskSandbox);
   const startSessionSandbox = useMutation(api.sessions.startSandbox);
   const stopSessionSandbox = useMutation(api.sessions.stopSandbox);
-  const { sandbox } = taskSession;
-  const startSandbox = async () => {
-    if (!taskSession.isQuickTask) return await startTaskSandboxMutation({ taskId });
-    const { sessionId } = await taskSession.ensure();
-    return await startSessionSandbox({ sessionId });
-  };
-  const stopSandbox = async () => {
-    if (!taskSession.isQuickTask) return await stopTaskSandboxMutation({ taskId });
-    const { sessionId } = await taskSession.ensure();
-    return await stopSessionSandbox({ sessionId });
-  };
-  const runTaskDevServer = useMutation(api.agentTasks.runDevServer);
-  const runTaskBackgroundCommands = useMutation(
-    api.agentTasks.runBackgroundCommands,
-  );
   const runSessionDevServer = useMutation(api.sessions.runDevServer);
   const runSessionBackgroundCommands = useMutation(
     api.sessions.runBackgroundCommands,
   );
-  // A quick task's sandbox is its session's; a running one implies the
-  // session exists, so `ensure` only reads it.
-  const runDevServerMutation = async () => {
-    if (!taskSession.isQuickTask) return await runTaskDevServer({ taskId });
-    const { sessionId } = await taskSession.ensure();
-    return await runSessionDevServer({ sessionId });
-  };
-  const runBackgroundCommandsMutation = async () => {
-    if (!taskSession.isQuickTask) {
-      return await runTaskBackgroundCommands({ taskId });
-    }
-    const { sessionId } = await taskSession.ensure();
-    return await runSessionBackgroundCommands({ sessionId });
-  };
+  const { sandbox } = taskSession;
+  // Every action targets the session; a running sandbox implies it exists,
+  // so `ensure` only reads it there.
+  const onSession =
+    (action: (args: { sessionId: Id<"sessions"> }) => Promise<null>) =>
+    async () => {
+      const { sessionId } = await taskSession.ensure();
+      return await action({ sessionId });
+    };
+  const startSandbox = onSession(startSessionSandbox);
+  const stopSandbox = onSession(stopSessionSandbox);
+  const runDevServerMutation = onSession(runSessionDevServer);
+  const runBackgroundCommandsMutation = onSession(runSessionBackgroundCommands);
 
   const [embeddedShowSandbox, setEmbeddedShowSandbox] = useState(false);
   const lifecycle = useSandboxLifecycle(sandbox.status);

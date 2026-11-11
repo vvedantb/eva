@@ -7,7 +7,6 @@ import {
   getRepoWithAccess,
   getSessionWithAccess,
   hasRepoAccess,
-  hasTaskAccess,
 } from "../functions";
 import { allocateNumId } from "../numId";
 import {
@@ -43,8 +42,13 @@ import {
 import { linkedRepoDir } from "../_sandbox_runtime/workspaceLayout";
 import { touchUserActivity } from "../_sandbox/activity";
 import { assertComposerMessageRole } from "../_messages/publicRole";
-import { assertStandaloneSession, STANDALONE_SESSION_OWNER } from "./owner";
-import { ensureOwnedSession, taskUsesOwnedSession } from "./ownedSession";
+import {
+  assertStandaloneSession,
+  ownedSessionOwnerValidator,
+  STANDALONE_SESSION_OWNER,
+} from "./owner";
+import { ensureOwnerChat } from "./ownedSession";
+import { loadOwnerEntityWithAccess, ownerChatRefValidator } from "./queries";
 import {
   ensureMainChat,
   getSessionChatWithAccess,
@@ -454,25 +458,22 @@ export const archive = authMutation({
 });
 
 /**
- * The quick task's session and Main chat, created on first use. The task's
- * chat panel calls this before its first send when `getOwned` is still null.
+ * A task's or project's session and the chat it talks in (`getOwned`),
+ * created on first use. The owner's chat and sandbox panels call this before
+ * their first send or Start when `getOwned` is still null.
  */
 export const ensureOwned = authMutation({
-  args: { taskId: v.id("agentTasks") },
-  returns: v.object({
-    sessionId: v.id("sessions"),
-    chatId: v.id("sessionChats"),
-  }),
+  args: { owner: ownedSessionOwnerValidator },
+  returns: ownerChatRefValidator,
   handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) {
-      throw new Error("Task not found");
-    }
-    if (!taskUsesOwnedSession(task)) {
-      throw new Error("Project tasks chat in their project");
-    }
-    const { session, mainChat } = await ensureOwnedSession(ctx, task);
-    return { sessionId: session._id, chatId: mainChat._id };
+    const entity = await loadOwnerEntityWithAccess(
+      ctx.db,
+      args.owner,
+      ctx.userId,
+    );
+    if (!entity) throw new Error(`${args.owner.kind} not found`);
+    const { session, chat } = await ensureOwnerChat(ctx, entity);
+    return { sessionId: session._id, chatId: chat._id };
   },
 });
 

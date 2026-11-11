@@ -18,7 +18,7 @@ const QUICK_TASK_AUTO_RETRY_JITTER_MS = 20_000;
  * `TASK_CHAT_BUSY_RETRY_MS`.
  */
 export const TASK_CHAT_BUSY_ERROR =
-  "Eva is still replying in this task's chat, or its sandbox is starting or stopping. Try the run again in a moment.";
+  "This sandbox is busy: Eva is replying in its chat, a run or build holds it, or it is starting or stopping. Try the run again in a moment.";
 
 /** How long a run held back by a busy task chat waits before trying again. */
 export const TASK_CHAT_BUSY_RETRY_MS = 60_000;

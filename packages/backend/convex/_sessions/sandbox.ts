@@ -48,7 +48,11 @@ import {
 import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
 import { buildSessionBranchName } from "../_git/branchNames";
 import { errorMessage } from "@vvedantb/server";
-import { sessionOwnerTaskId } from "./owner";
+import { sessionOwnerProjectId, sessionOwnerTaskId } from "./owner";
+import {
+  isProjectPreviewAllowed,
+  projectPreviewNotAllowedError,
+} from "../_projects/previewGate";
 import {
   isPreviewSandboxAllowed,
   previewSandboxNotAllowedError,
@@ -89,27 +93,35 @@ export const startSandbox = authMutation({
       args.sessionId,
       ctx.userId,
     );
-    const task = await previewBlockedTask(ctx.db, session);
-    if (task) throw previewSandboxNotAllowedError(task);
+    const blocked = await previewBlockedError(ctx.db, session);
+    if (blocked) throw blocked;
     await requestSessionSandboxStart(ctx, session);
     return null;
   },
 });
 
 /**
- * A task's session that may not boot a sandbox yet: the same gate the task's
- * own Start had (a todo task that never ran has no branch to preview; its
- * first run boots the sandbox). Returns the task when blocked.
+ * Why an owned session may not boot a sandbox yet, or null. The same gates
+ * the owner's own Start had: a todo task that never ran has no branch to
+ * preview (its first run boots the sandbox); a project previews only from
+ * in_progress to code_review. A task with a VM already may resume it.
  */
-async function previewBlockedTask(
+async function previewBlockedError(
   db: DatabaseReader,
   session: Doc<"sessions">,
-): Promise<Doc<"agentTasks"> | null> {
+): Promise<Error | null> {
+  const projectId = sessionOwnerProjectId(session);
+  const project = projectId ? await db.get(projectId) : null;
+  if (project) {
+    return isProjectPreviewAllowed(project)
+      ? null
+      : projectPreviewNotAllowedError(project);
+  }
   if (session.sandboxId !== undefined) return null;
   const taskId = sessionOwnerTaskId(session);
   const task = taskId ? await db.get(taskId) : null;
   if (!task || (await isPreviewSandboxAllowed(db, task))) return null;
-  return task;
+  return previewSandboxNotAllowedError(task);
 }
 
 /**
@@ -121,9 +133,9 @@ export async function requestSessionSandboxStart(
   ctx: MutationCtx,
   session: Doc<"sessions">,
 ): Promise<void> {
-  if (await previewBlockedTask(ctx.db, session)) {
+  if (await previewBlockedError(ctx.db, session)) {
     console.log(
-      `[sessions] startSandbox skipped sessionId=${session._id}: its task cannot preview yet`,
+      `[sessions] startSandbox skipped sessionId=${session._id}: its owner cannot preview yet`,
     );
     return;
   }
@@ -478,7 +490,13 @@ const taskRunClaimValidator = v.object({
 
 /** Claims the session's sandbox for a task run: `closed` → `starting`. */
 export const claimSandboxForTaskRun = internalMutation({
-  args: { sessionId: v.id("sessions"), runId: v.id("agentRuns") },
+  args: {
+    sessionId: v.id("sessions"),
+    /** A task run's claim. */
+    runId: v.optional(v.id("agentRuns")),
+    /** A project interview's claim (`projects.interviewSandboxClaim`). */
+    projectId: v.optional(v.id("projects")),
+  },
   returns: v.union(taskRunClaimValidator, v.null()),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
@@ -498,7 +516,16 @@ export const claimSandboxForTaskRun = internalMutation({
       sandboxError: undefined,
       updatedAt: Date.now(),
     });
-    await ctx.db.patch(args.runId, { sessionStartAttempt: attempt });
+    // The claimer records its attempt, so a cancel before the attach fails
+    // exactly this start (`abandonTaskRunSandbox`).
+    if (args.runId !== undefined) {
+      await ctx.db.patch(args.runId, { sessionStartAttempt: attempt });
+    }
+    if (args.projectId !== undefined) {
+      await ctx.db.patch(args.projectId, {
+        interviewSandboxClaim: { sessionStartAttempt: attempt },
+      });
+    }
     await scheduleStuckStartExpiry(
       ctx,
       { kind: "session", id: args.sessionId },
@@ -568,15 +595,17 @@ export async function finishTaskRunSandbox(
 }
 
 /**
- * A quick task's run was cancelled. Before its attach, the start the run
- * claimed fails through the normal start-failure transition (fenced by the
- * run's attempt, `shouldApplySandboxStartFailure`) and any VM it already
- * prepared stops; after it, the run's VM stops like at a run's end.
+ * A task run (or a project interview) was cancelled. Before its attach, the
+ * start it claimed fails through the normal start-failure transition (fenced
+ * by its recorded attempt, `shouldApplySandboxStartFailure`) and any VM it
+ * already prepared stops; after it, the VM finishes like at a run's end.
  */
 export async function abandonTaskRunSandbox(
   ctx: MutationCtx,
   sessionId: Id<"sessions">,
-  run: Pick<Doc<"agentRuns">, "sandboxId" | "sessionStartAttempt">,
+  run: { sandboxId?: string; sessionStartAttempt?: number },
+  /** A project's VM stays up after the attach (its chat and builds reuse it). */
+  options: { keepActive: boolean } = { keepActive: false },
 ): Promise<void> {
   const session = await ctx.db.get(sessionId);
   if (!session) return;
@@ -590,14 +619,14 @@ export async function abandonTaskRunSandbox(
   if (!claimPending) {
     if (run.sandboxId) {
       await finishTaskRunSandbox(ctx, sessionId, run.sandboxId, {
-        keepActive: false,
+        keepActive: options.keepActive,
       });
     }
     return;
   }
   await ctx.runMutation(internal.sessions.sandboxError, {
     sessionId,
-    error: "The task run was cancelled before its sandbox was ready.",
+    error: "The run was cancelled before its sandbox was ready.",
     startAttempt: run.sessionStartAttempt,
   });
   if (run.sandboxId) {

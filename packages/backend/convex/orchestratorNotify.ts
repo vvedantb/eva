@@ -9,7 +9,7 @@ import {
 } from "./orchestratorShared";
 import { requestRun } from "./_ave/threads";
 import { findMainChat } from "./_sessionChats/helpers";
-import { findTaskSession } from "./_sessions/ownedSession";
+import { findOwnerChat } from "./_sessions/ownedSession";
 
 /** Everything the wake-up message needs about the child that just finished. */
 type ChildSummary = {
@@ -50,25 +50,27 @@ async function loadChildSummary(
   if (child.kind === "project") {
     const project = await ctx.db.get(child.projectId);
     if (!project || project.watchedByAve === undefined) return null;
+    // A project chats in its session's Main chat.
+    const owned = await findOwnerChat(ctx.db, { kind: "project", project });
     return {
       threadId: project.watchedByAve,
       kindLabel: "project",
       title: project.title,
       repoId: project.repoId,
-      parentId: project._id,
+      parentId: owned?.chat._id ?? project._id,
     };
   }
   const task = await ctx.db.get(child.taskId);
   if (!task || task.watchedByAve === undefined) return null;
-  // A quick task chats in its session's Main chat.
-  const session = await findTaskSession(ctx.db, task._id);
-  const mainChat = session ? await findMainChat(ctx.db, session._id) : null;
+  // A task chats in its session chat (a project task's: its own chat in the
+  // project's session).
+  const owned = await findOwnerChat(ctx.db, { kind: "task", task });
   return {
     threadId: task.watchedByAve,
     kindLabel: "task",
     title: task.title,
     repoId: task.repoId,
-    parentId: mainChat?._id ?? task._id,
+    parentId: owned?.chat._id ?? task._id,
   };
 }
 

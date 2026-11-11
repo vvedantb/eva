@@ -22,6 +22,12 @@ export const sessionOwnerValidator = v.union(
 );
 
 export type SessionOwner = Infer<typeof sessionOwnerValidator>;
+
+/** A task or project owner, as an argument (`sessions.getOwned` / `ensureOwned`). */
+export const ownedSessionOwnerValidator = v.union(
+  v.object({ kind: v.literal("task"), taskId: v.id("agentTasks") }),
+  v.object({ kind: v.literal("project"), projectId: v.id("projects") }),
+);
 /** A task or project owner: the kinds that own at most one session each. */
 export type OwnedSessionOwner = Exclude<SessionOwner, { kind: "standalone" }>;
 
@@ -54,9 +60,16 @@ export function taskSessionOwner(taskId: Id<"agentTasks">): OwnedSessionOwner {
   return { kind: "task", taskId };
 }
 
+/** The owner value for a project's session. */
+export function projectSessionOwner(
+  projectId: Id<"projects">,
+): OwnedSessionOwner {
+  return { kind: "project", projectId };
+}
+
 /**
- * Whether a task runs on an owned session. Project tasks keep the project
- * sandbox and chat until projects move onto sessions.
+ * Whether a task owns a session of its own: quick tasks only. A project task
+ * works on its project's session (`taskWorkSessionOwner`).
  */
 export function taskUsesOwnedSession(
   task: Pick<Doc<"agentTasks">, "projectId">,
@@ -64,7 +77,19 @@ export function taskUsesOwnedSession(
   return task.projectId === undefined;
 }
 
-/** The task's session, or null before anything needed one. */
+/**
+ * The session a task works on (runs, chat, sandbox): its own for a quick
+ * task, its project's for a project task.
+ */
+export function taskWorkSessionOwner(
+  task: Pick<Doc<"agentTasks">, "_id" | "projectId">,
+): OwnedSessionOwner {
+  return task.projectId !== undefined
+    ? projectSessionOwner(task.projectId)
+    : taskSessionOwner(task._id);
+}
+
+/** The task's own session, or null before anything needed one. */
 export async function findTaskSession(
   db: DatabaseReader,
   taskId: Id<"agentTasks">,
@@ -72,16 +97,51 @@ export async function findTaskSession(
   return await findOwnedSession(db, taskSessionOwner(taskId));
 }
 
+/** The project's session, or null before anything needed one. */
+export async function findProjectSession(
+  db: DatabaseReader,
+  projectId: Id<"projects">,
+): Promise<Doc<"sessions"> | null> {
+  return await findOwnedSession(db, projectSessionOwner(projectId));
+}
+
 /**
- * Where a task's sandbox and chat live: its session for a quick task that has
- * one, else null (a project task, or a quick task not yet on a session, keeps
- * them on its own row). Every reader of a task's sandbox asks here first.
+ * A project task's own chat in its project's session (`sessionChats.taskId`),
+ * if it has one.
+ */
+export async function findProjectTaskChat(
+  db: DatabaseReader,
+  taskId: Id<"agentTasks">,
+): Promise<Doc<"sessionChats"> | null> {
+  return await db
+    .query("sessionChats")
+    .withIndex("by_task", (q) => q.eq("taskId", taskId))
+    .first();
+}
+
+/**
+ * A quick task's own session, or null (a project task, or a quick task not
+ * yet on a session). For what only a task's own session holds; a task's
+ * sandbox is read through `findTaskWorkSession`.
  */
 export async function findQuickTaskSession(
   db: DatabaseReader,
   task: Pick<Doc<"agentTasks">, "_id" | "projectId">,
 ): Promise<Doc<"sessions"> | null> {
   return taskUsesOwnedSession(task) ? await findTaskSession(db, task._id) : null;
+}
+
+/**
+ * Where a task's sandbox and chat live: its own session (a quick task) or its
+ * project's (a project task), or null before that session exists (the task
+ * or project then still keeps them on its own row). Every reader of a task's
+ * sandbox asks here first.
+ */
+export async function findTaskWorkSession(
+  db: DatabaseReader,
+  task: Pick<Doc<"agentTasks">, "_id" | "projectId">,
+): Promise<Doc<"sessions"> | null> {
+  return await findOwnedSession(db, taskWorkSessionOwner(task));
 }
 
 /** The task a session belongs to, or undefined for any other owner. */
@@ -92,17 +152,36 @@ export function sessionOwnerTaskId(
   return owner.kind === "task" ? owner.taskId : undefined;
 }
 
+/** The project a session belongs to, or undefined for any other owner. */
+export function sessionOwnerProjectId(
+  session: OwnerFields,
+): Id<"projects"> | undefined {
+  const owner = sessionOwner(session);
+  return owner.kind === "project" ? owner.projectId : undefined;
+}
+
+/**
+ * The task or project that owns the session, or undefined for a standalone
+ * one. Attribution (docs, unread, mentions, watches) routes through it.
+ */
+export function sessionOwnerEntityId(
+  session: OwnerFields,
+): Id<"agentTasks"> | Id<"projects"> | undefined {
+  return sessionOwnerTaskId(session) ?? sessionOwnerProjectId(session);
+}
+
 /**
  * Guard for the session-only actions an owned session refuses: fork, add to a
- * group, open another chat, rename. A task's session is one chat that mirrors
- * the task; those actions belong to the task, or to standalone sessions.
+ * group, open another chat, rename. A task's or project's session mirrors its
+ * owner; those actions belong to the owner, or to standalone sessions.
  */
 export function assertStandaloneSession(
   session: OwnerFields,
   action: string,
 ): void {
-  if (!isStandaloneSession(session)) {
-    throw new Error(`A task's session cannot ${action}.`);
+  const owner = sessionOwner(session);
+  if (owner.kind !== "standalone") {
+    throw new Error(`A ${owner.kind}'s session cannot ${action}.`);
   }
 }
 
@@ -132,3 +211,45 @@ export async function findOwnedSession(
         .unique();
   }
 }
+
+/** The loaded task or project an owned session belongs to. */
+export type OwnerEntity =
+  | { kind: "task"; task: Doc<"agentTasks"> }
+  | { kind: "project"; project: Doc<"projects"> };
+
+/** A session and one of its chats. */
+export type OwnerChat = {
+  session: Doc<"sessions">;
+  chat: Doc<"sessionChats">;
+};
+
+/**
+ * Who one chat speaks for: a project task's own chat (`sessionChats.taskId`)
+ * for that task, any other chat for its session's owner. Attribution, unread,
+ * mentions, watches and the busy light all resolve through here.
+ */
+export function chatOwner(
+  chat: Pick<Doc<"sessionChats">, "taskId">,
+  session: OwnerFields,
+): SessionOwner {
+  return chat.taskId !== undefined
+    ? { kind: "task", taskId: chat.taskId }
+    : sessionOwner(session);
+}
+
+/** `chatOwner`'s task or project id; undefined for a standalone session. */
+export function chatOwnerEntityId(
+  chat: Pick<Doc<"sessionChats">, "taskId">,
+  session: OwnerFields,
+): Id<"agentTasks"> | Id<"projects"> | undefined {
+  const owner = chatOwner(chat, session);
+  if (owner.kind === "task") return owner.taskId;
+  if (owner.kind === "project") return owner.projectId;
+  return undefined;
+}
+
+/** Project phases that retire the project's session. */
+export function isTerminalProjectPhase(phase: Doc<"projects">["phase"]) {
+  return phase === "completed" || phase === "cancelled";
+}
+

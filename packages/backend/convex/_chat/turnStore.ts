@@ -17,7 +17,10 @@ import {
   touchAgentFinished,
 } from "../_sandbox/activity";
 import { chatParentIdOf } from "./chatParent";
-import { sessionOwnerTaskId } from "../_sessions/owner";
+import {
+  chatOwnerEntityId,
+  sessionOwnerEntityId,
+} from "../_sessions/owner";
 
 export type TurnLeaseIdentity = {
   turnId: Id<"turns">;
@@ -455,15 +458,20 @@ export async function closeTurn(
   const runId = ctx.db.normalizeId("agentRuns", turn.entityId);
   if (session && chatParentId) {
     await ctx.db.patch(session._id, { lastTurnFinishedAt: finishedAt });
-    // A task's session reads unread on the task's card, so the task gets the
-    // watermark too (`chatReads.markRead` reads the task with the chat).
-    const ownerTaskId = sessionOwnerTaskId(session);
-    if (ownerTaskId && (await ctx.db.get(ownerTaskId))) {
-      await ctx.db.patch(ownerTaskId, { lastTurnFinishedAt: finishedAt });
+    // A task's or project's session reads unread on its owner's card (a
+    // project task's own chat on the task's), so the owner gets the
+    // watermark too (`chatReads.markRead` reads it with the chat).
+    const chatId = ctx.db.normalizeId("sessionChats", chatParentId);
+    const chat = chatId ? await ctx.db.get(chatId) : null;
+    const ownerId = chat
+      ? chatOwnerEntityId(chat, session)
+      : sessionOwnerEntityId(session);
+    if (ownerId && (await ctx.db.get(ownerId))) {
+      await ctx.db.patch(ownerId, { lastTurnFinishedAt: finishedAt });
     }
   }
   if (session && runId) {
-    // A quick task's run held its session's chats (`sessionChatHasFreeSlot`):
+    // A task's run held its session's chats (`sessionChatHasFreeSlot`):
     // offer them their queued messages now. Scheduled, since the queue
     // module imports this one.
     await ctx.scheduler.runAfter(

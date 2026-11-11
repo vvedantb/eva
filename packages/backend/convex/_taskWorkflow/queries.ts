@@ -70,7 +70,7 @@ export const getTaskData = internalQuery({
     repoId: v.id("githubRepos"),
     runId: v.id("agentRuns"),
     projectId: v.optional(v.id("projects")),
-    /** A quick task's session: its sandbox is the one the run reuses. */
+    /** The task's session (a project task's: the project's): its sandbox is the one the run reuses. */
     ownedSessionId: v.optional(v.id("sessions")),
     branchName: v.optional(v.string()),
     mode: v.optional(runModeValidator),
@@ -143,7 +143,11 @@ export const getTaskData = internalQuery({
     if (args.projectId) {
       project = await ctx.db.get(args.projectId);
       if (project) {
-        projectSandboxId = project.sandboxId;
+        // A run on the project's session claims its sandbox itself
+        // (`sessions.claimSandboxForTaskRun`); older runs read the row.
+        projectSandboxId = args.ownedSessionId
+          ? undefined
+          : project.sandboxId;
 
         projectContext = {
           title: project.title,

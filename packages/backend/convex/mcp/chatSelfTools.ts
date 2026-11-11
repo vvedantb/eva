@@ -57,13 +57,13 @@ function envSettingsLink(
 
 /**
  * Whether the target's sandbox is run by its own task or project start
- * workflow. A session's (and a quick task's on its session) is driven
- * directly on the running VM.
+ * workflow. A session's (and a task's or project's on its session) is
+ * driven directly on the running VM.
  */
 function usesEntitySandboxWorkflow(target: EntityTarget): boolean {
   return (
-    target.kind === "project" ||
-    (target.kind === "task" && target.sandboxSessionId === undefined)
+    target.sandboxSessionId === undefined &&
+    (target.kind === "task" || target.kind === "project")
   );
 }
 
@@ -78,7 +78,7 @@ function sandboxOwner(target: EntityTarget): Record<string, string> {
   if (target.kind === "session") {
     return { kind: target.kind, sessionId: target.targetId };
   }
-  // A quick task on its session: the session owns the panes and preview.
+  // A task or project on its session: the session owns the panes and preview.
   if (target.sandboxSessionId !== undefined) {
     return { kind: "session", sessionId: target.sandboxSessionId };
   }

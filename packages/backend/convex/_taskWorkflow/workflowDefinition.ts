@@ -8,7 +8,14 @@ import {
   runModeValidator,
 } from "../validators";
 import { taskCompleteEvent } from "./events";
-import { buildQuickTaskRetryDelayMs, TASK_CHAT_BUSY_ERROR } from "./recovery";
+import {
+  buildQuickTaskRetryDelayMs,
+  TASK_CHAT_BUSY_ERROR,
+  TASK_CHAT_BUSY_RETRY_MS,
+} from "./recovery";
+
+/** How many times a project run waits out a busy session before it fails. */
+const PROJECT_CLAIM_MAX_WAITS = 10;
 import { getTaskRunStreamingEntityId } from "./helpers";
 import { prepareSandboxSteps } from "../_sandbox_runtime/prepareSandboxSteps";
 import { formatDelayedPublishFailureError } from "../_sessions/resultTarget";
@@ -46,9 +53,10 @@ export const taskExecutionWorkflowArgs = {
   installationId: v.number(),
   projectId: v.optional(v.id("projects")),
   /**
-   * A quick task's session: the run reads and writes its sandbox there.
-   * Absent for project tasks and for runs started before tasks had sessions,
-   * which keep the sandbox on the task row.
+   * The session the run works on (a quick task's own, a project task's
+   * project's): the run claims and attaches its sandbox there. Absent only
+   * for runs started before tasks and projects had sessions, which keep the
+   * sandbox on the task or project row.
    */
   ownedSessionId: v.optional(v.id("sessions")),
   branchName: v.optional(v.string()),
@@ -118,8 +126,28 @@ export const taskExecutionWorkflow = workflow.define({
           internal.sessions.claimSandboxForTaskRun,
           { sessionId: args.ownedSessionId, runId: args.runId },
         );
+        // A project run waits out a start or stop in flight on its project's
+        // session (a build must not fail on the reviewer's Start); a quick
+        // task's run fails with the busy error and retries.
+        for (
+          let wait = 0;
+          sessionClaim === null &&
+          args.projectId !== undefined &&
+          wait < PROJECT_CLAIM_MAX_WAITS;
+          wait++
+        ) {
+          sessionClaim = await step.runMutation(
+            internal.sessions.claimSandboxForTaskRun,
+            { sessionId: args.ownedSessionId, runId: args.runId },
+            { runAfter: TASK_CHAT_BUSY_RETRY_MS },
+          );
+        }
         if (sessionClaim === null) throw new Error(TASK_CHAT_BUSY_ERROR);
-        keepTaskSandboxActiveAfterRun = sessionClaim.wasActive;
+        // A project's VM stays up (`active`) after a run, as the project
+        // sandbox always did: the build's next task and the chat resume it,
+        // and idle pause stops it once nothing holds the session.
+        keepTaskSandboxActiveAfterRun =
+          args.projectId !== undefined || sessionClaim.wasActive;
       }
       const reusableSandboxId = args.ownedSessionId
         ? sessionClaim?.sandboxId
@@ -212,13 +240,14 @@ export const taskExecutionWorkflow = workflow.define({
         sandboxId,
       });
 
-      if (args.projectId) {
+      if (args.ownedSessionId) {
+        // Attached to the session right after it was prepared (above).
+      } else if (args.projectId) {
+        // Runs started before projects had sessions.
         await step.runMutation(internal.taskWorkflow.updateProjectSandbox, {
           projectId: args.projectId,
           sandboxId,
         });
-      } else if (args.ownedSessionId) {
-        // Attached to the session right after it was prepared (above).
       } else {
         // Quick tasks: persist sandbox on the task itself so reviewer Start
         // Sandbox and follow-up runs (resolve_conflicts, change-requests)

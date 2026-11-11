@@ -22,6 +22,10 @@ import { resolveProjectBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { unreadLookupForList } from "../chatReads";
 import { awaitingAnswerEntityIdsForRepo } from "../_chat/turnProjection";
 import { isProjectBuilding } from "./buildState";
+import {
+  liveOwnedSessionStatuses,
+  projectSandboxStatus,
+} from "../_sessions/ownedSession";
 
 /** Builds a project's detail payload (conversation history + optional generated
  *  spec) from a single projectDetails read, matching projectWithDetailsValidator.
@@ -86,6 +90,8 @@ export const list = authQuery({
     return await Promise.all(
       projects.map(async (project) => ({
         ...listRow(project),
+        // A project's sandbox lives on its session; the row shows that.
+        reviewProjectSandboxStatus: await projectSandboxStatus(ctx.db, project),
         planningMode: await resolveProjectPlanningMode(ctx.db, project),
         hasUnread: await hasUnread(project),
         isAwaitingAnswer: awaitingAnswerIds.has(String(project._id)),
@@ -181,7 +187,9 @@ export const getActive = authQuery({
       "active",
       "starting",
     ];
-    const ranges = await Promise.all([
+    const [sessionStatuses, ...ranges] = await Promise.all([
+      // A project's sandbox lives on its session once it has one.
+      liveOwnedSessionStatuses(ctx.db, [args.repoId], "project"),
       buildingProjectsForRepo(ctx.db, args.repoId),
       ...liveSandboxStatuses.map((status) =>
         ctx.db
@@ -192,16 +200,38 @@ export const getActive = authQuery({
           .collect(),
       ),
     ]);
-    const byId = new Map(ranges.flat().map((p) => [String(p._id), p]));
-    return filterActiveEntities([...byId.values()])
-      .sort((a, b) => a._creationTime - b._creationTime)
-      .map((p) => ({
-        _id: p._id,
-        numId: p.numId,
-        title: p.title,
-        isBuilding: isProjectBuilding(p),
-        reviewProjectSandboxStatus: p.reviewProjectSandboxStatus,
-      }));
+    const sessionProjects = await Promise.all(
+      [...sessionStatuses]
+        .filter(([, status]) => status === "active" || status === "starting")
+        .map(([projectId]) => {
+          const id = ctx.db.normalizeId("projects", projectId);
+          return id ? ctx.db.get(id) : null;
+        }),
+    );
+    const byId = new Map(
+      [...ranges.flat(), ...sessionProjects.filter((p) => p !== null)].map(
+        (p) => [String(p._id), p],
+      ),
+    );
+    // One source per project: its session's status once it has one, so a
+    // stale row status from before the move does not light it up.
+    const rows = await Promise.all(
+      filterActiveEntities([...byId.values()])
+        .sort((a, b) => a._creationTime - b._creationTime)
+        .map(async (p) => ({
+          _id: p._id,
+          numId: p.numId,
+          title: p.title,
+          isBuilding: isProjectBuilding(p),
+          reviewProjectSandboxStatus: await projectSandboxStatus(ctx.db, p),
+        })),
+    );
+    return rows.filter(
+      (row) =>
+        row.isBuilding ||
+        row.reviewProjectSandboxStatus === "active" ||
+        row.reviewProjectSandboxStatus === "starting",
+    );
   },
 });
 

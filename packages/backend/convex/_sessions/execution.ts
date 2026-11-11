@@ -404,7 +404,7 @@ export const startExecute = authMutation({
     await notifyChatMentions(ctx, {
       content: args.message,
       authorUserId: ctx.userId,
-      surface: { kind: "session", session },
+      surface: { kind: "session", session, chat },
     });
 
     const repo = await ctx.db.get(session.repoId);
@@ -672,7 +672,7 @@ export async function sendSessionChatMessage(
   await notifyChatMentions(ctx, {
     content: params.displayContent ?? params.content,
     authorUserId: params.userId,
-    surface: { kind: "session", session },
+    surface: { kind: "session", session, chat },
   });
   await enqueueChatMessage(ctx, params);
   // Sends at once when the chat is idle. Otherwise the queue waits: behind

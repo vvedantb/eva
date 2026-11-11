@@ -20,8 +20,16 @@ import {
   sessionIsExecuting,
 } from "../_chat/turnProjection";
 import { unreadLookupForRepo } from "../chatReads";
-import { isStandaloneSession } from "./owner";
-import { findTaskSession } from "./ownedSession";
+import {
+  isStandaloneSession,
+  ownedSessionOwnerValidator,
+  type OwnedSessionOwner,
+} from "./owner";
+import {
+  findOwnerChat,
+  loadOwnerEntity,
+  type OwnerEntity,
+} from "./ownedSession";
 
 /** The primary repo a linked-in session actually belongs to. */
 const linkedFromValidator = v.object({
@@ -472,25 +480,46 @@ export const get = authQuery({
 });
 
 /**
- * The session a quick task owns and its Main chat, for the task's chat and
- * sandbox panels. Null until something first needed it (`ensureOwned`).
+ * The task or project behind an owner, when `userId` may reach it; null
+ * otherwise. The access check for `getOwned` and `ensureOwned`.
+ */
+export async function loadOwnerEntityWithAccess(
+  db: DatabaseReader,
+  owner: OwnedSessionOwner,
+  userId: Id<"users">,
+): Promise<OwnerEntity | null> {
+  const entity = await loadOwnerEntity(db, owner);
+  if (!entity) return null;
+  const allowed =
+    entity.kind === "task"
+      ? await hasTaskAccess(db, entity.task, userId)
+      : await hasRepoAccess(db, entity.project.repoId, userId);
+  return allowed ? entity : null;
+}
+
+/** What `getOwned` / `ensureOwned` return: the session and the owner's chat. */
+export const ownerChatRefValidator = v.object({
+  sessionId: v.id("sessions"),
+  chatId: v.id("sessionChats"),
+});
+
+/**
+ * The session a task or project works on and the chat it talks in (a quick
+ * task's or project's Main chat, a project task's own chat in the project's
+ * session), for the owner's chat and sandbox panels. Null until something
+ * first needed it (`ensureOwned`).
  */
 export const getOwned = authQuery({
-  args: { taskId: v.id("agentTasks") },
-  returns: v.union(
-    v.object({
-      sessionId: v.id("sessions"),
-      chatId: v.id("sessionChats"),
-    }),
-    v.null(),
-  ),
+  args: { owner: ownedSessionOwnerValidator },
+  returns: v.union(ownerChatRefValidator, v.null()),
   handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) return null;
-    const session = await findTaskSession(ctx.db, task._id);
-    if (!session) return null;
-    const mainChat = await findMainChat(ctx.db, session._id);
-    return mainChat ? { sessionId: session._id, chatId: mainChat._id } : null;
+    const entity = await loadOwnerEntityWithAccess(
+      ctx.db,
+      args.owner,
+      ctx.userId,
+    );
+    const found = entity ? await findOwnerChat(ctx.db, entity) : null;
+    return found ? { sessionId: found.session._id, chatId: found.chat._id } : null;
   },
 });
 

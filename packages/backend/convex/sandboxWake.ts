@@ -11,7 +11,7 @@ import { authQuery, hasRepoAccess, hasTaskAccess } from "./functions";
 import { chatEntityKindValidator } from "./_validators/enums";
 import { awaitSandboxActive } from "./mcp/orchestratorDelivery";
 import { sleep } from "./_shared/async";
-import { findQuickTaskSession } from "./_sessions/ownedSession";
+import { findProjectSession, findTaskWorkSession } from "./_sessions/owner";
 
 /**
  * Backend for the `/p/$kind/$id` wake link. The link carries the entity's
@@ -44,14 +44,20 @@ async function resolveWakeTarget(
     const normalized = ctx.db.normalizeId("agentTasks", id);
     const task = normalized ? await ctx.db.get(normalized) : null;
     if (!task) return null;
-    // A quick task's sandbox is its session's: wake that one.
-    const session = await findQuickTaskSession(ctx.db, task);
+    // A task's sandbox is its session's (a project task's: the project's):
+    // wake that one.
+    const session = await findTaskWorkSession(ctx.db, task);
     return session
       ? { kind: "session", id: session._id }
       : { kind, id: task._id };
   }
   const normalized = ctx.db.normalizeId("projects", id);
-  return normalized ? { kind, id: normalized } : null;
+  if (!normalized) return null;
+  // A project's sandbox is its session's.
+  const session = await findProjectSession(ctx.db, normalized);
+  return session
+    ? { kind: "session", id: session._id }
+    : { kind, id: normalized };
 }
 
 /** Internal: typed ids for the action below (actions have no `normalizeId`). */

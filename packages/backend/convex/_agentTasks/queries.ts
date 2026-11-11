@@ -31,8 +31,8 @@ import {
 } from "../chatReads";
 import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 import {
-  liveTaskSessionStatuses,
-  taskUsesOwnedSession,
+  liveOwnedSessionStatuses,
+  liveTaskSandboxStatuses,
 } from "../_sessions/ownedSession";
 
 /**
@@ -155,13 +155,13 @@ async function enrichTasksWithLastRun(
   const [
     { openIds: openChatEntityIds, awaitingAnswerIds },
     { summariesByTask, hasUnread: unreadOf },
-    sessionStatuses,
+    taskSandboxStatus,
   ] = await Promise.all([
     chatTurnFlagsForRepos(db, repoIds),
     tasks.length <= POINT_READ_LIMIT
       ? pointReadLookups(db, userId, tasks, repoIds)
       : repoWideLookups(db, userId, [...repoIds]),
-    liveTaskSessionStatuses(db, repoIds),
+    liveTaskSandboxStatuses(db, repoIds),
   ]);
 
   return Promise.all(
@@ -170,12 +170,10 @@ async function enrichTasksWithLastRun(
       const isExecuting = taskIsExecuting(task, openChatEntityIds);
       const hasUnread = await unreadOf(task);
       const isAwaitingAnswer = awaitingAnswerIds.has(String(task._id));
-      // One source per task: a quick task's session, a project task's row.
+      // The same session the task page reads (`liveTaskSandboxStatuses`).
       const row = {
         ...listRow(task),
-        reviewTaskSandboxStatus: taskUsesOwnedSession(task)
-          ? sessionStatuses.get(String(task._id))
-          : task.reviewTaskSandboxStatus,
+        reviewTaskSandboxStatus: await taskSandboxStatus(task),
       };
       if (summary) {
         return {
@@ -339,9 +337,9 @@ export const countSandboxTasks = authQuery({
       ),
     );
     // A quick task's sandbox lives on its session: count those too.
-    const sessionStatuses = await liveTaskSessionStatuses(ctx.db, [
+    const sessionStatuses = await liveOwnedSessionStatuses(ctx.db, [
       args.repoId,
-    ]);
+    ], "task");
     const liveSessionTasks = await Promise.all(
       [...sessionStatuses]
         .filter(([, status]) => status === "active" || status === "starting")

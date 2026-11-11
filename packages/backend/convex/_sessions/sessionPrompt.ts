@@ -12,7 +12,8 @@ import { listLiveSessionChats } from "../_sessionChats/helpers";
 import { buildSessionBranchName } from "../_git/branchNames";
 import { sandboxOwnerKey } from "@eva/shared";
 import { taskPrUrl } from "../_pullRequests/store";
-import { sessionOwnerTaskId } from "./owner";
+import { chatOwner } from "./owner";
+import { getProjectGeneratedSpec } from "../_projects/helpers";
 
 // --- Turn config ---
 
@@ -58,23 +59,54 @@ ${message}`;
 }
 
 /**
- * What the session's owner adds to a turn. A standalone session adds nothing;
- * a task's session leads with the task and uses the task's PR (the task owns
- * it, the session has none).
+ * The owner-context line a project's chat turn leads with: which project this
+ * sandbox serves and its description. Shared with the legacy project chat
+ * prompt (`_projects/chatPrompt.ts`) until that path is deleted.
+ */
+export function withProjectContext(
+  project: Pick<Doc<"projects">, "title" | "description">,
+  message: string,
+): string {
+  const descriptionBlock = project.description
+    ? `\nProject description:\n${project.description}`
+    : "";
+  return `In the sandbox for project "${project.title}"${descriptionBlock}
+
+${message}`;
+}
+
+/**
+ * What the session's owner adds to a turn. A standalone session adds nothing.
+ * A task's session leads with the task; a project's leads with the project
+ * (its spec as the plan), and a project task's own chat in it with the task.
+ * The owner's PR is used: the owner owns it, the session has none.
  */
 async function ownerPromptContext(
   ctx: QueryCtx,
   session: Doc<"sessions">,
+  chat: Doc<"sessionChats">,
   message: string,
 ): Promise<{ message: string; planContent?: string; prUrl?: string }> {
-  const taskId = sessionOwnerTaskId(session);
+  const owner = chatOwner(chat, session);
+  const taskId = owner.kind === "task" ? owner.taskId : undefined;
   const task = taskId ? await ctx.db.get(taskId) : null;
-  if (!task) return { message, prUrl: session.prUrl };
-  return {
-    message: withTaskContext(task, message),
-    planContent: task.description,
-    prUrl: await taskPrUrl(ctx.db, task),
-  };
+  if (task) {
+    return {
+      message: withTaskContext(task, message),
+      planContent: task.description,
+      prUrl: await taskPrUrl(ctx.db, task),
+    };
+  }
+  const projectId = owner.kind === "project" ? owner.projectId : undefined;
+  const project = projectId ? await ctx.db.get(projectId) : null;
+  if (project) {
+    return {
+      message: withProjectContext(project, message),
+      planContent: await getProjectGeneratedSpec(ctx.db, project._id),
+      prUrl: project.prUrl,
+    };
+  }
+  return { message, prUrl: session.prUrl };
 }
 
 /**
@@ -128,7 +160,7 @@ export async function buildSessionPrompt(
       .query("sessionRepos")
       .withIndex("by_session", (q) => q.eq("sessionId", session._id))
       .collect(),
-    ownerPromptContext(ctx, session, resolvedMessage),
+    ownerPromptContext(ctx, session, chat, resolvedMessage),
   ]);
   const linkedRepos = linkedRepoRows.map((row) => ({
     owner: row.owner,
