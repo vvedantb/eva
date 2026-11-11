@@ -8,7 +8,7 @@ interface RunTraitFields {
   fastMode?: boolean;
 }
 
-/** Stored run traits in the shape the traits menu reads. */
+/** Stored run traits in the shape the traits menu reads (web and phone). */
 export function storedRunTraits(
   record: RunTraitFields | undefined | null,
 ): StoredModelTraits {

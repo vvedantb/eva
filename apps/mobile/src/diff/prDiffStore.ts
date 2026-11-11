@@ -199,13 +199,20 @@ export function useViewedFiles(pr: PrRef): {
 
 // ── Pending line comments ───────────────────────────────────────────────────
 
-/** A line comment drafted on Code, waiting to be posted with a review. */
+/**
+ * A line comment drafted on Code, waiting to be posted with a review: GitHub's
+ * anchor (`lineRangeCommentTarget`), so a range carries its first line too.
+ */
 export type PendingLineComment = {
   id: string;
   path: string;
+  /** The last line of the range, which carries the comment. */
   line: number;
   side: "LEFT" | "RIGHT";
-  /** The web range label: `+12`, `-4` or `9`. */
+  /** The range's first line; null for a one-line comment. */
+  startLine: number | null;
+  startSide: "LEFT" | "RIGHT" | null;
+  /** The web range label: `+12`, `-4`, `9` or `+3 to +5`. */
   label: string;
   body: string;
 };

@@ -69,8 +69,8 @@ export function ReviewComposer({
     body: comment.body,
     line: comment.line,
     side: comment.side,
-    startLine: null,
-    startSide: null,
+    startLine: comment.startLine,
+    startSide: comment.startSide,
   }));
   const [commentBody, setCommentBody] = useState("");
   const [reviewBody, setReviewBody] = useState("");

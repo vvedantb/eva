@@ -1,12 +1,13 @@
-import type {
-  PrComment,
-  PrCommit,
-  PrOverview,
-  PrReviewEvent,
-} from "./prOverviewMeta";
+import type { PrOverview } from "./prReview";
+
+type PrCommit = PrOverview["commits"][number];
+type PrComment = PrOverview["comments"][number];
+type PrReviewEvent = PrOverview["reviewEvents"][number];
 
 /**
  * One thing that happened to the pull request, as t3code's Timeline reads it.
+ * Shared by the web Timeline tab and the phone one, so both list the same
+ * events in the same order.
  * Remarks are events too, but consecutive ones are folded into a single
  * conversation row (`TimelineRow`) so a run of bot comments reads as one entry.
  */

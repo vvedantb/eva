@@ -26,7 +26,7 @@ import {
   IconInfoCircle,
   IconBrandVercelFilled,
 } from "@tabler/icons-react";
-import { getUserInitials } from "@eva/shared";
+import { getUserInitials, storedRunTraits, toRunTraitArgs } from "@eva/shared";
 import { UserInitials } from "@eva/shared/user-initials";
 import { Facehash } from "facehash";
 import {
@@ -42,7 +42,6 @@ import {
 } from "@/lib/components/priority/priorityMeta";
 import { BranchSelect } from "@/lib/components/BranchSelect";
 import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
-import { storedRunTraits, toRunTraitArgs } from "@/lib/utils/runTraits";
 import {
   FIELD_ROW_CLASS,
   FIELD_TEXT_CLASS,
