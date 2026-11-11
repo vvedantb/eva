@@ -478,7 +478,7 @@ const taskRunClaimValidator = v.object({
 
 /** Claims the session's sandbox for a task run: `closed` → `starting`. */
 export const claimSandboxForTaskRun = internalMutation({
-  args: { sessionId: v.id("sessions") },
+  args: { sessionId: v.id("sessions"), runId: v.id("agentRuns") },
   returns: v.union(taskRunClaimValidator, v.null()),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
@@ -498,6 +498,7 @@ export const claimSandboxForTaskRun = internalMutation({
       sandboxError: undefined,
       updatedAt: Date.now(),
     });
+    await ctx.db.patch(args.runId, { sessionStartAttempt: attempt });
     await scheduleStuckStartExpiry(
       ctx,
       { kind: "session", id: args.sessionId },
@@ -564,6 +565,47 @@ export async function finishTaskRunSandbox(
   await requestSessionSandboxStop(ctx, sessionId, {
     stopReason: { kind: "task" },
   });
+}
+
+/**
+ * A quick task's run was cancelled. Before its attach, the start the run
+ * claimed fails through the normal start-failure transition (fenced by the
+ * run's attempt, `shouldApplySandboxStartFailure`) and any VM it already
+ * prepared stops; after it, the run's VM stops like at a run's end.
+ */
+export async function abandonTaskRunSandbox(
+  ctx: MutationCtx,
+  sessionId: Id<"sessions">,
+  run: Pick<Doc<"agentRuns">, "sandboxId" | "sessionStartAttempt">,
+): Promise<void> {
+  const session = await ctx.db.get(sessionId);
+  if (!session) return;
+  const claimPending =
+    run.sessionStartAttempt !== undefined &&
+    shouldApplySandboxStartFailure(session.status) &&
+    isCurrentSandboxStartAttempt(
+      session.sandboxStartAttempt,
+      run.sessionStartAttempt,
+    );
+  if (!claimPending) {
+    if (run.sandboxId) {
+      await finishTaskRunSandbox(ctx, sessionId, run.sandboxId, {
+        keepActive: false,
+      });
+    }
+    return;
+  }
+  await ctx.runMutation(internal.sessions.sandboxError, {
+    sessionId,
+    error: "The task run was cancelled before its sandbox was ready.",
+    startAttempt: run.sessionStartAttempt,
+  });
+  if (run.sandboxId) {
+    await ctx.scheduler.runAfter(0, internal.sandbox.stopSandbox, {
+      sandboxId: run.sandboxId,
+      repoId: session.repoId,
+    });
+  }
 }
 
 export const finishTaskRunSandboxMutation = internalMutation({

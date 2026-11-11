@@ -8,7 +8,7 @@ import {
   runModeValidator,
 } from "../validators";
 import { taskCompleteEvent } from "./events";
-import { buildQuickTaskRetryDelayMs } from "./recovery";
+import { buildQuickTaskRetryDelayMs, TASK_CHAT_BUSY_ERROR } from "./recovery";
 import { getTaskRunStreamingEntityId } from "./helpers";
 import { prepareSandboxSteps } from "../_sandbox_runtime/prepareSandboxSteps";
 import { formatDelayedPublishFailureError } from "../_sessions/resultTarget";
@@ -110,13 +110,16 @@ export const taskExecutionWorkflow = workflow.define({
       // A quick task's session lends its sandbox through the session
       // lifecycle: claimed (`closed` → `starting`, or reused while `active`)
       // before the VM is touched, so the row never reads `closed` over a
-      // running VM. No claim (a start/stop in flight): a VM of the run's own.
+      // running VM. A start or stop in flight refuses the claim: the run
+      // fails with the busy error and retries shortly (one busy rule with
+      // `startTaskRun`), so it never boots a VM no session row records.
       if (args.ownedSessionId) {
         sessionClaim = await step.runMutation(
           internal.sessions.claimSandboxForTaskRun,
-          { sessionId: args.ownedSessionId },
+          { sessionId: args.ownedSessionId, runId: args.runId },
         );
-        keepTaskSandboxActiveAfterRun = sessionClaim?.wasActive ?? false;
+        if (sessionClaim === null) throw new Error(TASK_CHAT_BUSY_ERROR);
+        keepTaskSandboxActiveAfterRun = sessionClaim.wasActive;
       }
       const reusableSandboxId = args.ownedSessionId
         ? sessionClaim?.sandboxId

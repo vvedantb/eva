@@ -16,10 +16,7 @@ import {
   taskSessionBusy,
   taskUsesOwnedSession,
 } from "../_sessions/ownedSession";
-
-/** Why a run did not start: the task's chat holds the sandbox. */
-export const TASK_CHAT_BUSY_ERROR =
-  "Eva is still replying in this task's chat, or its sandbox is starting or stopping. Try the run again in a moment.";
+import { TASK_CHAT_BUSY_ERROR } from "./recovery";
 
 /**
  * The one way to start a quick-task or project-task run. Queues an

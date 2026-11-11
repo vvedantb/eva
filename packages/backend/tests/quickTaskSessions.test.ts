@@ -4,6 +4,7 @@ import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { DEFAULT_AI_MODEL } from "../convex/validators";
 import { openTurn } from "../convex/_chat/turnStore";
+import { abandonTaskRunSandbox } from "../convex/_sessions/sandbox";
 import { migrateQuickTaskToSession } from "../convex/_migrations/quickTaskChatsToSessions";
 
 /**
@@ -163,14 +164,44 @@ describe("quick tasks on sessions", () => {
       });
       const status = async () =>
         (await f.t.run((ctx) => ctx.db.get(sessionId)))?.status;
+      const newRun = () =>
+        f.t.run((ctx) =>
+          ctx.db.insert("agentRuns", {
+            taskId: f.taskId,
+            status: "running",
+            logs: [],
+          }),
+        );
+
+      // Cancelled between claim and attach: the claimed start fails at once
+      // instead of sitting in `starting`.
+      const cancelledRunId = await newRun();
+      await f.t.mutation(internal.sessions.claimSandboxForTaskRun, {
+        sessionId,
+        runId: cancelledRunId,
+      });
+      expect(await status()).toBe("starting");
+      await f.t.run(async (ctx) => {
+        const run = await ctx.db.get(cancelledRunId);
+        if (!run) throw new Error("run missing");
+        await abandonTaskRunSandbox(ctx, sessionId, run);
+      });
+      expect(await status()).toBe("closed");
 
       const claim = await f.t.mutation(
         internal.sessions.claimSandboxForTaskRun,
-        { sessionId },
+        { sessionId, runId: await newRun() },
       );
       if (!claim) throw new Error("claim refused");
       expect(claim.wasActive).toBe(false);
       expect(await status()).toBe("starting");
+      // A start in flight refuses a second claim: no unrecorded VM.
+      expect(
+        await f.t.mutation(internal.sessions.claimSandboxForTaskRun, {
+          sessionId,
+          runId: await newRun(),
+        }),
+      ).toBeNull();
 
       // A stale attempt cannot attach.
       expect(

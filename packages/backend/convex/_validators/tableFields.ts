@@ -720,6 +720,12 @@ export const agentRunFields = {
   // media on — it renders as the quick task's first chat turn or as a timeline
   // row, both built from this doc — so the ids live here instead.
   mediaStorageIds: v.optional(v.array(v.id("_storage"))),
+  /**
+   * The start attempt a quick task run's claim took on its session
+   * (`sessions.claimSandboxForTaskRun`), so a cancel before the attach can
+   * fail exactly that start. Absent when the run reused an active session.
+   */
+  sessionStartAttempt: v.optional(v.number()),
 };
 
 export const sessionFields = {
