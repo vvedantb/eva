@@ -163,6 +163,8 @@ export default function InboxScreen() {
         onSelectAll={() => setSelected(new Set((notifications ?? []).map((notification) => notification._id)))}
         onClearSelection={() => setSelected(new Set())}
         bottomOffset={tabBarReserve(largerText, insets.bottom) - 24}
+        // At 390 the bar is wider than the screen: Cancel stays in view, the rest scrolls.
+        pinCancel
         // The web `InboxBulkBar` actions; Archive is reversible, so not destructive.
         primaryActions={[
           { key: "read", label: "Mark read", icon: IconMailOpened, onClick: bulk(markManyAsRead) },
