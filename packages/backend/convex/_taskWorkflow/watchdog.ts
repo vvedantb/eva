@@ -7,6 +7,7 @@ import { cleanUpStaleRun } from "./recovery";
 import { clearTaskRunStreaming, sendCompletionEvent } from "./helpers";
 import { RUN_TIMEOUT_MS } from "./staleness";
 import { finishTaskRun, taskRunWorkflowId } from "../_agentTasks/runState";
+import { projectBuildWorkflowId } from "../_projects/buildState";
 
 const RUN_TIMEOUT_MESSAGE = `Run timed out after ${RUN_TIMEOUT_MS / 3_600_000} hours`;
 
@@ -69,12 +70,13 @@ export const handleStaleRun = internalMutation({
 
     if (task.projectId) {
       const project = await ctx.db.get(task.projectId);
-      if (project?.activeBuildWorkflowId) {
+      const buildWorkflowId = project && projectBuildWorkflowId(project);
+      if (buildWorkflowId) {
         try {
           await sendCompletionEvent(
             ctx,
             buildTaskDoneEvent,
-            project.activeBuildWorkflowId,
+            buildWorkflowId,
             { taskId: args.taskId, success: false },
           );
         } catch {}

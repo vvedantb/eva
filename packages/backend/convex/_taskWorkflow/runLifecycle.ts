@@ -11,7 +11,10 @@ import { RUN_TIMEOUT_MS } from "../workflowWatchdog";
 import { buildTaskDoneEvent } from "./events";
 import { closeOpenTurn } from "../_chat/turnStore";
 import { isUsageLimitError, parseUsageLimitResetTime } from "./recovery";
-import { scheduleProjectBuildAt } from "../_scheduling/helpers";
+import {
+  projectBuildWorkflowId,
+  scheduleProjectBuild,
+} from "../_projects/buildState";
 import { finishTaskRun, scheduleTaskRun } from "../_agentTasks/runState";
 import {
   clearTaskRunStreaming,
@@ -342,11 +345,14 @@ export const completeRun = internalMutation({
       const resetAt = parseUsageLimitResetTime(args.error);
       if (resetAt && resetAt > Date.now()) {
         if (task?.projectId) {
-          // Project task: schedule the build to retry at the reset time
-          const proj = await ctx.db.get(task.projectId);
-          if (proj && !proj.scheduledBuildFunctionId) {
-            await scheduleProjectBuildAt(ctx, task.projectId, resetAt);
-          }
+          // Project task: schedule the build to retry at the reset time,
+          // unless a build is already scheduled.
+          await scheduleProjectBuild(
+            ctx,
+            task.projectId,
+            "scheduleRetry",
+            resetAt,
+          );
         } else if (task) {
           // Quick task: retry at the reset time, unless a schedule or a
           // newer run already owns the task.
@@ -365,11 +371,12 @@ export const completeRun = internalMutation({
       }
     }
 
-    if (project?.activeBuildWorkflowId && !staleCompletion) {
+    const buildWorkflowId = project && projectBuildWorkflowId(project);
+    if (buildWorkflowId && !staleCompletion) {
       await sendCompletionEvent(
         ctx,
         buildTaskDoneEvent,
-        project.activeBuildWorkflowId,
+        buildWorkflowId,
         {
           taskId: args.taskId,
           success: args.success,
