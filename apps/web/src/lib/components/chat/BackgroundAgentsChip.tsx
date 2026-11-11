@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Badge,
   Button,
   Popover,
   PopoverContent,
@@ -17,6 +16,7 @@ import { IconPlayerStop, IconRobot } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import { use, useState } from "react";
 import { isVisibleBackgroundAgent } from "./backgroundAgentVisibility";
+import { COMPOSER_CHIP_CLASS } from "./composerChip";
 
 type BackgroundAgent = BackgroundAgentEntry;
 
@@ -63,11 +63,6 @@ export function BackgroundAgentsChip({
     clearStopping();
   };
 
-  const label =
-    runningAgents.length === 1
-      ? "1 background agent"
-      : `${runningAgents.length} background agents`;
-
   return (
     <AnimatePresence initial={false}>
       {runningAgents.length === 0 ? null : (
@@ -81,16 +76,15 @@ export function BackgroundAgentsChip({
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="max-sm:hit-target mb-2 inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-xs text-foreground hover:bg-muted"
+                aria-label={`${runningAgents.length} background ${runningAgents.length === 1 ? "agent" : "agents"}`}
+                className={COMPOSER_CHIP_CLASS}
               >
                 <IconRobot className="size-3.5 shrink-0 text-muted-foreground" />
-                <span>{label}</span>
-                <Badge variant="secondary" className="h-4 px-1.5 text-3xs">
-                  <CountPop
-                    label={String(runningAgents.length)}
-                    className="tabular-nums"
-                  />
-                </Badge>
+                <CountPop
+                  label={String(runningAgents.length)}
+                  className="tabular-nums"
+                />
+                <span>{runningAgents.length === 1 ? "agent" : "agents"}</span>
               </button>
             </PopoverTrigger>
             <PopoverContent className="w-80 p-0" align="start">
