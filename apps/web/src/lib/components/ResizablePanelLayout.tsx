@@ -125,10 +125,12 @@ export function ResizablePanelLayout({
   // Below `md` only one pane is on screen, so the layout always opens on the
   // left pane (chat / list) regardless of `defaultRightCollapsed` or the stored
   // desktop preference. The switcher is the way back; opening on the right
-  // would trap the user.
-  const [rightCollapsed, setRightCollapsed] = useState(() =>
-    isMobile ? true : savedCollapsed,
-  );
+  // would trap the user. Phone-only: it never touches the desktop state.
+  const [mobileShowsRight, setMobileShowsRight] = useState(false);
+  // Desktop: the panel library owns the layout. This is only its last
+  // measured report (from `onResize`), so render can read it.
+  const [desktopCollapsed, setDesktopCollapsed] = useState(savedCollapsed);
+  const rightCollapsed = isMobile ? !mobileShowsRight : desktopCollapsed;
   // Seeded from storage so expanding after a reload returns to the dragged
   // width instead of the layout default.
   const lastExpandedSize = useRef<string>(savedRightSize);
@@ -152,7 +154,9 @@ export function ResizablePanelLayout({
     useState(collapseRightSignal);
   if (collapseRightSignal !== prevCollapseSignal) {
     setPrevCollapseSignal(collapseRightSignal);
-    if (isMobile && collapseRightSignal !== undefined) setRightCollapsed(true);
+    if (isMobile && collapseRightSignal !== undefined) {
+      setMobileShowsRight(false);
+    }
   }
 
   const railMinSizePx = rightCollapsedSizePx > 0 ? rightMinWidthPx : 0;
@@ -162,7 +166,7 @@ export function ResizablePanelLayout({
     // persisted: which pane you were last looking at on a phone must not
     // overwrite the dragged/collapsed desktop preference under the same key.
     if (isMobile) {
-      setRightCollapsed((prev) => !prev);
+      setMobileShowsRight((prev) => !prev);
       return;
     }
     const panel = rightPanelRef.current;
@@ -174,7 +178,7 @@ export function ResizablePanelLayout({
     const size = panel.getSize();
     const collapsed = isMeasuredPanelSize(size)
       ? isCollapsedPanelSize(size, rightCollapsedSizePx, railMinSizePx)
-      : rightCollapsed;
+      : desktopCollapsed;
     if (collapsed) {
       panel.resize(
         usableExpandedPanelSize(
@@ -191,7 +195,7 @@ export function ResizablePanelLayout({
     defaultRightSize,
     isMobile,
     railMinSizePx,
-    rightCollapsed,
+    desktopCollapsed,
     rightCollapsedSizePx,
     rightPanelRef,
   ]);
@@ -211,7 +215,7 @@ export function ResizablePanelLayout({
   useEffect(() => {
     if (expandRightSignal === undefined || expandRightSignal === 0) return;
     if (isMobile) {
-      setRightCollapsed(false);
+      setMobileShowsRight(true);
       return;
     }
     rightPanelRef.current?.resize(
@@ -269,7 +273,7 @@ export function ResizablePanelLayout({
     if (!collapsed) {
       lastExpandedSize.current = `${size.asPercentage}%`;
     }
-    setRightCollapsed(collapsed);
+    setDesktopCollapsed(collapsed);
     setSavedCollapsed(collapsed);
   };
 

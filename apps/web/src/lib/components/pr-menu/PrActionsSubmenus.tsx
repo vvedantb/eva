@@ -1,5 +1,6 @@
 "use client";
 
+import type { PrState } from "@eva/shared";
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -18,7 +19,8 @@ import {
 import type { Id } from "@eva/backend";
 import {
   IconExternalLink,
-    IconGitPullRequestClosed,
+  IconGitPullRequest,
+  IconGitPullRequestClosed,
   IconLink,
   IconStack2,
 } from "@tabler/icons-react";
@@ -32,17 +34,25 @@ export interface PrMenuPullRequest {
   _id: string;
   prUrl: string;
   prNumber: number;
-  state: "draft" | "open" | "merged" | "closed";
+  state: PrState;
   headBranch?: string;
   title?: string;
   repoId: Id<"githubRepos">;
 }
 
+/** Up to this many PRs sit in the menu itself; more fold into one submenu. */
+const INLINE_PR_LIMIT = 2;
+
+const isLive = (pr: PrMenuPullRequest) =>
+  pr.state === "open" || pr.state === "draft";
+
 /**
  * The PR entries of a chat's "…" menu and right-click menu: one row per pull
- * request, drawn like the stack popover's (`PrRow`). Each opens the same actions as the review header's menu — View on GitHub, Copy
- * link, Stack a new session, Close without merging — so a PR can be handled
- * without opening its review first.
+ * request, drawn like the stack popover's (`PrRow`). Each opens the same
+ * actions as the review header's menu — View on GitHub, Copy link, Stack a new
+ * session, Close without merging — so a PR can be handled without opening its
+ * review first. More than `INLINE_PR_LIMIT` PRs fold into one "Pull requests
+ * (N)" submenu, open and draft first, so the chat's own actions stay in view.
  */
 export function PrActionsSubmenus({
   variant,
@@ -58,25 +68,38 @@ export function PrActionsSubmenus({
     variant === "context" ? ContextMenuSubContent : DropdownMenuSubContent;
   const iconSize = variant === "context" ? 16 : 14;
 
+  // Stable sort: the query's order holds inside each half.
+  const ordered = [...prs].sort(
+    (a, b) => Number(isLive(b)) - Number(isLive(a)),
+  );
+  const rows = ordered.map((pr) => (
+    <Sub key={pr._id}>
+      <SubTrigger className="max-w-56 items-start">
+        {/* No branch line: a chat's PRs mostly share one session branch. */}
+        <PrRow
+          status={pr.state === "draft" ? "open" : pr.state}
+          draft={pr.state === "draft"}
+          title={pr.title}
+          number={pr.prNumber}
+          branch={undefined}
+        />
+      </SubTrigger>
+      <SubContent>
+        <PrActionItems variant={variant} pr={pr} iconSize={iconSize} />
+      </SubContent>
+    </Sub>
+  ));
+
+  if (prs.length <= INLINE_PR_LIMIT) return <>{rows}</>;
+
   return (
-    <>
-      {prs.map((pr) => (
-        <Sub key={pr._id}>
-          <SubTrigger className="max-w-80 items-start">
-            <PrRow
-              status={pr.state === "draft" ? "open" : pr.state}
-              draft={pr.state === "draft"}
-              title={pr.title}
-              number={pr.prNumber}
-              branch={pr.headBranch}
-            />
-          </SubTrigger>
-          <SubContent>
-            <PrActionItems variant={variant} pr={pr} iconSize={iconSize} />
-          </SubContent>
-        </Sub>
-      ))}
-    </>
+    <Sub>
+      <SubTrigger>
+        <IconGitPullRequest size={iconSize} aria-hidden />
+        Pull requests ({prs.length})
+      </SubTrigger>
+      <SubContent>{rows}</SubContent>
+    </Sub>
   );
 }
 
@@ -95,7 +118,7 @@ function PrActionItems({
   const { request: requestConfirm } = useRequestConfirm();
   const { close } = useClosePullRequest();
   const { canStack, stack } = useStackNewSession();
-  const live = pr.state === "open" || pr.state === "draft";
+  const live = isLive(pr);
   const headRef = pr.headBranch;
   const target = { repoId: pr.repoId, prNumber: pr.prNumber };
 

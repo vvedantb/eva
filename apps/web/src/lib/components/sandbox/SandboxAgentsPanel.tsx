@@ -15,13 +15,16 @@ export function SandboxAgentsPanel({
   agents: SubagentView[];
   isReadOnly?: boolean;
 }) {
-  const requestStop = useStopBackgroundAgent(entity);
+  const { requestStop, stopDialog } = useStopBackgroundAgent(entity);
 
   return (
-    <AgentsPanel
-      agents={agents}
-      isReadOnly={isReadOnly}
-      onRequestStop={requestStop}
-    />
+    <>
+      <AgentsPanel
+        agents={agents}
+        isReadOnly={isReadOnly}
+        onRequestStop={requestStop}
+      />
+      {stopDialog}
+    </>
   );
 }

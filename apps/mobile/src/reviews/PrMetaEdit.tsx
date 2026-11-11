@@ -175,6 +175,7 @@ export function PrMetaEditButton({
               leading={option.leading}
               title={option.value}
               active={selected.includes(option.value)}
+              multiple
               disabled={edit.saving !== null}
               onPress={() => toggle(option.value)}
             />

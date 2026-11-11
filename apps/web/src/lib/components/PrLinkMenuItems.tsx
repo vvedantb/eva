@@ -1,5 +1,6 @@
 "use client";
 
+import type { PrState } from "@eva/shared";
 import type { ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type SandboxOwner } from "@eva/backend";
@@ -21,7 +22,7 @@ interface PrLinkMenuItemsArgs {
   createPr?: { enabled: boolean; isCreating: boolean; onCreate: () => void };
   prUrl: string | undefined;
   /** Colours the View PR icon (sessions only); others leave it default. */
-  prState?: "draft" | "open" | "merged" | "closed";
+  prState?: PrState;
   /**
    * The chat whose PRs these are. Each PR row becomes a submenu of PR actions:
    * "View PR" for one, "PR #N" per PR for several (`PrActionsSubmenus`).
@@ -36,8 +37,8 @@ interface PrLinkMenuItemsArgs {
 
 /**
  * The Create PR / View PR(s) / View Preview block of the "More" dropdown, shared
- * by the quick-task footer and header, the session header and the project
- * header. Simple view hides git/PR plumbing here, so the three surfaces cannot
+ * by the quick-task footer and header and the project header. Simple view
+ * hides git/PR plumbing here, so the surfaces cannot
  * drift apart. Returning `hasItems` lets callers keep their own separator
  * logic around the block.
  */

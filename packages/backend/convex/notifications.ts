@@ -5,6 +5,7 @@ import {
 } from "./_generated/server";
 import { v, type Infer } from "convex/values";
 import { isInternalAppHref } from "@eva/shared/safeUrl";
+import { entityHref, repoBasePath } from "@eva/shared";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import {
@@ -93,17 +94,6 @@ const DIGEST_EXCLUDED_TYPES: ReadonlySet<string> = new Set([
   "session_archived",
 ]);
 
-/** Builds a URL path for a repo, including app name for monorepo sub-apps. */
-export function getRepoHref(
-  owner: string,
-  name: string,
-  rootDirectory?: string,
-): string {
-  if (!rootDirectory) return `/${owner}/${name}`;
-  const appName = rootDirectory.split("/").pop();
-  return `/${owner}/${name}/${appName}`;
-}
-
 /**
  * Creates a notification for a user, auto-generating an href from
  * repo/project/task/doc/session context. Returns the new row's id so a caller
@@ -148,7 +138,7 @@ export async function createNotification(
   if (!href && params.repoId) {
     const repo = await ctx.db.get(params.repoId);
     if (repo) {
-      const baseHref = getRepoHref(repo.owner, repo.name, repo.rootDirectory);
+      const baseHref = repoBasePath(repo);
       // Detail routes are keyed by per-repo numId, not by Convex id — a Convex
       // id in the path fails `parseRouteNumId` and renders "not found". An
       // entity still awaiting numId backfill falls through to its section list.
@@ -157,13 +147,13 @@ export async function createNotification(
       } else if (project?.numId !== undefined && task?.numId !== undefined) {
         href = `${baseHref}/projects/${project.numId}/${task.numId}/activity`;
       } else if (task?.numId !== undefined) {
-        href = `${baseHref}/quick-tasks/${task.numId}`;
+        href = entityHref("task", repo, task.numId);
       } else if (project?.numId !== undefined) {
-        href = `${baseHref}/projects/${project.numId}`;
+        href = entityHref("project", repo, project.numId);
       } else if (session?.numId !== undefined) {
-        href = `${baseHref}/sessions/${session.numId}`;
+        href = entityHref("session", repo, session.numId);
       } else {
-        href = `${baseHref}/quick-tasks`;
+        href = entityHref("task", repo, undefined);
       }
     }
   }

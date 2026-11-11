@@ -297,6 +297,32 @@ describe("mobile api", () => {
   );
 
   test(
+    "getChat says whether the sandbox runs, as the web composer reads it",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const awake = async () =>
+        Promise.all(
+          [ids.sessionId, ids.taskId, ids.projectId].map(
+            async (target) => (await asUser.query(api.mobile.getChat, { target }))?.sandboxActive,
+          ),
+        );
+      await t.run(async (ctx) => {
+        await ctx.db.patch(ids.sessionId, { status: "closed" });
+        await ctx.db.patch(ids.taskId, { reviewTaskSandboxStatus: "closed" });
+        await ctx.db.patch(ids.projectId, { reviewProjectSandboxStatus: "closed" });
+      });
+      expect(await awake()).toEqual([false, false, false]);
+      await t.run(async (ctx) => {
+        await ctx.db.patch(ids.sessionId, { status: "active" });
+        await ctx.db.patch(ids.taskId, { reviewTaskSandboxStatus: "active" });
+        await ctx.db.patch(ids.projectId, { reviewProjectSandboxStatus: "active" });
+      });
+      expect(await awake()).toEqual([true, true, true]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "getChat carries the pull request the web Review pane diffs",
     async () => {
       const { t, ids, asUser } = await fixture();
@@ -676,6 +702,68 @@ describe("mobile api", () => {
       });
       await expect(asUser.mutation(api.mobile.archiveSession, { sessionId: strangerSessionId })).rejects.toThrow();
       expect(await t.run((ctx) => ctx.db.get(strangerSessionId))).not.toHaveProperty("archived");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "projects.create makes the phone's new project: tasks only goes to Business Review with a branch, an interview starts as a draft",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const tasksOnly = await asUser.mutation(api.projects.create, {
+        repoId: ids.repoId,
+        title: "Offline drafts",
+        rawInput: "Keep a draft when the network drops.",
+        baseBranch: "main",
+        priority: "high",
+        skipPlanning: true,
+      });
+      const interview = await asUser.mutation(api.projects.create, {
+        repoId: ids.repoId,
+        title: "Copy pass",
+        rawInput: "Shorter onboarding copy.",
+        baseBranch: "main",
+        skipPlanning: false,
+      });
+      const listed = await asUser.query(api.projects.list, { repoId: ids.repoId });
+      const byId = new Map(listed.map((project) => [project._id, project]));
+      expect(byId.get(tasksOnly)).toMatchObject({
+        phase: "business_review",
+        planningMode: "tasks_only",
+        description: "Keep a draft when the network drops.",
+        priority: "high",
+        baseBranch: "main",
+        userId: ids.userId,
+      });
+      expect(byId.get(tasksOnly)?.branchName).toBeTruthy();
+      expect(byId.get(interview)).toMatchObject({ phase: "draft", planningMode: "interview" });
+      expect(byId.get(interview)).not.toHaveProperty("description");
+      // The interview opens on the user's own description, which the phone Plan tab shows.
+      const detail = await asUser.query(api.projects.get, { id: interview });
+      expect(detail?.conversationHistory.map((turn) => [turn.role, turn.content])).toEqual([["user", "Shorter onboarding copy."]]);
+      // Each takes the repo's next project number.
+      const numbers = await t.run(async (ctx) => [(await ctx.db.get(tasksOnly))?.numId, (await ctx.db.get(interview))?.numId]);
+      expect(new Set(numbers).size).toBe(2);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "projects.create refuses a repo you cannot access",
+    async () => {
+      const { t, asUser } = await fixture();
+      const strangerRepoId = await t.run(async (ctx) => {
+        const repo = await ctx.db
+          .query("githubRepos")
+          .filter((q) => q.eq(q.field("owner"), "someone"))
+          .unique();
+        if (!repo) throw new Error("fixture");
+        return repo._id;
+      });
+      await expect(
+        asUser.mutation(api.projects.create, { repoId: strangerRepoId, title: "Nope", rawInput: "Nope", skipPlanning: true }),
+      ).rejects.toThrow();
+      expect(await t.run((ctx) => ctx.db.query("projects").withIndex("by_repo_and_deleted", (q) => q.eq("repoId", strangerRepoId).eq("deletedAt", undefined)).collect())).toEqual([]);
     },
     TIMEOUT_MS,
   );

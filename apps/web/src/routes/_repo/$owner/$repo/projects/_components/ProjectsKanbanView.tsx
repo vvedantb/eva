@@ -131,7 +131,6 @@ function VirtualProjectColumn({
                   rawInput={project.rawInput}
                   branchName={project.branchName}
                   numId={project.numId}
-                  repoFullName={`${owner}/${name}`}
                   createdAt={project._creationTime}
                   accentColor={phaseConfig[phase].bar}
                   members={project.members}

@@ -5,7 +5,7 @@ import { patchLoadedQuery } from "@vvedantb/server";
 import { api, normalizeAIModel } from "@eva/backend";
 import type { Doc } from "@eva/backend";
 import { PageWrapper } from "@/lib/components/PageWrapper";
-import { CronScheduleCard } from "@/lib/components/CronScheduleCard";
+import { AutomationCronField } from "./_components/AutomationCronField";
 import {
   Button,
   Input,
@@ -236,10 +236,6 @@ function SettingsForm({
       list.filter((a) => a._id !== args.id),
     );
   });
-  // The cron input is a controlled field doing local↔UTC conversion with a
-  // live preview, so it needs an editing buffer to save on blur rather than on
-  // every keystroke. Every other field reads straight from the automation doc.
-  const [cronDraft, setCronDraft] = useState(automation.cronSchedule);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const { request: requestConfirm } = useRequestConfirm();
@@ -251,13 +247,14 @@ function SettingsForm({
   // Persist a single field change and confirm with one deduped toast.
   const commit = (
     fields: Omit<Parameters<typeof updateAutomation>[0], "id">,
-  ) => {
-    void updateAutomation({ id: automation._id, ...fields })
-      .then(() => toast.success("Saved", { id: "automation-saved" }))
-      .catch(() =>
-        toast.error("Couldn't save changes", { id: "automation-saved" }),
-      );
-  };
+  ) =>
+    updateAutomation({ id: automation._id, ...fields })
+      .then(() => {
+        toast.success("Saved", { id: "automation-saved" });
+      })
+      .catch(() => {
+        toast.error("Couldn't save changes", { id: "automation-saved" });
+      });
 
   const handleDelete = async () => {
     setIsDeleting(true);
@@ -285,12 +282,9 @@ function SettingsForm({
         trigger={automationTriggerOf(automation)}
         onChange={(trigger) => commit({ trigger })}
         schedule={
-          <CronScheduleCard
-            value={cronDraft}
-            onChange={setCronDraft}
-            onBlurCommit={(v) => {
-              if (v !== automation.cronSchedule) commit({ cronSchedule: v });
-            }}
+          <AutomationCronField
+            cronSchedule={automation.cronSchedule}
+            onSave={(cronSchedule) => commit({ cronSchedule })}
           />
         }
       />

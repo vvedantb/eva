@@ -15,7 +15,7 @@ import {
   workflowCompleteValidator,
   normalizeAIModel,
   roleValidator,
-  taskSandboxStatusValidator,
+  sessionStatusValidator,
   turnCheckpointArgs,
   turnLeaseFenceArgs,
   usesChatDaemon,
@@ -33,6 +33,7 @@ import { trackProjectChatWorkflow } from "./workflowWatchdog";
 import { buildProjectChatPrompt } from "./_projects/chatPrompt";
 import { listReadableSiblingRepos } from "./_githubRepos/sandboxRead";
 import { getProjectGeneratedSpec } from "./_projects/helpers";
+import { sandboxOwnerKey } from "@eva/shared";
 import { resolveProjectBranchName } from "./_git/branchNames";
 import { resolveExperimentalFlags } from "./_auth/experimentalFlags";
 import { buildCustomInstructionsBlock } from "./prompts";
@@ -149,7 +150,7 @@ async function buildProjectChatTurnPrompt(
     devPort: project.devPort ?? repo.devPort,
     readableRepos,
     runtime: {
-      ownerKey: `project-${args.projectId}`,
+      ownerKey: sandboxOwnerKey({ kind: "project", projectId: args.projectId }),
       prUrl: project.prUrl,
       devCommand: project.devCommand ?? repo.devCommand,
       startupCommands: repo.startupCommands,
@@ -1034,7 +1035,7 @@ export const getChatData = internalQuery({
   },
   returns: v.object({
     sandboxId: v.optional(v.string()),
-    sandboxStatus: v.optional(taskSandboxStatusValidator),
+    sandboxStatus: v.optional(sessionStatusValidator),
     repoOwner: v.string(),
     repoName: v.string(),
     repoId: v.id("githubRepos"),

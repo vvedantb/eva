@@ -79,10 +79,12 @@ export function SidebarPanel({
               onBackToMain={() => setContextSidebarMode("main")}
             />
 
+            {/* `max-lg:overscroll-y-contain`: below `lg` this is a drawer over
+                the page, and a scroll past its end moved the page behind. */}
             <nav
               ref={scrollRef}
               className={cn(
-                "scrollbar scroll-fade flex min-h-0 flex-1 flex-col justify-between overflow-y-auto px-2",
+                "scrollbar scroll-fade flex min-h-0 flex-1 flex-col justify-between overflow-y-auto px-2 max-lg:overscroll-y-contain",
                 flags.isSourceListHeader ? "pb-2 pt-1.5" : "py-2",
               )}
             >

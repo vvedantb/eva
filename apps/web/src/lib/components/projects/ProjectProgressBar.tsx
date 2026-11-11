@@ -2,6 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
+import { projectProgressSegments } from "@eva/shared";
 import type { Id } from "@eva/backend";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@vvedantb/ui";
 import {
@@ -40,19 +41,7 @@ export function ProjectProgressBar({
   // Fills stay at full track width and scale from the left — same compositor
   // rule as UsageBar. `.project-progress-fill` is the hook for
   // `html[data-page-motion=off]` (do not add that rule here).
-  const segments: {
-    status: (typeof TASK_STATUSES)[number];
-    ratio: number;
-    offset: number;
-  }[] = [];
-  let offset = 0;
-  for (const status of TASK_STATUSES) {
-    const count = progress[status];
-    if (count === 0) continue;
-    const ratio = count / progress.total;
-    segments.push({ status, ratio, offset });
-    offset += ratio;
-  }
+  const segments = projectProgressSegments(progress);
 
   return (
     <Tooltip>

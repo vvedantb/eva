@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
-import { sandboxStartupEntityId } from "../_sandbox/owner";
+import { sandboxStartupEntityId } from "@eva/shared";
 
 /** Clears a project interview stuck after sandbox or agent failure. */
 export const repairStuckProjectInterview = internalMutation({

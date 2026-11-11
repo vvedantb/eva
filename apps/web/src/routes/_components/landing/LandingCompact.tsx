@@ -6,6 +6,7 @@ import { cn } from "@eva/ui";
 import { Button } from "@vvedantb/ui";
 import { BrandMark } from "./BrandMark";
 import { LandingBrand } from "./LandingBrand";
+import { markLandingRoot } from "./markLandingRoot";
 import {
   LANDING_AGENTS,
   LANDING_HERO,
@@ -38,7 +39,11 @@ import {
  */
 export function LandingCompact() {
   return (
-    <div id="top" className="flex min-h-dvh flex-col bg-background">
+    <div
+      id="top"
+      ref={markLandingRoot}
+      className="flex min-h-dvh flex-col bg-background"
+    >
       <div className="landing-atmosphere landing-grain relative overflow-hidden">
         <div aria-hidden className="landing-grid" />
 

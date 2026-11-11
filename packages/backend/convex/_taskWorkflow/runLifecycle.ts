@@ -28,7 +28,7 @@ import {
 
 /**
  * Transitions a queued run to running, sets streaming activity, and schedules
- * the 2-hour backstop. Only `queued` may start: a run cancelled before this
+ * the `TURN_BACKSTOP_MS` backstop. Only `queued` may start: a run cancelled before this
  * step ran must stay cancelled, not come back as `running` with no watchdog.
  * Returns "not_queued" so the workflow stops; journals from before this guard
  * replay `null` and carry on as before.

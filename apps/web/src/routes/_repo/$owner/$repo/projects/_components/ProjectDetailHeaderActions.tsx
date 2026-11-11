@@ -13,7 +13,6 @@ import {
   ConfirmSkipHint,
   skipConfirmTitle,
   useRequestConfirm,
-  CopyLinkMenuItem,
 } from "@vvedantb/ui";
 import {
   isProjectBuilding,
@@ -39,6 +38,14 @@ import { SandboxCommitPushButton } from "@/lib/components/sandbox/SandboxCommitP
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { ScheduleBuildPopover } from "@/lib/components/projects/ScheduleBuildPopover";
 import { PrMergeConfetti } from "@/lib/components/celebration/PrMergeConfetti";
+import { useNavigate } from "@tanstack/react-router";
+import { useRepo } from "@/lib/contexts/RepoContext";
+import { entityPathSegment } from "@/lib/numId";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
+import { ProjectCardMenuItems } from "@/lib/components/projects/_components/ProjectCardMenuItems";
+import { useProjectMenu } from "@/lib/components/projects/_components/useProjectMenu";
+import { ProjectDeleteDialog } from "./ProjectDeleteDialog";
+import { useProjectDelete } from "./useProjectDelete";
 import {
   getProjectMenuFlags,
   type ProjectDetailProject,
@@ -63,7 +70,6 @@ interface ProjectDetailHeaderActionsProps {
   onResolveConflicts: () => Promise<void>;
   onStopBuild: () => Promise<void>;
   setShowResolveConfirm: (open: boolean) => void;
-  setShowStartupCommandsConfirm: (open: boolean) => void;
   setShowStopBuildConfirm: (open: boolean) => void;
   setShowPlanModal: (open: boolean) => void;
   setShowChatModal: (open: boolean) => void;
@@ -84,7 +90,6 @@ export function ProjectDetailHeaderActions({
   onResolveConflicts,
   onStopBuild,
   setShowResolveConfirm,
-  setShowStartupCommandsConfirm,
   setShowStopBuildConfirm,
   setShowPlanModal,
   setShowChatModal,
@@ -100,6 +105,25 @@ export function ProjectDetailHeaderActions({
   } = sandbox;
   const { request: requestConfirm } = useRequestConfirm();
   const flags = getProjectMenuFlags(project, sandbox);
+  const hasCommands = flags.showResolveConflicts || flags.hasSandboxCommandItems;
+  const { basePath } = useRepo();
+  const navigate = useNavigate();
+  const projectsPath = `${basePath}/projects`;
+  const segment = entityPathSegment(project);
+  // Deleted: this page has nothing left to show.
+  const projectDelete = useProjectDelete(repoId, () => {
+    void navigate({ to: toInternalRepoHref(projectsPath) });
+  });
+  const projectMenu = useProjectMenu({
+    projectId,
+    title: project.title,
+    description: project.description,
+    phase: project.phase,
+    projectLead: project.projectLead,
+    href: segment ? `${projectsPath}/${segment}` : undefined,
+    branchName: project.branchName,
+    onDelete: () => projectDelete.requestSingle(projectId, project.title),
+  });
 
   return (
     <div className="flex max-sm:min-w-0 flex-col items-end gap-1">
@@ -114,42 +138,52 @@ export function ProjectDetailHeaderActions({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <ProjectMoreMenuActionItems
-              flags={flags}
-              sandbox={sandbox}
-              requestConfirm={requestConfirm}
-              isResolvingConflicts={isResolvingConflicts}
-              onResolveConflicts={onResolveConflicts}
-              setShowResolveConfirm={setShowResolveConfirm}
-              setShowStartupCommandsConfirm={setShowStartupCommandsConfirm}
+            <ProjectCardMenuItems
+              variant="dropdown"
+              {...projectMenu.menuProps}
+              leading={
+                hasCommands || prLinks.hasItems ? (
+                  <>
+                    <ProjectMoreMenuActionItems
+                      flags={flags}
+                      sandbox={sandbox}
+                      requestConfirm={requestConfirm}
+                      isResolvingConflicts={isResolvingConflicts}
+                      onResolveConflicts={onResolveConflicts}
+                      setShowResolveConfirm={setShowResolveConfirm}
+                    />
+                    {hasCommands && prLinks.hasItems ? (
+                      <DropdownMenuSeparator />
+                    ) : null}
+                    {prLinks.items}
+                  </>
+                ) : undefined
+              }
+              planItems={
+                hasPlanContext ? (
+                  <>
+                    <DropdownMenuItem onSelect={() => setShowPlanModal(true)}>
+                      <IconFileText size={14} />
+                      View Plan
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setShowChatModal(true)}>
+                      <IconMessage size={14} />
+                      View Interview History
+                    </DropdownMenuItem>
+                  </>
+                ) : undefined
+              }
             />
-            {(flags.showResolveConflicts || flags.hasSandboxCommandItems) &&
-            prLinks.hasItems ? (
-              <DropdownMenuSeparator />
-            ) : null}
-            {prLinks.items}
-            {hasPlanContext && (
-              <>
-                {(flags.showResolveConflicts ||
-                  flags.hasSandboxCommandItems ||
-                  prLinks.hasItems) && <DropdownMenuSeparator />}
-                <DropdownMenuItem onClick={() => setShowPlanModal(true)}>
-                  <IconFileText size={14} />
-                  View Plan
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setShowChatModal(true)}>
-                  <IconMessage size={14} />
-                  View Interview History
-                </DropdownMenuItem>
-              </>
-            )}
-            {(flags.showResolveConflicts ||
-              flags.hasSandboxCommandItems ||
-              prLinks.hasItems ||
-              hasPlanContext) && <DropdownMenuSeparator />}
-            <CopyLinkMenuItem />
           </DropdownMenuContent>
         </DropdownMenu>
+        {/* Siblings of the menu: Radix unmounts menu content on close. */}
+        {projectMenu.dialogs}
+        <ProjectDeleteDialog
+          target={projectDelete.target}
+          onClose={projectDelete.close}
+          onConfirm={projectDelete.confirm}
+          isDeleting={projectDelete.isDeleting}
+        />
         {/* One control for both directions — see `SandboxStartStopButton`.
             Inert while a chat turn is in flight; a running build keeps its
             own confirmed "Stop Build", so it is not gated here. This is the
@@ -217,7 +251,6 @@ function ProjectMoreMenuActionItems({
   isResolvingConflicts,
   onResolveConflicts,
   setShowResolveConfirm,
-  setShowStartupCommandsConfirm,
 }: {
   flags: ProjectMenuFlags;
   sandbox: ProjectSandboxState;
@@ -225,17 +258,13 @@ function ProjectMoreMenuActionItems({
   isResolvingConflicts: boolean;
   onResolveConflicts: () => Promise<void>;
   setShowResolveConfirm: (open: boolean) => void;
-  setShowStartupCommandsConfirm: (open: boolean) => void;
 }) {
   const {
     showResolveConflicts,
     hasSandboxCommandItems,
-    showRetryStartupCommands,
     showRunBackgroundCommands,
   } = flags;
   const {
-    handleRetryStartupCommands,
-    isRetryingStartupCommands,
     handleRunBackgroundCommands,
     isRunningBackgroundCommands,
   } = sandbox;
@@ -266,15 +295,6 @@ function ProjectMoreMenuActionItems({
         <DropdownMenuSeparator />
       ) : null}
       <SandboxCommandMenuItems
-        startupCommands={{
-          show: showRetryStartupCommands,
-          busy: isRetryingStartupCommands,
-          onRun: () =>
-            requestConfirm(
-              () => setShowStartupCommandsConfirm(true),
-              handleRetryStartupCommands,
-            ),
-        }}
         backgroundCommands={{
           show: showRunBackgroundCommands,
           busy: isRunningBackgroundCommands,

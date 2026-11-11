@@ -1,6 +1,6 @@
 import type { DiffFileEntry, DiffFileStatus } from "@eva/shared";
 import { DiffStat } from "@vvedantb/native-ui/ai";
-import { Badge, Checkbox, ListDivider, Text } from "@vvedantb/native-ui/primitives";
+import { Badge, Checkbox, ListDivider, SkeletonList, SkeletonRow, Text } from "@vvedantb/native-ui/primitives";
 import { FlatList, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PendingCommentCount, PrDiffGate, TruncatedNote } from "@/diff/PrFileDiff";
@@ -25,7 +25,17 @@ const STATUS_CHIP: Record<DiffFileStatus, { label: string; variant: "success" | 
 export function ReviewCode({ pr, state, onOpenFile }: { pr: PrRef; state: PrDiffState; onOpenFile: (path: string) => void }) {
   const insets = useSafeAreaInsets();
   return (
-    <PrDiffGate state={state}>
+    <PrDiffGate
+      state={state}
+      // Rows shaped as `FileRow`: the name over its folder, the counts.
+      loading={
+        <SkeletonList
+          label="Loading pull request diff"
+          count={8}
+          renderRow={(row) => <SkeletonRow index={row} lines={2} minHeight={64} />}
+        />
+      }
+    >
       {(diff) => (
         <FlatList
           data={diff.entries}
@@ -53,7 +63,8 @@ function FileRow({ pr, entry, onOpen }: { pr: PrRef; entry: DiffFileEntry; onOpe
       accessibilityLabel={entry.path}
       accessibilityHint="Opens the file's diff"
       onPress={onOpen}
-      className="min-h-14 flex-row items-center gap-2 py-1 pr-1 pl-4 active:opacity-70"
+      // The two-line list row a thumb taps: 64, as the Inbox.
+      className="min-h-16 flex-row items-center gap-2 py-1 pr-1 pl-4 active:opacity-70"
     >
       <View className="min-w-0 flex-1 gap-0.5 py-2">
         <Text numberOfLines={1} className="text-sm" style={textColor(scheme)}>

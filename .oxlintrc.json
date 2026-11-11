@@ -27,6 +27,7 @@
     "react/static-components": "warn",
     "react/purity": "warn",
     "import/no-duplicates": "error",
+    "no-unused-vars": "warn",
     "anti-slop/no-chained-type-assertions": "error",
     "anti-slop/no-conditional-empty-object-spread": "off",
     "anti-slop/no-known-value-widening": "off",

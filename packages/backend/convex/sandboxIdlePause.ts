@@ -15,12 +15,11 @@ import {
 } from "./functions";
 import {
   gatherAccessibleRepos,
-  repoBasePath,
   repoDisplayLabel,
 } from "./_githubRepos/helpers";
 import { filterActiveEntities } from "./numId";
 import { resolveUserDisplayFirstName } from "./_userProviderAccounts/defaults";
-import { sandboxPresenceRoomId } from "@eva/shared";
+import { entityHref, sandboxPresenceRoomId } from "@eva/shared";
 import { firstPresentUserInRoom } from "./presence";
 import {
   openChatEntityIdsFor,
@@ -176,7 +175,7 @@ export const listAwakeSandboxes = authQuery({
               href:
                 entity.doc.numId === undefined
                   ? undefined
-                  : `${repoBasePath(repo)}/${ENTITY_SECTION[entity.kind]}/${entity.doc.numId}`,
+                  : entityHref(entity.kind, repo, entity.doc.numId),
               busy: candidate.busy,
               viewerName: await displayName(ctx, candidate.presentUserId),
               lastUserActivityAt: candidate.lastUserActivityAt,
@@ -204,12 +203,6 @@ export const listAwakeSandboxes = authQuery({
     };
   },
 });
-
-const ENTITY_SECTION: Record<AwakeEntity["kind"], string> = {
-  session: "sessions",
-  task: "quick-tasks",
-  project: "projects",
-};
 
 type AwakeEntity =
   | { kind: "session"; doc: Doc<"sessions"> }
