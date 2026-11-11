@@ -680,9 +680,8 @@ export const listEntitiesForUser = internalQuery({
 
 /**
  * Whether one entity has a turn in flight, by the same rule the app's own list
- * uses. `stop_sandbox` reads this before tearing a VM down: a session running a
- * daemon-minted continuation (`/loop`) never gets an `activeWorkflowId`, so
- * keying the refusal off that field alone would stop the VM under a live turn.
+ * uses. `stop_sandbox` reads this before tearing a VM down. For a session the
+ * open turn is the only signal, daemon-minted continuations (`/loop`) included.
  *
  * The caller has already proven access to `id` by reading the entity as the
  * user; this only adds the turn lookup that read cannot do.

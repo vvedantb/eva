@@ -1,5 +1,7 @@
-import type { DatabaseReader } from "../_generated/server";
+import type { DatabaseReader, QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
+import type { TurnLane } from "../validators";
+import { findOpenTurn, type TurnEntityId } from "./turnStore";
 import { isTaskRunning, type TaskRunSource } from "../_agentTasks/runState";
 import {
   isProjectBuilding,
@@ -7,27 +9,10 @@ import {
 } from "../_projects/buildState";
 
 /**
- * Deployment bridge for workflows that started before durable Turns existed.
- * Once a session opens any durable Turn, the marker permanently removes these
- * fallbacks so stale legacy fields can never become authoritative again.
- */
-export function isLegacySessionExecuting(
-  session: Pick<
-    Doc<"sessions">,
-    "activeWorkflowId" | "syntheticTurnMessageId" | "turnLifecycleVersion"
-  >,
-): boolean {
-  return (
-    session.turnLifecycleVersion === undefined &&
-    (session.activeWorkflowId !== undefined ||
-      session.syntheticTurnMessageId !== undefined)
-  );
-}
-
-/**
- * The same bridge for task and project chats, keyed on
- * `chatTurnLifecycleVersion`. A workflow turn sets `activeChatWorkflowId`; a
- * daemon-minted (synthetic) turn sets only `syntheticTurnMessageId`.
+ * Deployment bridge for task and project chats whose workflow started before
+ * durable Turns existed, keyed on `chatTurnLifecycleVersion`. A workflow turn
+ * sets `activeChatWorkflowId`; a daemon-minted (synthetic) turn sets only
+ * `syntheticTurnMessageId`. Sessions have no such bridge any more.
  */
 export function isLegacyChatExecuting(
   entity: Pick<
@@ -166,24 +151,28 @@ export async function openChatEntityIdsFor(
 }
 
 /**
- * Whether a session is mid-turn. `activeWorkflowId` alone is NOT the answer: a
- * daemon-minted continuation (`/loop`) never gets one, so anything keying off
- * that field alone reports an actively running session as idle.
+ * Whether a session is mid-turn: one of its chats has a turn open. The open
+ * turn is the only signal; synthetic (`/loop`) turns open one too.
  */
 export function sessionIsExecuting(
-  session: Pick<
-    Doc<"sessions">,
-    | "_id"
-    | "activeWorkflowId"
-    | "syntheticTurnMessageId"
-    | "turnLifecycleVersion"
-  >,
+  session: Pick<Doc<"sessions">, "_id">,
   openChatEntityIds: ReadonlySet<string>,
 ): boolean {
-  return (
-    openChatEntityIds.has(String(session._id)) ||
-    isLegacySessionExecuting(session)
-  );
+  return openChatEntityIds.has(String(session._id));
+}
+
+/**
+ * The workflow that runs an entity's open turn in one lane. Undefined when
+ * the entity is idle or its open turn is synthetic (daemon-minted, no
+ * workflow). Session chats and the session summary keep no workflow slot of
+ * their own: cancel, completion and the stall backstop read it here.
+ */
+export async function openTurnWorkflowId(
+  ctx: QueryCtx,
+  entityId: TurnEntityId,
+  lane?: TurnLane,
+): Promise<string | undefined> {
+  return (await findOpenTurn(ctx, entityId, lane))?.workflowId;
 }
 
 /** Whether a task or project chat has a turn open, synthetic turns included. */

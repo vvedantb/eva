@@ -365,6 +365,46 @@ export const pruneProjectBackgroundAgents = dataMigrations.define({
   migrateOne: (_ctx, doc) => pruneBackgroundAgentsPatch(doc),
 });
 
+/**
+ * `clearSessionWorkflowSlots`: clears the retired session workflow slots.
+ * Run once per deployment, after the deploy that stops reading them:
+ *
+ *   npx convex run dataMigrations:clearSessionWorkflowSlots
+ *
+ * The open turn is the only "busy" signal and holds the workflow id
+ * (`turns.workflowId`), so these copies are dead data. Clear only, no cancel:
+ * a chat slot with no open turn is a leftover (every chat workflow bound its
+ * turn in the same mutation that set the slot, and the 2-hour backstop has
+ * long since run). A summary slot whose workflow is still preparing needs
+ * nothing either: its lane turn takes the id at launch, and its backstop asks
+ * the workflow for its status. Idempotent; 0e drops the fields after this.
+ */
+export const clearSessionWorkflowSlots = dataMigrations.runner([
+  internal.dataMigrations.clearSessionChatWorkflowSlot,
+  internal.dataMigrations.clearSessionWorkflowSlot,
+]);
+
+export const clearSessionChatWorkflowSlot = dataMigrations.define({
+  table: "sessionChats",
+  migrateOne: async (_ctx, chat) => {
+    if (chat.activeWorkflowId === undefined) return;
+    return { activeWorkflowId: undefined };
+  },
+});
+
+export const clearSessionWorkflowSlot = dataMigrations.define({
+  table: "sessions",
+  migrateOne: async (_ctx, session) => {
+    if (
+      session.activeWorkflowId === undefined &&
+      session.turnLifecycleVersion === undefined
+    ) {
+      return;
+    }
+    return { activeWorkflowId: undefined, turnLifecycleVersion: undefined };
+  },
+});
+
 /** `npx convex run --prod dataMigrations:pruneBackgroundAgents` */
 export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionChatBackgroundAgents,
