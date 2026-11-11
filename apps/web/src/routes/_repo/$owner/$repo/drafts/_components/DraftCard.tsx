@@ -6,6 +6,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { cn } from "@eva/ui";
+import { draftContextTitle, draftKindLabel, draftSnippet } from "@eva/shared";
 import {
   Badge,
   ContextMenu,
@@ -19,7 +20,6 @@ import {
 } from "@vvedantb/ui";
 import { IconDots } from "@tabler/icons-react";
 import { DraftCardMenuItems } from "./DraftCardMenuItems";
-import { tokenizedToDisplayText } from "@/lib/components/mentions";
 import { entityPathSegment } from "@/lib/numId";
 import type { DraftCardModel } from "../_utils";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
@@ -29,32 +29,6 @@ import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
 interface DraftCardProps {
   model: DraftCardModel;
   basePath: string;
-}
-
-function kindLabel(model: DraftCardModel): string {
-  if (model.source === "task") return "Task";
-  const { kind, parentCommentId } = model.row;
-  if (kind === "taskComment") {
-    return parentCommentId ? "Reply" : "Comment";
-  }
-  if (kind === "taskChat") return "Task chat";
-  if (kind === "projectChat") return "Project chat";
-  if (kind === "sessionChat") return "Session";
-  return "Draft";
-}
-
-function contextTitle(model: DraftCardModel): string {
-  if (model.source === "task") {
-    return model.row.title || "Untitled";
-  }
-  return model.row.contextTitle;
-}
-
-function snippetText(model: DraftCardModel): string {
-  if (model.source === "task") {
-    return tokenizedToDisplayText(model.row.description ?? "");
-  }
-  return tokenizedToDisplayText(model.row.content);
 }
 
 async function resolveTaskActivityPath(
@@ -190,9 +164,9 @@ export function DraftCard({ model, basePath }: DraftCardProps) {
     }
   };
 
-  const snippet = snippetText(model);
-  const label = kindLabel(model);
-  const title = contextTitle(model);
+  const snippet = draftSnippet(model);
+  const label = draftKindLabel(model);
+  const title = draftContextTitle(model);
   const ts = model.row.updatedAt;
 
   return (
