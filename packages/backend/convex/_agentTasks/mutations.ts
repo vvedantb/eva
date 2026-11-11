@@ -36,6 +36,13 @@ import {
 import { createTaskRunSummary, moveTaskRunSummary } from "./runSummary";
 import { cancelTaskRunSchedule } from "./runState";
 import {
+  isTerminalTaskStatus,
+  mirrorTaskIntoOwnedSession,
+  retireOwnedSession,
+  reviveOwnedSession,
+  syncOwnedSessionWithTaskStatus,
+} from "../_sessions/ownedSession";
+import {
   applyPrLifecycleTransition,
   findPrimaryPullRequest,
 } from "../_pullRequests/store";
@@ -81,6 +88,7 @@ export const update = authMutation({
     }
     const updates = await buildTaskUpdates(ctx, task, args);
     await ctx.db.patch(args.id, updates);
+    await mirrorTaskIntoOwnedSession(ctx, { ...task, ...updates });
     if (args.repoId !== undefined && args.repoId !== task.repoId) {
       await moveTaskRunSummary(ctx, args.id, args.repoId);
     }
@@ -133,6 +141,12 @@ export const updateStatus = authMutation({
         args.status,
       );
     }
+    await syncOwnedSessionWithTaskStatus(
+      ctx,
+      task,
+      previousStatus,
+      args.status,
+    );
 
     // Sync the GitHub PR state for quick tasks. Project tasks share one PR
     // across many tasks, so individual task status changes don't map cleanly
@@ -259,6 +273,7 @@ export const remove = authMutation({
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
     await softDeleteAgentTask(ctx, args.id);
+    await retireOwnedSession(ctx, args.id);
     return null;
   },
 });
@@ -269,7 +284,8 @@ export const remove = authMutation({
  *
  * Only the row returns. `softDeleteAgentTask` also cancels the task's scheduled
  * run, drops its run summary and queues its sandbox for deletion; none of those
- * can be undone, so a restored task comes back without them.
+ * can be undone, so a restored task comes back without them. A quick task's
+ * session is the exception: the delete only archived it, so it comes back.
  */
 export const restore = authMutation({
   args: { id: v.id("agentTasks") },
@@ -283,6 +299,11 @@ export const restore = authMutation({
       deletedAt: undefined,
       updatedAt: Date.now(),
     });
+    // The delete retired the task's session; a live task gets it back. A
+    // done/cancelled task stays retired with its status.
+    if (!isTerminalTaskStatus(task.status)) {
+      await reviveOwnedSession(ctx, task._id);
+    }
     return null;
   },
 });
@@ -638,6 +659,7 @@ export const deleteCascade = authMutation({
     await collectDependents(args.id);
     for (const taskId of tasksToDelete) {
       await softDeleteAgentTask(ctx, taskId);
+      await retireOwnedSession(ctx, taskId);
     }
     return null;
   },

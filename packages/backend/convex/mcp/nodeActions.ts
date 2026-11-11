@@ -737,6 +737,7 @@ const agentTaskSchema = z.object({
   model: z.string().optional(),
   lastChatModel: z.string().optional(),
   reviewTaskSandboxStatus: z.string().optional(),
+  projectId: z.string().optional(),
 });
 
 /** One row of `getActiveTasksSlim`: the busy state is computed server-side. */
@@ -1332,6 +1333,34 @@ function chatDelivery(
   });
 }
 
+const ownedSessionRefSchema = z.object({
+  sessionId: z.string(),
+  chatId: z.string(),
+});
+
+/**
+ * Where a message to `kind`/`id` is delivered. A quick task's chat is its
+ * session's Main chat (`sessions.ensureOwned` creates it on first use); every
+ * other target is delivered to itself.
+ */
+async function resolveTaskDelivery(
+  clerkUserId: string,
+  kind: ChatTargetKind,
+  id: string,
+): Promise<{ kind: ChatTargetKind; id: string }> {
+  if (kind !== "task") return { kind, id };
+  const task = agentTaskSchema.parse(
+    await readChatDocAsUser(clerkUserId, "task", id),
+  );
+  if (task.projectId !== undefined) return { kind, id };
+  const owned = ownedSessionRefSchema.parse(
+    await runAsUser("mutation", clerkUserId, "sessions:ensureOwned", {
+      taskId: id,
+    }),
+  );
+  return { kind: "session", id: owned.sessionId };
+}
+
 export const orchestratorSendMessage = internalAction({
   args: {
     clerkUserId: v.string(),
@@ -1371,18 +1400,24 @@ export const orchestratorSendMessage = internalAction({
       sentViaOrchestrator,
     },
   ) => {
+    // A quick task chats in its session's Main chat, so its message is
+    // delivered there; the Ave watch below stays on the task. Project tasks
+    // keep the task chat until projects move onto sessions.
+    const delivery = await resolveTaskDelivery(clerkUserId, kind, id);
+    const deliveryKind = delivery.kind;
+    const deliveryId = delivery.id;
     // A session message lands in one of its chats: the named one, else Main.
     // From here on `targetId` is that chat; the session id is only kept for
     // the sandbox wake and the Ave watch pointer.
-    let targetId = id;
+    let targetId = deliveryId;
     let deliveryChat: z.infer<typeof deliveryChatSchema> | undefined;
     let rawDoc: JsonValue;
-    if (kind === "session") {
+    if (deliveryKind === "session") {
       rawDoc = await runAsUser(
         "query",
         clerkUserId,
         "sessionChats:resolveDeliveryChat",
-        { sessionId: id, ...(chat !== undefined ? { chat } : {}) },
+        { sessionId: deliveryId, ...(chat !== undefined ? { chat } : {}) },
       );
       if (rawDoc === null) {
         throw new Error(
@@ -1399,11 +1434,11 @@ export const orchestratorSendMessage = internalAction({
       }
       targetId = deliveryChat.chatId;
     } else {
-      rawDoc = await readChatDocAsUser(clerkUserId, kind, id);
+      rawDoc = await readChatDocAsUser(clerkUserId, deliveryKind, deliveryId);
     }
 
-    if (kind === "task") {
-      await ensureEntitySandboxActive(clerkUserId, kind, id);
+    if (deliveryKind === "task") {
+      await ensureEntitySandboxActive(clerkUserId, deliveryKind, deliveryId);
     }
 
     // A child with anything already queued is NOT idle, even with no workflow
@@ -1417,20 +1452,20 @@ export const orchestratorSendMessage = internalAction({
     // parallel chats run side by side, so a busy sibling must not queue it.
     const isExecuting: boolean = await ctx.runQuery(
       internal.mcp.queries.entityIsExecuting,
-      { kind, id: targetId },
+      { kind: deliveryKind, id: targetId },
     );
-    const delivery = chatDelivery(
-      kind,
+    const agentDelivery = chatDelivery(
+      deliveryKind,
       rawDoc,
       queuedAhead,
       model,
       isExecuting,
     );
     for (const call of buildChatMessageCalls({
-      kind,
+      kind: deliveryKind,
       id: targetId,
       message,
-      delivery,
+      delivery: agentDelivery,
       sentViaOrchestrator,
     })) {
       await runAsUser("mutation", clerkUserId, call.fn, call.args);
@@ -1438,11 +1473,11 @@ export const orchestratorSendMessage = internalAction({
 
     await registerWatchIfAve(clerkUserId, kind, id, aveThreadId);
     const delivered: "queued" | "started" =
-      delivery.action === "queue" ? "queued" : "started";
+      agentDelivery.action === "queue" ? "queued" : "started";
     return {
       delivered,
-      model: delivery.model,
-      ...(deliveryChat !== undefined
+      model: agentDelivery.model,
+      ...(kind === "session" && deliveryChat !== undefined
         ? { chat: { title: deliveryChat.title, number: deliveryChat.number } }
         : {}),
     };

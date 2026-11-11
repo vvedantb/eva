@@ -93,6 +93,27 @@ export async function ensureOwnedSession(
   return { session, mainChat: await ensureMainChat(ctx, session) };
 }
 
+/**
+ * Keeps the session's copies of task fields in step after a task edit: the
+ * title (the session borrows it) and the base branch a fresh sandbox checks
+ * out from. The task row stays the source; nothing writes these otherwise.
+ */
+export async function mirrorTaskIntoOwnedSession(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+): Promise<void> {
+  if (!taskUsesOwnedSession(task)) return;
+  const session = await findTaskSession(ctx.db, task._id);
+  if (!session) return;
+  const repo = await ctx.db.get(session.repoId);
+  const baseBranch = resolveSessionBaseBranch(
+    { baseBranch: task.baseBranch },
+    repo,
+  );
+  if (session.title === task.title && session.baseBranch === baseBranch) return;
+  await ctx.db.patch(session._id, { title: task.title, baseBranch });
+}
+
 /** The task's session, or null before anything needed one. */
 export async function findTaskSession(
   db: DatabaseReader,

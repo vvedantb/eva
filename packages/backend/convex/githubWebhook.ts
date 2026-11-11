@@ -17,6 +17,7 @@ import {
 import { requestTaskSandboxStop } from "./_agentTasks/sandbox";
 import { cancelTaskRunSchedule } from "./_agentTasks/runState";
 import { scheduleTaskSandboxGraceDelete } from "./sandboxCleanup";
+import { syncOwnedSessionWithTaskStatus } from "./_sessions/ownedSession";
 import { reconcileSessionArchiveState } from "./_sessions/prArchive";
 import {
   allPullRequestsTerminal,
@@ -319,7 +320,10 @@ async function applyQuickTaskPrClosed(
   );
 
   // A merged/closed PR makes the task read-only, so stop any live preview
-  // sandbox now (mirrors the session archive) and then grace-delete it.
+  // sandbox now (mirrors the session archive) and then grace-delete it. A
+  // task on a session retires it; the task-row branch below covers tasks
+  // whose sandbox has not moved to a session yet.
+  await syncOwnedSessionWithTaskStatus(ctx, task, task.status, newStatus);
   if (
     task.reviewTaskSandboxStatus === "active" ||
     task.reviewTaskSandboxStatus === "starting" ||
