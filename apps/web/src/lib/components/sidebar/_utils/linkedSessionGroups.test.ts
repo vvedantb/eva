@@ -32,6 +32,8 @@ describe("linkedSessionGroups", () => {
           { session: row("origin", 1, { group: "g" }), repo: "v2" },
           { session: row("child", 2, { group: "g" }), repo: "ts" },
         ],
+        createdAt: 1,
+        latestAt: 2,
       },
     ]);
   });

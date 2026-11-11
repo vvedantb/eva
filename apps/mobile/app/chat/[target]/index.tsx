@@ -323,7 +323,7 @@ export default function ChatScreen() {
                 value={composer.text}
                 onChangeText={composer.setText}
                 onSubmit={handleSend}
-                menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} /> : null}
+                menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} onDismiss={composer.dismiss} /> : null}
                 placeholder={placeholder}
                 leading={
                   <AttachButton onPress={() => void attachments.pick()} />
