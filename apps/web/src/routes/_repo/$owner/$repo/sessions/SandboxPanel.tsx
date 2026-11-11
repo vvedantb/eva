@@ -36,10 +36,8 @@ import { ReviewChatTargetProvider } from "@/lib/contexts/ReviewChatTargetContext
 import { SandboxPaneSlots } from "@/lib/components/sandbox/SandboxPaneSlots";
 import { type SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import type { TerminalPanelApi } from "@/lib/components/sandbox/SandboxWorkspace";
-import {
-  DEFAULT_PREVIEW_PORT,
-  useSandboxPreview,
-} from "@/lib/components/sandbox/useSandboxPreview";
+import { DEFAULT_PREVIEW_PORT } from "@eva/shared";
+import { useSandboxPreview } from "@/lib/components/sandbox/useSandboxPreview";
 import { useSandboxFileList } from "@/lib/components/sandbox/useSandboxFileList";
 import { withBrowserTab } from "@/lib/components/sandbox/withBrowserTab";
 import {
@@ -175,7 +173,7 @@ export function SandboxPanel({
   const artifactSource = { kind: "session" as const, sessionId };
   const { artifactCount } = useSourceArtifacts(artifactSource);
   const { documentCount } = useSourceDocuments(artifactSource);
-  // Same subscription as the chat's `useChatSend`, so the panel and the
+  // Same subscription as the chat's `ChatPanel`, so the panel and the
   // composer read one turn status.
   const turnStatus = useHeldQuery(
     api.turns.getChatStatus,
@@ -202,21 +200,14 @@ export function SandboxPanel({
     api.sandboxPanes.getViewState,
     isRouteActive ? { owner } : "skip",
   );
-  const setPreviewPath = useMutation(api.sandboxPanes.setPreviewPath);
-  const setPreviewPort = useMutation(api.sandboxPanes.setPreviewPort);
-  const setTerminalHistoryTail = useMutation(
-    api.sandboxPanes.setTerminalHistoryTail,
-  );
   const releaseBrowserLock = useMutation(api.sandboxPanes.releaseBrowserLock);
   const preview = useSandboxPreview({
+    owner,
     sandboxId,
     isActive,
     isRouteActive,
     repoId,
     devPort,
-    onPortPersist: (port) => {
-      void setPreviewPort({ owner, port });
-    },
   });
   // Multi-repo sessions: which checkout the Files tab browses. "" is the
   // primary repo; a linked repo's `sessionRepos.path` otherwise.
@@ -435,18 +426,7 @@ export function SandboxPanel({
                 ? { ...miniPlayer, owner: { kind: "session", sessionId } }
                 : undefined
             }
-            stickyPreviewPath={viewState?.previewPath}
-            onStickyPreviewPathChange={(path) => {
-              void setPreviewPath({ owner, path });
-            }}
-            stickyTerminalHistoryTail={
-              viewState === undefined
-                ? undefined
-                : (viewState?.terminalHistoryTail ?? "")
-            }
-            onStickyTerminalHistoryTailChange={(tail) => {
-              void setTerminalHistoryTail({ owner, tail });
-            }}
+            viewState={viewState}
           />
         </ReviewChatTargetProvider>
       </div>

@@ -7,6 +7,19 @@ description: Audit the Eva phone app (apps/mobile) against a 20-point mobile-fir
 
 The phone app copies the Eva web **look** (Inter, Tabler icons, web colours through `@vvedantb/native-ui`). Its **behaviour** must be mobile-first: the web is desktop-first, and there is no desktop APK. This pass checks behaviour, layout and accessibility. It never restyles.
 
+## Look from the web, ergonomics from the phone
+
+Copy from the web: colours, fonts and weights, icons, radii, borders, component shapes, states and wording.
+
+Do NOT copy the web's desktop density. Spacing, padding, row heights, list density and the size of tappable text follow phone ergonomics, because a finger is not a mouse pointer:
+
+- Tappable rows in a list are about 56 pt high (one line) or 64 pt (two lines), as the Inbox rows. Never the web's 30 pt drawer rows.
+- Every control reaches 44 pt; tappable titles are at least 14 px in the normal text colour, not muted 12-13 px.
+- Lists get dividers or card spacing so rows read as separate targets.
+- Primary actions sit in thumb reach at the bottom.
+
+When a web measurement is a desktop density value, do not port it. Use the phone value and say so in the report.
+
 ## Scope
 
 Every screen under `apps/mobile/app/` (tabs, pushed screens, auth) and the parts in `apps/mobile/src/`. If the change is small, audit only the screens it touches, but always run items 1, 3 and 5 on them.

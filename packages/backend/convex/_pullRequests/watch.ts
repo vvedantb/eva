@@ -4,8 +4,8 @@ import { internal } from "../_generated/api";
 import type { Doc } from "../_generated/dataModel";
 import { isEntityDeleted } from "../numId";
 import { prWatchValidator } from "../validators";
+import { isLivePrState } from "@eva/shared";
 import {
-  isLivePrState,
   listOwnerPullRequests,
   findPullRequestByUrl,
   setPullRequestWatch,
@@ -13,6 +13,7 @@ import {
 } from "./store";
 import { newPrWatch, PR_WATCH_DEBOUNCE_MS } from "./watchEvaluate";
 import { findReposByOwnerAndName } from "../_githubRepos/helpers";
+import { chatEntityKindValidator } from "../_validators/enums";
 
 /**
  * The agent's PR watch (`watch_pull_request`). No polling: the GitHub webhook
@@ -22,12 +23,6 @@ import { findReposByOwnerAndName } from "../_githubRepos/helpers";
  * lives on the `pullRequests` row: one owner per PR, found by URL from every
  * webhook, and the Review pane already reads that row.
  */
-
-const chatKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
 
 /**
  * Schedules one check for a watched PR. A check already waiting absorbs this
@@ -165,7 +160,7 @@ const watchReplyValidator = v.union(
  */
 export const startWatch = internalMutation({
   args: {
-    kind: chatKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
     /** Session only: the calling chat inside the session. */
     sessionChatId: v.optional(v.string()),
@@ -224,7 +219,7 @@ export const startWatch = internalMutation({
 /** Ends the chat's watch on one PR, or on all of them when none is named. */
 export const stopWatchForChat = internalMutation({
   args: {
-    kind: chatKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
     prUrl: v.optional(v.string()),
   },
@@ -316,7 +311,7 @@ export const claimCheck = internalMutation({
       name: v.string(),
       installationId: v.number(),
       target: v.object({
-        kind: chatKindValidator,
+        kind: chatEntityKindValidator,
         id: v.string(),
         chat: v.optional(v.string()),
         clerkUserId: v.string(),

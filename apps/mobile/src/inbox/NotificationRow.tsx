@@ -55,10 +55,13 @@ export function NotificationRow({
   const unread = !notification.read;
   // A low-urgency row reads as already read even while unread, as on the web.
   const emphasised = unread && notification.urgency !== "low";
-  const { subject, event } = splitNotificationTitle(notification);
+  const parts = splitNotificationTitle(notification);
+  const appearance = getNotificationAppearance(notification);
+  // An empty title still names the row: the type's label ("Run failed").
+  const subject = parts.subject || appearance.label;
+  const event = parts.event;
   // No event phrase: the repo keeps a second line, so rows stay one height.
   const detail = event ?? repo?.label;
-  const appearance = getNotificationAppearance(notification);
   const Glyph = NOTIFICATION_ICONS[appearance.icon];
   const tone = toneColors(appearance.tone, scheme);
   const archived = notification.archivedAt !== undefined;

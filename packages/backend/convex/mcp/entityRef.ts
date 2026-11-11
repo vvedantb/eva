@@ -11,13 +11,14 @@ import {
   mcpListUserRepos,
   type McpCredentials,
 } from "./toolShared";
+import { CHAT_ENTITY_KINDS } from "../_validators/enums";
 
 // Leaf module shared by tools.ts and entityTools.ts. Holds the one definition
 // of "which session, quick task or project did the caller mean", so every tool
 // that acts on an existing chat resolves it — and checks access — identically.
 
 /** The three chat surfaces an MCP caller can name. */
-export const ENTITY_KINDS = ["session", "task", "project"] as const;
+export const ENTITY_KINDS = CHAT_ENTITY_KINDS;
 export type EntityKind = (typeof ENTITY_KINDS)[number];
 
 /**

@@ -9,7 +9,7 @@ import { useAction } from "convex/react";
 import * as Clipboard from "expo-clipboard";
 import { useState } from "react";
 import { View } from "react-native";
-import { FooterSheet, useFooterChipColor } from "@/chat/ComposerFooter";
+import { FOOTER_CHIP, FooterSheet, useFooterChipColor } from "@/chat/ComposerFooter";
 import { textColor, useScheme } from "@/ui/theme";
 
 type Branch = { name: string; protected: boolean };
@@ -55,7 +55,7 @@ export function BaseBranchChip({
       <PromptInputChip
         icon={<IconGitBranch size={PROMPT_INPUT_CHIP.iconSize} color={color} />}
         label={value || "Select a branch"}
-        weight="normal"
+        {...FOOTER_CHIP}
         color={color}
         accessibilityLabel={`Base branch: ${value || "none"}`}
         expanded={open}
@@ -123,7 +123,7 @@ export function SandboxBranchChip({ branch, intendedBranch }: { branch: string; 
       icon={<IconGitBranch size={PROMPT_INPUT_CHIP.iconSize} color={color} />}
       label={branch}
       chevron={false}
-      weight="normal"
+      {...FOOTER_CHIP}
       color={color}
       accessibilityLabel={
         mismatched

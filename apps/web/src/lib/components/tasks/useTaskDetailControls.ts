@@ -11,6 +11,7 @@ import { useState } from "react";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import type { TaskDetailTab } from "./_components/task-detail-constants";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";
+import { useSandboxLifecycle } from "@/lib/components/sandbox/useSandboxLifecycle";
 
 type QuickTaskDetailRouting = {
   detailTab: TaskDetailTab;
@@ -235,8 +236,7 @@ export function useTaskSandboxControls({
   );
 
   const [embeddedShowSandbox, setEmbeddedShowSandbox] = useState(false);
-  const [isSandboxStarting, setIsSandboxStarting] = useState(false);
-  const [isSandboxStopping, setIsSandboxStopping] = useState(false);
+  const lifecycle = useSandboxLifecycle(task?.reviewTaskSandboxStatus);
   const [isRunningDevServer, setIsRunningDevServer] = useState(false);
   const [isRunningBackgroundCommands, setIsRunningBackgroundCommands] =
     useState(false);
@@ -258,28 +258,26 @@ export function useTaskSandboxControls({
     }
   };
 
-  const handleStartSandbox = async () => {
-    setIsSandboxStarting(true);
-    try {
-      await startTaskSandboxMutation({ taskId });
-      openSandboxAfterStart();
-    } catch (err) {
-      console.error("Failed to start sandbox:", err);
-      toast.error("Could not start the sandbox. Try again.");
-    }
-    setIsSandboxStarting(false);
-  };
+  const handleStartSandbox = () =>
+    lifecycle.run("start", async () => {
+      try {
+        await startTaskSandboxMutation({ taskId });
+        openSandboxAfterStart();
+      } catch (err) {
+        console.error("Failed to start sandbox:", err);
+        toast.error("Could not start the sandbox. Try again.");
+      }
+    });
 
-  const handleStopSandbox = async () => {
-    setIsSandboxStopping(true);
-    try {
-      await stopTaskSandboxMutation({ taskId });
-    } catch (err) {
-      console.error("Failed to stop sandbox:", err);
-      toast.error("Could not stop the sandbox. Try again.");
-    }
-    setIsSandboxStopping(false);
-  };
+  const handleStopSandbox = () =>
+    lifecycle.run("stop", async () => {
+      try {
+        await stopTaskSandboxMutation({ taskId });
+      } catch (err) {
+        console.error("Failed to stop sandbox:", err);
+        toast.error("Could not stop the sandbox. Try again.");
+      }
+    });
 
   const handleRunDevServer = async () => {
     setIsRunningDevServer(true);
@@ -315,9 +313,9 @@ export function useTaskSandboxControls({
     canViewSandbox: flags.canViewSandbox,
     showSandbox: resolveShowSandbox(routing, embeddedShowSandbox),
     isSandboxActive: flags.isSandboxActive,
-    isSandboxStarting: isSandboxStarting || flags.isSandboxStartingFromStatus,
+    isSandboxStarting: lifecycle.isStarting,
     sandboxStartupActivity: sandboxStartupStreaming?.currentActivity,
-    isSandboxStopping: isSandboxStopping || flags.isSandboxStoppingFromStatus,
+    isSandboxStopping: lifecycle.isStopping,
     handleStartSandbox,
     handleStopSandbox,
     handleSelectSurface: createSurfaceSelector(routing, setEmbeddedShowSandbox),

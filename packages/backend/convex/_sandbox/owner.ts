@@ -174,6 +174,7 @@ type SandboxOwnerPatch = Partial<
     Doc<"sessions">,
     | "terminalPanes"
     | "previewPath"
+    | "previewPanePaths"
     | "devPort"
     | "terminalHistoryTail"
     | "agentBrowsingAt"

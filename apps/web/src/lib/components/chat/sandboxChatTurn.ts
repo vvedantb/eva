@@ -1,4 +1,4 @@
-import type { FunctionArgs } from "convex/server";
+import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import type {
   AIModel,
   api,
@@ -6,22 +6,27 @@ import type {
   ModelTraitsExecutionArgs,
   ReasoningLevel,
 } from "@eva/backend";
+import {
+  annotationSender,
+  type AnnotationSubmit,
+} from "@/lib/components/sandbox/annotationSend";
 import type { ChatDraftTarget } from "./useChatDraftSeed";
 import type { ChatEntityRef } from "./sandboxChatSurface";
 
 /**
  * The chats that run on an entity-owned sandbox workflow
- * (`agentTaskChatWorkflow` / `projectChatWorkflow`). Sessions use
- * `api.sessions.*` and have their own send path (`useChatSend`).
+ * (`agentTaskChatWorkflow` / `projectChatWorkflow`). Sessions send through the
+ * same `sendSandboxTurn`, with ports bound to `api.sessions.*`.
  */
 export type SandboxChatEntity = Extract<
   ChatEntityRef,
   { kind: "task" | "project" }
 >;
 
-// The project validators are the canonical shape: the task validators accept
-// the same fields plus orchestrator-only extras, so a binding that spreads
-// these into either workflow type-checks, and a drift breaks the build.
+// The project validators are the canonical shape: the task and session
+// validators accept the same fields plus surface-only extras, so a binding
+// that spreads these into any chat workflow type-checks, and a drift breaks
+// the build.
 export type SandboxTurnAddArgs = Omit<
   FunctionArgs<typeof api.projectChatWorkflow.addMessage>,
   "projectId"
@@ -35,17 +40,29 @@ export type SandboxTurnEnqueueArgs = Omit<
   "projectId"
 >;
 
-/** One entity's chat workflow mutations, with the entity id already bound. */
+/** Start fields only a session turn takes; task and project ports drop them. */
+export interface SandboxTurnStartExtras {
+  attachmentStorageIds?: Id<"_storage">[];
+  /** The proposed plan this turn implements. */
+  sourceProposedPlanId?: Id<"proposedPlans">;
+}
+
+/** One chat's workflow mutations, with the chat's id already bound. */
 export interface SandboxTurnPorts {
   add: (args: SandboxTurnAddArgs) => Promise<null>;
-  start: (args: SandboxTurnStartArgs) => Promise<null>;
+  start: (
+    args: SandboxTurnStartArgs,
+    extras: SandboxTurnStartExtras,
+  ) => Promise<FunctionReturnType<
+    typeof api.sessionWorkflow.startExecute
+  > | null>;
   enqueue: (args: SandboxTurnEnqueueArgs) => Promise<null>;
 }
 
 /** The composer settings a turn runs on. */
 export interface SandboxTurnSettings {
   model: AIModel;
-  /** The effort shown in the picker; the chat row records this one. */
+  /** The effort shown in the picker; the turn and its rows record this one. */
   effortLevel: ReasoningLevel | undefined;
   executionTraits: ModelTraitsExecutionArgs;
   /** Already resolved from the picker id; undefined = Team credential. */
@@ -58,6 +75,8 @@ export interface SandboxTurnInput {
   /** Compact chat text when `message` is a rich prompt (preview annotations). */
   displayContent?: string;
   attachmentStorageIds?: Id<"_storage">[];
+  /** Sessions: the proposed plan this turn implements. Dropped when queued. */
+  sourceProposedPlanId?: Id<"proposedPlans">;
 }
 
 /**
@@ -72,13 +91,16 @@ export async function sendSandboxTurn(
   mode: "queue" | "start",
 ): Promise<void> {
   const { model, effortLevel, executionTraits, providerAccountId } = settings;
+  // The picker's effort wins. The execution payload leaves out the provider
+  // default, so it is only the fallback.
+  const reasoningLevel = effortLevel ?? executionTraits.reasoningLevel;
   if (mode === "queue") {
     await ports.enqueue({
       message: input.message,
       displayContent: input.displayContent,
       model,
       ...executionTraits,
-      reasoningLevel: effortLevel ?? executionTraits.reasoningLevel,
+      reasoningLevel,
       providerAccountId,
       attachmentStorageIds: input.attachmentStorageIds,
     });
@@ -94,15 +116,46 @@ export async function sendSandboxTurn(
       attachmentStorageIds: input.attachmentStorageIds,
       providerAccountId,
       model,
-      reasoningLevel: effortLevel,
+      reasoningLevel,
     }),
-    ports.start({
-      message: input.message,
-      model,
-      ...executionTraits,
-      providerAccountId,
-    }),
+    ports.start(
+      {
+        message: input.message,
+        model,
+        ...executionTraits,
+        reasoningLevel,
+        providerAccountId,
+      },
+      {
+        attachmentStorageIds: input.attachmentStorageIds,
+        sourceProposedPlanId: input.sourceProposedPlanId,
+      },
+    ),
   ]);
+}
+
+/**
+ * Sends a preview annotation into the chat as display text + rich agent
+ * prompt. Queues while a turn runs (see `annotationSender`).
+ */
+export function sandboxAnnotationSender(
+  ports: SandboxTurnPorts,
+  settings: SandboxTurnSettings,
+  isExecuting: boolean,
+): AnnotationSubmit {
+  const send = (mode: "queue" | "start") => (display: string, full: string) =>
+    sendSandboxTurn(
+      ports,
+      settings,
+      { message: full, displayContent: display },
+      mode,
+    );
+  return annotationSender({
+    isExecuting,
+    enqueue: send("queue"),
+    send: send("start"),
+    postError: (content) => ports.add({ role: "assistant", content }),
+  });
 }
 
 /** The ids and keys one sandbox chat is addressed by. */

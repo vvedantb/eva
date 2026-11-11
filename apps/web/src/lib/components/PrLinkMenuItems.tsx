@@ -1,5 +1,6 @@
 "use client";
 
+import type { PrState } from "@eva/shared";
 import type { ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type SandboxOwner } from "@eva/backend";
@@ -21,7 +22,7 @@ interface PrLinkMenuItemsArgs {
   createPr?: { enabled: boolean; isCreating: boolean; onCreate: () => void };
   prUrl: string | undefined;
   /** Colours the View PR icon (sessions only); others leave it default. */
-  prState?: "draft" | "open" | "merged" | "closed";
+  prState?: PrState;
   /**
    * The chat whose PRs these are. Each PR row becomes a submenu of PR actions:
    * "View PR" for one, "PR #N" per PR for several (`PrActionsSubmenus`).

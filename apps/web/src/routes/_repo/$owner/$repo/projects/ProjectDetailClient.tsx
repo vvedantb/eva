@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useChatTurnOpen } from "@/lib/components/chat/useChatTurnOpen";
 import { useChatUnread } from "@/lib/components/sandbox/useChatUnread";
@@ -17,6 +17,7 @@ import {
   type ProjectMainTab,
 } from "@/lib/components/projects/ProjectMainTabs";
 import { useProjectSandbox } from "@/lib/components/projects/useProjectSandbox";
+import { useAgentBrowsingAutoSwitch } from "@/lib/components/sandbox/useSandboxLifecycle";
 import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
@@ -153,15 +154,7 @@ export function ProjectDetailClient({
     setExpandRightSignal((n) => n + 1);
   };
 
-  // Auto-switch to Browser + expand sandbox panel on lock transition only
-  // (undefined → set). Mirrors SessionDetailClient's pattern. Don't fight the
-  // user if they switch away mid-lock.
-  const prevAgentBrowsingAt = useRef<number | undefined>(undefined);
-  const agentBrowsingAt = getAgentBrowsingAt(project);
-  useEffect(() => {
-    const prev = prevAgentBrowsingAt.current;
-    prevAgentBrowsingAt.current = agentBrowsingAt;
-    if (agentBrowsingAt === undefined || prev !== undefined) return;
+  useAgentBrowsingAutoSwitch(getAgentBrowsingAt(project), () => {
     if (!projectPathSegment) return;
     void navigate({
       to: toInternalRepoHref(
@@ -170,9 +163,7 @@ export function ProjectDetailClient({
       search: true,
     });
     setExpandRightSignal((n) => n + 1);
-    // Full deps are safe: the ref guard above makes re-runs no-ops, and a
-    // disable comment here makes React Compiler skip the whole file.
-  }, [agentBrowsingAt, basePath, navigate, projectPathSegment]);
+  });
 
   // Chat sub-agent CTA row → Agents tab + expand the sandbox pane (same shape
   // as SessionDetailClient's onOpenAgentsTab; the tab is a route segment here).

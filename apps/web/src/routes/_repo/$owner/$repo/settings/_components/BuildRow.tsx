@@ -1,4 +1,4 @@
-import type { Id } from "@eva/backend";
+import type { Doc, Id } from "@eva/backend";
 import { Button, Spinner, Collapsible, CollapsibleContent } from "@vvedantb/ui";
 import {
   IconCheck,
@@ -31,7 +31,7 @@ export function BuildRow({
 }: {
   build: {
     _id: Id<"snapshotBuilds">;
-    status: "running" | "success" | "error";
+    status: Doc<"snapshotBuilds">["status"];
     triggeredBy: "cron" | "manual";
     kind?: "base" | "seeded";
     provider: "vercel";
@@ -183,7 +183,7 @@ export function BuildRow({
 export function BuildStatusBadge({
   status,
 }: {
-  status: "running" | "success" | "error";
+  status: Doc<"snapshotBuilds">["status"];
 }) {
   if (status === "running") {
     return (

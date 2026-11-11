@@ -1,5 +1,6 @@
 import { components } from "./_generated/api";
 import { v } from "convex/values";
+import { DEFAULT_ACCENT_COLOR } from "./validators";
 import { mutation, type QueryCtx } from "./_generated/server";
 import { Presence } from "@convex-dev/presence";
 import { authQuery, authMutation } from "./functions";
@@ -125,7 +126,7 @@ export const updateCursor = authMutation({
       x,
       y,
       firstName: user.firstName ?? user.fullName ?? "User",
-      accentColor: user.customTheme?.accentColor ?? "zinc",
+      accentColor: user.customTheme?.accentColor ?? DEFAULT_ACCENT_COLOR,
       updatedAt: Date.now(),
     });
   },

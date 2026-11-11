@@ -783,6 +783,53 @@
     cursor: not-allowed;
   }
 
+  /*
+   * Phone feel for controls. `manipulation` drops the double-tap-zoom wait, so
+   * a tap fires `click` at once. `user-select: none` stops a long press from
+   * selecting a button label. Links and inputs stay selectable: their text is
+   * content. Opt a control back in with `select-text`.
+   */
+  button,
+  a,
+  label,
+  summary,
+  [role="button"],
+  [role="tab"],
+  [role="option"],
+  [role="menuitem"],
+  [role="menuitemcheckbox"],
+  [role="menuitemradio"],
+  [role="checkbox"],
+  [role="radio"],
+  [role="switch"] {
+    touch-action: manipulation;
+  }
+  button,
+  summary,
+  [role="button"],
+  [role="tab"],
+  [role="option"],
+  [role="menuitem"],
+  [role="menuitemcheckbox"],
+  [role="menuitemradio"],
+  [role="checkbox"],
+  [role="radio"],
+  [role="switch"] {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /*
+   * The app has its own scroll panes and live data, so a pull past the top
+   * must not reload the page (Android pull-to-refresh) or bounce the shell.
+   * Y only: `x` would also turn off trackpad swipe-back on desktop. The landing
+   * page (`#top`) is a document, so it keeps both.
+   */
+  html:not(:has(#top)),
+  html:not(:has(#top)) body {
+    overscroll-behavior-y: none;
+  }
+
   /* Cap radius on form controls when theme radius is "full" (9999px). */
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
       [type="hidden"]
@@ -1823,5 +1870,33 @@ html[data-page-hidden] .ave-face *,
 @media (hover: none) {
   .group-hover\:opacity-100 {
     opacity: 1;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────
+ * No zoom on focus. iOS Safari zooms the page when a field under 16px gets
+ * focus, and does not zoom back out. The composer (`text-sm`) and about
+ * thirty `text-xs` / `text-sm` fields trip it. Set the floor once here, by
+ * capability (`pointer: coarse` also covers tablets, which `sm:` misses),
+ * instead of a `pointer-coarse:text-base` at every call site.
+ *
+ * Unlayered for the same reason as the rule above: `.text-sm` is a single
+ * class in `@layer utilities` and would win against a layered rule. Fields
+ * already set larger than 16px keep their size.
+ * ─────────────────────────────────────────────────────────────────── */
+@media (pointer: coarse) {
+  :is(
+      input:not(
+          [type="checkbox"],
+          [type="radio"],
+          [type="range"],
+          [type="file"],
+          [type="color"]
+        ),
+      textarea,
+      select,
+      [contenteditable="true"]
+    ):not(.text-lg, .text-xl, .text-2xl, .text-3xl) {
+    font-size: 16px;
   }
 }

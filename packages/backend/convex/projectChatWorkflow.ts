@@ -15,7 +15,7 @@ import {
   workflowCompleteValidator,
   normalizeAIModel,
   roleValidator,
-  taskSandboxStatusValidator,
+  sessionStatusValidator,
   turnCheckpointArgs,
   turnLeaseFenceArgs,
   usesChatDaemon,
@@ -1034,7 +1034,7 @@ export const getChatData = internalQuery({
   },
   returns: v.object({
     sandboxId: v.optional(v.string()),
-    sandboxStatus: v.optional(taskSandboxStatusValidator),
+    sandboxStatus: v.optional(sessionStatusValidator),
     repoOwner: v.string(),
     repoName: v.string(),
     repoId: v.id("githubRepos"),

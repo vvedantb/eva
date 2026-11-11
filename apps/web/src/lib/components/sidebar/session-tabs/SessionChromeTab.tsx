@@ -13,16 +13,14 @@ import {
 } from "@vvedantb/ui";
 import { IconGitPullRequest, IconX } from "@tabler/icons-react";
 import type { PrState } from "@eva/shared";
+import { prStateIconClass } from "@/lib/components/prStateIconClass";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import {
   SANDBOX_STATUS_STYLES,
   type SandboxStatus,
 } from "@/lib/components/sandbox/sandboxStatusStyles";
 import { SessionHoverCardBody } from "@/lib/components/sidebar/SidebarListHoverCard";
-import {
-  TitleRegeneratingHint,
-  prStateIconColor,
-} from "@/lib/components/sidebar/SidebarSessionItem";
+import { TitleRegeneratingHint } from "@/lib/components/sidebar/SidebarSessionItem";
 import {
   SessionMenuItems,
   useIsRegeneratingTitle,
@@ -211,7 +209,7 @@ export function SessionChromeTab({
                     size={14}
                     className={cn(
                       "shrink-0 [@container(max-width:11rem)]:hidden",
-                      prStateIconColor(session.prState),
+                      prStateIconClass(session.prState),
                     )}
                   />
                 ) : null}

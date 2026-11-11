@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import {
+  OPEN_TASK_STATUSES,
   taskStatusValidator,
   aiModelValidator,
   priorityValidator,
@@ -100,13 +101,7 @@ export const updateStatus = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
-    const workStatuses = [
-      "todo",
-      "in_progress",
-      "code_review",
-      "business_review",
-    ];
-    if (workStatuses.includes(args.status)) {
+    if (OPEN_TASK_STATUSES.some((status) => status === args.status)) {
       const dependencies = await ctx.db
         .query("taskDependencies")
         .withIndex("by_task", (q) => q.eq("taskId", args.id))

@@ -14,7 +14,7 @@ import {
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconChecklist, IconChevronRight, IconPlayerPlay, IconPlus } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
-import { Button, CenteredSpinner, ConfirmDialog, EmptyState } from "@vvedantb/native-ui/primitives";
+import { Button, ConfirmDialog, EmptyState, SkeletonList, SkeletonRow } from "@vvedantb/native-ui/primitives";
 import { useLargerText, withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
@@ -60,7 +60,7 @@ export function useQuickTaskRepo() {
  */
 export function QuickTasksSection() {
   const { repos, repo, setRepo } = useQuickTaskRepo();
-  if (repos === undefined) return <CenteredSpinner label="Loading quick tasks" />;
+  if (repos === undefined) return <QuickTaskPlaceholders />;
   if (!repo) {
     return <EmptyState icon={IconChecklist} title="No repos" description="Connect a repo on the web. It shows up here." />;
   }
@@ -95,7 +95,7 @@ function QuickTaskList({ repo }: { repo: Repo }) {
   const insets = useSafeAreaInsets();
   const scheme = useScheme();
 
-  if (tasks === undefined) return <CenteredSpinner label="Loading quick tasks" />;
+  if (tasks === undefined) return <QuickTaskPlaceholders />;
   const changeFilters = (patch: Partial<QuickTaskListFilters>) => setFilters({ ...filters, ...patch });
   const shown = applyQuickTaskFilters(tasks, filters);
   // The web tag list: the stock tags and every tag on the repo's tasks. `sort` on a fresh array; Hermes lacks `toSorted`.
@@ -176,7 +176,7 @@ function QuickTaskList({ repo }: { repo: Repo }) {
               runningAll={runningAll}
             />
           )}
-          // Web: the rows `space-y-1.5`.
+          // 8 between cards (web `space-y-1.5`, 6), so each reads as its own target.
           ItemSeparatorComponent={RowGap}
           renderItem={({ item: task, section }) => (
             <QuickTaskRow
@@ -201,6 +201,23 @@ function QuickTaskList({ repo }: { repo: Repo }) {
         onConfirm={() => void runAll()}
       />
     </View>
+  );
+}
+
+/** While the tasks load: cards shaped as `QuickTaskRow` (title over tags and age), 8 apart, on the list's `px-3`. */
+function QuickTaskPlaceholders() {
+  const card = EVA_THEME[useScheme()].card;
+  return (
+    <SkeletonList
+      label="Loading quick tasks"
+      divided={false}
+      className="px-3"
+      renderRow={(row) => (
+        <View className="mb-2 rounded-lg" style={{ backgroundColor: card }}>
+          <SkeletonRow index={row} lines={2} trailing={false} minHeight={72} className="px-3" />
+        </View>
+      )}
+    />
   );
 }
 
@@ -248,9 +265,10 @@ function RunAllDialog({
 }
 
 /**
- * One web status section's header: a 44 high button (chevron that turns open,
- * the status icon and label in its colour, the count at 60% muted). Its rows
- * follow 6 apart, then `StatusFooter`.
+ * One web status section's header: a 48 high button (chevron that turns open,
+ * the 16 status icon and 14 label in its colour, the count at 60% muted), so
+ * it reads as a heading above the 72-high cards. Its rows follow 8 apart,
+ * then `StatusFooter`.
  */
 function StatusHeader({
   status,
@@ -279,12 +297,12 @@ function StatusHeader({
       accessibilityLabel={`${label}, ${count} ${count === 1 ? "task" : "tasks"}`}
       accessibilityState={{ expanded: open }}
       onPress={onToggle}
-      className="min-h-11 flex-1 flex-row items-center gap-2 rounded-lg px-2 active:opacity-70"
+      className="min-h-12 flex-1 flex-row items-center gap-2 rounded-lg px-2 active:opacity-70"
     >
       <View style={open ? { transform: [{ rotate: "90deg" }] } : undefined}>
-        <IconChevronRight size={14} color={muted} />
+        <IconChevronRight size={16} color={muted} />
       </View>
-      <Icon size={14} color={text} />
+      <Icon size={16} color={text} />
       <Text className="font-instrument-sans-medium text-sm" style={{ color: text, fontWeight: "500" }}>
         {label}
       </Text>
@@ -324,7 +342,7 @@ function StatusFooter({ open, count }: { open: boolean; count: number }) {
   return <View className={open ? "mb-1 pb-1.5" : "mb-1"} />;
 }
 
-/** The 6 between two task rows. */
+/** The 8 between two task cards. */
 function RowGap() {
-  return <View className="h-1.5" />;
+  return <View className="h-2" />;
 }

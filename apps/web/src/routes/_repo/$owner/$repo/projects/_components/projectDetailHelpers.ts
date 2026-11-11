@@ -1,6 +1,6 @@
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
-import { isLivePrState } from "@/lib/githubPr";
+import { isLivePrState } from "@eva/shared";
 import { BUILDABLE_PROJECT_PHASES } from "@/lib/components/projects/ProjectPhaseBadge";
 import type { useProjectSandbox } from "@/lib/components/projects/useProjectSandbox";
 import { parseSpec } from "@/lib/utils/parseSpec";

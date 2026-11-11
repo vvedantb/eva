@@ -1,5 +1,6 @@
 "use client";
 
+import type { PrState } from "@eva/shared";
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -33,7 +34,7 @@ export interface PrMenuPullRequest {
   _id: string;
   prUrl: string;
   prNumber: number;
-  state: "draft" | "open" | "merged" | "closed";
+  state: PrState;
   headBranch?: string;
   title?: string;
   repoId: Id<"githubRepos">;

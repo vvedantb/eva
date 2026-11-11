@@ -1,4 +1,5 @@
 import type { Infer } from "convex/values";
+import { isLivePrState, type LivePrState } from "@eva/shared";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import type {
@@ -18,6 +19,7 @@ import {
   schedulePrLifecycleActions,
   type PrLifecycleTransition,
 } from "../_github/prLifecycleActions";
+import { CHAT_ENTITY_KINDS, type ChatEntityKind } from "../_validators/enums";
 
 /**
  * The one module that writes `pullRequests`. Every PR Eva tracks — the draft a
@@ -30,17 +32,12 @@ import {
 export type PrOwner = Infer<typeof prOwnerValidator>;
 export type PrState = Infer<typeof prStateValidator>;
 export type PrOrigin = Infer<typeof prOriginValidator>;
-export type LivePrState = "draft" | "open";
 
 /**
  * The owner's identity alone, without the run / linked-repo detail. Same shape
  * as a sandbox owner: whatever owns a sandbox can own pull requests.
  */
 export type PrOwnerRef = SandboxOwner;
-
-export function isLivePrState(state: PrState): state is LivePrState {
-  return state === "draft" || state === "open";
-}
 
 /** Maps a GitHub pull_request webhook action onto a tracked state, or null. */
 export function derivePrStateFromEvent(
@@ -458,11 +455,11 @@ const EVA_OWNER_BRANCH = new RegExp(
 
 export function parseEvaOwnerBranch(
   branch: string,
-): { kind: "session" | "task" | "project"; id: string } | null {
+): { kind: ChatEntityKind; id: string } | null {
   const match = EVA_OWNER_BRANCH.exec(branch);
   if (!match) return null;
-  const kind = match[1];
-  if (kind !== "session" && kind !== "task" && kind !== "project") return null;
+  const kind = CHAT_ENTITY_KINDS.find((entry) => entry === match[1]);
+  if (!kind) return null;
   return { kind, id: match[2] };
 }
 

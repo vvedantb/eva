@@ -4,7 +4,14 @@ import { groupNotifications, type InboxGroup } from "@eva/shared/notificationGro
 import { IconArchive, IconArchiveOff, IconInbox, IconMail, IconMailOpened } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
 import { PageHeader, SectionLabel } from "@vvedantb/native-ui/layout";
-import { BulkActionBar, CenteredSpinner, closeSwipeRows, EmptyState, ListDivider } from "@vvedantb/native-ui/primitives";
+import {
+  BulkActionBar,
+  closeSwipeRows,
+  EmptyState,
+  ListDivider,
+  SkeletonList,
+  SkeletonRow,
+} from "@vvedantb/native-ui/primitives";
 import { tokens, useLargerText } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
@@ -138,7 +145,12 @@ export default function InboxScreen() {
         }
       />
       {notifications === undefined ? (
-        <CenteredSpinner label="Loading notifications" />
+        // Rows shaped as `NotificationRow`: the 28 mark, subject over event line, the time.
+        <SkeletonList
+          label="Loading notifications"
+          count={8}
+          renderRow={(row) => <SkeletonRow index={row} leading={28} lines={2} minHeight={64} />}
+        />
       ) : notifications.length === 0 ? (
         <EmptyState
           icon={IconInbox}

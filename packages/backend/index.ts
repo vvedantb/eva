@@ -29,13 +29,23 @@ export {
 export { type RecapWalkthroughStep } from "./convex/_prRecapWorkflow/walkthrough";
 export { CONNECTOR_ENV_KEYS } from "./convex/_connectors/providers";
 export {
+  CHAT_LOG_ENTRY_KINDS,
+  DEFAULT_ACCENT_COLOR,
+  FEEDBACK_AUTHORS,
+  FEEDBACK_SENTIMENTS,
+  PROJECT_PHASES,
   COMMENT_ANCHOR_PARAM,
   withCommentAnchor,
   AI_MODEL_OPTIONS,
   DEFAULT_AI_MODEL,
+  ARTIFACT_STATE_SCOPES,
+  CLAUDE_AUTH_ENV_KEYS,
   CODEX_AUTH_ENV_KEYS,
   OPENCODE_AUTH_ENV_KEYS,
   CURSOR_AUTH_ENV_KEYS,
+  PROVIDER_CONFIG_KEY,
+  PROVIDER_LABELS,
+  PROVIDER_PRIMARY_AUTH_KEY,
   findAIModelOption,
   contextWindowForRawModel,
   getAIModelProvider,

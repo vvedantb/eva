@@ -28,7 +28,9 @@ export function useSidebarContentOffset(): string | null {
       useChromeSessionTabs,
     });
   // `20rem` matches the sidebar default until localStorage hydrates the width.
+  // The bottom inset keeps the composer and last rows above the home indicator
+  // (`viewport-fit=cover` lets content under it); it is `0` on desktop.
   return railOnly
-    ? "pt-(--eva-mobile-header-height) lg:pt-0 lg:pl-16"
-    : "pt-(--eva-mobile-header-height) lg:pt-0 lg:pl-(--eva-sidebar-width,20rem)";
+    ? "pt-(--eva-mobile-header-height) pb-[env(safe-area-inset-bottom)] lg:pt-0 lg:pl-16"
+    : "pt-(--eva-mobile-header-height) pb-[env(safe-area-inset-bottom)] lg:pt-0 lg:pl-(--eva-sidebar-width,20rem)";
 }
