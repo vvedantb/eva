@@ -62,7 +62,9 @@ The redirect is `eva://sso-callback`. If Google sign-in fails with a redirect er
 
 GitHub Actions builds and publishes the signed APK. See [RELEASE.md](RELEASE.md) for the secrets, the variables, the tag prefix (`eva-apk-`) and how to build locally.
 
-A new native module needs a new APK. `react-native-gesture-handler` (the sheet drags, from November 2026) is one: install the first APK built after it. It is autolinked, so it needs no config plugin and no workflow change.
+A new native module needs a new APK. `react-native-gesture-handler` (the sheet drags, from November 2026) and `react-native-keyboard-controller` (the composer and transcript follow the keyboard, from November 2026) are two: install the first APK built after each. Both are autolinked, so they need no config plugin and no workflow change.
+
+Keyboard: the chat composer, its Scroll to end button and the transcript follow the keyboard frame by frame, and a drag down on the transcript moves the keyboard with the finger once the finger reaches the composer. That drag needs iOS or Android 11+; on Android 10 and below a drag on the transcript lowers the keyboard at once, as before.
 
 ### UI kit pin
 
