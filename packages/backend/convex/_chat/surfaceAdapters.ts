@@ -503,10 +503,10 @@ export function turnAdapterForEntity<R>(
 }
 
 /**
- * Schedules the `TURN_BACKSTOP_MS` backstop for a session chat workflow. The caller has
- * already bound the workflow to the chat's open turn (`bindTurnWorkflow`):
- * that turn is the only record of it. The turn lease (`turns.reconcile`) is
- * the stall check.
+ * Schedules the `TURN_BACKSTOP_MS` backstop for a session chat workflow. The
+ * caller has already bound the workflow to the chat's open turn
+ * (`bindTurnWorkflow`): that turn is the only record of it. The turn lease
+ * (`turns.reconcile`) is the stall check.
  */
 export async function trackSessionChatWorkflow(
   ctx: MutationCtx,
@@ -522,9 +522,10 @@ export async function trackSessionChatWorkflow(
 }
 
 /**
- * Schedules the `TURN_BACKSTOP_MS` backstop for a session-level workflow (the summary).
- * The session row keeps no workflow slot: the summary's lane turn holds the
- * id once the agent launches, and the backstop asks the workflow itself.
+ * Schedules the `TURN_BACKSTOP_MS` backstop for a session-level workflow (the
+ * summary). The session row keeps no workflow slot: the summary's lane turn
+ * holds the id once the agent launches, and the backstop asks the workflow
+ * itself.
  */
 export async function trackSessionWorkflow(
   ctx: MutationCtx,

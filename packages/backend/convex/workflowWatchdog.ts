@@ -149,8 +149,8 @@ export const handleStaleSession = internalMutation({
 
 /**
  * Tears down a session-level workflow (the summary — chat turns live on their
- * chat) the `TURN_BACKSTOP_MS` backstop or the lease reconciler gave up on. No-op once
- * that workflow has ended. The alert lands in the Main chat.
+ * chat) the `TURN_BACKSTOP_MS` backstop or the lease reconciler gave up on.
+ * No-op once that workflow has ended. The alert lands in the Main chat.
  */
 export async function tearDownStaleSessionWorkflow(
   ctx: MutationCtx,
