@@ -6,6 +6,7 @@ import {
   repoDisplayLabel,
 } from "./_githubRepos/helpers";
 import { filterActiveEntities, isEntityDeleted } from "./numId";
+import { isSessionArchived } from "./_sessions/archive";
 import { entityHref } from "@eva/shared";
 import type { Doc } from "./_generated/dataModel";
 import { resolveExperimentalFlags } from "./_auth/experimentalFlags";
@@ -352,7 +353,7 @@ export const search = authQuery({
           }
 
           for (const session of filterActiveEntities(sessions)) {
-            if (session.archived === true) continue;
+            if (isSessionArchived(session)) continue;
             pushPrHit(hits, session, { base, label, query, limit });
             if (session.numId === undefined) continue;
             if (!matchesQuery(session.title, query)) continue;
