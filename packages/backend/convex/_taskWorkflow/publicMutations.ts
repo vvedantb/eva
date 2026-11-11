@@ -23,7 +23,7 @@ import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { errorMessage } from "@vvedantb/server";
 import { findTaskWorkSession } from "../_sessions/ownedSession";
-import { stopTaskRunSandbox } from "../_sessions/sandbox";
+import { finishTaskRunSandbox } from "../_sessions/sandbox";
 
 /** Retrieves the active workflow ID for a task, or null if none exists. */
 async function getActiveWorkflowId(
@@ -220,7 +220,10 @@ export async function cancelTaskRun(
       ? await findTaskWorkSession(ctx.db, task)
       : null;
     if (session && run.sandboxId) {
-      await stopTaskRunSandbox(ctx, session._id, run.sandboxId);
+      await finishTaskRunSandbox(ctx, session._id, run.sandboxId, {
+        // A project's VM stays up for its chat and builds (idle pause stops it).
+        keepActive: task.projectId !== undefined,
+      });
     } else if (run.sandboxId && run.repoId) {
       await ctx.scheduler.runAfter(0, internal.sandbox.stopSandbox, {
         sandboxId: run.sandboxId,

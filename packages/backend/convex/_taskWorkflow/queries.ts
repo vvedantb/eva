@@ -96,8 +96,6 @@ export const getTaskData = internalQuery({
     projectSandboxId: v.optional(v.string()),
     taskSandboxId: v.optional(v.string()),
     keepTaskSandboxActiveAfterRun: v.boolean(),
-    /** The session's start attempt the run read: fences its attach. */
-    ownedSandboxStartAttempt: v.optional(v.number()),
     deploymentProjectName: v.optional(v.string()),
     rootDirectory: v.string(),
     devPort: v.optional(v.number()),
@@ -139,28 +137,16 @@ export const getTaskData = internalQuery({
       return resolvedMessage;
     };
 
-    // A task's runs reuse one paused filesystem: its session's sandbox (a
-    // project task's is the project's session), or, for runs started before
-    // sessions owned it, the task's or project's own. A session sandbox
-    // mid-start or mid-stop is not reused: its own start or stop action owns
-    // that VM (the run then prepares a fresh one).
-    const ownedSession = args.ownedSessionId
-      ? await ctx.db.get(args.ownedSessionId)
-      : null;
-    const ownedSandboxSettled =
-      ownedSession?.status === "active" || ownedSession?.status === "closed";
-    const ownedSandboxId = ownedSandboxSettled
-      ? ownedSession?.sandboxId
-      : undefined;
-
     let projectSandboxId: string | undefined;
     let projectContext: { title: string; description?: string } | undefined;
     let project = null;
     if (args.projectId) {
       project = await ctx.db.get(args.projectId);
       if (project) {
+        // A run on the project's session claims its sandbox itself
+        // (`sessions.claimSandboxForTaskRun`); older runs read the row.
         projectSandboxId = args.ownedSessionId
-          ? ownedSandboxId
+          ? undefined
           : project.sandboxId;
 
         projectContext = {
@@ -176,16 +162,13 @@ export const getTaskData = internalQuery({
       task.description ?? undefined,
     );
 
-    const taskSandboxId = args.projectId
-      ? undefined
-      : args.ownedSessionId
-        ? ownedSandboxId
-        : task.sandboxId;
+    // A run from before tasks had sessions reuses the task's own paused
+    // filesystem. A run on a session claims the session's sandbox itself
+    // (`sessions.claimSandboxForTaskRun`), so nothing is read here for it.
+    const usesTaskRow = !args.projectId && !args.ownedSessionId;
+    const taskSandboxId = usesTaskRow ? task.sandboxId : undefined;
     const keepTaskSandboxActiveAfterRun =
-      !args.projectId &&
-      (args.ownedSessionId
-        ? ownedSession?.status === "active"
-        : task.reviewTaskSandboxStatus === "active");
+      usesTaskRow && task.reviewTaskSandboxStatus === "active";
 
     // Only surface comments the last successful run hasn't already addressed,
     // so subsequent "Make changes" runs focus on NEW feedback. Cutoff is the
@@ -312,9 +295,6 @@ export const getTaskData = internalQuery({
       projectSandboxId,
       taskSandboxId,
       keepTaskSandboxActiveAfterRun,
-      ownedSandboxStartAttempt: ownedSession
-        ? (ownedSession.sandboxStartAttempt ?? 0)
-        : undefined,
       deploymentProjectName: repo.deploymentProjectName,
       rootDirectory,
       devPort: repo.devPort,

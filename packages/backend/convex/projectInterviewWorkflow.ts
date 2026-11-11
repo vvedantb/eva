@@ -31,6 +31,7 @@ import {
   setProjectGeneratedSpec,
 } from "./_projects/helpers";
 import { sandboxStartupEntityId } from "@eva/shared";
+import { errorMessage } from "@vvedantb/server";
 
 const projectInterviewCompleteEvent = defineEvent({
   name: "projectInterviewComplete",
@@ -130,9 +131,9 @@ export const projectInterviewWorkflow = workflow.define({
     );
     const fullPrompt = `${PROJECT_INTERVIEW_SYSTEM_PROMPT} ${questionPrompt}`;
 
-    let sandboxId: string | undefined;
+    let held: InterviewSandbox | undefined;
     try {
-      sandboxId = await prepareInterviewSandbox(
+      held = await prepareInterviewSandbox(
         step,
         projectData,
         args.installationId,
@@ -141,7 +142,7 @@ export const projectInterviewWorkflow = workflow.define({
       await launchAgentStep(
         step,
         {
-          sandboxId,
+          sandboxId: held.sandboxId,
           entityId: args.projectId,
           prompt: fullPrompt,
           userId: args.userId,
@@ -195,7 +196,7 @@ export const projectInterviewWorkflow = workflow.define({
       });
       throw error;
     } finally {
-      await releaseInterviewSandbox(step, projectData, sandboxId);
+      await releaseInterviewSandbox(step, projectData, held);
     }
   },
 });
@@ -205,10 +206,6 @@ export const projectInterviewWorkflow = workflow.define({
 /** What `ensureInterviewSession` returns. */
 const interviewSessionValidator = v.object({
   sessionId: v.id("sessions"),
-  /** The session's VM, when no start or stop owns it right now. */
-  sandboxId: v.optional(v.string()),
-  /** The session's start attempt read here: fences the attach. */
-  startAttempt: v.number(),
   repoOwner: v.string(),
   repoName: v.string(),
   repoId: v.id("githubRepos"),
@@ -216,10 +213,12 @@ const interviewSessionValidator = v.object({
   baseBranch: v.string(),
 });
 
+type InterviewTarget = Infer<typeof interviewSessionValidator>;
+
 /**
  * The project's session (created on first need, `ensureOwnedSession`) and
- * what an interview or spec agent needs to run on its sandbox: the session's
- * VM (only while settled, as a task run reuses it), its branch and the repo.
+ * what an interview or spec agent needs to run on its sandbox: its branch
+ * and the repo. The sandbox itself is claimed like a task run's.
  */
 export const ensureInterviewSession = internalMutation({
   args: { projectId: v.id("projects") },
@@ -233,11 +232,8 @@ export const ensureInterviewSession = internalMutation({
       kind: "project",
       project,
     });
-    const settled = session.status === "active" || session.status === "closed";
     return {
       sessionId: session._id,
-      sandboxId: settled ? session.sandboxId : undefined,
-      startAttempt: session.sandboxStartAttempt ?? 0,
       repoOwner: repo.owner,
       repoName: repo.name,
       repoId: project.repoId,
@@ -247,54 +243,83 @@ export const ensureInterviewSession = internalMutation({
   },
 });
 
+/** The VM an interview or spec agent runs on, and whether the session holds it. */
+type InterviewSandbox = {
+  sandboxId: string;
+  /** The session was `active` before: it stays `active` afterwards. */
+  wasActive: boolean;
+};
+
 /**
- * The sandbox an interview or spec agent runs on: the project session's VM
- * (resumed) or a fresh one, recorded on the session so the project's chat,
- * preview and builds reuse it. Interview agents only read the repo, so the
- * repo's startup commands are skipped.
+ * The sandbox an interview or spec agent runs on, through the same session
+ * lifecycle as a task run: the session is claimed (`closed` → `starting`),
+ * its VM resumed or a fresh one prepared, then attached (`starting` →
+ * `active`, fenced by the claim's attempt), so the row never reads `closed`
+ * over a running VM. A failed prepare is the claim's start failure. No claim
+ * (a start or stop in flight): a VM of the workflow's own. Interview agents
+ * only read the repo, so the repo's startup commands are skipped.
  */
 async function prepareInterviewSandbox(
   step: WorkflowCtx,
-  target: Infer<typeof interviewSessionValidator>,
+  target: InterviewTarget,
   installationId: number,
-): Promise<string> {
-  const { sandboxId } = await prepareSandboxSteps(step, {
-    existingSandboxId: target.sandboxId,
-    installationId,
-    repoOwner: target.repoOwner,
-    repoName: target.repoName,
-    repoId: target.repoId,
-    ephemeral: false,
-    streamingEntityId: sandboxStartupEntityId({
-      kind: "session",
+): Promise<InterviewSandbox> {
+  const claim = await step.runMutation(
+    internal.sessions.claimSandboxForTaskRun,
+    { sessionId: target.sessionId },
+  );
+  let sandboxId: string;
+  try {
+    ({ sandboxId } = await prepareSandboxSteps(step, {
+      existingSandboxId: claim?.sandboxId,
+      installationId,
+      repoOwner: target.repoOwner,
+      repoName: target.repoName,
+      repoId: target.repoId,
+      ephemeral: false,
+      streamingEntityId: sandboxStartupEntityId({
+        kind: "session",
+        sessionId: target.sessionId,
+      }),
+      baseBranch: target.baseBranch,
+      branchName: target.branchName,
+      skipStartupCommands: true,
+    }));
+  } catch (prepareError) {
+    if (claim && !claim.wasActive) {
+      await step.runMutation(internal.sessions.sandboxError, {
+        sessionId: target.sessionId,
+        error: errorMessage(prepareError),
+        startAttempt: claim.attempt,
+      });
+    }
+    throw prepareError;
+  }
+  if (claim) {
+    await step.runMutation(internal.sessions.attachTaskRunSandbox, {
       sessionId: target.sessionId,
-    }),
-    baseBranch: target.baseBranch,
-    branchName: target.branchName,
-    skipStartupCommands: true,
-  });
-  await step.runMutation(internal.sessions.attachTaskRunSandbox, {
-    sessionId: target.sessionId,
-    sandboxId,
-    startAttempt: target.startAttempt,
-  });
-  return sandboxId;
+      sandboxId,
+      attempt: claim.attempt,
+    });
+  }
+  return { sandboxId, wasActive: claim?.wasActive ?? false };
 }
 
 /**
- * The agent is done: a VM the session refused (`attachTaskRunSandbox`, e.g.
- * a start or rotation won the race) is the workflow's alone and stops; the
- * session's own stays for the chat and builds.
+ * The agent is done: the session's VM stops through the session stop path
+ * unless the session was already `active` (the reviewer has it open); a VM
+ * the session never took stops directly (`finishTaskRunSandbox`).
  */
 async function releaseInterviewSandbox(
   step: WorkflowCtx,
-  target: Infer<typeof interviewSessionValidator>,
-  sandboxId: string | undefined,
+  target: InterviewTarget,
+  held: InterviewSandbox | undefined,
 ): Promise<void> {
-  if (sandboxId === undefined) return;
-  await step.runMutation(internal.sessions.stopUnattachedRunSandbox, {
+  if (held === undefined) return;
+  await step.runMutation(internal.sessions.finishTaskRunSandboxMutation, {
     sessionId: target.sessionId,
-    sandboxId,
+    sandboxId: held.sandboxId,
+    keepActive: held.wasActive,
   });
 }
 
@@ -585,9 +610,9 @@ Based on the interview conversation above, generate an implementation spec with 
 
 Output ONLY valid JSON.`;
 
-    let sandboxId: string | undefined;
+    let held: InterviewSandbox | undefined;
     try {
-      const sandboxId = await prepareInterviewSandbox(
+      held = await prepareInterviewSandbox(
         step,
         projectData,
         args.installationId,
@@ -596,7 +621,7 @@ Output ONLY valid JSON.`;
       await launchAgentStep(
         step,
         {
-          sandboxId,
+          sandboxId: held.sandboxId,
           entityId: args.projectId,
           prompt,
           userId: args.userId,
@@ -632,7 +657,7 @@ Output ONLY valid JSON.`;
       });
       throw error;
     } finally {
-      await releaseInterviewSandbox(step, projectData, sandboxId);
+      await releaseInterviewSandbox(step, projectData, held);
     }
   },
 });

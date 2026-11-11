@@ -41,8 +41,8 @@ export async function findOwnerChat(
 /**
  * Whether a project's own work holds its session's sandbox outside any chat
  * turn: a build (all its tasks, gaps between them included) or the interview
- * / spec workflow. The one source the busy gates, the idle pause and the leak
- * sweep read for that hold; runs and chats hold it through their open turns.
+ * / spec workflow. The one source the busy gates and the idle pause read for
+ * that hold; runs and chats hold it through their open turns.
  */
 export function projectHoldsSession(
   project: Pick<Doc<"projects">, "build" | "activeWorkflowId">,

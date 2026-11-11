@@ -32,9 +32,10 @@ export {
   forcePushBranch,
   stopSandbox,
   requestStopSandbox,
-  stopSandboxAfterTaskRun,
+  claimSandboxForTaskRun,
+  finishTaskRunSandboxMutation,
   attachTaskRunSandbox,
-  stopUnattachedRunSandbox,
+
   runDevServer,
   runBackgroundCommands,
   patchSessionDevServer,
