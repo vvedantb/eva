@@ -7,6 +7,7 @@ import {
   IconGitPullRequest,
 } from "@tabler/icons-react";
 import type { Doc } from "@eva/backend";
+import { isAgentBrowsingActive } from "@eva/shared";
 import { useCycleSandboxTabHotkey } from "@/lib/components/sandbox/useCycleSandboxTabHotkey";
 import { useSandboxViewHotkeys } from "@/lib/components/sandbox/useSandboxViewHotkeys";
 import { SandboxPanelToggleButton } from "@/lib/components/sandbox/SandboxPanelToggleButton";
@@ -119,13 +120,6 @@ interface SandboxTabBarProps {
   /** Desktop: content pane is hidden; the rail stays. Ignored below `md`. */
   collapsed?: boolean;
   onToggle?: () => void;
-}
-
-const AGENT_BROWSING_LOCK_TTL_MS = 30 * 60 * 1000;
-
-function isAgentBrowsingActive(agentBrowsingAt: number | undefined): boolean {
-  if (agentBrowsingAt === undefined) return false;
-  return Date.now() - agentBrowsingAt < AGENT_BROWSING_LOCK_TTL_MS;
 }
 
 export function SandboxTabBar({

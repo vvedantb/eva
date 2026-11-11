@@ -11,8 +11,11 @@ import { readFileAtRef } from "./contents";
 import { isPrDiffTooLargeError, listFileToUnifiedDiff } from "./prDiffFallback";
 import { getActionRepoWithAccess } from "../functions";
 
-/** Cap the diff we return to the client so huge PRs don't blow the payload. */
-const MAX_DIFF_BYTES = 500_000;
+/**
+ * Cap on a unified diff we hold in one payload: the diff returned to the
+ * client and the diff fed to the PR recap model.
+ */
+export const MAX_DIFF_BYTES = 500_000;
 
 /** Cap a single file's contents fetched for GitHub-style context expansion. */
 const MAX_FILE_BYTES = 400_000;

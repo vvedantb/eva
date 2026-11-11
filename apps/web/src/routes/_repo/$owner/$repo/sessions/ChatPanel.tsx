@@ -10,7 +10,11 @@ import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { ChatPageWrapper } from "@/lib/components/ChatPageWrapper";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
 import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
-import { sandboxComposerState, SANDBOX_CHAT_COPY } from "@eva/shared";
+import {
+  MAX_PARALLEL_CHATS,
+  sandboxComposerState,
+  SANDBOX_CHAT_COPY,
+} from "@eva/shared";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
 import {
   SandboxChatPreInput,
@@ -112,9 +116,6 @@ interface ChatPanelProps {
    */
   isRouteActive?: boolean;
 }
-
-/** Sessions run at most this many chats at once; mirrors the server cap. */
-const MAX_PARALLEL_CHATS = 3;
 
 export function ChatPanel({
   sessionId,

@@ -5,13 +5,12 @@ import { IconDeviceDesktop } from "@tabler/icons-react";
 import { cn } from "@eva/ui";
 import { BorderBeam, Button, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
+import { DESKTOP_PORT, isAgentBrowsingActive } from "@eva/shared";
 import {
   SandboxIframeService,
   type StartResult,
 } from "@/lib/components/sandbox/SandboxIframeService";
 import type { SandboxWake } from "@/lib/components/sandbox/SandboxAsleepState";
-
-const AGENT_BROWSING_LOCK_TTL_MS = 30 * 60 * 1000;
 
 interface DesktopPanelProps {
   cacheKey: string;
@@ -82,11 +81,6 @@ function appendNoVncParams(baseUrl: string): string {
   return url.toString();
 }
 
-function isAgentBrowsingActive(agentBrowsingAt: number | undefined): boolean {
-  if (agentBrowsingAt === undefined) return false;
-  return Date.now() - agentBrowsingAt < AGENT_BROWSING_LOCK_TTL_MS;
-}
-
 export function DesktopPanel({
   cacheKey,
   sandboxId,
@@ -140,7 +134,7 @@ export function DesktopPanel({
         sandboxId={sandboxId}
         isActive={isActive}
         repoId={repoId}
-        port={6080}
+        port={DESKTOP_PORT}
         startAction={startAction}
         stopAction={stopAction}
         transformUrl={appendNoVncParams}

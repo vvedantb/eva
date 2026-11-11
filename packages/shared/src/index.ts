@@ -69,6 +69,14 @@ export {
   sandboxPresenceRoomId,
 } from "./sandboxPresence";
 export {
+  DEFAULT_PREVIEW_PORT,
+  DESKTOP_PORT,
+  EDITOR_PORT,
+} from "./sandboxPorts";
+export { MAX_PARALLEL_CHATS } from "./sessionChats";
+export { terminalHistoryTail } from "./terminalHistory";
+export { isAgentBrowsingActive } from "./agentBrowsing";
+export {
   SANDBOX_STARTUP_PREFIX,
   sandboxOwnerKey,
   sandboxStartupEntityId,

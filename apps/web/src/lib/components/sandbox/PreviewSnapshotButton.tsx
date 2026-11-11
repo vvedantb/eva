@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Spinner, toast, WebPreviewNavigationButton } from "@vvedantb/ui";
 import { IconListTree } from "@tabler/icons-react";
+import { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
 import { parseSnapshotInbound } from "@/lib/components/sandbox/previewSnapshot";
 import { PreviewSnapshotDialog } from "@/lib/components/sandbox/PreviewSnapshotDialog";
 import { usePendingPreviewSnapshots } from "@/lib/contexts/PendingPreviewSnapshotsContext";
@@ -72,7 +73,10 @@ export function usePreviewSnapshot({
     }
 
     window.addEventListener("message", onMessage);
-    postToFrame(frame, { type: "eva-preview-snapshot-capture", requestId });
+    postToFrame(frame, {
+      type: PREVIEW_FRAME_MESSAGE.snapshotCapture,
+      requestId,
+    });
   }
 
   const dialog = (
