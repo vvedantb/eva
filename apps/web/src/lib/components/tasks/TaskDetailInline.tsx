@@ -5,7 +5,12 @@ import { createPortal } from "react-dom";
 import { useQueryState } from "nuqs";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
-import { api, type Id, type SandboxOwner } from "@eva/backend";
+import {
+  api,
+  taskScheduledAt,
+  type Id,
+  type SandboxOwner,
+} from "@eva/backend";
 import { cn } from "@eva/ui";
 import {
   Badge,
@@ -149,6 +154,7 @@ export function TaskDetailInline({
     handleCreatePr,
   } = useTaskDetail(taskId, routing);
   const isAgentActive = useTaskAgentActive(taskId, task);
+  const scheduledAt = task ? taskScheduledAt(task) : undefined;
   const chatUnread = useChatUnread(taskId);
   const { request: requestConfirm } = useRequestConfirm();
 
@@ -416,7 +422,7 @@ export function TaskDetailInline({
                         hasActiveRun={hasActiveRun}
                         taskId={taskId}
                       />
-                      {task?.scheduledAt ? (
+                      {scheduledAt ? (
                         <div className="mt-2 flex items-center gap-2">
                           <Badge
                             variant="outline"
@@ -426,7 +432,7 @@ export function TaskDetailInline({
                             {status === "todo"
                               ? "Scheduled for"
                               : "Was scheduled for"}{" "}
-                            {dayjs(task.scheduledAt).format("DD/MM/YYYY HH:mm")}
+                            {dayjs(scheduledAt).format("DD/MM/YYYY HH:mm")}
                           </Badge>
                         </div>
                       ) : null}

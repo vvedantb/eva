@@ -37,7 +37,12 @@ async function fixture(overrides?: { activeWorkflowId?: string }) {
       updatedAt: now,
       createdBy: userId,
       ...(overrides?.activeWorkflowId !== undefined
-        ? { activeWorkflowId: overrides.activeWorkflowId }
+        ? {
+            run: {
+              state: "running" as const,
+              workflowId: overrides.activeWorkflowId,
+            },
+          }
         : {}),
     });
     await ctx.db.insert("queuedMessages", {
@@ -101,9 +106,10 @@ describe("a follow-up queued while a task run is going", () => {
 
       // The next run will own the sandbox, so the follow-up keeps waiting.
       expect(await queueLength(t, taskId)).toBe(1);
-      expect((await t.run((ctx) => ctx.db.get(taskId)))?.activeWorkflowId).toBe(
-        "wf-run",
-      );
+      expect((await t.run((ctx) => ctx.db.get(taskId)))?.run).toEqual({
+        state: "running",
+        workflowId: "wf-run",
+      });
     },
     TIMEOUT_MS,
   );

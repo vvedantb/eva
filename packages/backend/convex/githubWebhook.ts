@@ -15,6 +15,7 @@ import {
   isProjectReviewPhase,
 } from "./_projects/prSync";
 import { requestTaskSandboxStop } from "./_agentTasks/sandbox";
+import { cancelTaskRunSchedule } from "./_agentTasks/runState";
 import { scheduleTaskSandboxGraceDelete } from "./sandboxCleanup";
 import { reconcileSessionArchiveState } from "./_sessions/prArchive";
 import {
@@ -292,17 +293,7 @@ async function applyQuickTaskPrClosed(
   const newStatus = merged ? "done" : "cancelled";
   await ctx.db.patch(task._id, { status: newStatus, updatedAt: now });
 
-  if (task.scheduledFunctionId) {
-    try {
-      await ctx.scheduler.cancel(task.scheduledFunctionId);
-    } catch {
-      // may have already fired
-    }
-    await ctx.db.patch(task._id, {
-      scheduledAt: undefined,
-      scheduledFunctionId: undefined,
-    });
-  }
+  await cancelTaskRunSchedule(ctx, task._id);
 
   await notifySubscribers(ctx, {
     taskId: task._id,

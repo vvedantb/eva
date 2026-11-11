@@ -556,6 +556,29 @@ export const sessionChatFields = {
   ...chatDaemonEntityFields,
 };
 
+/**
+ * A task's own run: waiting on a scheduled job, or running a workflow.
+ * Transitions live in `_agentTasks/runState.ts`.
+ */
+export const taskRunValidator = v.union(
+  v.object({
+    state: v.literal("scheduled"),
+    at: v.number(),
+    jobId: v.id("_scheduled_functions"),
+  }),
+  v.object({
+    state: v.literal("retry_pending"),
+    at: v.number(),
+    jobId: v.id("_scheduled_functions"),
+  }),
+  v.object({
+    state: v.literal("running"),
+    workflowId: v.string(),
+    /** Absent only on rows migrated from the legacy `activeWorkflowId`. */
+    runId: v.optional(v.id("agentRuns")),
+  }),
+);
+
 export const agentTaskFields = {
   ...entityNumIdFields,
   title: v.string(),
@@ -587,9 +610,15 @@ export const agentTaskFields = {
   use1mContext: v.optional(v.boolean()),
   fastMode: v.optional(v.boolean()),
   baseBranch: v.optional(v.string()),
+  /** The task's own run lifecycle; absent = idle. Written only by `_agentTasks/runState.ts`. */
+  run: v.optional(taskRunValidator),
+  /** @deprecated Legacy run state; read via `taskRunState`, cleared by `migrateTaskRunState`. */
   activeWorkflowId: v.optional(v.string()),
+  /** @deprecated Never written; cleared by `migrateTaskRunState`. */
   scheduledRetryAt: v.optional(v.number()),
+  /** @deprecated Legacy run state; read via `taskRunState`, cleared by `migrateTaskRunState`. */
   scheduledAt: v.optional(v.number()),
+  /** @deprecated Legacy run state; read via `taskRunState`, cleared by `migrateTaskRunState`. */
   scheduledFunctionId: v.optional(v.id("_scheduled_functions")),
   // Canonical sandbox shared across run/preview/resolve_conflicts. Persists
   // across the task lifecycle so reviewers can resume in-sandbox state (DB,

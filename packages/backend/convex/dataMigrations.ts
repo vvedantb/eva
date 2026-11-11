@@ -10,6 +10,9 @@ import { recordPullRequest } from "./_pullRequests/store";
 import { recordRunPullRequest } from "./_taskWorkflow/helpers";
 import { pruneSettledBackgroundAgents } from "./_sessions/backgroundAgents";
 import type { BackgroundAgentEntry } from "./_validators/tableFields";
+import { taskRunState } from "./_agentTasks/runState";
+import { getActiveTaskRun } from "./functions";
+import { cancelScheduledFunction } from "./_scheduling/helpers";
 
 /**
  * Convex Migrations component — batched online migrations with progress,
@@ -364,3 +367,46 @@ export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneAgentTaskBackgroundAgents,
   internal.dataMigrations.pruneProjectBackgroundAgents,
 ]);
+
+/**
+ * `npx convex run dataMigrations:migrateTaskRunState` after the deploy that
+ * adds `agentTasks.run`. Folds the legacy run fields into `run` and clears
+ * them; idempotent (rows without legacy fields are skipped). Until it runs,
+ * `taskRunState` reads the legacy fields. Mapping:
+ * - `activeWorkflowId` → `running`, with the task's queued/running run as
+ *   `runId` when there is one.
+ * - `scheduledAt` + `scheduledFunctionId` → `scheduled`. Legacy rows cannot
+ *   tell a user schedule from an auto retry; both behave the same.
+ * - Both a workflow id and a schedule: `running` wins, so Stop can still
+ *   cancel the workflow; the schedule's job is cancelled.
+ * - A schedule missing its time or its job, and `scheduledRetryAt` (never
+ *   written), become idle.
+ */
+export const migrateTaskRunState = dataMigrations.define({
+  table: "agentTasks",
+  migrateOne: async (ctx, task) => {
+    if (
+      task.activeWorkflowId === undefined &&
+      task.scheduledAt === undefined &&
+      task.scheduledFunctionId === undefined &&
+      task.scheduledRetryAt === undefined
+    ) {
+      return;
+    }
+    let run = taskRunState(task);
+    if (run?.state === "running" && run.runId === undefined) {
+      const activeRun = await getActiveTaskRun(ctx.db, task._id);
+      if (activeRun) run = { ...run, runId: activeRun._id };
+    }
+    if (run?.state === "running") {
+      await cancelScheduledFunction(ctx, task.scheduledFunctionId);
+    }
+    return {
+      run,
+      activeWorkflowId: undefined,
+      scheduledAt: undefined,
+      scheduledFunctionId: undefined,
+      scheduledRetryAt: undefined,
+    };
+  },
+});

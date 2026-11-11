@@ -15,24 +15,6 @@ export async function cancelScheduledFunction(
   }
 }
 
-/** Schedules a task execution at `scheduledAt` and records it on the task. */
-export async function scheduleTaskExecutionAt(
-  ctx: MutationCtx,
-  taskId: Id<"agentTasks">,
-  scheduledAt: number,
-): Promise<void> {
-  const scheduledFunctionId = await ctx.scheduler.runAt(
-    scheduledAt,
-    internal.taskWorkflow.executeScheduledTask,
-    { taskId, scheduledAt },
-  );
-  await ctx.db.patch(taskId, {
-    scheduledAt,
-    scheduledFunctionId,
-    updatedAt: Date.now(),
-  });
-}
-
 /** Schedules a project build at `scheduledAt` and records it on the project. */
 export async function scheduleProjectBuildAt(
   ctx: MutationCtx,

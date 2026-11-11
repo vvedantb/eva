@@ -19,6 +19,7 @@ import type * as _agentTasks_mutations from "../_agentTasks/mutations.js";
 import type * as _agentTasks_queries from "../_agentTasks/queries.js";
 import type * as _agentTasks_readiness from "../_agentTasks/readiness.js";
 import type * as _agentTasks_runSummary from "../_agentTasks/runSummary.js";
+import type * as _agentTasks_runState from "../_agentTasks/runState.js";
 import type * as _agentTasks_sandbox from "../_agentTasks/sandbox.js";
 import type * as _agentTasks_updateTask from "../_agentTasks/updateTask.js";
 import type * as _arena_browserRun from "../_arena/browserRun.js";
@@ -596,6 +597,7 @@ declare const fullApi: ApiFromModules<{
   "_agentTasks/mutations": typeof _agentTasks_mutations;
   "_agentTasks/queries": typeof _agentTasks_queries;
   "_agentTasks/readiness": typeof _agentTasks_readiness;
+  "_agentTasks/runState": typeof _agentTasks_runState;
   "_agentTasks/runSummary": typeof _agentTasks_runSummary;
   "_agentTasks/sandbox": typeof _agentTasks_sandbox;
   "_agentTasks/updateTask": typeof _agentTasks_updateTask;

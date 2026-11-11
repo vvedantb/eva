@@ -2,7 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
-import { api } from "@eva/backend";
+import { api, taskScheduledAt } from "@eva/backend";
 import { runAllPlan, startAll } from "@eva/shared";
 import type { Id } from "@eva/backend";
 import { patchLoadedQuery } from "@vvedantb/server";
@@ -189,7 +189,7 @@ export function QuickTasksKanbanBoard({
             hasError={errorTaskIdSet.has(task._id)}
             deploymentStatus={deploymentStatusMap.get(task._id)}
             sandboxStatus={task.reviewTaskSandboxStatus}
-            scheduledAt={task.scheduledAt}
+            scheduledAt={taskScheduledAt(task)}
             tags={task.tags}
             createdByUser={users?.find((u) => u._id === task.createdBy)}
             createdAt={task.createdAt}
@@ -248,7 +248,7 @@ export function QuickTasksKanbanBoard({
             hasError={errorTaskIdSet.has(task._id)}
             deploymentStatus={deploymentStatusMap.get(task._id)}
             sandboxStatus={task.reviewTaskSandboxStatus}
-            scheduledAt={task.scheduledAt}
+            scheduledAt={taskScheduledAt(task)}
             tags={task.tags}
             createdByUser={users?.find((u) => u._id === task.createdBy)}
             createdAt={task.createdAt}
