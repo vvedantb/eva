@@ -6,16 +6,18 @@ import {
   type MutationCtx,
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
-import { scheduleDrainAfterStopSettles } from "../_sandbox/stopRecovery";
-import { authMutation, hasRepoAccess } from "../functions";
+import {
+  scheduleDrainAfterStopSettles,
+  STUCK_STOPPING_RECOVER_MS,
+} from "../_sandbox/stopRecovery";
+import { authMutation, hasTaskAccess } from "../functions";
 import { workflow } from "../workflowManager";
 import { resolveTaskWorkflowBaseBranchForTask } from "../_taskWorkflow/resolveBaseBranch";
 import {
   seedSandboxStartupActivity,
   clearSandboxStartupActivity,
 } from "../_sandbox/startupActivity";
-import { clearPendingQuestionsForEntity } from "../pendingQuestions";
+import { detachPendingQuestions } from "../pendingQuestions";
 import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
 import {
   stopAlertText,
@@ -23,6 +25,7 @@ import {
   type StopReason,
 } from "../_sandbox/stopReason";
 import { touchUserActivity } from "../_sandbox/activity";
+import { sandboxStartupEntityId } from "../_sandbox/owner";
 import {
   canRequestSandboxStart,
   discardUntrackedSandbox,
@@ -32,6 +35,7 @@ import {
   shouldApplySandboxStartFailure,
 } from "../_sandbox/transitions";
 import { settleOrphanedBackgroundAgents } from "../_sessions/backgroundAgents";
+import { errorMessage } from "@vvedantb/server";
 
 const PREVIEW_ALLOWED_STATUSES = [
   "code_review",
@@ -90,7 +94,7 @@ export const startTaskSandbox = authMutation({
     const repo = await ctx.db.get(task.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const hasAccess = await hasRepoAccess(ctx.db, repo._id, ctx.userId);
+    const hasAccess = await hasTaskAccess(ctx.db, task, ctx.userId);
     if (!hasAccess) throw new Error("No access to repository");
 
     await requestTaskSandboxStart(ctx, task, repo);
@@ -129,7 +133,10 @@ export async function requestTaskSandboxStart(
   });
   // Seed startup streaming immediately so the UI shows a real step instead of
   // the random "Eva is inferring…" spinner while the workflow schedules.
-  await seedSandboxStartupActivity(ctx.db, `task-sandbox-startup-${task._id}`);
+  await seedSandboxStartupActivity(
+    ctx.db,
+    sandboxStartupEntityId({ kind: "task", taskId: task._id }),
+  );
   const reusableSandboxId = task.sandboxId;
   console.log(
     `[tasks] startTaskSandbox taskId=${task._id} existingSandboxId=${task.sandboxId ?? "none"} sandboxId=${reusableSandboxId ?? "none"}`,
@@ -218,7 +225,7 @@ export const retryStartupCommands = authMutation({
     const repo = await ctx.db.get(task.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const hasAccess = await hasRepoAccess(ctx.db, repo._id, ctx.userId);
+    const hasAccess = await hasTaskAccess(ctx.db, task, ctx.userId);
     if (!hasAccess) throw new Error("No access to repository");
 
     const branchName = `eva/task-${args.taskId}`;
@@ -287,7 +294,7 @@ export const runDevServer = authMutation({
       );
     }
 
-    const hasAccess = await hasRepoAccess(ctx.db, task.repoId, ctx.userId);
+    const hasAccess = await hasTaskAccess(ctx.db, task, ctx.userId);
     if (!hasAccess) throw new Error("No access to repository");
 
     await ctx.scheduler.runAfter(
@@ -325,7 +332,7 @@ export const runBackgroundCommands = authMutation({
       throw new Error("Start the sandbox before running background commands");
     }
 
-    const hasAccess = await hasRepoAccess(ctx.db, task.repoId, ctx.userId);
+    const hasAccess = await hasTaskAccess(ctx.db, task, ctx.userId);
     if (!hasAccess) throw new Error("No access to repository");
 
     await ctx.scheduler.runAfter(0, internal.sandbox.runBackgroundCommands, {
@@ -400,11 +407,14 @@ export async function requestTaskSandboxStop(
   });
 
   // Clear leftover start steps so stop does not re-show startup activity.
-  await clearSandboxStartupActivity(ctx.db, `task-sandbox-startup-${taskId}`);
+  await clearSandboxStartupActivity(
+    ctx.db,
+    sandboxStartupEntityId({ kind: "task", taskId }),
+  );
 
   // Stopping kills the paused turn, so any blocking AskUserQuestion can
-  // never be claimed — clear it or it hides the composer forever.
-  await clearPendingQuestionsForEntity(ctx.db, String(taskId));
+  // never be claimed — move it onto the chat message so the card stays.
+  await detachPendingQuestions(ctx.db, String(taskId));
   await clearPreviewToolCallsForParent(ctx.db, taskId);
 
   // Keep sandboxId so we can resume the stopped sandbox later.
@@ -433,7 +443,7 @@ export const stopTaskSandbox = authMutation({
 
     if (!task.repoId) throw new Error("Task has no associated repository");
 
-    const hasAccess = await hasRepoAccess(ctx.db, task.repoId, ctx.userId);
+    const hasAccess = await hasTaskAccess(ctx.db, task, ctx.userId);
     if (!hasAccess) throw new Error("No access to repository");
 
     await requestTaskSandboxStop(ctx, args.taskId);
@@ -523,7 +533,7 @@ export const finalizeStopTaskSandbox = internalAction({
         repoId: args.repoId,
       });
     } catch (err) {
-      stopError = err instanceof Error ? err.message : String(err);
+      stopError = errorMessage(err);
     }
     await ctx.runMutation(internal._agentTasks.sandbox.markTaskSandboxClosed, {
       taskId: args.taskId,

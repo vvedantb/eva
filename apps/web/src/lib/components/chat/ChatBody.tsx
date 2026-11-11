@@ -43,6 +43,7 @@ import {
   collectForkPrefix,
   forkThreadTitle,
   formatForkPrompt,
+  SANDBOX_CHAT_COPY,
 } from "@eva/shared";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
 import { appendCitationsToPrompt } from "@/lib/components/chat/assistantCitation";
@@ -69,7 +70,7 @@ import { EnvVarRequestCard } from "@/lib/components/chat/_components/EnvVarReque
 import { placeChatUiPanels } from "@/lib/components/chat/generativeUi/chatUiPanelPlacement";
 import { ChatArtifactCard } from "@/lib/components/artifacts/ChatArtifactCard";
 import { AgentFeedbackCard } from "@/lib/components/chat/feedback/AgentFeedbackCard";
-import { groupChatFeedback } from "@/lib/components/chat/feedback/feedbackRows";
+import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import {
   startTransition,
   useDeferredValue,
@@ -88,7 +89,6 @@ import type { ChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
 import {
   buildMessageHistory,
   buildPrecedingUserTurns,
-  findDayBoundaryIds,
   findNewMessageIds,
   type ChatParentId,
   findHandoffBoundaryIds,
@@ -96,11 +96,9 @@ import {
   findLastAssistantMessageId,
   findStreamingTargetMessage,
   findTurnWindowStart,
-  firstNameFromUser,
+  firstNameByUserId,
   isOtherUserChatMessage,
   otherUserIdsInChat,
-  parsePendingQuestion,
-  SANDBOX_CHAT_COPY,
   TRANSCRIPT_TURN_WINDOW,
   visibleChatMessages,
   type ChatBodyMessage,
@@ -108,6 +106,8 @@ import {
   type ChatHeldFollowUp,
   type ChatRepo,
 } from "@/lib/components/chat/chatBodyUtils";
+import { findDayBoundaryIds } from "@eva/shared/dayLabel";
+import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
 
 import {
   ChatLinkedMessageScroll,
@@ -773,14 +773,7 @@ function ChatBodyInner({
     api.users.getMany,
     otherUserIds.length > 0 ? { ids: otherUserIds } : "skip",
   );
-  const firstNameByUserId = (() => {
-    const map = new Map<Id<"users">, string>();
-    for (const user of users ?? []) {
-      const name = firstNameFromUser(user);
-      if (name) map.set(user._id, name);
-    }
-    return map;
-  })();
+  const firstNames = firstNameByUserId(users ?? []);
 
   // Retry re-sends the failed turn's prompt through the normal send path. It is
   // withheld while a turn is running (the send would only queue behind it) and
@@ -855,7 +848,7 @@ function ChatBodyInner({
     const isOtherUser = isOtherUserChatMessage(message, currentUserId);
     const senderFirstName =
       isOtherUser && message.userId
-        ? firstNameByUserId.get(message.userId)
+        ? firstNames.get(message.userId)
         : undefined;
     const precedingUser = precedingUserTurns.get(message._id);
 

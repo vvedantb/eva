@@ -6,6 +6,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
+import { findSiblingsOf } from "./_githubRepos/helpers";
 
 /** Regex for safe filenames: alphanumeric, dash, underscore, dot only. */
 const SAFE_FILENAME_REGEX = /^[a-zA-Z0-9._-]+$/;
@@ -29,7 +30,7 @@ async function deleteFileBlobs(
 }
 
 /**
- * All config files across sibling repos sharing the anchor repo's owner/name.
+ * All config files across the anchor repo's siblings (same owner/name and team).
  * Returns [] when the anchor repo is missing. Preserves sibling-then-file order
  * so callers can rely on last-write-wins on filename collision.
  */
@@ -39,12 +40,7 @@ async function collectSiblingConfigFiles(
 ): Promise<Array<Doc<"sandboxConfigFiles">>> {
   const anchorRepo = await ctx.db.get(repoId);
   if (!anchorRepo) return [];
-  const siblings = await ctx.db
-    .query("githubRepos")
-    .withIndex("by_owner_and_name", (q) =>
-      q.eq("owner", anchorRepo.owner).eq("name", anchorRepo.name),
-    )
-    .collect();
+  const siblings = await findSiblingsOf(ctx.db, anchorRepo);
   const files: Array<Doc<"sandboxConfigFiles">> = [];
   for (const sibling of siblings) {
     const siblingFiles = await ctx.db
@@ -181,9 +177,9 @@ export const remove = authMutation({
  * Legacy single-blob records are returned as a 1-element chunkUrls array.
  * The snapshot/sandbox builder downloads each chunk in order and concatenates.
  *
- * Aggregates across all sibling repos sharing the snapshot anchor's owner/name —
- * one snapshot is built per (owner, name) and serves the root repo plus every
- * sub-app, so config files uploaded against any sibling repoId must be baked in.
+ * Aggregates across the snapshot anchor's siblings (same owner/name and team):
+ * one snapshot serves the root repo plus every sub-app of that team, so config
+ * files uploaded against any sibling repoId must be baked in.
  * Last write wins on filename collision (later sibling overrides earlier).
  */
 export const getConfigFilesForSnapshot = internalQuery({
@@ -209,27 +205,5 @@ export const getConfigFilesForSnapshot = internalQuery({
       filesByName.set(file.fileName, { fileName: file.fileName, chunkUrls });
     }
     return Array.from(filesByName.values());
-  },
-});
-
-/**
- * Stable identity keys for the config files baked into a snapshot — same
- * sibling aggregation as getConfigFilesForSnapshot but returns
- * `fileName:fileSize:chunkIds` strings (storage ids are immutable, unlike the
- * signed chunk URLs). Used to fingerprint image/seed inputs for skip decisions.
- */
-export const getConfigFileKeys = internalQuery({
-  args: { repoId: v.id("githubRepos") },
-  returns: v.array(v.string()),
-  handler: async (ctx, args) => {
-    const files = await collectSiblingConfigFiles(ctx, args.repoId);
-    const keysByName = new Map<string, string>();
-    for (const file of files) {
-      keysByName.set(
-        file.fileName,
-        `${file.fileName}:${file.fileSize}:${fileChunkIds(file).join(",")}`,
-      );
-    }
-    return Array.from(keysByName.values()).sort();
   },
 });

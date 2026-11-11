@@ -9,8 +9,13 @@ import { authQuery, authMutation, hasRepoAccess } from "../functions";
 import { allocateNumId, entityVisible } from "../numId";
 import { safeDeleteCron, safeReplaceCron } from "../cronManager";
 import type { Doc } from "../_generated/dataModel";
-import { listAutomationsForRepo, resolveAutomationRepoId } from "./helpers";
+import {
+  getAutomationWithAccess,
+  listAutomationsForRepo,
+  resolveAutomationRepoId,
+} from "./helpers";
 import { resolveCanonicalRepoId } from "../_githubRepos/helpers";
+import { CHANGELOG_AUTOMATION_TITLE } from "../_changelog/entry";
 import {
   automationCronspec,
   getSystemAutomation,
@@ -30,6 +35,16 @@ function visibleAutomation(
 ): Doc<"automations"> | null {
   const visible = entityVisible(automation);
   return visible ? resolveAutomationDoc(visible) : null;
+}
+
+/**
+ * The weekly changelog title is reserved: `changelog.ts` finds that automation
+ * by title and it broadcasts to every user, so no other automation may take it.
+ */
+function assertTitleNotReserved(title: string): void {
+  if (title.trim() === CHANGELOG_AUTOMATION_TITLE) {
+    throw new Error("That automation title is reserved");
+  }
 }
 
 /** Lists all automations for a given repository. */
@@ -103,6 +118,7 @@ export const create = authMutation({
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
+    assertTitleNotReserved(args.title);
     const now = Date.now();
     const numId = await allocateNumId(ctx.db, args.repoId, "automations");
     return await ctx.db.insert("automations", {
@@ -135,14 +151,15 @@ export const update = authMutation({
     shared: v.optional(v.boolean()),
     sendEmail: v.optional(v.boolean()),
     autoStartTasks: v.optional(v.boolean()),
+    emailAutoSend: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const automation = await ctx.db.get(args.id);
-    if (!automation) throw new Error("Automation not found");
-    if (!(await hasRepoAccess(ctx.db, automation.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const automation = await getAutomationWithAccess(
+      ctx.db,
+      args.id,
+      ctx.userId,
+    );
 
     // A system automation's definition is code-owned, but everything else —
     // schedule, model, enabled, email — belongs to the install and takes the
@@ -174,6 +191,11 @@ export const update = authMutation({
       }
     }
 
+    // The changelog automation itself may keep (re-save) its own title.
+    if (args.title !== undefined && args.title !== automation.title) {
+      assertTitleNotReserved(args.title);
+    }
+
     const patch: Partial<Doc<"automations">> = { updatedAt: Date.now() };
     if (args.title !== undefined) patch.title = args.title;
     if (args.description !== undefined) patch.description = args.description;
@@ -188,6 +210,8 @@ export const update = authMutation({
     if (args.autoStartTasks !== undefined) {
       patch.autoStartTasks = args.autoStartTasks;
     }
+    if (args.emailAutoSend !== undefined)
+      patch.emailAutoSend = args.emailAutoSend;
 
     if (args.shared !== undefined) {
       if (args.contextRepoId === undefined) {

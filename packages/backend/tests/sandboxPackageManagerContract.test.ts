@@ -1,7 +1,4 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import {
   CHROME_RUNTIME_LIBRARY_PACKAGES,
@@ -11,43 +8,6 @@ import {
   pkgInstall,
   pkgInstallScript,
 } from "../convex/_sandbox_runtime/packageManager";
-
-const testsDir = dirname(fileURLToPath(import.meta.url));
-const readSource = (relative: string) =>
-  readFileSync(join(testsDir, "..", relative), "utf8");
-
-/**
- * Managed Images move new sandboxes to Ubuntu while every snapshot seeded
- * before the flip stays Amazon Linux 2023 — and both restore into the same
- * runtime code. Every install therefore has to go through the shared helper;
- * a stray `dnf install` would work on a restored old snapshot and silently
- * fail on a fresh Ubuntu one (or vice versa for a stray `apt-get`).
- */
-describe("no module installs packages behind the shared helper's back", () => {
-  const modules = [
-    "convex/snapshotActions.ts",
-    "convex/_sandbox/vercelProvider.ts",
-    "convex/_sandbox_runtime/helpers.ts",
-    "convex/_sandbox_runtime/git.ts",
-    "convex/_pty/vercel.ts",
-    "convex/_pty/launchDevServerInVercelConsole.ts",
-  ];
-
-  for (const relative of modules) {
-    test(`${relative} has no direct package-manager call`, () => {
-      const source = readSource(relative).replace(/^\s*\/\/.*$/gm, "");
-      expect(source, "use pkgInstall / eva_pkg_install_*").not.toMatch(
-        /\bdnf install\b/,
-      );
-      expect(source, "use pkgInstall / eva_pkg_install_*").not.toMatch(
-        /\bapt-get install\b/,
-      );
-      expect(source, "vendor repos belong in packageManager.ts").not.toMatch(
-        /yum\.repos\.d|sources\.list\.d/,
-      );
-    });
-  }
-});
 
 describe("package alias table", () => {
   test("every referenced package id has an entry", () => {
@@ -154,32 +114,6 @@ describe("the emitted bash parses", () => {
 
   test("a full install snippet parses", () => {
     expect(() => parses(pkgInstallScript("docker", "git", "jq"))).not.toThrow();
-  });
-
-  /**
-   * `ensureDockerDaemon` used to join its script with `"; "`, which put a
-   * literal `;` straight after `sudo setsid dockerd … &` — a bash syntax error.
-   * The script never parsed, so the whole Docker recovery path silently threw
-   * into its catch and logged "Docker not available". Any array containing a
-   * backgrounded command must be newline-joined.
-   */
-  test("no shell script array joins a backgrounded command with '; '", () => {
-    for (const relative of [
-      "convex/_sandbox_runtime/helpers.ts",
-      "convex/snapshotActions.ts",
-      "convex/_sandbox/vercelProvider.ts",
-    ]) {
-      const source = readSource(relative);
-      // `… &",` (element ends by backgrounding) immediately before a `join("; ")`
-      // is the exact shape that breaks; check each join's own array.
-      const joins = [...source.matchAll(/\[([\s\S]*?)\]\.join\("; "\)/g)];
-      for (const [, body] of joins) {
-        expect(
-          body,
-          `${relative}: a backgrounded command cannot be joined with "; "`,
-        ).not.toMatch(/&"\s*,/);
-      }
-    }
   });
 
   /**

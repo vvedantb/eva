@@ -1,0 +1,89 @@
+name: Release Android APK
+
+# Builds the signed Eva sideload APK and publishes it as a GitHub Release
+# tagged eva-apk-<versionName>. V Store does not list Eva: its catalog sync
+# reads mobile-apk-* tags only, so tag_prefix stays eva-apk-. See
+# apps/mobile/RELEASE.md.
+on:
+  push:
+    branches: [main]
+    # Files that reach the APK. Metro bundles @eva/shared and the runtime
+    # exports of @eva/backend (packages/backend/index.ts re-exports from
+    # convex/), so both stay in the filter. Keep it equal to that closure.
+    paths:
+      - "apps/mobile/**"
+      - "!apps/mobile/**/*.md"
+      - "!apps/mobile/.env.example"
+      - "packages/shared/**"
+      - "!packages/shared/**/*.test.ts"
+      - "packages/backend/package.json"
+      - "packages/backend/index.ts"
+      - "packages/backend/convex/**"
+      - "!packages/backend/convex/**/*.test.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "patches/**"
+      - "scripts/build-android-release.sh"
+      - "scripts/check-clerk-native-api.sh"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "versionName, like 0.1.1. Empty bumps the patch of the highest published release.json versionName."
+        required: false
+        type: string
+      dry_run:
+        description: "Build and sign the APK, but publish nothing."
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+# One release at a time: the version is chosen inside the job.
+concurrency:
+  group: release-android
+  cancel-in-progress: false
+
+jobs:
+  release:
+    uses: vvedantb/packages/.github/workflows/release-android-apk.yml@main
+    with:
+      app_name: eva
+      release_title: Eva
+      apk_basename: eva
+      package_id: com.projectvdotuk.eva
+      # Not V Store: its catalog sync reads mobile-apk-* tags.
+      tag_prefix: eva-apk-
+      mark_as_latest: false
+      version: ${{ inputs.version }}
+      dry_run: ${{ inputs.dry_run == true }}
+      upload_dry_run_artifact: true # artifact eva-android-dry-run
+      pre_setup_command: |
+        df -h /
+        sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost /opt/hostedtoolcache/CodeQL /usr/local/lib/node_modules /usr/share/swift /usr/local/share/powershell /usr/local/share/chromium || true
+        sudo docker image prune --all --force || true
+        df -h /
+      # Public build-time values, from repository variables (Settings,
+      # Secrets and variables, Actions, Variables). They match the web app's
+      # VITE_CLERK_PUBLISHABLE_KEY and VITE_CONVEX_URL on Vercel.
+      build_env: |
+        EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ vars.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+        EXPO_PUBLIC_CONVEX_URL=${{ vars.EXPO_PUBLIC_CONVEX_URL }}
+        EXPO_PUBLIC_WEB_URL=${{ vars.EXPO_PUBLIC_WEB_URL }}
+        EAS_PROJECT_ID=${{ vars.EAS_PROJECT_ID }}
+      # Fail early and clearly: apps/mobile/src/config.ts has no defaults, and
+      # Clerk must have the Native API on.
+      pre_build_command: |
+        missing=0
+        for name in EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY EXPO_PUBLIC_CONVEX_URL EXPO_PUBLIC_WEB_URL; do
+          if [ -z "${!name:-}" ]; then
+            echo "::error::Repository variable $name is empty. Set it under Settings, Secrets and variables, Actions, Variables (see apps/mobile/RELEASE.md)."
+            missing=1
+          fi
+        done
+        [ "$missing" -eq 0 ] || exit 1
+        # The APK is blank on launch if Clerk's Native API is off for this key.
+        bash scripts/check-clerk-native-api.sh
+    secrets: inherit

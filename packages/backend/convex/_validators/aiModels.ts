@@ -24,9 +24,10 @@ export const aiModelValidator = v.union(
   v.literal("claude:opusplan"),
   v.literal("claude:claude-opus-4-5-20251101"),
   v.literal("claude:claude-opus-4-6"),
+  v.literal("claude:claude-fable-5-2"),
+  // Legacy Fable 5.1 and 5 — still accepted so existing sessions can load;
+  // normalizeAIModel maps them to claude-fable-5-2.
   v.literal("claude:claude-fable-5-1"),
-  // Legacy Fable 5 — still accepted so existing sessions can load;
-  // normalizeAIModel maps it to claude-fable-5-1.
   v.literal("claude:claude-fable-5"),
   v.literal("codex:gpt-6-astra"),
   v.literal("codex:gpt-5.6-sol"),
@@ -112,6 +113,8 @@ export const DEFAULT_REASONING_LEVEL: ReasoningLevel = "medium";
 export interface ModelReasoningTraits {
   levels: ReadonlyArray<ReasoningLevel>;
   default: ReasoningLevel;
+  /** The CLI's own default when Eva's `default` differs; omitted means equal. */
+  providerDefault?: ReasoningLevel;
   ultrathink?: boolean;
 }
 
@@ -141,6 +144,13 @@ const CLAUDE_REASONING_FULL: ModelReasoningTraits = {
   levels: ["low", "medium", "high", "xhigh", "max"],
   default: "high",
   ultrathink: true,
+};
+
+/** Opus defaults to medium in Eva; the Claude CLI defaults to high. */
+const CLAUDE_REASONING_OPUS: ModelReasoningTraits = {
+  ...CLAUDE_REASONING_FULL,
+  default: "medium",
+  providerDefault: "high",
 };
 
 const CLAUDE_REASONING_NO_XHIGH: ModelReasoningTraits = {
@@ -196,7 +206,7 @@ export type AIModel =
   | "claude:opusplan"
   | "claude:claude-opus-4-5-20251101"
   | "claude:claude-opus-4-6"
-  | "claude:claude-fable-5-1"
+  | "claude:claude-fable-5-2"
   | "codex:gpt-6-astra"
   | "codex:gpt-5.6-sol"
   | "codex:gpt-5.6-terra"
@@ -214,6 +224,7 @@ export type AIModel =
 export type PersistedAIModel =
   | AIModel
   | LegacyClaudeModel
+  | "claude:claude-fable-5-1"
   | "claude:claude-fable-5"
   | "codex:gpt-5.6"
   | "codex:gpt-5.5"
@@ -269,9 +280,9 @@ export const DEFAULT_AI_MODEL: AIModel = "claude:sonnet";
 
 export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
   {
-    id: "claude:claude-fable-5-1",
+    id: "claude:claude-fable-5-2",
     provider: "claude",
-    label: "Fable 5.1",
+    label: "Fable 5.2",
     requiresAuth: true,
     reasoning: CLAUDE_REASONING_FULL,
     contextWindow1m: true,
@@ -282,7 +293,7 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     provider: "claude",
     label: "Opus",
     requiresAuth: true,
-    reasoning: CLAUDE_REASONING_FULL,
+    reasoning: CLAUDE_REASONING_OPUS,
     contextWindow: 200000,
   },
   {
@@ -506,7 +517,7 @@ export const AI_MODEL_ALIASES: ReadonlyArray<
   ],
   ["claude:claude-opus-4-6", ["claude-opus-4-6", "claude:claude-opus-4-6"]],
   [
-    "claude:claude-fable-5-1",
+    "claude:claude-fable-5-2",
     [
       "fable",
       "claude:fable",
@@ -514,6 +525,8 @@ export const AI_MODEL_ALIASES: ReadonlyArray<
       "claude:claude-fable-5",
       "claude-fable-5-1",
       "claude:claude-fable-5-1",
+      "claude-fable-5-2",
+      "claude:claude-fable-5-2",
     ],
   ],
   ["codex:gpt-6-astra", ["codex:gpt-6-astra"]],
@@ -709,6 +722,34 @@ export function resolveTraitsForDisplay(
 }
 
 /**
+ * What a model picker trigger shows after the model name: the reasoning
+ * level, "1M" when the 1M context is on, "No thinking" when thinking is off,
+ * joined by " · ", and whether Fast is on (a bolt). Shared by the web
+ * `ModelSelectWithTraits` and the phone composer footer.
+ */
+export function modelTraitSummary(
+  model: string | null | undefined,
+  stored: StoredModelTraits,
+): { suffix: string | undefined; fast: boolean } {
+  const config = getModelTraits(model);
+  const display = resolveTraitsForDisplay(model, stored);
+  const parts: string[] = [];
+  if (config.reasoning) {
+    parts.push(
+      getReasoningLevelLabel(display.effortLevel ?? config.reasoning.default),
+    );
+  }
+  if (config.contextWindow1m && display.use1mContext) parts.push("1M");
+  if (config.thinkingToggle && !display.thinkingEnabled) {
+    parts.push("No thinking");
+  }
+  return {
+    suffix: parts.length > 0 ? parts.join(" · ") : undefined,
+    fast: Boolean(config.fastMode && display.fastMode),
+  };
+}
+
+/**
  * Build execution payload: only non-default trait overrides are included so the
  * runner uses each model's native defaults when the user has not changed them.
  */
@@ -719,13 +760,12 @@ export function buildTraitsExecutionPayload(
   const traits = getModelTraits(model);
   const payload: ModelTraitsExecutionArgs = {};
 
-  if (traits.reasoning && stored.effortLevel !== undefined) {
-    const { default: defaultLevel } = traits.reasoning;
-    if (stored.effortLevel !== defaultLevel) {
-      const resolved = resolveReasoningLevel(model, stored.effortLevel);
-      if (resolved) {
-        payload.reasoningLevel = resolved;
-      }
+  if (traits.reasoning) {
+    const { default: defaultLevel, providerDefault = defaultLevel } =
+      traits.reasoning;
+    const resolved = resolveReasoningLevel(model, stored.effortLevel);
+    if (resolved && resolved !== providerDefault) {
+      payload.reasoningLevel = resolved;
     }
   }
 
@@ -879,7 +919,7 @@ export function getVisibleAIModelOptions(
  * Everything else stays selectable in the normal UI — this only trims the list.
  */
 const SIMPLE_VIEW_MODEL_IDS: ReadonlySet<AIModel> = new Set<AIModel>([
-  "claude:claude-fable-5-1",
+  "claude:claude-fable-5-2",
   "claude:opus",
   "claude:sonnet",
   "codex:gpt-6-astra",
@@ -902,7 +942,7 @@ export const SIMPLE_VIEW_MODEL_LADDER: ReadonlyArray<AIModel> = [
   "cursor:grok-4.5",
   "cursor:grok-4.7",
   "claude:opus",
-  "claude:claude-fable-5-1",
+  "claude:claude-fable-5-2",
 ];
 
 /**
@@ -914,7 +954,7 @@ export function snapToSimpleViewLadder(model: string): AIModel {
   for (const step of SIMPLE_VIEW_MODEL_LADDER) {
     if (step === normalized) return step;
   }
-  if (normalized.includes("fable")) return "claude:claude-fable-5-1";
+  if (normalized.includes("fable")) return "claude:claude-fable-5-2";
   if (getAIModelProvider(normalized) === "claude") return "claude:opus";
   if (normalized.includes("composer")) return "cursor:composer-2.5";
   if (normalized.includes("grok-4.5")) return "cursor:grok-4.5";

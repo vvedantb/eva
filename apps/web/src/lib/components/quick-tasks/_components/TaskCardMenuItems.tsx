@@ -50,6 +50,8 @@ import {
   useAvailableAiModels,
   useTaskOwnerProviderAccounts,
 } from "@/lib/hooks/useAvailableAiModels";
+import { PrActionsSubmenus } from "@/lib/components/pr-menu/PrActionsSubmenus";
+import { useOwnerPullRequests } from "@/lib/components/pr-menu/useOwnerPullRequests";
 
 type GroupedCodebase = FunctionReturnType<
   typeof api.githubRepos.listGroupedByCodebase
@@ -139,12 +141,13 @@ export function TaskCardMenuItems({
   // content on demand, so these stay per opened menu rather than per card on
   // the board. PRs come primary first; a project task links its project's.
   const runs = useQuery(api.agentRuns.listByTask, { taskId: id });
-  const taskPrs = useQuery(api.pullRequests.listForOwner, {
-    owner: { kind: "task", taskId: id },
-  });
-  const latestPrUrl =
-    taskPrs?.[0]?.prUrl ??
-    projects?.find((project) => project._id === projectId)?.prUrl;
+  const taskPrs = useOwnerPullRequests({ kind: "task", taskId: id });
+  // A project task without PRs of its own links its project's, which is a bare
+  // URL here: the project's rows are not loaded on a task card.
+  const projectPrUrl =
+    taskPrs.length === 0
+      ? projects?.find((project) => project._id === projectId)?.prUrl
+      : undefined;
 
   const isOwner =
     currentUserId !== undefined &&
@@ -199,22 +202,23 @@ export function TaskCardMenuItems({
         </>
       )}
 
-      {href || latestPrUrl ? (
+      {href || taskPrs.length > 0 || projectPrUrl ? (
         <>
           {href ? (
             <Item
               onSelect={() => {
-                window.open(href, "_blank");
+                window.open(href, "_blank", "noopener,noreferrer");
               }}
             >
               <IconExternalLink size={16} />
               Open in new tab
             </Item>
           ) : null}
-          {latestPrUrl ? (
+          <PrActionsSubmenus variant={variant} prs={taskPrs} />
+          {projectPrUrl ? (
             <Item
               onSelect={() => {
-                window.open(latestPrUrl, "_blank", "noopener,noreferrer");
+                window.open(projectPrUrl, "_blank", "noopener,noreferrer");
               }}
             >
               <IconGitPullRequest size={16} />

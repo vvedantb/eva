@@ -17,7 +17,7 @@ import {
 } from "@/lib/components/sandbox/usePrDiff";
 import { useDiffIgnoreWhitespace } from "@/lib/components/sandbox/useDiffIgnoreWhitespace";
 import { DiffFileLazyBody } from "@/lib/components/sandbox/DiffFileLazyBody";
-import { applyIgnoreWhitespace } from "@/lib/components/sandbox/diffFiles";
+import { applyIgnoreWhitespace } from "@eva/shared";
 import { RecapAskAgentButton } from "./RecapAskAgentButton";
 
 interface RecapWalkthroughProps {

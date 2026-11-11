@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Eva's web theme (apps/web/src/globals.css, via @eva/shared/evaTheme) as
+ * `h s% l%` channels for NativeWind; the native-ui preset reads these keys.
+ * JS colours come from the same values through native-ui `configureTheme`
+ * (src/ui/evaTheme.ts). Keep in step with globals.css.
+ */
+@layer base {
+  :root {
+    --background: 210 10% 96%;
+    --foreground: 240 10% 4%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 4%;
+    --primary: 240 10% 4%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 210 5% 92%;
+    --secondary-foreground: 210 8% 10%;
+    --muted: 240 3% 94%;
+    --muted-foreground: 220 1% 40%;
+    --accent: 240 5% 96%;
+    --accent-foreground: 240 10% 4%;
+    --destructive: 358 100% 61%;
+    --destructive-foreground: 0 0% 99%;
+    --success: 146 81% 44%;
+    --warning: 37 91% 55%;
+    --border: 210 3% 87%;
+    --input: 210 3% 87%;
+    --ring: 240 10% 4%;
+    --surface: 0 0% 100%;
+    --surface-secondary: 240 3% 94%;
+    --surface-tertiary: 210 5% 92%;
+    --overlay: 0 0% 100%;
+    --overlay-foreground: 240 10% 4%;
+    --default: 210 5% 92%;
+    --default-foreground: 240 10% 4%;
+    --segment: 0 0% 100%;
+    --segment-foreground: 240 10% 4%;
+    --separator: 210 3% 87%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 4%;
+    --danger: 358 100% 61%;
+    --danger-foreground: 0 0% 99%;
+    --surface-card: 0 0% 100%;
+    --field: 0 0% 100%;
+    --success-foreground: 140 6% 9%;
+    --warning-foreground: 30 11% 9%;
+  }
+
+  /* One decimal where whole percents miss the web RGB by a step (card 16, not 15). */
+  .dark:root {
+    --background: 0 0% 0.8%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 6.3%;
+    --card-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 10% 4%;
+    --secondary: 0 0% 12.5%;
+    --secondary-foreground: 0 0% 99%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 220 1.6% 62.9%;
+    --accent: 0 0% 8%;
+    --accent-foreground: 240 5% 96%;
+    --destructive: 358.9 69% 54.5%;
+    --destructive-foreground: 0 0% 99%;
+    --success: 146.3 81.1% 43.5%;
+    --warning: 37 91% 64%;
+    --border: 0 0% 14%;
+    --input: 0 0% 14%;
+    --ring: 0 0% 98%;
+    --surface: 0 0% 6.3%;
+    --surface-secondary: 0 0% 10%;
+    --surface-tertiary: 0 0% 12.5%;
+    --overlay: 0 0% 6.3%;
+    --overlay-foreground: 0 0% 98%;
+    --default: 0 0% 12.5%;
+    --default-foreground: 0 0% 99%;
+    --segment: 0 0% 12.5%;
+    --segment-foreground: 0 0% 98%;
+    --separator: 0 0% 14%;
+    --popover: 0 0% 6.3%;
+    --popover-foreground: 0 0% 98%;
+    --danger: 358.9 69% 54.5%;
+    --danger-foreground: 0 0% 99%;
+    --surface-card: 0 0% 6.3%;
+    --field: 0 0% 6.3%;
+    --success-foreground: 140 6.4% 9.2%;
+    --warning-foreground: 36 10.6% 9.2%;
+  }
+}

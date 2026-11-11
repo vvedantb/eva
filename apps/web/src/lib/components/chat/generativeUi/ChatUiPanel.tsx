@@ -3,6 +3,7 @@
 import { tokenTransition, Surface } from "@vvedantb/ui";
 import { m } from "motion/react";
 import { parseChatUiSpec } from "@eva/shared/generativeUi";
+import { isHttpUrl } from "@eva/shared/safeUrl";
 import { ChatUiSpecRenderer } from "@/lib/components/chat/generativeUi/renderer";
 
 interface ChatUiPanelProps {
@@ -14,20 +15,6 @@ interface ChatUiPanelProps {
    * the panel's buttons inert rather than silently swallowing the press.
    */
   onReply?: (message: string) => void;
-}
-
-/**
- * The composer already rejects anything that is not http(s), but a stored spec
- * is data and `window.open("javascript:…")` would run it, so the scheme is
- * checked again at the point of use.
- */
-function isSafeHttpUrl(value: string): boolean {
-  try {
-    const protocol = new URL(value).protocol;
-    return protocol === "http:" || protocol === "https:";
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -52,7 +39,9 @@ export function ChatUiPanel({ spec, onReply }: ChatUiPanelProps) {
     }
     if (actionName === "open_url") {
       const url = params?.url;
-      if (typeof url === "string" && isSafeHttpUrl(url)) {
+      // The composer already rejects non-http(s), but a stored spec is data
+      // and `window.open("javascript:…")` would run it: check again here.
+      if (typeof url === "string" && isHttpUrl(url)) {
         window.open(url, "_blank", "noopener");
       }
     }

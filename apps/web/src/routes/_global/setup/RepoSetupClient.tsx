@@ -116,7 +116,6 @@ export function RepoSetupClient({
         owner: repo.owner,
         name: repo.name,
         installationId: Number(installationId),
-        githubId: repo.id,
         rootDirectory,
       });
       setAddedRepos((prev) => new Set([...prev, key]));

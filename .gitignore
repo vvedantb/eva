@@ -5,11 +5,14 @@ screenshots
 .env
 .env.local
 .env*
+!.env.example
 dist
 tsconfig.buildinfo
 packages/backend/callback-src/.build
 packages/backend/preview-annotation-src/.build
 mcp.json
+# Repo-owned Eva MCP servers (secrets stay as ${VAR}).
+!.eva/mcp.json
 videoeva-staging-backup.zip
 video
 # Local staging DB backup (large, never commit)
@@ -20,3 +23,6 @@ apps/web/.tanstack/
 
 # Redline local baseline pin
 .redline/
+
+# Android release signing for apps/mobile (see apps/mobile/plugins/withReleaseSigning.js).
+keystore.properties

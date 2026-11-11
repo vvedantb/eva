@@ -5,24 +5,16 @@ export {
   saveRepoSnapshot,
   setSnapshotEnabled,
   deleteRepoSnapshot,
-  getSeedableAppRepos,
-  getOrphanedSeededApps,
   getSeededAppStatus,
   setSeededSnapshotName,
-  setSeededSnapshotNameForAll,
-  getSeedFingerprint,
-  setImageFingerprint,
+  getCurrentSeedFingerprint,
   setBaseSnapshotId,
-  setSeedCommandsInternal,
-  listProtectedSnapshotIds,
   listAllProtectedSnapshotIds,
-  getPrimarySeedAppRepo,
 } from "./_repoSnapshots/config";
 
 export {
   listBuilds,
   getBuild,
-  getBuildStatus,
   triggerScheduledBuild,
   startBuild,
   startBuildForRepo,
@@ -37,6 +29,7 @@ export {
 export {
   getRepo,
   getStartupCommands,
+  getAppRunCommands,
   getBackgroundCommands,
   getStopCommands,
 } from "./_repoSnapshots/repoMetadata";

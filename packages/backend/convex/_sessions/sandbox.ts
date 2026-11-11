@@ -16,7 +16,7 @@ import {
 import { markAllRunningExited } from "../backgroundProcesses";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "../streaming";
-import { clearPendingQuestionsForEntity } from "../pendingQuestions";
+import { detachPendingQuestions } from "../pendingQuestions";
 import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
 import { settleOrphanedBackgroundAgents } from "./backgroundAgents";
 import {
@@ -24,14 +24,17 @@ import {
   listLiveSessionChats,
   sessionChatStreamingEntityId,
 } from "../_sessionChats/helpers";
-import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
-import { scheduleDrainAfterStopSettles } from "../_sandbox/stopRecovery";
+import {
+  scheduleDrainAfterStopSettles,
+  STUCK_STOPPING_RECOVER_MS,
+} from "../_sandbox/stopRecovery";
 import {
   stopAlertText,
   stopReasonValidator,
   type StopReason,
 } from "../_sandbox/stopReason";
 import { touchUserActivity } from "../_sandbox/activity";
+import { sandboxStartupEntityId } from "../_sandbox/owner";
 import {
   canRequestSandboxStart,
   discardUntrackedSandbox,
@@ -41,6 +44,7 @@ import {
   shouldApplySandboxStartFailure,
 } from "../_sandbox/transitions";
 import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
+import { errorMessage } from "@vvedantb/server";
 
 /** Longest `sandboxError` we persist — it is read as one line of chat header copy. */
 const SANDBOX_ERROR_MAX_LENGTH = 200;
@@ -111,7 +115,10 @@ export async function requestSessionSandboxStart(
   });
   // Seed startup streaming immediately so the UI shows a real step instead of
   // the random "Eva is inferring…" spinner while the workflow schedules.
-  await seedSandboxStartupActivity(ctx.db, `session-startup-${session._id}`);
+  await seedSandboxStartupActivity(
+    ctx.db,
+    sandboxStartupEntityId({ kind: "session", sessionId: session._id }),
+  );
   const reusableSandboxId = session.sandboxId;
   console.log(
     `[sessions] startSandbox sessionId=${session._id} existingSandboxId=${session.sandboxId ?? "none"} sandboxId=${reusableSandboxId ?? "none"}`,
@@ -232,10 +239,10 @@ export async function requestSessionSandboxStop(
   const { stopReason } = options;
 
   // Stopping kills every chat's paused turn, so a blocking AskUserQuestion
-  // can never be claimed — clear them or they hide the composer forever.
+  // can never be claimed — move them onto the chat message so the card stays.
   const chats = await listLiveSessionChats(ctx.db, sessionId);
   for (const chat of chats) {
-    await clearPendingQuestionsForEntity(
+    await detachPendingQuestions(
       ctx.db,
       sessionChatStreamingEntityId(chat._id),
     );
@@ -284,7 +291,10 @@ export async function requestSessionSandboxStop(
 
   // Clear leftover start steps so the chat does not re-show "Starting
   // sandbox..." / cold-storage copy while status is stopping.
-  await clearSandboxStartupActivity(ctx.db, `session-startup-${sessionId}`);
+  await clearSandboxStartupActivity(
+    ctx.db,
+    sandboxStartupEntityId({ kind: "session", sessionId }),
+  );
 
   for (const chat of chats) {
     if (!chat.syntheticTurnMessageId) continue;
@@ -382,7 +392,7 @@ export const finalizeStopSandbox = internalAction({
         repoId: args.repoId,
       });
     } catch (err) {
-      stopError = err instanceof Error ? err.message : String(err);
+      stopError = errorMessage(err);
     }
     await ctx.runMutation(internal._sessions.sandbox.markSandboxClosed, {
       sessionId: args.sessionId,

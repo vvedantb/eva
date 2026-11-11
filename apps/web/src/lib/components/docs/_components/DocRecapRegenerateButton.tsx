@@ -5,7 +5,7 @@ import { useAction } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api, DEFAULT_AI_MODEL, normalizeAIModel, type Id } from "@eva/backend";
 import { Button, Spinner } from "@vvedantb/ui";
-import { storedRunTraits, toRunTraitArgs } from "@/lib/utils/runTraits";
+import { storedRunTraits, toRunTraitArgs } from "@eva/shared";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 type Doc = NonNullable<FunctionReturnType<typeof api.docs.get>>;
@@ -28,12 +28,13 @@ export function DocRecapRegenerateButton({
 
   const regenerate = async () => {
     setBusy(true);
+    const model = normalizeAIModel(doc.prRecapModel ?? DEFAULT_AI_MODEL);
     try {
       await withMutationToast(
         generatePrRecap({
           repoId,
           prUrl,
-          model: normalizeAIModel(doc.prRecapModel ?? DEFAULT_AI_MODEL),
+          model,
           ...toRunTraitArgs(storedRunTraits(doc)),
         }),
         "Recap regeneration started",

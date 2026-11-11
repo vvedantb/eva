@@ -7,9 +7,12 @@ import { importJWK, SignJWT, type JWK } from "jose";
 import {
   PREVIEW_GRANT_AUDIENCE,
   PREVIEW_GRANT_ISSUER,
+  PREVIEW_GRANT_PARAM,
   PREVIEW_GRANT_TTL_SECONDS,
 } from "./previewGrantConfig";
 import { assertActionSandboxAccess } from "./functions";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
+import { getSandboxHandle } from "./_sandbox_runtime/helpers";
 
 /**
  * Reads the ES256 preview-grant keypair from the env. The grant is asymmetric
@@ -63,17 +66,26 @@ export async function signPreviewGrant(params: {
 
 /**
  * Mints a preview grant for the signed-in user, after confirming they have
- * access to the repo. Called by the `/preview-auth` handshake route when a
- * cold/shared preview link is opened.
+ * access to the repo, and returns the URL to send the browser to. Called by
+ * the `/preview-auth` handshake route when a cold/shared preview link is
+ * opened.
+ *
+ * The grant is a bearer token for the whole sandbox, so the backend picks
+ * where it goes: the sandbox's own preview origin for `port`, read from the
+ * provider. Only the path, query and hash come from the caller, so a crafted
+ * link cannot send the grant to another host.
  */
 export const mintPreviewGrant = action({
   args: {
     sandboxId: v.string(),
     port: v.number(),
     repoId: v.string(),
+    /** Path, query and hash to open on the preview origin. */
+    path: v.string(),
   },
   returns: v.string(),
   handler: async (ctx, args): Promise<string> => {
+    await rejectSandboxCaller(ctx);
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("Not authenticated");
@@ -89,10 +101,23 @@ export const mintPreviewGrant = action({
     }
     await assertActionSandboxAccess(ctx, repo._id, args.sandboxId);
 
-    return await signPreviewGrant({
+    const handle = await getSandboxHandle(ctx, repo._id, args.sandboxId);
+    const preview = await handle.previewUrl(args.port);
+    const grant = await signPreviewGrant({
       sandboxId: args.sandboxId,
       port: args.port,
       sub: identity.subject,
     });
+
+    // Parse against a placeholder base, then copy only the path parts: the
+    // caller's input can never change the origin, even as `//host/...`.
+    const requested = new URL(args.path, "https://eva.invalid");
+    const target = new URL(preview.url);
+    target.protocol = "https:";
+    target.pathname = requested.pathname;
+    target.search = requested.search;
+    target.hash = requested.hash;
+    target.searchParams.set(PREVIEW_GRANT_PARAM, grant);
+    return target.toString();
   },
 });

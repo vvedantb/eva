@@ -52,13 +52,14 @@ import {
 import { driveCacheSetupScript, driveCacheTeardownScript } from "./driveCache";
 import { FFMPEG_INSTALL_SCRIPT } from "./ffmpegInstall";
 import { snapshotPruneScript } from "./snapshotPrune";
-import { EVA_ENV_FILE } from "./vercelEnvFile";
+import { EVA_ENV_SOURCE_CMD } from "./vercelEnvFile";
 import { SANDBOX_REGION, sandboxPlacement } from "./vercelRegion";
 import {
   CHROME_RUNTIME_LIBRARY_PACKAGES,
   PACKAGE_HELPER_SCRIPT,
   pkgInstall,
 } from "../_sandbox_runtime/packageManager";
+import { errorMessage } from "@vvedantb/server";
 
 export {
   EVA_ENV_FILE,
@@ -93,7 +94,7 @@ const DEFAULT_VCPUS = Number(process.env.SANDBOX_VERCEL_VCPUS ?? "8");
 const VERCEL_SANDBOX_IMAGE = "vercel/sandbox/universal:latest";
 
 /** Prefix that sources the eva env file (if present) before a command. */
-const SOURCE_ENV = `[ -f ${EVA_ENV_FILE} ] && . ${EVA_ENV_FILE};`;
+const SOURCE_ENV = `${EVA_ENV_SOURCE_CMD};`;
 /** Vercel exposes at most 4 ports; default assumes Next on 3000 + Supabase API. */
 const MAX_PORTS = 4;
 const STOP_CONFIRMATION_TIMEOUT_MS = 180_000;
@@ -165,7 +166,7 @@ function extractApiErrorDetail(e: unknown): string {
   try {
     return JSON.stringify(e, Object.getOwnPropertyNames(e)).slice(0, 1000);
   } catch {
-    return e instanceof Error ? e.message : String(e);
+    return errorMessage(e);
   }
 }
 
@@ -633,7 +634,7 @@ class VercelSandboxHandle implements SandboxHandle {
       };
     } catch (e) {
       console.log(
-        `[vercel] listSessions failed sandbox=${this.sandbox.name}: ${e instanceof Error ? e.message : String(e)}`,
+        `[vercel] listSessions failed sandbox=${this.sandbox.name}: ${errorMessage(e)}`,
       );
       return { kind: "error" };
     }
@@ -917,7 +918,7 @@ class VercelSandboxHandle implements SandboxHandle {
         observed = this.state;
         if (observed === "running") return;
       } catch (e) {
-        lastError = e instanceof Error ? e.message : String(e);
+        lastError = errorMessage(e);
         lastErrorStatus = vercelHttpStatus(e);
         lastErrorDetail = extractApiErrorDetail(e);
         // SDK may reject resume while stop finishes even if listSessions lagged.
@@ -1085,7 +1086,7 @@ class VercelSandboxHandle implements SandboxHandle {
       } catch (error) {
         console.warn(
           `[vercel] snapshot.delete failed sandbox=${sandboxName} snapshotId=${meta.id}: ${
-            error instanceof Error ? error.message : String(error)
+            errorMessage(error)
           }`,
         );
       }
@@ -1104,7 +1105,7 @@ class VercelSandboxHandle implements SandboxHandle {
     } catch (error) {
       console.warn(
         `[vercel] sandbox.delete failed name=${sandboxName}: ${
-          error instanceof Error ? error.message : String(error)
+          errorMessage(error)
         }`,
       );
     }
@@ -1160,7 +1161,7 @@ class VercelSandboxHandle implements SandboxHandle {
       await this.exec(driveCacheTeardownScript(), { timeoutSeconds: 30 });
     } catch (error) {
       console.warn(
-        `[vercel] drive cache teardown before snapshot failed on ${this.id} (continuing): ${error instanceof Error ? error.message : String(error)}`,
+        `[vercel] drive cache teardown before snapshot failed on ${this.id} (continuing): ${errorMessage(error)}`,
       );
     }
 
@@ -1171,7 +1172,7 @@ class VercelSandboxHandle implements SandboxHandle {
       await this.exec(snapshotPruneScript(), { timeoutSeconds: 120 });
     } catch (error) {
       console.warn(
-        `[vercel] snapshot prune failed on ${this.id} (continuing): ${error instanceof Error ? error.message : String(error)}`,
+        `[vercel] snapshot prune failed on ${this.id} (continuing): ${errorMessage(error)}`,
       );
     }
 

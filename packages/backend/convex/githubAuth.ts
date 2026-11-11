@@ -3,7 +3,9 @@
 import { Octokit } from "octokit";
 import { createAppAuth } from "@octokit/auth-app";
 import { v } from "convex/values";
-import { internalAction } from "./_generated/server";
+import { internalAction, type ActionCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
 import {
   ensurePkcs8PrivateKey,
   normalizePemKey,
@@ -97,6 +99,22 @@ export async function getInstallationOctokit(
   return new Octokit({ auth: token });
 }
 
+/**
+ * Loads a repo without an access check and builds an installation Octokit for
+ * it. Internal fetchers only; public actions check access first.
+ */
+export async function getRepoOctokit(
+  ctx: Pick<ActionCtx, "runQuery">,
+  repoId: Id<"githubRepos">,
+): Promise<{ repo: Doc<"githubRepos">; octokit: Octokit }> {
+  const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
+    id: repoId,
+  });
+  if (!repo) throw new Error("Repo not found");
+  const octokit = await getInstallationOctokit(repo.installationId);
+  return { repo, octokit };
+}
+
 /** Creates an Octokit client authenticated as the GitHub App itself (not an installation). */
 export function getAppOctokit(): Octokit {
   const creds = getGitHubCredentials();
@@ -116,7 +134,7 @@ const sandboxGitCredentialValidator = v.object({
   expiresAt: v.number(),
 });
 
-function toSandboxGitCredential(auth: { token: string; expiresAt: string }) {
+export function toSandboxGitCredential(auth: { token: string; expiresAt: string }) {
   return {
     token: auth.token,
     expiresAt: Math.floor(Date.parse(auth.expiresAt) / 1000),

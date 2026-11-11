@@ -17,6 +17,8 @@ import {
   errorTypeValidator,
   evaluationStatusValidator,
   evalFixStatusValidator,
+  notificationTypeValidator,
+  notificationUrgencyValidator,
   evaluationKindValidator,
   evaluationTriggerValidator,
   phaseValidator,
@@ -37,19 +39,23 @@ import {
   snapshotBuildKindValidator,
   snapshotBuildStatusValidator,
   snapshotBuildTriggerValidator,
+  snapshotScheduleValidator,
   taskActivityFieldValidator,
   taskSandboxEventValidator,
   taskSandboxStatusValidator,
   taskStatusValidator,
+  teamMemberRoleValidator,
   themeValidator,
   usageLimitCompletenessValidator,
   usageLimitProviderValidator,
   usageLimitStatusValidator,
+  chatEntityKindValidator,
 } from "./enums";
 import {
   automationFindingValidator,
   conversationMessageValidator,
   customThemeValidator,
+  envVarEntryValidator,
   evalIssueValidator,
   arenaScenarioResultValidator,
   experimentalFlagsValidator,
@@ -704,6 +710,11 @@ export const sessionFields = {
   // restarts/restores rebuild the session branch from the same base instead of
   // silently falling back to the repo default.
   baseBranch: v.optional(v.string()),
+  /**
+   * Pull request this session stacks on. Its head branch is `baseBranch`, and
+   * the session's own PR joins that PR's GitHub stack once it opens.
+   */
+  stackOnPrNumber: v.optional(v.number()),
   /** Summary of the session's `pullRequests` rows (see `prSummaryFields`). */
   prUrl: v.optional(v.string()),
   prState: v.optional(prStateValidator),
@@ -1039,6 +1050,9 @@ export const githubRepoFields = {
   deploymentProjectName: v.optional(v.string()),
   domains: v.optional(v.array(v.string())),
   mcpRootPrompt: v.optional(v.string()),
+  // startup/background/stop commands and devPort/devCommand: a read-only cache
+  // of `.eva/config.json` on the default branch (_evaConfig/cache.ts writes
+  // them). Sandboxes read this copy so a boot needs no GitHub call.
   startupCommands: v.optional(v.array(v.string())),
   backgroundCommands: v.optional(v.array(v.string())),
   // Clean-shutdown commands run before snapshotting a seeded sandbox so on-disk
@@ -1049,11 +1063,30 @@ export const githubRepoFields = {
   // the DB already seeded), set by the seeded-snapshot build when it succeeds.
   // Preferred over the base Image snapshot at sandbox-create time for fast starts.
   seededSnapshotName: v.optional(v.string()),
-  // Fingerprint of the seed inputs (startup/background/stop commands + config
-  // file blobs) captured when seededSnapshotName was built. When unchanged, the
-  // build workflow skips re-seeding — the existing snapshot's data is identical
-  // and re-capturing it would only contend with the image build.
+  // computeSeedFingerprint (build/seed/background/stop commands) of the inputs
+  // seededSnapshotName was built from. A session branch whose `.eva/config.json`
+  // differs skips the seeded snapshot (see resolveSandboxContext).
   seededFingerprint: v.optional(v.string()),
+  // Last sync of the repo-owned `.eva/` folder on the default branch (see
+  // _evaConfig/sync.ts). Absent ⇒ the repo has no `.eva/config.json` yet.
+  evaConfig: v.optional(
+    v.object({
+      ref: v.string(),
+      syncedAt: v.number(),
+      // Parse error of the current file; the cache keeps the last good values.
+      error: v.optional(v.string()),
+      // False when the repo has the file but it does not list this app: the
+      // app's commands are left as they were (add it to the file to set them).
+      appListed: v.optional(v.boolean()),
+      mcpServers: v.array(
+        v.object({
+          name: v.string(),
+          kind: v.union(v.literal("http"), v.literal("stdio")),
+          target: v.string(),
+        }),
+      ),
+    }),
+  ),
   devPort: v.optional(v.number()),
   devCommand: v.optional(v.string()),
   systemPrompt: v.optional(v.string()),
@@ -1208,8 +1241,8 @@ export const automationFields = {
   readOnly: v.optional(v.boolean()),
   actionsEnabled: v.optional(v.boolean()),
   shared: v.optional(v.boolean()),
-  // When true, a successful run broadcasts its result summary by email to every
-  // user with email notifications enabled (see automationEmail.sendAutomationEmail).
+  // When true, a successful run emails its result summary to every user with
+  // email notifications enabled (see _automations/email.ts).
   sendEmail: v.optional(v.boolean()),
   // `create_task` presets only. Missing means true: a created task starts
   // at once. False leaves it in To do for a person to start.
@@ -1217,6 +1250,9 @@ export const automationFields = {
   // `production_alert` presets only. SHA-256 hex of the bearer secret the
   // alert webhook must send. The plain secret is shown once, never stored.
   alertSecretHash: v.optional(v.string()),
+  // True skips review and sends straight away. Missing means each email waits
+  // on its run as a draft until someone sends it, so review is the default.
+  emailAutoSend: v.optional(v.boolean()),
   cronJobId: v.optional(v.string()),
   // Set when this row is a per-repo install of a hardcoded system automation
   // (see _automations/systemAutomations.ts). Content fields hold placeholders;
@@ -1227,6 +1263,21 @@ export const automationFields = {
   createdAt: v.number(),
   updatedAt: v.number(),
 };
+
+/**
+ * The email a successful run produces. A `draft` waits for review and can be
+ * edited; `sent` and `discarded` are final, so an email never sends twice.
+ */
+export const automationRunEmailValidator = v.object({
+  status: v.union(
+    v.literal("draft"),
+    v.literal("sent"),
+    v.literal("discarded"),
+  ),
+  subject: v.string(),
+  /** Markdown, or the changelog's JSON; rendered by `renderAutomationEmail`. */
+  body: v.string(),
+});
 
 export const automationRunFields = {
   automationId: v.id("automations"),
@@ -1242,6 +1293,8 @@ export const automationRunFields = {
   activeWorkflowId: v.optional(v.string()),
   activityLog: v.optional(v.string()),
   findings: v.optional(v.array(automationFindingValidator)),
+  // Set when the automation emails its result; see automationRunEmailValidator.
+  email: v.optional(automationRunEmailValidator),
   // Event-triggered runs only. `eventKey` dedupes a burst of webhooks into one
   // run; `targetUrl` is the PR or issue the event was about.
   eventKind: v.optional(repoEventKindValidator),
@@ -1565,15 +1618,6 @@ export const appSettingsFields = {
   sandboxIdleStopMinutes: v.optional(v.number()),
 };
 
-// Per-entity "last interaction" record read by the idle-pause sweep. Lives in
-// its own table (not on the session/task/project doc) so the frequent, throttled
-// touches never join the write set of hot entity documents.
-export const sandboxActivityKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
-
 /** What reset the idle clock last (shown in the sandbox panel and sweep logs). */
 export const sandboxActivitySourceValidator = v.union(
   /** A chat message was sent or a queued one landed. */
@@ -1594,8 +1638,11 @@ export type SandboxActivitySource = Infer<
   typeof sandboxActivitySourceValidator
 >;
 
+// Per-entity "last interaction" record read by the idle-pause sweep. Lives in
+// its own table (not on the session/task/project doc) so the frequent, throttled
+// touches never join the write set of hot entity documents.
 export const sandboxActivityFields = {
-  kind: sandboxActivityKindValidator,
+  kind: chatEntityKindValidator,
   entityId: v.string(),
   /** Last human interaction: message sent, tab opened, preview traffic, presence. */
   lastUserActivityAt: v.optional(v.number()),
@@ -1631,9 +1678,7 @@ export const sandboxGitCredentialsFields = {
  * Shared by `docs` and `artifacts`; resolved by `_chatSource/helpers.ts`.
  */
 export const chatSourceFields = {
-  sourceKind: v.optional(
-    v.union(v.literal("session"), v.literal("task"), v.literal("project")),
-  ),
+  sourceKind: v.optional(chatEntityKindValidator),
   sourceSessionId: v.optional(v.id("sessions")),
   sourceTaskId: v.optional(v.id("agentTasks")),
   sourceProjectId: v.optional(v.id("projects")),
@@ -2113,6 +2158,99 @@ export const proposedPlanFields = {
   implementedAt: v.optional(v.number()),
   implementationSessionId: v.optional(v.id("sessions")),
   createdAt: v.number(),
+  updatedAt: v.number(),
+};
+
+export const taskDependencyFields = {
+  taskId: v.id("agentTasks"),
+  dependsOnId: v.id("agentTasks"),
+};
+
+export const notificationFields = {
+  userId: v.id("users"),
+  type: notificationTypeValidator,
+  title: v.string(),
+  message: v.optional(v.string()),
+  read: v.boolean(),
+  href: v.optional(v.string()),
+  repoId: v.optional(v.id("githubRepos")),
+  createdAt: v.number(),
+  // Human-readable task/project context shown on the notification card, e.g.
+  // a quick task's title or "Project title: issue title" for project tasks.
+  // Only set for types whose title does not already name the task (mentions,
+  // comment replies); snapshotted at creation, absent otherwise.
+  contextLabel: v.optional(v.string()),
+  // Set once this notification has been included in an email (instant send or
+  // daily digest), so neither path emails the same notification twice.
+  emailedAt: v.optional(v.number()),
+  // When the user archived this notification out of the inbox. Absent means
+  // "in the inbox" — archiving is reversible, so the row is kept and only
+  // this stamp moves. Archived rows never count as unread.
+  archivedAt: v.optional(v.number()),
+  // The comment this notification was generated from, when it came from one.
+  // Also encoded into `href` as `?comment=<id>` at creation; kept here as a
+  // field so the anchor survives independently of the href string. Absent on
+  // non-comment notifications and on every notification created before this
+  // field existed — those keep landing at the top of the target page.
+  commentId: v.optional(v.union(v.id("taskComments"), v.id("docComments"))),
+  // How loudly to deliver this one: high = instant email, normal = daily
+  // digest only, low = inbox only. Undefined means not yet routed (a mention
+  // whose routing action has not landed) or legacy; treated as normal.
+  urgency: v.optional(notificationUrgencyValidator),
+  // The chat this notification is about (session, quick task or project id),
+  // so the mobile inbox can open it without parsing `href`.
+  chatTarget: v.optional(v.string()),
+};
+
+export const repoEnvVarFields = {
+  repoId: v.id("githubRepos"),
+  vars: v.array(envVarEntryValidator),
+  updatedAt: v.number(),
+};
+
+export const repoSnapshotFields = {
+  repoId: v.id("githubRepos"),
+  snapshotName: v.string(),
+  schedule: snapshotScheduleValidator,
+  enabled: v.optional(v.boolean()),
+  cronJobId: v.optional(v.string()),
+  buildCommands: v.optional(v.array(v.string())),
+  // Seed-once commands run ONLY during seeded-snapshot builds, in the
+  // post-daemon phase (services like `convex dev` are up). For one-time
+  // data seeding (env set, convex import). Never re-run on sandbox boot,
+  // unlike githubRepos.startupCommands. Not part of the image fingerprint.
+  seedCommands: v.optional(v.array(v.string())),
+  // Vercel base Image capture (`snap_*`) from a running sandbox — separate
+  // from `snapshotName` and per-app `seededSnapshotName`.
+  baseSnapshotId: v.optional(v.string()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+};
+
+export const sandboxConfigFileFields = {
+  repoId: v.id("githubRepos"),
+  // Legacy single-blob storage (kept for backwards compat with existing records).
+  // New uploads always use `chunks` instead.
+  storageId: v.optional(v.id("_storage")),
+  // Ordered list of storage blob IDs that, when concatenated in order, form the file.
+  // Single-blob files use a 1-element array; multi-chunk files split a large file by ~100MB.
+  chunks: v.optional(v.array(v.id("_storage"))),
+  fileName: v.string(),
+  fileSize: v.number(),
+  uploadedBy: v.id("users"),
+  createdAt: v.number(),
+};
+
+export const teamMemberFields = {
+  teamId: v.id("teams"),
+  userId: v.id("users"),
+  role: teamMemberRoleValidator,
+  joinedAt: v.number(),
+};
+
+export const teamEnvVarFields = {
+  teamId: v.id("teams"),
+  vars: v.array(envVarEntryValidator),
   updatedAt: v.number(),
 };
 

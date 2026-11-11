@@ -80,6 +80,11 @@ test("cleanPrDescription unwraps a whole-answer fence and bounds length", () => 
   expect(long.endsWith("_Description truncated._")).toBe(true);
 });
 
+test("cleanPrDescription keeps empty answers empty", () => {
+  expect(cleanPrDescription("  ")).toBe("");
+  expect(cleanPrDescription("```\n\n```")).toBe("");
+});
+
 test("buildPrDescriptionPrompt asks for the template sections and forbids invention", () => {
   const prompt = buildPrDescriptionPrompt({
     prTitle: "Eva: toggle",
@@ -91,9 +96,12 @@ test("buildPrDescriptionPrompt asks for the template sections and forbids invent
     truncated: true,
   });
 
-  for (const heading of ["Why", "Scope", "Tradeoffs", "Blast radius", "Verification"]) {
-    expect(prompt).toContain(`### ${heading}`);
-  }
+  // Order matters: reviewers stop early, so evidence comes before details.
+  const headings = ["Why", "Scope", "Verification", "Tradeoffs", "Blast radius", "ELI5"];
+  const positions = headings.map((heading) => prompt.indexOf(`### ${heading}`));
+  expect(positions.every((position) => position >= 0)).toBe(true);
+  expect(positions).toEqual([...positions].sort((a, b) => a - b));
+  expect(prompt).toContain("**Not checked:**");
   expect(prompt).toContain("Never invent names");
   expect(prompt).toContain("diff truncated");
   expect(prompt).toContain("## Intent (from Eva)\n## Task\nShip the toggle");

@@ -9,6 +9,9 @@ minimumReleaseAgeExclude:
   - "@vvedantb/redline"
   # @vvedantb/ui 0.12.0 (owner's package) published 2026-10-20 with the shared nav icons.
   - "@vvedantb/ui"
+  # Owner's React Native kit for apps/mobile (same as vmem).
+  - "@vvedantb/native-ui"
+  - "@vvedantb/config"
   # @vvedantb/ui 0.17 imports @vvedantb/server (0.7.1, 2026-10-23) from its root.
   # Backend code mode also runs scripts in the shared sandbox from it.
   - "@vvedantb/server"
@@ -28,13 +31,6 @@ minimumReleaseAgeExclude:
   # release. A 7-day soak would leave every sandbox failing those turns.
   - "@anthropic-ai/claude-agent-sdk"
   - "@anthropic-ai/claude-agent-sdk-*"
-  # The evaluate API (TypeSafe Jev on AI Gateway) shipped in ai 7.0.105 and
-  # @ai-sdk/gateway 4.0.85 on 2026-09-16; the MCP `evaluate` tool needs it.
-  # Remove these four once those versions are past the soak (after 2026-09-23).
-  - ai
-  - "@ai-sdk/gateway"
-  - "@ai-sdk/provider"
-  - "@ai-sdk/provider-utils"
   # json-render 0.21.0 (2026-09-18) is the first release to export
   # experimental_composeSpec / experimental_createEvaluator, which is what the
   # chat's generative UI panels are built on. Drop once it is past the soak.

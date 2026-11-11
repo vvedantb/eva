@@ -1,8 +1,9 @@
 "use node";
 
-import { requiredEnv } from "@vvedantb/server";
+import { requiredEnv, errorMessage } from "@vvedantb/server";
 import { createHmac } from "crypto";
 import { quote } from "shell-quote";
+import { redactSecrets } from "@eva/shared/redactSecrets";
 import { z } from "zod";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
 import type { AIProvider } from "../validators";
@@ -20,7 +21,7 @@ import type { SandboxHandle } from "../_sandbox/provider";
 import {
   CLAUDE_CLI_INSTALL_DIR,
   CODEX_CLI_INSTALL_DIR,
-  EVA_ENV_FILE,
+  EVA_ENV_SOURCE_CMD,
 } from "../_sandbox/vercelEnvFile";
 import { CALLBACK_SCRIPT } from "./callbackScript";
 import { CALLBACK_SCRIPT_FINGERPRINT } from "./callbackScriptFingerprint";
@@ -75,7 +76,8 @@ const RUNNER_LOG_TAIL_MAX_CHARS = 2_000;
  *
  * Collapses runs of identical lines into `line (xN)` and keeps the LAST
  * `RUNNER_LOG_TAIL_MAX_CHARS` characters, since the tail is where the actual
- * failure lands.
+ * failure lands. Redacts before clipping so a cut cannot leave a token whose
+ * prefix no longer matches.
  */
 export function condenseRunnerLogTail(log: string): string {
   const collapsed: string[] = [];
@@ -89,7 +91,7 @@ export function condenseRunnerLogTail(log: string): string {
     if (shown === undefined) return;
     collapsed.push(repeats > 1 ? `${shown} (x${repeats})` : shown);
   };
-  for (const line of log.split("\n")) {
+  for (const line of redactSecrets(log).split("\n")) {
     const trimmed = line.trim();
     // Compare on the message, not the timestamps/backoff figures that differ on
     // every retry of the same failure.
@@ -207,7 +209,7 @@ async function resolveLatestCliVersion(
   } catch (error) {
     console.log(
       `[sandbox][cli] ${packageName} registry lookup failed, using floor ${floor}: ${
-        error instanceof Error ? error.message : String(error)
+        errorMessage(error)
       }`,
     );
   }
@@ -645,7 +647,7 @@ export async function launchScript(
   const runnerLaunchScript = [
     "#!/usr/bin/env bash",
     "set -euo pipefail",
-    `[ -f ${EVA_ENV_FILE} ] && . ${EVA_ENV_FILE}`,
+    EVA_ENV_SOURCE_CMD,
     "rm -f /tmp/run-design.pid /tmp/run-design.ready /tmp/eva-mcp.json",
     ...exportLines,
     // The script carries per-launch credentials, so unlink it once this shell

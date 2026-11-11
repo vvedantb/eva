@@ -12,7 +12,7 @@ import type { JsonValue } from "../_jev/jsonValue";
 
 /**
  * Short Claude names the MCP tools advertise. `fable` is Eva's Fable model
- * (`claude:claude-fable-5-1`); opus/sonnet/haiku keep their existing aliases.
+ * (`claude:claude-fable-5-2`); opus/sonnet/haiku keep their existing aliases.
  * Kept as a tuple so every tool schema stays in lockstep.
  */
 export const MCP_CLAUDE_MODELS = ["opus", "sonnet", "haiku", "fable"] as const;
@@ -107,6 +107,19 @@ export async function mcpCallAsUser<T>(
 }
 
 /**
+ * The `source` arg Eva's docs and artifacts mutations take to link a record to
+ * the chat (session, quick task or project) it came from.
+ */
+export function chatSourceArg(
+  kind: "session" | "task" | "project",
+  id: string,
+): Record<string, string> {
+  if (kind === "session") return { kind, sessionId: id };
+  if (kind === "task") return { kind, taskId: id };
+  return { kind, projectId: id };
+}
+
+/**
  * Required on every tool that deletes or irreversibly removes something. The
  * agent must ask the user in chat first; the literal makes skipping that a
  * visible choice rather than a default.
@@ -121,7 +134,7 @@ export const confirmedDeleteArg = z
 export async function mcpGetContext(
   ctx: ActionCtx,
   clerkUserId: string,
-): Promise<{ deployKey: string; userId: string }> {
+): Promise<{ userId: string }> {
   return ctx.runAction(internal.mcp.nodeActions.getContext, { clerkUserId });
 }
 
@@ -149,7 +162,7 @@ export async function mcpListUserRepos(
   ctx: ActionCtx,
   userId: string,
 ): Promise<RepoInfo[]> {
-  return ctx.runAction(internal.mcp.nodeActions.listUserRepos, { userId });
+  return ctx.runQuery(internal.mcp.queries.listUserRepos, { userId });
 }
 
 /** `owner/name` for a plain repo, `owner/name/app` for one app of a monorepo. */

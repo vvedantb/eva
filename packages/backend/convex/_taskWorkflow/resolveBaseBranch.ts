@@ -59,3 +59,11 @@ export function resolveNewTaskBaseBranch(
     repo?.defaultBaseBranch,
   );
 }
+
+/** A project's base branch; a blank one counts as missing. */
+export function resolveProjectBaseBranch(
+  project: Pick<Doc<"projects">, "baseBranch">,
+  repo: RepoBaseBranchSource,
+): string {
+  return firstBranchOrFallback(project.baseBranch, repo?.defaultBaseBranch);
+}

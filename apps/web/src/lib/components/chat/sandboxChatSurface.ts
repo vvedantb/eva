@@ -64,7 +64,7 @@ export interface SandboxChatSurface {
 }
 
 /** The task or project doc fields a sandbox chat surface reads. */
-interface SandboxChatOwnerDoc {
+export interface SandboxChatOwnerDoc {
   backgroundAgents?: BackgroundAgentEntry[];
   providerAccountId?: Id<"userProviderAccounts">;
   goal?: AgentGoal;

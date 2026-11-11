@@ -1,5 +1,10 @@
 import { v } from "convex/values";
-import { authQuery, authMutation, getTaskWithAccess } from "./functions";
+import {
+  authQuery,
+  authMutation,
+  getTaskWithAccess,
+  hasTaskAccess,
+} from "./functions";
 
 const dependencyValidator = v.object({
   _id: v.id("taskDependencies"),
@@ -54,7 +59,7 @@ export const getDependencies = authQuery({
     const result = [];
     for (const dep of dependencies) {
       const task = await ctx.db.get(dep.dependsOnId);
-      if (task) {
+      if (task && (await hasTaskAccess(ctx.db, task, ctx.userId))) {
         result.push({
           _id: task._id,
           title: task.title,

@@ -1,14 +1,14 @@
 "use node";
 
 import { v } from "convex/values";
-import { z } from "zod";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { quote } from "shell-quote";
 import {
   resolveSandboxCredentials,
+  resolveSeedOnlyEnvVars,
   tryResolveSandboxCredentials,
 } from "./envVarResolver";
-import { getInstallationToken } from "./githubAuth";
 import {
   buildConfigFileDownloadCommands,
   filterDownloadableConfigFiles,
@@ -21,9 +21,12 @@ import {
   SESSION_LIFECYCLE,
 } from "./_sandbox_runtime/git";
 import { getSandboxClient } from "./_sandbox/factory";
+import { computeStartupFingerprint } from "./_evaConfig/config";
+import { STARTUP_MARKER_PATH } from "./_sandbox_runtime/startupMarker";
 import { FFMPEG_INSTALL_SCRIPT } from "./_sandbox/ffmpegInstall";
 import { DRIVE_CACHE_ENV, DRIVE_CACHE_WRITER } from "./_sandbox/driveCache";
 import { buildSeedRunDockerStartCommand } from "./_sandbox_runtime/dockerBootstrap";
+import { writeSandboxFile } from "./_sandbox_runtime/sandboxFiles";
 import {
   COREPACK_SANDBOX_ENV,
   renderEvaEnvFile,
@@ -53,6 +56,7 @@ import {
   PACKAGE_HELPER_SCRIPT,
   pkgInstall,
 } from "./_sandbox_runtime/packageManager";
+import { errorMessage } from "@vvedantb/server";
 
 const SEED_PREP_LABEL_KEY = SANDBOX_TAG.purpose;
 const SEED_PREP_LABEL_VALUE = "snapshot-seed-prep";
@@ -191,97 +195,16 @@ function seededRuntimeStateCaptureLines(
   ];
 }
 
-// Bump when the Vercel seed-prep toolchain/build inputs change in a way that
-// should invalidate existing image fingerprints (see getImageFingerprint)
-// even though repo/config inputs are unchanged.
-const IMAGE_DEF_VERSION = 2;
+/** Loaded and deleted by the seed script; see launchSeedRun. */
+const SEED_ENV_FILE = "/tmp/.eva-seed-env.sh";
 
-// Boundary schema for the small GitHub JSON responses this module reads.
-const shaResponseSchema = z.object({ sha: z.string() });
-
-/** Manifest files that affect baked install output (Node lockfiles + Python). */
-const FINGERPRINT_MANIFEST_FILES = [
-  "pnpm-lock.yaml",
-  "package-lock.json",
-  "yarn.lock",
-  "requirements.txt",
-  "pyproject.toml",
-] as const;
-
-/**
- * Fingerprint of the Image inputs: every dependency manifest blob sha found on
- * the build branch (Node lockfiles + Python), the build commands, the
- * config-file blobs baked into the image, and IMAGE_DEF_VERSION. When this
- * matches the value stored at the last successful Image build, the workflow
- * skips the ~11-15m rebuild — the output would be byte-identical (sandboxes
- * fetch fresh branches at boot, so a repo checkout that is a few commits stale
- * costs nothing; node_modules / site-packages only drift when a manifest
- * changes, which changes this fingerprint). Returns null when the inputs
- * cannot be determined (e.g. no manifests found) — callers must treat null as
- * "always rebuild".
- */
-export const getImageFingerprint = internalAction({
-  args: { repoSnapshotId: v.id("repoSnapshots") },
-  returns: v.union(v.string(), v.null()),
-  handler: async (ctx, args): Promise<string | null> => {
-    const config = await ctx.runQuery(
-      internal.repoSnapshots.getRepoSnapshotInternal,
-      { repoSnapshotId: args.repoSnapshotId },
-    );
-    if (!config) return null;
-    const repo = await ctx.runQuery(internal.repoSnapshots.getRepo, {
-      repoId: config.repoId,
-    });
-    if (!repo) return null;
-    const branch = config.workflowRef ?? "main";
-    const manifestShas: string[] = [];
-    try {
-      const token = await getInstallationToken(repo.installationId);
-      // Fixed, small manifest list: fetch in parallel, keep the list order.
-      const shas = await Promise.all(
-        FINGERPRINT_MANIFEST_FILES.map(async (manifest) => {
-          const resp = await fetch(
-            `https://api.github.com/repos/${repo.owner}/${repo.name}/contents/${manifest}?ref=${encodeURIComponent(branch)}`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-                Accept: "application/vnd.github+json",
-              },
-            },
-          );
-          if (!resp.ok) return null;
-          const parsed = shaResponseSchema.safeParse(await resp.json());
-          return parsed.success ? `${manifest}:${parsed.data.sha}` : null;
-        }),
-      );
-      for (const sha of shas) if (sha !== null) manifestShas.push(sha);
-    } catch (e) {
-      console.error(
-        `[snapshot] image fingerprint: manifest lookup failed: ${
-          e instanceof Error ? e.message : String(e)
-        }`,
-      );
-      return null;
-    }
-    if (manifestShas.length === 0) return null;
-    const fileKeys: string[] = await ctx.runQuery(
-      internal.sandboxConfigFiles.getConfigFileKeys,
-      { repoId: config.repoId },
-    );
-    const payload = JSON.stringify({
-      v: IMAGE_DEF_VERSION,
-      branch,
-      manifestShas,
-      buildCommands: config.buildCommands ?? [],
-      files: fileKeys,
-    });
-    let hash = 5381;
-    for (let i = 0; i < payload.length; i++) {
-      hash = (hash * 33) ^ payload.charCodeAt(i);
-    }
-    return `img-${(hash >>> 0).toString(36)}-${payload.length}`;
-  },
-});
+/** `export KEY='value'` lines for the seed-only vars, or null when none. */
+function renderSeedOnlyEnvFile(vars: Record<string, string>): string | null {
+  const lines = Object.entries(vars)
+    .filter(([key]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(key))
+    .map(([key, value]) => `export ${key}=${quote([value])}`);
+  return lines.length > 0 ? `${lines.join("\n")}\n` : null;
+}
 
 /**
  * Seeded-snapshot build — LAUNCH step. Composes the app's whole seed sequence
@@ -362,6 +285,19 @@ export const launchSeedRun = internalAction({
       PACKAGE_HELPER_SCRIPT,
       "rm -f /tmp/.seedrun-done",
     ];
+    // Seed-only env vars (e.g. a staging deploy key) reach this run and no
+    // session. They ride a separate file that the script loads and deletes at
+    // once, so they never sit in seedrun.sh or the captured filesystem. xtrace
+    // goes off for the rest of the run: it would print expanded values into
+    // seedrun.log, which is captured too.
+    const seedOnlyVars = await resolveSeedOnlyEnvVars(ctx, args.repoId);
+    const seedEnvFile = renderSeedOnlyEnvFile(seedOnlyVars);
+    if (seedEnvFile !== null) {
+      lines.push(
+        "set +x",
+        `if [ -f ${SEED_ENV_FILE} ]; then set -a; . ${SEED_ENV_FILE}; set +a; rm -f ${SEED_ENV_FILE}; echo "seed-only env vars loaded; xtrace off"; else echo "SEEDRUN-FAILED:seed-env-missing"; exit 1; fi`,
+      );
+    }
     // Daytona used to bake its whole agent-CLI toolchain (claude, codex,
     // opencode, supabase, docker, ...) into the sandbox's Image
     // at build time — every fresh Daytona sandbox already had them.
@@ -630,7 +566,11 @@ export const launchSeedRun = internalAction({
     }
     lines.push(...seededRuntimeStateCaptureLines(requireSupabaseDump));
     // Marker so a sandbox booting from the captured snapshot skips the seed.
-    lines.push("touch /tmp/.startup-commands-done");
+    // It carries the startup fingerprint: a branch with other startup
+    // commands sees a mismatch and reruns them (runStartupCommandsDirect).
+    lines.push(
+      `printf %s ${computeStartupFingerprint(startupCommands ?? [])} > ${STARTUP_MARKER_PATH}`,
+    );
     (stopCommands ?? []).forEach((command, i) => {
       lines.push(
         `( ${command} ) || { echo "SEEDRUN-FAILED:stop-${i}"; exit 1; }`,
@@ -658,10 +598,14 @@ export const launchSeedRun = internalAction({
       // Use the provider writeFile API instead.
       await execHandle(
         sandbox,
-        "rm -f /tmp/.seedrun-done /tmp/seedrun.log /tmp/seedrun.sh",
+        `rm -f /tmp/.seedrun-done /tmp/seedrun.log /tmp/seedrun.sh ${SEED_ENV_FILE}`,
         30,
       );
-      await sandbox.writeFile("/tmp/seedrun.sh", script);
+      if (seedEnvFile !== null) {
+        await writeSandboxFile(sandbox, SEED_ENV_FILE, seedEnvFile);
+        await execHandle(sandbox, `chmod 600 ${SEED_ENV_FILE}`, 30);
+      }
+      await writeSandboxFile(sandbox, "/tmp/seedrun.sh", script);
       await execHandle(sandbox, "chmod +x /tmp/seedrun.sh", 30);
       const wrote = await execHandle(
         sandbox,
@@ -720,7 +664,7 @@ export const fetchSeedDiagnostics = internalAction({
         90,
       );
     } catch (e) {
-      return `diagnostics unavailable: ${e instanceof Error ? e.message : String(e)}`;
+      return `diagnostics unavailable: ${errorMessage(e)}`;
     }
   },
 });
@@ -879,7 +823,7 @@ export const deleteSeedPrepSandbox = internalAction({
       // Best-effort: log but do not fail the build if delete fails.
       console.error(
         `[snapshot] deleteSeedPrepSandbox: failed to delete ${args.sandboxId}: ${
-          e instanceof Error ? e.message : String(e)
+          errorMessage(e)
         }`,
       );
     }
@@ -1005,7 +949,7 @@ export const stopAllRepoSandboxes = internalAction({
         } catch (err) {
           console.warn(
             `[snapshot] stopAllRepoSandboxes: failed to delete ${meta.name}: ${
-              err instanceof Error ? err.message : String(err)
+              errorMessage(err)
             }`,
           );
         }
@@ -1016,7 +960,7 @@ export const stopAllRepoSandboxes = internalAction({
     } catch (e) {
       console.error(
         `[snapshot] stopAllRepoSandboxes: best-effort sweep failed: ${
-          e instanceof Error ? e.message : String(e)
+          errorMessage(e)
         }`,
       );
     }
@@ -1048,7 +992,7 @@ export const deleteSeededSnapshot = internalAction({
     } catch (e) {
       console.error(
         `[snapshot] deleteSeededSnapshot: failed to delete ${args.snapshotName}: ${
-          e instanceof Error ? e.message : String(e)
+          errorMessage(e)
         }`,
       );
     }
@@ -1152,7 +1096,7 @@ export const purgeUnreferencedVercelSnapshots = internalAction({
       } catch (error) {
         console.warn(
           `[snapshot] purgeUnreferencedVercelSnapshots: failed ${meta.id}: ${
-            error instanceof Error ? error.message : String(error)
+            errorMessage(error)
           }`,
         );
       }
@@ -1246,7 +1190,7 @@ export const purgeUnreferencedVercelSnapshotsAll = internalAction({
     } catch (err) {
       console.warn(
         `[purgeUnreferencedVercelSnapshotsAll] skip repo=${repoId}: ${
-          err instanceof Error ? err.message : String(err)
+          errorMessage(err)
         }`,
       );
     }

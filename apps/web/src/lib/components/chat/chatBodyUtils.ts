@@ -2,14 +2,26 @@ import { getAIModelProvider, type Doc, type Id } from "@eva/backend";
 import { getProviderLabel } from "@vvedantb/ui";
 import type { ActivityStep } from "@vvedantb/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
-import { isSandboxPausedAlert } from "@eva/shared";
-import { tokenizedToEditable } from "@/lib/components/mentions";
-import { stripReviewCommentBlocks } from "@/lib/reviewComments";
 import {
   collectChangedFiles,
+  isOtherUserChatMessage,
+  isSandboxPausedAlert,
+  otherUserIdsInChat,
   type ChangedFile,
-} from "@/lib/components/chat/ChangedFilesCard";
-import { z } from "zod";
+  type ChatUserAttribution,
+} from "@eva/shared";
+import { tokenizedToEditable } from "@/lib/components/mentions";
+import { stripReviewCommentBlocks } from "@/lib/reviewComments";
+
+// Moved to `@eva/shared` so the mobile chat footer reads the same turn model.
+export { buildPrecedingUserTurns } from "@eva/shared";
+// Moved to `@eva/shared` so the mobile chat draws a teammate's turn as the web.
+export {
+  firstNameByUserId,
+  firstNameFromUser,
+  isOtherUserChatMessage,
+  otherUserIdsInChat,
+} from "@eva/shared";
 
 /**
  * The codebase a chat belongs to. Manager Ave has none, so it passes nothing:
@@ -70,23 +82,6 @@ export function findHandoffBoundaryIds(
       boundaries.add(message._id);
     }
     previousProvider = provider;
-  }
-  return boundaries;
-}
-
-/**
- * Turns that open a new local calendar day — the first turn of the transcript
- * included — so ChatBody can head each day with an iMessage-style date label.
- */
-export function findDayBoundaryIds(
-  messages: ReadonlyArray<Pick<ChatBodyMessage, "_id" | "timestamp">>,
-): Set<string> {
-  const boundaries = new Set<string>();
-  let previousDay: string | undefined;
-  for (const message of messages) {
-    const day = new Date(message.timestamp).toDateString();
-    if (day !== previousDay) boundaries.add(message._id);
-    previousDay = day;
   }
   return boundaries;
 }
@@ -164,88 +159,12 @@ export function visibleChatMessages<
   return messages.filter((message) => !hidden(message));
 }
 
-// Boundary schema for the pending-question JSON emitted by the agent. A
-// question with any malformed field (or option) is dropped via
-// `.catch(null)` + filter, matching the previous per-item guard behaviour.
-const questionSchema = z.object({
-  question: z.string(),
-  header: z.string(),
-  multiSelect: z.boolean(),
-  options: z.array(z.object({ label: z.string(), description: z.string() })),
-});
-
-export type ParsedQuestion = z.infer<typeof questionSchema>;
-
-const pendingQuestionSchema = z.object({
-  questions: z.array(questionSchema.nullable().catch(null)),
-});
-
-export function parsePendingQuestion(
-  raw: string | undefined | null,
-): ParsedQuestion[] | null {
-  if (!raw) return null;
-  try {
-    const parsed = pendingQuestionSchema.safeParse(JSON.parse(raw));
-    if (!parsed.success) return null;
-    const questions = parsed.data.questions.flatMap((q) => (q ? [q] : []));
-    return questions.length > 0 ? questions : null;
-  } catch {
-    return null;
-  }
-}
-
-/** First name for chat labels; falls back to the first word of full name. */
-export function firstNameFromUser(user: {
-  firstName?: string | null;
-  fullName?: string | null;
-}): string | null {
-  return user.firstName?.trim() || user.fullName?.trim().split(" ")[0] || null;
-}
-
-type ChatUserAttribution = {
-  role: ChatBodyMessage["role"];
-  userId?: string;
-  isSystemAlert?: boolean;
-};
-
-/** Teammate user turn (not yours). Missing ids → treat as own to avoid layout flash. */
-export function isOtherUserChatMessage(
-  message: ChatUserAttribution,
-  currentUserId: string | undefined,
-): boolean {
-  return (
-    !message.isSystemAlert &&
-    message.role === "user" &&
-    message.userId !== undefined &&
-    currentUserId !== undefined &&
-    message.userId !== currentUserId
-  );
-}
-
 /** True when the transcript has a teammate bubble that needs a display name. */
 export function chatNeedsOtherUserDirectory(
   messages: ReadonlyArray<ChatUserAttribution>,
   currentUserId: string | undefined,
 ): boolean {
   return otherUserIdsInChat(messages, currentUserId).length > 0;
-}
-
-/** Sorted unique teammate ids that need a name lookup. Empty → skip the query. */
-export function otherUserIdsInChat<TUserId extends string>(
-  messages: ReadonlyArray<{
-    role: ChatBodyMessage["role"];
-    userId?: TUserId;
-    isSystemAlert?: boolean;
-  }>,
-  currentUserId: TUserId | undefined,
-): TUserId[] {
-  const ids = new Set<TUserId>();
-  for (const message of messages) {
-    if (!isOtherUserChatMessage(message, currentUserId)) continue;
-    if (message.userId === undefined) continue;
-    ids.add(message.userId);
-  }
-  return [...ids].sort();
 }
 
 /**
@@ -326,74 +245,6 @@ export function turnErrorTitle({
 }
 
 /**
- * One wording for the sandbox across every chat panel (session, quick task,
- * project). The header buttons already say "Wake up Eva" / "Put Eva to sleep",
- * so the transcript and the composer speak about Eva too rather than about a
- * "sandbox" the user never named.
- */
-export const SANDBOX_CHAT_COPY = {
-  startingTitle: "Waking Eva up…",
-  stoppingTitle: "Putting Eva to sleep…",
-  asleepTitle: "Eva is asleep",
-  asleepDescription: "Eva's sandbox is asleep.",
-  /** Sending while asleep queues the message and wakes Eva to run it. */
-  asleepPlaceholder: "Send a message to wake Eva up…",
-  /** The last turn hit a usage limit; sends queue until just after the reset. */
-  usageLimitPlaceholder: "Usage limit reached — messages send after the reset…",
-  /** Why the composer will not send while Eva sleeps. */
-  asleepDisabledReason: "Wake Eva up to send",
-  wakeAction: "Wake up Eva",
-  switchingAccountPlaceholder: "Switching Claude account…",
-  activePlaceholder: "Ask Eva anything... / for skills · @ to mention",
-  /** Teaches the three composer affordances on an empty, awake chat. */
-  activeDescription:
-    "Type / for skills, @ to mention, or drop files to attach.",
-} as const;
-
-/**
- * Whether a sandbox chat composer accepts input, where its sends go, and the
- * copy that goes with it. One rule for all three surfaces (session, quick
- * task, project):
- * - only an account swap locks the composer. A running turn, a sleeping
- *   sandbox and a usage limit all take the message into the queue instead.
- * - `queuesSends` is that queue rule for an idle chat: asleep (the queue wakes
- *   Eva and sends once she is up) or held by a usage limit on the chosen
- *   provider (it sends just after the reset). A running turn queues too, but
- *   each surface already routes that through its own `isExecuting`.
- */
-export function sandboxComposerState({
-  isSandboxActive,
-  isSwitchingAccount,
-  isExecuting,
-  isUsageLimitHeld,
-}: {
-  isSandboxActive: boolean;
-  isSwitchingAccount: boolean;
-  isExecuting: boolean;
-  isUsageLimitHeld: boolean;
-}): {
-  isInputDisabled: boolean;
-  queuesSends: boolean;
-  placeholder: string;
-  disabledReason: string;
-} {
-  const isAsleep = !isSandboxActive && !isExecuting;
-  const isHeld = isUsageLimitHeld && !isExecuting;
-  return {
-    isInputDisabled: isSwitchingAccount,
-    queuesSends: isAsleep || isHeld,
-    placeholder: isSwitchingAccount
-      ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
-      : isHeld
-        ? SANDBOX_CHAT_COPY.usageLimitPlaceholder
-        : isAsleep
-          ? SANDBOX_CHAT_COPY.asleepPlaceholder
-          : SANDBOX_CHAT_COPY.activePlaceholder,
-    disabledReason: SANDBOX_CHAT_COPY.switchingAccountPlaceholder,
-  };
-}
-
-/**
  * The failure a send threw, as the user should read it. Convex wraps a server
  * error in `[CONVEX …] [Request ID: …] Server Error` plus an `Uncaught Error:`
  * line and a stack, none of which means anything outside the dashboard.
@@ -471,29 +322,6 @@ export function findLastAssistantMessageId(
     if (message.role === "assistant") return message._id;
   }
   return undefined;
-}
-
-/**
- * Model / account snapshot for each assistant row: the user turn directly
- * before it (where send/dequeue stores model + credentialSourceLabel), skipping
- * system alerts. An assistant row that follows another assistant row has none.
- *
- * One pass for the whole transcript — looking each row up separately was
- * O(n²), and it re-ran on every streamed token.
- */
-export function buildPrecedingUserTurns<
-  T extends Pick<ChatBodyMessage, "_id" | "role" | "isSystemAlert">,
->(messages: ReadonlyArray<T>): Map<string, T> {
-  const byAssistantId = new Map<string, T>();
-  let previous: T | undefined;
-  for (const message of messages) {
-    if (message.isSystemAlert) continue;
-    if (message.role === "assistant" && previous?.role === "user") {
-      byAssistantId.set(message._id, previous);
-    }
-    previous = message;
-  }
-  return byAssistantId;
 }
 
 /** User turns a chat renders when it opens; older turns load on scroll. */

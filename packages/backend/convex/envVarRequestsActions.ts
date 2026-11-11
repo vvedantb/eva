@@ -8,6 +8,7 @@ import type { Doc } from "./_generated/dataModel";
 import { encryptValue } from "./encryption";
 import { assertActionTeamAccess, getActionRepoWithAccess } from "./functions";
 import { getSandboxHandle } from "./_sandbox_runtime/helpers";
+import { writeSandboxFile } from "./_sandbox_runtime/sandboxFiles";
 import { EVA_ENV_FILE, renderEvaEnvFile } from "./_sandbox/vercelEnvFile";
 import { savedReply } from "./_envVarRequests/replies";
 
@@ -28,7 +29,7 @@ async function writeLive(
   const handle = await getSandboxHandle(ctx, request.repoId, request.sandboxId);
   if (handle.state !== "running") return false;
   const tmp = `/tmp/eva-env-${randomUUID()}.sh`;
-  await handle.writeFile(tmp, renderEvaEnvFile({ [request.key]: value }));
+  await writeSandboxFile(handle, tmp, renderEvaEnvFile({ [request.key]: value }));
   const result = await handle.exec(
     `cat ${tmp} >> ${EVA_ENV_FILE}; status=$?; rm -f ${tmp}; exit $status`,
     { cwd: "/", timeoutSeconds: 15 },

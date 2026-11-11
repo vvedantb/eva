@@ -1,34 +1,32 @@
 import type { GenericDatabaseReader } from "convex/server";
 import { v } from "convex/values";
-import type { DataModel, Doc, Id } from "./_generated/dataModel";
-import { authQuery, authMutation, hasRepoAccess } from "./functions";
+import type { DataModel, Doc } from "./_generated/dataModel";
+import {
+  authQuery,
+  authMutation,
+  getTeamMembership,
+  hasRepoAccess,
+  requireTeamOwner,
+} from "./functions";
 import { getUserPresenceRow, mergeLastSeen } from "./_users/lastSeen";
 import { teamMemberRoleValidator } from "./validators";
+import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
-/** Fetches a user's membership row for a team, or null if they aren't a member. */
-function getTeamMembership(
+/** Throws when this membership is its team's only owner, so a team never loses its last owner. */
+async function assertNotLastOwner(
   db: GenericDatabaseReader<DataModel>,
-  teamId: Id<"teams">,
-  userId: Id<"users">,
-): Promise<Doc<"teamMembers"> | null> {
-  return db
-    .query("teamMembers")
-    .withIndex("by_team_and_user", (q) =>
-      q.eq("teamId", teamId).eq("userId", userId),
-    )
-    .first();
-}
-
-/** Throws with the given message unless the user is an owner of the team. */
-async function requireTeamOwner(
-  db: GenericDatabaseReader<DataModel>,
-  teamId: Id<"teams">,
-  userId: Id<"users">,
-  errorMessage: string,
+  membership: Doc<"teamMembers">,
+  action: "remove" | "demote",
 ): Promise<void> {
-  const membership = await getTeamMembership(db, teamId, userId);
-  if (!membership || membership.role !== "owner") {
-    throw new Error(errorMessage);
+  if (membership.role !== "owner") return;
+  const owners = await db
+    .query("teamMembers")
+    .withIndex("by_team_and_role", (q) =>
+      q.eq("teamId", membership.teamId).eq("role", "owner"),
+    )
+    .take(2);
+  if (owners.length < 2) {
+    throw new Error(`Cannot ${action} the last owner from the team`);
   }
 }
 
@@ -125,12 +123,20 @@ export const listForRepo = authQuery({
       .withIndex("by_team", (q) => q.eq("teamId", teamId))
       .collect();
 
+    // The repo's connector can be outside its team: names only for them.
+    const callerOnTeam = members.some((m) => m.userId === ctx.userId);
     const users = await Promise.all(
       members.map((member) => ctx.db.get(member.userId)),
     );
     return users.flatMap((user) =>
       user
-        ? [{ _id: user._id, fullName: user.fullName, email: user.email }]
+        ? [
+            {
+              _id: user._id,
+              fullName: user.fullName,
+              email: callerOnTeam ? user.email : undefined,
+            },
+          ]
         : [],
     );
   },
@@ -144,6 +150,7 @@ export const add = authMutation({
   },
   returns: v.id("teamMembers"),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await requireTeamOwner(
       ctx.db,
       args.teamId,
@@ -189,6 +196,7 @@ export const remove = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await requireTeamOwner(
       ctx.db,
       args.teamId,
@@ -206,18 +214,7 @@ export const remove = authMutation({
       throw new Error("User is not a member of this team");
     }
 
-    if (args.userId === ctx.userId) {
-      const allOwners = await ctx.db
-        .query("teamMembers")
-        .withIndex("by_team_and_role", (q) =>
-          q.eq("teamId", args.teamId).eq("role", "owner"),
-        )
-        .collect();
-
-      if (allOwners.length === 1) {
-        throw new Error("Cannot remove the last owner from the team");
-      }
-    }
+    await assertNotLastOwner(ctx.db, targetMembership, "remove");
 
     await ctx.db.delete(targetMembership._id);
     return null;
@@ -233,6 +230,7 @@ export const updateRole = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    await rejectSandboxCaller(ctx);
     await requireTeamOwner(
       ctx.db,
       args.teamId,
@@ -248,6 +246,10 @@ export const updateRole = authMutation({
 
     if (!targetMembership) {
       throw new Error("User is not a member of this team");
+    }
+
+    if (args.role !== "owner") {
+      await assertNotLastOwner(ctx.db, targetMembership, "demote");
     }
 
     await ctx.db.patch(targetMembership._id, { role: args.role });

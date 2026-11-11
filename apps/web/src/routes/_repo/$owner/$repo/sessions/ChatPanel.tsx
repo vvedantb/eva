@@ -9,10 +9,7 @@ import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { ChatPageWrapper } from "@/lib/components/ChatPageWrapper";
 import { ChatBody } from "@/lib/components/chat/ChatBody";
 import { SandboxBranchChip } from "@/lib/components/chat/SandboxBranchChip";
-import {
-  sandboxComposerState,
-  SANDBOX_CHAT_COPY,
-} from "@/lib/components/chat/chatBodyUtils";
+import { sandboxComposerState, SANDBOX_CHAT_COPY } from "@eva/shared";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
 import { SandboxChatPreInput } from "@/lib/components/chat/SandboxChatPreInput";
 import { useChatQueueGate } from "@/lib/components/chat/useChatQueueGate";
@@ -78,6 +75,8 @@ interface ChatPanelProps {
   prState?: "draft" | "open" | "merged" | "closed";
   summary?: string[];
   messages: SessionMessage[];
+  /** The transcript has not loaded: show the loader, not the empty state. */
+  isLoadingMessages: boolean;
   queuedMessages: QueuedSessionMessage[];
   streamingActivity?: string;
   streamingContent?: string;
@@ -129,6 +128,7 @@ export function ChatPanel({
   prState,
   summary,
   messages,
+  isLoadingMessages,
   queuedMessages,
   streamingActivity,
   streamingContent,
@@ -479,6 +479,7 @@ export function ChatPanel({
           chatParentId={chatId}
           isRouteActive={isRouteActive}
           messages={messages}
+          isLoadingMessages={isLoadingMessages}
           queuedMessages={queuedMessages}
           queueLabel={queueGate.queueLabel(isExecuting)}
           streamingActivity={streamingActivity}

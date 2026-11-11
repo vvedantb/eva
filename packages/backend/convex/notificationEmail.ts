@@ -1,6 +1,6 @@
 "use node";
 
-import { requiredEnv } from "@vvedantb/server";
+import { getEvaBaseUrl } from "./_env/webAppUrl";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -26,7 +26,7 @@ export const sendUnreadForUser = internalAction({
     );
     if (!data) return null;
 
-    const appUrl = requiredEnv("WEB_APP_URL");
+    const appUrl = getEvaBaseUrl();
     const count = data.notifications.length;
     const [first] = data.notifications;
 

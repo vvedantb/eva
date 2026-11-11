@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { authQuery, hasRepoAccess } from "../functions";
+import { authQuery, hasRepoAccess, isTaskVisibleTo } from "../functions";
 import { entityVisible } from "../numId";
 import {
   DATA_MENTION_BADGE,
@@ -228,7 +228,11 @@ export const getEntity = authQuery({
     if (taskId) {
       const task = await ctx.db.get(taskId);
       const visible = entityVisible(task);
-      if (visible && visible.repoId === args.repoId) {
+      if (
+        visible &&
+        visible.repoId === args.repoId &&
+        isTaskVisibleTo(visible, ctx.userId)
+      ) {
         const description = visible.description?.trim();
         const item: DataMentionItem = {
           kind: "quickTask",

@@ -19,8 +19,10 @@ import {
   type UsageLimitProvider,
   type UsageLimitRowKey,
 } from "./_usageLimits/rows";
-import { loadSessionChat } from "./_sessionChats/helpers";
-import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
+import {
+  findRepoEnvVarDoc,
+  findTeamEnvVarDoc,
+} from "./_envVars/documentStore";
 
 /**
  * Agent plan usage limits. A sandbox turn captures how much of the provider's
@@ -271,14 +273,8 @@ async function hasSharedClaudeCredential(
 ): Promise<boolean> {
   const key = PROVIDER_PRIMARY_AUTH_KEY[USAGE_LIMIT_PROVIDER];
   const [teamVars, repoVars] = await Promise.all([
-    db
-      .query("teamEnvVars")
-      .withIndex("by_team", (q) => q.eq("teamId", teamId))
-      .first(),
-    db
-      .query("repoEnvVars")
-      .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-      .first(),
+    findTeamEnvVarDoc(db, teamId),
+    findRepoEnvVarDoc(db, repoId),
   ]);
   return [teamVars, repoVars].some(
     (row) => row?.vars.some((entry) => entry.key === key) === true,
@@ -387,207 +383,6 @@ export const listRefreshTargetsInternal = internalQuery({
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, args.userId))) return [];
     return await listUsageLimitCredentials(ctx, args.userId, args.repoId);
-  },
-});
-
-// A session's daemon runs per chat, so the session surface is named by chat.
-const refreshTargetArgs = {
-  chatId: v.optional(v.id("sessionChats")),
-  projectId: v.optional(v.id("projects")),
-  taskId: v.optional(v.id("agentTasks")),
-};
-
-type RefreshTarget =
-  | { kind: "session"; chatId: Id<"sessionChats"> }
-  | { kind: "project"; projectId: Id<"projects"> }
-  | { kind: "task"; taskId: Id<"agentTasks"> };
-
-function parseRefreshTarget(args: {
-  chatId?: Id<"sessionChats">;
-  projectId?: Id<"projects">;
-  taskId?: Id<"agentTasks">;
-}): RefreshTarget {
-  if (
-    args.chatId !== undefined &&
-    args.projectId === undefined &&
-    args.taskId === undefined
-  ) {
-    return { kind: "session", chatId: args.chatId };
-  }
-  if (
-    args.projectId !== undefined &&
-    args.chatId === undefined &&
-    args.taskId === undefined
-  ) {
-    return { kind: "project", projectId: args.projectId };
-  }
-  if (
-    args.taskId !== undefined &&
-    args.chatId === undefined &&
-    args.projectId === undefined
-  ) {
-    return { kind: "task", taskId: args.taskId };
-  }
-  throw new Error("Refresh needs exactly one of chatId, projectId, or taskId");
-}
-
-/**
- * Whether the chip's surface has a running sandbox that can answer a refresh.
- * Stopped VMs must not be exec'd — Vercel `withResume` would wake them.
- */
-export const getRefreshSurface = internalQuery({
-  args: {
-    userId: v.id("users"),
-    repoId: v.id("githubRepos"),
-    ...refreshTargetArgs,
-  },
-  returns: v.union(v.literal("idle"), v.literal("ready")),
-  handler: async (ctx, args) => {
-    const target = parseRefreshTarget(args);
-    if (target.kind === "session") {
-      const context = await loadSessionChat(ctx.db, target.chatId);
-      if (!context || context.session.repoId !== args.repoId) {
-        throw new Error("Chat not found");
-      }
-      const { session } = context;
-      if (!(await hasRepoAccess(ctx.db, session.repoId, args.userId))) {
-        throw new Error("Not authorized");
-      }
-      if (!session.sandboxId || isSandboxClosingStatus(session.status)) {
-        return "idle";
-      }
-      return "ready";
-    }
-    if (target.kind === "project") {
-      const project = await ctx.db.get(target.projectId);
-      if (!project || project.repoId !== args.repoId) {
-        throw new Error("Project not found");
-      }
-      if (!(await hasRepoAccess(ctx.db, project.repoId, args.userId))) {
-        throw new Error("Not authorized");
-      }
-      if (
-        !project.sandboxId ||
-        isSandboxClosingStatus(project.reviewProjectSandboxStatus)
-      ) {
-        return "idle";
-      }
-      return "ready";
-    }
-    const task = await ctx.db.get(target.taskId);
-    if (!task || task.repoId !== args.repoId) {
-      throw new Error("Task not found");
-    }
-    if (!(await hasRepoAccess(ctx.db, task.repoId, args.userId))) {
-      throw new Error("Not authorized");
-    }
-    if (!task.sandboxId || isSandboxClosingStatus(task.reviewTaskSandboxStatus)) {
-      return "idle";
-    }
-    return "ready";
-  },
-});
-
-/**
- * Arms the level-triggered flag the live Claude daemon already polls. Returns
- * false when the sandbox is stopped so the action can toast "wake Eva"
- * instead of waiting for a report that will never arrive.
- */
-export const requestRefresh = authMutation({
-  args: {
-    repoId: v.id("githubRepos"),
-    ...refreshTargetArgs,
-  },
-  returns: v.boolean(),
-  handler: async (ctx, args) => {
-    const target = parseRefreshTarget(args);
-    const now = Date.now();
-    if (target.kind === "session") {
-      const context = await loadSessionChat(ctx.db, target.chatId);
-      if (!context || context.session.repoId !== args.repoId) {
-        throw new Error("Chat not found");
-      }
-      const { chat, session } = context;
-      if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-        throw new Error("Not authorized");
-      }
-      if (!session.sandboxId || isSandboxClosingStatus(session.status)) {
-        return false;
-      }
-      await ctx.db.patch(chat._id, { usageRefreshRequestedAt: now });
-      return true;
-    }
-    if (target.kind === "project") {
-      const project = await ctx.db.get(target.projectId);
-      if (!project || project.repoId !== args.repoId) {
-        throw new Error("Project not found");
-      }
-      if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
-        throw new Error("Not authorized");
-      }
-      if (
-        !project.sandboxId ||
-        isSandboxClosingStatus(project.reviewProjectSandboxStatus)
-      ) {
-        return false;
-      }
-      await ctx.db.patch(target.projectId, { usageRefreshRequestedAt: now });
-      return true;
-    }
-    const task = await ctx.db.get(target.taskId);
-    if (!task || task.repoId !== args.repoId) {
-      throw new Error("Task not found");
-    }
-    if (!(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
-    if (!task.sandboxId || isSandboxClosingStatus(task.reviewTaskSandboxStatus)) {
-      return false;
-    }
-    await ctx.db.patch(target.taskId, { usageRefreshRequestedAt: now });
-    return true;
-  },
-});
-
-/**
- * Drops the refresh flag. The refresh action owns this so a failed lookup
- * can retry until the action stops waiting. claimPendingTurn only *reads*
- * the flag so an old callback cannot eat it.
- */
-export const clearRefresh = authMutation({
-  args: refreshTargetArgs,
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const target = parseRefreshTarget(args);
-    if (target.kind === "session") {
-      const context = await loadSessionChat(ctx.db, target.chatId);
-      if (!context) throw new Error("Chat not found");
-      if (!(await hasRepoAccess(ctx.db, context.session.repoId, ctx.userId))) {
-        throw new Error("Not authorized");
-      }
-      await ctx.db.patch(context.chat._id, {
-        usageRefreshRequestedAt: undefined,
-      });
-      return null;
-    }
-    if (target.kind === "project") {
-      const project = await ctx.db.get(target.projectId);
-      if (!project) throw new Error("Project not found");
-      if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
-        throw new Error("Not authorized");
-      }
-      await ctx.db.patch(target.projectId, {
-        usageRefreshRequestedAt: undefined,
-      });
-      return null;
-    }
-    const task = await ctx.db.get(target.taskId);
-    if (!task || !task.repoId) throw new Error("Task not found");
-    if (!(await hasRepoAccess(ctx.db, task.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
-    await ctx.db.patch(target.taskId, { usageRefreshRequestedAt: undefined });
-    return null;
   },
 });
 

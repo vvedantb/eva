@@ -5,30 +5,15 @@ import { githubRepoFields } from "../validators";
 import { hasRepoAccess } from "../functions";
 import { pickSandboxRepoId } from "./sandboxRepoPick";
 
+/** Frontend path prefix for a githubRepos row (monorepo apps use `name/app`). */
+export { repoBasePath } from "@eva/shared";
+
 export {
   pickDefaultVisibleAppRepo,
   pickSandboxRepoId,
   pickSnapshotCredentialRepoId,
   type AppRepoPickFields,
 } from "./sandboxRepoPick";
-
-/** True when the user connected the repo or shares its team. */
-export async function userCanAccessRepo(
-  db: GenericDatabaseReader<DataModel>,
-  userId: Id<"users">,
-  repo: Doc<"githubRepos">,
-): Promise<boolean> {
-  if (repo.connectedBy === userId) return true;
-  const teamId = repo.teamId;
-  if (!teamId) return false;
-  const membership = await db
-    .query("teamMembers")
-    .withIndex("by_team_and_user", (q) =>
-      q.eq("teamId", teamId).eq("userId", userId),
-    )
-    .first();
-  return membership !== null;
-}
 
 /** Resolves a repo ID to its parent repo ID if it is a sub-app, otherwise returns itself. */
 export async function resolveCanonicalRepoId(
@@ -61,7 +46,7 @@ export async function resolveCodebaseDocsRepoId(
   return repoId;
 }
 
-/** True when the user can access any repo row for the same GitHub owner/name codebase. */
+/** True when the user can access any sibling row of the codebase (same team). */
 export async function hasCodebaseRepoAccess(
   db: GenericDatabaseReader<DataModel>,
   repoId: Id<"githubRepos">,
@@ -74,15 +59,16 @@ export async function hasCodebaseRepoAccess(
   return false;
 }
 
-/** Finds all repo rows sharing the same GitHub owner and name (root + sub-apps). */
-export async function findSiblingRepos(
+/**
+ * Every repo row for one GitHub owner/name, across ALL teams. Only for routing
+ * GitHub events and GitHub-wide facts; anything that shares data between rows
+ * must use `findSiblingsOf` instead.
+ */
+export function findReposByOwnerAndName(
   db: GenericDatabaseReader<DataModel>,
-  repoId: Id<"githubRepos">,
+  repo: { owner: string; name: string },
 ): Promise<Array<Doc<"githubRepos">>> {
-  const repo = await db.get(repoId);
-  if (!repo) return [];
-
-  return await db
+  return db
     .query("githubRepos")
     .withIndex("by_owner_and_name", (q) =>
       q.eq("owner", repo.owner).eq("name", repo.name),
@@ -90,7 +76,42 @@ export async function findSiblingRepos(
     .collect();
 }
 
-/** Finds all repo entry ids sharing the same owner and name (root + sub-apps). */
+type SiblingScope = Pick<Doc<"githubRepos">, "teamId" | "connectedBy">;
+
+/**
+ * The one sibling rule: rows of the same owner/name share config, snapshots,
+ * docs and settings only inside one team. A row with no team is visible only to
+ * its connector, so it only pairs with that connector's other team-less rows.
+ */
+export function isSameTeamSibling(a: SiblingScope, b: SiblingScope): boolean {
+  if (a.teamId !== undefined || b.teamId !== undefined) {
+    return a.teamId === b.teamId;
+  }
+  return a.connectedBy !== undefined && a.connectedBy === b.connectedBy;
+}
+
+/** Sibling rows of `repo` (root + monorepo apps in the same team), itself included. */
+export async function findSiblingsOf(
+  db: GenericDatabaseReader<DataModel>,
+  repo: Doc<"githubRepos">,
+): Promise<Array<Doc<"githubRepos">>> {
+  const rows = await findReposByOwnerAndName(db, repo);
+  return rows.filter(
+    (row) => row._id === repo._id || isSameTeamSibling(repo, row),
+  );
+}
+
+/** Sibling rows of a repo id (see `findSiblingsOf`); [] when the repo is gone. */
+export async function findSiblingRepos(
+  db: GenericDatabaseReader<DataModel>,
+  repoId: Id<"githubRepos">,
+): Promise<Array<Doc<"githubRepos">>> {
+  const repo = await db.get(repoId);
+  if (!repo) return [];
+  return await findSiblingsOf(db, repo);
+}
+
+/** Sibling repo ids (see `findSiblingsOf`), or just `repoId` when it is gone. */
 export async function findAllSiblingRepoIds(
   db: GenericDatabaseReader<DataModel>,
   repoId: Id<"githubRepos">,
@@ -139,18 +160,6 @@ export async function gatherAccessibleRepos(
     repos.push(repo);
   }
   return repos;
-}
-
-/** Frontend path prefix for a githubRepos row (monorepo apps use `name/app`). */
-export function repoBasePath(repo: {
-  owner: string;
-  name: string;
-  rootDirectory?: string;
-}): string {
-  if (!repo.rootDirectory) return `/${repo.owner}/${repo.name}`;
-  const appName = repo.rootDirectory.split("/").pop();
-  if (!appName) return `/${repo.owner}/${repo.name}`;
-  return `/${repo.owner}/${repo.name}/${appName}`;
 }
 
 /** Custom label when set; otherwise leaf folder or GitHub name. */

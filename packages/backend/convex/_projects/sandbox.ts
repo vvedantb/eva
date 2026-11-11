@@ -1,6 +1,8 @@
 import { v } from "convex/values";
 import { findPrimaryPullRequest } from "../_pullRequests/store";
-import { startTaskRunWorkflow } from "../_taskWorkflow/startRun";
+import { startTaskRun } from "../_taskWorkflow/startRun";
+import { resolveProjectBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
+import { resolveProjectBranchName } from "../_git/branchNames";
 import { internal } from "../_generated/api";
 import {
   internalAction,
@@ -8,27 +10,26 @@ import {
   type MutationCtx,
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { STUCK_STOPPING_RECOVER_MS } from "../_sandbox/stopRecovery";
-import { scheduleDrainAfterStopSettles } from "../_sandbox/stopRecovery";
+import {
+  scheduleDrainAfterStopSettles,
+  STUCK_STOPPING_RECOVER_MS,
+} from "../_sandbox/stopRecovery";
 import { authMutation, getProjectWithAccess, hasActiveRun } from "../functions";
 import { workflow } from "../workflowManager";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
-import { buildProjectBranchName } from "./helpers";
 import {
   seedSandboxStartupActivity,
   clearSandboxStartupActivity,
 } from "../_sandbox/startupActivity";
-import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
-import { clearPendingQuestionsForEntity } from "../pendingQuestions";
+import { detachPendingQuestions } from "../pendingQuestions";
 import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
-import { normalizeAIModel } from "../validators";
-import { setTaskLastRunStartedAt } from "../_agentTasks/runSummary";
 import {
   stopAlertText,
   stopReasonValidator,
   type StopReason,
 } from "../_sandbox/stopReason";
 import { touchUserActivity } from "../_sandbox/activity";
+import { sandboxStartupEntityId } from "../_sandbox/owner";
 import {
   canRequestSandboxStart,
   canStartActionMarkStarting,
@@ -39,6 +40,7 @@ import {
   shouldApplySandboxStartFailure,
 } from "../_sandbox/transitions";
 import { settleOrphanedBackgroundAgents } from "../_sessions/backgroundAgents";
+import { errorMessage } from "@vvedantb/server";
 
 const PREVIEW_ALLOWED_PHASES = [
   "in_progress",
@@ -106,7 +108,7 @@ async function requestProjectSandboxStart(
   // the random "Eva is inferring…" spinner while the workflow schedules.
   await seedSandboxStartupActivity(
     ctx.db,
-    `project-sandbox-startup-${project._id}`,
+    sandboxStartupEntityId({ kind: "project", projectId: project._id }),
   );
   const reusableSandboxId = project.sandboxId;
   console.log(
@@ -321,64 +323,18 @@ export const resolveProjectConflicts = authMutation({
       throw new Error("No task in project to carry a resolve-conflicts run");
     }
 
-    const branchName =
-      project.branchName ??
-      buildProjectBranchName(args.projectId, project.branchVersion);
-    const baseBranch =
-      project.baseBranch ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
-
-    const previousStatus = carrier.status;
-    const startedAt = Date.now();
-    const runId = await ctx.db.insert("agentRuns", {
-      taskId: carrier._id,
-      status: "queued",
-      logs: [],
-      startedAt,
+    await startTaskRun(ctx, {
+      task: carrier,
+      repo,
+      userId: ctx.userId,
+      baseBranch: resolveProjectBaseBranch(project, repo),
+      isFirstTaskOnBranch: false,
+      branchName: resolveProjectBranchName(args.projectId, project),
+      projectId: args.projectId,
       mode: "resolve_conflicts",
-      credentialSourceLabel: await resolveCredentialSourceLabel(
-        ctx.db,
-        carrier.providerAccountId,
-        carrier.createdBy,
-      ),
-      model: normalizeAIModel(carrier.model),
+      clearPendingChangeRequest: false,
+      rollbackStatus: carrier.status,
     });
-    await setTaskLastRunStartedAt(ctx, carrier._id, project.repoId, startedAt);
-    await ctx.db.patch(carrier._id, {
-      status: "in_progress",
-      updatedAt: Date.now(),
-    });
-    try {
-      await startTaskRunWorkflow(ctx, {
-        runId,
-        taskId: carrier._id,
-        repoId: project.repoId,
-        installationId: repo.installationId,
-        projectId: args.projectId,
-        branchName,
-        baseBranch,
-        isFirstTaskOnBranch: false,
-        model: carrier.model ?? repo.defaultModel,
-        providerAccountId: carrier.providerAccountId,
-        credentialOwnerUserId: carrier.createdBy,
-        userId: ctx.userId,
-        mode: "resolve_conflicts",
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to start workflow";
-      await ctx.db.patch(runId, {
-        status: "error",
-        error: message,
-        finishedAt: Date.now(),
-        exitReason: "workflow_start_failed",
-      });
-      await ctx.db.patch(carrier._id, {
-        status: previousStatus,
-        activeWorkflowId: undefined,
-        updatedAt: Date.now(),
-      });
-      throw error;
-    }
 
     return null;
   },
@@ -446,12 +402,12 @@ export async function requestProjectSandboxStop(
   // Clear leftover start steps so stop does not re-show startup activity.
   await clearSandboxStartupActivity(
     ctx.db,
-    `project-sandbox-startup-${projectId}`,
+    sandboxStartupEntityId({ kind: "project", projectId }),
   );
 
   // Stopping kills the paused turn, so any blocking AskUserQuestion can
-  // never be claimed — clear it or it hides the composer forever.
-  await clearPendingQuestionsForEntity(ctx.db, String(projectId));
+  // never be claimed — move it onto the chat message so the card stays.
+  await detachPendingQuestions(ctx.db, String(projectId));
   await clearPreviewToolCallsForParent(ctx.db, projectId);
 
   // Keep sandboxId so we can resume the stopped sandbox later.
@@ -539,7 +495,7 @@ export const finalizeStopProjectSandbox = internalAction({
         repoId: args.repoId,
       });
     } catch (err) {
-      stopError = err instanceof Error ? err.message : String(err);
+      stopError = errorMessage(err);
     }
     await ctx.runMutation(internal._projects.sandbox.markProjectSandboxClosed, {
       projectId: args.projectId,

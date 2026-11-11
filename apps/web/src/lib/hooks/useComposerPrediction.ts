@@ -40,12 +40,16 @@ export function useComposerPrediction(
   const isEmpty = value === "";
   const alreadyHave = result?.forMessageId === messageId;
 
+  /* eslint-disable no-effect/no-event-handler --
+     Async I/O: fetch a prediction whenever the composer is empty and the last
+     message changes. No single click handler owns that transition. */
   useEffect(() => {
     if (!parentId || !messageId || !isEmpty || alreadyHave) return;
     predict({ parentId })
       .then((text) => setResult({ forMessageId: messageId, text }))
       .catch(console.error);
   }, [parentId, messageId, isEmpty, alreadyHave, predict]);
+  /* eslint-enable no-effect/no-event-handler */
 
   const suggestion =
     messageId !== undefined &&

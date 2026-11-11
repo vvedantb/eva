@@ -23,6 +23,7 @@ import { SkillSuggestionChips } from "@/lib/components/chat/_components/SkillSug
 import { useSkillSuggestions } from "@/lib/components/chat/_components/useSkillSuggestions";
 import { DraftReadinessBanner } from "@/lib/components/draft-readiness/DraftReadinessBanner";
 import { useDraftReadiness } from "@/lib/components/draft-readiness/useDraftReadiness";
+import { shouldNudge } from "@/lib/components/draft-readiness/readinessHints";
 import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { usePeopleMentionItems } from "@/lib/hooks/usePeopleMentionItems";
@@ -188,6 +189,7 @@ export function ChatComposer({
   // The composer's text lives inside PromptInput; the readiness verdict is
   // keyed by the exact text it judged, so the last draft is mirrored here.
   const [draftText, setDraftText] = useState("");
+  const readinessResult = readiness.resultFor(draftText);
   const {
     updateQueuedMessage,
     deleteQueuedMessage,
@@ -337,6 +339,12 @@ export function ChatComposer({
         items={heldFollowUps}
         renderContent={renderQueuedContent}
       />
+      {/* Last, so it sits flush on the input card it warns about. */}
+      <DraftReadinessBanner
+        result={readinessResult}
+        onDismiss={readiness.dismiss}
+        className="rounded-b-none rounded-t-surface"
+      />
     </>
   );
 
@@ -360,6 +368,7 @@ export function ChatComposer({
       messageHistory={messageHistory}
       allowEmptySubmit={allowEmptySubmit}
       predictionTarget={predictionTarget}
+      warn={shouldNudge(readinessResult)}
       onDraftChange={(text) => {
         suggestions.noteDraft(text);
         setDraftText(text);
@@ -404,11 +413,6 @@ export function ChatComposer({
               onSave={localDraft.onSave}
             />
           )}
-          <DraftReadinessBanner
-            result={readiness.resultFor(draftText)}
-            onDismiss={readiness.dismiss}
-            className="mx-0 mb-2"
-          />
           <SkillSuggestionChips
             chips={suggestions.chips}
             onPick={(item) => {

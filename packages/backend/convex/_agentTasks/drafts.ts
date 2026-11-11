@@ -1,10 +1,14 @@
 import { v } from "convex/values";
 import { aiModelValidator } from "../validators";
 import { internal } from "../_generated/api";
+import type { Id } from "../_generated/dataModel";
+import type { QueryCtx } from "../_generated/server";
 import {
   authQuery,
   authMutation,
+  getProjectWithAccess,
   hasRepoAccess,
+  hasTaskAccess,
   recomputeProjectPhase,
 } from "../functions";
 import { allocateNumId } from "../numId";
@@ -23,26 +27,36 @@ import {
 } from "../_userProviderAccounts/defaults";
 import { createTaskRunSummary } from "./runSummary";
 
+/**
+ * The user's drafts in a repo. `deletedAt` is in the range so a soft-deleted
+ * draft does not linger in the quick-task modal (or the Drafts page) after
+ * Remove; `createdBy` is in the range so other users' drafts are never read.
+ */
+function myLiveDrafts(
+  db: QueryCtx["db"],
+  repoId: Id<"githubRepos">,
+  userId: Id<"users">,
+) {
+  return db
+    .query("agentTasks")
+    .withIndex("by_repo_status_deleted_and_creator", (q) =>
+      q
+        .eq("repoId", repoId)
+        .eq("status", "draft")
+        .eq("deletedAt", undefined)
+        .eq("createdBy", userId),
+    )
+    .collect();
+}
+
 /** Lists all draft tasks for the current user in a given repo, sorted by most recently updated. */
 export const listDrafts = authQuery({
   args: { repoId: v.id("githubRepos") },
   returns: v.array(agentTaskValidator),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    // Index by status + deletedAt so a soft-deleted draft does not linger in
-    // the quick-task modal (or the Drafts page) after Remove.
-    const drafts = await ctx.db
-      .query("agentTasks")
-      .withIndex("by_repo_status_and_deleted", (q) =>
-        q
-          .eq("repoId", args.repoId)
-          .eq("status", "draft")
-          .eq("deletedAt", undefined),
-      )
-      .collect();
-    return drafts
-      .filter((t) => t.createdBy === ctx.userId)
-      .sort((a, b) => b.updatedAt - a.updatedAt);
+    const drafts = await myLiveDrafts(ctx.db, args.repoId, ctx.userId);
+    return drafts.sort((a, b) => b.updatedAt - a.updatedAt);
   },
 });
 
@@ -52,16 +66,7 @@ export const countDrafts = authQuery({
   returns: v.number(),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return 0;
-    const drafts = await ctx.db
-      .query("agentTasks")
-      .withIndex("by_repo_status_and_deleted", (q) =>
-        q
-          .eq("repoId", args.repoId)
-          .eq("status", "draft")
-          .eq("deletedAt", undefined),
-      )
-      .collect();
-    return drafts.filter((t) => t.createdBy === ctx.userId).length;
+    return (await myLiveDrafts(ctx.db, args.repoId, ctx.userId)).length;
   },
 });
 
@@ -83,7 +88,9 @@ export const saveDraft = authMutation({
 
     const repo = await ctx.db.get(args.repoId);
     if (!repo) throw new Error("Repo not found");
-    const project = args.projectId ? await ctx.db.get(args.projectId) : null;
+    const project = args.projectId
+      ? await getProjectWithAccess(ctx.db, args.projectId, ctx.userId)
+      : null;
 
     const now = Date.now();
 
@@ -143,7 +150,12 @@ export const activateDraft = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.id);
-    if (!task || task.createdBy !== ctx.userId || task.status !== "draft")
+    if (
+      !task ||
+      task.createdBy !== ctx.userId ||
+      task.status !== "draft" ||
+      !(await hasTaskAccess(ctx.db, task, ctx.userId))
+    )
       throw new Error("Draft not found");
 
     const repo = task.repoId ? await ctx.db.get(task.repoId) : null;

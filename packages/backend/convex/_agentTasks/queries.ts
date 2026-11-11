@@ -4,21 +4,34 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { internalQuery } from "../_generated/server";
 import { aiModelValidator, taskStatusValidator } from "../validators";
-import { authQuery, hasRepoAccess, hasTaskAccess } from "../functions";
+import {
+  authQuery,
+  hasRepoAccess,
+  hasTaskAccess,
+  isTaskVisibleTo,
+} from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { agentTaskValidator } from "./helpers";
+import { listRow } from "../_validators/listRows";
 import { resolveStorageEntries } from "../_chat/storageUrls";
 import {
-  awaitingAnswerEntityIdsForRepo,
+  chatTurnFlagsForRepos,
   openChatEntityIdsForRepo,
   taskIsExecuting,
 } from "../_chat/turnProjection";
-import { unreadLookupForRepo } from "../chatReads";
+import {
+  POINT_READ_LIMIT,
+  hasUnreadByPointRead,
+  unreadLookupForRepo,
+} from "../chatReads";
 import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 
-/** Validator for a task document enriched with its latest run and busy state. */
+/**
+ * A task list row (`listRow`) enriched with its latest run and busy state. The
+ * open task's panel reads the dropped fields from `get`.
+ */
 export const agentTaskWithLastRunValidator = v.object({
-  ...agentTaskValidator.fields,
+  ...listRow(agentTaskValidator.fields),
   lastRunStartedAt: v.optional(v.number()),
   /** Main run or chat turn (synthetic turns too): `taskIsExecuting`. */
   isExecuting: v.boolean(),
@@ -53,29 +66,58 @@ async function turnIdsForRepos(
   return new Set(sets.flatMap((set) => [...set]));
 }
 
-/** Enriches each task with its most recent run start and its busy state. */
-async function enrichTasksWithLastRun(
+type RunSummary = Doc<"agentTaskRunSummaries">;
+
+/** Each task's run summary and unread flag, one point read per task. */
+async function pointReadLookups(
   db: QueryCtx["db"],
   userId: Id<"users">,
-  tasks: Array<Doc<"agentTasks">>,
+  tasks: ReadonlyArray<Doc<"agentTasks">>,
+  repoIds: ReadonlySet<Id<"githubRepos">>,
 ) {
-  const repoIds = [...repoIdsOf(tasks)];
-  const [openChatEntityIds, awaitingAnswerIds, unreadByRepo, summaryGroups] =
-    await Promise.all([
-      turnIdsForRepos(db, tasks, openChatEntityIdsForRepo),
-      turnIdsForRepos(db, tasks, awaitingAnswerEntityIdsForRepo),
-      Promise.all(
-        repoIds.map((repoId) => unreadLookupForRepo(db, userId, repoId)),
+  const summaries = await Promise.all(
+    tasks.map((task) =>
+      db
+        .query("agentTaskRunSummaries")
+        .withIndex("by_task", (q) => q.eq("taskId", task._id))
+        .order("desc")
+        .first(),
+    ),
+  );
+  const summariesByTask = new Map<string, RunSummary>();
+  tasks.forEach((task, i) => {
+    const summary = summaries[i];
+    // The repo-wide path only sees summaries filed under the listed repos.
+    if (summary && repoIds.has(summary.repoId)) {
+      summariesByTask.set(String(task._id), summary);
+    }
+  });
+  return {
+    summariesByTask,
+    hasUnread: (task: Doc<"agentTasks">) =>
+      hasUnreadByPointRead(db, userId, task),
+  };
+}
+
+/** Run summaries and unread flags for every task, from one range per repo. */
+async function repoWideLookups(
+  db: QueryCtx["db"],
+  userId: Id<"users">,
+  repoIds: ReadonlyArray<Id<"githubRepos">>,
+) {
+  const [unreadByRepo, summaryGroups] = await Promise.all([
+    Promise.all(
+      repoIds.map((repoId) => unreadLookupForRepo(db, userId, repoId)),
+    ),
+    Promise.all(
+      repoIds.map((repoId) =>
+        db
+          .query("agentTaskRunSummaries")
+          .withIndex("by_repo", (q) => q.eq("repoId", repoId))
+          .collect(),
       ),
-      Promise.all(
-        repoIds.map((repoId) =>
-          db
-            .query("agentTaskRunSummaries")
-            .withIndex("by_repo", (q) => q.eq("repoId", repoId))
-            .collect(),
-        ),
-      ),
-    ]);
+    ),
+  ]);
   const unreadLookups = new Map<
     string,
     (task: Doc<"agentTasks">) => Promise<boolean>
@@ -83,20 +125,43 @@ async function enrichTasksWithLastRun(
   repoIds.forEach((repoId, i) => {
     unreadLookups.set(String(repoId), unreadByRepo[i]);
   });
-  const summariesByTask = new Map(
-    summaryGroups.flat().map((summary) => [String(summary.taskId), summary]),
-  );
+  return {
+    summariesByTask: new Map<string, RunSummary>(
+      summaryGroups.flat().map((summary) => [String(summary.taskId), summary]),
+    ),
+    hasUnread: async (task: Doc<"agentTasks">) => {
+      const unreadLookup = unreadLookups.get(String(task.repoId));
+      return unreadLookup ? await unreadLookup(task) : false;
+    },
+  };
+}
+
+/** Enriches each task with its most recent run start and its busy state. */
+async function enrichTasksWithLastRun(
+  db: QueryCtx["db"],
+  userId: Id<"users">,
+  tasks: Array<Doc<"agentTasks">>,
+) {
+  const repoIds = repoIdsOf(tasks);
+  const [
+    { openIds: openChatEntityIds, awaitingAnswerIds },
+    { summariesByTask, hasUnread: unreadOf },
+  ] = await Promise.all([
+    chatTurnFlagsForRepos(db, repoIds),
+    tasks.length <= POINT_READ_LIMIT
+      ? pointReadLookups(db, userId, tasks, repoIds)
+      : repoWideLookups(db, userId, [...repoIds]),
+  ]);
 
   return Promise.all(
     tasks.map(async (task) => {
       const summary = summariesByTask.get(String(task._id));
       const isExecuting = taskIsExecuting(task, openChatEntityIds);
-      const unreadLookup = unreadLookups.get(String(task.repoId));
-      const hasUnread = unreadLookup ? await unreadLookup(task) : false;
+      const hasUnread = await unreadOf(task);
       const isAwaitingAnswer = awaitingAnswerIds.has(String(task._id));
       if (summary) {
         return {
-          ...task,
+          ...listRow(task),
           lastRunStartedAt: summary.lastRunStartedAt,
           isExecuting,
           hasUnread,
@@ -110,7 +175,7 @@ async function enrichTasksWithLastRun(
         .order("desc")
         .first();
       return {
-        ...task,
+        ...listRow(task),
         lastRunStartedAt: latestRun?.startedAt,
         isExecuting,
         hasUnread,
@@ -133,7 +198,7 @@ export const listByProject = authQuery({
         .query("agentTasks")
         .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
         .collect(),
-    );
+    ).filter((task) => isTaskVisibleTo(task, ctx.userId));
     const sorted = tasks.sort(
       (a, b) => (a.taskNumber ?? 0) - (b.taskNumber ?? 0),
     );
@@ -197,72 +262,78 @@ export const getByNumId = authQuery({
         q.eq("repoId", args.repoId).eq("numId", args.numId),
       )
       .first();
+    if (task && !isTaskVisibleTo(task, ctx.userId)) return null;
     return entityVisible(task);
   },
 });
 
-/** Returns all non-draft, non-done tasks across accessible repos, sorted by most recently updated. */
+/** Task statuses that count as active (not draft, done or cancelled). */
+const ACTIVE_TASK_STATUSES: ReadonlySet<Doc<"agentTasks">["status"]> = new Set([
+  "todo",
+  "in_progress",
+  "code_review",
+  "business_review",
+] as const);
+
 /**
- * Active tasks across every repo the user can reach (or one named repo). Shared
- * by `getActiveTasks` and the slim orchestrator projection below so the scope
- * rules — team repos plus connected repos, active statuses only — exist once.
+ * Active tasks across every repo the user can reach, most recently updated
+ * first. Scope rules: team repos plus connected repos, active statuses only.
  */
 async function activeTasksForUser(
   ctx: QueryCtx,
   userId: Id<"users">,
-  repoId?: Id<"githubRepos">,
 ): Promise<Array<Doc<"agentTasks">>> {
-  const args = { repoId };
-  const ctxUserId = userId;
-  {
-    const activeStatuses = [
-      "todo",
-      "in_progress",
-      "code_review",
-      "business_review",
-    ] as const;
-
-    let repoIds: Array<Id<"githubRepos">>;
-    if (args.repoId) {
-      if (!(await hasRepoAccess(ctx.db, args.repoId, ctxUserId))) return [];
-      repoIds = [args.repoId];
-    } else {
-      const repos = await gatherAccessibleRepos(ctx.db, ctxUserId, true);
-      repoIds = repos.map((repo) => repo._id);
-    }
-
-    const taskArrays = await Promise.all(
-      repoIds.flatMap((repoId) =>
-        activeStatuses.map((status) =>
-          ctx.db
-            .query("agentTasks")
-            .withIndex("by_repo_and_status", (q) =>
-              q.eq("repoId", repoId).eq("status", status),
-            )
-            .collect(),
-        ),
+  const repos = await gatherAccessibleRepos(ctx.db, userId, true);
+  const taskArrays = await Promise.all(
+    repos.flatMap((repo) =>
+      [...ACTIVE_TASK_STATUSES].map((status) =>
+        ctx.db
+          .query("agentTasks")
+          .withIndex("by_repo_and_status", (q) =>
+            q.eq("repoId", repo._id).eq("status", status),
+          )
+          .collect(),
       ),
-    );
-
-    return filterActiveEntities(taskArrays.flat()).sort(
-      (a, b) => b.updatedAt - a.updatedAt,
-    );
-  }
+    ),
+  );
+  return filterActiveEntities(taskArrays.flat()).sort(
+    (a, b) => b.updatedAt - a.updatedAt,
+  );
 }
 
-/** Active tasks for the user (or one repo), as full documents. */
-export const getActiveTasks = authQuery({
-  args: { repoId: v.optional(v.id("githubRepos")) },
-  returns: v.array(agentTaskValidator),
-  handler: async (ctx, args) =>
-    await activeTasksForUser(ctx, ctx.userId, args.repoId),
+/**
+ * Quick tasks in the repo with a live sandbox: the sidebar badge count.
+ *
+ * Reads only sandbox-live rows (`by_repo_and_sandbox_status`). It replaced a
+ * query that sent every active task document to the always-mounted sidebar,
+ * 259 KB for 150 tasks in the load test, resent on every task change.
+ */
+export const countSandboxTasks = authQuery({
+  args: { repoId: v.id("githubRepos") },
+  returns: v.number(),
+  handler: async (ctx, args) => {
+    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return 0;
+    const live = await Promise.all(
+      (["active", "starting"] as const).map((status) =>
+        ctx.db
+          .query("agentTasks")
+          .withIndex("by_repo_and_sandbox_status", (q) =>
+            q.eq("repoId", args.repoId).eq("reviewTaskSandboxStatus", status),
+          )
+          .collect(),
+      ),
+    );
+    return filterActiveEntities(live.flat()).filter(
+      (task) => !task.projectId && ACTIVE_TASK_STATUSES.has(task.status),
+    ).length;
+  },
 });
 
 /**
  * Fields the orchestrator's `list_agents` needs from a task — and nothing else.
  *
- * `getActiveTasks` returns whole documents, whose `backgroundAgents` and
- * `description` measured up to 35KB and 8KB on real data; the fleet list keeps
+ * Whole task documents carry `backgroundAgents` and `description` that
+ * measured up to 35KB and 8KB on real data; the fleet list keeps
  * eight small fields and drops the rest, so a supervision round was moving
  * hundreds of KB per call for no benefit.
  */
@@ -280,7 +351,7 @@ const orchestratorTaskValidator = v.object({
   isExecuting: v.boolean(),
 });
 
-/** Slim projection of {@link getActiveTasks} for the orchestrator fleet list. */
+/** Active tasks (`activeTasksForUser`), slim, for the orchestrator fleet list. */
 export const getActiveTasksSlim = authQuery({
   args: {},
   returns: v.array(orchestratorTaskValidator),
@@ -361,7 +432,10 @@ export const getDependentTasks = authQuery({
       dependents.map((dep) => ctx.db.get(dep.taskId)),
     );
     return filterActiveEntities(
-      depTasks.filter((t): t is Exclude<typeof t, null> => t !== null),
+      depTasks.filter(
+        (t): t is Exclude<typeof t, null> =>
+          t !== null && isTaskVisibleTo(t, ctx.userId),
+      ),
     ).map((t) => ({
       _id: t._id,
       title: t.title,

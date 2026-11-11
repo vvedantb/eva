@@ -2,12 +2,12 @@
 
 import { ConvexError, v, type Infer } from "convex/values";
 import { quote } from "shell-quote";
+import { redactSecrets } from "@eva/shared/redactSecrets";
 import { SandboxProviderError, type SandboxHandle } from "../_sandbox/provider";
 import type { ActionCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { action, internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import {
   getAIModelProvider,
   normalizeAIModel,
@@ -23,7 +23,6 @@ import {
   getSandboxHandle,
   ensureSandboxRunning,
   ARCHIVED_SANDBOX_READY_TIMEOUT_SECONDS,
-  sleep,
   errorMessage,
   signAndLaunchScript,
   KILL_PRIOR_AGENT_PROCESSES_CMD,
@@ -31,6 +30,13 @@ import {
   restartUnresponsiveSandbox,
 } from "./helpers";
 import { writeSandboxFile } from "./sandboxFiles";
+import { computeStartupFingerprint } from "../_evaConfig/config";
+import {
+  readBranchAppCommands,
+  readStartupMarker,
+  startupMarkerMatches,
+  writeStartupMarker,
+} from "./startupMarker";
 import { pollPreviewReadiness } from "./previewPoll";
 import { CALLBACK_SCRIPT_FINGERPRINT } from "./callbackScriptFingerprint";
 import {
@@ -64,18 +70,8 @@ import {
   type DaemonTurnSnapshot,
 } from "../_chat/daemonClaimPause";
 import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
-
-/** True if anything is LISTEN on `port` (Vercel images often lack `ss`). */
-function portListenProbeCmd(port: number): string {
-  const hex = port.toString(16).toUpperCase().padStart(4, "0");
-  return [
-    `if command -v ss >/dev/null 2>&1; then ss -ltn 2>/dev/null | grep -q ":${port} " && echo yes && exit 0; fi`,
-    `if command -v lsof >/dev/null 2>&1; then lsof -iTCP:${port} -sTCP:LISTEN >/dev/null 2>&1 && echo yes && exit 0; fi`,
-    // /proc/net/tcp{,6} local_address port is hex, big-endian (13000 → 32C8).
-    `if grep -Eiq ":${hex}[[:space:]]" /proc/net/tcp /proc/net/tcp6 2>/dev/null; then echo yes; exit 0; fi`,
-    "echo no",
-  ].join("; ");
-}
+import { buildPortListenProbeCommand } from "./httpReadyProbe";
+import type { ProgressStep } from "./startupProgress";
 
 async function probePreviewReady(
   handle: SandboxHandle,
@@ -86,7 +82,7 @@ async function probePreviewReady(
     // finishes compiling. A short HTTP curl times out mid-compile and used to
     // trigger remount → kill → relaunch loops (session 41 / CarePulse web).
     const listening = (
-      await execHandle(handle, portListenProbeCmd(port), 5)
+      await execHandle(handle, buildPortListenProbeCommand(port), 5)
     ).trim();
     if (listening === "yes") return true;
 
@@ -107,13 +103,14 @@ import {
   checkoutFetchedBaseBranch,
   createSandboxAndPrepareRepo,
   getOrCreateSandbox,
+  isTransientTransportError,
   pushBranchToOrigin,
   commitAndPushCheckedOutBranch,
   writeAutoPublishPolicy,
   EPHEMERAL_LIFECYCLE,
   SESSION_LIFECYCLE,
 } from "./git";
-import { startDesktopWithChrome } from "./desktop";
+import { deleteSandboxAndCredentials } from "./gitCredentials";
 import {
   ensurePreviewNavigationProxy,
   PREVIEW_TAB_PREFIX,
@@ -127,6 +124,8 @@ import { PREVIEW_GRANT_PARAM } from "../previewGrantConfig";
 import { createHmac } from "node:crypto";
 import { previewActivityHmacMessage } from "./callbackAuth";
 import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
+import { tryGetEvaBaseUrl } from "../_env/webAppUrl";
+import { sleep } from "../_shared/async";
 
 /**
  * Traffic-heartbeat credentials for the in-sandbox preview proxy. Empty when
@@ -147,13 +146,6 @@ function previewActivityParams(sandboxId: string): {
       .digest("hex"),
   };
 }
-
-const sessionPersistenceKindValidator = v.union(
-  v.literal("sessionChats"),
-  v.literal("sessions"),
-  v.literal("projects"),
-  v.literal("agentTasks"),
-);
 
 // A backfilled Main chat keeps its session's id as the Claude transcript seed.
 const sessionPersistenceIdValidator = v.union(
@@ -215,24 +207,28 @@ export const validateSandbox = internalAction({
   },
 });
 
-/** Executes a shell command on a sandbox and returns the output. */
-export const runSandboxCommand = internalAction({
-  args: {
-    sandboxId: v.string(),
-    command: v.string(),
-    timeoutSeconds: v.optional(v.number()),
-    repoId: v.id("githubRepos"),
-  },
-  returns: v.string(),
-  handler: async (ctx, args) => {
-    const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-    return (
-      await execHandle(handle, args.command, args.timeoutSeconds ?? 30)
-    ).trim();
-  },
-});
+/**
+ * The startup commands this sandbox should run: the checked-out branch's own
+ * `.eva/config.json` entry when present, else the cached default-branch ones.
+ */
+async function resolveStartupCommands(
+  ctx: ActionCtx,
+  sandbox: SandboxHandle,
+  repoId: Id<"githubRepos">,
+): Promise<string[]> {
+  const cached = await ctx.runQuery(internal.repoSnapshots.getAppRunCommands, {
+    repoId,
+  });
+  if (!cached) return [];
+  const branch = await readBranchAppCommands(sandbox, cached.rootDirectory);
+  return branch?.startup ?? cached.startupCommands;
+}
 
-/** Returns whether startup commands have already completed on this sandbox. */
+/**
+ * Returns whether this sandbox already ran its current startup commands: the
+ * marker exists and carries their fingerprint (a seeded snapshot built from
+ * other commands, or a branch that edited them, does not count).
+ */
 export const startupCommandsMarkerExists = internalAction({
   args: {
     sandboxId: v.string(),
@@ -241,12 +237,11 @@ export const startupCommandsMarkerExists = internalAction({
   returns: v.boolean(),
   handler: async (ctx, args): Promise<boolean> => {
     const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-    try {
-      await execHandle(handle, "test -f /tmp/.startup-commands-done", 5);
-      return true;
-    } catch {
-      return false;
-    }
+    const commands = await resolveStartupCommands(ctx, handle, args.repoId);
+    return startupMarkerMatches(
+      await readStartupMarker(handle),
+      computeStartupFingerprint(commands),
+    );
   },
 });
 
@@ -275,29 +270,23 @@ export async function runStartupCommandsDirect(
   ctx: ActionCtx,
   args: { sandboxId: string; repoId: Id<"githubRepos">; force?: boolean },
 ): Promise<{ ran: boolean; commandCount: number; errors: string[] }> {
-  // Get startup commands for this repo
-  const commands: string[] | null = await ctx.runQuery(
-    internal.repoSnapshots.getStartupCommands,
-    { repoId: args.repoId },
-  );
+  const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+  const commands = await resolveStartupCommands(ctx, sandbox, args.repoId);
 
-  if (!commands || commands.length === 0) {
+  if (commands.length === 0) {
     return { ran: false, commandCount: 0, errors: [] };
   }
 
-  const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-
+  const fingerprint = computeStartupFingerprint(commands);
   if (!args.force) {
-    // Check if startup commands have already run (marker file)
-    try {
-      await execHandle(sandbox, "test -f /tmp/.startup-commands-done", 5);
-      // Marker exists, commands already ran
+    // Skip when these exact commands already ran (marker carries their
+    // fingerprint). A branch that edited them reruns here, even on a sandbox
+    // booted from a seeded snapshot.
+    if (startupMarkerMatches(await readStartupMarker(sandbox), fingerprint)) {
       console.log(
-        `[sandbox] runStartupCommands: marker exists, skipping ${commands.length} commands`,
+        `[sandbox] runStartupCommands: marker matches, skipping ${commands.length} commands`,
       );
       return { ran: false, commandCount: 0, errors: [] };
-    } catch {
-      // Marker doesn't exist, proceed
     }
   }
 
@@ -307,18 +296,20 @@ export async function runStartupCommandsDirect(
 
   const errors: string[] = [];
   for (const command of commands) {
-    console.log(`[sandbox] runStartupCommands: running: ${command}`);
+    // Repo-configured commands can embed tokens; logs and errors show this.
+    const shown = redactSecrets(command);
+    console.log(`[sandbox] runStartupCommands: running: ${shown}`);
     try {
       // 10 minute timeout per command (supabase start can take a while)
       const output = await execHandle(sandbox, command, 600);
-      console.log(`[sandbox] runStartupCommands: completed: ${command}`);
+      console.log(`[sandbox] runStartupCommands: completed: ${shown}`);
       if (output.trim()) {
-        console.log(`[sandbox] output: ${output.slice(0, 500)}`);
+        console.log(`[sandbox] output: ${redactSecrets(output.slice(0, 500))}`);
       }
     } catch (e) {
       const msg = errorMessage(e, "command failed");
-      console.error(`[sandbox] runStartupCommands: failed: ${command}`, msg);
-      errors.push(`${command}: ${msg}`);
+      console.error(`[sandbox] runStartupCommands: failed: ${shown}`, msg);
+      errors.push(`${shown}: ${msg}`);
       // Continue with other commands even if one fails
     }
   }
@@ -329,7 +320,7 @@ export async function runStartupCommandsDirect(
   // marker absent lets the next resume retry the full startup sequence.
   if (errors.length === 0) {
     try {
-      await execHandle(sandbox, "touch /tmp/.startup-commands-done", 5);
+      await writeStartupMarker(sandbox, fingerprint);
     } catch {
       // Non-fatal
     }
@@ -461,16 +452,21 @@ export const runBackgroundCommands = internalAction({
     ctx,
     args,
   ): Promise<{ ran: boolean; commandCount: number; errors: string[] }> => {
-    const commands: string[] | null = await ctx.runQuery(
-      internal.repoSnapshots.getBackgroundCommands,
+    const cached = await ctx.runQuery(
+      internal.repoSnapshots.getAppRunCommands,
       { repoId: args.repoId },
     );
-
-    if (!commands || commands.length === 0) {
-      return { ran: false, commandCount: 0, errors: [] };
-    }
+    if (!cached) return { ran: false, commandCount: 0, errors: [] };
 
     const sandbox = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
+    // Background daemons run on every boot, so the checked-out branch's own
+    // `.eva/config.json` entry wins over the cached default-branch commands.
+    const branch = await readBranchAppCommands(sandbox, cached.rootDirectory);
+    const commands = branch?.background ?? cached.backgroundCommands;
+
+    if (commands.length === 0) {
+      return { ran: false, commandCount: 0, errors: [] };
+    }
 
     console.log(
       `[sandbox] runBackgroundCommands: launching ${commands.length} background command(s)${args.onlyRestartDead ? " (onlyRestartDead)" : ""}`,
@@ -492,6 +488,8 @@ export const runBackgroundCommands = internalAction({
     let restartAttempted = false;
     for (let i = 0; i < commands.length; i++) {
       const command = commands[i];
+      // Repo-configured commands can embed tokens; logs and errors show this.
+      const shown = redactSecrets(command);
       const isConvexCommand = isConvexBackendCommand(command);
       // Everything per command runs in one try — including the pid check and
       // cleanup execs, which used to throw uncaught out of the whole action
@@ -515,7 +513,7 @@ export const runBackgroundCommands = internalAction({
           ).trim();
           if (alive === "alive") {
             console.log(
-              `[sandbox] runBackgroundCommands: still alive, skip: ${command}`,
+              `[sandbox] runBackgroundCommands: still alive, skip: ${shown}`,
             );
             continue;
           }
@@ -569,7 +567,7 @@ export const runBackgroundCommands = internalAction({
           ? buildConvexBackgroundScriptBody(command)
           : command;
         console.log(
-          `[sandbox] runBackgroundCommands: launching: ${command} (log: ${logPath})`,
+          `[sandbox] runBackgroundCommands: launching: ${shown} (log: ${logPath})`,
         );
         // The file API, not `echo <base64> | base64 -d`. The command is
         // repo-supplied and the Convex wrapper adds a multi-KB preamble, so an
@@ -621,10 +619,10 @@ export const runBackgroundCommands = internalAction({
         }
         const msg = errorMessage(e, "command failed");
         console.error(
-          `[sandbox] runBackgroundCommands: failed to launch: ${command}`,
+          `[sandbox] runBackgroundCommands: failed to launch: ${shown}`,
           msg,
         );
-        errors.push(`${command}: ${msg}`);
+        errors.push(`${shown}: ${msg}`);
         if (verdict !== "command-failed") {
           // The VM cannot run commands (wedged, or no longer running). Stop
           // cascading: record the skip and return a handled result — heal
@@ -807,7 +805,7 @@ export const watchConvexReadiness = internalAction({
       // Tail is best-effort context only.
     }
     const detail =
-      `Convex dev was not ready after ${Math.round(CONVEX_READY_TIMEOUT_MS / 60000)} minutes.\n${logTail}`.slice(
+      `Convex dev was not ready after ${Math.round(CONVEX_READY_TIMEOUT_MS / 60000)} minutes.\n${redactSecrets(logTail)}`.slice(
         0,
         4000,
       );
@@ -821,58 +819,6 @@ export const watchConvexReadiness = internalAction({
       });
     }
     return null;
-  },
-});
-
-/**
- * Runs a repo's clean-stop commands (e.g. `supabase stop`, `pkill convex dev`)
- * sequentially, foreground, so on-disk volumes flush before a filesystem
- * snapshot. Used only by the seeded-snapshot build; never on normal starts.
- * Non-fatal per command so a partial stop still lets the snapshot proceed.
- */
-export const runStopCommands = internalAction({
-  args: {
-    sandboxId: v.string(),
-    repoId: v.id("githubRepos"),
-  },
-  returns: v.object({
-    ran: v.boolean(),
-    commandCount: v.number(),
-    errors: v.array(v.string()),
-  }),
-  handler: async (
-    ctx,
-    args,
-  ): Promise<{ ran: boolean; commandCount: number; errors: string[] }> => {
-    const commands: string[] | null = await ctx.runQuery(
-      internal.repoSnapshots.getStopCommands,
-      { repoId: args.repoId },
-    );
-
-    if (!commands || commands.length === 0) {
-      return { ran: false, commandCount: 0, errors: [] };
-    }
-
-    const handle = await getSandboxHandle(ctx, args.repoId, args.sandboxId);
-
-    console.log(
-      `[sandbox] runStopCommands: running ${commands.length} stop command(s)`,
-    );
-
-    const errors: string[] = [];
-    for (const command of commands) {
-      console.log(`[sandbox] runStopCommands: running: ${command}`);
-      try {
-        await execHandle(handle, command, 300);
-        console.log(`[sandbox] runStopCommands: completed: ${command}`);
-      } catch (e) {
-        const msg = errorMessage(e, "command failed");
-        console.error(`[sandbox] runStopCommands: failed: ${command}`, msg);
-        errors.push(`${command}: ${msg}`);
-      }
-    }
-
-    return { ran: true, commandCount: commands.length, errors };
   },
 });
 
@@ -1035,7 +981,7 @@ async function buildPreviewUrl(
           publicKeyJwk: previewPublicJwk,
           sandboxId: args.sandboxId,
           repoId: args.repoId,
-          webAppUrl: process.env.WEB_APP_URL ?? "",
+          webAppUrl: tryGetEvaBaseUrl() ?? "",
           inject: args.navigationSync === true,
           // Browser-facing port for /preview-auth (public proxy, not listen).
           authPort: fixedVercelProxyPort ?? args.port,
@@ -1125,214 +1071,20 @@ export const previewUrlForAuthorizedSandbox = internalAction({
 });
 
 const MAX_SETUP_ELAPSED_MS = 8 * 60 * 1000;
-const QUICK_TASK_MAX_TOTAL_RUNTIME_MS = "5400000";
 
 /** Checks if a sandbox setup error is transient and worth retrying. */
 function isSandboxSetupRetryable(message: string): boolean {
-  if (isDaytonaNetworkIssue(message)) {
-    return true;
-  }
-  const lowered = message.toLowerCase();
-  const gitNetworkMarkers = [
-    "status code 502",
-    "status code 503",
-    "status code 504",
-    "fetch failed",
-    "gnutls recv error",
-    "tls connection was non-properly terminated",
-    "remote end hung up unexpectedly",
-    "http/2 stream",
-    "early eof",
-    "connection reset by peer",
-    "rpc failed",
-  ];
   return (
-    (lowered.includes("sandbox exec") && lowered.includes("timed out")) ||
-    lowered.includes("command execution timeout") ||
+    isDaytonaNetworkIssue(message) ||
+    // Transport only: setup deletes and recreates the VM, so a permanent auth
+    // failure or a bare "network" substring must not trigger it.
+    isTransientTransportError(message) ||
     // Exit code -1 typically means the command was terminated abnormally
     // (sandbox not yet accepting commands, transport error, killed mid-exec) —
     // this is transient, unlike non-zero exit codes from real command failures.
-    lowered.includes("sandbox command failed with exit code -1") ||
-    gitNetworkMarkers.some((marker) => lowered.includes(marker))
+    message.toLowerCase().includes("sandbox command failed with exit code -1")
   );
 }
-
-/** Creates or resumes a sandbox with local branch setup, desktop, and retry logic. */
-export const prepareSandbox = internalAction({
-  args: {
-    existingSandboxId: v.optional(v.string()),
-    installationId: v.number(),
-    repoOwner: v.string(),
-    repoName: v.string(),
-    branchName: v.optional(v.string()),
-    baseBranch: v.optional(v.string()),
-    ephemeral: v.optional(v.boolean()),
-    repoId: v.id("githubRepos"),
-    attachRunId: v.optional(v.id("agentRuns")),
-    sessionPersistenceId: v.optional(sessionPersistenceIdValidator),
-    sessionPersistenceKind: v.optional(sessionPersistenceKindValidator),
-    startDesktop: v.optional(v.boolean()),
-    streamingEntityId: v.optional(v.string()),
-  },
-  returns: v.object({
-    sandboxId: v.string(),
-  }),
-  handler: async (ctx, args) => {
-    const completedSteps: Array<{
-      type: string;
-      label: string;
-      status: string;
-    }> = [];
-    const emitProgress = async (label: string): Promise<void> => {
-      if (!args.streamingEntityId) return;
-      const steps = [
-        ...completedSteps,
-        { type: "tool", label, status: "active" },
-      ];
-      await ctx.runMutation(internal.streaming.internalSet, {
-        entityId: args.streamingEntityId,
-        currentActivity: JSON.stringify(steps),
-      });
-      completedSteps.push({ type: "tool", label, status: "complete" });
-    };
-
-    const setupStartedAt = Date.now();
-    console.log(
-      `[sandbox] prepareSandbox: resolving context for repo=${args.repoOwner}/${args.repoName} repoId=${args.repoId} ephemeral=${args.ephemeral ?? false}`,
-    );
-    const { client, sandboxEnvVars, snapshotName } =
-      await resolveSandboxContext(ctx, args.repoId);
-    const existingSandboxId = args.existingSandboxId;
-    console.log(
-      `[sandbox] prepareSandbox: context resolved in ${Date.now() - setupStartedAt}ms — snapshot=${snapshotName ?? "none"}, existingSandbox=${existingSandboxId ?? "none"}`,
-    );
-    let sandbox: SandboxHandle | undefined;
-    let deleteSandboxOnFailure = false;
-    let attempt = 1;
-    const maxSetupAttempts = 3;
-    const attachRunSandbox = async (
-      sandboxToAttach: SandboxHandle,
-    ): Promise<void> => {
-      if (!args.attachRunId) {
-        return;
-      }
-      await ctx.runMutation(internal.taskWorkflow.saveSandboxId, {
-        runId: args.attachRunId,
-        sandboxId: sandboxToAttach.id,
-      });
-    };
-
-    while (true) {
-      try {
-        if (args.ephemeral) {
-          const prepared = await createSandboxAndPrepareRepo(
-            ctx,
-            client,
-            args.installationId,
-            args.repoOwner,
-            args.repoName,
-            sandboxEnvVars,
-            EPHEMERAL_LIFECYCLE,
-            snapshotName,
-            attachRunSandbox,
-            emitProgress,
-            { mode: "none" },
-          );
-          sandbox = prepared.sandbox;
-          deleteSandboxOnFailure = true;
-        } else {
-          const prepared = await getOrCreateSandbox(
-            ctx,
-            client,
-            existingSandboxId,
-            args.installationId,
-            args.repoOwner,
-            args.repoName,
-            sandboxEnvVars,
-            SESSION_LIFECYCLE,
-            snapshotName,
-            emitProgress,
-            { mode: "none" },
-          );
-          sandbox = prepared.sandbox;
-          deleteSandboxOnFailure = prepared.isNew;
-        }
-
-        if (args.branchName) {
-          await emitProgress("Setting up branch...");
-          await setupBranch(
-            sandbox,
-            args.branchName,
-            args.baseBranch ?? FALLBACK_GIT_BASE_BRANCH,
-          );
-        } else if (args.baseBranch) {
-          await emitProgress("Checking out base branch...");
-          await checkoutFetchedBaseBranch(sandbox, args.baseBranch);
-        }
-
-        if (args.startDesktop) {
-          await emitProgress("Starting desktop...");
-          await startDesktopWithChrome(sandbox);
-        }
-
-        break;
-      } catch (error) {
-        if (deleteSandboxOnFailure && sandbox) {
-          console.warn(
-            `[sandbox] prepareSandbox: deleting failed sandbox ${sandbox.id}`,
-          );
-          try {
-            await sandbox.delete();
-          } catch {}
-          // Best-effort cleanup of the credential-helper row. No-op if absent.
-          await ctx.runMutation(
-            internal.sandboxGitCredentials.deleteBySandboxId,
-            { sandboxId: sandbox.id },
-          );
-        }
-
-        const message = errorMessage(error, "Sandbox setup failed");
-        const elapsed = Date.now() - setupStartedAt;
-        const retryable = isSandboxSetupRetryable(message);
-        const withinTimeLimit = elapsed < MAX_SETUP_ELAPSED_MS;
-        const shouldRetry = retryable && withinTimeLimit;
-
-        console.warn(
-          `[sandbox] prepareSandbox: attempt ${attempt}/${maxSetupAttempts} failed after ${elapsed}ms — retryable=${retryable}, withinTimeLimit=${withinTimeLimit}, shouldRetry=${shouldRetry}: ${message}`,
-        );
-
-        if (!shouldRetry || attempt >= maxSetupAttempts) {
-          console.error(
-            `[sandbox] prepareSandbox: giving up after ${attempt} attempt(s), total elapsed=${elapsed}ms: ${message}`,
-          );
-          throw error;
-        }
-
-        const delayMs =
-          2500 * Math.pow(2, attempt - 1) + Math.floor(Math.random() * 1000);
-        console.warn(`[sandbox] prepareSandbox: retrying in ${delayMs}ms`);
-        await sleep(delayMs);
-        completedSteps.length = 0;
-        await emitProgress("Retrying sandbox setup...");
-        attempt += 1;
-        sandbox = undefined;
-        deleteSandboxOnFailure = false;
-      }
-    }
-
-    if (!sandbox) {
-      throw new Error("Sandbox setup failed");
-    }
-
-    const totalElapsed = Date.now() - setupStartedAt;
-    console.log(
-      `[sandbox] prepareSandbox: success in ${totalElapsed}ms, sandboxId=${sandbox.id}, attempts=${attempt}`,
-    );
-    return {
-      sandboxId: sandbox.id,
-    };
-  },
-});
 
 /** Creates or resumes a sandbox without performing repo sync. */
 export const createOrResumeSandbox = internalAction({
@@ -1341,12 +1093,8 @@ export const createOrResumeSandbox = internalAction({
     installationId: v.number(),
     repoOwner: v.string(),
     repoName: v.string(),
-    branchName: v.optional(v.string()),
-    baseBranch: v.optional(v.string()),
     ephemeral: v.optional(v.boolean()),
     repoId: v.id("githubRepos"),
-    sessionPersistenceId: v.optional(sessionPersistenceIdValidator),
-    sessionPersistenceKind: v.optional(sessionPersistenceKindValidator),
     attachRunId: v.optional(v.id("agentRuns")),
     streamingEntityId: v.optional(v.string()),
   },
@@ -1355,14 +1103,10 @@ export const createOrResumeSandbox = internalAction({
     resumeFellBack: v.boolean(),
   }),
   handler: async (ctx, args) => {
-    const completedSteps: Array<{
-      type: string;
-      label: string;
-      status: string;
-    }> = [];
+    const completedSteps: ProgressStep[] = [];
     const emitProgress = async (label: string): Promise<void> => {
       if (!args.streamingEntityId) return;
-      const steps = [
+      const steps: ProgressStep[] = [
         ...completedSteps,
         { type: "tool", label, status: "active" },
       ];
@@ -1452,14 +1196,7 @@ export const createOrResumeSandbox = internalAction({
           console.warn(
             `[sandbox] createOrResumeSandbox: deleting failed sandbox ${sandbox.id}`,
           );
-          try {
-            await sandbox.delete();
-          } catch {}
-          // Best-effort cleanup of the credential-helper row. No-op if absent.
-          await ctx.runMutation(
-            internal.sandboxGitCredentials.deleteBySandboxId,
-            { sandboxId: sandbox.id },
-          );
+          await deleteSandboxAndCredentials(ctx, sandbox);
         }
 
         const message = errorMessage(error, "Sandbox setup failed");
@@ -2521,7 +2258,6 @@ async function launchAgentOnSandbox(
       fastMode: args.fastMode,
     }),
   );
-  extraEnvVars.CLAUDE_MAX_TOTAL_RUNTIME_MS = QUICK_TASK_MAX_TOTAL_RUNTIME_MS;
 
   const normalizedModel = normalizeAIModel(args.model);
   const claudeSessionId =

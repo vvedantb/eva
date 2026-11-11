@@ -10,7 +10,6 @@ export {
 } from "./_agentRuns/queries";
 
 export {
-  appendLog,
   attachMedia,
   updateDeploymentStatus,
 } from "./_agentRuns/mutations";

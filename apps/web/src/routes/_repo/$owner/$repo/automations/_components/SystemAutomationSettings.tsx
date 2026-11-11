@@ -8,6 +8,7 @@ import { CronScheduleCard } from "@/lib/components/CronScheduleCard";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
 import { AlertWebhookFields } from "./AlertWebhookFields";
+import { EmailSettingsRows } from "./EmailSettingsRows";
 import { IssueLabelField } from "./TriggerSection";
 import {
   automationTriggerOf,
@@ -129,17 +130,7 @@ export function SystemAutomationSettings({
         {/* Event presets post a one-line note per run, so there is no
             summary worth emailing; the backend never sends one. */}
         {trigger.kind === "cron" ? (
-          <SettingsToggleRow
-            title="Send email"
-            description="Email this automation's run summary to all users when a run succeeds."
-            action={
-              <Switch
-                checked={automation.sendEmail === true}
-                onCheckedChange={(next) => commit({ sendEmail: next })}
-                aria-label="Send email"
-              />
-            }
-          />
+          <EmailSettingsRows automation={automation} commit={commit} />
         ) : null}
       </SettingsSection>
 

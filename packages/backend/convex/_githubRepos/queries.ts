@@ -3,13 +3,15 @@ import { v } from "convex/values";
 import type { GenericDatabaseReader, StorageReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { internalQuery } from "../_generated/server";
-import { authQuery } from "../functions";
+import { authQuery, hasTeamAccess, userCanAccessRepo } from "../functions";
 import {
+  findReposByOwnerAndName,
+  findSiblingRepos,
+  findSiblingsOf,
   gatherAccessibleRepos,
   githubRepoValidator,
   githubRepoWithLogoValidator,
   pickDefaultVisibleAppRepo,
-  userCanAccessRepo,
 } from "./helpers";
 import {
   getAIProviderAvailability,
@@ -129,7 +131,7 @@ export const getLogoUrl = authQuery({
   handler: async (ctx, args) => {
     const repo = await ctx.db.get(args.repoId);
     if (!repo) return null;
-    if (!(await userCanAccessRepo(ctx.db, ctx.userId, repo))) return null;
+    if (!(await userCanAccessRepo(ctx.db, repo, ctx.userId))) return null;
     if (!repo.logoStorageId) return null;
     return await ctx.storage.getUrl(repo.logoStorageId);
   },
@@ -143,7 +145,7 @@ export const get = authQuery({
     const repo = await ctx.db.get(args.id);
     if (!repo) return null;
     if (repo.hidden === true) return null;
-    return (await userCanAccessRepo(ctx.db, ctx.userId, repo)) ? repo : null;
+    return (await userCanAccessRepo(ctx.db, repo, ctx.userId)) ? repo : null;
   },
 });
 
@@ -158,7 +160,7 @@ export const getByIdString = authQuery({
     const repo = await ctx.db.get(id);
     if (!repo) return null;
     if (repo.hidden === true) return null;
-    return (await userCanAccessRepo(ctx.db, ctx.userId, repo)) ? repo : null;
+    return (await userCanAccessRepo(ctx.db, repo, ctx.userId)) ? repo : null;
   },
 });
 
@@ -183,7 +185,7 @@ export const getProviderAvailability = authQuery({
       return unavailable;
     }
 
-    if (!(await userCanAccessRepo(ctx.db, ctx.userId, repo))) {
+    if (!(await userCanAccessRepo(ctx.db, repo, ctx.userId))) {
       return unavailable;
     }
 
@@ -243,12 +245,7 @@ export const getByOwnerAndName = authQuery({
   },
   returns: v.union(githubRepoValidator, v.null()),
   handler: async (ctx, args) => {
-    const candidates = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", args.owner).eq("name", args.name),
-      )
-      .collect();
+    const candidates = await findReposByOwnerAndName(ctx.db, args);
 
     let repo = args.appName
       ? candidates.find(
@@ -262,7 +259,7 @@ export const getByOwnerAndName = authQuery({
 
     if (!repo) return null;
     if (repo.hidden === true) return null;
-    return (await userCanAccessRepo(ctx.db, ctx.userId, repo)) ? repo : null;
+    return (await userCanAccessRepo(ctx.db, repo, ctx.userId)) ? repo : null;
   },
 });
 
@@ -286,14 +283,7 @@ export const listByTeam = authQuery({
   args: { teamId: v.id("teams") },
   returns: v.array(githubRepoWithLogoValidator),
   handler: async (ctx, args) => {
-    const membership = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", args.teamId).eq("userId", ctx.userId),
-      )
-      .first();
-
-    if (!membership) return [];
+    if (!(await hasTeamAccess(ctx.db, args.teamId, ctx.userId))) return [];
 
     const repos = await ctx.db
       .query("githubRepos")
@@ -307,17 +297,12 @@ export const listByTeam = authQuery({
   },
 });
 
-/** Internal: all repo ids sharing owner/name (monorepo siblings + self). */
-export const listRepoIdsByOwnerAndName = internalQuery({
-  args: { owner: v.string(), name: v.string() },
+/** Internal: sibling repo ids of a repo (same owner/name and team, self included). */
+export const listSiblingRepoIds = internalQuery({
+  args: { repoId: v.id("githubRepos") },
   returns: v.array(v.id("githubRepos")),
   handler: async (ctx, args) => {
-    const siblings = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", args.owner).eq("name", args.name),
-      )
-      .collect();
+    const siblings = await findSiblingRepos(ctx.db, args.repoId);
     return siblings.map((repo) => repo._id);
   },
 });
@@ -353,14 +338,11 @@ export const listSiblingApps = authQuery({
   ),
   handler: async (ctx, args) => {
     const repo = await ctx.db.get(args.repoId);
-    if (!repo) return [];
+    if (!repo || !(await userCanAccessRepo(ctx.db, repo, ctx.userId))) {
+      return [];
+    }
 
-    const siblings = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", repo.owner).eq("name", repo.name),
-      )
-      .collect();
+    const siblings = await findSiblingsOf(ctx.db, repo);
 
     return siblings
       .filter((s) => s._id !== args.repoId && s.rootDirectory)
@@ -386,12 +368,7 @@ export const findParentRepoByOwnerAndName = internalQuery({
   },
   returns: v.union(githubRepoValidator, v.null()),
   handler: async (ctx, args) => {
-    const repos = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", args.owner).eq("name", args.name),
-      )
-      .collect();
+    const repos = await findReposByOwnerAndName(ctx.db, args);
     const parent = repos.find((repo) => !repo.rootDirectory);
     return parent ?? repos[0] ?? null;
   },
@@ -413,7 +390,7 @@ export const getAccessibleForAction = authQuery({
   handler: async (ctx, args) => {
     const repo = await ctx.db.get(args.id);
     if (!repo) return null;
-    return (await userCanAccessRepo(ctx.db, ctx.userId, repo)) ? repo : null;
+    return (await userCanAccessRepo(ctx.db, repo, ctx.userId)) ? repo : null;
   },
 });
 
@@ -436,7 +413,7 @@ export const getInstallationAccessState = authQuery({
     if (repos.length === 0) return "unclaimed";
     if (repos.some((repo) => repo.connectedBy === ctx.userId)) return "owner";
     for (const repo of repos) {
-      if (await userCanAccessRepo(ctx.db, ctx.userId, repo)) return "member";
+      if (await userCanAccessRepo(ctx.db, repo, ctx.userId)) return "member";
     }
     return "denied";
   },

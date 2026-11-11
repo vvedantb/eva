@@ -1,5 +1,6 @@
 import { v, type Infer } from "convex/values";
 import { internal } from "./_generated/api";
+import { errorMessage } from "@vvedantb/server";
 import {
   internalAction,
   internalMutation,
@@ -180,32 +181,6 @@ export const listSessionChatStatuses = authQuery({
       statuses.push({ chatId, turnId: turn._id, state: turn.state });
     }
     return statuses;
-  },
-});
-
-/**
- * Every session chat in a repo with a turn open, for the sidebar's indented
- * chat rows. One indexed read per repo group, like the session rows' own
- * executing projection.
- */
-export const listRunningChatIdsForRepo = authQuery({
-  args: { repoId: v.id("githubRepos") },
-  returns: v.array(v.id("sessionChats")),
-  handler: async (ctx, args) => {
-    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const turns = await ctx.db
-      .query("turns")
-      .withIndex("by_repo_open", (q) =>
-        q.eq("repoId", args.repoId).eq("open", true),
-      )
-      .collect();
-    const chatIds = [];
-    for (const turn of turns) {
-      if (turn.lane !== undefined) continue;
-      const chatId = ctx.db.normalizeId("sessionChats", turn.entityId);
-      if (chatId) chatIds.push(chatId);
-    }
-    return chatIds;
   },
 });
 
@@ -653,7 +628,7 @@ export const reconcile = internalAction({
           );
         } catch (error) {
           console.log(
-            `[watchdog][lease-diagnostics] turnId=${turn.turnId} capture failed: ${error instanceof Error ? error.message : String(error)}`,
+            `[watchdog][lease-diagnostics] turnId=${turn.turnId} capture failed: ${errorMessage(error)}`,
           );
         }
       }
@@ -667,7 +642,7 @@ export const reconcile = internalAction({
         });
       } catch (error) {
         console.error(
-          `[watchdog][lease-finalize-failed] turnId=${turn.turnId}: ${error instanceof Error ? error.message : String(error)}`,
+          `[watchdog][lease-finalize-failed] turnId=${turn.turnId}: ${errorMessage(error)}`,
         );
       }
     }

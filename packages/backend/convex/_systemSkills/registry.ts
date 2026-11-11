@@ -5,6 +5,7 @@ import { buildEvaDesignContent } from "./evaDesign";
 import { buildEvaAskContent } from "./evaAsk";
 import { buildEvaGrabProofContent } from "./evaGrabProof";
 import { buildEvaResolveConflictsContent } from "./evaResolveConflicts";
+import { buildEvaSetupContent } from "./evaSetup";
 
 /**
  * Eva-provided ("system") skills. Definitions live here rather than in a table
@@ -19,6 +20,7 @@ export const SYSTEM_SKILL_NAMES = [
   "eva-ask",
   "eva-grab-proof",
   "eva-resolve-conflicts",
+  "eva-setup",
 ] as const;
 
 export type SystemSkillName = (typeof SYSTEM_SKILL_NAMES)[number];
@@ -32,6 +34,8 @@ export type SystemSkillHydration = {
   devCommand?: string;
   startupCommands?: string[];
   baseBranch: string;
+  /** `.eva/config.json` built from today's Convex commands (eva-setup only). */
+  evaConfigDraft?: string;
 };
 
 export type SystemSkillDefinition = {
@@ -39,6 +43,11 @@ export type SystemSkillDefinition = {
   /** Frontmatter description — drives harness auto-trigger. Keep single-line. */
   description: string;
   buildContent: (hydration: SystemSkillHydration) => string;
+  /**
+   * Every repo has it; it cannot be uninstalled. For skills Eva's own UI
+   * starts (the "Set up with Eva" button runs eva-setup).
+   */
+  alwaysInstalled?: true;
 };
 
 /**
@@ -90,6 +99,13 @@ export const SYSTEM_SKILLS: Record<SystemSkillName, SystemSkillDefinition> = {
     description:
       "Bring this branch up to date with the base branch on origin and resolve any merge conflicts. Use when the user asks to sync with main, update from origin, or fix merge conflicts.",
     buildContent: buildEvaResolveConflictsContent,
+  },
+  "eva-setup": {
+    name: "eva-setup",
+    description:
+      "Write this repo's .eva/config.json (install, start, seed commands per app) and .eva/mcp.json so Eva can run it, then prove the app starts. Use when the user asks to set up the repo for Eva or to move its commands into the repo.",
+    buildContent: buildEvaSetupContent,
+    alwaysInstalled: true,
   },
 };
 

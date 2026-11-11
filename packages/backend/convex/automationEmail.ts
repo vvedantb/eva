@@ -1,24 +1,18 @@
 "use node";
 
 import { requiredEnv } from "@vvedantb/server";
+import { getEvaBaseUrl } from "./_env/webAppUrl";
 import { v } from "convex/values";
-import { marked } from "marked";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { sendEmail } from "./email";
+import { renderAutomationEmail } from "./_automations/email";
 import {
-  buildAutomationEmailHtml,
-  buildChangelogEmailHtml,
-} from "./emailTemplates";
-import {
-  CHANGELOG_AUTOMATION_TITLE,
   changelogVoteHmacMessage,
-  parseChangelog,
   type ChangelogFeedback,
 } from "./_changelog/entry";
 import { hmacSha256Hex } from "./_shared/hmac";
 
-/** Reads a required environment variable, throwing a clear error when it is missing. */
 /** Builds the signed one-click feedback link for one recipient of one changelog run. */
 async function changelogFeedbackUrlBuilder(
   runId: string,
@@ -38,10 +32,10 @@ async function changelogFeedbackUrlBuilder(
 }
 
 /**
- * Emails an automation's latest successful run summary to every user with email
- * notifications enabled. Scheduled by updateRunStatus when a run succeeds and
- * the automation has sendEmail enabled, so it sends exactly once per successful
- * run. A failed send is logged and skipped so it does not abort the batch.
+ * Delivers a run's `sent` email to its recipients (`getRunForEmail`).
+ * Scheduled once, by the mutation that marks the email sent (auto-send
+ * or a reviewed draft). A failed send is logged and skipped so it does not
+ * abort the batch.
  */
 export const sendAutomationEmail = internalAction({
   args: { runId: v.id("automationRuns") },
@@ -52,45 +46,25 @@ export const sendAutomationEmail = internalAction({
     });
     if (!run) return null;
 
-    const appUrl = requiredEnv("WEB_APP_URL");
-    // The weekly changelog returns structured JSON and gets the card layout;
-    // every other automation (and legacy markdown changelogs) gets plain HTML.
-    const changelog =
-      run.automationTitle === CHANGELOG_AUTOMATION_TITLE
-        ? parseChangelog(run.content)
-        : null;
-    const contentHtml = changelog ? "" : await marked.parse(run.content);
-    const recipients = await ctx.runQuery(
-      internal.users.listEmailRecipients,
-      {},
-    );
+    const appUrl = getEvaBaseUrl();
+    const { recipients } = run;
 
     let sent = 0;
     const failures: string[] = [];
     for (const recipient of recipients) {
       try {
-        const html = changelog
-          ? buildChangelogEmailHtml({
-              appUrl,
-              changelog,
-              publishedAt: run.publishedAt,
-              feedbackUrl: await changelogFeedbackUrlBuilder(
-                args.runId,
-                recipient.userId,
-              ),
-            })
-          : buildAutomationEmailHtml({
-              recipientName: recipient.name,
-              appUrl,
-              contentHtml,
-              publishedAt: run.publishedAt,
-              heading: run.automationTitle,
-            });
-        await sendEmail({
-          to: recipient.email,
-          subject: `${run.automationTitle} #${run.runNumber}`,
-          html,
+        const html = renderAutomationEmail({
+          automationTitle: run.automationTitle,
+          body: run.body,
+          publishedAt: run.publishedAt,
+          appUrl,
+          recipientName: recipient.name,
+          feedbackUrl: await changelogFeedbackUrlBuilder(
+            args.runId,
+            recipient.userId,
+          ),
         });
+        await sendEmail({ to: recipient.email, subject: run.subject, html });
         sent += 1;
       } catch (error) {
         failures.push(`${recipient.email}: ${String(error)}`);

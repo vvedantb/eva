@@ -1,5 +1,8 @@
 import { v, type Infer } from "convex/values";
-import type { GenericDatabaseReader } from "convex/server";
+import type {
+  GenericDatabaseReader,
+  GenericDatabaseWriter,
+} from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { hasRepoAccess, hasTaskAccess } from "../functions";
 
@@ -46,6 +49,48 @@ export function sandboxOwnerKey(owner: SandboxOwner): string {
   if (owner.kind === "session") return `session-${owner.sessionId}`;
   if (owner.kind === "task") return `task-${owner.taskId}`;
   return `project-${owner.projectId}`;
+}
+
+/**
+ * streamingActivity entityId for sandbox startup progress. These strings are
+ * persisted and subscribed to by apps/web (session detail, task detail,
+ * project sandbox); do not change them.
+ */
+const SESSION_STARTUP_PREFIX = "session-startup-";
+const TASK_STARTUP_PREFIX = "task-sandbox-startup-";
+const PROJECT_STARTUP_PREFIX = "project-sandbox-startup-";
+
+export function sandboxStartupEntityId(owner: SandboxOwner): string {
+  if (owner.kind === "session") {
+    return `${SESSION_STARTUP_PREFIX}${owner.sessionId}`;
+  }
+  if (owner.kind === "task") return `${TASK_STARTUP_PREFIX}${owner.taskId}`;
+  return `${PROJECT_STARTUP_PREFIX}${owner.projectId}`;
+}
+
+/** Inverse of `sandboxStartupEntityId`: null when `entityId` is not a startup row. */
+export function parseSandboxStartupEntityId(
+  db: Pick<GenericDatabaseReader<DataModel>, "normalizeId">,
+  entityId: string,
+): SandboxOwner | null {
+  const after = (prefix: string) =>
+    entityId.startsWith(prefix) ? entityId.slice(prefix.length) : null;
+  const session = after(SESSION_STARTUP_PREFIX);
+  if (session !== null) {
+    const sessionId = db.normalizeId("sessions", session);
+    return sessionId ? { kind: "session", sessionId } : null;
+  }
+  const task = after(TASK_STARTUP_PREFIX);
+  if (task !== null) {
+    const taskId = db.normalizeId("agentTasks", task);
+    return taskId ? { kind: "task", taskId } : null;
+  }
+  const project = after(PROJECT_STARTUP_PREFIX);
+  if (project !== null) {
+    const projectId = db.normalizeId("projects", project);
+    return projectId ? { kind: "project", projectId } : null;
+  }
+  return null;
 }
 
 /**
@@ -132,4 +177,39 @@ export async function resolveSandboxOwnerForUser(
     ownerKey: sandboxOwnerKey(owner),
     doc: project,
   };
+}
+
+/** Like `resolveSandboxOwnerForUser`, but a missing or forbidden owner throws. */
+export async function resolveSandboxOwnerOrThrow(
+  db: GenericDatabaseReader<DataModel>,
+  userId: Id<"users">,
+  owner: SandboxOwner,
+): Promise<ResolvedSandboxOwner> {
+  const resolved = await resolveSandboxOwnerForUser(db, userId, owner);
+  if (!resolved) throw new Error("Sandbox owner not found");
+  return resolved;
+}
+
+/** Fields every sandbox owner table declares, so one patch fits all three. */
+type SandboxOwnerPatch = Partial<
+  Pick<
+    Doc<"sessions">,
+    | "terminalPanes"
+    | "previewPath"
+    | "devPort"
+    | "terminalHistoryTail"
+    | "agentBrowsingAt"
+    | "updatedAt"
+  >
+>;
+
+/** The one place that narrows a resolved owner back to its table for db.patch. */
+export async function patchSandboxOwner(
+  db: GenericDatabaseWriter<DataModel>,
+  owner: ResolvedSandboxOwner,
+  fields: SandboxOwnerPatch,
+): Promise<void> {
+  if (owner.kind === "session") await db.patch(owner.doc._id, fields);
+  else if (owner.kind === "task") await db.patch(owner.doc._id, fields);
+  else await db.patch(owner.doc._id, fields);
 }

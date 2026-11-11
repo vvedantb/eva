@@ -34,10 +34,8 @@
  * (free − reserve), and skip entirely when that leaves too little to matter.
  */
 import type { SandboxHandle } from "../_sandbox/provider";
-import { writeSandboxFile } from "./sandboxFiles";
-
-/** Swapfile location. On `/`, which is a real fs (fallocate-capable). */
-export const SWAP_FILE_PATH = "/swapfile";
+import { SWAP_FILE_PATH, writeSandboxFile } from "./sandboxFiles";
+import { errorMessage } from "@vvedantb/server";
 
 const ENSURE_SCRIPT_PATH = "/tmp/eva-ensure-swap.sh";
 const RELEASE_SCRIPT_PATH = "/tmp/eva-release-swap.sh";
@@ -115,10 +113,13 @@ export function buildEnsureSwapScript(config: SwapConfig): string {
     "",
     // A swapfile baked into the snapshot restores as a plain file with swap
     // off. Reuse it (no new disk cost) unless it breaks the current policy —
-    // an oversized leftover is what filled the disk to 100% before.
+    // an oversized leftover is what filled the disk to 100% before. A leftover
+    // on a disk already under the reserve is dropped too: free disk beats swap,
+    // and the sizing below recreates a smaller one only if the reserve allows.
     'if [ -f "$SWAP" ]; then',
     "  existing=$(file_mib)",
-    '  if [ "$existing" -gt "$WANT" ] || [ "$existing" -lt "$MIN" ]; then',
+    "  free_now=$(avail_mib)",
+    '  if [ "$existing" -gt "$WANT" ] || [ "$existing" -lt "$MIN" ] || [ "${free_now:-$RESERVE}" -lt "$RESERVE" ]; then',
     `    echo "${MARKER_PREFIX}resizing existing=\${existing}MiB want=\${WANT}MiB"`,
     '    sudo -n swapoff "$SWAP" >/dev/null 2>&1 || true',
     '    sudo -n rm -f "$SWAP" || true',
@@ -238,7 +239,7 @@ async function runSwapScript(
     return status;
   } catch (error) {
     console.log(
-      `[sandbox] ${label}: skipped on ${sandbox.id} — ${error instanceof Error ? error.message : String(error)}`,
+      `[sandbox] ${label}: skipped on ${sandbox.id} — ${errorMessage(error)}`,
     );
     return "";
   }

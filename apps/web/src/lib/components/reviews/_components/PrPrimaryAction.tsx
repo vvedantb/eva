@@ -32,16 +32,16 @@ import {
 } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { mergeBlocker } from "./prMergeState";
+import {
+  MERGE_METHODS,
+  canMergePr,
+  mergeBlocker,
+  mergeButtonLabel,
+  revertSessionRequest,
+  stackMergeTargets,
+  type MergeMethod,
+} from "@eva/shared";
 import type { PrOverview } from "./prOverviewMeta";
-
-type MergeMethod = "merge" | "squash" | "rebase";
-
-const MERGE_METHODS: { value: MergeMethod; label: string }[] = [
-  { value: "squash", label: "Squash and merge" },
-  { value: "merge", label: "Create a merge commit" },
-  { value: "rebase", label: "Rebase and merge" },
-];
 
 /**
  * The one loud control on the review surface, in the header where a reader looks
@@ -90,8 +90,11 @@ function MergeAction({
   const [merging, setMerging] = useState(false);
   const { request: requestConfirm } = useRequestConfirm();
 
-  const canMerge = !overview.draft && overview.mergeable === true;
+  const canMerge = canMergePr(overview);
   const blocked = mergeBlocker(overview)?.detail ?? null;
+  const buttonLabel = mergeButtonLabel(overview);
+  // Only a stack that lands more than this PR needs listing in the dialog.
+  const stackTargets = overview.stack ? stackMergeTargets(overview.stack) : [];
   const methodLabel =
     MERGE_METHODS.find((entry) => entry.value === method)?.label ?? "Merge";
 
@@ -142,7 +145,7 @@ function MergeAction({
           title={blocked ?? skipConfirmTitle(methodLabel)}
         >
           <IconGitMerge size={14} aria-hidden />
-          Merge
+          {buttonLabel}
           <ConfirmSkipHint />
         </Button>
         <DropdownMenu>
@@ -185,12 +188,33 @@ function MergeAction({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{methodLabel}?</DialogTitle>
-            <DialogDescription>
-              This merges <span className="font-mono">{overview.headRef}</span>{" "}
-              into <span className="font-mono">{overview.baseRef}</span> on
-              GitHub. It cannot be undone from Eva.
-            </DialogDescription>
+            {stackTargets.length > 1 && overview.stack !== null ? (
+              <DialogDescription>
+                This merges {stackTargets.length} stacked pull requests into{" "}
+                <span className="font-mono">{overview.stack.baseRef}</span> on
+                GitHub, in this order. It cannot be undone from Eva.
+              </DialogDescription>
+            ) : (
+              <DialogDescription>
+                This merges{" "}
+                <span className="font-mono">{overview.headRef}</span> into{" "}
+                <span className="font-mono">{overview.baseRef}</span> on
+                GitHub. It cannot be undone from Eva.
+              </DialogDescription>
+            )}
           </DialogHeader>
+          {stackTargets.length > 1 ? (
+            <ol className="space-y-1 rounded-surface bg-muted/50 px-3 py-2 text-sm">
+              {stackTargets.map((entry) => (
+                <li key={entry.number} className="flex min-w-0 gap-2">
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                    #{entry.number}
+                  </span>
+                  <span className="truncate">{entry.title}</span>
+                </li>
+              ))}
+            </ol>
+          ) : null}
           <DialogFooter>
             <Button
               variant="ghost"
@@ -273,25 +297,15 @@ function RevertAction({ overview }: { overview: PrOverview }) {
   const [confirming, setConfirming] = useState(false);
   const { request: requestConfirm } = useRequestConfirm();
 
-  const sha = overview.mergeCommitSha;
-
   const start = async () => {
     // Same as merge: the skip-confirm path calls this from the trigger.
     if (starting) return;
     setStarting(true);
     // Built before the `try`: expression-level control flow inside one bails
     // the whole file out of the React Compiler.
-    let message = `Revert the changes pull request #${overview.number} ("${overview.title}") merged into \`${overview.baseRef}\`. Open a pull request with the revert.`;
-    if (sha !== null) {
-      message = `Revert merge commit \`${sha}\` (pull request #${overview.number}, "${overview.title}") on \`${overview.baseRef}\`. Use \`git revert -m 1 ${sha}\` if it is a merge commit, resolve any conflicts, then open a pull request with the revert.`;
-    }
+    const request = revertSessionRequest(overview);
     try {
-      const { numId } = await createSession({
-        repoId,
-        title: `Revert #${overview.number}`,
-        message,
-        baseBranch: overview.baseRef,
-      });
+      const { numId } = await createSession({ repoId, ...request });
       await navigate({
         to: toInternalRepoHref(`${basePath}/sessions/${numId}`),
       });

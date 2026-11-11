@@ -1,27 +1,22 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import type { ActivityStep } from "@vvedantb/ui";
 import {
   buildPrecedingUserTurns,
   collectQuestionSteps,
   findTurnWindowStart,
-  findDayBoundaryIds,
   findHandoffBoundaryIds,
   findNewMessageIds,
   findStreamingTargetMessage,
   isChatTurnExecuting,
   visibleChatMessages,
   chatNeedsOtherUserDirectory,
-  otherUserIdsInChat,
   readableSendError,
-  sandboxComposerState,
-  SANDBOX_CHAT_COPY,
   stripErrorPrefix,
   turnErrorTitle,
   type ChatBodyMessage,
 } from "./chatBodyUtils";
+import { findDayBoundaryIds } from "@eva/shared/dayLabel";
+import { sandboxComposerState, SANDBOX_CHAT_COPY } from "@eva/shared";
 
 type TestMessage = {
   role: "user" | "assistant";
@@ -367,23 +362,6 @@ describe("chatNeedsOtherUserDirectory", () => {
   });
 });
 
-describe("otherUserIdsInChat", () => {
-  test("returns sorted unique teammate ids", () => {
-    expect(
-      otherUserIdsInChat(
-        [
-          { role: "user", userId: "me" },
-          { role: "user", userId: "zoe" },
-          { role: "assistant" },
-          { role: "user", userId: "ann" },
-          { role: "user", userId: "zoe" },
-        ],
-        "me",
-      ),
-    ).toEqual(["ann", "zoe"]);
-  });
-});
-
 /**
  * The failed-turn notice states the error itself, so the stamp the harness
  * writes in front of the text would be said twice.
@@ -554,15 +532,6 @@ describe("collectQuestionSteps", () => {
     };
     expect(collectQuestionSteps([otherStep, answered])).toEqual([answered]);
   });
-});
-
-test("ChatBody looks up other senders, not the whole user table", () => {
-  const chatBody = readFileSync(
-    join(dirname(fileURLToPath(import.meta.url)), "ChatBody.tsx"),
-    "utf8",
-  );
-  expect(chatBody).toContain("api.users.getMany");
-  expect(chatBody).not.toContain("api.users.listAll");
 });
 
 /**

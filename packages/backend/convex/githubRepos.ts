@@ -14,7 +14,7 @@ export {
   getInternal,
   getInstallationAccessState,
   findParentRepoByOwnerAndName,
-  listRepoIdsByOwnerAndName,
+  listSiblingRepoIds,
   getInstallationIdByOwnerAndName,
   listGroupedByCodebase,
   getAppSlug,
@@ -23,14 +23,12 @@ export {
 export {
   assignToTeam,
   removeFromTeam,
-  create,
   createForInstallation,
   updateConfig,
   updateMcpRootPrompt,
   toggleHidden,
   generateLogoUploadUrl,
   setLogo,
-  setRepoCommandsInternal,
   deleteInternal,
 } from "./_githubRepos/mutations";
 

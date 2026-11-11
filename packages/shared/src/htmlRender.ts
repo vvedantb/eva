@@ -11,6 +11,7 @@
  */
 
 import { z } from "zod";
+import { isHttpUrl } from "./safeUrl";
 
 /** Convex documents cap at 1 MiB, so the page is capped in UTF-8 bytes. */
 export const HTML_RENDER_MAX_BYTES = 900_000;
@@ -128,7 +129,7 @@ export const htmlRenderFrameMessage = z.discriminatedUnion("method", [
       url: z
         .string()
         .url()
-        .refine((url) => /^https?:/i.test(url), "Only http(s) links open."),
+        .refine(isHttpUrl, "Only http(s) links open."),
     }),
   }),
 ]);

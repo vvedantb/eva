@@ -1,7 +1,7 @@
 import type { QueryCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { resolveDocMentions } from "./resolveDocMentions";
-import { resolveSkillMentions } from "./resolveSkillMentions";
+import { stripSkillTokens } from "./skillToken";
 
 export interface ResolvedMessageTokensResult {
   resolvedMessage: string;
@@ -16,6 +16,8 @@ export async function resolveMessageTokens(
 ): Promise<ResolvedMessageTokensResult> {
   const { resolvedMessage: afterDocs, prefixBlock: docBlock } =
     await resolveDocMentions(ctx, message, repoId);
-  const { resolvedMessage } = resolveSkillMentions(afterDocs);
-  return { resolvedMessage, prefixBlock: docBlock };
+  return {
+    resolvedMessage: stripSkillTokens(afterDocs),
+    prefixBlock: docBlock,
+  };
 }

@@ -47,7 +47,6 @@ import {
   defaultProviderAccountId,
   providerAccountIdForModel,
 } from "@/lib/utils/defaultProviderAccount";
-import { toRunTraitArgs } from "@/lib/utils/runTraits";
 import { BranchSelect } from "@/lib/components/BranchSelect";
 import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
@@ -85,8 +84,9 @@ import { QUICK_TASK_OPTION_BADGE_CLASS } from "./_utils/optionBadge";
 import {
   draftCountAfterRemove,
   draftsAfterRemove,
+  toRunTraitArgs,
   visibleDrafts,
-} from "./_utils/draftVisibility";
+} from "@eva/shared";
 import {
   catchMutationError,
   withMutationToast,
@@ -897,6 +897,7 @@ export function QuickTaskModal({
             <DraftReadinessBanner
               result={readiness.resultFor(description)}
               onDismiss={readiness.dismiss}
+              className="mx-5 mb-2"
             />
 
             <TaskFilesSection

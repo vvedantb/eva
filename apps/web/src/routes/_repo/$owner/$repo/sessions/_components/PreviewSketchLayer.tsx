@@ -126,10 +126,10 @@ export function PreviewSketchLayer({
   }
 
   function attach() {
-    const target = iframeElement?.contentWindow;
-    if (!target || !pending || !box || strokes.length === 0) return;
+    if (!iframeElement?.contentWindow || !pending || !box || strokes.length === 0)
+      return;
     setAttaching(true);
-    requestPreviewScreenshot(target)
+    requestPreviewScreenshot(iframeElement)
       .then((dataUrl) => composeSketchImage(dataUrl, strokes, box.width))
       .then(
         (file) => {

@@ -4,6 +4,7 @@ import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { getInstallationOctokit } from "../githubAuth";
 import { getActionRepoWithAccess } from "../functions";
+import { rejectSandboxCaller } from "../_auth/sandboxIdentity";
 
 const reviewSideValidator = v.union(v.literal("LEFT"), v.literal("RIGHT"));
 
@@ -50,8 +51,7 @@ export const submitPrReview = action({
     ctx,
     args,
   ): Promise<{ reviewId: number; htmlUrl: string; state: string }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
+    await rejectSandboxCaller(ctx);
     const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
     const body = args.body.trim();
@@ -100,8 +100,7 @@ export const addPrComment = action({
     htmlUrl: v.string(),
   }),
   handler: async (ctx, args): Promise<{ id: number; htmlUrl: string }> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
+    await rejectSandboxCaller(ctx);
     const repo = await getActionRepoWithAccess(ctx, args.repoId);
 
     const body = args.body.trim();
