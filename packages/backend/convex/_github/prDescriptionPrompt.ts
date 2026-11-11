@@ -13,7 +13,7 @@ const MAX_DESCRIPTION_CHARS = 6_000;
 /**
  * Builds the prompt for the reviewer-facing PR description. The sections match
  * `.github/pull_request_template.md` (Why, Scope, Verification, Tradeoffs,
- * Blast radius, ELI5) so generated and hand-written PRs read the same way.
+ * Blast radius, Rollback, ELI5) so generated and hand-written PRs read the same way.
  * The call sees only the diff and has no tools, so it cannot capture evidence
  * and must say what is unchecked.
  *
@@ -72,6 +72,9 @@ Real choices only: what was picked over what, and why. Omit the section entirely
 ### Blast radius
 Who and what the change touches, and why it is safe or risky. Name callers, data or schema it affects.
 
+### Rollback
+How to undo this change in production. Say whether reverting the PR is enough, or what else must be undone: data migrations or backfills, deleted or rewritten data, new env vars or config, external services, public APIs or packages that others depend on. When a revert cannot restore the old state, start with "One-way:" and name what is lost. One to three sentences.
+
 ### ELI5
 Two or three plain sentences that someone outside the project would follow. No file paths or identifiers.
 
@@ -79,7 +82,7 @@ Two or three plain sentences that someone outside the project would follow. No f
 - Only use file paths, identifiers, routes and props that appear in the diff. Never invent names, numbers or results.
 - Plain, direct sentences. No filler, no praise, no "this PR".
 - Do not repeat the diff line by line.
-- No headings other than the six above. No "Summary" or "Test plan". No preamble and no closing remarks.
+- No headings other than the seven above. No "Summary" or "Test plan". No preamble and no closing remarks.
 - Do not write an authorship line or a "Generated with" footer.
 - Output only the markdown. Do not wrap the whole answer in a code fence.
 

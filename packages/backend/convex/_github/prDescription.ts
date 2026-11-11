@@ -21,7 +21,11 @@ import {
   ensureClaudeCliAvailable,
   resolveClaudeCliVersion,
 } from "../_sandbox_runtime/launch";
-import { fetchPullRequestDiff } from "./prRecapService";
+import {
+  listPullRequestFiles,
+  summarizePullRequestDiff,
+} from "./prRecapService";
+import { assessMergeRisk, insertMergeRisk, stripMergeRisk } from "./mergeRisk";
 import {
   buildPrDescriptionPrompt,
   cleanPrDescription,
@@ -39,7 +43,9 @@ const PROMPT_PATH = "/tmp/eva-pr-description-prompt.txt";
 const EXEC_TIMEOUT_SECONDS = 240;
 
 /**
- * Writes the reviewer-facing description into a PR body from its diff, using
+ * Writes the fixed merge-risk block into a PR body, then the reviewer-facing
+ * description from its diff. The risk block needs no model, so it lands even
+ * when the description is skipped. The description uses
  * the Claude CLI on the run's own sandbox so it bills to the team's Claude
  * auth and needs no second provider. Called by the task workflow right after
  * its PR create/refresh (while the sandbox is still up) and by a session's
@@ -69,7 +75,33 @@ export const generatePrDescription = internalAction({
     }
     const label = `${args.repoOwner}/${args.repoName}#${prNumber}`;
     try {
-      const envVars = await resolveEnvVars(ctx, args.repoId);
+      const octokit = await getInstallationOctokit(args.installationId);
+      const target = {
+        owner: args.repoOwner,
+        repo: args.repoName,
+        prNumber,
+      };
+      const pullRef = {
+        owner: target.owner,
+        repo: target.repo,
+        pull_number: target.prNumber,
+      };
+      const [{ data: pr }, files, envVars] = await Promise.all([
+        octokit.rest.pulls.get(pullRef),
+        listPullRequestFiles(octokit, target),
+        resolveEnvVars(ctx, args.repoId),
+      ]);
+      const diff = summarizePullRequestDiff(files);
+      if (diff.additions + diff.deletions === 0) {
+        console.log(`[pr-description] ${label} has no diff; skipping`);
+        return null;
+      }
+
+      // Written now, on its own: the model step below may be skipped or fail.
+      await patchPullRequest(octokit, pullRef, {
+        body: insertMergeRisk(pr.body ?? "", assessMergeRisk(files)),
+      });
+
       if (!getAIProviderAvailability(Object.keys(envVars)).claude) {
         console.log(
           `[pr-description] ${label} skipped: no CLAUDE_CODE_OAUTH_TOKEN in sandbox env`,
@@ -77,28 +109,9 @@ export const generatePrDescription = internalAction({
         return null;
       }
 
-      const octokit = await getInstallationOctokit(args.installationId);
-      const target = {
-        owner: args.repoOwner,
-        repo: args.repoName,
-        prNumber,
-      };
-      const [{ data: pr }, diff] = await Promise.all([
-        octokit.rest.pulls.get({
-          owner: target.owner,
-          repo: target.repo,
-          pull_number: target.prNumber,
-        }),
-        fetchPullRequestDiff(octokit, target),
-      ]);
-      if (diff.additions + diff.deletions === 0) {
-        console.log(`[pr-description] ${label} has no diff; skipping`);
-        return null;
-      }
-
       const prompt = buildPrDescriptionPrompt({
         prTitle: pr.title,
-        context: stripPrDescription(pr.body ?? ""),
+        context: stripMergeRisk(stripPrDescription(pr.body ?? "")),
         diffText: diff.diffText,
         changedFiles: diff.changedFiles,
         additions: diff.additions,
