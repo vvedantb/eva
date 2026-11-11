@@ -28,6 +28,7 @@ import { MentionMenu } from "@/chat/MentionMenu";
 import { ModelChip } from "@/chat/ModelChip";
 import { useAttachments } from "@/chat/useAttachments";
 import { useMentionComposer } from "@/chat/useMentionComposer";
+import { RepoLogo } from "@/ui/RepoLogo";
 import { repoName, RepoSheet } from "@/ui/RepoPicker";
 import { useScheme } from "@/ui/theme";
 
@@ -127,7 +128,7 @@ export default function NewSessionScreen() {
       ) : (
         // The web landing at 390: `p-4` in a column 10 short of the right edge.
         <View className="flex-1 justify-center gap-3 pl-4 pr-[26px]">
-          {/* Web: text-xl semibold tracking-tight, centred, the repo picker inline (GitHub mark, name underlined at 30%). */}
+          {/* Web: text-xl semibold tracking-tight, centred, the repo picker inline (logo or GitHub mark, name underlined at 30%). */}
           <View className="flex-row flex-wrap items-center justify-center gap-x-2 gap-y-1">
             <Text className="font-instrument-sans-semibold text-xl" style={{ color: foreground, fontWeight: "600", letterSpacing: -0.5 }}>
               {firstName ? `${firstName}, what are we building for` : "What are we building for"}
@@ -141,7 +142,8 @@ export default function NewSessionScreen() {
               hitSlop={{ top: 8, bottom: 8 }}
               className="flex-row items-center gap-1.5 active:opacity-70"
             >
-              <IconBrandGithub size={28} color={muted} />
+              {/* The web `CodebasesPicker`: the logo at 28, else the GitHub mark. */}
+              <RepoLogo logoUrl={repo?.logoUrl} size={28} fallback={<IconBrandGithub size={28} color={muted} />} />
               <Text
                 className="font-instrument-sans-semibold text-xl"
                 style={{

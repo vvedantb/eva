@@ -17,6 +17,7 @@ import {
   ChoiceQuestion,
   Conversation,
   ConversationEmptyState,
+  ConversationDock,
   ConversationList,
   ConversationScrollButton,
   Message,
@@ -31,7 +32,7 @@ import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Linking, View } from "react-native";
+import { KeyboardAvoidingView, Linking, View } from "react-native";
 import { AssistantMessage } from "@/chat/AssistantMessage";
 import { AttachButton } from "@/chat/AttachButton";
 import { SandboxBranchChip } from "@/chat/BranchChips";
@@ -169,7 +170,9 @@ export default function ChatScreen() {
         sessionMenu={
           sessionTarget
             ? {
-                actions: sessionActions.actionsFor(sessionTarget).filter((action) => HEADER_SESSION_ACTIONS.has(action)),
+                groups: sessionActions
+                  .actionsFor(sessionTarget)
+                  .map((group) => group.filter((action) => HEADER_SESSION_ACTIONS.has(action))),
                 onSelect: (action) => sessionActions.run(action, sessionTarget),
               }
             : undefined
@@ -244,62 +247,69 @@ export default function ChatScreen() {
             </View>
           )}
         />
-        <ConversationScrollButton label="Scroll to end" icon={IconChevronDown} showLabel />
-      </Conversation>
-      {pending && questions ? (
-        // The web dock: p-3 around the card, in place of the composer, and the thread's 10 more on the right.
-        <View className="p-3 pr-[22px]">
-          <ChoiceQuestion
-            key={pending.toolUseId}
-            questions={questions}
-            buttonWeight="semibold"
-            onSubmit={async (answers) => {
-              try {
-                await answer({ entityId: chat.parentId, toolUseId: pending.toolUseId, answer: JSON.stringify(answers) });
-              } catch {
-                toast.error("Couldn't submit answer");
-              }
-            }}
-          />
-        </View>
-      ) : chat.canReply ? (
-        // Eva's web pill composer, the + on the muted fill, 10 more in on the right as the
-        // thread. Send stays ready during a turn (a send queues behind it) and Stop sits beside
-        // it, as `stopMode="alongside"`.
-        <View className="pr-2.5">
-          <PromptInput
-            layout="inline"
-            shape="pill"
-            value={composer.text}
-            onChangeText={composer.setText}
-            onSubmit={handleSend}
-            menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} /> : null}
-            placeholder={working ? "Add a follow-up..." : "Ask Eva anything..."}
-            leading={
-              <AttachButton onPress={() => void attachments.pick()} />
-            }
-            header={<ComposerHeader attachments={attachments} composer={composer} />}
-            toolbar={working ? <PromptInputButton icon={IconPlayerStopFilled} label="Stop generating" onPress={handleStop} /> : null}
-            footer={
-              <ComposerFooter
-                repoId={chat.repoId}
-                composer={composer}
-                attachments={attachments}
+        {/* The composer or the question card: the scroll button rides 16 above it, as the web's `bottom-4` over the dock. */}
+        <ConversationDock>
+          {pending && questions ? (
+            // The web dock: p-3 around the card, in place of the composer, and the thread's 10 more on the right.
+            // It rises with the keyboard (its "Other..." field), as the composer's own `KeyboardAvoidingView` does.
+            <KeyboardAvoidingView behavior="padding">
+              <View className="p-3 pr-[22px]">
+                <ChoiceQuestion
+                  key={pending.toolUseId}
+                  questions={questions}
+                  buttonWeight="semibold"
+                  onSubmit={async (answers) => {
+                    try {
+                      await answer({ entityId: chat.parentId, toolUseId: pending.toolUseId, answer: JSON.stringify(answers) });
+                    } catch {
+                      toast.error("Couldn't submit answer");
+                    }
+                  }}
+                />
+              </View>
+            </KeyboardAvoidingView>
+          ) : chat.canReply ? (
+            // Eva's web pill composer, the + on the muted fill, 10 more in on the right as the
+            // thread. Send stays ready during a turn (a send queues behind it) and Stop sits beside
+            // it, as `stopMode="alongside"`.
+            <View className="pr-2.5">
+              <PromptInput
+                layout="inline"
+                shape="pill"
+                value={composer.text}
+                onChangeText={composer.setText}
+                onSubmit={handleSend}
+                menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} /> : null}
+                placeholder={working ? "Add a follow-up..." : "Ask Eva anything..."}
                 leading={
-                  chat.sandboxBranch && !simpleView ? (
-                    <SandboxBranchChip branch={chat.sandboxBranch} intendedBranch={chat.intendedBranch} />
-                  ) : undefined
+                  <AttachButton onPress={() => void attachments.pick()} />
                 }
-                model={modelPick.pick ? <ModelChip repoId={chat.repoId} {...modelPick.pick} /> : undefined}
+                header={<ComposerHeader attachments={attachments} composer={composer} />}
+                toolbar={working ? <PromptInputButton icon={IconPlayerStopFilled} label="Stop generating" onPress={handleStop} /> : null}
+                footer={
+                  <ComposerFooter
+                    repoId={chat.repoId}
+                    composer={composer}
+                    attachments={attachments}
+                    leading={
+                      chat.sandboxBranch && !simpleView ? (
+                        <SandboxBranchChip branch={chat.sandboxBranch} intendedBranch={chat.intendedBranch} />
+                      ) : undefined
+                    }
+                    model={modelPick.pick ? <ModelChip repoId={chat.repoId} {...modelPick.pick} /> : undefined}
+                  />
+                }
               />
-            }
-          />
-        </View>
-      ) : (
-        <Text variant="muted" className="px-4 pb-8 pt-3 text-center" style={textColor(scheme, "muted")}>
-          This chat is closed.
-        </Text>
-      )}
+            </View>
+          ) : (
+            <Text variant="muted" className="px-4 pb-8 pt-3 text-center" style={textColor(scheme, "muted")}>
+              This chat is closed.
+            </Text>
+          )}
+        </ConversationDock>
+        {/* Centred on the thread, which sits 10 left of the screen's centre, as the web panel. */}
+        <ConversationScrollButton label="Scroll to end" icon={IconChevronDown} showLabel insets={{ right: 10 }} />
+      </Conversation>
     </View>
   );
 }

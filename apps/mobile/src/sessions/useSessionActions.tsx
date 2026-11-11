@@ -81,7 +81,7 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
   // The Rename field, focused once its dialog is on screen (`onShow`): focus is imperative.
   const renameInput = useRef<TextInput>(null);
 
-  /** The actions for one session, in the web order (`sessionMenuActions`). */
+  /** The actions for one session, in the web order and groups (`sessionMenuActions`). */
   const actionsFor = (target: SessionActionTarget) => sessionMenuActions({ ...target, simpleView });
 
   const unarchive = (sessionId: Id<"sessions">) => {
@@ -168,24 +168,27 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
         title={sheetTarget?.title ?? ""}
       >
         {sheetTarget
-          ? actionsFor(sheetTarget).map((action) => {
-              const item = SESSION_ACTION_ITEMS[action];
-              return (
-                <Fragment key={action}>
-                  {/* The web separator above Archive and Unarchive. */}
-                  {action === "archive" || action === "unarchive" ? <MenuDivider /> : null}
-                  <SheetRow
-                    icon={item.icon}
-                    title={item.label}
-                    warning={item.warning}
-                    onPress={() => {
-                      setSheetTarget(null);
-                      run(action, sheetTarget);
-                    }}
-                  />
-                </Fragment>
-              );
-            })
+          ? actionsFor(sheetTarget).map((group, index) => (
+              <Fragment key={group.join()}>
+                {/* A line parts the groups, as the web separators. */}
+                {index > 0 ? <MenuDivider /> : null}
+                {group.map((action) => {
+                  const item = SESSION_ACTION_ITEMS[action];
+                  return (
+                    <SheetRow
+                      key={action}
+                      icon={item.icon}
+                      title={item.label}
+                      warning={item.warning}
+                      onPress={() => {
+                        setSheetTarget(null);
+                        run(action, sheetTarget);
+                      }}
+                    />
+                  );
+                })}
+              </Fragment>
+            ))
           : null}
       </MenuSheet>
       {/* The web "Rename session" dialog; the kit draws it as a bottom sheet at phone size. */}
