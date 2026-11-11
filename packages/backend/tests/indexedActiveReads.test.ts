@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { api, internal } from "../convex/_generated/api";
+import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 
 /**
