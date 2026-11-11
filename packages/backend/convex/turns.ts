@@ -8,7 +8,10 @@ import {
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { finalizeStaleChatTurn } from "./_chat/stallWatchdog";
+import {
+  finalizeStaleChatTurn,
+  scheduleTurnEndedDrain,
+} from "./_chat/stallWatchdog";
 import {
   stalledAlert,
   turnAdapterForEntity,
@@ -456,7 +459,7 @@ async function finalizeExpiredChatTurn<TId extends ChatEntityId, TEntity>(
     }
     await clearStreamingActivity(ctx, turn.streamingEntityId);
     await adapter.finalizeOrphanTurn(ctx, id);
-    await adapter.drainQueue(ctx, id);
+    await scheduleTurnEndedDrain(ctx, id);
   }
   if (!sandboxStopped) {
     await adapter.afterStallFinalize(ctx, id, turn._id);

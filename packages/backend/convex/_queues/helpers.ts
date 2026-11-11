@@ -1142,13 +1142,15 @@ export const drainQueueQuietly = internalMutation({
 });
 
 /**
- * Retry drain for the releases the surfaces cannot signal themselves: the last
- * backgrounded subagent settling (`scheduleQueueDrainAfterBackgroundAgents`),
- * and a subagent that never settles ageing past the block cap
- * (`scheduleDrainAtBackgroundAgentExpiry`). Every other unblock (turn
- * completion, synthetic-turn completion, cancel, watchdog release) already ends
- * in a drain call. Dispatches on the id's table so all three surfaces share one
- * scheduled function instead of three copies.
+ * Scheduled turn-ended drain. Used for the releases the surfaces cannot signal
+ * themselves: the last backgrounded subagent settling
+ * (`scheduleQueueDrainAfterBackgroundAgents`), and a subagent that never
+ * settles ageing past the block cap (`scheduleDrainAtBackgroundAgentExpiry`).
+ * The stall watchdog uses it too (`scheduleTurnEndedDrain`), so a failing
+ * drain can never roll back the closing of a dead turn. Dispatches on the
+ * id's table so all three surfaces share one scheduled function instead of
+ * three copies. The name predates the watchdog use; it stays, because
+ * functions already scheduled under it must still resolve after a deploy.
  */
 export const drainQueueAfterBackgroundAgents = internalMutation({
   args: { parentId: queuedMessageFields.parentId },

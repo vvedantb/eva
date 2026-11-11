@@ -8,11 +8,6 @@ import {
   usesChatDaemon,
 } from "../validators";
 import { RUN_TIMEOUT_MS } from "../_taskWorkflow/staleness";
-import {
-  drainSessionChatQueues,
-  startNextQueuedProjectChatMessage,
-  startNextQueuedTaskChatMessage,
-} from "../_queues/helpers";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { STALL_ALERT_TEXT } from "./stallRetry";
 import { markAllRunningExited } from "../backgroundProcesses";
@@ -85,12 +80,10 @@ export type ChatSurfaceAdapter<TId extends ChatEntityId, TEntity> = {
     id: TId,
     opts: { sandboxStopped: boolean },
   ) => Promise<void>;
-  /** Starts the next queued message for this entity, if any. */
-  drainQueue: (ctx: MutationCtx, id: TId) => Promise<boolean>;
   /**
    * Entity side of an expired turn that never bound a workflow (a synthetic
    * turn): frees the synthetic slot. The caller has already closed the
-   * placeholder and the streaming row, and drains the queue after.
+   * placeholder and the streaming row, and schedules the queue drain after.
    */
   finalizeOrphanTurn: (ctx: MutationCtx, id: TId) => Promise<void>;
   /**
@@ -173,7 +166,7 @@ const sessionChatAdapter: ChatSurfaceAdapter<
     // saveResult are both paths this turn never reached. Left behind, the
     // orphan blocks `ensurePendingTurn` for every later turn, so the chat
     // opens turns no daemon can claim and stalls each one out forever.
-    // Cleared before `drainQueue` restages the next message.
+    // Cleared before the scheduled drain restages the next message.
     await ctx.db.patch(id, {
       activeWorkflowId: undefined,
       syntheticTurnMessageId: undefined,
@@ -197,11 +190,6 @@ const sessionChatAdapter: ChatSurfaceAdapter<
         });
       }
     }
-  },
-  drainQueue: async (ctx, id) => {
-    const chat = await ctx.db.get(id);
-    if (!chat) return false;
-    return await drainSessionChatQueues(ctx, chat.sessionId, id);
   },
   finalizeOrphanTurn: async (ctx, id) => {
     await ctx.db.patch(id, {
@@ -289,7 +277,6 @@ const taskChatAdapter: ChatSurfaceAdapter<
     }
     await ctx.db.patch(id, patch);
   },
-  drainQueue: (ctx, id) => startNextQueuedTaskChatMessage(ctx, id),
   finalizeOrphanTurn: async (ctx, id) => {
     await ctx.db.patch(id, {
       syntheticTurnMessageId: undefined,
@@ -377,7 +364,6 @@ const projectChatAdapter: ChatSurfaceAdapter<
     }
     await ctx.db.patch(id, patch);
   },
-  drainQueue: (ctx, id) => startNextQueuedProjectChatMessage(ctx, id),
   finalizeOrphanTurn: async (ctx, id) => {
     await ctx.db.patch(id, {
       syntheticTurnMessageId: undefined,

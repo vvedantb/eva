@@ -103,6 +103,9 @@ test(
       turnId: expiredTurnId,
       cause: "process_dead",
     });
+    // The drain runs in its own scheduled mutation, after the close commits.
+    vi.runOnlyPendingTimers();
+    await t.finishInProgressScheduledFunctions();
 
     const after = await t.run(async (ctx) => ({
       expired: await ctx.db.get(expiredTurnId),

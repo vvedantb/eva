@@ -1,6 +1,6 @@
 import { TURN_BACKSTOP_ERROR } from "@eva/shared/agentTurnLimits";
 import { convexTest } from "convex-test";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import {
@@ -450,6 +450,15 @@ describe("turn lifecycle integration", () => {
 });
 
 describe("task chat turns share the session turn lifecycle", () => {
+  // Stall teardowns schedule the queue drain in its own mutation. Fake timers
+  // keep that job from firing after a test ends, against a closed database.
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   test("renewal fences an older lease generation", async () => {
     const { t, turnId, streamingEntityId } = await createTaskChatFixture();
     const claim = async () =>
@@ -517,7 +526,10 @@ describe("task chat turns share the session turn lifecycle", () => {
     expect(rows.turn?.error).toBe(STALL_ALERT_TEXT);
     expect(rows.placeholder?.content).toBe(STALL_ALERT_TEXT);
     expect(rows.task?.syntheticTurnMessageId).toBeUndefined();
-    expect(scheduled).toEqual(["agentTaskChatWorkflow:retryEmptyStalledTurn"]);
+    expect(scheduled).toEqual([
+      "_queues/helpers:drainQueueAfterBackgroundAgents",
+      "agentTaskChatWorkflow:retryEmptyStalledTurn",
+    ]);
   });
 
   test("the legacy heartbeat teardown closes the turn it tears down", async () => {
