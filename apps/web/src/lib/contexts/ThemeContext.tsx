@@ -126,18 +126,13 @@ function applyCustomThemeVars(customTheme: CustomTheme, _isDark: boolean) {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const { theme, appearance, setTheme: setNextTheme } = useThemeMode();
+  // Theme mode (read, save, optimistic update) is owned by ThemeModeProvider.
+  const { theme, appearance, setTheme } = useThemeMode();
   // Client-only gate without setState-in-effect (SSR snapshot = false).
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,
     () => false,
-  );
-  const syncedTheme = useQuery(api.auth.getTheme);
-  const setThemeMutation = useMutation(api.auth.setTheme).withOptimisticUpdate(
-    (localStore, args) => {
-      localStore.setQuery(api.auth.getTheme, {}, args.theme);
-    },
   );
   const syncedCustomTheme = useQuery(api.auth.getCustomTheme);
   const setCustomThemeMutation = useMutation(
@@ -147,29 +142,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    if (syncedTheme === undefined || syncedTheme === null) return;
-    if (syncedTheme !== theme) {
-      setNextTheme(syncedTheme);
-    }
-  }, [syncedTheme]);
-
-  useEffect(() => {
     if (syncedCustomTheme === undefined) return;
     const customTheme = syncedCustomTheme ?? {};
     // Neutral is dark-family — accent `.dark` rules apply via the `dark` class.
     applyCustomThemeVars(customTheme, appearance !== "light");
   }, [syncedCustomTheme, appearance]);
-
-  // Every mode persists, System included — it is a preference ("follow the OS"),
-  // not a resolved appearance, so it has to survive a reload like the others.
-  const setTheme = (next: ThemeMode) => {
-    setNextTheme(next);
-    void catchMutationError(
-      setThemeMutation({ theme: next }),
-      "Couldn't save theme",
-      "theme-mode",
-    );
-  };
 
   const toggleTheme = () => {
     setTheme(nextCycledTheme(theme, appearance));

@@ -100,7 +100,6 @@ interface ChatPanelProps {
   /** Archive or PR merged/closed — hides composer and shows read-only banner. */
   isReadOnly?: boolean;
   deploymentStatus?: "queued" | "building" | "deployed" | "error";
-  sandboxCollapsed?: boolean;
   /** Opens a file (by full sandbox path) in the File Viewer tab. */
   onOpenFile?: (path: string) => void;
   /** Opens the Diffs tab; optional repo-relative path scrolls to that file. */

@@ -302,7 +302,7 @@ export function SessionDetailClient({
   // through auto-archive, which the owner can turn off.
   const isArchived = session.archived === true;
 
-  const chatPanel = (sandboxCollapsed?: boolean) => (
+  const chatPanel = (
     <ChatPanel
       // One mount per chat: composer draft, attachments and local state must
       // not carry over to another tab.
@@ -338,7 +338,6 @@ export function SessionDetailClient({
       isArchived={isArchived}
       isReadOnly={isArchived}
       deploymentStatus={session.deploymentStatus}
-      sandboxCollapsed={sandboxCollapsed}
       isRouteActive={isRouteActive}
       onOpenFile={onOpenFile}
       onViewDiff={handleViewDiff}
@@ -364,9 +363,7 @@ export function SessionDetailClient({
             >
               {(panes, owner, terminalPanel) => (
                 <ResizablePanelLayout
-                  leftPanel={({ rightPanelCollapsed }) =>
-                    chatPanel(rightPanelCollapsed)
-                  }
+                  leftPanel={() => chatPanel}
                   rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) => (
                     <SandboxPanel
                       sessionId={sessionId}
