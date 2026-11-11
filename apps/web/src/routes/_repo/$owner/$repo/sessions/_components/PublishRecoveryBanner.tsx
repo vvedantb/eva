@@ -21,11 +21,11 @@ import { AnimatePresence, m } from "motion/react";
 import { IconAlertTriangle, IconUpload } from "@tabler/icons-react";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
-import type { SessionMessage } from "./useChatSend";
+import type { TranscriptMessage } from "@/lib/hooks/useChatTranscript";
 
 interface PublishRecoveryBannerProps {
   sessionId: Id<"sessions">;
-  messages: SessionMessage[];
+  messages: TranscriptMessage[];
   isSandboxActive: boolean;
 }
 
@@ -160,10 +160,9 @@ export function PublishRecoveryBanner({
       }),
       "Couldn't start the force-push",
       "session-force-push",
-    )
-      .catch(() =>
-        setRequestedOffers((keys) => keys.filter((entry) => entry !== key)),
-      );
+    ).catch(() =>
+      setRequestedOffers((keys) => keys.filter((entry) => entry !== key)),
+    );
   };
 
   /** Alt-click skips the dialog, as everywhere else confirmation is offered. */

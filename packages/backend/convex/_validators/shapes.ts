@@ -163,6 +163,15 @@ export const terminalPaneValidator = v.object({
   createdAt: v.number(),
 });
 
+/**
+ * Sticky Preview path of one extra (non-main) preview pane. The main pane
+ * keeps the owner's `previewPath`, which the agent's set_preview_path writes.
+ */
+export const previewPanePathValidator = v.object({
+  paneId: v.string(),
+  path: v.string(),
+});
+
 export const conversationMessageValidator = v.object({
   role: roleValidator,
   content: v.string(),
