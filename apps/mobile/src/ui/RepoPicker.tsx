@@ -1,12 +1,12 @@
 import { api, type Id } from "@eva/backend";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconBrandGithub, IconChevronDown } from "@tabler/icons-react-native";
-import { SheetRow } from "@vvedantb/native-ui/primitives";
+import { IconBrandGithub, IconChevronDown, type IconProps } from "@tabler/icons-react-native";
+import { EmptyState, SheetRow } from "@vvedantb/native-ui/primitives";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
-import { Pressable, Text } from "react-native";
+import { Fragment, useState, type ComponentType, type ReactNode } from "react";
+import { Pressable, Text, View } from "react-native";
 import { FooterSheet } from "@/chat/ComposerFooter";
 import { RepoLogo } from "@/ui/RepoLogo";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
@@ -14,9 +14,10 @@ import { useScheme, XS_TRACKING } from "@/ui/theme";
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 
 /**
- * The repo a per-repo section of the Sessions tab shows (Quick Tasks,
- * Reviews), kept in the URL (`?repo=`) as the web keeps it in its path, so
- * both sections stay on one repo. Default: the first repo.
+ * The repo a per-repo section of a tab shows (Quick Tasks and Reviews in
+ * Sessions; Projects, Documents, Drafts and Today in Projects), kept in the
+ * URL (`?repo=`) as the web keeps it in its path, so a tab's sections stay
+ * on one repo. Default: the first repo.
  */
 export function useRepoParam() {
   const router = useRouter();
@@ -108,5 +109,34 @@ export function RepoSheet({
         />
       ))}
     </FooterSheet>
+  );
+}
+
+/**
+ * A per-repo section (`?repo=`, `useRepoParam`): `placeholder` while the
+ * repos load, "No repos" with `icon` when there are none, else the picker
+ * over `children` for the repo, keyed on it so its state starts fresh.
+ */
+export function RepoSection({
+  icon,
+  placeholder,
+  children,
+}: {
+  icon: ComponentType<IconProps>;
+  placeholder: ReactNode;
+  children: (repo: Repo) => ReactNode;
+}) {
+  const { repos, repo, setRepo } = useRepoParam();
+  if (repos === undefined) return placeholder;
+  if (!repo) {
+    return <EmptyState icon={icon} title="No repos" description="Connect a repo on the web. It shows up here." />;
+  }
+  return (
+    <View className="flex-1">
+      <View className="px-4">
+        <RepoPicker repos={repos} value={repo} onChange={setRepo} />
+      </View>
+      <Fragment key={repo._id}>{children(repo)}</Fragment>
+    </View>
   );
 }

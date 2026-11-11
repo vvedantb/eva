@@ -46,6 +46,7 @@ async function fixture() {
       connectedBy: strangerUserId,
     });
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId: ownerUserId,
       title: "Fix the login bug",
@@ -54,6 +55,7 @@ async function fixture() {
       branchName: "eva/session-login",
     });
     const strangerSessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId: otherRepoId,
       userId: strangerUserId,
       title: "Not yours",

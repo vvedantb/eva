@@ -70,6 +70,7 @@ async function seedSession(
 ): Promise<void> {
   await t.run(async (ctx) => {
     await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Preview recovery",

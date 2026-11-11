@@ -9,6 +9,7 @@ import { useSessionStorage } from "usehooks-ts";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 import {
   attachNormalBufferWheelScroll,
@@ -101,6 +102,23 @@ function getCssRgba(
   const raw = styles.getPropertyValue(variableName).trim();
   const value = raw.length > 0 ? raw : fallback;
   return `rgba(${value.split(/\s+/).join(", ")}, ${alpha})`;
+}
+
+/**
+ * Draws on a WebGL canvas instead of xterm's DOM renderer. Background
+ * terminals stay mounted under `display: none`, where the DOM renderer measures
+ * every glyph as 0px wide, never caches it, and forces a full-page style
+ * recalc per character on each redraw (a 12.9 s freeze in a prod profile).
+ * Without WebGL2, or after a context loss, xterm keeps the DOM renderer.
+ */
+function loadWebglRenderer(terminal: Terminal) {
+  try {
+    const webgl = new WebglAddon();
+    webgl.onContextLoss(() => webgl.dispose());
+    terminal.loadAddon(webgl);
+  } catch {
+    // WebGL2 unavailable: the DOM renderer stays.
+  }
 }
 
 export function TerminalPanel({
@@ -463,6 +481,7 @@ export function TerminalPanel({
         terminal.loadAddon(fitAddon);
         terminal.loadAddon(webLinksAddon);
         terminal.open(containerEl);
+        loadWebglRenderer(terminal);
 
         terminalInstanceRef.current = terminal;
         fitAddonRef.current = fitAddon;

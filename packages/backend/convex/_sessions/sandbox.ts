@@ -605,7 +605,7 @@ export const sandboxReady = internalMutation({
       { source: "start" },
     );
     // Drain first-message (and any other) queued turns now that chat can run.
-    // Early + final ready both call this; second no-ops while activeWorkflowId is set.
+    // Early + final ready both call this; second no-ops while the chat's turn is open.
     // Starting a sandbox is not a turn ending, so this drain must not wake a
     // watching orchestrator when the queue turns out to be empty.
     // Scheduled, not imported: the queue helpers import this module to wake a

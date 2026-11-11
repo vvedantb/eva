@@ -109,6 +109,7 @@ async function fixture() {
       repoId,
     });
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId: ownerId,
       title: "Login bug",

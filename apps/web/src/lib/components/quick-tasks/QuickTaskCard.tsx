@@ -17,8 +17,6 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  toast,
-  useRequestConfirm,
   MarqueeOnHover,
   UnreadDot,
 } from "@vvedantb/ui";
@@ -43,15 +41,11 @@ import {
   type Priority,
 } from "@/lib/components/priority/priorityMeta";
 import dayjs, { compactRelativeTime } from "@eva/shared/dates";
-import { useState, type MouseEvent } from "react";
+import type { MouseEvent } from "react";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
-import {
-  DeleteTaskDialog,
-  useDeleteAgentTask,
-} from "./_components/DeleteTaskDialog";
-import { MoveTaskDialog, useMoveAgentTask } from "./_components/MoveTaskDialog";
+import { useTaskMenu } from "./_components/useTaskMenu";
 import { TaskCardMenuItems } from "./_components/TaskCardMenuItems";
 import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
 
@@ -96,8 +90,6 @@ interface QuickTaskCardProps {
   /** `shiftKey` asks the owner for a range selection from its anchor. */
   onToggleSelect?: (event: { shiftKey: boolean }) => void;
   assignedTo?: Id<"users">;
-  model?: string;
-  providerAccountId?: Id<"userProviderAccounts">;
   projectId?: Id<"projects">;
   repoId?: Id<"githubRepos">;
   users?: User[];
@@ -137,8 +129,6 @@ export function QuickTaskCard({
   isActive,
   onToggleSelect,
   assignedTo,
-  model,
-  providerAccountId,
   projectId,
   repoId,
   users,
@@ -159,65 +149,20 @@ export function QuickTaskCard({
   const showAgentPulse = !hasError && !isInProgress && isAgentActive;
   const simpleView = useSimpleView();
 
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [moveTarget, setMoveTarget] = useState<Id<"githubRepos"> | null>(null);
-  const { request: requestConfirm } = useRequestConfirm();
-  const deleteTask = useDeleteAgentTask();
-  const moveTask = useMoveAgentTask();
-
-  // Find the app name for the move target across all codebases
-  const moveTargetAppName = (() => {
-    if (!moveTarget || !groupedCodebases) return "";
-    for (const codebase of groupedCodebases) {
-      const app = codebase.apps.find((a) => a._id === moveTarget);
-      if (app) {
-        // For monorepos, show "codebase/app", for single repos just the name
-        return codebase.isMonorepo
-          ? `${codebase.displayName}/${app.appName}`
-          : codebase.displayName;
-      }
-    }
-    return "";
-  })();
-
-  const menuProps = {
+  const { menuProps, dialogs, hasDialogOpen } = useTaskMenu({
     id,
     title,
     status,
     href,
+    showOpenInNewTab: true,
     assignedTo,
-    model,
-    providerAccountId,
-    createdBy: createdByUser?._id,
     projectId,
     repoId,
     groupedCodebases,
     users,
     currentUserId,
     projects,
-    onDelete: () =>
-      requestConfirm(
-        () => setShowDeleteConfirm(true),
-        () => {
-          void deleteTask({ id }).catch((err) => {
-            console.error("Failed to delete task:", err);
-            toast.error("Could not delete the task. Try again.");
-          });
-        },
-      ),
-    onMove: (targetId: Id<"githubRepos">) =>
-      requestConfirm(
-        () => setMoveTarget(targetId),
-        () => {
-          void moveTask({ id, repoId: targetId }).catch((err) => {
-            console.error("Failed to move task:", err);
-            toast.error("Could not move the task. Try again.");
-          });
-        },
-      ),
-  };
-
-  const hasDialogOpen = showDeleteConfirm || moveTarget !== null;
+  });
 
   const hasMetadata =
     projectName !== undefined || (tags !== undefined && tags.length > 0);
@@ -442,20 +387,7 @@ export function QuickTaskCard({
         </ContextMenuContent>
       </ContextMenu>
 
-      <DeleteTaskDialog
-        open={showDeleteConfirm}
-        onClose={() => setShowDeleteConfirm(false)}
-        taskId={id}
-        taskTitle={title}
-      />
-
-      <MoveTaskDialog
-        targetId={moveTarget}
-        targetAppName={moveTargetAppName}
-        onClose={() => setMoveTarget(null)}
-        taskId={id}
-        taskTitle={title}
-      />
+      {dialogs}
     </>
   );
 }

@@ -45,6 +45,7 @@ export function ThreadFindBar({
   defaultQuery = "",
   onQueryChange,
   scopeKey = "",
+  jumpKey = 0,
 }: {
   documents: ReadonlyArray<ThreadFindDocument>;
   defaultOpen?: boolean;
@@ -56,6 +57,11 @@ export function ThreadFindBar({
   onQueryChange?: (query: string) => void;
   /** Changes when the transcript renders more rows, so highlights repaint. */
   scopeKey?: string;
+  /**
+   * Changes when the rows a query's matches live in render after the query
+   * (loaded from older history), so the bar jumps to the active match again.
+   */
+  jumpKey?: number;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [query, setQuery] = useState(defaultQuery);
@@ -167,7 +173,7 @@ export function ThreadFindBar({
             repaint mid-stream cannot yank the reader's scroll position. */}
         <span
           hidden
-          key={`jump:${safeIndex}:${deferredQuery}`}
+          key={`jump:${safeIndex}:${deferredQuery}:${jumpKey}`}
           ref={(node) => {
             const scope = findScope(node);
             if (!scope) return;

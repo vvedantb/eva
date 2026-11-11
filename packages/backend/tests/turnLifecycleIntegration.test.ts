@@ -20,7 +20,6 @@ import { getTaskRunStreamingEntityId } from "../convex/_taskWorkflow/helpers";
 import { sessionSummaryStreamingEntityId } from "../convex/_chat/agentStreamIds";
 import {
   hasOpenChatTurn,
-  isLegacySessionExecuting,
   openChatEntityIdsForRepo,
   taskIsExecuting,
 } from "../convex/_chat/turnProjection";
@@ -50,6 +49,7 @@ async function createSessionFixture() {
       installationId: 1,
     });
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Lifecycle test",
@@ -127,12 +127,6 @@ async function createTaskChatFixture() {
 }
 
 describe("turn lifecycle integration", () => {
-  test("opening the first durable Turn permanently marks the session cutover", async () => {
-    const { t, sessionId } = await createSessionFixture();
-    const session = await t.run(async (ctx) => await ctx.db.get(sessionId));
-    expect(session?.turnLifecycleVersion).toBe(2);
-  });
-
   test("queued workflow start rollback closes its Turn and removes its placeholder", async () => {
     const { t, chatId, placeholderMessageId, turnId } =
       await createSessionFixture();
@@ -661,6 +655,7 @@ describe("task chat turns share the session turn lifecycle", () => {
         installationId: 1,
       });
       const sessionId = await ctx.db.insert("sessions", {
+        owner: { kind: "standalone" },
         repoId,
         userId,
         title: "Pick",
@@ -930,23 +925,6 @@ describe("turn lease renewal writes", () => {
 });
 
 describe("turn lifecycle rollout", () => {
-  test("legacy execution fields are consulted only before the durable cutover", () => {
-    expect(
-      isLegacySessionExecuting({
-        activeWorkflowId: "legacy-workflow",
-        syntheticTurnMessageId: undefined,
-        turnLifecycleVersion: undefined,
-      }),
-    ).toBe(true);
-    expect(
-      isLegacySessionExecuting({
-        activeWorkflowId: "stale-workflow",
-        syntheticTurnMessageId: undefined,
-        turnLifecycleVersion: 2,
-      }),
-    ).toBe(false);
-  });
-
   test("the shared completion helper carries the current lease into fatal payloads", () => {
     beginTurnOwnership("claim", { turnId: "turn-1", leaseGeneration: 7 });
     const args: JsonObject = { success: false };

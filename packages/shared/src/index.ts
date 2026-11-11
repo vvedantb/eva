@@ -141,6 +141,23 @@ export {
 export { sessionMenuActions, type SessionMenuAction } from "./sessionMenu";
 export { draftCountAfterRemove, draftsAfterRemove, visibleDrafts } from "./draftVisibility";
 export {
+  draftContextTitle,
+  draftKindLabel,
+  draftSnippet,
+  mergeDrafts,
+  type CommentDraftFields,
+  type DraftListItem,
+  type TaskDraftFields,
+} from "./draftList";
+export {
+  chatSourceKindLabel,
+  chatSourceLabel,
+  chatSourceShortLabel,
+  type ChatSourceKind,
+  type ChatSourceLabelFields,
+} from "./chatSourceLabel";
+export { standupEntryHeading, standupEntryTime } from "./standup";
+export {
   QUICK_TASK_FILTER_DEFAULTS,
   QUICK_TASK_LIST_DEFAULTS,
   QUICK_TASK_SORT_DEFAULTS,
@@ -264,3 +281,32 @@ export {
   type TimelineRow,
 } from "./prTimeline";
 export { SANDBOX_CHAT_COPY, sandboxComposerState } from "./sandboxComposer";
+export {
+  ACTIVE_PROJECT_PHASES,
+  BUILDABLE_PROJECT_PHASES,
+  PROJECT_LIST_DEFAULTS,
+  PROJECT_PHASE_LABELS,
+  PROJECT_SORT_FIELDS,
+  PROJECT_SORT_FIELD_LABELS,
+  clearedProjectFilter,
+  clearedProjectFilters,
+  filterAndSortProjects,
+  interviewTurnText,
+  isProjectPlanning,
+  newProjectSubmitBlocker,
+  parseProjectSpec,
+  projectFilterChips,
+  projectProgressSegments,
+  projectTaskSections,
+  toggleHiddenProjectPhase,
+  type FilterableProject,
+  type ProjectFilterKey,
+  type ProjectListFilters,
+  type ProjectPhase,
+  type ProjectSortDir,
+  type ProjectSortField,
+  type ProjectSpec,
+  type ProjectSpecTask,
+  type ProjectTaskProgress,
+  type SectionableProjectTask,
+} from "./projectMeta";

@@ -5,7 +5,12 @@ import { createPortal } from "react-dom";
 import { useQueryState } from "nuqs";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
-import { api, type Id, type SandboxOwner } from "@eva/backend";
+import {
+  api,
+  taskScheduledAt,
+  type Id,
+  type SandboxOwner,
+} from "@eva/backend";
 import { cn } from "@eva/ui";
 import {
   Badge,
@@ -29,7 +34,6 @@ import { TaskFooter } from "./_components/TaskFooter";
 import {
   StopConfirmDialog,
   ResolveConfirmDialog,
-  StartupCommandsConfirmDialog,
   RunDevServerConfirmDialog,
 } from "@/lib/components/tasks/_components/TaskConfirmDialogs";
 import { TaskSandboxPanel } from "./TaskSandboxPanel";
@@ -131,8 +135,6 @@ export function TaskDetailInline({
     setShowStopConfirm,
     showResolveConfirm,
     setShowResolveConfirm,
-    showStartupCommandsConfirm,
-    setShowStartupCommandsConfirm,
     showRunDevServerConfirm,
     setShowRunDevServerConfirm,
     isStarting,
@@ -151,8 +153,6 @@ export function TaskDetailInline({
     handleStartSandbox,
     handleStopSandbox,
     handleSelectSurface,
-    handleRetryStartupCommands,
-    isRetryingStartupCommands,
     handleRunDevServer,
     isRunningDevServer,
     handleRunBackgroundCommands,
@@ -164,6 +164,7 @@ export function TaskDetailInline({
     handleCreatePr,
   } = useTaskDetail(taskId, routing);
   const isAgentActive = useTaskAgentActive(taskId, task);
+  const scheduledAt = task ? taskScheduledAt(task) : undefined;
   const chatUnread = useChatUnread(taskId);
   const { request: requestConfirm } = useRequestConfirm();
 
@@ -416,7 +417,7 @@ export function TaskDetailInline({
                         hasActiveRun={hasActiveRun}
                         taskId={taskId}
                       />
-                      {task?.scheduledAt ? (
+                      {scheduledAt ? (
                         <div className="mt-2 flex items-center gap-2">
                           <Badge
                             variant="outline"
@@ -426,7 +427,7 @@ export function TaskDetailInline({
                             {status === "todo"
                               ? "Scheduled for"
                               : "Was scheduled for"}{" "}
-                            {dayjs(task.scheduledAt).format("DD/MM/YYYY HH:mm")}
+                            {dayjs(scheduledAt).format("DD/MM/YYYY HH:mm")}
                           </Badge>
                         </div>
                       ) : null}
@@ -528,18 +529,11 @@ export function TaskDetailInline({
         isSandboxActive={isSandboxActive}
         isSandboxStarting={isSandboxStarting}
         isSandboxStopping={isSandboxStopping}
-        isRetryingStartupCommands={isRetryingStartupCommands}
         canCreatePr={canCreatePr}
         isCreatingPr={isCreatingPr}
         onCreatePr={handleCreatePr}
         onStartSandbox={handleStartSandbox}
         onStopSandbox={handleStopSandbox}
-        onRunStartupCommands={() =>
-          requestConfirm(
-            () => setShowStartupCommandsConfirm(true),
-            handleRetryStartupCommands,
-          )
-        }
         onRunDevServer={() =>
           requestConfirm(
             () => setShowRunDevServerConfirm(true),
@@ -621,12 +615,6 @@ export function TaskDetailInline({
         onOpenChange={setShowResolveConfirm}
         onConfirm={handleResolveConflicts}
         isLoading={isStarting}
-      />
-      <StartupCommandsConfirmDialog
-        open={showStartupCommandsConfirm}
-        onOpenChange={setShowStartupCommandsConfirm}
-        onConfirm={handleRetryStartupCommands}
-        isLoading={isRetryingStartupCommands}
       />
       <RunDevServerConfirmDialog
         open={showRunDevServerConfirm}

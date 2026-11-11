@@ -43,10 +43,13 @@ export function applyEvaTheme() {
       overlay: pair("popover"),
       overlayForeground: pair("popoverForeground"),
       fieldPlaceholder: pair("mutedForeground"),
-      // The web `.tabs-segmented` active pill: card in light, secondary in dark,
-      // under the foreground label.
-      segment: { light: light.card, dark: dark.secondary },
+      // The web `.tabs-segmented` active pill (`--segment-active`), under the
+      // foreground label.
+      segment: pair("segmentActive"),
       segmentForeground: pair("foreground"),
+      // The bottom tab bar pill: Eva's secondary in light, so it shows on the
+      // near-white glass; the segmented pill in dark.
+      tabBarPill: { light: light.secondary, dark: dark.segmentActive },
     },
   });
 }

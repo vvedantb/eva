@@ -22,6 +22,10 @@ export interface LinkedSessionGroup<S, R> {
   label: string;
   /** Oldest first. Each row carries the repo it came from. */
   members: Array<{ session: S; repo: R }>;
+  /** Creation time of the oldest member: the group's "Created at" sort key. */
+  createdAt: number;
+  /** Latest member activity: the group's "Last user message" sort key. */
+  latestAt: number;
 }
 
 /**
@@ -48,7 +52,7 @@ export function linkedSessionGroups<S extends GroupableSession, R>(
       }
     }
   }
-  const groups: Array<LinkedSessionGroup<S, R> & { latestAt: number }> = [];
+  const groups: Array<LinkedSessionGroup<S, R>> = [];
   for (const [groupId, byId] of byGroup) {
     const members = [...byId.values()].toSorted(
       (a, b) => a.session._creationTime - b.session._creationTime,
@@ -59,10 +63,9 @@ export function linkedSessionGroups<S extends GroupableSession, R>(
       name,
       label: name ?? members[0].session.title,
       members,
+      createdAt: members[0].session._creationTime,
       latestAt: Math.max(...members.map((m) => sessionActivityAt(m.session))),
     });
   }
-  return groups
-    .toSorted((a, b) => b.latestAt - a.latestAt)
-    .map(({ latestAt: _latestAt, ...group }) => group);
+  return groups.toSorted((a, b) => b.latestAt - a.latestAt);
 }

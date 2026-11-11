@@ -43,6 +43,7 @@ describe("active sandbox sweeps", () => {
           sandboxId?: string,
         ) =>
           ctx.db.insert("sessions", {
+            owner: { kind: "standalone" },
             repoId: f.repoId,
             userId: f.userId,
             title,

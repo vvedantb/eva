@@ -4,6 +4,8 @@ import type { DataModel } from "./_generated/dataModel";
 import schema from "./schema";
 import { deriveLogUsage } from "./_logs/usage";
 import { archiveSessionDoc } from "./_sessions/mutations";
+import { isSessionArchived } from "./_sessions/archive";
+import { STANDALONE_SESSION_OWNER } from "./_sessions/owner";
 import type { MutationCtx } from "./_generated/server";
 import {
   buildProjectBranchName,
@@ -128,7 +130,7 @@ export const retireOrchestratorSessions = dataMigrations.define({
     if (user.orchestratorSessionId === undefined) return;
     const session = await ctx.db.get(user.orchestratorSessionId);
     if (session) {
-      if (session.archived !== true) await archiveSessionDoc(ctx, session);
+      if (!isSessionArchived(session)) await archiveSessionDoc(ctx, session);
       // A wake-up queued behind a busy old master would otherwise drain into
       // the archived chat and restart its sandbox.
       const queued = await ctx.db
@@ -367,3 +369,18 @@ export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneAgentTaskBackgroundAgents,
   internal.dataMigrations.pruneProjectBackgroundAgents,
 ]);
+
+/**
+ * Every session written before `sessions.owner` existed was opened by a user.
+ * Idempotent: rows that already have an owner are skipped. 3b makes the field
+ * required once this has run in prod.
+ *
+ * `npx convex run --prod dataMigrations:backfillSessionOwner`
+ */
+export const backfillSessionOwner = dataMigrations.define({
+  table: "sessions",
+  migrateOne: (_ctx, session) => {
+    if (session.owner !== undefined) return;
+    return { owner: STANDALONE_SESSION_OWNER };
+  },
+});

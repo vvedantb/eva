@@ -6,6 +6,8 @@ import { closeOpenTurn } from "../_chat/turnStore";
 import { cleanUpStaleRun } from "./recovery";
 import { clearTaskRunStreaming, sendCompletionEvent } from "./helpers";
 import { RUN_TIMEOUT_MS } from "./staleness";
+import { finishTaskRun, taskRunWorkflowId } from "../_agentTasks/runState";
+import { projectBuildWorkflowId } from "../_projects/buildState";
 
 const RUN_TIMEOUT_MESSAGE = `Run timed out after ${RUN_TIMEOUT_MS / 3_600_000} hours`;
 
@@ -22,7 +24,8 @@ export const handleStaleRun = internalMutation({
     // Keyed on the workflow, not the status: a task the user moved mid-run
     // still has a run to time out. Status resets below only touch
     // `in_progress`, so the user's choice survives.
-    if (!task.activeWorkflowId) return null;
+    const workflowId = taskRunWorkflowId(task);
+    if (workflowId === undefined) return null;
 
     const runs = await ctx.db
       .query("agentRuns")
@@ -33,7 +36,7 @@ export const handleStaleRun = internalMutation({
     )[0];
     if (latestRun && latestRun._id !== args.runId) return null;
 
-    await cancelTrackedWorkflow(ctx, task.activeWorkflowId);
+    await cancelTrackedWorkflow(ctx, workflowId);
 
     const run = await ctx.db.get(args.runId);
 
@@ -56,9 +59,9 @@ export const handleStaleRun = internalMutation({
         run && run.status === "success" ? "business_review" : "todo";
       await ctx.db.patch(args.taskId, {
         ...(task.status === "in_progress" ? { status: taskStatus } : {}),
-        activeWorkflowId: undefined,
         updatedAt: Date.now(),
       });
+      await finishTaskRun(ctx, args.taskId, undefined);
     }
 
     await clearTaskRunStreaming(ctx, args.taskId, args.runId, {
@@ -67,12 +70,13 @@ export const handleStaleRun = internalMutation({
 
     if (task.projectId) {
       const project = await ctx.db.get(task.projectId);
-      if (project?.activeBuildWorkflowId) {
+      const buildWorkflowId = project && projectBuildWorkflowId(project);
+      if (buildWorkflowId) {
         try {
           await sendCompletionEvent(
             ctx,
             buildTaskDoneEvent,
-            project.activeBuildWorkflowId,
+            buildWorkflowId,
             { taskId: args.taskId, success: false },
           );
         } catch {}

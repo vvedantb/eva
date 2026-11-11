@@ -56,7 +56,6 @@ export function taskChatDaemonLaunchArgs(
     providerAccountId: p.providerAccountId,
     credentialOwnerUserId: p.credentialOwnerUserId,
     sessionPersistenceId: p.taskId,
-    activeWorkflowField: "activeChatWorkflowId",
     skipPrewarm: false,
     entityTable: "agentTasks",
   };
@@ -80,7 +79,6 @@ export function projectChatDaemonLaunchArgs(
     providerAccountId: p.providerAccountId,
     credentialOwnerUserId: p.credentialOwnerUserId,
     sessionPersistenceId: p.projectId,
-    activeWorkflowField: "activeChatWorkflowId",
     skipPrewarm: false,
     entityTable: "projects",
   };

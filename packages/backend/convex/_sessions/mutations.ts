@@ -27,10 +27,7 @@ import { schedulePrTitleSync } from "../_github/prTitleSync";
 import { DEFAULT_SESSION_TITLE } from "./helpers";
 import { ensureSessionGroup } from "./groups";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
-import {
-  cancelSessionSandboxGraceDelete,
-  scheduleSessionSandboxGraceDelete,
-} from "../sandboxCleanup";
+import { archiveSession, unarchiveSession } from "./archive";
 import {
   closeLivePullRequests,
   findPrimaryPullRequest,
@@ -45,6 +42,7 @@ import {
 import { linkedRepoDir } from "../_sandbox_runtime/workspaceLayout";
 import { touchUserActivity } from "../_sandbox/activity";
 import { assertComposerMessageRole } from "../_messages/publicRole";
+import { STANDALONE_SESSION_OWNER } from "./owner";
 import {
   ensureMainChat,
   getSessionChatWithAccess,
@@ -169,6 +167,7 @@ export async function createSession(
     repoId: args.repoId,
     userId: ctx.userId,
     title,
+    owner: STANDALONE_SESSION_OWNER,
     status: "starting",
     // The first boot is a start request like any other; see
     // `_sandbox/transitions.ts`.
@@ -432,16 +431,8 @@ export async function archiveSessionDoc(
   }
 
   await closeLivePullRequests(ctx, { kind: "session", sessionId: session._id });
-  await ctx.db.patch(session._id, {
-    archived: true,
-    status: "closed",
-    updatedAt: Date.now(),
-  });
-  await scheduleSessionSandboxGraceDelete(ctx, {
-    ...session,
-    archived: true,
-    status: "closed",
-  });
+  await ctx.db.patch(session._id, { status: "closed" });
+  await archiveSession(ctx, session);
 }
 
 /** Archives a session so it no longer appears in the active list.
@@ -469,8 +460,7 @@ export const unarchive = authMutation({
       kind: "session",
       sessionId: args.id,
     });
-    await ctx.db.patch(args.id, { archived: false });
-    await cancelSessionSandboxGraceDelete(ctx, args.id);
+    await unarchiveSession(ctx, args.id, { touch: false });
     return null;
   },
 });

@@ -30,6 +30,7 @@ async function fixture() {
     });
     const now = Date.now();
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Idle session",
@@ -336,7 +337,7 @@ describe("sandbox owner state (leak sweep)", () => {
         // A quick-task run uses its sandbox while the review status is closed.
         await ctx.db.patch(taskId, {
           reviewTaskSandboxStatus: "closed",
-          activeWorkflowId: "wf-running",
+          run: { state: "running", workflowId: "wf-running" },
         });
       });
       expect(await state("sbx-session")).toBe("stopping");
@@ -344,7 +345,7 @@ describe("sandbox owner state (leak sweep)", () => {
 
       await t.run(async (ctx) => {
         await ctx.db.patch(sessionId, { status: "closed" });
-        await ctx.db.patch(taskId, { activeWorkflowId: undefined });
+        await ctx.db.patch(taskId, { run: undefined });
       });
       const leaked = await t.query(
         internal.sandboxIdlePause.listLeakedSandboxes,

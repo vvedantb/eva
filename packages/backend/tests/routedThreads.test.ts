@@ -63,6 +63,7 @@ async function fixture(opts?: { personalTeam?: boolean; soloTeam?: boolean }) {
       teamId,
     });
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId: ownerUserId,
       title: "Empty states",
@@ -132,7 +133,19 @@ async function queuedWakes(f: Awaited<ReturnType<typeof fixture>>) {
 /** Pins the session mid-turn so replies stay queued instead of draining. */
 async function markSessionBusy(f: Awaited<ReturnType<typeof fixture>>) {
   await f.t.run(async (ctx) => {
-    await ctx.db.patch(f.mainChatId, { activeWorkflowId: "wf-test" });
+    await ctx.db.insert("turns", {
+      entityId: f.mainChatId,
+      sessionId: f.sessionId,
+      streamingEntityId: String(f.mainChatId),
+      state: "running",
+      open: true,
+      turnStartedAt: Date.now(),
+      leaseExpiresAt: Date.now() + 120_000,
+      leaseGeneration: 1,
+      model: "claude:sonnet",
+      repoId: f.repoId,
+      workflowId: "wf-test",
+    });
   });
 }
 

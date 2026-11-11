@@ -8,6 +8,7 @@ import { cancelChatExecution } from "../_sessions/execution";
 import { cancelTaskChatExecution } from "../agentTaskChatWorkflow";
 import { cancelProjectChatExecution } from "../projectChatWorkflow";
 import type { ChatEntityId } from "./surfaceAdapters";
+import { openTurnWorkflowId } from "./turnProjection";
 
 /**
  * Steering: the user presses Steer on a queued message to send it now and
@@ -67,7 +68,7 @@ async function loadSteerTarget(
     const { chat } = context;
     return {
       entityId: chatId,
-      hasActiveTurn: chat.activeWorkflowId !== undefined,
+      hasActiveTurn: (await openTurnWorkflowId(ctx, chatId)) !== undefined,
       isBusy: chat.syntheticTurnMessageId !== undefined,
       runningModel: chat.lastModel,
       interrupt: () => cancelChatExecution(ctx, context),
