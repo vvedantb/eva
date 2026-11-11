@@ -158,27 +158,13 @@ export const getTaskData = internalQuery({
       task.description ?? undefined,
     );
 
-    // Quick tasks reuse one paused filesystem across runs: their session's
-    // sandbox, or (runs from before tasks had sessions) the task's own.
-    const ownedSession = args.ownedSessionId
-      ? await ctx.db.get(args.ownedSessionId)
-      : null;
-    // A session sandbox mid-start or mid-stop is not reused: its own start
-    // or stop action owns that VM (the run then prepares a fresh one).
-    const ownedSandboxSettled =
-      ownedSession?.status === "active" || ownedSession?.status === "closed";
-    const taskSandboxId = args.projectId
-      ? undefined
-      : args.ownedSessionId
-        ? ownedSandboxSettled
-          ? ownedSession?.sandboxId
-          : undefined
-        : task.sandboxId;
+    // A run from before tasks had sessions reuses the task's own paused
+    // filesystem. A run on a session claims the session's sandbox itself
+    // (`sessions.claimSandboxForTaskRun`), so nothing is read here for it.
+    const usesTaskRow = !args.projectId && !args.ownedSessionId;
+    const taskSandboxId = usesTaskRow ? task.sandboxId : undefined;
     const keepTaskSandboxActiveAfterRun =
-      !args.projectId &&
-      (args.ownedSessionId
-        ? ownedSession?.status === "active"
-        : task.reviewTaskSandboxStatus === "active");
+      usesTaskRow && task.reviewTaskSandboxStatus === "active";
 
     // Only surface comments the last successful run hasn't already addressed,
     // so subsequent "Make changes" runs focus on NEW feedback. Cutoff is the

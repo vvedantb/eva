@@ -332,9 +332,10 @@ export async function retireOwnedSession(
 ): Promise<void> {
   const session = await findTaskSession(ctx.db, taskId);
   if (!session) return;
-  // Any VM the session holds is stopped, even behind a `closed` row: a run
-  // resumes it without flipping the status. Silent, like the run's own stop.
-  if (session.sandboxId !== undefined || session.status !== "closed") {
+  // A `closed` row's VM is stopped: every path that runs it (a start or a
+  // task run's claim) moves the row off `closed` first. Silent, like the
+  // run's own stop.
+  if (session.status !== "closed") {
     await requestSessionSandboxStop(ctx, session._id, {
       stopReason: { kind: "task" },
     });

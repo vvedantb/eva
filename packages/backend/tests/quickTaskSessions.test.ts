@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
-import { api } from "../convex/_generated/api";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { DEFAULT_AI_MODEL } from "../convex/validators";
 import { openTurn } from "../convex/_chat/turnStore";
@@ -43,6 +43,13 @@ async function fixture() {
 }
 
 describe("quick tasks on sessions", () => {
+  // Scheduled stops and drains stay queued instead of running after a test.
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   test(
     "a quick task owns exactly one session, hidden from the Sessions list",
     async () => {
@@ -143,6 +150,51 @@ describe("quick tasks on sessions", () => {
       expect(next.sessionId).not.toBe(first.sessionId);
       const fresh = await f.t.run((ctx) => ctx.db.get(next.sessionId));
       expect(fresh?.repoId).toBe(otherRepoId);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a task run moves its session through the sandbox lifecycle, never running a VM behind a closed row",
+    async () => {
+      const f = await fixture();
+      const { sessionId } = await f.asUser.mutation(api.sessions.ensureOwned, {
+        taskId: f.taskId,
+      });
+      const status = async () =>
+        (await f.t.run((ctx) => ctx.db.get(sessionId)))?.status;
+
+      const claim = await f.t.mutation(
+        internal.sessions.claimSandboxForTaskRun,
+        { sessionId },
+      );
+      if (!claim) throw new Error("claim refused");
+      expect(claim.wasActive).toBe(false);
+      expect(await status()).toBe("starting");
+
+      // A stale attempt cannot attach.
+      expect(
+        await f.t.mutation(internal.sessions.attachTaskRunSandbox, {
+          sessionId,
+          sandboxId: "sbx-run",
+          attempt: claim.attempt - 1,
+        }),
+      ).toBe(false);
+      expect(
+        await f.t.mutation(internal.sessions.attachTaskRunSandbox, {
+          sessionId,
+          sandboxId: "sbx-run",
+          attempt: claim.attempt,
+        }),
+      ).toBe(true);
+      expect(await status()).toBe("active");
+
+      await f.t.mutation(internal.sessions.finishTaskRunSandboxMutation, {
+        sessionId,
+        sandboxId: "sbx-run",
+        keepActive: claim.wasActive,
+      });
+      expect(await status()).toBe("stopping");
     },
     TIMEOUT_MS,
   );

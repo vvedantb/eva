@@ -451,22 +451,87 @@ export const requestStopSandbox = internalMutation({
   },
 });
 
+/*
+ * A quick task's run on its session's sandbox follows the session lifecycle
+ * like any other start (`_sandbox/transitions.ts`), so the row never reads
+ * `closed` while the run's VM is up:
+ *
+ *   closed ──claimSandboxForTaskRun──▶ starting ──attachTaskRunSandbox──▶ active
+ *      ▲                                  │ prepare failed: sandboxError
+ *      └──── finishTaskRunSandbox (requestSessionSandboxStop) ◀── run ends ──┘
+ *
+ * `active` at claim time (the reviewer has it open) is reused as is and stays
+ * `active` after the run, as `keepTaskSandboxActiveAfterRun` did for the task
+ * sandbox; idle pause then stops it through the normal stop path. A row mid
+ * start or stop is not claimed: the run then works on a VM of its own, which
+ * no row records and which it stops itself.
+ */
+
+const taskRunClaimValidator = v.object({
+  /** The VM to resume, when the session has one. */
+  sandboxId: v.optional(v.string()),
+  /** The start attempt this claim owns (fences its attach and failure). */
+  attempt: v.number(),
+  /** The session was already `active`: the run leaves it running. */
+  wasActive: v.boolean(),
+});
+
+/** Claims the session's sandbox for a task run: `closed` → `starting`. */
+export const claimSandboxForTaskRun = internalMutation({
+  args: { sessionId: v.id("sessions") },
+  returns: v.union(taskRunClaimValidator, v.null()),
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) return null;
+    if (session.status === "active") {
+      return {
+        sandboxId: session.sandboxId,
+        attempt: session.sandboxStartAttempt ?? 0,
+        wasActive: true,
+      };
+    }
+    if (session.status !== "closed") return null;
+    const attempt = nextSandboxStartAttempt(session.sandboxStartAttempt);
+    await ctx.db.patch(args.sessionId, {
+      status: "starting",
+      sandboxStartAttempt: attempt,
+      sandboxError: undefined,
+      updatedAt: Date.now(),
+    });
+    await scheduleStuckStartExpiry(
+      ctx,
+      { kind: "session", id: args.sessionId },
+      attempt,
+    );
+    return { sandboxId: session.sandboxId, attempt, wasActive: false };
+  },
+});
+
 /**
- * Records the VM a quick task's run prepared as its session's sandbox. Only
- * while no start or stop owns the row: those write the sandbox id themselves,
- * and a run racing them must not re-point it. Returns whether it attached.
+ * The run's VM is up: `starting` → `active` with that VM, fenced by the
+ * claim's attempt. A stop or newer start since the claim wins; the VM then
+ * stays the run's own. Returns whether the session took the VM.
  */
 export const attachTaskRunSandbox = internalMutation({
-  args: { sessionId: v.id("sessions"), sandboxId: v.string() },
+  args: {
+    sessionId: v.id("sessions"),
+    sandboxId: v.string(),
+    attempt: v.number(),
+  },
   returns: v.boolean(),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
-    if (!session || session.status === "starting" || session.status === "stopping") {
+    if (
+      !session ||
+      !isCurrentSandboxStartAttempt(session.sandboxStartAttempt, args.attempt) ||
+      (session.status !== "starting" && session.status !== "active")
+    ) {
       return false;
     }
-    if (session.sandboxId === args.sandboxId) return true;
     await ctx.db.patch(args.sessionId, {
       sandboxId: args.sandboxId,
+      status: "active",
+      sandboxError: undefined,
       updatedAt: Date.now(),
     });
     return true;
@@ -474,17 +539,17 @@ export const attachTaskRunSandbox = internalMutation({
 });
 
 /**
- * A quick task's run (finished or cancelled) is done with `sandboxId`. The
- * session's own VM stops through the session stop path unless the reviewer
- * has it open or a start/stop is in flight: a `closed` row here means the run
- * resumed the VM behind a sleeping session. Silent (no divider), like the
- * task sandbox it replaces. A VM the session never took (`attachTaskRunSandbox`
- * refused it) is the run's alone and stops directly.
+ * A quick task's run (finished or cancelled) is done with `sandboxId`. A VM
+ * the session took stops through the session stop path unless `keepActive`
+ * (the reviewer had it open), silently (no divider, like the task sandbox it
+ * replaces). A VM the session never took is the run's alone and stops
+ * directly.
  */
-export async function stopTaskRunSandbox(
+export async function finishTaskRunSandbox(
   ctx: MutationCtx,
   sessionId: Id<"sessions">,
   sandboxId: string,
+  options: { keepActive: boolean },
 ): Promise<void> {
   const session = await ctx.db.get(sessionId);
   if (!session) return;
@@ -495,19 +560,23 @@ export async function stopTaskRunSandbox(
     });
     return;
   }
-  if (session.status !== "closed") return;
-  // `requestSessionSandboxStop` re-stops a closed row that still holds a
-  // sandbox id: exactly the run's resumed VM.
+  if (options.keepActive || session.status !== "active") return;
   await requestSessionSandboxStop(ctx, sessionId, {
     stopReason: { kind: "task" },
   });
 }
 
-export const stopSandboxAfterTaskRun = internalMutation({
-  args: { sessionId: v.id("sessions"), sandboxId: v.string() },
+export const finishTaskRunSandboxMutation = internalMutation({
+  args: {
+    sessionId: v.id("sessions"),
+    sandboxId: v.string(),
+    keepActive: v.boolean(),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await stopTaskRunSandbox(ctx, args.sessionId, args.sandboxId);
+    await finishTaskRunSandbox(ctx, args.sessionId, args.sandboxId, {
+      keepActive: args.keepActive,
+    });
     return null;
   },
 });

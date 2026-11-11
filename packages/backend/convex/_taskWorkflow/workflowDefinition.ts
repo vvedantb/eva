@@ -18,6 +18,11 @@ const PR_STEP_RETRY = {
   retry: { maxAttempts: 3, initialBackoffMs: 2000, base: 2 },
 };
 
+/** A quick task run's claim on its session's sandbox. */
+type TaskRunSessionClaim = NonNullable<
+  FunctionReturnType<typeof internal.sessions.claimSandboxForTaskRun>
+>;
+
 type PrEnrichmentData = FunctionReturnType<
   typeof internal.taskWorkflow.getPrEnrichmentData
 >;
@@ -71,6 +76,7 @@ export const taskExecutionWorkflow = workflow.define({
     let runFinalized = false;
     let preserveSandboxOnFailure = false;
     let keepTaskSandboxActiveAfterRun = false;
+    let sessionClaim: TaskRunSessionClaim | null = null;
 
     // Outside the try: a run that is no longer queued (cancelled first) has
     // nothing to finalize, and its cancel path already released the task slot
@@ -101,26 +107,61 @@ export const taskExecutionWorkflow = workflow.define({
       // changelog), so `ephemeral` is always false: a first run that ended up
       // ephemeral would be deleted on auto-stop, leaving
       // `task.sandboxId` as a tombstone and breaking the reviewer preview.
-      const reusableSandboxId =
-        data.projectSandboxId ?? data.taskSandboxId ?? undefined;
+      // A quick task's session lends its sandbox through the session
+      // lifecycle: claimed (`closed` → `starting`, or reused while `active`)
+      // before the VM is touched, so the row never reads `closed` over a
+      // running VM. No claim (a start/stop in flight): a VM of the run's own.
+      if (args.ownedSessionId) {
+        sessionClaim = await step.runMutation(
+          internal.sessions.claimSandboxForTaskRun,
+          { sessionId: args.ownedSessionId },
+        );
+        keepTaskSandboxActiveAfterRun = sessionClaim?.wasActive ?? false;
+      }
+      const reusableSandboxId = args.ownedSessionId
+        ? sessionClaim?.sandboxId
+        : (data.projectSandboxId ?? data.taskSandboxId ?? undefined);
       const skipStartupCommands =
         args.projectId !== undefined &&
         reusableSandboxId !== undefined &&
         !args.isFirstTaskOnBranch;
-      ({ sandboxId } = await prepareSandboxSteps(step, {
-        existingSandboxId: reusableSandboxId,
-        installationId: args.installationId,
-        repoOwner: data.repoOwner,
-        repoName: data.repoName,
-        ephemeral: false,
-        repoId: args.repoId,
-        attachRunId: args.runId,
-        streamingEntityId: getTaskRunStreamingEntityId(args.runId),
-        baseBranch: args.baseBranch,
-        branchName: data.branchName,
-        createRetry: { maxAttempts: 3, initialBackoffMs: 2000, base: 2 },
-        skipStartupCommands,
-      }));
+      try {
+        ({ sandboxId } = await prepareSandboxSteps(step, {
+          existingSandboxId: reusableSandboxId,
+          installationId: args.installationId,
+          repoOwner: data.repoOwner,
+          repoName: data.repoName,
+          ephemeral: false,
+          repoId: args.repoId,
+          attachRunId: args.runId,
+          streamingEntityId: getTaskRunStreamingEntityId(args.runId),
+          baseBranch: args.baseBranch,
+          branchName: data.branchName,
+          createRetry: { maxAttempts: 3, initialBackoffMs: 2000, base: 2 },
+          skipStartupCommands,
+        }));
+      } catch (prepareError) {
+        // The claimed start failed: the normal start-failure transition
+        // (`starting` → `closed`, fenced by the claim's attempt).
+        if (args.ownedSessionId && sessionClaim && !sessionClaim.wasActive) {
+          await step.runMutation(internal.sessions.sandboxError, {
+            sessionId: args.ownedSessionId,
+            error: errorMessage(prepareError),
+            startAttempt: sessionClaim.attempt,
+          });
+        }
+        throw prepareError;
+      }
+      if (args.ownedSessionId && sessionClaim) {
+        // `starting` → `active` with this VM: chat, preview and sweeps all
+        // read it there. Refused if a stop or newer start won meanwhile; the
+        // tail then stops this VM as the run's own.
+        await step.runMutation(internal.sessions.attachTaskRunSandbox, {
+          sessionId: args.ownedSessionId,
+          sandboxId,
+          attempt: sessionClaim.attempt,
+        });
+      }
 
       await step.runMutation(internal.turns.markLaunching, {
         turnId: args.turnId,
@@ -174,13 +215,7 @@ export const taskExecutionWorkflow = workflow.define({
           sandboxId,
         });
       } else if (args.ownedSessionId) {
-        // The task's session owns the sandbox: its chat, preview and sweeps
-        // all read it there. Refused while a start/stop owns the row; the
-        // tail then stops this VM on its own.
-        await step.runMutation(internal.sessions.attachTaskRunSandbox, {
-          sessionId: args.ownedSessionId,
-          sandboxId,
-        });
+        // Attached to the session right after it was prepared (above).
       } else {
         // Quick tasks: persist sandbox on the task itself so reviewer Start
         // Sandbox and follow-up runs (resolve_conflicts, change-requests)
@@ -432,12 +467,18 @@ export const taskExecutionWorkflow = workflow.define({
       // the reviewer UI. If a change-request reused an active preview sandbox,
       // keep it active so "View Sandbox" continues pointing at a live sandbox.
       if (args.ownedSessionId && sandboxId && !preserveSandboxOnFailure) {
-        // The session's own stop path: it keeps a sandbox the reviewer has
-        // open (status active/starting) and settles through `stopping`.
+        // `active` → `stopping` → `closed` through the session stop path,
+        // unless the reviewer had it open when the run began (it stays
+        // `active` and idle pause stops it later). Mirrors
+        // `keepTaskSandboxActiveAfterRun` for the task sandbox.
         try {
           await step.runMutation(
-            internal.sessions.stopSandboxAfterTaskRun,
-            { sessionId: args.ownedSessionId, sandboxId },
+            internal.sessions.finishTaskRunSandboxMutation,
+            {
+              sessionId: args.ownedSessionId,
+              sandboxId,
+              keepActive: keepTaskSandboxActiveAfterRun,
+            },
           );
         } catch {}
       } else if (

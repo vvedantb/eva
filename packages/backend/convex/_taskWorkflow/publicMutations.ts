@@ -23,7 +23,7 @@ import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { errorMessage } from "@vvedantb/server";
 import { findTaskSession } from "../_sessions/ownedSession";
-import { stopTaskRunSandbox } from "../_sessions/sandbox";
+import { finishTaskRunSandbox } from "../_sessions/sandbox";
 
 /** Retrieves the active workflow ID for a task, or null if none exists. */
 async function getActiveWorkflowId(
@@ -220,7 +220,9 @@ export async function cancelTaskRun(
       ? await findTaskSession(ctx.db, task._id)
       : null;
     if (session && run.sandboxId) {
-      await stopTaskRunSandbox(ctx, session._id, run.sandboxId);
+      await finishTaskRunSandbox(ctx, session._id, run.sandboxId, {
+        keepActive: false,
+      });
     } else if (run.sandboxId && run.repoId) {
       await ctx.scheduler.runAfter(0, internal.sandbox.stopSandbox, {
         sandboxId: run.sandboxId,
