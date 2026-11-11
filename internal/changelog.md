@@ -1,5 +1,13 @@
 # Changelog
 
+## Projects run on sessions (2)
+
+Date: 2026-11-11
+
+WHY: Projects and their tasks kept the last copy of the old chat, sandbox and prompt pipelines. A project now owns one hidden session, and its tasks work on it; the project stays the product surface.
+
+Architectural: `_sessions/ownedSession.ts` is generalised from task to task|project (`OwnerEntity`): `ensureOwnedSession` creates the project's session lazily (project branch, chat model and traits from the project, takes over `projects.sandboxId` and project chat drafts), `ensureTaskChat` gives a project task its own non-Main chat in that session (`sessionChats.taskId`, index `by_task`; the one extra chat an owned session holds), and `getOwned` / `ensureOwned` take `{ owner }`. Project task runs and builds use the project session's sandbox (`ownedSessionId`, `attachTaskRunSandbox`; the VM stays up after a run, as before). A build holds the session: `sessionChatHasFreeSlot` queues chat sends for the whole build and `finishProjectBuild` drains the queue; `startBuild` refuses and a scheduled build retries in 60 s while the project chat replies (`ownedSessionBusy`). Interviews prepare and attach the session sandbox. `rotateProjectBranch` is the one writer of a merged PR's branch bump (project branch, session branch, VM delete, start fenced). `syncProjectSession` retires a completed/cancelled/deleted project's session and revives a reopened one (`functions.ts` schedules `syncProjectSessionLifecycle`). `buildSessionPrompt` adds the project context (`withProjectContext`, spec as plan, project PR); a project task's chat adds the task context. Docs, unread, mentions and Ave watches route to the owner (a project task's chat to the task). Lists, wake links, MCP send/stop/start and chat-self tools read the session. Web: `useOwnedSession` (generalised `useTaskSession`) and `useOwnedChatBinding` drive the project chat, sandbox panel, header and project tasks; the task-row chat binding is gone. Mobile resolves a project or project task as its session chat. `dataMigrations:migrateProjectChatsToSessions` and `migrations:projectChatsLeft` (helpers shared with 1b in `_migrations/ownerChatsToSessions.ts`).
+
 ## Quick tasks run on sessions (1b)
 
 Date: 2026-11-11
