@@ -7,7 +7,7 @@ import {
   type SessionChatContext,
 } from "../_sessionChats/helpers";
 import { isSessionArchived } from "../_sessions/archive";
-import { findOwnedSession, sessionOwnerTaskId } from "../_sessions/owner";
+import { findQuickTaskSession, sessionOwnerTaskId } from "../_sessions/owner";
 import { entityHref, repoBasePath } from "@eva/shared";
 import { storedComposerTraits } from "../_shared/composerTraits";
 import {
@@ -127,11 +127,7 @@ async function resolveTaskSessionChat(
   db: GenericDatabaseReader<DataModel>,
   task: Doc<"agentTasks">,
 ): Promise<SessionChatContext | null> {
-  if (task.projectId !== undefined) return null;
-  const session = await findOwnedSession(db, {
-    kind: "task",
-    taskId: task._id,
-  });
+  const session = await findQuickTaskSession(db, task);
   const mainChat = session ? await findMainChat(db, session._id) : null;
   return session && mainChat ? { chat: mainChat, session } : null;
 }

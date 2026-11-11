@@ -2,7 +2,7 @@ import type { DatabaseReader } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { findMainChat } from "../_sessionChats/helpers";
 import type { ChatEntityKind } from "../_validators/enums";
-import { findOwnedSession } from "../_sessions/owner";
+import { findQuickTaskSession } from "../_sessions/owner";
 
 
 type ChatParentId =
@@ -50,7 +50,8 @@ export async function resolveChatParent(
     if (!taskId) return null;
     // A quick task's chat is its session's Main chat (a run's cards land
     // there too); a project task, or one with no session yet, keeps its own.
-    const session = await findOwnedSession(db, { kind: "task", taskId });
+    const task = await db.get(taskId);
+    const session = task ? await findQuickTaskSession(db, task) : null;
     const mainChat = session ? await findMainChat(db, session._id) : null;
     return mainChat?._id ?? taskId;
   }

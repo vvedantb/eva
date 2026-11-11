@@ -13,8 +13,11 @@ import { resolveSessionBaseBranch } from "./baseBranch";
 import { archiveSession, isSessionArchived, unarchiveSession } from "./archive";
 import {
   findOwnedSession,
+  findQuickTaskSession,
+  findTaskSession,
   sessionOwnerTaskId,
-  type OwnedSessionOwner,
+  taskSessionOwner,
+  taskUsesOwnedSession,
 } from "./owner";
 import { requestSessionSandboxStop } from "./sandbox";
 import { isTaskRunning } from "../_agentTasks/runState";
@@ -34,10 +37,6 @@ import {
  *   task reopened / restored ──▶ reviveOwnedSession (unarchive)
  */
 
-/** The owner value for a quick task's session. */
-export function taskSessionOwner(taskId: Id<"agentTasks">): OwnedSessionOwner {
-  return { kind: "task", taskId };
-}
 
 /** A task's session and its Main chat. */
 export type OwnedSessionContext = {
@@ -45,15 +44,13 @@ export type OwnedSessionContext = {
   mainChat: Doc<"sessionChats">;
 };
 
-/**
- * Whether a task runs on an owned session. Project tasks keep the project
- * sandbox and chat until projects move onto sessions.
- */
-export function taskUsesOwnedSession(
-  task: Pick<Doc<"agentTasks">, "projectId">,
-): boolean {
-  return task.projectId === undefined;
-}
+// The lookups live in the leaf `owner.ts` so low-level modules can use them.
+export {
+  findQuickTaskSession,
+  findTaskSession,
+  taskSessionOwner,
+  taskUsesOwnedSession,
+};
 
 /**
  * Returns the task's session, inserting it (and its Main chat) the first time
@@ -307,7 +304,12 @@ export async function liveTaskSessionStatuses(
           .withIndex("by_repo_and_status", (q) =>
             q.eq("repoId", repoId).eq("status", status),
           )
-          .filter((q) => q.eq(q.field("owner.kind"), "task"))
+          .filter((q) =>
+            q.and(
+              q.eq(q.field("owner.kind"), "task"),
+              q.eq(q.field("deletedAt"), undefined),
+            ),
+          )
           .collect(),
       ),
     ),
@@ -318,14 +320,6 @@ export async function liveTaskSessionStatuses(
     if (taskId) byTask.set(String(taskId), session.status);
   }
   return byTask;
-}
-
-/** The task's session, or null before anything needed one. */
-export async function findTaskSession(
-  db: DatabaseReader,
-  taskId: Id<"agentTasks">,
-): Promise<Doc<"sessions"> | null> {
-  return await findOwnedSession(db, taskSessionOwner(taskId));
 }
 
 /**
@@ -347,6 +341,37 @@ export async function retireOwnedSession(
   }
   const stopped = await ctx.db.get(session._id);
   if (stopped) await archiveSession(ctx, stopped);
+}
+
+/**
+ * The task moved to another repo or into a project: its session (sandbox,
+ * branch checkout and chat are bound to the old repo / the quick-task path)
+ * retires and stops belonging to the task (soft delete), so the next use
+ * creates a fresh session where the task now lives. The one place a task
+ * move touches its session; called by every move mutation.
+ */
+export async function detachOwnedSession(
+  ctx: MutationCtx,
+  taskId: Id<"agentTasks">,
+): Promise<void> {
+  const session = await findTaskSession(ctx.db, taskId);
+  if (!session) return;
+  await retireOwnedSession(ctx, taskId);
+  await ctx.db.patch(session._id, { deletedAt: Date.now() });
+}
+
+/** Whether an edit moves a task off its session: new repo, or into a project. */
+export function taskMoveDetachesSession(
+  task: Pick<Doc<"agentTasks">, "repoId" | "projectId">,
+  next: { repoId?: Id<"githubRepos">; projectId?: Id<"projects"> | null },
+): boolean {
+  const changesRepo =
+    next.repoId !== undefined && next.repoId !== task.repoId;
+  const entersProject =
+    task.projectId === undefined &&
+    next.projectId !== undefined &&
+    next.projectId !== null;
+  return changesRepo || entersProject;
 }
 
 /**

@@ -62,7 +62,9 @@ describe("quick tasks on sessions", () => {
         await ctx.db.patch(first.sessionId, { status: "active" });
         return await ctx.db
           .query("sessions")
-          .withIndex("by_owner_task", (q) => q.eq("owner.taskId", f.taskId))
+          .withIndex("by_owner_task", (q) =>
+            q.eq("owner.taskId", f.taskId).eq("deletedAt", undefined),
+          )
           .collect();
       });
       expect(owned).toHaveLength(1);
@@ -106,6 +108,41 @@ describe("quick tasks on sessions", () => {
       await expect(
         f.asUser.mutation(api.agentTasks.startTaskSandbox, { taskId: f.taskId }),
       ).rejects.toThrow("runs on its session");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "moving a quick task to another repo retires its session; the next use creates a fresh one there",
+    async () => {
+      const f = await fixture();
+      const first = await f.asUser.mutation(api.sessions.ensureOwned, {
+        taskId: f.taskId,
+      });
+      const otherRepoId = await f.t.run((ctx) =>
+        ctx.db.insert("githubRepos", {
+          owner: "vvedantb",
+          name: "other",
+          installationId: 1,
+          connectedBy: f.userId,
+        }),
+      );
+      await f.asUser.mutation(api.agentTasks.update, {
+        id: f.taskId,
+        repoId: otherRepoId,
+      });
+      const old = await f.t.run((ctx) => ctx.db.get(first.sessionId));
+      expect(old?.deletedAt).toBeDefined();
+      expect(old?.archive).toBeDefined();
+      expect(
+        await f.asUser.query(api.sessions.getOwned, { taskId: f.taskId }),
+      ).toBeNull();
+      const next = await f.asUser.mutation(api.sessions.ensureOwned, {
+        taskId: f.taskId,
+      });
+      expect(next.sessionId).not.toBe(first.sessionId);
+      const fresh = await f.t.run((ctx) => ctx.db.get(next.sessionId));
+      expect(fresh?.repoId).toBe(otherRepoId);
     },
     TIMEOUT_MS,
   );
@@ -195,7 +232,9 @@ describe("quick tasks on sessions", () => {
       const state = await f.t.run(async (ctx) => {
         const sessions = await ctx.db
           .query("sessions")
-          .withIndex("by_owner_task", (q) => q.eq("owner.taskId", f.taskId))
+          .withIndex("by_owner_task", (q) =>
+            q.eq("owner.taskId", f.taskId).eq("deletedAt", undefined),
+          )
           .collect();
         const session = sessions[0];
         const chat = session

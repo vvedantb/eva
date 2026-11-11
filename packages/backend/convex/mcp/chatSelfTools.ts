@@ -55,6 +55,18 @@ function envSettingsLink(
   }
 }
 
+/**
+ * Whether the target's sandbox is run by its own task or project start
+ * workflow. A session's (and a quick task's on its session) is driven
+ * directly on the running VM.
+ */
+function usesEntitySandboxWorkflow(target: EntityTarget): boolean {
+  return (
+    target.kind === "project" ||
+    (target.kind === "task" && target.sandboxSessionId === undefined)
+  );
+}
+
 /** PR number parsed off a GitHub pull request link. */
 function prNumber(prUrl: string | undefined): number | undefined {
   const match = prUrl?.match(/\/pull\/(\d+)/);
@@ -65,6 +77,10 @@ function prNumber(prUrl: string | undefined): number | undefined {
 function sandboxOwner(target: EntityTarget): Record<string, string> {
   if (target.kind === "session") {
     return { kind: target.kind, sessionId: target.targetId };
+  }
+  // A quick task on its session: the session owns the panes and preview.
+  if (target.sandboxSessionId !== undefined) {
+    return { kind: "session", sessionId: target.sandboxSessionId };
   }
   if (target.kind === "task") {
     return { kind: target.kind, taskId: target.targetId };
@@ -580,7 +596,7 @@ Name no chat and it relaunches your own. Refused unless the sandbox is active an
           ...entitySummary(target),
           backgroundCommands: details.backgroundCommands,
         };
-        if (target.kind === "task" || target.kind === "project") {
+        if (usesEntitySandboxWorkflow(target)) {
           await mcpCallAsUser(
             ctx,
             clerkUserId,
@@ -657,7 +673,7 @@ Name no chat and it runs for your own. Refused while the sandbox is starting or 
           startupCommands: details.startupCommands,
         };
 
-        if (target.kind === "task" || target.kind === "project") {
+        if (usesEntitySandboxWorkflow(target)) {
           if (
             target.sandboxStatus === "starting" ||
             target.sandboxStatus === "stopping"

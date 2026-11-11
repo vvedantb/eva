@@ -11,6 +11,7 @@ import { authQuery, hasRepoAccess, hasTaskAccess } from "./functions";
 import { chatEntityKindValidator } from "./_validators/enums";
 import { awaitSandboxActive } from "./mcp/orchestratorDelivery";
 import { sleep } from "./_shared/async";
+import { findQuickTaskSession } from "./_sessions/ownedSession";
 
 /**
  * Backend for the `/p/$kind/$id` wake link. The link carries the entity's
@@ -30,18 +31,24 @@ type WakeTarget =
   | { kind: "task"; id: Id<"agentTasks"> }
   | { kind: "project"; id: Id<"projects"> };
 
-function resolveWakeTarget(
+async function resolveWakeTarget(
   ctx: QueryCtx,
   kind: "session" | "task" | "project",
   id: string,
-): WakeTarget | null {
+): Promise<WakeTarget | null> {
   if (kind === "session") {
     const normalized = ctx.db.normalizeId("sessions", id);
     return normalized ? { kind, id: normalized } : null;
   }
   if (kind === "task") {
     const normalized = ctx.db.normalizeId("agentTasks", id);
-    return normalized ? { kind, id: normalized } : null;
+    const task = normalized ? await ctx.db.get(normalized) : null;
+    if (!task) return null;
+    // A quick task's sandbox is its session's: wake that one.
+    const session = await findQuickTaskSession(ctx.db, task);
+    return session
+      ? { kind: "session", id: session._id }
+      : { kind, id: task._id };
   }
   const normalized = ctx.db.normalizeId("projects", id);
   return normalized ? { kind, id: normalized } : null;
@@ -51,7 +58,8 @@ function resolveWakeTarget(
 export const resolveTarget = internalQuery({
   args: { kind: chatEntityKindValidator, id: v.string() },
   returns: v.union(wakeTargetValidator, v.null()),
-  handler: async (ctx, args) => resolveWakeTarget(ctx, args.kind, args.id),
+  handler: async (ctx, args) =>
+    await resolveWakeTarget(ctx, args.kind, args.id),
 });
 
 /**
@@ -72,7 +80,7 @@ export const getWakeTarget = authQuery({
     v.null(),
   ),
   handler: async (ctx, args) => {
-    const target = resolveWakeTarget(ctx, args.kind, args.id);
+    const target = await resolveWakeTarget(ctx, args.kind, args.id);
     if (!target) return null;
     if (target.kind === "session") {
       const session = await ctx.db.get(target.id);

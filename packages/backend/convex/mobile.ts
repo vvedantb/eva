@@ -7,6 +7,7 @@ import {
   hasOpenChatTurn,
 } from "./_chat/turnProjection";
 import { assertStandaloneSession, sessionOwnerTaskId } from "./_sessions/owner";
+import type { SessionChatContext } from "./_sessionChats/helpers";
 import {
   ensureOwnedSession,
   taskUsesOwnedSession,
@@ -100,38 +101,35 @@ export const sendMessage = authMutation({
     if (!chat.canReply) throw new Error("This chat is closed");
     const model = normalizeAIModel(chat.model);
     const { attachmentStorageIds } = args;
+    // A reply in a session chat runs on that chat's sticky picks.
+    const sendToSessionChat = (
+      context: SessionChatContext,
+      chatModel: typeof model,
+    ) =>
+      sendSessionChatMessage(ctx, {
+        context,
+        userId: ctx.userId,
+        content: message,
+        settings: {
+          model: chatModel,
+          ...storedTraits(chatModel, context.chat),
+          providerAccountId: context.chat.providerAccountId,
+          attachmentStorageIds,
+        },
+      });
     switch (entity.kind) {
       case "session":
-        await sendSessionChatMessage(ctx, {
-          context: entity.context,
-          userId: ctx.userId,
-          content: message,
-          settings: {
-            model,
-            ...storedTraits(model, entity.context.chat),
-            providerAccountId: entity.context.chat.providerAccountId,
-            attachmentStorageIds,
-          },
-        });
+        await sendToSessionChat(entity.context, model);
         return null;
       case "task": {
         // A quick task's first send creates its session; later sends resolve
         // as that session chat directly (`resolveMobileChat`).
         if (taskUsesOwnedSession(entity.task)) {
           const owned = await ensureOwnedSession(ctx, entity.task);
-          const context = { chat: owned.mainChat, session: owned.session };
-          const chatModel = normalizeAIModel(owned.mainChat.lastModel);
-          await sendSessionChatMessage(ctx, {
-            context,
-            userId: ctx.userId,
-            content: message,
-            settings: {
-              model: chatModel,
-              ...storedTraits(chatModel, owned.mainChat),
-              providerAccountId: owned.mainChat.providerAccountId,
-              attachmentStorageIds,
-            },
-          });
+          await sendToSessionChat(
+            { chat: owned.mainChat, session: owned.session },
+            normalizeAIModel(owned.mainChat.lastModel),
+          );
           return null;
         }
         await sendTaskChatMessage(ctx, entity.task, {

@@ -49,7 +49,7 @@ export async function startTaskRun(
   const { task, repo } = p;
   // One agent per sandbox: a run waits while the task's session chat is
   // mid-reply, as a chat message waits behind a run.
-  if (p.projectId === undefined && (await taskSessionBusy(ctx.db, task._id))) {
+  if (taskUsesOwnedSession(task) && (await taskSessionBusy(ctx.db, task._id))) {
     throw new Error(TASK_CHAT_BUSY_ERROR);
   }
   const startedAt = Date.now();
@@ -80,7 +80,7 @@ export async function startTaskRun(
   // project's. Looked up (or created) here so the run's turn and sandbox
   // writes land on that one session.
   const ownedSession =
-    p.projectId === undefined && taskUsesOwnedSession(task)
+    taskUsesOwnedSession(task)
       ? (await ensureOwnedSession(ctx, task)).session
       : null;
   try {

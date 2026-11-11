@@ -36,7 +36,7 @@ import {
 } from "../_sandbox/transitions";
 import { settleOrphanedBackgroundAgents } from "../_sessions/backgroundAgents";
 import { buildTaskBranchName } from "../_git/branchNames";
-import { findOwnedSession } from "../_sessions/owner";
+import { findQuickTaskSession } from "../_sessions/owner";
 import {
   isPreviewSandboxAllowed,
   previewSandboxNotAllowedError,
@@ -51,10 +51,7 @@ async function runsOnSession(
   db: MutationCtx["db"],
   task: Doc<"agentTasks">,
 ): Promise<boolean> {
-  if (task.projectId !== undefined) return false;
-  return (
-    (await findOwnedSession(db, { kind: "task", taskId: task._id })) !== null
-  );
+  return (await findQuickTaskSession(db, task)) !== null;
 }
 
 async function assertPreviewSandboxAllowed(
