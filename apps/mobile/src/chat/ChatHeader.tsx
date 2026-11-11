@@ -80,13 +80,17 @@ export function ChatHeader({
   const sessionItems = (actions: SessionMenuAction[]): MenuEntry[] =>
     actions.map((action) => ({ ...SESSION_ACTION_ITEMS[action], onSelect: () => sessionMenu?.onSelect(action) }));
   const [sessionMain = [], ...sessionRest] = sessionMenu?.groups ?? [];
-  // The web groups: the session's own block (Rename) with the links, then
-  // Archive / Unarchive alone (the web tab menu), then Stop, the destructive
-  // item, last. Empty groups drop out, so no divider stands alone.
+  // The web More menu's groups: Rename and Regenerate title; then its Copy
+  // submenu (title, link, branch name) laid flat with Open PR and Open on web;
+  // then Archive / Unarchive alone; then Stop, the destructive item, last.
+  // Empty groups drop out, so no divider stands alone.
+  const isEdit = (action: SessionMenuAction) => action === "rename" || action === "regenerateTitle";
   const menuGroups: MenuEntry[][] = [
+    sessionItems(sessionMain.filter(isEdit)),
     [
-      ...sessionItems(sessionMain),
+      ...sessionItems(sessionMain.filter((action) => action === "copyTitle")),
       { label: "Copy link", icon: IconLink, onSelect: onCopyLink },
+      ...sessionItems(sessionMain.filter((action) => !isEdit(action) && action !== "copyTitle")),
       { label: "Open on web", icon: IconExternalLink, onSelect: onOpenWeb },
     ],
     ...sessionRest.map(sessionItems),

@@ -16,6 +16,22 @@ WHY: Quick tasks kept their own copy of the session chat, sandbox and prompt pip
 
 Architectural: `_sessions/ownedSession.ts` owns the mapping: `ensureOwnedSession` (lazy, one per task, normal `numId`, task branch `eva/task-<id>`, chat model seeded from the task), `retireOwnedSession` / `reviveOwnedSession` behind `syncOwnedSessionWithTaskStatus` (done/cancelled, PR merged/closed, delete → stop + archive + grace delete; reopen/restore → unarchive), `mirrorTaskIntoOwnedSession` (title, base branch) and `liveTaskSessionStatuses` (task cards). Owned sessions are hidden from the Sessions list (new index `by_repo_owner_deleted_and_archived_at` replaces `by_repo_deleted_and_archived_at`), counts, mentions, spotlight, MCP lists and analytics (`standaloneOnly`), and refuse fork, groups, extra chats, rename and archive (`assertStandaloneSession`). They push the task branch but open no session PR. The task run keeps its own workflow but reads and writes the session sandbox (`ownedSessionId`) and files its turn under the session: `sessionChatHasFreeSlot` makes chat sends queue behind a run and `closeTurn` drains the queue when the run ends; the run stops the sandbox silently (`stopSandboxAfterTaskRun`, stop reason `task_run`). `buildSessionPrompt` adds the task context. Docs, artifacts, mentions, unread and the Ave watch attribute to the task. MCP `send_chat_message` and the mobile chat target deliver to the session Main chat. Web and mobile task chat panels bind to `sessions.getOwned` / `ensureOwned`. `dataMigrations:migrateQuickTaskChatsToSessions` moves existing tasks (generalised `moveLegacyTranscriptPage`, Claude transcript seed = task id); `migrations:quickTaskChatsLeft` reports what is left. Every reader of a quick task's sandbox goes through `findQuickTaskSession`. Moving a quick task to another repo or into a project detaches its session (`detachOwnedSession`: retire + soft delete; `by_owner_task` now includes `deletedAt`). Project tasks are unchanged (PR 2).
 
+## Composer tasks panel: model the todo status once
+
+Date: 2026-11-11
+
+WHY: A domain-model audit found five ternary chains on one status, a duration field nothing set, a renamed status, and guards for states that cannot occur.
+
+Architectural: `ComposerTasksPanel` uses the activity trace's todo item type directly (no `in_progress` → `inProgress` rename). `TASK_STATUS_STYLE` (a `Record` on status) holds each status's colours, icon and trailing label, so a new status fails the type check. `durationMs` and `formatTaskDuration` are gone. `deriveProgress` takes the first step, so it cannot see an empty list. The panel needs a `turnId`; the old `"current"` fallback key let one dismissal hide every later turn without an id.
+
+## Phone: chats open at the end; chat menu matches the web
+
+Date: 2026-11-11
+
+WHY: A chat drew its first messages for a frame and then jumped to the end. The session chat menu showed only Rename and Archive, not the web More menu's items.
+
+Architectural: native-ui `ConversationList` stays hidden until its first jump to the measured end. The chat header menu takes every `sessionMenuActions` item except the session Copy link (the header has its own), in the web groups: Rename and Regenerate title; Copy title, Copy link, Copy branch name, Open PR, Open on web; Archive; Stop. The session target now carries the branch and PR.
+
 ## Sessions: one owner field (1a)
 
 Date: 2026-11-11
