@@ -1,3 +1,4 @@
+import { TURN_BACKSTOP_ERROR } from "@eva/shared/agentTurnLimits";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
@@ -295,7 +296,7 @@ export async function renewTurnLease(
   const now = Date.now();
   if (turnExceededAbsoluteLimit(turn.turnStartedAt, now)) {
     await closeTurn(ctx, turn, "error", {
-      error: "Turn exceeded the 2-hour limit",
+      error: TURN_BACKSTOP_ERROR,
     });
     return { status: "terminal", reason: "timeout" };
   }
@@ -348,7 +349,7 @@ export async function renewTurnLease(
  * Extends an expired lease for a turn whose sandbox process the watchdog can
  * still see running. Stamps `silentSince` on the first grace cycle so the
  * reconciler can bound how long it keeps waiting; later cycles keep the
- * original stamp. The absolute 2-hour limit is enforced exactly as
+ * original stamp. The absolute `TURN_BACKSTOP_MS` limit is enforced exactly as
  * `renewTurnLease` does.
  */
 export async function graceExpiredTurnLease(
@@ -359,7 +360,7 @@ export async function graceExpiredTurnLease(
   if (!turn.open || isTerminalTurnState(turn.state)) return;
   if (turnExceededAbsoluteLimit(turn.turnStartedAt, now)) {
     await closeTurn(ctx, turn, "error", {
-      error: "Turn exceeded the 2-hour limit",
+      error: TURN_BACKSTOP_ERROR,
     });
     return;
   }
@@ -493,7 +494,7 @@ export async function closeTurnForWorkflow(
  * completion holds no current lease, so the caller drops it. True: the caller
  * handles it; the turn is closed here, since
  * the agent's work is over once it reports (the workflow's own steps after
- * that are covered by the 2-hour backstop, as before).
+ * that are covered by the `TURN_BACKSTOP_MS` backstop, as before).
  */
 export async function settleAgentTurnCompletion(
   ctx: MutationCtx,

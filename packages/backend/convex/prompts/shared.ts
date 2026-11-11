@@ -1,10 +1,10 @@
 import { CHAT_LOG_AGENT_TITLE_MAX } from "@eva/shared/chatLog";
-import { PERSONALISATION_PRESETS } from "../validators";
+import { PERSONALISATION_PRESETS, type RoleUser } from "../validators";
 import { primaryLinkPath } from "../_sandbox_runtime/workspaceLayout";
 
 /** Builds the custom instructions block from a user's role preset and custom instructions. */
 export function buildCustomInstructionsBlock(
-  role: "business" | "dev" | "designer" | undefined,
+  role: RoleUser | undefined,
   customInstructions: string | undefined,
 ): string {
   const parts: string[] = [];

@@ -2,6 +2,7 @@ import { useMutation } from "convex/react";
 import { CenteredSpinner } from "@vvedantb/ui";
 import { api } from "@eva/backend";
 import type { Doc, Id } from "@eva/backend";
+import { sandboxStartupEntityId } from "@eva/shared";
 import { useEffect, useRef, useState } from "react";
 import { useChatTranscript } from "@/lib/hooks/useChatTranscript";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
@@ -96,7 +97,7 @@ export function SessionDetailClient({
   );
   const startupStreaming = useHeldQuery(
     api.streaming.get,
-    isRouteActive ? { entityId: `session-startup-${sessionId}` } : "skip",
+    isRouteActive ? { entityId: sandboxStartupEntityId({ kind: "session", sessionId }) } : "skip",
   );
   // Names the browser tab. Gated on `isRouteActive`: up to five session shells
   // stay mounted at once, and a hidden one must not title the tab.

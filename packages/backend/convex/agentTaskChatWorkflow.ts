@@ -15,7 +15,7 @@ import {
   workflowCompleteValidator,
   normalizeAIModel,
   roleValidator,
-  taskSandboxStatusValidator,
+  sessionStatusValidator,
   turnCheckpointArgs,
   turnLeaseFenceArgs,
   usesChatDaemon,
@@ -28,6 +28,7 @@ import {
 import { resolveTaskWorkflowBaseBranchForTask } from "./_taskWorkflow/resolveBaseBranch";
 import { buildTaskBranchName } from "./_git/branchNames";
 import { seedSandboxStartupActivity } from "./_sandbox/startupActivity";
+import { sandboxOwnerKey, sandboxStartupEntityId } from "@eva/shared";
 import {
   drainChatQueueQuietly,
   dropComposerUserRow,
@@ -159,7 +160,7 @@ async function buildTaskChatTurnPrompt(
     devPort: task.devPort ?? repo.devPort,
     readableRepos,
     runtime: {
-      ownerKey: `task-${args.taskId}`,
+      ownerKey: sandboxOwnerKey({ kind: "task", taskId: args.taskId }),
       prUrl,
       devCommand: task.devCommand ?? repo.devCommand,
       startupCommands: repo.startupCommands,
@@ -1175,7 +1176,7 @@ export const markTaskSandboxStartingForChat = internalMutation({
     });
     await seedSandboxStartupActivity(
       ctx.db,
-      `task-sandbox-startup-${args.taskId}`,
+      sandboxStartupEntityId({ kind: "task", taskId: args.taskId }),
     );
     return null;
   },
@@ -1191,7 +1192,7 @@ export const getChatData = internalQuery({
   },
   returns: v.object({
     sandboxId: v.optional(v.string()),
-    sandboxStatus: v.optional(taskSandboxStatusValidator),
+    sandboxStatus: v.optional(sessionStatusValidator),
     repoOwner: v.string(),
     repoName: v.string(),
     repoId: v.id("githubRepos"),

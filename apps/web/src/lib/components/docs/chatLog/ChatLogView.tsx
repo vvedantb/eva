@@ -17,7 +17,8 @@ import {
   sessionSourceViewAllClass,
 } from "@/lib/components/sandbox/SessionSourcePane";
 import type { ChatSourceArg } from "@/lib/components/sandbox/chatSource";
-import { chatLogKindParser, chatLogKinds } from "@/lib/search-params";
+import { CHAT_LOG_ENTRY_KINDS } from "@eva/backend";
+import { chatLogKindParser } from "@/lib/search-params";
 import { downloadMarkdownFile } from "@/lib/utils/downloadMarkdownFile";
 import { AddLogEntryDialog } from "./AddLogEntryDialog";
 import { ChatLogEntryCard } from "./ChatLogEntryCard";
@@ -148,7 +149,7 @@ export function ChatLogView({
               role="radiogroup"
               aria-label="Filter by kind"
             >
-              {[null, ...chatLogKinds].map((kind) => (
+              {[null, ...CHAT_LOG_ENTRY_KINDS].map((kind) => (
                 <button
                   key={kind ?? "all"}
                   type="button"

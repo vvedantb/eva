@@ -54,39 +54,10 @@ interface ProjectsTimelineProps {
 
 // status.color is only used by the sidebar dot fallback (we supply a phase icon
 // instead), but GanttFeature requires it, so map phases to their bar colour.
-const phaseStatusMap: Record<ProjectPhase, GanttStatus> = {
-  draft: {
-    id: "draft",
-    name: "Draft",
-    color: "rgb(var(--muted-foreground) / 0.5)",
-  },
-  finalized: { id: "finalized", name: "Finalized", color: "rgb(59 130 246)" },
-  in_progress: {
-    id: "in_progress",
-    name: "In Progress",
-    color: "rgb(var(--status-progress-bar))",
-  },
-  business_review: {
-    id: "business_review",
-    name: "Business Review",
-    color: "rgb(var(--status-business-review-bar))",
-  },
-  code_review: {
-    id: "code_review",
-    name: "Code Review",
-    color: "rgb(var(--status-code-review-bar))",
-  },
-  completed: {
-    id: "completed",
-    name: "Merged",
-    color: "rgb(var(--status-done-bar))",
-  },
-  cancelled: {
-    id: "cancelled",
-    name: "Cancelled",
-    color: "rgb(var(--status-cancelled-bar))",
-  },
-};
+function phaseStatus(phase: ProjectPhase): GanttStatus {
+  const { label, barColor } = phaseConfig[phase];
+  return { id: phase, name: label, color: barColor };
+}
 
 /** Lives inside GanttProvider so it can read scrollToToday from context and
  *  hand it to the toolbar, which renders outside the provider. */
@@ -176,7 +147,7 @@ export function ProjectsTimeline({
         name: project.title,
         startAt: new Date(project.projectStartDate),
         endAt: new Date(project.projectEndDate),
-        status: phaseStatusMap[project.phase],
+        status: phaseStatus(project.phase),
       });
     } else {
       unscheduled.push(project);

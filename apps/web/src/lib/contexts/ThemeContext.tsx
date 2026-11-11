@@ -4,7 +4,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { useThemeMode, type ThemeMode } from "@/lib/hooks/useThemeMode";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
-import { api } from "@eva/backend";
+import { DEFAULT_ACCENT_COLOR, api } from "@eva/backend";
 import { writeCustomThemeHint } from "@/lib/contexts/themeHint";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import {
@@ -43,7 +43,7 @@ function clearAccentOverride() {
 }
 
 function applyCustomThemeVars(customTheme: CustomTheme, _isDark: boolean) {
-  const accentColor = customTheme.accentColor ?? "zinc";
+  const accentColor = customTheme.accentColor ?? DEFAULT_ACCENT_COLOR;
   const radius = customTheme.radius ?? "xl";
   const fontFamily = customTheme.fontFamily ?? "inter";
   const letterSpacing = customTheme.letterSpacing ?? "tight";

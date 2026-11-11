@@ -23,10 +23,7 @@ import {
 import { defineTool, type EvaTool } from "./registry";
 import { getEvaBaseUrl } from "../_env/webAppUrl";
 import { PREVIEW_GRANT_PARAM } from "../previewGrantConfig";
-import { previewWakePath } from "@eva/shared";
-
-/** Port the Preview pane falls back to when nothing recorded a dev port. */
-const DEFAULT_PREVIEW_PORT = 3000;
+import { DEFAULT_PREVIEW_PORT, previewWakePath } from "@eva/shared";
 
 /**
  * Turns a live preview URL into one that is safe to hand a person: the grant
