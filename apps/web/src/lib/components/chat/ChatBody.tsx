@@ -952,7 +952,14 @@ function ChatBodyInner({
           className="gap-3 p-3 max-w-3xl mx-auto w-full"
           // No native scroll anchoring: ChatEarlierTurnsLoader holds the
           // reader's place itself, and two corrections would add up.
-          scrollClassName="[container-type:size] [overflow-anchor:none]"
+          // Until the backlog commits, the content is only the last turn: the
+          // thumb filled the whole track, then jumped to the bottom when the
+          // older turns landed. A transparent thumb keeps the gutter's width.
+          scrollClassName={
+            displayMessages.length > 0 && !backlogReady
+              ? "[container-type:size] [overflow-anchor:none] [scrollbar-color:transparent_transparent]"
+              : "[container-type:size] [overflow-anchor:none]"
+          }
         >
           {displayMessages.length === 0 ? (
             transcriptTail ? (
