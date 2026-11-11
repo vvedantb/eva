@@ -11,13 +11,12 @@ import {
   visibleChatMessages,
   chatNeedsOtherUserDirectory,
   readableSendError,
-  sandboxComposerState,
-  SANDBOX_CHAT_COPY,
   stripErrorPrefix,
   turnErrorTitle,
   type ChatBodyMessage,
 } from "./chatBodyUtils";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
+import { sandboxComposerState, SANDBOX_CHAT_COPY } from "@eva/shared";
 
 type TestMessage = {
   role: "user" | "assistant";

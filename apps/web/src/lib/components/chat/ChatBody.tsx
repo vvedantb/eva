@@ -43,6 +43,7 @@ import {
   collectForkPrefix,
   forkThreadTitle,
   formatForkPrompt,
+  SANDBOX_CHAT_COPY,
 } from "@eva/shared";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
 import { appendCitationsToPrompt } from "@/lib/components/chat/assistantCitation";
@@ -98,7 +99,6 @@ import {
   firstNameByUserId,
   isOtherUserChatMessage,
   otherUserIdsInChat,
-  SANDBOX_CHAT_COPY,
   TRANSCRIPT_TURN_WINDOW,
   visibleChatMessages,
   type ChatBodyMessage,

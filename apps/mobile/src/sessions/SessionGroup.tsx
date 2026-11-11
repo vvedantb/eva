@@ -2,6 +2,7 @@ import type { api } from "@eva/backend";
 import { prStateLabel, prStateTone, type PrState, type PrStateTone } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconChevronDown, IconDots, IconGitPullRequest, IconPlus } from "@tabler/icons-react-native";
+import { SwipeableRow, swipeActionsAccessibility, type SwipeAction } from "@vvedantb/native-ui/primitives";
 import { palette, tokens, withAlpha } from "@vvedantb/native-ui/theme";
 import type { FunctionReturnType } from "convex/server";
 import { useRouter } from "expo-router";
@@ -213,42 +214,55 @@ export function SessionGroupFooter({ section, onToggleExpanded }: { section: Ses
 }
 
 /** The web `SidebarSessionItem` row: status, title, PR icon, age. A long press opens its menu (the web right-click). */
-export function SessionListRow({ session, onLongPress }: { session: SessionRow; onLongPress: () => void }) {
+export function SessionListRow({
+  session,
+  onLongPress,
+  swipeAction,
+}: {
+  session: SessionRow;
+  onLongPress: () => void;
+  /** The row menu's Archive (or Unarchive), revealed by a swipe left. */
+  swipeAction: SwipeAction;
+}) {
   const router = useRouter();
   const scheme = useScheme();
   const muted = tokens.color.muted[scheme];
+  const swipeA11y = swipeActionsAccessibility([swipeAction]);
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={session.title}
-      onPress={() => router.push({ pathname: "/chat/[target]", params: { target: session.sessionId } })}
-      onLongPress={onLongPress}
-      // VoiceOver and TalkBack reach the menu through the actions rotor.
-      accessibilityActions={[{ name: "longpress", label: "Session actions" }]}
-      onAccessibilityAction={(event) => {
-        if (event.nativeEvent.actionName === "longpress") onLongPress();
-      }}
-      hitSlop={ROW_SLOP}
-      className="flex-row items-center gap-2 px-4 py-1.5 active:opacity-70"
-    >
-      <RowStatus
-        awaitingAnswer={session.isAwaitingAnswer}
-        // `cancelled` is the muted 40% dot, the web idle `bg-muted-foreground/40`.
-        tone={session.status === "active" ? "active" : "cancelled"}
-      />
-      {/* The web title: `text-2sm leading-[18px]` (13 / 18) at 80% foreground. */}
-      <Text
-        numberOfLines={1}
-        className="font-instrument-sans flex-1 text-[13px] leading-[18px]"
-        style={{ color: withAlpha(tokens.color.foreground[scheme], 0.8), letterSpacing: 0.065 }}
+    <SwipeableRow trailingActions={[swipeAction]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={session.title}
+        onPress={() => router.push({ pathname: "/chat/[target]", params: { target: session.sessionId } })}
+        onLongPress={onLongPress}
+        // VoiceOver and TalkBack reach the menu and the swipe action through the actions rotor.
+        accessibilityActions={[{ name: "longpress", label: "Session actions" }, ...swipeA11y.accessibilityActions]}
+        onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === "longpress") onLongPress();
+          else swipeA11y.onAccessibilityAction(event);
+        }}
+        hitSlop={ROW_SLOP}
+        className="flex-row items-center gap-2 px-4 py-1.5 active:opacity-70"
       >
-        {session.title}
-      </Text>
-      {session.prUrl ? <PrIcon state={session.prState} scheme={scheme} /> : null}
-      <Text className="font-instrument-sans" style={{ ...TEXT_2XS, color: muted, fontVariant: ["tabular-nums"] }}>
-        {timeAgo(session.updatedAt)}
-      </Text>
-    </Pressable>
+        <RowStatus
+          awaitingAnswer={session.isAwaitingAnswer}
+          // `cancelled` is the muted 40% dot, the web idle `bg-muted-foreground/40`.
+          tone={session.status === "active" ? "active" : "cancelled"}
+        />
+        {/* The web title: `text-2sm leading-[18px]` (13 / 18) at 80% foreground. */}
+        <Text
+          numberOfLines={1}
+          className="font-instrument-sans flex-1 text-[13px] leading-[18px]"
+          style={{ color: withAlpha(tokens.color.foreground[scheme], 0.8), letterSpacing: 0.065 }}
+        >
+          {session.title}
+        </Text>
+        {session.prUrl ? <PrIcon state={session.prState} scheme={scheme} /> : null}
+        <Text className="font-instrument-sans" style={{ ...TEXT_2XS, color: muted, fontVariant: ["tabular-nums"] }}>
+          {timeAgo(session.updatedAt)}
+        </Text>
+      </Pressable>
+    </SwipeableRow>
   );
 }
 

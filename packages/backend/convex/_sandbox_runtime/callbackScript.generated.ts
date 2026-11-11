@@ -7241,7 +7241,7 @@ function handleCancelRequested(agentRunner) {
   });
 }
 function canTakeSteer() {
-  return supervisor.phase === "running" && supervisor.currentTurn?.kind === "real";
+  return supervisor.phase === "running" && supervisor.currentTurn?.kind === "real" && !callbackState.awaitingQuestionAnswer;
 }
 function startClaimWatcher(agentRunner) {
   void (async () => {

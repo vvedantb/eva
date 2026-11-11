@@ -5,7 +5,10 @@ import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import type { ChatAlert, ChatSurfaceAdapter } from "./surfaceAdapters";
 import { closeTurnForWorkflow } from "./turnStore";
-import { detachPendingQuestions } from "../pendingQuestions";
+import {
+  detachPendingQuestions,
+  findOpenChatQuestion,
+} from "../pendingQuestions";
 
 /**
  * Cancels a workflow by ID and clears streaming activity for associated
@@ -88,17 +91,7 @@ export async function finalizeStaleChatTurn<TId extends ChatId, TEntity>(
   // card renders only on the last message, so no alert goes after it — the
   // turn was waiting on the user, not failing.
   await detachPendingQuestions(ctx.db, String(id));
-  const tail = await ctx.db
-    .query("messages")
-    .withIndex("by_parent", (q) => q.eq("parentId", id))
-    .order("desc")
-    .first();
-  const questionLeftForUser =
-    tail !== null &&
-    tail.role === "assistant" &&
-    tail.isSystemAlert !== true &&
-    tail.pendingQuestion !== undefined;
-  if (!questionLeftForUser) {
+  if ((await findOpenChatQuestion(ctx.db, id)) === null) {
     await ctx.db.insert("messages", {
       parentId: id,
       role: "assistant",

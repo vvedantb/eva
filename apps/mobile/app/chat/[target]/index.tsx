@@ -10,6 +10,8 @@ import {
   formatForkPrompt,
   isOtherUserChatMessage,
   otherUserIdsInChat,
+  SANDBOX_CHAT_COPY,
+  sandboxComposerState,
   type SessionMenuAction,
   toRepoRelativePath,
 } from "@eva/shared";
@@ -35,7 +37,8 @@ import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { KeyboardAvoidingView, Linking, View } from "react-native";
+import { Linking, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AssistantMessage } from "@/chat/AssistantMessage";
 import { AttachButton } from "@/chat/AttachButton";
 import { SandboxBranchChip } from "@/chat/BranchChips";
@@ -71,6 +74,7 @@ export default function ChatScreen() {
   const { target } = useLocalSearchParams<{ target: string }>();
   const router = useRouter();
   const scheme = useScheme();
+  const insets = useSafeAreaInsets();
   const chat = useQuery(api.mobile.getChat, { target });
   const parentId = chat?.parentId;
   const messages = useQuery(api.messages.listByParent, parentId ? { parentId } : "skip");
@@ -121,6 +125,21 @@ export default function ChatScreen() {
   const teammateNames = firstNameByUserId(teammates ?? []);
   const teammateById = new Map((teammates ?? []).map((user) => [user._id, user]));
   const latestReplyId = visible.findLast((message) => message.role === "assistant")?._id;
+  // The web composer's placeholder: asleep, a send wakes Eva up; mid-turn, a follow-up.
+  // The phone has no usage-limit hold yet (the web's needs a ticking clock), so that line never shows.
+  // Awake, the web's "Ask Eva anything... / for skills · @ to mention" would wrap the one-row pill
+  // (a native field cannot ellipsise its placeholder), so the phone keeps the first part.
+  const composerState = sandboxComposerState({
+    isSandboxActive: chat.sandboxActive,
+    isSwitchingAccount: modelPick.switching,
+    isExecuting: working,
+    isUsageLimitHeld: false,
+  });
+  const placeholder = working
+    ? "Add a follow-up..."
+    : composerState.placeholder === SANDBOX_CHAT_COPY.activePlaceholder
+      ? "Ask Eva anything..."
+      : composerState.placeholder;
   // A changed file opens the PR diff, as the web Review pane; simple view has no card, as the web.
   const openDiff = simpleView
     ? undefined
@@ -278,23 +297,21 @@ export default function ChatScreen() {
         <ConversationDock>
           {pending && questions ? (
             // The web dock: p-3 around the card, in place of the composer, and the thread's 10 more on the right.
-            // It rises with the keyboard (its "Other..." field), as the composer's own `KeyboardAvoidingView` does.
-            <KeyboardAvoidingView behavior="padding">
-              <View className="p-3 pr-[22px]">
-                <ChoiceQuestion
-                  key={pending.toolUseId}
-                  questions={questions}
-                  buttonWeight="semibold"
-                  onSubmit={async (answers) => {
-                    try {
-                      await answer({ entityId: chat.parentId, toolUseId: pending.toolUseId, answer: JSON.stringify(answers) });
-                    } catch {
-                      toast.error("Couldn't submit answer");
-                    }
-                  }}
-                />
-              </View>
-            </KeyboardAvoidingView>
+            // Over the bottom inset, as the composer: the dock rises with the keyboard (its "Other..." field) less that inset.
+            <View className="p-3 pr-[22px]" style={{ paddingBottom: insets.bottom + 12 }}>
+              <ChoiceQuestion
+                key={pending.toolUseId}
+                questions={questions}
+                buttonWeight="semibold"
+                onSubmit={async (answers) => {
+                  try {
+                    await answer({ entityId: chat.parentId, toolUseId: pending.toolUseId, answer: JSON.stringify(answers) });
+                  } catch {
+                    toast.error("Couldn't submit answer");
+                  }
+                }}
+              />
+            </View>
           ) : chat.canReply ? (
             // Eva's web pill composer, the + on the muted fill, 10 more in on the right as the
             // thread. Send stays ready during a turn (a send queues behind it) and Stop sits beside
@@ -307,7 +324,7 @@ export default function ChatScreen() {
                 onChangeText={composer.setText}
                 onSubmit={handleSend}
                 menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} /> : null}
-                placeholder={working ? "Add a follow-up..." : "Ask Eva anything..."}
+                placeholder={placeholder}
                 leading={
                   <AttachButton onPress={() => void attachments.pick()} />
                 }
