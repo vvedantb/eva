@@ -26,7 +26,7 @@
     "@rn-primitives/slot": "^1.5.2",
     "@rn-primitives/switch": "^1.5.2",
     "@tabler/icons-react-native": "^3.49.0",
-    "@vvedantb/native-ui": "github:vvedantb/packages#491caa23914af0357ede044a8e20081918e5dd59&path:/packages/native-ui",
+    "@vvedantb/native-ui": "github:vvedantb/packages#60dc5b9803ab9b65acac26b7264c6934c2b51031&path:/packages/native-ui",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "convex": "^1.40.0",

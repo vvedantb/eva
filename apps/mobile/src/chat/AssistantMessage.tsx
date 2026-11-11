@@ -53,17 +53,12 @@ import {
 import { Markdown } from "@vvedantb/native-ui/markdown";
 import { Spinner, Text } from "@vvedantb/native-ui/primitives";
 import { tokens } from "@vvedantb/native-ui/theme";
-import * as Clipboard from "expo-clipboard";
 import { useState, type ComponentType, type ReactNode } from "react";
 import { Pressable, View } from "react-native";
+import { copyText } from "@/ui/copyText";
 import { textColor, useScheme } from "@/ui/theme";
 import { ChangedFilesCard } from "./ChangedFilesCard";
 import { StepDetail } from "./StepDetail";
-
-/** The code block's and table's copy buttons, as the web. */
-const copyText = async (text: string) => {
-  await Clipboard.setStringAsync(text);
-};
 
 /** Same icon per step type as the web trace (`activityStepConfig` in @vvedantb/ui). `status` draws a spinner. */
 const STEP_ICONS: Record<Exclude<ActivityLogStep["type"], "status">, ComponentType<IconProps>> = {
