@@ -15,49 +15,27 @@ Load a chat's messages in pages, newest first, instead of the whole list.
 - The sub-agent roster uses the loaded pages plus live background agents. Old finished sub-agents can drop off.
 - Mobile (`apps/mobile`) keeps `messages.listByParent` without paging. Out of scope.
 
-## Steps
+## Status
 
-0. Measure the baseline on one heavy production chat: bytes on open, time to last-turn paint, time to full transcript, JS heap. Use the loadtest cases plus a browser trace.
+PR 1 (paged history) is built. What changed from the first draft, and why:
 
-### Backend (`packages/backend/convex`)
+- No `usePaginatedQuery`. Its page args carry a per-hook id, so pages never share a cache key: no prefetch, no sharing between hooks. Instead:
+  - Live rows: `listByParent({ since })`, anchored on the oldest row of the first 30-message tail (`useChatTranscript`).
+  - Older rows: one `listByParent({ before, tail })` query whose size doubles (50, 100, 200, 400, then `before` alone), in `useOlderTranscript`. It re-reads at most twice what the reader loads.
+- `hasMessagesBefore` (one row read) says whether history exists before any is loaded. A quick task's first run waits on it.
+- The user-row query is `listUserMessagesByParent`. It returns full content, because up-arrow recall needs it.
+- Hidden shells hold only the tail (from #1247); loaded older rows drop and reload on return.
 
-1. `messages.listPageByParent({ parentId, paginationOpts })`. Index `by_parent`, order desc, `.paginate()`. Run each page through the same URL resolution and `trimActivityLogForTranscript` as `listByParent`. Share that code, do not copy it.
-2. Schema: add index `by_parent_and_role` (`["parentId", "role"]`) on `messages`.
-3. `messages.userIndexByParent({ parentId })`. Reads only user rows through `by_parent_and_role`. User rows have no `activityLog`, so the read is small. Returns `{ _id, timestamp, preview }` with a preview of 120 characters or less.
-4. Schema: add search index `search_content` on `messages.content` with filter field `parentId`. `messages.searchByParent({ parentId, query })` returns matching ids, oldest first.
-5. Fork: move the prefix build to the server. The fork mutation takes `throughMessageId` and collects the prefix itself. The client no longer needs the full list to fork.
-6. Remove the `tail` argument from `listByParent` when the web app no longer uses it. Mobile keeps the full form.
+## Remaining: PR 2
 
-### Web (`apps/web`)
-
-7. `useChatTranscript` becomes a paged hook: `{ messages, status, loadOlder, ensureLoaded(messageId) }`.
-   - First page 30 (same as today's tail). Older pages 50.
-   - Use the cached `usePaginatedQuery` from convex-helpers, so cached shells and `prefetchSession` share one subscription.
-   - `"skip"` must keep the loaded pages (hidden session shells), like `useHeldResult` does now.
-   - `ensureLoaded(id)` calls `loadOlder` until the row is present.
-8. `ChatBody`: keep the render window (`TRANSCRIPT_TURN_WINDOW`). When the window reaches the oldest loaded row, `ChatEarlierTurnsLoader` calls `loadOlder` and keeps the reader's place with the existing anchor.
-9. Jump rail ticks, and up-arrow recall (`buildMessageHistory`), come from `userIndexByParent`. A tick click calls `ensureLoaded`, then `revealMessage`.
-10. Find bar: the query goes to `searchByParent`. Stepping to a match calls `ensureLoaded`. Highlight in the DOM stays as it is.
-11. Targets older than the loaded pages call `ensureLoaded` first: a `?message=` link, and a NEW divider (`newSinceAt`). Cap the NEW divider load at 200 messages. Above the cap, the divider goes at the top of what is loaded.
-12. Optimistic send (`useChatSend`): write to the paged query with `insertAtTop` from `convex/react`. Remove the two `listByParent` writes.
-13. `prefetchSession`: prewarm the first page only.
-14. `useSubagentRoster`, `useSessionAnnotationSend`, `isChatTurnExecuting`: read the loaded pages. They need only recent rows.
-15. Update `packages/backend/loadtest/cases.ts` with the new queries.
-
-### Verify
-
-16. On a heavy chat, measure step 0 again: bytes, paint times, heap.
-17. Use the browser and the per-frame scroll probe from PR #1251:
-    - Open a chat and switch back to it: no flicker, and the chat lands at the bottom.
-    - Scroll up through several pages with no jump.
-    - Click an old rail tick, open an old `?message=` link, and step to an old find match. Each one loads pages and lands on the row.
-    - Fork from an old message.
-    - Send during a turn: the optimistic row appears and the reply streams in.
-18. Check all three chat surfaces: sessions, quick tasks and projects.
-19. `/ship`.
+1. Schema: search index `search_content` on `messages.content`, filter field `parentId`. `messages.searchByParent({ parentId, query })` returns matching ids, oldest first. Whole words and word starts are fine (agreed 2026-11-11).
+2. Find bar: the query goes to `searchByParent`; stepping to a match calls `reach({ messageId })`. Remove the "load all" stopgap in `revealFirstFindMatch`.
+3. Fork: the fork mutation takes `throughMessageId` and builds the prefix on the server. Remove the "load all" stopgap in `openFork`.
+4. When nothing calls `before` without `tail` any more, drop that form from `listByParent`.
+5. Measure on a heavy production chat: bytes on open, time to last-turn paint, JS heap. Compare with the loadtest numbers above.
+6. `/ship`.
 
 ## Risks
 
-- A Convex search index matches words and prefixes, not substrings. "auth" finds "authentication". "thenticat" finds nothing. Today's find matches substrings. Decide whether this is acceptable before step 10.
-- Paged queries in Convex can split or merge pages when rows are added. New messages land in page 0. Check that the render window pin (a row id) still holds.
-- A `?message=` link to a very old message loads every page down to it. That is the same cost as today, but only for that case.
+- A `?message=` link to a very old message loads every step down to it: the same cost as before, but only in that case.
+- Until PR 2, find and fork load the whole chat on use.
