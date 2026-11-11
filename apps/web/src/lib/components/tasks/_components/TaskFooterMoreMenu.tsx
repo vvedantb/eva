@@ -20,7 +20,6 @@ import type { TaskStatus } from "../TaskStatusBadge";
 
 export interface MoreMenuVisibility {
   showResolveConflicts: boolean;
-  showRunStartupCommands: boolean;
   showRunDevServer: boolean;
   showRunBackgroundCommands: boolean;
   hasSandboxCommandItems: boolean;
@@ -51,17 +50,15 @@ export function getMoreMenuVisibility({
     !simpleView &&
     !hasActiveRun &&
     (status === "code_review" || status === "business_review");
-  const showRunStartupCommands = !simpleView && canStartSandbox;
   const showRunDevServer = !simpleView && isSandboxActive && canStartSandbox;
   const showRunBackgroundCommands =
     !simpleView && isSandboxActive && canStartSandbox;
   const hasSandboxCommandItems =
-    showRunStartupCommands || showRunDevServer || showRunBackgroundCommands;
+    showRunDevServer || showRunBackgroundCommands;
   const showMoreMenu =
     isHeader || showResolveConflicts || hasSandboxCommandItems || hasPrItems;
   return {
     showResolveConflicts,
-    showRunStartupCommands,
     showRunDevServer,
     showRunBackgroundCommands,
     hasSandboxCommandItems,
@@ -75,11 +72,9 @@ export interface TaskFooterMoreMenuProps {
   buttonSize: "default" | "sm";
   iconSize: number;
   isStarting: boolean;
-  isRetryingStartupCommands: boolean;
   isRunningDevServer: boolean;
   isRunningBackgroundCommands: boolean;
   onResolveConfirm: () => void;
-  onRunStartupCommands: () => void;
   onRunDevServer: () => void;
   onRunBackgroundCommands: () => void;
 }
@@ -90,11 +85,9 @@ export function TaskFooterMoreMenu({
   buttonSize,
   iconSize,
   isStarting,
-  isRetryingStartupCommands,
   isRunningDevServer,
   isRunningBackgroundCommands,
   onResolveConfirm,
-  onRunStartupCommands,
   onRunDevServer,
   onRunBackgroundCommands,
 }: TaskFooterMoreMenuProps) {
@@ -114,11 +107,9 @@ export function TaskFooterMoreMenu({
         <TaskSandboxMenuItems
           visibility={visibility}
           isStarting={isStarting}
-          isRetryingStartupCommands={isRetryingStartupCommands}
           isRunningDevServer={isRunningDevServer}
           isRunningBackgroundCommands={isRunningBackgroundCommands}
           onResolveConfirm={onResolveConfirm}
-          onRunStartupCommands={onRunStartupCommands}
           onRunDevServer={onRunDevServer}
           onRunBackgroundCommands={onRunBackgroundCommands}
         />
@@ -136,11 +127,9 @@ export type TaskSandboxMenuItemsProps = Pick<
   TaskFooterMoreMenuProps,
   | "visibility"
   | "isStarting"
-  | "isRetryingStartupCommands"
   | "isRunningDevServer"
   | "isRunningBackgroundCommands"
   | "onResolveConfirm"
-  | "onRunStartupCommands"
   | "onRunDevServer"
   | "onRunBackgroundCommands"
 >;
@@ -149,11 +138,9 @@ export type TaskSandboxMenuItemsProps = Pick<
 export function TaskSandboxMenuItems({
   visibility,
   isStarting,
-  isRetryingStartupCommands,
   isRunningDevServer,
   isRunningBackgroundCommands,
   onResolveConfirm,
-  onRunStartupCommands,
   onRunDevServer,
   onRunBackgroundCommands,
 }: TaskSandboxMenuItemsProps) {
@@ -177,11 +164,6 @@ export function TaskSandboxMenuItems({
         <DropdownMenuSeparator />
       ) : null}
       <SandboxCommandMenuItems
-        startupCommands={{
-          show: visibility.showRunStartupCommands,
-          busy: isRetryingStartupCommands,
-          onRun: onRunStartupCommands,
-        }}
         devServer={{
           show: visibility.showRunDevServer,
           busy: isRunningDevServer,

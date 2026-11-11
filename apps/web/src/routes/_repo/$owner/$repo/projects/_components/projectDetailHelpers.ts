@@ -52,20 +52,14 @@ export function getProjectMenuFlags(
   sandbox: ProjectSandboxState,
 ) {
   const canBuildProject = BUILDABLE_PROJECT_PHASES.includes(project.phase);
-  const showRetryStartupCommands =
-    sandbox.canStartSandbox &&
-    !sandbox.isSandboxStarting &&
-    !sandbox.isSandboxStopping;
   const showRunBackgroundCommands = sandbox.isSandboxActive;
   const showResolveConflicts =
     isLivePrState(project.prState) &&
     !project.activeBuildWorkflowId &&
     (project.phase === "business_review" || project.phase === "code_review");
-  const hasSandboxCommandItems =
-    showRetryStartupCommands || showRunBackgroundCommands;
+  const hasSandboxCommandItems = showRunBackgroundCommands;
   return {
     canBuildProject,
-    showRetryStartupCommands,
     showRunBackgroundCommands,
     showResolveConflicts,
     hasSandboxCommandItems,

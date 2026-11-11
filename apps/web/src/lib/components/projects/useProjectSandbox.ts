@@ -26,17 +26,12 @@ export function useProjectSandbox(
   const stopProjectSandboxMutation = useMutation(
     api.projects.stopProjectSandbox,
   );
-  const retryStartupCommandsMutation = useMutation(
-    api.projects.retryProjectStartupCommands,
-  );
   const runBackgroundCommandsMutation = useMutation(
     api.projects.runProjectBackgroundCommands,
   );
 
   const [isStartingLocal, setIsStartingLocal] = useState(false);
   const [isStoppingLocal, setIsStoppingLocal] = useState(false);
-  const [isRetryingStartupCommands, setIsRetryingStartupCommands] =
-    useState(false);
   const [isRunningBackgroundCommands, setIsRunningBackgroundCommands] =
     useState(false);
 
@@ -75,17 +70,6 @@ export function useProjectSandbox(
     setIsStoppingLocal(false);
   };
 
-  const handleRetryStartupCommands = async () => {
-    setIsRetryingStartupCommands(true);
-    try {
-      await retryStartupCommandsMutation({ projectId });
-    } catch (err) {
-      console.error("Failed to retry project startup commands:", err);
-      toast.error("Could not rerun the startup commands. Try again.");
-    }
-    setIsRetryingStartupCommands(false);
-  };
-
   const handleRunBackgroundCommands = async () => {
     setIsRunningBackgroundCommands(true);
     try {
@@ -106,8 +90,6 @@ export function useProjectSandbox(
     sandboxId,
     handleStartSandbox,
     handleStopSandbox,
-    handleRetryStartupCommands,
-    isRetryingStartupCommands,
     handleRunBackgroundCommands,
     isRunningBackgroundCommands,
   };

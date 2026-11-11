@@ -26,7 +26,6 @@ import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import {
   StopConfirmDialog,
   ResolveConfirmDialog,
-  StartupCommandsConfirmDialog,
 } from "@/lib/components/tasks/_components/TaskConfirmDialogs";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";
 import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
@@ -76,8 +75,6 @@ export function ProjectDetailClient({
   const [isStoppingBuild, setIsStoppingBuild] = useState(false);
   const [showStopBuildConfirm, setShowStopBuildConfirm] = useState(false);
   const [showResolveConfirm, setShowResolveConfirm] = useState(false);
-  const [showStartupCommandsConfirm, setShowStartupCommandsConfirm] =
-    useState(false);
   const [isCreatingPr, setIsCreatingPr] = useState(false);
   const [isResolvingConflicts, setIsResolvingConflicts] = useState(false);
   const [prError, setPrError] = useState<string | null>(null);
@@ -114,8 +111,6 @@ export function ProjectDetailClient({
     isSandboxStopping,
     sandboxStartupActivity,
     sandboxId: projectSandboxId,
-    handleRetryStartupCommands,
-    isRetryingStartupCommands,
   } = sandbox;
 
   const prewarmChatDaemon = useMutation(
@@ -296,7 +291,6 @@ export function ProjectDetailClient({
             onResolveConflicts={handleResolveConflicts}
             onStopBuild={handleStopBuild}
             setShowResolveConfirm={setShowResolveConfirm}
-            setShowStartupCommandsConfirm={setShowStartupCommandsConfirm}
             setShowStopBuildConfirm={setShowStopBuildConfirm}
             setShowPlanModal={setShowPlanModal}
             setShowChatModal={setShowChatModal}
@@ -356,13 +350,6 @@ export function ProjectDetailClient({
         onOpenChange={setShowResolveConfirm}
         onConfirm={handleResolveConflicts}
         isLoading={isResolvingConflicts}
-      />
-
-      <StartupCommandsConfirmDialog
-        open={showStartupCommandsConfirm}
-        onOpenChange={setShowStartupCommandsConfirm}
-        onConfirm={handleRetryStartupCommands}
-        isLoading={isRetryingStartupCommands}
       />
 
       {parsedSpec && (

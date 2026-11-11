@@ -53,7 +53,6 @@ interface TaskFooterProps {
   isSandboxActive: boolean;
   isSandboxStarting: boolean;
   isSandboxStopping: boolean;
-  isRetryingStartupCommands: boolean;
   isRunningDevServer: boolean;
   isRunningBackgroundCommands: boolean;
   canCreatePr: boolean;
@@ -61,7 +60,6 @@ interface TaskFooterProps {
   onCreatePr: () => void;
   onStartSandbox: () => void;
   onStopSandbox: () => void;
-  onRunStartupCommands: () => void;
   onRunDevServer: () => void;
   onRunBackgroundCommands: () => void;
   onStartExecution: () => void;
@@ -162,7 +160,6 @@ export function TaskFooter({
   isSandboxActive,
   isSandboxStarting,
   isSandboxStopping,
-  isRetryingStartupCommands,
   isRunningDevServer,
   isRunningBackgroundCommands,
   canCreatePr,
@@ -170,7 +167,6 @@ export function TaskFooter({
   onCreatePr,
   onStartSandbox,
   onStopSandbox,
-  onRunStartupCommands,
   onRunDevServer,
   onRunBackgroundCommands,
   onStartExecution,
@@ -274,11 +270,9 @@ export function TaskFooter({
               }}
               visibility={moreMenu}
               isStarting={isStarting}
-              isRetryingStartupCommands={isRetryingStartupCommands}
               isRunningDevServer={isRunningDevServer}
               isRunningBackgroundCommands={isRunningBackgroundCommands}
               onResolveConfirm={onResolveConfirm}
-              onRunStartupCommands={onRunStartupCommands}
               onRunDevServer={onRunDevServer}
               onRunBackgroundCommands={onRunBackgroundCommands}
             />
@@ -289,11 +283,9 @@ export function TaskFooter({
               buttonSize={buttonSize}
               iconSize={iconSize}
               isStarting={isStarting}
-              isRetryingStartupCommands={isRetryingStartupCommands}
               isRunningDevServer={isRunningDevServer}
               isRunningBackgroundCommands={isRunningBackgroundCommands}
               onResolveConfirm={onResolveConfirm}
-              onRunStartupCommands={onRunStartupCommands}
               onRunDevServer={onRunDevServer}
               onRunBackgroundCommands={onRunBackgroundCommands}
             />

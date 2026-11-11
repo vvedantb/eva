@@ -29,7 +29,6 @@ import { TaskFooter } from "./_components/TaskFooter";
 import {
   StopConfirmDialog,
   ResolveConfirmDialog,
-  StartupCommandsConfirmDialog,
   RunDevServerConfirmDialog,
 } from "@/lib/components/tasks/_components/TaskConfirmDialogs";
 import { TaskSandboxPanel } from "./TaskSandboxPanel";
@@ -116,8 +115,6 @@ export function TaskDetailInline({
     setShowStopConfirm,
     showResolveConfirm,
     setShowResolveConfirm,
-    showStartupCommandsConfirm,
-    setShowStartupCommandsConfirm,
     showRunDevServerConfirm,
     setShowRunDevServerConfirm,
     isStarting,
@@ -136,8 +133,6 @@ export function TaskDetailInline({
     handleStartSandbox,
     handleStopSandbox,
     handleSelectSurface,
-    handleRetryStartupCommands,
-    isRetryingStartupCommands,
     handleRunDevServer,
     isRunningDevServer,
     handleRunBackgroundCommands,
@@ -528,18 +523,11 @@ export function TaskDetailInline({
         isSandboxActive={isSandboxActive}
         isSandboxStarting={isSandboxStarting}
         isSandboxStopping={isSandboxStopping}
-        isRetryingStartupCommands={isRetryingStartupCommands}
         canCreatePr={canCreatePr}
         isCreatingPr={isCreatingPr}
         onCreatePr={handleCreatePr}
         onStartSandbox={handleStartSandbox}
         onStopSandbox={handleStopSandbox}
-        onRunStartupCommands={() =>
-          requestConfirm(
-            () => setShowStartupCommandsConfirm(true),
-            handleRetryStartupCommands,
-          )
-        }
         onRunDevServer={() =>
           requestConfirm(
             () => setShowRunDevServerConfirm(true),
@@ -621,12 +609,6 @@ export function TaskDetailInline({
         onOpenChange={setShowResolveConfirm}
         onConfirm={handleResolveConflicts}
         isLoading={isStarting}
-      />
-      <StartupCommandsConfirmDialog
-        open={showStartupCommandsConfirm}
-        onOpenChange={setShowStartupCommandsConfirm}
-        onConfirm={handleRetryStartupCommands}
-        isLoading={isRetryingStartupCommands}
       />
       <RunDevServerConfirmDialog
         open={showRunDevServerConfirm}

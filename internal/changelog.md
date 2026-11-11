@@ -1,5 +1,13 @@
 # Changelog
 
+## Menus: Run Startup Commands removed; PR rows narrower
+
+Date: 2026-11-11
+
+WHY: Run Startup Commands can reseed a sandbox and reset its local data, which is too risky one click away in a general menu, and session menus never had it. The menus also looked wide.
+
+Architectural: `SandboxCommandMenuItems` drops `startupCommands`; the task and project flags, handlers, busy state and `StartupCommandsConfirmDialog` go with it. The backend mutations stay: the Eva MCP `rerun_startup_commands` tool calls them. `PrActionsSubmenus` rows cap at `max-w-56` (was `max-w-64`).
+
 ## Quick task and project menus: one menu per card and header
 
 Date: 2026-11-11

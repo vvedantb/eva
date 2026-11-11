@@ -73,7 +73,7 @@ export function PrActionsSubmenus({
   );
   const rows = ordered.map((pr) => (
     <Sub key={pr._id}>
-      <SubTrigger className="max-w-64 items-start">
+      <SubTrigger className="max-w-56 items-start">
         {/* No branch line: a chat's PRs mostly share one session branch. */}
         <PrRow
           status={pr.state === "draft" ? "open" : pr.state}

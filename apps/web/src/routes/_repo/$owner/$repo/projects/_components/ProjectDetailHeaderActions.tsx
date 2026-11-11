@@ -66,7 +66,6 @@ interface ProjectDetailHeaderActionsProps {
   onResolveConflicts: () => Promise<void>;
   onStopBuild: () => Promise<void>;
   setShowResolveConfirm: (open: boolean) => void;
-  setShowStartupCommandsConfirm: (open: boolean) => void;
   setShowStopBuildConfirm: (open: boolean) => void;
   setShowPlanModal: (open: boolean) => void;
   setShowChatModal: (open: boolean) => void;
@@ -87,7 +86,6 @@ export function ProjectDetailHeaderActions({
   onResolveConflicts,
   onStopBuild,
   setShowResolveConfirm,
-  setShowStartupCommandsConfirm,
   setShowStopBuildConfirm,
   setShowPlanModal,
   setShowChatModal,
@@ -149,9 +147,6 @@ export function ProjectDetailHeaderActions({
                       isResolvingConflicts={isResolvingConflicts}
                       onResolveConflicts={onResolveConflicts}
                       setShowResolveConfirm={setShowResolveConfirm}
-                      setShowStartupCommandsConfirm={
-                        setShowStartupCommandsConfirm
-                      }
                     />
                     {hasCommands && prLinks.hasItems ? (
                       <DropdownMenuSeparator />
@@ -252,7 +247,6 @@ function ProjectMoreMenuActionItems({
   isResolvingConflicts,
   onResolveConflicts,
   setShowResolveConfirm,
-  setShowStartupCommandsConfirm,
 }: {
   flags: ProjectMenuFlags;
   sandbox: ProjectSandboxState;
@@ -260,17 +254,13 @@ function ProjectMoreMenuActionItems({
   isResolvingConflicts: boolean;
   onResolveConflicts: () => Promise<void>;
   setShowResolveConfirm: (open: boolean) => void;
-  setShowStartupCommandsConfirm: (open: boolean) => void;
 }) {
   const {
     showResolveConflicts,
     hasSandboxCommandItems,
-    showRetryStartupCommands,
     showRunBackgroundCommands,
   } = flags;
   const {
-    handleRetryStartupCommands,
-    isRetryingStartupCommands,
     handleRunBackgroundCommands,
     isRunningBackgroundCommands,
   } = sandbox;
@@ -301,15 +291,6 @@ function ProjectMoreMenuActionItems({
         <DropdownMenuSeparator />
       ) : null}
       <SandboxCommandMenuItems
-        startupCommands={{
-          show: showRetryStartupCommands,
-          busy: isRetryingStartupCommands,
-          onRun: () =>
-            requestConfirm(
-              () => setShowStartupCommandsConfirm(true),
-              handleRetryStartupCommands,
-            ),
-        }}
         backgroundCommands={{
           show: showRunBackgroundCommands,
           busy: isRunningBackgroundCommands,
