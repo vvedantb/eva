@@ -89,8 +89,11 @@ const OLDER_FIRST_PAGE = 50;
 /** After 50, 100, 200 and 400 older rows, the next step loads all of them. */
 const OLDER_PAGED_STEPS = 4;
 
-/** What a chat needs loaded: one row, or the whole chat (find, fork). */
-export type TranscriptReach = { messageId: string } | "all";
+/**
+ * What a chat needs loaded: one row (a rail tick, a link), or the oldest
+ * older row matching a find query (`searchOlderByParent`).
+ */
+export type TranscriptReach = { messageId: string } | { search: string };
 
 interface OlderState {
   parentId: TranscriptParentId | undefined;
@@ -108,19 +111,9 @@ function olderArgs(
   return { parentId, before, tail: OLDER_FIRST_PAGE * 2 ** (steps - 1) };
 }
 
-function reachSatisfied(
-  reach: TranscriptReach,
-  messages: ReadonlyArray<Pick<TranscriptMessage, "_id">>,
-): boolean {
-  return (
-    reach !== "all" &&
-    messages.some((message) => message._id === reach.messageId)
-  );
-}
-
 /**
  * History above a chat's live rows, loaded only when the reader goes there:
- * scrolling up (`loadOlder`), a jump-rail tick or the find bar (`reach`), or a
+ * scrolling up (`loadOlder`), a jump-rail tick or a find query (`reach`), or a
  * shared message link (`?message=`, read here so the open chat loads down to
  * it).
  *
@@ -129,6 +122,7 @@ function reachSatisfied(
  * new step keeps the previous rows painted until it lands.
  *
  * `hasOlder` is false until the server says there is history above.
+ * `isReaching` is true until a `reach` target is loaded or out of range.
  * `loadOlder` and `reach` only set state, so they keep their identity across
  * renders: ChatBody hands them to memoised rows.
  */
@@ -195,6 +189,19 @@ export function useOlderTranscript({
         ? [...olderRows, ...live]
         : live;
 
+  // A find query asks the server for its oldest match above the loaded rows,
+  // then reaches that row like any other.
+  const firstLoaded = messages?.[0]?._creationTime;
+  const searchArgs =
+    !skipped &&
+    hasOlder &&
+    own.reach !== undefined &&
+    "search" in own.reach &&
+    firstLoaded !== undefined
+      ? { parentId, query: own.reach.search, before: firstLoaded }
+      : "skip";
+  const searchHit = useQuery(api.messages.searchOlderByParent, searchArgs);
+
   // Load the next step while a target is still missing. One step per landed
   // result: the step only moves while nothing is loading.
   const linkedId = useLinkedMessageId();
@@ -202,14 +209,20 @@ export function useOlderTranscript({
     active && linkedId !== null ? { messageId: linkedId } : undefined;
   const reach = own.reach ?? linkedReach;
   if (!skipped && reach !== undefined && messages !== undefined && !isLoading) {
-    const done = !hasOlder || reachSatisfied(reach, messages);
-    if (done) {
+    const clear = () => {
       if (own.reach !== undefined) setState({ ...own, reach: undefined });
+    };
+    if (!hasOlder) {
+      clear();
+    } else if ("search" in reach) {
+      if (searchHit === null) clear();
+      else if (searchHit !== undefined) {
+        setState({ ...own, reach: { messageId: searchHit } });
+      }
+    } else if (messages.some((message) => message._id === reach.messageId)) {
+      clear();
     } else {
-      setState({
-        ...own,
-        steps: reach === "all" ? OLDER_PAGED_STEPS + 1 : own.steps + 1,
-      });
+      setState({ ...own, steps: own.steps + 1 });
     }
   }
 
@@ -220,5 +233,12 @@ export function useOlderTranscript({
     setState((current) => ({ ...current, reach: target }));
   };
 
-  return { messages, hasOlder, isLoading, loadOlder, reach: reachHistory };
+  return {
+    messages,
+    hasOlder,
+    isLoading,
+    isReaching: own.reach !== undefined,
+    loadOlder,
+    reach: reachHistory,
+  };
 }
