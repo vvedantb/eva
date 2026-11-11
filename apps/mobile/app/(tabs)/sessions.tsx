@@ -83,6 +83,8 @@ function SessionsSection() {
   const [tab, setTab] = useState<SessionTab>("active");
   const sessionActions = useSessionActions();
   const sessions = useQuery(api.mobile.listChats, { archived: tab === "archived" });
+  // The repo logos for the group headers, from the list the web sidebar reads.
+  const repos = useQuery(api.githubRepos.list, {});
   const scheme = useScheme();
   const largerText = useLargerText();
   const insets = useSafeAreaInsets();
@@ -125,6 +127,7 @@ function SessionsSection() {
           renderSectionHeader={({ section }) => (
             <SessionGroupHeader
               section={section}
+              logoUrl={repos?.find((repo) => repo._id === section.repoId)?.logoUrl}
               // The web counts running sessions, and offers "+", in the Active list only.
               live={tab === "active" ? section.rows.filter((row) => row.status === "active").length : 0}
               onToggle={() => toggleOpen(section.repoId)}
