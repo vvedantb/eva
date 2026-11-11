@@ -7,6 +7,7 @@ import { sandboxComposerState, SANDBOX_CHAT_COPY } from "@eva/shared";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
 import { SandboxChatHeaderActions } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { useRepo } from "@/lib/contexts/RepoContext";
+import { useOlderTranscript } from "@/lib/hooks/useChatTranscript";
 import { useProviderAccountHandoff } from "@/lib/hooks/useProviderAccountHandoff";
 import { ChatBody } from "./ChatBody";
 import { SandboxBranchChip } from "./SandboxBranchChip";
@@ -63,6 +64,13 @@ export function SandboxChatPanel({
   const { entity, doc, model, firstRun } = binding;
   const { parentId, streamingEntityId, draftTarget } = sandboxChatKeys(entity);
   const { messages, isExecuting } = useSandboxChatTranscript(binding);
+  // `messages` is the live part; the rendered transcript adds the history
+  // above it once the reader goes there.
+  const history = useOlderTranscript({
+    parentId,
+    live: messages,
+    active: true,
+  });
   const queuedMessages = useQuery(api.queuedMessages.listByParent, {
     parentId,
   });
@@ -145,7 +153,11 @@ export function SandboxChatPanel({
       handleSend(command, undefined, { skipReviewComments: true }),
   });
 
-  const chatMessages = [...(firstRun?.turn ?? []), ...(messages ?? [])];
+  // The first run opens the chat, so it shows once nothing older is left.
+  const chatMessages = [
+    ...(history.hasOlder ? [] : (firstRun?.turn ?? [])),
+    ...(history.messages ?? []),
+  ];
   const usageAccountLabel =
     binding.providerAccountId === null
       ? "Team"
@@ -177,6 +189,10 @@ export function SandboxChatPanel({
           chatParentId={parentId}
           messages={chatMessages}
           isLoadingMessages={messages === undefined}
+          hasOlderHistory={history.hasOlder}
+          onLoadOlderHistory={history.loadOlder}
+          onReachHistory={history.reach}
+          isReachingHistory={history.isReaching}
           queuedMessages={queuedMessages ?? []}
           queueLabel={queueGate.queueLabel(isExecuting)}
           streamingActivity={streaming?.currentActivity}
