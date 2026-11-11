@@ -141,6 +141,23 @@ export {
 export { sessionMenuActions, type SessionMenuAction } from "./sessionMenu";
 export { draftCountAfterRemove, draftsAfterRemove, visibleDrafts } from "./draftVisibility";
 export {
+  draftContextTitle,
+  draftKindLabel,
+  draftSnippet,
+  mergeDrafts,
+  type CommentDraftFields,
+  type DraftListItem,
+  type TaskDraftFields,
+} from "./draftList";
+export {
+  chatSourceKindLabel,
+  chatSourceLabel,
+  chatSourceShortLabel,
+  type ChatSourceKind,
+  type ChatSourceLabelFields,
+} from "./chatSourceLabel";
+export { standupEntryHeading, standupEntryTime } from "./standup";
+export {
   QUICK_TASK_FILTER_DEFAULTS,
   QUICK_TASK_LIST_DEFAULTS,
   QUICK_TASK_SORT_DEFAULTS,
