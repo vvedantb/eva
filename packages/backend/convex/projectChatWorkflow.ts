@@ -79,6 +79,7 @@ import {
 import { isSandboxClosingStatus } from "./_sandbox/closingStatus";
 import { touchAgentFinished, touchUserActivity } from "./_sandbox/activity";
 import { errorMessage } from "@vvedantb/server";
+import { isProjectBuilding } from "./_projects/buildState";
 
 async function buildProjectChatTurnPrompt(
   ctx: QueryCtx,
@@ -735,7 +736,7 @@ export async function cancelProjectChatExecution(
       if (usesChatDaemon(project.lastChatModel ?? project.model)) {
         await ctx.db.patch(project._id, { cancelRequestedAt: Date.now() });
       } else if (project.sandboxId) {
-        if (project.activeWorkflowId || project.activeBuildWorkflowId) {
+        if (project.activeWorkflowId || isProjectBuilding(project)) {
           await ctx.scheduler.runAfter(0, internal.sandbox.killEntityDaemon, {
             sandboxId: project.sandboxId,
             repoId: project.repoId,

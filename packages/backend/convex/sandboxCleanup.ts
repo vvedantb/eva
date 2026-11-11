@@ -7,13 +7,14 @@ import {
   type MutationCtx,
 } from "./_generated/server";
 import { SANDBOX_DELETE_GRACE_MS } from "./_sandbox/vercelSnapshotOptions";
+import {
+  clearDeletedSessionSandbox,
+  isSessionArchived,
+  sessionDeleteAfter,
+} from "./_sessions/archive";
 
 const SWEEP_BATCH_SIZE = 16;
 const DELETE_STAGGER_MS = 2000;
-
-function isSessionDead(session: Doc<"sessions">): boolean {
-  return session.archived === true;
-}
 
 function isTaskDead(task: Doc<"agentTasks">): boolean {
   return task.status === "done" || task.status === "cancelled";
@@ -34,32 +35,6 @@ function pastGrace(
 }
 
 /**
- * Patch `sandboxDeleteAfter` and schedule maybe-delete after the grace window.
- * Duplicate schedules are harmless — the mutation re-checks at fire time.
- */
-export async function scheduleSessionSandboxGraceDelete(
-  ctx: MutationCtx,
-  session: Doc<"sessions">,
-): Promise<void> {
-  if (!session.sandboxId) return;
-  const sandboxDeleteAfter = Date.now() + SANDBOX_DELETE_GRACE_MS;
-  await ctx.db.patch(session._id, { sandboxDeleteAfter });
-  await ctx.scheduler.runAfter(
-    SANDBOX_DELETE_GRACE_MS,
-    internal.sandboxCleanup.maybeDeleteSessionSandbox,
-    { sessionId: session._id },
-  );
-}
-
-/** Clear a pending grace delete when the session becomes alive again. */
-export async function cancelSessionSandboxGraceDelete(
-  ctx: MutationCtx,
-  sessionId: Id<"sessions">,
-): Promise<void> {
-  await ctx.db.patch(sessionId, { sandboxDeleteAfter: undefined });
-}
-
-/**
  * Patch + schedule grace delete for a dead quick-task sandbox.
  */
 export async function scheduleTaskSandboxGraceDelete(
@@ -76,7 +51,10 @@ export async function scheduleTaskSandboxGraceDelete(
   );
 }
 
-/** Fired 48h after session death — deletes sandbox if still dead + due. */
+/**
+ * Fired 48h after archive — deletes the sandbox if still archived + due. An
+ * unarchived session has no delete time left, so it is skipped.
+ */
 export const maybeDeleteSessionSandbox = internalMutation({
   args: { sessionId: v.id("sessions") },
   returns: v.null(),
@@ -84,26 +62,17 @@ export const maybeDeleteSessionSandbox = internalMutation({
     const session = await ctx.db.get(args.sessionId);
     if (!session) return null;
 
-    if (!isSessionDead(session)) {
-      await ctx.db.patch(session._id, { sandboxDeleteAfter: undefined });
-      return null;
-    }
-
-    const now = Date.now();
-    if (session.sandboxDeleteAfter === undefined) return null;
-    if (now < session.sandboxDeleteAfter) return null;
+    const deleteAfter = sessionDeleteAfter(session);
+    if (deleteAfter === undefined) return null;
+    if (Date.now() < deleteAfter) return null;
     if (!session.sandboxId) return null;
     if (session.status !== "closed") return null;
 
-    const sandboxId = session.sandboxId;
     await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
-      sandboxId,
+      sandboxId: session.sandboxId,
       repoId: session.repoId,
     });
-    await ctx.db.patch(session._id, {
-      sandboxId: undefined,
-      sandboxDeleteAfter: undefined,
-    });
+    await clearDeletedSessionSandbox(ctx, session);
     return null;
   },
 });
@@ -174,7 +143,7 @@ export const sweepDeadSandboxes = internalMutation({
       let staggerIndex = 0;
       for (const session of page.page) {
         if (!session.sandboxId) continue;
-        if (!isSessionDead(session)) continue;
+        if (!isSessionArchived(session)) continue;
         // Normal sweeps wait for closed (stop finished). skipGrace one-offs
         // also clear stopping/active leftovers that still bill for snapshots.
         if (
@@ -185,7 +154,7 @@ export const sweepDeadSandboxes = internalMutation({
         }
         if (
           !skipGrace &&
-          !pastGrace(now, session.sandboxDeleteAfter, session.updatedAt)
+          !pastGrace(now, sessionDeleteAfter(session), session.updatedAt)
         ) {
           continue;
         }
@@ -196,10 +165,7 @@ export const sweepDeadSandboxes = internalMutation({
           internal.sandbox.deleteSandbox,
           { sandboxId, repoId: session.repoId },
         );
-        await ctx.db.patch(session._id, {
-          sandboxId: undefined,
-          sandboxDeleteAfter: undefined,
-        });
+        await clearDeletedSessionSandbox(ctx, session);
         deleted += 1;
         staggerIndex += 1;
       }
@@ -330,7 +296,7 @@ export const listLiveSandboxCandidates = internalQuery({
       });
       for (const session of page.page) {
         if (!session.sandboxId) continue;
-        if (session.archived === true) continue;
+        if (isSessionArchived(session)) continue;
         candidates.push({
           kind: "session",
           entityId: session._id,
@@ -437,7 +403,7 @@ export const countDeadSandboxes = internalQuery({
     for (const session of allSessions) {
       if (!session.sandboxId) continue;
       sessionAnyWithSandbox++;
-      if (isSessionDead(session)) sessionDeadWithSandbox++;
+      if (isSessionArchived(session)) sessionDeadWithSandbox++;
     }
     let taskDeadWithSandbox = 0;
     let taskAnyWithSandbox = 0;

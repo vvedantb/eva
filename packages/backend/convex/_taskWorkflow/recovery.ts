@@ -5,6 +5,7 @@ import type { Id } from "../_generated/dataModel";
 import type { TurnState } from "../validators";
 import { closeOpenTurn } from "../_chat/turnStore";
 import { clearTaskRunStreaming } from "./helpers";
+import { finishTaskRun, taskRunWorkflowId } from "../_agentTasks/runState";
 
 const QUICK_TASK_AUTO_RETRY_BASE_DELAY_MS = 20_000;
 const QUICK_TASK_AUTO_RETRY_JITTER_MS = 20_000;
@@ -95,11 +96,12 @@ export async function cleanUpStaleRun(
     isProjectTask: boolean;
     errorMessage: string;
     exitReason: string;
-    activeWorkflowId?: string;
+    /** The workflow the task tracks; cancelled, and the task's run state ended. */
+    workflowId?: string;
     taskStatus: string;
   },
 ): Promise<void> {
-  await cancelTrackedWorkflow(ctx, params.activeWorkflowId);
+  await cancelTrackedWorkflow(ctx, params.workflowId);
 
   if (params.sandboxId && params.repoId) {
     await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
@@ -133,13 +135,11 @@ export async function cleanUpStaleRun(
   });
 
   const taskPatch: {
-    activeWorkflowId: undefined;
     updatedAt: number;
     status?: "todo";
     sandboxId?: string;
     reviewTaskSandboxStatus?: "closed";
   } = {
-    activeWorkflowId: undefined,
     updatedAt: Date.now(),
     ...(params.taskStatus === "in_progress" ? { status: "todo" as const } : {}),
   };
@@ -152,6 +152,8 @@ export async function cleanUpStaleRun(
     taskPatch.reviewTaskSandboxStatus = "closed";
   }
   await ctx.db.patch(params.taskId, taskPatch);
+  // No runId fence: the workflow cancelled above is whichever the task tracks.
+  await finishTaskRun(ctx, params.taskId, undefined);
 
   if (!params.isProjectTask) {
     await ctx.scheduler.runAfter(
@@ -238,7 +240,7 @@ export async function finalizeStalledRun(
     isProjectTask: !!task.projectId,
     errorMessage: stop.errorMessage,
     exitReason: stop.exitReason,
-    activeWorkflowId: task.activeWorkflowId,
+    workflowId: taskRunWorkflowId(task),
     taskStatus: task.status,
   });
 }

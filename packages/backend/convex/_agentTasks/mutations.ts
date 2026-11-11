@@ -34,7 +34,7 @@ import {
   resolveDefaultProviderAccountId,
 } from "../_userProviderAccounts/defaults";
 import { createTaskRunSummary, moveTaskRunSummary } from "./runSummary";
-import { cancelScheduledFunction } from "../_scheduling/helpers";
+import { cancelTaskRunSchedule } from "./runState";
 import {
   applyPrLifecycleTransition,
   findPrimaryPullRequest,
@@ -115,19 +115,12 @@ export const updateStatus = authMutation({
         }
       }
     }
-    const clearSchedule =
-      args.status !== "todo" && task.scheduledFunctionId !== undefined;
-    if (clearSchedule) {
-      await cancelScheduledFunction(ctx, task.scheduledFunctionId);
-    }
+    // Only a todo task runs from a schedule, so leaving todo drops it.
+    if (args.status !== "todo") await cancelTaskRunSchedule(ctx, args.id);
     const previousStatus = task.status;
     await ctx.db.patch(args.id, {
       status: args.status,
       updatedAt: Date.now(),
-      ...(clearSchedule && {
-        scheduledAt: undefined,
-        scheduledFunctionId: undefined,
-      }),
     });
 
     if (previousStatus !== args.status) {

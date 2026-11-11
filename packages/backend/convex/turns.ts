@@ -57,10 +57,7 @@ import {
   turnStateValidator,
 } from "./_validators/tableFields";
 import { normalizeAIModel } from "./_validators/aiModels";
-import {
-  isLegacyChatExecuting,
-  isLegacySessionExecuting,
-} from "./_chat/turnProjection";
+import { isLegacyChatExecuting } from "./_chat/turnProjection";
 
 const chatTurnStatusValidator = v.union(
   v.object({
@@ -77,9 +74,9 @@ type ChatTurnStatus = Infer<typeof chatTurnStatusValidator>;
 
 /**
  * Whether one chat has a turn open, for a reader who may see it. The open
- * durable turn is canonical, synthetic turns included. Entities that never
- * opened one fall back to their workflow fields until the lifecycle marker
- * (`turnLifecycleVersion` / `chatTurnLifecycleVersion`) says otherwise.
+ * durable turn is canonical, synthetic turns included. Task and project chats
+ * that never opened one fall back to their workflow fields until
+ * `chatTurnLifecycleVersion` says otherwise; sessions never do.
  */
 async function readChatStatus(
   ctx: QueryCtx,
@@ -106,7 +103,7 @@ async function readLegacyExecuting(
   userId: Id<"users">,
   entityId: ChatTurnEntityId,
 ): Promise<boolean | null> {
-  // Session chats are born on the durable turn model: no legacy fields.
+  // Sessions and their chats run only on durable turns: no legacy fields.
   const chatId = ctx.db.normalizeId("sessionChats", entityId);
   if (chatId) {
     const chat = await ctx.db.get(chatId);
@@ -121,7 +118,7 @@ async function readLegacyExecuting(
     if (!session || !(await hasRepoAccess(ctx.db, session.repoId, userId))) {
       return null;
     }
-    return isLegacySessionExecuting(session);
+    return false;
   }
   const taskId = ctx.db.normalizeId("agentTasks", entityId);
   if (taskId) {

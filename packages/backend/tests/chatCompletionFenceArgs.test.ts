@@ -397,7 +397,9 @@ test(
     if (f.entity.surface !== "task") throw new Error("task fixture expected");
     const taskId = f.entity.id;
     const { runId, turnId } = await f.t.run(async (ctx) => {
-      await ctx.db.patch(taskId, { activeWorkflowId: "run-workflow" });
+      await ctx.db.patch(taskId, {
+        run: { state: "running", workflowId: "run-workflow" },
+      });
       const runId = await ctx.db.insert("agentRuns", {
         taskId,
         repoId: f.repoId,

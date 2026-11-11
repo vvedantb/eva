@@ -4,6 +4,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 import { hasRepoAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
+import { isSessionArchived } from "../_sessions/archive";
 import {
   ALL_TASK_STATUSES,
   PROJECT_PHASES,
@@ -598,7 +599,7 @@ export const listEntitiesForUser = internalQuery({
                   status: doc.status,
                   sandboxStatus: doc.status,
                   isExecuting: sessionIsExecuting(doc, openChatEntityIds),
-                  archived: doc.archived,
+                  archived: isSessionArchived(doc),
                   prUrl: doc.prUrl,
                   branchName: doc.branchName,
                   updatedAt: doc.updatedAt ?? doc._creationTime,
@@ -679,9 +680,8 @@ export const listEntitiesForUser = internalQuery({
 
 /**
  * Whether one entity has a turn in flight, by the same rule the app's own list
- * uses. `stop_sandbox` reads this before tearing a VM down: a session running a
- * daemon-minted continuation (`/loop`) never gets an `activeWorkflowId`, so
- * keying the refusal off that field alone would stop the VM under a live turn.
+ * uses. `stop_sandbox` reads this before tearing a VM down. For a session the
+ * open turn is the only signal, daemon-minted continuations (`/loop`) included.
  *
  * The caller has already proven access to `id` by reading the entity as the
  * user; this only adds the turn lookup that read cannot do.

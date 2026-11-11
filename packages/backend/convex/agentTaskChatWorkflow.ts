@@ -1,3 +1,4 @@
+import { isTaskRunning } from "./_agentTasks/runState";
 import { v, type Infer } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
@@ -445,7 +446,7 @@ export const startExecute = authMutation({
     // one ran two turns at once. Same busy rule as the queue's own drain.
     if (
       task.activeChatWorkflowId !== undefined ||
-      task.activeWorkflowId !== undefined ||
+      isTaskRunning(task) ||
       task.pendingTurn !== undefined
     ) {
       await enqueueTaskChatMessage(ctx, task, {
@@ -597,7 +598,7 @@ export const retryEmptyStalledTurn = internalMutation({
       // newer chat turn does.
       hasActiveWorkflow:
         task.activeChatWorkflowId !== undefined ||
-        task.activeWorkflowId !== undefined ||
+        isTaskRunning(task) ||
         task.pendingTurn !== undefined,
     });
     if (message === null) return null;
@@ -773,7 +774,7 @@ export async function cancelTaskChatExecution(
       if (usesChatDaemon(task.lastChatModel ?? task.model)) {
         await ctx.db.patch(task._id, { cancelRequestedAt: Date.now() });
       } else if (task.sandboxId && task.repoId) {
-        if (task.activeWorkflowId) {
+        if (isTaskRunning(task)) {
           await ctx.scheduler.runAfter(0, internal.sandbox.killEntityDaemon, {
             sandboxId: task.sandboxId,
             repoId: task.repoId,
