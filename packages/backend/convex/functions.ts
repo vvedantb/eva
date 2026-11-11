@@ -26,6 +26,7 @@ import {
 } from "./_git/branchNames";
 import { cancelTaskRunSchedule } from "./_agentTasks/runState";
 import { isProjectBuilding } from "./_projects/buildState";
+import { findProjectSession, isTerminalProjectPhase } from "./_sessions/owner";
 import {
   allPullRequestsTerminal,
   findLivePullRequestOnBranch,
@@ -255,12 +256,18 @@ async function applyPhaseTransition(
     await scheduleProjectPrSync(ctx, updated, previousPhase, newPhase);
   }
   // A completed / cancelled project retires its session, a reopened one
-  // revives it. Scheduled: this module stays a leaf.
-  await ctx.scheduler.runAfter(
-    0,
-    internal._sessions.ownedSession.syncProjectSessionLifecycle,
-    { projectId: project._id },
-  );
+  // revives it. Scheduled (this module stays a leaf), and only when the
+  // phase crosses that line and the project has a session to move.
+  if (
+    isTerminalProjectPhase(previousPhase) !== isTerminalProjectPhase(newPhase) &&
+    (await findProjectSession(ctx.db, project._id)) !== null
+  ) {
+    await ctx.scheduler.runAfter(
+      0,
+      internal._sessions.ownedSession.syncProjectSessionLifecycle,
+      { projectId: project._id },
+    );
+  }
 }
 
 /** Recalculates a project's delivery phase from child task statuses. */

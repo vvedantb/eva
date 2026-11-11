@@ -248,3 +248,8 @@ export function chatOwnerEntityId(
   return undefined;
 }
 
+/** Project phases that retire the project's session. */
+export function isTerminalProjectPhase(phase: Doc<"projects">["phase"]) {
+  return phase === "completed" || phase === "cancelled";
+}
+

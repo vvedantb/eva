@@ -326,13 +326,19 @@ export const resolveChatTargetForUser = internalQuery({
 
     const doc = hit.doc;
     // A task's or project's sandbox lives on its session (a project task's
-    // on the project's).
+    // on the project's); before that session exists, on the row that still
+    // holds it. A project task never had one of its own.
     const taskSession =
       hit.kind === "task"
         ? await findTaskWorkSession(ctx.db, hit.doc)
         : hit.kind === "project"
           ? await findProjectSession(ctx.db, hit.doc._id)
           : null;
+    const sandboxRow =
+      taskSession ??
+      (hit.kind === "task" && hit.doc.projectId !== undefined
+        ? await ctx.db.get(hit.doc.projectId)
+        : doc);
     return {
       kind: hit.kind,
       targetId: doc._id,
@@ -355,8 +361,8 @@ export const resolveChatTargetForUser = internalQuery({
           : ((hit.kind === "task"
               ? await taskSandboxStatus(ctx.db, hit.doc)
               : await projectSandboxStatus(ctx.db, hit.doc)) ?? "closed"),
-      sandboxId: taskSession ? taskSession.sandboxId : doc.sandboxId,
-      devPort: (taskSession ?? doc).devPort ?? repo.devPort,
+      sandboxId: sandboxRow?.sandboxId,
+      devPort: sandboxRow?.devPort ?? repo.devPort,
       sandboxSessionId: taskSession?._id,
     };
   },

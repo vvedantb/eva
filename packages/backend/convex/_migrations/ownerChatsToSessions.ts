@@ -168,10 +168,11 @@ async function moveOwnerChat(
     entity.kind === "task"
       ? await ctx.db.get(entity.task._id)
       : await ctx.db.get(entity.project._id);
-  const movesSandbox =
+  // A project task never had a sandbox of its own: no conflict to check.
+  const ownsSandbox =
     entity.kind === "project" || entity.task.projectId === undefined;
   if (
-    movesSandbox &&
+    ownsSandbox &&
     left?.sandboxId !== undefined &&
     left.sandboxId !== session.sandboxId
   ) {
@@ -248,10 +249,10 @@ async function projectTaskChatHasHistory(
 /**
  * One project's move (PR 2): the project's chat and sandbox onto its
  * session's Main chat, then each of its tasks' old chats onto that task's
- * own chat in the project's session. A project task's own sandbox (its old
- * chat's, on the task branch) is not the project's checkout and stays on the
- * task row. A busy task is skipped on its own; the project still counts as
- * migrated, and a rerun picks the task up.
+ * own chat in the project's session (a project task has no sandbox of its
+ * own: task-row sandbox fields on it are ignored). A busy task is skipped on
+ * its own; the project still counts as migrated, and a rerun picks the
+ * task up.
  */
 export async function migrateProjectToSession(
   ctx: MutationCtx,

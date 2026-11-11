@@ -28,6 +28,7 @@ import {
   findQuickTaskSession,
   findTaskSession,
   findTaskWorkSession,
+  isTerminalProjectPhase,
   projectSessionOwner,
   sessionOwnerEntityId,
   taskSessionOwner,
@@ -80,6 +81,7 @@ export {
   findQuickTaskSession,
   findTaskSession,
   findTaskWorkSession,
+  isTerminalProjectPhase,
   projectSessionOwner,
   taskSessionOwner,
   taskUsesOwnedSession,
@@ -378,10 +380,14 @@ export async function ownerBusyReason(
   ) {
     return "chat turn open";
   }
+  // A project task has no sandbox of its own: only a quick task's or a
+  // project's row status counts.
   const legacyStatus =
-    entity.kind === "task"
-      ? entity.task.reviewTaskSandboxStatus
-      : entity.project.reviewProjectSandboxStatus;
+    entity.kind === "project"
+      ? entity.project.reviewProjectSandboxStatus
+      : taskUsesOwnedSession(entity.task)
+        ? entity.task.reviewTaskSandboxStatus
+        : undefined;
   if (legacyStatus === "starting" || legacyStatus === "stopping") {
     return `sandbox ${legacyStatus}`;
   }
@@ -422,8 +428,8 @@ const LEGACY_SANDBOX_CLEARED = {
  * session and clears it on the owner: one owner per VM, so task and project
  * sweeps stop acting on it. `busy`: the old path is mid-start/stop/turn,
  * leave it for a later call. `conflict`: the session already holds another
- * VM. A project task's own sandbox (its old task chat's, on the task branch)
- * never moves: it is not the project's checkout.
+ * VM. A project task has no sandbox of its own (its project has one, the
+ * session's): task-row sandbox fields on it are ignored.
  */
 export async function adoptLegacySandbox(
   ctx: MutationCtx,
@@ -791,11 +797,6 @@ export async function reviveOwnedSession(
 /** Task statuses that retire the task's session. */
 export function isTerminalTaskStatus(status: Doc<"agentTasks">["status"]) {
   return status === "done" || status === "cancelled";
-}
-
-/** Project phases that retire the project's session. */
-export function isTerminalProjectPhase(phase: Doc<"projects">["phase"]) {
-  return phase === "completed" || phase === "cancelled";
 }
 
 /**
