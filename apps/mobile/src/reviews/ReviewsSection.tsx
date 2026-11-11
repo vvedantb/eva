@@ -3,7 +3,7 @@ import { PR_LIST_STATES, type PullRequestListState } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconGitPullRequest } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
-import { Button, CenteredSpinner, EmptyState, Tabs, TabsList, TabsTrigger } from "@vvedantb/native-ui/primitives";
+import { Button, EmptyState, SkeletonList, SkeletonRow, Tabs, TabsList, TabsTrigger } from "@vvedantb/native-ui/primitives";
 import { useLargerText } from "@vvedantb/native-ui/theme";
 import { useAction } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -45,7 +45,7 @@ export function ReviewsSection() {
     "Couldn't load pull requests",
   );
 
-  if (repos === undefined) return <CenteredSpinner label="Loading repos" />;
+  if (repos === undefined) return <PullRequestPlaceholders />;
   if (!repo) {
     return <EmptyState icon={IconGitPullRequest} title="No repos" description="Connect a repo on the web. It shows up here." />;
   }
@@ -76,7 +76,7 @@ export function ReviewsSection() {
         </Tabs>
       </View>
       {state.status === "loading" ? (
-        <CenteredSpinner label="Loading pull requests" />
+        <PullRequestPlaceholders />
       ) : state.status === "error" ? (
         <EmptyState
           icon={IconGitPullRequest}
@@ -101,6 +101,17 @@ export function ReviewsSection() {
         />
       )}
     </View>
+  );
+}
+
+/** While the pull requests load: rows shaped as `PullRequestRow` (icon and title over the meta line), undivided as the list. */
+function PullRequestPlaceholders() {
+  return (
+    <SkeletonList
+      label="Loading pull requests"
+      divided={false}
+      renderRow={(row) => <SkeletonRow index={row} leading={14} lines={2} minHeight={58} />}
+    />
   );
 }
 
