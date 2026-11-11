@@ -1,5 +1,6 @@
 import { useLocalStorage } from "usehooks-ts";
 import { useQueryStates } from "nuqs";
+import type { ProjectSortDir, ProjectSortField } from "@eva/shared";
 import type { ProjectPhase } from "@/lib/components/projects/ProjectPhaseBadge";
 import {
   searchParser,
@@ -10,9 +11,8 @@ import {
 
 type ProjectView = "kanban" | "timeline" | "list";
 const PROJECT_VIEWS: readonly ProjectView[] = ["kanban", "timeline", "list"];
-export const SORT_FIELDS = ["created", "title", "priority"] as const;
-type SortField = (typeof SORT_FIELDS)[number];
-type SortDir = "asc" | "desc";
+type SortField = ProjectSortField;
+type SortDir = ProjectSortDir;
 // Timeline axis granularity. Maps 1:1 to the Gantt engine's `Range`
 // ("daily" renders day columns, surfaced to users as the "Week" zoom).
 type TimelineRange = "quarterly" | "monthly" | "daily";
