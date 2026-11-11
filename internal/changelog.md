@@ -1,5 +1,13 @@
 # Changelog
 
+## Mobile: no slide on tab switches, no fade on chat folds
+
+Date: 2026-11-11
+
+WHY: A remove-animations pass put every phone animation through the gate. Two failed. The tab bar pill slid for 200 ms on every tab switch, a surface used many times a day. The chat folds faded in each time a list mounted an open fold: on chat open, on a streamed step and on a virtualised row scrolled back.
+
+Architectural: Both changes are in native-ui (changeset `remove-frequent-motion`): `FloatingTabBar` draws its pill at the tab offset with a plain `View`, and `CollapsibleContent` is a plain `View`. The chevron turn stays. Sheets, swipes, the section pager, the keyboard, push transitions, press scale, toasts, the bulk bar, skeletons and the live shimmer stay. Re-pin after the kit merges. No native module, so no new APK.
+
 ## Mobile: phone sizing on every list and control; worst-case data fixes
 
 Date: 2026-11-11
