@@ -1,4 +1,8 @@
-import { PromptInputProvider, toast } from "@vvedantb/ui";
+import {
+  PromptInputProvider,
+  toast,
+  usePromptInputController,
+} from "@vvedantb/ui";
 import type {
   ModelAccount,
   ModelOption,
@@ -185,11 +189,9 @@ export function ChatComposer({
   const mentionRef = useRef<MentionTextareaHandle>(null);
   const uploadChatAttachments = useUploadChatAttachments();
   const [isUploading, setIsUploading] = useState(false);
+  // The verdict is keyed by the exact text it judged; readers look it up
+  // against PromptInput's live text, which is the only copy of the draft.
   const readiness = useDraftReadiness();
-  // The composer's text lives inside PromptInput; the readiness verdict is
-  // keyed by the exact text it judged, so the last draft is mirrored here.
-  const [draftText, setDraftText] = useState("");
-  const readinessResult = readiness.resultFor(draftText);
   const {
     updateQueuedMessage,
     deleteQueuedMessage,
@@ -242,7 +244,6 @@ export function ChatComposer({
     }
     const content = mentionRef.current?.tokenize(visible) ?? visible;
     // The judged draft is gone once it is sent; a nudge about it is not.
-    setDraftText("");
     readiness.reset();
     await onSend(content, uploads.ids.length > 0 ? uploads.ids : undefined);
   };
@@ -340,11 +341,7 @@ export function ChatComposer({
         renderContent={renderQueuedContent}
       />
       {/* Last, so it sits flush on the input card it warns about. */}
-      <DraftReadinessBanner
-        result={readinessResult}
-        onDismiss={readiness.dismiss}
-        className="rounded-b-none rounded-t-surface"
-      />
+      <ComposerReadinessBanner readiness={readiness} />
     </>
   );
 
@@ -368,10 +365,9 @@ export function ChatComposer({
       messageHistory={messageHistory}
       allowEmptySubmit={allowEmptySubmit}
       predictionTarget={predictionTarget}
-      warn={shouldNudge(readinessResult)}
+      warnFor={(text) => shouldNudge(readiness.resultFor(text))}
       onDraftChange={(text) => {
         suggestions.noteDraft(text);
-        setDraftText(text);
         readiness.noteChange(text);
       }}
     />
@@ -437,5 +433,21 @@ export function ChatComposer({
         </PromptInputProvider>
       )}
     </div>
+  );
+}
+
+/** The readiness nudge for whatever PromptInput holds right now. */
+function ComposerReadinessBanner({
+  readiness,
+}: {
+  readiness: ReturnType<typeof useDraftReadiness>;
+}) {
+  const { textInput } = usePromptInputController();
+  return (
+    <DraftReadinessBanner
+      result={readiness.resultFor(textInput.value)}
+      onDismiss={readiness.dismiss}
+      className="rounded-b-none rounded-t-surface"
+    />
   );
 }

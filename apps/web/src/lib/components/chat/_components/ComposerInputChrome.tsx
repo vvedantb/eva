@@ -87,7 +87,7 @@ export function ComposerInputChrome({
   messageHistory,
   allowEmptySubmit,
   predictionTarget,
-  warn = false,
+  warnFor,
   onDraftChange,
 }: {
   repo?: ChatRepo;
@@ -111,12 +111,13 @@ export function ComposerInputChrome({
   messageHistory: string[];
   allowEmptySubmit?: boolean;
   predictionTarget?: ComposerPredictionTarget;
-  /** Amber border while the draft-readiness nudge is up; it beats the focus border. */
-  warn?: boolean;
+  /** Amber border while the draft-readiness nudge is up for this text; it beats the focus border. */
+  warnFor?: (text: string) => boolean;
   /** The visible draft after every edit; drives the skill suggestion chips. */
   onDraftChange?: (value: string) => void;
 }) {
   const { textInput, attachments } = usePromptInputController();
+  const warn = warnFor?.(textInput.value) ?? false;
   // A PR row dropped here becomes a context chip. Absent outside ChatBody
   // (Manager Ave), where the drop is left to the browser.
   const pullRequests = usePendingPullRequests();

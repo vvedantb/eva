@@ -69,17 +69,22 @@ export function Sidebar() {
     setCollapsed(!collapsed);
   });
   const simpleView = useSimpleView();
-  const [storedContextSidebarMode, setContextSidebarMode] =
-    useState<ContextSidebarMode>(() => getInitialContextSidebarMode(pathname));
+  // The pathname owns the context sidebar mode; a user pick only overrides it
+  // on the page where it was made, so navigating re-derives it.
+  const [modeOverride, setModeOverride] = useState<{
+    pathname: string;
+    mode: ContextSidebarMode;
+  } | null>(null);
+  const storedContextSidebarMode =
+    modeOverride?.pathname === pathname
+      ? modeOverride.mode
+      : getInitialContextSidebarMode(pathname);
   const contextSidebarMode =
     simpleView && storedContextSidebarMode === "reviews"
       ? "main"
       : storedContextSidebarMode;
-
-  // Sidebar now persists across sections, so re-derive the context sidebar mode on navigation.
-  useEffect(() => {
-    setContextSidebarMode(getInitialContextSidebarMode(pathname));
-  }, [pathname]);
+  const setContextSidebarMode = (mode: ContextSidebarMode) =>
+    setModeOverride({ pathname, mode });
 
   const repos = useQuery(api.githubRepos.list, {});
 

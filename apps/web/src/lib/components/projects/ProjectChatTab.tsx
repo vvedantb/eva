@@ -46,7 +46,6 @@ interface ProjectChatTabProps {
   initialMessages: ConversationMessage[];
   streamingActivity?: string;
   rawInput: string;
-  onSpecGenerated?: (spec: string) => void;
   onClear?: () => void;
   repoId: Id<"githubRepos">;
 }
@@ -58,7 +57,6 @@ export function ProjectChatTab({
   initialMessages,
   streamingActivity,
   rawInput,
-  onSpecGenerated,
   onClear,
   repoId: _repoId,
 }: ProjectChatTabProps) {
@@ -69,7 +67,9 @@ export function ProjectChatTab({
   );
   const startProjectSpec = useMutation(api.projectInterviewWorkflow.startSpec);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  // True only while a start mutation is in flight. Once it resolves, the
+  // server's `activeWorkflowId` owns the "running" state.
+  const [isStarting, setIsStarting] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const { request: requestConfirm } = useRequestConfirm();
   const [isClearing, setIsClearing] = useState(false);
@@ -83,8 +83,9 @@ export function ProjectChatTab({
     projectPhase === "business_review" ||
     projectPhase === "code_review" ||
     projectPhase === "completed";
-  const hasStarted = initialMessages.length > 0 || isLoading;
   const hasActiveWorkflow = activeWorkflowId !== undefined;
+  const isLoading = isStarting || hasActiveWorkflow;
+  const hasStarted = initialMessages.length > 0 || isLoading;
 
   const questionCount = initialMessages.filter((m) => {
     if (m.role !== "assistant" || !m.content) {
@@ -102,43 +103,44 @@ export function ProjectChatTab({
     (m) => m.role === "assistant" && m.content && isSpecContent(m.content),
   );
 
+  /** Holds `isStarting` for the mutation only; rethrows after the toast. */
+  const runStart = (start: Promise<null>, error: string, id: string) => {
+    setIsStarting(true);
+    return catchMutationError(start, error, id).finally(() =>
+      setIsStarting(false),
+    );
+  };
+
   /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change --
      `initialMessages` is a Convex live query, so the "event" happens on the
-     server: the interview workflow writing a row is what has to clear the
-     pending state and chain the spec mutation. There is no client event to
-     hang this off. */
+     server: the interview workflow writing a row is what has to chain the
+     spec mutation. There is no client event to hang this off. */
   useEffect(() => {
     const lastMessage = initialMessages[initialMessages.length - 1];
-    if (lastMessage?.role === "assistant" && lastMessage.content) {
-      setIsLoading(false);
-      if (isSpecContent(lastMessage.content)) {
-        onSpecGenerated?.(lastMessage.content);
-      } else if (
-        isInterviewTransitionContent(lastMessage.content) &&
-        projectPhase === "draft" &&
-        !hasSpecMessage &&
-        !hasActiveWorkflow &&
-        specRequestedForRef.current !== initialMessages.length
-      ) {
-        // Legacy rows that still have {"ready":true} before spec was chained server-side.
-        specRequestedForRef.current = initialMessages.length;
-        setIsLoading(true);
-        void catchMutationError(
-          startProjectSpec({
-            projectId,
-            featureDescription: rawInput,
-          }),
-          "Couldn't generate the spec",
-          "project-interview-spec",
-        ).catch(() => {
-          specRequestedForRef.current = null;
-          setIsLoading(false);
-        });
-      }
+    if (
+      lastMessage?.role === "assistant" &&
+      lastMessage.content &&
+      isInterviewTransitionContent(lastMessage.content) &&
+      projectPhase === "draft" &&
+      !hasSpecMessage &&
+      !hasActiveWorkflow &&
+      specRequestedForRef.current !== initialMessages.length
+    ) {
+      // Legacy rows that still have {"ready":true} before spec was chained server-side.
+      specRequestedForRef.current = initialMessages.length;
+      void runStart(
+        startProjectSpec({
+          projectId,
+          featureDescription: rawInput,
+        }),
+        "Couldn't generate the spec",
+        "project-interview-spec",
+      ).catch(() => {
+        specRequestedForRef.current = null;
+      });
     }
   }, [
     initialMessages,
-    onSpecGenerated,
     projectId,
     rawInput,
     startProjectSpec,
@@ -153,9 +155,7 @@ export function ProjectChatTab({
   }, [initialMessages]);
 
   const askQuestion = async () => {
-    setIsLoading(true);
-    // A failed start used to leave the tab on its loading state for good.
-    await catchMutationError(
+    await runStart(
       startProjectInterview({
         projectId: projectId,
         featureDescription: rawInput,
@@ -163,7 +163,7 @@ export function ProjectChatTab({
       }),
       "Couldn't ask the next question",
       "project-interview-ask",
-    ).catch(() => setIsLoading(false));
+    ).catch(() => undefined);
   };
 
   /* eslint-disable no-effect/no-event-handler, no-effect/no-pass-data-to-parent --
@@ -173,7 +173,7 @@ export function ProjectChatTab({
   useEffect(() => {
     // A running workflow will write the question itself; asking again would
     // only be refused server-side.
-    if (isLocked || isLoading || hasActiveWorkflow) return;
+    if (isLocked || isLoading) return;
     const hasAssistant = initialMessages.some((m) => m.role === "assistant");
     if (initialMessages.length > 0 && !hasAssistant) {
       void askQuestion();
@@ -199,7 +199,6 @@ export function ProjectChatTab({
     setIsClearing(true);
     try {
       await clearMessagesDb({ id: projectId });
-      setIsLoading(false);
       // Called through an if rather than `?.`: React Compiler bails on the
       // whole file when an optional-chaining call sits inside a try/catch.
       if (onClear) onClear();
@@ -229,12 +228,11 @@ export function ProjectChatTab({
   const waitingForResponse =
     initialMessages.length > 0 &&
     initialMessages[initialMessages.length - 1]?.role === "user" &&
-    (isLoading || hasActiveWorkflow);
+    isLoading;
   const canContinueInterview =
     initialMessages.length > 0 &&
     initialMessages[initialMessages.length - 1]?.role === "user" &&
     !isLoading &&
-    !hasActiveWorkflow &&
     !isLocked;
   const showQuestion = currentQuestion && !waitingForResponse;
 
