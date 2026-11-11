@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader } from "../_generated/server";
-import { authQuery, hasRepoAccess } from "../functions";
+import { authQuery, hasRepoAccess, hasTaskAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { firstUserMessagePreview } from "../_messages/preview";
 import { findMainChat } from "../_sessionChats/helpers";
@@ -20,6 +20,8 @@ import {
   sessionIsExecuting,
 } from "../_chat/turnProjection";
 import { unreadLookupForRepo } from "../chatReads";
+import { isStandaloneSession } from "./owner";
+import { findTaskSession } from "./ownedSession";
 
 /** The primary repo a linked-in session actually belongs to. */
 const linkedFromValidator = v.object({
@@ -451,7 +453,9 @@ export const countActive = authQuery({
         )
         .collect(),
     );
-    return sessions.filter((session) => !isSessionArchived(session)).length;
+    return sessions.filter(
+      (session) => isStandaloneSession(session) && !isSessionArchived(session),
+    ).length;
   },
 });
 
@@ -464,6 +468,29 @@ export const get = authQuery({
     if (!session) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return null;
     return entityVisible(session);
+  },
+});
+
+/**
+ * The session a quick task owns and its Main chat, for the task's chat and
+ * sandbox panels. Null until something first needed it (`ensureOwned`).
+ */
+export const getOwned = authQuery({
+  args: { taskId: v.id("agentTasks") },
+  returns: v.union(
+    v.object({
+      sessionId: v.id("sessions"),
+      chatId: v.id("sessionChats"),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) return null;
+    const session = await findTaskSession(ctx.db, task._id);
+    if (!session) return null;
+    const mainChat = await findMainChat(ctx.db, session._id);
+    return mainChat ? { sessionId: session._id, chatId: mainChat._id } : null;
   },
 });
 

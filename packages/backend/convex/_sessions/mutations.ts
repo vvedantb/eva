@@ -7,6 +7,7 @@ import {
   getRepoWithAccess,
   getSessionWithAccess,
   hasRepoAccess,
+  hasTaskAccess,
 } from "../functions";
 import { allocateNumId } from "../numId";
 import {
@@ -42,7 +43,8 @@ import {
 import { linkedRepoDir } from "../_sandbox_runtime/workspaceLayout";
 import { touchUserActivity } from "../_sandbox/activity";
 import { assertComposerMessageRole } from "../_messages/publicRole";
-import { STANDALONE_SESSION_OWNER } from "./owner";
+import { assertStandaloneSession, STANDALONE_SESSION_OWNER } from "./owner";
+import { ensureOwnedSession, taskUsesOwnedSession } from "./ownedSession";
 import {
   ensureMainChat,
   getSessionChatWithAccess,
@@ -385,6 +387,7 @@ export const update = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await getSessionWithAccess(ctx.db, args.id, ctx.userId);
+    assertStandaloneSession(session, "be renamed");
     const updates: {
       title?: string;
       branchName?: string;
@@ -443,8 +446,33 @@ export const archive = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await getSessionWithAccess(ctx.db, args.id, ctx.userId);
+    // A task's session archives with its task (`retireOwnedSession`).
+    assertStandaloneSession(session, "be archived on its own");
     await archiveSessionDoc(ctx, session);
     return null;
+  },
+});
+
+/**
+ * The quick task's session and Main chat, created on first use. The task's
+ * chat panel calls this before its first send when `getOwned` is still null.
+ */
+export const ensureOwned = authMutation({
+  args: { taskId: v.id("agentTasks") },
+  returns: v.object({
+    sessionId: v.id("sessions"),
+    chatId: v.id("sessionChats"),
+  }),
+  handler: async (ctx, args) => {
+    const task = await ctx.db.get(args.taskId);
+    if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) {
+      throw new Error("Task not found");
+    }
+    if (!taskUsesOwnedSession(task)) {
+      throw new Error("Project tasks chat in their project");
+    }
+    const { session, mainChat } = await ensureOwnedSession(ctx, task);
+    return { sessionId: session._id, chatId: mainChat._id };
   },
 });
 
@@ -454,7 +482,8 @@ export const unarchive = authMutation({
   args: { id: v.id("sessions") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
+    const session = await getSessionWithAccess(ctx.db, args.id, ctx.userId);
+    assertStandaloneSession(session, "be unarchived on its own");
 
     await reopenArchivedPullRequests(ctx, {
       kind: "session",

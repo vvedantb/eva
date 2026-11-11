@@ -237,8 +237,10 @@ const schema = defineSchema({
     .index("by_user", ["userId"])
     .index("by_repo_and_status", ["repoId", "status"])
     .index("by_status", ["status"])
-    .index("by_repo_deleted_and_archived_at", [
+    // The Sessions list: standalone sessions only (owned ones are hidden).
+    .index("by_repo_owner_deleted_and_archived_at", [
       "repoId",
+      "owner.kind",
       "deletedAt",
       "archive.archivedAt",
     ])

@@ -7,6 +7,7 @@ import {
 } from "../_projects/buildState";
 import type { TurnLane } from "../validators";
 import { findOpenTurn, type TurnEntityId } from "./turnStore";
+import { sessionOwnerTaskId } from "../_sessions/owner";
 
 /**
  * Deployment bridge for task and project chats whose workflow started before
@@ -40,7 +41,7 @@ export async function openChatEntityIdsForRepo(
   db: DatabaseReader,
   repoId: Id<"githubRepos">,
 ): Promise<ReadonlySet<string>> {
-  return idsOfTurns(await openChatTurnsForRepo(db, repoId));
+  return idsOfTurns(db, await openChatTurnsForRepo(db, repoId));
 }
 
 /**
@@ -73,7 +74,7 @@ export async function chatTurnFlagsForRepos(
     )
   ).flat();
   return {
-    openIds: idsOfTurns(turns),
+    openIds: await idsOfTurns(db, turns),
     awaitingAnswerIds: await awaitingAnswerIdsOf(db, turns),
   };
 }
@@ -91,7 +92,10 @@ async function awaitingAnswerIdsOf(
       return rows.some((row) => row.answer === undefined) ? turn : null;
     }),
   );
-  return idsOfTurns(asking.filter((turn) => turn !== null));
+  return idsOfTurns(
+    db,
+    asking.filter((turn) => turn !== null),
+  );
 }
 
 /** Open chat turns in one repo. A lane turn (summary, interview) is a one-shot agent, not a chat turn. */
@@ -106,11 +110,28 @@ async function openChatTurnsForRepo(
   return turns.filter((turn) => turn.lane === undefined);
 }
 
-function idsOfTurns(turns: ReadonlyArray<Doc<"turns">>): ReadonlySet<string> {
+/**
+ * A turn lights up its entity and its session. A task's session also lights
+ * up its task (its card is where that chat lives), read with one point read
+ * per distinct open-turn session, never one per list row.
+ */
+async function idsOfTurns(
+  db: DatabaseReader,
+  turns: ReadonlyArray<Doc<"turns">>,
+): Promise<ReadonlySet<string>> {
   const ids = new Set<string>();
+  const sessionIds = new Set<Id<"sessions">>();
   for (const turn of turns) {
     ids.add(String(turn.entityId));
-    if (turn.sessionId !== undefined) ids.add(String(turn.sessionId));
+    if (turn.sessionId !== undefined) {
+      ids.add(String(turn.sessionId));
+      sessionIds.add(turn.sessionId);
+    }
+  }
+  const sessions = await Promise.all([...sessionIds].map((id) => db.get(id)));
+  for (const session of sessions) {
+    const taskId = session ? sessionOwnerTaskId(session) : undefined;
+    if (taskId) ids.add(String(taskId));
   }
   return ids;
 }

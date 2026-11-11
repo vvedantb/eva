@@ -18,6 +18,7 @@ import {
   reconcileProviderAccountForModel,
 } from "../_userProviderAccounts/defaults";
 import { isSessionArchived } from "../_sessions/archive";
+import { assertStandaloneSession } from "../_sessions/owner";
 import {
   createSessionChat,
   ensureMainChat,
@@ -87,6 +88,7 @@ export const create = authMutation({
     if (isSessionArchived(session)) {
       throw new Error("This session is archived");
     }
+    assertStandaloneSession(session, "open another chat");
     await ensureMainChat(ctx, session);
     const inheritFrom =
       args.fromChatId !== undefined
@@ -105,11 +107,12 @@ export const rename = authMutation({
   args: { chatId: v.id("sessionChats"), title: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { chat } = await getSessionChatWithAccess(
+    const { chat, session } = await getSessionChatWithAccess(
       ctx.db,
       args.chatId,
       ctx.userId,
     );
+    assertStandaloneSession(session, "rename its chat");
     const title = args.title.trim();
     if (!title) return null;
     await ctx.db.patch(chat._id, { title });

@@ -5,6 +5,7 @@ import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 import { hasRepoAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { isSessionArchived } from "../_sessions/archive";
+import { standaloneOnly } from "../_sessions/owner";
 import {
   ALL_TASK_STATUSES,
   PROJECT_PHASES,
@@ -443,15 +444,18 @@ async function scanSessions(
         q.eq("repoId", repoId).eq("status", narrowed),
       )
       .order("desc")
+      .filter(standaloneOnly)
       .take(take);
     return filterActiveEntities(rows);
   }
+  // A task's session lists as its task, never as a session of its own.
   return ctx.db
     .query("sessions")
     .withIndex("by_repo_and_deleted", (q) =>
       q.eq("repoId", repoId).eq("deletedAt", undefined),
     )
     .order("desc")
+    .filter(standaloneOnly)
     .take(take);
 }
 

@@ -9,6 +9,7 @@ import {
 } from "./orchestratorShared";
 import { requestRun } from "./_ave/threads";
 import { findMainChat } from "./_sessionChats/helpers";
+import { findTaskSession } from "./_sessions/ownedSession";
 
 /** Everything the wake-up message needs about the child that just finished. */
 type ChildSummary = {
@@ -59,12 +60,15 @@ async function loadChildSummary(
   }
   const task = await ctx.db.get(child.taskId);
   if (!task || task.watchedByAve === undefined) return null;
+  // A quick task chats in its session's Main chat.
+  const session = await findTaskSession(ctx.db, task._id);
+  const mainChat = session ? await findMainChat(ctx.db, session._id) : null;
   return {
     threadId: task.watchedByAve,
     kindLabel: "task",
     title: task.title,
     repoId: task.repoId,
-    parentId: task._id,
+    parentId: mainChat?._id ?? task._id,
   };
 }
 

@@ -4,6 +4,7 @@ import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { hasRepoAccess, hasTaskAccess } from "../functions";
 import { isEntityDeleted } from "../numId";
+import { sessionOwnerTaskId } from "../_sessions/owner";
 import {
   chatEntityKindValidator,
   chatRefValidator,
@@ -60,9 +61,12 @@ export async function chatSourceFieldsForEntityId(
   }
   const sessionId = db.normalizeId("sessions", entityId);
   if (sessionId) {
-    return (await db.get(sessionId))
-      ? { sourceKind: "session", sourceSessionId: sessionId }
-      : null;
+    const session = await db.get(sessionId);
+    if (!session) return null;
+    // A task's session files its docs, artifacts and Log under the task.
+    const ownerTaskId = sessionOwnerTaskId(session);
+    if (ownerTaskId) return chatSourceFieldsForEntityId(db, ownerTaskId);
+    return { sourceKind: "session", sourceSessionId: sessionId };
   }
   const taskId = db.normalizeId("agentTasks", entityId);
   if (taskId) {
@@ -135,6 +139,14 @@ export async function chatSourceFieldsFromArg(
     if (!session) return {};
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
       throw denied();
+    }
+    const ownerTaskId = sessionOwnerTaskId(session);
+    if (ownerTaskId) {
+      return chatSourceFieldsFromArg(
+        ctx,
+        { kind: "task", taskId: ownerTaskId },
+        noun,
+      );
     }
     return { sourceKind: "session", sourceSessionId: sessionId };
   }

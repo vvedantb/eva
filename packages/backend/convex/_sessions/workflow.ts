@@ -77,6 +77,7 @@ import {
   sessionChatStreamingEntityId,
 } from "../_sessionChats/helpers";
 import { errorMessage } from "@vvedantb/server";
+import { isStandaloneSession } from "./owner";
 
 // --- Completion event ---
 
@@ -525,7 +526,12 @@ export const sessionExecuteWorkflow = workflow.define({
       // missing PR when it confirms the session branch already contains HEAD.
       // A chat-only first turn has no remote session branch, so `published` is
       // false and still avoids the old compare-404 alerts.
-      if (pushedCommits || (branchPublished && data.primaryPrUrl === undefined)) {
+      // A task's session pushes the task branch but never opens a session
+      // PR: the task owns its PRs (`eva/task-<id>` → the task's run).
+      if (
+        data.ownsPullRequests !== false &&
+        (pushedCommits || (branchPublished && data.primaryPrUrl === undefined))
+      ) {
         try {
           await step.runAction(internal.github.createDraftSessionPr, {
             sessionId,
@@ -555,7 +561,11 @@ export const sessionExecuteWorkflow = workflow.define({
     // before completion is even posted.
     // Not gated on the primary's `pushSucceeded`: a primary that failed to
     // publish must not strand a linked repo's commits in the sandbox.
-    if (result.success && (data.linkedRepoCount ?? 0) > 0) {
+    if (
+      result.success &&
+      data.ownsPullRequests !== false &&
+      (data.linkedRepoCount ?? 0) > 0
+    ) {
       let linkedPushes: Array<{
         sessionRepoId: Id<"sessionRepos">;
         pushed: boolean;
@@ -780,6 +790,12 @@ export const getSessionData = internalQuery({
     linkedRepoCount: v.optional(v.number()),
     /** startSessionSandbox still owns repo prep, swap and Docker. */
     sandboxSetupPending: v.boolean(),
+    /**
+     * False for a task's session: it pushes the task branch, but the draft PR
+     * and linked-repo publish belong to the task. Optional only so a workflow
+     * journaled before this field replays.
+     */
+    ownsPullRequests: v.optional(v.boolean()),
   }),
   handler: async (ctx, args) => {
     const [{ chat, session }, user, triggeringUserMessage] = await Promise.all([
@@ -833,6 +849,7 @@ export const getSessionData = internalQuery({
       attachmentStorageIds: triggeringUserMessage?.attachmentStorageIds,
       linkedRepoCount: session.linkedRepoCount,
       sandboxSetupPending: session.sandboxSetupPending === true,
+      ownsPullRequests: isStandaloneSession(session),
     };
   },
 });

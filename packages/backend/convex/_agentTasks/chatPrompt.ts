@@ -2,6 +2,7 @@ import {
   buildEditPrompt,
   type ChatRuntimeFacts,
 } from "../_sessions/prompts";
+import { withTaskContext } from "../_sessions/sessionPrompt";
 
 interface BuildAgentTaskChatPromptArgs {
   repoOwner: string;
@@ -29,16 +30,7 @@ interface BuildAgentTaskChatPromptArgs {
 export function buildAgentTaskChatPrompt(
   args: BuildAgentTaskChatPromptArgs,
 ): string {
-  const numberLabel = args.taskNumber ? `#${args.taskNumber} ` : "";
-  const descriptionBlock = args.description
-    ? `\nTask description:\n${args.description}`
-    : "";
-  const tagsLine =
-    args.tags && args.tags.length > 0 ? `\nTags: ${args.tags.join(", ")}` : "";
-
-  const messageWithContext = `In the sandbox for task ${numberLabel}"${args.title}" (status: ${args.status})${tagsLine}${descriptionBlock}
-
-${args.message}`;
+  const messageWithContext = withTaskContext(args, args.message);
 
   return buildEditPrompt({
     repo: { owner: args.repoOwner, name: args.repoName },

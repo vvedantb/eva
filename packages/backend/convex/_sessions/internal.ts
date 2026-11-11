@@ -17,6 +17,7 @@ import { reconcileSessionArchiveState } from "./prArchive";
 import { schedulePrTitleSync } from "../_github/prTitleSync";
 import { hasOpenChatTurn } from "../_chat/turnProjection";
 import { findMainChat } from "../_sessionChats/helpers";
+import { isStandaloneSession } from "./owner";
 
 /** Retrieves a session by ID for internal use (no auth check). */
 export const getInternal = internalQuery({
@@ -156,7 +157,7 @@ export const applyGeneratedTitle = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
-    if (!session) return null;
+    if (!session || !isStandaloneSession(session)) return null;
     if (session.title !== DEFAULT_SESSION_TITLE) return null;
     await ctx.db.patch(args.sessionId, {
       title: args.title,
@@ -194,7 +195,8 @@ export const getTitleContext = internalQuery({
   ),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
-    if (!session) return null;
+    // A task's session carries its task's title; it is never re-titled.
+    if (!session || !isStandaloneSession(session)) return null;
     // The title follows the session's own conversation: the Main chat.
     const mainChat = await findMainChat(ctx.db, args.sessionId);
     const newestFirst = mainChat

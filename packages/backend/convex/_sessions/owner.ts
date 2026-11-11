@@ -1,5 +1,6 @@
 import { v, type Infer } from "convex/values";
-import type { Doc } from "../_generated/dataModel";
+import type { FilterBuilder, NamedTableInfo } from "convex/server";
+import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader } from "../_generated/server";
 
 /**
@@ -35,6 +36,39 @@ export function sessionOwner(session: OwnerFields): SessionOwner {
 
 export function isStandaloneSession(session: OwnerFields): boolean {
   return sessionOwner(session).kind === "standalone";
+}
+
+/**
+ * Query filter for the user-facing session surfaces (mentions, search,
+ * analytics): a task's or project's session is reached through its owner.
+ * The Sessions list itself reads `by_repo_owner_deleted_and_archived_at`.
+ */
+export function standaloneOnly(
+  q: FilterBuilder<NamedTableInfo<DataModel, "sessions">>,
+) {
+  return q.eq(q.field("owner.kind"), "standalone");
+}
+
+/** The task a session belongs to, or undefined for any other owner. */
+export function sessionOwnerTaskId(
+  session: OwnerFields,
+): Id<"agentTasks"> | undefined {
+  const owner = sessionOwner(session);
+  return owner.kind === "task" ? owner.taskId : undefined;
+}
+
+/**
+ * Guard for the session-only actions an owned session refuses: fork, add to a
+ * group, open another chat, rename. A task's session is one chat that mirrors
+ * the task; those actions belong to the task, or to standalone sessions.
+ */
+export function assertStandaloneSession(
+  session: OwnerFields,
+  action: string,
+): void {
+  if (!isStandaloneSession(session)) {
+    throw new Error(`A task's session cannot ${action}.`);
+  }
 }
 
 /**

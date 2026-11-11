@@ -6,6 +6,7 @@ import { formatMessagePreview } from "../_messages/preview";
 import { authorDisplayName, teamMentionRecipients } from "./mentionRecipients";
 import { stripMentionTokens } from "./resolveDocMentions";
 import { stripSkillTokens } from "./skillToken";
+import { sessionOwnerTaskId } from "../_sessions/owner";
 
 /**
  * Which chat a message was posted in. Carries the whole document because the
@@ -60,6 +61,17 @@ function surfaceTitle(surface: ChatMentionSurface): string {
   }
 }
 
+/** A task's session notifies as its task: the link opens the task page. */
+async function ownerSurface(
+  ctx: MutationCtx,
+  surface: ChatMentionSurface,
+): Promise<ChatMentionSurface> {
+  if (surface.kind !== "session") return surface;
+  const taskId = sessionOwnerTaskId(surface.session);
+  const task = taskId ? await ctx.db.get(taskId) : null;
+  return task ? { kind: "task", task } : surface;
+}
+
 /** How much of the message routing is shown. Long enough for the ask, short
  * enough that a pasted log does not dominate the judgement. */
 const ROUTING_MESSAGE_LIMIT = 4000;
@@ -85,7 +97,8 @@ export async function notifyChatMentions(
     surface: ChatMentionSurface;
   },
 ): Promise<void> {
-  const target = notificationTarget(args.surface);
+  const surface = await ownerSurface(ctx, args.surface);
+  const target = notificationTarget(surface);
   const recipients = await teamMentionRecipients(
     ctx,
     args.content,
@@ -95,7 +108,7 @@ export async function notifyChatMentions(
   if (recipients.length === 0) return;
 
   const authorName = await authorDisplayName(ctx, args.authorUserId);
-  const title = `${authorName} mentioned you in a ${SURFACE_NAME[args.surface.kind]} chat`;
+  const title = `${authorName} mentioned you in a ${SURFACE_NAME[surface.kind]} chat`;
   const message = formatMessagePreview(args.content);
 
   // Routing runs after every notification exists, in one action: the judgement
@@ -135,7 +148,7 @@ export async function notifyChatMentions(
       ROUTING_MESSAGE_LIMIT,
     ),
     authorName,
-    surface: args.surface.kind,
-    entityTitle: surfaceTitle(args.surface),
+    surface: surface.kind,
+    entityTitle: surfaceTitle(surface),
   });
 }
