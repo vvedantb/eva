@@ -1,5 +1,5 @@
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { configureTheme, palette, tokens, withAlpha } from "@vvedantb/native-ui/theme";
+import { configureTheme, tokens, withAlpha } from "@vvedantb/native-ui/theme";
 import { EVA_FONT } from "./fonts";
 
 const { light, dark } = EVA_THEME;
@@ -43,13 +43,13 @@ export function applyEvaTheme() {
       overlay: pair("popover"),
       overlayForeground: pair("popoverForeground"),
       fieldPlaceholder: pair("mutedForeground"),
-      // The web `.tabs-segmented` active pill: card in light, secondary in dark,
-      // under the foreground label.
-      segment: { light: light.card, dark: dark.secondary },
+      // The web `.tabs-segmented` active pill (`--segment-active`), under the
+      // foreground label.
+      segment: pair("segmentActive"),
       segmentForeground: pair("foreground"),
-      // The bottom tab bar pill: Eva's secondary in light (as before), and the
-      // package's lighter #474747 in dark so it shows on the dark glass bar.
-      tabBarPill: { light: light.secondary, dark: palette.tabBarPill.dark },
+      // The bottom tab bar pill: Eva's secondary in light, so it shows on the
+      // near-white glass; the segmented pill in dark.
+      tabBarPill: { light: light.secondary, dark: dark.segmentActive },
     },
   });
 }
