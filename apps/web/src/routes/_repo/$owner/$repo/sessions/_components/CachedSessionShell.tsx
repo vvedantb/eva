@@ -28,7 +28,8 @@ interface CachedSessionShellProps {
 
 /**
  * One kept-alive session detail tree. While `isActiveRoute` is false the shell
- * stays mounted (parent uses `hidden`) and freezes its sandbox tab and chat
+ * keeps its DOM and state (parent uses a hidden `<Activity>`, so its effects
+ * are torn down) and freezes its sandbox tab and chat
  * tab so the active session's URL does not rewrite sibling caches. Each shell
  * carries its own passive RepoProvider so shells from other apps stay
  * resolvable.
@@ -65,8 +66,8 @@ function CachedSessionShellInner({
   const session = useSessionByNumId(numId, repoId);
   const urlSandboxTab = useSessionRouteSandboxTab();
   // What the session tree is told. Turning active is immediate; turning
-  // inactive is deferred, so the shell being hidden (already `display: none`
-  // via the parent) re-renders after the next session paints instead of in the
+  // inactive is deferred, so the shell being hidden (already hidden by the
+  // parent's `<Activity>`) re-renders after the next session paints instead of in the
   // same blocking commit. URL-following logic below keeps the live
   // `isActiveRoute`, so a lagging shell never adopts the new session's URL.
   const deferredActive = useDeferredValue(isActiveRoute);

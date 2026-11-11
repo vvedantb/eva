@@ -1,5 +1,13 @@
 # Changelog
 
+## Cached sessions: hidden shells pause in `<Activity>`
+
+Date: 2026-11-11
+
+WHY: Up to five cached session shells stayed mounted under `display: none` with all effects live. Their terminals kept sockets open and redrew on every line of output, which fed the page freezes.
+
+Architectural: The sessions layout wraps each cached `CachedSessionShell` in React `<Activity>`. A hidden shell keeps its DOM and state, so Preview iframes stay loaded, but its effects are torn down: terminal sockets close and reconnect on show. Convex cache-hook queries survive the 5-minute cache expiry, so a quick switch back still paints at once. The opt-in reply chime no longer sounds for a hidden session.
+
 ## Terminals: WebGL renderer stops the page freezes
 
 Date: 2026-11-11
