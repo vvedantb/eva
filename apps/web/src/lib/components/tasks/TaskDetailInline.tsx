@@ -102,8 +102,11 @@ export function TaskDetailInline({
         : "preview";
   const embeddedSandboxTab = pickedSandboxTab ?? urlSandboxTab;
   const sandboxRailWidthPx = useSandboxRailWidthPx();
-  const prewarmChatDaemon = useMutation(
+  const prewarmTaskChatDaemon = useMutation(
     api.agentTaskChatWorkflow.prewarmChatDaemon,
+  );
+  const prewarmSessionChatDaemon = useMutation(
+    api.sessionWorkflow.prewarmDaemon,
   );
 
   const {
@@ -162,16 +165,31 @@ export function TaskDetailInline({
     canCreatePr,
     isCreatingPr,
     handleCreatePr,
+    taskSession,
   } = useTaskDetail(taskId, routing);
-  const isAgentActive = useTaskAgentActive(taskId, task);
+  const { sandbox } = taskSession;
+  // A quick task chats in its session's Main chat; a project task on its row.
+  const chatId = taskSession.owned?.chatId;
+  const chatParentId = chatId ?? taskId;
+  const isAgentActive = useTaskAgentActive(chatParentId, task);
   const scheduledAt = task ? taskScheduledAt(task) : undefined;
-  const chatUnread = useChatUnread(taskId);
+  const chatUnread = useChatUnread(chatParentId);
   const { request: requestConfirm } = useRequestConfirm();
 
+  const isQuickTaskChat = taskSession.isQuickTask;
   useEffect(() => {
     if (!isSandboxActive || !sandboxId) return;
-    void prewarmChatDaemon({ taskId });
-  }, [taskId, isSandboxActive, sandboxId, prewarmChatDaemon]);
+    if (chatId) void prewarmSessionChatDaemon({ chatId });
+    else if (!isQuickTaskChat) void prewarmTaskChatDaemon({ taskId });
+  }, [
+    taskId,
+    chatId,
+    isQuickTaskChat,
+    isSandboxActive,
+    sandboxId,
+    prewarmTaskChatDaemon,
+    prewarmSessionChatDaemon,
+  ]);
 
   const [expandRightSignal, setExpandRightSignal] = useState(0);
 
@@ -223,7 +241,7 @@ export function TaskDetailInline({
     setExpandRightSignal((n) => n + 1);
   };
 
-  useAgentBrowsingAutoSwitch(task?.agentBrowsingAt, () => {
+  useAgentBrowsingAutoSwitch(sandbox.agentBrowsingAt, () => {
     handleSandboxTabChange("browser");
     setExpandRightSignal((n) => n + 1);
   });
@@ -280,13 +298,12 @@ export function TaskDetailInline({
         sandboxId={sandboxId}
         isActive={isSandboxActive}
         repoId={task.repoId}
-        devPort={task.devPort}
-        devCommand={task.devCommand}
+        devPort={sandbox.devPort}
+        devCommand={sandbox.devCommand}
         owner={owner}
         panes={panes}
         terminalPanel={terminalPanel}
         prUrl={latestPrUrl}
-        backgroundAgents={task.backgroundAgents}
         activeTab={activeSandboxTab}
         onTabChange={handleSandboxTabChange}
         onStartSandbox={
@@ -294,7 +311,7 @@ export function TaskDetailInline({
         }
         isSandboxStarting={isSandboxStarting}
         autoWakeEligible={
-          task.reviewTaskSandboxStatus === "closed" &&
+          sandbox.status === "closed" &&
           sandboxId !== undefined &&
           canStartSandbox &&
           !hasActiveRun
@@ -327,12 +344,11 @@ export function TaskDetailInline({
       onOpenDiffsTab={() => openDiffs()}
     >
       <SandboxWorkspace
-        ownerKind="task"
-        ownerId={taskId}
+        owner={sandbox.owner}
         storageScope={`task:${taskId}`}
         sandboxId={sandboxId}
         isActive={isSandboxActive}
-        terminalPanes={task.terminalPanes}
+        terminalPanes={sandbox.terminalPanes}
       >
         {(panes, owner, terminalPanel) => (
           <ResizablePanelLayout
@@ -529,6 +545,7 @@ export function TaskDetailInline({
         isSandboxActive={isSandboxActive}
         isSandboxStarting={isSandboxStarting}
         isSandboxStopping={isSandboxStopping}
+        sandbox={sandbox}
         canCreatePr={canCreatePr}
         isCreatingPr={isCreatingPr}
         onCreatePr={handleCreatePr}

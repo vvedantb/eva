@@ -63,6 +63,8 @@ export function SandboxChatPanel({
   const { repo, basePath } = useRepo();
   const { entity, doc, model, firstRun } = binding;
   const { parentId, streamingEntityId, draftTarget } = sandboxChatKeys(entity);
+  // A session here is a quick task's owned session: the user sees a task.
+  const ownerLabel = entity.kind === "project" ? "project" : "task";
   const { messages, isExecuting } = useSandboxChatTranscript(binding);
   // `messages` is the live part; the rendered transcript adds the history
   // above it once the reader goes there.
@@ -176,7 +178,7 @@ export function SandboxChatPanel({
       <SubagentThreadLayer
         surface={chatSurface}
         parentTitle={
-          doc?.title ?? (entity.kind === "task" ? "Task" : "Project")
+          doc?.title ?? (ownerLabel === "task" ? "Task" : "Project")
         }
         messages={chatMessages}
         streamingActivity={streaming?.currentActivity}
@@ -205,7 +207,7 @@ export function SandboxChatPanel({
           placeholder={composer.placeholder}
           emptyStateTitle={
             isSandboxActive
-              ? `Ask Eva anything about this ${entity.kind}'s running sandbox.`
+              ? `Ask Eva anything about this ${ownerLabel}'s running sandbox.`
               : SANDBOX_CHAT_COPY.asleepTitle
           }
           emptyStateDescription={

@@ -10,9 +10,10 @@ import { useChatTurnOpen } from "@/lib/components/chat/useChatTurnOpen";
  * persisted `status`, so this never moves a card between columns.
  */
 export function useTaskAgentActive(
-  taskId: Id<"agentTasks">,
+  /** The task's chat: a quick task's session Main chat, else the task. */
+  chatParentId: Id<"sessionChats"> | Id<"agentTasks">,
   task: TaskRunSource | null | undefined,
 ): boolean {
-  const chatTurnOpen = useChatTurnOpen(taskId);
+  const chatTurnOpen = useChatTurnOpen(chatParentId);
   return (task ? isTaskRunning(task) : false) || chatTurnOpen === true;
 }

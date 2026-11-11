@@ -14,14 +14,23 @@ import type { ChatDraftTarget } from "./useChatDraftSeed";
 import type { ChatEntityRef } from "./sandboxChatSurface";
 
 /**
- * The chats that run on an entity-owned sandbox workflow
- * (`agentTaskChatWorkflow` / `projectChatWorkflow`). Sessions send through the
- * same `sendSandboxTurn`, with ports bound to `api.sessions.*`.
+ * A session chat, or one not created yet: a quick task's session is made on
+ * its first need (`sessions.ensureOwned`), so its chat id may still be ahead.
  */
-export type SandboxChatEntity = Extract<
-  ChatEntityRef,
-  { kind: "task" | "project" }
->;
+export type SessionChatSource =
+  | Id<"sessionChats">
+  | (() => Promise<Id<"sessionChats">>);
+
+/**
+ * Runs `run` on the chat. A known id runs at once (no extra tick), so the
+ * optimistic updates of a session send still apply together.
+ */
+export function withSessionChat<T>(
+  chat: SessionChatSource,
+  run: (chatId: Id<"sessionChats">) => Promise<T>,
+): Promise<T> {
+  return typeof chat === "string" ? run(chat) : chat().then(run);
+}
 
 // The project validators are the canonical shape: the task and session
 // validators accept the same fields plus surface-only extras, so a binding
@@ -159,13 +168,24 @@ export function sandboxAnnotationSender(
 }
 
 /** The ids and keys one sandbox chat is addressed by. */
-export function sandboxChatKeys(entity: SandboxChatEntity): {
-  parentId: Id<"agentTasks"> | Id<"projects">;
+export function sandboxChatKeys(entity: ChatEntityRef): {
+  parentId: Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">;
   /** The chat's streaming row (not the first-run row). */
   streamingEntityId: string;
   draftTarget: ChatDraftTarget;
 } {
   switch (entity.kind) {
+    case "session":
+      return {
+        parentId: entity.chatId,
+        // Backend `sessionChatStreamingEntityId`.
+        streamingEntityId: String(entity.chatId),
+        draftTarget: {
+          kind: "sessionChat",
+          sessionId: entity.sessionId,
+          chatId: entity.chatId,
+        },
+      };
     case "task":
       return {
         parentId: entity.taskId,

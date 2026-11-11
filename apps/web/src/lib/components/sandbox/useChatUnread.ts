@@ -8,7 +8,7 @@ import { api, type Id } from "@eva/backend";
  * the Convex client serves both from one subscription. `false` while loading.
  */
 export function useChatUnread(
-  parentId: Id<"agentTasks"> | Id<"projects">,
+  parentId: Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">,
 ): boolean {
   const state = useQuery(api.chatReads.isUnread, { parentId });
   return state?.hasUnread === true;

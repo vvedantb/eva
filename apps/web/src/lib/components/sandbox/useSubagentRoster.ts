@@ -31,8 +31,8 @@ export function useSubagentRoster({
   backgroundAgents,
   sandboxRunning,
 }: {
-  /** Chat transcript owner — the task or project the sandbox belongs to. */
-  parentId: Id<"agentTasks"> | Id<"projects">;
+  /** Chat transcript owner: a quick task's session chat, a task or a project. */
+  parentId: Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">;
   /** `api.streaming.get` entity id for that surface's chat turn. */
   streamingEntityId: string;
   backgroundAgents: BackgroundAgentEntry[] | undefined;

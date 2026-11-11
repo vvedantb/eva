@@ -12,6 +12,7 @@ import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs
 import type { TaskDetailTab } from "./_components/task-detail-constants";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";
 import { useSandboxLifecycle } from "@/lib/components/sandbox/useSandboxLifecycle";
+import type { TaskSandboxFields, TaskSession } from "./useTaskSession";
 
 type QuickTaskDetailRouting = {
   detailTab: TaskDetailTab;
@@ -152,18 +153,20 @@ export function useTaskExecutionControls(taskId: Id<"agentTasks">) {
  * previews like a reviewed task rather than offering a first run again.
  * Mirrors `isPreviewSandboxAllowed` in the backend.
  */
-function deriveSandboxFlags(task: TaskDetailTask, hasRuns: boolean) {
+function deriveSandboxFlags(
+  task: TaskDetailTask,
+  sandbox: TaskSandboxFields,
+  hasRuns: boolean,
+) {
   const canStartSandbox =
     task?.status !== undefined &&
     (PREVIEW_SANDBOX_ALLOWED_STATUSES.includes(task.status) ||
       (task.status === "todo" && hasRuns));
 
-  const isSandboxActive = task?.reviewTaskSandboxStatus === "active";
-  const isSandboxStartingFromStatus =
-    task?.reviewTaskSandboxStatus === "starting";
-  const isSandboxStoppingFromStatus =
-    task?.reviewTaskSandboxStatus === "stopping";
-  const hasReviewSandbox = task?.sandboxId !== undefined;
+  const isSandboxActive = sandbox.status === "active";
+  const isSandboxStartingFromStatus = sandbox.status === "starting";
+  const isSandboxStoppingFromStatus = sandbox.status === "stopping";
+  const hasReviewSandbox = sandbox.sandboxId !== undefined;
   const canViewSandbox =
     canStartSandbox ||
     hasReviewSandbox ||
@@ -214,39 +217,57 @@ function createSurfaceSelector(
   };
 }
 
-/** Review sandbox lifecycle, startup / dev-server commands and surface toggle. */
+/**
+ * Review sandbox lifecycle, startup / dev-server commands and surface toggle.
+ * A quick task's sandbox is its owned session's (`useTaskSession`).
+ */
 export function useTaskSandboxControls({
   taskId,
   task,
+  taskSession,
   hasRuns,
   routing,
   setExecutionError,
 }: {
   taskId: Id<"agentTasks">;
   task: TaskDetailTask;
+  taskSession: TaskSession;
   hasRuns: boolean;
   routing: UseTaskDetailRouting | undefined;
   setExecutionError: (message: string | null) => void;
 }) {
   const startTaskSandboxMutation = useMutation(api.agentTasks.startTaskSandbox);
   const stopTaskSandboxMutation = useMutation(api.agentTasks.stopTaskSandbox);
+  const startSessionSandbox = useMutation(api.sessions.startSandbox);
+  const stopSessionSandbox = useMutation(api.sessions.stopSandbox);
+  const { sandbox } = taskSession;
+  const startSandbox = async () => {
+    if (!taskSession.isQuickTask) return await startTaskSandboxMutation({ taskId });
+    const { sessionId } = await taskSession.ensure();
+    return await startSessionSandbox({ sessionId });
+  };
+  const stopSandbox = async () => {
+    if (!taskSession.isQuickTask) return await stopTaskSandboxMutation({ taskId });
+    const { sessionId } = await taskSession.ensure();
+    return await stopSessionSandbox({ sessionId });
+  };
   const runDevServerMutation = useMutation(api.agentTasks.runDevServer);
   const runBackgroundCommandsMutation = useMutation(
     api.agentTasks.runBackgroundCommands,
   );
 
   const [embeddedShowSandbox, setEmbeddedShowSandbox] = useState(false);
-  const lifecycle = useSandboxLifecycle(task?.reviewTaskSandboxStatus);
+  const lifecycle = useSandboxLifecycle(sandbox.status);
   const [isRunningDevServer, setIsRunningDevServer] = useState(false);
   const [isRunningBackgroundCommands, setIsRunningBackgroundCommands] =
     useState(false);
   const [showRunDevServerConfirm, setShowRunDevServerConfirm] = useState(false);
 
-  const flags = deriveSandboxFlags(task, hasRuns);
+  const flags = deriveSandboxFlags(task, sandbox, hasRuns);
   const sandboxStartupStreaming = useQuery(
     api.streaming.get,
     flags.isSandboxStartingFromStatus
-      ? { entityId: sandboxStartupEntityId({ kind: "task", taskId }) }
+      ? { entityId: sandboxStartupEntityId(sandbox.owner) }
       : "skip",
   );
 
@@ -261,7 +282,7 @@ export function useTaskSandboxControls({
   const handleStartSandbox = () =>
     lifecycle.run("start", async () => {
       try {
-        await startTaskSandboxMutation({ taskId });
+        await startSandbox();
         openSandboxAfterStart();
       } catch (err) {
         console.error("Failed to start sandbox:", err);
@@ -272,7 +293,7 @@ export function useTaskSandboxControls({
   const handleStopSandbox = () =>
     lifecycle.run("stop", async () => {
       try {
-        await stopTaskSandboxMutation({ taskId });
+        await stopSandbox();
       } catch (err) {
         console.error("Failed to stop sandbox:", err);
         toast.error("Could not stop the sandbox. Try again.");
