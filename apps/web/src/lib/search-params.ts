@@ -1,8 +1,15 @@
 import {
+  CHAT_LOG_ENTRY_KINDS,
+  FEEDBACK_AUTHORS,
+  FEEDBACK_SENTIMENTS,
+  PROJECT_PHASES,
+} from "@eva/backend";
+import {
   PR_LIST_STATES,
   QUICK_TASK_FILTER_DEFAULTS,
   QUICK_TASK_SORT_FIELDS,
   QUICK_TASK_TIME_RANGES,
+  TASK_STATUSES,
 } from "@eva/shared";
 import {
   parseAsString,
@@ -18,27 +25,10 @@ export const searchParser = parseAsString
   .withDefault("")
   .withOptions(searchOptions);
 
-const taskStatuses = [
-  "todo",
-  "in_progress",
-  "business_review",
-  "code_review",
-  "done",
-  "cancelled",
-] as const;
-export const statusesParser = parseAsArrayOf(parseAsStringLiteral(taskStatuses))
-  .withDefault([...taskStatuses])
+export const statusesParser = parseAsArrayOf(parseAsStringLiteral(TASK_STATUSES))
+  .withDefault([...TASK_STATUSES])
   .withOptions(searchOptions);
 
-const projectPhases = [
-  "draft",
-  "finalized",
-  "in_progress",
-  "business_review",
-  "code_review",
-  "completed",
-  "cancelled",
-] as const;
 const sortDirections = ["asc", "desc"] as const;
 export const sortDirParser = parseAsStringLiteral(sortDirections)
   .withDefault("desc")
@@ -93,9 +83,9 @@ export const quickTaskTagsParser = parseAsArrayOf(parseAsString)
 // timelineRange, and timelineZoom are per-user presentation preferences and
 // stay in localStorage — see projects/_utils.ts.
 // hiddenPhases stores exclusions (blocklist), so the default is empty —
-// reuses the same phase set as `projectPhases` above.
+// reuses the Convex `PROJECT_PHASES`.
 export const hiddenProjectPhasesParser = parseAsArrayOf(
-  parseAsStringLiteral(projectPhases),
+  parseAsStringLiteral(PROJECT_PHASES),
 )
   .withDefault([])
   .withOptions(searchOptions);
@@ -398,24 +388,15 @@ export const sourcePanelItemParser = parseAsString.withOptions(tabOptions);
 export const CHAT_LOG_PANEL_ITEM = "log";
 
 // Entry kind the chat Log filters to (`?logKind=decision`). Absent = all.
-export const chatLogKinds = [
-  "decision",
-  "change",
-  "research",
-  "question",
-  "note",
-] as const;
 export const chatLogKindParser =
-  parseAsStringLiteral(chatLogKinds).withOptions(searchOptions);
+  parseAsStringLiteral(CHAT_LOG_ENTRY_KINDS).withOptions(searchOptions);
 
 // Feedback page filters (`/feedback?sentiment=negative&from=agent&repo=o/r`).
 // Absent = all.
-export const feedbackSentiments = ["positive", "negative"] as const;
 export const feedbackSentimentParser =
-  parseAsStringLiteral(feedbackSentiments).withOptions(searchOptions);
-export const feedbackAuthors = ["user", "agent"] as const;
+  parseAsStringLiteral(FEEDBACK_SENTIMENTS).withOptions(searchOptions);
 export const feedbackAuthorParser =
-  parseAsStringLiteral(feedbackAuthors).withOptions(searchOptions);
+  parseAsStringLiteral(FEEDBACK_AUTHORS).withOptions(searchOptions);
 export const feedbackRepoParser = parseAsString.withOptions(searchOptions);
 
 // Which of a chat's pull requests the sandbox Review tab shows (`?pr=<id>`).

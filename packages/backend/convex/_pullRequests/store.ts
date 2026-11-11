@@ -1,4 +1,5 @@
 import type { Infer } from "convex/values";
+import { isLivePrState, type LivePrState } from "@eva/shared";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import type {
@@ -25,17 +26,12 @@ import {
 export type PrOwner = Infer<typeof prOwnerValidator>;
 export type PrState = Infer<typeof prStateValidator>;
 export type PrOrigin = Infer<typeof prOriginValidator>;
-export type LivePrState = "draft" | "open";
 
 /**
  * The owner's identity alone, without the run / linked-repo detail. Same shape
  * as a sandbox owner: whatever owns a sandbox can own pull requests.
  */
 export type PrOwnerRef = SandboxOwner;
-
-export function isLivePrState(state: PrState): state is LivePrState {
-  return state === "draft" || state === "open";
-}
 
 /** Maps a GitHub pull_request webhook action onto a tracked state, or null. */
 export function derivePrStateFromEvent(

@@ -1,14 +1,42 @@
 import { v, type Infer } from "convex/values";
 
-export const taskStatusValidator = v.union(
-  v.literal("draft"),
-  v.literal("todo"),
-  v.literal("in_progress"),
-  v.literal("code_review"),
-  v.literal("business_review"),
-  v.literal("done"),
-  v.literal("cancelled"),
-);
+/**
+ * A Convex union of string literals built from one tuple, so a runtime list
+ * (nuqs parsers, Zod enums, pickers) and its validator cannot drift.
+ */
+export function literalUnion<const Values extends readonly [string, ...string[]]>(
+  values: Values,
+) {
+  return v.union(...values.map((value) => v.literal<Values[number]>(value)));
+}
+
+/** Every task status, in the validator's order (draft first). */
+export const ALL_TASK_STATUSES = [
+  "draft",
+  "todo",
+  "in_progress",
+  "code_review",
+  "business_review",
+  "done",
+  "cancelled",
+] as const;
+export const taskStatusValidator = literalUnion(ALL_TASK_STATUSES);
+type TaskStatus = Infer<typeof taskStatusValidator>;
+
+/** Task statuses still in flight (not done, cancelled, or draft). */
+export const OPEN_TASK_STATUSES = [
+  "todo",
+  "in_progress",
+  "code_review",
+  "business_review",
+] as const satisfies readonly TaskStatus[];
+
+/** Every task status but draft: what task lists and pickers show. */
+export const NON_DRAFT_TASK_STATUSES = [
+  ...OPEN_TASK_STATUSES,
+  "done",
+  "cancelled",
+] as const satisfies readonly TaskStatus[];
 
 export const runStatusValidator = v.union(
   v.literal("queued"),
@@ -44,22 +72,26 @@ export const interactionModeValidator = v.union(
   v.literal("plan"),
 );
 
-export const sessionStatusValidator = v.union(
-  v.literal("active"),
-  v.literal("starting"),
-  v.literal("stopping"),
-  v.literal("closed"),
-);
+/** A chat's sandbox lifecycle: sessions, tasks and projects share it. */
+export const SANDBOX_STATUSES = [
+  "active",
+  "starting",
+  "stopping",
+  "closed",
+] as const;
+export const sessionStatusValidator = literalUnion(SANDBOX_STATUSES);
 
-export const phaseValidator = v.union(
-  v.literal("draft"),
-  v.literal("finalized"),
-  v.literal("in_progress"),
-  v.literal("business_review"),
-  v.literal("code_review"),
-  v.literal("completed"),
-  v.literal("cancelled"),
-);
+/** A project's phase, in workflow order. */
+export const PROJECT_PHASES = [
+  "draft",
+  "finalized",
+  "in_progress",
+  "business_review",
+  "code_review",
+  "completed",
+  "cancelled",
+] as const;
+export const phaseValidator = literalUnion(PROJECT_PHASES);
 
 export const indexingStatusValidator = v.union(
   v.literal("pending"),
@@ -74,26 +106,23 @@ export const prRecapStatusValidator = v.union(
   v.literal("error"),
 );
 
-export const chatLogEntryKindValidator = v.union(
-  v.literal("decision"),
-  v.literal("change"),
-  v.literal("research"),
-  v.literal("question"),
-  v.literal("note"),
-);
+export const CHAT_LOG_ENTRY_KINDS = [
+  "decision",
+  "change",
+  "research",
+  "question",
+  "note",
+] as const;
+export const chatLogEntryKindValidator = literalUnion(CHAT_LOG_ENTRY_KINDS);
 export type ChatLogEntryKind = Infer<typeof chatLogEntryKindValidator>;
 
-export const feedbackSentimentValidator = v.union(
-  v.literal("positive"),
-  v.literal("negative"),
-);
+export const FEEDBACK_SENTIMENTS = ["positive", "negative"] as const;
+export const feedbackSentimentValidator = literalUnion(FEEDBACK_SENTIMENTS);
 export type FeedbackSentiment = Infer<typeof feedbackSentimentValidator>;
 
 /** "user": thumbs on a turn. "agent": `submit_feedback` from the sandbox. */
-export const feedbackAuthorValidator = v.union(
-  v.literal("user"),
-  v.literal("agent"),
-);
+export const FEEDBACK_AUTHORS = ["user", "agent"] as const;
+export const feedbackAuthorValidator = literalUnion(FEEDBACK_AUTHORS);
 
 export const chatLogAuthorValidator = v.union(
   v.literal("agent"),
@@ -288,6 +317,11 @@ export const accentColorValidator = v.union(
   v.literal("olive"),
 );
 
+/** The monochrome accent a user has before picking one. */
+export const DEFAULT_ACCENT_COLOR = "zinc" satisfies Infer<
+  typeof accentColorValidator
+>;
+
 export const radiusValidator = v.union(
   v.literal("none"),
   v.literal("sm"),
@@ -321,12 +355,6 @@ export const letterSpacingValidator = v.union(
   v.literal("wider"),
 );
 
-export const taskSandboxStatusValidator = v.union(
-  v.literal("starting"),
-  v.literal("active"),
-  v.literal("stopping"),
-  v.literal("closed"),
-);
 
 export const findingSeverityValidator = v.union(
   v.literal("low"),

@@ -4,8 +4,8 @@ import { internal } from "../_generated/api";
 import type { Doc } from "../_generated/dataModel";
 import { isEntityDeleted } from "../numId";
 import { prWatchValidator } from "../validators";
+import { isLivePrState } from "@eva/shared";
 import {
-  isLivePrState,
   listOwnerPullRequests,
   findPullRequestByUrl,
   setPullRequestWatch,

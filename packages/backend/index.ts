@@ -28,6 +28,11 @@ export {
 export { type RecapWalkthroughStep } from "./convex/_prRecapWorkflow/walkthrough";
 export { CONNECTOR_ENV_KEYS } from "./convex/_connectors/providers";
 export {
+  CHAT_LOG_ENTRY_KINDS,
+  DEFAULT_ACCENT_COLOR,
+  FEEDBACK_AUTHORS,
+  FEEDBACK_SENTIMENTS,
+  PROJECT_PHASES,
   COMMENT_ANCHOR_PARAM,
   withCommentAnchor,
   AI_MODEL_OPTIONS,

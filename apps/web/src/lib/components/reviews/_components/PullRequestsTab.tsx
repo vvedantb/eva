@@ -16,6 +16,7 @@ import {
   IconEye,
   IconGitPullRequest,
 } from "@tabler/icons-react";
+import { prStateLabel } from "@eva/shared";
 import { prStateIconClass } from "@/lib/components/prStateIconClass";
 import {
   pullRequestContextFromRow,
@@ -26,12 +27,6 @@ export type ReviewPullRequest = FunctionReturnType<
   typeof api.pullRequests.listForOwner
 >[number];
 
-const STATE_LABEL: Record<ReviewPullRequest["state"], string> = {
-  draft: "Draft",
-  open: "Open",
-  merged: "Merged",
-  closed: "Closed",
-};
 
 const ROW_ICON_BUTTON_CLASS = cn(
   LIST_ROW_CONTROL_CLASS,
@@ -131,7 +126,7 @@ function PullRequestRow({
           </div>
           <div className="flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
             <span className="shrink-0">#{pr.prNumber}</span>
-            <span className="shrink-0">{STATE_LABEL[pr.state]}</span>
+            <span className="shrink-0">{prStateLabel(pr.state)}</span>
             {pr.linkedRepo ? (
               <span className="truncate">
                 {pr.repoOwner}/{pr.repoName}
