@@ -200,21 +200,14 @@ export function SandboxPanel({
     api.sandboxPanes.getViewState,
     isRouteActive ? { owner } : "skip",
   );
-  const setPreviewPath = useMutation(api.sandboxPanes.setPreviewPath);
-  const setPreviewPort = useMutation(api.sandboxPanes.setPreviewPort);
-  const setTerminalHistoryTail = useMutation(
-    api.sandboxPanes.setTerminalHistoryTail,
-  );
   const releaseBrowserLock = useMutation(api.sandboxPanes.releaseBrowserLock);
   const preview = useSandboxPreview({
+    owner,
     sandboxId,
     isActive,
     isRouteActive,
     repoId,
     devPort,
-    onPortPersist: (port) => {
-      void setPreviewPort({ owner, port });
-    },
   });
   // Multi-repo sessions: which checkout the Files tab browses. "" is the
   // primary repo; a linked repo's `sessionRepos.path` otherwise.
@@ -433,18 +426,7 @@ export function SandboxPanel({
                 ? { ...miniPlayer, owner: { kind: "session", sessionId } }
                 : undefined
             }
-            stickyPreviewPath={viewState?.previewPath}
-            onStickyPreviewPathChange={(path) => {
-              void setPreviewPath({ owner, path });
-            }}
-            stickyTerminalHistoryTail={
-              viewState === undefined
-                ? undefined
-                : (viewState?.terminalHistoryTail ?? "")
-            }
-            onStickyTerminalHistoryTailChange={(tail) => {
-              void setTerminalHistoryTail({ owner, tail });
-            }}
+            viewState={viewState}
           />
         </ReviewChatTargetProvider>
       </div>

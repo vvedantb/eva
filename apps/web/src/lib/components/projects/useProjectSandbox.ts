@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
-import type { Id } from "@eva/backend";
+import type { Doc, Id } from "@eva/backend";
+import { useSandboxLifecycle } from "@/lib/components/sandbox/useSandboxLifecycle";
 import { sandboxStartupEntityId } from "@eva/shared";
 import { toast } from "@vvedantb/ui";
 
@@ -18,7 +19,7 @@ export function useProjectSandbox(
   projectId: Id<"projects">,
   phase: string | undefined,
   sandboxId: string | undefined,
-  reviewProjectSandboxStatus: string | undefined,
+  reviewProjectSandboxStatus: Doc<"projects">["reviewProjectSandboxStatus"],
 ) {
   const startProjectSandboxMutation = useMutation(
     api.projects.startProjectSandbox,
@@ -33,8 +34,7 @@ export function useProjectSandbox(
     api.projects.runProjectBackgroundCommands,
   );
 
-  const [isStartingLocal, setIsStartingLocal] = useState(false);
-  const [isStoppingLocal, setIsStoppingLocal] = useState(false);
+  const lifecycle = useSandboxLifecycle(reviewProjectSandboxStatus);
   const [isRetryingStartupCommands, setIsRetryingStartupCommands] =
     useState(false);
   const [isRunningBackgroundCommands, setIsRunningBackgroundCommands] =
@@ -44,7 +44,6 @@ export function useProjectSandbox(
     phase !== undefined && PREVIEW_SANDBOX_ALLOWED_PHASES.includes(phase);
   const isSandboxActive = reviewProjectSandboxStatus === "active";
   const isSandboxStartingFromStatus = reviewProjectSandboxStatus === "starting";
-  const isSandboxStoppingFromStatus = reviewProjectSandboxStatus === "stopping";
 
   const sandboxStartupStreaming = useQuery(
     api.streaming.get,
@@ -53,27 +52,25 @@ export function useProjectSandbox(
       : "skip",
   );
 
-  const handleStartSandbox = async () => {
-    setIsStartingLocal(true);
-    try {
-      await startProjectSandboxMutation({ projectId });
-    } catch (err) {
-      console.error("Failed to start project sandbox:", err);
-      toast.error("Could not start the sandbox. Try again.");
-    }
-    setIsStartingLocal(false);
-  };
+  const handleStartSandbox = () =>
+    lifecycle.run("start", async () => {
+      try {
+        await startProjectSandboxMutation({ projectId });
+      } catch (err) {
+        console.error("Failed to start project sandbox:", err);
+        toast.error("Could not start the sandbox. Try again.");
+      }
+    });
 
-  const handleStopSandbox = async () => {
-    setIsStoppingLocal(true);
-    try {
-      await stopProjectSandboxMutation({ projectId });
-    } catch (err) {
-      console.error("Failed to stop project sandbox:", err);
-      toast.error("Could not stop the sandbox. Try again.");
-    }
-    setIsStoppingLocal(false);
-  };
+  const handleStopSandbox = () =>
+    lifecycle.run("stop", async () => {
+      try {
+        await stopProjectSandboxMutation({ projectId });
+      } catch (err) {
+        console.error("Failed to stop project sandbox:", err);
+        toast.error("Could not stop the sandbox. Try again.");
+      }
+    });
 
   const handleRetryStartupCommands = async () => {
     setIsRetryingStartupCommands(true);
@@ -100,8 +97,8 @@ export function useProjectSandbox(
   return {
     canStartSandbox,
     isSandboxActive,
-    isSandboxStarting: isStartingLocal || isSandboxStartingFromStatus,
-    isSandboxStopping: isStoppingLocal || isSandboxStoppingFromStatus,
+    isSandboxStarting: lifecycle.isStarting,
+    isSandboxStopping: lifecycle.isStopping,
     sandboxStartupActivity: sandboxStartupStreaming?.currentActivity,
     sandboxId,
     handleStartSandbox,

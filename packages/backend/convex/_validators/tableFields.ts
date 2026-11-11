@@ -63,6 +63,7 @@ import {
   sandboxGitSyncValidator,
   scopeCheckValidator,
   terminalPaneValidator,
+  previewPanePathValidator,
   usageLimitWindowValidator,
   userFlowValidator,
   variationValidator,
@@ -613,6 +614,7 @@ export const agentTaskFields = {
   devCommand: v.optional(v.string()),
   // Sticky Preview URL path for this task sandbox (e.g. "/dashboard").
   previewPath: v.optional(v.string()),
+  previewPanePaths: v.optional(v.array(previewPanePathValidator)),
   // Last ~500 lines of the Preview Console PTY (debounced client writes).
   terminalHistoryTail: v.optional(v.string()),
   terminalPanes: v.optional(v.array(terminalPaneValidator)),
@@ -775,6 +777,7 @@ export const sessionFields = {
   // Sticky Preview URL path for this session (e.g. "/dashboard"). Device
   // viewport stays tab-local; port reuses `devPort` below.
   previewPath: v.optional(v.string()),
+  previewPanePaths: v.optional(v.array(previewPanePathValidator)),
   // Last ~500 lines of the Preview Console PTY (debounced client writes). Cap
   // keeps sessions.get reads small; full scrollback stays in sessionStorage.
   terminalHistoryTail: v.optional(v.string()),
@@ -1134,6 +1137,7 @@ export const projectFields = {
   devCommand: v.optional(v.string()),
   // Sticky Preview URL path for this project sandbox (e.g. "/dashboard").
   previewPath: v.optional(v.string()),
+  previewPanePaths: v.optional(v.array(previewPanePathValidator)),
   // Last ~500 lines of the Preview Console PTY (debounced client writes).
   terminalHistoryTail: v.optional(v.string()),
   terminalPanes: v.optional(v.array(terminalPaneValidator)),

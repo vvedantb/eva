@@ -115,21 +115,14 @@ export function TaskSandboxPanel({
   });
 
   const viewState = useQuery(api.sandboxPanes.getViewState, { owner });
-  const setPreviewPath = useMutation(api.sandboxPanes.setPreviewPath);
-  const setPreviewPort = useMutation(api.sandboxPanes.setPreviewPort);
-  const setTerminalHistoryTail = useMutation(
-    api.sandboxPanes.setTerminalHistoryTail,
-  );
   const releaseBrowserLock = useMutation(api.sandboxPanes.releaseBrowserLock);
 
   const preview = useSandboxPreview({
+    owner,
     sandboxId,
     isActive,
     repoId,
     devPort,
-    onPortPersist: (port) => {
-      void setPreviewPort({ owner, port });
-    },
   });
 
   const fileList = useSandboxFileList({ sandboxId, repoId, isActive });
@@ -252,18 +245,7 @@ export function TaskSandboxPanel({
                 ? { ...miniPlayer, owner: { kind: "task", taskId } }
                 : undefined
             }
-            stickyPreviewPath={viewState?.previewPath}
-            onStickyPreviewPathChange={(path) => {
-              void setPreviewPath({ owner, path });
-            }}
-            stickyTerminalHistoryTail={
-              viewState === undefined
-                ? undefined
-                : (viewState?.terminalHistoryTail ?? "")
-            }
-            onStickyTerminalHistoryTailChange={(tail) => {
-              void setTerminalHistoryTail({ owner, tail });
-            }}
+            viewState={viewState}
           />
         </ReviewChatTargetProvider>
       </div>
