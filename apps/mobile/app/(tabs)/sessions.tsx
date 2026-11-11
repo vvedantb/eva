@@ -3,7 +3,15 @@ import { IconPlus, IconTerminal2 } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
 import { PageHeader } from "@vvedantb/native-ui/layout";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { CenteredSpinner, EmptyState, PillTabs, Tabs, TabsList, TabsTrigger } from "@vvedantb/native-ui/primitives";
+import {
+  CenteredSpinner,
+  closeSwipeRows,
+  EmptyState,
+  PillTabs,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from "@vvedantb/native-ui/primitives";
 import { tokens, useLargerText } from "@vvedantb/native-ui/theme";
 import { useQuery } from "convex/react";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -14,7 +22,7 @@ import { QuickTasksSection, useQuickTaskRepo } from "@/quickTasks/QuickTasksSect
 import { useSimpleView } from "@/chat/ComposerFooter";
 import { ReviewsSection } from "@/reviews/ReviewsSection";
 import { SessionGroupFooter, SessionGroupHeader, SessionListRow, useSessionGroups } from "@/sessions/SessionGroup";
-import { useSessionActions } from "@/sessions/useSessionActions";
+import { SESSION_ACTION_ITEMS, useSessionActions } from "@/sessions/useSessionActions";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme } from "@/ui/theme";
 
@@ -76,7 +84,8 @@ export default function SessionsScreen() {
  * at phone width: Active and Archived tabs, then one collapsible group per
  * repo (`useSessionGroups`) with compact rows and "Show more", in a
  * `SectionList`. A long press on a row opens the web row menu as a sheet
- * (`useSessionActions`).
+ * (`useSessionActions`); a swipe left reveals its Archive (with the web
+ * confirm, then the Undo toast), or Unarchive in the Archived tab.
  */
 function SessionsSection() {
   const router = useRouter();
@@ -140,15 +149,29 @@ function SessionsSection() {
           )}
           // Web: `space-y-0.5` between rows.
           ItemSeparatorComponent={RowGap}
-          renderItem={({ item: session }) => (
-            <SessionListRow
-              session={session}
-              onLongPress={() => sessionActions.openSheet({ ...session, archived: tab === "archived" })}
-            />
-          )}
+          renderItem={({ item: session }) => {
+            const target = { ...session, archived: tab === "archived" };
+            const action = tab === "archived" ? "unarchive" : "archive";
+            const item = SESSION_ACTION_ITEMS[action];
+            return (
+              <SessionListRow
+                session={session}
+                onLongPress={() => sessionActions.openSheet(target)}
+                swipeAction={{
+                  key: action,
+                  label: item.label,
+                  icon: item.icon,
+                  tone: item.warning ? "warning" : "default",
+                  onPress: () => sessionActions.run(action, target),
+                }}
+              />
+            );
+          }}
           renderSectionFooter={({ section }) => (
             <SessionGroupFooter section={section} onToggleExpanded={() => toggleExpanded(section.repoId)} />
           )}
+          // A scroll closes a row swiped open.
+          onScrollBeginDrag={closeSwipeRows}
           contentContainerStyle={{ paddingBottom: tabBarReserve(largerText, insets.bottom) }}
         />
       )}
