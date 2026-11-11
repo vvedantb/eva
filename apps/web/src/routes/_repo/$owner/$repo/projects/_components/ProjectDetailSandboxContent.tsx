@@ -1,4 +1,4 @@
-import type { Id, SandboxOwner } from "@eva/backend";
+import { isProjectBuilding, type Id, type SandboxOwner } from "@eva/backend";
 import { IconTerminal2 } from "@tabler/icons-react";
 import { ProjectSandboxPanel } from "@/lib/components/projects/ProjectSandboxPanel";
 import { ProjectSandboxChatPanel } from "@/lib/components/projects/ProjectSandboxChatPanel";
@@ -96,7 +96,7 @@ export function ProjectDetailSandboxContent({
           project.reviewProjectSandboxStatus === "closed" &&
           projectSandboxId !== undefined &&
           canStartSandbox &&
-          project.activeBuildWorkflowId === undefined &&
+          !isProjectBuilding(project) &&
           // Still loading counts as busy: never wake under a live turn.
           chatTurnOpen === false
         }

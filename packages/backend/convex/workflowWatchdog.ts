@@ -12,6 +12,10 @@ import {
 } from "./_projects/helpers";
 import { recomputeProjectPhase } from "./functions";
 import {
+  finishProjectBuild,
+  markProjectBuildStarted,
+} from "./_projects/buildState";
+import {
   PROJECT_CHAT_STREAM_PREFIX,
   TASK_CHAT_STREAM_PREFIX,
   projectChatAdapter,
@@ -110,10 +114,10 @@ export async function trackProjectBuildWorkflow(
   timeoutMs: number = RUN_TIMEOUT_MS,
 ): Promise<void> {
   const id = String(workflowId);
-  await ctx.db.patch(projectId, {
-    activeBuildWorkflowId: id,
-    ...(options.clearLastBuildError ? { lastBuildError: undefined } : {}),
-  });
+  await markProjectBuildStarted(ctx, projectId, id);
+  if (options.clearLastBuildError) {
+    await ctx.db.patch(projectId, { lastBuildError: undefined });
+  }
   await recomputeProjectPhase(ctx, projectId);
   await ctx.scheduler.runAfter(
     timeoutMs,
@@ -371,15 +375,14 @@ export const handleStaleBuild = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project || project.activeBuildWorkflowId !== args.workflowId)
-      return null;
+    const finished = await finishProjectBuild(
+      ctx,
+      args.projectId,
+      args.workflowId,
+    );
+    if (!finished.ok) return null;
 
     await cancelTrackedWorkflow(ctx, args.workflowId);
-
-    await ctx.db.patch(args.projectId, {
-      activeBuildWorkflowId: undefined,
-    });
     await recomputeProjectPhase(ctx, args.projectId);
 
     return null;

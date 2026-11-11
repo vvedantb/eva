@@ -1,5 +1,5 @@
 import type { FunctionReturnType } from "convex/server";
-import type { api } from "@eva/backend";
+import { isProjectBuilding, type api } from "@eva/backend";
 import { isLivePrState } from "@/lib/githubPr";
 import { BUILDABLE_PROJECT_PHASES } from "@/lib/components/projects/ProjectPhaseBadge";
 import type { useProjectSandbox } from "@/lib/components/projects/useProjectSandbox";
@@ -38,7 +38,7 @@ export function getProjectPrFlags(
   // A merged PR stays linked as history, so only a live one blocks a new PR.
   const canCreatePr =
     !isLivePrState(project?.prState) &&
-    !project?.activeBuildWorkflowId &&
+    !(project && isProjectBuilding(project)) &&
     (project?.phase === "business_review" || project?.phase === "in_progress");
   return { hasDeployedPreview, canCreatePr };
 }
@@ -59,7 +59,7 @@ export function getProjectMenuFlags(
   const showRunBackgroundCommands = sandbox.isSandboxActive;
   const showResolveConflicts =
     isLivePrState(project.prState) &&
-    !project.activeBuildWorkflowId &&
+    !isProjectBuilding(project) &&
     (project.phase === "business_review" || project.phase === "code_review");
   const hasSandboxCommandItems =
     showRetryStartupCommands || showRunBackgroundCommands;

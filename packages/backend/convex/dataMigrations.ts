@@ -13,6 +13,7 @@ import type { BackgroundAgentEntry } from "./_validators/tableFields";
 import { taskRunState } from "./_agentTasks/runState";
 import { getActiveTaskRun } from "./functions";
 import { cancelScheduledFunction } from "./_scheduling/helpers";
+import { projectBuildState } from "./_projects/buildState";
 
 /**
  * Convex Migrations component — batched online migrations with progress,
@@ -407,6 +408,44 @@ export const migrateTaskRunState = dataMigrations.define({
       scheduledAt: undefined,
       scheduledFunctionId: undefined,
       scheduledRetryAt: undefined,
+    };
+  },
+});
+
+/**
+ * `npx convex run dataMigrations:migrateProjectBuildState` after the deploy
+ * that adds `projects.build`. Folds the legacy build fields into `build` and
+ * clears them; idempotent (rows without legacy fields are skipped). Until it
+ * runs, `projectBuildState` reads the legacy fields. Mapping:
+ * - `activeBuildWorkflowId` → `running`.
+ * - `scheduledBuildAt` + `scheduledBuildFunctionId` → `scheduled`, or
+ *   `running.scheduled` next to a running build (a usage-limit retry or a
+ *   schedule set before a manual start). Not a contradiction: the job fires
+ *   later and is dropped if the build still runs.
+ * - A schedule missing its time or its job becomes idle; an orphan job (no
+ *   time, so it would no-op when it fires) is cancelled.
+ */
+export const migrateProjectBuildState = dataMigrations.define({
+  table: "projects",
+  migrateOne: async (ctx, project) => {
+    if (
+      project.activeBuildWorkflowId === undefined &&
+      project.scheduledBuildAt === undefined &&
+      project.scheduledBuildFunctionId === undefined
+    ) {
+      return;
+    }
+    const build = projectBuildState(project);
+    const keptJobId =
+      build?.state === "scheduled" ? build.jobId : build?.scheduled?.jobId;
+    if (project.scheduledBuildFunctionId !== keptJobId) {
+      await cancelScheduledFunction(ctx, project.scheduledBuildFunctionId);
+    }
+    return {
+      build,
+      activeBuildWorkflowId: undefined,
+      scheduledBuildAt: undefined,
+      scheduledBuildFunctionId: undefined,
     };
   },
 });

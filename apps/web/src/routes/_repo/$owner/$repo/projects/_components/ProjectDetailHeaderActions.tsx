@@ -15,7 +15,11 @@ import {
   useRequestConfirm,
   CopyLinkMenuItem,
 } from "@vvedantb/ui";
-import type { Id } from "@eva/backend";
+import {
+  isProjectBuilding,
+  projectScheduledBuildAt,
+  type Id,
+} from "@eva/backend";
 import {
   IconHammer,
   IconPlayerStop,
@@ -168,7 +172,7 @@ export function ProjectDetailHeaderActions({
           />
         ) : null}
         {flags.canBuildProject ? (
-          project.activeBuildWorkflowId ? (
+          isProjectBuilding(project) ? (
             <Button
               size="sm"
               variant="destructive"
@@ -195,8 +199,8 @@ export function ProjectDetailHeaderActions({
           ) : (
             <SplitBuildButton
               projectId={projectId}
-              scheduledBuildAt={project.scheduledBuildAt}
-              hasActiveBuild={!!project.activeBuildWorkflowId}
+              scheduledBuildAt={projectScheduledBuildAt(project)}
+              hasActiveBuild={isProjectBuilding(project)}
               onBuild={() => setIsBuildModalOpen(true)}
             />
           )

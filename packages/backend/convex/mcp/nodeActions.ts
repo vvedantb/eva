@@ -775,12 +775,23 @@ const projectDocSchema = z.object({
   phase: z.string(),
   updatedAt: z.number().optional(),
   activeWorkflowId: z.string().optional(),
+  build: z.object({ state: z.enum(["scheduled", "running"]) }).optional(),
+  /** Legacy build state for unmigrated rows; 0e drops it. */
   activeBuildWorkflowId: z.string().optional(),
   activeChatWorkflowId: z.string().optional(),
   reviewProjectSandboxStatus: z.string().optional(),
   model: z.string().optional(),
   lastChatModel: z.string().optional(),
 });
+
+/** `isProjectBuilding` for a parsed doc; the legacy field only counts without `build`. */
+function projectDocBuildRunning(
+  project: z.infer<typeof projectDocSchema>,
+): boolean {
+  return project.build
+    ? project.build.state === "running"
+    : project.activeBuildWorkflowId !== undefined;
+}
 
 /** `sessionChats:resolveDeliveryChat` — the chat a session message lands in. */
 const deliveryChatSchema = z.object({
@@ -1179,7 +1190,7 @@ export const orchestratorGetAgentState = internalAction({
         updatedAt: project.updatedAt ?? project._creationTime,
         deploymentUrl: undefined,
         deploymentStatus: undefined,
-        buildRunning: project.activeBuildWorkflowId !== undefined,
+        buildRunning: projectDocBuildRunning(project),
       };
     }
 
@@ -1488,7 +1499,7 @@ export const orchestratorStopAgent = internalAction({
         "projectChatWorkflow:cancelExecution",
         { projectId: id },
       );
-      return { buildRunning: project.activeBuildWorkflowId !== undefined };
+      return { buildRunning: projectDocBuildRunning(project) };
     }
     // A task has two independent workflow slots: its main run and its sandbox
     // chat. Cancelling only the chat one reported success while a run kept

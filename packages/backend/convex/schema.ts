@@ -111,6 +111,8 @@ const schema = defineSchema({
     .index("by_user", ["userId"])
     .index("by_repo_and_phase", ["repoId", "phase"])
     .index("by_repo_and_numId", ["repoId", "numId"])
+    .index("by_repo_and_build_state", ["repoId", "build.state"])
+    // Legacy (`activeBuildWorkflowId`); 0e drops it with the field.
     .index("by_repo_and_build_workflow", ["repoId", "activeBuildWorkflowId"])
     .index("by_repo_and_sandbox_status", [
       "repoId",

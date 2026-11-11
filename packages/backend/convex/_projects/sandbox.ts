@@ -41,6 +41,7 @@ import {
 } from "../_sandbox/transitions";
 import { settleOrphanedBackgroundAgents } from "../_sessions/backgroundAgents";
 import { errorMessage } from "@vvedantb/server";
+import { isProjectBuilding } from "./buildState";
 
 const PREVIEW_ALLOWED_PHASES = [
   "in_progress",
@@ -293,7 +294,7 @@ export const resolveProjectConflicts = authMutation({
     ) {
       throw new Error("Project has no open PR to resolve conflicts for");
     }
-    if (project.activeBuildWorkflowId) {
+    if (isProjectBuilding(project)) {
       throw new Error(
         "Cannot resolve conflicts while a build is active. Stop the build first.",
       );

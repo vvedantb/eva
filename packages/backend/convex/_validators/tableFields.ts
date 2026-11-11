@@ -1141,6 +1141,30 @@ export const teamFields = {
   backgroundStorageId: v.optional(v.id("_storage")),
 };
 
+/** A build waiting on its scheduled job. */
+const scheduledBuildValidator = v.object({
+  at: v.number(),
+  jobId: v.id("_scheduled_functions"),
+});
+
+/**
+ * A project build: waiting on a scheduled job, or running the build
+ * workflow. Transitions live in `_projects/buildState.ts`.
+ */
+export const projectBuildValidator = v.union(
+  v.object({ state: v.literal("scheduled"), ...scheduledBuildValidator.fields }),
+  v.object({
+    state: v.literal("running"),
+    workflowId: v.string(),
+    /**
+     * A schedule waiting behind this build (a usage-limit retry, or one set
+     * before or during it). Its job is live; when the build ends the project
+     * becomes `scheduled` with it.
+     */
+    scheduled: v.optional(scheduledBuildValidator),
+  }),
+);
+
 export const projectFields = {
   ...entityNumIdFields,
   repoId: v.id("githubRepos"),
@@ -1179,11 +1203,16 @@ export const projectFields = {
   projectStartDate: v.optional(v.number()),
   projectEndDate: v.optional(v.number()),
   activeWorkflowId: v.optional(v.string()),
+  /** The project build lifecycle; absent = idle. Written only by `_projects/buildState.ts`. */
+  build: v.optional(projectBuildValidator),
+  /** @deprecated Legacy build state; read via `projectBuildState`, cleared by `migrateProjectBuildState`. */
   activeBuildWorkflowId: v.optional(v.string()),
   // Separate from build + spec workflows so the in-sandbox chat can run
   // independently of the project's other lifecycle workflows.
   activeChatWorkflowId: v.optional(v.string()),
+  /** @deprecated Legacy build state; read via `projectBuildState`, cleared by `migrateProjectBuildState`. */
   scheduledBuildAt: v.optional(v.number()),
+  /** @deprecated Legacy build state; read via `projectBuildState`, cleared by `migrateProjectBuildState`. */
   scheduledBuildFunctionId: v.optional(v.id("_scheduled_functions")),
   lastBuildError: v.optional(v.string()),
   branchVersion: v.optional(v.number()),

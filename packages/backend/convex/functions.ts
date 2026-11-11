@@ -25,6 +25,7 @@ import {
   resolveProjectBranchName,
 } from "./_git/branchNames";
 import { cancelTaskRunSchedule } from "./_agentTasks/runState";
+import { isProjectBuilding } from "./_projects/buildState";
 import {
   allPullRequestsTerminal,
   findLivePullRequestOnBranch,
@@ -274,7 +275,7 @@ export async function recomputeProjectPhase(
     return;
   }
 
-  if (project.activeBuildWorkflowId) {
+  if (isProjectBuilding(project)) {
     if (project.phase !== "in_progress") {
       await applyPhaseTransition(ctx, project, "in_progress");
     }
