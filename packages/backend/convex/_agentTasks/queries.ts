@@ -30,7 +30,10 @@ import {
   unreadLookupForRepo,
 } from "../chatReads";
 import { gatherAccessibleRepos } from "../_githubRepos/helpers";
-import { liveOwnedSessionStatuses } from "../_sessions/ownedSession";
+import {
+  liveOwnedSessionStatuses,
+  taskUsesOwnedSession,
+} from "../_sessions/ownedSession";
 
 /**
  * A task list row (`listRow`) enriched with its latest run and busy state. The
@@ -167,12 +170,12 @@ async function enrichTasksWithLastRun(
       const isExecuting = taskIsExecuting(task, openChatEntityIds);
       const hasUnread = await unreadOf(task);
       const isAwaitingAnswer = awaitingAnswerIds.has(String(task._id));
-      // A quick task's sandbox lives on its session; the card shows that.
+      // One source per task: a quick task's session, a project task's row.
       const row = {
         ...listRow(task),
-        reviewTaskSandboxStatus:
-          sessionStatuses.get(String(task._id)) ??
-          task.reviewTaskSandboxStatus,
+        reviewTaskSandboxStatus: taskUsesOwnedSession(task)
+          ? sessionStatuses.get(String(task._id))
+          : task.reviewTaskSandboxStatus,
       };
       if (summary) {
         return {

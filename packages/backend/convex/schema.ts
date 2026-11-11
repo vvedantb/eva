@@ -249,7 +249,9 @@ const schema = defineSchema({
     .index("by_forked_from", ["forkedFromSessionId"])
     .index("by_session_group", ["sessionGroupId"])
     // The hidden session a task or project owns (`_sessions/owner.ts`).
-    .index("by_owner_task", ["owner.taskId"])
+    // `deletedAt`: a task moved to another repo or into a project detaches
+    // (soft-deletes) its session, so the next use creates a fresh one.
+    .index("by_owner_task", ["owner.taskId", "deletedAt"])
     .index("by_owner_project", ["owner.projectId"]),
   // Chat threads inside a session (Main + parallel chats). See
   // `sessionChatFields` for the session/chat ownership split.

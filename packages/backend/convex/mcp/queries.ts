@@ -304,6 +304,8 @@ export const resolveChatTargetForUser = internalQuery({
       sandboxId: v.optional(v.string()),
       /** Port the app dev server listens on, entity setting before repo default. */
       devPort: v.optional(v.number()),
+      /** A quick task on its session: the session that holds its sandbox. */
+      sandboxSessionId: v.optional(v.id("sessions")),
     }),
   ),
   handler: async (ctx, args) => {
@@ -354,6 +356,7 @@ export const resolveChatTargetForUser = internalQuery({
             : (hit.doc.reviewProjectSandboxStatus ?? "closed"),
       sandboxId: taskSession ? taskSession.sandboxId : doc.sandboxId,
       devPort: (taskSession ?? doc).devPort ?? repo.devPort,
+      sandboxSessionId: taskSession?._id,
     };
   },
 });

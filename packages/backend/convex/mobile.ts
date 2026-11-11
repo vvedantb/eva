@@ -7,6 +7,7 @@ import {
   hasOpenChatTurn,
 } from "./_chat/turnProjection";
 import { assertStandaloneSession, sessionOwnerTaskId } from "./_sessions/owner";
+import type { SessionChatContext } from "./_sessionChats/helpers";
 import { ensureOwnerChat } from "./_sessions/ownedSession";
 import { gatherAccessibleRepos } from "./_githubRepos/helpers";
 import {
@@ -96,37 +97,35 @@ export const sendMessage = authMutation({
     if (!chat.canReply) throw new Error("This chat is closed");
     const model = normalizeAIModel(chat.model);
     const { attachmentStorageIds } = args;
+    // A reply in a session chat runs on that chat's sticky picks.
+    const sendToSessionChat = (
+      context: SessionChatContext,
+      chatModel: typeof model,
+    ) =>
+      sendSessionChatMessage(ctx, {
+        context,
+        userId: ctx.userId,
+        content: message,
+        settings: {
+          model: chatModel,
+          ...storedTraits(chatModel, context.chat),
+          providerAccountId: context.chat.providerAccountId,
+          attachmentStorageIds,
+        },
+      });
     switch (entity.kind) {
       case "session":
-        await sendSessionChatMessage(ctx, {
-          context: entity.context,
-          userId: ctx.userId,
-          content: message,
-          settings: {
-            model,
-            ...storedTraits(model, entity.context.chat),
-            providerAccountId: entity.context.chat.providerAccountId,
-            attachmentStorageIds,
-          },
-        });
+        await sendToSessionChat(entity.context, model);
         return null;
       case "task":
       case "project": {
         // A task's or project's first send creates its session chat; later
         // sends resolve as that session chat directly (`resolveMobileChat`).
         const context = await ensureOwnerChat(ctx, entity);
-        const chatModel = normalizeAIModel(context.chat.lastModel);
-        await sendSessionChatMessage(ctx, {
+        await sendToSessionChat(
           context,
-          userId: ctx.userId,
-          content: message,
-          settings: {
-            model: chatModel,
-            ...storedTraits(chatModel, context.chat),
-            providerAccountId: context.chat.providerAccountId,
-            attachmentStorageIds,
-          },
-        });
+          normalizeAIModel(context.chat.lastModel),
+        );
         return null;
       }
     }

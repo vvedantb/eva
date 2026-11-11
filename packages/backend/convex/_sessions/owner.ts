@@ -55,6 +55,81 @@ export function standaloneOnly(
   return q.eq(q.field("owner.kind"), "standalone");
 }
 
+/** The owner value for a quick task's session. */
+export function taskSessionOwner(taskId: Id<"agentTasks">): OwnedSessionOwner {
+  return { kind: "task", taskId };
+}
+
+/** The owner value for a project's session. */
+export function projectSessionOwner(
+  projectId: Id<"projects">,
+): OwnedSessionOwner {
+  return { kind: "project", projectId };
+}
+
+/**
+ * Whether a task owns a session of its own: quick tasks only. A project task
+ * works on its project's session (`taskWorkSessionOwner`).
+ */
+export function taskUsesOwnedSession(
+  task: Pick<Doc<"agentTasks">, "projectId">,
+): boolean {
+  return task.projectId === undefined;
+}
+
+/**
+ * The session a task works on (runs, chat, sandbox): its own for a quick
+ * task, its project's for a project task.
+ */
+export function taskWorkSessionOwner(
+  task: Pick<Doc<"agentTasks">, "_id" | "projectId">,
+): OwnedSessionOwner {
+  return task.projectId !== undefined
+    ? projectSessionOwner(task.projectId)
+    : taskSessionOwner(task._id);
+}
+
+/** The task's own session, or null before anything needed one. */
+export async function findTaskSession(
+  db: DatabaseReader,
+  taskId: Id<"agentTasks">,
+): Promise<Doc<"sessions"> | null> {
+  return await findOwnedSession(db, taskSessionOwner(taskId));
+}
+
+/** The project's session, or null before anything needed one. */
+export async function findProjectSession(
+  db: DatabaseReader,
+  projectId: Id<"projects">,
+): Promise<Doc<"sessions"> | null> {
+  return await findOwnedSession(db, projectSessionOwner(projectId));
+}
+
+/**
+ * A quick task's own session, or null (a project task, or a quick task not
+ * yet on a session). For what only a task's own session holds; a task's
+ * sandbox is read through `findTaskWorkSession`.
+ */
+export async function findQuickTaskSession(
+  db: DatabaseReader,
+  task: Pick<Doc<"agentTasks">, "_id" | "projectId">,
+): Promise<Doc<"sessions"> | null> {
+  return taskUsesOwnedSession(task) ? await findTaskSession(db, task._id) : null;
+}
+
+/**
+ * Where a task's sandbox and chat live: its own session (a quick task) or its
+ * project's (a project task), or null before that session exists (the task
+ * or project then still keeps them on its own row). Every reader of a task's
+ * sandbox asks here first.
+ */
+export async function findTaskWorkSession(
+  db: DatabaseReader,
+  task: Pick<Doc<"agentTasks">, "_id" | "projectId">,
+): Promise<Doc<"sessions"> | null> {
+  return await findOwnedSession(db, taskWorkSessionOwner(task));
+}
+
 /** The task a session belongs to, or undefined for any other owner. */
 export function sessionOwnerTaskId(
   session: OwnerFields,
@@ -108,7 +183,10 @@ export async function findOwnedSession(
     case "task":
       return await db
         .query("sessions")
-        .withIndex("by_owner_task", (q) => q.eq("owner.taskId", owner.taskId))
+        // A detached (soft-deleted) session no longer belongs to the task.
+        .withIndex("by_owner_task", (q) =>
+          q.eq("owner.taskId", owner.taskId).eq("deletedAt", undefined),
+        )
         .unique();
     case "project":
       return await db

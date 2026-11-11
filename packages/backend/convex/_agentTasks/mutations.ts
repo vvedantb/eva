@@ -36,11 +36,14 @@ import {
 import { createTaskRunSummary, moveTaskRunSummary } from "./runSummary";
 import { cancelTaskRunSchedule } from "./runState";
 import {
+  detachOwnedSession,
+  findQuickTaskSession,
   isTerminalTaskStatus,
   mirrorOwnerIntoSession,
   retireOwnedSession,
   reviveOwnedSession,
   syncOwnedSessionWithTaskStatus,
+  taskMoveDetachesSession,
   taskSessionOwner,
 } from "../_sessions/ownedSession";
 import {
@@ -88,14 +91,16 @@ export const update = authMutation({
       await getProjectWithAccess(ctx.db, args.projectId, ctx.userId);
     }
     const updates = await buildTaskUpdates(ctx, task, args);
-    await ctx.db.patch(args.id, updates);
-    const updated = { ...task, ...updates };
-    await mirrorOwnerIntoSession(ctx, { kind: "task", task: updated });
     // A quick task moved into a project works on the project's session from
-    // now on (`taskWorkSessionOwner`): its own session retires.
-    if (task.projectId === undefined && updated.projectId !== undefined) {
-      await retireOwnedSession(ctx, taskSessionOwner(task._id));
+    // now on (`taskWorkSessionOwner`): its own session detaches.
+    if (taskMoveDetachesSession(task, args)) {
+      await detachOwnedSession(ctx, task._id);
     }
+    await ctx.db.patch(args.id, updates);
+    await mirrorOwnerIntoSession(ctx, {
+      kind: "task",
+      task: { ...task, ...updates },
+    });
     if (args.repoId !== undefined && args.repoId !== task.repoId) {
       await moveTaskRunSummary(ctx, args.id, args.repoId);
     }
@@ -206,15 +211,21 @@ export const updateStatus = authMutation({
       // place. The run stops the sandbox on its way out, so the action resumes
       // it for the model call and stops it again unless the reviewer already
       // has it open.
-      if (enteringCodeReview && prUrl && repo && task.sandboxId) {
+      // A quick task's sandbox lives on its session.
+      const session = await findQuickTaskSession(ctx.db, task);
+      const sandboxId = session ? session.sandboxId : task.sandboxId;
+      const sandboxActive = session
+        ? session.status === "active"
+        : task.reviewTaskSandboxStatus === "active";
+      if (enteringCodeReview && prUrl && repo && sandboxId) {
         await ctx.scheduler.runAfter(0, internal.github.generatePrDescription, {
           installationId: repo.installationId,
           repoOwner: repo.owner,
           repoName: repo.name,
           prUrl,
-          sandboxId: task.sandboxId,
+          sandboxId,
           repoId: task.repoId,
-          restoreStoppedSandbox: task.reviewTaskSandboxStatus !== "active",
+          restoreStoppedSandbox: !sandboxActive,
         });
       }
     }
@@ -492,6 +503,9 @@ export const assignToProject = authMutation({
       if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
         throw new Error(`Task ${taskId} not found`);
       assigned++;
+      if (taskMoveDetachesSession(task, { projectId: args.projectId })) {
+        await detachOwnedSession(ctx, taskId);
+      }
       await ctx.db.patch(taskId, {
         projectId: args.projectId,
         taskNumber: maxTaskNumber + assigned,
