@@ -24,10 +24,15 @@ export interface OwnedSandboxFields {
   terminalPanes: Doc<"sessions">["terminalPanes"];
   agentBrowsingAt: number | undefined;
   sandboxGitSync: Doc<"sessions">["sandboxGitSync"];
-  /** Panes, preview and PTYs are keyed by this owner. */
-  owner: SandboxOwner;
-  /** Commit & push target for the sandbox checkout. */
-  gitTarget: SandboxGitTarget;
+  /**
+   * Panes, preview and PTYs are keyed by the session; undefined before it
+   * exists (there is no sandbox yet either).
+   */
+  owner: SandboxOwner | undefined;
+  /** Commit & push target for the sandbox checkout; undefined before the session exists. */
+  gitTarget: SandboxGitTarget | undefined;
+  /** The session lookup is still loading: not yet known whether one exists. */
+  sessionPending: boolean;
 }
 
 /**
@@ -45,15 +50,20 @@ export function useOwnedSession(owner: OwnedSessionOwner) {
   );
   const ensureOwned = useMutation(api.sessions.ensureOwned);
 
-  const ensure = async () => owned ?? (await ensureOwned({ owner }));
+  // A project task can work on its project's session before it has a chat.
+  const chatId = owned?.chatId;
+  const ensure = async () =>
+    owned && chatId
+      ? { sessionId: owned.sessionId, chatId }
+      : await ensureOwned({ owner });
   const chatSource: SessionChatSource =
-    owned?.chatId ?? (async () => (await ensure()).chatId);
+    chatId ?? (async () => (await ensure()).chatId);
 
-  // Before the session exists the owner's own key stands in: it has no
-  // panes, preview or PTYs yet, and the first Start creates the session.
-  const sandboxOwner: SandboxOwner = owned
+  // Before the session exists there are no panes, preview or PTYs: the
+  // first Start creates the session.
+  const sandboxOwner: SandboxOwner | undefined = owned
     ? { kind: "session", sessionId: owned.sessionId }
-    : owner;
+    : undefined;
   const sandbox: OwnedSandboxFields = {
     sandboxId: session?.sandboxId,
     status: session?.status,
@@ -64,10 +74,11 @@ export function useOwnedSession(owner: OwnedSessionOwner) {
     sandboxGitSync: session?.sandboxGitSync,
     owner: sandboxOwner,
     gitTarget: sandboxOwner,
+    sessionPending: owned === undefined,
   };
 
   return {
-    /** The session and the owner's chat; null until first needed. */
+    /** The session and the owner's chat (absent until it chats); null until first needed. */
     owned,
     session,
     /** Returns the session, creating it (no sandbox start) when missing. */

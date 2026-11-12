@@ -441,6 +441,13 @@ export const prOwnerValidator = v.union(
   }),
 );
 
+/** A PR owner's identity alone, without the run / linked-repo detail. */
+export const prOwnerRefValidator = v.union(
+  v.object({ kind: v.literal("session"), sessionId: v.id("sessions") }),
+  v.object({ kind: v.literal("task"), taskId: v.id("agentTasks") }),
+  v.object({ kind: v.literal("project"), projectId: v.id("projects") }),
+);
+
 /** How a tracked PR came to be linked to its owner. */
 export const prOriginValidator = v.union(
   // Opened by an Eva workflow through the GitHub API.
@@ -1992,14 +1999,6 @@ export const draftTarget = v.union(
     kind: v.literal("taskComment"),
     taskId: v.id("agentTasks"),
     parentCommentId: v.optional(v.id("taskComments")),
-  }),
-  v.object({
-    kind: v.literal("taskChat"),
-    taskId: v.id("agentTasks"),
-  }),
-  v.object({
-    kind: v.literal("projectChat"),
-    projectId: v.id("projects"),
   }),
   v.object({
     kind: v.literal("sessionChat"),

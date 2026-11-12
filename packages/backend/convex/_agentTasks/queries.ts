@@ -18,6 +18,7 @@ import {
 import { entityVisible, filterActiveEntities } from "../numId";
 import { agentTaskValidator } from "./helpers";
 import { listRow } from "../_validators/listRows";
+import { sessionStatusValidator } from "../_validators/enums";
 import { resolveStorageEntries } from "../_chat/storageUrls";
 import {
   chatTurnFlagsForRepos,
@@ -44,6 +45,8 @@ export const agentTaskWithLastRunValidator = v.object({
   lastRunStartedAt: v.optional(v.number()),
   /** Main run or chat turn (synthetic turns too): `taskIsExecuting`. */
   isExecuting: v.boolean(),
+  /** The sandbox status of the session the task works on (`taskSandboxStatus`). */
+  sandboxStatus: v.optional(sessionStatusValidator),
   /** Unread chat reply for this user (`chatReads.ts`). Autonomous runs do not count. */
   hasUnread: v.boolean(),
   /** A chat turn is paused on a blocking question for the user. */
@@ -171,10 +174,7 @@ async function enrichTasksWithLastRun(
       const hasUnread = await unreadOf(task);
       const isAwaitingAnswer = awaitingAnswerIds.has(String(task._id));
       // The same session the task page reads (`liveTaskSandboxStatuses`).
-      const row = {
-        ...listRow(task),
-        reviewTaskSandboxStatus: await taskSandboxStatus(task),
-      };
+      const row = { ...listRow(task), sandboxStatus: taskSandboxStatus(task) };
       if (summary) {
         return {
           ...row,
@@ -317,8 +317,8 @@ async function activeTasksForUser(
 /**
  * Quick tasks in the repo with a live sandbox: the sidebar badge count.
  *
- * Reads only sandbox-live rows (`by_repo_and_sandbox_status`). It replaced a
- * query that sent every active task document to the always-mounted sidebar,
+ * Reads only the live task sessions (`liveOwnedSessionStatuses`). It replaced
+ * a query that sent every active task document to the always-mounted sidebar,
  * 259 KB for 150 tasks in the load test, resent on every task change.
  */
 export const countSandboxTasks = authQuery({
@@ -326,17 +326,7 @@ export const countSandboxTasks = authQuery({
   returns: v.number(),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return 0;
-    const live = await Promise.all(
-      (["active", "starting"] as const).map((status) =>
-        ctx.db
-          .query("agentTasks")
-          .withIndex("by_repo_and_sandbox_status", (q) =>
-            q.eq("repoId", args.repoId).eq("reviewTaskSandboxStatus", status),
-          )
-          .collect(),
-      ),
-    );
-    // A quick task's sandbox lives on its session: count those too.
+    // A quick task's sandbox lives on its session.
     const sessionStatuses = await liveOwnedSessionStatuses(ctx.db, [
       args.repoId,
     ], "task");
@@ -348,14 +338,9 @@ export const countSandboxTasks = authQuery({
           return id ? ctx.db.get(id) : null;
         }),
     );
-    const counted = new Map<string, Doc<"agentTasks">>();
-    for (const task of [
-      ...live.flat(),
-      ...liveSessionTasks.filter((task) => task !== null),
-    ]) {
-      counted.set(String(task._id), task);
-    }
-    return filterActiveEntities([...counted.values()]).filter(
+    return filterActiveEntities(
+      liveSessionTasks.filter((task) => task !== null),
+    ).filter(
       (task) => !task.projectId && ACTIVE_TASK_STATUSES.has(task.status),
     ).length;
   },
@@ -378,7 +363,6 @@ const orchestratorTaskValidator = v.object({
   status: taskStatusValidator,
   updatedAt: v.number(),
   model: v.optional(aiModelValidator),
-  lastChatModel: v.optional(aiModelValidator),
   /** Main run or chat turn: one sandbox-busy status (`taskIsExecuting`). */
   isExecuting: v.boolean(),
 });
@@ -405,7 +389,6 @@ export const getActiveTasksSlim = authQuery({
       status: task.status,
       updatedAt: task.updatedAt,
       model: task.model,
-      lastChatModel: task.lastChatModel,
       isExecuting: taskIsExecuting(task, openChatEntityIds),
     }));
   },

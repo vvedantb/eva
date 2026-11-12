@@ -146,24 +146,12 @@ export async function cleanUpStaleRun(
     exitReason: params.exitReason,
   });
 
-  const taskPatch: {
-    updatedAt: number;
-    status?: "todo";
-    sandboxId?: string;
-    reviewTaskSandboxStatus?: "closed";
-  } = {
+  // The run's sandbox is its session's (`attachTaskRunSandbox`), so the task
+  // row keeps no sandbox reference.
+  await ctx.db.patch(params.taskId, {
     updatedAt: Date.now(),
     ...(params.taskStatus === "in_progress" ? { status: "todo" as const } : {}),
-  };
-  if (!params.isProjectTask && params.sandboxId) {
-    // Keep the sandbox reference on the task (the run may have died before
-    // saveTaskSandboxId ran, which would otherwise orphan the stopped
-    // sandbox) and mark it closed so the reviewer UI shows a resumable,
-    // stopped sandbox.
-    taskPatch.sandboxId = params.sandboxId;
-    taskPatch.reviewTaskSandboxStatus = "closed";
-  }
-  await ctx.db.patch(params.taskId, taskPatch);
+  });
   // No runId fence: the workflow cancelled above is whichever the task tracks.
   await finishTaskRun(ctx, params.taskId, undefined);
 

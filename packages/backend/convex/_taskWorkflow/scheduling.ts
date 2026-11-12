@@ -19,7 +19,6 @@ import {
   fireTaskRunSchedule,
   scheduleTaskRun,
 } from "../_agentTasks/runState";
-import { startNextQueuedTaskChatMessage } from "../_queues/helpers";
 
 /** Schedules an automatic retry for a failed quick task if the failure looks transient. */
 export const maybeScheduleQuickTaskRetry = internalMutation({
@@ -176,12 +175,9 @@ export const clearActiveWorkflow = internalMutation({
     const activeRun = await getActiveTaskRun(ctx.db, args.taskId);
 
     if (!activeRun) {
+      // The session chat queue behind the run drains when the run's turn
+      // closes (`closeTurn`).
       await finishTaskRun(ctx, args.taskId, args.runId);
-      // The run is the only thing the task chat queue waits on while a task is
-      // running, and nothing else drains it at this point — a follow-up typed
-      // during the run would sit there forever. The drain re-checks the task
-      // itself, so a chat turn already in flight keeps the queue where it is.
-      await startNextQueuedTaskChatMessage(ctx, args.taskId);
     }
 
     return null;

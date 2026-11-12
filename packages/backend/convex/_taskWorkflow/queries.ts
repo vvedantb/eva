@@ -93,9 +93,6 @@ export const getTaskData = internalQuery({
       use1mContext: v.optional(v.boolean()),
       fastMode: v.optional(v.boolean()),
     }),
-    projectSandboxId: v.optional(v.string()),
-    taskSandboxId: v.optional(v.string()),
-    keepTaskSandboxActiveAfterRun: v.boolean(),
     deploymentProjectName: v.optional(v.string()),
     rootDirectory: v.string(),
     devPort: v.optional(v.number()),
@@ -137,18 +134,11 @@ export const getTaskData = internalQuery({
       return resolvedMessage;
     };
 
-    let projectSandboxId: string | undefined;
     let projectContext: { title: string; description?: string } | undefined;
     let project = null;
     if (args.projectId) {
       project = await ctx.db.get(args.projectId);
       if (project) {
-        // A run on the project's session claims its sandbox itself
-        // (`sessions.claimSandboxForTaskRun`); older runs read the row.
-        projectSandboxId = args.ownedSessionId
-          ? undefined
-          : project.sandboxId;
-
         projectContext = {
           title: project.title,
           description: await resolveDescriptionForPrompt(
@@ -161,14 +151,6 @@ export const getTaskData = internalQuery({
     const resolvedTaskDescription = await resolveDescriptionForPrompt(
       task.description ?? undefined,
     );
-
-    // A run from before tasks had sessions reuses the task's own paused
-    // filesystem. A run on a session claims the session's sandbox itself
-    // (`sessions.claimSandboxForTaskRun`), so nothing is read here for it.
-    const usesTaskRow = !args.projectId && !args.ownedSessionId;
-    const taskSandboxId = usesTaskRow ? task.sandboxId : undefined;
-    const keepTaskSandboxActiveAfterRun =
-      usesTaskRow && task.reviewTaskSandboxStatus === "active";
 
     // Only surface comments the last successful run hasn't already addressed,
     // so subsequent "Make changes" runs focus on NEW feedback. Cutoff is the
@@ -292,9 +274,6 @@ export const getTaskData = internalQuery({
         use1mContext: task.use1mContext,
         fastMode: task.fastMode,
       }),
-      projectSandboxId,
-      taskSandboxId,
-      keepTaskSandboxActiveAfterRun,
       deploymentProjectName: repo.deploymentProjectName,
       rootDirectory,
       devPort: repo.devPort,

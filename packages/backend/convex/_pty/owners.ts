@@ -3,10 +3,7 @@ import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { sandboxOwnerValidator, type SandboxOwner } from "../_sandbox/owner";
 
-/**
- * Discriminated owner — a PTY belongs to a session, a quick task, or a project.
- * All expose a sandbox and a repo.
- */
+/** A PTY belongs to a session's sandbox. */
 export const ownerArg = sandboxOwnerValidator;
 
 export interface ResolvedOwner {
@@ -30,41 +27,14 @@ export async function resolveOwner(
   ctx: ActionCtx,
   owner: SandboxOwner,
 ): Promise<ResolvedOwner> {
-  if (owner.kind === "session") {
-    const session = await ctx.runQuery(internal.sessions.getInternal, {
-      id: owner.sessionId,
-    });
-    if (!session) throw new Error("Session not found");
-    if (!session.sandboxId) throw new Error("Sandbox not active");
-    return {
-      sandboxId: session.sandboxId,
-      repoId: session.repoId,
-      isStoppingOrClosed: isStoppingOrClosed(session.status),
-    };
-  }
-
-  if (owner.kind === "task") {
-    const task = await ctx.runQuery(internal.agentTasks.getInternal, {
-      id: owner.taskId,
-    });
-    if (!task) throw new Error("Task not found");
-    if (!task.sandboxId) throw new Error("Sandbox not active");
-    if (!task.repoId) throw new Error("Task has no repo");
-    return {
-      sandboxId: task.sandboxId,
-      repoId: task.repoId,
-      isStoppingOrClosed: isStoppingOrClosed(task.reviewTaskSandboxStatus),
-    };
-  }
-
-  const project = await ctx.runQuery(internal.projects.getInternal, {
-    id: owner.projectId,
+  const session = await ctx.runQuery(internal.sessions.getInternal, {
+    id: owner.sessionId,
   });
-  if (!project) throw new Error("Project not found");
-  if (!project.sandboxId) throw new Error("Sandbox not active");
+  if (!session) throw new Error("Session not found");
+  if (!session.sandboxId) throw new Error("Sandbox not active");
   return {
-    sandboxId: project.sandboxId,
-    repoId: project.repoId,
-    isStoppingOrClosed: isStoppingOrClosed(project.reviewProjectSandboxStatus),
+    sandboxId: session.sandboxId,
+    repoId: session.repoId,
+    isStoppingOrClosed: isStoppingOrClosed(session.status),
   };
 }

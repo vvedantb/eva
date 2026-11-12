@@ -31,17 +31,18 @@ export function useSubagentRoster({
   backgroundAgents,
   sandboxRunning,
 }: {
-  /** Chat transcript owner: a quick task's session chat, a task or a project. */
-  parentId: Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">;
-  /** `api.streaming.get` entity id for that surface's chat turn. */
-  streamingEntityId: string;
+  /** The chat; undefined for a task's or project's chat not created yet. */
+  parentId: Id<"sessionChats"> | undefined;
+  /** `api.streaming.get` entity id for that chat's turn. */
+  streamingEntityId: string | undefined;
   backgroundAgents: BackgroundAgentEntry[] | undefined;
   sandboxRunning: boolean;
 }): SubagentRoster {
-  const messages = useChatTranscript(parentId);
-  const streaming = useQuery(api.streaming.get, {
-    entityId: streamingEntityId,
-  });
+  const messages = useChatTranscript(parentId ?? "skip");
+  const streaming = useQuery(
+    api.streaming.get,
+    streamingEntityId ? { entityId: streamingEntityId } : "skip",
+  );
   const status = useChatTurnStatus(parentId);
 
   // Streaming payloads can outlive their turn; only fold them while one runs.

@@ -194,81 +194,6 @@ export const scheduleDeploymentTracking = internalMutation({
   },
 });
 
-/** Updates a project with the active sandbox ID and last activity timestamp. */
-export const updateProjectSandbox = internalMutation({
-  args: {
-    projectId: v.id("projects"),
-    sandboxId: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await ctx.db.patch(args.projectId, {
-      sandboxId: args.sandboxId,
-      lastSandboxActivity: Date.now(),
-    });
-    return null;
-  },
-});
-
-/** Persists the canonical sandbox ID on a quick task so subsequent runs
- * (change-requests, resolve_conflicts) and reviewer Start Sandbox can reuse
- * the same paused filesystem. Project tasks use `updateProjectSandbox` instead. */
-export const saveTaskSandboxId = internalMutation({
-  args: {
-    taskId: v.id("agentTasks"),
-    sandboxId: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task) return null;
-    await ctx.db.patch(args.taskId, {
-      sandboxId: args.sandboxId,
-      updatedAt: Date.now(),
-    });
-    return null;
-  },
-});
-
-/** Marks a quick task's sandbox as stopped (e.g. after agent run completion).
- * Keeps `sandboxId` so the reviewer can resume the same paused filesystem. */
-export const markTaskSandboxStopped = internalMutation({
-  args: {
-    taskId: v.id("agentTasks"),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task) return null;
-    await ctx.db.patch(args.taskId, {
-      reviewTaskSandboxStatus: "closed",
-      updatedAt: Date.now(),
-    });
-    return null;
-  },
-});
-
-/** Clears the sandbox association on a quick task — used when the sandbox is
- * deleted (e.g. PR-merge cleanup) so the resume button doesn't point at a
- * dead sandbox. */
-export const clearTaskSandbox = internalMutation({
-  args: {
-    taskId: v.id("agentTasks"),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task) return null;
-    await ctx.db.patch(args.taskId, {
-      sandboxId: undefined,
-
-      reviewTaskSandboxStatus: undefined,
-      updatedAt: Date.now(),
-    });
-    return null;
-  },
-});
-
 /** Completes a run: finalizes status, updates task, sends notifications, and signals build workflow. */
 export const completeRun = internalMutation({
   args: {
@@ -329,12 +254,6 @@ export const completeRun = internalMutation({
       }
     }
 
-    const project = args.projectId ? await ctx.db.get(args.projectId) : null;
-
-    if (project) {
-      await ctx.db.patch(project._id, { lastSandboxActivity: now });
-    }
-
     await clearTaskRunStreaming(ctx, args.taskId, args.runId);
 
     // Run success/failure deliberately sends no notification: the task card and
@@ -371,6 +290,7 @@ export const completeRun = internalMutation({
       }
     }
 
+    const project = args.projectId ? await ctx.db.get(args.projectId) : null;
     const buildWorkflowId = project && projectBuildWorkflowId(project);
     if (buildWorkflowId && !staleCompletion) {
       await sendCompletionEvent(

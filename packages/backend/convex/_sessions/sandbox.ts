@@ -180,11 +180,7 @@ export async function requestSessionSandboxStart(
     hasLinkedRepos: (session.linkedRepoCount ?? 0) > 0,
     startAttempt,
   };
-  await scheduleStuckStartExpiry(
-    ctx,
-    { kind: "session", id: session._id },
-    startAttempt,
-  );
+  await scheduleStuckStartExpiry(ctx, session._id, startAttempt);
   // Vercel: schedule the start action directly. Workflow step scheduling was
   // measured at ~6s before the first action ran.
   // Multi-repo sessions cannot take that shortcut: `startSessionSandbox`
@@ -526,11 +522,7 @@ export const claimSandboxForTaskRun = internalMutation({
         interviewSandboxClaim: { sessionStartAttempt: attempt },
       });
     }
-    await scheduleStuckStartExpiry(
-      ctx,
-      { kind: "session", id: args.sessionId },
-      attempt,
-    );
+    await scheduleStuckStartExpiry(ctx, args.sessionId, attempt);
     return { sandboxId: session.sandboxId, attempt, wasActive: false };
   },
 });

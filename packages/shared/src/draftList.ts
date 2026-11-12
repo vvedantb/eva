@@ -59,8 +59,6 @@ export function draftKindLabel(
   if (kind === "taskComment") {
     return parentCommentId ? "Reply" : "Comment";
   }
-  if (kind === "taskChat") return "Task chat";
-  if (kind === "projectChat") return "Project chat";
   if (kind === "sessionChat") return "Session";
   return "Draft";
 }

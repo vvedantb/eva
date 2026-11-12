@@ -1,13 +1,8 @@
 import type { SandboxOwner } from "@eva/backend";
 
-/**
- * Per-owner key for a sandbox's PTYs, panes and dev-server consoles:
- * `session-<id>`, `task-<id>` or `project-<id>`.
- */
+/** Per-owner key for a sandbox's PTYs, panes and dev-server consoles: `session-<id>`. */
 export function sandboxOwnerKey(owner: SandboxOwner): string {
-  if (owner.kind === "session") return `session-${owner.sessionId}`;
-  if (owner.kind === "task") return `task-${owner.taskId}`;
-  return `project-${owner.projectId}`;
+  return `session-${owner.sessionId}`;
 }
 
 /**
@@ -16,17 +11,9 @@ export function sandboxOwnerKey(owner: SandboxOwner): string {
  */
 export const SANDBOX_STARTUP_PREFIX = {
   session: "session-startup-",
-  task: "task-sandbox-startup-",
-  project: "project-sandbox-startup-",
 } as const satisfies Record<SandboxOwner["kind"], string>;
 
 /** streamingActivity entityId for one owner's sandbox startup progress. */
 export function sandboxStartupEntityId(owner: SandboxOwner): string {
-  if (owner.kind === "session") {
-    return `${SANDBOX_STARTUP_PREFIX.session}${owner.sessionId}`;
-  }
-  if (owner.kind === "task") {
-    return `${SANDBOX_STARTUP_PREFIX.task}${owner.taskId}`;
-  }
-  return `${SANDBOX_STARTUP_PREFIX.project}${owner.projectId}`;
+  return `${SANDBOX_STARTUP_PREFIX.session}${owner.sessionId}`;
 }

@@ -6,6 +6,7 @@ import type {
 } from "convex/server";
 import { projectFields, conversationMessageValidator } from "../validators";
 import { listRow } from "../_validators/listRows";
+import { sessionStatusValidator } from "../_validators/enums";
 import type { DataModel, Id, Doc } from "../_generated/dataModel";
 
 type ConversationMessage = Doc<"projectDetails">["conversationHistory"][number];
@@ -41,6 +42,8 @@ export const projectPlanningModeValidator = v.union(
 export const projectListItemValidator = v.object({
   ...listRow(projectSummaryFields),
   planningMode: projectPlanningModeValidator,
+  /** The project session's sandbox status (`projectSandboxStatus`). */
+  sandboxStatus: v.optional(sessionStatusValidator),
   /** Unread project chat reply for this user (`chatReads.ts`). */
   hasUnread: v.boolean(),
   /** The project chat is paused on a blocking question for the user. */

@@ -3,8 +3,8 @@ import { isProjectPreviewPhase, PROJECT_PREVIEW_PHASES } from "@eva/shared";
 
 /**
  * Whether a project may start its preview sandbox: only once it has work to
- * preview (`PROJECT_PREVIEW_PHASES`). Shared by the project session's Start
- * and chat wake (`sessions.startSandbox`) and the legacy project Start.
+ * preview (`PROJECT_PREVIEW_PHASES`). Read by the project session's Start and
+ * chat wake (`sessions.startSandbox`).
  */
 export function isProjectPreviewAllowed(
   project: Pick<Doc<"projects">, "phase">,

@@ -34,8 +34,7 @@ export function BuildingProjectsBadge({
   const sandboxProjects =
     projects?.filter(
       (p) =>
-        p.reviewProjectSandboxStatus === "active" ||
-        p.reviewProjectSandboxStatus === "starting",
+        p.sandboxStatus === "active" || p.sandboxStatus === "starting",
     ) ?? [];
 
   const visible = buildingProjects.length > 0 || sandboxProjects.length > 0;

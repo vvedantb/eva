@@ -96,7 +96,7 @@ function SortableTaskWrapper({
             hasUnread={task.hasUnread}
             isAwaitingAnswer={task.isAwaitingAnswer}
             hasError={hasError}
-            sandboxStatus={task.reviewTaskSandboxStatus}
+            sandboxStatus={task.sandboxStatus}
             numId={task.numId}
             projectNumId={projectNumId}
             tags={task.tags}
@@ -333,7 +333,7 @@ export function ProjectTaskListPanel({
                             hasUnread={task.hasUnread}
                             isAwaitingAnswer={task.isAwaitingAnswer}
                             hasError={errorTaskIdSet.has(task._id)}
-                            sandboxStatus={task.reviewTaskSandboxStatus}
+                            sandboxStatus={task.sandboxStatus}
                             numId={task.numId}
                             projectNumId={projectNumId}
                             tags={task.tags}

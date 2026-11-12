@@ -13,7 +13,6 @@ import {
   buildTaskBranchName,
   resolveProjectBranchName,
 } from "../_git/branchNames";
-import { composerTraitFields } from "../_shared/composerTraits";
 import {
   createSessionChat,
   ensureMainChat,
@@ -44,12 +43,7 @@ import {
   ownerHoldsSession,
   projectHoldsSession,
 } from "./ownerState";
-import { isTaskRunning } from "../_agentTasks/runState";
-import { isProjectBuilding } from "../_projects/buildState";
-import {
-  hasOpenChatTurn,
-  isLegacyChatExecuting,
-} from "../_chat/turnProjection";
+import { hasOpenChatTurn } from "../_chat/turnProjection";
 import { markAllRunningExited } from "../backgroundProcesses";
 import { nextSandboxStartAttempt } from "../_sandbox/transitions";
 
@@ -119,15 +113,31 @@ export async function ensureOwnedSession(
   ctx: MutationCtx,
   entity: OwnerEntity,
 ): Promise<OwnedSessionContext> {
-  const found = await findOrInsertOwnedSession(ctx, entity);
-  // An owner that still holds its own sandbox hands it over first, so no path
-  // (run, chat, Start, MCP, mobile) ever boots a second VM for it.
-  if ((await adoptLegacySandbox(ctx, entity, found.session)) !== "moved") {
-    return found;
+  const owner = ownerOf(entity);
+  const existing = await findOwnedSession(ctx.db, owner);
+  if (existing) {
+    return { session: existing, mainChat: await ensureMainChat(ctx, existing) };
   }
-  const session = await ctx.db.get(found.session._id);
-  if (!session) throw new Error("Owned session was not found");
-  return { session, mainChat: found.mainChat };
+  const seed = ownedSessionSeed(entity);
+  const repo = await ctx.db.get(seed.repoId);
+  if (!repo) throw new Error("Repository not found");
+  const sessionId = await ctx.db.insert("sessions", {
+    repoId: seed.repoId,
+    userId: seed.userId,
+    createdBy: seed.userId,
+    title: seed.title,
+    owner,
+    status: "closed",
+    numId: await allocateNumId(ctx.db, seed.repoId, "sessions"),
+    branchName: seed.branchName,
+    baseBranch: resolveSessionBaseBranch({ baseBranch: seed.baseBranch }, repo),
+    // The chat keeps its own sticky model, apart from the owner's run `model`.
+    ...ownerChatSettings(entity, repo.defaultModel),
+    updatedAt: Date.now(),
+  });
+  const session = await ctx.db.get(sessionId);
+  if (!session) throw new Error("Owned session was not created");
+  return { session, mainChat: await ensureMainChat(ctx, session) };
 }
 
 /** The session a task works on, created on first need (`taskWorkSessionOwner`). */
@@ -167,11 +177,9 @@ export async function ensureTaskChat(
     ),
     taskId: task._id,
   });
-  await adoptChatDrafts(ctx, { kind: "task", task }, chat);
   return { session, chat };
 }
 
-/** A session and one of its chats. */
 /**
  * The chat an owner talks in, created on first need: a task's
  * (`ensureTaskChat`) or a project's Main chat.
@@ -186,26 +194,21 @@ export async function ensureOwnerChat(
 }
 
 /**
- * The chat settings an owner's new chat starts from: its last chat pick, else
- * its run model, else `fallbackModel`. Kept apart from the run `model`.
+ * The chat settings an owner's new chat starts from: its run model, else
+ * `fallbackModel`, on the owner's account. From then on the chat keeps its
+ * own sticky picks, apart from the run `model`.
  */
 function ownerChatSettings(
   entity: OwnerEntity,
   fallbackModel: Doc<"sessions">["lastModel"],
 ): ChatSettingsSource {
   const doc = entity.kind === "task" ? entity.task : entity.project;
-  const model = doc.lastChatModel ?? doc.model ?? fallbackModel;
+  const model = doc.model ?? fallbackModel;
   return {
     providerAccountId: doc.providerAccountId,
     ...(model !== undefined
       ? { lastModel: model, provider: getAIModelProvider(model) }
       : {}),
-    ...composerTraitFields({
-      reasoningLevel: doc.lastReasoningLevel,
-      thinkingEnabled: doc.lastThinkingEnabled,
-      use1mContext: doc.lastUse1mContext,
-      fastMode: doc.lastFastMode,
-    }),
   };
 }
 
@@ -233,251 +236,6 @@ function ownedSessionSeed(entity: OwnerEntity) {
     branchName: resolveProjectBranchName(project._id, project),
     baseBranch: project.baseBranch,
   };
-}
-
-async function findOrInsertOwnedSession(
-  ctx: MutationCtx,
-  entity: OwnerEntity,
-): Promise<OwnedSessionContext> {
-  const owner = ownerOf(entity);
-  const existing = await findOwnedSession(ctx.db, owner);
-  if (existing) {
-    return { session: existing, mainChat: await ensureMainChat(ctx, existing) };
-  }
-  const seed = ownedSessionSeed(entity);
-  const repo = await ctx.db.get(seed.repoId);
-  if (!repo) throw new Error("Repository not found");
-  // The chat keeps its own sticky model, apart from the owner's run `model`.
-  const settings = ownerChatSettings(entity, repo.defaultModel);
-  const sessionId = await ctx.db.insert("sessions", {
-    repoId: seed.repoId,
-    userId: seed.userId,
-    createdBy: seed.userId,
-    title: seed.title,
-    owner,
-    status: "closed",
-    numId: await allocateNumId(ctx.db, seed.repoId, "sessions"),
-    branchName: seed.branchName,
-    baseBranch: resolveSessionBaseBranch({ baseBranch: seed.baseBranch }, repo),
-    ...settings,
-    updatedAt: Date.now(),
-  });
-  const session = await ctx.db.get(sessionId);
-  if (!session) throw new Error("Owned session was not created");
-  const mainChat = await ensureMainChat(ctx, session);
-  await adoptChatDrafts(ctx, entity, mainChat);
-  return { session, mainChat };
-}
-
-/**
- * The users who can hold per-user rows for an owner's chat (drafts, read
- * markers), which are indexed by user first. A task: owner, assignee,
- * subscribers. A project: owner, lead, members, code reviewer.
- */
-export async function ownerChatUserIds(
-  db: DatabaseReader,
-  entity: OwnerEntity,
-): Promise<Id<"users">[]> {
-  if (entity.kind === "project") {
-    const { project } = entity;
-    return [
-      ...new Set<Id<"users">>([
-        project.userId,
-        ...(project.projectLead ? [project.projectLead] : []),
-        ...(project.members ?? []),
-        ...(project.codeReviewer ? [project.codeReviewer] : []),
-      ]),
-    ];
-  }
-  const { task } = entity;
-  const subscribers = await db
-    .query("taskSubscribers")
-    .withIndex("by_task", (q) => q.eq("taskId", task._id))
-    .collect();
-  return [
-    ...new Set<Id<"users">>([
-      task.createdBy,
-      ...(task.assignedTo ? [task.assignedTo] : []),
-      ...subscribers.map((row) => row.userId),
-    ]),
-  ];
-}
-
-/**
- * The owner chat's unsent composer drafts become the session chat's, so text
- * typed before the session existed is still there after the first send.
- * Drafts are indexed by user first (`ownerChatUserIds`).
- */
-export async function adoptChatDrafts(
-  ctx: MutationCtx,
-  entity: OwnerEntity,
-  chat: Doc<"sessionChats">,
-): Promise<void> {
-  const userIds = await ownerChatUserIds(ctx.db, entity);
-  const drafts = (
-    await Promise.all(
-      userIds.map((userId) =>
-        entity.kind === "task"
-          ? ctx.db
-              .query("drafts")
-              .withIndex("by_user_and_task", (q) =>
-                q.eq("userId", userId).eq("taskId", entity.task._id),
-              )
-              .collect()
-          : ctx.db
-              .query("drafts")
-              .withIndex("by_user_and_project", (q) =>
-                q.eq("userId", userId).eq("projectId", entity.project._id),
-              )
-              .collect(),
-      ),
-    )
-  ).flat();
-  const legacyKind = entity.kind === "task" ? "taskChat" : "projectChat";
-  for (const draft of drafts) {
-    if (draft.kind !== legacyKind) continue;
-    await ctx.db.patch(draft._id, {
-      kind: "sessionChat",
-      taskId: undefined,
-      projectId: undefined,
-      sessionId: chat.sessionId,
-      chatId: chat._id,
-    });
-  }
-}
-
-/**
- * Why an owner's old chat and sandbox cannot change hands now, or null when
- * they can. The one busy rule for sandbox adoption (`adoptLegacySandbox`)
- * and the migration: a run, build, task run or interview in flight (they
- * still write the owner's own `sandboxId` when started before sessions), a
- * chat turn open or pending (old path or session), the old sandbox or the
- * session's starting/stopping, or a message still queued on the owner.
- */
-export async function ownerBusyReason(
-  db: DatabaseReader,
-  entity: OwnerEntity,
-): Promise<string | null> {
-  const doc = entity.kind === "task" ? entity.task : entity.project;
-  if (entity.kind === "task" && isTaskRunning(entity.task)) {
-    return "run in flight";
-  }
-  if (entity.kind === "project") {
-    const { project } = entity;
-    if (isProjectBuilding(project)) return "build in flight";
-    if (project.activeWorkflowId !== undefined) return "interview in flight";
-    const tasks = await db
-      .query("agentTasks")
-      .withIndex("by_project", (q) => q.eq("projectId", project._id))
-      .collect();
-    if (tasks.some(isTaskRunning)) return "task run in flight";
-  }
-  if (
-    doc.pendingTurn !== undefined ||
-    doc.syntheticTurnMessageId !== undefined ||
-    isLegacyChatExecuting(doc) ||
-    (await hasOpenChatTurn(db, doc._id))
-  ) {
-    return "chat turn open";
-  }
-  // A project task has no sandbox of its own: only a quick task's or a
-  // project's row status counts.
-  const legacyStatus =
-    entity.kind === "project"
-      ? entity.project.reviewProjectSandboxStatus
-      : taskUsesOwnedSession(entity.task)
-        ? entity.task.reviewTaskSandboxStatus
-        : undefined;
-  if (legacyStatus === "starting" || legacyStatus === "stopping") {
-    return `sandbox ${legacyStatus}`;
-  }
-  // `hasOpenChatTurn` above already covers the session's turns.
-  const session = await findOwnedSession(
-    db,
-    entity.kind === "task"
-      ? taskWorkSessionOwner(entity.task)
-      : projectSessionOwner(entity.project._id),
-  );
-  if (session?.status === "starting" || session?.status === "stopping") {
-    return `session sandbox ${session.status}`;
-  }
-  const queued = await db
-    .query("queuedMessages")
-    .withIndex("by_parent_and_order", (q) => q.eq("parentId", doc._id))
-    .first();
-  if (queued) return "queued message";
-  return null;
-}
-
-/** Fields the old task and project sandbox paths keep on the owner row. */
-const LEGACY_SANDBOX_CLEARED = {
-  sandboxId: undefined,
-  sandboxStartAttempt: undefined,
-  devPort: undefined,
-  devCommand: undefined,
-  previewPath: undefined,
-  previewPanePaths: undefined,
-  terminalHistoryTail: undefined,
-  terminalPanes: undefined,
-  sandboxBranch: undefined,
-  sandboxGitSync: undefined,
-};
-
-/**
- * Moves the owner's own sandbox (and its preview/terminal state) onto its
- * session and clears it on the owner: one owner per VM, so task and project
- * sweeps stop acting on it. `busy`: the old path is mid-start/stop/turn,
- * leave it for a later call. `conflict`: the session already holds another
- * VM. A project task has no sandbox of its own (its project has one, the
- * session's): task-row sandbox fields on it are ignored.
- */
-export async function adoptLegacySandbox(
-  ctx: MutationCtx,
-  entity: OwnerEntity,
-  session: Doc<"sessions">,
-): Promise<"none" | "moved" | "busy" | "conflict"> {
-  const doc = entity.kind === "task" ? entity.task : entity.project;
-  if (
-    doc.sandboxId === undefined ||
-    (entity.kind === "task" && entity.task.projectId !== undefined)
-  ) {
-    return "none";
-  }
-  if (session.sandboxId !== undefined && session.sandboxId !== doc.sandboxId) {
-    return "conflict";
-  }
-  if ((await ownerBusyReason(ctx.db, entity)) !== null) return "busy";
-  const status =
-    entity.kind === "task"
-      ? entity.task.reviewTaskSandboxStatus
-      : entity.project.reviewProjectSandboxStatus;
-  await ctx.db.patch(session._id, {
-    sandboxId: doc.sandboxId,
-    status: status === "active" ? "active" : "closed",
-    sandboxStartAttempt: doc.sandboxStartAttempt ?? session.sandboxStartAttempt,
-    devPort: doc.devPort ?? session.devPort,
-    devCommand: doc.devCommand ?? session.devCommand,
-    previewPath: doc.previewPath ?? session.previewPath,
-    previewPanePaths: doc.previewPanePaths ?? session.previewPanePaths,
-    terminalHistoryTail: doc.terminalHistoryTail ?? session.terminalHistoryTail,
-    terminalPanes: doc.terminalPanes ?? session.terminalPanes,
-    sandboxBranch: doc.sandboxBranch ?? session.sandboxBranch,
-    sandboxGitSync: doc.sandboxGitSync ?? session.sandboxGitSync,
-  });
-  if (entity.kind === "task") {
-    await ctx.db.patch(entity.task._id, {
-      ...LEGACY_SANDBOX_CLEARED,
-      reviewTaskSandboxStatus: undefined,
-      sandboxDeleteAfter: undefined,
-    });
-  } else {
-    await ctx.db.patch(entity.project._id, {
-      ...LEGACY_SANDBOX_CLEARED,
-      reviewProjectSandboxStatus: undefined,
-      lastSandboxActivity: undefined,
-    });
-  }
-  return "moved";
 }
 
 /**
@@ -530,8 +288,7 @@ const BRANCH_SYNC_RETRY_MS = 60_000;
 
 /**
  * A project's PR merged, so the next cycle works on a fresh branch version:
- * bumps `branchVersion` and the branch on the project, drops a not yet
- * migrated project VM (on the merged branch), then moves the session
+ * bumps `branchVersion` and the branch on the project, then moves the session
  * (`syncProjectSessionBranch`).
  */
 export async function rotateProjectBranch(
@@ -543,16 +300,6 @@ export async function rotateProjectBranch(
     branchVersion: nextVersion,
     branchName: buildProjectBranchName(project._id, nextVersion),
   });
-  if (project.sandboxId !== undefined) {
-    await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
-      sandboxId: project.sandboxId,
-      repoId: project.repoId,
-    });
-    await ctx.db.patch(project._id, {
-      sandboxId: undefined,
-      lastSandboxActivity: undefined,
-    });
-  }
   await syncProjectSessionBranch(ctx, project._id);
 }
 
@@ -614,78 +361,46 @@ export const syncProjectSessionBranchLater = internalMutation({
 });
 
 
-/**
- * A project's sandbox status, one source at a time: its session's once it
- * has one, the project row's (not migrated yet) until then.
- */
+/** A project's sandbox status: its session's, or undefined before it has one. */
 export async function projectSandboxStatus(
   db: DatabaseReader,
-  project: Pick<Doc<"projects">, "_id" | "reviewProjectSandboxStatus">,
+  project: Pick<Doc<"projects">, "_id">,
 ): Promise<Doc<"sessions">["status"] | undefined> {
-  const session = await findProjectSession(db, project._id);
-  return session ? session.status : project.reviewProjectSandboxStatus;
+  return (await findProjectSession(db, project._id))?.status;
 }
 
-type TaskStatusSource = Pick<
-  Doc<"agentTasks">,
-  "_id" | "projectId" | "reviewTaskSandboxStatus"
->;
+type TaskStatusSource = Pick<Doc<"agentTasks">, "_id" | "projectId">;
 
 /**
  * A task's sandbox status, the one rule the task page, lists and MCP share:
- * the session it works on (`taskWorkSessionOwner`) once that exists, else
- * the row that still holds it (a quick task's own, a project task's
- * project's, not migrated yet).
+ * the status of the session it works on (`taskWorkSessionOwner`), or
+ * undefined before that session exists.
  */
 export async function taskSandboxStatus(
   db: DatabaseReader,
   task: TaskStatusSource,
 ): Promise<Doc<"sessions">["status"] | undefined> {
-  if (task.projectId !== undefined) {
-    const project = await db.get(task.projectId);
-    return project ? await projectSandboxStatus(db, project) : undefined;
-  }
-  const session = await findTaskSession(db, task._id);
-  return session ? session.status : task.reviewTaskSandboxStatus;
+  return (await findTaskWorkSession(db, task))?.status;
 }
 
 /**
  * `taskSandboxStatus` for a list: one indexed read per repo and owner kind
- * for live sessions, and point reads only for rows whose session is not live
- * (a project read once per project), never one session scan per row.
+ * for live sessions, never one session read per row. A task absent from the
+ * live map has a closed (or no) sandbox.
  */
 export async function liveTaskSandboxStatuses(
   db: DatabaseReader,
   repoIds: Iterable<Id<"githubRepos">>,
-): Promise<
-  (task: TaskStatusSource) => Promise<Doc<"sessions">["status"] | undefined>
-> {
+): Promise<(task: TaskStatusSource) => Doc<"sessions">["status"] | undefined> {
   const ids = [...repoIds];
   const [byTask, byProject] = await Promise.all([
     liveOwnedSessionStatuses(db, ids, "task"),
     liveOwnedSessionStatuses(db, ids, "project"),
   ]);
-  const projectStatuses = new Map<
-    string,
-    Promise<Doc<"sessions">["status"] | undefined>
-  >();
-  return async (task) => {
-    if (task.projectId !== undefined) {
-      const key = String(task.projectId);
-      const live = byProject.get(key);
-      if (live) return live;
-      const cached =
-        projectStatuses.get(key) ?? taskSandboxStatus(db, task);
-      projectStatuses.set(key, cached);
-      return await cached;
-    }
-    const live = byTask.get(String(task._id));
-    if (live) return live;
-    // Not live on a session: only a row that still says live needs a read.
-    const legacy = task.reviewTaskSandboxStatus;
-    if (legacy === undefined || legacy === "closed") return undefined;
-    return await taskSandboxStatus(db, task);
-  };
+  return (task) =>
+    task.projectId !== undefined
+      ? byProject.get(String(task.projectId))
+      : byTask.get(String(task._id));
 }
 
 const LIVE_SANDBOX_STATUSES = ["active", "starting", "stopping"] as const;

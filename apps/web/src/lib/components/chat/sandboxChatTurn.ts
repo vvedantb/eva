@@ -32,24 +32,22 @@ export function withSessionChat<T>(
   return typeof chat === "string" ? run(chat) : chat().then(run);
 }
 
-// The project validators are the canonical shape: the task and session
-// validators accept the same fields plus surface-only extras, so a binding
-// that spreads these into any chat workflow type-checks, and a drift breaks
-// the build.
-export type SandboxTurnAddArgs = Omit<
-  FunctionArgs<typeof api.projectChatWorkflow.addMessage>,
-  "projectId"
->;
+// The session chat validators, with the chat id bound by the ports.
+type SessionAddArgs = FunctionArgs<typeof api.sessions.addMessage>;
+export type SandboxTurnAddArgs = Omit<SessionAddArgs, "chatId" | "role"> & {
+  /** Defaults to `user`. */
+  role?: SessionAddArgs["role"];
+};
 export type SandboxTurnStartArgs = Omit<
-  FunctionArgs<typeof api.projectChatWorkflow.startExecute>,
-  "projectId"
+  FunctionArgs<typeof api.sessionWorkflow.startExecute>,
+  "chatId" | "attachmentStorageIds" | "sourceProposedPlanId"
 >;
 export type SandboxTurnEnqueueArgs = Omit<
-  FunctionArgs<typeof api.projectChatWorkflow.enqueueMessage>,
-  "projectId"
+  FunctionArgs<typeof api.sessionWorkflow.enqueueMessage>,
+  "chatId"
 >;
 
-/** Start fields only a session turn takes; task and project ports drop them. */
+/** Start fields passed apart from the composer settings. */
 export interface SandboxTurnStartExtras {
   attachmentStorageIds?: Id<"_storage">[];
   /** The proposed plan this turn implements. */
@@ -167,36 +165,31 @@ export function sandboxAnnotationSender(
   });
 }
 
-/** The ids and keys one sandbox chat is addressed by. */
-export function sandboxChatKeys(entity: ChatEntityRef): {
-  parentId: Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">;
+/**
+ * The ids and keys one sandbox chat is addressed by; all undefined for a
+ * task's or project's chat before its session exists (nothing to read yet).
+ */
+export function sandboxChatKeys(entity: ChatEntityRef | undefined): {
+  parentId: Id<"sessionChats"> | undefined;
   /** The chat's streaming row (not the first-run row). */
-  streamingEntityId: string;
-  draftTarget: ChatDraftTarget;
+  streamingEntityId: string | undefined;
+  draftTarget: ChatDraftTarget | undefined;
 } {
-  switch (entity.kind) {
-    case "session":
-      return {
-        parentId: entity.chatId,
-        // Backend `sessionChatStreamingEntityId`.
-        streamingEntityId: String(entity.chatId),
-        draftTarget: {
-          kind: "sessionChat",
-          sessionId: entity.sessionId,
-          chatId: entity.chatId,
-        },
-      };
-    case "task":
-      return {
-        parentId: entity.taskId,
-        streamingEntityId: `task-chat-${entity.taskId}`,
-        draftTarget: { kind: "taskChat", taskId: entity.taskId },
-      };
-    case "project":
-      return {
-        parentId: entity.projectId,
-        streamingEntityId: `project-chat-${entity.projectId}`,
-        draftTarget: { kind: "projectChat", projectId: entity.projectId },
-      };
+  if (!entity) {
+    return {
+      parentId: undefined,
+      streamingEntityId: undefined,
+      draftTarget: undefined,
+    };
   }
+  return {
+    parentId: entity.chatId,
+    // Backend `sessionChatStreamingEntityId`.
+    streamingEntityId: String(entity.chatId),
+    draftTarget: {
+      kind: "sessionChat",
+      sessionId: entity.sessionId,
+      chatId: entity.chatId,
+    },
+  };
 }

@@ -1,6 +1,6 @@
 import { Migrations } from "@convex-dev/migrations";
 import { components, internal } from "./_generated/api";
-import type { DataModel } from "./_generated/dataModel";
+import type { DataModel, Id } from "./_generated/dataModel";
 import schema from "./schema";
 import { deriveLogUsage } from "./_logs/usage";
 import { archiveSessionDoc } from "./_sessions/mutations";
@@ -15,10 +15,6 @@ import { recordPullRequest } from "./_pullRequests/store";
 import { recordRunPullRequest } from "./_taskWorkflow/helpers";
 import { pruneSettledBackgroundAgents } from "./_sessions/backgroundAgents";
 import type { BackgroundAgentEntry } from "./_validators/tableFields";
-import {
-  migrateProjectToSession,
-  migrateQuickTaskToSession,
-} from "./_migrations/ownerChatsToSessions";
 
 /**
  * Convex Migrations component — batched online migrations with progress,
@@ -354,24 +350,10 @@ export const pruneSessionBackgroundAgents = dataMigrations.define({
   migrateOne: (_ctx, doc) => pruneBackgroundAgentsPatch(doc),
 });
 
-export const pruneAgentTaskBackgroundAgents = dataMigrations.define({
-  table: "agentTasks",
-  batchSize: PRUNE_BACKGROUND_AGENTS_BATCH,
-  migrateOne: (_ctx, doc) => pruneBackgroundAgentsPatch(doc),
-});
-
-export const pruneProjectBackgroundAgents = dataMigrations.define({
-  table: "projects",
-  batchSize: PRUNE_BACKGROUND_AGENTS_BATCH,
-  migrateOne: (_ctx, doc) => pruneBackgroundAgentsPatch(doc),
-});
-
 /** `npx convex run --prod dataMigrations:pruneBackgroundAgents` */
 export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionChatBackgroundAgents,
   internal.dataMigrations.pruneSessionBackgroundAgents,
-  internal.dataMigrations.pruneAgentTaskBackgroundAgents,
-  internal.dataMigrations.pruneProjectBackgroundAgents,
 ]);
 
 /**
@@ -389,47 +371,144 @@ export const backfillSessionOwner = dataMigrations.define({
   },
 });
 
-/**
- * PR 1b: moves every quick task (no `projectId`) onto its owned session —
- * sandbox fields, Main chat model/traits/transcript seed, transcript rows —
- * and archives the session of a done/cancelled/deleted task. See
- * `_migrations/ownerChatsToSessions.ts`. Skips a task mid-turn, mid-run,
- * with a queued message or a starting/stopping sandbox (logged
- * `[ownerChatMigration] skipped`). Idempotent: rerun with `{reset: true}`
- * until `migrations:quickTaskChatsLeft` reports 0 left.
+/*
+ * 3a: clears the task and project fields only the deleted task/project chat
+ * and sandbox pipelines used (their chats and sandboxes run on owned sessions
+ * since 1b/2), and deletes the rows those pipelines keyed by a task or
+ * project. 3b drops the fields from the schema once this has run to the end.
+ * Idempotent: a cleared row is skipped.
  *
- * `npx convex run --prod dataMigrations:migrateQuickTaskChatsToSessions '{dryRun: true}'`
- * `npx convex run --prod dataMigrations:migrateQuickTaskChatsToSessions`
+ *   npx convex run --prod dataMigrations:clearLegacyOwnerChatFields '{"dryRun":true}'
+ *   npx convex run --prod dataMigrations:clearLegacyOwnerChatFields
+ *   npx convex run --prod --component migrations lib:getStatus
  */
-export const migrateQuickTaskChatsToSessions = dataMigrations.define({
+
+/** Sandbox and chat fields `agentTasks` and `projects` share. */
+const LEGACY_OWNER_CHAT_FIELDS = {
+  // Sandbox: now the owned session's.
+  sandboxId: undefined,
+  sandboxStartAttempt: undefined,
+  devPort: undefined,
+  devCommand: undefined,
+  previewPath: undefined,
+  previewPanePaths: undefined,
+  terminalHistoryTail: undefined,
+  terminalPanes: undefined,
+  agentBrowsingAt: undefined,
+  sandboxBranch: undefined,
+  sandboxGitSync: undefined,
+  // Chat: now the session chat's.
+  activeChatWorkflowId: undefined,
+  chatTurnLifecycleVersion: undefined,
+  lastChatModel: undefined,
+  lastReasoningLevel: undefined,
+  lastThinkingEnabled: undefined,
+  lastUse1mContext: undefined,
+  lastFastMode: undefined,
+  // Chat daemon (`chatDaemonEntityFields`).
+  pendingTurn: undefined,
+  syntheticTurnMessageId: undefined,
+  backgroundAgents: undefined,
+  goal: undefined,
+  pendingTaskStops: undefined,
+  cancelRequestedAt: undefined,
+  steerRequestedAt: undefined,
+  usageRefreshRequestedAt: undefined,
+  claimPausedUntil: undefined,
+};
+
+const LEGACY_TASK_CHAT_FIELDS = {
+  ...LEGACY_OWNER_CHAT_FIELDS,
+  reviewTaskSandboxStatus: undefined,
+  sandboxDeleteAfter: undefined,
+};
+
+const LEGACY_PROJECT_CHAT_FIELDS = {
+  ...LEGACY_OWNER_CHAT_FIELDS,
+  reviewProjectSandboxStatus: undefined,
+  lastSandboxActivity: undefined,
+};
+
+/** True when the document still holds any of `fields` (absent = undefined). */
+function holdsAnyField(doc: object, fields: object): boolean {
+  const names = new Set(Object.keys(fields));
+  return Object.keys(doc).some((key) => names.has(key));
+}
+
+// Rows may carry a terminal tail or a subagent roster: keep batches small.
+const CLEAR_LEGACY_OWNER_BATCH = 50;
+
+/**
+ * A VM the row still points at that no session holds (an old project task's,
+ * or one the 1b/2 moves skipped) has no owner once the id is cleared, and no
+ * sweep reads it: delete it. Its work is on its pushed branch.
+ */
+async function deleteUnownedLegacySandbox(
+  ctx: MutationCtx,
+  sandboxId: string | undefined,
+  repoId: Id<"githubRepos"> | undefined,
+): Promise<void> {
+  if (sandboxId === undefined || repoId === undefined) return;
+  const session = await ctx.db
+    .query("sessions")
+    .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
+    .first();
+  if (session) return;
+  console.log(
+    `[clearLegacyOwnerChatFields] deleting unowned sandbox ${sandboxId}`,
+  );
+  await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
+    sandboxId,
+    repoId,
+  });
+}
+
+export const clearLegacyTaskChatFields = dataMigrations.define({
   table: "agentTasks",
-  // Each task may move a transcript page (up to 2 MiB) and insert a session.
-  batchSize: 10,
+  batchSize: CLEAR_LEGACY_OWNER_BATCH,
   migrateOne: async (ctx, task) => {
-    await migrateQuickTaskToSession(ctx, task);
+    if (!holdsAnyField(task, LEGACY_TASK_CHAT_FIELDS)) return;
+    const project = task.projectId ? await ctx.db.get(task.projectId) : null;
+    await deleteUnownedLegacySandbox(
+      ctx,
+      task.sandboxId,
+      task.repoId ?? project?.repoId,
+    );
+    return LEGACY_TASK_CHAT_FIELDS;
   },
 });
 
-/**
- * PR 2: moves every project onto its owned session — sandbox fields, Main
- * chat model/traits/transcript seed, transcript rows — and each project
- * task's old chat onto that task's own chat in the project's session, then
- * archives the session of a completed/cancelled/deleted project. See
- * `_migrations/ownerChatsToSessions.ts`. Skips a project mid-turn, mid-build,
- * mid-interview, with a task run in flight, a queued message or a
- * starting/stopping sandbox, and a busy project task on its own (logged
- * `[ownerChatMigration] skipped`). Idempotent: rerun with `{reset: true}`
- * until `migrations:projectChatsLeft` reports 0 left.
- *
- * `npx convex run --prod dataMigrations:migrateProjectChatsToSessions '{dryRun: true}'`
- * `npx convex run --prod dataMigrations:migrateProjectChatsToSessions`
- */
-export const migrateProjectChatsToSessions = dataMigrations.define({
+export const clearLegacyProjectChatFields = dataMigrations.define({
   table: "projects",
-  // A project moves one transcript page inline (up to 2 MiB) and schedules
-  // its tasks' transcripts, so the batch stays small.
-  batchSize: 2,
+  batchSize: CLEAR_LEGACY_OWNER_BATCH,
   migrateOne: async (ctx, project) => {
-    await migrateProjectToSession(ctx, project);
+    if (!holdsAnyField(project, LEGACY_PROJECT_CHAT_FIELDS)) return;
+    await deleteUnownedLegacySandbox(ctx, project.sandboxId, project.repoId);
+    return LEGACY_PROJECT_CHAT_FIELDS;
   },
 });
+
+/** Unsent task and project chat drafts: no composer writes or reads them now. */
+export const deleteLegacyOwnerChatDrafts = dataMigrations.define({
+  table: "drafts",
+  migrateOne: async (ctx, draft) => {
+    if (draft.kind === "taskChat" || draft.kind === "projectChat") {
+      await ctx.db.delete(draft._id);
+    }
+  },
+});
+
+/** Idle-pause clocks of task and project sandboxes: only sessions keep one now. */
+export const deleteLegacyOwnerSandboxActivity = dataMigrations.define({
+  table: "sandboxActivity",
+  migrateOne: async (ctx, row) => {
+    if (row.kind !== "session") await ctx.db.delete(row._id);
+  },
+});
+
+export const clearLegacyOwnerChatFields = dataMigrations.runner([
+  internal.dataMigrations.clearLegacyTaskChatFields,
+  internal.dataMigrations.clearLegacyProjectChatFields,
+  internal.dataMigrations.deleteLegacyOwnerChatDrafts,
+  internal.dataMigrations.deleteLegacyOwnerSandboxActivity,
+]);

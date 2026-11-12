@@ -40,8 +40,7 @@ type TaskContextFields = Pick<
 
 /**
  * The owner-context line a quick task's chat turn leads with: which task this
- * sandbox serves, its status, tags and description. Shared with the legacy
- * task chat prompt (`_agentTasks/chatPrompt.ts`) until that path is deleted.
+ * sandbox serves, its status, tags and description.
  */
 export function withTaskContext(
   task: TaskContextFields,
@@ -60,8 +59,7 @@ ${message}`;
 
 /**
  * The owner-context line a project's chat turn leads with: which project this
- * sandbox serves and its description. Shared with the legacy project chat
- * prompt (`_projects/chatPrompt.ts`) until that path is deleted.
+ * sandbox serves and its description.
  */
 export function withProjectContext(
   project: Pick<Doc<"projects">, "title" | "description">,

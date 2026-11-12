@@ -34,7 +34,10 @@ type StreamingRow = FunctionReturnType<typeof api.streaming.get>;
  * panel and annotation send do the rest.
  */
 export interface SandboxChatBinding {
-  entity: ChatEntityRef;
+  /** The owner's chat on its session; undefined until the session exists. */
+  entity: ChatEntityRef | undefined;
+  /** What the chat speaks for, for copy. */
+  ownerLabel: "task" | "project";
   /** The entity's live doc; undefined while it loads. */
   doc:
     | (SandboxChatOwnerDoc & { title: string; sandboxBranch?: string })
@@ -91,7 +94,7 @@ export function sandboxTurnSettings(
 export function useSandboxChatTranscript(binding: SandboxChatBinding) {
   const { parentId } = sandboxChatKeys(binding.entity);
   const status = useChatTurnStatus(parentId);
-  const messages = useChatTranscript(parentId);
+  const messages = useChatTranscript(parentId ?? "skip");
   const isExecuting = isChatTurnExecuting({
     status,
     messages,

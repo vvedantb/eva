@@ -91,7 +91,7 @@ export const list = authQuery({
       projects.map(async (project) => ({
         ...listRow(project),
         // A project's sandbox lives on its session; the row shows that.
-        reviewProjectSandboxStatus: await projectSandboxStatus(ctx.db, project),
+        sandboxStatus: await projectSandboxStatus(ctx.db, project),
         planningMode: await resolveProjectPlanningMode(ctx.db, project),
         hasUnread: await hasUnread(project),
         isAwaitingAnswer: awaitingAnswerIds.has(String(project._id)),
@@ -176,29 +176,16 @@ export const getActive = authQuery({
       numId: v.optional(v.number()),
       title: v.string(),
       isBuilding: v.boolean(),
-      reviewProjectSandboxStatus: v.optional(sessionStatusValidator),
+      sandboxStatus: v.optional(sessionStatusValidator),
     }),
   ),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    // Building, or a preview sandbox that is active or starting: one narrow
-    // range each, then deduped back into `by_repo` (creation) order.
-    const liveSandboxStatuses: Array<"active" | "starting"> = [
-      "active",
-      "starting",
-    ];
-    const [sessionStatuses, ...ranges] = await Promise.all([
-      // A project's sandbox lives on its session once it has one.
+    // Building, or a session sandbox that is active or starting, then
+    // deduped back into `by_repo` (creation) order.
+    const [sessionStatuses, building] = await Promise.all([
       liveOwnedSessionStatuses(ctx.db, [args.repoId], "project"),
       buildingProjectsForRepo(ctx.db, args.repoId),
-      ...liveSandboxStatuses.map((status) =>
-        ctx.db
-          .query("projects")
-          .withIndex("by_repo_and_sandbox_status", (q) =>
-            q.eq("repoId", args.repoId).eq("reviewProjectSandboxStatus", status),
-          )
-          .collect(),
-      ),
     ]);
     const sessionProjects = await Promise.all(
       [...sessionStatuses]
@@ -209,28 +196,25 @@ export const getActive = authQuery({
         }),
     );
     const byId = new Map(
-      [...ranges.flat(), ...sessionProjects.filter((p) => p !== null)].map(
-        (p) => [String(p._id), p],
-      ),
+      [...building, ...sessionProjects.filter((p) => p !== null)].map((p) => [
+        String(p._id),
+        p,
+      ]),
     );
-    // One source per project: its session's status once it has one, so a
-    // stale row status from before the move does not light it up.
-    const rows = await Promise.all(
-      filterActiveEntities([...byId.values()])
-        .sort((a, b) => a._creationTime - b._creationTime)
-        .map(async (p) => ({
-          _id: p._id,
-          numId: p.numId,
-          title: p.title,
-          isBuilding: isProjectBuilding(p),
-          reviewProjectSandboxStatus: await projectSandboxStatus(ctx.db, p),
-        })),
-    );
+    const rows = filterActiveEntities([...byId.values()])
+      .sort((a, b) => a._creationTime - b._creationTime)
+      .map((p) => ({
+        _id: p._id,
+        numId: p.numId,
+        title: p.title,
+        isBuilding: isProjectBuilding(p),
+        sandboxStatus: sessionStatuses.get(String(p._id)),
+      }));
     return rows.filter(
       (row) =>
         row.isBuilding ||
-        row.reviewProjectSandboxStatus === "active" ||
-        row.reviewProjectSandboxStatus === "starting",
+        row.sandboxStatus === "active" ||
+        row.sandboxStatus === "starting",
     );
   },
 });

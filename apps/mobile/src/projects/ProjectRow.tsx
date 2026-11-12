@@ -81,7 +81,7 @@ export function ProjectRow({
   const appearance = phaseAppearance(project.phase, scheme);
   const numLabel = formatEntityNumLabel({ numId: project.numId });
   const preview = project.description ?? project.rawInput;
-  const sandbox = project.reviewProjectSandboxStatus ? SANDBOX_DOT[project.reviewProjectSandboxStatus] : undefined;
+  const sandbox = project.sandboxStatus ? SANDBOX_DOT[project.sandboxStatus] : undefined;
   // The web `showsSandboxStatusDot`: simple view shows none.
   const showSandbox = sandbox !== undefined && !simpleView;
   const isBuilding = isProjectBuilding(project);
