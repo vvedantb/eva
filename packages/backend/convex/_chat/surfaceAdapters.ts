@@ -65,7 +65,7 @@ export type ChatSurfaceAdapter<TId extends ChatEntityId, TEntity> = {
   syntheticTurnMessageId: (entity: TEntity) => Id<"messages"> | undefined;
   sandboxId: (entity: TEntity) => string | undefined;
   repoId: (entity: TEntity) => Id<"githubRepos"> | undefined;
-  /** Interrupts a still-alive agent process the way cancelExecution does. */
+  /** Interrupts a still-alive agent process the way cancelChatExecution does. */
   interrupt: (ctx: MutationCtx, entity: TEntity) => Promise<void>;
   /** Clears the active workflow + synthetic turn, and closes the sandbox status field if `sandboxStopped`. */
   release: (
