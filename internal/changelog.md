@@ -1,5 +1,13 @@
 # Changelog
 
+## Agent feedback cards use the shared card placement
+
+Date: 2026-11-12
+
+WHY: `submit_feedback` cards were keyed only by `messageId`. A card whose turn was hidden (simple view) or that had no turn was silently dropped.
+
+Architectural: `groupChatFeedback` returns `agentReports` as a list. `ChatBody` places artifacts and reports together through `placeChatUiPanels` (`turnOutputPlacement`), so both follow one rule, in creation order.
+
 ## Chat cards stay with their turn, not at the bottom
 
 Date: 2026-11-12

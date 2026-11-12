@@ -837,38 +837,41 @@ function ChatBodyInner({
     hasOlderHistory,
   );
 
-  // Artifacts saved in this chat (`create_artifact`). Placed by the same rule
-  // as the cards above, but kept apart: an artifact sits with the turn's
-  // output and never trades places with its prose.
+  // Artifacts saved in this chat (`create_artifact`) and the agent's
+  // `submit_feedback` reports. Placed by the same rule as the cards above, but
+  // kept apart: they sit with the turn's output and never trade places with
+  // its prose behind a tab.
   const chatArtifacts = useQuery(
     api.artifacts.listForChat,
     chatParentId ? { parentId: chatParentId } : "skip",
   );
-  const artifactPlacement = placeChatUiPanels(
-    chatArtifacts ?? [],
-    displayMessages,
-    hasOlderHistory,
-  );
-  // Thumbs on turns and the agent's `submit_feedback` reports. The agent's
-  // cards share the artifacts slot: both sit with the turn's output and never
-  // trade places with its prose behind a tab.
+  // Thumbs on turns and the agent's reports.
   const chatFeedback = useQuery(
     api.feedback.listForChat,
     chatParentId ? { parentId: chatParentId } : "skip",
   );
   const feedback = groupChatFeedback(chatFeedback ?? [], currentUserId);
+  const turnOutputPlacement = placeChatUiPanels(
+    [
+      ...(chatArtifacts ?? []).map((artifact) => ({
+        _id: artifact._id,
+        messageId: artifact.messageId,
+        createdAt: artifact.createdAt,
+        node: <ChatArtifactCard key={artifact._id} artifact={artifact} />,
+      })),
+      ...feedback.agentReports.map((report) => ({
+        _id: report._id,
+        messageId: report.messageId,
+        createdAt: report.createdAt,
+        node: <AgentFeedbackCard key={report._id} feedback={report} />,
+      })),
+    ],
+    displayMessages,
+    hasOlderHistory,
+  );
   const renderTurnOutput = (messageId: string) => {
-    const artifacts = artifactPlacement.byMessageId.get(messageId) ?? [];
-    const reports = feedback.agentByMessageId.get(messageId) ?? [];
-    if (artifacts.length === 0 && reports.length === 0) return undefined;
-    return [
-      ...artifacts.map((artifact) => (
-        <ChatArtifactCard key={artifact._id} artifact={artifact} />
-      )),
-      ...reports.map((report) => (
-        <AgentFeedbackCard key={report._id} feedback={report} />
-      )),
-    ];
+    const outputs = turnOutputPlacement.byMessageId.get(messageId);
+    return outputs ? outputs.map((output) => output.node) : undefined;
   };
 
   const otherUserIds = otherUserIdsInChat(displayMessages, currentUserId);
@@ -1112,9 +1115,7 @@ function ChatBodyInner({
           )}
           {displayMessages.length > 0 ? transcriptTail : null}
           {renderChatUiPanels(panelPlacement.trailing)}
-          {artifactPlacement.trailing.map((artifact) => (
-            <ChatArtifactCard key={artifact._id} artifact={artifact} />
-          ))}
+          {turnOutputPlacement.trailing.map((output) => output.node)}
         </ConversationContent>
         {newBoundaryId ? (
           <ChatNewMessagesPill
