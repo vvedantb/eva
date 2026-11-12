@@ -7,7 +7,7 @@ import {
   type SessionChatContext,
 } from "../_sessionChats/helpers";
 import { isSessionArchived } from "../_sessions/archive";
-import { chatOwnerEntityId } from "../_sessions/owner";
+import { chatOwnerEntityId, findTaskWorkSession } from "../_sessions/owner";
 import { findOwnerChat, type OwnerEntity } from "../_sessions/ownedSession";
 import { entityHref, repoBasePath } from "@eva/shared";
 import { storedComposerTraits } from "../_shared/composerTraits";
@@ -235,8 +235,11 @@ export async function resolveMobileChat(
         },
       };
     }
-    // No session chat yet: the first send creates it (`ensureOwnerChat`).
-    // Nothing hangs off the task id, and there is no sandbox.
+    // No chat yet: the first send creates it (`ensureOwnerChat`). Nothing
+    // hangs off the task id. A project task may already work on its
+    // project's running session.
+    const workSession = await findTaskWorkSession(db, task);
+    const workSandboxActive = workSession?.status === "active";
     return {
       repoId: repo._id,
       entity: { kind: "task", task },
@@ -253,8 +256,8 @@ export async function resolveMobileChat(
         accountOwnerId: task.createdBy,
         task: { id: task._id },
         traits: storedComposerTraits({}),
-        sandboxActive: false,
-        sandboxBranch: undefined,
+        sandboxActive: workSandboxActive,
+        sandboxBranch: workSandboxActive ? workSession?.sandboxBranch : undefined,
         prUrl: task.projectId === undefined ? task.prUrl : project?.prUrl,
         webPath: taskWebPath,
       },

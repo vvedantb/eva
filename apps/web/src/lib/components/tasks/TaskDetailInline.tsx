@@ -398,6 +398,7 @@ export function TaskDetailInline({
             collapsed={rightPanelCollapsed}
             onToggle={onToggleRightPanel}
             ownerLabel="task"
+            isPending={sandbox.sessionPending}
             onStart={
               canStartSandbox && !isSandboxStopping
                 ? () => void handleStartSandbox()

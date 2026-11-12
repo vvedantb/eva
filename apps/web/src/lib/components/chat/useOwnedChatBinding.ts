@@ -55,9 +55,10 @@ export function useOwnedChatBinding({
 
   return {
     ...common,
-    entity: owned
-      ? { kind: "session", sessionId: owned.sessionId, chatId: owned.chatId }
-      : undefined,
+    entity:
+      owned?.chatId !== undefined
+        ? { kind: "session", sessionId: owned.sessionId, chatId: owned.chatId }
+        : undefined,
     ownerLabel,
     doc: title === undefined
       ? undefined
@@ -81,6 +82,8 @@ export function useOwnedChatBinding({
     ports,
     cancel: () =>
       cancelOther?.() ??
-      (owned ? cancelChat({ chatId: owned.chatId }) : Promise.resolve(null)),
+      (owned?.chatId !== undefined
+        ? cancelChat({ chatId: owned.chatId })
+        : Promise.resolve(null)),
   };
 }

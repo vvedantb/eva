@@ -187,6 +187,7 @@ export function ProjectDetailSandboxContent({
             collapsed={rightPanelCollapsed}
             onToggle={onToggleRightPanel}
             ownerLabel="project"
+            isPending={sandbox.sandbox.sessionPending}
             onStart={canStartSandbox ? handleStartSandbox : undefined}
             isStarting={isSandboxStarting}
           />

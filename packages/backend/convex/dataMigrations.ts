@@ -1,6 +1,6 @@
 import { Migrations } from "@convex-dev/migrations";
 import { components, internal } from "./_generated/api";
-import type { DataModel } from "./_generated/dataModel";
+import type { DataModel, Id } from "./_generated/dataModel";
 import schema from "./schema";
 import { deriveLogUsage } from "./_logs/usage";
 import { archiveSessionDoc } from "./_sessions/mutations";
@@ -438,22 +438,54 @@ function holdsAnyField(doc: object, fields: object): boolean {
 // Rows may carry a terminal tail or a subagent roster: keep batches small.
 const CLEAR_LEGACY_OWNER_BATCH = 50;
 
+/**
+ * A VM the row still points at that no session holds (an old project task's,
+ * or one the 1b/2 moves skipped) has no owner once the id is cleared, and no
+ * sweep reads it: delete it. Its work is on its pushed branch.
+ */
+async function deleteUnownedLegacySandbox(
+  ctx: MutationCtx,
+  sandboxId: string | undefined,
+  repoId: Id<"githubRepos"> | undefined,
+): Promise<void> {
+  if (sandboxId === undefined || repoId === undefined) return;
+  const session = await ctx.db
+    .query("sessions")
+    .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
+    .first();
+  if (session) return;
+  console.log(
+    `[clearLegacyOwnerChatFields] deleting unowned sandbox ${sandboxId}`,
+  );
+  await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
+    sandboxId,
+    repoId,
+  });
+}
+
 export const clearLegacyTaskChatFields = dataMigrations.define({
   table: "agentTasks",
   batchSize: CLEAR_LEGACY_OWNER_BATCH,
-  migrateOne: (_ctx, task) =>
-    holdsAnyField(task, LEGACY_TASK_CHAT_FIELDS)
-      ? LEGACY_TASK_CHAT_FIELDS
-      : undefined,
+  migrateOne: async (ctx, task) => {
+    if (!holdsAnyField(task, LEGACY_TASK_CHAT_FIELDS)) return;
+    const project = task.projectId ? await ctx.db.get(task.projectId) : null;
+    await deleteUnownedLegacySandbox(
+      ctx,
+      task.sandboxId,
+      task.repoId ?? project?.repoId,
+    );
+    return LEGACY_TASK_CHAT_FIELDS;
+  },
 });
 
 export const clearLegacyProjectChatFields = dataMigrations.define({
   table: "projects",
   batchSize: CLEAR_LEGACY_OWNER_BATCH,
-  migrateOne: (_ctx, project) =>
-    holdsAnyField(project, LEGACY_PROJECT_CHAT_FIELDS)
-      ? LEGACY_PROJECT_CHAT_FIELDS
-      : undefined,
+  migrateOne: async (ctx, project) => {
+    if (!holdsAnyField(project, LEGACY_PROJECT_CHAT_FIELDS)) return;
+    await deleteUnownedLegacySandbox(ctx, project.sandboxId, project.repoId);
+    return LEGACY_PROJECT_CHAT_FIELDS;
+  },
 });
 
 /** Unsent task and project chat drafts: no composer writes or reads them now. */

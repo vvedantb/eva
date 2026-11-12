@@ -46,7 +46,9 @@ export function useProjectChatBinding(
   const project = useQuery(api.projects.get, { id: projectId });
   const chat = useQuery(
     api.sessionChats.get,
-    projectSession.owned ? { chatId: projectSession.owned.chatId } : "skip",
+    projectSession.owned?.chatId !== undefined
+      ? { chatId: projectSession.owned.chatId }
+      : "skip",
   );
   const { options: accounts, resolveId: resolveAccountId } =
     useProviderAccounts();

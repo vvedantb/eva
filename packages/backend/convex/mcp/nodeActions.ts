@@ -1307,6 +1307,12 @@ const ownedSessionRefSchema = z.object({
   chatId: z.string(),
 });
 
+/** `sessions:getOwned`: the chat is absent while a project task has not chatted. */
+const ownedSessionReadSchema = z.object({
+  sessionId: z.string(),
+  chatId: z.string().optional(),
+});
+
 function ownerArg(
   kind: "task" | "project",
   id: string,
@@ -1338,8 +1344,8 @@ async function readOwnedChatAsUser(
   clerkUserId: string,
   kind: "task" | "project",
   id: string,
-): Promise<z.infer<typeof ownedSessionRefSchema> | null> {
-  return ownedSessionRefSchema
+): Promise<z.infer<typeof ownedSessionReadSchema> | null> {
+  return ownedSessionReadSchema
     .nullable()
     .parse(
       await runAsUser("query", clerkUserId, "sessions:getOwned", {
@@ -1501,7 +1507,7 @@ export const orchestratorStopAgent = internalAction({
         "_sessions/execution:cancelSessionExecution",
         { sessionId: owned.sessionId },
       );
-    } else if (owned) {
+    } else if (owned?.chatId !== undefined) {
       await runAsUser(
         "mutation",
         clerkUserId,
@@ -1568,10 +1574,16 @@ export const mcpStopEntitySandbox = internalAction({
     stopRequested: v.boolean(),
   }),
   handler: async (ctx, { clerkUserId, kind, id: entityId }) => {
-    // A task's or project's sandbox is its session's; resolving it reads the
-    // owner as the user, so the access check still comes first.
-    const target = await resolveSessionTarget(clerkUserId, kind, entityId);
-    const id = target.sessionId;
+    // A task's or project's sandbox is its session's. Stopping never creates
+    // one: no session means no sandbox. Reading the owner as the user is the
+    // access check, so it comes first.
+    let id = entityId;
+    if (kind !== "session") {
+      await readChatDocAsUser(clerkUserId, kind, entityId);
+      const owned = await readOwnedChatAsUser(clerkUserId, kind, entityId);
+      if (!owned) return { sandboxStatus: "closed", stopRequested: false };
+      id = owned.sessionId;
+    }
     // Reading the session as the user is the access check, so it comes first —
     // the turn lookup below runs on an id the caller has already proven.
     const sandboxStatus = await readSessionSandboxStatus(clerkUserId, id);

@@ -70,6 +70,7 @@ export function SandboxNotStartedRail({
   ownerLabel,
   onStart,
   isStarting,
+  isPending,
 }: {
   collapsed: boolean;
   onToggle: () => void;
@@ -77,19 +78,23 @@ export function SandboxNotStartedRail({
   /** Undefined when this viewer or phase cannot start it. */
   onStart: (() => void) | undefined;
   isStarting: boolean;
+  /** The session lookup is loading: show nothing rather than a false "none". */
+  isPending: boolean;
 }) {
   return (
     <SandboxEmptyRailFrame collapsed={collapsed} onToggle={onToggle}>
-      <div className="flex flex-col items-center gap-3 text-center">
-        <p className="text-sm text-muted-foreground">
-          This {ownerLabel} has no sandbox yet.
-        </p>
-        {onStart ? (
-          <Button size="sm" onClick={onStart} disabled={isStarting}>
-            {isStarting ? "Starting…" : "Start sandbox"}
-          </Button>
-        ) : null}
-      </div>
+      {isPending ? null : (
+        <div className="flex flex-col items-center gap-3 text-center">
+          <p className="text-sm text-muted-foreground">
+            This {ownerLabel} has no sandbox yet.
+          </p>
+          {onStart ? (
+            <Button size="sm" onClick={onStart} disabled={isStarting}>
+              {isStarting ? "Starting…" : "Start sandbox"}
+            </Button>
+          ) : null}
+        </div>
+      )}
     </SandboxEmptyRailFrame>
   );
 }
