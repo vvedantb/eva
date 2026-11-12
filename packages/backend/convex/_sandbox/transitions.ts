@@ -3,7 +3,6 @@ import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import type { sessionStatusValidator } from "../_validators/enums";
-import { isSandboxClosingStatus } from "./closingStatus";
 
 /**
  * A session's sandbox lifecycle (`status`):
@@ -29,15 +28,6 @@ export type SandboxStatus = Infer<typeof sessionStatusValidator> | undefined;
  */
 export function canRequestSandboxStart(status: SandboxStatus): boolean {
   return status !== "stopping";
-}
-
-/**
- * An in-flight start action re-marking itself `starting` (or recording the VM
- * it allocated) must not revive a row the user stopped meanwhile — the action
- * polls for `stopping`/`closed` to abort, and overwriting it defeats that.
- */
-export function canStartActionMarkStarting(status: SandboxStatus): boolean {
-  return !isSandboxClosingStatus(status);
 }
 
 /**

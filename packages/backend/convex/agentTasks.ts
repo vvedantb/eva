@@ -39,6 +39,5 @@ export {
 
 export {
   getInternal,
-  getInternalByStringId,
   applyGeneratedTags,
 } from "./_agentTasks/internal";

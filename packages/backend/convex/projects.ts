@@ -24,4 +24,4 @@ export { startDevelopment, createFromTasks } from "./_projects/development";
 
 export { resolveProjectConflicts } from "./_projects/conflicts";
 
-export { getInternal, getInternalByStringId } from "./_projects/internal";
+export { getInternal } from "./_projects/internal";
