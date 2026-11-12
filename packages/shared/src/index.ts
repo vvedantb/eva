@@ -128,6 +128,10 @@ export {
 export { MESSAGE_LINK_PARAM, messageLinkHref } from "./messageLink";
 export { buildPrecedingUserTurns } from "./precedingUserTurns";
 export {
+  chatStreamingEntityId,
+  findStreamingTargetMessage,
+} from "./chatStreaming";
+export {
   firstNameByUserId,
   firstNameFromUser,
   isOtherUserChatMessage,

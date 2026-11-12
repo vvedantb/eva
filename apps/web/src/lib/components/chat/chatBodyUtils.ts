@@ -16,6 +16,8 @@ import { stripReviewCommentBlocks } from "@/lib/reviewComments";
 
 // Moved to `@eva/shared` so the mobile chat footer reads the same turn model.
 export { buildPrecedingUserTurns } from "@eva/shared";
+// Moved to `@eva/shared` so the mobile chat streams into the same bubble.
+export { findStreamingTargetMessage } from "@eva/shared";
 // Moved to `@eva/shared` so the mobile chat draws a teammate's turn as the web.
 export {
   firstNameByUserId,
@@ -257,30 +259,6 @@ export function readableSendError(message: string): string {
     .split(" at ")[0];
   const trimmed = (cleaned ?? "").trim();
   return trimmed.length > 0 ? trimmed : "Something went wrong";
-}
-
-/**
- * The bubble the session-scoped streaming row belongs to: the oldest empty,
- * unfinished assistant bubble. Turns execute FIFO, so when a queued turn's
- * placeholder is inserted while an older turn (a synthetic loop continuation,
- * say) is still streaming, the older bubble owns the streamed tokens and the
- * new placeholder takes over only once that turn finalises. Attaching to the
- * newest bubble instead made the old turn's stream jump below the user's newer
- * message, then vanish when the old turn finalised above it.
- */
-export function findStreamingTargetMessage<
-  M extends Pick<
-    ChatBodyMessage,
-    "role" | "content" | "isSystemAlert" | "finishedAt"
-  >,
->(messages: ReadonlyArray<M>): M | undefined {
-  return messages.find(
-    (message) =>
-      message.role === "assistant" &&
-      message.isSystemAlert !== true &&
-      !message.content &&
-      message.finishedAt === undefined,
-  );
 }
 
 /** Previously sent user messages as editable display text, newest-first. */

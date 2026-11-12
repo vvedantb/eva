@@ -4,7 +4,9 @@ import { findDayBoundaryIds } from "@eva/shared/dayLabel";
 import { formatDuration } from "@eva/shared/duration";
 import {
   buildPrecedingUserTurns,
+  chatStreamingEntityId,
   collectForkPrefix,
+  findStreamingTargetMessage,
   firstNameByUserId,
   forkThreadTitle,
   formatForkPrompt,
@@ -40,7 +42,7 @@ import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Linking, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AssistantMessage } from "@/chat/AssistantMessage";
+import { AssistantMessage, LiveAssistantMessage } from "@/chat/AssistantMessage";
 import { AttachButton } from "@/chat/AttachButton";
 import { SandboxBranchChip } from "@/chat/BranchChips";
 import { ComposerFooter, ComposerHeader, useSimpleView } from "@/chat/ComposerFooter";
@@ -114,10 +116,13 @@ export default function ChatScreen() {
   }
 
   const working = turn !== undefined && turn !== null;
+  // The oldest unfinished reply owns the chat's streaming row, as the web (turns run in order).
+  const liveReplyId = findStreamingTargetMessage(messages ?? [])?._id;
+  const streamingEntityId = parentId ? chatStreamingEntityId(parentId) : undefined;
   const visible = (messages ?? []).filter(
     (message) =>
       message.isSystemAlert !== true &&
-      (message.content.trim() !== "" || (message.role === "assistant" && message.activityLog)),
+      (message.content.trim() !== "" || (message.role === "assistant" && message.activityLog) || message._id === liveReplyId),
   );
   const dayStarts = findDayBoundaryIds(visible);
   // The user turn before each reply holds the model it ran on (the footer mark), as the web.
@@ -234,7 +239,8 @@ export default function ChatScreen() {
             ) : null
           }
           ListFooterComponent={
-            working && questions === null ? (
+            // The live reply shows its own status; this covers a turn whose reply is not written yet.
+            working && questions === null && liveReplyId === undefined ? (
               <View className="pt-3">
                 <Shimmer>Working…</Shimmer>
               </View>
@@ -264,6 +270,8 @@ export default function ChatScreen() {
                       {message.role === "user" ? (
                         // The web user text is markdown in `text-sm` (14 / 20), its tokens as chips.
                         <UserMessageText content={message.content} />
+                      ) : message._id === liveReplyId && streamingEntityId ? (
+                        <LiveAssistantMessage streamingEntityId={streamingEntityId} messageId={message._id} />
                       ) : (
                         <AssistantMessage
                           messageId={message._id}
