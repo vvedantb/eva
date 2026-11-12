@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { queuePanelLabel } from "@eva/shared";
 import { useMutation } from "convex/react";
 import {
   api,
@@ -98,14 +99,16 @@ export function useChatQueueGate({
     heldCount > 0 && !isHeldByUsageLimit(hold, nextModel, nextAccountId);
 
   /** The queue panel's heading: why the queued messages have not sent. */
-  const queueLabel = (isExecuting: boolean): string | undefined => {
-    if (isExecuting || queuedMessages.length === 0) return undefined;
-    if (hold !== null && heldCount > 0) {
-      return `Queued · sends in ${formatResetDistanceMs(hold.resumeAt - now)}`;
-    }
-    if (!isSandboxActive) return "Queued · sends when Eva wakes up";
-    return undefined;
-  };
+  const queueLabel = (isExecuting: boolean): string | undefined =>
+    queuePanelLabel({
+      isExecuting,
+      queuedCount: queuedMessages.length,
+      isSandboxActive,
+      heldResetIn:
+        hold !== null && heldCount > 0
+          ? formatResetDistanceMs(hold.resumeAt - now)
+          : undefined,
+    });
 
   const guardedSetModel = (next: AIModel) => {
     if (releasesQueue(next, accountId)) {

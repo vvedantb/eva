@@ -96,18 +96,21 @@ export function MessageFooter({
 }
 
 /**
- * The 12 provider mark in a 16 box, as the web `MessageModelIcon`. Its
- * accessible name is the web tooltip's model, effort and account, without the
- * provider prefix the web adds to the model (`formatModelDisplayLabel`).
+ * The provider mark (12, or the queue row's 14) in a 16 box, as the web
+ * `MessageModelIcon`. Its accessible name is the web tooltip's model, effort
+ * and account, without the provider prefix the web adds to the model
+ * (`formatModelDisplayLabel`).
  */
-function ModelIcon({
+export function ModelIcon({
   model,
   reasoningLevel,
   credentialSourceLabel,
+  size = 12,
 }: {
   model: string;
   reasoningLevel?: string;
   credentialSourceLabel?: string;
+  size?: 12 | 14;
 }) {
   const option = findAIModelOption(model);
   const title = [option.label, reasoningLevel ? getReasoningLevelLabel(reasoningLevel) : undefined, credentialSourceLabel]
@@ -115,7 +118,7 @@ function ModelIcon({
     .join(" · ");
   return (
     <View className="size-4 shrink-0 items-center justify-center">
-      <ProviderIcon provider={option.provider} size={12} title={title} />
+      <ProviderIcon provider={option.provider} size={size} title={title} />
     </View>
   );
 }

@@ -8,11 +8,11 @@ import {
   isOtherUserChatMessage,
   isSandboxPausedAlert,
   otherUserIdsInChat,
+  stripReviewCommentBlocks,
   type ChangedFile,
   type ChatUserAttribution,
 } from "@eva/shared";
 import { tokenizedToEditable } from "@/lib/components/mentions";
-import { stripReviewCommentBlocks } from "@/lib/reviewComments";
 
 // Moved to `@eva/shared` so the mobile chat footer reads the same turn model.
 export { buildPrecedingUserTurns } from "@eva/shared";
