@@ -1,5 +1,13 @@
 # Changelog
 
+## Chat cards stay with their turn, not at the bottom
+
+Date: 2026-11-12
+
+WHY: Every artifact (and older `render_ui` / `render_html` card) showed at the end of the chat. The transcript loads only recent messages, so cards anchored to unloaded older messages fell into the "trailing" bucket.
+
+Architectural: `placeChatUiPanels` now takes the rendered rows and `hasOlderHistory`. A card with an unrendered anchor goes under the newest row created at or before it; a card older than the loaded window waits until that history loads. Trailing is only for cards older than every row with full history loaded.
+
 ## Retry Vercel exec on dropped connections
 
 Date: 2026-11-12

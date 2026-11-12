@@ -806,9 +806,6 @@ function ChatBodyInner({
     api.envVarRequests.listByParent,
     chatParentId ? { parentId: chatParentId } : "skip",
   );
-  const visibleMessageIds = new Set(
-    displayMessages.map((message) => message._id),
-  );
   const panelPlacement = placeChatUiPanels(
     [
       ...(chatUiPanels ?? []).map(
@@ -836,7 +833,8 @@ function ChatBodyInner({
         }),
       ),
     ],
-    visibleMessageIds,
+    displayMessages,
+    hasOlderHistory,
   );
 
   // Artifacts saved in this chat (`create_artifact`). Placed by the same rule
@@ -848,7 +846,8 @@ function ChatBodyInner({
   );
   const artifactPlacement = placeChatUiPanels(
     chatArtifacts ?? [],
-    visibleMessageIds,
+    displayMessages,
+    hasOlderHistory,
   );
   // Thumbs on turns and the agent's `submit_feedback` reports. The agent's
   // cards share the artifacts slot: both sit with the turn's output and never
