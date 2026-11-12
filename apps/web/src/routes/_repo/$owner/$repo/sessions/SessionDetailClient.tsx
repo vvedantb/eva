@@ -2,7 +2,7 @@ import { useMutation } from "convex/react";
 import { CenteredSpinner } from "@vvedantb/ui";
 import { api } from "@eva/backend";
 import type { Doc, Id } from "@eva/backend";
-import { sandboxStartupEntityId } from "@eva/shared";
+import { chatStreamingEntityId, sandboxStartupEntityId } from "@eva/shared";
 import { useEffect, useRef, useState } from "react";
 import { useChatTranscript } from "@/lib/hooks/useChatTranscript";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
@@ -88,7 +88,9 @@ export function SessionDetailClient({
   );
   const streaming = useHeldQuery(
     api.streaming.get,
-    isRouteActive && chatId ? { entityId: chatId } : "skip",
+    isRouteActive && chatId
+      ? { entityId: chatStreamingEntityId(chatId) }
+      : "skip",
   );
   const summaryStreaming = useHeldQuery(
     api.streaming.get,

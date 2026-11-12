@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: the live turn shows its steps and text
+
+Date: 2026-11-12
+
+WHY: While Eva worked, the phone chat showed only "Working…" and then the finished reply. It never read the chat's streaming row, so the current step, the tool timeline and the streamed text that the web shows were missing.
+
+Architectural: `findStreamingTargetMessage` and `chatStreamingEntityId` move to `@eva/shared`; the web re-exports and uses them with no behaviour change. The phone's `LiveAssistantMessage` reads `api.streaming.get` for the oldest unfinished reply and draws it with `AssistantMessage`, the same trace as a finished reply. Only that row subscribes, so a token does not re-render the transcript, and the activity is deferred (`useDeferredValue`) as on the web. Before the first visible step it shows the web header: a spinner and the live step's label, or "Working...".
+
 ## Late PR webhooks no longer reopen a merged PR
 
 Date: 2026-11-12
