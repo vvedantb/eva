@@ -43,17 +43,12 @@ export async function resolveTaskSandboxIdForRun(
   run: Doc<"agentRuns">,
 ): Promise<string | undefined> {
   // A task's sandbox lives on its session (a project task's on the
-  // project's); rows from before that keep it on the task or project.
+  // project's).
   const session = await findTaskWorkSession(db, task);
-  if (task.projectId) {
-    const project = session ? null : await db.get(task.projectId);
-    return preferPersistedSandboxId({
-      sandboxId:
-        (session ? session.sandboxId : project?.sandboxId) ?? run.sandboxId,
-    });
-  }
   return preferPersistedSandboxId({
-    sandboxId: run.sandboxId ?? (session ? session.sandboxId : task.sandboxId),
+    sandboxId: task.projectId
+      ? (session?.sandboxId ?? run.sandboxId)
+      : (run.sandboxId ?? session?.sandboxId),
   });
 }
 

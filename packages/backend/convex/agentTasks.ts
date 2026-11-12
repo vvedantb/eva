@@ -21,7 +21,6 @@ export {
   assignToProject,
   reorderProjectTasks,
   deleteCascade,
-  setTraits,
 } from "./_agentTasks/mutations";
 
 export {

@@ -235,7 +235,8 @@ export async function resolveMobileChat(
         },
       };
     }
-    const sandboxActive = task.reviewTaskSandboxStatus === "active";
+    // No session chat yet: the first send creates it (`ensureOwnerChat`).
+    // Nothing hangs off the task id, and there is no sandbox.
     return {
       repoId: repo._id,
       entity: { kind: "task", task },
@@ -251,9 +252,9 @@ export async function resolveMobileChat(
         providerAccountId: task.providerAccountId,
         accountOwnerId: task.createdBy,
         task: { id: task._id },
-        traits: storedComposerTraits(task),
-        sandboxActive,
-        sandboxBranch: sandboxActive ? task.sandboxBranch : undefined,
+        traits: storedComposerTraits({}),
+        sandboxActive: false,
+        sandboxBranch: undefined,
         prUrl: task.projectId === undefined ? task.prUrl : project?.prUrl,
         webPath: taskWebPath,
       },
@@ -297,7 +298,8 @@ export async function resolveMobileChat(
         },
       };
     }
-    const sandboxActive = project.reviewProjectSandboxStatus === "active";
+    // No session chat yet: the first send creates it (`ensureOwnerChat`).
+    // Nothing hangs off the project id, and there is no sandbox.
     return {
       repoId: repo._id,
       entity: { kind: "project", project },
@@ -308,13 +310,13 @@ export async function resolveMobileChat(
         repoId: repo._id,
         parentId: project._id,
         canReply: project.deletedAt === undefined,
-        model: project.lastChatModel ?? project.model,
+        model: project.model ?? repo.defaultModel,
         providerAccountId: project.providerAccountId,
         accountOwnerId: project.userId,
         project: { id: project._id },
-        traits: storedComposerTraits(project),
-        sandboxActive,
-        sandboxBranch: sandboxActive ? project.sandboxBranch : undefined,
+        traits: storedComposerTraits({}),
+        sandboxActive: false,
+        sandboxBranch: undefined,
         intendedBranch: project.branchName,
         prUrl: project.prUrl,
         webPath: entityHref("project", repo, project.numId),

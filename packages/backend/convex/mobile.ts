@@ -141,10 +141,9 @@ const traitArgs = {
 /**
  * The composer model picker: sets a chat's sticky model and traits, which
  * `sendMessage` then uses. Shares the writes of the web picker's mutations
- * (`sessionChats.setModel` / `setTraits`, `projects.setChatModel` /
- * `setTraits`), so a pick reconciles the sticky account as on the web. Session and project
- * chats only: for a quick task the phone calls the web task chat's own
- * `agentTasks.update` and `agentTasks.setTraits`.
+ * (`sessionChats.setModel` / `setTraits`), so a pick reconciles the sticky
+ * account as on the web. A task's or project's pick lands on its session
+ * chat, created on first need.
  */
 export const setChatModel = authMutation({
   args: { target: v.string(), model: v.optional(aiModelValidator), ...traitArgs },

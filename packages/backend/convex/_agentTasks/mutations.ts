@@ -6,7 +6,6 @@ import {
   taskStatusValidator,
   aiModelValidator,
   priorityValidator,
-  reasoningLevelValidator,
 } from "../validators";
 import { createNotification } from "../notifications";
 import { ensureSubscribed, notifySubscribers } from "../taskSubscribers";
@@ -53,10 +52,6 @@ import {
 import {
   selectPrLifecycleTransition,
 } from "../_github/prLifecycleActions";
-import {
-  composerTraitFields,
-  hasComposerTraitUpdate,
-} from "../_shared/composerTraits";
 import {
   buildTaskUpdates,
   logTaskUpdateActivity,
@@ -686,28 +681,3 @@ export const deleteCascade = authMutation({
   },
 });
 
-/**
- * Sticky sandbox-chat traits (effort / thinking / 1M). No `updatedAt` bump.
- * Only provided fields are patched.
- */
-export const setTraits = authMutation({
-  args: {
-    id: v.id("agentTasks"),
-    reasoningLevel: v.optional(reasoningLevelValidator),
-    thinkingEnabled: v.optional(v.boolean()),
-    use1mContext: v.optional(v.boolean()),
-    fastMode: v.optional(v.boolean()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.id);
-    if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) {
-      throw new Error("Task not found");
-    }
-    if (!hasComposerTraitUpdate(args)) {
-      return null;
-    }
-    await ctx.db.patch(args.id, composerTraitFields(args));
-    return null;
-  },
-});

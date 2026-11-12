@@ -450,21 +450,13 @@ export async function isFirstTaskOnBranch(
   );
 }
 
-/** Deletes a task and all its related data (runs, dependencies, scheduled functions, sandbox). */
+/** Deletes a task and all its related data (runs, dependencies, scheduled functions). */
 export async function deleteTaskRelatedData(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
 ): Promise<void> {
-  const task = await ctx.db.get(taskId);
+  // A task's sandbox is its session's: the delete path retires that session.
   await cancelTaskRunSchedule(ctx, taskId);
-  // Quick tasks persist a sandbox; clean it up so we don't leak compute.
-  // Project tasks share their sandbox via `project.sandboxId` — leave that alone.
-  if (task && !task.projectId && task.sandboxId && task.repoId) {
-    await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
-      sandboxId: task.sandboxId,
-      repoId: task.repoId,
-    });
-  }
   const runs = await ctx.db
     .query("agentRuns")
     .withIndex("by_task", (q) => q.eq("taskId", taskId))
@@ -503,9 +495,7 @@ export async function deleteTaskRelatedData(
   await ctx.db.delete(taskId);
 }
 
-/**
- * Soft-deletes a task: cancels schedules and sandbox cleanup, but keeps the row.
- */
+/** Soft-deletes a task: cancels schedules, but keeps the row. */
 export async function softDeleteAgentTask(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
@@ -513,12 +503,6 @@ export async function softDeleteAgentTask(
   const task = await ctx.db.get(taskId);
   if (!task || isEntityDeleted(task)) return;
   await cancelTaskRunSchedule(ctx, taskId);
-  if (!task.projectId && task.sandboxId && task.repoId) {
-    await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
-      sandboxId: task.sandboxId,
-      repoId: task.repoId,
-    });
-  }
   const runSummary = await ctx.db
     .query("agentTaskRunSummaries")
     .withIndex("by_task", (q) => q.eq("taskId", taskId))
