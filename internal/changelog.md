@@ -1,5 +1,29 @@
 # Changelog
 
+## Retry Vercel exec on dropped connections
+
+Date: 2026-11-12
+
+WHY: Opening a terminal failed with `vercel exec failed ... fetch failed`. Undici dropped the HTTP connection to the Vercel API, and `exec` only retried a closed command stream, so the pty connect action threw.
+
+Architectural: `_sandbox/vercelProvider.ts` `isRetryableExecFailure` (was `isVercelCommandStreamClosed`) also matches `fetch failed`, `UND_ERR_SOCKET`, `ECONNRESET` and `socket hang up`, so every `exec` gets one refresh+retry on a transit failure. A failed refresh no longer hides the exec error.
+
+## Bounded handoff read; clear stale task runs
+
+Date: 2026-11-12
+
+WHY: A large chat (163 rows, ~8.8 MB) failed every send and queued dequeue with "Too many bytes read": one send runs handoff detection twice (alert, then prompt), and each read took the newest 400 messages. Separately, one cancelled task kept a `running` run from the 0b migration.
+
+Architectural: `_shared/modelHandoff.ts` `readHandoffHistory` reads the newest messages in batches of 4 and stops at 400 rows or 2 MiB (`HANDOFF_SCAN_BYTE_BUDGET`); both `maybeInsertModelHandoffAlert` and `prependModelHandoffContext` use it. `_agentTasks/runState:finishStaleTerminalRuns` (`{ dryRun? }`, self-paginating) ends the run of done/cancelled tasks idle for 24 h with no open turn and a terminal or absent `agentRuns` row, through `finishTaskRun`.
+
+## Phone: maintenance screen; new APK for the session-chat backend
+
+Date: 2026-11-12
+
+WHY: With `MAINTENANCE=1`, the web shows a maintenance screen but the phone showed its start-up error. The published APK (0.1.33, from `a5f5d4e2b`) predates #1266 and #1267: its project page sends a project id to `chatReads.isUnread`, which now takes session ids, so it crashes, and task and project chats without a session cannot send. Main's phone code already fits; this `feat` merge releases it.
+
+Architectural: `MaintenanceGate` (`src/ui/MaintenanceScreen.tsx`) wraps the app above `ClerkGate` and shows the web wording while `maintenance.status` is true. It reads the status with `watchQuery` and `useSyncExternalStore`, not `useQuery`, so a backend without that query does not take the app down. The root `ErrorBoundary` shows the same screen for `isMaintenanceError` errors, with its own `ConvexProvider`, and retries when the status turns false.
+
 ## Maintenance mode
 
 Date: 2026-11-12
