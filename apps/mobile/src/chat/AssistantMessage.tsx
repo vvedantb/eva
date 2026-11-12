@@ -54,7 +54,6 @@ import {
 } from "@vvedantb/native-ui/ai";
 import { Markdown } from "@vvedantb/native-ui/markdown";
 import { Spinner, Text } from "@vvedantb/native-ui/primitives";
-import { tokens } from "@vvedantb/native-ui/theme";
 import { useQuery } from "convex/react";
 import { useDeferredValue, useState, type ComponentType, type ReactNode } from "react";
 import { Pressable, View } from "react-native";
@@ -141,7 +140,7 @@ function TodoChecklist({ step }: { step: ActivityLogStep }) {
             ) : todo.status === "in_progress" ? (
               <Spinner size="sm" decorative />
             ) : (
-              <IconCircle size={14} color={tokens.color.muted[scheme]} />
+              <IconCircle size={14} color={EVA_THEME[scheme].mutedForeground} />
             )}
           </View>
           {/* Web `leading-snug` (1.375). */}

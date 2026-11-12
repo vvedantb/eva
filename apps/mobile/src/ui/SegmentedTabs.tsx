@@ -29,7 +29,7 @@ export function SegmentedTabs<Value extends string>({
         variant="segmented"
         size="sm"
         className="gap-0 self-stretch p-1"
-        style={scheme === "dark" ? { backgroundColor: EVA_THEME.dark.card } : undefined}
+        style={scheme === "light" ? undefined : { backgroundColor: EVA_THEME[scheme].card }}
       >
         {options.map((option) => (
           <TabsTrigger key={option.value} value={option.value} className="flex-1" minHeight={largerText ? undefined : 40}>

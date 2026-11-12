@@ -1,7 +1,7 @@
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconPlus } from "@tabler/icons-react-native";
 import { PageHeader } from "@vvedantb/native-ui/layout";
 import { Pager, PillTabs } from "@vvedantb/native-ui/primitives";
-import { tokens } from "@vvedantb/native-ui/theme";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
@@ -41,7 +41,7 @@ export default function ProjectsScreen() {
   const section = sections[index] ?? { id: "projects", label: "Projects" };
   // Where the pages are, shared by the pager and the pill indicator.
   const progress = useSharedValue(index);
-  const muted = tokens.color.muted[useScheme()];
+  const muted = EVA_THEME[useScheme()].mutedForeground;
   return (
     <TabScreen>
       <PageHeader

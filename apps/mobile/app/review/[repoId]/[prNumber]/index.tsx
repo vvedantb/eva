@@ -38,7 +38,7 @@ import {
   TabsTrigger,
 } from "@vvedantb/native-ui/primitives";
 import { goBackOrReplace } from "@vvedantb/native-ui/expo-router";
-import { tokens, useLargerText } from "@vvedantb/native-ui/theme";
+import { useLargerText } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useAction, useQuery } from "convex/react";
 import * as Clipboard from "expo-clipboard";
@@ -97,7 +97,7 @@ export default function ReviewScreen() {
     <View className="flex-1" style={{ paddingTop: insets.top + 8 }}>
       <View className="flex-row px-3 pb-2">
         <HeaderIconButton label="Back" onPress={back}>
-          <IconChevronLeft size={20} color={tokens.color.foreground[scheme]} />
+          <IconChevronLeft size={20} color={EVA_THEME[scheme].foreground} />
         </HeaderIconButton>
       </View>
       {body}
@@ -245,7 +245,7 @@ function ReviewTabs({
       {/* The web header's Merge and its floating composer, in thumb reach. */}
       <View
         className="flex-row items-center gap-2 px-4 pt-2"
-        style={{ paddingBottom: Math.max(insets.bottom, 8), borderTopWidth: 1, borderColor: tokens.color.border[scheme] }}
+        style={{ paddingBottom: Math.max(insets.bottom, 8), borderTopWidth: 1, borderColor: EVA_THEME[scheme].border }}
       >
         <View className="min-w-0 flex-1">
           <PrPrimaryAction repoId={repoId} overview={overview} onDone={onRefresh} />
@@ -359,7 +359,7 @@ function ReviewHeader({
     );
 
   return (
-    <View className="gap-2 px-3 pb-3" style={{ paddingTop: insets.top + 8, borderBottomWidth: 1, borderColor: tokens.color.border[scheme] }}>
+    <View className="gap-2 px-3 pb-3" style={{ paddingTop: insets.top + 8, borderBottomWidth: 1, borderColor: EVA_THEME[scheme].border }}>
       <View className="flex-row items-center gap-2">
         <HeaderIconButton label="Back" onPress={onBack}>
           <IconChevronLeft size={20} color={theme.foreground} />
@@ -386,7 +386,7 @@ function ReviewHeader({
             accessibilityLabel={refreshing ? "Refreshing pull request" : "More pull request actions"}
             hitSlop={4}
             className="h-11 w-11 items-center justify-center rounded-full active:opacity-70"
-            style={{ backgroundColor: tokens.color.surfaceSecondary[scheme] }}
+            style={{ backgroundColor: EVA_THEME[scheme].muted }}
           >
             {refreshing || closing ? <Spinner size="sm" decorative /> : <IconDots size={18} color={theme.foreground} />}
           </DropdownMenuTrigger>

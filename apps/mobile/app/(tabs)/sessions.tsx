@@ -1,4 +1,5 @@
 import { api } from "@eva/backend";
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconPlus, IconTerminal2 } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
 import { PageHeader } from "@vvedantb/native-ui/layout";
@@ -11,7 +12,7 @@ import {
   SkeletonList,
   SkeletonRow,
 } from "@vvedantb/native-ui/primitives";
-import { tokens, useLargerText } from "@vvedantb/native-ui/theme";
+import { useLargerText } from "@vvedantb/native-ui/theme";
 import { useQuery } from "convex/react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
@@ -58,7 +59,7 @@ export default function SessionsScreen() {
   // Where the pages are, shared by the pager and the pill indicator.
   const progress = useSharedValue(index);
   const { openNew: openNewQuickTask } = useQuickTaskRepo();
-  const muted = tokens.color.muted[useScheme()];
+  const muted = EVA_THEME[useScheme()].mutedForeground;
   const isQuickTasks = section.id === "quick-tasks";
 
   return (

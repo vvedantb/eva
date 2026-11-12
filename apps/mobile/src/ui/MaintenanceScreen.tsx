@@ -1,5 +1,5 @@
 import { api } from "@eva/backend";
-import { tokens } from "@vvedantb/native-ui/theme";
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import { useConvex } from "convex/react";
 import { type ReactNode, useSyncExternalStore } from "react";
 import { Text, View } from "react-native";
@@ -43,17 +43,17 @@ export function MaintenanceScreen() {
   return (
     <View
       className="flex-1 items-center justify-center p-4"
-      style={{ backgroundColor: tokens.color.background[scheme] }}
+      style={{ backgroundColor: EVA_THEME[scheme].background }}
       accessibilityRole="alert"
     >
-      <View className="w-full max-w-md rounded-lg p-6" style={{ backgroundColor: tokens.color.surfaceCard[scheme] }}>
+      <View className="w-full max-w-md rounded-lg p-6" style={{ backgroundColor: EVA_THEME[scheme].card }}>
         <Text
           className="font-instrument-sans-semibold text-center text-lg"
-          style={{ color: tokens.color.foreground[scheme], fontWeight: "600" }}
+          style={{ color: EVA_THEME[scheme].foreground, fontWeight: "600" }}
         >
           Eva is down for maintenance
         </Text>
-        <Text className="font-instrument-sans mt-2 text-center text-sm" style={{ color: tokens.color.muted[scheme] }}>
+        <Text className="font-instrument-sans mt-2 text-center text-sm" style={{ color: EVA_THEME[scheme].mutedForeground }}>
           We are updating Eva. The app comes back on its own when we are done.
         </Text>
       </View>

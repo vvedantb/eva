@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useConvexAuth, useMutation } from "convex/react";
 import { api } from "@eva/backend";
+import { isThemeMode, themeAppearance } from "@eva/shared";
 import {
   ThemeModeContext,
   appearanceToResolvedTheme,
@@ -35,15 +36,6 @@ function applyAppearance(appearance: ThemeAppearance, mode: ThemeMode) {
   writeThemeAppearanceHint(appearance, mode);
 }
 
-function isValidTheme(value: string): value is ThemeMode {
-  return (
-    value === "dark" ||
-    value === "light" ||
-    value === "neutral" ||
-    value === "system"
-  );
-}
-
 /**
  * Seed the pre-sync theme from the FOUC hint (or legacy `theme` key) so the
  * first client render matches index.html. Convex is the source of truth once
@@ -60,7 +52,7 @@ function readInitialTheme(): ThemeMode {
   if (appearance) return appearance;
   try {
     const legacy = localStorage.getItem("theme");
-    if (legacy && isValidTheme(legacy)) return legacy;
+    if (legacy && isThemeMode(legacy)) return legacy;
   } catch {
     // Ignore.
   }
@@ -90,15 +82,14 @@ export function ThemeModeProvider({ children }: { children: React.ReactNode }) {
   // `resolvedTheme` feed Sonner and the diff viewer, and they went stale when a
   // System user flipped their OS theme mid-session.
   const [systemAppearance, setSystemAppearance] = useState(getSystemAppearance);
-  const appearance: ThemeAppearance =
-    theme === "system" ? systemAppearance : theme;
+  const appearance: ThemeAppearance = themeAppearance(theme, systemAppearance);
   const resolvedTheme = appearanceToResolvedTheme(appearance);
 
   // Every mode persists, System included — it is a preference ("follow the
   // OS"), not a resolved appearance. The optimistic update moves `syncedTheme`
   // in the same tick, so there is no flash while the write is in flight.
   const setTheme = (t: ThemeMode) => {
-    applyAppearance(t === "system" ? systemAppearance : t, t);
+    applyAppearance(themeAppearance(t, systemAppearance), t);
     if (!isAuthenticated) {
       setHintTheme(t);
       return;

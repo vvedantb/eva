@@ -1,9 +1,9 @@
 import type { MentionItem, MentionKind } from "@eva/shared";
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconChecklist, IconFileText, IconLayoutKanban, IconTerminal2, type IconProps } from "@tabler/icons-react-native";
 import { PromptInputMenu, PromptInputMenuItem } from "@vvedantb/native-ui/ai";
 import { ProviderIcon } from "@vvedantb/native-ui/brand";
 import { Avatar, AvatarFallback, initials } from "@vvedantb/native-ui/primitives";
-import { tokens } from "@vvedantb/native-ui/theme";
 import type { ComponentType } from "react";
 import type { MentionMenuState } from "@/chat/useMentionComposer";
 import { useScheme } from "@/ui/theme";
@@ -35,7 +35,7 @@ export function MentionMenu({
 }) {
   const scheme = useScheme();
   const slash = menu.trigger.kind === "slash";
-  const muted = tokens.color.muted[scheme];
+  const muted = EVA_THEME[scheme].mutedForeground;
   const row = (item: MentionItem, index: number) => {
     const person = menu.peopleIds.has(item.id);
     const Kind = item.kind ? KIND_ICON[item.kind] : undefined;
