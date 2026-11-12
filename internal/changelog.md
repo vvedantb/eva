@@ -1,5 +1,13 @@
 # Changelog
 
+## One Stop for web, mobile and MCP
+
+Date: 2026-11-12
+
+WHY: Stop did different things per surface. Mobile left a project task's run going. MCP `stop_agent` on a project stopped every task chat too. Only MCP refused a sandbox Stop mid-turn on the server; web Stop during a build killed the build's VM, and a task or project sandbox Stop could create a session.
+
+Architectural: `_sessions/stop.ts` holds the two Stops. `sessions.stopChatTurn({ chatId } | { taskId })` cancels the chat's turn and its task's run, never a build or interview. `sessions.stopWorkSandbox({ sessionId } | { taskId } | { projectId })` refuses while a turn, run, build or interview holds the session, and never creates one. `sessionWorkflow.cancelExecution` and `taskWorkflow.cancelExecution` are gone; `sessions.stopSandbox` stays for archive teardown only.
+
 ## Collaborators can switch the account in quick task and project chats
 
 Date: 2026-11-12

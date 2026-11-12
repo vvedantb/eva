@@ -341,6 +341,7 @@ import type * as _sessions_resultTarget from "../_sessions/resultTarget.js";
 import type * as _sessions_sandbox from "../_sessions/sandbox.js";
 import type * as _sessions_sessionPrompt from "../_sessions/sessionPrompt.js";
 import type * as _sessions_setupGate from "../_sessions/setupGate.js";
+import type * as _sessions_stop from "../_sessions/stop.js";
 import type * as _sessions_workflow from "../_sessions/workflow.js";
 import type * as _shared_async from "../_shared/async.js";
 import type * as _shared_commentAnchor from "../_shared/commentAnchor.js";
@@ -919,6 +920,7 @@ declare const fullApi: ApiFromModules<{
   "_sessions/sandbox": typeof _sessions_sandbox;
   "_sessions/sessionPrompt": typeof _sessions_sessionPrompt;
   "_sessions/setupGate": typeof _sessions_setupGate;
+  "_sessions/stop": typeof _sessions_stop;
   "_sessions/workflow": typeof _sessions_workflow;
   "_shared/async": typeof _shared_async;
   "_shared/commentAnchor": typeof _shared_commentAnchor;

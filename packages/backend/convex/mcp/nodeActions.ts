@@ -1496,39 +1496,25 @@ export const orchestratorStopAgent = internalAction({
       );
       return { buildRunning: false };
     }
-    // A project's session goes quiet (every chat of it); a task's own chat
-    // does. A project's running build is its own workflow and is reported
-    // back rather than cancelled (cancel_project_build owns that).
+    // The app's chat Stop (`sessions.stopChatTurn`): a task's run and chat,
+    // a project's own chat. A project's running build is its own workflow and
+    // is reported back rather than cancelled (cancel_project_build owns that).
+    if (kind === "task") {
+      await runAsUser("mutation", clerkUserId, "sessions:stopChatTurn", {
+        target: { taskId: id },
+      });
+      return { buildRunning: false };
+    }
     const owned = await readOwnedChatAsUser(clerkUserId, kind, id);
-    if (owned && kind === "project") {
-      await runAsUser(
-        "mutation",
-        clerkUserId,
-        "_sessions/execution:cancelSessionExecution",
-        { sessionId: owned.sessionId },
-      );
-    } else if (owned?.chatId !== undefined) {
-      await runAsUser(
-        "mutation",
-        clerkUserId,
-        "_sessions/execution:cancelExecution",
-        { chatId: owned.chatId },
-      );
+    if (owned?.chatId !== undefined) {
+      await runAsUser("mutation", clerkUserId, "sessions:stopChatTurn", {
+        target: { chatId: owned.chatId },
+      });
     }
-    if (kind === "project") {
-      const project = projectDocSchema.parse(
-        await readChatDocAsUser(clerkUserId, "project", id),
-      );
-      return { buildRunning: projectDocBuildRunning(project) };
-    }
-    // A task's run is its own workflow slot: stop it too (a no-op when idle).
-    await runAsUser(
-      "mutation",
-      clerkUserId,
-      "_taskWorkflow/publicMutations:cancelExecution",
-      { taskId: id },
+    const project = projectDocSchema.parse(
+      await readChatDocAsUser(clerkUserId, "project", id),
     );
-    return { buildRunning: false };
+    return { buildRunning: projectDocBuildRunning(project) };
   },
 });
 
@@ -1573,7 +1559,7 @@ export const mcpStopEntitySandbox = internalAction({
     sandboxStatus: v.string(),
     stopRequested: v.boolean(),
   }),
-  handler: async (ctx, { clerkUserId, kind, id: entityId }) => {
+  handler: async (_ctx, { clerkUserId, kind, id: entityId }) => {
     // A task's or project's sandbox is its session's. Stopping never creates
     // one: no session means no sandbox. Reading the owner as the user is the
     // access check, so it comes first.
@@ -1584,28 +1570,14 @@ export const mcpStopEntitySandbox = internalAction({
       if (!owned) return { sandboxStatus: "closed", stopRequested: false };
       id = owned.sessionId;
     }
-    // Reading the session as the user is the access check, so it comes first —
-    // the turn lookup below runs on an id the caller has already proven.
-    const sandboxStatus = await readSessionSandboxStatus(clerkUserId, id);
-
-    // Tearing the VM down mid-turn kills the turn. Stopping and cancelling are
-    // separate decisions, so this refuses rather than deciding for the caller.
-    const isExecuting = await ctx.runQuery(
-      internal.mcp.queries.entityIsExecuting,
-      { kind: "session", id },
-    );
-    if (isExecuting) {
-      throw new Error(
-        `This ${kind} has a turn in flight. Wait for it to finish and stop again, or cancel it first with stop_agent.`,
-      );
-    }
-
-    if (sandboxStatus === "closed") {
+    if ((await readSessionSandboxStatus(clerkUserId, id)) === "closed") {
       return { sandboxStatus: "closed", stopRequested: false };
     }
 
-    await runAsUser("mutation", clerkUserId, "sessions:stopSandbox", {
-      sessionId: id,
+    // The app's sandbox Stop: refused while an agent works in the sandbox
+    // (a turn, run, build or interview). Stop it first with stop_agent.
+    await runAsUser("mutation", clerkUserId, "sessions:stopWorkSandbox", {
+      target: { sessionId: id },
     });
 
     // Teardown finalizes in a scheduled action, so poll for the settled state

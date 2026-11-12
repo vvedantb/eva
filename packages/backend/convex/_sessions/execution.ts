@@ -727,18 +727,6 @@ export async function cancelChatExecution(
   await drainSessionChatQueues(ctx, session._id, chat._id);
 }
 
-export const cancelExecution = authMutation({
-  args: { chatId: v.id("sessionChats") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const context = await getSessionChatOrThrow(ctx.db, args.chatId);
-    if (!(await hasRepoAccess(ctx.db, context.session.repoId, ctx.userId)))
-      throw new Error("Not authorized");
-    await cancelChatExecution(ctx, context);
-    return null;
-  },
-});
-
 /** Stops every chat of a session at once (the fleet `stop_agent` tool). */
 export const cancelSessionExecution = authMutation({
   args: { sessionId: v.id("sessions") },

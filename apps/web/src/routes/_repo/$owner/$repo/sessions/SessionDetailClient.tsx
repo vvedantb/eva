@@ -105,6 +105,7 @@ export function SessionDetailClient({
   useEntityDocumentTitle(session?.title, isRouteActive);
   const startSandboxMutation = useMutation(api.sessions.startSandbox);
   const stopSandboxMutation = useMutation(api.sessions.stopSandbox);
+  const stopWorkSandbox = useMutation(api.sessions.stopWorkSandbox);
   const ensureMainChat = useMutation(api.sessionChats.ensureMain);
   const createChat = useMutation(api.sessionChats.create);
   const [isCreatingChat, setIsCreatingChat] = useState(false);
@@ -202,7 +203,7 @@ export function SessionDetailClient({
               "session-sandbox-start",
             )
           : catchMutationError(
-              stopSandboxMutation({ sessionId }),
+              stopWorkSandbox({ target: { sessionId } }),
               "Couldn't stop sandbox",
               "session-sandbox-stop",
             )

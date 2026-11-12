@@ -400,7 +400,7 @@ export const chatDaemonEntityFields = {
   // Written only when the goal changes (set, check, met, cleared).
   goal: v.optional(agentGoalValidator),
   pendingTaskStops: v.optional(v.array(v.string())),
-  // Interrupt-cancel signal for a warm Claude daemon: cancelExecution sets this
+  // Interrupt-cancel signal for a warm Claude daemon: cancelChatExecution sets this
   // instead of killing the sandbox process; claimPendingTurn drains it
   // unconditionally (even mid-turn, with no pendingTurn) so the daemon's poll
   // loop notices and aborts its in-flight SDK query.
