@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: a chat opens at its newest message
+
+Date: 2026-11-12
+
+WHY: On the APK, a chat opened at its top and then scrolled to the bottom. The list drew its oldest rows first, jumped to an end it measured, and then rendered and measured the newer rows in batches, so the content height changed again and the list jumped again after it showed.
+
+Architectural: The chat transcript is an inverted `ConversationList` (kit `inverted`, data newest first). The newest message is row 0 at the bottom, so the first frame is already at the end with no scroll. The "Working…" line is the list header (the bottom when inverted). The thread's side padding moves into each row, as Android flips an inverted list on both axes.
+
 ## Phone: faster on resume, on the Inbox and while typing
 
 Date: 2026-11-12
