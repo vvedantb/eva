@@ -20,9 +20,10 @@ import {
 import {
   tearDownStaleDocWorkflow,
   tearDownStaleEvaluationWorkflow,
-  tearDownStaleProjectWorkflow,
+  stopProjectInterview,
   tearDownStaleSessionWorkflow,
 } from "./workflowWatchdog";
+import { interviewTurnProjectId } from "./_projects/interviewState";
 import { tearDownStaleAutomationRun } from "./_automations/runs";
 import { finalizeStalledRun, stalledRunStop } from "./_taskWorkflow/recovery";
 import { clearStreamingActivity } from "./_taskWorkflow/helpers";
@@ -289,6 +290,8 @@ export const openAgentTurnLease = internalMutation({
   args: {
     entityId: turnEntityIdValidator,
     lane: v.optional(turnLaneValidator),
+    /** The session whose sandbox the agent holds (a project interview's). */
+    sessionId: v.optional(v.id("sessions")),
     streamingEntityId: v.string(),
     model: v.optional(v.string()),
     sandboxId: v.string(),
@@ -300,6 +303,7 @@ export const openAgentTurnLease = internalMutation({
     const turnId = await openTurn(ctx, {
       entityId: args.entityId,
       lane: args.lane,
+      sessionId: args.sessionId,
       streamingEntityId: args.streamingEntityId,
       model: normalizeAIModel(args.model),
       sandboxId: args.sandboxId,
@@ -528,11 +532,16 @@ async function finalizeExpiredAgentTurn(
         );
       }
       break;
-    case "interview":
-      if (workflowId !== undefined) {
-        await tearDownStaleProjectWorkflow(ctx, owner.id, workflowId);
+    case "interview": {
+      const projectId = await interviewTurnProjectId(ctx.db, owner.id);
+      if (workflowId !== undefined && projectId !== undefined) {
+        await stopProjectInterview(ctx, projectId, workflowId, {
+          state: "error",
+          error,
+        });
       }
       break;
+    }
   }
   await clearStreamingActivity(ctx, turn.streamingEntityId);
   await closeTurn(ctx, turn, "error", { error });

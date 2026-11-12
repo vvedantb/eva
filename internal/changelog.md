@@ -1,5 +1,13 @@
 # Changelog
 
+## Project interviews have one explicit state; their turns sit on the project session
+
+Date: 2026-11-12
+
+WHY: Two fields described one interview lifecycle: `projects.activeWorkflowId` and `projects.interviewSandboxClaim`. The save step cleared the workflow before the release step stopped the VM. A build or the chained spec could claim the session in that gap, and the release then stopped their VM. The stale and stall teardowns left the claim behind, so the claimed start never failed and the prepared VM never stopped.
+
+Architectural: The new `projects.interview` (`started` | `claimed` | `prepared`; absent = idle) is written only by `_projects/interviewState.ts`, through a pure transition table fenced by `workflowId`. `releaseInterview` ends the interview, releases the VM and chains the spec in one mutation. Every stop uses `stopProjectInterview`. Interview turns now open with `entityId` and `sessionId` set to the project session (lane `interview`), so the session's open-turn reads see them. The legacy fields stay optional and nothing writes them. Run `dataMigrations:migrateProjectInterviewState`. Before the narrowing PR, `migrations:projectEntityTurnsLeft` must report 0.
+
 ## Collaborators can switch the account in quick task and project chats
 
 Date: 2026-11-12

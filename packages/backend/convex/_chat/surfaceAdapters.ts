@@ -240,7 +240,8 @@ export type AgentTurnOwner =
   | { kind: "doc"; id: Id<"docs"> }
   | { kind: "evaluation"; id: Id<"evaluationReports"> }
   | { kind: "summary"; id: Id<"sessions"> }
-  | { kind: "interview"; id: Id<"projects"> };
+  /** Filed under the project's session; a legacy turn under the project. */
+  | { kind: "interview"; id: Id<"sessions"> | Id<"projects"> };
 
 /** One handler per kind of turn owner. */
 export type TurnAdapterVisitor<R> = {
@@ -257,7 +258,9 @@ function laneOwner(
     const id = db.normalizeId("sessions", entityId);
     return id ? { kind: "summary", id } : null;
   }
-  const id = db.normalizeId("projects", entityId);
+  const id =
+    db.normalizeId("sessions", entityId) ??
+    db.normalizeId("projects", entityId);
   return id ? { kind: "interview", id } : null;
 }
 

@@ -108,7 +108,10 @@ export async function openTurn(
   params: OpenTurnFields & {
     entityId: TurnEntityId;
     lane?: TurnLane;
-    /** Session chat turns: the session the chat belongs to. */
+    /**
+     * The session the turn holds: a chat's session, or the session whose
+     * sandbox a run or a project interview works on.
+     */
     sessionId?: Id<"sessions">;
   },
 ): Promise<Id<"turns">> {

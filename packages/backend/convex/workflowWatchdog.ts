@@ -19,6 +19,15 @@ import {
   markProjectBuildStarted,
 } from "./_projects/buildState";
 import {
+  finishProjectInterview,
+  interviewTurnEntityIds,
+  markProjectInterviewStarted,
+} from "./_projects/interviewState";
+import { closeOpenTurn } from "./_chat/turnStore";
+import type { TerminalTurnState } from "./_chat/turnLease";
+import { findProjectSession } from "./_sessions/owner";
+import { abandonTaskRunSandbox } from "./_sessions/sandbox";
+import {
   sessionChatAdapter,
   trackSessionChatWorkflow,
   trackSessionWorkflow,
@@ -53,15 +62,18 @@ export async function trackDocWorkflow(
   );
 }
 
-/** Records a workflow as the active workflow for a project and schedules a stale handler. */
-export async function trackProjectWorkflow(
+/**
+ * Records an interview or spec workflow as the project's interview
+ * (`markProjectInterviewStarted`) and schedules a stale handler.
+ */
+export async function trackProjectInterviewWorkflow(
   ctx: MutationCtx,
   projectId: Id<"projects">,
   workflowId: WorkflowId,
   timeoutMs: number = RUN_TIMEOUT_MS,
 ): Promise<void> {
   const id = String(workflowId);
-  await ctx.db.patch(projectId, { activeWorkflowId: id });
+  await markProjectInterviewStarted(ctx, projectId, id);
   await ctx.scheduler.runAfter(
     timeoutMs,
     internal.workflowWatchdog.handleStaleProject,
@@ -265,33 +277,52 @@ export const handleStaleProject = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await tearDownStaleProjectWorkflow(ctx, args.projectId, args.workflowId);
+    await stopProjectInterview(ctx, args.projectId, args.workflowId, {
+      state: "error",
+      error: "Project interview timed out",
+    });
     return null;
   },
 });
 
-/** Cancels a stale project interview or spec workflow and marks the last message failed. */
-export async function tearDownStaleProjectWorkflow(
+/**
+ * Stops a project's interview or spec workflow (stale, stalled, or its
+ * project closed). With a `workflowId`, a newer interview is left alone.
+ * The one teardown for every stop: the state goes idle, the workflow is
+ * cancelled, its agent turn closes with `turn`, the session start it claimed
+ * fails or the VM it prepared stops (`abandonTaskRunSandbox`; a VM the
+ * session already had stays), and an empty assistant bubble reads failed.
+ */
+export async function stopProjectInterview(
   ctx: MutationCtx,
   projectId: Id<"projects">,
-  workflowId: string,
+  workflowId: string | undefined,
+  turn: { state: TerminalTurnState; error: string },
 ): Promise<void> {
-  const project = await ctx.db.get(projectId);
-  if (!project || project.activeWorkflowId !== workflowId) return;
+  const finished = await finishProjectInterview(ctx, projectId, workflowId);
+  const previous = finished.previous;
+  if (!finished.ok || previous === undefined) return;
 
-  await cancelStaleWorkflow(ctx, workflowId, [String(projectId)]);
-
-  const conversation = await getProjectConversation(ctx.db, projectId);
-  const messages = [...conversation];
-  const last = messages[messages.length - 1];
-  if (last && last.role === "assistant" && !last.content) {
-    last.content = JSON.stringify({ error: true });
+  await cancelStaleWorkflow(ctx, previous.workflowId, [String(projectId)]);
+  for (const entityId of await interviewTurnEntityIds(ctx.db, projectId)) {
+    await closeOpenTurn(ctx, entityId, turn.state, {
+      lane: "interview",
+      error: turn.error,
+    });
+  }
+  const session = await findProjectSession(ctx.db, projectId);
+  if (session && previous.state !== "started") {
+    await abandonTaskRunSandbox(ctx, session._id, previous);
   }
 
-  await setProjectConversation(ctx.db, projectId, messages);
-  await ctx.db.patch(projectId, {
-    activeWorkflowId: undefined,
-  });
+  const conversation = await getProjectConversation(ctx.db, projectId);
+  const last = conversation.at(-1);
+  if (last && last.role === "assistant" && !last.content) {
+    await setProjectConversation(ctx.db, projectId, [
+      ...conversation.slice(0, -1),
+      { ...last, content: JSON.stringify({ error: true }) },
+    ]);
+  }
 }
 
 /** Cancels a stale build workflow and clears the active build reference. */
