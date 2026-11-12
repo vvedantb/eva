@@ -1,5 +1,13 @@
 # Changelog
 
+## One owner-to-session lookup
+
+Date: 2026-11-12
+
+WHY: The rule "a project and its tasks share the project's session; a quick task owns its own" was spread over about ten helpers and inline copies. A caller could pick the wrong one.
+
+Architectural: `_sessions/owner.ts` holds the rule (`workSessionOwner`) and the read path (`findWorkSession`, over the raw `findOwnedSession`). `ownerState.findWorkChat` resolves the chat. `ownedSession.ensureWorkSession` is the one create path; a project task always gets its project's session. Removed: `taskSessionOwner`, `projectSessionOwner`, `taskUsesOwnedSession`, `taskWorkSessionOwner`, `findTaskSession`, `findProjectSession`, `findQuickTaskSession`, `findTaskWorkSession`, `findOwnerChat`, `ensureOwnedSession`, `ensureTaskWorkSession`, and the `ownedSession.ts` re-exports. Behaviour is unchanged.
+
 ## Collaborators can switch the account in quick task and project chats
 
 Date: 2026-11-12

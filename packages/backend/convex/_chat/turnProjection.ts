@@ -9,9 +9,8 @@ import type { TurnLane } from "../validators";
 import { findOpenTurn, type TurnEntityId } from "./turnStore";
 import {
   chatOwnerEntityId,
-  findProjectSession,
+  findOwnedSession,
   findProjectTaskChat,
-  findTaskSession,
   sessionOwnerEntityId,
 } from "../_sessions/owner";
 
@@ -160,9 +159,9 @@ export async function hasOpenChatTurn(
     if (taskChat && (await hasOpenChatTurn(db, taskChat._id))) return true;
   }
   const ownedSession = taskId
-    ? await findTaskSession(db, taskId)
+    ? await findOwnedSession(db, { kind: "task", taskId })
     : projectId
-      ? await findProjectSession(db, projectId)
+      ? await findOwnedSession(db, { kind: "project", projectId })
       : null;
   const sessionId = ownedSession?._id ?? db.normalizeId("sessions", entityId);
   if (sessionId) {

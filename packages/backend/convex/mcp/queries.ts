@@ -5,10 +5,12 @@ import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 import { hasRepoAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { isSessionArchived } from "../_sessions/archive";
-import { standaloneOnly } from "../_sessions/owner";
 import {
-  findProjectSession,
-  findTaskWorkSession,
+  findOwnedSession,
+  findWorkSession,
+  standaloneOnly,
+} from "../_sessions/owner";
+import {
   liveTaskSandboxStatuses,
   projectSandboxStatus,
 } from "../_sessions/ownedSession";
@@ -328,9 +330,12 @@ export const resolveChatTargetForUser = internalQuery({
     // on the project's); none before that session exists.
     const ownerSession =
       hit.kind === "task"
-        ? await findTaskWorkSession(ctx.db, hit.doc)
+        ? await findWorkSession(ctx.db, hit.doc)
         : hit.kind === "project"
-          ? await findProjectSession(ctx.db, hit.doc._id)
+          ? await findOwnedSession(ctx.db, {
+              kind: "project",
+              projectId: hit.doc._id,
+            })
           : null;
     const sandboxRow = hit.kind === "session" ? hit.doc : ownerSession;
     return {

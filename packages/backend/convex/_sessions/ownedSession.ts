@@ -22,27 +22,17 @@ import { resolveSessionBaseBranch } from "./baseBranch";
 import { archiveSession, isSessionArchived, unarchiveSession } from "./archive";
 import {
   findOwnedSession,
-  findProjectSession,
   findProjectTaskChat,
-  findQuickTaskSession,
-  findTaskSession,
-  findTaskWorkSession,
+  findWorkSession,
   isTerminalProjectPhase,
-  projectSessionOwner,
   sessionOwnerEntityId,
-  taskSessionOwner,
-  taskUsesOwnedSession,
-  taskWorkSessionOwner,
+  workSessionOwner,
   type OwnedSessionOwner,
   type OwnerChat,
   type OwnerEntity,
 } from "./owner";
 import { requestSessionSandboxStop } from "./sandbox";
-import {
-  findOwnerChat,
-  ownerHoldsSession,
-  projectHoldsSession,
-} from "./ownerState";
+import { ownerHoldsSession, projectHoldsSession } from "./ownerState";
 import { hasOpenChatTurn } from "../_chat/turnProjection";
 import { markAllRunningExited } from "../backgroundProcesses";
 import { nextSandboxStartAttempt } from "../_sandbox/transitions";
@@ -53,7 +43,7 @@ import { nextSandboxStartAttempt } from "../_sandbox/transitions";
  * surface; its session runs the sandbox and the chat. A project's tasks have
  * no session of their own: they work on the project's.
  *
- *   owner created ──first need──▶ ensureOwnedSession (one session, never two)
+ *   owner created ──first need──▶ ensureWorkSession (one session, never two)
  *   task done / cancelled / deleted,
  *   project completed / cancelled / deleted ──▶ retireOwnedSession (stop + archive)
  *   reopened / restored ──▶ reviveOwnedSession (unarchive)
@@ -65,28 +55,9 @@ export type OwnedSessionContext = {
   mainChat: Doc<"sessionChats">;
 };
 
-// The lookups live in the leaf `owner.ts` (and `ownerState.ts`) so
-// low-level modules can use them.
+// The lookups (`workSessionOwner`, `findWorkSession`, `findWorkChat`) live
+// in the leaf `owner.ts` and `ownerState.ts` so low-level modules can use them.
 export type { OwnerChat, OwnerEntity };
-export {
-  findOwnerChat,
-  findProjectSession,
-  findProjectTaskChat,
-  findQuickTaskSession,
-  findTaskSession,
-  findTaskWorkSession,
-  isTerminalProjectPhase,
-  projectSessionOwner,
-  taskSessionOwner,
-  taskUsesOwnedSession,
-  taskWorkSessionOwner,
-};
-
-function ownerOf(entity: OwnerEntity): OwnedSessionOwner {
-  return entity.kind === "task"
-    ? taskSessionOwner(entity.task._id)
-    : projectSessionOwner(entity.project._id);
-}
 
 /** Loads the task or project behind an owner, or null when it is gone. */
 export async function loadOwnerEntity(
@@ -102,22 +73,24 @@ export async function loadOwnerEntity(
 }
 
 /**
- * Returns the owner's session, inserting it (and its Main chat) the first
- * time anything needs it. The lookup and the insert run in the caller's
- * mutation, so `findOwnedSession`'s `.unique()` never sees two rows. Starts no
- * sandbox and generates no title: the session borrows its owner's title and
- * stays `closed` until something starts it. It takes a normal session `numId`;
- * the visible session numbers may skip it.
+ * Returns the session the task or project works on (`workSessionOwner`),
+ * inserting it (and its Main chat) the first time anything needs it. A
+ * project task gets its project's session. The lookup and the insert run in
+ * the caller's mutation, so `findOwnedSession`'s `.unique()` never sees two
+ * rows. Starts no sandbox and generates no title: the session borrows its
+ * owner's title and stays `closed` until something starts it. It takes a
+ * normal session `numId`; the visible session numbers may skip it.
  */
-export async function ensureOwnedSession(
+export async function ensureWorkSession(
   ctx: MutationCtx,
-  entity: OwnerEntity,
+  target: OwnerEntity,
 ): Promise<OwnedSessionContext> {
-  const owner = ownerOf(entity);
+  const owner = workSessionOwner(target);
   const existing = await findOwnedSession(ctx.db, owner);
   if (existing) {
     return { session: existing, mainChat: await ensureMainChat(ctx, existing) };
   }
+  const entity = await workSessionEntity(ctx.db, target);
   const seed = ownedSessionSeed(entity);
   const repo = await ctx.db.get(seed.repoId);
   if (!repo) throw new Error("Repository not found");
@@ -140,17 +113,17 @@ export async function ensureOwnedSession(
   return { session, mainChat: await ensureMainChat(ctx, session) };
 }
 
-/** The session a task works on, created on first need (`taskWorkSessionOwner`). */
-export async function ensureTaskWorkSession(
-  ctx: MutationCtx,
-  task: Doc<"agentTasks">,
-): Promise<OwnedSessionContext> {
-  if (task.projectId === undefined) {
-    return await ensureOwnedSession(ctx, { kind: "task", task });
+/** The entity that owns `target`'s work session: a project task's project. */
+async function workSessionEntity(
+  db: DatabaseReader,
+  target: OwnerEntity,
+): Promise<OwnerEntity> {
+  if (target.kind === "project" || target.task.projectId === undefined) {
+    return target;
   }
-  const project = await ctx.db.get(task.projectId);
+  const project = await db.get(target.task.projectId);
   if (!project) throw new Error("Project not found");
-  return await ensureOwnedSession(ctx, { kind: "project", project });
+  return { kind: "project", project };
 }
 
 /**
@@ -163,7 +136,10 @@ export async function ensureTaskChat(
   ctx: MutationCtx,
   task: Doc<"agentTasks">,
 ): Promise<{ session: Doc<"sessions">; chat: Doc<"sessionChats"> }> {
-  const { session, mainChat } = await ensureTaskWorkSession(ctx, task);
+  const { session, mainChat } = await ensureWorkSession(ctx, {
+    kind: "task",
+    task,
+  });
   if (task.projectId === undefined) return { session, chat: mainChat };
   const existing = await findProjectTaskChat(ctx.db, task._id);
   if (existing) return { session, chat: existing };
@@ -189,7 +165,7 @@ export async function ensureOwnerChat(
   entity: OwnerEntity,
 ): Promise<OwnerChat> {
   if (entity.kind === "task") return await ensureTaskChat(ctx, entity.task);
-  const { session, mainChat } = await ensureOwnedSession(ctx, entity);
+  const { session, mainChat } = await ensureWorkSession(ctx, entity);
   return { session, chat: mainChat };
 }
 
@@ -268,8 +244,9 @@ export async function mirrorOwnerIntoSession(
   ctx: MutationCtx,
   entity: OwnerEntity,
 ): Promise<void> {
-  if (entity.kind === "task" && !taskUsesOwnedSession(entity.task)) return;
-  const session = await findOwnedSession(ctx.db, ownerOf(entity));
+  // A project task's session is its project's: the project mirrors into it.
+  if (workSessionOwner(entity).kind !== entity.kind) return;
+  const session = await findWorkSession(ctx.db, entity);
   if (!session) return;
   const seed = ownedSessionSeed(entity);
   const repo = await ctx.db.get(session.repoId);
@@ -318,12 +295,12 @@ export async function syncProjectSessionBranch(
 ): Promise<void> {
   const [project, session] = await Promise.all([
     ctx.db.get(projectId),
-    findProjectSession(ctx.db, projectId),
+    findOwnedSession(ctx.db, { kind: "project", projectId }),
   ]);
   if (!project || !session) return;
   const branchName = resolveProjectBranchName(project._id, project);
   if (session.branchName === branchName) return;
-  if (await ownedSessionBusy(ctx.db, projectSessionOwner(projectId))) {
+  if (await ownedSessionBusy(ctx.db, { kind: "project", projectId })) {
     await ctx.scheduler.runAfter(
       BRANCH_SYNC_RETRY_MS,
       internal._sessions.ownedSession.syncProjectSessionBranchLater,
@@ -366,21 +343,25 @@ export async function projectSandboxStatus(
   db: DatabaseReader,
   project: Pick<Doc<"projects">, "_id">,
 ): Promise<Doc<"sessions">["status"] | undefined> {
-  return (await findProjectSession(db, project._id))?.status;
+  const session = await findOwnedSession(db, {
+    kind: "project",
+    projectId: project._id,
+  });
+  return session?.status;
 }
 
 type TaskStatusSource = Pick<Doc<"agentTasks">, "_id" | "projectId">;
 
 /**
  * A task's sandbox status, the one rule the task page, lists and MCP share:
- * the status of the session it works on (`taskWorkSessionOwner`), or
+ * the status of the session it works on (`workSessionOwner`), or
  * undefined before that session exists.
  */
 export async function taskSandboxStatus(
   db: DatabaseReader,
   task: TaskStatusSource,
 ): Promise<Doc<"sessions">["status"] | undefined> {
-  return (await findTaskWorkSession(db, task))?.status;
+  return (await findWorkSession(db, task))?.status;
 }
 
 /**
@@ -397,10 +378,12 @@ export async function liveTaskSandboxStatuses(
     liveOwnedSessionStatuses(db, ids, "task"),
     liveOwnedSessionStatuses(db, ids, "project"),
   ]);
-  return (task) =>
-    task.projectId !== undefined
-      ? byProject.get(String(task.projectId))
-      : byTask.get(String(task._id));
+  return (task) => {
+    const owner = workSessionOwner(task);
+    return owner.kind === "project"
+      ? byProject.get(String(owner.projectId))
+      : byTask.get(String(owner.taskId));
+  };
 }
 
 const LIVE_SANDBOX_STATUSES = ["active", "starting", "stopping"] as const;
@@ -477,9 +460,10 @@ export async function detachOwnedSession(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
 ): Promise<void> {
-  const session = await findTaskSession(ctx.db, taskId);
+  const owner: OwnedSessionOwner = { kind: "task", taskId };
+  const session = await findOwnedSession(ctx.db, owner);
   if (!session) return;
-  await retireOwnedSession(ctx, taskSessionOwner(taskId));
+  await retireOwnedSession(ctx, owner);
   await ctx.db.patch(session._id, { deletedAt: Date.now() });
 }
 
@@ -537,10 +521,12 @@ export async function syncOwnedSessionWithTaskStatus(
   previous: Doc<"agentTasks">["status"],
   next: Doc<"agentTasks">["status"],
 ): Promise<void> {
-  if (!taskUsesOwnedSession(task)) return;
+  // A project task's status does not touch its project's session.
+  const owner = workSessionOwner(task);
+  if (owner.kind !== "task") return;
   await syncOwnedSessionWithTerminal(
     ctx,
-    taskSessionOwner(task._id),
+    owner,
     isTerminalTaskStatus(previous),
     isTerminalTaskStatus(next),
   );
@@ -558,7 +544,7 @@ export async function syncProjectSession(
 ): Promise<void> {
   const [project, session] = await Promise.all([
     ctx.db.get(projectId),
-    findProjectSession(ctx.db, projectId),
+    findOwnedSession(ctx.db, { kind: "project", projectId }),
   ]);
   if (!project || !session) return;
   const retired =
@@ -574,7 +560,7 @@ export async function syncProjectSession(
   }
   await syncOwnedSessionWithTerminal(
     ctx,
-    projectSessionOwner(projectId),
+    { kind: "project", projectId },
     isSessionArchived(session),
     retired,
   );

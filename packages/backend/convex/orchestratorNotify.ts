@@ -9,7 +9,7 @@ import {
 } from "./orchestratorShared";
 import { requestRun } from "./_ave/threads";
 import { findMainChat } from "./_sessionChats/helpers";
-import { findOwnerChat } from "./_sessions/ownedSession";
+import { findWorkChat } from "./_sessions/ownerState";
 
 /** Everything the wake-up message needs about the child that just finished. */
 type ChildSummary = {
@@ -48,7 +48,7 @@ async function loadChildSummary(
     const project = await ctx.db.get(child.projectId);
     if (!project || project.watchedByAve === undefined) return null;
     // A project chats in its session's Main chat.
-    const owned = await findOwnerChat(ctx.db, { kind: "project", project });
+    const owned = await findWorkChat(ctx.db, { kind: "project", project });
     return {
       threadId: project.watchedByAve,
       kindLabel: "project",
@@ -61,7 +61,7 @@ async function loadChildSummary(
   if (!task || task.watchedByAve === undefined) return null;
   // A task chats in its session chat (a project task's: its own chat in the
   // project's session).
-  const owned = await findOwnerChat(ctx.db, { kind: "task", task });
+  const owned = await findWorkChat(ctx.db, { kind: "task", task });
   return {
     threadId: task.watchedByAve,
     kindLabel: "task",
