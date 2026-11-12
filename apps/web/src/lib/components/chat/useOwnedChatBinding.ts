@@ -4,8 +4,8 @@ import { useMutation } from "convex/react";
 import {
   api,
   buildTraitsExecutionPayload,
+  normalizeAIModel,
   resolveTraitsForDisplay,
-  type AIModel,
 } from "@eva/backend";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
@@ -24,21 +24,19 @@ export type OwnedChatBindingCommon = Pick<
  * The sandbox chat of a task or project on its owned session
  * (`useOwnedSession`): the session chat's own sticky model, traits and
  * account drive the composer, and sends go through the session chat ports.
- * Before the session exists there is no chat to read (`entity` is
- * undefined) and `seedModel` (the seed `ensureOwned` gives the chat) shows in
+ * Before the chat exists there is no chat to read (`entity` is undefined)
+ * and the backend's `chatSeed` (what `ensureOwned` gives the chat) shows in
  * the picker. `cancel` may route a turn the chat does not own (a quick task's
  * first run) elsewhere.
  */
 export function useOwnedChatBinding({
   ownedSession,
-  seedModel,
   ownerLabel,
   title,
   common,
   cancelOther,
 }: {
   ownedSession: OwnedSession;
-  seedModel: AIModel;
   ownerLabel: SandboxChatBinding["ownerLabel"];
   /** The owner's title; undefined while it loads. */
   title: string | undefined;
@@ -46,11 +44,16 @@ export function useOwnedChatBinding({
   cancelOther?: () => Promise<null> | undefined;
 }): SandboxChatBinding {
   const { repo } = useRepo();
-  const { owned, session, chatSource } = ownedSession;
-  const chatModel = useChatModel(chatSource, seedModel);
+  const { owned, session, chatSource, chatSeed } = ownedSession;
+  const chatModel = useChatModel(chatSource, normalizeAIModel(chatSeed?.model));
   const ports = useSessionTurnPorts(chatSource, common.accounts);
   const cancelChat = useMutation(api.sessionWorkflow.cancelExecution);
   const { model, chat } = chatModel;
+  // No chat row yet: show what the backend will seed it with.
+  const traits = chat ? chatModel.traits : (chatSeed?.traits ?? {});
+  const providerAccountId = chat
+    ? (chat.providerAccountId ?? null)
+    : (chatSeed?.providerAccountId ?? null);
   const { options: modelOptions } = useAvailableAiModels(repo._id, model);
 
   return {
@@ -73,10 +76,10 @@ export function useOwnedChatBinding({
     model,
     setModel: chatModel.setModel,
     modelOptions,
-    displayTraits: resolveTraitsForDisplay(model, chatModel.traits),
-    executionTraits: buildTraitsExecutionPayload(model, chatModel.traits),
+    displayTraits: resolveTraitsForDisplay(model, traits),
+    executionTraits: buildTraitsExecutionPayload(model, traits),
     onTraitsChange: chatModel.setTraits,
-    providerAccountId: chatModel.providerAccountId ?? null,
+    providerAccountId,
     persistAccount: chatModel.persistProviderAccountId,
     prewarm: chatModel.prewarm,
     ports,

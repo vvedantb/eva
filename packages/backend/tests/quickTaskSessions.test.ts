@@ -62,7 +62,7 @@ describe("quick tasks on sessions", () => {
       });
       expect(second).toEqual(first);
       expect(
-        await f.asUser.query(api.sessions.getOwned, { owner: { kind: "task", taskId: f.taskId } }),
+        (await f.asUser.query(api.sessions.getOwned, { owner: { kind: "task", taskId: f.taskId } }))?.session,
       ).toEqual(first);
 
       const owned = await f.t.run(async (ctx) => {
@@ -116,7 +116,7 @@ describe("quick tasks on sessions", () => {
       expect(old?.deletedAt).toBeDefined();
       expect(old?.archive).toBeDefined();
       expect(
-        await f.asUser.query(api.sessions.getOwned, { owner: { kind: "task", taskId: f.taskId } }),
+        (await f.asUser.query(api.sessions.getOwned, { owner: { kind: "task", taskId: f.taskId } }))?.session,
       ).toBeNull();
       const next = await f.asUser.mutation(api.sessions.ensureOwned, {
         owner: { kind: "task", taskId: f.taskId },

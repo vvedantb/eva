@@ -7,7 +7,13 @@ import {
   type MutationCtx,
 } from "../_generated/server";
 import { allocateNumId } from "../numId";
-import { getAIModelProvider } from "../validators";
+import {
+  aiModelValidator,
+  getAIModelProvider,
+  normalizeAIModel,
+  reasoningLevelValidator,
+} from "../validators";
+import { storedComposerTraits } from "../_shared/composerTraits";
 import {
   buildProjectBranchName,
   buildTaskBranchName,
@@ -131,8 +137,8 @@ export async function ensureOwnedSession(
     numId: await allocateNumId(ctx.db, seed.repoId, "sessions"),
     branchName: seed.branchName,
     baseBranch: resolveSessionBaseBranch({ baseBranch: seed.baseBranch }, repo),
-    // The chat keeps its own sticky model, apart from the owner's run `model`.
-    ...ownerChatSettings(entity, repo.defaultModel),
+    // Its Main chat copies these (`insertMainChat`).
+    ...chatSeedFields(await chatSeedSettings(ctx.db, entity)),
     updatedAt: Date.now(),
   });
   const session = await ctx.db.get(sessionId);
@@ -171,9 +177,8 @@ export async function ensureTaskChat(
     session,
     createdBy: task.createdBy,
     title: task.title,
-    inheritFrom: ownerChatSettings(
-      { kind: "task", task },
-      session.lastModel,
+    inheritFrom: chatSeedFields(
+      await chatSeedSettings(ctx.db, { kind: "task", task }),
     ),
     taskId: task._id,
   });
@@ -193,22 +198,71 @@ export async function ensureOwnerChat(
   return { session, chat: mainChat };
 }
 
+export const chatSeedValidator = v.object({
+  model: aiModelValidator,
+  traits: v.object({
+    effortLevel: v.optional(reasoningLevelValidator),
+    thinkingEnabled: v.optional(v.boolean()),
+    use1mContext: v.optional(v.boolean()),
+    fastMode: v.optional(v.boolean()),
+  }),
+  /** Absent is Team. */
+  providerAccountId: v.optional(v.id("userProviderAccounts")),
+});
+
+export type ChatSeed = typeof chatSeedValidator.type;
+
 /**
- * The chat settings an owner's new chat starts from: its run model, else
- * `fallbackModel`, on the owner's account. From then on the chat keeps its
- * own sticky picks, apart from the run `model`.
+ * The model, traits and provider account an owner's new chat starts on: the
+ * one rule. `ensureOwnerChat` writes it into the chat it creates; `getOwned`
+ * and the mobile chat target return it, so clients show it before the chat
+ * exists (and for a chat with no sticky `lastModel`). From then on the chat
+ * keeps its own sticky picks, apart from the owner's run settings.
+ *
+ * Model: the owner's run model, else (a project task) its project's, else
+ * the repo default, else `DEFAULT_AI_MODEL`. Traits: the model's defaults.
+ * Account: the owner's.
  */
-function ownerChatSettings(
+export async function chatSeedSettings(
+  db: DatabaseReader,
   entity: OwnerEntity,
-  fallbackModel: Doc<"sessions">["lastModel"],
-): ChatSettingsSource {
+): Promise<ChatSeed> {
   const doc = entity.kind === "task" ? entity.task : entity.project;
-  const model = doc.model ?? fallbackModel;
   return {
-    providerAccountId: doc.providerAccountId,
-    ...(model !== undefined
-      ? { lastModel: model, provider: getAIModelProvider(model) }
+    model: normalizeAIModel(doc.model ?? (await ownerFallbackModel(db, entity))),
+    traits: storedComposerTraits(null),
+    ...(doc.providerAccountId !== undefined
+      ? { providerAccountId: doc.providerAccountId }
       : {}),
+  };
+}
+
+/** A project task's project model, else the owner's repo default. */
+async function ownerFallbackModel(
+  db: DatabaseReader,
+  entity: OwnerEntity,
+): Promise<Doc<"githubRepos">["defaultModel"]> {
+  if (entity.kind === "project") {
+    return (await db.get(entity.project.repoId))?.defaultModel;
+  }
+  const { task } = entity;
+  const project =
+    task.projectId !== undefined ? await db.get(task.projectId) : null;
+  if (project?.model !== undefined) return project.model;
+  const repoId = task.repoId ?? project?.repoId;
+  return repoId !== undefined ? (await db.get(repoId))?.defaultModel : undefined;
+}
+
+/** A seed as the chat (or session) columns it is written to. */
+function chatSeedFields(seed: ChatSeed): ChatSettingsSource {
+  return {
+    lastModel: seed.model,
+    provider: getAIModelProvider(seed.model),
+    providerAccountId: seed.providerAccountId,
+    lastReasoningLevel: seed.traits.effortLevel,
+    lastThinkingEnabled: seed.traits.thinkingEnabled,
+    lastUse1mContext: seed.traits.use1mContext,
+    lastFastMode: seed.traits.fastMode,
   };
 }
 
