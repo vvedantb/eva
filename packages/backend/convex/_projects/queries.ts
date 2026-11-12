@@ -4,7 +4,6 @@ import { authQuery, hasRepoAccess } from "../functions";
 import { internalQuery } from "../_generated/server";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { sessionStatusValidator } from "../_validators/enums";
-import { listRow } from "../_validators/listRows";
 import {
   taskProgressValidator,
   taskProgressFields,
@@ -89,7 +88,7 @@ export const list = authQuery({
     );
     return await Promise.all(
       projects.map(async (project) => ({
-        ...listRow(project),
+        ...project,
         // A project's sandbox lives on its session; the row shows that.
         sandboxStatus: await projectSandboxStatus(ctx.db, project),
         planningMode: await resolveProjectPlanningMode(ctx.db, project),

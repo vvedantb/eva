@@ -17,7 +17,6 @@ import {
 } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { agentTaskValidator } from "./helpers";
-import { listRow } from "../_validators/listRows";
 import { sessionStatusValidator } from "../_validators/enums";
 import { resolveStorageEntries } from "../_chat/storageUrls";
 import {
@@ -37,11 +36,11 @@ import {
 } from "../_sessions/ownedSession";
 
 /**
- * A task list row (`listRow`) enriched with its latest run and busy state. The
- * open task's panel reads the dropped fields from `get`.
+ * A task list row enriched with its latest run, busy state and session
+ * sandbox status.
  */
 export const agentTaskWithLastRunValidator = v.object({
-  ...listRow(agentTaskValidator.fields),
+  ...agentTaskValidator.fields,
   lastRunStartedAt: v.optional(v.number()),
   /** Main run or chat turn (synthetic turns too): `taskIsExecuting`. */
   isExecuting: v.boolean(),
@@ -174,7 +173,7 @@ async function enrichTasksWithLastRun(
       const hasUnread = await unreadOf(task);
       const isAwaitingAnswer = awaitingAnswerIds.has(String(task._id));
       // The same session the task page reads (`liveTaskSandboxStatuses`).
-      const row = { ...listRow(task), sandboxStatus: taskSandboxStatus(task) };
+      const row = { ...task, sandboxStatus: taskSandboxStatus(task) };
       if (summary) {
         return {
           ...row,

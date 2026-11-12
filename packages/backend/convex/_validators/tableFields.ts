@@ -370,14 +370,9 @@ export const sessionDaemonStateFields = {
   claimPausedUntil: v.optional(v.number()),
 };
 
-/**
- * Task and project chat durable-turn cutover marker: set the first time the
- * chat opens a durable Turn, so projections stop trusting
- * the legacy `activeChatWorkflowId` / `syntheticTurnMessageId` fields.
- */
-const chatTurnLifecycleFields = {
-  chatTurnLifecycleVersion: v.optional(v.literal(2)),
-};
+// Task and project chat fields (`chatTurnLifecycleVersion`, the sandbox and
+// chat-daemon fields, `lastChatModel` and traits) removed: their chats and
+// sandboxes run on owned sessions. schema-narrowing-ok: clearLegacyOwnerChatFields
 
 export const chatDaemonEntityFields = {
   pendingTurn: pendingTurnValidator,
@@ -632,67 +627,19 @@ export const agentTaskFields = {
   /** The task's own run lifecycle; absent = idle. Written only by `_agentTasks/runState.ts`. */
   run: v.optional(taskRunValidator),
   // Legacy run fields removed. schema-narrowing-ok: migrateTaskRunState
-  // Canonical sandbox shared across run/preview/resolve_conflicts. Persists
-  // across the task lifecycle so reviewers can resume in-sandbox state (DB,
-  // generated fixtures) instead of re-bootstrapping from the branch.
-  sandboxId: v.optional(v.string()),
-  /** Earliest time a dead task's sandbox may be deleted (grace after done/cancelled). */
-  sandboxDeleteAfter: v.optional(v.number()),
-  // Separate from `run` so a task can host an in-sandbox chat
-  // (via the sandbox view) concurrently with — and without conflicting with —
-  // its main run workflow.
-  activeChatWorkflowId: v.optional(v.string()),
-  // UI state for the reviewer-facing Start/Stop sandbox button.
-  reviewTaskSandboxStatus: v.optional(sessionStatusValidator),
-  /** Bumped by every start request; see `_sandbox/transitions.ts`. */
-  sandboxStartAttempt: v.optional(v.number()),
-  // Resolved dev server port + full command for the current sandbox. Stored
-  // so the task panel can route the preview iframe to the right port and
-  // auto-run the dev server in the first terminal pane. Populated by
-  // taskSandboxReady from startSessionServices() output. User Preview port
-  // changes also patch `devPort` (sticky, mirrors sessions).
-  devPort: v.optional(v.number()),
-  devCommand: v.optional(v.string()),
-  // Sticky Preview URL path for this task sandbox (e.g. "/dashboard").
-  previewPath: v.optional(v.string()),
-  previewPanePaths: v.optional(v.array(previewPanePathValidator)),
-  // Last ~500 lines of the Preview Console PTY (debounced client writes).
-  terminalHistoryTail: v.optional(v.string()),
-  terminalPanes: v.optional(v.array(terminalPaneValidator)),
   // The change-request comment that put this task back to "todo" via "Make
   // changes". Project-task change runs start later (Build Project), decoupled
   // from the comment, so the id is parked here and copied onto the run's
   // `triggeringCommentId` when the run is created, then cleared. Lets the
   // timeline label project re-runs "made changes" like quick-task re-runs.
   pendingChangeRequestCommentId: v.optional(v.id("taskComments")),
-  ...chatDaemonEntityFields,
   /** Stamped by `closeTurn` when a durable chat turn ends; the unread watermark (see chatReads.ts). */
   lastTurnFinishedAt: v.optional(v.number()),
-  ...chatTurnLifecycleFields,
-  // Last model used in sandbox chat; page-open prewarm matches the composer.
-  lastChatModel: v.optional(aiModelValidator),
-  // Sticky sandbox-chat traits (mirrors sessions.lastReasoningLevel / …).
-  lastReasoningLevel: v.optional(reasoningLevelValidator),
-  lastThinkingEnabled: v.optional(v.boolean()),
-  lastUse1mContext: v.optional(v.boolean()),
-  lastFastMode: v.optional(v.boolean()),
-  // Soft UX lock while the agent drives the shared desktop Chrome via
-  // browser_lock/browser_unlock MCP tools (mirrors sessions.agentBrowsingAt).
-  agentBrowsingAt: v.optional(v.number()),
   /** @deprecated Pre-rebuild watch pointer; cleared by migration. Use `watchedByAve`. */
   watchedByOrchestrator: v.optional(v.id("sessions")),
   // Manager Ave thread watching this task for completion notifications
   // (mirrors sessions.watchedByAve).
   watchedByAve: v.optional(v.id("aveThreads")),
-  /**
-   * Branch the sandbox worktree is actually on, reported live by the in-sandbox
-   * daemon (see callback-src/runtime/branchWatcher.ts). Tasks store no intended
-   * branch — that is derived as `eva/task-<id>` — so this is the only record of
-   * where the checkout really is. Detached HEAD is reported as the short sha.
-   */
-  sandboxBranch: v.optional(v.string()),
-  /** Uncommitted / unpushed work on `sandboxBranch`, reported with it. */
-  sandboxGitSync: v.optional(sandboxGitSyncValidator),
   ...prSummaryFields,
 };
 
@@ -1206,24 +1153,6 @@ export const projectFields = {
   branchName: v.optional(v.string()),
   baseBranch: v.optional(v.string()),
   ...prSummaryFields,
-  sandboxId: v.optional(v.string()),
-  lastSandboxActivity: v.optional(v.number()),
-  // UI state for the project-level Start/Stop preview sandbox button.
-  // Mirrors `agentTasks.reviewTaskSandboxStatus` lifecycle.
-  reviewProjectSandboxStatus: v.optional(sessionStatusValidator),
-  /** Bumped by every start request; see `_sandbox/transitions.ts`. */
-  sandboxStartAttempt: v.optional(v.number()),
-  // Dev port + full command for the active project preview sandbox.
-  // Populated by `projectSandboxReady` from `startSessionServices` output.
-  // User Preview port changes also patch `devPort` (sticky, mirrors sessions).
-  devPort: v.optional(v.number()),
-  devCommand: v.optional(v.string()),
-  // Sticky Preview URL path for this project sandbox (e.g. "/dashboard").
-  previewPath: v.optional(v.string()),
-  previewPanePaths: v.optional(v.array(previewPanePathValidator)),
-  // Last ~500 lines of the Preview Console PTY (debounced client writes).
-  terminalHistoryTail: v.optional(v.string()),
-  terminalPanes: v.optional(v.array(terminalPaneValidator)),
   phase: phaseValidator,
   /** How the project was created: AI interview/plan vs tasks-only container. */
   planningMode: v.optional(
@@ -1251,9 +1180,6 @@ export const projectFields = {
   /** The project build lifecycle; absent = idle. Written only by `_projects/buildState.ts`. */
   build: v.optional(projectBuildValidator),
   // Legacy build fields removed. schema-narrowing-ok: migrateProjectBuildState
-  // Separate from build + spec workflows so the in-sandbox chat can run
-  // independently of the project's other lifecycle workflows.
-  activeChatWorkflowId: v.optional(v.string()),
   lastBuildError: v.optional(v.string()),
   branchVersion: v.optional(v.number()),
   // Set when chat or other queue helpers touch the project. Mirrors
@@ -1265,34 +1191,13 @@ export const projectFields = {
   // Whose credential this project's model preference is tied to (null/absent =
   // team). Mirrors agentTasks.providerAccountId for the project metadata picker.
   providerAccountId: v.optional(v.id("userProviderAccounts")),
-  ...chatDaemonEntityFields,
   /** Stamped by `closeTurn` when a durable chat turn ends; the unread watermark (see chatReads.ts). */
   lastTurnFinishedAt: v.optional(v.number()),
-  ...chatTurnLifecycleFields,
-  // Last model used in sandbox chat; page-open prewarm matches the composer.
-  lastChatModel: v.optional(aiModelValidator),
-  // Sticky sandbox-chat traits (mirrors sessions.lastReasoningLevel / …).
-  lastReasoningLevel: v.optional(reasoningLevelValidator),
-  lastThinkingEnabled: v.optional(v.boolean()),
-  lastUse1mContext: v.optional(v.boolean()),
-  lastFastMode: v.optional(v.boolean()),
-  // Soft UX lock while the agent drives the shared desktop Chrome via
-  // browser_lock/browser_unlock MCP tools (mirrors sessions.agentBrowsingAt).
-  agentBrowsingAt: v.optional(v.number()),
   /** @deprecated Pre-rebuild watch pointer; cleared by migration. Use `watchedByAve`. */
   watchedByOrchestrator: v.optional(v.id("sessions")),
   // Manager Ave thread watching this project's chat for completion
   // notifications (mirrors sessions.watchedByAve).
   watchedByAve: v.optional(v.id("aveThreads")),
-  /**
-   * Branch the sandbox worktree is actually on, reported live by the in-sandbox
-   * daemon (see callback-src/runtime/branchWatcher.ts). Distinct from
-   * `branchName`, which is what Eva asked the sandbox to check out at boot.
-   * Detached HEAD is reported as the short commit sha.
-   */
-  sandboxBranch: v.optional(v.string()),
-  /** Uncommitted / unpushed work on `sandboxBranch`, reported with it. */
-  sandboxGitSync: v.optional(sandboxGitSyncValidator),
 };
 
 export const projectDetailsFields = {
