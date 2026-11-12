@@ -100,7 +100,7 @@ export async function launchPreviewDevServer(
  */
 export async function startServicesWithRestoreAlert(
   ctx: GenericActionCtx<DataModel>,
-  parentId: Id<"sessions"> | Id<"agentTasks"> | Id<"projects">,
+  parentId: Id<"sessions">,
   handle: SandboxHandle,
   rootDir: string,
   repo: Doc<"githubRepos"> | null,

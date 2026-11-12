@@ -28,7 +28,3 @@ export { backfillQueuedMessageOrder } from "./_migrations/backfillQueuedMessageO
 export { backfillEvaPrRecapOrigin } from "./_migrations/backfillEvaPrRecapOrigin";
 export { excludeConvexUrlFromSandbox } from "./_migrations/excludeConvexUrlFromSandbox";
 export { backfillExperimentalFlags } from "./_migrations/backfillExperimentalFlags";
-export {
-  projectChatsLeft,
-  quickTaskChatsLeft,
-} from "./_migrations/ownerChatsToSessions";

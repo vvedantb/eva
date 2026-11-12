@@ -27,18 +27,6 @@ export const getInternalByStringId = internalQuery({
   },
 });
 
-/** Task owning a sandbox — preview recovery relaunches services through it. */
-export const getBySandboxInternal = internalQuery({
-  args: { sandboxId: v.string() },
-  returns: v.union(agentTaskValidator, v.null()),
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("agentTasks")
-      .withIndex("by_sandbox", (q) => q.eq("sandboxId", args.sandboxId))
-      .first();
-  },
-});
-
 /**
  * Merges model-suggested tags into a task. Re-reads current tags rather than
  * trusting the snapshot the action was scheduled with, so tags the user picked

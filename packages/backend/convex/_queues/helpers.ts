@@ -11,7 +11,6 @@ import { internal } from "../_generated/api";
 import { workflow } from "../workflowManager";
 import {
   DEFAULT_AI_MODEL,
-  getAIModelProvider,
   launchTraitsFromStored,
   normalizeAIModel,
   usesChatDaemon,
@@ -52,7 +51,6 @@ import {
   bindTurnWorkflow,
   closeTurn,
   findOpenTurn,
-  openChatTurn,
   openSessionChatTurn,
   type ChatTurnEntityId,
 } from "../_chat/turnStore";
@@ -802,7 +800,7 @@ export async function drainSessionChatQueues(
  */
 export async function drainChatQueueQuietly(
   ctx: MutationCtx,
-  parentId: Id<"sessions"> | ChatQueueId,
+  parentId: string,
 ): Promise<boolean> {
   const sessionId = ctx.db.normalizeId("sessions", parentId);
   if (sessionId) {

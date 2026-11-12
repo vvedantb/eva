@@ -2,9 +2,7 @@ import { v } from "convex/values";
 import {
   internalMutation,
   internalQuery,
-  type DatabaseReader,
 } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
 import { pendingTurnValidator } from "../_validators/tableFields";
 import { DAEMON_CLAIM_PAUSE_MS } from "../_chat/daemonClaimPause";
 import { openTurnWorkflowId } from "../_chat/turnProjection";

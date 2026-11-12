@@ -35,15 +35,10 @@ import {
   buildChatMessageCalls,
   resolveAgentDelivery,
   SANDBOX_STOP_SETTLE_TIMEOUT_MS,
-  SANDBOX_SURFACES,
   TASK_PREVIEW_SANDBOX_READY_POLL_MS,
   type AgentDelivery,
   type ChatTargetKind,
 } from "./orchestratorDelivery";
-import {
-  PROJECT_CHAT_STREAM_PREFIX,
-  TASK_CHAT_STREAM_PREFIX,
-} from "../_chat/surfaceAdapters";
 import {
   CHAT_ENTITY_KINDS,
   chatEntityKindValidator,
@@ -735,8 +730,6 @@ const agentTaskSchema = z.object({
   status: z.string(),
   updatedAt: z.number(),
   model: z.string().optional(),
-  lastChatModel: z.string().optional(),
-  reviewTaskSandboxStatus: z.string().optional(),
   projectId: z.string().optional(),
 });
 
@@ -749,7 +742,6 @@ const agentTaskListItemSchema = z.object({
   status: z.string(),
   updatedAt: z.number(),
   model: z.string().optional(),
-  lastChatModel: z.string().optional(),
   isExecuting: z.boolean(),
 });
 
@@ -763,10 +755,7 @@ const projectDocSchema = z.object({
   updatedAt: z.number().optional(),
   activeWorkflowId: z.string().optional(),
   build: z.object({ state: z.enum(["scheduled", "running"]) }).optional(),
-  activeChatWorkflowId: z.string().optional(),
-  reviewProjectSandboxStatus: z.string().optional(),
   model: z.string().optional(),
-  lastChatModel: z.string().optional(),
 });
 
 /** `isProjectBuilding` for a parsed doc. */
@@ -946,7 +935,7 @@ export const orchestratorListAgents = internalAction({
         title: task.title,
         status: task.status,
         isExecuting: task.isExecuting,
-        model: task.lastChatModel ?? task.model,
+        model: task.model,
         updatedAt: task.updatedAt,
       });
     }
@@ -1087,31 +1076,40 @@ export const orchestratorGetAgentState = internalAction({
     const rawDoc = await readChatDocAsUser(clerkUserId, kind, id);
 
     // A session's transcript is its Main chat's (parallel chats keep their
-    // own); the streaming row is that chat's too.
+    // own); a task's or project's is the chat it talks in on its session
+    // (none before it first chatted). The streaming row is that chat's too.
     // Same rule as list_agents / stop_sandbox: the open turn is "is executing",
     // daemon `/loop` continuations included.
+    const owned =
+      kind === "session" ? null : await readOwnedChatAsUser(clerkUserId, kind, id);
     const [sessionChats, isExecuting, pullRequests] = await Promise.all([
-      kind === "session" ? loadSessionChatsAsUser(clerkUserId, id) : [],
+      kind === "session"
+        ? loadSessionChatsAsUser(clerkUserId, id)
+        : owned
+          ? loadSessionChatsAsUser(clerkUserId, owned.sessionId)
+          : [],
       ctx.runQuery(internal.mcp.queries.entityIsExecuting, { kind, id }),
       ctx.runQuery(internal.mcp.queries.chatPullRequests, { kind, id }),
     ]);
-    const mainChat =
-      sessionChats.find((chat) => chat.isMain) ?? sessionChats[0];
-    const transcriptParentId = kind === "session" ? (mainChat?._id ?? id) : id;
-    const streamingEntityId =
+    const ownChat =
       kind === "session"
-        ? transcriptParentId
-        : `${kind === "task" ? TASK_CHAT_STREAM_PREFIX : PROJECT_CHAT_STREAM_PREFIX}${id}`;
+        ? (sessionChats.find((chat) => chat.isMain) ?? sessionChats[0])
+        : sessionChats.find((chat) => chat._id === owned?.chatId);
+    const transcriptParentId =
+      kind === "session" ? (ownChat?._id ?? id) : owned?.chatId;
 
-    const [rawStreaming, rawMessages, queued] = await Promise.all([
-      runAsUser("query", clerkUserId, "streaming:get", {
-        entityId: streamingEntityId,
-      }),
-      runAsUser("query", clerkUserId, "messages:listByParent", {
-        parentId: transcriptParentId,
-      }),
-      listQueuedAsUser(clerkUserId, transcriptParentId),
-    ]);
+    const [rawStreaming, rawMessages, queued] =
+      transcriptParentId === undefined
+        ? [null, [], []]
+        : await Promise.all([
+            runAsUser("query", clerkUserId, "streaming:get", {
+              entityId: transcriptParentId,
+            }),
+            runAsUser("query", clerkUserId, "messages:listByParent", {
+              parentId: transcriptParentId,
+            }),
+            listQueuedAsUser(clerkUserId, transcriptParentId),
+          ]);
 
     const streaming = streamingStateSchema.parse(rawStreaming);
     const queuedMessageCount = queued.length;
@@ -1151,7 +1149,7 @@ export const orchestratorGetAgentState = internalAction({
         numId: session.numId,
         title: session.title,
         status: session.status,
-        model: mainChat?.lastModel ?? session.lastModel,
+        model: ownChat?.lastModel ?? session.lastModel,
         updatedAt: session.updatedAt ?? session._creationTime,
         deploymentUrl: session.deploymentUrl,
         deploymentStatus: session.deploymentStatus,
@@ -1167,7 +1165,7 @@ export const orchestratorGetAgentState = internalAction({
         numId: project.numId,
         title: project.title,
         status: project.phase,
-        model: project.lastChatModel ?? project.model,
+        model: ownChat?.lastModel ?? project.model,
         updatedAt: project.updatedAt ?? project._creationTime,
         deploymentUrl: undefined,
         deploymentStatus: undefined,
@@ -1181,7 +1179,7 @@ export const orchestratorGetAgentState = internalAction({
       numId: task.numId,
       title: task.title,
       status: task.status,
-      model: task.lastChatModel ?? task.model,
+      model: ownChat?.lastModel ?? task.model,
       updatedAt: task.updatedAt,
       deploymentUrl: undefined,
       deploymentStatus: undefined,
@@ -1246,48 +1244,39 @@ async function readChatDocAsUser(
 }
 
 /**
- * Reads one entity's preview sandbox state as the calling user, so the read
- * doubles as the access check. Each surface parks that state somewhere
- * different: a session in `status`, a task and a project in their own
- * `review*SandboxStatus` field.
+ * Reads one session's sandbox status as the calling user, so the read doubles
+ * as the access check.
  *
  * Deliberately not "is a turn running" — that answer needs the `turns` table,
  * which no per-entity read exposes (see `mcp.queries.entityIsExecuting`).
  */
-async function readEntitySandboxStatus(
+async function readSessionSandboxStatus(
   clerkUserId: string,
-  kind: ChatTargetKind,
-  id: string,
+  sessionId: string,
 ): Promise<string> {
-  const raw = await readChatDocAsUser(clerkUserId, kind, id);
-  if (kind === "session") return sessionDocSchema.parse(raw).status;
-  if (kind === "task") {
-    return agentTaskSchema.parse(raw).reviewTaskSandboxStatus ?? "closed";
-  }
-  return projectDocSchema.parse(raw).reviewProjectSandboxStatus ?? "closed";
+  const raw = await readChatDocAsUser(clerkUserId, "session", sessionId);
+  return sessionDocSchema.parse(raw).status;
 }
 
 /**
- * Brings one entity's preview sandbox up and waits until it is actually
- * `active`. A completed entity tears its sandbox down, and resuming the closed
- * id in-place hangs on "Resuming sandbox…", so this drives the same
- * Start-button mutation the Eva UI does and then polls.
+ * Brings one session's sandbox up and waits until it is actually `active`. A
+ * retired session tears its sandbox down, and resuming the closed id
+ * in-place hangs on "Resuming sandbox…", so this drives the same Start-button
+ * mutation the Eva UI does and then polls.
  *
  * Returns whether it had to issue a start; throws — rather than returning a
  * half-started sandbox — when the VM never comes up.
  */
-async function ensureEntitySandboxActive(
+async function ensureSessionSandboxActive(
   clerkUserId: string,
-  kind: ChatTargetKind,
-  id: string,
+  sessionId: string,
 ): Promise<{ startRequested: boolean }> {
-  const surface = SANDBOX_SURFACES[kind];
   return await awaitSandboxActive({
-    kind,
-    readStatus: () => readEntitySandboxStatus(clerkUserId, kind, id),
+    kind: "session",
+    readStatus: () => readSessionSandboxStatus(clerkUserId, sessionId),
     start: async () => {
-      await runAsUser("mutation", clerkUserId, surface.start, {
-        [surface.idArg]: id,
+      await runAsUser("mutation", clerkUserId, "sessions:startSandbox", {
+        sessionId,
       });
     },
     sleep,
@@ -1296,40 +1285,20 @@ async function ensureEntitySandboxActive(
 
 /**
  * Decides whether a message starts a turn or joins the queue, and which model
- * the turn falls back to. `isExecuting` is `entityIsExecuting`: the open
- * durable turn (synthetic turns included), plus a task's main run or a
- * project's build. A busy answer is always safe — the queue drain starts the
+ * the turn falls back to. `isExecuting` is `entityIsExecuting` for the
+ * delivery chat. A busy answer is always safe — the queue drain starts the
  * message at once when the chat itself is free.
  */
 function chatDelivery(
-  kind: ChatTargetKind,
-  rawDoc: JsonValue,
+  chat: z.infer<typeof deliveryChatSchema>,
   queuedAhead: number,
   requestedModel: string | undefined,
   isExecuting: boolean,
 ): AgentDelivery {
-  const isBusy = isExecuting || queuedAhead > 0;
-  if (kind === "session") {
-    const chat = deliveryChatSchema.parse(rawDoc);
-    return resolveAgentDelivery({
-      isBusy,
-      requestedModel,
-      storedModel: chat.lastModel,
-    });
-  }
-  if (kind === "task") {
-    const task = agentTaskSchema.parse(rawDoc);
-    return resolveAgentDelivery({
-      isBusy,
-      requestedModel,
-      storedModel: task.lastChatModel ?? task.model,
-    });
-  }
-  const project = projectDocSchema.parse(rawDoc);
   return resolveAgentDelivery({
-    isBusy,
+    isBusy: isExecuting || queuedAhead > 0,
     requestedModel,
-    storedModel: project.lastChatModel ?? project.model,
+    storedModel: chat.lastModel,
   });
 }
 
@@ -1338,27 +1307,58 @@ const ownedSessionRefSchema = z.object({
   chatId: z.string(),
 });
 
+function ownerArg(
+  kind: "task" | "project",
+  id: string,
+): Record<string, string> {
+  return kind === "task"
+    ? { kind: "task", taskId: id }
+    : { kind: "project", projectId: id };
+}
+
 /**
- * Where a message to `kind`/`id` is delivered. A task's or project's chat is
- * a chat of its session (`sessions.ensureOwned` creates it on first use): a
- * quick task's or project's Main chat, a project task's own chat. A session
- * is delivered to itself.
+ * The session and chat a task or project talks in, created on first use
+ * (`sessions.ensureOwned`): a quick task's or project's Main chat, a project
+ * task's own chat.
+ */
+async function ensureOwnedChatAsUser(
+  clerkUserId: string,
+  kind: "task" | "project",
+  id: string,
+): Promise<z.infer<typeof ownedSessionRefSchema>> {
+  return ownedSessionRefSchema.parse(
+    await runAsUser("mutation", clerkUserId, "sessions:ensureOwned", {
+      owner: ownerArg(kind, id),
+    }),
+  );
+}
+
+/** `ensureOwnedChatAsUser` without creating it: null before first use. */
+async function readOwnedChatAsUser(
+  clerkUserId: string,
+  kind: "task" | "project",
+  id: string,
+): Promise<z.infer<typeof ownedSessionRefSchema> | null> {
+  return ownedSessionRefSchema
+    .nullable()
+    .parse(
+      await runAsUser("query", clerkUserId, "sessions:getOwned", {
+        owner: ownerArg(kind, id),
+      }),
+    );
+}
+
+/**
+ * Where a message to `kind`/`id` is delivered: a session, with the chat a
+ * task or project talks in on it. A session is delivered to itself.
  */
 async function resolveSessionTarget(
   clerkUserId: string,
   kind: ChatTargetKind,
   id: string,
-): Promise<{ kind: ChatTargetKind; id: string; chatId?: string }> {
-  if (kind === "session") return { kind, id };
-  const owned = ownedSessionRefSchema.parse(
-    await runAsUser("mutation", clerkUserId, "sessions:ensureOwned", {
-      owner:
-        kind === "task"
-          ? { kind: "task", taskId: id }
-          : { kind: "project", projectId: id },
-    }),
-  );
-  return { kind: "session", id: owned.sessionId, chatId: owned.chatId };
+): Promise<{ sessionId: string; chatId?: string }> {
+  if (kind === "session") return { sessionId: id };
+  return await ensureOwnedChatAsUser(clerkUserId, kind, id);
 }
 
 export const orchestratorSendMessage = internalAction({
@@ -1403,47 +1403,33 @@ export const orchestratorSendMessage = internalAction({
     // A task or project chats in a chat of its session, so its message is
     // delivered there; the Ave watch below stays on the task or project.
     const delivery = await resolveSessionTarget(clerkUserId, kind, id);
-    const deliveryKind = delivery.kind;
-    const deliveryId = delivery.id;
     // A session message lands in one of its chats: the named one, else Main;
     // a task's or project's lands in its own chat. From here on `targetId` is
-    // that chat; the session id is only kept for the sandbox wake and the Ave
-    // watch pointer.
+    // that chat.
     const chatName = delivery.chatId ?? chat;
-    let targetId = deliveryId;
-    let deliveryChat: z.infer<typeof deliveryChatSchema> | undefined;
-    let rawDoc: JsonValue;
-    if (deliveryKind === "session") {
-      rawDoc = await runAsUser(
-        "query",
-        clerkUserId,
-        "sessionChats:resolveDeliveryChat",
-        {
-          sessionId: deliveryId,
-          ...(chatName !== undefined ? { chat: chatName } : {}),
-        },
+    const rawDoc = await runAsUser(
+      "query",
+      clerkUserId,
+      "sessionChats:resolveDeliveryChat",
+      {
+        sessionId: delivery.sessionId,
+        ...(chatName !== undefined ? { chat: chatName } : {}),
+      },
+    );
+    if (rawDoc === null) {
+      throw new Error(
+        chat === undefined
+          ? `No session ${id} found, or you do not have access.`
+          : `Session ${id} has no open chat named "${chat}".`,
       );
-      if (rawDoc === null) {
-        throw new Error(
-          chat === undefined
-            ? `No session ${id} found, or you do not have access.`
-            : `Session ${id} has no open chat named "${chat}".`,
-        );
-      }
-      deliveryChat = deliveryChatSchema.parse(rawDoc);
-      if (deliveryChat.chatId === excludeChatId) {
-        throw new Error(
-          "That is this sandbox's own chat. Reply in your own turn instead of messaging yourself.",
-        );
-      }
-      targetId = deliveryChat.chatId;
-    } else {
-      rawDoc = await readChatDocAsUser(clerkUserId, deliveryKind, deliveryId);
     }
-
-    if (deliveryKind === "task") {
-      await ensureEntitySandboxActive(clerkUserId, deliveryKind, deliveryId);
+    const deliveryChat = deliveryChatSchema.parse(rawDoc);
+    if (deliveryChat.chatId === excludeChatId) {
+      throw new Error(
+        "That is this sandbox's own chat. Reply in your own turn instead of messaging yourself.",
+      );
     }
+    const targetId = deliveryChat.chatId;
 
     // A child with anything already queued is NOT idle, even with no workflow
     // in flight: a brand-new session parks its first turn in the queue until
@@ -1456,18 +1442,16 @@ export const orchestratorSendMessage = internalAction({
     // parallel chats run side by side, so a busy sibling must not queue it.
     const isExecuting: boolean = await ctx.runQuery(
       internal.mcp.queries.entityIsExecuting,
-      { kind: deliveryKind, id: targetId },
+      { kind: "session", id: targetId },
     );
     const agentDelivery = chatDelivery(
-      deliveryKind,
-      rawDoc,
+      deliveryChat,
       queuedAhead,
       model,
       isExecuting,
     );
     for (const call of buildChatMessageCalls({
-      kind: deliveryKind,
-      id: targetId,
+      chatId: targetId,
       message,
       delivery: agentDelivery,
       sentViaOrchestrator,
@@ -1481,7 +1465,7 @@ export const orchestratorSendMessage = internalAction({
     return {
       delivered,
       model: agentDelivery.model,
-      ...(kind === "session" && deliveryChat !== undefined
+      ...(kind === "session"
         ? { chat: { title: deliveryChat.title, number: deliveryChat.number } }
         : {}),
     };
@@ -1506,46 +1490,32 @@ export const orchestratorStopAgent = internalAction({
       );
       return { buildRunning: false };
     }
-    if (kind === "project") {
-      // Only the sandbox chat. A running build is its own workflow and is
-      // reported back rather than cancelled (cancel_project_build owns that).
-      const project = projectDocSchema.parse(
-        await readChatDocAsUser(clerkUserId, "project", id),
-      );
-      // The project chats in its session (every chat of it goes quiet); a
-      // chat from before that is cancelled on the project.
-      const owned = ownedSessionRefSchema
-        .nullable()
-        .parse(
-          await runAsUser("query", clerkUserId, "sessions:getOwned", {
-            owner: { kind: "project", projectId: id },
-          }),
-        );
-      if (owned) {
-        await runAsUser(
-          "mutation",
-          clerkUserId,
-          "_sessions/execution:cancelSessionExecution",
-          { sessionId: owned.sessionId },
-        );
-      }
+    // A project's session goes quiet (every chat of it); a task's own chat
+    // does. A project's running build is its own workflow and is reported
+    // back rather than cancelled (cancel_project_build owns that).
+    const owned = await readOwnedChatAsUser(clerkUserId, kind, id);
+    if (owned && kind === "project") {
       await runAsUser(
         "mutation",
         clerkUserId,
-        "projectChatWorkflow:cancelExecution",
-        { projectId: id },
+        "_sessions/execution:cancelSessionExecution",
+        { sessionId: owned.sessionId },
+      );
+    } else if (owned) {
+      await runAsUser(
+        "mutation",
+        clerkUserId,
+        "_sessions/execution:cancelExecution",
+        { chatId: owned.chatId },
+      );
+    }
+    if (kind === "project") {
+      const project = projectDocSchema.parse(
+        await readChatDocAsUser(clerkUserId, "project", id),
       );
       return { buildRunning: projectDocBuildRunning(project) };
     }
-    // A task has two independent workflow slots: its main run and its sandbox
-    // chat. Cancelling only the chat one reported success while a run kept
-    // going, so stop both — each cancel is a no-op when that slot is idle.
-    await runAsUser(
-      "mutation",
-      clerkUserId,
-      "agentTaskChatWorkflow:cancelExecution",
-      { taskId: id },
-    );
+    // A task's run is its own workflow slot: stop it too (a no-op when idle).
     await runAsUser(
       "mutation",
       clerkUserId,
@@ -1577,10 +1547,9 @@ export const mcpStartEntitySandbox = internalAction({
   handler: async (_ctx, { clerkUserId, kind, id }) => {
     // A task's or project's sandbox is its session's.
     const target = await resolveSessionTarget(clerkUserId, kind, id);
-    const { startRequested } = await ensureEntitySandboxActive(
+    const { startRequested } = await ensureSessionSandboxActive(
       clerkUserId,
-      target.kind,
-      target.id,
+      target.sessionId,
     );
     // ensureEntitySandboxActive only returns once the VM is up, so there is no
     // "resuming" limbo to report back.
@@ -1602,20 +1571,16 @@ export const mcpStopEntitySandbox = internalAction({
     // A task's or project's sandbox is its session's; resolving it reads the
     // owner as the user, so the access check still comes first.
     const target = await resolveSessionTarget(clerkUserId, kind, entityId);
-    const id = target.id;
-    // Reading the entity as the user is the access check, so it comes first —
+    const id = target.sessionId;
+    // Reading the session as the user is the access check, so it comes first —
     // the turn lookup below runs on an id the caller has already proven.
-    const sandboxStatus = await readEntitySandboxStatus(
-      clerkUserId,
-      target.kind,
-      id,
-    );
+    const sandboxStatus = await readSessionSandboxStatus(clerkUserId, id);
 
     // Tearing the VM down mid-turn kills the turn. Stopping and cancelling are
     // separate decisions, so this refuses rather than deciding for the caller.
     const isExecuting = await ctx.runQuery(
       internal.mcp.queries.entityIsExecuting,
-      { kind: target.kind, id },
+      { kind: "session", id },
     );
     if (isExecuting) {
       throw new Error(
@@ -1627,9 +1592,8 @@ export const mcpStopEntitySandbox = internalAction({
       return { sandboxStatus: "closed", stopRequested: false };
     }
 
-    const surface = SANDBOX_SURFACES[target.kind];
-    await runAsUser("mutation", clerkUserId, surface.stop, {
-      [surface.idArg]: id,
+    await runAsUser("mutation", clerkUserId, "sessions:stopSandbox", {
+      sessionId: id,
     });
 
     // Teardown finalizes in a scheduled action, so poll for the settled state
@@ -1638,7 +1602,7 @@ export const mcpStopEntitySandbox = internalAction({
     let settled = "stopping";
     while (Date.now() < deadline) {
       await sleep(TASK_PREVIEW_SANDBOX_READY_POLL_MS);
-      settled = await readEntitySandboxStatus(clerkUserId, target.kind, id);
+      settled = await readSessionSandboxStatus(clerkUserId, id);
       if (settled !== "stopping") break;
     }
     // A still-`stopping` status is reported as-is: the stop was accepted and

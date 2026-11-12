@@ -39,18 +39,7 @@ export {
 } from "./_agentTasks/drafts";
 
 export {
-  startTaskSandbox,
-  stopTaskSandbox,
-  retryStartupCommands,
-  runDevServer,
-  runBackgroundCommands,
-  taskSandboxReady,
-  taskSandboxError,
-} from "./_agentTasks/sandbox";
-
-export {
   getInternal,
   getInternalByStringId,
-  getBySandboxInternal,
   applyGeneratedTags,
 } from "./_agentTasks/internal";

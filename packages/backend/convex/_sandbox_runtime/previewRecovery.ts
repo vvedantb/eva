@@ -9,70 +9,26 @@ import { getSandboxHandle } from "./helpers";
 import { launchPreviewDevServer } from "./sessions";
 import { sandboxOwnerKey } from "@eva/shared";
 
-type SandboxStatus = "closed" | "stopping" | "starting" | string;
-
 /**
- * The status/devPort/devCommand/ownerKey field access for one possible
- * sandbox owner (session, quick task, project chat) — the only thing that
- * differs between owners, since the guard shape and recovery steps
- * (`recoverPreviewOwner` below) are identical.
+ * Relaunches the session's managed dev server on `sandboxId`: bails on a
+ * closing/starting status, a missing or mismatched devPort, or a non-running
+ * sandbox; otherwise relaunches it through the single Console launcher.
  */
-type PreviewOwnerConfig<TEntity> = {
-  status: (entity: TEntity) => SandboxStatus | undefined;
-  devPort: (entity: TEntity) => number | undefined;
-  devCommand: (entity: TEntity) => string | undefined;
-  ownerKey: (entity: TEntity) => string;
-};
-
-const sessionOwnerConfig: PreviewOwnerConfig<Doc<"sessions">> = {
-  status: (session) => session.status,
-  devPort: (session) => session.devPort,
-  devCommand: (session) => session.devCommand,
-  ownerKey: (session) =>
-    sandboxOwnerKey({ kind: "session", sessionId: session._id }),
-};
-
-const taskOwnerConfig: PreviewOwnerConfig<Doc<"agentTasks">> = {
-  status: (task) => task.reviewTaskSandboxStatus,
-  devPort: (task) => task.devPort,
-  devCommand: (task) => task.devCommand,
-  ownerKey: (task) => sandboxOwnerKey({ kind: "task", taskId: task._id }),
-};
-
-const projectOwnerConfig: PreviewOwnerConfig<Doc<"projects">> = {
-  status: (project) => project.reviewProjectSandboxStatus,
-  devPort: (project) => project.devPort,
-  devCommand: (project) => project.devCommand,
-  ownerKey: (project) =>
-    sandboxOwnerKey({ kind: "project", projectId: project._id }),
-};
-
-/**
- * Runs the shared recovery guard chain for one already-resolved sandbox
- * owner: bail on a closing/starting status, a missing or mismatched devPort,
- * or a non-running sandbox; otherwise relaunch the dev server through the
- * single Console launcher. Called once per owner kind (never looped over a
- * heterogeneous list) so each call site stays monomorphic — TypeScript can't
- * safely narrow a union of differently-shaped owner entities inside a shared
- * loop body.
- */
-async function recoverPreviewOwner<TEntity>(
+async function recoverSessionPreview(
   ctx: ActionCtx,
   args: { sandboxId: string; repoId: Id<"githubRepos">; expectedPort: number },
-  entity: TEntity,
-  config: PreviewOwnerConfig<TEntity>,
+  session: Doc<"sessions">,
 ): Promise<null> {
   // "starting" owns service launches: the startup flow resolves the real
   // port and launches the dev server itself, and this recovery racing it
   // with a stale sticky devPort is exactly how a duplicate server appeared
   // on the wrong port (observed in prod: startup launched 13000, a recovery
   // scheduled during startup launched 3001 one second later).
-  const status = config.status(entity);
+  const status = session.status;
   if (status === "closed" || status === "stopping" || status === "starting")
     return null;
 
-  const devPort = config.devPort(entity);
-  const devCommand = config.devCommand(entity);
+  const { devPort, devCommand } = session;
   if (devPort === undefined || devCommand === undefined) return null;
   // Multi-app repos preview secondary apps on their own ports; this recovery
   // only owns the primary dev server.
@@ -92,7 +48,7 @@ async function recoverPreviewOwner<TEntity>(
   );
   await launchPreviewDevServer(
     handle,
-    config.ownerKey(entity),
+    sandboxOwnerKey({ kind: "session", sessionId: session._id }),
     devCommand,
     devPort,
     repo?.rootDirectory ?? "",
@@ -116,10 +72,8 @@ async function recoverPreviewOwner<TEntity>(
  * Idempotence lives in the launcher: it skips when something already listens
  * on the port, so races with a slow-compiling but live server are harmless.
  *
- * A sandbox can be owned by a session, a quick task, or a project chat — the
- * readiness poll that schedules this action is entity-agnostic (it only knows
- * sandboxId/port), so the owner is resolved here by sandbox id, checked in
- * that order (sessions first, matching the pre-existing behavior).
+ * The readiness poll that schedules this action only knows sandboxId/port, so
+ * the owning session is resolved here by sandbox id.
  */
 export const ensureSessionPreviewServices = internalAction({
   args: {
@@ -130,49 +84,11 @@ export const ensureSessionPreviewServices = internalAction({
   },
   returns: v.null(),
   handler: async (ctx, args): Promise<null> => {
-    // One round trip for all three owner lookups; sessions still win first.
-    const [session, task, project]: [
-      Doc<"sessions"> | null,
-      Doc<"agentTasks"> | null,
-      Doc<"projects"> | null,
-    ] = await Promise.all([
-      ctx.runQuery(internal.sessions.getBySandboxInternal, {
-        sandboxId: args.sandboxId,
-      }),
-      ctx.runQuery(internal.agentTasks.getBySandboxInternal, {
-        sandboxId: args.sandboxId,
-      }),
-      ctx.runQuery(internal.projects.getBySandboxInternal, {
-        sandboxId: args.sandboxId,
-      }),
-    ]);
-    if (session) {
-      return recoverPreviewOwner<Doc<"sessions">>(
-        ctx,
-        args,
-        session,
-        sessionOwnerConfig,
-      );
-    }
-
-    if (task) {
-      return recoverPreviewOwner<Doc<"agentTasks">>(
-        ctx,
-        args,
-        task,
-        taskOwnerConfig,
-      );
-    }
-
-    if (project) {
-      return recoverPreviewOwner<Doc<"projects">>(
-        ctx,
-        args,
-        project,
-        projectOwnerConfig,
-      );
-    }
-
+    const session: Doc<"sessions"> | null = await ctx.runQuery(
+      internal.sessions.getBySandboxInternal,
+      { sandboxId: args.sandboxId },
+    );
+    if (session) return recoverSessionPreview(ctx, args, session);
     return null;
   },
 });

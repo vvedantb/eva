@@ -32,14 +32,3 @@ export const getInternalByStringId = internalQuery({
   },
 });
 
-/** Project owning a sandbox — preview recovery relaunches services through it. */
-export const getBySandboxInternal = internalQuery({
-  args: { sandboxId: v.string() },
-  returns: v.union(projectDocValidator, v.null()),
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("projects")
-      .withIndex("by_sandbox", (q) => q.eq("sandboxId", args.sandboxId))
-      .first();
-  },
-});

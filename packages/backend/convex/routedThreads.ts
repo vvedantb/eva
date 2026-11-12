@@ -13,10 +13,9 @@ import { isEntityDeleted } from "./numId";
 import { isSessionArchived } from "./_sessions/archive";
 import {
   drainSessionChatQueues,
-  startNextQueuedProjectChatMessage,
-  startNextQueuedTaskChatMessage,
 } from "./_queues/helpers";
 import { ensureMainChat, findMainChat } from "./_sessionChats/helpers";
+import { ensureOwnerChat, loadOwnerEntity } from "./_sessions/ownedSession";
 import { listDirectoryForTeam, teamHasOtherMembers } from "./workProfiles";
 import {
   DEFAULT_AI_MODEL,
@@ -367,27 +366,44 @@ function notifyEntityArgs(
 }
 
 /**
- * Where a source's transcript and queue live. A session's rows hang off its
- * Main chat (sessions hold several chats); tasks and projects key on their own
- * id. Undefined when the session is gone.
+ * Where a source's transcript and queue live: a session's Main chat, or the
+ * chat a task or project talks in (`ensureOwnerChat`, created on first need).
+ * Undefined when the source is gone.
  */
 async function transcriptParent(
   ctx: MutationCtx,
   source: SourceRecord,
 ): Promise<
   | {
-      parentId: Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">;
+      sessionId: Id<"sessions">;
+      parentId: Id<"sessionChats">;
       model: Doc<"sessions">["lastModel"];
     }
   | undefined
 > {
-  if (source.ref.kind !== "session") {
-    return { parentId: source.ref.id, model: source.lastModel };
+  if (source.ref.kind === "session") {
+    const session = await ctx.db.get(source.ref.id);
+    if (!session) return undefined;
+    const chat = await ensureMainChat(ctx, session);
+    return {
+      sessionId: session._id,
+      parentId: chat._id,
+      model: chat.lastModel ?? source.lastModel,
+    };
   }
-  const session = await ctx.db.get(source.ref.id);
-  if (!session) return undefined;
-  const chat = await ensureMainChat(ctx, session);
-  return { parentId: chat._id, model: chat.lastModel ?? source.lastModel };
+  const entity = await loadOwnerEntity(
+    ctx.db,
+    source.ref.kind === "task"
+      ? { kind: "task", taskId: source.ref.id }
+      : { kind: "project", projectId: source.ref.id },
+  );
+  if (!entity) return undefined;
+  const { session, chat } = await ensureOwnerChat(ctx, entity);
+  return {
+    sessionId: session._id,
+    parentId: chat._id,
+    model: chat.lastModel ?? source.lastModel,
+  };
 }
 
 async function insertSystemAlert(
@@ -426,13 +442,7 @@ async function enqueueSourceWake(
     userId,
     model: parent.model ?? DEFAULT_AI_MODEL,
   });
-  if (source.ref.kind === "session") {
-    await drainSessionChatQueues(ctx, source.ref.id);
-  } else if (source.ref.kind === "task") {
-    await startNextQueuedTaskChatMessage(ctx, source.ref.id);
-  } else {
-    await startNextQueuedProjectChatMessage(ctx, source.ref.id);
-  }
+  await drainSessionChatQueues(ctx, parent.sessionId);
 }
 
 type DirectoryMember = {

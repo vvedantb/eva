@@ -8,7 +8,7 @@ import {
 } from "./_chat/turnProjection";
 import { assertStandaloneSession, sessionOwnerTaskId } from "./_sessions/owner";
 import type { SessionChatContext } from "./_sessionChats/helpers";
-import { ensureOwnerChat } from "./_sessions/ownedSession";
+import { ensureOwnerChat, findOwnerChat } from "./_sessions/ownedSession";
 import { gatherAccessibleRepos } from "./_githubRepos/helpers";
 import {
   mobileChatValidator,
@@ -21,8 +21,6 @@ import { archiveSessionDoc, createSession, type AuthMutationCtx } from "./_sessi
 import { requestSessionSandboxStop } from "./_sessions/sandbox";
 import { listRepoSessionsByArchive } from "./_sessions/archive";
 import { setSessionChatModel, setSessionChatTraits } from "./_sessionChats/mutations";
-import { cancelTaskChatExecution } from "./agentTaskChatWorkflow";
-import { cancelProjectChatExecution } from "./projectChatWorkflow";
 import { cancelTaskRun } from "./_taskWorkflow/publicMutations";
 import {
   aiModelValidator,
@@ -195,22 +193,18 @@ export const stopTurn = authMutation({
         await cancelChatExecution(ctx, entity.context);
         return null;
       }
-      case "task": {
-        const { task } = entity;
-        // A quick task's first run is an agent run, not a chat turn: the web
-        // Stop calls `taskWorkflow.cancelExecution` for it.
-        const isFirstRun =
-          task.projectId === undefined &&
-          isTaskRunning(task) &&
-          task.activeChatWorkflowId === undefined &&
-          task.pendingTurn === undefined;
-        if (isFirstRun) await cancelTaskRun(ctx, task);
-        else await cancelTaskChatExecution(ctx, task);
+      case "task":
+      case "project": {
+        // No session chat yet: only a quick task's run can be running (the
+        // web Stop calls `taskWorkflow.cancelExecution` for it).
+        if (entity.kind === "task" && isTaskRunning(entity.task)) {
+          await cancelTaskRun(ctx, entity.task);
+          return null;
+        }
+        const found = await findOwnerChat(ctx.db, entity);
+        if (found) await cancelChatExecution(ctx, found);
         return null;
       }
-      case "project":
-        await cancelProjectChatExecution(ctx, entity.project);
-        return null;
     }
   },
 });

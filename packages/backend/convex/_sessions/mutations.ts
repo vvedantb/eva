@@ -262,7 +262,7 @@ export async function createSession(
       startAttempt: 1,
     },
   );
-  await scheduleStuckStartExpiry(ctx, { kind: "session", id: sessionId }, 1);
+  await scheduleStuckStartExpiry(ctx, sessionId, 1);
 
   const content = args.message?.trim() ?? "";
   if (content) {
