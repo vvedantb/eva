@@ -4,7 +4,6 @@ import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconBookmark, IconBookmarkPlus, IconFileText, IconX } from "@tabler/icons-react-native";
 import { Attachment, Attachments, PROMPT_INPUT_CHIP, PromptInputChip } from "@vvedantb/native-ui/ai";
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetRow, SheetTitle } from "@vvedantb/native-ui/primitives";
-import { withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -24,6 +23,21 @@ type ComposerAttachments = ReturnType<typeof useAttachments>;
  * Above the field: the picked images, then the `@` / `/` picks as chips
  * (`ComposerMentionChips`). Nothing to show: no row.
  */
+
+/**
+ * The web footer's `bg-muted/70`, mixed over the page background into one
+ * solid colour. Drawn at 70%, it let the transcript show through on a phone,
+ * where the keyboard lifts the composer over the messages.
+ */
+function mutedFooterFill(theme: { muted: string; background: string }): string {
+  const channel = (hex: string, at: number) => Number.parseInt(hex.slice(at, at + 2), 16);
+  const mix = (at: number) =>
+    Math.round(0.7 * channel(theme.muted, at) + 0.3 * channel(theme.background, at))
+      .toString(16)
+      .padStart(2, "0");
+  return `#${mix(1)}${mix(3)}${mix(5)}`;
+}
+
 export function ComposerHeader({ attachments, composer }: { attachments: ComposerAttachments; composer: Composer }) {
   if (attachments.items.length === 0 && composer.picks.length === 0) return null;
   return (
@@ -94,7 +108,7 @@ export function ComposerFooter({
   return (
     <View
       className="mx-3 flex-row items-center gap-0.5 px-2 py-1"
-      style={{ backgroundColor: withAlpha(theme.muted, 0.7), borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}
+      style={{ backgroundColor: mutedFooterFill(theme), borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}
     >
       {/* As the web phone bar: the leading control takes what the stash and
           the model leave (`flex-1 basis-0`), so its label truncates first and

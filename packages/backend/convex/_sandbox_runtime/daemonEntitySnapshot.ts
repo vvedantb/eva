@@ -28,23 +28,24 @@ const DAEMON_LAUNCH_LEASE_MS = 30_000;
  * the in-sandbox spawn flock still dedupes any launch that slips past it.
  */
 export const claimDaemonLaunchLease = internalMutation({
-  args: { entityId: v.string() },
+  // `entityId` is the lease key: an entity id, or `sandboxLaunchLockKey(...)`
+  // for the per-sandbox launch lock (see `withSandboxLaunchLock`).
+  args: { entityId: v.string(), ttlMs: v.optional(v.number()) },
   returns: v.boolean(),
   handler: async (ctx, args) => {
     const now = Date.now();
+    const expiresAt = now + (args.ttlMs ?? DAEMON_LAUNCH_LEASE_MS);
     const existing = await ctx.db
       .query("daemonLaunchLeases")
       .withIndex("by_entity", (q) => q.eq("entityId", args.entityId))
       .unique();
     if (existing && existing.expiresAt > now) return false;
     if (existing) {
-      await ctx.db.patch(existing._id, {
-        expiresAt: now + DAEMON_LAUNCH_LEASE_MS,
-      });
+      await ctx.db.patch(existing._id, { expiresAt });
     } else {
       await ctx.db.insert("daemonLaunchLeases", {
         entityId: args.entityId,
-        expiresAt: now + DAEMON_LAUNCH_LEASE_MS,
+        expiresAt,
       });
     }
     return true;

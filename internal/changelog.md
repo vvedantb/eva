@@ -1,5 +1,45 @@
 # Changelog
 
+## Late PR webhooks no longer reopen a merged PR
+
+Date: 2026-11-12
+
+WHY: Session 1004 showed PR 1274 as open after it merged. `gh pr ready` and `gh pr merge` ran a second apart; the merge webhook closed the session, then the late `ready_for_review` webhook set the PR row back to open.
+
+- `handlePullRequestEvent` ignores a live state (open/draft) for a merged or closed row unless the action is `reopened`. Title and branches still update.
+
+## Phone: "Update available" prompt; solid composer
+
+Date: 2026-11-12
+
+WHY: An APK has no over-the-air updates, so an old one kept calling the backend as it was built and broke silently (0.1.33 after #1266/#1267). On a phone the keyboard lifts the composer over the transcript, and its 70% footer and clear dock let the messages show through.
+
+Architectural: `src/update/updateCheck.ts` reads the public GitHub releases list once at start (Zod-parsed), takes the highest `eva-apk-*` tag above `Constants.expoConfig.version`, and `UpdateDialog` offers it (Download opens the APK; Later stores the version in SecureStore). Local builds (0.1.0) and failed checks offer nothing. The composer footer mixes the web `bg-muted/70` over the page background into one solid colour, and `ConversationDock` takes the page background.
+
+## Collaborators can switch the account in quick task and project chats
+
+Date: 2026-11-12
+
+WHY: In a teammate's quick task chat, picking another account did nothing. `SandboxChatPanel` returned early unless the viewer created the task. The session chat and `sessionChats.setProviderAccountId` already let any repo collaborator switch among the owner's accounts.
+
+Architectural: `SandboxChatBinding` drops `isOwner` and `pickerAccounts`; `accounts` is always the owner's pool. Projects now use `userProviderAccounts.listForProjectOwner` (was the viewer's own accounts plus a synthetic owner row, which the backend rejected for teammates).
+
+## Agent feedback cards use the shared card placement
+
+Date: 2026-11-12
+
+WHY: `submit_feedback` cards were keyed only by `messageId`. A card whose turn was hidden (simple view) or that had no turn was silently dropped.
+
+Architectural: `groupChatFeedback` returns `agentReports` as a list. `ChatBody` places artifacts and reports together through `placeChatUiPanels` (`turnOutputPlacement`), so both follow one rule, in creation order.
+
+## Chat cards stay with their turn, not at the bottom
+
+Date: 2026-11-12
+
+WHY: Every artifact (and older `render_ui` / `render_html` card) showed at the end of the chat. The transcript loads only recent messages, so cards anchored to unloaded older messages fell into the "trailing" bucket.
+
+Architectural: `placeChatUiPanels` now takes the rendered rows and `hasOlderHistory`. A card with an unrendered anchor goes under the newest row created at or before it; a card older than the loaded window waits until that history loads. Trailing is only for cards older than every row with full history loaded.
+
 ## Retry Vercel exec on dropped connections
 
 Date: 2026-11-12

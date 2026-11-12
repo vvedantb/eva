@@ -336,6 +336,8 @@ const schema = defineSchema({
   // second check-then-launch window and boot duplicate daemons; only the
   // lease claimant launches, the rest no-op. Short TTL so a crashed launcher
   // never blocks the next boot for long. One row per entity, upserted.
+  // Also holds the per-sandbox launch lock (`sandbox:<id>` keys, see
+  // `withSandboxLaunchLock`): launches share fixed /tmp runner files.
   daemonLaunchLeases: defineTable({
     entityId: v.string(),
     expiresAt: v.number(),
@@ -531,25 +533,9 @@ const schema = defineSchema({
     ["repoId", "entityType"],
   ),
 
-  // Unused after Clerk MCP OAuth. Kept until a drain migration removes them.
-  mcpAuthCodes: defineTable({
-    code: v.string(),
-    clerkUserId: v.string(),
-    codeChallenge: v.string(),
-    codeChallengeMethod: v.string(),
-    redirectUri: v.string(),
-    clientId: v.string(),
-    expiresAt: v.number(),
-  }).index("by_code", ["code"]),
-
-  // Unused after Clerk MCP OAuth. Kept until a drain migration removes them.
-  mcpClientRegistrations: defineTable({
-    clientId: v.string(),
-    clientSecret: v.optional(v.string()),
-    redirectUris: v.array(v.string()),
-    registeredAt: v.number(),
-  }).index("by_clientId", ["clientId"]),
-
+  // Legacy MCP OAuth tables removed after the drain migrations emptied them.
+  // schema-narrowing-ok: drainMcpAuthCodes
+  // schema-narrowing-ok: drainMcpClientRegistrations
   // MCP bearer token-cache table removed after the drain migration emptied it.
   // schema-narrowing-ok: drainMcpTokenCache
 
