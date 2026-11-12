@@ -7,7 +7,8 @@ import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import type { ModelPick } from "@/chat/ModelChip";
 
-type Chat = NonNullable<FunctionReturnType<typeof api.mobile.getChat>>;
+/** An open chat (`mobile.getChat`). */
+export type Chat = NonNullable<FunctionReturnType<typeof api.mobile.getChat>>;
 
 /** Shows a pick on the open chat at once (`mobile.getChat`), before the server has it. */
 function patchChat(store: OptimisticLocalStore, target: string, patch: (chat: Chat) => Partial<Chat>) {

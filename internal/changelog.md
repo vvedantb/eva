@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: faster on resume, on the Inbox and while typing
+
+Date: 2026-11-12
+
+WHY: The phone app froze for a moment when it came back from the background, the Inbox stalled for seconds after it opened, and typing in a chat lagged. Measured on the 390×844 web preview at 4× CPU throttling: a reconnect redrew 7,720 components (a 650 ms task), the Inbox redrew about 40,000 while it drew its 100 rows, and each keystroke redrew the whole transcript.
+
+Architectural: The app's Convex client is a `StableConvexClient`: a query result whose JSON equals the last one keeps the last object, so the reconnect after resume (every query sent again, unchanged) redraws nothing. The Inbox passes the same handlers to every `NotificationRow`, and its `BackHandler` effect comes before the derived values, so the React Compiler memoises the list and a row draws only when its notification changes. The chat's question card and composer move into `ChatDock`, which owns the draft, the attachments and the model pick, so a keystroke redraws the dock only.
+
 ## Phone: image attachments upload on Android
 
 Date: 2026-11-12

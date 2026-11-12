@@ -16,7 +16,7 @@ import { KeyboardControllerProvider } from "@vvedantb/native-ui/keyboard-control
 import { NativeUiProvider } from "@vvedantb/native-ui/theme";
 import { Toaster } from "@vvedantb/native-ui/toast";
 import { isMaintenanceError } from "@eva/shared";
-import { ConvexProvider, ConvexReactClient } from "convex/react";
+import { ConvexProvider } from "convex/react";
 import { type ErrorBoundaryProps, Stack, ThemeProvider } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { type ReactNode, useEffect, useState } from "react";
@@ -24,6 +24,7 @@ import { StyleSheet } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { CONVEX_URL, PUBLISHABLE_KEY } from "@/config";
+import { StableConvexClient } from "@/convex/StableConvexClient";
 import { restoreColorSchemeChoice } from "@/settings/colorScheme";
 import {
   isClerkNativeApiEnabled,
@@ -50,8 +51,12 @@ void restoreColorSchemeChoice();
 // A newer APK on GitHub Releases, offered once the app is up (`UpdateDialog`).
 void checkForUpdate();
 
-/** One client for the app's life, outside render (it holds the socket). */
-const convex = new ConvexReactClient(CONVEX_URL, { unsavedChangesWarning: false });
+/**
+ * One client for the app's life, outside render (it holds the socket). Its
+ * results keep their identity while their data is the same, so a reconnect
+ * on resume does not redraw every list (`StableConvexClient`).
+ */
+const convex = new StableConvexClient(CONVEX_URL, { unsavedChangesWarning: false });
 
 /** Fonts wait at most this long, then the app starts with system fonts. */
 const FONT_TIMEOUT_MS = 3_000;

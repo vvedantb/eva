@@ -33,7 +33,7 @@ export type NotificationRepo = { label: string; logoUrl?: string | null };
 export function NotificationRow({
   notification,
   repo,
-  onPress,
+  onOpen,
   onMarkRead,
   onToggleRead,
   onToggleArchive,
@@ -41,14 +41,14 @@ export function NotificationRow({
 }: {
   notification: Doc<"notifications">;
   repo: NotificationRepo | undefined;
-  onPress: () => void;
-  onMarkRead: () => void;
+  onOpen: (notification: Doc<"notifications">) => void;
+  onMarkRead: (notification: Doc<"notifications">) => void;
   /** The web menu's Mark as read / Mark as unread. */
-  onToggleRead: () => void;
+  onToggleRead: (notification: Doc<"notifications">) => void;
   /** The web menu's Archive / Unarchive: the promise rejects when it fails, so the row comes back. */
-  onToggleArchive: () => Promise<unknown>;
+  onToggleArchive: (notification: Doc<"notifications">) => Promise<unknown>;
   /** Select mode, as the web: a checkbox leads the row, a press toggles it, and Mark read hides. */
-  selection?: { checked: boolean; onToggle: () => void };
+  selection?: { checked: boolean; onToggle: (notification: Doc<"notifications">) => void };
 }) {
   const scheme = useScheme();
   const muted = tokens.color.muted[scheme];
@@ -65,20 +65,26 @@ export function NotificationRow({
   const Glyph = NOTIFICATION_ICONS[appearance.icon];
   const tone = toneColors(appearance.tone, scheme);
   const archived = notification.archivedAt !== undefined;
+  // The row's own closures over the list's handlers: the list passes the same
+  // handlers to every row, so a row whose notification did not change keeps
+  // its drawing when the list draws more rows or the inbox redraws.
+  const press = () => (selection ? selection.onToggle(notification) : onOpen(notification));
+  const toggleRead = () => onToggleRead(notification);
+  const toggleArchive = () => onToggleArchive(notification);
   // The web menu items, their wording and icons. Archive takes the session menu's warning tone.
   const readAction: SwipeAction = unread
-    ? { key: "read", label: "Mark as read", icon: IconMailOpened, onPress: onToggleRead }
-    : { key: "unread", label: "Mark as unread", icon: IconMail, onPress: onToggleRead };
+    ? { key: "read", label: "Mark as read", icon: IconMailOpened, onPress: toggleRead }
+    : { key: "unread", label: "Mark as unread", icon: IconMail, onPress: toggleRead };
   const archiveAction: SwipeAction = archived
-    ? { key: "unarchive", label: "Unarchive", icon: IconArchiveOff, onPress: onToggleArchive, exits: true }
-    : { key: "archive", label: "Archive", icon: IconArchive, tone: "warning", onPress: onToggleArchive, exits: true };
+    ? { key: "unarchive", label: "Unarchive", icon: IconArchiveOff, onPress: toggleArchive, exits: true }
+    : { key: "archive", label: "Archive", icon: IconArchive, tone: "warning", onPress: toggleArchive, exits: true };
   return (
     <SwipeableRow leadingActions={[readAction]} trailingActions={[archiveAction]} enabled={!selection}>
       <View className="flex-row items-center gap-3 px-4">
         {selection ? (
           <Checkbox
             checked={selection.checked}
-            onCheckedChange={selection.onToggle}
+            onCheckedChange={() => selection.onToggle(notification)}
             accessibilityLabel={`Select ${subject}`}
           />
         ) : null}
@@ -86,7 +92,7 @@ export function NotificationRow({
           accessibilityRole="button"
           accessibilityLabel={subject}
           {...(selection ? null : swipeActionsAccessibility([readAction, archiveAction]))}
-          onPress={selection ? selection.onToggle : onPress}
+          onPress={press}
           className="min-w-0 flex-1 flex-row items-center gap-3 py-3 active:opacity-70"
         >
           <View className="w-1.5 items-center">
@@ -135,7 +141,7 @@ export function NotificationRow({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Mark as read"
-            onPress={onMarkRead}
+            onPress={() => onMarkRead(notification)}
             hitSlop={4}
             className="h-10 w-10 items-center justify-center active:opacity-70"
           >
