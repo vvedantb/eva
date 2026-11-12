@@ -1,10 +1,11 @@
 import { isTaskRunning } from "./_agentTasks/runState";
 import { v } from "convex/values";
-import type { Doc, Id } from "./_generated/dataModel";
+import type { Doc } from "./_generated/dataModel";
 import { authMutation, authQuery, getSessionWithAccess, hasRepoAccess } from "./functions";
 import {
-  awaitingAnswerEntityIdsForRepo,
+  chatTurnFlagsForRepos,
   hasOpenChatTurn,
+  sessionIsExecuting,
 } from "./_chat/turnProjection";
 import { assertStandaloneSession, sessionOwnerTaskId } from "./_sessions/owner";
 import type { SessionChatContext } from "./_sessionChats/helpers";
@@ -264,6 +265,8 @@ export const listChats = authQuery({
       updatedAt: v.number(),
       /** An agent in one of its chats waits on your answer (as the web sidebar shows). */
       isAwaitingAnswer: v.boolean(),
+      /** One of its chats has a turn open: the web sidebar's "Working" glyph. */
+      isExecuting: v.boolean(),
       /** The session's primary PR and its rolled-up state, as the web sidebar row shows. */
       prUrl: v.optional(v.string()),
       prState: v.optional(prStateValidator),
@@ -290,17 +293,11 @@ export const listChats = authQuery({
       .map((row) => ({ ...row, updatedAt: row.session.updatedAt ?? row.session._creationTime }))
       .toSorted((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, CHAT_LIST_LIMIT);
-    // Question state only for repos that made the list, not every repo read.
-    const listedRepoIds = [...new Set(rows.map((row) => row.repo._id))];
-    const awaiting = new Map(
-      await Promise.all(
-        listedRepoIds.map(
-          async (repoId): Promise<[Id<"githubRepos">, ReadonlySet<string>]> => [
-            repoId,
-            await awaitingAnswerEntityIdsForRepo(ctx.db, repoId),
-          ],
-        ),
-      ),
+    // Turn flags only for repos that made the list: one open-turn read per
+    // repo, as the web list (`chatTurnFlagsForRepos`), never one per row.
+    const { openIds, awaitingAnswerIds } = await chatTurnFlagsForRepos(
+      ctx.db,
+      rows.map((row) => row.repo._id),
     );
     return rows.map(({ session, repo, updatedAt }) => ({
       sessionId: session._id,
@@ -309,7 +306,8 @@ export const listChats = authQuery({
       repoLabel: repoLabel(repo),
       status: session.status,
       updatedAt,
-      isAwaitingAnswer: awaiting.get(repo._id)?.has(String(session._id)) === true,
+      isAwaitingAnswer: awaitingAnswerIds.has(String(session._id)),
+      isExecuting: sessionIsExecuting(session, openIds),
       prUrl: session.prUrl,
       prState: session.prState,
       branchName: session.branchName,
