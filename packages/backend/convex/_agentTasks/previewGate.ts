@@ -11,8 +11,8 @@ const PREVIEW_ALLOWED_STATUSES = [
  * Whether a task may start a preview sandbox it does not have yet. Review
  * statuses always may. A task moved back to `todo` after it already ran keeps
  * its branch, so it previews like a reviewed task instead of offering a first
- * run again (mirrors `canStartSandbox` in `useTaskDetail`). Shared by the
- * task's own Start (`startTaskSandbox`) and its session's (`sessions.startSandbox`).
+ * run again (mirrors `canStartSandbox` in `useTaskDetail`). Read by the
+ * task session's Start (`sessions.startSandbox`).
  */
 export async function isPreviewSandboxAllowed(
   db: DatabaseReader,

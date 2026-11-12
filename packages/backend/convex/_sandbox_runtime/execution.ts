@@ -1604,10 +1604,10 @@ type PrewarmEntityDaemonBaseParams = {
 };
 
 type PrewarmEntityDaemonParams = PrewarmEntityDaemonBaseParams & {
-  entityTable: "sessionChats" | "sessions" | "agentTasks" | "projects";
+  entityTable: "sessionChats";
 };
 
-/** Shared implementation for prewarmEntityDaemon and prewarmSessionDaemon. */
+/** The implementation behind `prewarmSessionDaemon`. */
 async function runPrewarmEntityDaemon(
   ctx: ActionCtx,
   args: PrewarmEntityDaemonParams,
@@ -1930,48 +1930,6 @@ async function runPrewarmEntityDaemon(
     return { prewarmed: false };
   }
 }
-
-/**
- * Pre-warm a provider chat daemon for any entity (session, task chat, project
- * chat). No-op for one-shot providers or when a matching daemon is already
- * alive. Best-effort: failures are swallowed.
- */
-export const prewarmEntityDaemon = internalAction({
-  args: {
-    sandboxId: v.string(),
-    repoId: v.id("githubRepos"),
-    userId: v.id("users"),
-    entityId: v.string(),
-    entityIdField: v.string(),
-    completionMutation: v.string(),
-    claimMutation: v.string(),
-    openSyntheticTurnMutation: v.string(),
-    completeSyntheticTurnMutation: v.string(),
-    updateBackgroundAgentsMutation: v.string(),
-    // Optional: scheduled prewarms persisted before this field still validate.
-    updateGoalMutation: v.optional(v.string()),
-    model: v.optional(v.string()),
-    reasoningLevel: v.optional(reasoningLevelValidator),
-    thinkingEnabled: v.optional(v.boolean()),
-    use1mContext: v.optional(v.boolean()),
-    fastMode: v.optional(v.boolean()),
-    allowedTools: v.optional(v.string()),
-    providerAccountId: v.optional(v.id("userProviderAccounts")),
-    credentialOwnerUserId: v.optional(v.id("users")),
-    sessionPersistenceId: v.optional(sessionPersistenceIdValidator),
-    streamingEntityId: v.optional(v.string()),
-    skipPrewarm: v.optional(v.boolean()),
-    entityTable: v.union(
-      v.literal("sessionChats"),
-      v.literal("sessions"),
-      v.literal("agentTasks"),
-      v.literal("projects"),
-    ),
-  },
-  returns: v.object({ prewarmed: v.boolean() }),
-  handler: async (ctx, args): Promise<{ prewarmed: boolean }> =>
-    runPrewarmEntityDaemon(ctx, args),
-});
 
 /**
  * Pushes the sandbox's hard session deadline out by `durationMs`. Vercel's

@@ -37,7 +37,7 @@ export function useProjectSandbox(
 
   const sandboxStartupStreaming = useQuery(
     api.streaming.get,
-    isSandboxStartingFromStatus
+    isSandboxStartingFromStatus && sandbox.owner
       ? { entityId: sandboxStartupEntityId(sandbox.owner) }
       : "skip",
   );

@@ -12,8 +12,7 @@ import type { DatabaseReader } from "../_generated/server";
  *
  * The id lives inside its kind, so "task session without a task" cannot be
  * written. The owner is set at insert and never changes: there is no
- * transition to guard. The field is optional only until `dataMigrations:backfillSessionOwner`
- * has run; read it through `sessionOwner`, which treats absent as standalone.
+ * transition to guard.
  */
 export const sessionOwnerValidator = v.union(
   v.object({ kind: v.literal("standalone") }),
@@ -37,7 +36,7 @@ type OwnerFields = Pick<Doc<"sessions">, "owner">;
 export const STANDALONE_SESSION_OWNER: SessionOwner = { kind: "standalone" };
 
 export function sessionOwner(session: OwnerFields): SessionOwner {
-  return session.owner ?? STANDALONE_SESSION_OWNER;
+  return session.owner;
 }
 
 export function isStandaloneSession(session: OwnerFields): boolean {
@@ -142,6 +141,29 @@ export async function findTaskWorkSession(
   task: Pick<Doc<"agentTasks">, "_id" | "projectId">,
 ): Promise<Doc<"sessions"> | null> {
   return await findOwnedSession(db, taskWorkSessionOwner(task));
+}
+
+/**
+ * The session that holds the sandbox of a session, task or project named by
+ * a bare id (an MCP token's entity): the session itself, the one a task works
+ * on, or a project's. Null for a malformed id or before the session exists.
+ */
+export async function findEntitySession(
+  db: DatabaseReader,
+  kind: "session" | "task" | "project",
+  id: string,
+): Promise<Doc<"sessions"> | null> {
+  if (kind === "session") {
+    const sessionId = db.normalizeId("sessions", id);
+    return sessionId ? await db.get(sessionId) : null;
+  }
+  if (kind === "task") {
+    const taskId = db.normalizeId("agentTasks", id);
+    const task = taskId ? await db.get(taskId) : null;
+    return task ? await findTaskWorkSession(db, task) : null;
+  }
+  const projectId = db.normalizeId("projects", id);
+  return projectId ? await findProjectSession(db, projectId) : null;
 }
 
 /** The task a session belongs to, or undefined for any other owner. */

@@ -71,10 +71,9 @@ export function useTaskChatBinding(
     ownedSession: taskSession,
     // Before the session exists, the same seed `ensureOwned` gives its chat.
     seedModel: normalizeAIModel(
-      task?.lastChatModel ?? task?.model ?? repo.defaultModel ?? DEFAULT_AI_MODEL,
+      task?.model ?? repo.defaultModel ?? DEFAULT_AI_MODEL,
     ),
-    // No session yet means no transcript yet: the task keys read empty.
-    fallbackEntity: { kind: "task", taskId },
+    ownerLabel: "task",
     title: task?.title,
     common,
     cancelOther: () =>

@@ -212,7 +212,7 @@ export function TaskSandboxPanel({
         >
           <SandboxAgentsPanel entity={chatBinding.entity} agents={agents} />
         </div>
-        <ReviewChatTargetProvider value={chatKeys.draftTarget}>
+        <ReviewChatTargetProvider value={chatKeys.draftTarget ?? null}>
           <SandboxPaneSlots
             activeTab={tabBarValue}
             panes={panes}

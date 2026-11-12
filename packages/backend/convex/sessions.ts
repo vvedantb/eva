@@ -60,6 +60,7 @@ export {
 
 export {
   getInternal,
+  getForEntityInternal,
   getBySandboxInternal,
   recordSessionPr,
   setSessionPrState,

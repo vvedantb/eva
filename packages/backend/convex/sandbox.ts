@@ -38,7 +38,6 @@ export {
   launchOnExistingSandbox,
   launchAgentTurn,
   prewarmSessionDaemon,
-  prewarmEntityDaemon,
   killEntityDaemon,
   extendSandboxDeadline,
   reconcileStaleActiveSandboxes,
@@ -71,8 +70,6 @@ export {
   startSessionSandbox,
   prepareSessionSandbox,
   performForcePushBranch,
-  startTaskPreviewSandbox,
-  startProjectPreviewSandbox,
 } from "./_sandbox_runtime/sessions";
 
 export { prepareLinkedRepo } from "./_sandbox_runtime/linkedRepos";

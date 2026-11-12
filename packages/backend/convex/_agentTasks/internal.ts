@@ -13,33 +13,6 @@ export const getInternal = internalQuery({
 });
 
 /**
- * Same as `getInternal` but takes an unbranded string id (normalized against
- * the table). Used where the caller only has a plain string, e.g. the
- * entityId claim on an MCP token (browser_start).
- */
-export const getInternalByStringId = internalQuery({
-  args: { id: v.string() },
-  returns: v.union(agentTaskValidator, v.null()),
-  handler: async (ctx, args) => {
-    const id = ctx.db.normalizeId("agentTasks", args.id);
-    if (!id) return null;
-    return await ctx.db.get(id);
-  },
-});
-
-/** Task owning a sandbox — preview recovery relaunches services through it. */
-export const getBySandboxInternal = internalQuery({
-  args: { sandboxId: v.string() },
-  returns: v.union(agentTaskValidator, v.null()),
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("agentTasks")
-      .withIndex("by_sandbox", (q) => q.eq("sandboxId", args.sandboxId))
-      .first();
-  },
-});
-
-/**
  * Merges model-suggested tags into a task. Re-reads current tags rather than
  * trusting the snapshot the action was scheduled with, so tags the user picked
  * while the model was running are preserved and never duplicated. Re-parses

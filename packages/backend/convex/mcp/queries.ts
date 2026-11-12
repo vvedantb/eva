@@ -11,7 +11,6 @@ import {
   findTaskWorkSession,
   liveTaskSandboxStatuses,
   projectSandboxStatus,
-  taskSandboxStatus,
 } from "../_sessions/ownedSession";
 import {
   ALL_TASK_STATUSES,
@@ -326,19 +325,14 @@ export const resolveChatTargetForUser = internalQuery({
 
     const doc = hit.doc;
     // A task's or project's sandbox lives on its session (a project task's
-    // on the project's); before that session exists, on the row that still
-    // holds it. A project task never had one of its own.
-    const taskSession =
+    // on the project's); none before that session exists.
+    const ownerSession =
       hit.kind === "task"
         ? await findTaskWorkSession(ctx.db, hit.doc)
         : hit.kind === "project"
           ? await findProjectSession(ctx.db, hit.doc._id)
           : null;
-    const sandboxRow =
-      taskSession ??
-      (hit.kind === "task" && hit.doc.projectId !== undefined
-        ? await ctx.db.get(hit.doc.projectId)
-        : doc);
+    const sandboxRow = hit.kind === "session" ? hit.doc : ownerSession;
     return {
       kind: hit.kind,
       targetId: doc._id,
@@ -355,15 +349,10 @@ export const resolveChatTargetForUser = internalQuery({
       repoRootDirectory: repo.rootDirectory,
       // A session's own status IS its sandbox's; a task's or project's is its
       // session's, the same rule lists use (`taskSandboxStatus`).
-      sandboxStatus:
-        hit.kind === "session"
-          ? hit.doc.status
-          : ((hit.kind === "task"
-              ? await taskSandboxStatus(ctx.db, hit.doc)
-              : await projectSandboxStatus(ctx.db, hit.doc)) ?? "closed"),
+      sandboxStatus: sandboxRow?.status ?? "closed",
       sandboxId: sandboxRow?.sandboxId,
       devPort: sandboxRow?.devPort ?? repo.devPort,
-      sandboxSessionId: taskSession?._id,
+      sandboxSessionId: ownerSession?._id,
     };
   },
 });

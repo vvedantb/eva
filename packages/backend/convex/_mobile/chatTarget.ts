@@ -7,7 +7,7 @@ import {
   type SessionChatContext,
 } from "../_sessionChats/helpers";
 import { isSessionArchived } from "../_sessions/archive";
-import { chatOwnerEntityId } from "../_sessions/owner";
+import { chatOwnerEntityId, findTaskWorkSession } from "../_sessions/owner";
 import { findOwnerChat, type OwnerEntity } from "../_sessions/ownedSession";
 import { entityHref, repoBasePath } from "@eva/shared";
 import { storedComposerTraits } from "../_shared/composerTraits";
@@ -32,11 +32,15 @@ export const mobileChatValidator = v.object({
   repoLabel: v.string(),
   /** The chat's repo, for starting a session from it (fork). */
   repoId: v.id("githubRepos"),
-  /** The chat's id for `messages.listByParent`, `turns` and `pendingQuestions`. */
-  parentId: v.union(v.id("sessionChats"), v.id("projects"), v.id("agentTasks")),
   /**
-   * True when the app can reply: pass `parentId` as `target` to
-   * `mobile.sendMessage` (and `mobile.stopTurn`). False for an archived
+   * The chat's id for `messages.listByParent`, `turns` and
+   * `pendingQuestions`; absent while a task or project has not chatted yet.
+   */
+  parentId: v.optional(v.id("sessionChats")),
+  /** What to pass as `target` to `mobile.sendMessage` and `mobile.stopTurn`. */
+  target: v.string(),
+  /**
+   * True when the app can reply (see `target`). False for an archived
    * session or session chat (read-only, as the web) or a deleted task / project.
    */
   canReply: v.boolean(),
@@ -178,6 +182,7 @@ export async function resolveMobileChat(
         repoLabel: repoLabel(repo),
         repoId: repo._id,
         parentId: chat._id,
+        target: chat._id,
         canReply: chat.archived !== true && !isSessionArchived(session) && session.deletedAt === undefined,
         model: chat.lastModel ?? session.lastModel,
         providerAccountId: chat.providerAccountId,
@@ -221,6 +226,7 @@ export async function resolveMobileChat(
           repoLabel: repoLabel(repo),
           repoId: repo._id,
           parentId: chat._id,
+          target: chat._id,
           canReply: task.deletedAt === undefined && chat.archived !== true,
           model: chat.lastModel ?? session.lastModel,
           providerAccountId: chat.providerAccountId,
@@ -235,7 +241,11 @@ export async function resolveMobileChat(
         },
       };
     }
-    const sandboxActive = task.reviewTaskSandboxStatus === "active";
+    // No chat yet: the first send creates it (`ensureOwnerChat`). Nothing
+    // hangs off the task id. A project task may already work on its
+    // project's running session.
+    const workSession = await findTaskWorkSession(db, task);
+    const workSandboxActive = workSession?.status === "active";
     return {
       repoId: repo._id,
       entity: { kind: "task", task },
@@ -244,16 +254,16 @@ export async function resolveMobileChat(
         title: task.title,
         repoLabel: repoLabel(repo),
         repoId: repo._id,
-        parentId: task._id,
+        target: task._id,
         canReply: task.deletedAt === undefined,
         // The web task chat picks and sends `agentTasks.model`, not the `lastChatModel` a turn records.
         model: task.model ?? repo.defaultModel,
         providerAccountId: task.providerAccountId,
         accountOwnerId: task.createdBy,
         task: { id: task._id },
-        traits: storedComposerTraits(task),
-        sandboxActive,
-        sandboxBranch: sandboxActive ? task.sandboxBranch : undefined,
+        traits: storedComposerTraits({}),
+        sandboxActive: workSandboxActive,
+        sandboxBranch: workSandboxActive ? workSession?.sandboxBranch : undefined,
         prUrl: task.projectId === undefined ? task.prUrl : project?.prUrl,
         webPath: taskWebPath,
       },
@@ -283,6 +293,7 @@ export async function resolveMobileChat(
           repoLabel: repoLabel(repo),
           repoId: repo._id,
           parentId: chat._id,
+          target: chat._id,
           canReply: project.deletedAt === undefined && chat.archived !== true,
           model: chat.lastModel ?? session.lastModel,
           providerAccountId: chat.providerAccountId,
@@ -297,7 +308,8 @@ export async function resolveMobileChat(
         },
       };
     }
-    const sandboxActive = project.reviewProjectSandboxStatus === "active";
+    // No session chat yet: the first send creates it (`ensureOwnerChat`).
+    // Nothing hangs off the project id, and there is no sandbox.
     return {
       repoId: repo._id,
       entity: { kind: "project", project },
@@ -306,15 +318,15 @@ export async function resolveMobileChat(
         title: project.title,
         repoLabel: repoLabel(repo),
         repoId: repo._id,
-        parentId: project._id,
+        target: project._id,
         canReply: project.deletedAt === undefined,
-        model: project.lastChatModel ?? project.model,
+        model: project.model ?? repo.defaultModel,
         providerAccountId: project.providerAccountId,
         accountOwnerId: project.userId,
         project: { id: project._id },
-        traits: storedComposerTraits(project),
-        sandboxActive,
-        sandboxBranch: sandboxActive ? project.sandboxBranch : undefined,
+        traits: storedComposerTraits({}),
+        sandboxActive: false,
+        sandboxBranch: undefined,
         intendedBranch: project.branchName,
         prUrl: project.prUrl,
         webPath: entityHref("project", repo, project.numId),

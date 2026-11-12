@@ -43,13 +43,21 @@ async function fixture() {
       repoId,
       title: "Idle task",
       status: "code_review",
-      sandboxId: "sbx-task",
-      reviewTaskSandboxStatus: "active",
       createdAt: now - 3 * HOUR,
       updatedAt: now - 3 * HOUR,
       createdBy: userId,
     });
-    return { userId, repoId, sessionId, taskId };
+    // A quick task's sandbox is its owned session's.
+    const taskSessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "task", taskId },
+      repoId,
+      userId,
+      title: "Idle task",
+      status: "active",
+      sandboxId: "sbx-task",
+      updatedAt: now - 3 * HOUR,
+    });
+    return { userId, repoId, sessionId, taskId, taskSessionId };
   });
   return { t, ...ids };
 }
@@ -76,10 +84,6 @@ function sessionStatus(t: Fixture["t"], id: Id<"sessions">) {
   return t.run(async (ctx) => (await ctx.db.get(id))?.status);
 }
 
-function taskStatus(t: Fixture["t"], id: Id<"agentTasks">) {
-  return t.run(async (ctx) => (await ctx.db.get(id))?.reviewTaskSandboxStatus);
-}
-
 describe("idle pause sweep", () => {
   // The stop helpers schedule zero-delay provider actions (finalize + stuck
   // recovery). Faking setTimeout keeps them from firing after a test ends.
@@ -93,7 +97,7 @@ describe("idle pause sweep", () => {
   test(
     "no settings row means on at 60 min: hours-idle sandboxes pause, a fresh one does not",
     async () => {
-      const { t, sessionId, taskId } = await fixture();
+      const { t, sessionId, taskSessionId } = await fixture();
       const settings = await t.query(
         internal.sandboxIdlePause.getSettingsInternal,
         {},
@@ -104,13 +108,13 @@ describe("idle pause sweep", () => {
         afterInteractionMs: 60 * 60_000,
       });
       await t.mutation(internal._sandbox.activity.touchUser, {
-        kind: "task",
-        entityId: String(taskId),
+        kind: "session",
+        entityId: String(taskSessionId),
         source: "chat",
       });
       await t.action(internal.sandboxIdlePause.run, {});
       expect(await sessionStatus(t, sessionId)).toBe("stopping");
-      expect(await taskStatus(t, taskId)).toBe("active");
+      expect(await sessionStatus(t, taskSessionId)).toBe("active");
     },
     TIMEOUT_MS,
   );
@@ -136,11 +140,11 @@ describe("idle pause sweep", () => {
   test(
     "dry-run decides but never stops",
     async () => {
-      const { t, sessionId, taskId } = await fixture();
+      const { t, sessionId, taskSessionId } = await fixture();
       await setMode(t, "dry-run");
       await t.action(internal.sandboxIdlePause.run, {});
       expect(await sessionStatus(t, sessionId)).toBe("active");
-      expect(await taskStatus(t, taskId)).toBe("active");
+      expect(await sessionStatus(t, taskSessionId)).toBe("active");
     },
     TIMEOUT_MS,
   );
@@ -148,13 +152,13 @@ describe("idle pause sweep", () => {
   test(
     "on: an hours-idle session and task are moved to stopping with their sandbox ids kept",
     async () => {
-      const { t, sessionId, taskId } = await fixture();
+      const { t, sessionId, taskSessionId } = await fixture();
       await setMode(t, "on");
       await t.action(internal.sandboxIdlePause.run, {});
       expect(await sessionStatus(t, sessionId)).toBe("stopping");
-      expect(await taskStatus(t, taskId)).toBe("stopping");
-      const task = await t.run((ctx) => ctx.db.get(taskId));
-      expect(task?.sandboxId).toBe("sbx-task");
+      expect(await sessionStatus(t, taskSessionId)).toBe("stopping");
+      const taskSession = await t.run((ctx) => ctx.db.get(taskSessionId));
+      expect(taskSession?.sandboxId).toBe("sbx-task");
     },
     TIMEOUT_MS,
   );
@@ -227,24 +231,6 @@ describe("idle pause sweep", () => {
   );
 
   test(
-    "a queued run makes a task busy",
-    async () => {
-      const { t, taskId } = await fixture();
-      await setMode(t, "on");
-      await t.run(async (ctx) => {
-        await ctx.db.insert("agentRuns", {
-          taskId,
-          status: "queued",
-          logs: [],
-        });
-      });
-      await t.action(internal.sandboxIdlePause.run, {});
-      expect(await taskStatus(t, taskId)).toBe("active");
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
     "the pause mutation re-checks busy state and refuses when a turn appeared",
     async () => {
       const { t, sessionId, repoId } = await fixture();
@@ -276,19 +262,19 @@ describe("idle pause sweep", () => {
   test(
     "a paused stop settles with the idle divider, not the generic one",
     async () => {
-      const { t, taskId } = await fixture();
+      const { t, taskSessionId } = await fixture();
       await setMode(t, "on");
       const paused = await t.mutation(internal.sandboxIdlePause.pause, {
-        kind: "task",
-        entityId: String(taskId),
+        kind: "session",
+        entityId: String(taskSessionId),
         idleMinutes: 42,
       });
       expect(paused).toBe(true);
-      await t.mutation(internal._agentTasks.sandbox.markTaskSandboxClosed, {
-        taskId,
+      await t.mutation(internal._sessions.sandbox.markSandboxClosed, {
+        sessionId: taskSessionId,
         stopReason: { kind: "idle", idleMinutes: 42 },
       });
-      expect(await taskStatus(t, taskId)).toBe("closed");
+      expect(await sessionStatus(t, taskSessionId)).toBe("closed");
       const alerts = await t.run(async (ctx) =>
         (await ctx.db.query("messages").collect()).map((m) => m.content),
       );
@@ -300,12 +286,12 @@ describe("idle pause sweep", () => {
   test(
     "a manual stop still settles with the plain divider",
     async () => {
-      const { t, taskId } = await fixture();
+      const { t, taskSessionId } = await fixture();
       await t.run(async (ctx) => {
-        await ctx.db.patch(taskId, { reviewTaskSandboxStatus: "stopping" });
+        await ctx.db.patch(taskSessionId, { status: "stopping" });
       });
-      await t.mutation(internal._agentTasks.sandbox.markTaskSandboxClosed, {
-        taskId,
+      await t.mutation(internal._sessions.sandbox.markSandboxClosed, {
+        sessionId: taskSessionId,
       });
       const alerts = await t.run(async (ctx) =>
         (await ctx.db.query("messages").collect()).map((m) => m.content),
@@ -325,7 +311,7 @@ describe("sandbox owner state (leak sweep)", () => {
   test(
     "closed and idle is a leak; active, stopping, busy and unowned are not",
     async () => {
-      const { t, sessionId, taskId, repoId } = await fixture();
+      const { t, sessionId, taskId, taskSessionId, repoId } = await fixture();
       const state = (sandboxId: string) =>
         t.query(internal.sandboxIdlePause.getSandboxOwnerState, { sandboxId });
 
@@ -334,10 +320,23 @@ describe("sandbox owner state (leak sweep)", () => {
 
       await t.run(async (ctx) => {
         await ctx.db.patch(sessionId, { status: "stopping" });
-        // A quick-task run uses its sandbox while the review status is closed.
-        await ctx.db.patch(taskId, {
-          reviewTaskSandboxStatus: "closed",
-          run: { state: "running", workflowId: "wf-running" },
+        // A quick-task run's open turn holds its session's VM.
+        await ctx.db.patch(taskSessionId, { status: "closed" });
+        await ctx.db.insert("turns", {
+          entityId: await ctx.db.insert("agentRuns", {
+            taskId,
+            status: "running",
+            logs: [],
+          }),
+          sessionId: taskSessionId,
+          streamingEntityId: "task-run",
+          state: "running",
+          open: true,
+          turnStartedAt: Date.now(),
+          leaseExpiresAt: Date.now() + 60_000,
+          leaseGeneration: 1,
+          model: "claude:sonnet",
+          repoId,
         });
       });
       expect(await state("sbx-session")).toBe("stopping");
@@ -345,7 +344,9 @@ describe("sandbox owner state (leak sweep)", () => {
 
       await t.run(async (ctx) => {
         await ctx.db.patch(sessionId, { status: "closed" });
-        await ctx.db.patch(taskId, { run: undefined });
+        for (const turn of await ctx.db.query("turns").collect()) {
+          await ctx.db.patch(turn._id, { open: false, state: "done" });
+        }
       });
       const leaked = await t.query(
         internal.sandboxIdlePause.listLeakedSandboxes,
@@ -362,7 +363,7 @@ describe("sandbox owner state (leak sweep)", () => {
   test(
     "a shared VM is a leak only once every owner is closed",
     async () => {
-      const { t, sessionId, taskId } = await fixture();
+      const { t, sessionId, taskSessionId } = await fixture();
       const leaked = () =>
         t.query(internal.sandboxIdlePause.listLeakedSandboxes, {
           sandboxIds: ["sbx-session"],
@@ -372,7 +373,7 @@ describe("sandbox owner state (leak sweep)", () => {
       // must not stop the VM the task still uses.
       await t.run(async (ctx) => {
         await ctx.db.patch(sessionId, { status: "closed" });
-        await ctx.db.patch(taskId, { sandboxId: "sbx-session" });
+        await ctx.db.patch(taskSessionId, { sandboxId: "sbx-session" });
       });
       expect(
         await t.query(internal.sandboxIdlePause.getSandboxOwnerState, {
@@ -382,7 +383,7 @@ describe("sandbox owner state (leak sweep)", () => {
       expect(await leaked()).toEqual([]);
 
       await t.run(async (ctx) => {
-        await ctx.db.patch(taskId, { reviewTaskSandboxStatus: "closed" });
+        await ctx.db.patch(taskSessionId, { status: "closed" });
       });
       expect((await leaked()).map((row) => row.sandboxId)).toEqual([
         "sbx-session",

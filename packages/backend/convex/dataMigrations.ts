@@ -5,7 +5,6 @@ import schema from "./schema";
 import { deriveLogUsage } from "./_logs/usage";
 import { archiveSessionDoc } from "./_sessions/mutations";
 import { isSessionArchived } from "./_sessions/archive";
-import { STANDALONE_SESSION_OWNER } from "./_sessions/owner";
 import type { MutationCtx } from "./_generated/server";
 import {
   buildProjectBranchName,
@@ -15,10 +14,6 @@ import { recordPullRequest } from "./_pullRequests/store";
 import { recordRunPullRequest } from "./_taskWorkflow/helpers";
 import { pruneSettledBackgroundAgents } from "./_sessions/backgroundAgents";
 import type { BackgroundAgentEntry } from "./_validators/tableFields";
-import {
-  migrateProjectToSession,
-  migrateQuickTaskToSession,
-} from "./_migrations/ownerChatsToSessions";
 
 /**
  * Convex Migrations component — batched online migrations with progress,
@@ -354,82 +349,8 @@ export const pruneSessionBackgroundAgents = dataMigrations.define({
   migrateOne: (_ctx, doc) => pruneBackgroundAgentsPatch(doc),
 });
 
-export const pruneAgentTaskBackgroundAgents = dataMigrations.define({
-  table: "agentTasks",
-  batchSize: PRUNE_BACKGROUND_AGENTS_BATCH,
-  migrateOne: (_ctx, doc) => pruneBackgroundAgentsPatch(doc),
-});
-
-export const pruneProjectBackgroundAgents = dataMigrations.define({
-  table: "projects",
-  batchSize: PRUNE_BACKGROUND_AGENTS_BATCH,
-  migrateOne: (_ctx, doc) => pruneBackgroundAgentsPatch(doc),
-});
-
 /** `npx convex run --prod dataMigrations:pruneBackgroundAgents` */
 export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionChatBackgroundAgents,
   internal.dataMigrations.pruneSessionBackgroundAgents,
-  internal.dataMigrations.pruneAgentTaskBackgroundAgents,
-  internal.dataMigrations.pruneProjectBackgroundAgents,
 ]);
-
-/**
- * Every session written before `sessions.owner` existed was opened by a user.
- * Idempotent: rows that already have an owner are skipped. 3b makes the field
- * required once this has run in prod.
- *
- * `npx convex run --prod dataMigrations:backfillSessionOwner`
- */
-export const backfillSessionOwner = dataMigrations.define({
-  table: "sessions",
-  migrateOne: (_ctx, session) => {
-    if (session.owner !== undefined) return;
-    return { owner: STANDALONE_SESSION_OWNER };
-  },
-});
-
-/**
- * PR 1b: moves every quick task (no `projectId`) onto its owned session —
- * sandbox fields, Main chat model/traits/transcript seed, transcript rows —
- * and archives the session of a done/cancelled/deleted task. See
- * `_migrations/ownerChatsToSessions.ts`. Skips a task mid-turn, mid-run,
- * with a queued message or a starting/stopping sandbox (logged
- * `[ownerChatMigration] skipped`). Idempotent: rerun with `{reset: true}`
- * until `migrations:quickTaskChatsLeft` reports 0 left.
- *
- * `npx convex run --prod dataMigrations:migrateQuickTaskChatsToSessions '{dryRun: true}'`
- * `npx convex run --prod dataMigrations:migrateQuickTaskChatsToSessions`
- */
-export const migrateQuickTaskChatsToSessions = dataMigrations.define({
-  table: "agentTasks",
-  // Each task may move a transcript page (up to 2 MiB) and insert a session.
-  batchSize: 10,
-  migrateOne: async (ctx, task) => {
-    await migrateQuickTaskToSession(ctx, task);
-  },
-});
-
-/**
- * PR 2: moves every project onto its owned session — sandbox fields, Main
- * chat model/traits/transcript seed, transcript rows — and each project
- * task's old chat onto that task's own chat in the project's session, then
- * archives the session of a completed/cancelled/deleted project. See
- * `_migrations/ownerChatsToSessions.ts`. Skips a project mid-turn, mid-build,
- * mid-interview, with a task run in flight, a queued message or a
- * starting/stopping sandbox, and a busy project task on its own (logged
- * `[ownerChatMigration] skipped`). Idempotent: rerun with `{reset: true}`
- * until `migrations:projectChatsLeft` reports 0 left.
- *
- * `npx convex run --prod dataMigrations:migrateProjectChatsToSessions '{dryRun: true}'`
- * `npx convex run --prod dataMigrations:migrateProjectChatsToSessions`
- */
-export const migrateProjectChatsToSessions = dataMigrations.define({
-  table: "projects",
-  // A project moves one transcript page inline (up to 2 MiB) and schedules
-  // its tasks' transcripts, so the batch stays small.
-  batchSize: 2,
-  migrateOne: async (ctx, project) => {
-    await migrateProjectToSession(ctx, project);
-  },
-});

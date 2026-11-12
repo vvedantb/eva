@@ -10,15 +10,14 @@ import { startServicesWithRestoreAlert } from "./sessions";
 /**
  * Re-runs the app dev server inside an active sandbox using the repo's App
  * settings (dev command / port overrides, else package.json detection), then
- * stores the resolved port and command on the sandbox's owner: a project
- * task's own row, or a session (a quick task's sandbox lives on its session).
+ * stores the resolved port and command on the session that owns it.
  */
 export const runDevServerInSandbox = internalAction({
   args: {
-    owner: v.union(
-      v.object({ kind: v.literal("task"), taskId: v.id("agentTasks") }),
-      v.object({ kind: v.literal("session"), sessionId: v.id("sessions") }),
-    ),
+    owner: v.object({
+      kind: v.literal("session"),
+      sessionId: v.id("sessions"),
+    }),
     sandboxId: v.string(),
     repoId: v.id("githubRepos"),
   },
@@ -38,7 +37,7 @@ export const runDevServerInSandbox = internalAction({
     const { owner } = args;
     const { port: devPort, devCommand } = await startServicesWithRestoreAlert(
       ctx,
-      owner.kind === "task" ? owner.taskId : owner.sessionId,
+      owner.sessionId,
       handle,
       rootDir,
       repo,
@@ -46,19 +45,11 @@ export const runDevServerInSandbox = internalAction({
 
     await launchDevServerInBackground(handle, devCommand, devPort);
 
-    if (owner.kind === "task") {
-      await ctx.runMutation(internal._agentTasks.sandbox.patchTaskDevServer, {
-        taskId: owner.taskId,
-        devPort,
-        devCommand,
-      });
-    } else {
-      await ctx.runMutation(internal.sessions.patchSessionDevServer, {
-        sessionId: owner.sessionId,
-        devPort,
-        devCommand,
-      });
-    }
+    await ctx.runMutation(internal.sessions.patchSessionDevServer, {
+      sessionId: owner.sessionId,
+      devPort,
+      devCommand,
+    });
     return null;
   },
 });

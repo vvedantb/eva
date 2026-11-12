@@ -7,7 +7,7 @@ import {
   api,
   isViewableRecap,
   type Id,
-  type SandboxOwner,
+  type PrOwnerRef,
 } from "@eva/backend";
 import { reviewPullRequestParser, type ReviewTab } from "@/lib/search-params";
 import { prNumberFromGithubUrl } from "@eva/shared";
@@ -16,7 +16,7 @@ import { usePrTabParam } from "./usePrTabParam";
 
 interface PrPanelProps {
   /** The chat whose pull requests this pane reviews. */
-  owner: SandboxOwner;
+  owner: PrOwnerRef;
   /**
    * The chat's own PR from its summary. Shown when the chat holds no PR rows
    * yet (a chat whose PR predates the `pullRequests` backfill).

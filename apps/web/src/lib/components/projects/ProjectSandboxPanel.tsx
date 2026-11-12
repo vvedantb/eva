@@ -239,7 +239,7 @@ export function ProjectSandboxPanel({
               agents={agents}
             />
           </div>
-          <ReviewChatTargetProvider value={chatKeys.draftTarget}>
+          <ReviewChatTargetProvider value={chatKeys.draftTarget ?? null}>
             <SandboxPaneSlots
               activeTab={activeTab}
               panes={panes}

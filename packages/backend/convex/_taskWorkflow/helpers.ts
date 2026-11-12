@@ -17,7 +17,6 @@ import { preferPersistedSandboxId } from "../_sandbox/resolveExistingSandboxId";
 import { isUsageLimitError, parseUsageLimitResetTime } from "./recovery";
 import { scheduleTaskOrchestratorNotify } from "../orchestratorShared";
 import { deriveLogUsage } from "../_logs/usage";
-import { touchAgentFinished } from "../_sandbox/activity";
 import { TASK_RUN_STREAM_PREFIX } from "../_chat/agentStreamIds";
 import { findTaskWorkSession } from "../_sessions/owner";
 
@@ -43,17 +42,12 @@ export async function resolveTaskSandboxIdForRun(
   run: Doc<"agentRuns">,
 ): Promise<string | undefined> {
   // A task's sandbox lives on its session (a project task's on the
-  // project's); rows from before that keep it on the task or project.
+  // project's).
   const session = await findTaskWorkSession(db, task);
-  if (task.projectId) {
-    const project = session ? null : await db.get(task.projectId);
-    return preferPersistedSandboxId({
-      sandboxId:
-        (session ? session.sandboxId : project?.sandboxId) ?? run.sandboxId,
-    });
-  }
   return preferPersistedSandboxId({
-    sandboxId: run.sandboxId ?? (session ? session.sandboxId : task.sandboxId),
+    sandboxId: task.projectId
+      ? (session?.sandboxId ?? run.sandboxId)
+      : (run.sandboxId ?? session?.sandboxId),
   });
 }
 
@@ -218,10 +212,6 @@ export async function finalizeRunStatus(
       prUrl: params.prUrl,
     });
   }
-  await touchAgentFinished(ctx, {
-    kind: "task",
-    entityId: String(run.taskId),
-  });
 
   // Single terminal-status choke point for a run, guarded above against
   // re-finalizing, so a watched task's master is woken exactly once.

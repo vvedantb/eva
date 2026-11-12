@@ -29,14 +29,13 @@ import {
 } from "./helpers";
 
 /**
- * Continuation of `ensureMainChat` and of the task and project migrations:
- * moves the next bounded page of a heavy legacy transcript (a session's, a
- * task's or a project's) onto its chat and reschedules itself until none is
- * left.
+ * Continuation of `ensureMainChat`: moves the next bounded page of a heavy
+ * pre-chat session transcript onto its chat and reschedules itself until
+ * none is left.
  */
 export const moveLegacyTranscript = internalMutation({
   args: {
-    from: v.union(v.id("sessions"), v.id("agentTasks"), v.id("projects")),
+    from: v.id("sessions"),
     chatId: v.id("sessionChats"),
   },
   returns: v.null(),

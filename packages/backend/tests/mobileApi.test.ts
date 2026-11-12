@@ -88,9 +88,8 @@ async function fixture() {
       createdAt: now,
       updatedAt: now,
       createdBy: userId,
-      // The web task chat picks and sends `model`; a turn records `lastChatModel`.
+      // The run's model; the task's session chat starts from it.
       model: "claude:opus",
-      lastChatModel: "codex:gpt-5.6-sol",
     });
     const projectId = await ctx.db.insert("projects", {
       repoId,
@@ -197,12 +196,12 @@ describe("mobile api", () => {
       expect(await sent(t, ids.chatId)).toEqual([
         { content: "hi session", model: "codex:gpt-5.6-sol", userId: ids.userId },
       ]);
-      // A quick task chats in its session's Main chat, on the chat's own model
-      // (seeded from the task chat's last pick, not the run's `model`).
+      // A quick task chats in its session's Main chat, on the chat's own
+      // model (seeded from the task's run `model`).
       const taskChatId = await ownedChatId(asUser, { kind: "task", taskId: ids.taskId });
       expect(await sent(t, ids.taskId)).toEqual([]);
       expect(await sent(t, taskChatId)).toEqual([
-        { content: "hi task", model: "codex:gpt-5.6-sol", userId: ids.userId },
+        { content: "hi task", model: "claude:opus", userId: ids.userId },
       ]);
       // A project chats in its session's Main chat too.
       const projectChatId = await ownedChatId(asUser, { kind: "project", projectId: ids.projectId });
@@ -263,16 +262,23 @@ describe("mobile api", () => {
     async () => {
       const { t, ids, asUser } = await fixture();
       const requestedAt = Date.now();
+      // A project's turn runs on its session chat.
+      const { chatId: projectChatId } = await asUser.mutation(api.sessions.ensureOwned, {
+        owner: { kind: "project", projectId: ids.projectId },
+      });
       await t.run(async (ctx) => {
         await ctx.db.patch(ids.chatId, { pendingTurn: { prompt: "work", requestedAt } });
-        await ctx.db.patch(ids.projectId, { pendingTurn: { prompt: "work", requestedAt } });
+        await ctx.db.patch(projectChatId, { pendingTurn: { prompt: "work", requestedAt } });
       });
       await asUser.mutation(api.mobile.stopTurn, { target: ids.sessionId });
       await asUser.mutation(api.mobile.stopTurn, { target: ids.projectId });
       await asUser.mutation(api.mobile.stopTurn, { target: ids.taskId });
-      const [chat, project] = await t.run(async (ctx) => [await ctx.db.get(ids.chatId), await ctx.db.get(ids.projectId)]);
+      const [chat, projectChat] = await t.run(async (ctx) => [
+        await ctx.db.get(ids.chatId),
+        await ctx.db.get(projectChatId),
+      ]);
       expect(chat?.pendingTurn).toBeUndefined();
-      expect(project?.pendingTurn).toBeUndefined();
+      expect(projectChat?.pendingTurn).toBeUndefined();
       await expect(asUser.mutation(api.mobile.stopTurn, { target: ids.strangerTaskId })).rejects.toThrow(
         "Not authorized",
       );
@@ -327,23 +333,25 @@ describe("mobile api", () => {
     "getChat says whether the sandbox runs, as the web composer reads it",
     async () => {
       const { t, ids, asUser } = await fixture();
+      // A task's and a project's sandbox is its session's.
+      const owned = await Promise.all([
+        asUser.mutation(api.sessions.ensureOwned, { owner: { kind: "task", taskId: ids.taskId } }),
+        asUser.mutation(api.sessions.ensureOwned, { owner: { kind: "project", projectId: ids.projectId } }),
+      ]);
+      const sessionIds = [ids.sessionId, ...owned.map((row) => row.sessionId)];
       const awake = async () =>
         Promise.all(
           [ids.sessionId, ids.taskId, ids.projectId].map(
             async (target) => (await asUser.query(api.mobile.getChat, { target }))?.sandboxActive,
           ),
         );
-      await t.run(async (ctx) => {
-        await ctx.db.patch(ids.sessionId, { status: "closed" });
-        await ctx.db.patch(ids.taskId, { reviewTaskSandboxStatus: "closed" });
-        await ctx.db.patch(ids.projectId, { reviewProjectSandboxStatus: "closed" });
-      });
+      const setStatus = (status: "closed" | "active") =>
+        t.run(async (ctx) => {
+          for (const sessionId of sessionIds) await ctx.db.patch(sessionId, { status });
+        });
+      await setStatus("closed");
       expect(await awake()).toEqual([false, false, false]);
-      await t.run(async (ctx) => {
-        await ctx.db.patch(ids.sessionId, { status: "active" });
-        await ctx.db.patch(ids.taskId, { reviewTaskSandboxStatus: "active" });
-        await ctx.db.patch(ids.projectId, { reviewProjectSandboxStatus: "active" });
-      });
+      await setStatus("active");
       expect(await awake()).toEqual([true, true, true]);
     },
     TIMEOUT_MS,
@@ -407,20 +415,20 @@ describe("mobile api", () => {
       expect(await asUser.query(api.mobile.getChat, { target: ids.taskId })).toMatchObject({
         kind: "task",
         parentId: chatId,
-        model: "codex:gpt-5.6-sol",
+        model: "claude:opus",
         accountOwnerId: ids.userId,
         task: { id: ids.taskId, sessionChatId: chatId },
       });
-      await asUser.mutation(api.mobile.setChatModel, { target: ids.taskId, model: "claude:opus", reasoningLevel: "low" });
+      await asUser.mutation(api.mobile.setChatModel, { target: ids.taskId, model: "claude:sonnet", reasoningLevel: "low" });
       expect(await asUser.query(api.mobile.getChat, { target: chatId })).toMatchObject({
         kind: "task",
-        model: "claude:opus",
+        model: "claude:sonnet",
         traits: { effortLevel: "low" },
       });
       // The run's model on the task row is untouched.
       expect((await t.run((ctx) => ctx.db.get(ids.taskId)))?.model).toBe("claude:opus");
       await asUser.mutation(api.mobile.sendMessage, { target: ids.taskId, message: "hi" });
-      expect(await sent(t, chatId)).toEqual([{ content: "hi", model: "claude:opus", userId: ids.userId }]);
+      expect(await sent(t, chatId)).toEqual([{ content: "hi", model: "claude:sonnet", userId: ids.userId }]);
     },
     TIMEOUT_MS,
   );

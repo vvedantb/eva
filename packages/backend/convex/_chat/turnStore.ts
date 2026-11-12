@@ -52,11 +52,7 @@ export type CompletionTurnResolution =
 export type TurnEntityId = Doc<"turns">["entityId"];
 
 /** Chat entities that own durable turns. */
-export type ChatTurnEntityId =
-  | Id<"sessionChats">
-  | Id<"sessions">
-  | Id<"agentTasks">
-  | Id<"projects">;
+export type ChatTurnEntityId = Id<"sessionChats"> | Id<"sessions">;
 
 /** Open turns across every chat of a session (the parallel-chat cap reads this). */
 export async function listOpenSessionTurns(
@@ -160,19 +156,6 @@ export async function openSessionChatTurn(
 ): Promise<Id<"turns">> {
   const { chatId, sessionId, ...turn } = params;
   return await openTurn(ctx, { ...turn, entityId: chatId, sessionId });
-}
-
-/**
- * Opens a task-chat or project-chat turn and marks the entity as a durable-turn
- * user (`chatTurnLifecycleVersion`).
- */
-export async function openChatTurn(
-  ctx: MutationCtx,
-  params: OpenTurnFields & { entityId: Id<"agentTasks"> | Id<"projects"> },
-): Promise<Id<"turns">> {
-  const turnId = await openTurn(ctx, params);
-  await ctx.db.patch(params.entityId, { chatTurnLifecycleVersion: 2 });
-  return turnId;
 }
 
 /**
@@ -481,13 +464,11 @@ export async function closeTurn(
     );
   }
   // Every durable turn ends here, so this is the one place the idle-pause
-  // sweep learns "the agent finished". The id's table names the surface; a
-  // run counts for its task (or the task's session, which holds the
-  // sandbox), a session chat for its session.
-  const run = runId ? await ctx.db.get(runId) : null;
+  // sweep learns "the agent finished": a chat turn or a run counts for the
+  // session that holds the sandbox.
   const activityRef = activityRefForParentId(
     ctx.db,
-    turn.sessionId ?? (run ? run.taskId : turn.entityId),
+    turn.sessionId ?? turn.entityId,
   );
   if (activityRef) await touchAgentFinished(ctx, activityRef, finishedAt);
 }

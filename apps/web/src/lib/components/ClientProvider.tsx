@@ -23,6 +23,7 @@ import {
 } from "@vvedantb/ui";
 import { ThemeProvider } from "../contexts/ThemeContext";
 import { AuthLoadingScreen } from "./AuthLoadingScreen";
+import { MaintenanceGate } from "./MaintenanceScreen";
 import { WelcomeSetupDialog } from "./onboarding/WelcomeSetupDialog";
 import { convex } from "@/lib/convex";
 import { api } from "@eva/backend";
@@ -78,7 +79,7 @@ export function ClientProvider({ children }: { children: React.ReactNode }) {
         <EnsureUser />
         <ThemeModeProvider>
           <PageMotionProvider>
-            {children}
+            <MaintenanceGate>{children}</MaintenanceGate>
             <FaviconController />
           </PageMotionProvider>
         </ThemeModeProvider>

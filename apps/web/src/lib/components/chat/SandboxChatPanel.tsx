@@ -61,30 +61,33 @@ export function SandboxChatPanel({
   onSandboxToggle,
 }: SandboxChatPanelProps & { binding: SandboxChatBinding }) {
   const { repo, basePath } = useRepo();
-  const { entity, doc, model, firstRun } = binding;
+  const { entity, doc, model, firstRun, ownerLabel } = binding;
+  // All undefined until the owner's session exists: nothing to read yet, and
+  // the first send creates it.
   const { parentId, streamingEntityId, draftTarget } = sandboxChatKeys(entity);
-  // A session here is a quick task's owned session: the user sees a task.
-  const ownerLabel = entity.kind === "project" ? "project" : "task";
   const { messages, isExecuting } = useSandboxChatTranscript(binding);
   // `messages` is the live part; the rendered transcript adds the history
   // above it once the reader goes there.
   const history = useOlderTranscript({
-    parentId,
+    parentId: parentId ?? "skip",
     live: messages,
     active: true,
   });
-  const queuedMessages = useQuery(api.queuedMessages.listByParent, {
-    parentId,
-  });
-  const chatStreaming = useQuery(api.streaming.get, {
-    entityId: streamingEntityId,
-  });
+  const queuedMessages = useQuery(
+    api.queuedMessages.listByParent,
+    parentId ? { parentId } : "skip",
+  );
+  const chatStreaming = useQuery(
+    api.streaming.get,
+    streamingEntityId ? { entityId: streamingEntityId } : "skip",
+  );
   // The first run streams to its own row while it owns the bubble.
   const streaming = firstRun?.isInProgress ? firstRun.streaming : chatStreaming;
   // Same entityId the sandbox posts with (the entity id, not the stream key).
-  const blockingQuestion = useQuery(api.pendingQuestions.getActive, {
-    entityId: parentId,
-  });
+  const blockingQuestion = useQuery(
+    api.pendingQuestions.getActive,
+    parentId ? { entityId: parentId } : "skip",
+  );
   const answerPendingQuestion = useMutation(api.pendingQuestions.answer);
   const { draftBundle, isDraftLoading } = useSandboxChatDraft(draftTarget);
   const { isSwitchingAccount, switchProviderAccount } =
@@ -130,6 +133,7 @@ export function SandboxChatPanel({
     toolUseId: string,
     answers: Record<string, string>,
   ) => {
+    if (!parentId) return;
     await answerPendingQuestion({
       entityId: parentId,
       toolUseId,
@@ -187,7 +191,7 @@ export function SandboxChatPanel({
       >
         <ChatBody
           repo={{ id: repo._id, basePath }}
-          conversationId={parentId}
+          conversationId={parentId ?? `${ownerLabel}-chat`}
           chatParentId={parentId}
           messages={chatMessages}
           isLoadingMessages={messages === undefined}

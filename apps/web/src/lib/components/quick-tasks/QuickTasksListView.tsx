@@ -319,7 +319,7 @@ export function QuickTasksListView({
                                       }
                                       hasError={errorTaskIdSet.has(task._id)}
                                       sandboxStatus={
-                                        task.reviewTaskSandboxStatus
+                                        task.sandboxStatus
                                       }
                                       scheduledAt={taskScheduledAt(task)}
                                       tags={task.tags}

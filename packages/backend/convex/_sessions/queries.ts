@@ -21,6 +21,8 @@ import {
 } from "../_chat/turnProjection";
 import { unreadLookupForRepo } from "../chatReads";
 import {
+  findProjectSession,
+  findTaskWorkSession,
   isStandaloneSession,
   ownedSessionOwnerValidator,
   type OwnedSessionOwner,
@@ -504,22 +506,35 @@ export const ownerChatRefValidator = v.object({
 });
 
 /**
- * The session a task or project works on and the chat it talks in (a quick
- * task's or project's Main chat, a project task's own chat in the project's
- * session), for the owner's chat and sandbox panels. Null until something
- * first needed it (`ensureOwned`).
+ * The session a task or project works on (its sandbox) and the chat it talks
+ * in (a quick task's or project's Main chat, a project task's own chat in the
+ * project's session), for the owner's chat and sandbox panels. Null until
+ * the session exists; `chatId` absent while a project task has not chatted
+ * yet (its project's session may already run). `ensureOwned` creates both.
  */
 export const getOwned = authQuery({
   args: { owner: ownedSessionOwnerValidator },
-  returns: v.union(ownerChatRefValidator, v.null()),
+  returns: v.union(
+    v.object({
+      sessionId: v.id("sessions"),
+      chatId: v.optional(v.id("sessionChats")),
+    }),
+    v.null(),
+  ),
   handler: async (ctx, args) => {
     const entity = await loadOwnerEntityWithAccess(
       ctx.db,
       args.owner,
       ctx.userId,
     );
-    const found = entity ? await findOwnerChat(ctx.db, entity) : null;
-    return found ? { sessionId: found.session._id, chatId: found.chat._id } : null;
+    if (!entity) return null;
+    const session =
+      entity.kind === "task"
+        ? await findTaskWorkSession(ctx.db, entity.task)
+        : await findProjectSession(ctx.db, entity.project._id);
+    if (!session) return null;
+    const found = await findOwnerChat(ctx.db, entity);
+    return { sessionId: session._id, chatId: found?.chat._id };
   },
 });
 

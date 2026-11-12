@@ -105,11 +105,10 @@ export function ProjectDetailClient({
     sandboxStartupActivity,
     sandboxId: projectSandboxId,
   } = sandbox;
-  // The project chats in its session's Main chat; before that chat exists,
-  // the project id reads empty.
+  // The project chats in its session's Main chat; nothing before it exists.
   const chatId = sandbox.projectSession.owned?.chatId;
-  const chatTurnOpen = useChatTurnOpen(chatId ?? projectId);
-  const chatUnread = useChatUnread(chatId ?? projectId);
+  const chatTurnOpen = useChatTurnOpen(chatId);
+  const chatUnread = useChatUnread(chatId);
 
   const prewarmSessionChatDaemon = useMutation(
     api.sessionWorkflow.prewarmDaemon,

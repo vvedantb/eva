@@ -84,7 +84,7 @@ function busySessionChat(f: Fixture, rows: Row[]) {
 
 function chatState(
   t: Fixture["t"],
-  parentId: Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">,
+  parentId: Id<"sessionChats">,
 ) {
   return t.run(async (ctx) => {
     const queued = await ctx.db
@@ -124,94 +124,6 @@ describe("a send that lands behind a running turn", () => {
       });
       const turn = await f.t.run((ctx) => findOpenTurn(ctx, chatId));
       expect(turn?.workflowId).toBe("wf-first-send");
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "queues on a task chat and keeps the row's attachments",
-    async () => {
-      const f = await baseFixture();
-      const { taskId, storageId } = await f.t.run(async (ctx) => {
-        const now = Date.now();
-        const id = await ctx.db.insert("agentTasks", {
-          title: "Send burst",
-          status: "in_progress" as const,
-          repoId: f.repoId,
-          createdAt: now,
-          updatedAt: now,
-          createdBy: f.userId,
-          activeChatWorkflowId: "wf-first-send",
-        });
-        const blob = await ctx.storage.store(new Blob(["png"]));
-        await ctx.db.insert("messages", {
-          parentId: id,
-          role: "user",
-          content: BURST_MESSAGE,
-          timestamp: now,
-          attachmentStorageIds: [blob],
-        });
-        return { taskId: id, storageId: blob };
-      });
-
-      await f.asUser.mutation(api.agentTaskChatWorkflow.startExecute, {
-        taskId,
-        message: BURST_MESSAGE,
-        model: "claude:sonnet",
-      });
-
-      expect(await chatState(f.t, taskId)).toEqual({
-        queued: [BURST_MESSAGE],
-        userRows: [],
-      });
-      const queued = await f.t.run((ctx) =>
-        ctx.db
-          .query("queuedMessages")
-          .withIndex("by_parent_and_order", (q) => q.eq("parentId", taskId))
-          .first(),
-      );
-      expect(queued?.attachmentStorageIds).toEqual([storageId]);
-      const task = await f.t.run((ctx) => ctx.db.get(taskId));
-      expect(task?.activeChatWorkflowId).toBe("wf-first-send");
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "queues on a project chat instead of starting a second turn",
-    async () => {
-      const f = await baseFixture();
-      const projectId = await f.t.run(async (ctx) => {
-        const id = await ctx.db.insert("projects", {
-          repoId: f.repoId,
-          userId: f.userId,
-          title: "Send burst",
-          phase: "in_progress",
-          rawInput: "send burst",
-          updatedAt: Date.now(),
-          activeChatWorkflowId: "wf-first-send",
-        });
-        await ctx.db.insert("messages", {
-          parentId: id,
-          role: "user",
-          content: BURST_MESSAGE,
-          timestamp: Date.now(),
-        });
-        return id;
-      });
-
-      await f.asUser.mutation(api.projectChatWorkflow.startExecute, {
-        projectId,
-        message: BURST_MESSAGE,
-        model: "claude:sonnet",
-      });
-
-      expect(await chatState(f.t, projectId)).toEqual({
-        queued: [BURST_MESSAGE],
-        userRows: [],
-      });
-      const project = await f.t.run((ctx) => ctx.db.get(projectId));
-      expect(project?.activeChatWorkflowId).toBe("wf-first-send");
     },
     TIMEOUT_MS,
   );

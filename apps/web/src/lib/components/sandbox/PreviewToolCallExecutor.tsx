@@ -15,17 +15,12 @@ import {
 /** Under the backend's 40 s wait, so the agent sees our error, not its own. */
 const PREVIEW_TOOL_CALL_TIMEOUT_MS = 30_000;
 
-export type PreviewToolCallParentId =
-  | Id<"sessions">
-  | Id<"projects">
-  | Id<"agentTasks">;
+export type PreviewToolCallParentId = Id<"sessions">;
 
 export function sandboxOwnerParentId(
   owner: SandboxOwner,
 ): PreviewToolCallParentId {
-  if (owner.kind === "session") return owner.sessionId;
-  if (owner.kind === "task") return owner.taskId;
-  return owner.projectId;
+  return owner.sessionId;
 }
 
 /** One id per browser tab: the backend's claim election is between tabs. */

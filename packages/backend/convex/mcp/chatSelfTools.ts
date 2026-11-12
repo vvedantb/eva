@@ -55,37 +55,21 @@ function envSettingsLink(
   }
 }
 
-/**
- * Whether the target's sandbox is run by its own task or project start
- * workflow. A session's (and a task's or project's on its session) is
- * driven directly on the running VM.
- */
-function usesEntitySandboxWorkflow(target: EntityTarget): boolean {
-  return (
-    target.sandboxSessionId === undefined &&
-    (target.kind === "task" || target.kind === "project")
-  );
-}
-
 /** PR number parsed off a GitHub pull request link. */
 function prNumber(prUrl: string | undefined): number | undefined {
   const match = prUrl?.match(/\/pull\/(\d+)/);
   return match ? Number(match[1]) : undefined;
 }
 
-/** The `{ kind, <kind>Id }` owner shape `sandboxPanes` mutations take. */
-function sandboxOwner(target: EntityTarget): Record<string, string> {
-  if (target.kind === "session") {
-    return { kind: target.kind, sessionId: target.targetId };
-  }
-  // A task or project on its session: the session owns the panes and preview.
-  if (target.sandboxSessionId !== undefined) {
-    return { kind: "session", sessionId: target.sandboxSessionId };
-  }
-  if (target.kind === "task") {
-    return { kind: target.kind, taskId: target.targetId };
-  }
-  return { kind: target.kind, projectId: target.targetId };
+/**
+ * The `{ kind: "session", sessionId }` owner shape `sandboxPanes` mutations
+ * take: the session itself, or the one a task or project works on. Null for
+ * a task or project with no session yet.
+ */
+function sandboxOwner(target: EntityTarget): Record<string, string> | null {
+  const sessionId =
+    target.kind === "session" ? target.targetId : target.sandboxSessionId;
+  return sessionId === undefined ? null : { kind: "session", sessionId };
 }
 
 /**
@@ -127,13 +111,13 @@ export function chatSelfTools(
     return target.sandboxId;
   }
 
-  /** The session row when the target is a session (orchestrators run no repo services). */
+  /** The session that holds the target's sandbox (its own, or its owner's). */
   async function sessionRow(target: EntityTarget) {
-    return target.kind === "session"
-      ? await ctx.runQuery(internal.sessions.getInternal, {
-          id: target.targetId,
-        })
-      : null;
+    const sessionId =
+      target.kind === "session" ? target.targetId : target.sandboxSessionId;
+    return sessionId === undefined
+      ? null
+      : await ctx.runQuery(internal.sessions.getInternal, { id: sessionId });
   }
 
   /** Resolves the named chat (or the caller's own) plus its details row. */
@@ -527,6 +511,11 @@ Name no chat and it steers your own. Pass "path", "port" or both. The choice sti
         if ("content" in chat) return chat;
         const { target } = chat;
         const owner = sandboxOwner(target);
+        if (!owner) {
+          return toolErrorResult(
+            `This ${target.kind} has no sandbox yet. Call start_sandbox first.`,
+          );
+        }
 
         if (port !== undefined) {
           await mcpCallAsUser(
@@ -573,7 +562,7 @@ Name no chat and it steers your own. Pass "path", "port" or both. The choice sti
 
 Every command is relaunched, including ones still alive: each is stopped first (its whole process group, and any stray Convex backend for a Convex command), then started again. So it never leaves duplicate daemons, but it does briefly interrupt the healthy ones. If the VM turns out to be wedged, Eva may stop and resume it once.
 
-Name no chat and it relaunches your own. Refused unless the sandbox is active and its VM running; it never wakes a stopped VM, and it errors when the repo has no background commands. For sessions the reply lists launch errors; for tasks and projects the launch is queued and the reply means it was sent. Background commands never re-run startup commands (seeds, imports) — that is rerun_startup_commands.`,
+Name no chat and it relaunches your own. Refused unless the sandbox is active and its VM running; it never wakes a stopped VM, and it errors when the repo has no background commands. The reply lists launch errors. Background commands never re-run startup commands (seeds, imports) — that is rerun_startup_commands.`,
       mutating: true,
       input: entityRefArgs,
       handler: async (ref) => {
@@ -596,30 +585,6 @@ Name no chat and it relaunches your own. Refused unless the sandbox is active an
           ...entitySummary(target),
           backgroundCommands: details.backgroundCommands,
         };
-        if (usesEntitySandboxWorkflow(target)) {
-          await mcpCallAsUser(
-            ctx,
-            clerkUserId,
-            target.kind === "task"
-              ? {
-                  type: "mutation",
-                  path: "agentTasks:runBackgroundCommands",
-                  args: { taskId: target.targetId },
-                }
-              : {
-                  type: "mutation",
-                  path: "projects:runProjectBackgroundCommands",
-                  args: { projectId: target.targetId },
-                },
-            z.null(),
-          );
-          return toolJsonResult({
-            ...summary,
-            relaunched: "queued",
-            note: "Relaunch queued. Check /tmp/bg-<index>.log in the sandbox in a few seconds to confirm each daemon came up.",
-          });
-        }
-
         // Sessions have no public mutation for this; resolveChat has already
         // access-checked the chat, so the launcher is called directly.
         const session = await sessionRow(target);
@@ -653,9 +618,9 @@ Name no chat and it relaunches your own. Refused unless the sandbox is active an
       name: "rerun_startup_commands",
       description: `Re-run the repo's startup commands — the one-time setup Eva runs on a fresh sandbox, such as seeding a database, importing data or running migrations — even though they already ran. Use it to recover when a seed or import failed.
 
-WARNING: startup commands can reset, reseed or overwrite the sandbox's local data, and for tasks and projects this restarts the whole sandbox startup flow (the sandbox goes to "starting", and a stopped one is started). If local data might be lost, ask the user before calling this. It is not the fix for a dead daemon; use restart_background_commands for that.
+WARNING: startup commands can reset, reseed or overwrite the sandbox's local data. If local data might be lost, ask the user before calling this. It is not the fix for a dead daemon; use restart_background_commands for that.
 
-Name no chat and it runs for your own. Refused while the sandbox is starting or stopping, and it errors when the repo has no startup commands. Sessions: only on an active sandbox with a running VM (it never wakes a stopped one); the commands run in the background, each for up to 10 minutes, alongside whatever is already running. The reply means the run was started, not that it finished.`,
+Name no chat and it runs for your own. Only on an active sandbox with a running VM (it never wakes a stopped one), and it errors when the repo has no startup commands. The commands run in the background, each for up to 10 minutes, alongside whatever is already running. The reply means the run was started, not that it finished.`,
       mutating: true,
       input: entityRefArgs,
       handler: async (ref) => {
@@ -672,40 +637,6 @@ Name no chat and it runs for your own. Refused while the sandbox is starting or 
           ...entitySummary(target),
           startupCommands: details.startupCommands,
         };
-
-        if (usesEntitySandboxWorkflow(target)) {
-          if (
-            target.sandboxStatus === "starting" ||
-            target.sandboxStatus === "stopping"
-          ) {
-            return toolErrorResult(
-              `This ${target.kind}'s sandbox is "${target.sandboxStatus}". Wait for it to settle before re-running startup commands.`,
-            );
-          }
-          // The public mutation applies the status and phase gates and starts
-          // the regular startup workflow with the force flag set.
-          await mcpCallAsUser(
-            ctx,
-            clerkUserId,
-            target.kind === "task"
-              ? {
-                  type: "mutation",
-                  path: "agentTasks:retryStartupCommands",
-                  args: { taskId: target.targetId },
-                }
-              : {
-                  type: "mutation",
-                  path: "projects:retryProjectStartupCommands",
-                  args: { projectId: target.targetId },
-                },
-            z.null(),
-          );
-          return toolJsonResult({
-            ...summary,
-            rerun: "started",
-            note: 'The sandbox startup flow is running with startup commands forced. Its status is "starting" until it finishes; check get_chat_context, then get_dev_server_logs.',
-          });
-        }
 
         const sandboxId = await runningSandboxId(
           target,

@@ -7,7 +7,7 @@ import type {
   prOwnerValidator,
   prStateValidator,
 } from "../validators";
-import type { SandboxOwner } from "../_sandbox/owner";
+import type { prOwnerRefValidator } from "../_validators/tableFields";
 import {
   buildProjectBranchName,
   buildSessionBranchName,
@@ -33,11 +33,8 @@ export type PrOwner = Infer<typeof prOwnerValidator>;
 export type PrState = Infer<typeof prStateValidator>;
 export type PrOrigin = Infer<typeof prOriginValidator>;
 
-/**
- * The owner's identity alone, without the run / linked-repo detail. Same shape
- * as a sandbox owner: whatever owns a sandbox can own pull requests.
- */
-export type PrOwnerRef = SandboxOwner;
+/** The owner's identity alone, without the run / linked-repo detail. */
+export type PrOwnerRef = Infer<typeof prOwnerRefValidator>;
 
 /** Maps a GitHub pull_request webhook action onto a tracked state, or null. */
 export function derivePrStateFromEvent(

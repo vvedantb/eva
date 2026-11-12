@@ -17,6 +17,7 @@ import {
 import type { ActionCtx, MutationCtx } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { requireCurrentUserId } from "./_auth/currentUser";
+import { assertNotInMaintenance } from "./maintenance";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { scheduleProjectPrSync } from "./_projects/prSync";
 import { isEntityDeleted } from "./numId";
@@ -259,7 +260,8 @@ async function applyPhaseTransition(
   // revives it. Scheduled (this module stays a leaf), and only when the
   // phase crosses that line and the project has a session to move.
   if (
-    isTerminalProjectPhase(previousPhase) !== isTerminalProjectPhase(newPhase) &&
+    isTerminalProjectPhase(previousPhase) !==
+      isTerminalProjectPhase(newPhase) &&
     (await findProjectSession(ctx.db, project._id)) !== null
   ) {
     await ctx.scheduler.runAfter(
@@ -450,21 +452,13 @@ export async function isFirstTaskOnBranch(
   );
 }
 
-/** Deletes a task and all its related data (runs, dependencies, scheduled functions, sandbox). */
+/** Deletes a task and all its related data (runs, dependencies, scheduled functions). */
 export async function deleteTaskRelatedData(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
 ): Promise<void> {
-  const task = await ctx.db.get(taskId);
+  // A task's sandbox is its session's: the delete path retires that session.
   await cancelTaskRunSchedule(ctx, taskId);
-  // Quick tasks persist a sandbox; clean it up so we don't leak compute.
-  // Project tasks share their sandbox via `project.sandboxId` — leave that alone.
-  if (task && !task.projectId && task.sandboxId && task.repoId) {
-    await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
-      sandboxId: task.sandboxId,
-      repoId: task.repoId,
-    });
-  }
   const runs = await ctx.db
     .query("agentRuns")
     .withIndex("by_task", (q) => q.eq("taskId", taskId))
@@ -503,9 +497,7 @@ export async function deleteTaskRelatedData(
   await ctx.db.delete(taskId);
 }
 
-/**
- * Soft-deletes a task: cancels schedules and sandbox cleanup, but keeps the row.
- */
+/** Soft-deletes a task: cancels schedules, but keeps the row. */
 export async function softDeleteAgentTask(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
@@ -513,12 +505,6 @@ export async function softDeleteAgentTask(
   const task = await ctx.db.get(taskId);
   if (!task || isEntityDeleted(task)) return;
   await cancelTaskRunSchedule(ctx, taskId);
-  if (!task.projectId && task.sandboxId && task.repoId) {
-    await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
-      sandboxId: task.sandboxId,
-      repoId: task.repoId,
-    });
-  }
   const runSummary = await ctx.db
     .query("agentTaskRunSummaries")
     .withIndex("by_task", (q) => q.eq("taskId", taskId))
@@ -529,16 +515,25 @@ export async function softDeleteAgentTask(
   await ctx.db.patch(taskId, { deletedAt: Date.now() });
 }
 
-/** Authenticated query wrapper — injects userId into context, throws if not authenticated. */
+/**
+ * Authenticated query wrapper — injects userId into context, throws if not
+ * authenticated or while maintenance mode is on (see `maintenance.ts`).
+ */
 export const authQuery = customQuery(
   query,
-  customCtx(async (ctx) => ({ userId: await requireCurrentUserId(ctx) })),
+  customCtx(async (ctx) => {
+    assertNotInMaintenance();
+    return { userId: await requireCurrentUserId(ctx) };
+  }),
 );
 
-/** Authenticated mutation wrapper — injects userId into context, throws if not authenticated. */
+/** Authenticated mutation wrapper — same gates as `authQuery`. */
 export const authMutation = customMutation(
   mutation,
-  customCtx(async (ctx) => ({ userId: await requireCurrentUserId(ctx) })),
+  customCtx(async (ctx) => {
+    assertNotInMaintenance();
+    return { userId: await requireCurrentUserId(ctx) };
+  }),
 );
 
 const getUserIdFromIdentityRef = makeFunctionReference<
@@ -556,12 +551,13 @@ async function resolveActionUserId(ctx: ActionCtx): Promise<Id<"users">> {
   return userId;
 }
 
-/** Authenticated action wrapper — injects userId into context via a query roundtrip. */
+/** Authenticated action wrapper — same gates as `authQuery`; userId via a query roundtrip. */
 export const authAction = customAction(
   action,
-  customCtx(async (ctx: ActionCtx) => ({
-    userId: await resolveActionUserId(ctx),
-  })),
+  customCtx(async (ctx: ActionCtx) => {
+    assertNotInMaintenance();
+    return { userId: await resolveActionUserId(ctx) };
+  }),
 );
 
 /** Internal authenticated query — same as authQuery but for internal-only queries. */

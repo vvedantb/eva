@@ -39,8 +39,6 @@ function chatMessageParentId(
 ): Doc<"messages">["parentId"] | null {
   return (
     db.normalizeId("sessionChats", entityId) ??
-    db.normalizeId("agentTasks", entityId) ??
-    db.normalizeId("projects", entityId) ??
     db.normalizeId("sessions", entityId)
   );
 }
