@@ -1,7 +1,7 @@
-import type { Infer } from "convex/values";
+import { v, type Infer } from "convex/values";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
-import type { MutationCtx } from "../_generated/server";
+import { internalMutation, type MutationCtx } from "../_generated/server";
 import type { taskRunValidator } from "../_validators/tableFields";
 import { cancelScheduledFunction } from "../_scheduling/helpers";
 
@@ -237,3 +237,84 @@ export async function finishTaskRun(
 ): Promise<void> {
   await applyTaskRunEvent(ctx, taskId, { type: "finish", runId });
 }
+
+const STALE_RUN_AGE_MS = 24 * 60 * 60 * 1000;
+const STALE_RUN_PAGE_SIZE = 100;
+
+/**
+ * A done/cancelled task, untouched for a day, still `running` a run that
+ * nothing will finish: no open turn for its workflow or run, and its
+ * `agentRuns` row is terminal or absent. Rows migrated from the legacy
+ * `activeWorkflowId` carry no `runId`. Returns the stale run, else null.
+ */
+async function staleTerminalRun(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+  now: number,
+): Promise<{ runId: Id<"agentRuns"> | undefined } | null> {
+  const run = taskRunState(task);
+  if (run?.state !== "running") return null;
+  if (task.status !== "done" && task.status !== "cancelled") return null;
+  if (now - task.updatedAt < STALE_RUN_AGE_MS) return null;
+  const workflowTurns = await ctx.db
+    .query("turns")
+    .withIndex("by_workflow", (q) => q.eq("workflowId", run.workflowId))
+    .collect();
+  if (workflowTurns.some((turn) => turn.open)) return null;
+  const runId = run.runId;
+  if (runId === undefined) return { runId };
+  const runTurns = await ctx.db
+    .query("turns")
+    .withIndex("by_entity_open", (q) => q.eq("entityId", runId))
+    .collect();
+  if (runTurns.some((turn) => turn.open)) return null;
+  const agentRun = await ctx.db.get(runId);
+  const active =
+    agentRun?.status === "queued" || agentRun?.status === "running";
+  return active ? null : { runId };
+}
+
+/**
+ * One-off ops repair: ends the stale `running` run of finished tasks
+ * (`staleTerminalRun`) through `finishTaskRun`. Pages through `agentTasks`
+ * and schedules the next page itself; every page logs its ids, and the call
+ * returns the first page's. Run with `dryRun: true` first to list only.
+ */
+export const finishStaleTerminalRuns = internalMutation({
+  args: {
+    dryRun: v.optional(v.boolean()),
+    cursor: v.optional(v.string()),
+  },
+  returns: v.object({
+    taskIds: v.array(v.id("agentTasks")),
+    isDone: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const dryRun = args.dryRun === true;
+    const now = Date.now();
+    const page = await ctx.db.query("agentTasks").paginate({
+      cursor: args.cursor ?? null,
+      numItems: STALE_RUN_PAGE_SIZE,
+    });
+    const taskIds: Id<"agentTasks">[] = [];
+    for (const task of page.page) {
+      const stale = await staleTerminalRun(ctx, task, now);
+      if (stale === null) continue;
+      taskIds.push(task._id);
+      if (!dryRun) await finishTaskRun(ctx, task._id, stale.runId);
+    }
+    if (taskIds.length > 0) {
+      console.log(
+        `[finishStaleTerminalRuns] ${dryRun ? "would finish" : "finished"}: ${taskIds.join(", ")}`,
+      );
+    }
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal._agentTasks.runState.finishStaleTerminalRuns,
+        { dryRun, cursor: page.continueCursor },
+      );
+    }
+    return { taskIds, isDone: page.isDone };
+  },
+});
