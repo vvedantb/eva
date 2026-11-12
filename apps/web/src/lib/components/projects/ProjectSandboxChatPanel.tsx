@@ -1,11 +1,9 @@
 "use client";
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import type { FunctionReturnType } from "convex/server";
 import {
   api,
   DEFAULT_AI_MODEL,
-  getAIModelProvider,
   normalizeAIModel,
   type Id,
 } from "@eva/backend";
@@ -17,7 +15,7 @@ import type { SandboxChatBinding } from "@/lib/components/chat/sandboxChatBindin
 import { useOwnedChatBinding } from "@/lib/components/chat/useOwnedChatBinding";
 import type { OwnedSession } from "@/lib/components/sandbox/useOwnedSession";
 import { useRepo } from "@/lib/contexts/RepoContext";
-import { useProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
+import { useProjectOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
 
 export function ProjectSandboxChatPanel({
   projectId,
@@ -35,8 +33,8 @@ export function ProjectSandboxChatPanel({
  * The project side of the sandbox chat: the Main chat of the project's
  * session (`useOwnedSession`), whose own sticky model, traits and account
  * drive the composer. The chat model is apart from the project's build model.
- * A teammate sees the owner's sticky account as an extra, read-only picker
- * row.
+ * The chat runs on the owner's credentials, so every viewer picks from the
+ * owner's accounts (as in a session chat).
  */
 export function useProjectChatBinding(
   projectId: Id<"projects">,
@@ -44,60 +42,17 @@ export function useProjectChatBinding(
 ): SandboxChatBinding {
   const { repo } = useRepo();
   const project = useQuery(api.projects.get, { id: projectId });
-  const chat = useQuery(
-    api.sessionChats.get,
-    projectSession.owned?.chatId !== undefined
-      ? { chatId: projectSession.owned.chatId }
-      : "skip",
-  );
   const { options: accounts, resolveId: resolveAccountId } =
-    useProviderAccounts();
-  const currentUserId = useQuery(api.auth.me);
-  const isOwner =
-    currentUserId !== undefined &&
-    project?.userId !== undefined &&
-    currentUserId === project.userId;
-  const ownerProfile = useQuery(
-    api.users.get,
-    project?.userId ? { id: project.userId } : "skip",
-  );
+    useProjectOwnerProviderAccounts(projectId);
   // Before the session exists, the same seed `ensureOwned` gives its chat.
   const seedModel = normalizeAIModel(
-    project?.model ??
-      repo.defaultModel ??
-      DEFAULT_AI_MODEL,
+    project?.model ?? repo.defaultModel ?? DEFAULT_AI_MODEL,
   );
-  const providerAccountId =
-    chat?.providerAccountId ?? project?.providerAccountId;
-  const pickerAccounts =
-    isOwner || !providerAccountId
-      ? accounts
-      : [
-          {
-            id: providerAccountId,
-            provider: getAIModelProvider(chat?.lastModel ?? seedModel),
-            label: projectOwnerAccountLabel(ownerProfile),
-            // The project owner's account, shown to a collaborator: theirs, not
-            // the viewer's, so it must never be defaulted to.
-            isOwn: false,
-          },
-          ...accounts,
-        ];
   return useOwnedChatBinding({
     ownedSession: projectSession,
     seedModel,
     ownerLabel: "project",
     title: project?.title,
-    common: { accounts, pickerAccounts, resolveAccountId, isOwner },
+    common: { accounts, resolveAccountId },
   });
-}
-
-function projectOwnerAccountLabel(
-  ownerProfile: FunctionReturnType<typeof api.users.get> | undefined,
-): string {
-  return (
-    ownerProfile?.firstName?.trim() ||
-    ownerProfile?.fullName?.trim() ||
-    "Personal"
-  );
 }

@@ -97,7 +97,6 @@ export function SandboxChatPanel({
     });
 
   const setProviderAccountId = async (next: string | null) => {
-    if (!binding.isOwner) return;
     await switchProviderAccount(binding.resolveAccountId(next) ?? null);
   };
 
@@ -107,7 +106,7 @@ export function SandboxChatPanel({
     queuedMessages: queuedMessages ?? [],
     model,
     accountId: binding.providerAccountId,
-    accounts: binding.pickerAccounts,
+    accounts: binding.accounts,
     resolveAccountId: binding.resolveAccountId,
     isSandboxActive,
     setModel: binding.setModel,
@@ -141,15 +140,13 @@ export function SandboxChatPanel({
     });
   };
 
-  // `accounts`, not `pickerAccounts`: the synthetic owner row exists only for
-  // non-owners, who never see the usage-limit recovery card.
   const chatSurface = buildSandboxChatSurface({
     entity,
     repoId: repo._id,
     model,
     isExecuting,
     doc,
-    canSwitchAccount: binding.isOwner,
+    canSwitchAccount: true,
     messages,
     accounts: binding.accounts,
     resolveAccountId: binding.resolveAccountId,
@@ -167,7 +164,7 @@ export function SandboxChatPanel({
   const usageAccountLabel =
     binding.providerAccountId === null
       ? "Team"
-      : (binding.pickerAccounts.find(
+      : (binding.accounts.find(
           (account) => account.id === binding.providerAccountId,
         )?.label ?? "Selected account");
 
@@ -229,7 +226,7 @@ export function SandboxChatPanel({
             model,
             setModel: queueGate.setModel,
             modelOptions: binding.modelOptions,
-            accounts: binding.pickerAccounts,
+            accounts: binding.accounts,
             accountId: binding.providerAccountId,
             onAccountChange: queueGate.setAccount,
             displayTraits: binding.displayTraits,

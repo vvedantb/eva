@@ -1,5 +1,13 @@
 # Changelog
 
+## Collaborators can switch the account in quick task and project chats
+
+Date: 2026-11-12
+
+WHY: In a teammate's quick task chat, picking another account did nothing. `SandboxChatPanel` returned early unless the viewer created the task. The session chat and `sessionChats.setProviderAccountId` already let any repo collaborator switch among the owner's accounts.
+
+Architectural: `SandboxChatBinding` drops `isOwner` and `pickerAccounts`; `accounts` is always the owner's pool. Projects now use `userProviderAccounts.listForProjectOwner` (was the viewer's own accounts plus a synthetic owner row, which the backend rejected for teammates).
+
 ## Agent feedback cards use the shared card placement
 
 Date: 2026-11-12
