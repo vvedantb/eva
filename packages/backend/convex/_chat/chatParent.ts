@@ -2,13 +2,13 @@ import type { DatabaseReader } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { findMainChat } from "../_sessionChats/helpers";
 import type { ChatEntityKind } from "../_validators/enums";
+import {
+  findProjectSession,
+  findProjectTaskChat,
+  findTaskWorkSession,
+} from "../_sessions/owner";
 
-
-type ChatParentId =
-  | Id<"sessionChats">
-  | Id<"sessions">
-  | Id<"agentTasks">
-  | Id<"projects">;
+type ChatParentId = Id<"sessionChats"> | Id<"sessions">;
 
 /**
  * Narrows a bare turn owner id to a chat entity. Null for runs, docs,
@@ -20,9 +20,7 @@ export function chatParentIdOf(
 ): ChatParentId | null {
   return (
     db.normalizeId("sessionChats", entityId) ??
-    db.normalizeId("sessions", entityId) ??
-    db.normalizeId("agentTasks", entityId) ??
-    db.normalizeId("projects", entityId)
+    db.normalizeId("sessions", entityId)
   );
 }
 
@@ -44,8 +42,26 @@ export async function resolveChatParent(
     const mainChat = await findMainChat(db, sessionId);
     return mainChat?._id ?? null;
   }
-  if (entityKind === "task") return db.normalizeId("agentTasks", entityId);
-  return db.normalizeId("projects", entityId);
+  if (entityKind === "task") {
+    const taskId = db.normalizeId("agentTasks", entityId);
+    const task = taskId ? await db.get(taskId) : null;
+    if (!task) return null;
+    // A project task's own chat in the project's session, once it has one;
+    // else the Main chat of the session it works on (a quick task's own, a
+    // project task's project's). A run's cards land there too.
+    const taskChat =
+      task.projectId !== undefined
+        ? await findProjectTaskChat(db, task._id)
+        : null;
+    if (taskChat) return taskChat._id;
+    const session = await findTaskWorkSession(db, task);
+    return session ? ((await findMainChat(db, session._id))?._id ?? null) : null;
+  }
+  const projectId = db.normalizeId("projects", entityId);
+  if (!projectId) return null;
+  // A project's chat is its session's Main chat.
+  const session = await findProjectSession(db, projectId);
+  return session ? ((await findMainChat(db, session._id))?._id ?? null) : null;
 }
 
 /**

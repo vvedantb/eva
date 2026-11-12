@@ -106,6 +106,8 @@ export interface EntityTarget {
   sandboxStatus: string;
   sandboxId?: string;
   devPort?: number;
+  /** A task or project on its session: the session that holds its sandbox. */
+  sandboxSessionId?: string;
 }
 
 /** Everything needed to name one entity's place in Eva's url structure. */

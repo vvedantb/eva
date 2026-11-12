@@ -17,6 +17,10 @@ import {
   touchAgentFinished,
 } from "../_sandbox/activity";
 import { chatParentIdOf } from "./chatParent";
+import {
+  chatOwnerEntityId,
+  sessionOwnerEntityId,
+} from "../_sessions/owner";
 
 export type TurnLeaseIdentity = {
   turnId: Id<"turns">;
@@ -48,11 +52,7 @@ export type CompletionTurnResolution =
 export type TurnEntityId = Doc<"turns">["entityId"];
 
 /** Chat entities that own durable turns. */
-export type ChatTurnEntityId =
-  | Id<"sessionChats">
-  | Id<"sessions">
-  | Id<"agentTasks">
-  | Id<"projects">;
+export type ChatTurnEntityId = Id<"sessionChats"> | Id<"sessions">;
 
 /** Open turns across every chat of a session (the parallel-chat cap reads this). */
 export async function listOpenSessionTurns(
@@ -156,19 +156,6 @@ export async function openSessionChatTurn(
 ): Promise<Id<"turns">> {
   const { chatId, sessionId, ...turn } = params;
   return await openTurn(ctx, { ...turn, entityId: chatId, sessionId });
-}
-
-/**
- * Opens a task-chat or project-chat turn and marks the entity as a durable-turn
- * user (`chatTurnLifecycleVersion`).
- */
-export async function openChatTurn(
-  ctx: MutationCtx,
-  params: OpenTurnFields & { entityId: Id<"agentTasks"> | Id<"projects"> },
-): Promise<Id<"turns">> {
-  const turnId = await openTurn(ctx, params);
-  await ctx.db.patch(params.entityId, { chatTurnLifecycleVersion: 2 });
-  return turnId;
 }
 
 /**
@@ -449,17 +436,39 @@ export async function closeTurn(
   if (chatParentId && (await ctx.db.get(chatParentId))) {
     await ctx.db.patch(chatParentId, { lastTurnFinishedAt: finishedAt });
   }
-  if (turn.sessionId !== undefined && (await ctx.db.get(turn.sessionId))) {
-    await ctx.db.patch(turn.sessionId, { lastTurnFinishedAt: finishedAt });
+  const session =
+    turn.sessionId !== undefined ? await ctx.db.get(turn.sessionId) : null;
+  const runId = ctx.db.normalizeId("agentRuns", turn.entityId);
+  if (session && chatParentId) {
+    await ctx.db.patch(session._id, { lastTurnFinishedAt: finishedAt });
+    // A task's or project's session reads unread on its owner's card (a
+    // project task's own chat on the task's), so the owner gets the
+    // watermark too (`chatReads.markRead` reads it with the chat).
+    const chatId = ctx.db.normalizeId("sessionChats", chatParentId);
+    const chat = chatId ? await ctx.db.get(chatId) : null;
+    const ownerId = chat
+      ? chatOwnerEntityId(chat, session)
+      : sessionOwnerEntityId(session);
+    if (ownerId && (await ctx.db.get(ownerId))) {
+      await ctx.db.patch(ownerId, { lastTurnFinishedAt: finishedAt });
+    }
+  }
+  if (session && runId) {
+    // A task's run held its session's chats (`sessionChatHasFreeSlot`):
+    // offer them their queued messages now. Scheduled, since the queue
+    // module imports this one.
+    await ctx.scheduler.runAfter(
+      0,
+      internal._queues.helpers.drainQueueQuietly,
+      { parentId: session._id },
+    );
   }
   // Every durable turn ends here, so this is the one place the idle-pause
-  // sweep learns "the agent finished". The id's table names the surface; a
-  // run counts for its task, a session chat for its session.
-  const runId = ctx.db.normalizeId("agentRuns", turn.entityId);
-  const run = runId ? await ctx.db.get(runId) : null;
+  // sweep learns "the agent finished": a chat turn or a run counts for the
+  // session that holds the sandbox.
   const activityRef = activityRefForParentId(
     ctx.db,
-    run ? run.taskId : (turn.sessionId ?? turn.entityId),
+    turn.sessionId ?? turn.entityId,
   );
   if (activityRef) await touchAgentFinished(ctx, activityRef, finishedAt);
 }

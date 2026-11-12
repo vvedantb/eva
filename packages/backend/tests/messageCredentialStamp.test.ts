@@ -32,13 +32,20 @@ async function seed(t: ReturnType<typeof convexTest>) {
       installationId: 1,
       connectedBy: ownerId,
     });
-    const taskId = await ctx.db.insert("agentTasks", {
-      title: "Ran once",
-      status: "code_review" as const,
+    const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
-      createdAt: now,
-      updatedAt: now,
-      createdBy: ownerId,
+      userId: ownerId,
+      title: "Ran once",
+      status: "closed",
+    });
+    const taskId = await ctx.db.insert("sessionChats", {
+      sessionId,
+      repoId,
+      userId: ownerId,
+      title: "Main",
+      number: 1,
+      isMain: true,
     });
     const account = {
       provider: "claude" as const,

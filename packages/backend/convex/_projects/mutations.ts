@@ -1,14 +1,9 @@
-import { internal } from "../_generated/api";
-import type { MutationCtx } from "../_generated/server";
-import type { Doc, Id } from "../_generated/dataModel";
 import { findPrimaryPullRequest } from "../_pullRequests/store";
-import { v, type Infer } from "convex/values";
+import { v } from "convex/values";
 import {
   phaseValidator,
   priorityValidator,
   aiModelValidator,
-  reasoningLevelValidator,
-  type ReasoningLevel,
 } from "../validators";
 import {
   authMutation,
@@ -17,7 +12,6 @@ import {
   softDeleteAgentTask,
 } from "../functions";
 import { allocateNumId } from "../numId";
-import { preferPersistedSandboxId } from "../_sandbox/resolveExistingSandboxId";
 import {
   getProjectConversation,
   setProjectConversation,
@@ -25,17 +19,17 @@ import {
   buildProjectBranchName,
 } from "./helpers";
 import { scheduleProjectPrSync } from "./prSync";
+import {
+  mirrorOwnerIntoSession,
+  syncProjectSession,
+  syncProjectSessionBranch,
+} from "../_sessions/ownedSession";
 import { schedulePrTitleSync } from "../_github/prTitleSync";
 import {
   assertProviderAccountUsableBy,
   reconcileProviderAccountForModel,
   resolveDefaultProviderAccountId,
 } from "../_userProviderAccounts/defaults";
-import {
-  composerTraitFields,
-  hasComposerTraitUpdate,
-  type ComposerTraits,
-} from "../_shared/composerTraits";
 
 /**
  * Creates a new project. Defaults to `draft` phase with an initial conversation
@@ -190,6 +184,14 @@ export const update = authMutation({
     if (Object.keys(updates).length > 0) {
       await ctx.db.patch(args.id, updates);
     }
+    // The session mirrors the title and base branch, moves to an edited
+    // branch (the one branch writer), and follows the phase.
+    const edited = await ctx.db.get(args.id);
+    if (edited) {
+      await mirrorOwnerIntoSession(ctx, { kind: "project", project: edited });
+      await syncProjectSessionBranch(ctx, args.id);
+      await syncProjectSession(ctx, args.id);
+    }
     if (args.title !== undefined && args.title !== project.title) {
       const primaryPr = await findPrimaryPullRequest(ctx.db, {
         kind: "project",
@@ -250,6 +252,7 @@ export const remove = authMutation({
   handler: async (ctx, args) => {
     await getProjectWithAccess(ctx.db, args.id, ctx.userId);
     await ctx.db.patch(args.id, { deletedAt: Date.now() });
+    await syncProjectSession(ctx, args.id);
     return null;
   },
 });
@@ -268,6 +271,7 @@ export const deleteCascade = authMutation({
       await softDeleteAgentTask(ctx, task._id);
     }
     await ctx.db.patch(args.id, { deletedAt: Date.now() });
+    await syncProjectSession(ctx, args.id);
     return null;
   },
 });
@@ -279,41 +283,6 @@ export const clearMessages = authMutation({
   handler: async (ctx, args) => {
     await getProjectWithAccess(ctx.db, args.id, ctx.userId);
     await setProjectConversation(ctx.db, args.id, []);
-    return null;
-  },
-});
-
-/** Removes the sandbox association from a project and triggers sandbox deletion. */
-export const clearProjectSandbox = authMutation({
-  args: { id: v.id("projects") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const project = await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    const deleteId = preferPersistedSandboxId({
-      sandboxId: project.sandboxId,
-    });
-    if (deleteId) {
-      await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
-        sandboxId: deleteId,
-        repoId: project.repoId,
-      });
-    }
-    await ctx.db.patch(args.id, {
-      sandboxId: undefined,
-
-      lastSandboxActivity: undefined,
-    });
-    return null;
-  },
-});
-
-/** Updates the last sandbox activity timestamp on a project. */
-export const updateLastSandboxActivity = authMutation({
-  args: { id: v.id("projects") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    await ctx.db.patch(args.id, { lastSandboxActivity: Date.now() });
     return null;
   },
 });
@@ -337,83 +306,3 @@ export const updateLastConversationMessage = authMutation({
     return null;
   },
 });
-
-/**
- * Sticky sandbox-chat model (`lastChatModel`). No `updatedAt` bump — picker
- * changes are not conversation activity. Distinct from `projects.model`
- * (metadata / build prefs). An owner's cross-provider pick also reconciles
- * their sticky account to the new model's provider.
- */
-export const setChatModel = authMutation({
-  args: {
-    id: v.id("projects"),
-    model: aiModelValidator,
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const project = await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    await setProjectChatModel(ctx, ctx.userId, project, args.model);
-    return null;
-  },
-});
-
-/**
- * The write behind `setChatModel`, shared with `mobile.setChatModel`: the
- * sticky chat model, and the owner's sticky account reconciled to its
- * provider. The caller checks access.
- */
-export async function setProjectChatModel(
-  ctx: MutationCtx,
-  userId: Id<"users">,
-  project: Doc<"projects">,
-  model: Infer<typeof aiModelValidator>,
-): Promise<void> {
-  // Only the owner's pick moves the owner's sticky account (as for tasks in
-  // `applyProviderAccountUpdate`); a teammate's turn still reconciles it per
-  // turn in `resolveTurnProviderAccountId`.
-  if (userId !== project.userId) {
-    await ctx.db.patch(project._id, { lastChatModel: model });
-    return;
-  }
-  const providerAccountId = await reconcileProviderAccountForModel(
-    ctx.db,
-    project.userId,
-    model,
-    project.providerAccountId,
-  );
-  await ctx.db.patch(project._id, { lastChatModel: model, providerAccountId });
-}
-
-/**
- * Sticky sandbox-chat traits (effort / thinking / 1M). No `updatedAt` bump.
- * Only provided fields are patched.
- */
-export const setTraits = authMutation({
-  args: {
-    id: v.id("projects"),
-    reasoningLevel: v.optional(reasoningLevelValidator),
-    thinkingEnabled: v.optional(v.boolean()),
-    use1mContext: v.optional(v.boolean()),
-    fastMode: v.optional(v.boolean()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const { id, ...traits } = args;
-    await getProjectWithAccess(ctx.db, id, ctx.userId);
-    await setProjectTraits(ctx, id, traits);
-    return null;
-  },
-});
-
-/**
- * The write behind `setTraits`, shared with `mobile.setChatModel`: patches
- * only the given traits. The caller checks access.
- */
-export async function setProjectTraits(
-  ctx: MutationCtx,
-  projectId: Id<"projects">,
-  traits: ComposerTraits<ReasoningLevel>,
-): Promise<void> {
-  if (!hasComposerTraitUpdate(traits)) return;
-  await ctx.db.patch(projectId, composerTraitFields(traits));
-}

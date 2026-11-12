@@ -1,9 +1,11 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { api, type Id } from "@eva/backend";
+import { api } from "@eva/backend";
 import type { OptimisticLocalStore } from "convex/browser";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 
-type ChatTurnEntityId = Id<"sessions"> | Id<"agentTasks"> | Id<"projects">;
+type ChatTurnEntityId = FunctionArgs<
+  typeof api.turns.getChatStatus
+>["entityId"];
 
 /**
  * One chat's (session, task or project) open durable turn: `null` when none,
@@ -40,7 +42,7 @@ export function useChatTurnOpen(
  */
 export function openChatTurnOptimistically(
   localStore: OptimisticLocalStore,
-  entityId: FunctionArgs<typeof api.turns.getChatStatus>["entityId"],
+  entityId: ChatTurnEntityId,
 ): void {
   const args = { entityId };
   if (localStore.getQuery(api.turns.getChatStatus, args)) return;

@@ -5,7 +5,6 @@ import schema from "./schema";
 import { deriveLogUsage } from "./_logs/usage";
 import { archiveSessionDoc } from "./_sessions/mutations";
 import { isSessionArchived } from "./_sessions/archive";
-import { STANDALONE_SESSION_OWNER } from "./_sessions/owner";
 import type { MutationCtx } from "./_generated/server";
 import {
   buildProjectBranchName,
@@ -350,37 +349,8 @@ export const pruneSessionBackgroundAgents = dataMigrations.define({
   migrateOne: (_ctx, doc) => pruneBackgroundAgentsPatch(doc),
 });
 
-export const pruneAgentTaskBackgroundAgents = dataMigrations.define({
-  table: "agentTasks",
-  batchSize: PRUNE_BACKGROUND_AGENTS_BATCH,
-  migrateOne: (_ctx, doc) => pruneBackgroundAgentsPatch(doc),
-});
-
-export const pruneProjectBackgroundAgents = dataMigrations.define({
-  table: "projects",
-  batchSize: PRUNE_BACKGROUND_AGENTS_BATCH,
-  migrateOne: (_ctx, doc) => pruneBackgroundAgentsPatch(doc),
-});
-
 /** `npx convex run --prod dataMigrations:pruneBackgroundAgents` */
 export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionChatBackgroundAgents,
   internal.dataMigrations.pruneSessionBackgroundAgents,
-  internal.dataMigrations.pruneAgentTaskBackgroundAgents,
-  internal.dataMigrations.pruneProjectBackgroundAgents,
 ]);
-
-/**
- * Every session written before `sessions.owner` existed was opened by a user.
- * Idempotent: rows that already have an owner are skipped. 3b makes the field
- * required once this has run in prod.
- *
- * `npx convex run --prod dataMigrations:backfillSessionOwner`
- */
-export const backfillSessionOwner = dataMigrations.define({
-  table: "sessions",
-  migrateOne: (_ctx, session) => {
-    if (session.owner !== undefined) return;
-    return { owner: STANDALONE_SESSION_OWNER };
-  },
-});

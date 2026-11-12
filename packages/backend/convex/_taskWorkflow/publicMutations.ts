@@ -22,6 +22,8 @@ import { finishTaskRun, taskRunWorkflowId } from "../_agentTasks/runState";
 import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { errorMessage } from "@vvedantb/server";
+import { findTaskWorkSession } from "../_sessions/owner";
+import { abandonTaskRunSandbox } from "../_sessions/sandbox";
 
 /** Retrieves the active workflow ID for a task, or null if none exists. */
 async function getActiveWorkflowId(
@@ -212,7 +214,15 @@ export async function cancelTaskRun(
 
     // workflow.cancel() aborts execution before the workflow's own sandbox
     // cleanup step runs, so we stop the execution sandbox here.
-    if (run.sandboxId && run.repoId) {
+    // A run borrowed its session's sandbox (a project task's: the project's):
+    // fail the start it claimed (or finish the VM it attached) through the
+    // session lifecycle. A project's VM stays up for its chat and builds.
+    const session = await findTaskWorkSession(ctx.db, task);
+    if (session) {
+      await abandonTaskRunSandbox(ctx, session._id, run, {
+        keepActive: task.projectId !== undefined,
+      });
+    } else if (run.sandboxId && run.repoId) {
       await ctx.scheduler.runAfter(0, internal.sandbox.stopSandbox, {
         sandboxId: run.sandboxId,
         repoId: run.repoId,

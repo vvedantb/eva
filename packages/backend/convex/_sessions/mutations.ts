@@ -42,7 +42,13 @@ import {
 import { linkedRepoDir } from "../_sandbox_runtime/workspaceLayout";
 import { touchUserActivity } from "../_sandbox/activity";
 import { assertComposerMessageRole } from "../_messages/publicRole";
-import { STANDALONE_SESSION_OWNER } from "./owner";
+import {
+  assertStandaloneSession,
+  ownedSessionOwnerValidator,
+  STANDALONE_SESSION_OWNER,
+} from "./owner";
+import { ensureOwnerChat } from "./ownedSession";
+import { loadOwnerEntityWithAccess, ownerChatRefValidator } from "./queries";
 import {
   ensureMainChat,
   getSessionChatWithAccess,
@@ -256,7 +262,7 @@ export async function createSession(
       startAttempt: 1,
     },
   );
-  await scheduleStuckStartExpiry(ctx, { kind: "session", id: sessionId }, 1);
+  await scheduleStuckStartExpiry(ctx, sessionId, 1);
 
   const content = args.message?.trim() ?? "";
   if (content) {
@@ -385,6 +391,7 @@ export const update = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await getSessionWithAccess(ctx.db, args.id, ctx.userId);
+    assertStandaloneSession(session, "be renamed");
     const updates: {
       title?: string;
       branchName?: string;
@@ -443,8 +450,30 @@ export const archive = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await getSessionWithAccess(ctx.db, args.id, ctx.userId);
+    // A task's session archives with its task (`retireOwnedSession`).
+    assertStandaloneSession(session, "be archived on its own");
     await archiveSessionDoc(ctx, session);
     return null;
+  },
+});
+
+/**
+ * A task's or project's session and the chat it talks in (`getOwned`),
+ * created on first use. The owner's chat and sandbox panels call this before
+ * their first send or Start when `getOwned` is still null.
+ */
+export const ensureOwned = authMutation({
+  args: { owner: ownedSessionOwnerValidator },
+  returns: ownerChatRefValidator,
+  handler: async (ctx, args) => {
+    const entity = await loadOwnerEntityWithAccess(
+      ctx.db,
+      args.owner,
+      ctx.userId,
+    );
+    if (!entity) throw new Error(`${args.owner.kind} not found`);
+    const { session, chat } = await ensureOwnerChat(ctx, entity);
+    return { sessionId: session._id, chatId: chat._id };
   },
 });
 
@@ -454,7 +483,8 @@ export const unarchive = authMutation({
   args: { id: v.id("sessions") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
+    const session = await getSessionWithAccess(ctx.db, args.id, ctx.userId);
+    assertStandaloneSession(session, "be unarchived on its own");
 
     await reopenArchivedPullRequests(ctx, {
       kind: "session",

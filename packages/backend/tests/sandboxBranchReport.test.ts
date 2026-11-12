@@ -64,9 +64,40 @@ async function fixture() {
       rawInput: "branch",
       numId: 3,
       updatedAt: STAMP,
-      lastSandboxActivity: STAMP,
     });
-    return { userId, strangerUserId, repoId, sessionId, taskId, projectId };
+    // A task's and a project's checkout is their owned session's.
+    const ownedSession = (
+      title: string,
+      owner:
+        | { kind: "task"; taskId: typeof taskId }
+        | { kind: "project"; projectId: typeof projectId },
+    ) =>
+      ctx.db.insert("sessions", {
+        owner,
+        repoId,
+        userId,
+        title,
+        status: "active",
+        updatedAt: STAMP,
+      });
+    const taskSessionId = await ownedSession("Quick task", {
+      kind: "task",
+      taskId,
+    });
+    const projectSessionId = await ownedSession("Project", {
+      kind: "project",
+      projectId,
+    });
+    return {
+      userId,
+      strangerUserId,
+      repoId,
+      sessionId,
+      taskId,
+      projectId,
+      taskSessionId,
+      projectSessionId,
+    };
   });
   return {
     t,
@@ -78,7 +109,7 @@ async function fixture() {
 
 describe("sandboxGit.reportBranch", () => {
   test(
-    "records the live branch on each surface without touching activity stamps",
+    "records the live branch on the session behind each surface without touching activity stamps",
     async () => {
       const f = await fixture();
 
@@ -96,18 +127,21 @@ describe("sandboxGit.reportBranch", () => {
       });
 
       await f.t.run(async (ctx) => {
-        const session = await ctx.db.get(f.sessionId);
+        const sessions = await Promise.all(
+          [f.sessionId, f.taskSessionId, f.projectSessionId].map((id) =>
+            ctx.db.get(id),
+          ),
+        );
+        for (const session of sessions) {
+          expect(session?.sandboxBranch).toBe("feature/live");
+          expect(session?.updatedAt).toBe(STAMP);
+        }
+        // The branch Eva booted on is a separate fact and stays put.
+        expect(sessions[0]?.branchName).toBe("eva/session-boot");
         const task = await ctx.db.get(f.taskId);
         const project = await ctx.db.get(f.projectId);
-        expect(session?.sandboxBranch).toBe("feature/live");
-        expect(task?.sandboxBranch).toBe("feature/live");
-        expect(project?.sandboxBranch).toBe("feature/live");
-        // The branch Eva booted on is a separate fact and stays put.
-        expect(session?.branchName).toBe("eva/session-boot");
-        expect(session?.updatedAt).toBe(STAMP);
         expect(task?.updatedAt).toBe(STAMP);
         expect(project?.updatedAt).toBe(STAMP);
-        expect(project?.lastSandboxActivity).toBe(STAMP);
       });
     },
     TIMEOUT_MS,
@@ -156,7 +190,7 @@ describe("sandboxGit.reportBranch", () => {
   );
 
   test(
-    "a task with no repo has nothing to authorise against and is refused",
+    "a task with no session has no checkout and is refused",
     async () => {
       const f = await fixture();
       const orphanTaskId = await f.t.run((ctx) =>

@@ -2,7 +2,13 @@ import { isTaskRunning } from "./_agentTasks/runState";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { authMutation, authQuery, getSessionWithAccess, hasRepoAccess } from "./functions";
-import { awaitingAnswerEntityIdsForRepo } from "./_chat/turnProjection";
+import {
+  awaitingAnswerEntityIdsForRepo,
+  hasOpenChatTurn,
+} from "./_chat/turnProjection";
+import { assertStandaloneSession, sessionOwnerTaskId } from "./_sessions/owner";
+import type { SessionChatContext } from "./_sessionChats/helpers";
+import { ensureOwnerChat, findOwnerChat } from "./_sessions/ownedSession";
 import { gatherAccessibleRepos } from "./_githubRepos/helpers";
 import {
   mobileChatValidator,
@@ -15,9 +21,6 @@ import { archiveSessionDoc, createSession, type AuthMutationCtx } from "./_sessi
 import { requestSessionSandboxStop } from "./_sessions/sandbox";
 import { listRepoSessionsByArchive } from "./_sessions/archive";
 import { setSessionChatModel, setSessionChatTraits } from "./_sessionChats/mutations";
-import { setProjectChatModel, setProjectTraits } from "./_projects/mutations";
-import { cancelTaskChatExecution, sendTaskChatMessage } from "./agentTaskChatWorkflow";
-import { cancelProjectChatExecution, sendProjectChatMessage } from "./projectChatWorkflow";
 import { cancelTaskRun } from "./_taskWorkflow/publicMutations";
 import {
   aiModelValidator,
@@ -92,38 +95,37 @@ export const sendMessage = authMutation({
     if (!chat.canReply) throw new Error("This chat is closed");
     const model = normalizeAIModel(chat.model);
     const { attachmentStorageIds } = args;
+    // A reply in a session chat runs on that chat's sticky picks.
+    const sendToSessionChat = (
+      context: SessionChatContext,
+      chatModel: typeof model,
+    ) =>
+      sendSessionChatMessage(ctx, {
+        context,
+        userId: ctx.userId,
+        content: message,
+        settings: {
+          model: chatModel,
+          ...storedTraits(chatModel, context.chat),
+          providerAccountId: context.chat.providerAccountId,
+          attachmentStorageIds,
+        },
+      });
     switch (entity.kind) {
       case "session":
-        await sendSessionChatMessage(ctx, {
-          context: entity.context,
-          userId: ctx.userId,
-          content: message,
-          settings: {
-            model,
-            ...storedTraits(model, entity.context.chat),
-            providerAccountId: entity.context.chat.providerAccountId,
-            attachmentStorageIds,
-          },
-        });
+        await sendToSessionChat(entity.context, model);
         return null;
       case "task":
-        await sendTaskChatMessage(ctx, entity.task, {
-          message,
-          userId: ctx.userId,
-          model,
-          ...storedTraits(model, entity.task),
-          attachmentStorageIds,
-        });
+      case "project": {
+        // A task's or project's first send creates its session chat; later
+        // sends resolve as that session chat directly (`resolveMobileChat`).
+        const context = await ensureOwnerChat(ctx, entity);
+        await sendToSessionChat(
+          context,
+          normalizeAIModel(context.chat.lastModel),
+        );
         return null;
-      case "project":
-        await sendProjectChatMessage(ctx, entity.project, {
-          message,
-          userId: ctx.userId,
-          model,
-          ...storedTraits(model, entity.project),
-          attachmentStorageIds,
-        });
-        return null;
+      }
     }
   },
 });
@@ -139,10 +141,9 @@ const traitArgs = {
 /**
  * The composer model picker: sets a chat's sticky model and traits, which
  * `sendMessage` then uses. Shares the writes of the web picker's mutations
- * (`sessionChats.setModel` / `setTraits`, `projects.setChatModel` /
- * `setTraits`), so a pick reconciles the sticky account as on the web. Session and project
- * chats only: for a quick task the phone calls the web task chat's own
- * `agentTasks.update` and `agentTasks.setTraits`.
+ * (`sessionChats.setModel` / `setTraits`), so a pick reconciles the sticky
+ * account as on the web. A task's or project's pick lands on its session
+ * chat, created on first need.
  */
 export const setChatModel = authMutation({
   args: { target: v.string(), model: v.optional(aiModelValidator), ...traitArgs },
@@ -156,12 +157,14 @@ export const setChatModel = authMutation({
         if (model !== undefined) await setSessionChatModel(ctx, entity.context, model);
         await setSessionChatTraits(ctx, entity.context.chat._id, traits);
         return null;
-      case "project":
-        if (model !== undefined) await setProjectChatModel(ctx, ctx.userId, entity.project, model);
-        await setProjectTraits(ctx, entity.project._id, traits);
-        return null;
       case "task":
-        throw new Error("Set a quick task's model with agentTasks.update");
+      case "project": {
+        // The pick lands on the owner's session chat, created on first need.
+        const context = await ensureOwnerChat(ctx, entity);
+        if (model !== undefined) await setSessionChatModel(ctx, context, model);
+        await setSessionChatTraits(ctx, context.chat._id, traits);
+        return null;
+      }
     }
   },
 });
@@ -173,25 +176,34 @@ export const stopTurn = authMutation({
   handler: async (ctx, args) => {
     const { entity } = await resolveWritableChat(ctx, args.target);
     switch (entity.kind) {
-      case "session":
+      case "session": {
+        // A quick task's run owns its chat while it runs (the web Stop calls
+        // `taskWorkflow.cancelExecution` for it).
+        const ownerTaskId = sessionOwnerTaskId(entity.context.session);
+        const task = ownerTaskId ? await ctx.db.get(ownerTaskId) : null;
+        if (
+          task &&
+          isTaskRunning(task) &&
+          !(await hasOpenChatTurn(ctx.db, entity.context.chat._id))
+        ) {
+          await cancelTaskRun(ctx, task);
+          return null;
+        }
         await cancelChatExecution(ctx, entity.context);
         return null;
-      case "task": {
-        const { task } = entity;
-        // A quick task's first run is an agent run, not a chat turn: the web
-        // Stop calls `taskWorkflow.cancelExecution` for it.
-        const isFirstRun =
-          task.projectId === undefined &&
-          isTaskRunning(task) &&
-          task.activeChatWorkflowId === undefined &&
-          task.pendingTurn === undefined;
-        if (isFirstRun) await cancelTaskRun(ctx, task);
-        else await cancelTaskChatExecution(ctx, task);
+      }
+      case "task":
+      case "project": {
+        // No session chat yet: only a quick task's run can be running (the
+        // web Stop calls `taskWorkflow.cancelExecution` for it).
+        if (entity.kind === "task" && isTaskRunning(entity.task)) {
+          await cancelTaskRun(ctx, entity.task);
+          return null;
+        }
+        const found = await findOwnerChat(ctx.db, entity);
+        if (found) await cancelChatExecution(ctx, found);
         return null;
       }
-      case "project":
-        await cancelProjectChatExecution(ctx, entity.project);
-        return null;
     }
   },
 });
@@ -317,6 +329,7 @@ export const archiveSession = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await getSessionWithAccess(ctx.db, args.sessionId, ctx.userId);
+    assertStandaloneSession(session, "be archived on its own");
     if (session.sandboxId) await requestSessionSandboxStop(ctx, session._id);
     // Re-read: the stop moves the status, and the archive patches from this doc.
     await archiveSessionDoc(ctx, await getSessionWithAccess(ctx.db, args.sessionId, ctx.userId));

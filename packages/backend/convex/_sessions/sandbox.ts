@@ -3,6 +3,7 @@ import { internal } from "../_generated/api";
 import {
   internalAction,
   internalMutation,
+  type DatabaseReader,
   type MutationCtx,
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -30,6 +31,7 @@ import {
 } from "../_sandbox/stopRecovery";
 import {
   stopAlertText,
+  stopPostsDivider,
   stopReasonValidator,
   type StopReason,
 } from "../_sandbox/stopReason";
@@ -46,6 +48,15 @@ import {
 import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
 import { buildSessionBranchName } from "../_git/branchNames";
 import { errorMessage } from "@vvedantb/server";
+import { sessionOwnerProjectId, sessionOwnerTaskId } from "./owner";
+import {
+  isProjectPreviewAllowed,
+  projectPreviewNotAllowedError,
+} from "../_projects/previewGate";
+import {
+  isPreviewSandboxAllowed,
+  previewSandboxNotAllowedError,
+} from "../_agentTasks/previewGate";
 
 /** Longest `sandboxError` we persist — it is read as one line of chat header copy. */
 const SANDBOX_ERROR_MAX_LENGTH = 200;
@@ -82,19 +93,52 @@ export const startSandbox = authMutation({
       args.sessionId,
       ctx.userId,
     );
+    const blocked = await previewBlockedError(ctx.db, session);
+    if (blocked) throw blocked;
     await requestSessionSandboxStart(ctx, session);
     return null;
   },
 });
 
 /**
- * Shared start path for the user Start button and the fork's source restart.
- * Marks the session `"starting"` then schedules resume or create.
+ * Why an owned session may not boot a sandbox yet, or null. The same gates
+ * the owner's own Start had: a todo task that never ran has no branch to
+ * preview (its first run boots the sandbox); a project previews only from
+ * in_progress to code_review. A task with a VM already may resume it.
+ */
+async function previewBlockedError(
+  db: DatabaseReader,
+  session: Doc<"sessions">,
+): Promise<Error | null> {
+  const projectId = sessionOwnerProjectId(session);
+  const project = projectId ? await db.get(projectId) : null;
+  if (project) {
+    return isProjectPreviewAllowed(project)
+      ? null
+      : projectPreviewNotAllowedError(project);
+  }
+  if (session.sandboxId !== undefined) return null;
+  const taskId = sessionOwnerTaskId(session);
+  const task = taskId ? await db.get(taskId) : null;
+  if (!task || (await isPreviewSandboxAllowed(db, task))) return null;
+  return previewSandboxNotAllowedError(task);
+}
+
+/**
+ * Shared start path for the user Start button, the chat queue's wake and the
+ * fork's source restart. Marks the session `"starting"` then schedules resume
+ * or create.
  */
 export async function requestSessionSandboxStart(
   ctx: MutationCtx,
   session: Doc<"sessions">,
 ): Promise<void> {
+  if (await previewBlockedError(ctx.db, session)) {
+    console.log(
+      `[sessions] startSandbox skipped sessionId=${session._id}: its owner cannot preview yet`,
+    );
+    return;
+  }
   if (!canRequestSandboxStart(session.status)) {
     console.log(
       `[sessions] startSandbox skipped sessionId=${session._id} status=${session.status}`,
@@ -136,11 +180,7 @@ export async function requestSessionSandboxStart(
     hasLinkedRepos: (session.linkedRepoCount ?? 0) > 0,
     startAttempt,
   };
-  await scheduleStuckStartExpiry(
-    ctx,
-    { kind: "session", id: session._id },
-    startAttempt,
-  );
+  await scheduleStuckStartExpiry(ctx, session._id, startAttempt);
   // Vercel: schedule the start action directly. Workflow step scheduling was
   // measured at ~6s before the first action ran.
   // Multi-repo sessions cannot take that shortcut: `startSessionSandbox`
@@ -221,6 +261,81 @@ export const forcePushBranch = authMutation({
       ...(args.sessionRepoId !== undefined
         ? { sessionRepoId: args.sessionRepoId }
         : {}),
+    });
+    return null;
+  },
+});
+
+/** The running sandbox of a session the caller can reach, or a thrown reason. */
+async function requireActiveSandbox(
+  ctx: MutationCtx & { userId: Id<"users"> },
+  sessionId: Id<"sessions">,
+  action: string,
+): Promise<{ session: Doc<"sessions">; sandboxId: string }> {
+  const session = await getSessionWithAccess(ctx.db, sessionId, ctx.userId);
+  if (session.status !== "active" || !session.sandboxId) {
+    throw new Error(`Start the sandbox before ${action}`);
+  }
+  return { session, sandboxId: session.sandboxId };
+}
+
+/**
+ * Re-runs the app dev server in the session's running sandbox (repo App
+ * settings, else package.json detection) and stores the resolved port and
+ * command. The quick task panel's "Run dev server".
+ */
+export const runDevServer = authMutation({
+  args: { sessionId: v.id("sessions") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const { session, sandboxId } = await requireActiveSandbox(
+      ctx,
+      args.sessionId,
+      "running the dev server",
+    );
+    await ctx.scheduler.runAfter(0, internal.sandbox.runDevServerInSandbox, {
+      owner: { kind: "session", sessionId: session._id },
+      sandboxId,
+      repoId: session.repoId,
+    });
+    return null;
+  },
+});
+
+/** Records the dev server a manual rerun resolved (`runDevServerInSandbox`). */
+export const patchSessionDevServer = internalMutation({
+  args: {
+    sessionId: v.id("sessions"),
+    devPort: v.number(),
+    devCommand: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.sessionId, {
+      devPort: args.devPort,
+      devCommand: args.devCommand,
+    });
+    return null;
+  },
+});
+
+/**
+ * Re-launches the repo's background commands (long-running daemons such as
+ * `npx convex dev`) in the session's running sandbox, for a daemon that died
+ * while the sandbox kept running.
+ */
+export const runBackgroundCommands = authMutation({
+  args: { sessionId: v.id("sessions") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const { session, sandboxId } = await requireActiveSandbox(
+      ctx,
+      args.sessionId,
+      "running background commands",
+    );
+    await ctx.scheduler.runAfter(0, internal.sandbox.runBackgroundCommands, {
+      sandboxId,
+      repoId: session.repoId,
     });
     return null;
   },
@@ -340,6 +455,191 @@ export const requestStopSandbox = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await requestSessionSandboxStop(ctx, args.sessionId);
+    return null;
+  },
+});
+
+/*
+ * A quick task's run on its session's sandbox follows the session lifecycle
+ * like any other start (`_sandbox/transitions.ts`), so the row never reads
+ * `closed` while the run's VM is up:
+ *
+ *   closed ──claimSandboxForTaskRun──▶ starting ──attachTaskRunSandbox──▶ active
+ *      ▲                                  │ prepare failed: sandboxError
+ *      └──── finishTaskRunSandbox (requestSessionSandboxStop) ◀── run ends ──┘
+ *
+ * `active` at claim time (the reviewer has it open) is reused as is and stays
+ * `active` after the run, as `keepTaskSandboxActiveAfterRun` did for the task
+ * sandbox; idle pause then stops it through the normal stop path. A row mid
+ * start or stop is not claimed: the run then works on a VM of its own, which
+ * no row records and which it stops itself.
+ */
+
+const taskRunClaimValidator = v.object({
+  /** The VM to resume, when the session has one. */
+  sandboxId: v.optional(v.string()),
+  /** The start attempt this claim owns (fences its attach and failure). */
+  attempt: v.number(),
+  /** The session was already `active`: the run leaves it running. */
+  wasActive: v.boolean(),
+});
+
+/** Claims the session's sandbox for a task run: `closed` → `starting`. */
+export const claimSandboxForTaskRun = internalMutation({
+  args: {
+    sessionId: v.id("sessions"),
+    /** A task run's claim. */
+    runId: v.optional(v.id("agentRuns")),
+    /** A project interview's claim (`projects.interviewSandboxClaim`). */
+    projectId: v.optional(v.id("projects")),
+  },
+  returns: v.union(taskRunClaimValidator, v.null()),
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (!session) return null;
+    if (session.status === "active") {
+      return {
+        sandboxId: session.sandboxId,
+        attempt: session.sandboxStartAttempt ?? 0,
+        wasActive: true,
+      };
+    }
+    if (session.status !== "closed") return null;
+    const attempt = nextSandboxStartAttempt(session.sandboxStartAttempt);
+    await ctx.db.patch(args.sessionId, {
+      status: "starting",
+      sandboxStartAttempt: attempt,
+      sandboxError: undefined,
+      updatedAt: Date.now(),
+    });
+    // The claimer records its attempt, so a cancel before the attach fails
+    // exactly this start (`abandonTaskRunSandbox`).
+    if (args.runId !== undefined) {
+      await ctx.db.patch(args.runId, { sessionStartAttempt: attempt });
+    }
+    if (args.projectId !== undefined) {
+      await ctx.db.patch(args.projectId, {
+        interviewSandboxClaim: { sessionStartAttempt: attempt },
+      });
+    }
+    await scheduleStuckStartExpiry(ctx, args.sessionId, attempt);
+    return { sandboxId: session.sandboxId, attempt, wasActive: false };
+  },
+});
+
+/**
+ * The run's VM is up: `starting` → `active` with that VM, fenced by the
+ * claim's attempt. A stop or newer start since the claim wins; the VM then
+ * stays the run's own. Returns whether the session took the VM.
+ */
+export const attachTaskRunSandbox = internalMutation({
+  args: {
+    sessionId: v.id("sessions"),
+    sandboxId: v.string(),
+    attempt: v.number(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const session = await ctx.db.get(args.sessionId);
+    if (
+      !session ||
+      !isCurrentSandboxStartAttempt(session.sandboxStartAttempt, args.attempt) ||
+      (session.status !== "starting" && session.status !== "active")
+    ) {
+      return false;
+    }
+    await ctx.db.patch(args.sessionId, {
+      sandboxId: args.sandboxId,
+      status: "active",
+      sandboxError: undefined,
+      updatedAt: Date.now(),
+    });
+    return true;
+  },
+});
+
+/**
+ * A quick task's run (finished or cancelled) is done with `sandboxId`. A VM
+ * the session took stops through the session stop path unless `keepActive`
+ * (the reviewer had it open), silently (no divider, like the task sandbox it
+ * replaces). A VM the session never took is the run's alone and stops
+ * directly.
+ */
+export async function finishTaskRunSandbox(
+  ctx: MutationCtx,
+  sessionId: Id<"sessions">,
+  sandboxId: string,
+  options: { keepActive: boolean },
+): Promise<void> {
+  const session = await ctx.db.get(sessionId);
+  if (!session) return;
+  if (session.sandboxId !== sandboxId) {
+    await ctx.scheduler.runAfter(0, internal.sandbox.stopSandbox, {
+      sandboxId,
+      repoId: session.repoId,
+    });
+    return;
+  }
+  if (options.keepActive || session.status !== "active") return;
+  await requestSessionSandboxStop(ctx, sessionId, {
+    stopReason: { kind: "task" },
+  });
+}
+
+/**
+ * A task run (or a project interview) was cancelled. Before its attach, the
+ * start it claimed fails through the normal start-failure transition (fenced
+ * by its recorded attempt, `shouldApplySandboxStartFailure`) and any VM it
+ * already prepared stops; after it, the VM finishes like at a run's end.
+ */
+export async function abandonTaskRunSandbox(
+  ctx: MutationCtx,
+  sessionId: Id<"sessions">,
+  run: { sandboxId?: string; sessionStartAttempt?: number },
+  /** A project's VM stays up after the attach (its chat and builds reuse it). */
+  options: { keepActive: boolean } = { keepActive: false },
+): Promise<void> {
+  const session = await ctx.db.get(sessionId);
+  if (!session) return;
+  const claimPending =
+    run.sessionStartAttempt !== undefined &&
+    shouldApplySandboxStartFailure(session.status) &&
+    isCurrentSandboxStartAttempt(
+      session.sandboxStartAttempt,
+      run.sessionStartAttempt,
+    );
+  if (!claimPending) {
+    if (run.sandboxId) {
+      await finishTaskRunSandbox(ctx, sessionId, run.sandboxId, {
+        keepActive: options.keepActive,
+      });
+    }
+    return;
+  }
+  await ctx.runMutation(internal.sessions.sandboxError, {
+    sessionId,
+    error: "The run was cancelled before its sandbox was ready.",
+    startAttempt: run.sessionStartAttempt,
+  });
+  if (run.sandboxId) {
+    await ctx.scheduler.runAfter(0, internal.sandbox.stopSandbox, {
+      sandboxId: run.sandboxId,
+      repoId: session.repoId,
+    });
+  }
+}
+
+export const finishTaskRunSandboxMutation = internalMutation({
+  args: {
+    sessionId: v.id("sessions"),
+    sandboxId: v.string(),
+    keepActive: v.boolean(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await finishTaskRunSandbox(ctx, args.sessionId, args.sandboxId, {
+      keepActive: args.keepActive,
+    });
     return null;
   },
 });
@@ -468,13 +768,15 @@ export const markSandboxClosed = internalMutation({
       });
       return null;
     }
-    await ctx.db.insert("messages", {
-      parentId: mainChat._id,
-      role: "assistant",
-      content: stopAlertText(args.stopReason),
-      timestamp: Date.now(),
-      isSystemAlert: true,
-    });
+    if (stopPostsDivider(args.stopReason)) {
+      await ctx.db.insert("messages", {
+        parentId: mainChat._id,
+        role: "assistant",
+        content: stopAlertText(args.stopReason),
+        timestamp: Date.now(),
+        isSystemAlert: true,
+      });
+    }
     await markAllRunningExited(ctx.db, args.sessionId);
     await ctx.db.patch(args.sessionId, {
       status: "closed",

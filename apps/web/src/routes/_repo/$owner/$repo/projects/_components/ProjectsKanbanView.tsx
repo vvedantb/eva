@@ -138,7 +138,7 @@ function VirtualProjectColumn({
                   phase={phase}
                   planningMode={project.planningMode}
                   isBuilding={isProjectBuilding(project)}
-                  sandboxStatus={project.reviewProjectSandboxStatus}
+                  sandboxStatus={project.sandboxStatus}
                   hasUnread={project.hasUnread}
                   isAwaitingAnswer={project.isAwaitingAnswer}
                   href={

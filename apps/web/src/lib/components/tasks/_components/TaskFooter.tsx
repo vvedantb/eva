@@ -31,6 +31,7 @@ import {
   TaskFooterMoreMenu,
 } from "./TaskFooterMoreMenu";
 import { TaskHeaderMenu } from "./TaskHeaderMenu";
+import type { OwnedSandboxFields } from "@/lib/components/sandbox/useOwnedSession";
 
 type RunDoc = NonNullable<
   FunctionReturnType<typeof api.agentRuns.listByTask>
@@ -53,6 +54,8 @@ interface TaskFooterProps {
   isSandboxActive: boolean;
   isSandboxStarting: boolean;
   isSandboxStopping: boolean;
+  /** The task's sandbox checkout (a quick task's lives on its session). */
+  sandbox: Pick<OwnedSandboxFields, "sandboxGitSync" | "gitTarget">;
   isRunningDevServer: boolean;
   isRunningBackgroundCommands: boolean;
   canCreatePr: boolean;
@@ -160,6 +163,7 @@ export function TaskFooter({
   isSandboxActive,
   isSandboxStarting,
   isSandboxStopping,
+  sandbox,
   isRunningDevServer,
   isRunningBackgroundCommands,
   canCreatePr,
@@ -291,9 +295,9 @@ export function TaskFooter({
             />
           ) : null}
           <SandboxCommitPushButton
-            gitSync={task?.sandboxGitSync}
+            gitSync={sandbox.sandboxGitSync}
             isSandboxActive={isSandboxActive}
-            target={{ kind: "task", taskId }}
+            target={sandbox.gitTarget}
             size={buttonSize}
           />
           <AnimatePresence initial={false} mode="popLayout">

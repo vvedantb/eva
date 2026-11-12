@@ -11,6 +11,7 @@ import { findMainChat } from "../_sessionChats/helpers";
 import { createSession } from "./mutations";
 import { requestSessionSandboxStart } from "./sandbox";
 import { isSessionArchived } from "./archive";
+import { assertStandaloneSession } from "./owner";
 
 /** What `forkSession` needs to know about the source before touching its sandbox. */
 export const getForkSource = internalAuthQuery({
@@ -33,6 +34,7 @@ export const getForkSource = internalAuthQuery({
       args.sessionId,
       ctx.userId,
     );
+    assertStandaloneSession(session, "be forked");
     const repo = await ctx.db.get(session.repoId);
     if (!repo) throw new Error("Repository not found");
     return {
@@ -79,6 +81,7 @@ export const createForkedSession = internalAuthMutation({
       args.sourceSessionId,
       ctx.userId,
     );
+    assertStandaloneSession(source, "be forked");
     const linkedRepos = await ctx.db
       .query("sessionRepos")
       .withIndex("by_session", (q) => q.eq("sessionId", args.sourceSessionId))

@@ -11,7 +11,7 @@ export function SandboxAgentsPanel({
   agents,
   isReadOnly,
 }: {
-  entity: ChatEntityRef;
+  entity: ChatEntityRef | undefined;
   agents: SubagentView[];
   isReadOnly?: boolean;
 }) {

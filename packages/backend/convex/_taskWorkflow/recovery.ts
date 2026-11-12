@@ -11,6 +11,18 @@ const QUICK_TASK_AUTO_RETRY_BASE_DELAY_MS = 20_000;
 const QUICK_TASK_AUTO_RETRY_JITTER_MS = 20_000;
 
 /** Checks whether an error message indicates a sandbox infrastructure/network issue. */
+/**
+ * Why a quick task run did not start or claim its sandbox: the task's
+ * session chat holds it, or a start/stop is in flight. A user start is refused
+ * with it; a scheduled or already-running run retries in
+ * `TASK_CHAT_BUSY_RETRY_MS`.
+ */
+export const TASK_CHAT_BUSY_ERROR =
+  "This sandbox is busy: Eva is replying in its chat, a run or build holds it, or it is starting or stopping. Try the run again in a moment.";
+
+/** How long a run held back by a busy task chat waits before trying again. */
+export const TASK_CHAT_BUSY_RETRY_MS = 60_000;
+
 export function isDaytonaNetworkIssue(errorMsg: string): boolean {
   const message = errorMsg.toLowerCase();
   if (
@@ -134,24 +146,12 @@ export async function cleanUpStaleRun(
     exitReason: params.exitReason,
   });
 
-  const taskPatch: {
-    updatedAt: number;
-    status?: "todo";
-    sandboxId?: string;
-    reviewTaskSandboxStatus?: "closed";
-  } = {
+  // The run's sandbox is its session's (`attachTaskRunSandbox`), so the task
+  // row keeps no sandbox reference.
+  await ctx.db.patch(params.taskId, {
     updatedAt: Date.now(),
     ...(params.taskStatus === "in_progress" ? { status: "todo" as const } : {}),
-  };
-  if (!params.isProjectTask && params.sandboxId) {
-    // Keep the sandbox reference on the task (the run may have died before
-    // saveTaskSandboxId ran, which would otherwise orphan the stopped
-    // sandbox) and mark it closed so the reviewer UI shows a resumable,
-    // stopped sandbox.
-    taskPatch.sandboxId = params.sandboxId;
-    taskPatch.reviewTaskSandboxStatus = "closed";
-  }
-  await ctx.db.patch(params.taskId, taskPatch);
+  });
   // No runId fence: the workflow cancelled above is whichever the task tracks.
   await finishTaskRun(ctx, params.taskId, undefined);
 

@@ -87,8 +87,9 @@ export async function clearDeletedSessionSandbox(
 }
 
 /**
- * A repo's non-deleted sessions, live or archived. `newest` reads only that
- * many, newest first (archived: most recently archived).
+ * A repo's non-deleted standalone sessions, live or archived. Sessions a task
+ * or project owns never list here. `newest` reads only that many, newest
+ * first (archived: most recently archived).
  */
 export async function listRepoSessionsByArchive(
   db: DatabaseReader,
@@ -98,8 +99,11 @@ export async function listRepoSessionsByArchive(
 ): Promise<Doc<"sessions">[]> {
   const query = db
     .query("sessions")
-    .withIndex("by_repo_deleted_and_archived_at", (q) => {
-      const notDeleted = q.eq("repoId", repoId).eq("deletedAt", undefined);
+    .withIndex("by_repo_owner_deleted_and_archived_at", (q) => {
+      const notDeleted = q
+        .eq("repoId", repoId)
+        .eq("owner.kind", "standalone")
+        .eq("deletedAt", undefined);
       return archived
         ? notDeleted.gte("archive.archivedAt", 0)
         : notDeleted.eq("archive.archivedAt", undefined);

@@ -10,9 +10,6 @@ export const TASK_RUN_STREAM_PREFIX = "task-run-";
 export const AUTOMATION_RUN_STREAM_PREFIX = "automation-run-";
 export const PR_RECAP_STREAM_PREFIX = "pr-recap:";
 export const SESSION_SUMMARY_STREAM_PREFIX = "summary:";
-/** Chat turn rows of task and project chats (`_chat/surfaceAdapters.ts`). */
-export const TASK_CHAT_STREAM_PREFIX = "task-chat-";
-export const PROJECT_CHAT_STREAM_PREFIX = "project-chat-";
 
 export function automationRunStreamingEntityId(
   runId: Id<"automationRuns">,

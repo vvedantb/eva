@@ -9,6 +9,7 @@ import {
 } from "./orchestratorShared";
 import { requestRun } from "./_ave/threads";
 import { findMainChat } from "./_sessionChats/helpers";
+import { findOwnerChat } from "./_sessions/ownedSession";
 
 /** Everything the wake-up message needs about the child that just finished. */
 type ChildSummary = {
@@ -17,15 +18,12 @@ type ChildSummary = {
   title: string;
   /** Optional because a quick task can exist before a repo is attached. */
   repoId: Id<"githubRepos"> | undefined;
-  parentId: ChildParentId;
+  /** The chat to report from; undefined when the child never chatted. */
+  parentId: ChildParentId | undefined;
 };
 
 /** Where the child's messages hang off: a session's turns live on its chats. */
-type ChildParentId =
-  | Id<"sessionChats">
-  | Id<"sessions">
-  | Id<"agentTasks">
-  | Id<"projects">;
+type ChildParentId = Id<"sessionChats"> | Id<"sessions">;
 
 async function loadChildSummary(
   ctx: MutationCtx,
@@ -49,22 +47,27 @@ async function loadChildSummary(
   if (child.kind === "project") {
     const project = await ctx.db.get(child.projectId);
     if (!project || project.watchedByAve === undefined) return null;
+    // A project chats in its session's Main chat.
+    const owned = await findOwnerChat(ctx.db, { kind: "project", project });
     return {
       threadId: project.watchedByAve,
       kindLabel: "project",
       title: project.title,
       repoId: project.repoId,
-      parentId: project._id,
+      parentId: owned?.chat._id,
     };
   }
   const task = await ctx.db.get(child.taskId);
   if (!task || task.watchedByAve === undefined) return null;
+  // A task chats in its session chat (a project task's: its own chat in the
+  // project's session).
+  const owned = await findOwnerChat(ctx.db, { kind: "task", task });
   return {
     threadId: task.watchedByAve,
     kindLabel: "task",
     title: task.title,
     repoId: task.repoId,
-    parentId: task._id,
+    parentId: owned?.chat._id,
   };
 }
 
@@ -91,9 +94,12 @@ async function clearWatch(
  */
 async function resolveChildOutcome(
   ctx: MutationCtx,
-  parentId: ChildParentId,
+  parentId: ChildParentId | undefined,
   reportedStatus: string,
 ): Promise<{ status: string; tail: string | undefined }> {
+  if (parentId === undefined) {
+    return decideChildOutcome(undefined, reportedStatus);
+  }
   const recent = await ctx.db
     .query("messages")
     .withIndex("by_parent", (q) => q.eq("parentId", parentId))

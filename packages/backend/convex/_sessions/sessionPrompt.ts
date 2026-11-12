@@ -11,6 +11,9 @@ import { prependModelHandoffContext } from "../_shared/modelHandoff";
 import { listLiveSessionChats } from "../_sessionChats/helpers";
 import { buildSessionBranchName } from "../_git/branchNames";
 import { sandboxOwnerKey } from "@eva/shared";
+import { taskPrUrl } from "../_pullRequests/store";
+import { chatOwner } from "./owner";
+import { getProjectGeneratedSpec } from "../_projects/helpers";
 
 // --- Turn config ---
 
@@ -29,6 +32,80 @@ export const SESSION_TOOLS = "Read,Write,Edit,Bash,Glob,Grep,Skill";
  */
 const PARALLEL_CHATS_NOTE =
   "Other chats in this session may edit this checkout at the same time. Do not revert changes you did not make.";
+
+type TaskContextFields = Pick<
+  Doc<"agentTasks">,
+  "title" | "description" | "tags" | "taskNumber"
+> & { status: string };
+
+/**
+ * The owner-context line a quick task's chat turn leads with: which task this
+ * sandbox serves, its status, tags and description.
+ */
+export function withTaskContext(
+  task: TaskContextFields,
+  message: string,
+): string {
+  const numberLabel = task.taskNumber ? `#${task.taskNumber} ` : "";
+  const descriptionBlock = task.description
+    ? `\nTask description:\n${task.description}`
+    : "";
+  const tagsLine =
+    task.tags && task.tags.length > 0 ? `\nTags: ${task.tags.join(", ")}` : "";
+  return `In the sandbox for task ${numberLabel}"${task.title}" (status: ${task.status})${tagsLine}${descriptionBlock}
+
+${message}`;
+}
+
+/**
+ * The owner-context line a project's chat turn leads with: which project this
+ * sandbox serves and its description.
+ */
+export function withProjectContext(
+  project: Pick<Doc<"projects">, "title" | "description">,
+  message: string,
+): string {
+  const descriptionBlock = project.description
+    ? `\nProject description:\n${project.description}`
+    : "";
+  return `In the sandbox for project "${project.title}"${descriptionBlock}
+
+${message}`;
+}
+
+/**
+ * What the session's owner adds to a turn. A standalone session adds nothing.
+ * A task's session leads with the task; a project's leads with the project
+ * (its spec as the plan), and a project task's own chat in it with the task.
+ * The owner's PR is used: the owner owns it, the session has none.
+ */
+async function ownerPromptContext(
+  ctx: QueryCtx,
+  session: Doc<"sessions">,
+  chat: Doc<"sessionChats">,
+  message: string,
+): Promise<{ message: string; planContent?: string; prUrl?: string }> {
+  const owner = chatOwner(chat, session);
+  const taskId = owner.kind === "task" ? owner.taskId : undefined;
+  const task = taskId ? await ctx.db.get(taskId) : null;
+  if (task) {
+    return {
+      message: withTaskContext(task, message),
+      planContent: task.description,
+      prUrl: await taskPrUrl(ctx.db, task),
+    };
+  }
+  const projectId = owner.kind === "project" ? owner.projectId : undefined;
+  const project = projectId ? await ctx.db.get(projectId) : null;
+  if (project) {
+    return {
+      message: withProjectContext(project, message),
+      planContent: await getProjectGeneratedSpec(ctx.db, project._id),
+      prUrl: project.prUrl,
+    };
+  }
+  return { message, prUrl: session.prUrl };
+}
 
 /**
  * Builds the agent prompt for a chat turn (doc `@` mentions resolved, custom
@@ -75,12 +152,13 @@ export async function buildSessionPrompt(
   // Cursor resumes the saved SDK agent; the Eva transcript is not stuffed
   // in as a rotation handoff. Session plan.md / planContent is not injected —
   // that was the old Plan/Build mode contract.
-  const [readableRepos, linkedRepoRows] = await Promise.all([
+  const [readableRepos, linkedRepoRows, owner] = await Promise.all([
     listReadableSiblingRepos(ctx.db, session.userId, repo._id),
     ctx.db
       .query("sessionRepos")
       .withIndex("by_session", (q) => q.eq("sessionId", session._id))
       .collect(),
+    ownerPromptContext(ctx, session, chat, resolvedMessage),
   ]);
   const linkedRepos = linkedRepoRows.map((row) => ({
     owner: row.owner,
@@ -96,7 +174,8 @@ export async function buildSessionPrompt(
       baseBranch: resolveSessionBaseBranch(session, repo),
     },
     branchName,
-    message: resolvedMessage,
+    message: owner.message,
+    planContent: owner.planContent,
     rootDirectory,
     customInstructionsBlock,
     systemPrompt: repo.systemPrompt,
@@ -105,7 +184,7 @@ export async function buildSessionPrompt(
     linkedRepos,
     runtime: {
       ownerKey: sandboxOwnerKey({ kind: "session", sessionId: session._id }),
-      prUrl: session.prUrl,
+      prUrl: owner.prUrl,
       devCommand: session.devCommand ?? repo.devCommand,
       startupCommands: repo.startupCommands,
       backgroundCommands: repo.backgroundCommands,

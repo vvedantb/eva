@@ -190,9 +190,9 @@ export function ProjectDetailHeaderActions({
             only wake/sleep control now, the sandbox chat header carries
             usage alone. */}
         <SandboxCommitPushButton
-          gitSync={project.sandboxGitSync}
+          gitSync={sandbox.sandbox.sandboxGitSync}
           isSandboxActive={isSandboxActive}
-          target={{ kind: "project", projectId }}
+          target={sandbox.sandbox.gitTarget}
         />
         {isSandboxActive || canStartSandbox ? (
           <SandboxStartStopButton
