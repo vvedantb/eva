@@ -747,10 +747,9 @@ export const sessionFields = {
   ),
   /**
    * Who the session belongs to: the user (standalone), a quick task or a
-   * project. Owned by `_sessions/owner.ts` — read it through `sessionOwner`.
-   * Optional until `backfillSessionOwner` has run in prod.
+   * project. Owned by `_sessions/owner.ts`; set at insert, never changed.
    */
-  owner: v.optional(sessionOwnerValidator),
+  owner: sessionOwnerValidator,
   summary: v.optional(v.array(v.string())),
   createdBy: v.optional(v.id("users")),
   planContent: v.optional(v.string()),
@@ -1834,12 +1833,8 @@ export const docVersionDraftFields = {
 export const draftFields = {
   userId: v.id("users"),
   repoId: v.id("githubRepos"),
-  kind: v.union(
-    v.literal("taskComment"),
-    v.literal("taskChat"),
-    v.literal("projectChat"),
-    v.literal("sessionChat"),
-  ),
+  // Task and project chat drafts removed. schema-narrowing-ok: deleteLegacyOwnerChatDrafts
+  kind: v.union(v.literal("taskComment"), v.literal("sessionChat")),
   taskId: v.optional(v.id("agentTasks")),
   parentCommentId: v.optional(v.id("taskComments")),
   projectId: v.optional(v.id("projects")),

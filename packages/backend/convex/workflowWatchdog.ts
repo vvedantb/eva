@@ -294,24 +294,6 @@ export async function tearDownStaleProjectWorkflow(
   });
 }
 
-/**
- * In-flight safety only: the deleted task and project chat workflows
- * scheduled these backstops `TURN_BACKSTOP_MS` ahead. Chats run on sessions
- * now, so a job that still fires has nothing to tear down. Remove in 3b.
- */
-export const handleStaleProjectChat = internalMutation({
-  args: { projectId: v.id("projects"), workflowId: v.string() },
-  returns: v.null(),
-  handler: async () => null,
-});
-
-/** In-flight safety only; see `handleStaleProjectChat`. Remove in 3b. */
-export const handleStaleAgentTaskChat = internalMutation({
-  args: { taskId: v.id("agentTasks"), workflowId: v.string() },
-  returns: v.null(),
-  handler: async () => null,
-});
-
 /** Cancels a stale build workflow and clears the active build reference. */
 export const handleStaleBuild = internalMutation({
   args: {

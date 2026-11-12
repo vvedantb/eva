@@ -12,8 +12,7 @@ import type { DatabaseReader } from "../_generated/server";
  *
  * The id lives inside its kind, so "task session without a task" cannot be
  * written. The owner is set at insert and never changes: there is no
- * transition to guard. The field is optional only until `dataMigrations:backfillSessionOwner`
- * has run; read it through `sessionOwner`, which treats absent as standalone.
+ * transition to guard.
  */
 export const sessionOwnerValidator = v.union(
   v.object({ kind: v.literal("standalone") }),
@@ -37,7 +36,7 @@ type OwnerFields = Pick<Doc<"sessions">, "owner">;
 export const STANDALONE_SESSION_OWNER: SessionOwner = { kind: "standalone" };
 
 export function sessionOwner(session: OwnerFields): SessionOwner {
-  return session.owner ?? STANDALONE_SESSION_OWNER;
+  return session.owner;
 }
 
 export function isStandaloneSession(session: OwnerFields): boolean {
