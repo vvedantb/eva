@@ -208,10 +208,8 @@ export const updateStatus = authMutation({
       // has it open.
       // A quick task's sandbox lives on its session.
       const session = await findQuickTaskSession(ctx.db, task);
-      const sandboxId = session ? session.sandboxId : task.sandboxId;
-      const sandboxActive = session
-        ? session.status === "active"
-        : task.reviewTaskSandboxStatus === "active";
+      const sandboxId = session?.sandboxId;
+      const sandboxActive = session?.status === "active";
       if (enteringCodeReview && prUrl && repo && sandboxId) {
         await ctx.scheduler.runAfter(0, internal.github.generatePrDescription, {
           installationId: repo.installationId,

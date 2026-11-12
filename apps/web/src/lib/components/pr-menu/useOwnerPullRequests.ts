@@ -1,5 +1,5 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { api, type SandboxOwner } from "@eva/backend";
+import { api, type PrOwnerRef } from "@eva/backend";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import type { PrMenuPullRequest } from "./PrActionsSubmenus";
 
@@ -9,7 +9,7 @@ import type { PrMenuPullRequest } from "./PrActionsSubmenus";
  * on open, so a list of cards pays for this only on the card opened.
  */
 export function useOwnerPullRequests(
-  owner: SandboxOwner | undefined,
+  owner: PrOwnerRef | undefined,
 ): readonly PrMenuPullRequest[] {
   const simpleView = useSimpleView();
   const rows = useQuery(

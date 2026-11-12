@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { api, type SandboxOwner } from "@eva/backend";
+import { api, type PrOwnerRef } from "@eva/backend";
 import { ConfettiBurst } from "./ConfettiBurst";
 import { hasNewlyMergedPr } from "./prMergeCelebration";
 
@@ -11,7 +11,7 @@ import { hasNewlyMergedPr } from "./prMergeCelebration";
  * merges while the page is open. Merging is rare, so it gets the big moment;
  * a chat opened after the merge stays quiet.
  */
-export function PrMergeConfetti({ owner }: { owner: SandboxOwner }) {
+export function PrMergeConfetti({ owner }: { owner: PrOwnerRef }) {
   // Same subscription as the PR menu items, so the cache shares it.
   const prs = useQuery(api.pullRequests.listForOwner, { owner });
   const [seen, setSeen] = useState(prs);

@@ -266,7 +266,7 @@ export function useTaskSandboxControls({
   const flags = deriveSandboxFlags(task, sandbox, hasRuns);
   const sandboxStartupStreaming = useQuery(
     api.streaming.get,
-    flags.isSandboxStartingFromStatus
+    flags.isSandboxStartingFromStatus && sandbox.owner
       ? { entityId: sandboxStartupEntityId(sandbox.owner) }
       : "skip",
   );

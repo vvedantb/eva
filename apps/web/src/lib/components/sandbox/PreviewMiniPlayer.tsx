@@ -114,44 +114,14 @@ function useOwnerSandboxStale(entry: PreviewMiniPlayerEntry): boolean {
   const { owner } = entry;
   const fixture =
     entry.src.startsWith("blob:") || entry.src.startsWith("data:");
-  // A task or project keeps its sandbox on its session once it has one.
-  const owned = useQuery(
-    api.sessions.getOwned,
-    !fixture && owner.kind !== "session" ? { owner } : "skip",
-  );
-  const sessionId =
-    owner.kind === "session" ? owner.sessionId : owned?.sessionId;
   const session = useQuery(
     api.sessions.get,
-    !fixture && sessionId ? { id: sessionId } : "skip",
+    !fixture ? { id: owner.sessionId } : "skip",
   );
-  const task = useQuery(
-    api.agentTasks.get,
-    !fixture && owner.kind === "task" && owned === null
-      ? { id: owner.taskId }
-      : "skip",
-  );
-  const project = useQuery(
-    api.projects.get,
-    !fixture && owner.kind === "project" && owned === null
-      ? { id: owner.projectId }
-      : "skip",
-  );
-  const live =
-    owner.kind === "session" || owned
-      ? session && {
-          sandboxId: session.sandboxId,
-          active: session.status === "active",
-        }
-      : owner.kind === "task"
-        ? task && {
-            sandboxId: task.sandboxId,
-            active: task.reviewTaskSandboxStatus === "active",
-          }
-        : project && {
-            sandboxId: project.sandboxId,
-            active: project.reviewProjectSandboxStatus === "active",
-          };
+  const live = session && {
+    sandboxId: session.sandboxId,
+    active: session.status === "active",
+  };
   return (
     live === null ||
     (live !== undefined && (live.sandboxId !== entry.sandboxId || !live.active))

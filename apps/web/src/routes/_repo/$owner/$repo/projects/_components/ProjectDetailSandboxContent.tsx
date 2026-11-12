@@ -1,10 +1,14 @@
+import type { ReactNode } from "react";
 import { isProjectBuilding, type Id, type SandboxOwner } from "@eva/backend";
 import { IconTerminal2 } from "@tabler/icons-react";
 import { ProjectSandboxPanel } from "@/lib/components/projects/ProjectSandboxPanel";
 import { ProjectSandboxChatPanel } from "@/lib/components/projects/ProjectSandboxChatPanel";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { SandboxSurfaceProviders } from "@/lib/components/sandbox/SandboxSurfaceProviders";
-import { SandboxEmptyRailFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
+import {
+  SandboxEmptyRailFrame,
+  SandboxNotStartedRail,
+} from "@/lib/components/sandbox/SandboxPanelFrame";
 import {
   SandboxWorkspace,
   type TerminalPanelApi,
@@ -15,6 +19,11 @@ import type {
   ProjectDetailProject,
   ProjectSandboxState,
 } from "./projectDetailHelpers";
+
+interface SandboxPanelContext {
+  rightPanelCollapsed: boolean;
+  onToggleRightPanel: () => void;
+}
 
 interface ProjectDetailSandboxContentProps {
   projectId: Id<"projects">;
@@ -112,60 +121,77 @@ export function ProjectDetailSandboxContent({
       </SandboxEmptyRailFrame>
     );
 
+  const layout = (rightPanel: (ctx: SandboxPanelContext) => ReactNode) => (
+    <ResizablePanelLayout
+      storageKey="project-sandbox-panel"
+      leftDefaultSize="40%"
+      leftMinWidthPx={350}
+      rightMinWidthPx={300}
+      rightCollapsedSizePx={sandboxRailWidthPx}
+      defaultRightCollapsed={false}
+      expandRightSignal={expandRightSignal}
+      mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
+      leftPanel={() => (
+        <ProjectSandboxChatPanel
+          projectId={projectId}
+          projectSession={sandbox.projectSession}
+          isSandboxActive={isSandboxActive}
+          isSandboxToggling={isSandboxStarting || isSandboxStopping}
+          sandboxStartupActivity={sandboxStartupActivity}
+          onOpenFile={openFile}
+          onViewDiff={openDiffs}
+          onOpenAgentsTab={openAgentsTab}
+          onSandboxToggle={
+            canStartSandbox || isSandboxActive
+              ? (action) => {
+                  if (action === "start") void handleStartSandbox();
+                  else void handleStopSandbox();
+                }
+              : undefined
+          }
+        />
+      )}
+      rightPanel={rightPanel}
+    />
+  );
+
+  const { owner } = sandbox.sandbox;
   return (
     <SandboxSurfaceProviders
       onOpenFile={openFile}
       onOpenDiffsTab={() => openDiffs()}
     >
-      <SandboxWorkspace
-        owner={sandbox.sandbox.owner}
-        storageScope={`project:${projectId}`}
-        sandboxId={projectSandboxId}
-        isActive={isSandboxActive}
-        terminalPanes={sandbox.sandbox.terminalPanes}
-      >
-        {(panes, owner, terminalPanel) => (
-          <ResizablePanelLayout
-            storageKey="project-sandbox-panel"
-            leftDefaultSize="40%"
-            leftMinWidthPx={350}
-            rightMinWidthPx={300}
-            rightCollapsedSizePx={sandboxRailWidthPx}
-            defaultRightCollapsed={false}
-            expandRightSignal={expandRightSignal}
-            mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
-            leftPanel={() => (
-              <ProjectSandboxChatPanel
-                projectId={projectId}
-                projectSession={sandbox.projectSession}
-                isSandboxActive={isSandboxActive}
-                isSandboxToggling={isSandboxStarting || isSandboxStopping}
-                sandboxStartupActivity={sandboxStartupActivity}
-                onOpenFile={openFile}
-                onViewDiff={openDiffs}
-                onOpenAgentsTab={openAgentsTab}
-                onSandboxToggle={
-                  canStartSandbox || isSandboxActive
-                    ? (action) => {
-                        if (action === "start") void handleStartSandbox();
-                        else void handleStopSandbox();
-                      }
-                    : undefined
-                }
-              />
-            )}
-            rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) =>
+      {owner ? (
+        <SandboxWorkspace
+          owner={owner}
+          storageScope={`project:${projectId}`}
+          sandboxId={projectSandboxId}
+          isActive={isSandboxActive}
+          terminalPanes={sandbox.sandbox.terminalPanes}
+        >
+          {(panes, workspaceOwner, terminalPanel) =>
+            layout(({ rightPanelCollapsed, onToggleRightPanel }) =>
               projectSandboxPanel(
                 panes,
-                owner,
+                workspaceOwner,
                 terminalPanel,
                 rightPanelCollapsed,
                 onToggleRightPanel,
-              )
-            }
+              ),
+            )
+          }
+        </SandboxWorkspace>
+      ) : (
+        layout(({ rightPanelCollapsed, onToggleRightPanel }) => (
+          <SandboxNotStartedRail
+            collapsed={rightPanelCollapsed}
+            onToggle={onToggleRightPanel}
+            ownerLabel="project"
+            onStart={canStartSandbox ? handleStartSandbox : undefined}
+            isStarting={isSandboxStarting}
           />
-        )}
-      </SandboxWorkspace>
+        ))
+      )}
     </SandboxSurfaceProviders>
   );
 }

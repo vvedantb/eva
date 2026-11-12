@@ -8,14 +8,14 @@ import type { ModelAccount } from "@vvedantb/ui";
 import type { ChatBodyMessage } from "./chatBodyUtils";
 
 /**
- * Which chat a sandbox surface belongs to. Sessions, quick tasks and projects
- * each own a transcript and a sandbox, and every shared chat piece needs to
- * address the right one.
+ * Which chat a sandbox surface belongs to: one chat of a session. A quick
+ * task's or project's chat is a chat of its owned session.
  */
-export type ChatEntityRef =
-  | { kind: "session"; sessionId: Id<"sessions">; chatId: Id<"sessionChats"> }
-  | { kind: "task"; taskId: Id<"agentTasks"> }
-  | { kind: "project"; projectId: Id<"projects"> };
+export type ChatEntityRef = {
+  kind: "session";
+  sessionId: Id<"sessions">;
+  chatId: Id<"sessionChats">;
+};
 
 /**
  * What the usage-limit recovery card needs from a surface. `undefined` when
@@ -43,7 +43,8 @@ interface UsageLimitRecoveryInputs {
  * it when a shared piece actually needs more, not before.
  */
 export interface SandboxChatSurface {
-  entity: ChatEntityRef;
+  /** Undefined for a task's or project's chat before its session exists. */
+  entity: ChatEntityRef | undefined;
   repoId: Id<"githubRepos">;
   /** The chat's current model. */
   model: AIModel;
@@ -91,7 +92,7 @@ export function buildSandboxChatSurface({
   isSandboxActive,
   sendCommand,
 }: {
-  entity: ChatEntityRef;
+  entity: ChatEntityRef | undefined;
   repoId: Id<"githubRepos">;
   model: AIModel;
   isExecuting: boolean;

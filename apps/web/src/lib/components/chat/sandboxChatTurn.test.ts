@@ -127,18 +127,11 @@ describe("sendSandboxTurn", () => {
 });
 
 describe("sandboxChatKeys", () => {
-  test("task and project chats address their own rows", () => {
-    const taskId = z.custom<Id<"agentTasks">>().parse("task_1");
-    const projectId = z.custom<Id<"projects">>().parse("project_1");
-    expect(sandboxChatKeys({ kind: "task", taskId })).toEqual({
-      parentId: taskId,
-      streamingEntityId: "task-chat-task_1",
-      draftTarget: { kind: "taskChat", taskId },
-    });
-    expect(sandboxChatKeys({ kind: "project", projectId })).toEqual({
-      parentId: projectId,
-      streamingEntityId: "project-chat-project_1",
-      draftTarget: { kind: "projectChat", projectId },
+  test("a chat not created yet has nothing to read or persist", () => {
+    expect(sandboxChatKeys(undefined)).toEqual({
+      parentId: undefined,
+      streamingEntityId: undefined,
+      draftTarget: undefined,
     });
   });
 

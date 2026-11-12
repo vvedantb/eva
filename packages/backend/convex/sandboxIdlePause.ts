@@ -24,6 +24,7 @@ import { listLiveSessionChats } from "./_sessionChats/helpers";
 import { requestSessionSandboxStop } from "./_sessions/sandbox";
 import { usageLimitHoldFor } from "./_queues/helpers";
 import { ownerHoldsSession } from "./_sessions/ownerState";
+import { sessionOwner } from "./_sessions/owner";
 import {
   getSandboxActivity,
   sandboxActivityRefArgs,
@@ -159,15 +160,18 @@ export const listAwakeSandboxes = authQuery({
           entities.map(async (entity) => {
             const candidate = await inspectEntity(ctx, entity);
             if (!candidate) return null;
+            // A task's or project's session shows as its owner: that is the
+            // page the user opens (the session itself is hidden).
+            const shown = await shownSandboxOwner(ctx, entity.doc);
             return {
-              kind: entity.kind,
+              kind: shown.kind,
               entityId: String(entity.doc._id),
-              title: entity.doc.title,
+              title: shown.title,
               repoLabel: repoDisplayLabel(repo),
               href:
-                entity.doc.numId === undefined
+                shown.numId === undefined
                   ? undefined
-                  : entityHref(entity.kind, repo, entity.doc.numId),
+                  : entityHref(shown.kind, repo, shown.numId),
               busy: candidate.busy,
               viewerName: await displayName(ctx, candidate.presentUserId),
               lastUserActivityAt: candidate.lastUserActivityAt,
@@ -212,6 +216,27 @@ async function awakeEntitiesInRepo(
   return filterActiveEntities(sessions)
     .filter((doc) => doc.sandboxId)
     .map((doc) => ({ kind: "session" as const, doc }));
+}
+
+/** What the status page shows for a session: its owner when it has one. */
+async function shownSandboxOwner(
+  ctx: QueryCtx,
+  session: Doc<"sessions">,
+): Promise<{
+  kind: "session" | "task" | "project";
+  title: string;
+  numId: number | undefined;
+}> {
+  const owner = sessionOwner(session);
+  const doc =
+    owner.kind === "task"
+      ? await ctx.db.get(owner.taskId)
+      : owner.kind === "project"
+        ? await ctx.db.get(owner.projectId)
+        : null;
+  return doc && owner.kind !== "standalone"
+    ? { kind: owner.kind, title: doc.title, numId: doc.numId }
+    : { kind: "session", title: session.title, numId: session.numId };
 }
 
 async function inspectEntity(

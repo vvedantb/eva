@@ -61,8 +61,7 @@ export function useProjectChatBinding(
   );
   // Before the session exists, the same seed `ensureOwned` gives its chat.
   const seedModel = normalizeAIModel(
-    project?.lastChatModel ??
-      project?.model ??
+    project?.model ??
       repo.defaultModel ??
       DEFAULT_AI_MODEL,
   );
@@ -85,8 +84,7 @@ export function useProjectChatBinding(
   return useOwnedChatBinding({
     ownedSession: projectSession,
     seedModel,
-    // No session yet means no transcript yet: the project keys read empty.
-    fallbackEntity: { kind: "project", projectId },
+    ownerLabel: "project",
     title: project?.title,
     common: { accounts, pickerAccounts, resolveAccountId, isOwner },
   });

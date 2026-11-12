@@ -13,7 +13,6 @@ import { useChatModel } from "@/lib/hooks/useChatModel";
 import { useSessionTurnPorts } from "@/routes/_repo/$owner/$repo/sessions/_components/useSessionTurnPorts";
 import type { OwnedSession } from "@/lib/components/sandbox/useOwnedSession";
 import type { SandboxChatBinding } from "./sandboxChatBinding";
-import type { ChatEntityRef } from "./sandboxChatSurface";
 
 /** The owner-specific parts of an owned session's chat binding. */
 export type OwnedChatBindingCommon = Pick<
@@ -25,22 +24,22 @@ export type OwnedChatBindingCommon = Pick<
  * The sandbox chat of a task or project on its owned session
  * (`useOwnedSession`): the session chat's own sticky model, traits and
  * account drive the composer, and sends go through the session chat ports.
- * Before the session exists the owner's own keys read an empty transcript
- * and `seedModel` (the seed `ensureOwned` gives the chat) shows in the
- * picker. `cancel` may route a turn the chat does not own (a quick task's
+ * Before the session exists there is no chat to read (`entity` is
+ * undefined) and `seedModel` (the seed `ensureOwned` gives the chat) shows in
+ * the picker. `cancel` may route a turn the chat does not own (a quick task's
  * first run) elsewhere.
  */
 export function useOwnedChatBinding({
   ownedSession,
   seedModel,
-  fallbackEntity,
+  ownerLabel,
   title,
   common,
   cancelOther,
 }: {
   ownedSession: OwnedSession;
   seedModel: AIModel;
-  fallbackEntity: ChatEntityRef;
+  ownerLabel: SandboxChatBinding["ownerLabel"];
   /** The owner's title; undefined while it loads. */
   title: string | undefined;
   common: OwnedChatBindingCommon;
@@ -58,7 +57,8 @@ export function useOwnedChatBinding({
     ...common,
     entity: owned
       ? { kind: "session", sessionId: owned.sessionId, chatId: owned.chatId }
-      : fallbackEntity,
+      : undefined,
+    ownerLabel,
     doc: title === undefined
       ? undefined
       : {

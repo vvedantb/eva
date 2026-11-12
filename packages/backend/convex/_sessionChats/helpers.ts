@@ -265,42 +265,26 @@ type LegacyChatRowTable =
   | "queuedMessages"
   | "chatUiPanels"
   | "chatHtmlRenders"
-  | "envVarRequests"
-  | "feedback"
-  | "turns";
+  | "envVarRequests";
 
 /**
- * Who held a transcript before chats did: a session predating session chats,
- * or a task or project predating its owned session.
- */
-export type LegacyTranscriptOwner =
-  | Id<"sessions">
-  | Id<"agentTasks">
-  | Id<"projects">;
-
-/**
- * Repoints one bounded page of a legacy chat owner's rows onto a chat: the
+ * Repoints one bounded page of a session's pre-chat rows onto a chat: the
  * transcript, the queue and the inline cards (UI panels, HTML renders, env
- * var requests). A task or project also moves its thumbs (`feedback`) and its
- * closed chat turns, which become the chat's turns in its session. Once those
- * are empty a session links the chat owner's pre-chat composer draft. Returns
- * true once no legacy row is left. Moved rows leave the `parentId = from`
- * range, so every call starts from the front and a rerun after a failure
- * resumes where the last commit stopped. A session's `chatReads` stay on the
- * session id: the sidebar unread dot reads them there.
+ * var requests). Once those are empty it links the chat owner's pre-chat
+ * composer draft. Returns true once no legacy row is left. Moved rows leave
+ * the `parentId = from` range, so every call starts from the front and a
+ * rerun after a failure resumes where the last commit stopped. A session's
+ * `chatReads` stay on the session id: the sidebar unread dot reads them there.
  */
 export async function moveLegacyTranscriptPage(
   ctx: MutationCtx,
-  from: LegacyTranscriptOwner,
+  from: Id<"sessions">,
   chatId: Id<"sessionChats">,
 ): Promise<boolean> {
   const moveParent = async (row: { _id: Id<LegacyChatRowTable> }) => {
     await ctx.db.patch(row._id, { parentId: chatId });
   };
   const chat = await ctx.db.get(chatId);
-  const ownerId =
-    ctx.db.normalizeId("agentTasks", from) ??
-    ctx.db.normalizeId("projects", from);
   // Each table reads into what is left of the one byte budget.
   const tables = [
     (left: number) =>
@@ -343,39 +327,6 @@ export async function moveLegacyTranscriptPage(
         left,
         moveParent,
       ),
-    ...(ownerId && chat
-      ? [
-          (left: number) =>
-            repointPage(
-              ctx.db
-                .query("feedback")
-                .withIndex("by_parent", (q) => q.eq("parentId", ownerId)),
-              left,
-              moveParent,
-            ),
-          // Closed chat turns only: the migration skips an owner whose turn
-          // is still open, and a run's turns are keyed on the run. Lane turns
-          // (a project's interview) stay on the project.
-          (left: number) =>
-            repointPage(
-              ctx.db
-                .query("turns")
-                .withIndex("by_entity_open", (q) =>
-                  q
-                    .eq("entityId", ownerId)
-                    .eq("lane", undefined)
-                    .eq("open", false),
-                ),
-              left,
-              async (turn) => {
-                await ctx.db.patch(turn._id, {
-                  entityId: chatId,
-                  sessionId: chat.sessionId,
-                });
-              },
-            ),
-        ]
-      : []),
   ];
   let budget = LEGACY_TRANSCRIPT_PAGE_BYTES;
   for (const repoint of tables) {
@@ -384,8 +335,7 @@ export async function moveLegacyTranscriptPage(
     budget -= page.bytes;
   }
 
-  const sessionId = ctx.db.normalizeId("sessions", from);
-  if (!sessionId) return true;
+  const sessionId = from;
   // `drafts` is indexed by user first; other users' pre-chat drafts are moved
   // by `_migrations/moveLegacyChatRows:moveLegacySessionDrafts`.
   if (!chat) return true;

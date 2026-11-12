@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@eva/ui";
+import { Button } from "@vvedantb/ui";
 import { SandboxPanelToggleButton } from "./SandboxPanelToggleButton";
 
 /**
@@ -55,5 +56,40 @@ export function SandboxEmptyRailFrame({
         {children}
       </div>
     </div>
+  );
+}
+
+/**
+ * The sandbox pane of a task or project whose session does not exist yet:
+ * there is no sandbox, so no panes, preview or terminals. Start creates the
+ * session and boots it.
+ */
+export function SandboxNotStartedRail({
+  collapsed,
+  onToggle,
+  ownerLabel,
+  onStart,
+  isStarting,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+  ownerLabel: "task" | "project";
+  /** Undefined when this viewer or phase cannot start it. */
+  onStart: (() => void) | undefined;
+  isStarting: boolean;
+}) {
+  return (
+    <SandboxEmptyRailFrame collapsed={collapsed} onToggle={onToggle}>
+      <div className="flex flex-col items-center gap-3 text-center">
+        <p className="text-sm text-muted-foreground">
+          This {ownerLabel} has no sandbox yet.
+        </p>
+        {onStart ? (
+          <Button size="sm" onClick={onStart} disabled={isStarting}>
+            {isStarting ? "Starting…" : "Start sandbox"}
+          </Button>
+        ) : null}
+      </div>
+    </SandboxEmptyRailFrame>
   );
 }
