@@ -51,10 +51,7 @@ export const listForRepo = authQuery({
     // Surfaces are independent reads; a gone surface yields null (skipped).
     const items = await Promise.all(
       rows.map(async (draft): Promise<DraftListItem | null> => {
-        if (
-          (draft.kind === "taskComment" || draft.kind === "taskChat") &&
-          draft.taskId
-        ) {
+        if (draft.kind === "taskComment" && draft.taskId) {
           const task = await ctx.db.get(draft.taskId);
           if (!task) return null;
           return {
@@ -63,14 +60,10 @@ export const listForRepo = authQuery({
             taskProjectId: task.projectId,
           };
         }
-        if (draft.kind === "projectChat" && draft.projectId) {
-          const project = await ctx.db.get(draft.projectId);
-          if (!project) return null;
-          return {
-            ...draft,
-            contextTitle: project.title || "Untitled",
-            taskProjectId: undefined,
-          };
+        // Old task and project chat drafts: their chats moved to sessions,
+        // and `clearLegacyOwnerChatFields` deletes the rows.
+        if (draft.kind === "taskChat" || draft.kind === "projectChat") {
+          return null;
         }
         if (draft.kind === "sessionChat" && draft.sessionId) {
           const session = await ctx.db.get(draft.sessionId);

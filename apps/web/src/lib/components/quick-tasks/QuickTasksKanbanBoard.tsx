@@ -188,7 +188,7 @@ export function QuickTasksKanbanBoard({
             }
             hasError={errorTaskIdSet.has(task._id)}
             deploymentStatus={deploymentStatusMap.get(task._id)}
-            sandboxStatus={task.reviewTaskSandboxStatus}
+            sandboxStatus={task.sandboxStatus}
             scheduledAt={taskScheduledAt(task)}
             tags={task.tags}
             createdByUser={users?.find((u) => u._id === task.createdBy)}
@@ -245,7 +245,7 @@ export function QuickTasksKanbanBoard({
             }
             hasError={errorTaskIdSet.has(task._id)}
             deploymentStatus={deploymentStatusMap.get(task._id)}
-            sandboxStatus={task.reviewTaskSandboxStatus}
+            sandboxStatus={task.sandboxStatus}
             scheduledAt={taskScheduledAt(task)}
             tags={task.tags}
             createdByUser={users?.find((u) => u._id === task.createdBy)}

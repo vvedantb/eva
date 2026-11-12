@@ -2001,14 +2001,6 @@ export const draftTarget = v.union(
     parentCommentId: v.optional(v.id("taskComments")),
   }),
   v.object({
-    kind: v.literal("taskChat"),
-    taskId: v.id("agentTasks"),
-  }),
-  v.object({
-    kind: v.literal("projectChat"),
-    projectId: v.id("projects"),
-  }),
-  v.object({
     kind: v.literal("sessionChat"),
     sessionId: v.id("sessions"),
     chatId: v.id("sessionChats"),

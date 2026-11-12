@@ -147,7 +147,7 @@ function DraftCard({ draft, repoId, onLongPress }: { draft: Draft; repoId: Id<"g
 /**
  * Where a draft was written, as the web card's `handleClick`, on the phone's
  * screens: a quick-task draft opens the new quick task with it loaded; a
- * session, project or task chat draft opens that chat. A task comment opens
+ * session chat draft opens that chat. A task comment opens
  * the task's chat: the phone has no task Activity page.
  */
 function useOpenDraft(repoId: Id<"githubRepos">) {
@@ -157,8 +157,8 @@ function useOpenDraft(repoId: Id<"githubRepos">) {
       router.push({ pathname: "/quick-task/new", params: { repoId, draftId: draft.row._id } });
       return;
     }
-    const { kind, taskId, projectId, sessionId } = draft.row;
-    const target = kind === "taskComment" || kind === "taskChat" ? taskId : kind === "projectChat" ? projectId : sessionId;
+    const { kind, taskId, sessionId } = draft.row;
+    const target = kind === "taskComment" ? taskId : sessionId;
     if (target) router.push({ pathname: "/chat/[target]", params: { target } });
   };
 }

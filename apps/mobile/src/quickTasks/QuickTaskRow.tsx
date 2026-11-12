@@ -70,7 +70,7 @@ export function QuickTaskRow({
   // because the web draws its border beam instead; the phone has no beam.
   const isInProgress = !hasError && status === "in_progress";
   const showWorking = !hasError && !isInProgress && task.isExecuting;
-  const sandbox = task.reviewTaskSandboxStatus ? SANDBOX_DOT[task.reviewTaskSandboxStatus] : undefined;
+  const sandbox = task.sandboxStatus ? SANDBOX_DOT[task.sandboxStatus] : undefined;
   const showSandbox = sandbox !== undefined && !simpleView;
   const showUnread = task.hasUnread && !task.isExecuting;
   const numLabel = formatEntityNumLabel({ numId: task.numId, projectNumId });
