@@ -144,7 +144,7 @@ export function ProjectRow({
           {project.isAwaitingAnswer ? (
             <AwaitingAnswerMark />
           ) : showSandbox ? (
-            <View className="size-2 rounded-full" style={{ backgroundColor: sandbox[scheme] ?? withAlpha(muted, 0.4) }} />
+            <View className="size-2 rounded-full" style={{ backgroundColor: sandbox.color ?? withAlpha(muted, 0.4) }} />
           ) : null}
           {project.hasUnread ? <View className="size-1.5 rounded-full" style={{ backgroundColor: theme.primary }} /> : null}
         </View>

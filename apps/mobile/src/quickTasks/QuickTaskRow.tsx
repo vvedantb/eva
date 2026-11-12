@@ -27,10 +27,10 @@ export const META_TEXT = { fontSize: 12, lineHeight: 16, letterSpacing: XS_TRACK
 
 /** The web sandbox dot: Awake emerald, waking or going to sleep amber, asleep muted. */
 export const SANDBOX_DOT = {
-  active: { light: "#10b981", dark: "#10b981", label: "Awake" },
-  starting: { light: "#fbbf24", dark: "#fbbf24", label: "Waking up" },
-  stopping: { light: "#fbbf24", dark: "#fbbf24", label: "Going to sleep" },
-  closed: { light: undefined, dark: undefined, label: "Asleep" },
+  active: { color: "#10b981", label: "Awake" },
+  starting: { color: "#fbbf24", label: "Waking up" },
+  stopping: { color: "#fbbf24", label: "Going to sleep" },
+  closed: { color: undefined, label: "Asleep" },
 };
 
 /**
@@ -128,7 +128,7 @@ export function QuickTaskRow({
           ) : showSandbox ? (
             <View
               className="size-2 rounded-full"
-              style={{ backgroundColor: sandbox[scheme] ?? withAlpha(muted, 0.4) }}
+              style={{ backgroundColor: sandbox.color ?? withAlpha(muted, 0.4) }}
             />
           ) : null}
           {showUnread ? <View className="size-1.5 rounded-full" style={{ backgroundColor: theme.primary }} /> : null}

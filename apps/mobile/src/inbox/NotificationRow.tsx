@@ -11,7 +11,6 @@ import {
   swipeActionsAccessibility,
   type SwipeAction,
 } from "@vvedantb/native-ui/primitives";
-import { palette, tokens } from "@vvedantb/native-ui/theme";
 import { Pressable, Text, View } from "react-native";
 import { timeAgo } from "@/ui/format";
 import { RepoLogo } from "@/ui/RepoLogo";
@@ -51,7 +50,7 @@ export function NotificationRow({
   selection?: { checked: boolean; onToggle: (notification: Doc<"notifications">) => void };
 }) {
   const scheme = useScheme();
-  const muted = tokens.color.muted[scheme];
+  const muted = EVA_THEME[scheme].mutedForeground;
   const unread = !notification.read;
   // A low-urgency row reads as already read even while unread, as on the web.
   const emphasised = unread && notification.urgency !== "low";
@@ -97,7 +96,7 @@ export function NotificationRow({
         >
           <View className="w-1.5 items-center">
             {unread ? (
-              <View className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: palette.primary[scheme] }} />
+              <View className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: EVA_THEME[scheme].primary }} />
             ) : null}
           </View>
           {repo ? (
@@ -115,7 +114,7 @@ export function NotificationRow({
             <Text
               numberOfLines={1}
               className={emphasised ? "font-instrument-sans-medium text-sm" : "font-instrument-sans text-sm"}
-              style={emphasised ? { color: tokens.color.foreground[scheme], fontWeight: "500" } : { color: muted }}
+              style={emphasised ? { color: EVA_THEME[scheme].foreground, fontWeight: "500" } : { color: muted }}
             >
               {subject}
             </Text>
@@ -162,7 +161,7 @@ function RepoMark({ repo }: { repo: NotificationRepo }) {
       size={28}
       fallback={
         <View className="h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: EVA_THEME[scheme].muted }}>
-          <Text className="font-instrument-sans-semibold text-xs" style={{ color: tokens.color.muted[scheme], fontWeight: "600" }}>
+          <Text className="font-instrument-sans-semibold text-xs" style={{ color: EVA_THEME[scheme].mutedForeground, fontWeight: "600" }}>
             {repo.label.charAt(0).toUpperCase()}
           </Text>
         </View>

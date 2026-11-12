@@ -5,9 +5,10 @@ import {
   shouldPreviewChangedFiles,
   type ChangedFile,
 } from "@eva/shared";
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconChevronDown, IconFileText } from "@tabler/icons-react-native";
 import { MONO_FONT } from "@vvedantb/native-ui/ai";
-import { tokens, withAlpha } from "@vvedantb/native-ui/theme";
+import { withAlpha } from "@vvedantb/native-ui/theme";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { useScheme } from "@/ui/theme";
@@ -52,12 +53,12 @@ export function ChangedFilesCard({
       ? selectChangedFilePreview(files)
       : [];
   const groups = groupChangedFilesByRepo(shown);
-  const muted = tokens.color.muted[scheme];
-  const foreground = tokens.color.foreground[scheme];
+  const muted = EVA_THEME[scheme].mutedForeground;
+  const foreground = EVA_THEME[scheme].foreground;
 
   return (
     // Web `Surface density="none"` with `mt-2`: the card fill at the 16 surface radius.
-    <View className="mt-2 rounded-2xl" style={{ backgroundColor: tokens.color.surface[scheme] }}>
+    <View className="mt-2 rounded-2xl" style={{ backgroundColor: EVA_THEME[scheme].card }}>
       <View className="flex-row items-center justify-between gap-2 px-3 py-2">
         <Pressable
           accessibilityRole="button"
@@ -100,7 +101,7 @@ export function ChangedFilesCard({
                   onPress={() => onOpenDiff(file.path)}
                   // 44 high for touch; the web row is `px-1.5 py-1.5 rounded-md`.
                   className="min-h-11 flex-row items-center gap-2 rounded-md px-1.5"
-                  style={({ pressed }) => (pressed ? { backgroundColor: tokens.color.surfaceSecondary[scheme] } : null)}
+                  style={({ pressed }) => (pressed ? { backgroundColor: EVA_THEME[scheme].muted } : null)}
                 >
                   <IconFileText size={14} color={muted} />
                   <Text numberOfLines={1} className="min-w-0 shrink" style={[LABEL, { color: foreground, fontFamily: MONO_FONT }]}>
@@ -115,7 +116,7 @@ export function ChangedFilesCard({
               accessibilityRole="button"
               onPress={() => setExpanded(true)}
               className="min-h-11 justify-center rounded-md px-1.5"
-              style={({ pressed }) => (pressed ? { backgroundColor: tokens.color.surfaceSecondary[scheme] } : null)}
+              style={({ pressed }) => (pressed ? { backgroundColor: EVA_THEME[scheme].muted } : null)}
             >
               <Text className="font-instrument-sans" style={[LABEL, { color: muted }]}>
                 {`Show all ${files.length} files`}

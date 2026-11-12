@@ -1,7 +1,7 @@
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconHelpCircle } from "@tabler/icons-react-native";
 import { StatusDot, type StatusTone } from "@vvedantb/native-ui/primitives";
 import { View } from "react-native";
-import { palette } from "@vvedantb/native-ui/theme";
 import { useScheme } from "@/ui/theme";
 
 /**
@@ -14,7 +14,7 @@ export function AwaitingAnswerMark() {
     <IconHelpCircle
       size={18}
       strokeWidth={2}
-      color={palette.warning[scheme]}
+      color={EVA_THEME[scheme].warning}
       accessibilityLabel="Waiting for your answer"
     />
   );

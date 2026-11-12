@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: Neutral theme, shared with the web
+
+Date: 2026-11-12
+
+WHY: The web has four appearance modes (Light, Neutral, Dark, System); the phone had three, and kept its pick on the phone only, so the phone and the web could show different themes.
+
+Architectural: `EVA_THEME.neutral` (`@eva/shared`) is the dark palette with the web `.dark.neutral` surfaces. Neutral is dark-family: NativeWind runs "dark", `applyEvaTheme("neutral")` repaints the kit's dark slot (native-ui `configureTheme` now redraws mounted parts), and the root layout sets the changed global.css variables with NativeWind `vars` for class colours. The app's `useScheme()` returns light, dark or neutral, and app code reads its colours from `EVA_THEME[scheme]` only, so React Compiler memos follow a Dark to Neutral pick. The mode is the account's `auth.getTheme` once loaded (SecureStore is the start value); a pick writes both, as the web `ThemeModeProvider`. `isThemeMode` and `themeAppearance` moved to `@eva/shared`; the web uses them.
+
 ## Phone: queued messages show above the composer
 
 Date: 2026-11-12

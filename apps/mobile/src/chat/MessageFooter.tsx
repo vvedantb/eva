@@ -1,10 +1,10 @@
 import { findAIModelOption, getReasoningLevelLabel } from "@eva/backend";
 import { formatClockTime } from "@eva/shared/dayLabel";
 import { formatDuration } from "@eva/shared/duration";
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconCheck, IconGitFork, IconLink } from "@tabler/icons-react-native";
 import { MessageAction, MessageActionsBar, MessageMeta } from "@vvedantb/native-ui/ai";
 import { ProviderIcon } from "@vvedantb/native-ui/brand";
-import { palette } from "@vvedantb/native-ui/theme";
 import * as Clipboard from "expo-clipboard";
 import { useState } from "react";
 import { View } from "react-native";
@@ -126,5 +126,5 @@ export function ModelIcon({
 /** The success-coloured check the web shows after a copy. */
 function SuccessCheck(props: { size?: number | string }) {
   const scheme = useScheme();
-  return <IconCheck {...props} color={palette.success[scheme]} />;
+  return <IconCheck {...props} color={EVA_THEME[scheme].success} />;
 }

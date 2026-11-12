@@ -44,7 +44,7 @@ export default function SettingsScreen() {
       <ScreenContainer reserveTabBar>
         {/* The web `SettingsStack` rhythm: 32 between sections. */}
         <View className="gap-8">
-          <SettingsSection title="Appearance" description="Choose light, dark, or system.">
+          <SettingsSection title="Appearance" description="Choose light, neutral, dark, or system.">
             <AppearanceTiles />
           </SettingsSection>
           <SettingsSection

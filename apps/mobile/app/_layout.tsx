@@ -20,17 +20,17 @@ import { ConvexProvider } from "convex/react";
 import { type ErrorBoundaryProps, Stack, ThemeProvider } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { type ReactNode, useEffect, useState } from "react";
-import { StyleSheet } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { CONVEX_URL, PUBLISHABLE_KEY } from "@/config";
 import { StableConvexClient } from "@/convex/StableConvexClient";
-import { restoreColorSchemeChoice } from "@/settings/colorScheme";
+import { restoreThemeMode } from "@/settings/themeMode";
 import {
   isClerkNativeApiEnabled,
   NATIVE_API_DISABLED_MESSAGE,
 } from "@/ui/clerkNativeApi";
-import { applyEvaTheme } from "@/ui/evaTheme";
+import { applyEvaTheme, NEUTRAL_CLASS_VARS } from "@/ui/evaTheme";
 import { EVA_FONT } from "@/ui/fonts";
 import { MaintenanceGate, MaintenanceScreen, useMaintenanceMode } from "@/ui/MaintenanceScreen";
 import { StartupFailure } from "@/ui/StartupFailure";
@@ -45,8 +45,9 @@ installUnhandledRejectionLogging();
 // Eva's web colours for every native-ui part, before anything renders.
 applyEvaTheme();
 
-// The saved light / dark / system choice, applied before the first screen.
-void restoreColorSchemeChoice();
+// This phone's last appearance mode, applied before the first screen; the
+// account's mode follows once signed in (`AccountThemeSync`).
+void restoreThemeMode();
 
 // A newer APK on GitHub Releases, offered once the app is up (`UpdateDialog`).
 void checkForUpdate();
@@ -152,31 +153,34 @@ export default function RootLayout() {
     // real position, frame by frame, for the kit's composer, transcript and
     // forms (`KeyboardControllerProvider`).
     <GestureHandlerRootView style={styles.root}>
-      <KeyboardProvider>
-        <KeyboardControllerProvider>
-          <GestureHandlerProvider>
-            <AuthProviders loaded={false} publishableKey={PUBLISHABLE_KEY} tokenCache={tokenCache} convex={convex}>
-              <ThemeProvider value={navigationTheme(scheme)}>
-                <NativeUiProvider>
-                  {/* Maintenance replaces the app, signed in or not (its status needs no sign-in). */}
-                  <MaintenanceGate>
-                    <ClerkGate>
-                      {/* A stack, not a `Slot`: a `Slot` unmounts the tabs under a pushed chat and
-                          drops their state, so Back landed on the Inbox, not the tab it came from.
-                          A push deeper (a chat, a review, a new session) runs the platform's own
-                          transition (`useStackScreenOptions`). */}
-                      <Stack screenOptions={stackOptions} />
-                    </ClerkGate>
-                  </MaintenanceGate>
-                  <UpdateDialog />
-                  <Toaster />
-                  <StatusBar style={scheme === "dark" ? "light" : "dark"} />
-                </NativeUiProvider>
-              </ThemeProvider>
-            </AuthProviders>
-          </GestureHandlerProvider>
-        </KeyboardControllerProvider>
-      </KeyboardProvider>
+      {/* Neutral repaints the class colours: global.css has light and dark only. */}
+      <View className="flex-1" style={scheme === "neutral" ? NEUTRAL_CLASS_VARS : undefined}>
+        <KeyboardProvider>
+          <KeyboardControllerProvider>
+            <GestureHandlerProvider>
+              <AuthProviders loaded={false} publishableKey={PUBLISHABLE_KEY} tokenCache={tokenCache} convex={convex}>
+                <ThemeProvider value={navigationTheme(scheme)}>
+                  <NativeUiProvider>
+                    {/* Maintenance replaces the app, signed in or not (its status needs no sign-in). */}
+                    <MaintenanceGate>
+                      <ClerkGate>
+                        {/* A stack, not a `Slot`: a `Slot` unmounts the tabs under a pushed chat and
+                            drops their state, so Back landed on the Inbox, not the tab it came from.
+                            A push deeper (a chat, a review, a new session) runs the platform's own
+                            transition (`useStackScreenOptions`). */}
+                        <Stack screenOptions={stackOptions} />
+                      </ClerkGate>
+                    </MaintenanceGate>
+                    <UpdateDialog />
+                    <Toaster />
+                    <StatusBar style={scheme === "light" ? "dark" : "light"} />
+                  </NativeUiProvider>
+                </ThemeProvider>
+              </AuthProviders>
+            </GestureHandlerProvider>
+          </KeyboardControllerProvider>
+        </KeyboardProvider>
+      </View>
     </GestureHandlerRootView>
   );
 }

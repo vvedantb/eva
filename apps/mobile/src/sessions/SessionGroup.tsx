@@ -3,7 +3,6 @@ import { prStateLabel, prStateTone, type PrState, type PrStateTone } from "@eva/
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconChevronDown, IconDots, IconGitPullRequest, IconPlus } from "@tabler/icons-react-native";
 import { SwipeableRow, swipeActionsAccessibility, type SwipeAction } from "@vvedantb/native-ui/primitives";
-import { palette, tokens } from "@vvedantb/native-ui/theme";
 import type { FunctionReturnType } from "convex/server";
 import { useRouter } from "expo-router";
 import { useState } from "react";
@@ -99,7 +98,7 @@ export function SessionGroupHeader({
   onNew?: () => void;
 }) {
   const scheme = useScheme();
-  const muted = tokens.color.muted[scheme];
+  const muted = EVA_THEME[scheme].mutedForeground;
   const { repoLabel, open } = section;
   return (
     // The web header (the 18 logo or initial on `bg-muted`, then the medium
@@ -142,7 +141,7 @@ export function SessionGroupHeader({
           </Text>
           {live > 0 ? (
             <View className="flex-row items-center gap-1 px-1.5" accessibilityLabel={`${live} running`}>
-              <View className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: palette.success[scheme] }} />
+              <View className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: EVA_THEME[scheme].success }} />
               <Text
                 className="font-instrument-sans-medium"
                 style={{ ...TEXT_2XS, color: muted, fontWeight: "500", fontVariant: ["tabular-nums"] }}
@@ -179,7 +178,7 @@ export function SessionGroupHeader({
  * header. A folded group has neither.
  */
 export function SessionGroupFooter({ section, onToggleExpanded }: { section: SessionGroupSection; onToggleExpanded: () => void }) {
-  const muted = tokens.color.muted[useScheme()];
+  const muted = EVA_THEME[useScheme()].mutedForeground;
   if (!section.open) return null;
   const hiddenCount = section.rows.length - section.data.length;
   return (
@@ -224,7 +223,7 @@ export function SessionListRow({
 }) {
   const router = useRouter();
   const scheme = useScheme();
-  const muted = tokens.color.muted[scheme];
+  const muted = EVA_THEME[scheme].mutedForeground;
   const swipeA11y = swipeActionsAccessibility([swipeAction]);
   return (
     <SwipeableRow trailingActions={[swipeAction]}>
@@ -250,7 +249,7 @@ export function SessionListRow({
         <Text
           numberOfLines={1}
           className="font-instrument-sans flex-1 text-sm"
-          style={{ color: tokens.color.foreground[scheme] }}
+          style={{ color: EVA_THEME[scheme].foreground }}
         >
           {displayTitle(session.title)}
         </Text>

@@ -9,13 +9,14 @@ import {
   type StoredModelTraits,
 } from "@eva/backend";
 import { carriedAccountForProvider, defaultAccountForProvider, toPickerAccounts } from "@eva/shared";
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared/gitDefaults";
 import { useUser } from "@clerk/clerk-expo";
 import { IconBrandGithub, IconChevronDown, IconStack2 } from "@tabler/icons-react-native";
 import { PromptInput } from "@vvedantb/native-ui/ai";
 import { RouterStackPageHeader } from "@vvedantb/native-ui/expo-router";
 import { CenteredSpinner, EmptyState } from "@vvedantb/native-ui/primitives";
-import { tokens, withAlpha } from "@vvedantb/native-ui/theme";
+import { withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -68,8 +69,8 @@ export default function NewSessionScreen() {
   const accounts = toPickerAccounts(useQuery(api.userProviderAccounts.listSelectable, {}) ?? []);
   const repo = repos?.find((candidate) => candidate._id === (picked ?? repoParam)) ?? repos?.[0];
   const firstName = user?.firstName?.trim();
-  const foreground = tokens.color.foreground[scheme];
-  const muted = tokens.color.muted[scheme];
+  const foreground = EVA_THEME[scheme].foreground;
+  const muted = EVA_THEME[scheme].mutedForeground;
 
   const model = pickedModel ?? normalizeAIModel(repo?.defaultModel);
   const traits: StoredModelTraits = { ...(repo ? storedTraitsFromRepoDefaults(repo) : {}), ...pickedTraits };
