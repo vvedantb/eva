@@ -27,15 +27,22 @@ const uiElement = z.object({
   on: z.record(z.string(), actionBinding).optional(),
 });
 
-/** Annotated so a drift between this schema and json-render fails the build. */
-const chatUiSpecSchema: z.ZodType<Spec> = z.object({
+/** `satisfies`, so a drift between this schema and json-render fails the build. */
+const chatUiTreeSchema = z.object({
   root: z.string(),
   elements: z.record(z.string(), uiElement),
   state: z.record(z.string(), z.unknown()).optional(),
-});
+}) satisfies z.ZodType<Spec>;
 
-/** Parses a stored spec string. Returns null for anything unusable. */
-export function parseChatUiSpec(serialized: string): Spec | null {
+/** A parsed panel: the flat element map json-render renders, in this schema's narrower shape. */
+export type ChatUiTree = z.infer<typeof chatUiTreeSchema>;
+export type ChatUiElement = ChatUiTree["elements"][string];
+
+/**
+ * Parses a stored spec string, with no json-render at run time (the phone
+ * draws panels natively from this). Returns null for anything unusable.
+ */
+export function parseChatUiTree(serialized: string): ChatUiTree | null {
   const json: unknown = (() => {
     try {
       return JSON.parse(serialized);
@@ -44,10 +51,15 @@ export function parseChatUiSpec(serialized: string): Spec | null {
     }
   })();
   if (json === null) return null;
-  const parsed = chatUiSpecSchema.safeParse(json);
+  const parsed = chatUiTreeSchema.safeParse(json);
   if (!parsed.success) return null;
   // A spec whose root is missing renders as an empty box; treat it as unusable
   // so the panel shows its fallback instead of a blank card.
   if (!parsed.data.elements[parsed.data.root]) return null;
   return parsed.data;
+}
+
+/** Parses a stored spec string for json-render. Returns null for anything unusable. */
+export function parseChatUiSpec(serialized: string): Spec | null {
+  return parseChatUiTree(serialized);
 }

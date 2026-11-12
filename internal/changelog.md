@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: chats show attachments, agent media, generative UI panels and turn outputs
+
+Date: 2026-11-12
+
+WHY: The phone chat drew none of the rich content the web chat draws: user attachments, the agent's screenshots and recordings, `render_ui` panels and `render_html` pages, and artifact and agent-report cards.
+
+Architectural: Rows are a memoised `ChatRow`, so the screen's other queries no longer redraw them. A user bubble shows `messageAttachments` (96 pt thumbs into the native-ui `ImageViewer`, text chips into a read-only sheet). A reply shows `message.media` through `splitAgentMedia`: `InlineVideo` (`@vvedantb/native-ui/video`, `expo-video`, mounted on the first press) and `ImageGallery`. `useChatCards` runs `chatUi.listByParent`, `chatHtml.listByParent` and `artifacts.listForChat` once per chat and places them, and the agent reports, with `placeChatUiPanels`, as the web `ChatBody`. Panels draw natively from `parseChatUiTree` and `CHAT_UI_ELEMENT_PROPS` (all 16 catalog types; anything else is a card that opens the web chat), behind the web's UI and Text tabs. Pages use `HtmlView` (`@vvedantb/native-ui/webview`, `react-native-webview`), sandboxed, links to the in-app browser, mounted once the row is seen. Moved to `@eva/shared` and used by the web with no behaviour change: `placeChatUiPanels`, the catalog prop schemas (`generativeUi/elements.ts`), `parseChatUiTree`, the attachment labels and `splitAgentMedia`. New native modules `expo-video` and `react-native-webview`: a new APK.
+
 ## Phone: Sessions tab reads the web's session lists and shows linked groups
 
 Date: 2026-11-12

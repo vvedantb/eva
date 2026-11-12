@@ -6,6 +6,7 @@ import {
   buildPastedTextFile,
   isAllowedAttachmentFile,
 } from "./attachmentMeta";
+import { messageAttachments, splitAgentMedia } from "@eva/shared";
 
 /**
  * These guard the paste-to-file fix ("Wall-of-text pastes flooded composers").
@@ -87,5 +88,38 @@ describe("isAllowedAttachmentFile", () => {
     );
     expect(isAllowedAttachmentFile({ filename: "archive.zip" })).toBe(false);
     expect(isAllowedAttachmentFile({})).toBe(false);
+  });
+});
+
+/**
+ * The web chat and the phone chat both read a message's attachments and an
+ * agent's captures through these (`@eva/shared`), so a change to the legacy
+ * fallback or the video split shows on both.
+ */
+describe("message attachments and agent media", () => {
+  test("falls back to the legacy URL list as images, and drops gone blobs", () => {
+    expect(
+      messageAttachments({ attachmentUrls: ["https://a.test/1.png", null] }),
+    ).toEqual([{ url: "https://a.test/1.png", contentType: "image/*" }]);
+    expect(
+      messageAttachments({
+        attachments: [{ url: "https://a.test/n.md", contentType: "text/markdown" }],
+        attachmentUrls: ["https://a.test/ignored.png"],
+      }),
+    ).toEqual([{ url: "https://a.test/n.md", contentType: "text/markdown" }]);
+  });
+
+  test("splits captures into videos and images, skipping gone blobs", () => {
+    expect(
+      splitAgentMedia([
+        { url: "https://a.test/r.mp4", contentType: "video/mp4" },
+        { url: "https://a.test/s.png", contentType: "image/png" },
+        { url: null, contentType: "image/png" },
+        { url: "https://a.test/u", contentType: null },
+      ]),
+    ).toEqual({
+      videos: ["https://a.test/r.mp4"],
+      images: ["https://a.test/s.png", "https://a.test/u"],
+    });
   });
 });

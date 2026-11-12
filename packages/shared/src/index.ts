@@ -363,3 +363,27 @@ export {
   type SessionListEntry,
   type SessionSortOrder,
 } from "./sessionList";
+export { placeChatUiPanels, type PanelPlacement, type PlaceablePanel, type PlacementMessage } from "./chatUiPanelPlacement";
+// The json-render-free half of `./generativeUi`: the phone draws panels natively.
+export {
+  parseChatUiTree,
+  type ChatUiElement,
+  type ChatUiTree,
+} from "./generativeUi/spec";
+export {
+  CHAT_UI_ELEMENT_PROPS,
+  CHAT_UI_TONES,
+  type ChatUiElementType,
+  type ChatUiTone,
+} from "./generativeUi/elements";
+export {
+  attachmentFileKind,
+  filenameExtension,
+  isImageContentType,
+  labelForAttachment,
+  messageAttachments,
+  normalizeContentType,
+  splitAgentMedia,
+  type AttachmentFileKind,
+  type ResolvedMediaEntry,
+} from "./attachmentLabels";

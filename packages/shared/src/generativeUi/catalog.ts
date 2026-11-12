@@ -14,131 +14,83 @@
 import { defineCatalog } from "@json-render/core";
 import { schema } from "@json-render/react/schema";
 import { z } from "zod";
+import { CHAT_UI_ELEMENT_PROPS } from "./elements";
 
-/** Sentiment shared by metrics, badges and callouts. */
-export const CHAT_UI_TONES = [
-  "neutral",
-  "positive",
-  "warning",
-  "danger",
-] as const;
-export type ChatUiTone = (typeof CHAT_UI_TONES)[number];
-
-/** Text styles: the catalog's `Text.variant` and a text block's `emphasis`. */
-export const CHAT_UI_TEXT_STYLES = ["body", "muted", "lead"] as const;
-
-/** Button styles, shared by the catalog and the button content block. */
-export const CHAT_UI_BUTTON_VARIANTS = [
-  "primary",
-  "secondary",
-  "ghost",
-] as const;
-
-const tone = z.enum(CHAT_UI_TONES);
-const nullableText = z.string().nullable();
+export {
+  CHAT_UI_BUTTON_VARIANTS,
+  CHAT_UI_TEXT_STYLES,
+  CHAT_UI_TONES,
+  type ChatUiTone,
+} from "./elements";
 
 export const chatUiCatalog = defineCatalog(schema, {
   components: {
     Stack: {
-      props: z.object({
-        direction: z.enum(["vertical", "horizontal"]),
-        gap: z.enum(["sm", "md", "lg"]),
-        align: z.enum(["start", "center", "stretch"]),
-      }),
+      props: CHAT_UI_ELEMENT_PROPS.Stack,
       slots: ["default"],
       description: "Layout row or column that holds other elements.",
     },
     Grid: {
-      props: z.object({
-        columns: z.number().int().min(2).max(3),
-        gap: z.enum(["sm", "md"]),
-      }),
+      props: CHAT_UI_ELEMENT_PROPS.Grid,
       slots: ["default"],
       description: "Equal-width columns, e.g. a row of metrics.",
     },
     Panel: {
-      props: z.object({
-        title: nullableText,
-        description: nullableText,
-      }),
+      props: CHAT_UI_ELEMENT_PROPS.Panel,
       slots: ["default"],
       description: "Bordered container grouping related content.",
     },
     Heading: {
-      props: z.object({
-        text: z.string(),
-        level: z.enum(["h2", "h3"]),
-      }),
+      props: CHAT_UI_ELEMENT_PROPS.Heading,
       description: "Section title.",
     },
     Text: {
-      props: z.object({
-        text: z.string(),
-        variant: z.enum(CHAT_UI_TEXT_STYLES),
-      }),
+      props: CHAT_UI_ELEMENT_PROPS.Text,
       description: "A paragraph of read-only prose.",
     },
     Metric: {
-      props: z.object({
-        label: z.string(),
-        value: z.string(),
-        delta: nullableText,
-        tone,
-      }),
+      props: CHAT_UI_ELEMENT_PROPS.Metric,
       description: "One labelled number or short value.",
     },
     Badge: {
-      props: z.object({ text: z.string(), tone }),
+      props: CHAT_UI_ELEMENT_PROPS.Badge,
       description: "Small status pill.",
     },
     Callout: {
-      props: z.object({ title: nullableText, text: z.string(), tone }),
+      props: CHAT_UI_ELEMENT_PROPS.Callout,
       description: "Highlighted note, warning or result.",
     },
     Progress: {
-      props: z.object({
-        label: nullableText,
-        value: z.number().min(0).max(100),
-      }),
+      props: CHAT_UI_ELEMENT_PROPS.Progress,
       description: "Completion bar from 0 to 100.",
     },
     Checklist: {
-      props: z.object({
-        items: z.array(z.object({ text: z.string(), done: z.boolean() })),
-      }),
+      props: CHAT_UI_ELEMENT_PROPS.Checklist,
       description: "List of done / not-done items.",
     },
     Table: {
-      props: z.object({
-        columns: z.array(z.string()),
-        rows: z.array(z.array(z.string())),
-      }),
+      props: CHAT_UI_ELEMENT_PROPS.Table,
       description: "Small table of rows and columns.",
     },
     KeyValue: {
-      props: z.object({
-        items: z.array(z.object({ label: z.string(), value: z.string() })),
-      }),
+      props: CHAT_UI_ELEMENT_PROPS.KeyValue,
       description: "Label / value pairs, e.g. a summary of settings.",
     },
     Code: {
-      props: z.object({ code: z.string(), language: nullableText }),
+      props: CHAT_UI_ELEMENT_PROPS.Code,
       description: "Preformatted code or command output.",
     },
     Image: {
-      props: z.object({ url: z.string(), alt: nullableText }),
+      props: CHAT_UI_ELEMENT_PROPS.Image,
       description: "A screenshot or diagram already hosted at a URL.",
     },
     Button: {
-      props: z.object({
-        label: z.string(),
-        variant: z.enum(CHAT_UI_BUTTON_VARIANTS),
-      }),
+      props: CHAT_UI_ELEMENT_PROPS.Button,
       events: ["press"],
       description: "Clickable button that replies in the chat or opens a link.",
     },
     Separator: {
-      props: z.object({}),
+      props: CHAT_UI_ELEMENT_PROPS.Separator,
       description: "Horizontal rule between sections.",
     },
   },
