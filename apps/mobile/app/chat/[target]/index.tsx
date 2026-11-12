@@ -74,9 +74,10 @@ const HEADER_HIDDEN_ACTIONS: ReadonlySet<SessionMenuAction> = new Set(["copyLink
  * name, as the web), the agent's question when it asks one, and the composer
  * (attachments, Stop beside Send while the agent works, the web `@` / `/`
  * picker) with the web footer: the live sandbox branch, the stash and the
- * chat's sticky model. The transcript is a `ConversationList`, so a long chat
- * draws only the messages near the view. Back returns to where the chat was
- * opened from, or to the Inbox after a deep link.
+ * chat's sticky model. The transcript is an inverted `ConversationList`
+ * (newest first), so a chat opens at its newest message with no scroll, and a
+ * long chat draws only the messages near the view. Back returns to where the
+ * chat was opened from, or to the Inbox after a deep link.
  */
 export default function ChatScreen() {
   const { target } = useLocalSearchParams<{ target: string }>();
@@ -122,6 +123,8 @@ export default function ChatScreen() {
       (message.content.trim() !== "" || (message.role === "assistant" && message.activityLog) || message._id === liveReplyId),
   );
   const dayStarts = findDayBoundaryIds(visible);
+  // The inverted transcript draws its first row at the bottom. A copy, as `toReversed` is missing in some Hermes release builds.
+  const newestFirst = [...visible].reverse();
   // The user turn before each reply holds the model it ran on (the footer mark), as the web.
   const precedingUserTurns = buildPrecedingUserTurns(messages ?? []);
   const questions = pending ? parsePendingQuestion(pending.payload) : null;
@@ -188,12 +191,12 @@ export default function ChatScreen() {
       />
       {sessionActions.dialogs}
       <Conversation>
-        {/* The web thread at 390: the panel (10 in on the left, 20 on the right) and the column's `p-3`, messages `gap-3`. */}
         <ConversationList
-          data={visible}
+          inverted
+          data={newestFirst}
           keyExtractor={(message) => message._id}
-          // The web thread at 390: the panel (10 in on the left, 20 on the right) and the column's `p-3`.
-          contentContainerClassName="pl-[22px] pr-8"
+          // The side padding is in each row: Android flips an inverted list on both axes, which would swap it here.
+          contentContainerClassName="px-0"
           // Web: messages `gap-3`.
           ItemSeparatorComponent={MessageGap}
           ListEmptyComponent={
@@ -203,10 +206,11 @@ export default function ChatScreen() {
               <ConversationEmptyState icon={IconMessageCircle} title="No messages yet" />
             ) : null
           }
-          ListFooterComponent={
+          ListHeaderComponent={
+            // Inverted, the header is the bottom, under the newest message.
             // The live reply shows its own status; this covers a turn whose reply is not written yet.
             working && questions === null && liveReplyId === undefined ? (
-              <View className="pt-3">
+              <View className={`pt-3 ${THREAD_INSET}`}>
                 <Shimmer>Working…</Shimmer>
               </View>
             ) : null
@@ -216,7 +220,7 @@ export default function ChatScreen() {
             const fromTeammate = isOtherUserChatMessage(message, me ?? undefined);
             const senderName = fromTeammate && message.userId ? teammateNames.get(message.userId) : undefined;
             return (
-              <View className="gap-3">
+              <View className={`gap-3 ${THREAD_INSET}`}>
                 {dayStarts.has(message._id) ? <DayDivider timestamp={message.timestamp} /> : null}
                 {/* Web: parts `gap-0.5`; a reply is full width, a user message at most 95%. */}
                 <Message
@@ -420,6 +424,9 @@ function ChatDock({
     </Text>
   );
 }
+
+/** The web thread at 390: the panel (10 in on the left, 20 on the right) and the column's `p-3`. */
+const THREAD_INSET = "pl-[22px] pr-8";
 
 /** The web `gap-3` between two messages. */
 function MessageGap() {
