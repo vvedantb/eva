@@ -1,5 +1,13 @@
 # Changelog
 
+## Maintenance mode
+
+Date: 2026-11-12
+
+WHY: Destructive migrations need eva closed to users while they run. Before this, the only way was to stop the whole deployment.
+
+Architectural: `convex/maintenance.ts` reads the `MAINTENANCE` env var (`npx convex env set MAINTENANCE 1` on, `npx convex env remove MAINTENANCE` off). `authQuery`, `authMutation` and `authAction` throw `ConvexError(MAINTENANCE_ERROR)` while it is on; `internalAuth*` wrappers, crons and sandbox callbacks keep running. The MCP endpoint returns 503. `maintenance:status` is a public live query: web `MaintenanceGate` (in `ClientProvider`) swaps the whole app for `MaintenanceScreen` and brings it back on its own when the var is removed; `DeploymentErrorFallback` shows the same screen for a maintenance error that beat the status query (`isMaintenanceError` in `@eva/shared`). Gaps: raw public `query` / `mutation` / `action` functions and `ensureUserExists` are not gated, and mobile shows only the error.
+
 ## Projects run on sessions (2)
 
 Date: 2026-11-11
