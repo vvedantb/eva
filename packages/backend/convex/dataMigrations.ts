@@ -370,3 +370,113 @@ export const backfillSessionOwner = dataMigrations.define({
     return { owner: STANDALONE_SESSION_OWNER };
   },
 });
+
+/*
+ * 3a: clears the task and project fields only the deleted task/project chat
+ * and sandbox pipelines used (their chats and sandboxes run on owned sessions
+ * since 1b/2), and deletes the rows those pipelines keyed by a task or
+ * project. 3b drops the fields from the schema once this has run to the end.
+ * Idempotent: a cleared row is skipped.
+ *
+ *   npx convex run --prod dataMigrations:clearLegacyOwnerChatFields '{"dryRun":true}'
+ *   npx convex run --prod dataMigrations:clearLegacyOwnerChatFields
+ *   npx convex run --prod --component migrations lib:getStatus
+ */
+
+/** Sandbox and chat fields `agentTasks` and `projects` share. */
+const LEGACY_OWNER_CHAT_FIELDS = {
+  // Sandbox: now the owned session's.
+  sandboxId: undefined,
+  sandboxStartAttempt: undefined,
+  devPort: undefined,
+  devCommand: undefined,
+  previewPath: undefined,
+  previewPanePaths: undefined,
+  terminalHistoryTail: undefined,
+  terminalPanes: undefined,
+  agentBrowsingAt: undefined,
+  sandboxBranch: undefined,
+  sandboxGitSync: undefined,
+  // Chat: now the session chat's.
+  activeChatWorkflowId: undefined,
+  chatTurnLifecycleVersion: undefined,
+  lastChatModel: undefined,
+  lastReasoningLevel: undefined,
+  lastThinkingEnabled: undefined,
+  lastUse1mContext: undefined,
+  lastFastMode: undefined,
+  // Chat daemon (`chatDaemonEntityFields`).
+  pendingTurn: undefined,
+  syntheticTurnMessageId: undefined,
+  backgroundAgents: undefined,
+  goal: undefined,
+  pendingTaskStops: undefined,
+  cancelRequestedAt: undefined,
+  steerRequestedAt: undefined,
+  usageRefreshRequestedAt: undefined,
+  claimPausedUntil: undefined,
+};
+
+const LEGACY_TASK_CHAT_FIELDS = {
+  ...LEGACY_OWNER_CHAT_FIELDS,
+  reviewTaskSandboxStatus: undefined,
+  sandboxDeleteAfter: undefined,
+};
+
+const LEGACY_PROJECT_CHAT_FIELDS = {
+  ...LEGACY_OWNER_CHAT_FIELDS,
+  reviewProjectSandboxStatus: undefined,
+  lastSandboxActivity: undefined,
+};
+
+/** True when the document still holds any of `fields` (absent = undefined). */
+function holdsAnyField(doc: object, fields: object): boolean {
+  const names = new Set(Object.keys(fields));
+  return Object.keys(doc).some((key) => names.has(key));
+}
+
+// Rows may carry a terminal tail or a subagent roster: keep batches small.
+const CLEAR_LEGACY_OWNER_BATCH = 50;
+
+export const clearLegacyTaskChatFields = dataMigrations.define({
+  table: "agentTasks",
+  batchSize: CLEAR_LEGACY_OWNER_BATCH,
+  migrateOne: (_ctx, task) =>
+    holdsAnyField(task, LEGACY_TASK_CHAT_FIELDS)
+      ? LEGACY_TASK_CHAT_FIELDS
+      : undefined,
+});
+
+export const clearLegacyProjectChatFields = dataMigrations.define({
+  table: "projects",
+  batchSize: CLEAR_LEGACY_OWNER_BATCH,
+  migrateOne: (_ctx, project) =>
+    holdsAnyField(project, LEGACY_PROJECT_CHAT_FIELDS)
+      ? LEGACY_PROJECT_CHAT_FIELDS
+      : undefined,
+});
+
+/** Unsent task and project chat drafts: no composer writes or reads them now. */
+export const deleteLegacyOwnerChatDrafts = dataMigrations.define({
+  table: "drafts",
+  migrateOne: async (ctx, draft) => {
+    if (draft.kind === "taskChat" || draft.kind === "projectChat") {
+      await ctx.db.delete(draft._id);
+    }
+  },
+});
+
+/** Idle-pause clocks of task and project sandboxes: only sessions keep one now. */
+export const deleteLegacyOwnerSandboxActivity = dataMigrations.define({
+  table: "sandboxActivity",
+  migrateOne: async (ctx, row) => {
+    if (row.kind !== "session") await ctx.db.delete(row._id);
+  },
+});
+
+export const clearLegacyOwnerChatFields = dataMigrations.runner([
+  internal.dataMigrations.clearLegacyTaskChatFields,
+  internal.dataMigrations.clearLegacyProjectChatFields,
+  internal.dataMigrations.deleteLegacyOwnerChatDrafts,
+  internal.dataMigrations.deleteLegacyOwnerSandboxActivity,
+]);
