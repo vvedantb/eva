@@ -531,25 +531,9 @@ const schema = defineSchema({
     ["repoId", "entityType"],
   ),
 
-  // Unused after Clerk MCP OAuth. dataMigrations:drainLegacyMcpOAuthTables empties it; a follow-up removes the table.
-  mcpAuthCodes: defineTable({
-    code: v.string(),
-    clerkUserId: v.string(),
-    codeChallenge: v.string(),
-    codeChallengeMethod: v.string(),
-    redirectUri: v.string(),
-    clientId: v.string(),
-    expiresAt: v.number(),
-  }).index("by_code", ["code"]),
-
-  // Unused after Clerk MCP OAuth. dataMigrations:drainLegacyMcpOAuthTables empties it; a follow-up removes the table.
-  mcpClientRegistrations: defineTable({
-    clientId: v.string(),
-    clientSecret: v.optional(v.string()),
-    redirectUris: v.array(v.string()),
-    registeredAt: v.number(),
-  }).index("by_clientId", ["clientId"]),
-
+  // Legacy MCP OAuth tables removed after the drain migrations emptied them.
+  // schema-narrowing-ok: drainMcpAuthCodes
+  // schema-narrowing-ok: drainMcpClientRegistrations
   // MCP bearer token-cache table removed after the drain migration emptied it.
   // schema-narrowing-ok: drainMcpTokenCache
 
