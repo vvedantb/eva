@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: segmented switches slide
+
+Date: 2026-11-12
+
+WHY: Open / Closed / All (Reviews), Active / Archived (Sessions) and the project tabs jumped; the web segmented pill slides.
+
+Architectural: `SegmentedTabs` passes `TabsList` a `progress` value (`useDerivedValue(() => withTiming(index))`, the web `--tabs-dur` 200 ms and `--tabs-ease`, instant under Reduce Motion), so the kit draws one sliding thumb instead of a fill per trigger.
+
 ## Phone: Neutral theme, shared with the web
 
 Date: 2026-11-12
