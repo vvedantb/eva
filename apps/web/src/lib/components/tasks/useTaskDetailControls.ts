@@ -74,16 +74,13 @@ export function useTaskDetailTab(routing: UseTaskDetailRouting | undefined) {
   return { activeTab, setActiveTab };
 }
 
-/** Agent run start / stop / resolve-conflicts and PR creation. */
+/** Agent run start / resolve-conflicts and PR creation. */
 export function useTaskExecutionControls(taskId: Id<"agentTasks">) {
   const startExecution = useMutation(api.agentTasks.startExecution);
-  const cancelExecution = useMutation(api.taskWorkflow.cancelExecution);
   const createTaskPrAction = useAction(api.taskWorkflowActions.createTaskPr);
 
   const [isCreatingPr, setIsCreatingPr] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
-  const [isStopping, setIsStopping] = useState(false);
-  const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [showResolveConfirm, setShowResolveConfirm] = useState(false);
   const [executionError, setExecutionError] = useState<string | null>(null);
 
@@ -111,17 +108,6 @@ export function useTaskExecutionControls(taskId: Id<"agentTasks">) {
     setIsStarting(false);
   };
 
-  const handleStopExecution = async () => {
-    setIsStopping(true);
-    try {
-      await cancelExecution({ taskId });
-    } catch (err) {
-      console.error("Failed to stop execution:", err);
-      toast.error("Could not stop the run. Try again.");
-    }
-    setIsStopping(false);
-  };
-
   const handleCreatePr = async () => {
     setIsCreatingPr(true);
     try {
@@ -135,15 +121,11 @@ export function useTaskExecutionControls(taskId: Id<"agentTasks">) {
   return {
     executionError,
     setExecutionError,
-    showStopConfirm,
-    setShowStopConfirm,
     showResolveConfirm,
     setShowResolveConfirm,
     isStarting,
-    isStopping,
     isCreatingPr,
     handleStartExecution,
-    handleStopExecution,
     handleResolveConflicts,
     handleCreatePr,
   };

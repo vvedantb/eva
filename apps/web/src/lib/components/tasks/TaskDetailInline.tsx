@@ -32,7 +32,6 @@ import { TaskReactionsProvider } from "./_components/TaskReactionsProvider";
 import { StatusFieldsSection } from "./_components/StatusFieldsSection";
 import { TaskFooter } from "./_components/TaskFooter";
 import {
-  StopConfirmDialog,
   ResolveConfirmDialog,
   RunDevServerConfirmDialog,
 } from "@/lib/components/tasks/_components/TaskConfirmDialogs";
@@ -113,36 +112,28 @@ export function TaskDetailInline({
     isNotFound,
     task,
     status,
-    runs,
     comments,
     taskActivity,
     users,
     creatorUser,
     projects,
-    streaming,
     isOwner,
     isBlocked,
     hasActiveRun,
     isProjectTask,
     hasRuns,
     canEditTaskText,
-    isActivityBusy,
-    activeRunElapsed,
     latestPrUrl,
     latestPrError,
     latestDeployment,
     baseBranch,
     executionError,
-    showStopConfirm,
-    setShowStopConfirm,
     showResolveConfirm,
     setShowResolveConfirm,
     showRunDevServerConfirm,
     setShowRunDevServerConfirm,
     isStarting,
-    isStopping,
     handleStartExecution,
-    handleStopExecution,
     handleResolveConflicts,
     // Sandbox preview
     canStartSandbox,
@@ -250,10 +241,6 @@ export function TaskDetailInline({
 
   const isQuickTask = task.projectId === undefined;
   const isSandboxViewActive = showSandbox;
-
-  // A quick task's agent work belongs to the sandbox chat only. Its overview
-  // timeline shows comments and task updates, no agent runs.
-  const timelineRuns = isQuickTask ? undefined : runs;
 
   const routeSandboxTab: TaskRouteSandboxTab =
     routing?.mode === "quick-sandbox" ? routing.quick.sandboxTab : "preview";
@@ -464,11 +451,8 @@ export function TaskDetailInline({
                     <TaskAttachments taskId={taskId} />
 
                     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
-                      <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                      <div className="text-sm font-medium text-foreground">
                         Activity
-                        {isActivityBusy && !isQuickTask ? (
-                          <span className="h-1.5 w-1.5 rounded-full bg-warning" />
-                        ) : null}
                       </div>
                       <TaskSubscribers taskId={taskId} users={users} />
                     </div>
@@ -478,19 +462,9 @@ export function TaskDetailInline({
                       taskId={taskId}
                       createdAt={task.createdAt}
                       creatorUser={creatorUser}
-                      runs={timelineRuns}
                       comments={comments}
                       taskActivity={taskActivity}
                       users={users}
-                      streaming={streaming}
-                      activeRunElapsed={activeRunElapsed}
-                      isStopping={isStopping}
-                      onStopConfirm={() =>
-                        requestConfirm(
-                          () => setShowStopConfirm(true),
-                          handleStopExecution,
-                        )
-                      }
                       isProjectTask={isProjectTask}
                     />
                   </div>
@@ -623,12 +597,6 @@ export function TaskDetailInline({
           )}
         </AnimatePresence>
       </div>
-      <StopConfirmDialog
-        open={showStopConfirm}
-        onOpenChange={setShowStopConfirm}
-        onConfirm={handleStopExecution}
-        isLoading={isStopping}
-      />
       <ResolveConfirmDialog
         open={showResolveConfirm}
         onOpenChange={setShowResolveConfirm}

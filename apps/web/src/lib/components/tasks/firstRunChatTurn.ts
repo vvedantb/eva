@@ -42,7 +42,7 @@ export function taskRunStreamingEntityId(runId: string): string {
  *
  * Failed or cancelled attempts, a success with no `resultSummary` (the turn
  * would have no reply text), "Make changes" runs and Resolve Conflicts runs
- * are skipped. The quick task overview timeline shows no runs at all.
+ * are skipped. Task overview timelines show no runs at all.
  */
 export function findFirstRunChatTurnRun<Run extends ChatTurnRunFields>(
   runs: readonly Run[] | undefined,

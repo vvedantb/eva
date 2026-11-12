@@ -1,6 +1,6 @@
 "use client";
 
-import { lazy, Suspense, useState } from "react";
+import { useState } from "react";
 import { useMutation } from "convex/react";
 import {
   Button,
@@ -29,14 +29,8 @@ import {
   getTopLevelComments,
 } from "../_utils/commentThread";
 
-const RunTimelineItem = lazy(() =>
-  import("./RunTimelineItem").then((m) => ({ default: m.RunTimelineItem })),
-);
-
-type Runs = FunctionReturnType<typeof api.agentRuns.listByTask>;
 type Comments = FunctionReturnType<typeof api.taskComments.listByTask>;
 type Comment = NonNullable<Comments>[number];
-type Streaming = FunctionReturnType<typeof api.streaming.get>;
 type TaskActivity = FunctionReturnType<typeof api.taskActivity.listByTask>;
 type TaskActivityEvent = NonNullable<TaskActivity>[number];
 type Users = FunctionReturnType<typeof api.users.listAll>;
@@ -46,11 +40,6 @@ type ActivityItem =
   | {
       kind: "created";
       timestamp: number;
-    }
-  | {
-      kind: "run";
-      timestamp: number;
-      run: NonNullable<Runs>[number];
     }
   | {
       kind: "taskActivity";
@@ -67,33 +56,18 @@ export function ActivityTimeline({
   taskId,
   createdAt,
   creatorUser,
-  runs,
   comments,
   taskActivity,
   users,
-  streaming,
-  activeRunElapsed,
-  isStopping,
-  onStopConfirm,
   isProjectTask,
 }: {
   taskId: Id<"agentTasks">;
   createdAt: number | undefined;
   creatorUser: User | undefined;
   isProjectTask: boolean;
-  /**
-   * Agent runs to show on the rail. Quick tasks pass none: their agent work
-   * lives in the sandbox chat, so the overview shows only comments and
-   * task updates.
-   */
-  runs: Runs | undefined;
   comments: Comments | undefined;
   taskActivity: TaskActivity | undefined;
   users: Users | undefined;
-  streaming: Streaming | undefined;
-  activeRunElapsed: number;
-  isStopping: boolean;
-  onStopConfirm: () => void;
 }) {
   const [deletingCommentId, setDeletingCommentId] =
     useState<Id<"taskComments"> | null>(null);
@@ -136,51 +110,21 @@ export function ActivityTimeline({
   const topLevelComments = getTopLevelComments(userComments);
   const repliesByParentId = buildRepliesByParentId(userComments);
 
-  // Link each run to the change-request comment that actually triggered it,
-  // recorded on the run as `triggeringCommentId`. Runs without one (initial
-  // task runs, Resolve Conflicts, legacy runs) intentionally have no comment.
-  const commentById = new Map(topLevelComments.map((c) => [c._id, c]));
-  const runCommentMap = new Map<string, (typeof topLevelComments)[number]>();
-  for (const run of runs ?? []) {
-    if (!run.triggeringCommentId) continue;
-    const comment = commentById.get(run.triggeringCommentId);
-    if (comment) runCommentMap.set(run._id, comment);
-  }
-
-  const commentsShownWithRuns = new Set(
-    [...runCommentMap.values()].map((comment) => comment._id),
-  );
-
-  const sortedRunsDesc = [...(runs ?? [])].sort(
-    (a, b) =>
-      (b.startedAt ?? b._creationTime) - (a.startedAt ?? a._creationTime),
-  );
-
+  // Comments and task updates only: agent runs live in the sandbox chat.
   const activityTimeline: ActivityItem[] = [
     ...(createdAt !== undefined
       ? [{ kind: "created" as const, timestamp: createdAt }]
       : []),
-    ...sortedRunsDesc.map((run) => ({
-      kind: "run" as const,
-      timestamp: run.startedAt ?? run._creationTime,
-      run,
-    })),
     ...(taskActivity ?? []).map((activity) => ({
       kind: "taskActivity" as const,
       timestamp: activity.createdAt,
       activity,
     })),
-    ...topLevelComments.flatMap((comment) =>
-      commentsShownWithRuns.has(comment._id)
-        ? []
-        : [
-            {
-              kind: "comment" as const,
-              timestamp: comment.createdAt,
-              comment,
-            },
-          ],
-    ),
+    ...topLevelComments.map((comment) => ({
+      kind: "comment" as const,
+      timestamp: comment.createdAt,
+      comment,
+    })),
   ].sort((a, b) => a.timestamp - b.timestamp);
 
   // Comments sit in cards off the rail; contiguous non-comment events share a line.
@@ -222,29 +166,7 @@ export function ActivityTimeline({
         />
       );
     }
-    if (item.kind === "comment") {
-      return null;
-    }
-    const run = item.run;
-    const isActiveRun = run.status === "running" || run.status === "queued";
-    const runComment = runCommentMap.get(run._id);
-    return (
-      <Suspense key={run._id} fallback={<Spinner size="sm" />}>
-        <RunTimelineItem
-          run={run}
-          isActiveRun={isActiveRun}
-          streaming={streaming}
-          activeRunElapsed={activeRunElapsed}
-          isStopping={isStopping}
-          onStopConfirm={onStopConfirm}
-          runComment={runComment}
-          runCommentReplies={
-            runComment ? (repliesByParentId.get(runComment._id) ?? []) : []
-          }
-          users={users}
-        />
-      </Suspense>
-    );
+    return null;
   };
 
   return (
@@ -284,11 +206,9 @@ export function ActivityTimeline({
               <ListEnter
                 key={`rail-${segment.items
                   .map((item) =>
-                    item.kind === "run"
-                      ? item.run._id
-                      : item.kind === "taskActivity"
-                        ? item.activity._id
-                        : "created",
+                    item.kind === "taskActivity"
+                      ? item.activity._id
+                      : "created",
                   )
                   .join("-")}`}
                 index={segmentIndex}
