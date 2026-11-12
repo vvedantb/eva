@@ -1,5 +1,13 @@
 # Changelog
 
+## Late PR webhooks no longer reopen a merged PR
+
+Date: 2026-11-12
+
+WHY: Session 1004 showed PR 1274 as open after it merged. `gh pr ready` and `gh pr merge` ran a second apart; the merge webhook closed the session, then the late `ready_for_review` webhook set the PR row back to open.
+
+- `handlePullRequestEvent` ignores a live state (open/draft) for a merged or closed row unless the action is `reopened`. Title and branches still update.
+
 ## Phone: "Update available" prompt; solid composer
 
 Date: 2026-11-12
