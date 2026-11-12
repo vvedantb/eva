@@ -349,3 +349,17 @@ export {
   type SectionableProjectTask,
 } from "./projectMeta";
 export { MAINTENANCE_ERROR, isMaintenanceError } from "./maintenance";
+export {
+  APP_SORT_ORDERS,
+  SESSION_SORT_ORDERS,
+  linkedSessionGroups,
+  perRepoQueryCache,
+  sessionActivityAt,
+  sessionListEntries,
+  sortAppsForSidebar,
+  sortSessionsForSidebar,
+  type AppSortOrder,
+  type LinkedSessionGroup,
+  type SessionListEntry,
+  type SessionSortOrder,
+} from "./sessionList";

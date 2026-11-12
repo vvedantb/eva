@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { linkedSessionGroups } from "./linkedSessionGroups";
+import { linkedSessionGroups, sessionListEntries } from "@eva/shared";
 
 const row = (
   id: string,
@@ -68,5 +68,36 @@ describe("linkedSessionGroups", () => {
       },
     ]);
     expect(group.members.map((m) => m.repo)).toEqual(["home", "home"]);
+  });
+});
+
+describe("sessionListEntries", () => {
+  const app = (id: string, createdAt: number) => ({
+    _id: id,
+    _creationTime: createdAt,
+  });
+  const lists = [
+    {
+      repo: app("ts", 1),
+      sessions: [row("child", 30, { group: "g" }), row("solo", 10)],
+    },
+    { repo: app("v2", 2), sessions: [row("origin", 20, { group: "g" })] },
+    { repo: app("idle", 3), sessions: undefined },
+  ];
+
+  test("linked rows leave their apps; each sorts by the rows it shows", () => {
+    expect(
+      sessionListEntries(lists, "updated_at").map((entry) =>
+        entry.kind === "group"
+          ? `group ${entry._id}`
+          : `${entry._id} ${entry.sessions?.map((s) => s._id).join(",")}`,
+      ),
+    ).toEqual(["group g", "ts solo", "idle undefined", "v2 "]);
+  });
+
+  test("manual keeps groups on top, then the apps in input order", () => {
+    expect(
+      sessionListEntries(lists, "manual").map((entry) => entry._id),
+    ).toEqual(["g", "ts", "v2", "idle"]);
   });
 });
