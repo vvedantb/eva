@@ -170,13 +170,13 @@ export default function ChatScreen() {
     }
     const attachmentStorageIds = attachments.storageIds;
     attachments.clear();
-    send({ target: chat.parentId, message: composer.tokenize(text), attachmentStorageIds }).catch(() => {
+    send({ target: chat.target, message: composer.tokenize(text), attachmentStorageIds }).catch(() => {
       toast.error("Couldn't send your message");
     });
   };
 
   const handleStop = () => {
-    stop({ target: chat.parentId }).catch(() => toast.error("Couldn't stop Eva"));
+    stop({ target: chat.target }).catch(() => toast.error("Couldn't stop Eva"));
   };
 
   // Fork: a new session that starts from the transcript up to this message, as the web.
@@ -312,6 +312,7 @@ export default function ChatScreen() {
                 questions={questions}
                 buttonWeight="semibold"
                 onSubmit={async (answers) => {
+                  if (!chat.parentId) return;
                   try {
                     await answer({ entityId: chat.parentId, toolUseId: pending.toolUseId, answer: JSON.stringify(answers) });
                   } catch {

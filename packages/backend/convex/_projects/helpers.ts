@@ -5,7 +5,6 @@ import type {
   GenericDatabaseWriter,
 } from "convex/server";
 import { projectFields, conversationMessageValidator } from "../validators";
-import { listRow } from "../_validators/listRows";
 import { sessionStatusValidator } from "../_validators/enums";
 import type { DataModel, Id, Doc } from "../_generated/dataModel";
 
@@ -36,11 +35,11 @@ export const projectPlanningModeValidator = v.union(
 );
 
 /**
- * List rows (`listRow`) always include a resolved planning mode (stored or
- * inferred). The open project's panel reads the dropped fields from `get`.
+ * List rows always include a resolved planning mode (stored or inferred) and
+ * the project session's sandbox status.
  */
 export const projectListItemValidator = v.object({
-  ...listRow(projectSummaryFields),
+  ...projectSummaryFields,
   planningMode: projectPlanningModeValidator,
   /** The project session's sandbox status (`projectSandboxStatus`). */
   sandboxStatus: v.optional(sessionStatusValidator),

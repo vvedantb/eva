@@ -8,7 +8,7 @@ import { tokenizedToDisplayText } from "./mentionText";
 
 /** The comment-draft fields the list reads. */
 export interface CommentDraftFields {
-  kind: "taskComment" | "taskChat" | "projectChat" | "sessionChat";
+  kind: "taskComment" | "sessionChat";
   parentCommentId?: string;
   contextTitle: string;
   content: string;

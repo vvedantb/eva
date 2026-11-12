@@ -17,7 +17,6 @@ import { preferPersistedSandboxId } from "../_sandbox/resolveExistingSandboxId";
 import { isUsageLimitError, parseUsageLimitResetTime } from "./recovery";
 import { scheduleTaskOrchestratorNotify } from "../orchestratorShared";
 import { deriveLogUsage } from "../_logs/usage";
-import { touchAgentFinished } from "../_sandbox/activity";
 import { TASK_RUN_STREAM_PREFIX } from "../_chat/agentStreamIds";
 import { findTaskWorkSession } from "../_sessions/owner";
 
@@ -213,10 +212,6 @@ export async function finalizeRunStatus(
       prUrl: params.prUrl,
     });
   }
-  await touchAgentFinished(ctx, {
-    kind: "task",
-    entityId: String(run.taskId),
-  });
 
   // Single terminal-status choke point for a run, guarded above against
   // re-finalizing, so a watched task's master is woken exactly once.

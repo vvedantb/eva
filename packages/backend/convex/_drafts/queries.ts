@@ -60,11 +60,6 @@ export const listForRepo = authQuery({
             taskProjectId: task.projectId,
           };
         }
-        // Old task and project chat drafts: their chats moved to sessions,
-        // and `clearLegacyOwnerChatFields` deletes the rows.
-        if (draft.kind === "taskChat" || draft.kind === "projectChat") {
-          return null;
-        }
         if (draft.kind === "sessionChat" && draft.sessionId) {
           const session = await ctx.db.get(draft.sessionId);
           if (!session) return null;

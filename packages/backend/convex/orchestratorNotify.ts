@@ -18,15 +18,12 @@ type ChildSummary = {
   title: string;
   /** Optional because a quick task can exist before a repo is attached. */
   repoId: Id<"githubRepos"> | undefined;
-  parentId: ChildParentId;
+  /** The chat to report from; undefined when the child never chatted. */
+  parentId: ChildParentId | undefined;
 };
 
 /** Where the child's messages hang off: a session's turns live on its chats. */
-type ChildParentId =
-  | Id<"sessionChats">
-  | Id<"sessions">
-  | Id<"agentTasks">
-  | Id<"projects">;
+type ChildParentId = Id<"sessionChats"> | Id<"sessions">;
 
 async function loadChildSummary(
   ctx: MutationCtx,
@@ -57,7 +54,7 @@ async function loadChildSummary(
       kindLabel: "project",
       title: project.title,
       repoId: project.repoId,
-      parentId: owned?.chat._id ?? project._id,
+      parentId: owned?.chat._id,
     };
   }
   const task = await ctx.db.get(child.taskId);
@@ -70,7 +67,7 @@ async function loadChildSummary(
     kindLabel: "task",
     title: task.title,
     repoId: task.repoId,
-    parentId: owned?.chat._id ?? task._id,
+    parentId: owned?.chat._id,
   };
 }
 
@@ -97,9 +94,12 @@ async function clearWatch(
  */
 async function resolveChildOutcome(
   ctx: MutationCtx,
-  parentId: ChildParentId,
+  parentId: ChildParentId | undefined,
   reportedStatus: string,
 ): Promise<{ status: string; tail: string | undefined }> {
+  if (parentId === undefined) {
+    return decideChildOutcome(undefined, reportedStatus);
+  }
   const recent = await ctx.db
     .query("messages")
     .withIndex("by_parent", (q) => q.eq("parentId", parentId))

@@ -55,18 +55,6 @@ export const maybeDeleteSessionSandbox = internalMutation({
 });
 
 /**
- * In-flight safety only: the deleted task sandbox path scheduled this 48h
- * after a task closed. A task's sandbox is its session's now (the session
- * archive schedules `maybeDeleteSessionSandbox`), so it does nothing.
- * Remove in 3b.
- */
-export const maybeDeleteTaskSandbox = internalMutation({
-  args: { taskId: v.id("agentTasks") },
-  returns: v.null(),
-  handler: async () => null,
-});
-
-/**
  * One-off backlog sweep + weekly cron body. Deletes the sandboxes of archived
  * sessions whose grace has elapsed (a task's or project's sandbox is its
  * session's).
