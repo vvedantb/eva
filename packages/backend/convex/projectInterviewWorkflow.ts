@@ -412,8 +412,9 @@ export const recordInterviewSandbox = internalMutation({
  * The VM stops through the session stop path unless the session was already
  * `active` (the reviewer has it open) or spec generation chains on it; a VM
  * the session never took stops directly (`finishTaskRunSandbox`). A stopped
- * interview (`stopProjectInterview`) already released it: the VM finish is
- * then a no-op and no spec chains.
+ * interview (`stopProjectInterview`) already released the session's VM: a
+ * late release (a step can run after its workflow was cancelled) then stops
+ * only a VM of its own, and no spec chains.
  */
 export const releaseInterview = internalMutation({
   args: {
@@ -434,8 +435,11 @@ export const releaseInterview = internalMutation({
     );
     const chainSpec = finished.ok ? args.chainSpec : undefined;
     if (args.held !== undefined) {
+      // A stopped interview no longer owns the session's VM (a newer start
+      // may have resumed it): only a VM the session never took stops here.
       await finishTaskRunSandbox(ctx, args.sessionId, args.held.sandboxId, {
-        keepActive: args.held.wasActive || chainSpec !== undefined,
+        keepActive:
+          !finished.ok || args.held.wasActive || chainSpec !== undefined,
       });
     }
     if (chainSpec !== undefined) {
