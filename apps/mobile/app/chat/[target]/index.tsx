@@ -41,6 +41,7 @@ import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import type { ReactNode } from "react";
 import { Linking, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AssistantMessage, LiveAssistantMessage } from "@/chat/AssistantMessage";
@@ -51,6 +52,7 @@ import { ModelChip } from "@/chat/ModelChip";
 import { ChatHeader } from "@/chat/ChatHeader";
 import { DayDivider } from "@/chat/DayDivider";
 import { UserMessageText } from "@/chat/MentionChip";
+import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { MessageFooter } from "@/chat/MessageFooter";
 import { useAttachments } from "@/chat/useAttachments";
@@ -291,6 +293,7 @@ export default function ChatScreen() {
             pending={pending}
             questions={questions}
             onStop={handleStop}
+            queue={<QueuedMessagesPanel parentId={parentId} isExecuting={working} isSandboxActive={chat.sandboxActive} />}
           />
         </ConversationDock>
         {/* Centred on the thread, which sits 10 left of the screen's centre, as the web panel. */}
@@ -304,7 +307,9 @@ export default function ChatScreen() {
  * The chat's dock: the agent's question card, the composer or "This chat is
  * closed". It owns the draft, the attachments and the model pick, so a
  * keystroke redraws the dock only, not the transcript above it. It stays
- * mounted while the chat is open, so a draft outlives a question card.
+ * mounted while the chat is open, so a draft outlives a question card. The
+ * queue panel sits on the composer, as the web; the screen builds it, so a
+ * keystroke here does not redraw it either.
  */
 function ChatDock({
   target,
@@ -315,6 +320,7 @@ function ChatDock({
   pending,
   questions,
   onStop,
+  queue,
 }: {
   target: string;
   chat: Chat;
@@ -324,6 +330,8 @@ function ChatDock({
   pending: PendingQuestion | null | undefined;
   questions: ParsedQuestion[] | null;
   onStop: () => void;
+  /** The queued messages, above the composer only (not over a question card), as the web. */
+  queue: ReactNode;
 }) {
   const scheme = useScheme();
   const insets = useSafeAreaInsets();
@@ -390,6 +398,7 @@ function ChatDock({
     // thread. Send stays ready during a turn (a send queues behind it) and Stop sits beside
     // it, as `stopMode="alongside"`.
     <View className="pr-2.5">
+      {queue}
       <PromptInput
         layout="inline"
         shape="pill"

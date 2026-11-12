@@ -299,6 +299,21 @@ export {
 } from "./prTimeline";
 export { SANDBOX_CHAT_COPY, sandboxComposerState } from "./sandboxComposer";
 export {
+  QUEUE_PANEL_LABEL,
+  moveQueuedId,
+  orderQueuedRows,
+  queuePanelLabel,
+  queuedMessagePreview,
+} from "./queuedMessages";
+export {
+  parseReviewCommentSegments,
+  stripReviewCommentBlocks,
+  type ReviewComment,
+  type ReviewCommentAnchor,
+  type ReviewCommentMessageSegment,
+  type ReviewCommentSide,
+} from "./reviewCommentBlocks";
+export {
   ACTIVE_PROJECT_PHASES,
   BUILDABLE_PROJECT_PHASES,
   PROJECT_LIST_DEFAULTS,

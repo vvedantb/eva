@@ -14,7 +14,7 @@ import type { ChatRepo } from "@/lib/components/chat/chatBodyUtils";
 import {
   parseReviewCommentSegments,
   type ReviewCommentMessageSegment,
-} from "@/lib/reviewComments";
+} from "@eva/shared";
 
 interface ReviewCommentMessageProps {
   text: string;
