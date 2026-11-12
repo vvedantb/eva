@@ -145,6 +145,7 @@ export function useTaskDetail(
   const data = useTaskDetailQueries(taskId);
   const execution = useTaskExecutionControls(taskId);
   const sandbox = useTaskSandboxControls({
+    taskId,
     task: data.task,
     taskSession: data.taskSession,
     hasRuns: data.hasRuns,

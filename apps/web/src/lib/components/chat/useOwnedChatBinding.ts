@@ -6,6 +6,7 @@ import {
   buildTraitsExecutionPayload,
   resolveTraitsForDisplay,
   type AIModel,
+  type Id,
 } from "@eva/backend";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
@@ -26,8 +27,8 @@ export type OwnedChatBindingCommon = Pick<
  * account drive the composer, and sends go through the session chat ports.
  * Before the session exists there is no chat to read (`entity` is
  * undefined) and `seedModel` (the seed `ensureOwned` gives the chat) shows in
- * the picker. `cancel` may route a turn the chat does not own (a quick task's
- * first run) elsewhere.
+ * the picker. Stop is `sessions.stopChatTurn` on the chat, or on
+ * `stopTarget` (a task, whose run the chat does not own).
  */
 export function useOwnedChatBinding({
   ownedSession,
@@ -35,7 +36,7 @@ export function useOwnedChatBinding({
   ownerLabel,
   title,
   common,
-  cancelOther,
+  stopTarget,
 }: {
   ownedSession: OwnedSession;
   seedModel: AIModel;
@@ -43,13 +44,13 @@ export function useOwnedChatBinding({
   /** The owner's title; undefined while it loads. */
   title: string | undefined;
   common: OwnedChatBindingCommon;
-  cancelOther?: () => Promise<null> | undefined;
+  stopTarget?: { taskId: Id<"agentTasks"> };
 }): SandboxChatBinding {
   const { repo } = useRepo();
   const { owned, session, chatSource } = ownedSession;
   const chatModel = useChatModel(chatSource, seedModel);
   const ports = useSessionTurnPorts(chatSource, common.accounts);
-  const cancelChat = useMutation(api.sessionWorkflow.cancelExecution);
+  const stopChatTurn = useMutation(api.sessions.stopChatTurn);
   const { model, chat } = chatModel;
   const { options: modelOptions } = useAvailableAiModels(repo._id, model);
 
@@ -80,10 +81,12 @@ export function useOwnedChatBinding({
     persistAccount: chatModel.persistProviderAccountId,
     prewarm: chatModel.prewarm,
     ports,
+    // Stopping never creates the session: no chat yet means nothing to stop.
     cancel: () =>
-      cancelOther?.() ??
-      (owned?.chatId !== undefined
-        ? cancelChat({ chatId: owned.chatId })
-        : Promise.resolve(null)),
+      stopTarget !== undefined
+        ? stopChatTurn({ target: stopTarget })
+        : owned?.chatId !== undefined
+          ? stopChatTurn({ target: { chatId: owned.chatId } })
+          : Promise.resolve(null),
   };
 }

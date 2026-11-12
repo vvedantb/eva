@@ -77,7 +77,7 @@ export function useTaskDetailTab(routing: UseTaskDetailRouting | undefined) {
 /** Agent run start / stop / resolve-conflicts and PR creation. */
 export function useTaskExecutionControls(taskId: Id<"agentTasks">) {
   const startExecution = useMutation(api.agentTasks.startExecution);
-  const cancelExecution = useMutation(api.taskWorkflow.cancelExecution);
+  const stopChatTurn = useMutation(api.sessions.stopChatTurn);
   const createTaskPrAction = useAction(api.taskWorkflowActions.createTaskPr);
 
   const [isCreatingPr, setIsCreatingPr] = useState(false);
@@ -114,7 +114,7 @@ export function useTaskExecutionControls(taskId: Id<"agentTasks">) {
   const handleStopExecution = async () => {
     setIsStopping(true);
     try {
-      await cancelExecution({ taskId });
+      await stopChatTurn({ target: { taskId } });
     } catch (err) {
       console.error("Failed to stop execution:", err);
       toast.error("Could not stop the run. Try again.");
@@ -224,12 +224,14 @@ function createSurfaceSelector(
  * project's (`useTaskSession`).
  */
 export function useTaskSandboxControls({
+  taskId,
   task,
   taskSession,
   hasRuns,
   routing,
   setExecutionError,
 }: {
+  taskId: Id<"agentTasks">;
   task: TaskDetailTask;
   taskSession: TaskSession;
   hasRuns: boolean;
@@ -237,14 +239,15 @@ export function useTaskSandboxControls({
   setExecutionError: (message: string | null) => void;
 }) {
   const startSessionSandbox = useMutation(api.sessions.startSandbox);
-  const stopSessionSandbox = useMutation(api.sessions.stopSandbox);
+  const stopWorkSandbox = useMutation(api.sessions.stopWorkSandbox);
   const runSessionDevServer = useMutation(api.sessions.runDevServer);
   const runSessionBackgroundCommands = useMutation(
     api.sessions.runBackgroundCommands,
   );
   const { sandbox } = taskSession;
   // Every action targets the session; a running sandbox implies it exists,
-  // so `ensure` only reads it there.
+  // so `ensure` only reads it there. Stop names the task and never creates
+  // the session.
   const onSession =
     (action: (args: { sessionId: Id<"sessions"> }) => Promise<null>) =>
     async () => {
@@ -252,7 +255,7 @@ export function useTaskSandboxControls({
       return await action({ sessionId });
     };
   const startSandbox = onSession(startSessionSandbox);
-  const stopSandbox = onSession(stopSessionSandbox);
+  const stopSandbox = () => stopWorkSandbox({ target: { taskId } });
   const runDevServerMutation = onSession(runSessionDevServer);
   const runBackgroundCommandsMutation = onSession(runSessionBackgroundCommands);
 

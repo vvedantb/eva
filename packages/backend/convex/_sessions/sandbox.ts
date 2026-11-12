@@ -342,7 +342,8 @@ export const runBackgroundCommands = authMutation({
 });
 
 /**
- * Shared stop path for the user Stop button and PR-terminal webhook auto-stop.
+ * Shared stop path for the Stop button (`stopWorkSandbox`), archive and the
+ * PR-terminal webhook auto-stop.
  * Marks the session `"stopping"` then schedules provider teardown.
  */
 export async function requestSessionSandboxStop(
@@ -439,6 +440,10 @@ export async function requestSessionSandboxStop(
   });
 }
 
+/**
+ * Archive teardown: stops the sandbox even mid-turn. The Stop button is
+ * `stopWorkSandbox` (`_sessions/stop.ts`), which refuses while an agent works.
+ */
 export const stopSandbox = authMutation({
   args: { sessionId: v.id("sessions") },
   returns: v.null(),
