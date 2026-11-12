@@ -36,6 +36,7 @@ import { getSandboxClient } from "../_sandbox/factory";
 import { launchScript } from "./launch";
 import type { LinkedRepoEnvRow } from "./linkedReposEnv";
 import { ensureSwapFile } from "./swap";
+import { sleep } from "../_shared/async";
 import { PACKAGE_HELPER_SCRIPT, pkgInstall } from "./packageManager";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
 
@@ -666,6 +667,60 @@ export async function getRunningSandboxHandle(
   return sandbox.state === "running" ? sandbox : null;
 }
 
+// Covers a slow launch (cold CLI install + uploads + ready poll); a launcher
+// that died holding the lock blocks the next one for at most this long.
+const SANDBOX_LAUNCH_LOCK_TTL_MS = 120_000;
+const SANDBOX_LAUNCH_LOCK_WAIT_MS = 120_000;
+const SANDBOX_LAUNCH_LOCK_POLL_MS = 500;
+
+/**
+ * Serialises `launchScript` per sandbox. Every launch writes the same fixed
+ * files (/tmp/design-prompt.txt, /tmp/eva-launch-runner.sh, the pid/ready
+ * markers), so two overlapping launches on one sandbox clobber each other.
+ * Observed on quick task 284: a session prewarm and the task launch overlapped
+ * by 2s, only the session daemon started, the task accepted its ready marker,
+ * and the task prompt never ran until the watchdog killed it 15 minutes later.
+ * Fails open after the wait so a stuck lock can never block launches outright.
+ */
+async function withSandboxLaunchLock<T>(
+  ctx: GenericActionCtx<DataModel>,
+  sandboxId: string,
+  entityId: string,
+  launch: () => Promise<T>,
+): Promise<T> {
+  const key = `sandbox:${sandboxId}`;
+  const claim = () =>
+    ctx.runMutation(internal.sandboxDaemon.claimDaemonLaunchLease, {
+      entityId: key,
+      ttlMs: SANDBOX_LAUNCH_LOCK_TTL_MS,
+    });
+  const waitStartedAt = Date.now();
+  let held = await claim();
+  while (!held && Date.now() - waitStartedAt < SANDBOX_LAUNCH_LOCK_WAIT_MS) {
+    await sleep(SANDBOX_LAUNCH_LOCK_POLL_MS);
+    held = await claim();
+  }
+  const waitedMs = Date.now() - waitStartedAt;
+  if (!held) {
+    console.warn(
+      `[sandbox][launch] launch lock still held after ${waitedMs}ms — launching anyway entityId=${entityId} sandboxId=${sandboxId}`,
+    );
+  } else if (waitedMs > 0) {
+    console.log(
+      `[sandbox][launch] waited ${waitedMs}ms for launch lock entityId=${entityId} sandboxId=${sandboxId}`,
+    );
+  }
+  try {
+    return await launch();
+  } finally {
+    if (held) {
+      await ctx.runMutation(internal.sandboxDaemon.releaseDaemonLaunchLease, {
+        entityId: key,
+      });
+    }
+  }
+}
+
 /** Signs sandbox and MCP tokens, then launches the AI agent script on the sandbox. */
 export async function signAndLaunchScript(
   ctx: GenericActionCtx<DataModel>,
@@ -820,22 +875,24 @@ export async function signAndLaunchScript(
       })
     : [];
 
-  await launchScript(
-    sandbox,
-    prompt,
-    completionMutation,
-    entityIdField,
-    sandboxToken,
-    entityId,
-    {
-      ...opts,
-      extraEnvVars,
-      mcpToken: mcpToken?.token,
-      mcpBaseUrl,
-      systemSkillsJson: JSON.stringify({ skills: systemSkillStubs }),
-      harnessCatalogToken,
-      ...(linkedRepos.length > 0 ? { linkedRepos } : {}),
-    },
+  await withSandboxLaunchLock(ctx, sandbox.id, entityId, () =>
+    launchScript(
+      sandbox,
+      prompt,
+      completionMutation,
+      entityIdField,
+      sandboxToken,
+      entityId,
+      {
+        ...opts,
+        extraEnvVars,
+        mcpToken: mcpToken?.token,
+        mcpBaseUrl,
+        systemSkillsJson: JSON.stringify({ skills: systemSkillStubs }),
+        harnessCatalogToken,
+        ...(linkedRepos.length > 0 ? { linkedRepos } : {}),
+      },
+    ),
   );
   console.log(
     `[sandbox][launch] launchScript completed in ${Date.now() - launchStartedAt}ms entityId=${entityId} sandboxId=${sandbox.id}`,

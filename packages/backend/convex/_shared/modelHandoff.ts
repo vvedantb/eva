@@ -21,26 +21,22 @@ const OLDER_MESSAGE_LIMIT = 320;
 /** Reserve for the omission marker, so the closing tag survives the cap. */
 const OMISSION_MARKER_RESERVE = 80;
 /**
- * Bound on the history read. A handoff only ever replays the tail since the
+ * Bounds on the history read. A handoff only ever replays the tail since the
  * incoming provider's last checkpoint, so the whole table is never needed.
+ * Rows carry their full `activityLog`, so a count cap alone can pass Convex's
+ * 16 MiB read limit: reads go in small batches and stop at a byte budget. One
+ * send reads twice (alert + prompt), so the budget stays well under half.
  */
 const HANDOFF_SCAN_LIMIT = 400;
-/**
- * Byte bound on the same read. Message rows carry tool steps and can each be
- * hundreds of KB: 400 of them passed Convex's 16 MiB per-function read limit
- * on a long session (2026-11-11, session 427), and because this runs inside
- * every queue drain, Stop and the stall watchdog both failed for hours. The
- * context block is capped at {@link HANDOFF_CONTEXT_LIMIT} anyway, so a few
- * MiB of history is far more than it can ever use.
- */
-const HANDOFF_SCAN_BYTE_BUDGET = 4 * 1024 * 1024;
+const HANDOFF_SCAN_BATCH = 4;
+const HANDOFF_SCAN_BYTE_BUDGET = 2 * 1024 * 1024;
 
 export type HandoffMessage = Pick<
   Doc<"messages">,
   "content" | "finishedAt" | "isSystemAlert" | "model" | "role"
 >;
 
-type HandoffParentId = Id<"sessionChats"> | Id<"sessions"> | Id<"projects"> | Id<"agentTasks">;
+type HandoffParentId = Id<"sessionChats"> | Id<"sessions">;
 
 export type ModelHandoff =
   | { kind: "none" }
@@ -250,54 +246,46 @@ export async function detectModelHandoff(
   incomingModel: string,
   fallbackPreviousProvider: AIProvider | undefined,
 ): Promise<ModelHandoff> {
-  const recent = await readHandoffHistory(ctx, parentId, incomingModel);
   return detectModelHandoffFromMessages(
-    recent.reverse(),
+    await readHandoffHistory(ctx, parentId),
     incomingModel,
     fallbackPreviousProvider,
   );
 }
 
-/**
- * Newest-first history for handoff detection, streamed so it can stop early.
- *
- * Stops at the previous model-stamped user turn when it used the incoming
- * provider: that alone proves "no handoff", which is the answer for almost
- * every turn, so the common case reads a handful of rows instead of 400.
- * Otherwise it keeps reading up to {@link HANDOFF_SCAN_LIMIT} rows or
- * {@link HANDOFF_SCAN_BYTE_BUDGET} bytes, whichever comes first.
- */
-async function readHandoffHistory(
+/** The chat's newest rows, oldest first, within the count and byte bounds. */
+export async function readHandoffHistory(
   ctx: QueryCtx,
   parentId: HandoffParentId,
-  incomingModel: string,
 ): Promise<Doc<"messages">[]> {
-  const incomingProvider = getAIModelProvider(normalizeAIModel(incomingModel));
-  const rows: Doc<"messages">[] = [];
+  const newestFirst: Doc<"messages">[] = [];
   let bytes = 0;
-  let seenCurrentUser = false;
-  const history = ctx.db
-    .query("messages")
-    .withIndex("by_parent", (query) => query.eq("parentId", parentId))
-    .order("desc");
-  for await (const message of history) {
-    rows.push(message);
-    bytes += JSON.stringify(message).length;
-    if (message.role === "user" && message.isSystemAlert !== true) {
-      if (!seenCurrentUser) {
-        seenCurrentUser = true;
-      } else if (
-        message.model !== undefined &&
-        getAIModelProvider(normalizeAIModel(message.model)) === incomingProvider
-      ) {
-        break;
-      }
+  let before: number | undefined;
+  while (newestFirst.length < HANDOFF_SCAN_LIMIT) {
+    const batch = await ctx.db
+      .query("messages")
+      .withIndex("by_parent", (query) =>
+        before === undefined
+          ? query.eq("parentId", parentId)
+          : query.eq("parentId", parentId).lt("_creationTime", before),
+      )
+      .order("desc")
+      .take(HANDOFF_SCAN_BATCH);
+    for (const message of batch) {
+      newestFirst.push(message);
+      bytes += JSON.stringify(message).length;
     }
-    if (rows.length >= HANDOFF_SCAN_LIMIT || bytes >= HANDOFF_SCAN_BYTE_BUDGET) {
+    const oldest = batch.at(-1);
+    if (
+      oldest === undefined ||
+      batch.length < HANDOFF_SCAN_BATCH ||
+      bytes >= HANDOFF_SCAN_BYTE_BUDGET
+    ) {
       break;
     }
+    before = oldest._creationTime;
   }
-  return rows;
+  return newestFirst.reverse();
 }
 
 /** Posts the "Handed off from X to Y" chat alert, when this turn is a handoff. */

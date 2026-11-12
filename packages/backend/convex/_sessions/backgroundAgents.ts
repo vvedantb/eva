@@ -95,7 +95,7 @@ export function pruneSettledBackgroundAgents(
 /**
  * Subagents still working: started, never settled, and recent enough to be
  * believable. A backgrounded Agent/Task outlives the turn that spawned it, so
- * this — not `activeWorkflowId` — is what says "the surface is still busy"
+ * this — not the turn's workflow — is what says "the surface is still busy"
  * once the main turn has completed.
  */
 export function runningBackgroundAgents(

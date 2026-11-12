@@ -61,28 +61,33 @@ export function SandboxChatPanel({
   onSandboxToggle,
 }: SandboxChatPanelProps & { binding: SandboxChatBinding }) {
   const { repo, basePath } = useRepo();
-  const { entity, doc, model, firstRun } = binding;
+  const { entity, doc, model, firstRun, ownerLabel } = binding;
+  // All undefined until the owner's session exists: nothing to read yet, and
+  // the first send creates it.
   const { parentId, streamingEntityId, draftTarget } = sandboxChatKeys(entity);
   const { messages, isExecuting } = useSandboxChatTranscript(binding);
   // `messages` is the live part; the rendered transcript adds the history
   // above it once the reader goes there.
   const history = useOlderTranscript({
-    parentId,
+    parentId: parentId ?? "skip",
     live: messages,
     active: true,
   });
-  const queuedMessages = useQuery(api.queuedMessages.listByParent, {
-    parentId,
-  });
-  const chatStreaming = useQuery(api.streaming.get, {
-    entityId: streamingEntityId,
-  });
+  const queuedMessages = useQuery(
+    api.queuedMessages.listByParent,
+    parentId ? { parentId } : "skip",
+  );
+  const chatStreaming = useQuery(
+    api.streaming.get,
+    streamingEntityId ? { entityId: streamingEntityId } : "skip",
+  );
   // The first run streams to its own row while it owns the bubble.
   const streaming = firstRun?.isInProgress ? firstRun.streaming : chatStreaming;
   // Same entityId the sandbox posts with (the entity id, not the stream key).
-  const blockingQuestion = useQuery(api.pendingQuestions.getActive, {
-    entityId: parentId,
-  });
+  const blockingQuestion = useQuery(
+    api.pendingQuestions.getActive,
+    parentId ? { entityId: parentId } : "skip",
+  );
   const answerPendingQuestion = useMutation(api.pendingQuestions.answer);
   const { draftBundle, isDraftLoading } = useSandboxChatDraft(draftTarget);
   const { isSwitchingAccount, switchProviderAccount } =
@@ -92,7 +97,6 @@ export function SandboxChatPanel({
     });
 
   const setProviderAccountId = async (next: string | null) => {
-    if (!binding.isOwner) return;
     await switchProviderAccount(binding.resolveAccountId(next) ?? null);
   };
 
@@ -102,7 +106,7 @@ export function SandboxChatPanel({
     queuedMessages: queuedMessages ?? [],
     model,
     accountId: binding.providerAccountId,
-    accounts: binding.pickerAccounts,
+    accounts: binding.accounts,
     resolveAccountId: binding.resolveAccountId,
     isSandboxActive,
     setModel: binding.setModel,
@@ -128,6 +132,7 @@ export function SandboxChatPanel({
     toolUseId: string,
     answers: Record<string, string>,
   ) => {
+    if (!parentId) return;
     await answerPendingQuestion({
       entityId: parentId,
       toolUseId,
@@ -135,15 +140,13 @@ export function SandboxChatPanel({
     });
   };
 
-  // `accounts`, not `pickerAccounts`: the synthetic owner row exists only for
-  // non-owners, who never see the usage-limit recovery card.
   const chatSurface = buildSandboxChatSurface({
     entity,
     repoId: repo._id,
     model,
     isExecuting,
     doc,
-    canSwitchAccount: binding.isOwner,
+    canSwitchAccount: true,
     messages,
     accounts: binding.accounts,
     resolveAccountId: binding.resolveAccountId,
@@ -161,7 +164,7 @@ export function SandboxChatPanel({
   const usageAccountLabel =
     binding.providerAccountId === null
       ? "Team"
-      : (binding.pickerAccounts.find(
+      : (binding.accounts.find(
           (account) => account.id === binding.providerAccountId,
         )?.label ?? "Selected account");
 
@@ -176,7 +179,7 @@ export function SandboxChatPanel({
       <SubagentThreadLayer
         surface={chatSurface}
         parentTitle={
-          doc?.title ?? (entity.kind === "task" ? "Task" : "Project")
+          doc?.title ?? (ownerLabel === "task" ? "Task" : "Project")
         }
         messages={chatMessages}
         streamingActivity={streaming?.currentActivity}
@@ -185,7 +188,7 @@ export function SandboxChatPanel({
       >
         <ChatBody
           repo={{ id: repo._id, basePath }}
-          conversationId={parentId}
+          conversationId={parentId ?? `${ownerLabel}-chat`}
           chatParentId={parentId}
           messages={chatMessages}
           isLoadingMessages={messages === undefined}
@@ -205,7 +208,7 @@ export function SandboxChatPanel({
           placeholder={composer.placeholder}
           emptyStateTitle={
             isSandboxActive
-              ? `Ask Eva anything about this ${entity.kind}'s running sandbox.`
+              ? `Ask Eva anything about this ${ownerLabel}'s running sandbox.`
               : SANDBOX_CHAT_COPY.asleepTitle
           }
           emptyStateDescription={
@@ -223,7 +226,7 @@ export function SandboxChatPanel({
             model,
             setModel: queueGate.setModel,
             modelOptions: binding.modelOptions,
-            accounts: binding.pickerAccounts,
+            accounts: binding.accounts,
             accountId: binding.providerAccountId,
             onAccountChange: queueGate.setAccount,
             displayTraits: binding.displayTraits,

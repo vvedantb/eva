@@ -7,6 +7,8 @@ import {
 } from "@vvedantb/ui";
 import { IconChevronRight } from "@tabler/icons-react";
 import { isChunkLoadError } from "@/lib/utils/isChunkLoadError";
+import { isMaintenanceError } from "@eva/shared";
+import { MaintenanceScreen } from "./MaintenanceScreen";
 import {
   claimStaleDeployReload,
   reloadForStaleDeploy,
@@ -32,6 +34,11 @@ export function DeploymentErrorFallback({ error }: { error: Error }) {
 
   if (shouldReload) {
     return <div className="min-h-dvh w-full bg-background" />;
+  }
+
+  // A query that threw before the live status query reported maintenance.
+  if (isMaintenanceError(error)) {
+    return <MaintenanceScreen />;
   }
 
   return (

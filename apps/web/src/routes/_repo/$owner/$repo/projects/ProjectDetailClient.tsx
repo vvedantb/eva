@@ -32,7 +32,6 @@ import type { TaskRouteSandboxTab } from "@/lib/search-params";
 import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
 import type { EntityResolveStatus } from "@/lib/numId";
 import {
-  getAgentBrowsingAt,
   getProjectPrFlags,
   isProjectDraftOrFinalized,
   parseProjectSpec,
@@ -90,8 +89,6 @@ export function ProjectDetailClient({
   );
 
   const project = useQuery(api.projects.get, { id: projectId });
-  const chatTurnOpen = useChatTurnOpen(projectId);
-  const chatUnread = useChatUnread(projectId);
   useEntityDocumentTitle(project?.title);
   const streaming = useQuery(api.streaming.get, { entityId: projectId });
   const latestDeployment = useQuery(
@@ -99,12 +96,7 @@ export function ProjectDetailClient({
     { projectId: projectId },
   );
 
-  const sandbox = useProjectSandbox(
-    projectId,
-    project?.phase,
-    project?.sandboxId,
-    project?.reviewProjectSandboxStatus,
-  );
+  const sandbox = useProjectSandbox(projectId, project?.phase);
   const {
     canStartSandbox,
     isSandboxActive,
@@ -113,14 +105,18 @@ export function ProjectDetailClient({
     sandboxStartupActivity,
     sandboxId: projectSandboxId,
   } = sandbox;
+  // The project chats in its session's Main chat; nothing before it exists.
+  const chatId = sandbox.projectSession.owned?.chatId;
+  const chatTurnOpen = useChatTurnOpen(chatId);
+  const chatUnread = useChatUnread(chatId);
 
-  const prewarmChatDaemon = useMutation(
-    api.projectChatWorkflow.prewarmChatDaemon,
+  const prewarmSessionChatDaemon = useMutation(
+    api.sessionWorkflow.prewarmDaemon,
   );
   useEffect(() => {
-    if (!isSandboxActive || !projectSandboxId) return;
-    void prewarmChatDaemon({ projectId });
-  }, [projectId, isSandboxActive, projectSandboxId, prewarmChatDaemon]);
+    if (!isSandboxActive || !projectSandboxId || !chatId) return;
+    void prewarmSessionChatDaemon({ chatId });
+  }, [chatId, isSandboxActive, projectSandboxId, prewarmSessionChatDaemon]);
 
   const isSandboxSurface = surface === "sandbox";
 
@@ -154,7 +150,7 @@ export function ProjectDetailClient({
     setExpandRightSignal((n) => n + 1);
   };
 
-  useAgentBrowsingAutoSwitch(getAgentBrowsingAt(project), () => {
+  useAgentBrowsingAutoSwitch(sandbox.sandbox.agentBrowsingAt, () => {
     if (!projectPathSegment) return;
     void navigate({
       to: toInternalRepoHref(

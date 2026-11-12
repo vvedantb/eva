@@ -32,97 +32,42 @@ async function fixture() {
 
 describe("active sandbox sweeps", () => {
   test(
-    "find every active sandbox across sessions, tasks and projects, and nothing else",
+    "find every active session sandbox, and nothing else",
     async () => {
       const f = await fixture();
       const ids = await f.t.run(async (ctx) => {
-        const now = Date.now();
         const session = (
           title: string,
           status: "active" | "closed",
           sandboxId?: string,
         ) =>
           ctx.db.insert("sessions", {
+            owner: { kind: "standalone" },
             repoId: f.repoId,
             userId: f.userId,
             title,
             status,
             ...(sandboxId === undefined ? {} : { sandboxId }),
           });
-        const task = (
-          title: string,
-          reviewTaskSandboxStatus: "active" | "closed",
-          sandboxId?: string,
-        ) =>
-          ctx.db.insert("agentTasks", {
-            title,
-            status: "business_review",
-            repoId: f.repoId,
-            reviewTaskSandboxStatus,
-            createdAt: now,
-            updatedAt: now,
-            createdBy: f.userId,
-            ...(sandboxId === undefined ? {} : { sandboxId }),
-          });
-        const project = (
-          title: string,
-          reviewProjectSandboxStatus: "active" | "closed",
-          sandboxId?: string,
-        ) =>
-          ctx.db.insert("projects", {
-            repoId: f.repoId,
-            userId: f.userId,
-            title,
-            phase: "in_progress",
-            rawInput: title,
-            updatedAt: now,
-            reviewProjectSandboxStatus,
-            ...(sandboxId === undefined ? {} : { sandboxId }),
-          });
-
         const liveSession = await session("Live", "active", "sbx-session");
         await session("Closed", "closed", "sbx-session-old");
         await session("Active, no sandbox yet", "active");
-        const liveTask = await task("Live", "active", "sbx-task");
-        await task("Closed", "closed", "sbx-task-old");
-        await task("Active, no sandbox yet", "active");
-        const liveProject = await project("Live", "active", "sbx-project");
-        await project("Closed", "closed", "sbx-project-old");
-        await project("Active, no sandbox yet", "active");
-        return { liveSession, liveTask, liveProject };
+        return { liveSession };
       });
 
       const sweep = await f.t.query(
         internal.sandboxAutoStop.listActiveSandboxes,
       );
-      expect(sweep).toEqual({
-        sessionIds: [ids.liveSession],
-        taskIds: [ids.liveTask],
-        projectIds: [ids.liveProject],
-      });
+      expect(sweep).toEqual({ sessionIds: [ids.liveSession] });
 
       const entities = await f.t.query(
         internal.sandboxDaemon.listActiveSandboxEntities,
       );
-      expect(
-        entities.toSorted((a, b) => a.sandboxId.localeCompare(b.sandboxId)),
-      ).toEqual([
-        {
-          entityTable: "projects",
-          entityId: String(ids.liveProject),
-          sandboxId: "sbx-project",
-          repoId: f.repoId,
-        },
+      expect(entities).toEqual([
         {
           entityTable: "sessions",
           entityId: String(ids.liveSession),
           sandboxId: "sbx-session",
-          repoId: f.repoId,
-        },
-        {
-          entityTable: "agentTasks",
-          entityId: String(ids.liveTask),
-          sandboxId: "sbx-task",
           repoId: f.repoId,
         },
       ]);

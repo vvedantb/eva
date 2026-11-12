@@ -64,7 +64,7 @@ export function SessionHeaderMenu({
   const [renameValue, setRenameValue] = useState("");
   const [archiveTarget, setArchiveTarget] =
     useState<SessionArchiveTarget | null>(null);
-  const isArchived = session.archived === true;
+  const isArchived = session.archive !== undefined;
   const pathSegment = entityPathSegment(session);
 
   return (

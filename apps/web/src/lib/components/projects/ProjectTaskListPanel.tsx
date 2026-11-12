@@ -2,7 +2,7 @@
 
 import type { Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
-import { api } from "@eva/backend";
+import { api, taskScheduledAt } from "@eva/backend";
 import { projectTaskSections, type DisplayTaskStatus } from "@eva/shared";
 import { useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
@@ -96,12 +96,12 @@ function SortableTaskWrapper({
             hasUnread={task.hasUnread}
             isAwaitingAnswer={task.isAwaitingAnswer}
             hasError={hasError}
-            sandboxStatus={task.reviewTaskSandboxStatus}
+            sandboxStatus={task.sandboxStatus}
             numId={task.numId}
             projectNumId={projectNumId}
             tags={task.tags}
             createdAt={task._creationTime}
-            scheduledAt={task.scheduledAt}
+            scheduledAt={taskScheduledAt(task)}
             href={
               entityPathSegment(task)
                 ? `${basePath}/quick-tasks/${entityPathSegment(task)}`
@@ -333,12 +333,12 @@ export function ProjectTaskListPanel({
                             hasUnread={task.hasUnread}
                             isAwaitingAnswer={task.isAwaitingAnswer}
                             hasError={errorTaskIdSet.has(task._id)}
-                            sandboxStatus={task.reviewTaskSandboxStatus}
+                            sandboxStatus={task.sandboxStatus}
                             numId={task.numId}
                             projectNumId={projectNumId}
                             tags={task.tags}
                             createdAt={task._creationTime}
-                            scheduledAt={task.scheduledAt}
+                            scheduledAt={taskScheduledAt(task)}
                             href={
                               entityPathSegment(task)
                                 ? `${basePath}/quick-tasks/${entityPathSegment(task)}`

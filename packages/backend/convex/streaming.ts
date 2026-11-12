@@ -11,9 +11,7 @@ import { cancelledMessageOutcome } from "./_chat/cancelledMessage";
 import {
   AUTOMATION_RUN_STREAM_PREFIX,
   PR_RECAP_STREAM_PREFIX,
-  PROJECT_CHAT_STREAM_PREFIX,
   SESSION_SUMMARY_STREAM_PREFIX,
-  TASK_CHAT_STREAM_PREFIX,
   TASK_RUN_STREAM_PREFIX,
 } from "./_chat/agentStreamIds";
 import {
@@ -139,11 +137,12 @@ type StreamOwner =
   | { kind: "doc"; docId: Id<"docs"> }
   | { kind: "report"; reportId: Id<"evaluationReports"> }
   | { kind: "taskRun"; runId: Id<"agentRuns"> }
-  | { kind: "automationRun"; runId: Id<"automationRuns"> };
+  | { kind: "automationRun"; runId: Id<"automationRuns"> }
+  | { kind: "project"; projectId: Id<"projects"> };
 
 /**
  * Maps every streaming entity id the app reads to its owner: the prefixed
- * ids (`_chat/agentStreamIds.ts`, the chat prefixes, sandbox startup rows)
+ * ids (`_chat/agentStreamIds.ts`, sandbox startup rows)
  * and the bare row ids of session chats, sessions, docs (interview, test
  * gen), evaluation reports and projects (interview). Unknown ids map to null.
  */
@@ -178,20 +177,6 @@ function parseStreamOwner(
       ? { kind: "sandboxOwner", owner: { kind: "session", sessionId } }
       : null;
   }
-  const taskChat = after(TASK_CHAT_STREAM_PREFIX);
-  if (taskChat !== null) {
-    const taskId = db.normalizeId("agentTasks", taskChat);
-    return taskId
-      ? { kind: "sandboxOwner", owner: { kind: "task", taskId } }
-      : null;
-  }
-  const projectChat = after(PROJECT_CHAT_STREAM_PREFIX);
-  if (projectChat !== null) {
-    const projectId = db.normalizeId("projects", projectChat);
-    return projectId
-      ? { kind: "sandboxOwner", owner: { kind: "project", projectId } }
-      : null;
-  }
 
   const chatId = db.normalizeId("sessionChats", entityId);
   if (chatId) return { kind: "sessionChat", chatId };
@@ -204,11 +189,7 @@ function parseStreamOwner(
   const reportId = db.normalizeId("evaluationReports", entityId);
   if (reportId) return { kind: "report", reportId };
   const projectId = db.normalizeId("projects", entityId);
-  if (projectId) {
-    return { kind: "sandboxOwner", owner: { kind: "project", projectId } };
-  }
-  const taskId = db.normalizeId("agentTasks", entityId);
-  if (taskId) return { kind: "sandboxOwner", owner: { kind: "task", taskId } };
+  if (projectId) return { kind: "project", projectId };
   return null;
 }
 
@@ -242,6 +223,12 @@ async function canReadStream(
     case "automationRun": {
       const run = await db.get(owner.runId);
       return run !== null && (await hasRepoAccess(db, run.repoId, userId));
+    }
+    case "project": {
+      const project = await db.get(owner.projectId);
+      return (
+        project !== null && (await hasRepoAccess(db, project.repoId, userId))
+      );
     }
   }
 }

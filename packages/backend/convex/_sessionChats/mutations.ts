@@ -17,6 +17,8 @@ import {
   assertProviderAccountUsableBy,
   reconcileProviderAccountForModel,
 } from "../_userProviderAccounts/defaults";
+import { isSessionArchived } from "../_sessions/archive";
+import { assertStandaloneSession } from "../_sessions/owner";
 import {
   createSessionChat,
   ensureMainChat,
@@ -28,18 +30,17 @@ import {
 
 /**
  * Continuation of `ensureMainChat`: moves the next bounded page of a heavy
- * session's legacy transcript onto its Main chat and reschedules itself
- * until none is left.
+ * pre-chat session transcript onto its chat and reschedules itself until
+ * none is left.
  */
 export const moveLegacyTranscript = internalMutation({
-  args: { sessionId: v.id("sessions"), chatId: v.id("sessionChats") },
+  args: {
+    from: v.id("sessions"),
+    chatId: v.id("sessionChats"),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const done = await moveLegacyTranscriptPage(
-      ctx,
-      args.sessionId,
-      args.chatId,
-    );
+    const done = await moveLegacyTranscriptPage(ctx, args.from, args.chatId);
     if (!done) {
       await ctx.scheduler.runAfter(
         0,
@@ -83,9 +84,10 @@ export const create = authMutation({
       args.sessionId,
       ctx.userId,
     );
-    if (session.archived === true) {
+    if (isSessionArchived(session)) {
       throw new Error("This session is archived");
     }
+    assertStandaloneSession(session, "open another chat");
     await ensureMainChat(ctx, session);
     const inheritFrom =
       args.fromChatId !== undefined
@@ -104,11 +106,12 @@ export const rename = authMutation({
   args: { chatId: v.id("sessionChats"), title: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { chat } = await getSessionChatWithAccess(
+    const { chat, session } = await getSessionChatWithAccess(
       ctx.db,
       args.chatId,
       ctx.userId,
     );
+    assertStandaloneSession(session, "rename its chat");
     const title = args.title.trim();
     if (!title) return null;
     await ctx.db.patch(chat._id, { title });

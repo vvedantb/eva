@@ -27,10 +27,10 @@ export async function cancelStaleWorkflow(
   }
 }
 
-type ChatId = Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">;
+type ChatId = Id<"sessionChats">;
 
 /**
- * Tears down one tracked chat turn (session, task chat, or project chat):
+ * Tears down one tracked session chat turn:
  * cancels the workflow, salvages the open assistant bubble (streamed text and
  * tool steps survive; an empty bubble is dropped), surfaces the failure as a
  * standalone system alert, interrupts any still-alive agent process the way

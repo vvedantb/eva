@@ -113,7 +113,8 @@ export function useChatSend({
   /** Stops whatever turn owns the chat bubble. */
   cancel: () => Promise<null>;
   /** The `drafts` row "Restore draft" writes back to. */
-  draftTarget: ChatDraftTarget;
+  /** Undefined for a chat not created yet: a failed send cannot restore a draft. */
+  draftTarget: ChatDraftTarget | undefined;
   /** A turn owns the chat: the send queues behind it. */
   isExecuting: boolean;
   /**
@@ -132,14 +133,18 @@ export function useChatSend({
   // `drafts` row the composer reads (ChatDraftSync pulls it live).
   const raiseSendFailure = (errorMessage: string, draftContent: string) => {
     toast.error("Couldn't send your message", {
-      id: `${draftTarget.kind}-send`,
+      id: "chat-send",
       description: readableSendError(errorMessage),
-      action: {
-        label: "Restore draft",
-        onClick: () => {
-          void setDraft({ target: draftTarget, content: draftContent });
-        },
-      },
+      ...(draftTarget
+        ? {
+            action: {
+              label: "Restore draft",
+              onClick: () => {
+                void setDraft({ target: draftTarget, content: draftContent });
+              },
+            },
+          }
+        : {}),
     });
   };
 
@@ -190,7 +195,7 @@ export function useChatSend({
     await catchMutationError(
       cancel(),
       "Couldn't cancel execution",
-      `${draftTarget.kind}-cancel-execution`,
+      "chat-cancel-execution",
     );
   };
 

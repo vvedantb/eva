@@ -11,28 +11,20 @@ import type { ChatEntityRef } from "./sandboxChatSurface";
 export type RequestAgentStop = (toolUseId: string, title?: string) => void;
 
 /**
- * Stop for one background agent, routed to whichever chat owns it, behind a
- * confirm: a stop cannot be undone, and the Stop buttons sit next to View.
+ * Stop for one background agent of the chat, behind a confirm: a stop cannot
+ * be undone, and the Stop buttons sit next to View. A chat with no session
+ * yet has no agents.
  *
  * `requestStop` only opens the dialog. Render `stopDialog` at the caller's
  * root, outside any popover: a popover closes when the modal takes focus, and
  * a dialog inside it would unmount with it.
- *
- * All three mutations are bound up front — hooks cannot be called
- * conditionally, and an unused binding costs nothing.
  */
-export function useStopBackgroundAgent(entity: ChatEntityRef): {
+export function useStopBackgroundAgent(entity: ChatEntityRef | undefined): {
   requestStop: RequestAgentStop;
   stopDialog: ReactNode;
 } {
   const stopSessionAgent = useMutation(
     api.sessionWorkflow.requestStopBackgroundAgent,
-  );
-  const stopTaskAgent = useMutation(
-    api.agentTaskChatWorkflow.requestStopBackgroundAgent,
-  );
-  const stopProjectAgent = useMutation(
-    api.projectChatWorkflow.requestStopBackgroundAgent,
   );
   const [target, setTarget] = useState<{
     toolUseId: string;
@@ -41,12 +33,8 @@ export function useStopBackgroundAgent(entity: ChatEntityRef): {
   const [isStopping, setIsStopping] = useState(false);
 
   const stop = async (toolUseId: string) => {
-    const request =
-      entity.kind === "session"
-        ? stopSessionAgent({ chatId: entity.chatId, toolUseId })
-        : entity.kind === "task"
-          ? stopTaskAgent({ taskId: entity.taskId, toolUseId })
-          : stopProjectAgent({ projectId: entity.projectId, toolUseId });
+    if (!entity) return;
+    const request = stopSessionAgent({ chatId: entity.chatId, toolUseId });
     setIsStopping(true);
     // Either way the dialog closes: a failure has already toasted. Cleanup is
     // repeated in the catch instead of `finally`, which the React Compiler

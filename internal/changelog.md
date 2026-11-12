@@ -1,5 +1,142 @@
 # Changelog
 
+## Collaborators can switch the account in quick task and project chats
+
+Date: 2026-11-12
+
+WHY: In a teammate's quick task chat, picking another account did nothing. `SandboxChatPanel` returned early unless the viewer created the task. The session chat and `sessionChats.setProviderAccountId` already let any repo collaborator switch among the owner's accounts.
+
+Architectural: `SandboxChatBinding` drops `isOwner` and `pickerAccounts`; `accounts` is always the owner's pool. Projects now use `userProviderAccounts.listForProjectOwner` (was the viewer's own accounts plus a synthetic owner row, which the backend rejected for teammates).
+
+## Agent feedback cards use the shared card placement
+
+Date: 2026-11-12
+
+WHY: `submit_feedback` cards were keyed only by `messageId`. A card whose turn was hidden (simple view) or that had no turn was silently dropped.
+
+Architectural: `groupChatFeedback` returns `agentReports` as a list. `ChatBody` places artifacts and reports together through `placeChatUiPanels` (`turnOutputPlacement`), so both follow one rule, in creation order.
+
+## Chat cards stay with their turn, not at the bottom
+
+Date: 2026-11-12
+
+WHY: Every artifact (and older `render_ui` / `render_html` card) showed at the end of the chat. The transcript loads only recent messages, so cards anchored to unloaded older messages fell into the "trailing" bucket.
+
+Architectural: `placeChatUiPanels` now takes the rendered rows and `hasOlderHistory`. A card with an unrendered anchor goes under the newest row created at or before it; a card older than the loaded window waits until that history loads. Trailing is only for cards older than every row with full history loaded.
+
+## Retry Vercel exec on dropped connections
+
+Date: 2026-11-12
+
+WHY: Opening a terminal failed with `vercel exec failed ... fetch failed`. Undici dropped the HTTP connection to the Vercel API, and `exec` only retried a closed command stream, so the pty connect action threw.
+
+Architectural: `_sandbox/vercelProvider.ts` `isRetryableExecFailure` (was `isVercelCommandStreamClosed`) also matches `fetch failed`, `UND_ERR_SOCKET`, `ECONNRESET` and `socket hang up`, so every `exec` gets one refresh+retry on a transit failure. A failed refresh no longer hides the exec error.
+
+## Bounded handoff read; clear stale task runs
+
+Date: 2026-11-12
+
+WHY: A large chat (163 rows, ~8.8 MB) failed every send and queued dequeue with "Too many bytes read": one send runs handoff detection twice (alert, then prompt), and each read took the newest 400 messages. Separately, one cancelled task kept a `running` run from the 0b migration.
+
+Architectural: `_shared/modelHandoff.ts` `readHandoffHistory` reads the newest messages in batches of 4 and stops at 400 rows or 2 MiB (`HANDOFF_SCAN_BYTE_BUDGET`); both `maybeInsertModelHandoffAlert` and `prependModelHandoffContext` use it. `_agentTasks/runState:finishStaleTerminalRuns` (`{ dryRun? }`, self-paginating) ends the run of done/cancelled tasks idle for 24 h with no open turn and a terminal or absent `agentRuns` row, through `finishTaskRun`.
+
+## Phone: maintenance screen; new APK for the session-chat backend
+
+Date: 2026-11-12
+
+WHY: With `MAINTENANCE=1`, the web shows a maintenance screen but the phone showed its start-up error. The published APK (0.1.33, from `a5f5d4e2b`) predates #1266 and #1267: its project page sends a project id to `chatReads.isUnread`, which now takes session ids, so it crashes, and task and project chats without a session cannot send. Main's phone code already fits; this `feat` merge releases it.
+
+Architectural: `MaintenanceGate` (`src/ui/MaintenanceScreen.tsx`) wraps the app above `ClerkGate` and shows the web wording while `maintenance.status` is true. It reads the status with `watchQuery` and `useSyncExternalStore`, not `useQuery`, so a backend without that query does not take the app down. The root `ErrorBoundary` shows the same screen for `isMaintenanceError` errors, with its own `ConvexProvider`, and retries when the status turns false.
+
+## Maintenance mode
+
+Date: 2026-11-12
+
+WHY: Destructive migrations need eva closed to users while they run. Before this, the only way was to stop the whole deployment.
+
+Architectural: `convex/maintenance.ts` reads the `MAINTENANCE` env var (`npx convex env set MAINTENANCE 1` on, `npx convex env remove MAINTENANCE` off). `authQuery`, `authMutation` and `authAction` throw `ConvexError(MAINTENANCE_ERROR)` while it is on; `internalAuth*` wrappers, crons and sandbox callbacks keep running. The MCP endpoint returns 503. `maintenance:status` is a public live query: web `MaintenanceGate` (in `ClientProvider`) swaps the whole app for `MaintenanceScreen` and brings it back on its own when the var is removed; `DeploymentErrorFallback` shows the same screen for a maintenance error that beat the status query (`isMaintenanceError` in `@eva/shared`). Gaps: raw public `query` / `mutation` / `action` functions and `ensureUserExists` are not gated, and mobile shows only the error.
+
+## Projects run on sessions (2)
+
+Date: 2026-11-11
+
+WHY: Projects and their tasks kept the last copy of the old chat, sandbox and prompt pipelines. A project now owns one hidden session, and its tasks work on it; the project stays the product surface.
+
+Architectural: `_sessions/ownedSession.ts` is generalised from task to task|project (`OwnerEntity`): `ensureOwnedSession` creates the project's session lazily (project branch, chat model and traits from the project, takes over `projects.sandboxId` and project chat drafts), `ensureTaskChat` gives a project task its own non-Main chat in that session (`sessionChats.taskId`, index `by_task`; the one extra chat an owned session holds), and `getOwned` / `ensureOwned` take `{ owner }`. Project task runs and builds use the project session's sandbox through 1b's claim → attach → finish lifecycle (the session reads `active` while a VM is up; after a project run it stays `active` for the next task and the chat, and idle pause stops it). A build holds the session: `sessionChatHasFreeSlot` queues chat sends for the whole build and `finishProjectBuild` drains the queue; `startBuild` refuses and a scheduled build retries in 60 s while the project chat replies (`ownedSessionBusy`). Interviews claim, attach and finish the session sandbox the same way. `rotateProjectBranch` is the one writer of a merged PR's branch bump (project branch, session branch, VM delete, start fenced). `syncProjectSession` retires a completed/cancelled/deleted project's session and revives a reopened one (`functions.ts` schedules `syncProjectSessionLifecycle`). `buildSessionPrompt` adds the project context (`withProjectContext`, spec as plan, project PR); a project task's chat adds the task context. Docs, unread, mentions and Ave watches route to the owner (a project task's chat to the task). Lists, wake links, MCP send/stop/start and chat-self tools read the session. Web: `useOwnedSession` (generalised `useTaskSession`) and `useOwnedChatBinding` drive the project chat, sandbox panel, header and project tasks; the task-row chat binding is gone. Mobile resolves a project or project task as its session chat. `dataMigrations:migrateProjectChatsToSessions` and `migrations:projectChatsLeft` (helpers shared with 1b in `_migrations/ownerChatsToSessions.ts`). Single owners: `chatOwner` (who a chat speaks for), `projectHoldsSession` (build/interview hold, read by busy gates and idle pause), `ownerBusyReason` (adoption and migration), `syncProjectSessionBranch` (the session branch; waits while busy), `taskSandboxStatus` / `projectSandboxStatus` (lists, detail, MCP). retiring a project stops its build and interview first; scheduled builds give up after 30 min of a busy session; preview phases live in `@eva/shared`.
+
+## Quick tasks run on sessions (1b)
+
+Date: 2026-11-11
+
+WHY: Quick tasks kept their own copy of the session chat, sandbox and prompt pipelines. A quick task now owns one hidden session, and that session runs its sandbox and chat; the task stays the product surface.
+
+Architectural: `_sessions/ownedSession.ts` owns the mapping: `ensureOwnedSession` (lazy, one per task, normal `numId`, task branch `eva/task-<id>`, chat model seeded from the task), `retireOwnedSession` / `reviveOwnedSession` behind `syncOwnedSessionWithTaskStatus` (done/cancelled, PR merged/closed, delete → stop + archive + grace delete; reopen/restore → unarchive), `mirrorTaskIntoOwnedSession` (title, base branch) and `liveTaskSessionStatuses` (task cards). Owned sessions are hidden from the Sessions list (new index `by_repo_owner_deleted_and_archived_at` replaces `by_repo_deleted_and_archived_at`), counts, mentions, spotlight, MCP lists and analytics (`standaloneOnly`), and refuse fork, groups, extra chats, rename and archive (`assertStandaloneSession`). They push the task branch but open no session PR. The task run keeps its own workflow but reads and writes the session sandbox (`ownedSessionId`) and files its turn under the session: `sessionChatHasFreeSlot` makes chat sends queue behind a run and `closeTurn` drains the queue when the run ends; the run stops the sandbox silently (`stopSandboxAfterTaskRun`, stop reason `task_run`). `buildSessionPrompt` adds the task context. Docs, artifacts, mentions, unread and the Ave watch attribute to the task. MCP `send_chat_message` and the mobile chat target deliver to the session Main chat. Web and mobile task chat panels bind to `sessions.getOwned` / `ensureOwned`. `dataMigrations:migrateQuickTaskChatsToSessions` moves existing tasks (generalised `moveLegacyTranscriptPage`, Claude transcript seed = task id); `migrations:quickTaskChatsLeft` reports what is left. Every reader of a quick task's sandbox goes through `findQuickTaskSession`. Moving a quick task to another repo or into a project detaches its session (`detachOwnedSession`: retire + soft delete; `by_owner_task` now includes `deletedAt`). Project tasks are unchanged (PR 2).
+
+## Composer tasks panel: model the todo status once
+
+Date: 2026-11-11
+
+WHY: A domain-model audit found five ternary chains on one status, a duration field nothing set, a renamed status, and guards for states that cannot occur.
+
+Architectural: `ComposerTasksPanel` uses the activity trace's todo item type directly (no `in_progress` → `inProgress` rename). `TASK_STATUS_STYLE` (a `Record` on status) holds each status's colours, icon and trailing label, so a new status fails the type check. `durationMs` and `formatTaskDuration` are gone. `deriveProgress` takes the first step, so it cannot see an empty list. The panel needs a `turnId`; the old `"current"` fallback key let one dismissal hide every later turn without an id.
+
+## Phone: chats open at the end; chat menu matches the web
+
+Date: 2026-11-11
+
+WHY: A chat drew its first messages for a frame and then jumped to the end. The session chat menu showed only Rename and Archive, not the web More menu's items.
+
+Architectural: native-ui `ConversationList` stays hidden until its first jump to the measured end. The chat header menu takes every `sessionMenuActions` item except the session Copy link (the header has its own), in the web groups: Rename and Regenerate title; Copy title, Copy link, Copy branch name, Open PR, Open on web; Archive; Stop. The session target now carries the branch and PR.
+
+## Sessions: one owner field (1a)
+
+Date: 2026-11-11
+
+WHY: Quick tasks and projects will move onto sessions as the one chat, sandbox and PR engine. A task will own one hidden session; a project and its tasks will share one. A session must say who owns it before any code can create or hide such sessions.
+
+Architectural: `sessions.owner` is one union (`standalone`, `task` with `taskId`, `project` with `projectId`). `_sessions/owner.ts` owns it: the validator, `STANDALONE_SESSION_OWNER`, `sessionOwner` (absent reads as standalone), `isStandaloneSession` and `findOwnedSession`. New indexes `by_owner_task` (`owner.taskId`) and `by_owner_project` (`owner.projectId`). `createSession` (create, fork, MCP `create_session`), the load-test seed and the test fixtures write `standalone`. `dataMigrations:backfillSessionOwner` sets `standalone` on older rows; run it after deploy. No behaviour change: list, count and search queries still return every session. 1b hides owned sessions; 3b makes the field required.
+
+## Drop the legacy state fields (0e)
+
+Date: 2026-11-11
+
+WHY: 0a–0d moved four lifecycles to one field each and kept the old fields, with read fallbacks, until their migrations ran. Once those migrations have run in prod, the old fields are dead data and the fallbacks are dead code.
+
+Architectural: removed `sessions.archived`, `sessions.sandboxDeleteAfter`, `sessions.activeWorkflowId`, `sessions.turnLifecycleVersion`, `sessionChats.activeWorkflowId`, `agentTasks.activeWorkflowId` / `scheduledAt` / `scheduledRetryAt` / `scheduledFunctionId`, and `projects.activeBuildWorkflowId` / `scheduledBuildAt` / `scheduledBuildFunctionId`. Removed the indexes `sessions.by_repo_archived_and_deleted` and `projects.by_repo_and_build_workflow`. `taskRunState` and `projectBuildState` now return the new field as is; `sessionArchive`, `withResolvedArchive`, the legacy-clearing writes and the unused prewarm arg `activeWorkflowField` are gone. The four migrations (`backfillSessionArchive`, `migrateTaskRunState`, `migrateProjectBuildState`, `clearSessionWorkflowSlots`) are deleted. `sessionChats.create` read `session.archived` directly; it now uses `isSessionArchived`. Deploy only after the four migrations have run, or schema validation fails.
+
+
+## Projects: one explicit build state (0c)
+
+Date: 2026-11-11
+
+WHY: A project build (idle, scheduled, running) lived in three fields that had to agree (`activeBuildWorkflowId`, `scheduledBuildAt`, `scheduledBuildFunctionId`), patched from `buildWorkflow.ts`, `workflowWatchdog.ts`, `_scheduling/helpers.ts` and `runLifecycle.ts`.
+
+Architectural: `projects.build` is one union (`scheduled` with `at` + `jobId`; `running` with `workflowId` and an optional `scheduled` that waits behind it, for usage-limit retries; absent = idle). `_projects/buildState.ts` holds the transition table (`nextProjectBuild`) and the only writers (`scheduleProjectBuild`, `cancelProjectBuildSchedule`, `fireProjectBuildSchedule`, `markProjectBuildStarted`, `finishProjectBuild`); each write clears the legacy fields. The task a build is on is not stored: it is the project task whose `run` is `running`. Reads use `projectBuildState` / `isProjectBuilding` / `projectScheduledBuildAt` (the last two exported to web), which fall back to the legacy fields until `dataMigrations:migrateProjectBuildState` runs after deploy. New index `by_repo_and_build_state`; `projects.getActive` returns `isBuilding` instead of `activeBuildWorkflowId`. 0e drops the legacy fields, the `by_repo_and_build_workflow` index and the fallback.
+
+## Tasks: one explicit run state (0b)
+
+Date: 2026-11-11
+
+WHY: A quick task's run lifecycle (idle, scheduled, retry pending, running) lived in four fields that had to agree (`activeWorkflowId`, `scheduledAt`, `scheduledFunctionId`, `scheduledRetryAt`), patched from a dozen files.
+
+Architectural: `agentTasks.run` is one union (`scheduled` / `retry_pending` with `at` + `jobId`, `running` with `workflowId` + `runId`; absent = idle). `_agentTasks/runState.ts` holds the transition table (`nextTaskRun`) and the only writers (`scheduleTaskRun`, `cancelTaskRunSchedule`, `fireTaskRunSchedule`, `markTaskRunStarted`, `finishTaskRun`); each write clears the legacy fields. Reads use `taskRunState` / `taskScheduledAt` / `isTaskRunning` (also exported to web and mobile), which fall back to the legacy fields until `dataMigrations:migrateTaskRunState` runs after deploy. 0e drops the legacy fields and the fallback.
+
+## Sessions: one explicit archive state (0a)
+
+Date: 2026-11-11
+
+WHY: A session's archive lived in two fields, `archived` and `sandboxDeleteAfter`, that had to agree. A delete time on a live session, or an archive without one, could be written but meant nothing. This is the first of the PRs (0a–0e) that replace such pairs with one state field before the chat engines merge.
+
+Architectural: `sessions.archive` (`{ archivedAt, sandboxDeleteAfter? }`) is the one field; unset means live. `_sessions/archive.ts` owns it: `archiveSession`, `unarchiveSession`, `clearDeletedSessionSandbox`, `isSessionArchived`, `sessionDeleteAfter` and the indexed list read. Every write clears the legacy pair, and reads fall back to it until `dataMigrations:backfillSessionArchive` runs after deploy. The delete time stays optional: a session with no sandbox at archive time has nothing to delete, and the time is cleared once the sandbox goes. New index `by_repo_deleted_and_archived_at` replaces the unused `by_repo_and_archived`; `by_repo_archived_and_deleted` stays for the fallback. The stale one-off `backfillArchivedFromPrState` is removed. 0e drops the legacy fields, the fallback and the old index.
+
+## Segmented tabs: lighter active pill in dark (web and phone)
+
+Date: 2026-11-11
+
+WHY: The phone tab bar pill went back to #474747 in dark. The web segmented pill was `bg-card` (#101010) on a #101010 trough, so it hardly showed, and the phone segmented thumb copied the web #202020.
+
+Architectural: New `--segment-active` (white light, #474747 dark, #444548 neutral dark) in globals.css and `segmentActive` in `EVA_THEME`. `.tabs-segmented .t-tabs-pill` uses it; the old `[data-state="active"]` rules never matched the sliding pill and are gone. The phone themes `segment` and the dark `tabBarPill` from it.
+
 ## Phone: bottom tab pill slides again and is lighter in dark
 
 Date: 2026-11-11

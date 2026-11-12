@@ -34,6 +34,7 @@ async function fixture() {
       connectedBy: userId,
     });
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Build the log",
@@ -216,19 +217,19 @@ describe("chat log", () => {
       const f = await fixture();
       await f.t.run(async (ctx) => {
         const messageId = await ctx.db.insert("messages", {
-          parentId: f.taskId,
+          parentId: f.sessionId,
           role: "assistant",
           content: "- **Added** the Log to the Documents tab. It is pinned.\nMore detail.",
           timestamp: Date.now(),
         });
         const message = await ctx.db.get(messageId);
         if (!message) throw new Error("message missing");
-        await recordTurnChange(ctx, String(f.taskId), message, "aaa", "aaa");
-        await recordTurnChange(ctx, String(f.taskId), message, "aaa", "bbb");
-        await recordTurnChange(ctx, String(f.taskId), message, "aaa", "bbb");
+        await recordTurnChange(ctx, String(f.sessionId), message, "aaa", "aaa");
+        await recordTurnChange(ctx, String(f.sessionId), message, "aaa", "bbb");
+        await recordTurnChange(ctx, String(f.sessionId), message, "aaa", "bbb");
       });
       const rows = await f.asUser.query(api.chatLog.listForSource, {
-        source: { kind: "task", taskId: f.taskId },
+        source: { kind: "session", sessionId: f.sessionId },
       });
       expect(rows).toHaveLength(1);
       expect(rows[0]).toMatchObject({
@@ -247,7 +248,7 @@ describe("chat log", () => {
     "a turn's commits go onto the agent's change entry from that turn",
     async () => {
       const f = await fixture();
-      const source = { kind: "task" as const, taskId: f.taskId };
+      const source = { kind: "session" as const, sessionId: f.sessionId };
       await f.asUser.mutation(api.chatLog.append, {
         source,
         kind: "change",
@@ -256,7 +257,7 @@ describe("chat log", () => {
       });
       const message = await f.t.run(async (ctx) => {
         const messageId = await ctx.db.insert("messages", {
-          parentId: f.taskId,
+          parentId: f.sessionId,
           role: "assistant",
           content: "",
           timestamp: Date.now(),
@@ -273,7 +274,7 @@ describe("chat log", () => {
       await f.t.run(async (ctx) => {
         await recordTurnChange(
           ctx,
-          String(f.taskId),
+          String(f.sessionId),
           { ...message, content: "Done. Long reply." },
           "aaa",
           "bbb",
@@ -300,18 +301,18 @@ describe("chat log", () => {
           ["ccc", "bbb"],
         ].entries()) {
           const messageId = await ctx.db.insert("messages", {
-            parentId: f.taskId,
+            parentId: f.sessionId,
             role: "assistant",
             content: `Turn ${index}.`,
             timestamp: Date.now(),
           });
           const message = await ctx.db.get(messageId);
           if (!message) throw new Error("message missing");
-          await recordTurnChange(ctx, String(f.taskId), message, range[0], range[1]);
+          await recordTurnChange(ctx, String(f.sessionId), message, range[0], range[1]);
         }
       });
       const rows = await f.asUser.query(api.chatLog.listForSource, {
-        source: { kind: "task", taskId: f.taskId },
+        source: { kind: "session", sessionId: f.sessionId },
       });
       expect(rows.map((row) => row.title)).toEqual(["Turn 0."]);
     },

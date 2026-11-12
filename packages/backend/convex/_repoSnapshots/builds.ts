@@ -192,17 +192,11 @@ export const listReferencedSandboxIds = internalQuery({
       if (sandboxId && !ids.includes(sandboxId)) ids.push(sandboxId);
     };
 
-    const tasks = await ctx.db.query("agentTasks").collect();
-    for (const task of tasks) add(task.sandboxId);
-
     const runs = await ctx.db.query("agentRuns").collect();
     for (const run of runs) add(run.sandboxId);
 
     const sessions = await ctx.db.query("sessions").collect();
     for (const session of sessions) add(session.sandboxId);
-
-    const projects = await ctx.db.query("projects").collect();
-    for (const project of projects) add(project.sandboxId);
 
     const docs = await ctx.db.query("docs").collect();
     for (const doc of docs) add(doc.sandboxId);

@@ -6,6 +6,8 @@ import {
   repoDisplayLabel,
 } from "./_githubRepos/helpers";
 import { filterActiveEntities, isEntityDeleted } from "./numId";
+import { isSessionArchived } from "./_sessions/archive";
+import { standaloneOnly } from "./_sessions/owner";
 import { entityHref } from "@eva/shared";
 import type { Doc } from "./_generated/dataModel";
 import { resolveExperimentalFlags } from "./_auth/experimentalFlags";
@@ -320,6 +322,8 @@ export const search = authQuery({
               ctx.db
                 .query("sessions")
                 .withIndex("by_repo", (q) => q.eq("repoId", repo._id))
+                // A task's session is reached through its task.
+                .filter(standaloneOnly)
                 .take(PER_REPO_TAKE),
               ctx.db
                 .query("agentTasks")
@@ -352,7 +356,7 @@ export const search = authQuery({
           }
 
           for (const session of filterActiveEntities(sessions)) {
-            if (session.archived === true) continue;
+            if (isSessionArchived(session)) continue;
             pushPrHit(hits, session, { base, label, query, limit });
             if (session.numId === undefined) continue;
             if (!matchesQuery(session.title, query)) continue;

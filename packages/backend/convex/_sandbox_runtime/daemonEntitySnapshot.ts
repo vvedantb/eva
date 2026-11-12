@@ -2,11 +2,10 @@ import { v } from "convex/values";
 import {
   internalMutation,
   internalQuery,
-  type DatabaseReader,
 } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
 import { pendingTurnValidator } from "../_validators/tableFields";
 import { DAEMON_CLAIM_PAUSE_MS } from "../_chat/daemonClaimPause";
+import { openTurnWorkflowId } from "../_chat/turnProjection";
 
 const emptyDaemonEntitySnapshot = {
   pendingTurn: undefined,
@@ -29,23 +28,24 @@ const DAEMON_LAUNCH_LEASE_MS = 30_000;
  * the in-sandbox spawn flock still dedupes any launch that slips past it.
  */
 export const claimDaemonLaunchLease = internalMutation({
-  args: { entityId: v.string() },
+  // `entityId` is the lease key: an entity id, or `sandboxLaunchLockKey(...)`
+  // for the per-sandbox launch lock (see `withSandboxLaunchLock`).
+  args: { entityId: v.string(), ttlMs: v.optional(v.number()) },
   returns: v.boolean(),
   handler: async (ctx, args) => {
     const now = Date.now();
+    const expiresAt = now + (args.ttlMs ?? DAEMON_LAUNCH_LEASE_MS);
     const existing = await ctx.db
       .query("daemonLaunchLeases")
       .withIndex("by_entity", (q) => q.eq("entityId", args.entityId))
       .unique();
     if (existing && existing.expiresAt > now) return false;
     if (existing) {
-      await ctx.db.patch(existing._id, {
-        expiresAt: now + DAEMON_LAUNCH_LEASE_MS,
-      });
+      await ctx.db.patch(existing._id, { expiresAt });
     } else {
       await ctx.db.insert("daemonLaunchLeases", {
         entityId: args.entityId,
-        expiresAt: now + DAEMON_LAUNCH_LEASE_MS,
+        expiresAt,
       });
     }
     return true;
@@ -76,12 +76,7 @@ export const releaseDaemonLaunchLease = internalMutation({
  */
 export const setDaemonClaimPause = internalMutation({
   args: {
-    entityTable: v.union(
-      v.literal("sessionChats"),
-      v.literal("sessions"),
-      v.literal("agentTasks"),
-      v.literal("projects"),
-    ),
+    entityTable: v.union(v.literal("sessionChats"), v.literal("sessions")),
     entityId: v.string(),
     paused: v.boolean(),
   },
@@ -97,21 +92,9 @@ export const setDaemonClaimPause = internalMutation({
       await ctx.db.patch(id, { claimPausedUntil });
       return null;
     }
-    if (args.entityTable === "sessions") {
-      const id = ctx.db.normalizeId("sessions", args.entityId);
-      if (!id) return null;
-      if (!(await ctx.db.get(id))) return null;
-      await ctx.db.patch(id, { claimPausedUntil });
-      return null;
-    }
-    if (args.entityTable === "agentTasks") {
-      const id = ctx.db.normalizeId("agentTasks", args.entityId);
-      if (!id) return null;
-      await ctx.db.patch(id, { claimPausedUntil });
-      return null;
-    }
-    const id = ctx.db.normalizeId("projects", args.entityId);
+    const id = ctx.db.normalizeId("sessions", args.entityId);
     if (!id) return null;
+    if (!(await ctx.db.get(id))) return null;
     await ctx.db.patch(id, { claimPausedUntil });
     return null;
   },
@@ -120,12 +103,7 @@ export const setDaemonClaimPause = internalMutation({
 /** Reads daemon-relevant fields for mid-turn respawn deferral decisions. */
 export const readDaemonEntitySnapshot = internalQuery({
   args: {
-    entityTable: v.union(
-      v.literal("sessionChats"),
-      v.literal("sessions"),
-      v.literal("agentTasks"),
-      v.literal("projects"),
-    ),
+    entityTable: v.union(v.literal("sessionChats"), v.literal("sessions")),
     entityId: v.string(),
   },
   returns: v.object({
@@ -141,39 +119,17 @@ export const readDaemonEntitySnapshot = internalQuery({
       if (!doc) return emptyDaemonEntitySnapshot;
       return {
         pendingTurn: doc.pendingTurn,
-        activeWorkflow: doc.activeWorkflowId,
+        activeWorkflow: await openTurnWorkflowId(ctx, id),
         syntheticTurnMessageId: doc.syntheticTurnMessageId,
       };
     }
-    if (args.entityTable === "sessions") {
-      const id = ctx.db.normalizeId("sessions", args.entityId);
-      if (!id) return emptyDaemonEntitySnapshot;
-      const doc = await ctx.db.get(id);
-      if (!doc) return emptyDaemonEntitySnapshot;
-      return {
-        pendingTurn: doc.pendingTurn,
-        activeWorkflow: doc.activeWorkflowId,
-        syntheticTurnMessageId: doc.syntheticTurnMessageId,
-      };
-    }
-    if (args.entityTable === "agentTasks") {
-      const id = ctx.db.normalizeId("agentTasks", args.entityId);
-      if (!id) return emptyDaemonEntitySnapshot;
-      const doc = await ctx.db.get(id);
-      if (!doc) return emptyDaemonEntitySnapshot;
-      return {
-        pendingTurn: doc.pendingTurn,
-        activeWorkflow: doc.activeChatWorkflowId,
-        syntheticTurnMessageId: doc.syntheticTurnMessageId,
-      };
-    }
-    const id = ctx.db.normalizeId("projects", args.entityId);
+    const id = ctx.db.normalizeId("sessions", args.entityId);
     if (!id) return emptyDaemonEntitySnapshot;
     const doc = await ctx.db.get(id);
     if (!doc) return emptyDaemonEntitySnapshot;
     return {
       pendingTurn: doc.pendingTurn,
-      activeWorkflow: doc.activeChatWorkflowId,
+      activeWorkflow: await openTurnWorkflowId(ctx, id),
       syntheticTurnMessageId: doc.syntheticTurnMessageId,
     };
   },
@@ -187,12 +143,7 @@ export const readDaemonEntitySnapshot = internalQuery({
  */
 export const isEntitySandboxStopRequested = internalQuery({
   args: {
-    entityTable: v.union(
-      v.literal("sessionChats"),
-      v.literal("sessions"),
-      v.literal("agentTasks"),
-      v.literal("projects"),
-    ),
+    entityTable: v.union(v.literal("sessionChats"), v.literal("sessions")),
     entityId: v.string(),
   },
   returns: v.boolean(),
@@ -207,106 +158,44 @@ export const isEntitySandboxStopRequested = internalQuery({
       const session = await ctx.db.get(chat.sessionId);
       return !session || isStopped(session.status);
     }
-    if (args.entityTable === "sessions") {
-      const id = ctx.db.normalizeId("sessions", args.entityId);
-      const doc = id ? await ctx.db.get(id) : null;
-      return !doc || isStopped(doc.status);
-    }
-    if (args.entityTable === "agentTasks") {
-      const id = ctx.db.normalizeId("agentTasks", args.entityId);
-      const doc = id ? await ctx.db.get(id) : null;
-      return !doc || isStopped(doc.reviewTaskSandboxStatus);
-    }
-    const id = ctx.db.normalizeId("projects", args.entityId);
+    const id = ctx.db.normalizeId("sessions", args.entityId);
     const doc = id ? await ctx.db.get(id) : null;
-    return !doc || isStopped(doc.reviewProjectSandboxStatus);
+    return !doc || isStopped(doc.status);
   },
 });
 
 const activeSandboxEntityValidator = v.object({
-  entityTable: v.union(
-    v.literal("sessions"),
-    v.literal("agentTasks"),
-    v.literal("projects"),
-  ),
+  entityTable: v.literal("sessions"),
   entityId: v.string(),
   sandboxId: v.string(),
   repoId: v.id("githubRepos"),
 });
 
 /**
- * Rows whose sandbox status says "active". Indexed on the status alone, so a
- * sweep reads only the few live sandboxes instead of every historical row
- * (and its heavy terminal/plan fields).
- */
-export async function loadActiveSandboxRows(db: DatabaseReader) {
-  const [sessions, tasks, projects] = await Promise.all([
-    db
-      .query("sessions")
-      .withIndex("by_status", (q) => q.eq("status", "active"))
-      .collect(),
-    db
-      .query("agentTasks")
-      .withIndex("by_sandbox_status", (q) =>
-        q.eq("reviewTaskSandboxStatus", "active"),
-      )
-      .collect(),
-    db
-      .query("projects")
-      .withIndex("by_sandbox_status", (q) =>
-        q.eq("reviewProjectSandboxStatus", "active"),
-      )
-      .collect(),
-  ]);
-  return { sessions, tasks, projects };
-}
-
-/**
- * Every entity whose sandbox status says "active", with the fields the
- * reconcile sweep needs to verify that against the provider.
+ * Every session whose sandbox status says "active", with the fields the
+ * reconcile sweep needs to verify that against the provider. Indexed on the
+ * status alone, so a sweep reads only the few live sandboxes.
  */
 export const listActiveSandboxEntities = internalQuery({
   args: {},
   returns: v.array(activeSandboxEntityValidator),
   handler: async (ctx) => {
-    const { sessions, tasks, projects } = await loadActiveSandboxRows(ctx.db);
-    const out: Array<{
-      entityTable: "sessions" | "agentTasks" | "projects";
-      entityId: string;
-      sandboxId: string;
-      repoId: Id<"githubRepos">;
-    }> = [];
-    for (const s of sessions) {
-      if (typeof s.sandboxId === "string") {
-        out.push({
-          entityTable: "sessions",
-          entityId: String(s._id),
-          sandboxId: s.sandboxId,
-          repoId: s.repoId,
-        });
-      }
-    }
-    for (const t of tasks) {
-      if (typeof t.sandboxId === "string" && t.repoId !== undefined) {
-        out.push({
-          entityTable: "agentTasks",
-          entityId: String(t._id),
-          sandboxId: t.sandboxId,
-          repoId: t.repoId,
-        });
-      }
-    }
-    for (const p of projects) {
-      if (typeof p.sandboxId === "string" && p.repoId !== undefined) {
-        out.push({
-          entityTable: "projects",
-          entityId: String(p._id),
-          sandboxId: p.sandboxId,
-          repoId: p.repoId,
-        });
-      }
-    }
-    return out;
+    const sessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_status", (q) => q.eq("status", "active"))
+      .collect();
+    return sessions.flatMap((s) =>
+      typeof s.sandboxId === "string"
+        ? [
+            {
+              entityTable: "sessions" as const,
+              entityId: String(s._id),
+              sandboxId: s.sandboxId,
+              repoId: s.repoId,
+            },
+          ]
+        : [],
+    );
   },
 });
 
@@ -324,67 +213,32 @@ export const listActiveSandboxEntities = internalQuery({
  */
 export const reconcileStoppedSandboxStatus = internalMutation({
   args: {
-    entityTable: v.union(
-      v.literal("sessionChats"),
-      v.literal("sessions"),
-      v.literal("agentTasks"),
-      v.literal("projects"),
-    ),
+    entityTable: v.union(v.literal("sessionChats"), v.literal("sessions")),
     entityId: v.string(),
     sandboxId: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    if (args.entityTable === "sessionChats" || args.entityTable === "sessions") {
-      // A chat shares its session's sandbox, so its status lives on the session.
-      const chatId =
-        args.entityTable === "sessionChats"
-          ? ctx.db.normalizeId("sessionChats", args.entityId)
-          : null;
-      const chat = chatId ? await ctx.db.get(chatId) : null;
-      const id =
-        args.entityTable === "sessionChats"
-          ? (chat?.sessionId ?? null)
-          : ctx.db.normalizeId("sessions", args.entityId);
-      if (!id) return null;
-      const doc = await ctx.db.get(id);
-      if (!doc) return null;
-      if (doc.sandboxId !== args.sandboxId) {
-        return null;
-      }
-      if (doc.status !== "active") return null;
-      await ctx.db.patch(id, { status: "closed", updatedAt: Date.now() });
-      console.log(
-        `[sandbox] reconcileStoppedSandboxStatus: sessions ${id} active → closed (sandbox ${args.sandboxId} not running)`,
-      );
-      return null;
-    }
-    if (args.entityTable === "agentTasks") {
-      const id = ctx.db.normalizeId("agentTasks", args.entityId);
-      if (!id) return null;
-      const doc = await ctx.db.get(id);
-      if (!doc) return null;
-      if (doc.sandboxId !== args.sandboxId) {
-        return null;
-      }
-      if (doc.reviewTaskSandboxStatus !== "active") return null;
-      await ctx.db.patch(id, { reviewTaskSandboxStatus: "closed" });
-      console.log(
-        `[sandbox] reconcileStoppedSandboxStatus: agentTasks ${id} active → closed (sandbox ${args.sandboxId} not running)`,
-      );
-      return null;
-    }
-    const id = ctx.db.normalizeId("projects", args.entityId);
+    // A chat shares its session's sandbox, so its status lives on the session.
+    const chatId =
+      args.entityTable === "sessionChats"
+        ? ctx.db.normalizeId("sessionChats", args.entityId)
+        : null;
+    const chat = chatId ? await ctx.db.get(chatId) : null;
+    const id =
+      args.entityTable === "sessionChats"
+        ? (chat?.sessionId ?? null)
+        : ctx.db.normalizeId("sessions", args.entityId);
     if (!id) return null;
     const doc = await ctx.db.get(id);
     if (!doc) return null;
     if (doc.sandboxId !== args.sandboxId) {
       return null;
     }
-    if (doc.reviewProjectSandboxStatus !== "active") return null;
-    await ctx.db.patch(id, { reviewProjectSandboxStatus: "closed" });
+    if (doc.status !== "active") return null;
+    await ctx.db.patch(id, { status: "closed", updatedAt: Date.now() });
     console.log(
-      `[sandbox] reconcileStoppedSandboxStatus: projects ${id} active → closed (sandbox ${args.sandboxId} not running)`,
+      `[sandbox] reconcileStoppedSandboxStatus: sessions ${id} active → closed (sandbox ${args.sandboxId} not running)`,
     );
     return null;
   },

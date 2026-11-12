@@ -11,7 +11,7 @@ import schema from "../convex/schema";
 const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 
-/** A task chat whose newest turn is `prompt` → `reply`; returns its queue after one continue pass. */
+/** A session chat whose newest turn is `prompt` → `reply`; returns its queue after one continue pass. */
 async function queueAfterTurn(prompt: string, reply: string, passes = 1) {
   const t = convexTest(schema, modules);
   return await t.run(async (ctx) => {
@@ -23,13 +23,20 @@ async function queueAfterTurn(prompt: string, reply: string, passes = 1) {
       connectedBy: userId,
     });
     const now = Date.now();
-    const taskId = await ctx.db.insert("agentTasks", {
-      title: "Long load test",
-      status: "code_review",
+    const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
-      createdAt: now,
-      updatedAt: now,
-      createdBy: userId,
+      userId: userId,
+      title: "Long load test",
+      status: "closed",
+    });
+    const taskId = await ctx.db.insert("sessionChats", {
+      sessionId,
+      repoId,
+      userId: userId,
+      title: "Main",
+      number: 1,
+      isMain: true,
     });
     await ctx.db.insert("messages", {
       parentId: taskId,

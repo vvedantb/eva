@@ -211,14 +211,23 @@ function providerError(message: string, e: unknown): SandboxProviderError {
   });
 }
 
-/** True when the Vercel command NDJSON stream died while the VM is still up. */
-function isVercelCommandStreamClosed(detail: string): boolean {
+/**
+ * True when an exec failed in transit, not in the sandbox: the command NDJSON
+ * stream died while the VM is still up, or undici dropped the HTTP connection
+ * to the Vercel API ("fetch failed", socket reset). A retry can run the
+ * command twice; that is the same trade-off the stream-closed retry accepts.
+ */
+function isRetryableExecFailure(detail: string): boolean {
   const lower = detail.toLowerCase();
   return (
     lower.includes("stream was closed") ||
     lower.includes("not accepting commands") ||
     lower.includes("stream_ended_early") ||
-    lower.includes("stream ended before")
+    lower.includes("stream ended before") ||
+    lower.includes("fetch failed") ||
+    lower.includes("und_err_socket") ||
+    lower.includes("econnreset") ||
+    lower.includes("socket hang up")
   );
 }
 
@@ -227,7 +236,7 @@ class VercelGit implements SandboxGit {
   constructor(private readonly handle: VercelSandboxHandle) {}
 
   private async sh(cmd: string): Promise<string> {
-    // Goes through handle.exec so stream-closed refresh+retry applies.
+    // Goes through handle.exec so its transit-failure refresh+retry applies.
     const result = await this.handle.exec(cmd);
     if (result.exitCode !== 0) {
       throw new Error(
@@ -778,8 +787,8 @@ class VercelSandboxHandle implements SandboxHandle {
     cmd: string,
     opts?: SandboxExecOptions,
   ): Promise<SandboxExecResult> {
-    // One refresh+retry on "stream was closed" — common after resume when the
-    // SDK's command stream dies while the VM is still running.
+    // One refresh+retry on a transit failure (`isRetryableExecFailure`): the
+    // command stream dying after resume, or a dropped API connection.
     const maxAttempts = 2;
     let lastError: Error | undefined;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -805,11 +814,12 @@ class VercelSandboxHandle implements SandboxHandle {
           `vercel exec failed (cwd=${opts?.cwd ?? "(default)"}, cmd=${cmd.slice(0, 120)})`,
           e,
         );
-        if (attempt < maxAttempts && isVercelCommandStreamClosed(detail)) {
+        if (attempt < maxAttempts && isRetryableExecFailure(detail)) {
           console.log(
-            `[vercel] exec stream closed on ${this.id}; refreshing and retrying (attempt ${attempt}/${maxAttempts})`,
+            `[vercel] exec transit failure on ${this.id}; refreshing and retrying (attempt ${attempt}/${maxAttempts}): ${detail.slice(0, 200)}`,
           );
-          await this.refresh();
+          // A failed refresh must not hide the exec error; the retry reports it.
+          await this.refresh().catch(() => undefined);
           continue;
         }
         throw lastError;

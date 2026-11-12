@@ -3,18 +3,16 @@ import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import type { sessionStatusValidator } from "../_validators/enums";
-import { isSandboxClosingStatus } from "./closingStatus";
 
 /**
- * Sandbox lifecycle shared by sessions (`status`), tasks
- * (`reviewTaskSandboxStatus`) and projects (`reviewProjectSandboxStatus`):
+ * A session's sandbox lifecycle (`status`):
  *
  *   closed ──start──▶ starting ──ready──▶ active ──stop──▶ stopping ──settled──▶ closed
  *                        └──────failure──────▶ closed
  *
- * Tasks and projects use `undefined` for "never started", which behaves as
- * `closed`. These guards are the only rules for leaving a state; every writer
- * that moves a sandbox into `starting` or out of it on failure asks here first.
+ * `undefined` behaves as `closed`. These guards are the only rules for
+ * leaving a state; every writer that moves a sandbox into `starting` or out
+ * of it on failure asks here first.
  */
 export type SandboxStatus = Infer<typeof sessionStatusValidator> | undefined;
 
@@ -30,15 +28,6 @@ export type SandboxStatus = Infer<typeof sessionStatusValidator> | undefined;
  */
 export function canRequestSandboxStart(status: SandboxStatus): boolean {
   return status !== "stopping";
-}
-
-/**
- * An in-flight start action re-marking itself `starting` (or recording the VM
- * it allocated) must not revive a row the user stopped meanwhile — the action
- * polls for `stopping`/`closed` to abort, and overwriting it defeats that.
- */
-export function canStartActionMarkStarting(status: SandboxStatus): boolean {
-  return !isSandboxClosingStatus(status);
 }
 
 /**
@@ -134,34 +123,12 @@ const STUCK_STARTING_ERROR = "Sandbox start timed out. Press Start to retry.";
  */
 export async function scheduleStuckStartExpiry(
   ctx: MutationCtx,
-  target:
-    | { kind: "session"; id: Id<"sessions"> }
-    | { kind: "task"; id: Id<"agentTasks"> }
-    | { kind: "project"; id: Id<"projects"> },
+  sessionId: Id<"sessions">,
   startAttempt: number,
 ): Promise<void> {
-  const error = STUCK_STARTING_ERROR;
-  switch (target.kind) {
-    case "session":
-      await ctx.scheduler.runAfter(
-        STUCK_STARTING_EXPIRE_MS,
-        internal.sessions.sandboxError,
-        { sessionId: target.id, error, startAttempt },
-      );
-      return;
-    case "task":
-      await ctx.scheduler.runAfter(
-        STUCK_STARTING_EXPIRE_MS,
-        internal.agentTasks.taskSandboxError,
-        { taskId: target.id, error, startAttempt },
-      );
-      return;
-    case "project":
-      await ctx.scheduler.runAfter(
-        STUCK_STARTING_EXPIRE_MS,
-        internal.projects.projectSandboxError,
-        { projectId: target.id, error, startAttempt },
-      );
-      return;
-  }
+  await ctx.scheduler.runAfter(
+    STUCK_STARTING_EXPIRE_MS,
+    internal.sessions.sandboxError,
+    { sessionId, error: STUCK_STARTING_ERROR, startAttempt },
+  );
 }

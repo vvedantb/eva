@@ -3,7 +3,7 @@
 import type { PrState } from "@eva/shared";
 import type { ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { api, type SandboxOwner } from "@eva/backend";
+import { api, type PrOwnerRef } from "@eva/backend";
 import {
   DropdownMenuItem,
   Tooltip,
@@ -27,7 +27,7 @@ interface PrLinkMenuItemsArgs {
    * The chat whose PRs these are. Each PR row becomes a submenu of PR actions:
    * "View PR" for one, "PR #N" per PR for several (`PrActionsSubmenus`).
    */
-  owner?: SandboxOwner;
+  owner?: PrOwnerRef;
   /**
    * True when a deployment exists — renders the disabled View Preview hint,
    * behind the `viewVercelDeployment` experimental flag.

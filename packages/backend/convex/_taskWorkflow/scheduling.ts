@@ -1,16 +1,25 @@
 import { v } from "convex/values";
-import { startTaskRun } from "./startRun";
+import { startTaskRun, taskWorkSessionBusy } from "./startRun";
 import { internalMutation } from "../_generated/server";
 import {
   getActiveTaskRun,
   hasActiveRun,
   isFirstTaskOnBranch,
 } from "../functions";
-import { isDaytonaNetworkIssue, buildQuickTaskRetryDelayMs } from "./recovery";
+import {
+  buildQuickTaskRetryDelayMs,
+  isDaytonaNetworkIssue,
+  isRetryableWatchdogExit,
+  TASK_CHAT_BUSY_ERROR,
+  TASK_CHAT_BUSY_RETRY_MS,
+} from "./recovery";
 import { resolveProjectBranchName } from "../_git/branchNames";
 import { resolveTaskWorkflowBaseBranchForTask } from "./resolveBaseBranch";
-import { scheduleTaskExecutionAt } from "../_scheduling/helpers";
-import { startNextQueuedTaskChatMessage } from "../_queues/helpers";
+import {
+  finishTaskRun,
+  fireTaskRunSchedule,
+  scheduleTaskRun,
+} from "../_agentTasks/runState";
 
 /** Schedules an automatic retry for a failed quick task if the failure looks transient. */
 export const maybeScheduleQuickTaskRetry = internalMutation({
@@ -31,11 +40,14 @@ export const maybeScheduleQuickTaskRetry = internalMutation({
     if (run.exitReason === "auto_retry_scheduled") return null;
 
     const errorMessage = args.error ?? run.error ?? "";
+    // A run held back by a busy task chat (its session's sandbox was mid
+    // start/stop at claim time) waits, like a scheduled run, then retries.
+    const chatBusy = errorMessage === TASK_CHAT_BUSY_ERROR;
     const retryableFailure =
-      errorMessage.length > 0 && isDaytonaNetworkIssue(errorMessage);
+      chatBusy ||
+      isRetryableWatchdogExit(run.exitReason) ||
+      (errorMessage.length > 0 && isDaytonaNetworkIssue(errorMessage));
     if (!retryableFailure) return null;
-
-    if (task.scheduledFunctionId) return null;
 
     const runs = await ctx.db
       .query("agentRuns")
@@ -61,9 +73,16 @@ export const maybeScheduleQuickTaskRetry = internalMutation({
     );
     if (hasOtherActiveRun) return null;
 
-    const delayMs = args.delayMs ?? buildQuickTaskRetryDelayMs();
-    const scheduledAt = Date.now() + delayMs;
-    await scheduleTaskExecutionAt(ctx, args.taskId, scheduledAt);
+    const delayMs = chatBusy
+      ? TASK_CHAT_BUSY_RETRY_MS
+      : (args.delayMs ?? buildQuickTaskRetryDelayMs());
+    const retry = await scheduleTaskRun(
+      ctx,
+      args.taskId,
+      "scheduleRetry",
+      Date.now() + delayMs,
+    );
+    if (!retry.ok) return null;
 
     const existingError = run.error ?? "Run failed";
     await ctx.db.patch(args.runId, {
@@ -85,40 +104,28 @@ export const executeScheduledTask = internalMutation({
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
     if (!task) return null;
-    const now = Date.now();
 
-    const clearSchedule: {
-      scheduledAt: undefined;
-      scheduledFunctionId: undefined;
-    } = {
-      scheduledAt: undefined,
-      scheduledFunctionId: undefined,
-    };
+    // Consumes the schedule. A stale job (replaced, cancelled, not due) stops here.
+    const fired = await fireTaskRunSchedule(ctx, args.taskId, args.scheduledAt);
+    if (!fired.ok) return null;
 
-    if (task.scheduledAt === undefined) return null;
-    if (task.scheduledAt > now) return null;
-    if (
-      args.scheduledAt !== undefined &&
-      task.scheduledAt !== args.scheduledAt
-    ) {
-      return null;
-    }
-
-    if (task.status !== "todo" || !task.repoId || !task.createdBy) {
-      await ctx.db.patch(args.taskId, clearSchedule);
-      return null;
-    }
-
-    if (await hasActiveRun(ctx.db, args.taskId)) {
-      await ctx.db.patch(args.taskId, clearSchedule);
+    if (task.status !== "todo" || !task.repoId || !task.createdBy) return null;
+    if (await hasActiveRun(ctx.db, args.taskId)) return null;
+    // The task's (or its project's) chat is mid-reply on the shared sandbox:
+    // try again shortly instead of failing the schedule (`startTaskRun`
+    // refuses a busy chat).
+    if (await taskWorkSessionBusy(ctx.db, task)) {
+      await scheduleTaskRun(
+        ctx,
+        args.taskId,
+        "scheduleRetry",
+        Date.now() + TASK_CHAT_BUSY_RETRY_MS,
+      );
       return null;
     }
 
     const repo = await ctx.db.get(task.repoId);
-    if (!repo) {
-      await ctx.db.patch(args.taskId, clearSchedule);
-      return null;
-    }
+    if (!repo) return null;
 
     const firstOnBranch = await isFirstTaskOnBranch(
       ctx.db,
@@ -139,7 +146,6 @@ export const executeScheduledTask = internalMutation({
       repo,
     );
 
-    await ctx.db.patch(args.taskId, clearSchedule);
     const runId = await startTaskRun(ctx, {
       task,
       repo,
@@ -159,9 +165,10 @@ export const executeScheduledTask = internalMutation({
   },
 });
 
-/** Clears the active workflow ID from a task if no runs are still queued or running. */
+/** Ends the task's run state if no runs are still queued or running. */
 export const clearActiveWorkflow = internalMutation({
-  args: { taskId: v.id("agentTasks") },
+  // `runId` is optional: workflows started before it existed omit it.
+  args: { taskId: v.id("agentTasks"), runId: v.optional(v.id("agentRuns")) },
   returns: v.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
@@ -170,12 +177,9 @@ export const clearActiveWorkflow = internalMutation({
     const activeRun = await getActiveTaskRun(ctx.db, args.taskId);
 
     if (!activeRun) {
-      await ctx.db.patch(args.taskId, { activeWorkflowId: undefined });
-      // The run is the only thing the task chat queue waits on while a task is
-      // running, and nothing else drains it at this point — a follow-up typed
-      // during the run would sit there forever. The drain re-checks the task
-      // itself, so a chat turn already in flight keeps the queue where it is.
-      await startNextQueuedTaskChatMessage(ctx, args.taskId);
+      // The session chat queue behind the run drains when the run's turn
+      // closes (`closeTurn`).
+      await finishTaskRun(ctx, args.taskId, args.runId);
     }
 
     return null;

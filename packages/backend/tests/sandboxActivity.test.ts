@@ -28,35 +28,15 @@ async function fixture() {
       installationId: 1,
       connectedBy: userId,
     });
-    const now = Date.now();
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Idle session",
       status: "active",
       sandboxId: "sbx-session",
     });
-    const taskId = await ctx.db.insert("agentTasks", {
-      repoId,
-      title: "Idle task",
-      status: "code_review",
-      sandboxId: "sbx-task",
-      reviewTaskSandboxStatus: "active",
-      createdAt: now,
-      updatedAt: now,
-      createdBy: userId,
-    });
-    const projectId = await ctx.db.insert("projects", {
-      repoId,
-      userId,
-      title: "Idle project",
-      phase: "in_progress",
-      rawInput: "idle",
-      updatedAt: now,
-      sandboxId: "sbx-project",
-      reviewProjectSandboxStatus: "active",
-    });
-    return { userId, sessionId, taskId, projectId };
+    return { userId, sessionId };
   });
   return { t, ...ids };
 }
@@ -96,8 +76,8 @@ describe("sandbox activity record", () => {
   test(
     "user and agent timestamps live on one row and do not clobber each other",
     async () => {
-      const { t, taskId } = await fixture();
-      const ref = { kind: "task" as const, entityId: String(taskId) };
+      const { t, sessionId } = await fixture();
+      const ref = { kind: "session" as const, entityId: String(sessionId) };
       await t.run((ctx) => touchUserActivity(ctx, ref, CHAT, 10));
       await t.run((ctx) => touchAgentFinished(ctx, ref, 20));
       const rows = await t.run((ctx) =>
@@ -111,10 +91,10 @@ describe("sandbox activity record", () => {
   );
 
   test(
-    "touchBySandbox resolves a session, a project and a task by sandbox id",
+    "touchBySandbox resolves the session that holds a sandbox",
     async () => {
-      const { t, sessionId, taskId, projectId } = await fixture();
-      for (const sandboxId of ["sbx-session", "sbx-task", "sbx-project"]) {
+      const { t, sessionId } = await fixture();
+      for (const sandboxId of ["sbx-session", "sbx-unknown"]) {
         await t.mutation(internal._sandbox.activity.touchBySandbox, {
           sandboxId,
           source: "terminal",
@@ -123,10 +103,9 @@ describe("sandbox activity record", () => {
       const rows = await t.run((ctx) =>
         ctx.db.query("sandboxActivity").collect(),
       );
-      const byEntity = new Map(rows.map((row) => [row.entityId, row.kind]));
-      expect(byEntity.get(String(sessionId))).toBe("session");
-      expect(byEntity.get(String(taskId))).toBe("task");
-      expect(byEntity.get(String(projectId))).toBe("project");
+      expect(rows.map((row) => [row.kind, row.entityId])).toEqual([
+        ["session", String(sessionId)],
+      ]);
     },
     TIMEOUT_MS,
   );
@@ -154,14 +133,17 @@ describe("sandbox activity record", () => {
   test(
     "touchBySandbox credits the user behind a Clerk subject",
     async () => {
-      const { t, taskId, userId } = await fixture();
+      const { t, sessionId, userId } = await fixture();
       await t.mutation(internal._sandbox.activity.touchBySandbox, {
-        sandboxId: "sbx-task",
+        sandboxId: "sbx-session",
         source: "preview-page",
         clerkUserId: "clerk|idle",
       });
       const row = await t.run((ctx) =>
-        getSandboxActivity(ctx.db, { kind: "task", entityId: String(taskId) }),
+        getSandboxActivity(ctx.db, {
+          kind: "session",
+          entityId: String(sessionId),
+        }),
       );
       expect(row?.lastUserActivitySource).toBe("preview-page");
       expect(row?.lastUserActivityUserId).toBe(userId);
