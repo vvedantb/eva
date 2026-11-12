@@ -33,6 +33,8 @@ import { applyEvaTheme } from "@/ui/evaTheme";
 import { EVA_FONT } from "@/ui/fonts";
 import { MaintenanceGate, MaintenanceScreen, useMaintenanceMode } from "@/ui/MaintenanceScreen";
 import { StartupFailure } from "@/ui/StartupFailure";
+import { UpdateDialog } from "@/update/UpdateDialog";
+import { checkForUpdate } from "@/update/updateCheck";
 import { useStackScreenOptions } from "@/ui/stackOptions";
 import { navigationTheme, useScheme } from "@/ui/theme";
 
@@ -44,6 +46,9 @@ applyEvaTheme();
 
 // The saved light / dark / system choice, applied before the first screen.
 void restoreColorSchemeChoice();
+
+// A newer APK on GitHub Releases, offered once the app is up (`UpdateDialog`).
+void checkForUpdate();
 
 /** One client for the app's life, outside render (it holds the socket). */
 const convex = new ConvexReactClient(CONVEX_URL, { unsavedChangesWarning: false });
@@ -158,6 +163,7 @@ export default function RootLayout() {
                       <Stack screenOptions={stackOptions} />
                     </ClerkGate>
                   </MaintenanceGate>
+                  <UpdateDialog />
                   <Toaster />
                   <StatusBar style={scheme === "dark" ? "light" : "dark"} />
                 </NativeUiProvider>
