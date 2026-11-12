@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: Inbox select mode as Android's contextual action bar
+
+Date: 2026-11-12
+
+WHY: Select mode started only from a header icon, its bar showed unlabelled 36 pt icons, and it floated over the last row with the tab bar still under it.
+
+Architectural: A long press on a row starts select mode with that row ticked and a light haptic (in select mode it ticks, as a tap). While selecting, the Inbox sets `tabBarStyle: { display: "none" }` with `<Tabs.Screen options>`, native-ui `FloatingTabBar` hides on it, and `BulkActionBar placement="tabBar"` sits in the same slot with labelled 48 pt actions. The header shows "N selected" with a close X (native-ui `PageHeader leading`) and hides the page actions.
+
 ## Phone: segmented switches slide
 
 Date: 2026-11-12
