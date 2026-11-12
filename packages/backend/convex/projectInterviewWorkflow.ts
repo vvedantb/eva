@@ -438,7 +438,6 @@ export const saveResult = internalMutation({
       await setProjectConversation(ctx.db, args.projectId, messages);
       await ctx.db.patch(args.projectId, {
         activeWorkflowId: undefined,
-        lastSandboxActivity: Date.now(),
       });
       return "error";
     }
@@ -453,7 +452,6 @@ export const saveResult = internalMutation({
       await setProjectConversation(ctx.db, args.projectId, messages);
       await ctx.db.patch(args.projectId, {
         activeWorkflowId: undefined,
-        lastSandboxActivity: Date.now(),
       });
       return "error";
     }
@@ -467,7 +465,6 @@ export const saveResult = internalMutation({
       await setProjectConversation(ctx.db, args.projectId, messages);
       await ctx.db.patch(args.projectId, {
         activeWorkflowId: undefined,
-        lastSandboxActivity: Date.now(),
       });
       return "ready";
     }
@@ -480,7 +477,6 @@ export const saveResult = internalMutation({
     await setProjectConversation(ctx.db, args.projectId, messages);
     await ctx.db.patch(args.projectId, {
       activeWorkflowId: undefined,
-      lastSandboxActivity: Date.now(),
     });
     return "question";
   },
@@ -759,7 +755,6 @@ export const saveSpecResult = internalMutation({
         await ctx.db.patch(args.projectId, {
           phase: "finalized",
           activeWorkflowId: undefined,
-          lastSandboxActivity: Date.now(),
         });
         return null;
       }
@@ -773,7 +768,6 @@ export const saveSpecResult = internalMutation({
     await setProjectConversation(ctx.db, args.projectId, messages);
     await ctx.db.patch(args.projectId, {
       activeWorkflowId: undefined,
-      lastSandboxActivity: Date.now(),
     });
     return null;
   },

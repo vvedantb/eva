@@ -225,18 +225,11 @@ export const startDesktopForBrowserEntity = internalAction({
     message: v.string(),
   }),
   handler: async (ctx, args) => {
-    const entity =
-      args.entityKind === "session"
-        ? await ctx.runQuery(internal.sessions.getInternal, {
-            id: args.entityId,
-          })
-        : args.entityKind === "task"
-          ? await ctx.runQuery(internal.agentTasks.getInternalByStringId, {
-              id: args.entityId,
-            })
-          : await ctx.runQuery(internal.projects.getInternalByStringId, {
-              id: args.entityId,
-            });
+    // A task's or project's sandbox is its session's.
+    const entity = await ctx.runQuery(internal.sessions.getForEntityInternal, {
+      entityKind: args.entityKind,
+      entityId: args.entityId,
+    });
     if (!entity) {
       return { ok: false, message: `${args.entityKind} not found.` };
     }

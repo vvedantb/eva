@@ -144,6 +144,29 @@ export async function findTaskWorkSession(
   return await findOwnedSession(db, taskWorkSessionOwner(task));
 }
 
+/**
+ * The session that holds the sandbox of a session, task or project named by
+ * a bare id (an MCP token's entity): the session itself, the one a task works
+ * on, or a project's. Null for a malformed id or before the session exists.
+ */
+export async function findEntitySession(
+  db: DatabaseReader,
+  kind: "session" | "task" | "project",
+  id: string,
+): Promise<Doc<"sessions"> | null> {
+  if (kind === "session") {
+    const sessionId = db.normalizeId("sessions", id);
+    return sessionId ? await db.get(sessionId) : null;
+  }
+  if (kind === "task") {
+    const taskId = db.normalizeId("agentTasks", id);
+    const task = taskId ? await db.get(taskId) : null;
+    return task ? await findTaskWorkSession(db, task) : null;
+  }
+  const projectId = db.normalizeId("projects", id);
+  return projectId ? await findProjectSession(db, projectId) : null;
+}
+
 /** The task a session belongs to, or undefined for any other owner. */
 export function sessionOwnerTaskId(
   session: OwnerFields,

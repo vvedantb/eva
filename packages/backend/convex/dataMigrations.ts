@@ -350,24 +350,10 @@ export const pruneSessionBackgroundAgents = dataMigrations.define({
   migrateOne: (_ctx, doc) => pruneBackgroundAgentsPatch(doc),
 });
 
-export const pruneAgentTaskBackgroundAgents = dataMigrations.define({
-  table: "agentTasks",
-  batchSize: PRUNE_BACKGROUND_AGENTS_BATCH,
-  migrateOne: (_ctx, doc) => pruneBackgroundAgentsPatch(doc),
-});
-
-export const pruneProjectBackgroundAgents = dataMigrations.define({
-  table: "projects",
-  batchSize: PRUNE_BACKGROUND_AGENTS_BATCH,
-  migrateOne: (_ctx, doc) => pruneBackgroundAgentsPatch(doc),
-});
-
 /** `npx convex run --prod dataMigrations:pruneBackgroundAgents` */
 export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionChatBackgroundAgents,
   internal.dataMigrations.pruneSessionBackgroundAgents,
-  internal.dataMigrations.pruneAgentTaskBackgroundAgents,
-  internal.dataMigrations.pruneProjectBackgroundAgents,
 ]);
 
 /**

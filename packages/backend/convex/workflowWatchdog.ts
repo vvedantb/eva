@@ -291,7 +291,6 @@ export async function tearDownStaleProjectWorkflow(
   await setProjectConversation(ctx.db, projectId, messages);
   await ctx.db.patch(projectId, {
     activeWorkflowId: undefined,
-    lastSandboxActivity: Date.now(),
   });
 }
 

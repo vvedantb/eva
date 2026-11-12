@@ -163,19 +163,6 @@ export async function openSessionChatTurn(
 }
 
 /**
- * Opens a task-chat or project-chat turn and marks the entity as a durable-turn
- * user (`chatTurnLifecycleVersion`).
- */
-export async function openChatTurn(
-  ctx: MutationCtx,
-  params: OpenTurnFields & { entityId: Id<"agentTasks"> | Id<"projects"> },
-): Promise<Id<"turns">> {
-  const turnId = await openTurn(ctx, params);
-  await ctx.db.patch(params.entityId, { chatTurnLifecycleVersion: 2 });
-  return turnId;
-}
-
-/**
  * Leases a just-opened daemon-minted (synthetic) turn: the daemon that asked
  * for it is already running, so it owns the lease from the first heartbeat.
  */

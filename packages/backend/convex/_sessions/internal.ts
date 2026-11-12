@@ -17,7 +17,7 @@ import { reconcileSessionArchiveState } from "./prArchive";
 import { schedulePrTitleSync } from "../_github/prTitleSync";
 import { hasOpenChatTurn } from "../_chat/turnProjection";
 import { findMainChat } from "../_sessionChats/helpers";
-import { isStandaloneSession } from "./owner";
+import { findEntitySession, isStandaloneSession } from "./owner";
 
 /** Retrieves a session by ID for internal use (no auth check). */
 export const getInternal = internalQuery({
@@ -28,6 +28,21 @@ export const getInternal = internalQuery({
     if (!id) return null;
     return await ctx.db.get(id);
   },
+});
+
+/** The session holding an MCP entity's sandbox (`findEntitySession`). */
+export const getForEntityInternal = internalQuery({
+  args: {
+    entityKind: v.union(
+      v.literal("session"),
+      v.literal("task"),
+      v.literal("project"),
+    ),
+    entityId: v.string(),
+  },
+  returns: v.union(sessionValidator, v.null()),
+  handler: async (ctx, args) =>
+    await findEntitySession(ctx.db, args.entityKind, args.entityId),
 });
 
 /** Session owning a sandbox — preview recovery relaunches services through it. */

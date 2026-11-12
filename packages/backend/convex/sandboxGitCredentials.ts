@@ -100,24 +100,6 @@ async function lookupSandboxOwner(
     };
   }
 
-  const project = await db
-    .query("projects")
-    .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
-    .first();
-  if (project) return { userId: project.userId, repoId: project.repoId };
-
-  const task = await db
-    .query("agentTasks")
-    .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
-    .first();
-  if (!task) return null;
-  if (task.repoId) return { userId: task.createdBy, repoId: task.repoId };
-  if (task.projectId) {
-    const taskProject = await db.get(task.projectId);
-    if (taskProject) {
-      return { userId: task.createdBy, repoId: taskProject.repoId };
-    }
-  }
   return null;
 }
 
