@@ -52,6 +52,20 @@ export default function InboxScreen() {
   const largerText = useLargerText();
   const insets = useSafeAreaInsets();
 
+  // Android back leaves select mode first, as it closes a sheet first. An
+  // effect because the hardware back button is a subscription outside React.
+  // It comes before the values below: the React Compiler memoises nothing
+  // across a hook call, and the list and its rows are memoised only when no
+  // hook sits between the queries and the JSX.
+  useEffect(() => {
+    if (!selecting) return;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      setSelecting(false);
+      setSelected(new Set());
+      return true;
+    });
+    return () => subscription.remove();
+  }, [selecting]);
   // The web Unread filter: the inbox list, unread rows only.
   const notifications = filter === "unread" ? listed?.filter((notification) => !notification.read) : listed;
   const repoById = new Map<Id<"githubRepos">, NotificationRepo>(
@@ -68,18 +82,7 @@ export default function InboxScreen() {
     setSelecting(false);
     setSelected(new Set());
   };
-  // Android back leaves select mode first, as it closes a sheet first. An
-  // effect because the hardware back button is a subscription outside React.
-  useEffect(() => {
-    if (!selecting) return;
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      setSelecting(false);
-      setSelected(new Set());
-      return true;
-    });
-    return () => subscription.remove();
-  }, [selecting]);
-  const toggle = (id: Id<"notifications">) => {
+  const toggle = ({ _id: id }: Doc<"notifications">) => {
     const next = new Set(selected);
     if (next.has(id)) next.delete(id);
     else next.add(id);
@@ -110,6 +113,9 @@ export default function InboxScreen() {
       markAsRead({ id }).catch(() => toast.error("Couldn't mark as read", { id: "inbox-mark-read" }));
     }
   };
+  const markRead = (notification: Doc<"notifications">) => void markAsRead({ id: notification._id });
+  const toggleArchive = (notification: Doc<"notifications">) =>
+    notification.archivedAt === undefined ? archive([notification._id]) : unarchive([notification._id]);
   const open = (notification: Doc<"notifications">) => {
     if (!notification.read) void markAsRead({ id: notification._id });
     if (notification.chatTarget) {
@@ -178,21 +184,17 @@ export default function InboxScreen() {
           )}
           // The `DividedList` hairline between the rows of a group.
           ItemSeparatorComponent={ListDivider}
+          // The same handlers for every row (each row closes over its own notification), so a
+          // row whose notification did not change keeps its drawing when the list draws more.
           renderItem={({ item: notification }) => (
             <NotificationRow
               notification={notification}
               repo={repoOf(notification)}
-              onPress={() => open(notification)}
-              onMarkRead={() => void markAsRead({ id: notification._id })}
-              onToggleRead={() => toggleRead(notification)}
-              onToggleArchive={() =>
-                notification.archivedAt === undefined ? archive([notification._id]) : unarchive([notification._id])
-              }
-              selection={
-                selecting
-                  ? { checked: selected.has(notification._id), onToggle: () => toggle(notification._id) }
-                  : undefined
-              }
+              onOpen={open}
+              onMarkRead={markRead}
+              onToggleRead={toggleRead}
+              onToggleArchive={toggleArchive}
+              selection={selecting ? { checked: selected.has(notification._id), onToggle: toggle } : undefined}
             />
           )}
           // A scroll closes a row swiped open.

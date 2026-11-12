@@ -1,4 +1,4 @@
-import { api, getAIModelProvider, normalizeAIModel } from "@eva/backend";
+import { api, getAIModelProvider, normalizeAIModel, type Id } from "@eva/backend";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
 import { formatDuration } from "@eva/shared/duration";
@@ -18,7 +18,7 @@ import {
   toRepoRelativePath,
 } from "@eva/shared";
 import { messageLinkHref } from "@eva/shared/messageLink";
-import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
+import { type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { IconChevronDown, IconMessageCircle, IconPlayerStopFilled } from "@tabler/icons-react-native";
 import {
   ChoiceQuestion,
@@ -38,6 +38,7 @@ import { CenteredSpinner, EmptyState, Text } from "@vvedantb/native-ui/primitive
 import { tokens } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Linking, View } from "react-native";
@@ -53,12 +54,15 @@ import { UserMessageText } from "@/chat/MentionChip";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { MessageFooter } from "@/chat/MessageFooter";
 import { useAttachments } from "@/chat/useAttachments";
-import { useChatModelPick } from "@/chat/useChatModelPick";
+import { type Chat, useChatModelPick } from "@/chat/useChatModelPick";
 import { useMentionComposer } from "@/chat/useMentionComposer";
 import { WEB_URL } from "@/config";
 import { TEAMMATE_FOOTER_INSET, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
 import { useSessionActions } from "@/sessions/useSessionActions";
 import { textColor, useScheme } from "@/ui/theme";
+
+/** The agent's open question in the chat (`pendingQuestions.getActive`). */
+type PendingQuestion = NonNullable<FunctionReturnType<typeof api.pendingQuestions.getActive>>;
 
 /** The session actions the chat header ⋯ adds; it has Copy link of its own. */
 // The header has its own Copy link (every chat kind), so the session's is left out.
@@ -78,7 +82,6 @@ export default function ChatScreen() {
   const { target } = useLocalSearchParams<{ target: string }>();
   const router = useRouter();
   const scheme = useScheme();
-  const insets = useSafeAreaInsets();
   const chat = useQuery(api.mobile.getChat, { target });
   const parentId = chat?.parentId;
   const messages = useQuery(api.messages.listByParent, parentId ? { parentId } : "skip");
@@ -89,16 +92,10 @@ export default function ChatScreen() {
   // A teammate's turn shows their avatar and first name, from the same lookup as the web `ChatBody`.
   const teammateIds = otherUserIdsInChat(messages ?? [], me ?? undefined);
   const teammates = useQuery(api.users.getMany, teammateIds.length > 0 ? { ids: teammateIds } : "skip");
-  const send = useMutation(api.mobile.sendMessage);
   const stop = useMutation(api.mobile.stopTurn);
   const startSession = useMutation(api.mobile.startSession);
   const rate = useMutation(api.feedback.rateTurn);
-  const answer = useMutation(api.pendingQuestions.answer);
-  const attachments = useAttachments();
   const simpleView = useSimpleView();
-  // The `/` list follows the chat's model provider, as the web composer.
-  const composer = useMentionComposer(chat?.repoId, chat ? getAIModelProvider(normalizeAIModel(chat.model)) : undefined);
-  const modelPick = useChatModelPick(target, chat, me);
   // The web leaves a session's page once it is archived; the phone goes back (to Sessions after a deep link).
   const sessionActions = useSessionActions({ onArchived: () => goBackOrReplace(router, "/sessions") });
 
@@ -132,21 +129,6 @@ export default function ChatScreen() {
   const teammateNames = firstNameByUserId(teammates ?? []);
   const teammateById = new Map((teammates ?? []).map((user) => [user._id, user]));
   const latestReplyId = visible.findLast((message) => message.role === "assistant")?._id;
-  // The web composer's placeholder: asleep, a send wakes Eva up; mid-turn, a follow-up.
-  // The phone has no usage-limit hold yet (the web's needs a ticking clock), so that line never shows.
-  // Awake, the web's "Ask Eva anything... / for skills · @ to mention" would wrap the one-row pill
-  // (a native field cannot ellipsise its placeholder), so the phone keeps the first part.
-  const composerState = sandboxComposerState({
-    isSandboxActive: chat.sandboxActive,
-    isSwitchingAccount: modelPick.switching,
-    isExecuting: working,
-    isUsageLimitHeld: false,
-  });
-  const placeholder = working
-    ? "Add a follow-up..."
-    : composerState.placeholder === SANDBOX_CHAT_COPY.activePlaceholder
-      ? "Ask Eva anything..."
-      : composerState.placeholder;
   // A changed file opens the PR diff, as the web Review pane; simple view has no card, as the web.
   const openDiff = simpleView
     ? undefined
@@ -163,23 +145,6 @@ export default function ChatScreen() {
         prUrl: chat.prUrl,
       }
     : null;
-
-  const handleSend = (text: string) => {
-    if (attachments.uploading) {
-      toast.error("Wait for the attachments to upload");
-      return;
-    }
-    // The web composer is locked while the new account's daemon starts.
-    if (modelPick.switching) {
-      toast.error("Wait for the account switch");
-      return;
-    }
-    const attachmentStorageIds = attachments.storageIds;
-    attachments.clear();
-    send({ target: chat.target, message: composer.tokenize(text), attachmentStorageIds }).catch(() => {
-      toast.error("Couldn't send your message");
-    });
-  };
 
   const handleStop = () => {
     stop({ target: chat.target }).catch(() => toast.error("Couldn't stop Eva"));
@@ -313,67 +278,146 @@ export default function ChatScreen() {
         {/* The composer or the question card: the scroll button rides 16 above it, as the web's `bottom-4` over the dock. */}
         {/* Solid: the keyboard lifts the dock over the transcript, which must not show through it. */}
         <ConversationDock style={{ backgroundColor: tokens.color.background[scheme] }}>
-          {pending && questions ? (
-            // The web dock: p-3 around the card, in place of the composer, and the thread's 10 more on the right.
-            // Over the bottom inset, as the composer: the dock rises with the keyboard (its "Other..." field) less that inset.
-            <View className="p-3 pr-[22px]" style={{ paddingBottom: insets.bottom + 12 }}>
-              <ChoiceQuestion
-                key={pending.toolUseId}
-                questions={questions}
-                buttonWeight="semibold"
-                onSubmit={async (answers) => {
-                  if (!chat.parentId) return;
-                  try {
-                    await answer({ entityId: chat.parentId, toolUseId: pending.toolUseId, answer: JSON.stringify(answers) });
-                  } catch {
-                    toast.error("Couldn't submit answer");
-                  }
-                }}
-              />
-            </View>
-          ) : chat.canReply ? (
-            // Eva's web pill composer, the + on the muted fill, 10 more in on the right as the
-            // thread. Send stays ready during a turn (a send queues behind it) and Stop sits beside
-            // it, as `stopMode="alongside"`.
-            <View className="pr-2.5">
-              <PromptInput
-                layout="inline"
-                shape="pill"
-                value={composer.text}
-                onChangeText={composer.setText}
-                onSubmit={handleSend}
-                menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} onDismiss={composer.dismiss} /> : null}
-                placeholder={placeholder}
-                leading={
-                  <AttachButton onPress={() => void attachments.pick()} />
-                }
-                header={<ComposerHeader attachments={attachments} composer={composer} />}
-                toolbar={working ? <PromptInputButton icon={IconPlayerStopFilled} label="Stop generating" onPress={handleStop} /> : null}
-                footer={
-                  <ComposerFooter
-                    repoId={chat.repoId}
-                    composer={composer}
-                    attachments={attachments}
-                    leading={
-                      chat.sandboxBranch && !simpleView ? (
-                        <SandboxBranchChip branch={chat.sandboxBranch} intendedBranch={chat.intendedBranch} />
-                      ) : undefined
-                    }
-                    model={modelPick.pick ? <ModelChip repoId={chat.repoId} {...modelPick.pick} /> : undefined}
-                  />
-                }
-              />
-            </View>
-          ) : (
-            <Text variant="muted" className="px-4 pb-8 pt-3 text-center" style={textColor(scheme, "muted")}>
-              This chat is closed.
-            </Text>
-          )}
+          <ChatDock
+            target={target}
+            chat={chat}
+            me={me}
+            working={working}
+            simpleView={simpleView}
+            pending={pending}
+            questions={questions}
+            onStop={handleStop}
+          />
         </ConversationDock>
         {/* Centred on the thread, which sits 10 left of the screen's centre, as the web panel. */}
         <ConversationScrollButton label="Scroll to end" icon={IconChevronDown} showLabel insets={{ right: 10 }} />
       </Conversation>
     </View>
+  );
+}
+
+/**
+ * The chat's dock: the agent's question card, the composer or "This chat is
+ * closed". It owns the draft, the attachments and the model pick, so a
+ * keystroke redraws the dock only, not the transcript above it. It stays
+ * mounted while the chat is open, so a draft outlives a question card.
+ */
+function ChatDock({
+  target,
+  chat,
+  me,
+  working,
+  simpleView,
+  pending,
+  questions,
+  onStop,
+}: {
+  target: string;
+  chat: Chat;
+  me: Id<"users"> | undefined;
+  working: boolean;
+  simpleView: boolean;
+  pending: PendingQuestion | null | undefined;
+  questions: ParsedQuestion[] | null;
+  onStop: () => void;
+}) {
+  const scheme = useScheme();
+  const insets = useSafeAreaInsets();
+  const send = useMutation(api.mobile.sendMessage);
+  const answer = useMutation(api.pendingQuestions.answer);
+  const attachments = useAttachments();
+  // The `/` list follows the chat's model provider, as the web composer.
+  const composer = useMentionComposer(chat.repoId, getAIModelProvider(normalizeAIModel(chat.model)));
+  const modelPick = useChatModelPick(target, chat, me);
+
+  // The web composer's placeholder: asleep, a send wakes Eva up; mid-turn, a follow-up.
+  // The phone has no usage-limit hold yet (the web's needs a ticking clock), so that line never shows.
+  // Awake, the web's "Ask Eva anything... / for skills · @ to mention" would wrap the one-row pill
+  // (a native field cannot ellipsise its placeholder), so the phone keeps the first part.
+  const composerState = sandboxComposerState({
+    isSandboxActive: chat.sandboxActive,
+    isSwitchingAccount: modelPick.switching,
+    isExecuting: working,
+    isUsageLimitHeld: false,
+  });
+  const placeholder = working
+    ? "Add a follow-up..."
+    : composerState.placeholder === SANDBOX_CHAT_COPY.activePlaceholder
+      ? "Ask Eva anything..."
+      : composerState.placeholder;
+
+  const handleSend = (text: string) => {
+    if (attachments.uploading) {
+      toast.error("Wait for the attachments to upload");
+      return;
+    }
+    // The web composer is locked while the new account's daemon starts.
+    if (modelPick.switching) {
+      toast.error("Wait for the account switch");
+      return;
+    }
+    const attachmentStorageIds = attachments.storageIds;
+    attachments.clear();
+    send({ target: chat.target, message: composer.tokenize(text), attachmentStorageIds }).catch(() => {
+      toast.error("Couldn't send your message");
+    });
+  };
+
+  return pending && questions ? (
+    // The web dock: p-3 around the card, in place of the composer, and the thread's 10 more on the right.
+    // Over the bottom inset, as the composer: the dock rises with the keyboard (its "Other..." field) less that inset.
+    <View className="p-3 pr-[22px]" style={{ paddingBottom: insets.bottom + 12 }}>
+      <ChoiceQuestion
+        key={pending.toolUseId}
+        questions={questions}
+        buttonWeight="semibold"
+        onSubmit={async (answers) => {
+          if (!chat.parentId) return;
+          try {
+            await answer({ entityId: chat.parentId, toolUseId: pending.toolUseId, answer: JSON.stringify(answers) });
+          } catch {
+            toast.error("Couldn't submit answer");
+          }
+        }}
+      />
+    </View>
+  ) : chat.canReply ? (
+    // Eva's web pill composer, the + on the muted fill, 10 more in on the right as the
+    // thread. Send stays ready during a turn (a send queues behind it) and Stop sits beside
+    // it, as `stopMode="alongside"`.
+    <View className="pr-2.5">
+      <PromptInput
+        layout="inline"
+        shape="pill"
+        value={composer.text}
+        onChangeText={composer.setText}
+        onSubmit={handleSend}
+        menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} onDismiss={composer.dismiss} /> : null}
+        placeholder={placeholder}
+        leading={
+          <AttachButton onPress={() => void attachments.pick()} />
+        }
+        header={<ComposerHeader attachments={attachments} composer={composer} />}
+        toolbar={working ? <PromptInputButton icon={IconPlayerStopFilled} label="Stop generating" onPress={onStop} /> : null}
+        footer={
+          <ComposerFooter
+            repoId={chat.repoId}
+            composer={composer}
+            attachments={attachments}
+            leading={
+              chat.sandboxBranch && !simpleView ? (
+                <SandboxBranchChip branch={chat.sandboxBranch} intendedBranch={chat.intendedBranch} />
+              ) : undefined
+            }
+            model={modelPick.pick ? <ModelChip repoId={chat.repoId} {...modelPick.pick} /> : undefined}
+          />
+        }
+      />
+    </View>
+  ) : (
+    <Text variant="muted" className="px-4 pb-8 pt-3 text-center" style={textColor(scheme, "muted")}>
+      This chat is closed.
+    </Text>
   );
 }
 
