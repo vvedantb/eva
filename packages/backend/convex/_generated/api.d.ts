@@ -190,7 +190,6 @@ import type * as _migrations_cleanup from "../_migrations/cleanup.js";
 import type * as _migrations_deleteRepos from "../_migrations/deleteRepos.js";
 import type * as _migrations_deploymentUrl from "../_migrations/deploymentUrl.js";
 import type * as _migrations_excludeConvexUrlFromSandbox from "../_migrations/excludeConvexUrlFromSandbox.js";
-import type * as _migrations_legacyOwnerRows from "../_migrations/legacyOwnerRows.js";
 import type * as _migrations_logProjectIds from "../_migrations/logProjectIds.js";
 import type * as _migrations_moveLegacyChatRows from "../_migrations/moveLegacyChatRows.js";
 import type * as _migrations_projectInterview from "../_migrations/projectInterview.js";
@@ -768,7 +767,6 @@ declare const fullApi: ApiFromModules<{
   "_migrations/deleteRepos": typeof _migrations_deleteRepos;
   "_migrations/deploymentUrl": typeof _migrations_deploymentUrl;
   "_migrations/excludeConvexUrlFromSandbox": typeof _migrations_excludeConvexUrlFromSandbox;
-  "_migrations/legacyOwnerRows": typeof _migrations_legacyOwnerRows;
   "_migrations/logProjectIds": typeof _migrations_logProjectIds;
   "_migrations/moveLegacyChatRows": typeof _migrations_moveLegacyChatRows;
   "_migrations/projectInterview": typeof _migrations_projectInterview;
