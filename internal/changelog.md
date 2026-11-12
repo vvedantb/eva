@@ -4,9 +4,9 @@
 
 Date: 2026-11-12
 
-WHY: A large chat (163 rows, ~8.8 MB) failed every queued dequeue with "Too many bytes read". One send runs handoff detection twice (alert, then prompt), and each read took the newest 400 messages. Separately, one cancelled task kept a `running` run from the 0b migration.
+WHY: A large chat (163 rows, ~8.8 MB) failed every send and queued dequeue with "Too many bytes read": one send runs handoff detection twice (alert, then prompt), and each read took the newest 400 messages. Separately, one cancelled task kept a `running` run from the 0b migration.
 
-Architectural: `_shared/modelHandoff.ts` `loadHandoffWindow` reads the newest messages lazily and stops at 400 rows or about 2 MB (`HANDOFF_SCAN_BYTE_BUDGET`); both `maybeInsertModelHandoffAlert` and `prependModelHandoffContext` use it, so direct sends and dequeues are bounded. `_agentTasks/runState:finishStaleTerminalRuns` (`{ dryRun? }`, self-paginating) ends the run of done/cancelled tasks idle for 24 h with no open turn and a terminal or absent `agentRuns` row, through `finishTaskRun`.
+Architectural: `_shared/modelHandoff.ts` `readHandoffHistory` reads the newest messages in batches of 4 and stops at 400 rows or 2 MiB (`HANDOFF_SCAN_BYTE_BUDGET`); both `maybeInsertModelHandoffAlert` and `prependModelHandoffContext` use it. `_agentTasks/runState:finishStaleTerminalRuns` (`{ dryRun? }`, self-paginating) ends the run of done/cancelled tasks idle for 24 h with no open turn and a terminal or absent `agentRuns` row, through `finishTaskRun`.
 
 ## Maintenance mode
 
