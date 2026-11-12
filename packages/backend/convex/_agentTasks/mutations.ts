@@ -36,15 +36,14 @@ import { createTaskRunSummary, moveTaskRunSummary } from "./runSummary";
 import { cancelTaskRunSchedule } from "./runState";
 import {
   detachOwnedSession,
-  findQuickTaskSession,
   isTerminalTaskStatus,
   mirrorOwnerIntoSession,
   retireOwnedSession,
   reviveOwnedSession,
   syncOwnedSessionWithTaskStatus,
   taskMoveDetachesSession,
-  taskSessionOwner,
 } from "../_sessions/ownedSession";
+import { findOwnedSession, workSessionOwner } from "../_sessions/owner";
 import {
   applyPrLifecycleTransition,
   findPrimaryPullRequest,
@@ -87,7 +86,7 @@ export const update = authMutation({
     }
     const updates = await buildTaskUpdates(ctx, task, args);
     // A quick task moved into a project works on the project's session from
-    // now on (`taskWorkSessionOwner`): its own session detaches.
+    // now on (`workSessionOwner`): its own session detaches.
     if (taskMoveDetachesSession(task, args)) {
       await detachOwnedSession(ctx, task._id);
     }
@@ -206,8 +205,12 @@ export const updateStatus = authMutation({
       // place. The run stops the sandbox on its way out, so the action resumes
       // it for the model call and stops it again unless the reviewer already
       // has it open.
-      // A quick task's sandbox lives on its session.
-      const session = await findQuickTaskSession(ctx.db, task);
+      // Only a quick task: its sandbox lives on its own session.
+      const workOwner = workSessionOwner(task);
+      const session =
+        workOwner.kind === "task"
+          ? await findOwnedSession(ctx.db, workOwner)
+          : null;
       const sandboxId = session?.sandboxId;
       const sandboxActive = session?.status === "active";
       if (enteringCodeReview && prUrl && repo && sandboxId) {
@@ -284,7 +287,7 @@ export const remove = authMutation({
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
     await softDeleteAgentTask(ctx, args.id);
-    await retireOwnedSession(ctx, taskSessionOwner(args.id));
+    await retireOwnedSession(ctx, { kind: "task", taskId: args.id });
     return null;
   },
 });
@@ -313,7 +316,7 @@ export const restore = authMutation({
     // The delete retired the task's session; a live task gets it back. A
     // done/cancelled task stays retired with its status.
     if (!isTerminalTaskStatus(task.status)) {
-      await reviveOwnedSession(ctx, taskSessionOwner(task._id));
+      await reviveOwnedSession(ctx, { kind: "task", taskId: task._id });
     }
     return null;
   },
@@ -673,7 +676,7 @@ export const deleteCascade = authMutation({
     await collectDependents(args.id);
     for (const taskId of tasksToDelete) {
       await softDeleteAgentTask(ctx, taskId);
-      await retireOwnedSession(ctx, taskSessionOwner(taskId));
+      await retireOwnedSession(ctx, { kind: "task", taskId });
     }
     return null;
   },

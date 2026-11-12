@@ -13,8 +13,8 @@ import { slugifyAppTabName } from "@eva/shared/appTabSlug";
 import { previewConsoleSessionName } from "../_pty/consoleSessionName";
 import { sandboxOwnerKey } from "@eva/shared";
 import {
-  findProjectSession,
-  findTaskWorkSession,
+  findOwnedSession,
+  findWorkSession,
 } from "../_sessions/owner";
 
 // Backs the chat-self MCP tools (chatSelfTools.ts). Internal on purpose: the
@@ -95,7 +95,7 @@ async function ownerFields(
     if (!task) return null;
     // A task's sandbox (preview port, path, owner key) is its session's (a
     // project task's: the project's); its PRs stay the task's.
-    const session = await findTaskWorkSession(ctx.db, task);
+    const session = await findWorkSession(ctx.db, task);
     if (!session) return null;
     return {
       owner: { kind: "task", taskId: task._id },
@@ -112,7 +112,10 @@ async function ownerFields(
   const project = projectId ? await ctx.db.get(projectId) : null;
   if (!project) return null;
   // A project's sandbox is its session's; its PRs stay the project's.
-  const session = await findProjectSession(ctx.db, project._id);
+  const session = await findOwnedSession(ctx.db, {
+    kind: "project",
+    projectId: project._id,
+  });
   if (!session) return null;
   return {
     owner: { kind: "project", projectId: project._id },

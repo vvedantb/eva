@@ -18,7 +18,7 @@ import { isUsageLimitError, parseUsageLimitResetTime } from "./recovery";
 import { scheduleTaskOrchestratorNotify } from "../orchestratorShared";
 import { deriveLogUsage } from "../_logs/usage";
 import { TASK_RUN_STREAM_PREFIX } from "../_chat/agentStreamIds";
-import { findTaskWorkSession } from "../_sessions/owner";
+import { findWorkSession } from "../_sessions/owner";
 
 export const llmJson = new LlmJson({ attemptCorrection: true });
 
@@ -43,7 +43,7 @@ export async function resolveTaskSandboxIdForRun(
 ): Promise<string | undefined> {
   // A task's sandbox lives on its session (a project task's on the
   // project's).
-  const session = await findTaskWorkSession(db, task);
+  const session = await findWorkSession(db, task);
   return preferPersistedSandboxId({
     sandboxId: task.projectId
       ? (session?.sandboxId ?? run.sandboxId)

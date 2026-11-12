@@ -7,8 +7,8 @@ import {
   type SessionChatContext,
 } from "../_sessionChats/helpers";
 import { isSessionArchived } from "../_sessions/archive";
-import { chatOwnerEntityId, findTaskWorkSession } from "../_sessions/owner";
-import { findOwnerChat, type OwnerEntity } from "../_sessions/ownedSession";
+import { chatOwnerEntityId, findWorkSession } from "../_sessions/owner";
+import { findWorkChat } from "../_sessions/ownerState";
 import { entityHref, repoBasePath } from "@eva/shared";
 import { storedComposerTraits } from "../_shared/composerTraits";
 import {
@@ -136,17 +136,6 @@ export function sessionWebPath(repo: Doc<"githubRepos">, session: Doc<"sessions"
 }
 
 /**
- * The session chat a task or project talks in (`findOwnerChat`), or null
- * before it has one.
- */
-async function resolveOwnerSessionChat(
-  db: GenericDatabaseReader<DataModel>,
-  entity: OwnerEntity,
-): Promise<SessionChatContext | null> {
-  return await findOwnerChat(db, entity);
-}
-
-/**
  * Resolves a mobile chat target, or null when the id names nothing the app
  * can open. Access is the caller's job: `repoId` is returned for that check.
  */
@@ -213,7 +202,7 @@ export async function resolveMobileChat(
     // task's own chat in the project's session). Shown as the task (title,
     // link, PR); read, sent and stopped as that session chat. A task with no
     // session chat yet resolves as below until its first send creates one.
-    const owned = await resolveOwnerSessionChat(db, { kind: "task", task });
+    const owned = await findWorkChat(db, { kind: "task", task });
     if (owned) {
       const { chat, session } = owned;
       const ownedSandboxActive = session.status === "active";
@@ -244,7 +233,7 @@ export async function resolveMobileChat(
     // No chat yet: the first send creates it (`ensureOwnerChat`). Nothing
     // hangs off the task id. A project task may already work on its
     // project's running session.
-    const workSession = await findTaskWorkSession(db, task);
+    const workSession = await findWorkSession(db, task);
     const workSandboxActive = workSession?.status === "active";
     return {
       repoId: repo._id,
@@ -277,7 +266,7 @@ export async function resolveMobileChat(
     if (!project || !repo) return null;
     // A project chats in its session's Main chat: shown as the project, read,
     // sent and stopped as that session chat.
-    const owned = await resolveOwnerSessionChat(db, {
+    const owned = await findWorkChat(db, {
       kind: "project",
       project,
     });

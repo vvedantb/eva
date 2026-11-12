@@ -27,7 +27,7 @@ import {
 } from "./_git/branchNames";
 import { cancelTaskRunSchedule } from "./_agentTasks/runState";
 import { isProjectBuilding } from "./_projects/buildState";
-import { findProjectSession, isTerminalProjectPhase } from "./_sessions/owner";
+import { findOwnedSession, isTerminalProjectPhase } from "./_sessions/owner";
 import {
   allPullRequestsTerminal,
   findLivePullRequestOnBranch,
@@ -262,7 +262,10 @@ async function applyPhaseTransition(
   if (
     isTerminalProjectPhase(previousPhase) !==
       isTerminalProjectPhase(newPhase) &&
-    (await findProjectSession(ctx.db, project._id)) !== null
+    (await findOwnedSession(ctx.db, {
+      kind: "project",
+      projectId: project._id,
+    })) !== null
   ) {
     await ctx.scheduler.runAfter(
       0,

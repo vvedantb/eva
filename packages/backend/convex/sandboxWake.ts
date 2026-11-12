@@ -12,11 +12,10 @@ import { chatEntityKindValidator } from "./_validators/enums";
 import { awaitSandboxActive } from "./mcp/orchestratorDelivery";
 import { sleep } from "./_shared/async";
 import {
-  findProjectSession,
-  findTaskWorkSession,
+  findOwnedSession,
   ownedSessionOwnerValidator,
-  projectSessionOwner,
-  taskWorkSessionOwner,
+  workSessionOwner,
+  type OwnedSessionOwner,
 } from "./_sessions/owner";
 import { loadOwnerEntityWithAccess } from "./_sessions/queries";
 
@@ -52,18 +51,23 @@ async function resolveWakeTarget(
     const task = normalized ? await ctx.db.get(normalized) : null;
     if (!task) return null;
     // A task's sandbox is its session's (a project task's: the project's).
-    const session = await findTaskWorkSession(ctx.db, task);
-    return session
-      ? { kind: "session", id: session._id }
-      : { kind: "owner", owner: taskWorkSessionOwner(task) };
+    return await wakeOwnerTarget(ctx, workSessionOwner(task));
   }
   const normalized = ctx.db.normalizeId("projects", id);
   if (!normalized) return null;
   // A project's sandbox is its session's.
-  const session = await findProjectSession(ctx.db, normalized);
+  return await wakeOwnerTarget(ctx, { kind: "project", projectId: normalized });
+}
+
+/** The owner's session, or the owner itself before its session exists. */
+async function wakeOwnerTarget(
+  ctx: QueryCtx,
+  owner: OwnedSessionOwner,
+): Promise<WakeTarget> {
+  const session = await findOwnedSession(ctx.db, owner);
   return session
     ? { kind: "session", id: session._id }
-    : { kind: "owner", owner: projectSessionOwner(normalized) };
+    : { kind: "owner", owner };
 }
 
 /** Internal: typed ids for the action below (actions have no `normalizeId`). */

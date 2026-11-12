@@ -22,7 +22,7 @@ import { finishTaskRun, taskRunWorkflowId } from "../_agentTasks/runState";
 import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { errorMessage } from "@vvedantb/server";
-import { findTaskWorkSession } from "../_sessions/owner";
+import { findWorkSession } from "../_sessions/owner";
 import { abandonTaskRunSandbox } from "../_sessions/sandbox";
 
 /** Retrieves the active workflow ID for a task, or null if none exists. */
@@ -217,7 +217,7 @@ export async function cancelTaskRun(
     // A run borrowed its session's sandbox (a project task's: the project's):
     // fail the start it claimed (or finish the VM it attached) through the
     // session lifecycle. A project's VM stays up for its chat and builds.
-    const session = await findTaskWorkSession(ctx.db, task);
+    const session = await findWorkSession(ctx.db, task);
     if (session) {
       await abandonTaskRunSandbox(ctx, session._id, run, {
         keepActive: task.projectId !== undefined,
