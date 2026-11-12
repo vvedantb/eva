@@ -1,5 +1,13 @@
 # Changelog
 
+## Retry Vercel exec on dropped connections
+
+Date: 2026-11-12
+
+WHY: Opening a terminal failed with `vercel exec failed ... fetch failed`. Undici dropped the HTTP connection to the Vercel API, and `exec` only retried a closed command stream, so the pty connect action threw.
+
+Architectural: `_sandbox/vercelProvider.ts` `isRetryableExecFailure` (was `isVercelCommandStreamClosed`) also matches `fetch failed`, `UND_ERR_SOCKET`, `ECONNRESET` and `socket hang up`, so every `exec` gets one refresh+retry on a transit failure. A failed refresh no longer hides the exec error.
+
 ## Bounded handoff read; clear stale task runs
 
 Date: 2026-11-12
