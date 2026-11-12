@@ -8,6 +8,7 @@ import {
   IconExternalLink,
   IconGitBranch,
   IconLink,
+  IconLinkOff,
   IconPencil,
   IconSparkles,
   type IconProps,
@@ -42,7 +43,22 @@ export type SessionActionTarget = {
   webPath: string;
   branchName?: string;
   prUrl?: string;
+  /** A row in a linked-session group: its menu has Remove from group. */
+  inGroup?: boolean;
 };
+
+/** A linked-session group, for its Rename group menu. */
+export type SessionGroupTarget = {
+  /** Any member: `sessions.renameGroup` finds the group from it (the web passes the oldest). */
+  sessionId: Id<"sessions">;
+  /** The user-set name, when the group has one. */
+  name?: string;
+  /** What the list shows: the name, or the oldest member's title. */
+  label: string;
+};
+
+/** What the Rename dialog renames: a session's title or a group's name. */
+type RenameTarget = { kind: "session"; session: SessionActionTarget } | { kind: "group"; group: SessionGroupTarget };
 
 /** The web `SessionMenuItems` label and icon of each action; Archive is its `text-warning` item. */
 export const SESSION_ACTION_ITEMS: Record<
@@ -55,6 +71,7 @@ export const SESSION_ACTION_ITEMS: Record<
   copyLink: { label: "Copy link", icon: IconLink },
   copyBranchName: { label: "Copy branch name", icon: IconGitBranch },
   openPr: { label: "Open PR", icon: IconExternalLink },
+  removeFromGroup: { label: "Remove from group", icon: IconLinkOff },
   unarchive: { label: "Unarchive", icon: IconArchiveOff },
   archive: { label: "Archive", icon: IconArchive, warning: true },
 };
@@ -62,7 +79,8 @@ export const SESSION_ACTION_ITEMS: Record<
 /**
  * The web session menu on the phone: `openSheet` shows the row menu as a
  * bottom sheet (a long press stands in for the web right-click), `run` starts
- * one action, and `dialogs` holds the sheet and the web Rename and Archive
+ * one action, `openGroupSheet` shows a linked group's header menu (Rename
+ * group), and `dialogs` holds the sheets and the web Rename and Archive
  * dialogs, so render it once. Writes are the web mutations; Archive is
  * `mobile.archiveSession`, the web stop-then-archive in one call.
  */
@@ -70,11 +88,14 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
   const updateSession = useMutation(api.sessions.update);
   const archiveSession = useMutation(api.mobile.archiveSession);
   const unarchiveSession = useMutation(api.sessions.unarchive);
+  const removeFromGroup = useMutation(api.sessions.removeFromGroup);
+  const renameGroup = useMutation(api.sessions.renameGroup);
   const regenerateTitle = useAction(api.textGen.regenerateSessionTitle);
   const simpleView = useSimpleView();
   const scheme = useScheme();
   const [sheetTarget, setSheetTarget] = useState<SessionActionTarget | null>(null);
-  const [renameTarget, setRenameTarget] = useState<SessionActionTarget | null>(null);
+  const [groupSheetTarget, setGroupSheetTarget] = useState<SessionGroupTarget | null>(null);
+  const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [isRenaming, setIsRenaming] = useState(false);
   const [archiveTarget, setArchiveTarget] = useState<SessionActionTarget | null>(null);
@@ -83,6 +104,12 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
 
   /** The actions for one session, in the web order and groups (`sessionMenuActions`). */
   const actionsFor = (target: SessionActionTarget) => sessionMenuActions({ ...target, simpleView });
+
+  const openGroupRename = (group: SessionGroupTarget) => {
+    // A blank name clears it, so the group shows its oldest session's title again.
+    setRenameValue(group.name ?? "");
+    setRenameTarget({ kind: "group", group });
+  };
 
   const unarchive = (sessionId: Id<"sessions">) => {
     unarchiveSession({ id: sessionId }).then(
@@ -95,7 +122,7 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
     switch (action) {
       case "rename":
         setRenameValue(target.title);
-        setRenameTarget(target);
+        setRenameTarget({ kind: "session", session: target });
         return;
       case "regenerateTitle":
         regenerateTitle({ sessionId: target.sessionId }).then(
@@ -117,6 +144,12 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
       case "openPr":
         if (target.prUrl) void Linking.openURL(target.prUrl);
         return;
+      case "removeFromGroup":
+        removeFromGroup({ sessionId: target.sessionId }).then(
+          () => toast.success("Removed from group", { id: "session-group-remove" }),
+          () => toast.error("Couldn't remove from group", { id: "session-group-remove" }),
+        );
+        return;
       case "unarchive":
         unarchive(target.sessionId);
         return;
@@ -126,16 +159,24 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
     }
   };
 
+  /** A session needs a title; a group's blank name is allowed (it clears the name). */
+  const canSaveRename = renameTarget?.kind === "group" || renameValue.trim() !== "";
+
   const saveRename = async () => {
-    const title = renameValue.trim();
-    if (!renameTarget || !title || isRenaming) return;
+    if (!renameTarget || !canSaveRename || isRenaming) return;
     setIsRenaming(true);
     try {
-      await updateSession({ id: renameTarget.sessionId, title });
-      toast.success("Session renamed", { id: "session-rename" });
+      if (renameTarget.kind === "session") {
+        await updateSession({ id: renameTarget.session.sessionId, title: renameValue.trim() });
+        toast.success("Session renamed", { id: "session-rename" });
+      } else {
+        await renameGroup({ sessionId: renameTarget.group.sessionId, name: renameValue });
+        toast.success("Group renamed", { id: "session-group-rename" });
+      }
       setRenameTarget(null);
     } catch {
-      toast.error("Couldn't rename session", { id: "session-rename" });
+      if (renameTarget.kind === "session") toast.error("Couldn't rename session", { id: "session-rename" });
+      else toast.error("Couldn't rename group", { id: "session-group-rename" });
     }
     setIsRenaming(false);
   };
@@ -191,7 +232,24 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
             ))
           : null}
       </MenuSheet>
-      {/* The web "Rename session" dialog; the kit draws it as a bottom sheet at phone size. */}
+      {/* The web linked-group header menu (its right-click): Rename group. */}
+      <MenuSheet
+        open={groupSheetTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setGroupSheetTarget(null);
+        }}
+        title={groupSheetTarget?.label ?? ""}
+      >
+        <SheetRow
+          icon={IconPencil}
+          title="Rename group"
+          onPress={() => {
+            setGroupSheetTarget(null);
+            if (groupSheetTarget) openGroupRename(groupSheetTarget);
+          }}
+        />
+      </MenuSheet>
+      {/* The web "Rename session" and "Rename group" dialogs; the kit draws them as a bottom sheet at phone size. */}
       <Dialog
         open={renameTarget !== null}
         onOpenChange={(open) => {
@@ -200,11 +258,12 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
       >
         <DialogContent onShow={() => renameInput.current?.focus()}>
           <DialogHeader>
-            <DialogTitle>Rename session</DialogTitle>
+            <DialogTitle>{renameTarget?.kind === "group" ? "Rename group" : "Rename session"}</DialogTitle>
           </DialogHeader>
           <Input
             ref={renameInput}
-            accessibilityLabel="Session title"
+            accessibilityLabel={renameTarget?.kind === "group" ? "Group name" : "Session title"}
+            placeholder={renameTarget?.kind === "group" ? "Group name" : undefined}
             value={renameValue}
             onChangeText={setRenameValue}
             onSubmitEditing={() => void saveRename()}
@@ -215,7 +274,7 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
             <Button variant="ghost" disabled={isRenaming} onPress={() => setRenameTarget(null)}>
               Cancel
             </Button>
-            <Button disabled={!renameValue.trim() || isRenaming} onPress={() => void saveRename()}>
+            <Button disabled={!canSaveRename || isRenaming} onPress={() => void saveRename()}>
               {isRenaming ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>
@@ -251,6 +310,8 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
   return {
     /** Opens the row menu sheet for one session (the web right-click menu). */
     openSheet: setSheetTarget,
+    /** Opens a linked group's header menu (the web right-click on the group). */
+    openGroupSheet: setGroupSheetTarget,
     actionsFor,
     run,
     dialogs,

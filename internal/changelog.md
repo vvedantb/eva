@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: Sessions tab reads the web's session lists and shows linked groups
+
+Date: 2026-11-12
+
+WHY: The phone Sessions tab read `mobile.listChats`, a cross-repo wrapper with its own fields and caps, and did not show linked session groups as the web sidebar does.
+
+Architectural: The tab subscribes as `GlobalSessionsSidebar` does: `githubRepos.list`, then one `sessions.list` (Active) or `sessions.listArchived` (Archived) per repo through `useQueries`. `linkedSessionGroups`, the sort orders and sort helpers, `sessionListEntries` (groups and apps as one ordered list, lifted out of the web sidebar) and `perRepoQueryCache` (stable `useQueries` maps) moved to `@eva/shared`; the web sidebar uses them with no behaviour change. Linked groups draw as a section with the link tile, name and member count, open by default; member rows show their app mark. A long press on a group header offers Rename group (`sessions.renameGroup`), and a group row's menu has Remove from group (`sessions.removeFromGroup`, via `sessionMenuActions({ inGroup })`). `mobile.listChats` stays for APKs up to 0.1.43 and is marked deprecated.
+
 ## Phone: a working session shows the web "Working" grid
 
 Date: 2026-11-12

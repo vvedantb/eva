@@ -251,6 +251,10 @@ export const startSession = authMutation({
  * Recent sessions across every repo the user can access, newest first: open
  * ones by default, archived ones with `archived: true` (the web Active and
  * Archived tabs).
+ *
+ * @deprecated Kept only for old APKs (up to 0.1.43). The phone Sessions tab
+ * now reads the web's own `githubRepos.list` plus a per-repo `sessions.list`
+ * / `sessions.listArchived`. Remove once no supported APK calls it.
  */
 export const listChats = authQuery({
   args: { archived: v.optional(v.boolean()) },

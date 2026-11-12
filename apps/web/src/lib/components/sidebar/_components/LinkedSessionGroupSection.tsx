@@ -25,7 +25,7 @@ import {
   repoBasePaths,
   sessionRowMatchesPath,
 } from "@/lib/components/sidebar/_utils/repoSessionPaths";
-import type { LinkedSessionGroup } from "@/lib/components/sidebar/_utils/linkedSessionGroups";
+import type { LinkedSessionGroup } from "@eva/shared";
 import { previewSessions } from "@/lib/components/sidebar/_utils/sessionListPreview";
 import {
   sortSessionsForSidebar,

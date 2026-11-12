@@ -838,6 +838,12 @@ describe("mobile api", () => {
       ["rename", "regenerateTitle", "copyTitle", "copyLink"],
       ["archive"],
     ]);
+    // A linked-group row adds Remove from group, alone, before Archive or Unarchive.
+    expect(sessionMenuActions({ archived: true, simpleView: true, inGroup: true })).toEqual([
+      ["copyTitle", "copyLink"],
+      ["removeFromGroup"],
+      ["unarchive"],
+    ]);
   });
 
   test("mentionTokensToChipLinks marks each sent token as a chip link and leaves code as typed", () => {
