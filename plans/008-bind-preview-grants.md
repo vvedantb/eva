@@ -1,4 +1,4 @@
-# Plan 008: Preview grants go only to their own sandbox host and only work on their own port
+# Plan 008: Preview proxy rejects a grant minted for another port
 
 > **Executor instructions**: Follow this plan step by step. Run every
 > verification command and confirm the expected result before moving to the
@@ -7,7 +7,7 @@
 > in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
-> **Drift check (run first)**: `git diff --stat 2042a0ac7..HEAD -- packages/backend/convex/previewGrant.ts packages/backend/convex/_previewGrant packages/backend/convex/_sandbox_runtime/previewProxy.ts apps/web/src/routes/preview-auth.tsx packages/backend/tests/previewGrantReturnUrl.test.ts packages/backend/tests/previewProxyGrantPort.test.ts`
+> **Drift check (run first)**: `git diff --stat 478be7912..HEAD -- packages/backend/convex/_sandbox_runtime/previewProxy.ts packages/backend/convex/previewGrant.ts packages/backend/convex/_sandbox_runtime/execution.ts packages/backend/tests/previewProxyGrantPort.test.ts`
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition. (Plans 006 and 007 also edit
@@ -16,299 +16,176 @@
 
 ## Status
 
-- **Priority**: P2
-- **Effort**: M
-- **Risk**: MED — a wrong host comparison blocks every cold/shared preview link sign-in.
+- **Priority**: P3
+- **Effort**: S
+- **Risk**: LOW — every grant minted today already carries the receiving proxy's `AUTH_PORT` (verified below). A wrong check would block Preview, Desktop or Editor sign-in, so the post-deploy check matters.
 - **Depends on**: none (all of 006/007/008 bump `SCRIPT_VERSION`)
 - **Category**: security
-- **Planned at**: commit `2042a0ac7`, 2026-11-09
+- **Planned at**: commit `478be7912`, 2026-11-12
+- Refreshed: 2026-11-12 (was planned at 2042a0ac7)
+
+### Scope change at refresh
+
+The original plan had two halves. The **return-host half is fixed on main**
+and is removed from this plan:
+
+- `apps/web/src/routes/preview-auth.tsx` now keeps only the path, query and
+  hash of `return` (`returnPath`, line 22) and passes it as `path` (line 64).
+  It navigates to the URL the backend returns (line 69).
+- `packages/backend/convex/previewGrant.ts` `mintPreviewGrant` (line 78) now
+  takes `path`, reads the origin from the provider with
+  `getSandboxHandle(...).previewUrl(args.port)` (lines 104–105), copies only
+  pathname/search/hash from `path` (lines 114–119), and returns the full URL.
+- `packages/backend/tests/previewGrantRedirect.test.ts` covers it: an absolute
+  `https://attacker.vercel.run/...`, a protocol-relative `//attacker.vercel.run/...`
+  and a plain path all come back on the sandbox's own origin.
+
+What is still open: the proxy ignores the grant's `port` claim.
 
 ## Why this matters
 
-A preview grant is a five-minute bearer token that the in-sandbox proxy swaps
-for a 24-hour session cookie. The Eva route `/preview-auth` mints one for the
-signed-in user with no click and sends it to the `return` URL, which it checks
-only for "https and hostname ends in `.vercel.run`". Anyone can create a Vercel
-sandbox and so own a `*.vercel.run` host. A link to
-`/preview-auth?sandbox=<victim sandbox>&repo=<victim repo>&return=https://<attacker>.vercel.run/`
-makes a signed-in team member hand the attacker a valid grant for the victim's
-sandbox, which the attacker then redeems on the real preview host. Separately,
-the proxy ignores the grant's `port` claim, so a grant minted for one surface
-(e.g. Preview on 3000) also opens the Desktop (6080) or Editor (8080) proxy of
-the same sandbox. After this plan, the backend refuses to mint unless the return
-host is that sandbox's own preview host for that port, and the proxy refuses a
-grant whose port is not its own.
+A preview grant is a five-minute ES256 bearer token. The in-sandbox proxy
+swaps it for a 24-hour session cookie. Each exposed surface runs its own proxy:
+Preview on 3000, Desktop (noVNC) on 6080, Editor (code-server) on 8080. The
+grant body carries `{ sandboxId, port }`, but `verifyGrant` checks only
+signature, `exp`, `iss`, `aud` and `sandboxId`. So a grant minted for Preview
+also opens the Desktop or the Editor (a shell in the sandbox) of the same
+sandbox. Grants travel on URLs (the in-app iframe URL, open-in-new-tab, the
+`/preview-auth` redirect), so a Preview grant that leaks within its five
+minutes gives more than Preview. After this plan, a proxy accepts only grants
+whose `port` equals its own `AUTH_PORT`.
 
 ## Current state
 
 Files:
 
-- `apps/web/src/routes/preview-auth.tsx` — handshake route. Client-side allow-list and auto-mint.
-- `packages/backend/convex/previewGrant.ts` — `"use node"`; `signPreviewGrant` (line 44) and public action `mintPreviewGrant` (line 69).
-- `packages/backend/convex/_sandbox_runtime/previewProxy.ts` — builds the in-sandbox proxy script (a `String.raw` template from `function buildPreviewProxyScript`, line 152, written into the sandbox and run with `node`; nothing in it can be imported). `verifyGrant` at line 311.
-- `packages/backend/convex/_sandbox_runtime/execution.ts` — `buildPreviewUrl` (~line 905) mints grants for the in-app iframe; it is the reference for which port goes into a grant.
-- `packages/backend/convex/_sandbox/vercelProvider.ts:1135-1150` — `previewUrl(port)` returns `{ url: this.sandbox.domain(port), port }`.
-- `packages/backend/convex/_sandbox_runtime/helpers.ts:579` — `getSandboxHandle(ctx, repoId, sandboxId)`.
+- `packages/backend/convex/_sandbox_runtime/previewProxy.ts` — builds the
+  in-sandbox proxy script (a `String.raw` template from
+  `function buildPreviewProxyScript`, line 153, written into the sandbox and
+  run with `node`; nothing in it can be imported). `verifyGrant` at line 312.
+- `packages/backend/convex/previewGrant.ts` — `"use node"`; `signPreviewGrant`
+  (line 47) puts `{ sandboxId, port }` in the JWT body (line 57);
+  `mintPreviewGrant` (line 78).
+- `packages/backend/convex/_sandbox_runtime/execution.ts` — the in-app grant
+  minter (`buildPreviewUrl`); reference for which port goes into a grant.
+- `packages/backend/convex/previewGrantConfig.ts` — `PREVIEW_GRANT_ISSUER` and
+  `PREVIEW_GRANT_AUDIENCE` (both `"eva-preview"`), `PREVIEW_GRANT_PARAM`.
+- `packages/backend/tests/_helpers/previewProxySource.ts` —
+  `extractFunctionSource(signature)` lifts one function's shipped source.
 
-`apps/web/src/routes/preview-auth.tsx:10-14, 28-37, 52-77`:
-
-```tsx
-// Open-redirect guard: only ever redirect back to a Vercel sandbox preview
-// origin over https. ...
-const VERCEL_PREVIEW_SUFFIX = ".vercel.run";
-...
-function parseAllowedReturn(url: string): URL | null {
-  try {
-    const parsed = new URL(url);
-    if (parsed.protocol !== "https:") return null;
-    if (!parsed.hostname.endsWith(VERCEL_PREVIEW_SUFFIX)) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-...
-  useEffect(() => {
-    if (!isLoaded || !isSignedIn || ran.current) return;
-
-    const parsedReturn = parseAllowedReturn(search.return);
-    const port = Number(search.port);
-    if (!parsedReturn || !search.repo || !search.sandbox || !Number.isFinite(port)) {
-      setError("This preview link is invalid or points to an untrusted host.");
-      return;
-    }
-
-    ran.current = true;
-    mintPreviewGrant({
-      sandboxId: search.sandbox,
-      port,
-      repoId: search.repo,
-    })
-      .then((grant) => {
-        parsedReturn.searchParams.set(GRANT_PARAM, grant);
-        window.location.replace(parsedReturn.toString());
-      })
-```
-
-`packages/backend/convex/previewGrant.ts:69-98`:
-
-```ts
-export const mintPreviewGrant = action({
-  args: {
-    sandboxId: v.string(),
-    port: v.number(),
-    repoId: v.string(),
-  },
-  returns: v.string(),
-  handler: async (ctx, args): Promise<string> => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Not authenticated");
-    }
-    const repo = await ctx.runQuery(api.githubRepos.getByIdString, { repoId: args.repoId });
-    if (!repo) {
-      throw new Error("Not authorized to access this repository");
-    }
-    await assertActionSandboxAccess(ctx, repo._id, args.sandboxId);
-
-    return await signPreviewGrant({
-      sandboxId: args.sandboxId,
-      port: args.port,
-      sub: identity.subject,
-    });
-  },
-});
-```
-
-`signPreviewGrant` puts `{ sandboxId, port }` in the JWT body (line 54).
-
-`packages/backend/convex/_sandbox_runtime/previewProxy.ts:258-260` and `311-334`:
+`previewProxy.ts:194-199` and `259-261`:
 
 ```js
+const PUBLIC_KEY_JWK = ${params.publicKeyJwk ? JSON.stringify(params.publicKeyJwk) : "null"};
+const SANDBOX_ID = ${JSON.stringify(params.sandboxId)};
+...
+const EXPECTED_ISS = ${JSON.stringify(PREVIEW_GRANT_ISSUER)};
+const EXPECTED_AUD = ${JSON.stringify(PREVIEW_GRANT_AUDIENCE)};
+...
 // Port shown to /preview-auth and matched against grant claims. May differ from
 // targetPort when the proxy fronts an internal-only upstream (Vercel desktop).
 const AUTH_PORT = ${params.authPort ?? "targetPort"};
+```
+
+The comment says grants are "matched against" `AUTH_PORT`, but no code does it.
+
+`previewProxy.ts:283-287` and `310-336`:
+
+```js
+function b64urlToBuf(s) {
+  let v = String(s).replace(/-/g, "+").replace(/_/g, "/");
+  while (v.length % 4) v += "=";
+  return Buffer.from(v, "base64");
+}
 ...
+// Verifies an ES256 grant JWT. JOSE signatures are raw r||s (IEEE P-1363), not
+// the DER form node:crypto defaults to, hence dsaEncoding.
 function verifyGrant(token) {
   if (!PUBLIC_KEY) return null;
   try {
-    ...
+    const parts = String(token).split(".");
+    if (parts.length !== 3) return null;
+    const signingInput = Buffer.from(parts[0] + "." + parts[1]);
+    const ok = crypto.verify(
+      "sha256",
+      signingInput,
+      { key: PUBLIC_KEY, dsaEncoding: "ieee-p1363" },
+      b64urlToBuf(parts[2]),
+    );
+    if (!ok) return null;
+    const payload = JSON.parse(b64urlToBuf(parts[1]).toString("utf8"));
+    const now = Math.floor(Date.now() / 1000);
+    if (typeof payload.exp !== "number" || payload.exp < now) return null;
     if (payload.iss !== EXPECTED_ISS) return null;
     const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
     if (aud.indexOf(EXPECTED_AUD) === -1) return null;
     if (payload.sandboxId !== SANDBOX_ID) return null;
     return payload;
+  } catch {
+    return null;
+  }
+}
 ```
 
-The comment says grants are "matched against" `AUTH_PORT`, but no code does it.
-`verifyGrant` is called by `authorize` (line ~466) and by the WebSocket
-`upgrade` handler (line ~1405).
+`verifyGrant` is called by `authorize` (line 467) and by the WebSocket
+`upgrade` handler (line 1406). A check inside `verifyGrant` covers both.
 
-Port consistency (verified at planning time) — every grant today carries the
-proxy's `AUTH_PORT`, so the new check breaks nothing:
+Port consistency (verified 2026-11-12) — every grant today carries the
+receiving proxy's `AUTH_PORT`, so the new check breaks nothing:
 
-- `execution.ts:1016-1018`: `fixedVercelProxyPort = (port is 6080 or 8080) ? port : VERCEL_PREVIEW_PROXY_PORT` (3000).
-- `execution.ts:1041`: proxy launched with `authPort: fixedVercelProxyPort ?? args.port`.
-- `execution.ts:1072-1075`: iframe grant signed with `port: fixedVercelProxyPort ?? args.port` — the same expression.
-- `/preview-auth` gets `port` from the proxy's bootstrap HTML, which writes `AUTH_PORT` (`buildAuthBootstrapHtml`, ~line 371).
-- Desktop WebSocket: `DesktopPanel.tsx:77-80` forwards the 6080 grant onto the websockify path; the desktop proxy's `AUTH_PORT` is 6080.
+- `execution.ts:962-966`: `fixedVercelProxyPort = (args.port === DESKTOP_PORT || args.port === EDITOR_PORT) ? args.port : VERCEL_PREVIEW_PROXY_PORT` (6080 / 8080 / 3000; constants in `packages/shared/src/sandboxPorts.ts` and `_sandbox_runtime/vercelAppPorts.ts:29`).
+- `execution.ts:989`: proxy launched with `authPort: fixedVercelProxyPort ?? args.port`.
+- `execution.ts:1020-1024`: iframe grant signed with `port: fixedVercelProxyPort ?? args.port` — the same expression — and placed on `handle.previewUrl(previewPort)` for that same port.
+- `/preview-auth` gets `port` from the proxy's bootstrap HTML, which writes `AUTH_PORT` (`buildAuthBootstrapHtml`, line 371). `mintPreviewGrant` signs `port: args.port` (line 108) and sends it to `previewUrl(args.port)` (line 105) — the same proxy.
+- Desktop WebSocket: `DesktopPanel.tsx:76-79` forwards the 6080 grant onto the websockify path of the same 6080 proxy.
+- `grep -rn "signPreviewGrant(" packages/backend/convex` → only `previewGrant.ts:47` (definition), `previewGrant.ts:106` and `execution.ts:1020`.
 
-Where the preview host lives: nowhere in the database. Vercel assigns an
-opaque subdomain per exposed port (`@vercel/sandbox` `domain(p)` reads it from
-the sandbox's `routes`), so the only source of truth is the Vercel API via
-`handle.previewUrl(port)` — the same call `buildPreviewUrl` makes on every
-preview open (`execution.ts:1063`).
+The grant's `port` is a JSON number (`v.number()` arg; `signPreviewGrant`
+types it `number`), so compare with `!==` against the numeric `AUTH_PORT`.
 
-### Design decision (made at planning time)
+Conventions (`CLAUDE.md`):
 
-Two designs were considered for part (a):
-
-1. **Chosen — server-side return-host check in `mintPreviewGrant`.** The action
-   takes the return URL, resolves the sandbox's real preview URL for that port
-   via `getSandboxHandle(...).previewUrl(port)`, and refuses to mint unless the
-   hosts match. The grant then never leaves Eva for a foreign host. Cost: one
-   Vercel API read per cold sign-in (rare: once per browser per 24 h session),
-   which `buildPreviewUrl` already pays on every preview open.
-2. Rejected — embed the expected host in the grant and have the proxy compare
-   it with the request `Host` header. The proxy code says it "cannot know its
-   own browser-facing URL" because Vercel's edge terminates TLS first
-   (`previewProxy.ts:365-369`, `1092-1102`); the `Host` it sees is unverified
-   and may not be the external host. It also still ships the grant to the
-   attacker's host. Not safe to build on without a live test.
-
-The client-side `.vercel.run` check stays as a fast first filter for obviously
-bad links. No-click minting stays: once the host is bound, the grant can only
-reach the sandbox the user already has access to.
-
-Conventions (`CLAUDE.md`, `docs/eva-convex.md`):
-
-- "No `any`, `unknown`, `as`, or non-null `!`. ... parse at the boundary (Zod)." — the return URL is parsed with `new URL` in a `try`.
-- "Avoid importing `process.env` helpers into Convex isolate workflow files. If something needs env vars, keep it in `"use node"` actions." — `previewGrant.ts` is already `"use node"`; the new pure helper must not be.
-- "Greenfield OK — breaking changes fine." — adding a required arg to `mintPreviewGrant` is acceptable; web and backend deploy together.
-- "Avoid useEffect" — do not restructure the existing effect in `preview-auth.tsx`; only change the mutation call.
-- `docs/eva-ui.md`: "Never use `window.location.href` for navigation" — the existing `window.location.replace` is a cross-origin navigation and stays.
+- "No `any`, `unknown`, `as`, or non-null `!`." — applies to the test file.
+- Lint rule `eva/no-source-text-in-tests`: tests must run code, not assert on source text. Lifting `verifyGrant` with `extractFunctionSource` and calling it is the allowed pattern (see `tests/previewProxyGrantStrip.test.ts`).
+- Never put a real key in a test: generate a throwaway key pair in the test.
 
 ## Commands you will need
 
 | Purpose | Command | Expected on success |
 |---|---|---|
 | Backend typecheck | `pnpm --filter @eva/backend typecheck` | exit 0 |
-| Web typecheck | `pnpm --filter @eva/web typecheck` | exit 0 |
-| New tests | `pnpm --filter @eva/backend test -- tests/previewGrantReturnUrl.test.ts tests/previewProxyGrantPort.test.ts` | all pass |
-| Proxy + cycle tests | `pnpm --filter @eva/backend test -- tests/previewProxy tests/convexModuleCycleContract.test.ts` | all pass |
+| New test | `pnpm --filter @eva/backend test -- tests/previewProxyGrantPort.test.ts` | all pass |
+| Proxy + grant tests | `pnpm --filter @eva/backend test -- tests/previewProxy tests/previewGrantRedirect.test.ts` | all pass |
 | Lint | `pnpm lint` | exit 0 |
 
-Never run `npx convex codegen`, `convex dev` or `convex deploy` (the generated
-`api` types pick up the new arg via the existing typecheck setup; if
-`pnpm --filter @eva/web typecheck` cannot see the new arg, that is a STOP).
-Run only targeted tests (5 unrelated backend tests already fail).
-
-## Suggested executor toolkit
-
-- `convex-rules` skill for action/validator style.
+Never run `npx convex codegen`, `convex dev` or `convex deploy`. Run only
+targeted tests. At planning time 2 backend tests in
+`tests/sessionChatTabs.test.ts` already fail; they are not yours to fix.
 
 ## Scope
 
 **In scope**:
 
-- `packages/backend/convex/_previewGrant/returnUrl.ts` (create; pure, no `"use node"`)
-- `packages/backend/convex/previewGrant.ts`
 - `packages/backend/convex/_sandbox_runtime/previewProxy.ts` (`verifyGrant` + `SCRIPT_VERSION` only)
-- `apps/web/src/routes/preview-auth.tsx` (pass `returnUrl`)
-- `packages/backend/tests/previewGrantReturnUrl.test.ts` (create)
+- `packages/backend/convex/previewGrant.ts` (doc comment only, lines 73–76)
 - `packages/backend/tests/previewProxyGrantPort.test.ts` (create)
 - `internal/changelog/2026-11.md`
 
 **Out of scope**:
 
-- `buildPreviewUrl` / `previewUrlForAuthorizedSandbox` in `execution.ts` — they put the grant on the URL Vercel itself returned; already bound.
-- Grant TTL, session-cookie TTL, cookie attributes.
+- The return-host binding (`preview-auth.tsx`, `mintPreviewGrant` logic) — already fixed on main.
+- `buildPreviewUrl` in `execution.ts` — read only, for the port check above.
+- Grant TTL, session-cookie TTL, cookie attributes; whether a session cookie is per port (each proxy has its own random `SESSION_SECRET`, so it already is).
 - The static-asset exception (plan 007) and `Location` handling (plan 006).
-- Adding a confirmation click to `/preview-auth`.
 
 ## Git workflow
 
 - Stay on the current branch; no branch, push, or PR unless told.
-- Two commits are fine, e.g. `fix(backend): bind preview grant mint to the sandbox preview host` and `fix(backend): preview proxy rejects grants for another port`.
+- One commit, e.g. `fix(backend): preview proxy rejects grants for another port`.
 
 ## Steps
 
-### Step 1: Pure return-URL check
-
-Create `packages/backend/convex/_previewGrant/returnUrl.ts`:
-
-```ts
-/**
- * True when `returnUrl` is an https URL on exactly the host of `previewUrl`
- * (the sandbox's own preview URL for the port). Guards /preview-auth: the
- * grant must never be sent to another *.vercel.run host.
- */
-export function isPreviewReturnUrl(returnUrl: string, previewUrl: string): boolean {
-  try {
-    const target = new URL(returnUrl);
-    const expected = new URL(previewUrl);
-    if (target.protocol !== "https:") return false;
-    if (target.username !== "" || target.password !== "") return false;
-    return target.host === expected.host;
-  } catch {
-    return false;
-  }
-}
-```
-
-(`host` includes a non-default port, so `https://x.vercel.run:444` does not match `https://x.vercel.run`. `URL` lower-cases hostnames.)
-
-Create `packages/backend/tests/previewGrantReturnUrl.test.ts` (plain vitest,
-pattern: `packages/backend/tests/directory.test.ts`). Cases, with
-`PREVIEW = "https://sb-abc.vercel.run"`:
-
-1. `https://sb-abc.vercel.run/` → true
-2. `https://sb-abc.vercel.run/__tab/54323/?x=1` → true
-3. `https://SB-ABC.vercel.run/` → true
-4. `https://other.vercel.run/` → false
-5. `https://sb-abc.vercel.run.evil.example/` → false
-6. `http://sb-abc.vercel.run/` → false
-7. `https://sb-abc.vercel.run:444/` → false
-8. `https://user@sb-abc.vercel.run/` → false
-9. `not a url` → false; also `previewUrl` = `"garbage"` → false
-
-**Verify**: `pnpm --filter @eva/backend test -- tests/previewGrantReturnUrl.test.ts` → 9+ pass.
-
-### Step 2: Bind the mint to the host
-
-In `packages/backend/convex/previewGrant.ts`:
-
-1. Add `returnUrl: v.string()` to `mintPreviewGrant`'s `args`.
-2. Imports: `import { getSandboxHandle } from "./_sandbox_runtime/helpers";` and `import { isPreviewReturnUrl } from "./_previewGrant/returnUrl";`.
-3. After `await assertActionSandboxAccess(ctx, repo._id, args.sandboxId);` add:
-
-```ts
-    // The grant may only travel to this sandbox's own preview host for this
-    // port. Any *.vercel.run host can be created by anyone, so a suffix check
-    // let a crafted link hand a teammate's grant to someone else's sandbox.
-    const handle = await getSandboxHandle(ctx, repo._id, args.sandboxId);
-    const preview = await handle.previewUrl(args.port);
-    if (!isPreviewReturnUrl(args.returnUrl, preview.url)) {
-      throw new Error("This preview link does not match the sandbox.");
-    }
-```
-
-4. Update the action's doc comment to say it checks the return host.
-
-**Verify**: `pnpm --filter @eva/backend typecheck` → exit 0.
-`pnpm --filter @eva/backend test -- tests/convexModuleCycleContract.test.ts` → pass (the new import must not create a module cycle; only `execution.ts` imports `previewGrant.ts` today).
-
-### Step 3: Pass the return URL from the web route
-
-In `apps/web/src/routes/preview-auth.tsx`, change the `mintPreviewGrant({...})`
-call to add `returnUrl: parsedReturn.toString(),` (before the grant param is
-set on `parsedReturn`). Keep `parseAllowedReturn` and update the comment above
-`VERCEL_PREVIEW_SUFFIX` to say the backend does the binding check and this is
-only a fast pre-filter. No other change in this file.
-
-**Verify**: `pnpm --filter @eva/web typecheck` → exit 0.
-
-### Step 4: Proxy checks the grant port
+### Step 1: Proxy checks the grant port
 
 In the template in `previewProxy.ts`, in `verifyGrant`, after
 `if (payload.sandboxId !== SANDBOX_ID) return null;` add:
@@ -319,76 +196,99 @@ In the template in `previewProxy.ts`, in `verifyGrant`, after
     if (payload.port !== AUTH_PORT) return null;
 ```
 
-Bump `SCRIPT_VERSION` by one from its current value.
+Bump `SCRIPT_VERSION` by one from its live value (at planning time
+`"stream-v31"` → `"stream-v32"`; if plan 006 or 007 already bumped it, add one
+to the current value).
+
+In `previewGrant.ts`, change the doc comment sentence "The grant is a bearer
+token for the whole sandbox" (line 73) so it says the grant is a bearer token
+for one sandbox port. Do not change any code in this file.
+
+**Verify**: `pnpm --filter @eva/backend typecheck` → exit 0.
+`grep -n "payload.port !== AUTH_PORT" packages/backend/convex/_sandbox_runtime/previewProxy.ts` → 1 match, inside `verifyGrant`.
+
+### Step 2: Test the shipped `verifyGrant`
 
 Create `packages/backend/tests/previewProxyGrantPort.test.ts`:
 
-- Build `verifyGrant` from shipped source: `new Function("crypto", "PUBLIC_KEY", "AUTH_PORT", body)` where `body` = `const EXPECTED_ISS = "eva-preview"; const EXPECTED_AUD = "eva-preview"; const SANDBOX_ID = "sb";` + `extractFunctionSource("function b64urlToBuf(s) {")` + `extractFunctionSource("function verifyGrant(token) {")` + `return verifyGrant;`. Pass Node's `crypto` (`import crypto from "node:crypto"`) — not the global Web Crypto.
-- Keys: `crypto.generateKeyPairSync("ec", { namedCurve: "P-256" })` in the test (a throwaway test key, never a real one). Sign with `jose` (`SignJWT`, `alg: "ES256"`, issuer/audience `"eva-preview"`, expiry +5 min, body `{ sandboxId, port }`), passing the `KeyObject` private key.
+- Build `verifyGrant` from shipped source:
+  `new Function("crypto", "PUBLIC_KEY", "AUTH_PORT", body)` where `body` =
+  `const EXPECTED_ISS = "eva-preview"; const EXPECTED_AUD = "eva-preview"; const SANDBOX_ID = "sb";`
+  + `extractFunctionSource("function b64urlToBuf(s) {")`
+  + `extractFunctionSource("function verifyGrant(token) {")`
+  + `return verifyGrant;`.
+  You may import `PREVIEW_GRANT_ISSUER` / `PREVIEW_GRANT_AUDIENCE` from
+  `../convex/previewGrantConfig` and interpolate them instead of the literals.
+  Pass Node's `crypto` (`import crypto from "node:crypto"`) — not the global
+  Web Crypto. `Buffer` is a Node global and needs no parameter.
+- Keys: `crypto.generateKeyPairSync("ec", { namedCurve: "P-256" })` in the test
+  (a throwaway test key, never a real one). Sign with `jose` (already a backend
+  dependency): `new SignJWT({ sandboxId, port }).setProtectedHeader({ alg: "ES256" }).setIssuer(...).setAudience(...).setExpirationTime("5m").sign(privateKey)`, passing the `KeyObject` private key. Pass the `KeyObject` public key as `PUBLIC_KEY`.
 - Cases with `AUTH_PORT = 3000`:
-  1. `{ sandboxId: "sb", port: 3000 }` → returns payload with `port === 3000`.
+  1. `{ sandboxId: "sb", port: 3000 }` → returns a payload with `port === 3000`.
   2. `{ sandboxId: "sb", port: 6080 }` → `null`.
   3. `{ sandboxId: "sb" }` (no port) → `null`.
   4. `{ sandboxId: "other", port: 3000 }` → `null`.
   5. `{ sandboxId: "sb", port: "3000" }` (string) → `null`.
-- One case with `AUTH_PORT = 6080` and a 6080 grant → payload.
+- Cases with `AUTH_PORT = 6080`:
+  6. `{ sandboxId: "sb", port: 6080 }` → payload.
+  7. `{ sandboxId: "sb", port: 3000 }` → `null` (a Preview grant cannot open the Desktop).
 
-**Verify**: `pnpm --filter @eva/backend test -- tests/previewProxyGrantPort.test.ts tests/previewProxy` → all pass.
+**Verify**: `pnpm --filter @eva/backend test -- tests/previewProxyGrantPort.test.ts` → 7 pass.
+`pnpm --filter @eva/backend test -- tests/previewProxy tests/previewGrantRedirect.test.ts` → all pass.
 
-### Step 5: Changelog and lint
+### Step 3: Changelog and lint
 
-Add at the top of `internal/changelog/2026-11.md`:
+Add at the top of `internal/changelog/2026-11.md`, directly under the
+`# Changelog — November 2026` heading (format per
+`internal/changelog/README.md`):
 
 ```
-## Preview grants bound to their sandbox host and port - 2026-11-09
+## Preview grants only open their own port - <today's date, YYYY-MM-DD>
 
-- Cause: /preview-auth minted a grant without a click and sent it to any https `*.vercel.run` return URL, which anyone can own; the proxy also ignored the grant's `port`.
-- `mintPreviewGrant` now takes `returnUrl` and refuses unless its host equals the sandbox's Vercel preview host for that port (`_previewGrant/returnUrl.ts`). The proxy's `verifyGrant` rejects a grant whose `port` is not its `AUTH_PORT`. SCRIPT_VERSION bumped.
+- Cause: the preview proxy's `verifyGrant` ignored the grant's `port`, so a Preview grant also opened the Desktop and Editor proxies of the same sandbox.
+- `verifyGrant` now rejects a grant whose `port` is not the proxy's `AUTH_PORT` (HTTP and WebSocket paths). SCRIPT_VERSION bumped.
 ```
 
-**Verify**: `pnpm lint` → exit 0. `git status --short` → only in-scope files.
+**Verify**: `pnpm lint` → exit 0. `git status --short` → only in-scope files (plus `plans/README.md`).
 
-### Step 6: Hand the live check to the operator
+### Step 4: Hand the live check to the operator
 
 You cannot deploy. Put this checklist in your final report, for after deploy:
 
-1. Copy a raw sandbox Preview URL (without `__eva_grant`), open it in a fresh browser profile signed in to Eva → it passes through `/preview-auth` and loads the app.
-2. Same for Desktop (6080) and Editor (8080) raw URLs.
-3. Edit the `return` param on a `/preview-auth` URL to another `*.vercel.run` host → the page shows the error, and no redirect happens.
-4. The in-app Preview, Desktop and Editor tabs still load (they use `buildPreviewUrl` grants).
+1. The in-app Preview, Desktop and Editor tabs still load (they use `buildPreviewUrl` grants). The Desktop must leave "Loading" (its WebSocket uses the grant too).
+2. Copy a raw sandbox Preview URL (without `__eva_grant`), open it in a fresh browser profile signed in to Eva → it passes through `/preview-auth` and loads the app. Same for Desktop (6080) and Editor (8080) raw URLs.
+3. Take a fresh Preview URL with its `__eva_grant` (from the in-app iframe) and put the same `__eva_grant` value on the Editor (8080) host in a fresh profile → the proxy does not set a session; it shows the sign-in bootstrap.
 
-If 1 or 2 fails with "does not match the sandbox", Vercel served the page on a
-host other than `domain(port)`; report both hostnames (they are not secrets).
+If 1 or 2 fails, a grant carries a port other than the proxy's `AUTH_PORT`;
+report which surface and the `port` query param that `/preview-auth` received.
 
 ## Test plan
 
-- `tests/previewGrantReturnUrl.test.ts` — 9+ pure cases (Step 1).
-- `tests/previewProxyGrantPort.test.ts` — 6 cases on the shipped `verifyGrant` (Step 4).
-- Regression: `tests/previewProxy*` and `tests/convexModuleCycleContract.test.ts`.
-- Manual post-deploy checklist (Step 6). The `mintPreviewGrant` action itself is not unit tested: it calls the Vercel API.
+- `tests/previewProxyGrantPort.test.ts` — 7 cases on the shipped `verifyGrant` (Step 2).
+- Regression: `tests/previewProxy*` and `tests/previewGrantRedirect.test.ts`.
+- Manual post-deploy checklist (Step 4).
 
 ## Done criteria
 
-- [ ] `pnpm --filter @eva/backend typecheck` and `pnpm --filter @eva/web typecheck` exit 0
-- [ ] `pnpm --filter @eva/backend test -- tests/previewGrantReturnUrl.test.ts tests/previewProxyGrantPort.test.ts tests/previewProxy tests/convexModuleCycleContract.test.ts` passes
-- [ ] `grep -n "returnUrl" packages/backend/convex/previewGrant.ts apps/web/src/routes/preview-auth.tsx` → matches in both
+- [ ] `pnpm --filter @eva/backend typecheck` exits 0
+- [ ] `pnpm --filter @eva/backend test -- tests/previewProxyGrantPort.test.ts tests/previewProxy tests/previewGrantRedirect.test.ts` passes
 - [ ] `grep -n "payload.port !== AUTH_PORT" packages/backend/convex/_sandbox_runtime/previewProxy.ts` → 1 match
-- [ ] `head -1 packages/backend/convex/_previewGrant/returnUrl.ts` is not `"use node";`
-- [ ] `SCRIPT_VERSION` bumped; `pnpm lint` exits 0; `git status --short` lists only in-scope files
-- [ ] Final report contains the Step 6 checklist
+- [ ] `grep -n "bearer token for the whole sandbox" packages/backend/convex/previewGrant.ts` → no match
+- [ ] `SCRIPT_VERSION` is one more than the value you found (planning time: `"stream-v31"`)
+- [ ] `pnpm lint` exits 0; `git status --short` lists only in-scope files (plus `plans/README.md`)
+- [ ] Final report contains the Step 4 checklist
 - [ ] `plans/README.md` status row updated
 
 ## STOP conditions
 
 - Any excerpt above does not match the live code.
-- A grant is minted anywhere with a port other than the proxy's `AUTH_PORT` (re-check `execution.ts` around `signPreviewGrant` and `authPort:`; grep `signPreviewGrant(` for new callers). The port check would break that surface.
-- `SandboxHandle.previewUrl` no longer returns the Vercel `domain(port)` URL, or has gained side effects beyond the existing exposed-ports update.
-- Importing `getSandboxHandle` into `previewGrant.ts` makes `convexModuleCycleContract.test.ts` fail.
-- `pnpm --filter @eva/web typecheck` does not see the new `returnUrl` arg (generated API types stale) — do not run `convex codegen`; report.
+- A grant is minted anywhere with a port other than the receiving proxy's `AUTH_PORT`: re-check `execution.ts` around `signPreviewGrant(` and `authPort:`, `mintPreviewGrant` (`port` signed vs `previewUrl(port)`), and grep `signPreviewGrant(` for new callers. The port check would break that surface.
+- `authPort` is passed as anything other than a number (e.g. a string) to `ensurePreviewNavigationProxy`, so `AUTH_PORT` would not be a number in the script.
+- `verifyGrant` is no longer the single function used by both `authorize` and the `upgrade` handler.
 
 ## Maintenance notes
 
-- If Vercel adds custom domains or a second host per port, extend `isPreviewReturnUrl` with the extra hosts from the provider; never go back to a suffix check.
-- Every new grant minter must sign `port` = the target proxy's `AUTH_PORT`.
-- Reviewer: check the host comparison uses `URL.host` (not `endsWith`), and that the proxy change is inside `verifyGrant` so both HTTP and WebSocket paths get it.
-- Deferred: grants are still bearer tokens for 5 minutes on the URL; plan 006-style stripping already removes them from the iframe URL.
+- Every new grant minter must sign `port` = the receiving proxy's `AUTH_PORT`.
+- Reviewer: check the port check is inside `verifyGrant`, so both HTTP and WebSocket paths get it, and that it uses strict `!==` against a number.
+- Deferred: grants are still bearer tokens for five minutes on the URL; the proxy's grant-strip 302 already removes them from the browser URL after first use.

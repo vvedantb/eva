@@ -7,7 +7,7 @@
 > in `plans/README.md` — unless a reviewer dispatched you and told you they
 > maintain the index.
 >
-> **Drift check (run first)**: `git diff --stat 2042a0ac7..HEAD -- packages/backend/convex/_sandbox_runtime/previewProxy.ts packages/backend/tests/previewProxyGrantStrip.test.ts packages/backend/tests/previewProxyStaticAssetGate.test.ts`
+> **Drift check (run first)**: `git diff --stat 478be7912..HEAD -- packages/backend/convex/_sandbox_runtime/previewProxy.ts packages/backend/tests/previewProxyGrantStrip.test.ts packages/backend/tests/previewProxyStaticAssetGate.test.ts`
 > If any in-scope file changed since this plan was written, compare the
 > "Current state" excerpts against the live code before proceeding; on a
 > mismatch, treat it as a STOP condition. (Plans 006 and 008 also edit
@@ -21,7 +21,8 @@
 - **Risk**: MED — the exception exists so the Desktop (noVNC) tab loads; a too-tight rule shows "Loading" forever. Code-server (Editor tab) may also depend on it without saying so. Both need a live check after deploy.
 - **Depends on**: none (independent of 006/008, but all three bump `SCRIPT_VERSION`)
 - **Category**: security
-- **Planned at**: commit `2042a0ac7`, 2026-11-09
+- **Planned at**: commit `478be7912`, 2026-11-12
+- Refreshed: 2026-11-12 (was planned at 2042a0ac7)
 
 ## Why this matters
 
@@ -33,8 +34,8 @@ every proxy, and is then forwarded to whatever the route resolves to. So anyone
 who knows a preview hostname can fetch the app's JS bundles and source maps
 (often containing source code, env-derived config, and API keys baked in by
 bundlers), any `.js` route an app exposes, and the same files on any in-sandbox
-port through `/__tab/<port>/x.js` — including through a forged `Referer`. The
-exception was added only for noVNC (see comment below). After this plan it
+port through `/__tab/<port>/x.js` — or through a forged `Referer`. The
+exception was added only for noVNC (see the comment below). After this plan it
 applies only on the desktop proxy, only to noVNC's own asset folders, and only
 when the request routes to the noVNC upstream itself.
 
@@ -43,19 +44,22 @@ when the request routes to the noVNC upstream itself.
 Files:
 
 - `packages/backend/convex/_sandbox_runtime/previewProxy.ts` — builds the proxy
-  script. Everything between `function buildPreviewProxyScript` (line 152) and
+  script. Everything between `function buildPreviewProxyScript` (line 153) and
   its closing backtick is a `String.raw` template that is written into the
-  sandbox (`/tmp/eva-preview-proxy-<targetPort>.mjs`, see
-  `ensurePreviewNavigationProxy`, line 1534) and run with `node`. It cannot
-  import anything. Tests lift functions out by their exact signature line via
-  `packages/backend/tests/_helpers/previewProxySource.ts` (`extractFunctionSource`).
+  sandbox (see `ensurePreviewNavigationProxy`, line 1535) and run with `node`.
+  It cannot import anything. Tests lift functions out by their exact signature
+  line via `packages/backend/tests/_helpers/previewProxySource.ts`
+  (`extractFunctionSource`; it also exports `previewProxySource`).
 - `packages/backend/tests/previewProxyGrantStrip.test.ts` — builds `authorize`
-  with stubs; its factory string defines `STATIC_ASSET_RE = /\.js$/` and will need
-  a stub for the new helper.
-- `packages/backend/tests/previewProxyTabPrefix.test.ts` — shows how to build the
-  real routing functions (`routingFactory`, lines 30–52). Copy that.
+  with stubs; its factory string (lines 13–35) defines
+  `const STATIC_ASSET_RE = /\\.js$/;` (line 21) and will need a stub for the
+  new helper.
+- `packages/backend/tests/previewProxyTabPrefix.test.ts` — shows how to build
+  the real routing functions (`routingFactory`, lines 30–52) and how to slice a
+  `const` regex out of the source (`TAB_SKIP_PREFIX_RE`, lines 64–71). Copy
+  those.
 
-The exception — `previewProxy.ts:391-396`:
+The exception — `previewProxy.ts:392-397`:
 
 ```js
 // noVNC's vnc_lite.html loads RFB via <script type="module" crossorigin="anonymous">,
@@ -66,7 +70,7 @@ const STATIC_ASSET_RE =
   /\.(?:js|mjs|cjs|css|map|svg|png|jpe?g|gif|ico|webp|woff2?|ttf|otf|wasm)(?:\?|$)/i;
 ```
 
-Used in `authorize` — `previewProxy.ts:437-454`:
+Used in `authorize` — `previewProxy.ts:438-455`:
 
 ```js
 function authorize(clientReq, clientRes) {
@@ -89,38 +93,44 @@ function authorize(clientReq, clientRes) {
   }
 ```
 
-Also used at `previewProxy.ts:1278` (`const addCors = STATIC_ASSET_RE.test(pathname);`)
+Also used at `previewProxy.ts:1279` (`const addCors = STATIC_ASSET_RE.test(pathname);`)
 to add `access-control-allow-origin: *` to asset responses. **Leave that use
 alone** — it does not grant access, and noVNC module loads need it.
 
-The exception was introduced by commit `44fe08e6d feat(sandbox/vercel): complete
+The exception came in with commit `44fe08e6d feat(sandbox/vercel): complete
 Computer/Editor/auth parity and fast session start` (found with
 `git log -S STATIC_ASSET_RE`). Since then the proxy also:
 
-- strips `crossorigin` from module scripts (`stripModuleCrossorigin`, ~line 1016), so module loads are "ordinary same-origin module fetches (cookies included)";
-- rewrites `import RFB from './core/rfb.js'` to jsDelivr (`NOVNC_CDN_RFB`, ~line 1027), so RFB and its imports no longer load from the sandbox.
+- strips `crossorigin` from module scripts (`stripModuleCrossorigin`, line 1017), so module loads are ordinary same-origin fetches with cookies;
+- rewrites `import RFB from './core/rfb.js'` to jsDelivr (`NOVNC_CDN_RFB`, line 1028), so RFB and its imports no longer load from the sandbox.
 
 So noVNC may no longer need the exception at all. This plan keeps a narrow one
-anyway because it cannot be checked without a live sandbox.
+anyway, because that cannot be checked without a live sandbox.
 
 How routing works (the exception must respect it):
 
-- `resolveRoute(url)` (line 565) sends `/__convex-site…` → 3211, `/__convex…` → 3210, `/__agentation…` → 4747, `/__tab/<port>/…` → `<port>`, else → `targetPort`.
-- `resolveRouteWithReferer(url, headers)` (line 611) re-routes a default-route request to a tab port when the `Referer` path is under `/__tab/<port>`. The `Referer` is client-controlled.
-- The forwarder (line 1203 onward) routes the **raw** `clientReq.url` (only normalised when it contains the grant param), while `authorize` tests the **normalised** `parsed.pathname`. So `/__tab/5432/x/../../app/a.js` has pathname `/app/a.js` but routes to port 5432. The new check must route the raw URL itself.
+- `resolveRoute(url)` (line 566) sends `/__convex-site…` → 3211, `/__convex…` → 3210, `/__agentation…` → 4747, `/__tab/<port>/…` → `<port>` (via `matchTabPrefix`, line 545), else → `targetPort`.
+- `resolveRouteWithReferer(url, headers)` (line 612) re-routes a default-route request to a tab port when the `Referer` path is under `/__tab/<port>`. The `Referer` is client-controlled. Confirmed still live: the HTTP forwarder calls it at line 1253 and the WebSocket `upgrade` handler at line 1427.
+- The HTTP forwarder (`http.createServer`, line 1204) routes the **raw** `clientReq.url` (it only re-serialises it when it contains the grant param, lines 1245–1251), while `authorize` tests the **normalised** `parsed.pathname`. Browsers normalise dot segments before sending, but a direct client (`curl --path-as-is`) does not. Verified in Node 24: `new URL("/__tab/5432/../../app/x.js", "https://h").pathname === "/app/x.js"`, while `matchTabPrefix` on the raw string routes it to port 5432. (`/__tab/5432/x/../../app/x.js` normalises to `/__tab/app/x.js` — not a useful test case.) The new check must route the raw URL itself.
 
 Desktop facts:
 
-- The desktop proxy runs with `targetPort === 16080` (`VERCEL_DESKTOP_INTERNAL_PORT`, line 29), fronting websockify `--web=/opt/novnc` (`packages/backend/convex/_sandbox/vercelProvider.ts:357`). The template already compares `targetPort === ${VERCEL_DESKTOP_INTERNAL_PORT}` for `BUFFER_WHOLE_HTML` (lines 264–266). Copy that.
-- noVNC's static files live under `app/`, `core/`, `vendor/` in `/opt/novnc` (upstream noVNC layout). The Desktop tab loads `vnc_lite.html` (`apps/web/src/routes/_repo/$owner/$repo/sessions/DesktopPanel.tsx:69`); HTML stays gated.
-- The editor proxy runs with `targetPort === 18080` (code-server). It loses the exception under this plan.
+- The desktop proxy runs with `targetPort === 16080` (`VERCEL_DESKTOP_INTERNAL_PORT`, line 30; chosen in `execution.ts:896-901`), fronting websockify `--web="$NOVNC_DIR"` (`packages/backend/convex/_sandbox/vercelProvider.ts:371`; `NOVNC_DIR` is `/opt/novnc` or `/opt/noVNC`, else a `git clone` of upstream noVNC, lines 328 and 336). The template already compares `targetPort === ${VERCEL_DESKTOP_INTERNAL_PORT}` for `BUFFER_WHOLE_HTML` (lines 265–267). Copy that.
+- noVNC's static files live under `app/`, `core/`, `vendor/` (upstream noVNC layout). The Desktop tab loads `vnc_lite.html` (`apps/web/src/routes/_repo/$owner/$repo/sessions/DesktopPanel.tsx:68`); HTML stays gated.
+- The editor proxy runs with `targetPort === 18080` (code-server, `VERCEL_EDITOR_INTERNAL_PORT`, line 32). It loses the exception under this plan.
+- `/__eva_preview_proxy/html2canvas.js` (line 172) and `/__eva_preview_proxy/activity.js` (line 176) are served after `authorize` (lines 1211 and 1222). Both end in `.js`, so today they skip the session; after this plan they need it. They are only loaded by pages that are already authenticated (classic `<script>` tags, cookies sent).
 
 Other facts:
 
-- `const SCRIPT_VERSION = "stream-v30";` (line 42) — bump when the script changes so running proxies relaunch.
+- `const SCRIPT_VERSION = "stream-v31";` (line 43) — bump when the script changes so running proxies relaunch.
 - Inside the `String.raw` template, write backslashes as you want them in the script; never write `${` unless you mean interpolation.
 
-Conventions (`CLAUDE.md`): "Think first; simplest solution wins. Ask when unsure"; "Prefer simplicity, small diffs, co-location, explicit behavior"; "No `any`, `unknown`, `as`, or non-null `!`" (test file).
+Conventions (`CLAUDE.md`): "Think first; simplest solution wins. Ask when
+unsure"; "Prefer simplicity, small diffs, co-location, explicit behavior";
+"No `any`, `unknown`, `as`, or non-null `!`" (test files). Lint rule
+`eva/no-source-text-in-tests`: tests must run code, not assert on source text.
+Slicing a function or `const` from `previewProxySource` and then running it is
+the allowed, existing pattern.
 
 ## Commands you will need
 
@@ -132,7 +142,8 @@ Conventions (`CLAUDE.md`): "Think first; simplest solution wins. Ask when unsure
 | Lint | `pnpm lint` | exit 0 |
 
 Never run `npx convex codegen`, `convex dev` or `convex deploy`. Run only
-targeted tests (5 unrelated backend tests already fail).
+targeted tests. At planning time 2 backend tests in
+`tests/sessionChatTabs.test.ts` already fail; they are not yours to fix.
 
 ## Scope
 
@@ -145,9 +156,9 @@ targeted tests (5 unrelated backend tests already fail).
 
 **Out of scope**:
 
-- `addCors` at line 1278 and `responseHeaders` — response headers, not access.
+- `addCors` at line 1279 and `responseHeaders` — response headers, not access.
 - The WebSocket `upgrade` handler — already gated.
-- `html2canvasPath` / `activityScriptPath` handling — they call `authorize` and will now need a session like any other path; they are only loaded by already-authenticated pages.
+- `html2canvasPath` / `activityScriptPath` handling — they call `authorize` and will now need a session like any other path.
 - Any web-app change.
 
 ## Git workflow
@@ -162,10 +173,10 @@ targeted tests (5 unrelated backend tests already fail).
 In the template, directly after the `STATIC_ASSET_RE` declaration, add:
 
 ```js
-// noVNC ships its own static files under these folders in /opt/novnc. Only
-// the desktop proxy serves them; every other proxy (dev server, editor, tabs)
-// keeps assets behind the session cookie, because app bundles and source maps
-// are not public.
+// noVNC ships its own static files under these folders. Only the desktop
+// proxy serves them; every other proxy (dev server, editor, tabs) keeps
+// assets behind the session cookie, because app bundles and source maps are
+// not public.
 const NOVNC_ASSET_DIR_RE = /^\/(?:app|core|vendor)\//;
 const IS_DESKTOP_PROXY = targetPort === ${VERCEL_DESKTOP_INTERNAL_PORT};
 
@@ -181,7 +192,7 @@ function isPublicNovncAsset(clientReq, pathname) {
 }
 ```
 
-(`${VERCEL_DESKTOP_INTERNAL_PORT}` is a real interpolation, same as on line 265.)
+(`${VERCEL_DESKTOP_INTERNAL_PORT}` is a real interpolation, same as on line 266.)
 
 Update the comment above `STATIC_ASSET_RE` so it no longer says every static
 asset is public: say the regex marks asset responses for CORS, and that the
@@ -203,7 +214,9 @@ with
   }
 ```
 
-Bump `SCRIPT_VERSION` by one from its current value.
+Bump `SCRIPT_VERSION` by one from its live value (at planning time
+`"stream-v31"` → `"stream-v32"`; if plan 006 or 008 already bumped it, add one
+to the current value).
 
 **Verify**: `pnpm --filter @eva/backend typecheck` → exit 0.
 `grep -n "STATIC_ASSET_RE.test" packages/backend/convex/_sandbox_runtime/previewProxy.ts` → exactly 2 matches (inside `isPublicNovncAsset` and the `addCors` line).
@@ -212,7 +225,7 @@ Bump `SCRIPT_VERSION` by one from its current value.
 
 In `tests/previewProxyGrantStrip.test.ts`, inside the factory body string, add
 the stub `function isPublicNovncAsset() { return false; }` next to the other
-stubs (e.g. after `function isLoopbackRequest() { return false; }`).
+stubs (e.g. after `function isLoopbackRequest() { return false; }`, line 22).
 
 **Verify**: `pnpm --filter @eva/backend test -- tests/previewProxyGrantStrip.test.ts` → all pass.
 
@@ -223,11 +236,11 @@ Create `packages/backend/tests/previewProxyStaticAssetGate.test.ts`. Build
 with the **real** routing and asset functions, like `previewProxyTabPrefix.test.ts`:
 
 - `new Function("targetPort", "proxyPort", body)` where `body` joins:
-  - constants: `GATE_ENABLED = true`, `GRANT_PARAM`, `SESSION_COOKIE`, `SESSION_TTL_SECONDS`, `SANDBOX_ID`, and the routing constants from `previewProxyTabPrefix.test.ts` lines 33–40;
+  - constants: `GATE_ENABLED = true`, `GRANT_PARAM`, `SESSION_COOKIE`, `SESSION_TTL_SECONDS`, `SANDBOX_ID`, and the routing constants from `previewProxyTabPrefix.test.ts` lines 34–41;
   - the real `const STATIC_ASSET_RE = …;` sliced from `previewProxySource` (from `"const STATIC_ASSET_RE"` to the next `";"`, the way that file slices `TAB_SKIP_PREFIX_RE`);
   - the real `const NOVNC_ASSET_DIR_RE = …;` sliced the same way;
   - `const IS_DESKTOP_PROXY = targetPort === 16080;` (the shipped line is a template interpolation, so write it literally in the test);
-  - stubs: `isLoopbackRequest` → false, `parseCookies`, `verifySession` → null, `verifyGrant` → null, `signSession`, `buildAuthBootstrapHtml`, and `safeLocalPath` if plan 006 has landed (extract the real one if present);
+  - stubs: `isLoopbackRequest` → false, `parseCookies`, `verifySession` → null, `verifyGrant` → null, `signSession`, `buildAuthBootstrapHtml`; if plan 006 has landed, extract the real `safeLocalPath`;
   - real sources via `extractFunctionSource`: `matchPrefix`, `matchTabPrefix`, `resolveRoute`, `resolveRouteWithReferer`, `isPublicNovncAsset`, `authorize`;
   - `return authorize;`.
 - A `run({ targetPort, url, method?, referer?, accept? })` helper that returns `{ allowed, status }` using a fake `clientRes` (`writeHead` records status, `end` no-op). Default `accept` to `"*/*"` so a denial is a 401.
@@ -239,7 +252,7 @@ Cases (no session cookie in any):
 3. Desktop, `GET /vendor/pako/lib/zlib/inflate.js` → allowed.
 4. Desktop, `GET /secret.js` → 401.
 5. Desktop, `GET /__tab/5432/app/x.js` → 401.
-6. Desktop, `GET /__tab/5432/x/../../app/x.js` → 401 (raw URL routes to the tab).
+6. Desktop, `GET /__tab/5432/../../app/x.js` → 401 (normalised pathname is `/app/x.js`, but the raw URL routes to the tab).
 7. Desktop, `GET /app/x.js` with `referer: "https://h.vercel.run/__tab/5432/"` → 401.
 8. Desktop, `GET /__convex/app/x.js` → 401.
 9. Desktop, `POST /app/x.js` → 401.
@@ -253,10 +266,12 @@ Cases (no session cookie in any):
 
 ### Step 4: Full proxy suite, changelog, lint
 
-Add at the top of `internal/changelog/2026-11.md`:
+Add at the top of `internal/changelog/2026-11.md`, directly under the
+`# Changelog — November 2026` heading (format per
+`internal/changelog/README.md`):
 
 ```
-## Preview assets need a preview session (noVNC files excepted) - 2026-11-09
+## Preview assets need a preview session (noVNC files excepted) - <today's date, YYYY-MM-DD>
 
 - Cause: any GET ending in a static-asset extension skipped the preview session on every proxy and was forwarded to the dev server, Convex and `/__tab/<port>` routes, so bundles and source maps were public.
 - Now only the desktop proxy serves `/app/`, `/core/`, `/vendor/` assets without a session, and only when the request routes to noVNC itself. SCRIPT_VERSION bumped.
@@ -293,8 +308,8 @@ code-server's static prefix, or fix the cookie path) — do not decide alone.
 - [ ] `pnpm --filter @eva/backend test -- tests/previewProxy` passes, including 14 new tests
 - [ ] `grep -n "STATIC_ASSET_RE.test(parsed.pathname)" packages/backend/convex/_sandbox_runtime/previewProxy.ts` → no match
 - [ ] `grep -n "function isPublicNovncAsset" packages/backend/convex/_sandbox_runtime/previewProxy.ts` → 1 match
-- [ ] `SCRIPT_VERSION` value bumped
-- [ ] `pnpm lint` exits 0; `git status --short` lists only in-scope files
+- [ ] `SCRIPT_VERSION` is one more than the value you found (planning time: `"stream-v31"`)
+- [ ] `pnpm lint` exits 0; `git status --short` lists only in-scope files (plus `plans/README.md`)
 - [ ] Final report contains the Step 5 checklist
 - [ ] `plans/README.md` status row updated
 
