@@ -354,31 +354,3 @@ export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionChatBackgroundAgents,
   internal.dataMigrations.pruneSessionBackgroundAgents,
 ]);
-
-/**
- * Deletes every `mcpAuthCodes` row. Eva's own MCP OAuth server is gone (Clerk
- * issues MCP tokens), so nothing reads or writes this table.
- */
-export const drainMcpAuthCodes = dataMigrations.define({
-  table: "mcpAuthCodes",
-  migrateOne: async (ctx, row) => {
-    await ctx.db.delete(row._id);
-  },
-});
-
-/**
- * Deletes every `mcpClientRegistrations` row, including the dead OAuth client
- * secrets they hold. Same reason as `drainMcpAuthCodes`.
- */
-export const drainMcpClientRegistrations = dataMigrations.define({
-  table: "mcpClientRegistrations",
-  migrateOne: async (ctx, row) => {
-    await ctx.db.delete(row._id);
-  },
-});
-
-/** `npx convex run --prod dataMigrations:drainLegacyMcpOAuthTables` */
-export const drainLegacyMcpOAuthTables = dataMigrations.runner([
-  internal.dataMigrations.drainMcpAuthCodes,
-  internal.dataMigrations.drainMcpClientRegistrations,
-]);
