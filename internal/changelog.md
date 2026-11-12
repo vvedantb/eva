@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: a working session shows the web "Working" grid
+
+Date: 2026-11-12
+
+WHY: A session whose agent was mid-turn showed only its status dot on the phone; the web sidebar shows the animated Drive pixel grid.
+
+Architectural: `mobile.listChats` returns `isExecuting`, from `sessionIsExecuting` over `chatTurnFlagsForRepos` (one open-turn read per listed repo, as the web list; it also replaces the separate awaiting-answer read). `RowStatus` follows the web `SessionStatusLeading` order: question mark, then native-ui `LoadingState` (`size="sm"`), then the dot. Quick task rows swap their system spinner for the same `WorkingMark`, as the web `QuickTaskCard`. The grid holds still while its tab is not focused.
+
 ## Phone: Inbox select mode as Android's contextual action bar
 
 Date: 2026-11-12

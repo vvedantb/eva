@@ -187,6 +187,33 @@ describe("mobile api", () => {
   );
 
   test(
+    "listChats marks a session working while one of its chats has a turn open, as the web list",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const working = async () => (await asUser.query(api.mobile.listChats, {}))[0]?.isExecuting;
+      expect(await working()).toBe(false);
+      const turnId = await t.run((ctx) =>
+        ctx.db.insert("turns", {
+          entityId: ids.chatId,
+          sessionId: ids.sessionId,
+          streamingEntityId: String(ids.chatId),
+          state: "running",
+          open: true,
+          turnStartedAt: Date.now(),
+          leaseExpiresAt: Date.now() + 60_000,
+          leaseGeneration: 1,
+          model: "claude:sonnet",
+          repoId: ids.repoId,
+        }),
+      );
+      expect(await working()).toBe(true);
+      await t.run((ctx) => ctx.db.patch(turnId, { open: false }));
+      expect(await working()).toBe(false);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "sendMessage delivers to each chat kind with its sticky model",
     async () => {
       const { t, ids, asUser } = await fixture();

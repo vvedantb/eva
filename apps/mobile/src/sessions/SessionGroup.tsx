@@ -242,6 +242,7 @@ export function SessionListRow({
       >
         <RowStatus
           awaitingAnswer={session.isAwaitingAnswer}
+          working={session.isExecuting}
           // `cancelled` is the muted 40% dot, the web idle `bg-muted-foreground/40`.
           tone={session.status === "active" ? "active" : "cancelled"}
         />
