@@ -28,6 +28,10 @@ export type NotificationRepo = { label: string; logoUrl?: string | null };
  * read. Flat; `DividedList` draws the hairlines. The web right-click menu is
  * a swipe: right to mark read or unread, left to archive or unarchive (the
  * row slides out). Screen readers get both as row actions. Off in select mode.
+ * A long press starts select mode with this row ticked, as Gmail; in select
+ * mode it ticks, as a tap. The swipe's Gesture Handler pan takes the touch
+ * from the press once it moves sideways, and the press drops its long press
+ * once the finger moves, so neither counts as the other.
  */
 export function NotificationRow({
   notification,
@@ -36,6 +40,7 @@ export function NotificationRow({
   onMarkRead,
   onToggleRead,
   onToggleArchive,
+  onStartSelect,
   selection,
 }: {
   notification: Doc<"notifications">;
@@ -46,6 +51,8 @@ export function NotificationRow({
   onToggleRead: (notification: Doc<"notifications">) => void;
   /** The web menu's Archive / Unarchive: the promise rejects when it fails, so the row comes back. */
   onToggleArchive: (notification: Doc<"notifications">) => Promise<unknown>;
+  /** A long press outside select mode: start it with this row ticked. */
+  onStartSelect: (notification: Doc<"notifications">) => void;
   /** Select mode, as the web: a checkbox leads the row, a press toggles it, and Mark read hides. */
   selection?: { checked: boolean; onToggle: (notification: Doc<"notifications">) => void };
 }) {
@@ -68,6 +75,7 @@ export function NotificationRow({
   // handlers to every row, so a row whose notification did not change keeps
   // its drawing when the list draws more rows or the inbox redraws.
   const press = () => (selection ? selection.onToggle(notification) : onOpen(notification));
+  const longPress = () => (selection ? selection.onToggle(notification) : onStartSelect(notification));
   const toggleRead = () => onToggleRead(notification);
   const toggleArchive = () => onToggleArchive(notification);
   // The web menu items, their wording and icons. Archive takes the session menu's warning tone.
@@ -92,6 +100,7 @@ export function NotificationRow({
           accessibilityLabel={subject}
           {...(selection ? null : swipeActionsAccessibility([readAction, archiveAction]))}
           onPress={press}
+          onLongPress={longPress}
           className="min-w-0 flex-1 flex-row items-center gap-3 py-3 active:opacity-70"
         >
           <View className="w-1.5 items-center">
