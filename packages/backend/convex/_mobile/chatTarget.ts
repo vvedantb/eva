@@ -8,7 +8,11 @@ import {
 } from "../_sessionChats/helpers";
 import { isSessionArchived } from "../_sessions/archive";
 import { chatOwnerEntityId, findTaskWorkSession } from "../_sessions/owner";
-import { findOwnerChat, type OwnerEntity } from "../_sessions/ownedSession";
+import {
+  chatSeedSettings,
+  findOwnerChat,
+  type OwnerEntity,
+} from "../_sessions/ownedSession";
 import { entityHref, repoBasePath } from "@eva/shared";
 import { storedComposerTraits } from "../_shared/composerTraits";
 import {
@@ -45,9 +49,9 @@ export const mobileChatValidator = v.object({
    */
   canReply: v.boolean(),
   /**
-   * The chat's model, which a reply uses: as the web composer reads it (a
-   * session or project chat's sticky `lastModel` / `lastChatModel`, a quick
-   * task's `agentTasks.model` or the repo default).
+   * The chat's model, which a reply uses: as the web composer reads it (the
+   * chat's sticky `lastModel`; a task's or project's chat falls back to its
+   * `chatSeedSettings`, also before the chat exists).
    */
   model: v.optional(aiModelValidator),
   /** The chat's sticky provider account, which a reply runs on; absent is Team. */
@@ -213,7 +217,10 @@ export async function resolveMobileChat(
     // task's own chat in the project's session). Shown as the task (title,
     // link, PR); read, sent and stopped as that session chat. A task with no
     // session chat yet resolves as below until its first send creates one.
-    const owned = await resolveOwnerSessionChat(db, { kind: "task", task });
+    const [owned, seed] = await Promise.all([
+      resolveOwnerSessionChat(db, { kind: "task", task }),
+      chatSeedSettings(db, { kind: "task", task }),
+    ]);
     if (owned) {
       const { chat, session } = owned;
       const ownedSandboxActive = session.status === "active";
@@ -228,7 +235,7 @@ export async function resolveMobileChat(
           parentId: chat._id,
           target: chat._id,
           canReply: task.deletedAt === undefined && chat.archived !== true,
-          model: chat.lastModel ?? session.lastModel,
+          model: chat.lastModel ?? seed.model,
           providerAccountId: chat.providerAccountId,
           accountOwnerId: task.createdBy,
           task: { id: task._id, sessionChatId: chat._id },
@@ -256,12 +263,12 @@ export async function resolveMobileChat(
         repoId: repo._id,
         target: task._id,
         canReply: task.deletedAt === undefined,
-        // The web task chat picks and sends `agentTasks.model`, not the `lastChatModel` a turn records.
-        model: task.model ?? repo.defaultModel,
-        providerAccountId: task.providerAccountId,
+        // What the first send's chat starts on.
+        model: seed.model,
+        providerAccountId: seed.providerAccountId,
         accountOwnerId: task.createdBy,
         task: { id: task._id },
-        traits: storedComposerTraits({}),
+        traits: seed.traits,
         sandboxActive: workSandboxActive,
         sandboxBranch: workSandboxActive ? workSession?.sandboxBranch : undefined,
         prUrl: task.projectId === undefined ? task.prUrl : project?.prUrl,
@@ -277,10 +284,10 @@ export async function resolveMobileChat(
     if (!project || !repo) return null;
     // A project chats in its session's Main chat: shown as the project, read,
     // sent and stopped as that session chat.
-    const owned = await resolveOwnerSessionChat(db, {
-      kind: "project",
-      project,
-    });
+    const [owned, seed] = await Promise.all([
+      resolveOwnerSessionChat(db, { kind: "project", project }),
+      chatSeedSettings(db, { kind: "project", project }),
+    ]);
     if (owned) {
       const { chat, session } = owned;
       const ownedSandboxActive = session.status === "active";
@@ -295,7 +302,7 @@ export async function resolveMobileChat(
           parentId: chat._id,
           target: chat._id,
           canReply: project.deletedAt === undefined && chat.archived !== true,
-          model: chat.lastModel ?? session.lastModel,
+          model: chat.lastModel ?? seed.model,
           providerAccountId: chat.providerAccountId,
           accountOwnerId: project.userId,
           project: { id: project._id, sessionChatId: chat._id },
@@ -320,11 +327,12 @@ export async function resolveMobileChat(
         repoId: repo._id,
         target: project._id,
         canReply: project.deletedAt === undefined,
-        model: project.model ?? repo.defaultModel,
-        providerAccountId: project.providerAccountId,
+        // What the first send's chat starts on.
+        model: seed.model,
+        providerAccountId: seed.providerAccountId,
         accountOwnerId: project.userId,
         project: { id: project._id },
-        traits: storedComposerTraits({}),
+        traits: seed.traits,
         sandboxActive: false,
         sandboxBranch: undefined,
         intendedBranch: project.branchName,

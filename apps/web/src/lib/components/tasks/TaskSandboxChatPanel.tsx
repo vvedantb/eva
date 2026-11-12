@@ -3,12 +3,7 @@
 import type { FunctionReturnType } from "convex/server";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
-import {
-  api,
-  DEFAULT_AI_MODEL,
-  normalizeAIModel,
-  type Id,
-} from "@eva/backend";
+import { api, type Id } from "@eva/backend";
 import {
   SandboxChatPanel,
   type SandboxChatPanelProps,
@@ -21,7 +16,6 @@ import {
   isRunInProgress,
   taskRunStreamingEntityId,
 } from "@/lib/components/tasks/firstRunChatTurn";
-import { useRepo } from "@/lib/contexts/RepoContext";
 import { useTaskOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
 import { useTaskSession } from "./useTaskSession";
 
@@ -56,16 +50,11 @@ export function useTaskChatBinding(
     accounts: accounts.options,
     resolveAccountId: accounts.resolveId,
   };
-  const { repo } = useRepo();
   // The first run is its own workflow, not a chat turn, so Stop has to reach
   // the task workflow while it owns the bubble.
   const cancelFirstRun = useMutation(api.taskWorkflow.cancelExecution);
   return useOwnedChatBinding({
     ownedSession: taskSession,
-    // Before the session exists, the same seed `ensureOwned` gives its chat.
-    seedModel: normalizeAIModel(
-      task?.model ?? repo.defaultModel ?? DEFAULT_AI_MODEL,
-    ),
     ownerLabel: "task",
     title: task?.title,
     common,

@@ -1080,8 +1080,9 @@ export const orchestratorGetAgentState = internalAction({
     // (none before it first chatted). The streaming row is that chat's too.
     // Same rule as list_agents / stop_sandbox: the open turn is "is executing",
     // daemon `/loop` continuations included.
-    const owned =
+    const ownedRead =
       kind === "session" ? null : await readOwnedChatAsUser(clerkUserId, kind, id);
+    const owned = ownedRead?.session;
     const [sessionChats, isExecuting, pullRequests] = await Promise.all([
       kind === "session"
         ? loadSessionChatsAsUser(clerkUserId, id)
@@ -1165,7 +1166,7 @@ export const orchestratorGetAgentState = internalAction({
         numId: project.numId,
         title: project.title,
         status: project.phase,
-        model: ownChat?.lastModel ?? project.model,
+        model: ownChat?.lastModel ?? ownedRead?.chatSeed.model,
         updatedAt: project.updatedAt ?? project._creationTime,
         deploymentUrl: undefined,
         deploymentStatus: undefined,
@@ -1179,7 +1180,7 @@ export const orchestratorGetAgentState = internalAction({
       numId: task.numId,
       title: task.title,
       status: task.status,
-      model: ownChat?.lastModel ?? task.model,
+      model: ownChat?.lastModel ?? ownedRead?.chatSeed.model,
       updatedAt: task.updatedAt,
       deploymentUrl: undefined,
       deploymentStatus: undefined,
@@ -1307,10 +1308,16 @@ const ownedSessionRefSchema = z.object({
   chatId: z.string(),
 });
 
-/** `sessions:getOwned`: the chat is absent while a project task has not chatted. */
+/**
+ * `sessions:getOwned`: `session` is null before the session exists, its chat
+ * absent while a project task has not chatted. `chatSeed` is what the chat
+ * starts on (`chatSeedSettings`).
+ */
 const ownedSessionReadSchema = z.object({
-  sessionId: z.string(),
-  chatId: z.string().optional(),
+  session: z
+    .object({ sessionId: z.string(), chatId: z.string().optional() })
+    .nullable(),
+  chatSeed: z.object({ model: z.string() }),
 });
 
 function ownerArg(
@@ -1339,7 +1346,7 @@ async function ensureOwnedChatAsUser(
   );
 }
 
-/** `ensureOwnedChatAsUser` without creating it: null before first use. */
+/** `ensureOwnedChatAsUser` without creating it; null when the owner is not visible. */
 async function readOwnedChatAsUser(
   clerkUserId: string,
   kind: "task" | "project",
@@ -1499,7 +1506,7 @@ export const orchestratorStopAgent = internalAction({
     // A project's session goes quiet (every chat of it); a task's own chat
     // does. A project's running build is its own workflow and is reported
     // back rather than cancelled (cancel_project_build owns that).
-    const owned = await readOwnedChatAsUser(clerkUserId, kind, id);
+    const owned = (await readOwnedChatAsUser(clerkUserId, kind, id))?.session;
     if (owned && kind === "project") {
       await runAsUser(
         "mutation",
@@ -1580,7 +1587,8 @@ export const mcpStopEntitySandbox = internalAction({
     let id = entityId;
     if (kind !== "session") {
       await readChatDocAsUser(clerkUserId, kind, entityId);
-      const owned = await readOwnedChatAsUser(clerkUserId, kind, entityId);
+      const owned = (await readOwnedChatAsUser(clerkUserId, kind, entityId))
+        ?.session;
       if (!owned) return { sandboxStatus: "closed", stopRequested: false };
       id = owned.sessionId;
     }
