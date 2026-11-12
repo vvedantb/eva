@@ -5,7 +5,7 @@ import { internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { openSessionChatTurn } from "../convex/_chat/turnStore";
-import { MAX_PARALLEL_CHATS } from "../convex/_sessionChats/helpers";
+import { MAX_PARALLEL_CHATS } from "@eva/shared";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 
@@ -38,6 +38,7 @@ test(
         installationId: 1,
       });
       const sessionId = await ctx.db.insert("sessions", {
+        owner: { kind: "standalone" },
         repoId,
         userId,
         title: "Parallel chats",

@@ -1,6 +1,8 @@
 import { v } from "convex/values";
-import { authQuery, hasRepoAccess } from "../functions";
+import { authQuery, hasRepoAccess, isTaskVisibleTo } from "../functions";
 import { entityVisible } from "../numId";
+import { standaloneOnly } from "../_sessions/owner";
+import { OPEN_TASK_STATUSES } from "../validators";
 import {
   DATA_MENTION_BADGE,
   DATA_MENTION_KINDS,
@@ -91,12 +93,14 @@ export const listData = authQuery({
       });
     }
 
-    // Include archived sessions — soft-deleted only are excluded below.
+    // Include archived sessions — soft-deleted only are excluded below. A
+    // task's session is not mentionable: mention the task.
     const sessions = await ctx.db
       .query("sessions")
       .withIndex("by_repo_and_deleted", (q) =>
         q.eq("repoId", args.repoId).eq("deletedAt", undefined),
       )
+      .filter(standaloneOnly)
       .order("desc")
       .take(MENTION_LIST_CAP);
     for (const session of sessions) {
@@ -129,11 +133,8 @@ export const listData = authQuery({
     }
 
     // Open work only — done tasks rarely need @-mention and dominate large repos.
-    const taskStatuses: Array<
-      "todo" | "in_progress" | "code_review" | "business_review"
-    > = ["todo", "in_progress", "code_review", "business_review"];
     const taskArrays = await Promise.all(
-      taskStatuses.map((status) =>
+      OPEN_TASK_STATUSES.map((status) =>
         ctx.db
           .query("agentTasks")
           .withIndex("by_repo_status_and_deleted", (q) =>
@@ -228,7 +229,11 @@ export const getEntity = authQuery({
     if (taskId) {
       const task = await ctx.db.get(taskId);
       const visible = entityVisible(task);
-      if (visible && visible.repoId === args.repoId) {
+      if (
+        visible &&
+        visible.repoId === args.repoId &&
+        isTaskVisibleTo(visible, ctx.userId)
+      ) {
         const description = visible.description?.trim();
         const item: DataMentionItem = {
           kind: "quickTask",

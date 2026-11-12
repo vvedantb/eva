@@ -5,6 +5,9 @@ import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { internalQuery } from "../_generated/server";
 import { authQuery, hasTeamAccess, userCanAccessRepo } from "../functions";
 import {
+  findReposByOwnerAndName,
+  findSiblingRepos,
+  findSiblingsOf,
   gatherAccessibleRepos,
   githubRepoValidator,
   githubRepoWithLogoValidator,
@@ -15,34 +18,31 @@ import {
   PROVIDER_PRIMARY_AUTH_KEY,
 } from "../validators";
 import { filterActiveEntities } from "../numId";
+import { isSessionArchived } from "../_sessions/archive";
+import { isStandaloneSession } from "../_sessions/owner";
 import { listTeammateUserIds } from "../_userProviderAccounts/sharing";
 
-/** How many live sandboxes this app has across quick tasks and projects. */
+/** How many live sandboxes this app's quick tasks and projects hold (their sessions'). */
 async function repoActiveSandboxCount(
   db: GenericDatabaseReader<DataModel>,
   repoId: Id<"githubRepos">,
 ): Promise<number> {
-  // Indexed reads (not full table scans): the index pins both repo and status,
-  // and the take caps a pathological app the way `countActiveSessions` does.
-  const activeProjects = filterActiveEntities(
+  // Indexed read pinning repo and status; the take caps a pathological app
+  // the way `countActiveSessions` does.
+  const activeOwnedSessions = (
     await db
-      .query("projects")
-      .withIndex("by_repo_and_sandbox_status", (q) =>
-        q.eq("repoId", repoId).eq("reviewProjectSandboxStatus", "active"),
+      .query("sessions")
+      .withIndex("by_repo_and_status", (q) =>
+        q.eq("repoId", repoId).eq("status", "active"),
       )
-      .take(64),
-  ).filter((p) => p.sandboxId !== undefined);
-
-  const activeTasks = filterActiveEntities(
-    await db
-      .query("agentTasks")
-      .withIndex("by_repo_and_sandbox_status", (q) =>
-        q.eq("repoId", repoId).eq("reviewTaskSandboxStatus", "active"),
-      )
-      .take(64),
-  ).filter((t) => t.sandboxId !== undefined);
-
-  return activeProjects.length + activeTasks.length;
+      .take(64)
+  ).filter(
+    (s) =>
+      !isStandaloneSession(s) &&
+      s.deletedAt === undefined &&
+      s.sandboxId !== undefined,
+  );
+  return activeOwnedSessions.length;
 }
 
 /** Attaches a resolved `logoUrl` (from `logoStorageId`) to each repo. */
@@ -114,7 +114,9 @@ export const countActiveSessions = authQuery({
             )
             .take(64),
         );
-        return sessions.filter((s) => s.archived !== true).length;
+        return sessions.filter(
+          (s) => isStandaloneSession(s) && !isSessionArchived(s),
+        ).length;
       }),
     );
     return perRepo.reduce((total, n) => total + n, 0);
@@ -242,12 +244,7 @@ export const getByOwnerAndName = authQuery({
   },
   returns: v.union(githubRepoValidator, v.null()),
   handler: async (ctx, args) => {
-    const candidates = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", args.owner).eq("name", args.name),
-      )
-      .collect();
+    const candidates = await findReposByOwnerAndName(ctx.db, args);
 
     let repo = args.appName
       ? candidates.find(
@@ -299,17 +296,12 @@ export const listByTeam = authQuery({
   },
 });
 
-/** Internal: all repo ids sharing owner/name (monorepo siblings + self). */
-export const listRepoIdsByOwnerAndName = internalQuery({
-  args: { owner: v.string(), name: v.string() },
+/** Internal: sibling repo ids of a repo (same owner/name and team, self included). */
+export const listSiblingRepoIds = internalQuery({
+  args: { repoId: v.id("githubRepos") },
   returns: v.array(v.id("githubRepos")),
   handler: async (ctx, args) => {
-    const siblings = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", args.owner).eq("name", args.name),
-      )
-      .collect();
+    const siblings = await findSiblingRepos(ctx.db, args.repoId);
     return siblings.map((repo) => repo._id);
   },
 });
@@ -345,14 +337,11 @@ export const listSiblingApps = authQuery({
   ),
   handler: async (ctx, args) => {
     const repo = await ctx.db.get(args.repoId);
-    if (!repo) return [];
+    if (!repo || !(await userCanAccessRepo(ctx.db, repo, ctx.userId))) {
+      return [];
+    }
 
-    const siblings = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", repo.owner).eq("name", repo.name),
-      )
-      .collect();
+    const siblings = await findSiblingsOf(ctx.db, repo);
 
     return siblings
       .filter((s) => s._id !== args.repoId && s.rootDirectory)
@@ -378,12 +367,7 @@ export const findParentRepoByOwnerAndName = internalQuery({
   },
   returns: v.union(githubRepoValidator, v.null()),
   handler: async (ctx, args) => {
-    const repos = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", args.owner).eq("name", args.name),
-      )
-      .collect();
+    const repos = await findReposByOwnerAndName(ctx.db, args);
     const parent = repos.find((repo) => !repo.rootDirectory);
     return parent ?? repos[0] ?? null;
   },

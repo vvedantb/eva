@@ -8,18 +8,42 @@ import {
   runModeValidator,
 } from "../validators";
 import { taskCompleteEvent } from "./events";
-import { buildQuickTaskRetryDelayMs } from "./recovery";
+import {
+  buildQuickTaskRetryDelayMs,
+  TASK_CHAT_BUSY_ERROR,
+  TASK_CHAT_BUSY_RETRY_MS,
+} from "./recovery";
+
+/** How many times a project run waits out a busy session before it fails. */
+const PROJECT_CLAIM_MAX_WAITS = 10;
 import { getTaskRunStreamingEntityId } from "./helpers";
 import { prepareSandboxSteps } from "../_sandbox_runtime/prepareSandboxSteps";
 import { formatDelayedPublishFailureError } from "../_sessions/resultTarget";
+import { errorMessage } from "@vvedantb/server";
 
 const PR_STEP_RETRY = {
   retry: { maxAttempts: 3, initialBackoffMs: 2000, base: 2 },
 };
 
+/** A quick task run's claim on its session's sandbox. */
+type TaskRunSessionClaim = NonNullable<
+  FunctionReturnType<typeof internal.sessions.claimSandboxForTaskRun>
+>;
+
 type PrEnrichmentData = FunctionReturnType<
   typeof internal.taskWorkflow.getPrEnrichmentData
 >;
+
+/** The terminal fields `completeRun` records for a run. */
+type RunOutcome = {
+  success: boolean;
+  error: string | null;
+  prError: string | null;
+  prUrl: string | null;
+  activityLog: string | null;
+  exitReason?: string;
+  claudeResult?: string;
+};
 
 /** Arguments every start passes; `startTaskRunWorkflow` adds `turnId`. */
 export const taskExecutionWorkflowArgs = {
@@ -28,6 +52,11 @@ export const taskExecutionWorkflowArgs = {
   repoId: v.id("githubRepos"),
   installationId: v.number(),
   projectId: v.optional(v.id("projects")),
+  /**
+   * The session the run works on (a quick task's own, a project task's
+   * project's): the run claims and attaches its sandbox there.
+   */
+  ownedSessionId: v.id("sessions"),
   branchName: v.optional(v.string()),
   baseBranch: v.optional(v.string()),
   isFirstTaskOnBranch: v.boolean(),
@@ -48,28 +77,23 @@ export const taskExecutionWorkflow = workflow.define({
   },
   handler: async (step, args): Promise<void> => {
     let sandboxId: string | undefined;
-
-    let completionSuccess: boolean | undefined;
-    let completionError: string | null = null;
     let completionPrUrl: string | null = null;
-    let completionPrError: string | null = null;
-    let completionActivityLog: string | null = null;
-    let completionResult: string | null = null;
-    let finalSuccess = false;
-    let finalError: string | null = null;
-    let runCompletionRecorded = false;
+    let outcome: RunOutcome | undefined;
     let runFinalized = false;
-    let sandboxStopped = false;
     let preserveSandboxOnFailure = false;
     let keepTaskSandboxActiveAfterRun = false;
+    let sessionClaim: TaskRunSessionClaim | null = null;
+
+    // Outside the try: a run that is no longer queued (cancelled first) has
+    // nothing to finalize, and its cancel path already released the task slot
+    // and turn. Running the tail would clear a newer run's workflow id.
+    const startResult = await step.runMutation(
+      internal.taskWorkflow.updateRunToRunning,
+      { runId: args.runId, taskId: args.taskId, repoId: args.repoId },
+    );
+    if (startResult === "not_queued") return;
 
     try {
-      await step.runMutation(internal.taskWorkflow.updateRunToRunning, {
-        runId: args.runId,
-        taskId: args.taskId,
-        repoId: args.repoId,
-      });
-
       const data = await step.runQuery(internal.taskWorkflow.getTaskData, {
         taskId: args.taskId,
         repoId: args.repoId,
@@ -77,37 +101,80 @@ export const taskExecutionWorkflow = workflow.define({
         projectId: args.projectId,
         branchName: args.branchName,
         mode: args.mode,
+        ownedSessionId: args.ownedSessionId,
       });
-      keepTaskSandboxActiveAfterRun = data.keepTaskSandboxActiveAfterRun;
-      // Reuse the persisted sandbox for project tasks (project.sandboxId) or
-      // for quick tasks on follow-up runs (task.sandboxId — set after the first
-      // run completes). Quick-task sandboxes are persistent (stop/pause, not
-      // delete-on-completion — see "Persistent Quick-Task Sandboxes" in the
-      // changelog), so `ephemeral` is always false: a first run that ended up
-      // ephemeral would be deleted on auto-stop, leaving
-      // `task.sandboxId` as a tombstone and breaking the reviewer preview.
-      const reusableSandboxId =
-        data.projectSandboxId ?? data.taskSandboxId ?? undefined;
+      // A quick task's session lends its sandbox through the session
+      // lifecycle: claimed (`closed` → `starting`, or reused while `active`)
+      // before the VM is touched, so the row never reads `closed` over a
+      // running VM. A start or stop in flight refuses the claim: the run
+      // fails with the busy error and retries shortly (one busy rule with
+      // `startTaskRun`), so it never boots a VM no session row records.
+      sessionClaim = await step.runMutation(
+        internal.sessions.claimSandboxForTaskRun,
+        { sessionId: args.ownedSessionId, runId: args.runId },
+      );
+      // A project run waits out a start or stop in flight on its project's
+      // session (a build must not fail on the reviewer's Start); a quick
+      // task's run fails with the busy error and retries.
+      for (
+        let wait = 0;
+        sessionClaim === null &&
+        args.projectId !== undefined &&
+        wait < PROJECT_CLAIM_MAX_WAITS;
+        wait++
+      ) {
+        sessionClaim = await step.runMutation(
+          internal.sessions.claimSandboxForTaskRun,
+          { sessionId: args.ownedSessionId, runId: args.runId },
+          { runAfter: TASK_CHAT_BUSY_RETRY_MS },
+        );
+      }
+      if (sessionClaim === null) throw new Error(TASK_CHAT_BUSY_ERROR);
+      // A project's VM stays up (`active`) after a run, as the project
+      // sandbox always did: the build's next task and the chat resume it,
+      // and idle pause stops it once nothing holds the session.
+      keepTaskSandboxActiveAfterRun =
+        args.projectId !== undefined || sessionClaim.wasActive;
+      const reusableSandboxId = sessionClaim.sandboxId;
       const skipStartupCommands =
         args.projectId !== undefined &&
         reusableSandboxId !== undefined &&
         !args.isFirstTaskOnBranch;
-      ({ sandboxId } = await prepareSandboxSteps(step, {
-        existingSandboxId: reusableSandboxId,
-        installationId: args.installationId,
-        repoOwner: data.repoOwner,
-        repoName: data.repoName,
-        ephemeral: false,
-        repoId: args.repoId,
-        attachRunId: args.runId,
-        streamingEntityId: getTaskRunStreamingEntityId(args.runId),
-        baseBranch: args.baseBranch,
-        branchName: data.branchName,
-        createRetry: { maxAttempts: 3, initialBackoffMs: 2000, base: 2 },
-        skipStartupCommands,
-        sessionPersistenceId: args.projectId,
-        sessionPersistenceKind: args.projectId ? "projects" : undefined,
-      }));
+      try {
+        ({ sandboxId } = await prepareSandboxSteps(step, {
+          existingSandboxId: reusableSandboxId,
+          installationId: args.installationId,
+          repoOwner: data.repoOwner,
+          repoName: data.repoName,
+          ephemeral: false,
+          repoId: args.repoId,
+          attachRunId: args.runId,
+          streamingEntityId: getTaskRunStreamingEntityId(args.runId),
+          baseBranch: args.baseBranch,
+          branchName: data.branchName,
+          createRetry: { maxAttempts: 3, initialBackoffMs: 2000, base: 2 },
+          skipStartupCommands,
+        }));
+      } catch (prepareError) {
+        // The claimed start failed: the normal start-failure transition
+        // (`starting` → `closed`, fenced by the claim's attempt).
+        if (!sessionClaim.wasActive) {
+          await step.runMutation(internal.sessions.sandboxError, {
+            sessionId: args.ownedSessionId,
+            error: errorMessage(prepareError),
+            startAttempt: sessionClaim.attempt,
+          });
+        }
+        throw prepareError;
+      }
+      // `starting` → `active` with this VM: chat, preview and sweeps all
+      // read it there. Refused if a stop or newer start won meanwhile; the
+      // tail then stops this VM as the run's own.
+      await step.runMutation(internal.sessions.attachTaskRunSandbox, {
+        sessionId: args.ownedSessionId,
+        sandboxId,
+        attempt: sessionClaim.attempt,
+      });
 
       await step.runMutation(internal.turns.markLaunching, {
         turnId: args.turnId,
@@ -155,28 +222,9 @@ export const taskExecutionWorkflow = workflow.define({
         sandboxId,
       });
 
-      if (args.projectId) {
-        await step.runMutation(internal.taskWorkflow.updateProjectSandbox, {
-          projectId: args.projectId,
-          sandboxId,
-        });
-      } else {
-        // Quick tasks: persist sandbox on the task itself so reviewer Start
-        // Sandbox and follow-up runs (resolve_conflicts, change-requests)
-        // resume the same paused filesystem instead of bootstrapping anew.
-        await step.runMutation(internal.taskWorkflow.saveTaskSandboxId, {
-          taskId: args.taskId,
-          sandboxId,
-        });
-      }
-
       const result = await step.awaitEvent(taskCompleteEvent);
-      completionSuccess = result.success;
-      completionError = result.error;
-      completionActivityLog = result.activityLog;
-      completionResult = result.result;
-      finalSuccess = result.success;
-      finalError = result.error;
+      let finalSuccess = result.success;
+      let finalError = result.error;
 
       console.log(
         `[task-workflow] run=${args.runId} taskId=${args.taskId} projectId=${args.projectId ?? "none"} agentSuccess=${finalSuccess} isFirstTaskOnBranch=${args.isFirstTaskOnBranch} branchName=${data.branchName} baseBranch=${args.baseBranch ?? "(default)"}`,
@@ -202,7 +250,7 @@ export const taskExecutionWorkflow = workflow.define({
           finalSuccess = false;
           finalError = formatDelayedPublishFailureError("task", error);
           console.error(
-            `[task-workflow] run=${args.runId} pushSandboxBranch failed: ${error instanceof Error ? error.message : String(error)}`,
+            `[task-workflow] run=${args.runId} pushSandboxBranch failed: ${errorMessage(error)}`,
           );
         }
       }
@@ -223,7 +271,7 @@ export const taskExecutionWorkflow = workflow.define({
           );
         } catch (deploymentError) {
           console.error(
-            `[task-workflow] run=${args.runId} deployment tracking scheduling failed: ${deploymentError instanceof Error ? deploymentError.message : String(deploymentError)}`,
+            `[task-workflow] run=${args.runId} deployment tracking scheduling failed: ${errorMessage(deploymentError)}`,
           );
         }
       }
@@ -233,6 +281,7 @@ export const taskExecutionWorkflow = workflow.define({
       // attempting one against a branch origin may not even have burned
       // compare retries into a spurious "PR creation failed" (404). Transient
       // failures still recover via the next pushing run or the Create PR button.
+      let completionPrError: string | null = null;
       if (finalSuccess && pushedCommits) {
         const createPrAsDraft = true;
         try {
@@ -245,7 +294,7 @@ export const taskExecutionWorkflow = workflow.define({
             changeRequests = enrichment.changeRequests;
           } catch (enrichmentError) {
             console.error(
-              `[task-workflow] run=${args.runId} PR enrichment failed; creating PR with base body: ${enrichmentError instanceof Error ? enrichmentError.message : String(enrichmentError)}`,
+              `[task-workflow] run=${args.runId} PR enrichment failed; creating PR with base body: ${errorMessage(enrichmentError)}`,
             );
           }
 
@@ -314,7 +363,7 @@ export const taskExecutionWorkflow = workflow.define({
           }
         } catch (prError) {
           const action = args.isFirstTaskOnBranch ? "creation" : "refresh";
-          completionPrError = `PR ${action} failed: ${prError instanceof Error ? prError.message : String(prError)}. Commits are pushed; use the Create PR button to recover.`;
+          completionPrError = `PR ${action} failed: ${errorMessage(prError)}. Commits are pushed; use the Create PR button to recover.`;
           console.error(
             `PR ${action} failed for run ${args.runId}: ${completionPrError}`,
           );
@@ -327,30 +376,20 @@ export const taskExecutionWorkflow = workflow.define({
       // dedicated prError field so the UI can show what went wrong instead of
       // silently dropping it (the run-level `error` field is cleared on success
       // runs by finalizeRunStatus).
-      await step.runMutation(internal.taskWorkflow.finalizeRunStreamingPhase, {
-        runId: args.runId,
-        taskId: args.taskId,
-        projectId: args.projectId,
+      outcome = {
         success: finalSuccess,
         error: finalError,
         prError: completionPrError,
         prUrl: completionPrUrl,
         activityLog: result.activityLog,
         claudeResult: result.result ?? undefined,
-      });
-      runCompletionRecorded = true;
-
+      };
       await step.runMutation(internal.taskWorkflow.completeRun, {
         runId: args.runId,
         taskId: args.taskId,
         projectId: args.projectId,
-        success: finalSuccess,
-        error: finalError,
-        prError: completionPrError,
-        prUrl: completionPrUrl,
-        activityLog: result.activityLog,
         mode: args.mode,
-        claudeResult: result.result ?? undefined,
+        ...outcome,
       });
       runFinalized = true;
 
@@ -373,19 +412,42 @@ export const taskExecutionWorkflow = workflow.define({
           });
         } catch (descriptionError) {
           console.error(
-            `[task-workflow] run=${args.runId} generatePrDescription failed: ${descriptionError instanceof Error ? descriptionError.message : String(descriptionError)}`,
+            `[task-workflow] run=${args.runId} generatePrDescription failed: ${errorMessage(descriptionError)}`,
           );
         }
       }
+    } catch (error) {
+      outcome = outcome ?? {
+        success: false,
+        error: error instanceof Error ? error.message : "Task workflow failed",
+        prError: null,
+        prUrl: null,
+        activityLog: null,
+        exitReason: "error",
+      };
+    }
 
-      if (!args.projectId && !finalSuccess) {
+    // One terminal tail for both paths: finalize the run if the try did not,
+    // retry a failed quick task, then stop its sandbox when that is safe.
+    try {
+      if (!runFinalized) {
+        await step.runMutation(internal.taskWorkflow.completeRun, {
+          runId: args.runId,
+          taskId: args.taskId,
+          projectId: args.projectId,
+          mode: args.mode,
+          ...outcome,
+        });
+      }
+
+      if (!args.projectId && !outcome.success) {
         try {
           await step.runMutation(
             internal.taskWorkflow.maybeScheduleQuickTaskRetry,
             {
               taskId: args.taskId,
               runId: args.runId,
-              error: finalError ?? undefined,
+              error: outcome.error ?? undefined,
               delayMs: buildQuickTaskRetryDelayMs(),
             },
           );
@@ -400,107 +462,30 @@ export const taskExecutionWorkflow = workflow.define({
       // Stop (don't delete) quick-task sandboxes that were not already open in
       // the reviewer UI. If a change-request reused an active preview sandbox,
       // keep it active so "View Sandbox" continues pointing at a live sandbox.
-      if (
-        !args.projectId &&
-        sandboxId &&
-        !preserveSandboxOnFailure &&
-        !keepTaskSandboxActiveAfterRun
-      ) {
-        await step.runAction(internal.sandbox.stopSandbox, {
-          sandboxId,
-          repoId: args.repoId,
-        });
-        await step.runMutation(internal.taskWorkflow.markTaskSandboxStopped, {
-          taskId: args.taskId,
-        });
-        sandboxStopped = true;
-      }
-    } catch (error) {
-      const workflowError =
-        error instanceof Error ? error.message : "Task workflow failed";
-      const fallbackSuccess = completionSuccess ?? false;
-      const fallbackError = fallbackSuccess
-        ? null
-        : (completionError ?? workflowError);
-      const fallbackExitReason = fallbackSuccess ? "completed" : "error";
-
-      if (!runCompletionRecorded) {
-        await step.runMutation(
-          internal.taskWorkflow.finalizeRunStreamingPhase,
-          {
-            runId: args.runId,
-            taskId: args.taskId,
-            projectId: args.projectId,
-            success: fallbackSuccess,
-            error: fallbackError,
-            prError: completionPrError,
-            prUrl: completionPrUrl,
-            activityLog: completionActivityLog,
-            exitReason: fallbackExitReason,
-            claudeResult: completionResult ?? undefined,
-          },
-        );
-      }
-
-      if (!runFinalized) {
-        await step.runMutation(internal.taskWorkflow.completeRun, {
-          runId: args.runId,
-          taskId: args.taskId,
-          projectId: args.projectId,
-          success: fallbackSuccess,
-          error: fallbackError,
-          prError: completionPrError,
-          prUrl: completionPrUrl,
-          activityLog: completionActivityLog,
-          exitReason: fallbackExitReason,
-          mode: args.mode,
-          claudeResult: completionResult ?? undefined,
-        });
-      }
-
-      if (!args.projectId) {
+      if (sandboxId && !preserveSandboxOnFailure) {
+        // `active` → `stopping` → `closed` through the session stop path,
+        // unless the reviewer had it open when the run began (it stays
+        // `active` and idle pause stops it later). Mirrors
+        // `keepTaskSandboxActiveAfterRun` for the task sandbox.
         try {
           await step.runMutation(
-            internal.taskWorkflow.maybeScheduleQuickTaskRetry,
+            internal.sessions.finishTaskRunSandboxMutation,
             {
-              taskId: args.taskId,
-              runId: args.runId,
-              error: fallbackError ?? undefined,
-              delayMs: buildQuickTaskRetryDelayMs(),
+              sessionId: args.ownedSessionId,
+              sandboxId,
+              keepActive: keepTaskSandboxActiveAfterRun,
             },
           );
-        } catch (retryError) {
-          console.error(
-            "Failed to schedule quick-task auto-retry:",
-            retryError,
-          );
-        }
-      }
-
-      if (
-        !args.projectId &&
-        sandboxId &&
-        !sandboxStopped &&
-        !preserveSandboxOnFailure &&
-        !keepTaskSandboxActiveAfterRun
-      ) {
-        try {
-          await step.runAction(internal.sandbox.stopSandbox, {
-            sandboxId,
-            repoId: args.repoId,
-          });
-          await step.runMutation(internal.taskWorkflow.markTaskSandboxStopped, {
-            taskId: args.taskId,
-          });
         } catch {}
       }
     } finally {
       await step.runMutation(internal.taskWorkflow.clearActiveWorkflow, {
         taskId: args.taskId,
+        runId: args.runId,
       });
       await step.runMutation(internal.taskWorkflow.closeRunTurn, {
         runId: args.runId,
-        success: finalSuccess,
+        success: outcome.success,
       });
     }
   },

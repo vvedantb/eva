@@ -62,7 +62,8 @@ export function useChatQueueGate({
   setModel,
   setAccount,
 }: {
-  parentId: Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">;
+  /** Undefined for a chat not created yet: nothing is queued on it. */
+  parentId: Id<"sessionChats"> | undefined;
   messages: ReadonlyArray<ChatBodyMessage>;
   queuedMessages: ReadonlyArray<ChatBodyQueuedMessage>;
   model: AIModel;
@@ -130,15 +131,18 @@ export function useChatQueueGate({
     // cannot send on the exhausted credential's warm daemon.
     const ready =
       next.kind === "account" ? setAccount(next.accountId) : Promise.resolve();
+    const queueParentId = parentId;
     // Cleanup is duplicated across `then`/`catch` rather than written once in a
     // `finally`: React Compiler cannot compile a `finally`.
     void catchMutationError(
       ready.then(() =>
-        switchQueuedCredential({
-          parentId,
-          model: nextModel,
-          providerAccountId: resolveAccountId(nextAccountId),
-        }),
+        queueParentId === undefined
+          ? null
+          : switchQueuedCredential({
+              parentId: queueParentId,
+              model: nextModel,
+              providerAccountId: resolveAccountId(nextAccountId),
+            }),
       ),
       "Couldn't send the queued messages",
       "chat-queue-switch-credential",

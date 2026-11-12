@@ -5,6 +5,7 @@ import type {
   GenericDatabaseWriter,
 } from "convex/server";
 import { projectFields, conversationMessageValidator } from "../validators";
+import { sessionStatusValidator } from "../_validators/enums";
 import type { DataModel, Id, Doc } from "../_generated/dataModel";
 
 type ConversationMessage = Doc<"projectDetails">["conversationHistory"][number];
@@ -33,10 +34,15 @@ export const projectPlanningModeValidator = v.union(
   v.literal("tasks_only"),
 );
 
-/** List rows always include a resolved planning mode (stored or inferred). */
+/**
+ * List rows always include a resolved planning mode (stored or inferred) and
+ * the project session's sandbox status.
+ */
 export const projectListItemValidator = v.object({
   ...projectSummaryFields,
   planningMode: projectPlanningModeValidator,
+  /** The project session's sandbox status (`projectSandboxStatus`). */
+  sandboxStatus: v.optional(sessionStatusValidator),
   /** Unread project chat reply for this user (`chatReads.ts`). */
   hasUnread: v.boolean(),
   /** The project chat is paused on a blocking question for the user. */

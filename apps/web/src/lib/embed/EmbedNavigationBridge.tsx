@@ -2,7 +2,10 @@
 
 import { useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { embedNavigateMessage } from "@/lib/embed/embedded";
+import {
+  EMBED_READY_MESSAGE,
+  embedNavigateMessage,
+} from "@/lib/embed/embedded";
 import { hrefToNavigateOptions } from "@/lib/utils/repoUrl";
 
 /**
@@ -16,7 +19,9 @@ export function EmbedNavigationBridge() {
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
+      // Only the host pane drives this frame, not another same-origin window.
       if (event.origin !== window.location.origin) return;
+      if (event.source !== window.parent) return;
       const parsed = embedNavigateMessage.safeParse(event.data);
       if (!parsed.success) return;
       // Split path from search: a comment notification's href carries
@@ -26,10 +31,7 @@ export function EmbedNavigationBridge() {
     window.addEventListener("message", onMessage);
     // Until this arrives the host falls back to swapping the iframe src, so a
     // selection made mid-boot is never lost.
-    window.parent.postMessage(
-      { type: "eva:embed-ready" },
-      window.location.origin,
-    );
+    window.parent.postMessage(EMBED_READY_MESSAGE, window.location.origin);
     return () => window.removeEventListener("message", onMessage);
   }, [navigate]);
 

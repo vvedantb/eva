@@ -1,6 +1,9 @@
 "use node";
 
 import { v } from "convex/values";
+import type { GenericActionCtx } from "convex/server";
+import { redactSecrets } from "@eva/shared/redactSecrets";
+import type { DataModel, Id } from "../_generated/dataModel";
 import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import {
@@ -13,6 +16,7 @@ import {
 import { releaseSwapFile } from "./swap";
 import { isSandboxGoneError } from "./sandboxErrors";
 import { CALLBACK_LIVENESS_COMMAND } from "./daemonPaths";
+import { errorMessage } from "@vvedantb/server";
 
 /**
  * Total budget for one stopSandbox attempt. Must stay well under the 600s
@@ -54,7 +58,7 @@ const AGENT_PROCESS_LIVENESS_COMMAND =
  *
  * Conservative failure handling: if we cannot reach the sandbox to determine state,
  * we report `alive: true` with reason `probe_unreachable` so the watchdog does
- * NOT kill on our inability to verify. The hard 2-hour timeout (`handleStaleRun`)
+ * NOT kill on our inability to verify. The hard `TURN_BACKSTOP_MS` timeout (`handleStaleRun`)
  * remains a backstop.
  */
 export const verifySandboxLiveness = internalAction({
@@ -206,7 +210,7 @@ export const stopSandbox = internalAction({
             state = sandbox.state;
           } catch (refreshError) {
             console.log(
-              `[sandbox] stopSandbox refresh failed sandboxId=${args.sandboxId}: ${refreshError instanceof Error ? refreshError.message : String(refreshError)}`,
+              `[sandbox] stopSandbox refresh failed sandboxId=${args.sandboxId}: ${errorMessage(refreshError)}`,
             );
           }
           // Stop auto-snapshots the filesystem — drop the swapfile first so
@@ -222,7 +226,7 @@ export const stopSandbox = internalAction({
               );
             } catch (swapError) {
               console.log(
-                `[sandbox] stopSandbox swap release failed sandboxId=${args.sandboxId}: ${swapError instanceof Error ? swapError.message : String(swapError)}`,
+                `[sandbox] stopSandbox swap release failed sandboxId=${args.sandboxId}: ${errorMessage(swapError)}`,
               );
             }
           } else {
@@ -237,7 +241,7 @@ export const stopSandbox = internalAction({
       );
       console.log(`[sandbox] stopSandbox ok sandboxId=${args.sandboxId}`);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = errorMessage(error);
       // Already gone / already idle — treat as success so finalize can close.
       //
       // The structured verdict comes first. The provider's own 404 carries no
@@ -296,6 +300,23 @@ const KILL_DIAGNOSTICS_COMMAND = [
 ].join("; ");
 
 /**
+ * Runs KILL_DIAGNOSTICS_COMMAND and returns its capped, redacted output (the
+ * process list and callback log can carry tokens). Throws when the sandbox is
+ * not running: an exec on a stopped VM resumes it, and a parallel kill/stop
+ * can then leave it running.
+ */
+async function readKillDiagnostics(
+  ctx: GenericActionCtx<DataModel>,
+  repoId: Id<"githubRepos">,
+  sandboxId: string,
+): Promise<string> {
+  const sandbox = await getRunningSandboxHandle(ctx, repoId, sandboxId);
+  if (!sandbox) throw new Error("sandbox not running");
+  const diagnostics = await execHandle(sandbox, KILL_DIAGNOSTICS_COMMAND, 15);
+  return redactSecrets(diagnostics.trim()).slice(0, 4000);
+}
+
+/**
  * Read-only post-mortem for a session turn whose lease expired on a sandbox
  * that is still running. The sandbox is left running — this only reads
  * evidence (OOM lines, memory/swap, load, top processes, callback log) so the
@@ -310,22 +331,9 @@ export const captureStalledTurnDiagnostics = internalAction({
   returns: v.string(),
   handler: async (ctx, args) => {
     try {
-      // Diagnostics only from a live VM: an exec on a stopped one resumes it,
-      // and a parallel kill/stop can then leave it running.
-      const sandbox = await getRunningSandboxHandle(
-        ctx,
-        args.repoId,
-        args.sandboxId,
-      );
-      if (!sandbox) throw new Error("sandbox not running");
-      const diagnostics = await execHandle(
-        sandbox,
-        KILL_DIAGNOSTICS_COMMAND,
-        15,
-      );
-      return diagnostics.trim().slice(0, 4000);
+      return await readKillDiagnostics(ctx, args.repoId, args.sandboxId);
     } catch (error) {
-      return `diagnostics capture failed: ${error instanceof Error ? error.message : String(error)}`;
+      return `diagnostics capture failed: ${errorMessage(error)}`;
     }
   },
 });
@@ -346,20 +354,11 @@ export const captureDiagnosticsAndStopSandbox = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     try {
-      // Diagnostics only from a live VM: an exec on a stopped one resumes it,
-      // and a parallel kill/stop can then leave it running.
-      const sandbox = await getRunningSandboxHandle(
+      const trimmed = await readKillDiagnostics(
         ctx,
         args.repoId,
         args.sandboxId,
       );
-      if (!sandbox) throw new Error("sandbox not running");
-      const diagnostics = await execHandle(
-        sandbox,
-        KILL_DIAGNOSTICS_COMMAND,
-        15,
-      );
-      const trimmed = diagnostics.trim().slice(0, 4000);
       console.log(
         `[watchdog][diagnostics] runId=${args.runId} sandboxId=${args.sandboxId}\n${trimmed}`,
       );
@@ -369,7 +368,7 @@ export const captureDiagnosticsAndStopSandbox = internalAction({
       });
     } catch (error) {
       console.log(
-        `[watchdog][diagnostics] runId=${args.runId} capture failed: ${error instanceof Error ? error.message : String(error)}`,
+        `[watchdog][diagnostics] runId=${args.runId} capture failed: ${errorMessage(error)}`,
       );
     }
     await ctx.runAction(internal.sandbox.stopSandbox, {
@@ -430,7 +429,7 @@ export const archiveSandbox = internalAction({
     } catch (error) {
       // Sandbox may already be archived, stopped, or deleted
       console.warn(
-        `[sandbox] Failed to archive sandbox ${args.sandboxId}: ${error instanceof Error ? error.message : String(error)}`,
+        `[sandbox] Failed to archive sandbox ${args.sandboxId}: ${errorMessage(error)}`,
       );
     }
     return null;

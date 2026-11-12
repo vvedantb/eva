@@ -30,16 +30,17 @@ import {
   scheduleQueueDrainAfterBackgroundAgents,
 } from "../_queues/helpers";
 import { z } from "zod";
-import {
-  assistantReplyContent,
-  formatDelayedPublishFailureError,
-} from "./resultTarget";
+import { formatDelayedPublishFailureError } from "./resultTarget";
 import {
   applyChatTurnResult,
   insertAssistantPlaceholderIfNeeded,
+  syntheticTurnCompletionPatch,
+  turnCheckpointPatch,
+  type AssistantTurnResultPatch,
 } from "../_chat/chatResult";
 import { resolveStorageUrls } from "../_chat/storageUrls";
 import { buildSessionPrompt, SESSION_TOOLS } from "./sessionPrompt";
+import { buildSessionBranchName } from "../_git/branchNames";
 import { scheduleScopeCheck } from "../_scopeCheck/mutations";
 import {
   isPendingTurnLive,
@@ -47,7 +48,7 @@ import {
   isUnclaimedOpenTurn,
 } from "./pendingTurnRecovery";
 import type { MutationCtx } from "../_generated/server";
-import type { Doc, Id } from "../_generated/dataModel";
+import type { Id } from "../_generated/dataModel";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import { backgroundAgentEntryValidator } from "../_validators/tableFields";
 import { mergeBackgroundAgents } from "./backgroundAgents";
@@ -60,10 +61,12 @@ import {
   claimStagedTurn,
   closeTurn,
   findOpenTurn,
+  isSupersededChatResult,
   leaseSyntheticTurn,
   openSessionChatTurn,
   resolveCompletionTurn,
 } from "../_chat/turnStore";
+import { openTurnWorkflowId } from "../_chat/turnProjection";
 import {
   daemonChatTargetArgs,
   ensureMainChat,
@@ -71,8 +74,11 @@ import {
   loadSessionChat,
   resolveDaemonChatId,
   sessionChatPersistenceId,
+  sessionChatPersistenceIdValidator,
   sessionChatStreamingEntityId,
 } from "../_sessionChats/helpers";
+import { errorMessage } from "@vvedantb/server";
+import { isStandaloneSession } from "./owner";
 
 // --- Completion event ---
 
@@ -198,7 +204,7 @@ export const sessionSandboxStartupWorkflow = workflow.define({
         await step.runMutation(internal.sessionWorkflow.postSystemAlert, {
           sessionId: args.sessionId,
           content: `Failed to prepare linked repo ${linkedRepo.name}`,
-          errorDetail: error instanceof Error ? error.message : String(error),
+          errorDetail: errorMessage(error),
         });
       }
     }
@@ -307,7 +313,7 @@ export const sessionExecuteWorkflow = workflow.define({
           installationId: args.installationId,
           repoOwner: data.repoOwner,
           repoName: data.repoName,
-          branchName: data.branchName ?? `eva/session-${sessionId}`,
+          branchName: data.branchName ?? buildSessionBranchName(sessionId),
           baseBranch: data.baseBranch,
           repoId: data.repoId,
           startDesktop: false,
@@ -336,7 +342,7 @@ export const sessionExecuteWorkflow = workflow.define({
       sandboxId,
       repoId: data.repoId,
       userId: args.userId,
-      branchName: data.branchName ?? `eva/session-${sessionId}`,
+      branchName: data.branchName ?? buildSessionBranchName(sessionId),
     });
     await step.runMutation(internal.sessionWorkflow.clearSessionClosedStatus, {
       sessionId,
@@ -373,8 +379,8 @@ export const sessionExecuteWorkflow = workflow.define({
     } else {
       // A failed launch must finalize the turn: without this catch the
       // workflow dies after its step retries with no saveResult, leaving the
-      // empty placeholder (and activeWorkflowId) stuck on "Working…" until
-      // the 2-hour backstop.
+      // empty placeholder (and the open turn) stuck on "Working…" until
+      // the `TURN_BACKSTOP_MS` backstop.
       try {
         // One-shot providers push the prompt at launch, so hold it until the
         // new sandbox is on the latest base (daemons get this from the
@@ -487,7 +493,7 @@ export const sessionExecuteWorkflow = workflow.define({
       } catch (error) {
         const publishError = formatDelayedPublishFailureError("session", error);
         console.error(
-          `[sessionWorkflow] pushSandboxBranch failed chatId=${args.chatId}: ${error instanceof Error ? error.message : String(error)}`,
+          `[sessionWorkflow] pushSandboxBranch failed chatId=${args.chatId}: ${errorMessage(error)}`,
         );
         await step.runMutation(internal.sessionWorkflow.saveResult, {
           chatId: args.chatId,
@@ -521,14 +527,19 @@ export const sessionExecuteWorkflow = workflow.define({
       // missing PR when it confirms the session branch already contains HEAD.
       // A chat-only first turn has no remote session branch, so `published` is
       // false and still avoids the old compare-404 alerts.
-      if (pushedCommits || (branchPublished && data.primaryPrUrl === undefined)) {
+      // A task's session pushes the task branch but never opens a session
+      // PR: the task owns its PRs (`eva/task-<id>` → the task's run).
+      if (
+        data.ownsPullRequests !== false &&
+        (pushedCommits || (branchPublished && data.primaryPrUrl === undefined))
+      ) {
         try {
           await step.runAction(internal.github.createDraftSessionPr, {
             sessionId,
           });
         } catch (error) {
           const errorDetail =
-            error instanceof Error ? error.message : String(error);
+            errorMessage(error);
           console.error(
             `[sessionWorkflow] createDraftSessionPr failed sessionId=${sessionId}: ${errorDetail}`,
           );
@@ -551,7 +562,11 @@ export const sessionExecuteWorkflow = workflow.define({
     // before completion is even posted.
     // Not gated on the primary's `pushSucceeded`: a primary that failed to
     // publish must not strand a linked repo's commits in the sandbox.
-    if (result.success && (data.linkedRepoCount ?? 0) > 0) {
+    if (
+      result.success &&
+      data.ownsPullRequests !== false &&
+      (data.linkedRepoCount ?? 0) > 0
+    ) {
       let linkedPushes: Array<{
         sessionRepoId: Id<"sessionRepos">;
         pushed: boolean;
@@ -564,7 +579,7 @@ export const sessionExecuteWorkflow = workflow.define({
         );
       } catch (error) {
         const errorDetail =
-          error instanceof Error ? error.message : String(error);
+          errorMessage(error);
         console.error(
           `[sessionWorkflow] pushLinkedRepoBranches failed sessionId=${sessionId}: ${errorDetail}`,
         );
@@ -585,7 +600,7 @@ export const sessionExecuteWorkflow = workflow.define({
         } catch (error) {
           // One repo's PR failing must not stop its siblings' PRs.
           const errorDetail =
-            error instanceof Error ? error.message : String(error);
+            errorMessage(error);
           console.error(
             `[sessionWorkflow] createDraftSessionRepoPr failed sessionRepoId=${linkedPush.sessionRepoId}: ${errorDetail}`,
           );
@@ -709,7 +724,6 @@ export const clearStuckWorkingState = internalMutation({
     }
     await clearStreamingActivity(ctx, sessionChatStreamingEntityId(args.chatId));
     await ctx.db.patch(args.chatId, {
-      activeWorkflowId: undefined,
       pendingTurn: undefined,
       syntheticTurnMessageId: undefined,
       updatedAt: Date.now(),
@@ -760,7 +774,7 @@ export const getSessionData = internalQuery({
   },
   returns: v.object({
     sessionId: v.id("sessions"),
-    sessionPersistenceId: v.union(v.id("sessions"), v.id("sessionChats")),
+    sessionPersistenceId: sessionChatPersistenceIdValidator,
     sandboxId: v.optional(v.string()),
     status: sessionStatusValidator,
     repoOwner: v.string(),
@@ -777,6 +791,12 @@ export const getSessionData = internalQuery({
     linkedRepoCount: v.optional(v.number()),
     /** startSessionSandbox still owns repo prep, swap and Docker. */
     sandboxSetupPending: v.boolean(),
+    /**
+     * False for a task's session: it pushes the task branch, but the draft PR
+     * and linked-repo publish belong to the task. Optional only so a workflow
+     * journaled before this field replays.
+     */
+    ownsPullRequests: v.optional(v.boolean()),
   }),
   handler: async (ctx, args) => {
     const [{ chat, session }, user, triggeringUserMessage] = await Promise.all([
@@ -830,6 +850,7 @@ export const getSessionData = internalQuery({
       attachmentStorageIds: triggeringUserMessage?.attachmentStorageIds,
       linkedRepoCount: session.linkedRepoCount,
       sandboxSetupPending: session.sandboxSetupPending === true,
+      ownsPullRequests: isStandaloneSession(session),
     };
   },
 });
@@ -923,41 +944,30 @@ export const saveResult = internalMutation({
     const context = await loadSessionChat(ctx.db, args.chatId);
     if (!context) return null;
     const { chat, session } = context;
+    const turn = await ctx.db.get(args.turnId);
+    if (
+      isSupersededChatResult(turn, await openTurnWorkflowId(ctx, chat._id))
+    ) {
+      return null;
+    }
 
     // Any successful turn may have ended with the eva-design JSON, so this is
     // keyed on the reply's content rather than on what the turn was asked to do.
     const designParsed = args.success ? parseDesignResult(args.result) : null;
-    const extraPatch: {
-      isSystemAlert?: boolean;
-      errorDetail?: string;
-      beforeSha?: string;
-      afterSha?: string;
-      beforeShas?: Array<{ path: string; sha: string }>;
-      afterShas?: Array<{ path: string; sha: string }>;
-      variations?: Array<{
-        label: string;
-        route?: string;
-        filePath?: string;
-      }>;
-    } = {
+    const extraPatch: Omit<AssistantTurnResultPatch, "content"> = {
       isSystemAlert: undefined,
       errorDetail: undefined,
+      ...(designParsed
+        ? {
+            variations: designParsed.variations.map((variation) => ({
+              label: variation.label,
+              route: variation.route,
+              filePath: variation.filePath,
+            })),
+          }
+        : {}),
+      ...turnCheckpointPatch(args),
     };
-    if (designParsed) {
-      extraPatch.variations = designParsed.variations.map((variation) => ({
-        label: variation.label,
-        route: variation.route,
-        filePath: variation.filePath,
-      }));
-    }
-    if (args.beforeSha !== undefined && args.afterSha !== undefined) {
-      extraPatch.beforeSha = args.beforeSha;
-      extraPatch.afterSha = args.afterSha;
-    }
-    if (args.beforeShas !== undefined && args.afterShas !== undefined) {
-      extraPatch.beforeShas = args.beforeShas;
-      extraPatch.afterShas = args.afterShas;
-    }
 
     const outcome = await applyChatTurnResult(ctx, {
       parentId: chat._id,
@@ -978,7 +988,7 @@ export const saveResult = internalMutation({
     if (outcome === "publish-failure" || outcome === "no-target") return null;
 
     const now = Date.now();
-    await ctx.db.patch(chat._id, { activeWorkflowId: undefined, updatedAt: now });
+    await ctx.db.patch(chat._id, { updatedAt: now });
     const sessionPatch: {
       updatedAt: number;
       planContent?: string;
@@ -992,7 +1002,6 @@ export const saveResult = internalMutation({
       sessionPatch.planContent = args.planContent;
     }
     await ctx.db.patch(session._id, sessionPatch);
-    const turn = await ctx.db.get(args.turnId);
     if (turn) {
       await closeTurn(
         ctx,
@@ -1478,6 +1487,8 @@ export const completeSyntheticTurn = authMutation({
     const chatId = await resolveDaemonChatId(ctx.db, args);
     if (chatId === null) return null;
     const { chat, session } = await getSessionChatOrThrow(ctx.db, chatId);
+    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
+      throw new Error("Not authorized");
     const streamingEntityId = sessionChatStreamingEntityId(chat._id);
     const turnResolution = await resolveCompletionTurn(ctx, {
       entityId: chat._id,
@@ -1510,42 +1521,7 @@ export const completeSyntheticTurn = authMutation({
       return null;
     }
 
-    const patch: {
-      content: string;
-      activityLog?: string;
-      finishedAt: number;
-      pendingQuestion?: string;
-      model?: Doc<"messages">["model"];
-      beforeSha?: string;
-      afterSha?: string;
-      beforeShas?: Array<{ path: string; sha: string }>;
-      afterShas?: Array<{ path: string; sha: string }>;
-    } = {
-      content: assistantReplyContent({
-        success: args.success,
-        result: args.result,
-        error: args.error,
-      }),
-      finishedAt: Date.now(),
-    };
-    if (args.activityLog) {
-      patch.activityLog = args.activityLog;
-    }
-    if (args.pendingQuestion) {
-      patch.pendingQuestion = args.pendingQuestion;
-    }
-    if (args.beforeSha !== undefined && args.afterSha !== undefined) {
-      patch.beforeSha = args.beforeSha;
-      patch.afterSha = args.afterSha;
-    }
-    if (args.beforeShas !== undefined && args.afterShas !== undefined) {
-      patch.beforeShas = args.beforeShas;
-      patch.afterShas = args.afterShas;
-    }
-    // Drops the open-time stamp so a failed turn never becomes a checkpoint.
-    if (!args.success) {
-      patch.model = undefined;
-    }
+    const patch = syntheticTurnCompletionPatch(args);
     await ctx.db.patch(args.messageId, patch);
     // Judged out of band; a turn that changed no code schedules nothing.
     await scheduleScopeCheck(ctx, {
@@ -1651,7 +1627,7 @@ export const handleCompletion = authMutation({
     const context = await loadSessionChat(ctx.db, chatId);
     if (!context) return null;
     const { chat, session } = context;
-    const activeWorkflowId = chat.activeWorkflowId;
+    const activeWorkflowId = await openTurnWorkflowId(ctx, chat._id);
     if (activeWorkflowId === undefined) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");

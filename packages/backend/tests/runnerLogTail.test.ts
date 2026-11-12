@@ -49,4 +49,17 @@ describe("condenseRunnerLogTail", () => {
     expect(condensed.startsWith("…")).toBe(true);
     expect(condensed.endsWith("failed")).toBe(true);
   });
+
+  test("redacts tokens, even when the clip would cut their prefix", () => {
+    expect(
+      condenseRunnerLogTail(
+        "clone https://x-access-token:ghs_secret@github.com/a/b",
+      ),
+    ).toBe("clone https://x-access-token:***@github.com/a/b");
+
+    const token = `ghs_${"a".repeat(40)}`;
+    // Clipping first would keep the token's last chars without its prefix.
+    const log = `${token} ${"x".repeat(RUNNER_LOG_TAIL_CAP - 10)}`;
+    expect(condenseRunnerLogTail(log)).not.toContain("aaaaa");
+  });
 });

@@ -4,6 +4,9 @@ import { useColorScheme } from "nativewind";
 
 export type Scheme = "light" | "dark";
 
+/** The web `text-xs` letter spacing (0.005em of 12, from the `@vvedantb/ui` type scale), in points. */
+export const XS_TRACKING = 0.06;
+
 /** The scheme every @vvedantb/native-ui component reads (NativeWind). */
 export function useScheme(): Scheme {
   return useColorScheme().colorScheme === "dark" ? "dark" : "light";

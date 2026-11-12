@@ -1,35 +1,46 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import { internal } from "../_generated/api";
-import { internalMutation } from "../_generated/server";
+import { internalMutation, type MutationCtx } from "../_generated/server";
+import type { Id } from "../_generated/dataModel";
 import { authMutation, getSessionWithAccess } from "../functions";
-import { aiModelValidator, reasoningLevelValidator } from "../validators";
+import {
+  aiModelValidator,
+  reasoningLevelValidator,
+  type ReasoningLevel,
+} from "../validators";
+import {
+  composerTraitFields,
+  hasComposerTraitUpdate,
+  type ComposerTraits,
+} from "../_shared/composerTraits";
 import {
   assertProviderAccountUsableBy,
   reconcileProviderAccountForModel,
 } from "../_userProviderAccounts/defaults";
-import { cancelChatExecution } from "../_sessions/execution";
+import { isSessionArchived } from "../_sessions/archive";
+import { assertStandaloneSession } from "../_sessions/owner";
 import {
   createSessionChat,
   ensureMainChat,
   getSessionChatWithAccess,
   moveLegacyTranscriptPage,
   sessionChatValidator,
+  type SessionChatContext,
 } from "./helpers";
 
 /**
  * Continuation of `ensureMainChat`: moves the next bounded page of a heavy
- * session's legacy transcript onto its Main chat and reschedules itself
- * until none is left.
+ * pre-chat session transcript onto its chat and reschedules itself until
+ * none is left.
  */
 export const moveLegacyTranscript = internalMutation({
-  args: { sessionId: v.id("sessions"), chatId: v.id("sessionChats") },
+  args: {
+    from: v.id("sessions"),
+    chatId: v.id("sessionChats"),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const done = await moveLegacyTranscriptPage(
-      ctx,
-      args.sessionId,
-      args.chatId,
-    );
+    const done = await moveLegacyTranscriptPage(ctx, args.from, args.chatId);
     if (!done) {
       await ctx.scheduler.runAfter(
         0,
@@ -73,9 +84,10 @@ export const create = authMutation({
       args.sessionId,
       ctx.userId,
     );
-    if (session.archived === true) {
+    if (isSessionArchived(session)) {
       throw new Error("This session is archived");
     }
+    assertStandaloneSession(session, "open another chat");
     await ensureMainChat(ctx, session);
     const inheritFrom =
       args.fromChatId !== undefined
@@ -94,44 +106,15 @@ export const rename = authMutation({
   args: { chatId: v.id("sessionChats"), title: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { chat } = await getSessionChatWithAccess(
+    const { chat, session } = await getSessionChatWithAccess(
       ctx.db,
       args.chatId,
       ctx.userId,
     );
+    assertStandaloneSession(session, "rename its chat");
     const title = args.title.trim();
     if (!title) return null;
     await ctx.db.patch(chat._id, { title });
-    return null;
-  },
-});
-
-/**
- * Closes a parallel chat: cancels its turn, kills its daemon and hides its
- * tab. Main cannot be closed — it is the session's own transcript.
- */
-export const archive = authMutation({
-  args: { chatId: v.id("sessionChats") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const context = await getSessionChatWithAccess(
-      ctx.db,
-      args.chatId,
-      ctx.userId,
-    );
-    const { chat, session } = context;
-    if (chat.isMain) throw new Error("The Main chat cannot be closed");
-    if (chat.archived === true) return null;
-    await cancelChatExecution(ctx, context);
-    await ctx.db.patch(chat._id, { archived: true, updatedAt: Date.now() });
-    if (session.sandboxId && session.status === "active") {
-      await ctx.scheduler.runAfter(0, internal.sandbox.killEntityDaemon, {
-        sandboxId: session.sandboxId,
-        repoId: session.repoId,
-        entityIdField: "chatId",
-        entityId: String(chat._id),
-      });
-    }
     return null;
   },
 });
@@ -153,21 +136,34 @@ export const setModel = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { chat, session } = await getSessionChatWithAccess(
+    const context = await getSessionChatWithAccess(
       ctx.db,
       args.chatId,
       ctx.userId,
     );
-    const providerAccountId = await reconcileProviderAccountForModel(
-      ctx.db,
-      session.createdBy ?? session.userId,
-      args.model,
-      chat.providerAccountId,
-    );
-    await ctx.db.patch(chat._id, { lastModel: args.model, providerAccountId });
+    await setSessionChatModel(ctx, context, args.model);
     return null;
   },
 });
+
+/**
+ * The write behind `setModel`, shared with `mobile.setChatModel`: the sticky
+ * model, and the sticky account reconciled to its provider. The caller checks
+ * access.
+ */
+export async function setSessionChatModel(
+  ctx: MutationCtx,
+  { chat, session }: SessionChatContext,
+  model: Infer<typeof aiModelValidator>,
+): Promise<void> {
+  const providerAccountId = await reconcileProviderAccountForModel(
+    ctx.db,
+    session.createdBy ?? session.userId,
+    model,
+    chat.providerAccountId,
+  );
+  await ctx.db.patch(chat._id, { lastModel: model, providerAccountId });
+}
 
 /**
  * Sets the sticky provider account for a chat. Same contract as `setModel`:
@@ -215,31 +211,26 @@ export const setTraits = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const { chatId, ...traits } = args;
     const { chat } = await getSessionChatWithAccess(
       ctx.db,
-      args.chatId,
+      chatId,
       ctx.userId,
     );
-    if (
-      args.reasoningLevel === undefined &&
-      args.thinkingEnabled === undefined &&
-      args.use1mContext === undefined &&
-      args.fastMode === undefined
-    ) {
-      return null;
-    }
-    await ctx.db.patch(chat._id, {
-      ...(args.reasoningLevel !== undefined
-        ? { lastReasoningLevel: args.reasoningLevel }
-        : {}),
-      ...(args.thinkingEnabled !== undefined
-        ? { lastThinkingEnabled: args.thinkingEnabled }
-        : {}),
-      ...(args.use1mContext !== undefined
-        ? { lastUse1mContext: args.use1mContext }
-        : {}),
-      ...(args.fastMode !== undefined ? { lastFastMode: args.fastMode } : {}),
-    });
+    await setSessionChatTraits(ctx, chat._id, traits);
     return null;
   },
 });
+
+/**
+ * The write behind `setTraits`, shared with `mobile.setChatModel`: patches
+ * only the given traits. The caller checks access.
+ */
+export async function setSessionChatTraits(
+  ctx: MutationCtx,
+  chatId: Id<"sessionChats">,
+  traits: ComposerTraits<ReasoningLevel>,
+): Promise<void> {
+  if (!hasComposerTraitUpdate(traits)) return;
+  await ctx.db.patch(chatId, composerTraitFields(traits));
+}

@@ -2,25 +2,19 @@
 
 import type { FunctionReturnType } from "convex/server";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { useAction, useMutation } from "convex/react";
+import { useMutation } from "convex/react";
 import {
   api,
-  buildTraitsExecutionPayload,
   DEFAULT_AI_MODEL,
   normalizeAIModel,
-  resolveTraitsForDisplay,
   type Id,
-  type StoredModelTraits,
 } from "@eva/backend";
-import { patchLoadedQuery } from "@vvedantb/server";
-import { composerTraitFields, storedComposerTraits } from "@eva/shared";
-import { toRunTraitArgs } from "@/lib/utils/runTraits";
-import { openChatTurnOptimistically } from "@/lib/components/chat/useChatTurnOpen";
 import {
   SandboxChatPanel,
   type SandboxChatPanelProps,
 } from "@/lib/components/chat/SandboxChatPanel";
 import type { SandboxChatBinding } from "@/lib/components/chat/sandboxChatBinding";
+import { useOwnedChatBinding } from "@/lib/components/chat/useOwnedChatBinding";
 import {
   buildFirstRunChatTurn,
   findFirstRunChatTurnRun,
@@ -28,10 +22,8 @@ import {
   taskRunStreamingEntityId,
 } from "@/lib/components/tasks/firstRunChatTurn";
 import { useRepo } from "@/lib/contexts/RepoContext";
-import {
-  useAvailableAiModels,
-  useTaskOwnerProviderAccounts,
-} from "@/lib/hooks/useAvailableAiModels";
+import { useTaskOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
+import { useTaskSession } from "./useTaskSession";
 
 type TaskChatTask = FunctionReturnType<typeof api.agentTasks.get> | undefined;
 type TaskChatRun =
@@ -47,90 +39,39 @@ export function TaskSandboxChatPanel({
 }
 
 /**
- * The task side of the sandbox chat. Model, account and traits stay on the
- * task doc (shared with the activity composer); traits are sticky on Convex
- * like sessions. A quick task also brings its first run as the opening turn.
+ * The task side of the sandbox chat. A task chats in a session chat (a quick
+ * task's own session's Main chat, a project task's own chat in its project's
+ * session), whose sticky model, traits and account drive the composer; a
+ * quick task's first run shows as the opening turn.
  */
 export function useTaskChatBinding(
   taskId: Id<"agentTasks">,
 ): SandboxChatBinding {
-  const { repo } = useRepo();
   const task = useQuery(api.agentTasks.get, { id: taskId });
+  const taskSession = useTaskSession(taskId, task);
   const firstRun = useTaskFirstRunChatTurn(taskId, task);
-
-  const addMessage = useMutation(api.agentTaskChatWorkflow.addMessage);
-  const startExecute = useMutation(
-    api.agentTaskChatWorkflow.startExecute,
-  ).withOptimisticUpdate((localStore, args) =>
-    openChatTurnOptimistically(localStore, args.taskId),
-  );
-  const enqueueMessage = useMutation(api.agentTaskChatWorkflow.enqueueMessage);
-  const cancelExecution = useMutation(
-    api.agentTaskChatWorkflow.cancelExecution,
-  );
+  const accounts = useTaskOwnerProviderAccounts(taskId);
+  const common = {
+    firstRun,
+    accounts: accounts.options,
+    resolveAccountId: accounts.resolveId,
+  };
+  const { repo } = useRepo();
   // The first run is its own workflow, not a chat turn, so Stop has to reach
   // the task workflow while it owns the bubble.
   const cancelFirstRun = useMutation(api.taskWorkflow.cancelExecution);
-  const prewarmChatDaemonNow = useAction(
-    api.agentTaskChatWorkflow.prewarmChatDaemonNow,
-  );
-  const updateTask = useMutation(api.agentTasks.update);
-  const setTraits = useMutation(api.agentTasks.setTraits).withOptimisticUpdate(
-    (localStore, args) => {
-      patchLoadedQuery(
-        localStore,
-        api.agentTasks.get,
-        { id: args.id },
-        (cur) => cur && { ...cur, ...composerTraitFields(args) },
-      );
-    },
-  );
-
-  const model = normalizeAIModel(
-    task?.model ?? repo.defaultModel ?? DEFAULT_AI_MODEL,
-  );
-  const storedTraits: StoredModelTraits = storedComposerTraits(task);
-  const { options: modelOptions } = useAvailableAiModels(repo._id, model);
-  const { options: accounts, resolveId: resolveAccountId } =
-    useTaskOwnerProviderAccounts(taskId);
-  const currentUserId = useQuery(api.auth.me);
-  const isOwner =
-    currentUserId !== undefined &&
-    task?.createdBy !== undefined &&
-    currentUserId === task.createdBy;
-
-  return {
-    entity: { kind: "task", taskId },
-    doc: task,
-    model,
-    setModel: (next) => {
-      void updateTask({ id: taskId, model: normalizeAIModel(next) });
-    },
-    modelOptions,
-    displayTraits: resolveTraitsForDisplay(model, storedTraits),
-    executionTraits: buildTraitsExecutionPayload(model, storedTraits),
-    onTraitsChange: (partial) => {
-      void setTraits({ id: taskId, ...toRunTraitArgs(partial) });
-    },
-    providerAccountId: task?.providerAccountId ?? null,
-    accounts,
-    pickerAccounts: accounts,
-    resolveAccountId,
-    isOwner,
-    persistAccount: (providerAccountId) =>
-      updateTask({ id: taskId, providerAccountId }),
-    prewarm: () => prewarmChatDaemonNow({ taskId }),
-    ports: {
-      add: (args) => addMessage({ taskId, ...args }),
-      start: (args) => startExecute({ taskId, ...args }),
-      enqueue: (args) => enqueueMessage({ taskId, ...args }),
-    },
-    cancel: () =>
-      firstRun.isInProgress
-        ? cancelFirstRun({ taskId })
-        : cancelExecution({ taskId }),
-    firstRun,
-  };
+  return useOwnedChatBinding({
+    ownedSession: taskSession,
+    // Before the session exists, the same seed `ensureOwned` gives its chat.
+    seedModel: normalizeAIModel(
+      task?.model ?? repo.defaultModel ?? DEFAULT_AI_MODEL,
+    ),
+    ownerLabel: "task",
+    title: task?.title,
+    common,
+    cancelOther: () =>
+      firstRun.isInProgress ? cancelFirstRun({ taskId }) : undefined,
+  });
 }
 
 // Quick tasks open the chat with the first run rendered as a normal turn:

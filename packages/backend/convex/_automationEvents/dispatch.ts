@@ -16,10 +16,12 @@ import {
 } from "../_automations/systemAutomations";
 import { insertAutomationTask } from "../_automations/findings";
 import {
+  ALERT_DEDUPE_WINDOW_MS,
   ciPassedValidator,
   EVENT_DEBOUNCE_MS,
   repoEventKey,
   repoEventTargetUrl,
+  alertValidator,
   repoEventValidator,
   STALE_EVENT_RUN_MS,
   STALE_WAITING_RUN_MS,
@@ -29,6 +31,8 @@ import {
 import { MAX_CI_FIX_ATTEMPTS } from "./messages";
 import { pickOnePerPreset } from "./select";
 import { isTerminalRunStatus } from "../_automations/runStatus";
+import { findReposByOwnerAndName } from "../_githubRepos/helpers";
+import { chatEntityKindValidator } from "../_validators/enums";
 
 /** Every run an automation made for one PR or issue. */
 async function runsForTarget(
@@ -77,6 +81,11 @@ async function shouldQueue(
   // A run still waiting out its debounce absorbs this webhook. One already
   // claimed (`running`) does not: it may have fetched before this happened.
   if (sameKey.some((run) => run.status === "queued")) return false;
+  // One task per monitor per window, whatever became of the last one.
+  if (event.kind === "production_alert") {
+    const since = Date.now() - ALERT_DEDUPE_WINDOW_MS;
+    return !sameKey.some((run) => run.startedAt >= since);
+  }
   // One task per issue, however often the label comes and goes, and whether
   // or not the run that made it finished cleanly.
   if (event.kind === "issue_labeled") {
@@ -112,12 +121,7 @@ export const dispatch = internalMutation({
   args: { event: repoEventValidator },
   returns: v.null(),
   handler: async (ctx, { event }) => {
-    const repos = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", event.owner).eq("name", event.name),
-      )
-      .collect();
+    const repos = await findReposByOwnerAndName(ctx.db, event);
 
     const matched: Array<{
       automation: Doc<"automations">;
@@ -155,44 +159,108 @@ export const dispatch = internalMutation({
       chat?.repoId,
     );
 
-    const eventKey = repoEventKey(event);
-    const now = Date.now();
     for (const pick of picks) {
       const match = matched.find(
         ({ automation }) => automation._id === pick.automationId,
       );
       if (match === undefined) continue;
-      const { automation } = match;
-      if (!(await shouldQueue(ctx, automation, event, eventKey, chat))) {
-        continue;
-      }
-
-      const runId = await ctx.db.insert("automationRuns", {
-        automationId: automation._id,
-        repoId: automation.repoId,
-        status: "queued",
-        startedAt: now,
-        acknowledged: false,
-        eventKind: event.kind,
-        eventKey,
-        targetUrl: repoEventTargetUrl(event),
-      });
-      const debounce = EVENT_DEBOUNCE_MS[event.kind];
-      await ctx.scheduler.runAfter(
-        debounce,
-        internal._automationEvents.flush.flush,
-        { runId, event },
-      );
-      // Backstop: a flush that dies mid-way must not leave the run queued,
-      // which would block this PR or issue for good.
-      await ctx.scheduler.runAfter(
-        debounce +
-          (pick.action === "run" ? STALE_WAITING_RUN_MS : STALE_EVENT_RUN_MS),
-        internal._automationEvents.dispatch.expireEventRun,
-        { runId },
-      );
+      await queueEventRun(ctx, match.automation, event, chat);
     }
     return null;
+  },
+});
+
+/**
+ * Queues one automation's run for an event, unless dedupe says the event is
+ * already covered. The flush action handles it after the event's debounce.
+ */
+async function queueEventRun(
+  ctx: MutationCtx,
+  automation: Doc<"automations">,
+  event: RepoEvent,
+  chat: PrChat | null,
+): Promise<boolean> {
+  const eventKey = repoEventKey(event);
+  if (!(await shouldQueue(ctx, automation, event, eventKey, chat))) {
+    return false;
+  }
+  const runId = await ctx.db.insert("automationRuns", {
+    automationId: automation._id,
+    repoId: automation.repoId,
+    status: "queued",
+    startedAt: Date.now(),
+    acknowledged: false,
+    eventKind: event.kind,
+    eventKey,
+    targetUrl: repoEventTargetUrl(event),
+  });
+  const debounce = EVENT_DEBOUNCE_MS[event.kind];
+  await ctx.scheduler.runAfter(
+    debounce,
+    internal._automationEvents.flush.flush,
+    { runId, event },
+  );
+  // Backstop: a flush that dies mid-way must not leave the run queued,
+  // which would block this PR, issue or monitor for good.
+  await ctx.scheduler.runAfter(
+    debounce +
+      (automationAction(automation) === "run"
+        ? STALE_WAITING_RUN_MS
+        : STALE_EVENT_RUN_MS),
+    internal._automationEvents.dispatch.expireEventRun,
+    { runId },
+  );
+  return true;
+}
+
+/**
+ * An alert webhook for one automation. Unlike GitHub's, each alert URL names
+ * its automation, so there is no fan-out: the secret is checked against that
+ * row and the alert is queued there. `secretHash` is null when the caller sent
+ * no bearer token; `alert` is null for a monitor resolving.
+ */
+export const receiveAlert = internalMutation({
+  args: {
+    automationId: v.string(),
+    secretHash: v.union(v.string(), v.null()),
+    alert: v.union(alertValidator, v.null()),
+  },
+  returns: v.union(
+    v.literal("queued"),
+    v.literal("deduped"),
+    v.literal("ignored"),
+    v.literal("unauthorized"),
+    v.literal("not_found"),
+  ),
+  handler: async (ctx, { automationId, secretHash, alert }) => {
+    const id = ctx.db.normalizeId("automations", automationId);
+    const stored = id === null ? null : await ctx.db.get(id);
+    if (stored === null || stored.deletedAt !== undefined) return "not_found";
+    const trigger = automationTrigger(stored);
+    if (trigger.kind !== "event" || trigger.event !== "production_alert") {
+      return "not_found";
+    }
+    // Both sides are SHA-256 hex of the secret, so comparing them leaks
+    // nothing a timing attack could use.
+    if (
+      secretHash === null ||
+      stored.alertSecretHash === undefined ||
+      stored.alertSecretHash !== secretHash
+    ) {
+      return "unauthorized";
+    }
+    // A switched-off automation still answers, so Axiom's test send passes;
+    // it simply does nothing.
+    if (alert === null || !stored.enabled) return "ignored";
+    const repo = await ctx.db.get(stored.repoId);
+    if (repo === null) return "not_found";
+    const queued = await queueEventRun(
+      ctx,
+      stored,
+      { ...alert, owner: repo.owner, name: repo.name },
+      null,
+    );
+    return queued ? "queued" : "deduped";
   },
 });
 
@@ -262,7 +330,7 @@ export const settleEventRun = internalMutation({
 });
 
 const prChatValidator = v.object({
-  kind: v.union(v.literal("session"), v.literal("task"), v.literal("project")),
+  kind: chatEntityKindValidator,
   id: v.string(),
   numId: v.optional(v.number()),
 });
@@ -349,11 +417,12 @@ export const getFlushContext = internalQuery({
 });
 
 /**
- * Creates the quick task for a labelled issue and starts it, acting as the
- * automation's owner. The task id is stored first, so nothing that fails
- * afterwards can lead to a second task. Null when the run is not claimed.
+ * Creates the quick task for an event (a labelled issue, an alert), acting as
+ * the automation's owner, and starts it unless the install turned that off.
+ * The task id is stored first, so nothing that fails afterwards can lead to a
+ * second task. Null when the run is not claimed.
  */
-export const createTaskFromIssue = internalMutation({
+export const createTaskForEvent = internalMutation({
   args: {
     runId: v.id("automationRuns"),
     title: v.string(),
@@ -380,10 +449,12 @@ export const createTaskFromIssue = internalMutation({
       description: args.description,
     });
     await ctx.db.patch(args.runId, { createdTaskId: taskId });
-    await ctx.scheduler.runAfter(0, internal.automations.autoStartTask, {
-      taskId,
-      userId: automation.createdBy,
-    });
+    if (automation.autoStartTasks !== false) {
+      await ctx.scheduler.runAfter(0, internal.automations.autoStartTask, {
+        taskId,
+        userId: automation.createdBy,
+      });
+    }
     return { taskId, numId };
   },
 });
@@ -397,12 +468,7 @@ export const noteCiPassed = internalMutation({
   args: { passed: ciPassedValidator },
   returns: v.null(),
   handler: async (ctx, { passed }) => {
-    const repos = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", passed.owner).eq("name", passed.name),
-      )
-      .collect();
+    const repos = await findReposByOwnerAndName(ctx.db, passed);
     const automationIds: Array<Id<"automations">> = [];
     let installationId: number | null = null;
     for (const repo of repos) {

@@ -7,27 +7,24 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { authMutation, authQuery, hasActiveRun } from "./functions";
+import { authMutation, authQuery, requireAppAdmin } from "./functions";
 import {
   gatherAccessibleRepos,
-  repoBasePath,
   repoDisplayLabel,
 } from "./_githubRepos/helpers";
 import { filterActiveEntities } from "./numId";
 import { resolveUserDisplayFirstName } from "./_userProviderAccounts/defaults";
-import { sandboxPresenceRoomId } from "@eva/shared";
+import { entityHref, sandboxPresenceRoomId } from "@eva/shared";
 import { firstPresentUserInRoom } from "./presence";
 import {
   openChatEntityIdsFor,
-  projectIsExecuting,
   sessionIsExecuting,
-  taskIsExecuting,
 } from "./_chat/turnProjection";
 import { listLiveSessionChats } from "./_sessionChats/helpers";
 import { requestSessionSandboxStop } from "./_sessions/sandbox";
-import { requestTaskSandboxStop } from "./_agentTasks/sandbox";
-import { requestProjectSandboxStop } from "./_projects/sandbox";
 import { usageLimitHoldFor } from "./_queues/helpers";
+import { ownerHoldsSession } from "./_sessions/ownerState";
+import { sessionOwner } from "./_sessions/owner";
 import {
   getSandboxActivity,
   sandboxActivityRefArgs,
@@ -40,8 +37,8 @@ import {
   resolveIdleThresholds,
   type IdleThresholds,
 } from "./_sandbox/idlePolicy";
+import { chatEntityKindValidator } from "./_validators/enums";
 import {
-  sandboxActivityKindValidator,
   sandboxActivitySourceValidator,
   sandboxIdlePauseModeValidator,
 } from "./_validators/tableFields";
@@ -80,11 +77,12 @@ export const getSandboxIdlePauseSettings = authQuery({
   },
 });
 
-/** Settings-page write. Upserts the single `appSettings` row. */
+/** Settings-page write. Upserts the single `appSettings` row. App admins only. */
 export const setSandboxIdlePauseSettings = authMutation({
   args: settingsShape,
   returns: v.null(),
   handler: async (ctx, args) => {
+    await requireAppAdmin(ctx.db, ctx.userId);
     if (
       !Number.isFinite(args.afterAgentMinutes) ||
       !Number.isFinite(args.afterInteractionMinutes) ||
@@ -121,7 +119,7 @@ export const setSandboxIdlePauseSettings = authMutation({
 const AWAKE_PER_REPO_LIMIT = 64;
 
 const awakeSandboxValidator = v.object({
-  kind: sandboxActivityKindValidator,
+  kind: chatEntityKindValidator,
   entityId: v.string(),
   title: v.string(),
   repoLabel: v.string(),
@@ -162,15 +160,18 @@ export const listAwakeSandboxes = authQuery({
           entities.map(async (entity) => {
             const candidate = await inspectEntity(ctx, entity);
             if (!candidate) return null;
+            // A task's or project's session shows as its owner: that is the
+            // page the user opens (the session itself is hidden).
+            const shown = await shownSandboxOwner(ctx, entity.doc);
             return {
-              kind: entity.kind,
+              kind: shown.kind,
               entityId: String(entity.doc._id),
-              title: entity.doc.title,
+              title: shown.title,
               repoLabel: repoDisplayLabel(repo),
               href:
-                entity.doc.numId === undefined
+                shown.numId === undefined
                   ? undefined
-                  : `${repoBasePath(repo)}/${ENTITY_SECTION[entity.kind]}/${entity.doc.numId}`,
+                  : entityHref(shown.kind, repo, shown.numId),
               busy: candidate.busy,
               viewerName: await displayName(ctx, candidate.presentUserId),
               lastUserActivityAt: candidate.lastUserActivityAt,
@@ -199,62 +200,50 @@ export const listAwakeSandboxes = authQuery({
   },
 });
 
-const ENTITY_SECTION: Record<AwakeEntity["kind"], string> = {
-  session: "sessions",
-  task: "quick-tasks",
-  project: "projects",
-};
+type AwakeEntity = { kind: "session"; doc: Doc<"sessions"> };
 
-type AwakeEntity =
-  | { kind: "session"; doc: Doc<"sessions"> }
-  | { kind: "task"; doc: Doc<"agentTasks"> }
-  | { kind: "project"; doc: Doc<"projects"> };
-
-/** Awake (status `active`, sandbox attached, not deleted) entities in one repo. */
+/** Awake (status `active`, sandbox attached, not deleted) sessions in one repo. */
 async function awakeEntitiesInRepo(
   ctx: QueryCtx,
   repoId: Id<"githubRepos">,
 ): Promise<AwakeEntity[]> {
-  const [sessions, tasks, projects] = await Promise.all([
-    ctx.db
-      .query("sessions")
-      .withIndex("by_repo_and_status", (q) =>
-        q.eq("repoId", repoId).eq("status", "active"),
-      )
-      .take(AWAKE_PER_REPO_LIMIT),
-    ctx.db
-      .query("agentTasks")
-      .withIndex("by_repo_and_sandbox_status", (q) =>
-        q.eq("repoId", repoId).eq("reviewTaskSandboxStatus", "active"),
-      )
-      .take(AWAKE_PER_REPO_LIMIT),
-    ctx.db
-      .query("projects")
-      .withIndex("by_repo_and_sandbox_status", (q) =>
-        q.eq("repoId", repoId).eq("reviewProjectSandboxStatus", "active"),
-      )
-      .take(AWAKE_PER_REPO_LIMIT),
-  ]);
-  return [
-    ...filterActiveEntities(sessions)
-      .filter((doc) => doc.sandboxId)
-      .map((doc) => ({ kind: "session" as const, doc })),
-    ...filterActiveEntities(tasks)
-      .filter((doc) => doc.sandboxId)
-      .map((doc) => ({ kind: "task" as const, doc })),
-    ...filterActiveEntities(projects)
-      .filter((doc) => doc.sandboxId)
-      .map((doc) => ({ kind: "project" as const, doc })),
-  ];
+  const sessions = await ctx.db
+    .query("sessions")
+    .withIndex("by_repo_and_status", (q) =>
+      q.eq("repoId", repoId).eq("status", "active"),
+    )
+    .take(AWAKE_PER_REPO_LIMIT);
+  return filterActiveEntities(sessions)
+    .filter((doc) => doc.sandboxId)
+    .map((doc) => ({ kind: "session" as const, doc }));
+}
+
+/** What the status page shows for a session: its owner when it has one. */
+async function shownSandboxOwner(
+  ctx: QueryCtx,
+  session: Doc<"sessions">,
+): Promise<{
+  kind: "session" | "task" | "project";
+  title: string;
+  numId: number | undefined;
+}> {
+  const owner = sessionOwner(session);
+  const doc =
+    owner.kind === "task"
+      ? await ctx.db.get(owner.taskId)
+      : owner.kind === "project"
+        ? await ctx.db.get(owner.projectId)
+        : null;
+  return doc && owner.kind !== "standalone"
+    ? { kind: owner.kind, title: doc.title, numId: doc.numId }
+    : { kind: "session", title: session.title, numId: session.numId };
 }
 
 async function inspectEntity(
   ctx: QueryCtx,
   entity: AwakeEntity,
 ): Promise<Candidate | null> {
-  if (entity.kind === "session") return await inspectSession(ctx, entity.doc._id);
-  if (entity.kind === "task") return await inspectTask(ctx, entity.doc._id);
-  return await inspectProject(ctx, entity.doc._id);
+  return await inspectSession(ctx, entity.doc._id);
 }
 
 async function displayName(
@@ -314,10 +303,7 @@ async function hasPendingWork(ctx: QueryCtx, entityId: string): Promise<boolean>
     .first();
   if (streaming && isStreamingRowFresh(streaming, Date.now())) return true;
   // A session chat's turn streams under the chat id and queues on it too.
-  const chatId = ctx.db.normalizeId("sessionChats", entityId);
-  const taskId = ctx.db.normalizeId("agentTasks", entityId);
-  const projectId = ctx.db.normalizeId("projects", entityId);
-  const parentId = chatId ?? taskId ?? projectId;
+  const parentId = ctx.db.normalizeId("sessionChats", entityId);
   if (!parentId) return false;
   const queued = await ctx.db
     .query("queuedMessages")
@@ -359,6 +345,9 @@ async function inspectSession(
       await openChatEntityIdsFor(ctx.db, sessionId),
     ) ||
     chatBusy ||
+    // A project's build or interview holds its session's VM between turns
+    // (`ownerHoldsSession`), e.g. between two build tasks: not idle.
+    (await ownerHoldsSession(ctx.db, session)) ||
     // Streaming rows keyed by the session itself: a session that predates
     // chats and has not been opened (so has no Main chat row) yet.
     (await hasPendingWork(ctx, String(sessionId)));
@@ -369,47 +358,6 @@ async function inspectSession(
     busy,
     [session.updatedAt],
     session._creationTime,
-  );
-}
-
-async function inspectTask(
-  ctx: QueryCtx,
-  taskId: Id<"agentTasks">,
-): Promise<Candidate | null> {
-  const task = await ctx.db.get(taskId);
-  if (!task) return null;
-  const busy =
-    (await hasActiveRun(ctx.db, taskId)) ||
-    taskIsExecuting(task, await openChatEntityIdsFor(ctx.db, taskId)) ||
-    (await hasPendingWork(ctx, String(taskId)));
-  return await finishCandidate(
-    ctx,
-    { kind: "task", entityId: String(taskId) },
-    task.reviewTaskSandboxStatus,
-    busy,
-    [task.updatedAt],
-    task._creationTime,
-  );
-}
-
-async function inspectProject(
-  ctx: QueryCtx,
-  projectId: Id<"projects">,
-): Promise<Candidate | null> {
-  const project = await ctx.db.get(projectId);
-  if (!project) return null;
-  const busy =
-    projectIsExecuting(
-      project,
-      await openChatEntityIdsFor(ctx.db, projectId),
-    ) || (await hasPendingWork(ctx, String(projectId)));
-  return await finishCandidate(
-    ctx,
-    { kind: "project", entityId: String(projectId) },
-    project.reviewProjectSandboxStatus,
-    busy,
-    [project.lastSandboxActivity],
-    project._creationTime,
   );
 }
 
@@ -447,23 +395,15 @@ export const inspectCandidate = internalQuery({
   args: sandboxActivityRefArgs,
   returns: v.union(candidateValidator, v.null()),
   handler: async (ctx, args) => {
-    if (args.kind === "session") {
-      const id = ctx.db.normalizeId("sessions", args.entityId);
-      return id ? await inspectSession(ctx, id) : null;
-    }
-    if (args.kind === "task") {
-      const id = ctx.db.normalizeId("agentTasks", args.entityId);
-      return id ? await inspectTask(ctx, id) : null;
-    }
-    const id = ctx.db.normalizeId("projects", args.entityId);
-    return id ? await inspectProject(ctx, id) : null;
+    const id = ctx.db.normalizeId("sessions", args.entityId);
+    return id ? await inspectSession(ctx, id) : null;
   },
 });
 
 /**
  * What Eva wants for one Vercel sandbox, judged from every entity that points
  * at it:
- *   - `unknown`  — no session, quick task or project owns it (another
+ *   - `unknown`  — no session owns it (another
  *                  deployment, seed prep, arena): never touch it.
  *   - `wanted`   — an owner is active/starting, busy, or has a tab open.
  *   - `stopping` — an owner is mid-stop and nothing wants the VM.
@@ -490,34 +430,14 @@ async function resolveSandboxOwnerState(
   | { state: "unknown" }
   | { state: Exclude<SandboxOwnerState, "unknown">; repoId: Id<"githubRepos"> }
 > {
-  const [sessions, tasks, projects] = await Promise.all([
-    ctx.db
-      .query("sessions")
-      .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
-      .collect(),
-    ctx.db
-      .query("agentTasks")
-      .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
-      .collect(),
-    ctx.db
-      .query("projects")
-      .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
-      .collect(),
-  ]);
-  const owners = [
-    ...sessions.map((doc) => ({
-      repoId: doc.repoId,
-      inspect: () => inspectSession(ctx, doc._id),
-    })),
-    ...tasks.map((doc) => ({
-      repoId: doc.repoId,
-      inspect: () => inspectTask(ctx, doc._id),
-    })),
-    ...projects.map((doc) => ({
-      repoId: doc.repoId,
-      inspect: () => inspectProject(ctx, doc._id),
-    })),
-  ];
+  const sessions = await ctx.db
+    .query("sessions")
+    .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
+    .collect();
+  const owners = sessions.map((doc) => ({
+    repoId: doc.repoId,
+    inspect: () => inspectSession(ctx, doc._id),
+  }));
   // The repo resolves the Vercel credentials a stop needs.
   const repoId = owners.find((owner) => owner.repoId)?.repoId;
   if (!repoId) return { state: "unknown" };
@@ -573,30 +493,12 @@ export const pause = internalMutation({
   returns: v.boolean(),
   handler: async (ctx, args) => {
     const stopReason = { kind: "idle" as const, idleMinutes: args.idleMinutes };
-    if (args.kind === "session") {
-      const id = ctx.db.normalizeId("sessions", args.entityId);
-      const candidate = id ? await inspectSession(ctx, id) : null;
-      if (!id || !candidate || candidate.status !== "active" || candidate.busy) {
-        return false;
-      }
-      await requestSessionSandboxStop(ctx, id, { stopReason });
-      return true;
-    }
-    if (args.kind === "task") {
-      const id = ctx.db.normalizeId("agentTasks", args.entityId);
-      const candidate = id ? await inspectTask(ctx, id) : null;
-      if (!id || !candidate || candidate.status !== "active" || candidate.busy) {
-        return false;
-      }
-      await requestTaskSandboxStop(ctx, id, { stopReason });
-      return true;
-    }
-    const id = ctx.db.normalizeId("projects", args.entityId);
-    const candidate = id ? await inspectProject(ctx, id) : null;
+    const id = ctx.db.normalizeId("sessions", args.entityId);
+    const candidate = id ? await inspectSession(ctx, id) : null;
     if (!id || !candidate || candidate.status !== "active" || candidate.busy) {
       return false;
     }
-    await requestProjectSandboxStop(ctx, id, { stopReason });
+    await requestSessionSandboxStop(ctx, id, { stopReason });
     return true;
   },
 });
@@ -619,20 +521,10 @@ export const run = internalAction({
       internal.sandboxAutoStop.listActiveSandboxes,
       {},
     );
-    const refs: SandboxActivityRef[] = [
-      ...active.sessionIds.map((id) => ({
-        kind: "session" as const,
-        entityId: String(id),
-      })),
-      ...active.taskIds.map((id) => ({
-        kind: "task" as const,
-        entityId: String(id),
-      })),
-      ...active.projectIds.map((id) => ({
-        kind: "project" as const,
-        entityId: String(id),
-      })),
-    ];
+    const refs: SandboxActivityRef[] = active.sessionIds.map((id) => ({
+      kind: "session" as const,
+      entityId: String(id),
+    }));
 
     const now = Date.now();
     let busy = 0;

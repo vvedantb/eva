@@ -1,4 +1,8 @@
-import { normalizeAIModel, type AIModel } from "../validators";
+import {
+  normalizeAIModel,
+  type AIModel,
+  type ChatEntityKind,
+} from "../validators";
 
 /**
  * How an orchestrator-sent message must reach a child agent.
@@ -29,17 +33,12 @@ export function resolveAgentDelivery(input: {
 }
 
 /**
- * How a preview sandbox should be brought up before it is used.
+ * How a session's sandbox should be brought up before it is used.
  *
- * A completed entity tears its preview sandbox down (`closed`). Resuming that
- * id in-place hangs on "Resuming sandbox…"; the Start-button path
- * (`startTaskSandbox` → `startTaskPreviewSandbox`, and its session/project
- * twins) is the one that actually comes back. `starting`/`stopping` are
- * in-flight — wait, don't kick off a second start.
- *
- * All three surfaces share the same status vocabulary, so one decision covers
- * them: a session's `status`, a task's `reviewTaskSandboxStatus` and a
- * project's `reviewProjectSandboxStatus`.
+ * A retired session tears its sandbox down (`closed`). Resuming that id
+ * in-place hangs on "Resuming sandbox…"; the Start-button path
+ * (`sessions.startSandbox`) is the one that actually comes back.
+ * `starting`/`stopping` are in-flight — wait, don't kick off a second start.
  */
 export type SandboxStartPlan = "run" | "start" | "wait";
 
@@ -120,12 +119,11 @@ export async function awaitSandboxActive(
 export const SANDBOX_STOP_SETTLE_TIMEOUT_MS = 120_000;
 
 /**
- * The three chat surfaces a message can be sent into: a session, a quick
- * task's sandbox chat, or a project's sandbox chat. Each is a separate
- * workflow slot, so "busy" means something different on each (see
+ * What an MCP caller can name: a session, a quick task or a project. A task
+ * or project is delivered to the chat it talks in on its session (see
  * `orchestratorSendMessage`).
  */
-export type ChatTargetKind = "session" | "task" | "project";
+export type ChatTargetKind = ChatEntityKind;
 
 /** One mutation to run as the sending user, by Convex function path. */
 export interface SessionMessageCall {
@@ -133,79 +131,12 @@ export interface SessionMessageCall {
   args: Record<string, string | boolean>;
 }
 
-interface ChatSurfaceMutations {
-  /** Argument name the surface's mutations use for its entity id. */
-  idArg: string;
-  addMessage: string;
-  startExecute: string;
-  enqueueMessage: string;
-  /**
-   * Whether the surface's mutations declare `sentViaOrchestrator`. Convex
-   * rejects an argument no validator declares, so the flag can only be passed
-   * where it exists — project chat has no orchestrator badge because the
-   * master session cannot drive a project.
-   */
-  orchestratorBadge: boolean;
-}
-
-const CHAT_SURFACES: Record<ChatTargetKind, ChatSurfaceMutations> = {
-  session: {
-    // A session message lands in one of its chats, so the id handed to these
-    // mutations is the chat id resolved by `sessionChats:resolveDeliveryChat`.
-    idArg: "chatId",
-    addMessage: "_sessions/mutations:addMessage",
-    startExecute: "_sessions/execution:startExecute",
-    enqueueMessage: "_sessions/execution:enqueueMessage",
-    orchestratorBadge: true,
-  },
-  task: {
-    idArg: "taskId",
-    addMessage: "agentTaskChatWorkflow:addMessage",
-    startExecute: "agentTaskChatWorkflow:startExecute",
-    enqueueMessage: "agentTaskChatWorkflow:enqueueMessage",
-    orchestratorBadge: true,
-  },
-  project: {
-    idArg: "projectId",
-    addMessage: "projectChatWorkflow:addMessage",
-    startExecute: "projectChatWorkflow:startExecute",
-    enqueueMessage: "projectChatWorkflow:enqueueMessage",
-    orchestratorBadge: false,
-  },
+/** A session chat's send mutations; every MCP send lands in one. */
+const SESSION_CHAT_MUTATIONS = {
+  addMessage: "_sessions/mutations:addMessage",
+  startExecute: "_sessions/execution:startExecute",
+  enqueueMessage: "_sessions/execution:enqueueMessage",
 };
-
-interface SandboxSurfaceMutations {
-  /** Argument name the surface's sandbox mutations use for its entity id. */
-  idArg: string;
-  /** The exact mutation behind the surface's Start button in the Eva UI. */
-  start: string;
-  /** …and behind its Stop button. */
-  stop: string;
-}
-
-/**
- * Start/Stop for each surface's preview sandbox, as the web app calls them.
- * Sessions carry their sandbox state in `status` itself; task and project
- * preview sandboxes have their own `review*SandboxStatus` field.
- */
-export const SANDBOX_SURFACES: Record<ChatTargetKind, SandboxSurfaceMutations> =
-  {
-    session: {
-      idArg: "sessionId",
-      start: "sessions:startSandbox",
-      stop: "sessions:stopSandbox",
-    },
-    task: {
-      idArg: "taskId",
-      start: "agentTasks:startTaskSandbox",
-      stop: "agentTasks:stopTaskSandbox",
-    },
-    project: {
-      idArg: "projectId",
-      start: "projects:startProjectSandbox",
-      stop: "projects:stopProjectSandbox",
-    },
-  };
 
 /**
  * The mutations that put one message into an existing chat, in order. Shared
@@ -219,47 +150,38 @@ export const SANDBOX_SURFACES: Record<ChatTargetKind, SandboxSurfaceMutations> =
  * itself on dequeue.
  */
 export function buildChatMessageCalls(input: {
-  kind: ChatTargetKind;
-  id: string;
+  /** The session chat the message lands in. */
+  chatId: string;
   message: string;
   delivery: AgentDelivery;
   /** Stamps the "via MCP" chat badge. True for every MCP send. */
   sentViaOrchestrator: boolean;
 }): SessionMessageCall[] {
-  const { kind, id, message, delivery, sentViaOrchestrator } = input;
-  const surface = CHAT_SURFACES[kind];
-  const badge: Record<string, boolean> = surface.orchestratorBadge
-    ? { sentViaOrchestrator }
-    : {};
+  const { chatId, message, delivery, sentViaOrchestrator } = input;
 
   if (delivery.action === "queue") {
     return [
       {
-        fn: surface.enqueueMessage,
-        args: {
-          [surface.idArg]: id,
-          message,
-          model: delivery.model,
-          ...badge,
-        },
+        fn: SESSION_CHAT_MUTATIONS.enqueueMessage,
+        args: { chatId, message, model: delivery.model, sentViaOrchestrator },
       },
     ];
   }
 
   return [
     {
-      fn: surface.addMessage,
+      fn: SESSION_CHAT_MUTATIONS.addMessage,
       args: {
-        [surface.idArg]: id,
+        chatId,
         role: "user",
         content: message,
         model: delivery.model,
-        ...badge,
+        sentViaOrchestrator,
       },
     },
     {
-      fn: surface.startExecute,
-      args: { [surface.idArg]: id, message, model: delivery.model },
+      fn: SESSION_CHAT_MUTATIONS.startExecute,
+      args: { chatId, message, model: delivery.model },
     },
   ];
 }

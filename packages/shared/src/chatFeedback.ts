@@ -7,27 +7,27 @@ export type ChatFeedbackRow = FunctionReturnType<
 export type FeedbackSentiment = ChatFeedbackRow["sentiment"];
 
 /**
- * One chat's feedback, keyed by the turn it is about: the viewer's own thumbs
- * (one per turn) and the agent's reports (shown as cards under the turn).
+ * One chat's feedback: the viewer's own thumbs, keyed by the turn they rate
+ * (one per turn), and the agent's reports, which the transcript places as
+ * cards like its other inline cards.
  */
 export function groupChatFeedback(
   rows: readonly ChatFeedbackRow[],
   viewerId: Id<"users"> | undefined,
 ): {
   mineByMessageId: Map<string, ChatFeedbackRow>;
-  agentByMessageId: Map<string, ChatFeedbackRow[]>;
+  agentReports: ChatFeedbackRow[];
 } {
   const mineByMessageId = new Map<string, ChatFeedbackRow>();
-  const agentByMessageId = new Map<string, ChatFeedbackRow[]>();
+  const agentReports: ChatFeedbackRow[] = [];
   for (const row of rows) {
-    if (!row.messageId) continue;
-    if (row.author === "user") {
-      if (row.userId === viewerId) mineByMessageId.set(row.messageId, row);
+    if (row.author !== "user") {
+      agentReports.push(row);
       continue;
     }
-    const existing = agentByMessageId.get(row.messageId);
-    if (existing) existing.push(row);
-    else agentByMessageId.set(row.messageId, [row]);
+    if (row.messageId && row.userId === viewerId) {
+      mineByMessageId.set(row.messageId, row);
+    }
   }
-  return { mineByMessageId, agentByMessageId };
+  return { mineByMessageId, agentReports };
 }

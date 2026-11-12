@@ -1,21 +1,8 @@
 "use client";
 
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  ConfirmSkipHint,
-  skipConfirmTitle,
-  CopyLinkMenuItem,
-} from "@vvedantb/ui";
-import { IconDots, IconEye, IconSparkles } from "@tabler/icons-react";
 import type { Doc, Id } from "@eva/backend";
 import { EntityContextUsage } from "@/lib/components/context-usage";
 import { UsageLimitsIndicator } from "@/lib/components/usage-limits";
-import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
 import { SandboxCommitPushButton } from "@/lib/components/sandbox/SandboxCommitPushButton";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import {
@@ -25,18 +12,17 @@ import {
 import { SessionSwitcher } from "./SessionSwitcher";
 import { SessionGroupBadge } from "./SessionGroupBadge";
 import { SessionRepoBadges } from "./SessionRepoBadges";
+import { SessionHeaderMenu } from "./SessionHeaderMenu";
 import { canSendSessionForReview } from "../_utils/sessionReadOnly";
 import { PrMergeConfetti } from "@/lib/components/celebration/PrMergeConfetti";
 
 interface SessionChatHeaderArgs {
   repoId: Id<"githubRepos">;
-  sessionId: Id<"sessions">;
+  session: Doc<"sessions">;
   /** The chat tab shown — context usage is per chat, like its transcript. */
   chatId: Id<"sessionChats">;
-  title: string;
-  branchName?: string;
-  prUrl?: string;
-  prState?: "draft" | "open" | "merged" | "closed";
+  /** Any chat of the session holds a turn — blocks Fork session. */
+  isAnyChatExecuting: boolean;
   hasSummary: boolean;
   messageCount: number;
   isSandboxActive: boolean;
@@ -45,12 +31,6 @@ interface SessionChatHeaderArgs {
   sandboxGitSync: Doc<"sessions">["sandboxGitSync"];
   /** True while the assistant holds the turn — hides the sleep button. */
   isAssistantResponding: boolean;
-  deploymentStatus?: "queued" | "building" | "deployed" | "error";
-  /**
-   * Hides Send for Review — git/PR plumbing simple view does not surface. The
-   * PR links hide themselves (see `usePrLinkMenuItems`).
-   */
-  simpleView: boolean;
   /** Active model + sticky credential — only the chip bar cares. */
   model: string | null | undefined;
   providerAccountId: Id<"userProviderAccounts"> | null | undefined;
@@ -63,24 +43,19 @@ interface SessionChatHeaderArgs {
 /**
  * Builds the session chat header slots. Named `use*` because ChatPanel invokes
  * it during render: a PascalCase helper would look pure to React Compiler,
- * which then skips the call on a cache hit and drops `usePrLinkMenuItems`.
+ * which then skips the call on a cache hit and drops `useSessionSandboxError`.
  */
 export function useSessionChatHeader({
   repoId,
-  sessionId,
+  session,
   chatId,
-  title,
-  branchName,
-  prUrl,
-  prState,
+  isAnyChatExecuting,
   hasSummary,
   messageCount,
   isSandboxActive,
   isSandboxToggling,
   sandboxGitSync,
   isAssistantResponding,
-  deploymentStatus,
-  simpleView,
   model,
   providerAccountId,
   usageAccountLabel,
@@ -88,22 +63,18 @@ export function useSessionChatHeader({
   onOpenSummaryModal,
   onOpenReviewModal,
 }: SessionChatHeaderArgs) {
-  const showSendForReview =
-    !simpleView && canSendSessionForReview({ branchName, prState });
+  const sessionId = session._id;
+  // Same gate as the sidebar row: an archived session is read-only.
+  const canSendForReview =
+    session.archive === undefined && canSendSessionForReview(session);
   // A start that failed leaves the session `closed`, which the header would
   // otherwise render as an ordinary sleeping sandbox. The hook reads the row
   // itself because nothing upstream hands this header the failure.
   const sandboxError = useSessionSandboxError(sessionId);
-  const prLinks = usePrLinkMenuItems({
-    prUrl,
-    prState,
-    owner: { kind: "session", sessionId },
-    hasDeployment: Boolean(deploymentStatus),
-  });
 
   const headerLeft = (
     <>
-      <SessionSwitcher sessionId={sessionId} title={title} />
+      <SessionSwitcher sessionId={sessionId} title={session.title} />
       <SessionRepoBadges sessionId={sessionId} />
       <SessionGroupBadge sessionId={sessionId} />
     </>
@@ -137,40 +108,14 @@ export function useSessionChatHeader({
         isAssistantResponding={isAssistantResponding}
         hasStartError={sandboxError !== undefined}
       />
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button size="icon-sm" variant="secondary" aria-label="More">
-            <IconDots size={14} />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem
-            onClick={onOpenSummaryModal}
-            disabled={!isSandboxActive || messageCount === 0}
-            title={skipConfirmTitle(
-              hasSummary ? "Regenerate Summary" : "Summarise Session",
-            )}
-          >
-            <IconSparkles size={14} />
-            {hasSummary ? "Regenerate Summary" : "Summarise Session"}
-            <ConfirmSkipHint />
-          </DropdownMenuItem>
-          {(showSendForReview || prLinks.hasItems) && <DropdownMenuSeparator />}
-          {showSendForReview && (
-            <DropdownMenuItem
-              onClick={onOpenReviewModal}
-              title={skipConfirmTitle("Send for Review")}
-            >
-              <IconEye size={14} className="text-status-code-review" />
-              Send for Review
-              <ConfirmSkipHint />
-            </DropdownMenuItem>
-          )}
-          {prLinks.items}
-          <DropdownMenuSeparator />
-          <CopyLinkMenuItem />
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <SessionHeaderMenu
+        session={session}
+        isExecuting={isAnyChatExecuting}
+        hasSummary={hasSummary}
+        canSummarise={isSandboxActive && messageCount > 0}
+        onOpenSummaryModal={onOpenSummaryModal}
+        onOpenReviewModal={canSendForReview ? onOpenReviewModal : undefined}
+      />
     </>
   );
 

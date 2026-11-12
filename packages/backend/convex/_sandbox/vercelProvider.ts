@@ -29,6 +29,7 @@
 import { Drive, Sandbox } from "@vercel/sandbox";
 import type { SandboxMounts, SandboxRegion } from "@vercel/sandbox";
 import { z } from "zod";
+import { DEFAULT_PREVIEW_PORT, DESKTOP_PORT, EDITOR_PORT } from "@eva/shared";
 import { SandboxProviderError } from "./provider";
 import type {
   CreateSnapshotParams,
@@ -52,13 +53,14 @@ import {
 import { driveCacheSetupScript, driveCacheTeardownScript } from "./driveCache";
 import { FFMPEG_INSTALL_SCRIPT } from "./ffmpegInstall";
 import { snapshotPruneScript } from "./snapshotPrune";
-import { EVA_ENV_FILE } from "./vercelEnvFile";
+import { EVA_ENV_SOURCE_CMD } from "./vercelEnvFile";
 import { SANDBOX_REGION, sandboxPlacement } from "./vercelRegion";
 import {
   CHROME_RUNTIME_LIBRARY_PACKAGES,
   PACKAGE_HELPER_SCRIPT,
   pkgInstall,
 } from "../_sandbox_runtime/packageManager";
+import { errorMessage } from "@vvedantb/server";
 
 export {
   EVA_ENV_FILE,
@@ -93,7 +95,7 @@ const DEFAULT_VCPUS = Number(process.env.SANDBOX_VERCEL_VCPUS ?? "8");
 const VERCEL_SANDBOX_IMAGE = "vercel/sandbox/universal:latest";
 
 /** Prefix that sources the eva env file (if present) before a command. */
-const SOURCE_ENV = `[ -f ${EVA_ENV_FILE} ] && . ${EVA_ENV_FILE};`;
+const SOURCE_ENV = `${EVA_ENV_SOURCE_CMD};`;
 /** Vercel exposes at most 4 ports; default assumes Next on 3000 + Supabase API. */
 const MAX_PORTS = 4;
 const STOP_CONFIRMATION_TIMEOUT_MS = 180_000;
@@ -105,7 +107,10 @@ const STOP_CONFIRMATION_POLL_MS = 1_000;
  */
 const SNAPSHOT_REQUEST_TIMEOUT_MS = 120_000;
 export const VERCEL_DEFAULT_EXPOSED_PORTS: ReadonlyArray<number> = [
-  3000, 8080, 6080, 54321,
+  DEFAULT_PREVIEW_PORT,
+  EDITOR_PORT,
+  DESKTOP_PORT,
+  54321,
 ];
 /**
  * Provisioned ceiling per cache Drive, not an allocation: Vercel bills stored
@@ -165,7 +170,7 @@ function extractApiErrorDetail(e: unknown): string {
   try {
     return JSON.stringify(e, Object.getOwnPropertyNames(e)).slice(0, 1000);
   } catch {
-    return e instanceof Error ? e.message : String(e);
+    return errorMessage(e);
   }
 }
 
@@ -206,14 +211,23 @@ function providerError(message: string, e: unknown): SandboxProviderError {
   });
 }
 
-/** True when the Vercel command NDJSON stream died while the VM is still up. */
-function isVercelCommandStreamClosed(detail: string): boolean {
+/**
+ * True when an exec failed in transit, not in the sandbox: the command NDJSON
+ * stream died while the VM is still up, or undici dropped the HTTP connection
+ * to the Vercel API ("fetch failed", socket reset). A retry can run the
+ * command twice; that is the same trade-off the stream-closed retry accepts.
+ */
+function isRetryableExecFailure(detail: string): boolean {
   const lower = detail.toLowerCase();
   return (
     lower.includes("stream was closed") ||
     lower.includes("not accepting commands") ||
     lower.includes("stream_ended_early") ||
-    lower.includes("stream ended before")
+    lower.includes("stream ended before") ||
+    lower.includes("fetch failed") ||
+    lower.includes("und_err_socket") ||
+    lower.includes("econnreset") ||
+    lower.includes("socket hang up")
   );
 }
 
@@ -222,7 +236,7 @@ class VercelGit implements SandboxGit {
   constructor(private readonly handle: VercelSandboxHandle) {}
 
   private async sh(cmd: string): Promise<string> {
-    // Goes through handle.exec so stream-closed refresh+retry applies.
+    // Goes through handle.exec so its transit-failure refresh+retry applies.
     const result = await this.handle.exec(cmd);
     if (result.exitCode !== 0) {
       throw new Error(
@@ -633,7 +647,7 @@ class VercelSandboxHandle implements SandboxHandle {
       };
     } catch (e) {
       console.log(
-        `[vercel] listSessions failed sandbox=${this.sandbox.name}: ${e instanceof Error ? e.message : String(e)}`,
+        `[vercel] listSessions failed sandbox=${this.sandbox.name}: ${errorMessage(e)}`,
       );
       return { kind: "error" };
     }
@@ -773,8 +787,8 @@ class VercelSandboxHandle implements SandboxHandle {
     cmd: string,
     opts?: SandboxExecOptions,
   ): Promise<SandboxExecResult> {
-    // One refresh+retry on "stream was closed" — common after resume when the
-    // SDK's command stream dies while the VM is still running.
+    // One refresh+retry on a transit failure (`isRetryableExecFailure`): the
+    // command stream dying after resume, or a dropped API connection.
     const maxAttempts = 2;
     let lastError: Error | undefined;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -800,11 +814,12 @@ class VercelSandboxHandle implements SandboxHandle {
           `vercel exec failed (cwd=${opts?.cwd ?? "(default)"}, cmd=${cmd.slice(0, 120)})`,
           e,
         );
-        if (attempt < maxAttempts && isVercelCommandStreamClosed(detail)) {
+        if (attempt < maxAttempts && isRetryableExecFailure(detail)) {
           console.log(
-            `[vercel] exec stream closed on ${this.id}; refreshing and retrying (attempt ${attempt}/${maxAttempts})`,
+            `[vercel] exec transit failure on ${this.id}; refreshing and retrying (attempt ${attempt}/${maxAttempts}): ${detail.slice(0, 200)}`,
           );
-          await this.refresh();
+          // A failed refresh must not hide the exec error; the retry reports it.
+          await this.refresh().catch(() => undefined);
           continue;
         }
         throw lastError;
@@ -917,7 +932,7 @@ class VercelSandboxHandle implements SandboxHandle {
         observed = this.state;
         if (observed === "running") return;
       } catch (e) {
-        lastError = e instanceof Error ? e.message : String(e);
+        lastError = errorMessage(e);
         lastErrorStatus = vercelHttpStatus(e);
         lastErrorDetail = extractApiErrorDetail(e);
         // SDK may reject resume while stop finishes even if listSessions lagged.
@@ -1085,7 +1100,7 @@ class VercelSandboxHandle implements SandboxHandle {
       } catch (error) {
         console.warn(
           `[vercel] snapshot.delete failed sandbox=${sandboxName} snapshotId=${meta.id}: ${
-            error instanceof Error ? error.message : String(error)
+            errorMessage(error)
           }`,
         );
       }
@@ -1104,7 +1119,7 @@ class VercelSandboxHandle implements SandboxHandle {
     } catch (error) {
       console.warn(
         `[vercel] sandbox.delete failed name=${sandboxName}: ${
-          error instanceof Error ? error.message : String(error)
+          errorMessage(error)
         }`,
       );
     }
@@ -1160,7 +1175,7 @@ class VercelSandboxHandle implements SandboxHandle {
       await this.exec(driveCacheTeardownScript(), { timeoutSeconds: 30 });
     } catch (error) {
       console.warn(
-        `[vercel] drive cache teardown before snapshot failed on ${this.id} (continuing): ${error instanceof Error ? error.message : String(error)}`,
+        `[vercel] drive cache teardown before snapshot failed on ${this.id} (continuing): ${errorMessage(error)}`,
       );
     }
 
@@ -1171,7 +1186,7 @@ class VercelSandboxHandle implements SandboxHandle {
       await this.exec(snapshotPruneScript(), { timeoutSeconds: 120 });
     } catch (error) {
       console.warn(
-        `[vercel] snapshot prune failed on ${this.id} (continuing): ${error instanceof Error ? error.message : String(error)}`,
+        `[vercel] snapshot prune failed on ${this.id} (continuing): ${errorMessage(error)}`,
       );
     }
 

@@ -7,6 +7,7 @@ export {
   getForkLinks,
   listGroup,
   countActive,
+  getOwned,
 } from "./_sessions/queries";
 
 export {
@@ -20,11 +21,10 @@ export {
   create,
   addMessage,
   update,
-  updateSummary,
   archive,
   unarchive,
   updatePlanContent,
-  updateLastMessage,
+  ensureOwned,
 } from "./_sessions/mutations";
 
 export {
@@ -32,6 +32,13 @@ export {
   forcePushBranch,
   stopSandbox,
   requestStopSandbox,
+  claimSandboxForTaskRun,
+  finishTaskRunSandboxMutation,
+  attachTaskRunSandbox,
+
+  runDevServer,
+  runBackgroundCommands,
+  patchSessionDevServer,
   sandboxReady,
   clearSandboxSetupPending,
   clearSandboxServicesPending,
@@ -39,7 +46,6 @@ export {
   sandboxStartupWarning,
 } from "./_sessions/sandbox";
 
-export { updatePtySession, updatePtySessionInternal } from "./_sessions/pty";
 export {
   addToGroup,
   renameGroup,
@@ -54,6 +60,7 @@ export {
 
 export {
   getInternal,
+  getForEntityInternal,
   getBySandboxInternal,
   recordSessionPr,
   setSessionPrState,

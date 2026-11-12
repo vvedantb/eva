@@ -8,14 +8,14 @@ import type { ModelAccount } from "@vvedantb/ui";
 import type { ChatBodyMessage } from "./chatBodyUtils";
 
 /**
- * Which chat a sandbox surface belongs to. Sessions, quick tasks and projects
- * each own a transcript and a sandbox, and every shared chat piece needs to
- * address the right one.
+ * Which chat a sandbox surface belongs to: one chat of a session. A quick
+ * task's or project's chat is a chat of its owned session.
  */
-export type ChatEntityRef =
-  | { kind: "session"; sessionId: Id<"sessions">; chatId: Id<"sessionChats"> }
-  | { kind: "task"; taskId: Id<"agentTasks"> }
-  | { kind: "project"; projectId: Id<"projects"> };
+export type ChatEntityRef = {
+  kind: "session";
+  sessionId: Id<"sessions">;
+  chatId: Id<"sessionChats">;
+};
 
 /**
  * What the usage-limit recovery card needs from a surface. `undefined` when
@@ -43,7 +43,8 @@ interface UsageLimitRecoveryInputs {
  * it when a shared piece actually needs more, not before.
  */
 export interface SandboxChatSurface {
-  entity: ChatEntityRef;
+  /** Undefined for a task's or project's chat before its session exists. */
+  entity: ChatEntityRef | undefined;
   repoId: Id<"githubRepos">;
   /** The chat's current model. */
   model: AIModel;
@@ -63,7 +64,7 @@ export interface SandboxChatSurface {
   sendCommand: ((command: string) => Promise<void>) | undefined;
 }
 
-/** The task or project doc fields a sandbox chat surface reads. */
+/** The chat owner's doc fields a sandbox chat surface reads. */
 export interface SandboxChatOwnerDoc {
   backgroundAgents?: BackgroundAgentEntry[];
   providerAccountId?: Id<"userProviderAccounts">;
@@ -71,18 +72,19 @@ export interface SandboxChatOwnerDoc {
 }
 
 /**
- * The surface for a task or project sandbox chat. `doc` is the entity's live
- * record (undefined while it loads). `accounts` is the viewer's own list, not
- * a display list with a synthetic owner row: that row exists only for
- * non-owners, who never see the recovery card.
+ * The surface for a session, task or project sandbox chat. `doc` is the chat
+ * owner's live record (undefined while it loads). `accounts` is the viewer's
+ * own list, not a display list with a synthetic owner row: that row exists
+ * only for non-owners, who never see the recovery card.
  */
 export function buildSandboxChatSurface({
   entity,
   repoId,
   model,
   isExecuting,
+  isReadOnly = false,
   doc,
-  isOwner,
+  canSwitchAccount,
   messages,
   accounts,
   resolveAccountId,
@@ -90,17 +92,26 @@ export function buildSandboxChatSurface({
   isSandboxActive,
   sendCommand,
 }: {
-  entity: ChatEntityRef;
+  entity: ChatEntityRef | undefined;
   repoId: Id<"githubRepos">;
   model: AIModel;
   isExecuting: boolean;
+  isReadOnly?: boolean;
   doc: SandboxChatOwnerDoc | null | undefined;
-  isOwner: boolean;
+  /**
+   * The viewer may move the chat onto another account. Task and project chat
+   * are owner-sticky; a read-only session cannot switch.
+   */
+  canSwitchAccount: boolean;
   messages: UsageLimitRecoveryInputs["messages"] | undefined;
   accounts: UsageLimitRecoveryInputs["accounts"];
   resolveAccountId: UsageLimitRecoveryInputs["resolveAccountId"];
   switchProviderAccount: UsageLimitRecoveryInputs["onSwitchAccount"];
   isSandboxActive: boolean;
+  /**
+   * Must skip the pending review comments: a slash command has to reach the
+   * harness verbatim. Undefined when the chat cannot be written to.
+   */
   sendCommand: SandboxChatSurface["sendCommand"];
 }): SandboxChatSurface {
   return {
@@ -108,13 +119,10 @@ export function buildSandboxChatSurface({
     repoId,
     model,
     isExecuting,
-    isReadOnly: false,
-    // A stopped sandbox cannot run `/compact`, so it counts as read-only here.
+    isReadOnly,
     backgroundAgents: doc?.backgroundAgents,
-    // Owner-only, like the account picker: task and project chat are
-    // owner-sticky.
     usageLimitRecovery:
-      isOwner && doc
+      canSwitchAccount && doc
         ? {
             messages: messages ?? [],
             accounts,
@@ -125,8 +133,6 @@ export function buildSandboxChatSurface({
           }
         : undefined,
     goal: doc?.goal,
-    // No review-comment append on this send path (sessions-only), so a slash
-    // command already reaches the harness verbatim.
     sendCommand,
   };
 }

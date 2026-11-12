@@ -1,15 +1,19 @@
-import { useState } from "react";
 import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api, normalizeAIModel } from "@eva/backend";
 import type { Doc } from "@eva/backend";
 import { Button, ModelPicker, Switch, toast, SettingsField, SettingsStack, SettingsToggleRow, SettingsSection } from "@vvedantb/ui";
-import { CronScheduleCard } from "@/lib/components/CronScheduleCard";
+import { AutomationCronField } from "./AutomationCronField";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useAvailableAiModels } from "@/lib/hooks/useAvailableAiModels";
+import { AlertWebhookFields } from "./AlertWebhookFields";
 import { EmailSettingsRows } from "./EmailSettingsRows";
 import { IssueLabelField } from "./TriggerSection";
-import { automationTriggerOf, describeTrigger } from "./trigger";
+import {
+  automationTriggerOf,
+  createsTasks,
+  describeTrigger,
+} from "./trigger";
 
 /**
  * Settings tab for an installed system automation. eva owns the title, prompt
@@ -31,44 +35,49 @@ export function SystemAutomationSettings({
   const navigate = useNavigate();
   const updateAutomation = useMutation(api.automations.update);
   const uninstall = useMutation(api.automations.uninstallSystemAutomation);
-  // Mirrors SettingsForm: the cron field is controlled with a live local-time
-  // preview, so it needs an editing buffer and saves on blur.
-  const [cronDraft, setCronDraft] = useState(automation.cronSchedule);
   const trigger = automationTriggerOf(automation);
   const model = normalizeAIModel(automation.model ?? repo.defaultModel);
   const { options: modelOptions } = useAvailableAiModels(repoId, model);
 
   const commit = (
     fields: Omit<Parameters<typeof updateAutomation>[0], "id">,
-  ) => {
-    void updateAutomation({ id: automation._id, ...fields })
-      .then(() => toast.success("Saved", { id: "automation-saved" }))
-      .catch(() =>
-        toast.error("Couldn't save changes", { id: "automation-saved" }),
-      );
-  };
+  ) =>
+    updateAutomation({ id: automation._id, ...fields })
+      .then(() => {
+        toast.success("Saved", { id: "automation-saved" });
+      })
+      .catch(() => {
+        toast.error("Couldn't save changes", { id: "automation-saved" });
+      });
 
   return (
     <SettingsStack>
       {trigger.kind === "cron" ? (
-        <CronScheduleCard
-          value={cronDraft}
-          onChange={setCronDraft}
-          onBlurCommit={(v) => {
-            if (v !== automation.cronSchedule) commit({ cronSchedule: v });
-          }}
+        <AutomationCronField
+          cronSchedule={automation.cronSchedule}
+          onSave={(cronSchedule) => commit({ cronSchedule })}
         />
       ) : (
         <SettingsSection
           title="Trigger"
           description={describeTrigger(trigger)}
-          bodyVariant={trigger.event === "issue_labeled" ? "form" : "compact"}
+          bodyVariant={
+            trigger.event === "issue_labeled" ||
+            trigger.event === "production_alert"
+              ? "form"
+              : "compact"
+          }
+          bodyClassName={
+            trigger.event === "production_alert" ? "grid gap-5" : undefined
+          }
         >
           {trigger.event === "issue_labeled" ? (
             <IssueLabelField
               trigger={trigger}
               onChange={(next) => commit({ trigger: next })}
             />
+          ) : trigger.event === "production_alert" ? (
+            <AlertWebhookFields automationId={automation._id} />
           ) : (
             <p className="text-sm text-muted-foreground">
               Runs automatically; there is no schedule to set.
@@ -99,6 +108,19 @@ export function SystemAutomationSettings({
             />
           }
         />
+        {createsTasks(trigger) ? (
+          <SettingsToggleRow
+            title="Start tasks automatically"
+            description="Start each new task as soon as it is created. When off, tasks wait in To do for someone to start them."
+            action={
+              <Switch
+                checked={automation.autoStartTasks !== false}
+                onCheckedChange={(next) => commit({ autoStartTasks: next })}
+                aria-label="Start tasks automatically"
+              />
+            }
+          />
+        ) : null}
         {/* Event presets post a one-line note per run, so there is no
             summary worth emailing; the backend never sends one. */}
         {trigger.kind === "cron" ? (

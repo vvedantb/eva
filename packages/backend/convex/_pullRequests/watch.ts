@@ -3,15 +3,18 @@ import { internalMutation, type MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Doc } from "../_generated/dataModel";
 import { isEntityDeleted } from "../numId";
+import { isSessionArchived } from "../_sessions/archive";
 import { prWatchValidator } from "../validators";
+import { isLivePrState } from "@eva/shared";
 import {
-  isLivePrState,
   listOwnerPullRequests,
   findPullRequestByUrl,
   setPullRequestWatch,
   type PrOwnerRef,
 } from "./store";
 import { newPrWatch, PR_WATCH_DEBOUNCE_MS } from "./watchEvaluate";
+import { findReposByOwnerAndName } from "../_githubRepos/helpers";
+import { chatEntityKindValidator } from "../_validators/enums";
 
 /**
  * The agent's PR watch (`watch_pull_request`). No polling: the GitHub webhook
@@ -21,12 +24,6 @@ import { newPrWatch, PR_WATCH_DEBOUNCE_MS } from "./watchEvaluate";
  * lives on the `pullRequests` row: one owner per PR, found by URL from every
  * webhook, and the Review pane already reads that row.
  */
-
-const chatKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
 
 /**
  * Schedules one check for a watched PR. A check already waiting absorbs this
@@ -105,12 +102,7 @@ export const noteBasePush = internalMutation({
   args: { owner: v.string(), name: v.string(), branch: v.string() },
   returns: v.null(),
   handler: async (ctx, { owner, name, branch }) => {
-    const repos = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", owner).eq("name", name),
-      )
-      .collect();
+    const repos = await findReposByOwnerAndName(ctx.db, { owner, name });
     for (const repo of repos) {
       const watched = await ctx.db
         .query("pullRequests")
@@ -169,7 +161,7 @@ const watchReplyValidator = v.union(
  */
 export const startWatch = internalMutation({
   args: {
-    kind: chatKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
     /** Session only: the calling chat inside the session. */
     sessionChatId: v.optional(v.string()),
@@ -228,7 +220,7 @@ export const startWatch = internalMutation({
 /** Ends the chat's watch on one PR, or on all of them when none is named. */
 export const stopWatchForChat = internalMutation({
   args: {
-    kind: chatKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
     prUrl: v.optional(v.string()),
   },
@@ -269,7 +261,7 @@ async function wakeTarget(
 
   if (owner.kind === "session") {
     const session = await ctx.db.get(owner.sessionId);
-    if (!session || session.archived === true || isEntityDeleted(session)) {
+    if (!session || isSessionArchived(session) || isEntityDeleted(session)) {
       return null;
     }
     let chat: string | undefined;
@@ -320,7 +312,7 @@ export const claimCheck = internalMutation({
       name: v.string(),
       installationId: v.number(),
       target: v.object({
-        kind: chatKindValidator,
+        kind: chatEntityKindValidator,
         id: v.string(),
         chat: v.optional(v.string()),
         clerkUserId: v.string(),

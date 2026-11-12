@@ -1,37 +1,39 @@
 import { v } from "convex/values";
+import { terminalHistoryTail } from "@eva/shared";
 import { authMutation, authQuery } from "./functions";
-import type { GenericDatabaseWriter } from "convex/server";
-import type { DataModel, Doc, Id } from "./_generated/dataModel";
-import { terminalPaneValidator } from "./validators";
+import type { Doc } from "./_generated/dataModel";
 import {
+  previewPanePathValidator,
+  terminalPaneValidator,
+} from "./validators";
+import {
+  patchSandboxOwner,
   resolveSandboxOwnerForUser,
+  resolveSandboxOwnerOrThrow,
   sandboxOwnerValidator,
   type ResolvedSandboxOwner,
-  type SandboxOwner,
 } from "./_sandbox/owner";
 import {
   assertStickyPreviewPort,
   normalizeStickyPreviewPath,
-  truncateTerminalHistoryTail,
 } from "./_sandbox/stickyPreview";
 
 type TerminalPane = NonNullable<Doc<"sessions">["terminalPanes"]>[number];
 
+/**
+ * Extra preview panes kept per owner. Pane ids are per-browser UUIDs, so old
+ * ids pile up; the oldest writes drop off past this cap.
+ */
+const MAX_PREVIEW_PANE_PATHS = 16;
+
 const viewStateValidator = v.object({
+  /** Main (first) preview pane path; the agent's set_preview_path writes it. */
   previewPath: v.optional(v.string()),
+  /** Paths of extra preview panes, keyed by the client pane id. */
+  previewPanePaths: v.optional(v.array(previewPanePathValidator)),
   terminalHistoryTail: v.optional(v.string()),
   agentBrowsingAt: v.optional(v.number()),
 });
-
-async function resolveOwnerOrThrow(
-  db: GenericDatabaseWriter<DataModel>,
-  userId: Id<"users">,
-  owner: SandboxOwner,
-): Promise<ResolvedSandboxOwner> {
-  const resolved = await resolveSandboxOwnerForUser(db, userId, owner);
-  if (!resolved) throw new Error("Sandbox owner not found");
-  return resolved;
-}
 
 function defaultPane(ownerKey: string, createdAt: number): TerminalPane {
   return {
@@ -65,20 +67,6 @@ function panesOrDefault(
     : [defaultPane(owner.ownerKey, createdAt)];
 }
 
-async function patchPanes(
-  db: GenericDatabaseWriter<DataModel>,
-  owner: ResolvedSandboxOwner,
-  panes: TerminalPane[],
-) {
-  if (owner.kind === "session") {
-    await db.patch(owner.doc._id, { terminalPanes: panes });
-  } else if (owner.kind === "task") {
-    await db.patch(owner.doc._id, { terminalPanes: panes });
-  } else {
-    await db.patch(owner.doc._id, { terminalPanes: panes });
-  }
-}
-
 /** Ensures every active sandbox has a stable shared default terminal pane. */
 export const ensureDefaultTerminalPane = authMutation({
   args: { owner: sandboxOwnerValidator },
@@ -93,7 +81,7 @@ export const ensureDefaultTerminalPane = authMutation({
     const panes = owner.doc.terminalPanes ?? [];
     if (panes.length > 0) return panes;
     const next = [defaultPane(owner.ownerKey, Date.now())];
-    await patchPanes(ctx.db, owner, next);
+    await patchSandboxOwner(ctx.db, owner, { terminalPanes: next });
     return next;
   },
 });
@@ -103,16 +91,17 @@ export const createTerminalPane = authMutation({
   args: { owner: sandboxOwnerValidator },
   returns: terminalPaneValidator,
   handler: async (ctx, args) => {
-    const owner = await resolveSandboxOwnerForUser(
+    const owner = await resolveSandboxOwnerOrThrow(
       ctx.db,
       ctx.userId,
       args.owner,
     );
-    if (!owner) throw new Error("Sandbox owner not found");
     const createdAt = Date.now();
     const panes = panesOrDefault(owner, createdAt);
     const pane = nextPane(owner.ownerKey, panes.length, createdAt);
-    await patchPanes(ctx.db, owner, [...panes, pane]);
+    await patchSandboxOwner(ctx.db, owner, {
+      terminalPanes: [...panes, pane],
+    });
     return pane;
   },
 });
@@ -134,7 +123,7 @@ export const closeTerminalPane = authMutation({
     const panes = panesOrDefault(owner, Date.now());
     if (panes[0]?.id === args.paneId) return panes;
     const next = panes.filter((pane) => pane.id !== args.paneId);
-    await patchPanes(ctx.db, owner, next);
+    await patchSandboxOwner(ctx.db, owner, { terminalPanes: next });
     return next;
   },
 });
@@ -152,25 +141,45 @@ export const getViewState = authQuery({
     if (!owner) return null;
     return {
       previewPath: owner.doc.previewPath,
+      previewPanePaths: owner.doc.previewPanePaths,
       terminalHistoryTail: owner.doc.terminalHistoryTail,
       agentBrowsingAt: owner.doc.agentBrowsingAt,
     };
   },
 });
 
+/**
+ * Sticky Preview path of one pane. No `paneId` writes the main pane (the
+ * agent's set_preview_path); a `paneId` writes that extra pane only, so one
+ * pane's navigation never moves the others.
+ */
 export const setPreviewPath = authMutation({
-  args: { owner: sandboxOwnerValidator, path: v.string() },
+  args: {
+    owner: sandboxOwnerValidator,
+    path: v.string(),
+    paneId: v.optional(v.string()),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const owner = await resolveOwnerOrThrow(ctx.db, ctx.userId, args.owner);
-    const previewPath = normalizeStickyPreviewPath(args.path);
-    if (owner.kind === "session") {
-      await ctx.db.patch(owner.doc._id, { previewPath });
-    } else if (owner.kind === "task") {
-      await ctx.db.patch(owner.doc._id, { previewPath });
-    } else {
-      await ctx.db.patch(owner.doc._id, { previewPath });
+    const owner = await resolveSandboxOwnerOrThrow(
+      ctx.db,
+      ctx.userId,
+      args.owner,
+    );
+    const path = normalizeStickyPreviewPath(args.path);
+    const { paneId } = args;
+    if (paneId === undefined) {
+      await patchSandboxOwner(ctx.db, owner, { previewPath: path });
+      return null;
     }
+    const others = (owner.doc.previewPanePaths ?? []).filter(
+      (entry) => entry.paneId !== paneId,
+    );
+    await patchSandboxOwner(ctx.db, owner, {
+      previewPanePaths: [...others, { paneId, path }].slice(
+        -MAX_PREVIEW_PANE_PATHS,
+      ),
+    });
     return null;
   },
 });
@@ -179,15 +188,13 @@ export const setPreviewPort = authMutation({
   args: { owner: sandboxOwnerValidator, port: v.number() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const owner = await resolveOwnerOrThrow(ctx.db, ctx.userId, args.owner);
+    const owner = await resolveSandboxOwnerOrThrow(
+      ctx.db,
+      ctx.userId,
+      args.owner,
+    );
     assertStickyPreviewPort(args.port);
-    if (owner.kind === "session") {
-      await ctx.db.patch(owner.doc._id, { devPort: args.port });
-    } else if (owner.kind === "task") {
-      await ctx.db.patch(owner.doc._id, { devPort: args.port });
-    } else {
-      await ctx.db.patch(owner.doc._id, { devPort: args.port });
-    }
+    await patchSandboxOwner(ctx.db, owner, { devPort: args.port });
     return null;
   },
 });
@@ -196,15 +203,15 @@ export const setTerminalHistoryTail = authMutation({
   args: { owner: sandboxOwnerValidator, tail: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const owner = await resolveOwnerOrThrow(ctx.db, ctx.userId, args.owner);
-    const terminalHistoryTail = truncateTerminalHistoryTail(args.tail);
-    if (owner.kind === "session") {
-      await ctx.db.patch(owner.doc._id, { terminalHistoryTail });
-    } else if (owner.kind === "task") {
-      await ctx.db.patch(owner.doc._id, { terminalHistoryTail });
-    } else {
-      await ctx.db.patch(owner.doc._id, { terminalHistoryTail });
-    }
+    const owner = await resolveSandboxOwnerOrThrow(
+      ctx.db,
+      ctx.userId,
+      args.owner,
+    );
+    // Server-side trim too, so a buggy client cannot inflate entity docs.
+    await patchSandboxOwner(ctx.db, owner, {
+      terminalHistoryTail: terminalHistoryTail(args.tail),
+    });
     return null;
   },
 });
@@ -213,15 +220,15 @@ export const releaseBrowserLock = authMutation({
   args: { owner: sandboxOwnerValidator },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const owner = await resolveOwnerOrThrow(ctx.db, ctx.userId, args.owner);
-    const patch = { agentBrowsingAt: undefined, updatedAt: Date.now() };
-    if (owner.kind === "session") {
-      await ctx.db.patch(owner.doc._id, patch);
-    } else if (owner.kind === "task") {
-      await ctx.db.patch(owner.doc._id, patch);
-    } else {
-      await ctx.db.patch(owner.doc._id, patch);
-    }
+    const owner = await resolveSandboxOwnerOrThrow(
+      ctx.db,
+      ctx.userId,
+      args.owner,
+    );
+    await patchSandboxOwner(ctx.db, owner, {
+      agentBrowsingAt: undefined,
+      updatedAt: Date.now(),
+    });
     return null;
   },
 });

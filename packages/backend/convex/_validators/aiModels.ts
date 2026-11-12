@@ -10,6 +10,25 @@ function tuple<const Values extends readonly [string, ...string[]]>(
 export const AI_PROVIDERS = tuple("claude", "codex", "opencode", "cursor");
 export type AIProvider = (typeof AI_PROVIDERS)[number];
 
+/** Provider name shown in the web UI (Accounts page, provider pickers). */
+export const PROVIDER_LABELS: Record<AIProvider, string> = {
+  claude: "Claude Code",
+  codex: "Codex",
+  opencode: "opencode",
+  cursor: "Cursor",
+};
+
+/**
+ * Provider name in model-handoff alerts and the handoff prompt. Shorter than
+ * {@link PROVIDER_LABELS} because it follows a model name ("Opus (Claude)").
+ */
+export const PROVIDER_HANDOFF_LABELS: Record<AIProvider, string> = {
+  claude: "Claude",
+  codex: "Codex",
+  opencode: "OpenCode",
+  cursor: "Cursor",
+};
+
 export const aiProviderValidator = v.union(
   ...AI_PROVIDERS.map((provider) => v.literal(provider)),
 );
@@ -113,6 +132,8 @@ export const DEFAULT_REASONING_LEVEL: ReasoningLevel = "medium";
 export interface ModelReasoningTraits {
   levels: ReadonlyArray<ReasoningLevel>;
   default: ReasoningLevel;
+  /** The CLI's own default when Eva's `default` differs; omitted means equal. */
+  providerDefault?: ReasoningLevel;
   ultrathink?: boolean;
 }
 
@@ -142,6 +163,13 @@ const CLAUDE_REASONING_FULL: ModelReasoningTraits = {
   levels: ["low", "medium", "high", "xhigh", "max"],
   default: "high",
   ultrathink: true,
+};
+
+/** Opus defaults to medium in Eva; the Claude CLI defaults to high. */
+const CLAUDE_REASONING_OPUS: ModelReasoningTraits = {
+  ...CLAUDE_REASONING_FULL,
+  default: "medium",
+  providerDefault: "high",
 };
 
 const CLAUDE_REASONING_NO_XHIGH: ModelReasoningTraits = {
@@ -284,7 +312,7 @@ export const AI_MODEL_OPTIONS: ReadonlyArray<AIModelOption> = [
     provider: "claude",
     label: "Opus",
     requiresAuth: true,
-    reasoning: CLAUDE_REASONING_FULL,
+    reasoning: CLAUDE_REASONING_OPUS,
     contextWindow: 200000,
   },
   {
@@ -449,22 +477,6 @@ export const CURSOR_MODELS: ReadonlyArray<AIModel> = AI_MODEL_OPTIONS.filter(
   (option) => option.provider === "cursor",
 ).map((option) => option.id);
 
-export const CODEX_AUTH_ENV_KEYS: ReadonlyArray<string> = [
-  "CODEX_AUTH_JSON",
-  "CODEX_AUTH_JSON_BASE64",
-];
-export const CODEX_CONFIG_ENV_KEYS: ReadonlyArray<string> = [
-  "CODEX_CONFIG_TOML",
-  "CODEX_CONFIG_TOML_BASE64",
-];
-export const OPENCODE_AUTH_ENV_KEYS: ReadonlyArray<string> = [
-  "OPENCODE_CONFIG_JSON",
-  "OPENCODE_CONFIG_JSON_BASE64",
-  "OPENCODE_AUTH_JSON",
-  "OPENCODE_AUTH_JSON_BASE64",
-];
-export const CURSOR_AUTH_ENV_KEYS: ReadonlyArray<string> = ["CURSOR_API_KEY"];
-
 /**
  * The canonical auth env-var key per provider. Used to mark a provider
  * "available" when a user has their own account for it, and as the primary
@@ -477,13 +489,40 @@ export const PROVIDER_PRIMARY_AUTH_KEY: Record<AIProvider, string> = {
   cursor: "CURSOR_API_KEY",
 };
 
+/** The optional config env-var key the Accounts UI collects per provider. */
+export const PROVIDER_CONFIG_KEY = {
+  codex: "CODEX_CONFIG_TOML",
+  opencode: "OPENCODE_CONFIG_JSON",
+} as const satisfies Partial<Record<AIProvider, string>>;
+
+export const CLAUDE_AUTH_ENV_KEYS: ReadonlyArray<string> = [
+  PROVIDER_PRIMARY_AUTH_KEY.claude,
+];
+export const CODEX_AUTH_ENV_KEYS: ReadonlyArray<string> = [
+  PROVIDER_PRIMARY_AUTH_KEY.codex,
+  "CODEX_AUTH_JSON_BASE64",
+];
+export const CODEX_CONFIG_ENV_KEYS: ReadonlyArray<string> = [
+  PROVIDER_CONFIG_KEY.codex,
+  "CODEX_CONFIG_TOML_BASE64",
+];
+export const OPENCODE_AUTH_ENV_KEYS: ReadonlyArray<string> = [
+  PROVIDER_CONFIG_KEY.opencode,
+  "OPENCODE_CONFIG_JSON_BASE64",
+  PROVIDER_PRIMARY_AUTH_KEY.opencode,
+  "OPENCODE_AUTH_JSON_BASE64",
+];
+export const CURSOR_AUTH_ENV_KEYS: ReadonlyArray<string> = [
+  PROVIDER_PRIMARY_AUTH_KEY.cursor,
+];
+
 /** Determines which AI providers are available based on the presence of required env var keys. */
 export function getAIProviderAvailability(
   envVarKeys: Iterable<string>,
 ): AIProviderAvailability {
   const keys = envVarKeys instanceof Set ? envVarKeys : new Set(envVarKeys);
   return {
-    claude: keys.has("CLAUDE_CODE_OAUTH_TOKEN"),
+    claude: CLAUDE_AUTH_ENV_KEYS.some((key) => keys.has(key)),
     codex: CODEX_AUTH_ENV_KEYS.some((key) => keys.has(key)),
     opencode: OPENCODE_AUTH_ENV_KEYS.some((key) => keys.has(key)),
     cursor: CURSOR_AUTH_ENV_KEYS.some((key) => keys.has(key)),
@@ -713,6 +752,34 @@ export function resolveTraitsForDisplay(
 }
 
 /**
+ * What a model picker trigger shows after the model name: the reasoning
+ * level, "1M" when the 1M context is on, "No thinking" when thinking is off,
+ * joined by " · ", and whether Fast is on (a bolt). Shared by the web
+ * `ModelSelectWithTraits` and the phone composer footer.
+ */
+export function modelTraitSummary(
+  model: string | null | undefined,
+  stored: StoredModelTraits,
+): { suffix: string | undefined; fast: boolean } {
+  const config = getModelTraits(model);
+  const display = resolveTraitsForDisplay(model, stored);
+  const parts: string[] = [];
+  if (config.reasoning) {
+    parts.push(
+      getReasoningLevelLabel(display.effortLevel ?? config.reasoning.default),
+    );
+  }
+  if (config.contextWindow1m && display.use1mContext) parts.push("1M");
+  if (config.thinkingToggle && !display.thinkingEnabled) {
+    parts.push("No thinking");
+  }
+  return {
+    suffix: parts.length > 0 ? parts.join(" · ") : undefined,
+    fast: Boolean(config.fastMode && display.fastMode),
+  };
+}
+
+/**
  * Build execution payload: only non-default trait overrides are included so the
  * runner uses each model's native defaults when the user has not changed them.
  */
@@ -723,13 +790,12 @@ export function buildTraitsExecutionPayload(
   const traits = getModelTraits(model);
   const payload: ModelTraitsExecutionArgs = {};
 
-  if (traits.reasoning && stored.effortLevel !== undefined) {
-    const { default: defaultLevel } = traits.reasoning;
-    if (stored.effortLevel !== defaultLevel) {
-      const resolved = resolveReasoningLevel(model, stored.effortLevel);
-      if (resolved) {
-        payload.reasoningLevel = resolved;
-      }
+  if (traits.reasoning) {
+    const { default: defaultLevel, providerDefault = defaultLevel } =
+      traits.reasoning;
+    const resolved = resolveReasoningLevel(model, stored.effortLevel);
+    if (resolved && resolved !== providerDefault) {
+      payload.reasoningLevel = resolved;
     }
   }
 

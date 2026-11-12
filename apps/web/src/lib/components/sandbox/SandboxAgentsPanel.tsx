@@ -11,17 +11,20 @@ export function SandboxAgentsPanel({
   agents,
   isReadOnly,
 }: {
-  entity: ChatEntityRef;
+  entity: ChatEntityRef | undefined;
   agents: SubagentView[];
   isReadOnly?: boolean;
 }) {
-  const requestStop = useStopBackgroundAgent(entity);
+  const { requestStop, stopDialog } = useStopBackgroundAgent(entity);
 
   return (
-    <AgentsPanel
-      agents={agents}
-      isReadOnly={isReadOnly}
-      onRequestStop={requestStop}
-    />
+    <>
+      <AgentsPanel
+        agents={agents}
+        isReadOnly={isReadOnly}
+        onRequestStop={requestStop}
+      />
+      {stopDialog}
+    </>
   );
 }

@@ -2,7 +2,7 @@ import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
-import { repoBasePath } from "../_githubRepos/helpers";
+import { entityHref } from "@eva/shared";
 import {
   matchRepoByName,
   mcpGetContext,
@@ -353,17 +353,19 @@ export function fleetTools(
           },
         );
 
-        const basePath = repoBasePath({
-          owner: repo.owner,
-          name: repo.name,
-          rootDirectory: repo.rootDirectory ?? undefined,
-        });
-
         return toolJsonResult({
           sessionId: created.sessionId,
           numId: created.numId,
           repo: repoRefLabel(repo),
-          path: `${basePath}/sessions/${created.numId}`,
+          path: entityHref(
+            "session",
+            {
+              owner: repo.owner,
+              name: repo.name,
+              rootDirectory: repo.rootDirectory ?? undefined,
+            },
+            created.numId,
+          ),
           linkedRepos: created.linkedRepos,
           status: "created",
         });

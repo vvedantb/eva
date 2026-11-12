@@ -1,17 +1,17 @@
 import { z } from "zod";
 
 /**
- * The tool steps of a finished assistant message (`messages.activityLog`), in
- * the fields a compact trace shows: type, label, detail and status, plus the
- * step detail when present (command, output, edits). A
- * platform-free reader for the mobile app; the web reads the full step
- * (`parseActivitySteps`, typed by `@vvedantb/ui`).
+ * The steps of an assistant message's activity log (`messages.activityLog`),
+ * checked with Zod, in the fields the web timeline reads (the `ActivityStep`
+ * of `@vvedantb/ui`). A platform-free reader for the mobile app, which hands
+ * the steps to the `@vvedantb/native-ui/ai` copies of the web row text and
+ * grouping (`foldedActivitySegments`, `deriveStepRowPresentation`). The web
+ * reads the log without a check (`parseActivitySteps`).
  *
- * Steps the trace does not show (the reply itself, reasoning, status lines,
- * notices, hooks, steers, todo lists, questions) are dropped, and so is any
- * step whose shape does not parse.
+ * A step whose shape does not parse is dropped; so is the whole log when it
+ * is empty, legacy plain text or not a list.
  */
-export const TOOL_STEP_TYPES = [
+export const ACTIVITY_STEP_TYPES = [
   "read",
   "edit",
   "write",
@@ -22,70 +22,63 @@ export const TOOL_STEP_TYPES = [
   "web_search",
   "subtask",
   "notebook",
+  "thinking",
+  "reasoning",
+  "response",
+  "question",
+  "todos",
   "tool",
+  "notice",
+  "hook",
+  "status",
+  "steer",
 ] as const;
 
-export type ToolStepType = (typeof TOOL_STEP_TYPES)[number];
-
-const toolStepSchema = z.object({
-  type: z.enum(TOOL_STEP_TYPES),
+const activityLogStepSchema = z.object({
+  type: z.enum(ACTIVITY_STEP_TYPES),
   label: z.string(),
   detail: z.string().optional(),
   status: z.enum(["complete", "active", "pending"]),
+  /** The file a read, edit, write or notebook step touched (file chips, the "Changed files" card). */
+  path: z.string().optional(),
+  /** The tool call's id; a subagent's own steps name it in `parentToolUseId`, and nest under it. */
+  toolUseId: z.string().optional(),
+  parentToolUseId: z.string().optional(),
+  /** A to-do list step's items. */
+  todos: z
+    .array(z.object({ content: z.string(), status: z.enum(["pending", "in_progress", "completed"]) }))
+    .optional(),
   /** Bash command, fuller than `detail`. */
   command: z.string().optional(),
   /** Tool result transcript (tail-capped by the writer). */
   output: z.object({ text: z.string(), exitCode: z.number().optional(), truncated: z.boolean().optional() }).optional(),
   /** Edit before/after snippets. */
   edits: z.array(z.object({ oldText: z.string(), newText: z.string() })).optional(),
+  /** Codex file_change paths. */
+  files: z.array(z.string()).optional(),
+  /** A written file's first lines. */
+  contentPreview: z.string().optional(),
+  /** The tool failed or exited non-zero: the row is drawn in the danger colour. */
+  isError: z.boolean().optional(),
+  /** How long the step ran: the faded "4s" after its row. */
+  durationMs: z.number().optional(),
   /** The transcript copy dropped `output`/`edits`; fetch the full log (`messages.activityLogById`) to show them. */
   hasHiddenDetail: z.boolean().optional(),
 });
 
-export type ToolStep = z.infer<typeof toolStepSchema>;
+export type ActivityLogStep = z.infer<typeof activityLogStepSchema>;
 
-const activityLogSchema = z.array(z.unknown());
+/** A malformed step reads as null, so the steps around it survive. */
+const activityLogSchema = z.array(activityLogStepSchema.nullable().catch(null));
 
-/** Tool steps in order, or [] for an empty, legacy plain-text or malformed log. */
-export function parseToolSteps(activityLog: string | undefined): ToolStep[] {
+/** The steps of a log in order, or [] for an empty, legacy plain-text or malformed one. */
+export function parseActivityLog(activityLog: string | undefined): ActivityLogStep[] {
   if (!activityLog) return [];
-  let raw: unknown;
   try {
-    raw = JSON.parse(activityLog);
+    const parsed = activityLogSchema.safeParse(JSON.parse(activityLog));
+    return parsed.success ? parsed.data.filter((step) => step !== null) : [];
   } catch {
+    // Legacy plain-text log.
     return [];
   }
-  const parsed = activityLogSchema.safeParse(raw);
-  if (!parsed.success) return [];
-  return parsed.data.flatMap((step) => {
-    const result = toolStepSchema.safeParse(step);
-    return result.success ? [result.data] : [];
-  });
-}
-
-/** Same phrases as the web's folded tool run (`deriveActionGroupSummary` in @vvedantb/ui). */
-const GROUP_PHRASES: Record<ToolStepType, string> = {
-  read: "read files",
-  edit: "edited files",
-  write: "created files",
-  notebook: "edited notebooks",
-  bash: "ran commands",
-  search_files: "searched for files",
-  search_code: "searched the code",
-  web_fetch: "fetched pages",
-  web_search: "searched the web",
-  subtask: "ran agents",
-  tool: "used tools",
-};
-
-/** One line for a folded run of steps: "Edited files, ran commands". */
-export function summariseToolSteps(steps: ReadonlyArray<ToolStep>): string {
-  const phrases = [...new Set(steps.map((step) => GROUP_PHRASES[step.type]))];
-  const joined = phrases.join(", ");
-  return joined ? `${joined.charAt(0).toUpperCase()}${joined.slice(1)}` : "Worked";
-}
-
-/** Whether a step has detail to open: a command, output or edits, or detail the transcript trimmed. */
-export function hasStepDetail(step: ToolStep): boolean {
-  return Boolean(step.command || step.output || (step.edits && step.edits.length > 0) || step.hasHiddenDetail);
 }

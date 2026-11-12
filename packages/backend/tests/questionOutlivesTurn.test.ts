@@ -6,7 +6,7 @@ import { detachPendingQuestions } from "../convex/pendingQuestions";
 
 /**
  * Sessions 417 and 419 lost turns that asked a blocking question and then
- * waited for the user until the 2-hour cap. The question must outlive the
+ * waited for the user until the `TURN_BACKSTOP_MS` cap. The question must outlive the
  * turn: the daemon releases it after 10 minutes, and a turn torn down another
  * way (sandbox stop, timeout, stall) moves it onto the chat message, where
  * the after-turn question card renders and the answer resumes the agent.
@@ -30,6 +30,7 @@ async function fixture() {
       connectedBy: userId,
     });
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Asks a question",

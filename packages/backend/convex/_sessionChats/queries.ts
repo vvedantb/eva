@@ -24,34 +24,6 @@ export const listForSession = authQuery({
   },
 });
 
-/**
- * Every open chat beyond Main across a repo, for the sidebar's indented rows.
- * One subscription per repo group rather than one per session row. Indexed on
- * isMain/archived so the read set excludes every session's Main chat, whose
- * daemon-poll writes would otherwise re-run this query repo-wide.
- */
-export const listExtraForRepo = authQuery({
-  args: { repoId: v.id("githubRepos") },
-  returns: v.array(sessionChatValidator),
-  handler: async (ctx, args) => {
-    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const groups = await Promise.all(
-      [undefined, false].map((archived) =>
-        ctx.db
-          .query("sessionChats")
-          .withIndex("by_repo_main_and_archived", (q) =>
-            q
-              .eq("repoId", args.repoId)
-              .eq("isMain", false)
-              .eq("archived", archived),
-          )
-          .collect(),
-      ),
-    );
-    return groups.flat().toSorted((a, b) => a.number - b.number);
-  },
-});
-
 export const get = authQuery({
   args: { chatId: v.id("sessionChats") },
   returns: v.union(sessionChatValidator, v.null()),
@@ -106,7 +78,6 @@ const deliveryChatValidator = v.object({
   chatId: v.id("sessionChats"),
   title: v.string(),
   number: v.number(),
-  activeWorkflowId: v.optional(v.string()),
   lastModel: v.optional(v.string()),
 });
 
@@ -118,6 +89,9 @@ function pickDeliveryChat(
   if (chat === undefined) {
     return live.find((candidate) => candidate.isMain) ?? live[0] ?? null;
   }
+  // A project task's own chat is named by its id (`orchestratorSendMessage`).
+  const byId = live.find((candidate) => String(candidate._id) === chat);
+  if (byId) return byId;
   const asNumber = Number(chat);
   if (Number.isInteger(asNumber)) {
     const byNumber = live.find((candidate) => candidate.number === asNumber);
@@ -151,7 +125,6 @@ export const resolveDeliveryChat = authQuery({
       chatId: chat._id,
       title: chat.title,
       number: chat.number,
-      activeWorkflowId: chat.activeWorkflowId,
       lastModel: chat.lastModel,
     };
   },
@@ -161,6 +134,5 @@ export type DeliveryChat = {
   chatId: Id<"sessionChats">;
   title: string;
   number: number;
-  activeWorkflowId?: string;
   lastModel?: string;
 };

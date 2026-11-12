@@ -3,23 +3,28 @@ import { findLivePullRequestOnBranch } from "../_pullRequests/store";
 import { authQuery, hasRepoAccess } from "../functions";
 import { internalQuery } from "../_generated/server";
 import { entityVisible, filterActiveEntities } from "../numId";
-import { taskSandboxStatusValidator } from "../_validators/enums";
+import { sessionStatusValidator } from "../_validators/enums";
 import {
   taskProgressValidator,
   taskProgressFields,
 } from "../_validators/shapes";
 import type { GenericDatabaseReader } from "convex/server";
-import type { DataModel, Doc } from "../_generated/dataModel";
+import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import {
   projectWithDetailsValidator,
   projectListItemValidator,
   resolveProjectPlanningMode,
   getProjectDetails,
-  buildProjectBranchName,
 } from "./helpers";
-import { unreadLookupForRepo } from "../chatReads";
+import { resolveProjectBranchName } from "../_git/branchNames";
+import { resolveProjectBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
+import { unreadLookupForList } from "../chatReads";
 import { awaitingAnswerEntityIdsForRepo } from "../_chat/turnProjection";
-import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
+import { isProjectBuilding } from "./buildState";
+import {
+  liveOwnedSessionStatuses,
+  projectSandboxStatus,
+} from "../_sessions/ownedSession";
 
 /** Builds a project's detail payload (conversation history + optional generated
  *  spec) from a single projectDetails read, matching projectWithDetailsValidator.
@@ -39,24 +44,53 @@ async function buildProjectWithDetails(
   };
 }
 
+/** A repo's projects that are not soft-deleted, in creation order. */
+function liveProjectsForRepo(
+  db: GenericDatabaseReader<DataModel>,
+  repoId: Id<"githubRepos">,
+) {
+  return db
+    .query("projects")
+    .withIndex("by_repo_and_deleted", (q) =>
+      q.eq("repoId", repoId).eq("deletedAt", undefined),
+    )
+    .collect();
+}
+
+/** A repo's projects with a build workflow running (deleted rows included). */
+function buildingProjectsForRepo(
+  db: GenericDatabaseReader<DataModel>,
+  repoId: Id<"githubRepos">,
+) {
+  return db
+    .query("projects")
+    .withIndex("by_repo_and_build_state", (q) =>
+      q.eq("repoId", repoId).eq("build.state", "running"),
+    )
+    .collect();
+}
+
 /** Lists all projects for a repo. */
 export const list = authQuery({
   args: { repoId: v.id("githubRepos") },
   returns: v.array(projectListItemValidator),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const [allProjects, hasUnread, awaitingAnswerIds] = await Promise.all([
-      ctx.db
-        .query("projects")
-        .withIndex("by_repo", (q) => q.eq("repoId", args.repoId))
-        .collect(),
-      unreadLookupForRepo(ctx.db, ctx.userId, args.repoId),
+    const [projects, awaitingAnswerIds] = await Promise.all([
+      liveProjectsForRepo(ctx.db, args.repoId),
       awaitingAnswerEntityIdsForRepo(ctx.db, args.repoId),
     ]);
-    const projects = filterActiveEntities(allProjects);
+    const hasUnread = await unreadLookupForList(
+      ctx.db,
+      ctx.userId,
+      args.repoId,
+      projects.length,
+    );
     return await Promise.all(
       projects.map(async (project) => ({
         ...project,
+        // A project's sandbox lives on its session; the row shows that.
+        sandboxStatus: await projectSandboxStatus(ctx.db, project),
         planningMode: await resolveProjectPlanningMode(ctx.db, project),
         hasUnread: await hasUnread(project),
         isAwaitingAnswer: awaitingAnswerIds.has(String(project._id)),
@@ -126,13 +160,9 @@ export const countBuilding = authQuery({
   returns: v.number(),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return 0;
-    const projects = filterActiveEntities(
-      await ctx.db
-        .query("projects")
-        .withIndex("by_repo", (q) => q.eq("repoId", args.repoId))
-        .collect(),
-    );
-    return projects.filter((p) => p.activeBuildWorkflowId !== undefined).length;
+    return filterActiveEntities(
+      await buildingProjectsForRepo(ctx.db, args.repoId),
+    ).length;
   },
 });
 
@@ -144,32 +174,47 @@ export const getActive = authQuery({
       _id: v.id("projects"),
       numId: v.optional(v.number()),
       title: v.string(),
-      activeBuildWorkflowId: v.optional(v.string()),
-      reviewProjectSandboxStatus: v.optional(taskSandboxStatusValidator),
+      isBuilding: v.boolean(),
+      sandboxStatus: v.optional(sessionStatusValidator),
     }),
   ),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const projects = filterActiveEntities(
-      await ctx.db
-        .query("projects")
-        .withIndex("by_repo", (q) => q.eq("repoId", args.repoId))
-        .collect(),
+    // Building, or a session sandbox that is active or starting, then
+    // deduped back into `by_repo` (creation) order.
+    const [sessionStatuses, building] = await Promise.all([
+      liveOwnedSessionStatuses(ctx.db, [args.repoId], "project"),
+      buildingProjectsForRepo(ctx.db, args.repoId),
+    ]);
+    const sessionProjects = await Promise.all(
+      [...sessionStatuses]
+        .filter(([, status]) => status === "active" || status === "starting")
+        .map(([projectId]) => {
+          const id = ctx.db.normalizeId("projects", projectId);
+          return id ? ctx.db.get(id) : null;
+        }),
     );
-    return projects
+    const byId = new Map(
+      [...building, ...sessionProjects.filter((p) => p !== null)].map((p) => [
+        String(p._id),
+        p,
+      ]),
+    );
+    const rows = filterActiveEntities([...byId.values()])
+      .sort((a, b) => a._creationTime - b._creationTime)
       .map((p) => ({
         _id: p._id,
         numId: p.numId,
         title: p.title,
-        activeBuildWorkflowId: p.activeBuildWorkflowId,
-        reviewProjectSandboxStatus: p.reviewProjectSandboxStatus,
-      }))
-      .filter(
-        (p) =>
-          p.activeBuildWorkflowId !== undefined ||
-          p.reviewProjectSandboxStatus === "active" ||
-          p.reviewProjectSandboxStatus === "starting",
-      );
+        isBuilding: isProjectBuilding(p),
+        sandboxStatus: sessionStatuses.get(String(p._id)),
+      }));
+    return rows.filter(
+      (row) =>
+        row.isBuilding ||
+        row.sandboxStatus === "active" ||
+        row.sandboxStatus === "starting",
+    );
   },
 });
 
@@ -205,9 +250,7 @@ export const getProjectPrCreationData = internalQuery({
     const repo = await ctx.db.get(project.repoId);
     if (!repo) throw new Error("Repository not found");
 
-    const branchName =
-      project.branchName ??
-      buildProjectBranchName(args.projectId, project.branchVersion);
+    const branchName = resolveProjectBranchName(args.projectId, project);
 
     const tasks = filterActiveEntities(
       await ctx.db
@@ -231,10 +274,7 @@ export const getProjectPrCreationData = internalQuery({
       repoOwner: repo.owner,
       repoName: repo.name,
       branchName,
-      baseBranch:
-        project.baseBranch ??
-        repo.defaultBaseBranch ??
-        FALLBACK_GIT_BASE_BRANCH,
+      baseBranch: resolveProjectBaseBranch(project, repo),
       projectTitle: project.title,
       projectDescription: project.description,
       rootDirectory: repo.rootDirectory ?? "",
@@ -294,12 +334,7 @@ export const listTaskProgress = authQuery({
   ),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const projects = filterActiveEntities(
-      await ctx.db
-        .query("projects")
-        .withIndex("by_repo", (q) => q.eq("repoId", args.repoId))
-        .collect(),
-    );
+    const projects = await liveProjectsForRepo(ctx.db, args.repoId);
     return await Promise.all(
       projects.map(async (project) => {
         const tasks = filterActiveEntities(

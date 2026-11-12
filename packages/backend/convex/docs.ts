@@ -24,7 +24,6 @@ import {
   normalizeAIModel,
   prRecapOriginValidator,
   prRecapStatusValidator,
-  roleValidator,
   docKindValidator,
   docFields,
   evaluationStatusValidator,
@@ -174,7 +173,9 @@ export const list = authQuery({
       siblingIds.map((siblingId) =>
         ctx.db
           .query("docs")
-          .withIndex("by_repo", (q) => q.eq("repoId", siblingId))
+          .withIndex("by_repo_and_deleted", (q) =>
+            q.eq("repoId", siblingId).eq("deletedAt", undefined),
+          )
           .collect(),
       ),
     );
@@ -193,7 +194,6 @@ export const list = authQuery({
         ) {
           continue;
         }
-        if (isEntityDeleted(doc)) continue;
         seen.add(doc._id);
         docs.push(doc);
       }
@@ -516,13 +516,15 @@ export const remove = authMutation({
   },
 });
 
-/** Appends a message to the doc's interview conversation history. */
+/**
+ * Appends the caller's own answer to the doc interview. Assistant turns are
+ * written only by the interview workflow (internal mutations).
+ */
 export const addInterviewMessage = authMutation({
   args: {
     id: v.id("docs"),
-    role: roleValidator,
+    role: v.literal("user"),
     content: v.string(),
-    activityLog: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -531,7 +533,6 @@ export const addInterviewMessage = authMutation({
     history.push({
       role: args.role,
       content: args.content,
-      activityLog: args.activityLog,
       userId: ctx.userId,
     });
     await ctx.db.patch(args.id, { interviewHistory: history });

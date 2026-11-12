@@ -1,6 +1,3 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
 import { internal } from "../convex/_generated/api";
@@ -16,7 +13,6 @@ import { listReadableSiblingRepos } from "../convex/_githubRepos/sandboxRead";
  */
 
 const modules = import.meta.glob("../convex/**/*.ts");
-const testsDir = dirname(fileURLToPath(import.meta.url));
 
 const SECRET = "sandbox-secret-abc";
 const SANDBOX_ID = "sbx_home";
@@ -86,34 +82,40 @@ async function fixture(options: {
       createdAt: now,
     });
 
-    if (entityKind === "session") {
-      await ctx.db.insert("sessions", {
-        repoId: homeRepoId,
-        userId: ownerUserId,
-        title: "Sibling read session",
-        status: "active",
-        sandboxId: SANDBOX_ID,
-      });
-    } else if (entityKind === "task") {
-      await ctx.db.insert("agentTasks", {
-        repoId: homeRepoId,
-        title: "Sibling read task",
-        status: "in_progress",
-        createdAt: now,
-        updatedAt: now,
-        createdBy: ownerUserId,
-        sandboxId: SANDBOX_ID,
-      });
-    } else {
-      await ctx.db.insert("projects", {
-        repoId: homeRepoId,
-        userId: ownerUserId,
-        title: "Sibling read project",
-        phase: "in_progress",
-        rawInput: "build it",
-        sandboxId: SANDBOX_ID,
-      });
-    }
+    // A task's or project's sandbox is its owned session's.
+    const owner =
+      entityKind === "task"
+        ? {
+            kind: "task" as const,
+            taskId: await ctx.db.insert("agentTasks", {
+              repoId: homeRepoId,
+              title: "Sibling read task",
+              status: "in_progress",
+              createdAt: now,
+              updatedAt: now,
+              createdBy: ownerUserId,
+            }),
+          }
+        : entityKind === "project"
+          ? {
+              kind: "project" as const,
+              projectId: await ctx.db.insert("projects", {
+                repoId: homeRepoId,
+                userId: ownerUserId,
+                title: "Sibling read project",
+                phase: "in_progress",
+                rawInput: "build it",
+              }),
+            }
+          : { kind: "standalone" as const };
+    await ctx.db.insert("sessions", {
+      owner,
+      repoId: homeRepoId,
+      userId: ownerUserId,
+      title: "Sibling read session",
+      status: "active",
+      sandboxId: SANDBOX_ID,
+    });
 
     return { ownerUserId, homeRepoId, siblingRepoId, teamId };
   });
@@ -357,7 +359,7 @@ describe("resolveCredentialRequest — sandboxes bound to no entity", () => {
 
 describe("resolveCredentialRequest — entity kinds", () => {
   test.each(["session", "task", "project"] as const)(
-    "sandbox bound via a %s resolves its owner",
+    "sandbox bound via a %s's session resolves its owner",
     async (entity) => {
       const { t, ids } = await fixture({ entity });
       const result = await resolve(t, "AcmeOrg/design-system.git");
@@ -441,29 +443,5 @@ describe("listReadableSiblingRepos", () => {
     );
     expect(strangerRepoId).toBeDefined();
     expect(readable.some((repo) => repo.owner === "stranger")).toBe(false);
-  });
-});
-
-describe("in-sandbox credential helper contract", () => {
-  const source = readFileSync(
-    join(testsDir, "../convex/_sandbox_runtime/gitCredentials.ts"),
-    "utf8",
-  );
-
-  test("git is configured to send the repository path", () => {
-    expect(source).toContain("useHttpPath true");
-  });
-
-  test("the token cache is keyed per requested path", () => {
-    expect(source).toContain("git-cred-cache-");
-  });
-
-  test("the requested path is posted as JSON built by jq", () => {
-    expect(source).toContain("{path:$p}");
-  });
-
-  test("the install pins the sandbox's home repository on the row", () => {
-    expect(source).toContain("repoOwner: homeRepo.owner");
-    expect(source).toContain("repoName: homeRepo.name");
   });
 });

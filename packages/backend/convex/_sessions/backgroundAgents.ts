@@ -1,3 +1,4 @@
+import { RUN_TIMEOUT_MS } from "../_taskWorkflow/staleness";
 import type { BackgroundAgentEntry } from "../_validators/tableFields";
 
 /**
@@ -5,9 +6,9 @@ import type { BackgroundAgentEntry } from "../_validators/tableFields";
  * settle from the daemon (`settleSubagent` in callback-src), so an entry older
  * than this means the daemon died mid-run and will never report a terminal
  * status — without the cap that session's queue would stay blocked forever.
- * Matches the 2h workflow timeout used elsewhere for the same reason.
+ * Matches the workflow timeout used elsewhere for the same reason.
  */
-export const BACKGROUND_AGENT_QUEUE_BLOCK_MS = 2 * 60 * 60 * 1000;
+export const BACKGROUND_AGENT_QUEUE_BLOCK_MS = RUN_TIMEOUT_MS;
 
 /**
  * Settled entries kept per surface. The array lives on a doc that the cancel,
@@ -94,7 +95,7 @@ export function pruneSettledBackgroundAgents(
 /**
  * Subagents still working: started, never settled, and recent enough to be
  * believable. A backgrounded Agent/Task outlives the turn that spawned it, so
- * this — not `activeWorkflowId` — is what says "the surface is still busy"
+ * this — not the turn's workflow — is what says "the surface is still busy"
  * once the main turn has completed.
  */
 export function runningBackgroundAgents(

@@ -10,7 +10,7 @@ import {
   FileStatusChip,
 } from "@/lib/components/sandbox/DiffFileBadges";
 import { DiffFileTree } from "@/lib/components/sandbox/DiffFileTree";
-import type { DiffFileEntry } from "@/lib/components/sandbox/diffFiles";
+import type { DiffFileEntry } from "@eva/shared";
 import { ReviewableFileDiff } from "@/lib/components/sandbox/ReviewableFileDiff";
 import { NoPendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
 import { useThemeMode } from "@/lib/hooks/useThemeMode";

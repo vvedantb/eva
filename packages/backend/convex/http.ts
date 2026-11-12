@@ -8,6 +8,7 @@ import { z } from "zod";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { SANDBOX_JWT_ISSUER } from "./sandboxAuthConfig";
+import { tryGetEvaBaseUrl } from "./_env/webAppUrl";
 import { parseHarnessCatalogReport } from "./_harnessSkills/report";
 import {
   previewActivityHmacMessage,
@@ -18,6 +19,8 @@ import {
   parseCiPassed,
   parseRepoEvents,
 } from "./_automationEvents/events";
+import { parseAxiomAlert } from "./_automationEvents/axiomAlert";
+import { AXIOM_ALERT_PATH_PREFIX } from "./_automations/alertWebhook";
 import { prWatchUrls } from "./_pullRequests/watchEvaluate";
 import { hmacSha256Hex } from "./_shared/hmac";
 import {
@@ -488,15 +491,17 @@ const pushWebhookSchema = z.object({
 });
 
 const SKILLS_ROOT_PREFIXES = [".agents/skills", ".claude/skills"];
+const EVA_CONFIG_ROOT_PREFIXES = [".eva"];
 
-/** True when a commit touches a supported skill root, or when GitHub sent no
+/** True when a commit touches one of the given roots, or when GitHub sent no
  * path lists (force-push / truncated payloads) so we still resync. */
-function pushTouchesSkills(
+function pushTouchesRoots(
   commits: Array<{
     added: string[];
     modified: string[];
     removed: string[];
   }>,
+  prefixes: ReadonlyArray<string>,
 ): boolean {
   if (commits.length === 0) return true;
   let sawAnyPath = false;
@@ -508,7 +513,7 @@ function pushTouchesSkills(
     ]) {
       sawAnyPath = true;
       if (
-        SKILLS_ROOT_PREFIXES.some(
+        prefixes.some(
           (prefix) => path === prefix || path.startsWith(`${prefix}/`),
         )
       ) {
@@ -528,6 +533,55 @@ async function verifyWebhookSignature(
   const computed = `sha256=${await hmacSha256Hex(secret, body)}`;
   return timingSafeEqual(computed, signature);
 }
+
+/** Larger bodies are refused before parsing; a real alert is a few KB. */
+const MAX_ALERT_BODY_BYTES = 256 * 1024;
+
+/**
+ * Axiom custom webhook notifier for an "Axiom alerts to tasks" install. The
+ * path names the automation; `Authorization: Bearer <secret>` proves the
+ * caller. Resolved monitors and repeat alerts answer 200 and do nothing.
+ */
+http.route({
+  pathPrefix: AXIOM_ALERT_PATH_PREFIX,
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const automationId = new URL(request.url).pathname.slice(
+      AXIOM_ALERT_PATH_PREFIX.length,
+    );
+    const body = await request.text();
+    if (body.length > MAX_ALERT_BODY_BYTES) {
+      return new Response("Alert body too large", { status: 413 });
+    }
+    const auth = request.headers.get("Authorization") ?? "";
+    const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+
+    const parsed = parseAxiomAlert(body);
+    if (parsed.kind === "invalid") {
+      return new Response("Expected Axiom's default webhook JSON", {
+        status: 400,
+      });
+    }
+    // Check the secret even for a resolve, so the URL answers the same way
+    // to every caller without one.
+    const result = await ctx.runMutation(
+      internal._automationEvents.dispatch.receiveAlert,
+      {
+        automationId,
+        secretHash: token === "" ? null : await sha256Hex(token),
+        alert: parsed.kind === "alert" ? parsed.alert : null,
+      },
+    );
+    switch (result) {
+      case "unauthorized":
+        return new Response("Invalid secret", { status: 401 });
+      case "not_found":
+        return new Response("Unknown alert webhook", { status: 404 });
+      default:
+        return new Response(result, { status: 200 });
+    }
+  }),
+});
 
 http.route({
   path: "/api/github/webhook",
@@ -684,12 +738,19 @@ http.route({
         );
         await ctx.scheduler.runAfter(
           0,
-          internal.githubWebhook.handlePushForSkillSync,
+          internal.githubWebhook.handlePushToBaseBranch,
           {
             owner: parsed.data.repository.owner.login,
             name: parsed.data.repository.name,
             branch,
-            touchedSkillsPath: pushTouchesSkills(parsed.data.commits),
+            touchedSkillsPath: pushTouchesRoots(
+              parsed.data.commits,
+              SKILLS_ROOT_PREFIXES,
+            ),
+            touchedEvaConfig: pushTouchesRoots(
+              parsed.data.commits,
+              EVA_CONFIG_ROOT_PREFIXES,
+            ),
           },
         );
       }
@@ -704,7 +765,7 @@ http.route({
  * installations resume setup; anything else lands on the codebase list.
  */
 function githubAuthReturnUrl(installationId: number | null): string {
-  const webAppUrl = process.env.WEB_APP_URL ?? "";
+  const webAppUrl = tryGetEvaBaseUrl() ?? "";
   return installationId === null
     ? `${webAppUrl}/home`
     : `${webAppUrl}/setup/${installationId}`;
@@ -779,7 +840,7 @@ http.route({
 });
 
 function connectorAuthReturnUrl(returnPath: string | null): string {
-  const webAppUrl = (process.env.WEB_APP_URL ?? "").replace(/\/$/, "");
+  const webAppUrl = tryGetEvaBaseUrl() ?? "";
   const path =
     returnPath &&
     returnPath.startsWith("/settings") &&
@@ -884,7 +945,7 @@ http.route({
     const expected = await computeScopedHmac(
       changelogVoteHmacMessage(run, user),
     );
-    const appUrl = process.env.WEB_APP_URL;
+    const appUrl = tryGetEvaBaseUrl();
     if (!expected || !appUrl) {
       return new Response("ENCRYPTION_KEY or WEB_APP_URL is not configured", {
         status: 500,

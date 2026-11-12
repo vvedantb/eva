@@ -3,22 +3,12 @@ import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { sandboxOwnerValidator, type SandboxOwner } from "../_sandbox/owner";
 
-/**
- * Discriminated owner — a PTY belongs to a session, a quick task, or a project.
- * All expose a sandbox and a repo; sessions additionally track a default
- * `ptySessionId` for the legacy single-terminal flow.
- */
+/** A PTY belongs to a session's sandbox. */
 export const ownerArg = sandboxOwnerValidator;
 
 export interface ResolvedOwner {
   sandboxId: string;
   repoId: Id<"githubRepos">;
-  /** Legacy default-terminal pointer; only sessions track this. */
-  defaultPtyId: string | undefined;
-  /** Bound mutator for the default-terminal pointer; tasks have no equivalent. */
-  setDefaultPtyId: ((nextPtyId: string) => Promise<void>) | undefined;
-  /** Stable suffix used to derive the legacy default PTY name when missing. */
-  ownerIdSuffix: string;
   /**
    * True when the owner is `stopping`/`closed`. A terminal connect must not
    * exec on the sandbox in this state — on Vercel any exec lazily resumes a
@@ -37,55 +27,14 @@ export async function resolveOwner(
   ctx: ActionCtx,
   owner: SandboxOwner,
 ): Promise<ResolvedOwner> {
-  if (owner.kind === "session") {
-    const session = await ctx.runQuery(internal.sessions.getInternal, {
-      id: owner.sessionId,
-    });
-    if (!session) throw new Error("Session not found");
-    if (!session.sandboxId) throw new Error("Sandbox not active");
-    return {
-      sandboxId: session.sandboxId,
-      repoId: session.repoId,
-      defaultPtyId: session.ptySessionId || undefined,
-      setDefaultPtyId: async (nextPtyId: string) => {
-        await ctx.runMutation(internal.sessions.updatePtySessionInternal, {
-          id: owner.sessionId,
-          ptySessionId: nextPtyId,
-        });
-      },
-      ownerIdSuffix: String(owner.sessionId).slice(-8),
-      isStoppingOrClosed: isStoppingOrClosed(session.status),
-    };
-  }
-
-  if (owner.kind === "task") {
-    const task = await ctx.runQuery(internal.agentTasks.getInternal, {
-      id: owner.taskId,
-    });
-    if (!task) throw new Error("Task not found");
-    if (!task.sandboxId) throw new Error("Sandbox not active");
-    if (!task.repoId) throw new Error("Task has no repo");
-    return {
-      sandboxId: task.sandboxId,
-      repoId: task.repoId,
-      defaultPtyId: undefined,
-      setDefaultPtyId: undefined,
-      ownerIdSuffix: String(owner.taskId).slice(-8),
-      isStoppingOrClosed: isStoppingOrClosed(task.reviewTaskSandboxStatus),
-    };
-  }
-
-  const project = await ctx.runQuery(internal.projects.getInternal, {
-    id: owner.projectId,
+  const session = await ctx.runQuery(internal.sessions.getInternal, {
+    id: owner.sessionId,
   });
-  if (!project) throw new Error("Project not found");
-  if (!project.sandboxId) throw new Error("Sandbox not active");
+  if (!session) throw new Error("Session not found");
+  if (!session.sandboxId) throw new Error("Sandbox not active");
   return {
-    sandboxId: project.sandboxId,
-    repoId: project.repoId,
-    defaultPtyId: undefined,
-    setDefaultPtyId: undefined,
-    ownerIdSuffix: String(owner.projectId).slice(-8),
-    isStoppingOrClosed: isStoppingOrClosed(project.reviewProjectSandboxStatus),
+    sandboxId: session.sandboxId,
+    repoId: session.repoId,
+    isStoppingOrClosed: isStoppingOrClosed(session.status),
   };
 }

@@ -9,7 +9,8 @@
       "pg",
       "shell-quote",
       "quickjs-emscripten-core",
-      "@jitl/quickjs-singlefile-cjs-release-sync"
+      "@jitl/quickjs-singlefile-cjs-release-sync",
+      "sharp"
     ]
   }
 }

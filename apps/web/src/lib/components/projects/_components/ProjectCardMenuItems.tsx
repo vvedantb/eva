@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import {
   ContextMenuItem,
   ContextMenuRadioGroup,
@@ -15,6 +16,7 @@ import {
   DropdownMenuSubTrigger,
   ConfirmSkipHint,
   skipConfirmTitle,
+  toast,
 } from "@vvedantb/ui";
 import type { api, Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
@@ -23,6 +25,7 @@ import {
   IconCopy,
   IconExternalLink,
   IconGitBranch,
+  IconLink,
   IconPencil,
   IconTrash,
   IconUserPlus,
@@ -32,26 +35,34 @@ import {
   PROJECT_PHASES,
   type ProjectPhase,
 } from "@/lib/components/projects/ProjectPhaseBadge";
+import { PrActionsSubmenus } from "@/lib/components/pr-menu/PrActionsSubmenus";
+import { useOwnerPullRequests } from "@/lib/components/pr-menu/useOwnerPullRequests";
 
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 
 /**
- * The project card's actions, hosted in either menu surface. Right-click covers
- * pointer devices; below `sm` a kebab re-hosts the same items, since touch has
- * nothing to right-click and the card carried no visible affordance at all.
- * Both surfaces render this one component so the two can never drift apart —
- * see `TaskCardMenuItems` for the original of this pattern.
+ * The project menu body, shared by the card's right-click menu, the card's
+ * kebab (touch has nothing to right-click) and the project header "…" menu.
+ * Groups: project properties, open and copy, PRs and plan, then Delete.
+ * See `TaskCardMenuItems` for the original of this pattern.
  */
 export interface ProjectCardMenuItemsProps {
   variant: "context" | "dropdown";
+  projectId: Id<"projects">;
   title: string;
   phase: ProjectPhase;
   projectLead?: Id<"users">;
   currentUserId?: Id<"users">;
   users?: User[];
+  /** The project page; Copy link copies it. */
   href?: string;
+  /** Cards link elsewhere; the project header already is the project. */
+  showOpenInNewTab?: boolean;
   branchName?: string;
-  repoFullName: string;
+  /** Project header only: its sandbox and PR commands, above the shared items. */
+  leading?: ReactNode;
+  /** Project header only: View Plan and View Interview History, after the PRs. */
+  planItems?: ReactNode;
   onPhaseChange: (phase: ProjectPhase) => void;
   onLeadChange: (value: string) => void;
   onEdit: () => void;
@@ -60,19 +71,23 @@ export interface ProjectCardMenuItemsProps {
 
 export function ProjectCardMenuItems({
   variant,
+  projectId,
   title,
   phase,
   projectLead,
   currentUserId,
   users,
   href,
+  showOpenInNewTab = false,
   branchName,
-  repoFullName,
+  leading,
+  planItems,
   onPhaseChange,
   onLeadChange,
   onEdit,
   onDelete,
 }: ProjectCardMenuItemsProps) {
+  const prs = useOwnerPullRequests({ kind: "project", projectId });
   const Item = variant === "context" ? ContextMenuItem : DropdownMenuItem;
   const Sub = variant === "context" ? ContextMenuSub : DropdownMenuSub;
   const SubTrigger =
@@ -85,14 +100,22 @@ export function ProjectCardMenuItems({
     variant === "context" ? ContextMenuRadioItem : DropdownMenuRadioItem;
   const MenuSeparator =
     variant === "context" ? ContextMenuSeparator : DropdownMenuSeparator;
+  const iconSize = variant === "context" ? 16 : 14;
 
   const PhaseIcon = phaseConfig[phase].icon;
+  const hasPrGroup = prs.length > 0 || planItems !== undefined;
 
   return (
     <>
+      {leading ? (
+        <>
+          {leading}
+          <MenuSeparator />
+        </>
+      ) : null}
       <Sub>
         <SubTrigger>
-          <PhaseIcon size={16} className={phaseConfig[phase].text} />
+          <PhaseIcon size={iconSize} className={phaseConfig[phase].text} />
           Phase
         </SubTrigger>
         <SubContent>
@@ -109,7 +132,7 @@ export function ProjectCardMenuItems({
               const Icon = cfg.icon;
               return (
                 <RadioItem key={p} value={p}>
-                  <Icon size={16} className={cfg.text} />
+                  <Icon size={iconSize} className={cfg.text} />
                   {cfg.label}
                 </RadioItem>
               );
@@ -119,7 +142,7 @@ export function ProjectCardMenuItems({
       </Sub>
       <Sub>
         <SubTrigger>
-          <IconUserPlus className="size-4" />
+          <IconUserPlus size={iconSize} />
           Project Lead
         </SubTrigger>
         <SubContent>
@@ -142,59 +165,75 @@ export function ProjectCardMenuItems({
           </RadioGroup>
         </SubContent>
       </Sub>
+      <Item onSelect={onEdit}>
+        <IconPencil size={iconSize} />
+        Edit details
+      </Item>
       <MenuSeparator />
-      {href ? (
+      {showOpenInNewTab && href ? (
         <Item
-          onClick={() => {
-            window.open(href, "_blank");
+          onSelect={() => {
+            window.open(href, "_blank", "noopener,noreferrer");
           }}
         >
-          <IconExternalLink className="size-4" />
+          <IconExternalLink size={iconSize} />
           Open in new tab
         </Item>
       ) : null}
-      {branchName ? (
-        <Item asChild>
-          <a
-            href={`https://github.com/${repoFullName}/tree/${branchName}`}
-            target="_blank"
-            rel="noopener noreferrer"
+      <Sub>
+        <SubTrigger>
+          <IconCopy size={iconSize} />
+          Copy
+        </SubTrigger>
+        <SubContent>
+          <Item
+            onSelect={() => {
+              void navigator.clipboard.writeText(title);
+            }}
           >
-            <IconGitBranch className="size-4" />
-            View Branch
-          </a>
-        </Item>
+            <IconClipboard size={iconSize} />
+            Title
+          </Item>
+          {href ? (
+            <Item
+              onSelect={() => {
+                void navigator.clipboard.writeText(
+                  window.location.origin + href,
+                );
+              }}
+            >
+              <IconLink size={iconSize} />
+              Link
+            </Item>
+          ) : null}
+          {branchName ? (
+            <Item
+              onSelect={() => {
+                void navigator.clipboard.writeText(branchName).then(() => {
+                  toast.success("Branch name copied");
+                });
+              }}
+            >
+              <IconGitBranch size={iconSize} />
+              Branch name
+            </Item>
+          ) : null}
+        </SubContent>
+      </Sub>
+      {hasPrGroup ? (
+        <>
+          <MenuSeparator />
+          <PrActionsSubmenus variant={variant} prs={prs} />
+          {planItems}
+        </>
       ) : null}
-      <Item onClick={onEdit}>
-        <IconPencil className="size-4" />
-        Edit Details
-      </Item>
       <MenuSeparator />
       <Item
-        onClick={() => {
-          void navigator.clipboard.writeText(title);
-        }}
-      >
-        <IconClipboard className="size-4" />
-        Copy title
-      </Item>
-      {branchName ? (
-        <Item
-          onClick={() => {
-            void navigator.clipboard.writeText(branchName);
-          }}
-        >
-          <IconCopy className="size-4" />
-          Copy branch name
-        </Item>
-      ) : null}
-      <MenuSeparator />
-      <Item
-        className="text-destructive"
-        onClick={onDelete}
+        className="text-destructive focus:text-destructive"
+        onSelect={onDelete}
         title={skipConfirmTitle("Delete")}
       >
-        <IconTrash className="size-4" />
+        <IconTrash size={iconSize} />
         Delete
         <ConfirmSkipHint />
       </Item>

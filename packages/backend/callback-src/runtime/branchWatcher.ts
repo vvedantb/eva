@@ -3,7 +3,7 @@ import { COMMIT_EXCLUDE_PATHSPECS } from "@eva/shared/gitDefaults";
 import { ENTITY_ID, ENTITY_ID_FIELD, WORK_DIR } from "../config.js";
 import { callConvexWithRetry } from "../http/convexClient.js";
 import { log } from "../utils.js";
-import { git } from "./gitExec.js";
+import { git, readCurrentBranch } from "./gitExec.js";
 
 /**
  * Reports the branch the sandbox checkout is actually on, plus how much of its
@@ -81,12 +81,13 @@ export function decideGitStateReport(input: {
   return input.current;
 }
 
-function readCurrentBranch(): string | null {
-  const abbrev = git(["rev-parse", "--abbrev-ref", "HEAD"], GIT_TIMEOUT_MS);
-  if (!abbrev.ok) return null;
-  if (abbrev.out.trim() !== "HEAD") return formatBranch(abbrev.out, "");
-  const short = git(["rev-parse", "--short", "HEAD"], GIT_TIMEOUT_MS);
-  return formatBranch(abbrev.out, short.ok ? short.out : "");
+function readWatchedBranch(): string | null {
+  const abbrev = readCurrentBranch({ timeoutMs: GIT_TIMEOUT_MS });
+  if (abbrev !== "HEAD") return formatBranch(abbrev, "");
+  const short = git(["rev-parse", "--short", "HEAD"], {
+    timeoutMs: GIT_TIMEOUT_MS,
+  });
+  return formatBranch(abbrev, short.ok ? short.stdout : "");
 }
 
 /**
@@ -98,23 +99,23 @@ function readCurrentBranch(): string | null {
 function readGitSync(): GitSync | null {
   const status = git(
     ["status", "--porcelain", "--", ".", ...COMMIT_EXCLUDE_PATHSPECS],
-    GIT_TIMEOUT_MS,
+    { timeoutMs: GIT_TIMEOUT_MS },
   );
   const ahead = git(
     ["rev-list", "--count", "HEAD", "--not", "--remotes=origin"],
-    GIT_TIMEOUT_MS,
+    { timeoutMs: GIT_TIMEOUT_MS },
   );
-  const unpushedCommits = Number(ahead.out);
+  const unpushedCommits = Number(ahead.stdout);
   if (!status.ok || !ahead.ok || !Number.isSafeInteger(unpushedCommits)) {
     return null;
   }
   const uncommittedFiles =
-    status.out.length === 0 ? 0 : status.out.split("\n").length;
+    status.stdout.length === 0 ? 0 : status.stdout.split("\n").length;
   return { uncommittedFiles, unpushedCommits };
 }
 
 function readGitState(): GitState | null {
-  const branch = readCurrentBranch();
+  const branch = readWatchedBranch();
   if (branch === null) return null;
   return { branch, sync: readGitSync() };
 }

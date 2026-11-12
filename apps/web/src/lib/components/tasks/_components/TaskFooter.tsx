@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef } from "react";
-import type { api, Doc, Id } from "@eva/backend";
+import { taskScheduledAt, type api, type Doc, type Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import {
   Button,
@@ -30,6 +30,8 @@ import {
   getMoreMenuVisibility,
   TaskFooterMoreMenu,
 } from "./TaskFooterMoreMenu";
+import { TaskHeaderMenu } from "./TaskHeaderMenu";
+import type { OwnedSandboxFields } from "@/lib/components/sandbox/useOwnedSession";
 
 type RunDoc = NonNullable<
   FunctionReturnType<typeof api.agentRuns.listByTask>
@@ -52,7 +54,8 @@ interface TaskFooterProps {
   isSandboxActive: boolean;
   isSandboxStarting: boolean;
   isSandboxStopping: boolean;
-  isRetryingStartupCommands: boolean;
+  /** The task's sandbox checkout (a quick task's lives on its session). */
+  sandbox: Pick<OwnedSandboxFields, "sandboxGitSync" | "gitTarget">;
   isRunningDevServer: boolean;
   isRunningBackgroundCommands: boolean;
   canCreatePr: boolean;
@@ -60,7 +63,6 @@ interface TaskFooterProps {
   onCreatePr: () => void;
   onStartSandbox: () => void;
   onStopSandbox: () => void;
-  onRunStartupCommands: () => void;
   onRunDevServer: () => void;
   onRunBackgroundCommands: () => void;
   onStartExecution: () => void;
@@ -161,7 +163,7 @@ export function TaskFooter({
   isSandboxActive,
   isSandboxStarting,
   isSandboxStopping,
-  isRetryingStartupCommands,
+  sandbox,
   isRunningDevServer,
   isRunningBackgroundCommands,
   canCreatePr,
@@ -169,7 +171,6 @@ export function TaskFooter({
   onCreatePr,
   onStartSandbox,
   onStopSandbox,
-  onRunStartupCommands,
   onRunDevServer,
   onRunBackgroundCommands,
   onStartExecution,
@@ -246,7 +247,7 @@ export function TaskFooter({
             >
               <SplitRunButton
                 taskId={taskId}
-                scheduledAt={task?.scheduledAt}
+                scheduledAt={task ? taskScheduledAt(task) : undefined}
                 isStarting={isStarting}
                 onStartExecution={onStartExecution}
                 size={buttonSize}
@@ -261,27 +262,42 @@ export function TaskFooter({
           {isHeader ? (
             <PrMergeConfetti owner={{ kind: "task", taskId }} />
           ) : null}
-          {moreMenu.showMoreMenu && (
-            <TaskFooterMoreMenu
-              visibility={moreMenu}
-              prLinks={prLinks}
-              isHeader={isHeader}
+          {isHeader && task ? (
+            <TaskHeaderMenu
+              task={task}
               buttonSize={buttonSize}
               iconSize={iconSize}
+              createPr={{
+                enabled: canCreatePr,
+                isCreating: isCreatingPr,
+                onCreate: onCreatePr,
+              }}
+              visibility={moreMenu}
               isStarting={isStarting}
-              isRetryingStartupCommands={isRetryingStartupCommands}
               isRunningDevServer={isRunningDevServer}
               isRunningBackgroundCommands={isRunningBackgroundCommands}
               onResolveConfirm={onResolveConfirm}
-              onRunStartupCommands={onRunStartupCommands}
               onRunDevServer={onRunDevServer}
               onRunBackgroundCommands={onRunBackgroundCommands}
             />
-          )}
+          ) : moreMenu.showMoreMenu ? (
+            <TaskFooterMoreMenu
+              visibility={moreMenu}
+              prLinks={prLinks}
+              buttonSize={buttonSize}
+              iconSize={iconSize}
+              isStarting={isStarting}
+              isRunningDevServer={isRunningDevServer}
+              isRunningBackgroundCommands={isRunningBackgroundCommands}
+              onResolveConfirm={onResolveConfirm}
+              onRunDevServer={onRunDevServer}
+              onRunBackgroundCommands={onRunBackgroundCommands}
+            />
+          ) : null}
           <SandboxCommitPushButton
-            gitSync={task?.sandboxGitSync}
+            gitSync={sandbox.sandboxGitSync}
             isSandboxActive={isSandboxActive}
-            target={{ kind: "task", taskId }}
+            target={sandbox.gitTarget}
             size={buttonSize}
           />
           <AnimatePresence initial={false} mode="popLayout">

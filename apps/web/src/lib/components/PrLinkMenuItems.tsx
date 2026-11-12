@@ -1,8 +1,9 @@
 "use client";
 
+import type { PrState } from "@eva/shared";
 import type { ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { api, type SandboxOwner } from "@eva/backend";
+import { api, type PrOwnerRef } from "@eva/backend";
 import {
   DropdownMenuItem,
   Tooltip,
@@ -14,18 +15,19 @@ import { IconBrandVercel, IconGitPullRequest } from "@tabler/icons-react";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { useViewVercelDeployment } from "@/lib/hooks/useViewVercelDeployment";
 import { prStateIconClass } from "./prStateIconClass";
+import { PrActionsSubmenus } from "./pr-menu/PrActionsSubmenus";
 
 interface PrLinkMenuItemsArgs {
   /** Offers Create PR when set; omit on surfaces without that action. */
   createPr?: { enabled: boolean; isCreating: boolean; onCreate: () => void };
   prUrl: string | undefined;
   /** Colours the View PR icon (sessions only); others leave it default. */
-  prState?: "draft" | "open" | "merged" | "closed";
+  prState?: PrState;
   /**
-   * The chat whose PRs these are. When it holds more than one PR, View PR
-   * becomes one item per PR, numbered, instead of a single link.
+   * The chat whose PRs these are. Each PR row becomes a submenu of PR actions:
+   * "View PR" for one, "PR #N" per PR for several (`PrActionsSubmenus`).
    */
-  owner?: SandboxOwner;
+  owner?: PrOwnerRef;
   /**
    * True when a deployment exists — renders the disabled View Preview hint,
    * behind the `viewVercelDeployment` experimental flag.
@@ -35,8 +37,8 @@ interface PrLinkMenuItemsArgs {
 
 /**
  * The Create PR / View PR(s) / View Preview block of the "More" dropdown, shared
- * by the quick-task footer and header, the session header and the project
- * header. Simple view hides git/PR plumbing here, so the three surfaces cannot
+ * by the quick-task footer and header and the project header. Simple view
+ * hides git/PR plumbing here, so the surfaces cannot
  * drift apart. Returning `hasItems` lets callers keep their own separator
  * logic around the block.
  */
@@ -50,9 +52,9 @@ export function usePrLinkMenuItems(args: PrLinkMenuItemsArgs): {
     api.pullRequests.listForOwner,
     args.owner !== undefined && !simpleView ? { owner: args.owner } : "skip",
   );
-  const manyPrs = ownerPrs !== undefined && ownerPrs.length > 1;
+  const hasPrRows = ownerPrs !== undefined && ownerPrs.length > 0;
   const showCreatePr = !simpleView && Boolean(args.createPr?.enabled);
-  const showViewPr = !simpleView && (args.prUrl !== undefined || manyPrs);
+  const showViewPr = !simpleView && (args.prUrl !== undefined || hasPrRows);
   const showViewPreview =
     !simpleView && viewVercelDeployment && args.hasDeployment;
   const hasItems = showCreatePr || showViewPr || showViewPreview;
@@ -75,20 +77,11 @@ export function usePrLinkMenuItems(args: PrLinkMenuItemsArgs): {
             Create PR
           </DropdownMenuItem>
         ) : null}
-        {showViewPr && manyPrs
-          ? ownerPrs.map((pr) => (
-              <DropdownMenuItem key={pr._id} asChild>
-                <a href={pr.prUrl} target="_blank" rel="noopener noreferrer">
-                  <IconGitPullRequest
-                    size={14}
-                    className={prStateIconClass(pr.state)}
-                  />
-                  View PR #{pr.prNumber}
-                </a>
-              </DropdownMenuItem>
-            ))
-          : null}
-        {showViewPr && !manyPrs && args.prUrl !== undefined ? (
+        {showViewPr && hasPrRows ? (
+          <PrActionsSubmenus variant="dropdown" prs={ownerPrs} />
+        ) : null}
+        {/* A chat whose PR predates the `pullRequests` rows has only a URL. */}
+        {showViewPr && !hasPrRows && args.prUrl !== undefined ? (
           <DropdownMenuItem asChild>
             <a href={args.prUrl} target="_blank" rel="noopener noreferrer">
               <IconGitPullRequest

@@ -24,17 +24,16 @@ import {
   normalizedClaudeModel,
   settingsJson,
 } from "../config.js";
-import { evaMcpServers } from "../evaMcp.js";
+import { evaMcpServers, hasRepoMcpFile } from "../evaMcp.js";
 import { buildClaudeStartupStep } from "../session/claudeSession.js";
 import { emitParsedStreamLine } from "../parse/streamRouter.js";
-import { updateThinkingStep } from "../parse/canonical.js";
 import {
   recordSdkAttemptFailure,
   recordSdkRetry,
   trimBufferHead,
 } from "../runtime/buffers.js";
 import { buildCanUseTool } from "../runtime/pendingQuestion.js";
-import { callbackState as S, resetAttemptState } from "../runtime/state.js";
+import { callbackState as S } from "../runtime/state.js";
 import {
   startClaudeUsageReport,
   type ClaudeUsageResponseLike,
@@ -44,8 +43,8 @@ import type {
   ProviderAttemptResult,
   SessionMode,
 } from "../types.js";
-import { log, tryParseJson } from "../utils.js";
-import { buildStandardSdkAttemptResult } from "./attemptResult.js";
+import { log, readTurnPrompt, tryParseJsonObject } from "../utils.js";
+import { beginSdkAttempt, finishSdkAttempt } from "./attemptResult.js";
 import { isZeroWorkTaskNotificationResult } from "./claudeResult.js";
 
 const SDK_PACKAGE = "@anthropic-ai/claude-agent-sdk";
@@ -241,11 +240,7 @@ export function resolvePinnedSdkEntry(pin: {
  * raw log, so the round trip is the boundary rather than extra work.
  */
 export function sdkMessageJson(serialized: string): JsonObject | null {
-  const parsed = tryParseJson(serialized);
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return null;
-  }
-  return parsed;
+  return tryParseJsonObject(serialized);
 }
 
 /** Imports the Agent SDK version this callback's parsers were written for. */
@@ -359,10 +354,6 @@ function claudeExecutablePath(): string {
     pinnedVersion: process.env.CLAUDE_CLI_PINNED_VERSION || null,
     fallbackBinPath: process.env.CLAUDE_BIN_PATH || "",
   });
-}
-
-function readPromptText(): string {
-  return readFileSync("/tmp/design-prompt.txt", "utf8");
 }
 
 export function buildSdkOptions(sessionMode: SessionMode): SdkOptions {
@@ -506,6 +497,10 @@ function buildSdkOptionsFromParts(
       ? { resume: sessionMode.sessionId }
       : {}),
     extraArgs,
+    // A repo with `.eva/mcp.json` gets the merged set from Eva; its own
+    // `.mcp.json` would then add duplicates, such as a second `eva`. Repos
+    // without one keep loading `.mcp.json` as before.
+    ...(hasRepoMcpFile ? { strictMcpConfig: true } : {}),
     ...(Object.keys(evaMcpServers).length > 0
       ? { mcpServers: evaMcpServers }
       : {}),
@@ -526,17 +521,7 @@ function buildSdkOptionsFromParts(
 export async function runClaudeSdkAttempt(
   sessionMode: SessionMode,
 ): Promise<ProviderAttemptResult> {
-  resetAttemptState();
-  S.activeAttemptStartedAt = Date.now();
-  const startupStep = buildClaudeStartupStep();
-  updateThinkingStep(startupStep.label, startupStep.detail);
-  log(
-    "runClaudeSdkAttempt started (mode=" +
-      sessionMode.mode +
-      ", sessionId=" +
-      (sessionMode.sessionId || "none") +
-      ")",
-  );
+  beginSdkAttempt("runClaudeSdkAttempt", sessionMode, buildClaudeStartupStep);
 
   let attemptOutput = "";
   let lastMessageAt = Date.now();
@@ -551,7 +536,7 @@ export async function runClaudeSdkAttempt(
   const sdk = await loadSdk();
   let effectiveMode = sessionMode;
   let q = sdk.query({
-    prompt: readPromptText(),
+    prompt: readTurnPrompt(),
     options: buildSdkOptions(effectiveMode),
   });
 
@@ -631,7 +616,7 @@ export async function runClaudeSdkAttempt(
         );
         sawZeroWorkTaskNotification = false;
         q = sdk.query({
-          prompt: readPromptText(),
+          prompt: readTurnPrompt(),
           options: buildSdkOptions(effectiveMode),
         });
         await consumeQuery();
@@ -656,7 +641,7 @@ export async function runClaudeSdkAttempt(
         resultIsError = false;
         effectiveMode = { mode: "session", sessionId: effectiveMode.sessionId };
         q = sdk.query({
-          prompt: readPromptText(),
+          prompt: readTurnPrompt(),
           options: buildSdkOptions(effectiveMode),
         });
         await consumeQuery();
@@ -682,35 +667,14 @@ export async function runClaudeSdkAttempt(
     error: resultErrorMessage || queryErrorMessage || undefined,
   });
 
-  const code =
-    sawResult &&
-    !resultIsError &&
-    !timedOutForMaxRuntime &&
-    !timedOutForNoOutput
-      ? 0
-      : 1;
-  log(
-    "runClaudeSdkAttempt finished in " +
-      String(Date.now() - S.activeAttemptStartedAt) +
-      "ms (code=" +
-      code +
-      ", sawResult=" +
-      sawResult +
-      ", resultIsError=" +
-      resultIsError +
-      ", timedOutForNoOutput=" +
-      timedOutForNoOutput +
-      ", timedOutForMaxRuntime=" +
-      timedOutForMaxRuntime +
-      ", outputBytes=" +
-      attemptOutput.length +
-      (queryErrorMessage ? ", queryError=" + queryErrorMessage : "") +
-      ")",
-  );
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
+  return finishSdkAttempt({
+    name: "runClaudeSdkAttempt",
+    sawResult,
+    resultIsError,
     timedOutForNoOutput,
     timedOutForMaxRuntime,
+    output: attemptOutput,
+    errorLabel: "queryError",
+    errorMessage: queryErrorMessage,
   });
 }

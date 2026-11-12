@@ -1,21 +1,15 @@
 import { v } from "convex/values";
-import { startTaskRunWorkflow } from "../_taskWorkflow/startRun";
-import { internal } from "../_generated/api";
-import {
-  aiModelValidator,
-  normalizeAIModel,
-  runModeValidator,
-} from "../validators";
+import { startTaskRun } from "../_taskWorkflow/startRun";
+import { aiModelValidator, runModeValidator } from "../validators";
 import {
   authMutation,
   hasTaskAccess,
   hasActiveRun,
   isFirstTaskOnBranch,
 } from "../functions";
-import { buildProjectBranchName } from "../_projects/helpers";
+import { resolveProjectBranchName } from "../_git/branchNames";
 import { resolveTaskWorkflowBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
-import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
-import { setTaskLastRunStartedAt } from "./runSummary";
+import { cancelTaskRunSchedule, scheduleTaskRun } from "./runState";
 
 /** Starts task execution by creating a run and launching the workflow. */
 export const startExecution = authMutation({
@@ -49,18 +43,7 @@ export const startExecution = authMutation({
     if (!repo) {
       throw new Error("Repository not found");
     }
-    if (task.scheduledFunctionId) {
-      try {
-        await ctx.scheduler.cancel(task.scheduledFunctionId);
-      } catch {
-        // may have already fired
-      }
-      await ctx.db.patch(args.id, {
-        scheduledAt: undefined,
-        scheduledFunctionId: undefined,
-      });
-    }
-
+    // A pending schedule is cancelled when the run starts (`markTaskRunStarted`).
     if (await hasActiveRun(ctx.db, args.id)) {
       throw new Error("Task already has an active execution");
     }
@@ -101,8 +84,7 @@ export const startExecution = authMutation({
 
     const branchName =
       task.projectId && project
-        ? (project.branchName ??
-          buildProjectBranchName(task.projectId, project.branchVersion))
+        ? resolveProjectBranchName(task.projectId, project)
         : undefined;
     const baseBranch = resolveTaskWorkflowBaseBranch(
       task,
@@ -110,63 +92,23 @@ export const startExecution = authMutation({
       project ?? undefined,
     );
 
-    const startedAt = Date.now();
-    const runId = await ctx.db.insert("agentRuns", {
-      taskId: args.id,
-      status: "queued",
-      logs: [],
-      startedAt,
+    const runId = await startTaskRun(ctx, {
+      task,
+      repo,
+      userId: ctx.userId,
+      baseBranch,
+      isFirstTaskOnBranch: firstOnBranch,
+      branchName,
+      projectId: task.projectId,
       mode: args.mode,
       triggeredBy: ctx.userId,
       // Explicit comment (quick-task "Make changes") wins; otherwise consume any
       // comment parked on the task by an earlier change request.
       triggeringCommentId:
         args.triggeringCommentId ?? task.pendingChangeRequestCommentId,
-      credentialSourceLabel: await resolveCredentialSourceLabel(
-        ctx.db,
-        task.providerAccountId,
-        task.createdBy,
-      ),
-      model: normalizeAIModel(task.model),
+      clearPendingChangeRequest: true,
+      rollbackStatus: "todo",
     });
-    await setTaskLastRunStartedAt(ctx, args.id, task.repoId, startedAt);
-    await ctx.db.patch(args.id, {
-      status: "in_progress",
-      updatedAt: Date.now(),
-      pendingChangeRequestCommentId: undefined,
-    });
-    try {
-      await startTaskRunWorkflow(ctx, {
-        runId,
-        taskId: args.id,
-        repoId: task.repoId,
-        installationId: repo.installationId,
-        projectId: task.projectId,
-        branchName,
-        baseBranch,
-        isFirstTaskOnBranch: firstOnBranch,
-        model: task.model ?? repo.defaultModel,
-        providerAccountId: task.providerAccountId,
-        credentialOwnerUserId: task.createdBy,
-        userId: ctx.userId,
-        mode: args.mode,
-      });
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to start workflow";
-      await ctx.db.patch(runId, {
-        status: "error",
-        error: message,
-        finishedAt: Date.now(),
-        exitReason: "workflow_start_failed",
-      });
-      await ctx.db.patch(args.id, {
-        status: "todo",
-        activeWorkflowId: undefined,
-        updatedAt: Date.now(),
-      });
-      throw error;
-    }
 
     return {
       runId,
@@ -209,16 +151,13 @@ export const scheduleExecution = authMutation({
       throw new Error("Scheduled time must be in the future");
     }
 
-    const functionId = await ctx.scheduler.runAt(
+    const result = await scheduleTaskRun(
+      ctx,
+      args.id,
+      "schedule",
       args.scheduledAt,
-      internal.taskWorkflow.executeScheduledTask,
-      { taskId: args.id, scheduledAt: args.scheduledAt },
     );
-    await ctx.db.patch(args.id, {
-      scheduledAt: args.scheduledAt,
-      scheduledFunctionId: functionId,
-      updatedAt: Date.now(),
-    });
+    if (!result.ok) throw new Error(result.reason);
     return null;
   },
 });
@@ -231,20 +170,9 @@ export const cancelScheduledExecution = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
-    if (!task.scheduledFunctionId) {
-      throw new Error("Task is not scheduled");
-    }
-
-    try {
-      await ctx.scheduler.cancel(task.scheduledFunctionId);
-    } catch {
-      // may have already fired
-    }
-    await ctx.db.patch(args.id, {
-      scheduledAt: undefined,
-      scheduledFunctionId: undefined,
-      updatedAt: Date.now(),
-    });
+    const result = await cancelTaskRunSchedule(ctx, args.id);
+    if (!result.ok) throw new Error(result.reason);
+    await ctx.db.patch(args.id, { updatedAt: Date.now() });
     return null;
   },
 });
@@ -264,24 +192,13 @@ export const updateScheduledExecution = authMutation({
       throw new Error("Scheduled time must be in the future");
     }
 
-    if (task.scheduledFunctionId) {
-      try {
-        await ctx.scheduler.cancel(task.scheduledFunctionId);
-      } catch {
-        // may have already fired
-      }
-    }
-
-    const functionId = await ctx.scheduler.runAt(
+    const result = await scheduleTaskRun(
+      ctx,
+      args.id,
+      "schedule",
       args.scheduledAt,
-      internal.taskWorkflow.executeScheduledTask,
-      { taskId: args.id, scheduledAt: args.scheduledAt },
     );
-    await ctx.db.patch(args.id, {
-      scheduledAt: args.scheduledAt,
-      scheduledFunctionId: functionId,
-      updatedAt: Date.now(),
-    });
+    if (!result.ok) throw new Error(result.reason);
     return null;
   },
 });

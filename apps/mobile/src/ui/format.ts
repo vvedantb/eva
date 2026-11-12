@@ -1,13 +1,23 @@
-const MINUTE = 60_000;
-const HOUR = 60 * MINUTE;
-const DAY = 24 * HOUR;
+import { formatCompactRelativeTime } from "@vvedantb/native-ui/primitives";
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
 
-/** "now", "5m", "3h", "2d", then a short date. For list rows. */
-export function timeAgo(timestamp: number, now = Date.now()): string {
-  const elapsed = Math.max(0, now - timestamp);
-  if (elapsed < MINUTE) return "now";
-  if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)}m`;
-  if (elapsed < DAY) return `${Math.floor(elapsed / HOUR)}h`;
-  if (elapsed < 7 * DAY) return `${Math.floor(elapsed / DAY)}d`;
-  return new Date(timestamp).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+dayjs.extend(relativeTime);
+
+/**
+ * "42s", "5m", "3h", "2d", "4mo", "1y", in calendar units: the web
+ * `RelativeDateTime` and `compactRelativeTime` (`@eva/shared/dates`). For list rows.
+ */
+export function timeAgo(timestamp: number): string {
+  return formatCompactRelativeTime(timestamp, { calendar: true });
+}
+
+/** "3 months ago", as the web `relativeTime` (dayjs `fromNow`). For the stash rows. */
+export function fromNow(timestamp: number): string {
+  return dayjs(timestamp).fromNow();
+}
+
+/** A row or header title: the stored one, or "Untitled" when it is empty or blank (the web drafts' word). */
+export function displayTitle(title: string): string {
+  return title.trim() || "Untitled";
 }

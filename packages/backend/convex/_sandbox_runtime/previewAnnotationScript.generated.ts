@@ -188,14 +188,15 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
       Reflect.deleteProperty(window, "__evaPreviewParentOrigin");
       return typeof raw === "string" && raw ? originOf(raw) : "";
     }
-    const parentOrigin = injectedParentOrigin() || (document.referrer ? originOf(document.referrer) : "");
+    const parentOrigin = injectedParentOrigin() || originOf(window.location.ancestorOrigins?.item(0) ?? "") || (document.referrer ? originOf(document.referrer) : "");
     let modeActive = false;
     let selectedEl = null;
     let overlay = null;
     let labelEl = null;
     let rectRaf = 0;
     function post(payload) {
-      window.parent.postMessage(payload, parentOrigin || "*");
+      if (!parentOrigin) return;
+      window.parent.postMessage(payload, parentOrigin);
     }
     function ensureOverlay() {
       if (overlay) return;
@@ -1070,7 +1071,7 @@ export const PREVIEW_ANNOTATION_SCRIPT = `"use strict";
       return loadHtml2Canvas().then(renderViewportCanvas).then((canvas) => canvas.toDataURL("image/png")).finally(restoreCaptureChrome);
     }
     window.addEventListener("message", (event) => {
-      if (parentOrigin && event.origin !== parentOrigin) return;
+      if (!parentOrigin || event.origin !== parentOrigin) return;
       const data = event.data;
       if (!data || typeof data !== "object") return;
       const type = Reflect.get(data, "type");

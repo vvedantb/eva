@@ -4,6 +4,7 @@ import { internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { isFirstTaskOnBranch } from "../convex/functions";
+import { isSessionArchived } from "../convex/_sessions/archive";
 
 /**
  * Reported bug: closing a project's pull request wiped the project (fix
@@ -311,11 +312,17 @@ describe("a quick task's pull request", () => {
   );
 
   test(
-    "closes a preview sandbox the task never started",
+    "retires the task's session, so its preview stops being startable",
     async () => {
       const { t, ids } = await fixture();
-      await t.run((ctx) =>
-        ctx.db.patch(ids.quick, { reviewTaskSandboxStatus: "active" }),
+      const sessionId = await t.run((ctx) =>
+        ctx.db.insert("sessions", {
+          owner: { kind: "task", taskId: ids.quick },
+          repoId: ids.repoId,
+          userId: ids.ada,
+          title: "Quick task",
+          status: "closed",
+        }),
       );
 
       await t.mutation(internal.githubWebhook.handlePullRequestEvent, {
@@ -324,11 +331,10 @@ describe("a quick task's pull request", () => {
         merged: true,
       });
 
-      // A merged PR makes the task read-only, so its preview must not stay
-      // startable. (The stop of a *live* VM schedules provider teardown, so
-      // that half is asserted at source level in taskPrLifecycleContract.)
-      const task = await t.run((ctx) => ctx.db.get(ids.quick));
-      expect(task?.reviewTaskSandboxStatus).toBe("closed");
+      // A merged PR makes the task read-only: its session (and so its
+      // sandbox) is archived and starts the grace delete.
+      const session = await t.run((ctx) => ctx.db.get(sessionId));
+      expect(session && isSessionArchived(session)).toBe(true);
     },
     TIMEOUT_MS,
   );

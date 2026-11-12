@@ -11,20 +11,7 @@ type SessionChatTarget = {
   chatId: Id<"sessionChats">;
 };
 
-type TaskChatTarget = {
-  kind: "taskChat";
-  taskId: Id<"agentTasks">;
-};
-
-type ProjectChatTarget = {
-  kind: "projectChat";
-  projectId: Id<"projects">;
-};
-
-export type ChatDraftTarget =
-  | SessionChatTarget
-  | TaskChatTarget
-  | ProjectChatTarget;
+export type ChatDraftTarget = SessionChatTarget;
 
 /** Seed bundle passed to ChatBody. */
 export type ChatDraftSeed = {
@@ -42,16 +29,20 @@ export type ChatDraftSeed = {
  * The PromptInputProvider subtree must NOT mount until isReady is true so that
  * initialInput is never seeded with an empty string before the draft loads.
  */
-export function useChatDraftSeed(target: ChatDraftTarget): {
+export function useChatDraftSeed(target: ChatDraftTarget | undefined): {
   isReady: boolean;
   initialDisplay: string;
   mentionMap: Map<string, string>;
   skillMap: Map<string, string>;
 } {
-  const data = useQuery(api.drafts.getForTarget, { target });
+  const data = useQuery(
+    api.drafts.getForTarget,
+    target ? { target } : "skip",
+  );
 
-  // data === undefined → query still in flight
-  const isReady = data !== undefined;
+  // data === undefined → query still in flight. No target (a chat not
+  // created yet) has no draft to load.
+  const isReady = target === undefined || data !== undefined;
 
   const { displayText, mentionMap, skillMap } = tokenizedToEditable(data ?? "");
 

@@ -5,7 +5,7 @@ import {
   internalQuery,
   type MutationCtx,
 } from "../_generated/server";
-import { workflow, cancelTrackedWorkflow } from "../workflowManager";
+import { workflow } from "../workflowManager";
 import { authAction, authMutation, hasRepoAccess } from "../functions";
 import {
   aiModelValidator,
@@ -16,8 +16,6 @@ import {
 } from "../validators";
 import { trackSessionChatWorkflow } from "../workflowWatchdog";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
-import { finalizeCancelledAssistantMessage } from "../streaming";
-import { finalizeOpenSyntheticTurnOnCancel } from "../_chat/chatResult";
 import {
   drainChatQueueQuietly,
   drainSessionChatQueues,
@@ -35,15 +33,14 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { composerTraitFields } from "../_shared/composerTraits";
-import { detectCancelSupersession } from "../_chat/cancelRace";
+import { cancelChatTurn } from "../_chat/cancelRace";
 import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
 import { touchUserActivity } from "../_sandbox/activity";
+import { bindTurnWorkflow, openSessionChatTurn } from "../_chat/turnStore";
 import {
-  bindTurnWorkflow,
-  closeOpenTurn,
-  closeTurnForWorkflow,
-  openSessionChatTurn,
-} from "../_chat/turnStore";
+  hasOpenChatTurn,
+  openTurnWorkflowId,
+} from "../_chat/turnProjection";
 import { emptyStallRetryPrompt } from "../_chat/stallRetry";
 import {
   getSessionChatOrThrow,
@@ -51,6 +48,7 @@ import {
   loadSessionChat,
   sessionChatHasFreeSlot,
   sessionChatPersistenceId,
+  sessionChatPersistenceIdValidator,
   sessionChatStreamingEntityId,
   type SessionChatContext,
 } from "../_sessionChats/helpers";
@@ -268,9 +266,12 @@ export const retryEmptyStalledSessionTurn = internalMutation({
     const lastUserContent = await emptyStallRetryPrompt(ctx.db, {
       parentId: chat._id,
       sandboxStopped: args.sandboxStopped,
-      hasActiveWorkflow: chat.activeWorkflowId !== undefined,
+      hasActiveWorkflow: await hasOpenChatTurn(ctx.db, chat._id),
     });
     if (lastUserContent === null) return null;
+    // A task run or the parallel-chat cap holds the slot: no restage, the
+    // stall alert stays and the user resends.
+    if (!(await sessionChatHasFreeSlot(ctx.db, context))) return null;
 
     const repo = await ctx.db.get(session.repoId);
     if (!repo) return null;
@@ -322,10 +323,14 @@ export const retryLastTurnWithAccount = authMutation({
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
     if (
-      chat.activeWorkflowId !== undefined ||
+      (await hasOpenChatTurn(ctx.db, chat._id)) ||
       chat.pendingTurn !== undefined
     ) {
       throw new Error("A turn is already running");
+    }
+    // Same gate as a send: a task run or the parallel-chat cap holds the slot.
+    if (!(await sessionChatHasFreeSlot(ctx.db, context))) {
+      throw new Error("The sandbox is busy. Try again when it finishes.");
     }
 
     const recent = await ctx.db
@@ -399,7 +404,7 @@ export const startExecute = authMutation({
     await notifyChatMentions(ctx, {
       content: args.message,
       authorUserId: ctx.userId,
-      surface: { kind: "session", session },
+      surface: { kind: "session", session, chat },
     });
 
     const repo = await ctx.db.get(session.repoId);
@@ -424,7 +429,8 @@ export const startExecute = authMutation({
     // burst of sends can all reach here before the composer sees the first
     // turn, and starting each one ran two turns at once.
     const chatBusy =
-      chat.activeWorkflowId !== undefined || chat.pendingTurn !== undefined;
+      (await hasOpenChatTurn(ctx.db, chat._id)) ||
+      chat.pendingTurn !== undefined;
     if (chatBusy || !(await sessionChatHasFreeSlot(ctx.db, context))) {
       await enqueueChatMessage(ctx, {
         context,
@@ -562,7 +568,7 @@ export const getDaemonPrewarmData = internalQuery({
       use1mContext: v.optional(v.boolean()),
       fastMode: v.optional(v.boolean()),
       providerAccountId: v.optional(v.id("userProviderAccounts")),
-      sessionPersistenceId: v.union(v.id("sessions"), v.id("sessionChats")),
+      sessionPersistenceId: sessionChatPersistenceIdValidator,
     }),
   ),
   handler: async (ctx, args) => {
@@ -666,7 +672,7 @@ export async function sendSessionChatMessage(
   await notifyChatMentions(ctx, {
     content: params.displayContent ?? params.content,
     authorUserId: params.userId,
-    surface: { kind: "session", session },
+    surface: { kind: "session", session, chat },
   });
   await enqueueChatMessage(ctx, params);
   // Sends at once when the chat is idle. Otherwise the queue waits: behind
@@ -687,98 +693,36 @@ export async function cancelChatExecution(
   context: SessionChatContext,
 ): Promise<void> {
   const { chat, session } = context;
-  const streamingEntityId = sessionChatStreamingEntityId(chat._id);
-
-  // Snapshot what this cancel owns. A concurrent startExecute may stage a
-  // newer pendingTurn / activeWorkflowId while we run — must not clear those
-  // or mark the newer assistant placeholder as cancelled.
-  const workflowIdToCancel = chat.activeWorkflowId;
-  const pendingRequestedAt = chat.pendingTurn?.requestedAt;
-
-  await cancelTrackedWorkflow(ctx, workflowIdToCancel);
-
-  if (usesChatDaemon(normalizeAIModel(chat.lastModel))) {
-    await ctx.db.patch(chat._id, { cancelRequestedAt: Date.now() });
-  } else if (session.sandboxId) {
-    // One-shot providers run under the sandbox-wide /tmp/run-design.pid, not
-    // a per-chat daemon pidfile, so only the process kill stops them.
-    await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
-      sandboxId: session.sandboxId,
-      repoId: session.repoId,
-    });
-  }
-
-  if (workflowIdToCancel !== undefined) {
-    await closeTurnForWorkflow(ctx, chat._id, workflowIdToCancel, "cancelled", {
-      error: "Cancelled by the user",
-    });
-  }
-
-  const streaming = await ctx.db
-    .query("streamingActivity")
-    .withIndex("by_entity", (q) => q.eq("entityId", streamingEntityId))
-    .first();
-
-  const latest = await ctx.db.get(chat._id);
-  if (!latest) return;
-
-  const { cancelOwnsCurrentTurn } = detectCancelSupersession({
-    latestPendingTurn: latest.pendingTurn,
-    cancelPendingRequestedAt: pendingRequestedAt,
-    latestActiveWorkflowId: latest.activeWorkflowId,
-    cancelWorkflowId: workflowIdToCancel,
+  const cancelled = await cancelChatTurn(ctx, {
+    id: chat._id,
+    entity: chat,
+    activeWorkflowId: () => openTurnWorkflowId(ctx, chat._id),
+    streamingEntityId: sessionChatStreamingEntityId(chat._id),
+    interrupt: async () => {
+      if (usesChatDaemon(normalizeAIModel(chat.lastModel))) {
+        await ctx.db.patch(chat._id, { cancelRequestedAt: Date.now() });
+      } else if (session.sandboxId) {
+        // One-shot providers run under the sandbox-wide /tmp/run-design.pid,
+        // not a per-chat daemon pidfile, so only the process kill stops them.
+        await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
+          sandboxId: session.sandboxId,
+          repoId: session.repoId,
+        });
+      }
+    },
+    getLatest: () => ctx.db.get(chat._id),
   });
-
-  if (cancelOwnsCurrentTurn) {
-    const syntheticTurnMessageId = latest.syntheticTurnMessageId;
-    const last = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", chat._id))
-      .order("desc")
-      .first();
-    if (
-      last &&
-      last.role === "assistant" &&
-      last.finishedAt === undefined &&
-      last._id !== syntheticTurnMessageId
-    ) {
-      await finalizeCancelledAssistantMessage(ctx, last, streaming);
-    }
-    await finalizeOpenSyntheticTurnOnCancel(
-      ctx,
-      syntheticTurnMessageId,
-      streaming,
-    );
-    await closeOpenTurn(ctx, chat._id, "cancelled", {
-      error: "Cancelled by the user",
-    });
-  }
-
-  await clearStreamingActivity(ctx, streamingEntityId);
+  if (!cancelled) return;
 
   const chatPatch: {
-    activeWorkflowId?: undefined;
     pendingTurn?: undefined;
     syntheticTurnMessageId?: undefined;
     updatedAt: number;
   } = { updatedAt: Date.now() };
-
-  if (
-    workflowIdToCancel !== undefined &&
-    latest.activeWorkflowId === workflowIdToCancel
-  ) {
-    chatPatch.activeWorkflowId = undefined;
-  }
-  if (
-    pendingRequestedAt !== undefined &&
-    latest.pendingTurn?.requestedAt === pendingRequestedAt
-  ) {
-    chatPatch.pendingTurn = undefined;
-  }
-  if (cancelOwnsCurrentTurn) {
+  if (cancelled.clearsPendingTurn) chatPatch.pendingTurn = undefined;
+  if (cancelled.cancelOwnsCurrentTurn) {
     chatPatch.syntheticTurnMessageId = undefined;
   }
-
   await ctx.db.patch(chat._id, chatPatch);
   await drainSessionChatQueues(ctx, session._id, chat._id);
 }

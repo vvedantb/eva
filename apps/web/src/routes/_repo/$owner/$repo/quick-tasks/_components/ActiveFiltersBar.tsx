@@ -3,17 +3,17 @@ import { IconX } from "@tabler/icons-react";
 import { tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 
-interface ActiveFiltersBarProps {
-  filters: Array<{ key: string; label: ReactNode }>;
-  onClearFilter: (key: string) => void;
+interface ActiveFiltersBarProps<K extends string> {
+  filters: Array<{ key: K; label: ReactNode }>;
+  onClearFilter: (key: K) => void;
   onClearAll: () => void;
 }
 
-export function ActiveFiltersBar({
+export function ActiveFiltersBar<K extends string>({
   filters,
   onClearFilter,
   onClearAll,
-}: ActiveFiltersBarProps) {
+}: ActiveFiltersBarProps<K>) {
   return (
     // Chips are 20px tall on a pointer device, which is not a tap target. They
     // grow to the 40px floor below `sm` rather than taking `hit-target`:

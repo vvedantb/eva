@@ -49,7 +49,6 @@ import { ProjectTagsPopover } from "./_components/ProjectTagsPopover";
 import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { useUpdateProject } from "./useUpdateProject";
-import { projectStoredTraits, useSetProjectTraits } from "./useProjectTraits";
 
 /**
  * Project fields as a single column, one row per field — the Overview tab's
@@ -66,7 +65,6 @@ export function ProjectFieldsPanel({
   const users = useQuery(api.users.listAll);
   const currentUserId = useQuery(api.auth.me);
   const updateProject = useUpdateProject(projectId);
-  const setProjectTraits = useSetProjectTraits(projectId);
 
   const displayName = (user: NonNullable<typeof users>[number]) =>
     user.fullName ||
@@ -286,8 +284,6 @@ export function ProjectFieldsPanel({
                   providerAccountId: resolveAccountId(nextAccountId) ?? null,
                 });
               }}
-              traits={projectStoredTraits(project)}
-              onTraitsChange={setProjectTraits}
               className={`px-0 ${FIELD_TEXT_CLASS}`}
             />
           </div>

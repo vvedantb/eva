@@ -4,11 +4,15 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { authMutation, hasRepoAccess } from "./functions";
 import { sandboxGitSyncValidator } from "./_validators/shapes";
+import { findProjectSession, findTaskWorkSession } from "./_sessions/owner";
 
 /** Git's own ref-name ceiling is well under this; the cap is just a guard. */
 const BRANCH_MAX_CHARS = 255;
 
-/** The entity a sandbox checkout belongs to; session chats share the session's. */
+/**
+ * The entity a daemon reports a checkout for. Every checkout is a session's:
+ * session chats, a task and a project resolve to theirs.
+ */
 export const sandboxGitTargetValidator = v.union(
   v.object({ kind: v.literal("session"), sessionId: v.id("sessions") }),
   v.object({
@@ -21,12 +25,9 @@ export const sandboxGitTargetValidator = v.union(
 
 type SandboxGitTarget = Infer<typeof sandboxGitTargetValidator>;
 type SandboxGitSync = Infer<typeof sandboxGitSyncValidator>;
-type SandboxOwner =
-  | Doc<"sessions">
-  | Doc<"agentTasks">
-  | Doc<"projects">;
+type SandboxOwner = Doc<"sessions">;
 
-/** Resolves the sandbox-owning doc. Session daemons run per chat; the checkout belongs to the session. */
+/** Resolves the session that holds the checkout. */
 async function resolveSandboxOwner(
   ctx: Pick<QueryCtx, "db">,
   target: SandboxGitTarget,
@@ -36,8 +37,11 @@ async function resolveSandboxOwner(
     const chat = await ctx.db.get(target.chatId);
     return chat ? await ctx.db.get(chat.sessionId) : null;
   }
-  if (target.kind === "task") return await ctx.db.get(target.taskId);
-  return await ctx.db.get(target.projectId);
+  if (target.kind === "task") {
+    const task = await ctx.db.get(target.taskId);
+    return task ? await findTaskWorkSession(ctx.db, task) : null;
+  }
+  return await findProjectSession(ctx.db, target.projectId);
 }
 
 function syncEquals(
@@ -74,8 +78,8 @@ async function patchSandboxGitState(
  * `sync` is optional so bundles that predate it keep reporting the branch.
  *
  * Deliberately patches `sandboxBranch` / `sandboxGitSync` alone: a branch
- * report is not user activity, so bumping `updatedAt` / `lastSandboxActivity`
- * here would reorder every sidebar each time the watcher polls.
+ * report is not user activity, so bumping `updatedAt` here would reorder
+ * every sidebar each time the watcher polls.
  */
 export const reportBranch = authMutation({
   args: {

@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
+import { z } from "zod";
+import type { api, Id } from "@eva/backend";
+import type { FunctionReturnType } from "convex/server";
 import type { ActivityStep } from "@vvedantb/ui";
 import {
   buildPrecedingUserTurns,
@@ -13,15 +13,17 @@ import {
   isChatTurnExecuting,
   visibleChatMessages,
   chatNeedsOtherUserDirectory,
-  otherUserIdsInChat,
   readableSendError,
-  sandboxComposerState,
-  SANDBOX_CHAT_COPY,
   stripErrorPrefix,
   turnErrorTitle,
   type ChatBodyMessage,
 } from "./chatBodyUtils";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
+import { sandboxComposerState, SANDBOX_CHAT_COPY } from "@eva/shared";
+
+type OpenChatTurn = NonNullable<
+  FunctionReturnType<typeof api.turns.getChatStatus>
+>;
 
 type TestMessage = {
   role: "user" | "assistant";
@@ -367,23 +369,6 @@ describe("chatNeedsOtherUserDirectory", () => {
   });
 });
 
-describe("otherUserIdsInChat", () => {
-  test("returns sorted unique teammate ids", () => {
-    expect(
-      otherUserIdsInChat(
-        [
-          { role: "user", userId: "me" },
-          { role: "user", userId: "zoe" },
-          { role: "assistant" },
-          { role: "user", userId: "ann" },
-          { role: "user", userId: "zoe" },
-        ],
-        "me",
-      ),
-    ).toEqual(["ann", "zoe"]);
-  });
-});
-
 /**
  * The failed-turn notice states the error itself, so the stamp the harness
  * writes in front of the text would be said twice.
@@ -556,15 +541,6 @@ describe("collectQuestionSteps", () => {
   });
 });
 
-test("ChatBody looks up other senders, not the whole user table", () => {
-  const chatBody = readFileSync(
-    join(dirname(fileURLToPath(import.meta.url)), "ChatBody.tsx"),
-    "utf8",
-  );
-  expect(chatBody).toContain("api.users.getMany");
-  expect(chatBody).not.toContain("api.users.listAll");
-});
-
 /**
  * The bug this covers: quick task chat locked its composer whenever the
  * sandbox was not marked active, and a quick task's first run only marks it
@@ -632,39 +608,63 @@ describe("sandboxComposerState", () => {
  * could read as working in one place and idle in another. They share this.
  */
 describe("isChatTurnExecuting", () => {
-  const working = [user("u1"), placeholder("a1")];
-  const settled = [user("u1"), finished("a1")];
+  const working = withIds([user("u1"), placeholder("a1")]);
+  const settled = withIds([user("u1"), finished("a1")]);
+  const turnFor = (placeholderId: string): OpenChatTurn => ({
+    source: "durable",
+    turnId: z.custom<Id<"turns">>().parse("turn_1"),
+    state: "running",
+    startedAt: 1,
+    leaseExpiresAt: 2,
+    placeholderMessageId: z.custom<Id<"messages">>().parse(placeholderId),
+  });
 
   test("the durable turn wins over a stale empty bubble", () => {
-    expect(isChatTurnExecuting({ turnOpen: false, messages: working })).toBe(
+    expect(isChatTurnExecuting({ status: null, messages: working })).toBe(
       false,
     );
   });
 
-  test("an open turn runs even when the last bubble has settled", () => {
+  test("an open turn runs while its own bubble is unfinished", () => {
+    expect(
+      isChatTurnExecuting({ status: turnFor("a1"), messages: working }),
+    ).toBe(true);
+  });
+
+  test("an open turn runs before its bubble lands", () => {
     // A synthetic continuation opens a turn before its bubble lands.
-    expect(isChatTurnExecuting({ turnOpen: true, messages: settled })).toBe(
-      true,
-    );
+    expect(
+      isChatTurnExecuting({ status: turnFor("a2"), messages: settled }),
+    ).toBe(true);
+    expect(
+      isChatTurnExecuting({ status: { source: "legacy" }, messages: settled }),
+    ).toBe(true);
+  });
+
+  test("a stale open status ends once its bubble has finished", () => {
+    // The server closes the turn and finishes its bubble in one mutation.
+    expect(
+      isChatTurnExecuting({ status: turnFor("a1"), messages: settled }),
+    ).toBe(false);
   });
 
   test("message shape covers the render while the status loads", () => {
     expect(
-      isChatTurnExecuting({ turnOpen: undefined, messages: working }),
+      isChatTurnExecuting({ status: undefined, messages: working }),
     ).toBe(true);
     expect(
-      isChatTurnExecuting({ turnOpen: undefined, messages: settled }),
+      isChatTurnExecuting({ status: undefined, messages: settled }),
     ).toBe(false);
     expect(
-      isChatTurnExecuting({ turnOpen: undefined, messages: undefined }),
+      isChatTurnExecuting({ status: undefined, messages: undefined }),
     ).toBe(false);
   });
 
   test("a system alert after the bubble does not end the turn", () => {
     expect(
       isChatTurnExecuting({
-        turnOpen: undefined,
-        messages: [...working, alert("x1")],
+        status: undefined,
+        messages: [...working, ...withIds([alert("x1")])],
       }),
     ).toBe(true);
   });
@@ -672,14 +672,14 @@ describe("isChatTurnExecuting", () => {
   test("a running first run counts whatever the chat turn says", () => {
     expect(
       isChatTurnExecuting({
-        turnOpen: false,
+        status: null,
         messages: settled,
         isFirstRunInProgress: true,
       }),
     ).toBe(true);
     expect(
       isChatTurnExecuting({
-        turnOpen: false,
+        status: null,
         messages: settled,
         isFirstRunInProgress: false,
       }),

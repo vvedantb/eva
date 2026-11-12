@@ -1,10 +1,49 @@
 "use node";
 
+import { errorMessage, requiredEnv } from "@vvedantb/server";
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { importJWK, SignJWT } from "jose";
+import { z } from "zod";
 import { SANDBOX_JWT_ISSUER } from "./sandboxAuthConfig";
+import { EVA_MCP_CLAIM } from "./_auth/sandboxIdentity";
+
+const sandboxPrivateJwkSchema = z
+  .object({ kid: z.string().optional() })
+  .passthrough();
+
+/**
+ * `vm`: the daemon's CONVEX_TOKEN (24h, no claim). `mcp`: the MCP `runAsUser`
+ * token (1h) marked with EVA_MCP_CLAIM, so the backend can tell the two apart
+ * (`_auth/sandboxIdentity.ts`). Only MCP is marked, so in-flight VM tokens keep
+ * their meaning.
+ */
+export type SandboxJwtPurpose = "vm" | "mcp";
+
+/**
+ * Signs the ES256 sandbox-user JWT that Convex auth accepts (see
+ * auth.config.ts). The issuer matches the verifier's SANDBOX_JWT_ISSUER.
+ */
+export async function signSandboxUserJwt(
+  clerkId: string,
+  purpose: SandboxJwtPurpose,
+): Promise<string> {
+  const privateKeyJwk = sandboxPrivateJwkSchema.parse(
+    JSON.parse(requiredEnv("SANDBOX_JWT_PRIVATE_KEY")),
+  );
+  const kid = privateKeyJwk.kid ?? "sandbox-1";
+  const key = await importJWK(privateKeyJwk, "ES256");
+  const claims =
+    purpose === "mcp" ? { sub: clerkId, [EVA_MCP_CLAIM]: true } : { sub: clerkId };
+  return await new SignJWT(claims)
+    .setProtectedHeader({ alg: "ES256", kid })
+    .setIssuer(SANDBOX_JWT_ISSUER)
+    .setAudience("convex")
+    .setExpirationTime(purpose === "mcp" ? "1h" : "24h")
+    .setIssuedAt()
+    .sign(key);
+}
 
 /**
  * Mints BOTH sandbox-launch tokens in a single node action: the ES256 sandbox
@@ -57,20 +96,7 @@ export const mintSandboxSessionTokens = internalAction({
     }
 
     // Sandbox auth token (ES256) — required.
-    const privateKeyJson = process.env.SANDBOX_JWT_PRIVATE_KEY;
-    if (!privateKeyJson) {
-      throw new Error("Missing SANDBOX_JWT_PRIVATE_KEY env var");
-    }
-    const privateKeyJwk: Record<string, string> = JSON.parse(privateKeyJson);
-    const kid = privateKeyJwk.kid ?? "sandbox-1";
-    const key = await importJWK(privateKeyJwk, "ES256");
-    const sandboxToken = await new SignJWT({ sub: clerkId })
-      .setProtectedHeader({ alg: "ES256", kid })
-      .setIssuer(SANDBOX_JWT_ISSUER)
-      .setAudience("convex")
-      .setExpirationTime("24h")
-      .setIssuedAt()
-      .sign(key);
+    const sandboxToken = await signSandboxUserJwt(clerkId, "vm");
 
     // MCP-internal token (HS256) — best-effort.
     let mcpToken: { token: string; expiresIn: number } | null = null;
@@ -99,7 +125,7 @@ export const mintSandboxSessionTokens = internalAction({
         }
       } catch (error) {
         console.warn(
-          `[mcp] Continuing without MCP token: ${error instanceof Error ? error.message : String(error)}`,
+          `[mcp] Continuing without MCP token: ${errorMessage(error)}`,
         );
       }
     }

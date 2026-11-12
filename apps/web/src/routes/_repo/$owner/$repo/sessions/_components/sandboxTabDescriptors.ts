@@ -15,7 +15,7 @@ import {
   IconRobot,
 } from "@tabler/icons-react";
 import type { Doc } from "@eva/backend";
-import { slugifyAppTabName } from "@/lib/utils/appTabSlug";
+import { slugifyAppTabName } from "@eva/shared/appTabSlug";
 import type { SandboxCommandTab } from "@/lib/components/sandbox/sandboxPaletteCommands";
 import type { SandboxTabDescriptor } from "./SandboxTabTrigger";
 

@@ -1,4 +1,4 @@
-import { tokenizedToEditable } from "@/lib/components/mentions/mentionToken";
+import { tokenizedToEditable } from "@eva/shared";
 
 /**
  * How many of this client's own saves to remember for the echo guard. The

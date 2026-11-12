@@ -11,26 +11,32 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence } from "motion/react";
-import { formatMentionToken } from "./mentionToken";
-import { formatSkillToken } from "./skillToken";
 import {
-  buildMentionPattern,
-  buildSkillPattern,
+  acceptMentionTrigger,
+  filterMentionItems,
+  findMentionTrigger,
+  isInsertedTokenTrigger,
+  matchesMentionQuery,
+  shouldShowMentionPicker,
+  tokenizeMentionText,
+  type InsertedToken,
+  type MentionItem,
+  type SlashItem,
+} from "@eva/shared";
+import {
   extractEditableText,
   isEditorValueEmpty,
-  isInsertedTokenTrigger,
   normalizeMentionText,
   placeCursorAtEnd,
   renderEditorChipHtml,
-  type InsertedToken,
 } from "./mentionEditorUtils";
 import { MENTION_CHIP_CLASS, SKILL_CHIP_CLASS } from "./mentionChipStyles";
-import { countLinkUrls } from "./linkChipUtils";
+import { countLinkUrls } from "./linkUrls";
 import {
   MentionPickerPopup,
   type MentionPopupLayout,
 } from "./MentionPickerPopup";
-import { MentionRow, type MentionKind } from "./MentionRow";
+import { MentionRow } from "./MentionRow";
 import {
   computeMentionPopupPlacement,
   getSelectionAnchorRect,
@@ -38,7 +44,6 @@ import {
 } from "./mentionPopupPosition";
 import { cn } from "@eva/ui";
 import { UserProfileHoverCardBody } from "@eva/shared/user-initials";
-import type { AIProvider, Id } from "@eva/backend";
 import {
   composerSlashOptionId as optionId,
   computePanelPopupPlacement,
@@ -52,27 +57,8 @@ import {
 const DEFAULT_EDITOR_CLASS =
   "relative block w-full whitespace-pre-wrap wrap-break-word bg-transparent text-sm outline-hidden data-empty:before:pointer-events-none data-empty:before:select-none data-empty:before:absolute data-empty:before:text-muted-foreground/90 data-empty:before:content-[attr(data-placeholder)] data-suggestion:after:pointer-events-none data-suggestion:after:select-none data-suggestion:after:text-muted-foreground/50 data-suggestion:after:content-[attr(data-suggestion)]";
 
-export interface MentionItem<TId extends string = string> {
-  id: TId;
-  label: string;
-  description?: string;
-  /** Type badge shown in the picker (e.g. Eva, Claude, Person). */
-  badge?: string;
-  /** Provider badge identity, used to select its logo without matching text. */
-  provider?: AIProvider;
-  /** Data entity kind — the picker shows its icon in place of a kind badge. */
-  kind?: MentionKind;
-  /**
-   * Set when this item is a teammate rather than a data entity, so the picker
-   * row shows their avatar. Same value as `id` for people items; kept separate
-   * so the renderer can tell the two kinds apart without re-deriving it.
-   */
-  personUserId?: Id<"users">;
-}
-
-export interface SlashItem<
-  TId extends string = string,
-> extends MentionItem<TId> {}
+/** The picker entry types, shared with the phone composer. */
+export type { MentionItem, SlashItem };
 
 export interface MentionEditorHandle {
   tokenize: (text: string) => string;
@@ -214,66 +200,6 @@ function defaultRenderSlashItem(
   return renderRow("/", item);
 }
 
-/**
- * Substring match against the label or description. A query can never contain
- * whitespace — a space ends the `@`/`/` trigger — so one substring is enough.
- */
-function matchesQuery(item: MentionItem, query: string): boolean {
-  const needle = query.toLowerCase();
-  if (needle.length === 0) return true;
-  const haystack = `${item.label} ${item.description ?? ""}`.toLowerCase();
-  return haystack.includes(needle);
-}
-
-function isValidTrigger(value: string, triggerIndex: number): boolean {
-  const textAfter = value.slice(triggerIndex + 1);
-  if (textAfter.includes("\n") || /\s/.test(textAfter)) {
-    return false;
-  }
-  const charBefore = triggerIndex > 0 ? value[triggerIndex - 1] : "";
-  return (
-    triggerIndex === 0 || (charBefore !== undefined && /\s/.test(charBefore))
-  );
-}
-
-function findActiveTrigger(
-  value: string,
-  hasMentions: boolean,
-  hasSlash: boolean,
-): TriggerState | null {
-  const candidates: Array<{
-    kind: "mention" | "slash";
-    index: number;
-  }> = [];
-
-  if (hasMentions) {
-    const atIndex = value.lastIndexOf("@");
-    if (atIndex !== -1 && isValidTrigger(value, atIndex)) {
-      candidates.push({ kind: "mention", index: atIndex });
-    }
-  }
-
-  if (hasSlash) {
-    const slashIndex = value.lastIndexOf("/");
-    if (slashIndex !== -1 && isValidTrigger(value, slashIndex)) {
-      candidates.push({ kind: "slash", index: slashIndex });
-    }
-  }
-
-  if (candidates.length === 0) return null;
-
-  const active = candidates.reduce((best, candidate) =>
-    candidate.index >= best.index ? candidate : best,
-  );
-
-  return {
-    isOpen: true,
-    query: value.slice(active.index + 1),
-    startIndex: active.index,
-    kind: active.kind,
-  };
-}
-
 /** The optional props `MentionEditor` gives a default, resolved in one place. */
 function withMentionEditorDefaults<TItem extends MentionItem>({
   slashItems = [],
@@ -281,8 +207,8 @@ function withMentionEditorDefaults<TItem extends MentionItem>({
   skillChipClassName = SKILL_CHIP_CLASS,
   renderItem = defaultRenderItem,
   renderSlashItem = defaultRenderSlashItem,
-  filterItem = matchesQuery,
-  filterSlashItem = matchesQuery,
+  filterItem = matchesMentionQuery,
+  filterSlashItem = matchesMentionQuery,
   popupLayout = "caret",
   mentionPopupTitle = "Data",
   mentionChipHoverCard = false,
@@ -372,24 +298,6 @@ function handleEnterSubmitKey(
     e.preventDefault();
     onEnterSubmit(e);
   }
-}
-
-/**
- * Gated on the *unfiltered* list so a query that matches nothing shows "No
- * matches" instead of unmounting the popup.
- */
-function shouldShowPopup(
-  trigger: TriggerState,
-  slashItemCount: number,
-  hasEmptySlashContent: boolean,
-  itemCount: number,
-): boolean {
-  return (
-    trigger.isOpen &&
-    (trigger.kind === "slash"
-      ? slashItemCount > 0 || hasEmptySlashContent
-      : itemCount > 0)
-  );
 }
 
 /**
@@ -792,10 +700,10 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
     if (!el) return;
     const domText = normalizeMentionText(extractEditableText(el));
     // A pasted/typed link URL leaves DOM text already equal to `value`, so also
-    // re-render when the link-chip count is out of sync — this chips a fresh URL
+    // re-render when the link count is out of sync — this links a fresh URL
     // exactly once, then stays stable during normal editing.
-    const linkChipCount = el.querySelectorAll("[data-link-url]").length;
-    if (domText !== value || linkChipCount !== countLinkUrls(value)) {
+    const linkCount = el.querySelectorAll("[data-link-url]").length;
+    if (domText !== value || linkCount !== countLinkUrls(value)) {
       el.innerHTML = renderEditorChipHtml(
         value,
         mentionMap,
@@ -848,26 +756,8 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
   useImperativeHandle(
     ref,
     () => ({
-      tokenize: (text: string) => {
-        let result = text;
-        if (mentionMap.size > 0) {
-          const pattern = buildMentionPattern([...mentionMap.keys()]);
-          result = result.replace(pattern, (match) => {
-            const label = match.slice(1);
-            const id = mentionMap.get(label);
-            return id ? formatMentionToken(label, id) : match;
-          });
-        }
-        if (skillMap.size > 0) {
-          const pattern = buildSkillPattern([...skillMap.keys()]);
-          result = result.replace(pattern, (match) => {
-            const label = match.slice(1);
-            const id = skillMap.get(label);
-            return id ? formatSkillToken(label, id) : match;
-          });
-        }
-        return result;
-      },
+      tokenize: (text: string) =>
+        tokenizeMentionText(text, { mentionMap, skillMap }),
       reset: () => {
         setMentionMap(new Map());
         setSkillMap(new Map());
@@ -886,13 +776,16 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
 
   // Full filtered lists — popup scrolls; do not cap (callers need every
   // doc/skill/person available, not an alphabetical first-N subset).
-  const activeSlashItems = slashItems
-    .filter((item) => filterSlashItem(item, trigger.query))
-    .sort((a, b) => a.label.localeCompare(b.label));
-
-  const activeMentionItems = items
-    .filter((item) => filterItem(item, trigger.query))
-    .sort((a, b) => a.label.localeCompare(b.label));
+  const activeSlashItems = filterMentionItems(
+    slashItems,
+    trigger.query,
+    filterSlashItem,
+  );
+  const activeMentionItems = filterMentionItems(
+    items,
+    trigger.query,
+    filterItem,
+  );
 
   const popupItems =
     trigger.kind === "slash" ? activeSlashItems : activeMentionItems;
@@ -903,39 +796,27 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
   };
 
   const insertMentionItem = (item: TItem) => {
-    const visible = `@${item.label}`;
-    const before = value.slice(0, trigger.startIndex);
-    const after = value.slice(trigger.startIndex + trigger.query.length + 1);
-    const newValue = before + visible + " " + after;
-    insertedTokenRef.current = {
-      startIndex: trigger.startIndex,
-      token: visible,
-    };
+    const accepted = acceptMentionTrigger(value, trigger, item.label);
+    insertedTokenRef.current = accepted.inserted;
     setMentionMap((prev) => {
       const next = new Map(prev);
       next.set(item.label, item.id);
       return next;
     });
-    onValueChange(newValue);
+    onValueChange(accepted.value);
     closeTrigger();
     requestAnimationFrame(() => editorRef.current?.focus());
   };
 
   const insertSlashItem = (item: SlashItem) => {
-    const visible = `/${item.label}`;
-    const before = value.slice(0, trigger.startIndex);
-    const after = value.slice(trigger.startIndex + trigger.query.length + 1);
-    const newValue = before + visible + " " + after;
-    insertedTokenRef.current = {
-      startIndex: trigger.startIndex,
-      token: visible,
-    };
+    const accepted = acceptMentionTrigger(value, trigger, item.label);
+    insertedTokenRef.current = accepted.inserted;
     setSkillMap((prev) => {
       const next = new Map(prev);
       next.set(item.label, item.id);
       return next;
     });
-    onValueChange(newValue);
+    onValueChange(accepted.value);
     closeTrigger();
     requestAnimationFrame(() => editorRef.current?.focus());
   };
@@ -956,11 +837,12 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
      back as a trigger the user is typing. Deriving it during render would
      mutate that ref while rendering. */
   useEffect(() => {
-    const next = findActiveTrigger(
+    const found = findMentionTrigger(
       value,
       items.length > 0,
       slashItems.length > 0 || emptySlashContent !== undefined,
     );
+    const next: TriggerState | null = found ? { isOpen: true, ...found } : null;
     // Released only once the chip stops being there — a healthy accept leaves no
     // trigger at all for a pass or two, so releasing on that would drop the
     // guard before the keystroke it exists to catch.
@@ -1141,15 +1023,20 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
     renderSkillChipHoverCard,
   });
 
+  /** A link favicon that 404s hides itself (`.markdown-link-icon[data-failed]`). */
+  const hideFailedFavicon = (e: React.SyntheticEvent<HTMLDivElement>) => {
+    if (e.target instanceof HTMLImageElement) e.target.dataset.failed = "true";
+  };
+
   const handleChipClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target;
     if (!(target instanceof Element)) return;
 
-    // Link chips open externally and are always clickable, independent of the
+    // Links open externally and are always clickable, independent of the
     // mention/skill click handlers.
-    const linkChip = target.closest("[data-link-url]");
-    if (linkChip instanceof HTMLElement) {
-      const url = linkChip.dataset.linkUrl;
+    const link = target.closest("[data-link-url]");
+    if (link instanceof HTMLElement) {
+      const url = link.dataset.linkUrl;
       if (url) {
         e.preventDefault();
         e.stopPropagation();
@@ -1230,12 +1117,11 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
 
   const isEmpty = isEditorValueEmpty(value);
 
-  const showPopup = shouldShowPopup(
-    trigger,
-    slashItems.length,
-    emptySlashContent !== undefined,
-    items.length,
-  );
+  const showPopup = shouldShowMentionPicker(trigger.isOpen ? trigger : null, {
+    mentions: items.length,
+    skills: slashItems.length,
+    hasEmptySkills: emptySlashContent !== undefined,
+  });
 
   const popupTitle = trigger.kind === "slash" ? "Skills" : mentionPopupTitle;
 
@@ -1307,6 +1193,7 @@ export function MentionEditor<TItem extends MentionItem = MentionItem>(
         onInput={disabled ? undefined : handleInput}
         onKeyDown={disabled ? undefined : handleKeyDown}
         onClick={disabled ? undefined : handleChipClick}
+        onErrorCapture={hideFailedFavicon}
         onMouseOver={
           chipHoverEnabled ? chipHover.handleEditorMouseOver : undefined
         }

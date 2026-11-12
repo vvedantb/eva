@@ -9,7 +9,7 @@ import { PrRecapPanel } from "@/lib/components/sandbox/PrRecapPanel";
 import { usePrEdit } from "./usePrEdit";
 import { PrCheckRow } from "./_components/PrCheckRow";
 import { PrDescriptionEditor } from "./_components/PrDescriptionEditor";
-import { checksHeadline, countChecks } from "./_components/prMergeState";
+import { checksHeadline, countChecks } from "@eva/shared";
 import {
   MARKDOWN_CLASS,
   NOTICE_CLASS,

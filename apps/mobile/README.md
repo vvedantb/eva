@@ -62,9 +62,13 @@ The redirect is `eva://sso-callback`. If Google sign-in fails with a redirect er
 
 GitHub Actions builds and publishes the signed APK. See [RELEASE.md](RELEASE.md) for the secrets, the variables, the tag prefix (`eva-apk-`) and how to build locally.
 
+A new native module needs a new APK. `react-native-gesture-handler` (the sheet drags, from November 2026) and `react-native-keyboard-controller` (the composer and transcript follow the keyboard, from November 2026) are two: install the first APK built after each. Both are autolinked, so they need no config plugin and no workflow change.
+
+Keyboard: the chat composer, its Scroll to end button and the transcript follow the keyboard frame by frame, and a drag down on the transcript moves the keyboard with the finger once the finger reaches the composer. That drag needs iOS or Android 11+; on Android 10 and below a drag on the transcript lowers the keyboard at once, as before.
+
 ### UI kit pin
 
-`@vvedantb/native-ui` is pinned to a git commit in `package.json`. npm 0.8.0 (the latest published on 8 November 2026) does not export what the app uses: `DropdownMenu*`, `ChoiceQuestion`, `AgentTraceFold`, `MessageMeta`, `ActivityStepDetail`, `DividedList`, `BulkActionBar`, `configureTheme`, `/markdown`, and newer `PromptInput` and `MessageContent` props. Typecheck fails with 27 errors against 0.8.0. Move to an npm version when one ships these.
+`@vvedantb/native-ui` is pinned to a git commit of `vvedantb/packages` main (0.14.0) in `package.json`, because the npm publish of 0.14.0 failed: CI needs the npm trusted publisher set up for the package. Move to `^0.14.0` once npm has it.
 
 ## Changing the package name
 

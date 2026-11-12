@@ -45,7 +45,18 @@ import {
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
 import { useQuickTaskFilters } from "../_utils";
-import { QUICK_TASK_FILTER_DEFAULTS } from "@/lib/search-params";
+import {
+  QUICK_TASK_SORT_FIELDS,
+  QUICK_TASK_SORT_FIELD_LABELS,
+  QUICK_TASK_TIME_RANGES,
+  QUICK_TASK_TIME_RANGE_LABELS,
+  clearedQuickTaskFilters,
+  hasActiveQuickTaskFilters,
+  toggleQuickTaskStatus,
+  type QuickTaskSortDir,
+  type QuickTaskSortField,
+  type QuickTaskTimeRange,
+} from "@eva/shared";
 
 type QuickTaskView = "kanban" | "list";
 type Project = FunctionReturnType<typeof api.projects.list>[number];
@@ -55,27 +66,15 @@ function isQuickTaskView(value: string): value is QuickTaskView {
   return value === "kanban" || value === "list";
 }
 
-const SORT_FIELDS = [
-  "status",
-  "updated",
-  "lastRun",
-  "created",
-  "title",
-  "priority",
-] as const;
-type SortField = (typeof SORT_FIELDS)[number];
-const isSortField = (v: string): v is SortField =>
-  SORT_FIELDS.some((field) => field === v);
+const isSortField = (v: string): v is QuickTaskSortField =>
+  QUICK_TASK_SORT_FIELDS.some((field) => field === v);
 
 const SORT_DIRS = ["asc", "desc"] as const;
-type SortDir = (typeof SORT_DIRS)[number];
-const isSortDir = (v: string): v is SortDir =>
+const isSortDir = (v: string): v is QuickTaskSortDir =>
   SORT_DIRS.some((dir) => dir === v);
 
-const TIME_RANGES = ["7d", "30d", "90d", "all"] as const;
-type TimeRange = (typeof TIME_RANGES)[number];
-const isTimeRange = (v: string): v is TimeRange =>
-  TIME_RANGES.some((range) => range === v);
+const isTimeRange = (v: string): v is QuickTaskTimeRange =>
+  QUICK_TASK_TIME_RANGES.some((range) => range === v);
 
 interface QuickTasksToolbarProps {
   view: QuickTaskView;
@@ -95,22 +94,6 @@ interface QuickTasksToolbarProps {
   onUserFilterChange: (v: string) => void;
   allTags: string[];
 }
-
-const SORT_FIELD_LABELS: Record<SortField, string> = {
-  status: "Status",
-  lastRun: "Last Run",
-  updated: "Updated",
-  created: "Created",
-  title: "Title",
-  priority: "Priority",
-};
-
-const TIME_RANGE_LABELS: Record<TimeRange, string> = {
-  "7d": "Last 7 days",
-  "30d": "Last 30 days",
-  "90d": "Last 90 days",
-  all: "All time",
-};
 
 export function QuickTasksToolbar({
   view,
@@ -148,10 +131,8 @@ export function QuickTasksToolbar({
       </span>
     );
 
-  const [
-    { statuses, assignee, tags, sortField, sortDir, timeRange },
-    setParams,
-  ] = useQuickTaskFilters();
+  const [filters, setParams] = useQuickTaskFilters();
+  const { statuses, assignee, tags, sortField, sortDir, timeRange } = filters;
   const visibleStatuses = new Set(statuses);
   const selectedTags = new Set(tags);
 
@@ -171,14 +152,7 @@ export function QuickTasksToolbar({
     );
 
   const handleStatusToggle = (status: DisplayTaskStatus) => {
-    const next = new Set(visibleStatuses);
-    if (next.has(status)) {
-      if (next.size === 1) return;
-      next.delete(status);
-    } else {
-      next.add(status);
-    }
-    setParams({ statuses: [...next] });
+    setParams({ statuses: toggleQuickTaskStatus(statuses, status) });
   };
 
   const handleTagToggle = (tag: string) => {
@@ -191,19 +165,10 @@ export function QuickTasksToolbar({
     setParams({ tags: [...next] });
   };
 
-  // Both sides read the parser defaults, so "cleared" and "not filtered" cannot
-  // disagree. Note the project default is "none" (No Project) — quick tasks are
-  // the non-project ones — so "all" is an active filter here, not the default.
-  const hasActiveFilters =
-    projectFilter !== QUICK_TASK_FILTER_DEFAULTS.project ||
-    userFilter !== QUICK_TASK_FILTER_DEFAULTS.user ||
-    assignee !== QUICK_TASK_FILTER_DEFAULTS.assignee ||
-    visibleStatuses.size !== QUICK_TASK_FILTER_DEFAULTS.statuses.length ||
-    selectedTags.size > QUICK_TASK_FILTER_DEFAULTS.tags.length ||
-    timeRange !== QUICK_TASK_FILTER_DEFAULTS.timeRange;
+  const hasActiveFilters = hasActiveQuickTaskFilters(filters);
 
   const clearAllFilters = () => {
-    setParams({ ...QUICK_TASK_FILTER_DEFAULTS });
+    setParams(clearedQuickTaskFilters());
   };
 
   return (
@@ -299,7 +264,7 @@ export function QuickTasksToolbar({
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <IconSortDescending size={16} className="mr-2" />
-                Sort: {SORT_FIELD_LABELS[sortField]}{" "}
+                Sort: {QUICK_TASK_SORT_FIELD_LABELS[sortField]}{" "}
                 {sortDir === "asc" ? "↑" : "↓"}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
@@ -309,9 +274,9 @@ export function QuickTasksToolbar({
                     if (isSortField(v)) setParams({ sortField: v });
                   }}
                 >
-                  {SORT_FIELDS.map((f) => (
+                  {QUICK_TASK_SORT_FIELDS.map((f) => (
                     <DropdownMenuRadioItem key={f} value={f}>
-                      {SORT_FIELD_LABELS[f]}
+                      {QUICK_TASK_SORT_FIELD_LABELS[f]}
                     </DropdownMenuRadioItem>
                   ))}
                 </DropdownMenuRadioGroup>
@@ -469,7 +434,7 @@ export function QuickTasksToolbar({
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <IconClock size={16} className="mr-2" />
-                {TIME_RANGE_LABELS[timeRange]}
+                {QUICK_TASK_TIME_RANGE_LABELS[timeRange]}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
                 <DropdownMenuRadioGroup
@@ -478,9 +443,9 @@ export function QuickTasksToolbar({
                     if (isTimeRange(v)) setParams({ timeRange: v });
                   }}
                 >
-                  {TIME_RANGES.map((r) => (
+                  {QUICK_TASK_TIME_RANGES.map((r) => (
                     <DropdownMenuRadioItem key={r} value={r}>
-                      {TIME_RANGE_LABELS[r]}
+                      {QUICK_TASK_TIME_RANGE_LABELS[r]}
                     </DropdownMenuRadioItem>
                   ))}
                 </DropdownMenuRadioGroup>

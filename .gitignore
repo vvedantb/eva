@@ -11,6 +11,8 @@ tsconfig.buildinfo
 packages/backend/callback-src/.build
 packages/backend/preview-annotation-src/.build
 mcp.json
+# Repo-owned Eva MCP servers (secrets stay as ${VAR}).
+!.eva/mcp.json
 videoeva-staging-backup.zip
 video
 # Local staging DB backup (large, never commit)

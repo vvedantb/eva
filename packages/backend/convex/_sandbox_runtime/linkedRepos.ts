@@ -36,6 +36,7 @@ import {
 import { launchLinkedRepoDevServerInVercelConsole } from "../_pty/launchDevServerInVercelConsole";
 import { resolveEnvVars } from "../envVarResolver";
 import { type ProgressStep, startupProgress } from "./startupProgress";
+import { sandboxOwnerKey, sandboxStartupEntityId } from "@eva/shared";
 
 type ActionCtx = GenericActionCtx<DataModel>;
 
@@ -50,7 +51,7 @@ async function setLinkedRepoProgress(
   steps: ProgressStep[],
 ): Promise<void> {
   await ctx.runMutation(internal.streaming.internalSet, {
-    entityId: `session-startup-${sessionId}`,
+    entityId: sandboxStartupEntityId({ kind: "session", sessionId }),
     currentActivity: JSON.stringify(steps),
   });
 }
@@ -265,7 +266,7 @@ export const prepareLinkedRepo = internalAction({
       if (freshlyCloned && row.devCommand && row.devPort !== undefined) {
         await launchLinkedRepoDevServerInVercelConsole(
           sandbox,
-          `session-${args.sessionId}-${row.name}`,
+          `${sandboxOwnerKey({ kind: "session", sessionId: args.sessionId })}-${row.name}`,
           row.path,
           row.devCommand,
           row.devPort,

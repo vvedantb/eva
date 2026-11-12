@@ -2,7 +2,7 @@ import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import type { JsonValue } from "../_jev/jsonValue";
-import { AI_MODEL_OPTIONS } from "../validators";
+import { AI_MODEL_OPTIONS, RUN_STATUSES } from "../validators";
 import { repoBasePath } from "../_githubRepos/helpers";
 import { entityAccess, repoRefArgs } from "./entityRef";
 import {
@@ -54,7 +54,7 @@ type Automation = z.infer<typeof automationSchema>;
 
 const runSchema = z.object({
   _id: z.string(),
-  status: z.enum(["queued", "running", "success", "error", "cancelled"]),
+  status: z.enum(RUN_STATUSES),
   startedAt: z.number(),
   finishedAt: z.number().optional(),
   resultSummary: z.string().optional(),
@@ -163,7 +163,7 @@ const settingsArgs = {
     .boolean()
     .optional()
     .describe(
-      "true emails each successful run's summary to every user with email notifications on. Each email waits as a draft for review unless emailAutoSend is true.",
+      "true emails each successful run's summary to the repo team's members with email notifications on. Each email waits as a draft for review unless emailAutoSend is true.",
     ),
   emailAutoSend: z
     .boolean()

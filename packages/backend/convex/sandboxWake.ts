@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
@@ -7,9 +7,18 @@ import {
   type ActionCtx,
   type QueryCtx,
 } from "./_generated/server";
-import { authQuery, hasRepoAccess, hasTaskAccess } from "./functions";
-import { sandboxActivityKindValidator } from "./_validators/tableFields";
+import { authQuery, hasRepoAccess } from "./functions";
+import { chatEntityKindValidator } from "./_validators/enums";
 import { awaitSandboxActive } from "./mcp/orchestratorDelivery";
+import { sleep } from "./_shared/async";
+import {
+  findProjectSession,
+  findTaskWorkSession,
+  ownedSessionOwnerValidator,
+  projectSessionOwner,
+  taskWorkSessionOwner,
+} from "./_sessions/owner";
+import { loadOwnerEntityWithAccess } from "./_sessions/queries";
 
 /**
  * Backend for the `/p/$kind/$id` wake link. The link carries the entity's
@@ -20,46 +29,59 @@ import { awaitSandboxActive } from "./mcp/orchestratorDelivery";
 
 const wakeTargetValidator = v.union(
   v.object({ kind: v.literal("session"), id: v.id("sessions") }),
-  v.object({ kind: v.literal("task"), id: v.id("agentTasks") }),
-  v.object({ kind: v.literal("project"), id: v.id("projects") }),
+  v.object({ kind: v.literal("owner"), owner: ownedSessionOwnerValidator }),
 );
 
-type WakeTarget =
-  | { kind: "session"; id: Id<"sessions"> }
-  | { kind: "task"; id: Id<"agentTasks"> }
-  | { kind: "project"; id: Id<"projects"> };
+/**
+ * A session, or a task or project whose session does not exist yet (the
+ * wake creates it through `sessions.ensureOwned`, then starts it).
+ */
+type WakeTarget = Infer<typeof wakeTargetValidator>;
 
-function resolveWakeTarget(
+async function resolveWakeTarget(
   ctx: QueryCtx,
   kind: "session" | "task" | "project",
   id: string,
-): WakeTarget | null {
+): Promise<WakeTarget | null> {
   if (kind === "session") {
     const normalized = ctx.db.normalizeId("sessions", id);
     return normalized ? { kind, id: normalized } : null;
   }
   if (kind === "task") {
     const normalized = ctx.db.normalizeId("agentTasks", id);
-    return normalized ? { kind, id: normalized } : null;
+    const task = normalized ? await ctx.db.get(normalized) : null;
+    if (!task) return null;
+    // A task's sandbox is its session's (a project task's: the project's).
+    const session = await findTaskWorkSession(ctx.db, task);
+    return session
+      ? { kind: "session", id: session._id }
+      : { kind: "owner", owner: taskWorkSessionOwner(task) };
   }
   const normalized = ctx.db.normalizeId("projects", id);
-  return normalized ? { kind, id: normalized } : null;
+  if (!normalized) return null;
+  // A project's sandbox is its session's.
+  const session = await findProjectSession(ctx.db, normalized);
+  return session
+    ? { kind: "session", id: session._id }
+    : { kind: "owner", owner: projectSessionOwner(normalized) };
 }
 
 /** Internal: typed ids for the action below (actions have no `normalizeId`). */
 export const resolveTarget = internalQuery({
-  args: { kind: sandboxActivityKindValidator, id: v.string() },
+  args: { kind: chatEntityKindValidator, id: v.string() },
   returns: v.union(wakeTargetValidator, v.null()),
-  handler: async (ctx, args) => resolveWakeTarget(ctx, args.kind, args.id),
+  handler: async (ctx, args) =>
+    await resolveWakeTarget(ctx, args.kind, args.id),
 });
 
 /**
  * What the wake page needs to show progress and hand off: status, the sandbox
  * to poll for readiness and the dev port. Null when the id is malformed, the
- * entity is gone, or the caller may not see it.
+ * entity is gone, or the caller may not see it. A task or project without a
+ * session yet reads as closed.
  */
 export const getWakeTarget = authQuery({
-  args: { kind: sandboxActivityKindValidator, id: v.string() },
+  args: { kind: chatEntityKindValidator, id: v.string() },
   returns: v.union(
     v.object({
       status: v.string(),
@@ -71,7 +93,7 @@ export const getWakeTarget = authQuery({
     v.null(),
   ),
   handler: async (ctx, args) => {
-    const target = resolveWakeTarget(ctx, args.kind, args.id);
+    const target = await resolveWakeTarget(ctx, args.kind, args.id);
     if (!target) return null;
     if (target.kind === "session") {
       const session = await ctx.db.get(target.id);
@@ -86,68 +108,38 @@ export const getWakeTarget = authQuery({
         title: session.title,
       };
     }
-    if (target.kind === "task") {
-      const task = await ctx.db.get(target.id);
-      if (!task || !task.repoId || !(await hasTaskAccess(ctx.db, task, ctx.userId))) {
-        return null;
-      }
-      return {
-        status: task.reviewTaskSandboxStatus ?? "closed",
-        sandboxId: task.sandboxId,
-        repoId: task.repoId,
-        devPort: task.devPort,
-        title: task.title,
-      };
-    }
-    const project = await ctx.db.get(target.id);
-    if (!project || !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) {
-      return null;
-    }
-    return {
-      status: project.reviewProjectSandboxStatus ?? "closed",
-      sandboxId: project.sandboxId,
-      repoId: project.repoId,
-      devPort: project.devPort,
-      title: project.title,
-    };
+    const entity = await loadOwnerEntityWithAccess(
+      ctx.db,
+      target.owner,
+      ctx.userId,
+    );
+    if (!entity) return null;
+    const doc = entity.kind === "task" ? entity.task : entity.project;
+    if (!doc.repoId) return null;
+    return { status: "closed", repoId: doc.repoId, title: doc.title };
   },
 });
 
-async function readStatus(ctx: ActionCtx, target: WakeTarget): Promise<string> {
-  if (target.kind === "session") {
-    const session = await ctx.runQuery(api.sessions.get, { id: target.id });
-    if (!session) throw new Error("Session not found");
-    return session.status;
-  }
-  if (target.kind === "task") {
-    const task = await ctx.runQuery(api.agentTasks.get, { id: target.id });
-    if (!task) throw new Error("Task not found");
-    return task.reviewTaskSandboxStatus ?? "closed";
-  }
-  const project = await ctx.runQuery(api.projects.get, { id: target.id });
-  if (!project) throw new Error("Project not found");
-  return project.reviewProjectSandboxStatus ?? "closed";
-}
-
-/** The exact Start-button mutation of each surface, run as the signed-in user. */
-async function start(ctx: ActionCtx, target: WakeTarget): Promise<void> {
-  if (target.kind === "session") {
-    await ctx.runMutation(api.sessions.startSandbox, { sessionId: target.id });
-    return;
-  }
-  if (target.kind === "task") {
-    await ctx.runMutation(api.agentTasks.startTaskSandbox, {
-      taskId: target.id,
-    });
-    return;
-  }
-  await ctx.runMutation(api.projects.startProjectSandbox, {
-    projectId: target.id,
+/** The session behind a wake target, created for an owner that has none yet. */
+async function wakeSessionId(
+  ctx: ActionCtx,
+  target: WakeTarget,
+): Promise<Id<"sessions">> {
+  if (target.kind === "session") return target.id;
+  const { sessionId } = await ctx.runMutation(api.sessions.ensureOwned, {
+    owner: target.owner,
   });
+  return sessionId;
 }
 
-const sleep = (ms: number) =>
-  new Promise<void>((resolve) => setTimeout(resolve, ms));
+async function readStatus(
+  ctx: ActionCtx,
+  sessionId: Id<"sessions">,
+): Promise<string> {
+  const session = await ctx.runQuery(api.sessions.get, { id: sessionId });
+  if (!session) throw new Error("Session not found");
+  return session.status;
+}
 
 /**
  * Brings the entity's sandbox to `active` (starting it if paused) and returns.
@@ -155,7 +147,7 @@ const sleep = (ms: number) =>
  * a saved link follows the Start button's path, including stop/start races.
  */
 export const ensureEntitySandboxActive = action({
-  args: { kind: sandboxActivityKindValidator, id: v.string() },
+  args: { kind: chatEntityKindValidator, id: v.string() },
   returns: v.object({ startRequested: v.boolean() }),
   // Explicit types: the action calls a query from its own module, and Convex's
   // inferred `internal` type would otherwise be circular (and cascade `any`).
@@ -167,10 +159,14 @@ export const ensureEntitySandboxActive = action({
       args,
     );
     if (!target) throw new Error("This preview link is not valid.");
+    const sessionId = await wakeSessionId(ctx, target);
     return await awaitSandboxActive({
-      kind: target.kind,
-      readStatus: () => readStatus(ctx, target),
-      start: () => start(ctx, target),
+      kind: "session",
+      readStatus: () => readStatus(ctx, sessionId),
+      // The session's Start button, run as the signed-in user.
+      start: async () => {
+        await ctx.runMutation(api.sessions.startSandbox, { sessionId });
+      },
       sleep,
     });
   },

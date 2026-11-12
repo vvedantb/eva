@@ -26,6 +26,8 @@ import {
   IconMaximize,
 } from "@tabler/icons-react";
 import { stripPreviewGrant, carryPreviewGrant } from "@/lib/utils/previewGrant";
+import { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
+import { isFromFrame, postToFrame } from "@/lib/utils/frameMessaging";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { PreviewPathInput } from "./PreviewPathInput";
 import {
@@ -140,8 +142,8 @@ interface PreviewNavBarProps {
 }
 
 type PreviewHistoryCommand =
-  | "eva-preview-history-back"
-  | "eva-preview-history-forward";
+  | typeof PREVIEW_FRAME_MESSAGE.historyBack
+  | typeof PREVIEW_FRAME_MESSAGE.historyForward;
 
 export function PreviewNavBar({
   previewUrl,
@@ -167,28 +169,31 @@ export function PreviewNavBar({
   // Host-managed iframes only: a legacy ref can't be read during render.
   const documentLoading = usePreviewDocumentLoading(iframeElement ?? null);
   const [portInput, setPortInput] = useState(String(port));
-  const [pathInput, setPathInput] = useState(path ?? defaultPath);
+  // `path` is the owner's value; the draft only exists while the user edits
+  // the input. Uncontrolled bars (no `path`) keep the iframe path as a draft.
+  const [pathDraft, setPathDraft] = useState<string | null>(null);
+  const pathInput = pathDraft ?? path ?? defaultPath;
   // Tracks the last value emitted via onPathChange so the three event sources
   // (input commit, iframe load, in-iframe postMessage) don't fire redundant
-  // notifications for the same path.
+  // notifications for the same path. A controlled bar compares with `path`
+  // instead, so returning to a path after the owner moved it still reports.
   const lastNotifiedPathRef = useRef<string | null>(null);
 
-  // Adjust draft inputs during render when external port/path props change
+  // Adjust the port draft during render when the external port changes
   // (React-recommended alternative to setState-in-effect).
   const [prevPort, setPrevPort] = useState(port);
   if (port !== prevPort) {
     setPrevPort(port);
     setPortInput(String(port));
   }
-  const resolvedPath = path ?? defaultPath;
-  const [prevPath, setPrevPath] = useState(resolvedPath);
-  if (resolvedPath !== prevPath) {
-    setPrevPath(resolvedPath);
-    setPathInput(resolvedPath);
+
+  /** The iframe or a commit settled on `nextPath`: drop the edit draft. */
+  function settlePath(nextPath: string) {
+    setPathDraft(path === undefined ? nextPath : null);
   }
 
   function notifyPathChange(nextPath: string) {
-    if (lastNotifiedPathRef.current === nextPath) return;
+    if ((path ?? lastNotifiedPathRef.current) === nextPath) return;
     lastNotifiedPathRef.current = nextPath;
     onPathChange?.(nextPath);
   }
@@ -200,7 +205,7 @@ export function PreviewNavBar({
     // want that captured as a navigable path.
     if (!href || !/^https?:/i.test(href)) return;
     const nextPath = getPathFromUrl(href);
-    setPathInput(nextPath);
+    settlePath(nextPath);
     notifyPathChange(nextPath);
   }
 
@@ -209,15 +214,17 @@ export function PreviewNavBar({
   // listeners only fire after commit, so the effect-time write is equivalent.
   const syncPathFromIframeRef = useRef(syncPathFromIframe);
   const notifyPathChangeRef = useRef(notifyPathChange);
+  const settlePathRef = useRef(settlePath);
   const currentIframeRef = useRef(currentIframe);
   useEffect(() => {
     syncPathFromIframeRef.current = syncPathFromIframe;
     notifyPathChangeRef.current = notifyPathChange;
+    settlePathRef.current = settlePath;
     currentIframeRef.current = currentIframe;
   });
 
   function postHistoryCommand(type: PreviewHistoryCommand) {
-    currentIframe()?.contentWindow?.postMessage({ type }, "*");
+    postToFrame(currentIframe(), { type });
   }
 
   useEffect(() => {
@@ -237,7 +244,7 @@ export function PreviewNavBar({
       const source = currentIframeRef.current();
       if (
         source === null ||
-        event.source !== source.contentWindow ||
+        !isFromFrame(event, source) ||
         typeof event.data !== "object" ||
         event.data === null ||
         !("type" in event.data)
@@ -245,17 +252,17 @@ export function PreviewNavBar({
         return;
       }
       // The page is leaving for another document (link, form, location.href).
-      if (event.data.type === "eva-preview-unload") {
+      if (event.data.type === PREVIEW_FRAME_MESSAGE.unload) {
         setPreviewDocumentLoading(source, true);
         return;
       }
       if (
-        event.data.type === "navigation" &&
+        event.data.type === PREVIEW_FRAME_MESSAGE.navigation &&
         "url" in event.data &&
         typeof event.data.url === "string"
       ) {
         const nextPath = getPathFromUrl(event.data.url);
-        setPathInput(nextPath);
+        settlePathRef.current(nextPath);
         notifyPathChangeRef.current(nextPath);
       }
     }
@@ -270,7 +277,7 @@ export function PreviewNavBar({
   function goBack() {
     const handled = stepIframeHistory(currentIframe(), "back");
     if (!handled) {
-      postHistoryCommand("eva-preview-history-back");
+      postHistoryCommand(PREVIEW_FRAME_MESSAGE.historyBack);
     }
     setTimeout(syncPathFromIframe, 200);
   }
@@ -278,7 +285,7 @@ export function PreviewNavBar({
   function goForward() {
     const handled = stepIframeHistory(currentIframe(), "forward");
     if (!handled) {
-      postHistoryCommand("eva-preview-history-forward");
+      postHistoryCommand(PREVIEW_FRAME_MESSAGE.historyForward);
     }
     setTimeout(syncPathFromIframe, 200);
   }
@@ -297,7 +304,7 @@ export function PreviewNavBar({
     const iframe = currentIframe();
     if (!iframe || !previewUrl) return;
     const nextPath = normalizePreviewPath(path);
-    setPathInput(nextPath);
+    settlePath(nextPath);
     notifyPathChange(nextPath);
     setPreviewDocumentLoading(iframe, true);
     iframe.src = buildUrlWithPath(previewUrl, nextPath);
@@ -360,7 +367,7 @@ export function PreviewNavBar({
       </WebPreviewNavigationButton>
       <PreviewPathInput
         value={pathInput}
-        onValueChange={setPathInput}
+        onValueChange={setPathDraft}
         onCommit={commitPath}
       />
       {/* The port is developer plumbing; simple view keeps path, reload,

@@ -87,11 +87,10 @@ export function ChatEarlierTurnsLoader({
         );
         if (!reached) return;
         // Still locked to the bottom: nobody is reading up here. The marker
-        // only passes through view while stick-to-bottom springs down from
-        // where the backlog commit left the scroll — on open, and each time
-        // a cached session is shown again. Loading then added 25 turns per
-        // visit and froze the page for ~1 s each time. Scrolling up releases
-        // the lock; a chat too short to scroll still loads.
+        // can pass through view before the chat settles at its bottom (see
+        // ChatBottomPin); loading then added 25 turns per visit and froze
+        // the page for ~1 s each time. Scrolling up releases the lock; a
+        // chat too short to scroll still loads.
         const canScroll =
           viewport.scrollHeight - viewport.clientHeight > PRELOAD_MARGIN_PX;
         if (canScroll && !state.escapedFromLock) return;

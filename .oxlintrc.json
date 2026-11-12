@@ -27,6 +27,7 @@
     "react/static-components": "warn",
     "react/purity": "warn",
     "import/no-duplicates": "error",
+    "no-unused-vars": "warn",
     "anti-slop/no-chained-type-assertions": "error",
     "anti-slop/no-conditional-empty-object-spread": "off",
     "anti-slop/no-known-value-widening": "off",
@@ -50,6 +51,7 @@
     "eva/no-json-parse": "warn",
     "eva/no-double-cast": "warn",
     "eva/no-value-block-in-try": "off",
+    "eva/no-source-text-in-tests": "error",
     "typescript/no-explicit-any": "error",
     "typescript/no-non-null-assertion": "error",
     "typescript/consistent-type-assertions": [

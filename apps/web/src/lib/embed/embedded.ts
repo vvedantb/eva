@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isInternalAppHref } from "@eva/shared/safeUrl";
 
 /**
  * Support for embedding the app inside itself (same-origin iframe), used by
@@ -19,8 +20,20 @@ export const embedReadyMessage = z.object({
  */
 export const embedNavigateMessage = z.object({
   type: z.literal("eva:embed-navigate"),
-  href: z.string().startsWith("/"),
+  href: z.string().refine(isInternalAppHref),
 });
+
+/** The readiness announcement, built from its schema so the name cannot drift. */
+export const EMBED_READY_MESSAGE: z.infer<typeof embedReadyMessage> = {
+  type: embedReadyMessage.shape.type.value,
+};
+
+/** A navigate request for the embedded app, built from its schema. */
+export function embedNavigate(
+  href: string,
+): z.input<typeof embedNavigateMessage> {
+  return { type: embedNavigateMessage.shape.type.value, href };
+}
 
 function detectEmbedded(): boolean {
   if (typeof window === "undefined") return false;

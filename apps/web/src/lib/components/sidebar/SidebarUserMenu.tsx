@@ -8,16 +8,10 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
-  Button,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  Spinner,
   ConfirmSkipHint,
   skipConfirmTitle,
   useRequestConfirm,
+  SignOutDialog,
 } from "@vvedantb/ui";
 import { useClerk } from "@clerk/clerk-react";
 import { UserInitials } from "@eva/shared/user-initials";
@@ -42,8 +36,9 @@ interface SidebarUserMenuProps {
  * Avatar-only account menu for the left icon rail. Name sits above the actions
  * (sentence case — not the shared uppercase menu-label style); email is omitted.
  *
- * Sign out is destructive, so it confirms in a dialog (sibling of the
- * dropdown) so the menu can close cleanly before the dialog traps focus.
+ * Sign out is destructive, so it confirms in the package `SignOutDialog`
+ * (sibling of the dropdown) so the menu can close cleanly before the dialog
+ * traps focus. The dialog stays open while sign-out is pending.
  */
 export function SidebarUserMenu({ name, showSearch }: SidebarUserMenuProps) {
   const { openUserProfile, signOut } = useClerk();
@@ -145,39 +140,13 @@ export function SidebarUserMenu({ name, showSearch }: SidebarUserMenuProps) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <Dialog
+      <SignOutDialog
         open={confirmOpen}
-        onOpenChange={(open) => {
-          if (!open && !isSigningOut) setConfirmOpen(false);
-        }}
-      >
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Sign out</DialogTitle>
-          </DialogHeader>
-          <p className="text-muted-foreground">
-            Sign out of your account? You&apos;ll need to sign back in to
-            continue.
-          </p>
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => setConfirmOpen(false)}
-              disabled={isSigningOut}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => void handleSignOut()}
-              disabled={isSigningOut}
-            >
-              {isSigningOut && <Spinner variant="circle" size="sm" />}
-              Sign out
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onOpenChange={setConfirmOpen}
+        pending={isSigningOut}
+        onConfirm={handleSignOut}
+        description="You'll need to sign back in to continue."
+      />
     </>
   );
 }

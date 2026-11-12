@@ -3,7 +3,7 @@
 import { v, type Infer } from "convex/values";
 import { internalAction } from "../_generated/server";
 import { createClerkClient } from "@clerk/backend";
-import { jwtVerify, SignJWT, importJWK } from "jose";
+import { jwtVerify } from "jose";
 import { z } from "zod";
 import { internal } from "../_generated/api";
 import {
@@ -22,7 +22,11 @@ import {
   PR_WATCH_TOOL_NAMES,
 } from "./tools";
 import { resolveExperimentalFlags } from "../_auth/experimentalFlags";
-import { supabaseTools } from "./supabase";
+import {
+  supabaseProjects,
+  supabaseTools,
+  type SupabaseProject,
+} from "./supabase";
 import { mountFlat, type EvaTool } from "./registry";
 import { codeModeTools } from "../_mcp/codeModeTools";
 import { jsonValue, type JsonValue } from "../_jev/jsonValue";
@@ -31,21 +35,26 @@ import {
   buildChatMessageCalls,
   resolveAgentDelivery,
   SANDBOX_STOP_SETTLE_TIMEOUT_MS,
-  SANDBOX_SURFACES,
   TASK_PREVIEW_SANDBOX_READY_POLL_MS,
   type AgentDelivery,
   type ChatTargetKind,
 } from "./orchestratorDelivery";
 import {
-  PROJECT_CHAT_STREAM_PREFIX,
-  TASK_CHAT_STREAM_PREFIX,
-} from "../_chat/surfaceAdapters";
-import { prStateValidator } from "../validators";
+  CHAT_ENTITY_KINDS,
+  chatEntityKindValidator,
+  prStateValidator,
+  type ChatEntityKind,
+} from "../validators";
 import { mcpPullRequestValidator, type McpLinkedRepo } from "./queries";
-import { repoRefLabel } from "./toolShared";
-import { resolvePublicConvexCloudUrl } from "../_env/publicConvexUrls";
-import { getEvaBaseUrl } from "../_taskWorkflow/urls";
+import { chatSourceArg, repoRefLabel } from "./toolShared";
+import {
+  customerConvexOrigin,
+  resolvePublicConvexCloudUrl,
+} from "../_env/publicConvexUrls";
+import { getEvaBaseUrl } from "../_env/webAppUrl";
+import { signSandboxUserJwt } from "../sandboxJwt";
 import { evaMcpServerInfo } from "./serverInfo";
+import { sleep } from "../_shared/async";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // JWT Claim Schemas (boundary parsing for verified payloads)
@@ -57,15 +66,9 @@ const internalTokenClaims = z.object({
   aud: z.literal("mcp-internal"),
   repoId: z.string(),
   entityId: z.string().optional(),
-  entityKind: z.enum(["session", "task", "project"]).optional(),
+  entityKind: z.enum(CHAT_ENTITY_KINDS).optional(),
   chatId: z.string().optional(),
 });
-
-const mcpEntityKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Internal Actions
@@ -112,7 +115,7 @@ export const verifyAccessToken = internalAction({
       clerkUserId: v.string(),
       scopedRepoId: v.optional(v.string()),
       entityId: v.optional(v.string()),
-      entityKind: v.optional(mcpEntityKindValidator),
+      entityKind: v.optional(chatEntityKindValidator),
       chatId: v.optional(v.string()),
     }),
     v.null(),
@@ -191,8 +194,7 @@ const repoCredentialsCache = new Map<
 const userJwtCache = new Map<string, { jwt: string; expiresAt: number }>();
 
 /**
- * Eva's own Convex API URL, used for the `runQueryAsUser`/`runMutationAsUser`
- * calls below.
+ * Eva's own Convex API URL, used for the `runAsUser` calls below.
  *
  * Prefer `CONVEX_CLOUD_URL`, which every deployment sets and which is correct
  * by construction. The `.convex.site` → `.convex.cloud` rewrite only works on
@@ -215,21 +217,16 @@ async function runTestQueryRemote(
   deployKey: string,
   source: string,
 ): Promise<{ value: JsonValue; logLines: string[] }> {
-  const response = await fetch(`${convexUrl}/api/run_test_function`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  const result = await postConvex(
+    `${convexUrl}/api/run_test_function`,
+    { "Content-Type": "application/json" },
+    {
       adminKey: deployKey,
       args: {},
       bundle: { path: "testQuery.js", source },
       format: "convex_encoded_json",
-    }),
-  });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
-  }
-  const json = await response.json();
-  const result = parseConvexResponse(jsonValue.parse(json));
+    },
+  );
   return { value: result.value, logLines: result.logLines ?? [] };
 }
 
@@ -239,21 +236,7 @@ async function signUserJwt(clerkUserId: string): Promise<string> {
     return cached.jwt;
   }
 
-  const privateKeyJson = process.env.SANDBOX_JWT_PRIVATE_KEY;
-  if (!privateKeyJson) throw new Error("Missing SANDBOX_JWT_PRIVATE_KEY");
-
-  const issuer = requiredEnv("CONVEX_SITE_URL");
-  const privateKeyJwk: Record<string, string> = JSON.parse(privateKeyJson);
-  const kid = privateKeyJwk.kid ?? "sandbox-1";
-  const key = await importJWK(privateKeyJwk, "ES256");
-
-  const jwt = await new SignJWT({ sub: clerkUserId })
-    .setProtectedHeader({ alg: "ES256", kid })
-    .setIssuer(issuer)
-    .setAudience("convex")
-    .setExpirationTime("1h")
-    .setIssuedAt()
-    .sign(key);
+  const jwt = await signSandboxUserJwt(clerkUserId, "mcp");
 
   userJwtCache.set(clerkUserId, {
     jwt,
@@ -263,86 +246,45 @@ async function signUserJwt(clerkUserId: string): Promise<string> {
   return jwt;
 }
 
-async function runMutationAsUser(
-  convexUrl: string,
-  clerkUserId: string,
-  functionPath: string,
-  args: Record<string, JsonValue>,
-): Promise<JsonValue> {
-  const jwt = await signUserJwt(clerkUserId);
-  const response = await fetch(`${convexUrl}/api/mutation`, {
+/**
+ * POSTs one request to a Convex HTTP API endpoint and parses the reply. Throws
+ * on a non-2xx status or a Convex error result.
+ */
+async function postConvex(
+  url: string,
+  headers: Record<string, string>,
+  body: Record<string, JsonValue>,
+) {
+  const response = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${jwt}`,
-    },
-    body: JSON.stringify({ path: functionPath, args, format: "json" }),
+    headers,
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: ${await response.text()}`);
   }
-  const json = await response.json();
-  const result = parseConvexResponse(jsonValue.parse(json));
-  return result.value;
+  return parseConvexResponse(jsonValue.parse(await response.json()));
 }
 
 /**
- * Call a Convex query as the given user (mirrors runMutationAsUser but hits
- * /api/query). Reuses the signed user JWT so the query's authQuery wrapper and
- * access checks (hasRepoAccess/hasTeamAccess) apply automatically.
+ * Calls one public Eva function as the given user. Signs the user JWT, so the
+ * function's auth wrapper and access checks (hasRepoAccess/hasTeamAccess)
+ * apply automatically.
  */
-async function runQueryAsUser(
-  convexUrl: string,
+async function runAsUser(
+  type: "query" | "mutation" | "action",
   clerkUserId: string,
-  functionPath: string,
+  path: string,
   args: Record<string, JsonValue>,
 ): Promise<JsonValue> {
   const jwt = await signUserJwt(clerkUserId);
-  const response = await fetch(`${convexUrl}/api/query`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${jwt}`,
-    },
-    body: JSON.stringify({ path: functionPath, args, format: "json" }),
-  });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
-  }
-  const json = await response.json();
-  const result = parseConvexResponse(jsonValue.parse(json));
+  const result = await postConvex(
+    `${getEvaConvexCloudUrl()}/api/${type}`,
+    { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` },
+    { path, args, format: "json" },
+  );
   return result.value;
 }
-
-/** Call a Convex action as the given user (mirrors runMutationAsUser via /api/action). */
-async function runActionAsUser(
-  convexUrl: string,
-  clerkUserId: string,
-  functionPath: string,
-  args: Record<string, JsonValue>,
-): Promise<JsonValue> {
-  const jwt = await signUserJwt(clerkUserId);
-  const response = await fetch(`${convexUrl}/api/action`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${jwt}`,
-    },
-    body: JSON.stringify({ path: functionPath, args, format: "json" }),
-  });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
-  }
-  const json = await response.json();
-  const result = parseConvexResponse(jsonValue.parse(json));
-  return result.value;
-}
-
-const AS_USER_RUNNERS = {
-  query: runQueryAsUser,
-  mutation: runMutationAsUser,
-  action: runActionAsUser,
-};
 
 /**
  * Runs one public Eva function as the MCP caller, so the tool inherits the
@@ -364,22 +306,14 @@ export const callAsUser = internalAction({
   returns: v.string(),
   handler: async (_ctx, { clerkUserId, type, path, argsJson }) => {
     const args = z.record(z.string(), jsonValue).parse(JSON.parse(argsJson));
-    const value = await AS_USER_RUNNERS[type](
-      getEvaConvexCloudUrl(),
-      clerkUserId,
-      path,
-      args,
-    );
+    const value = await runAsUser(type, clerkUserId, path, args);
     return JSON.stringify(value ?? null);
   },
 });
 
-async function ensureUserExists(
-  convexUrl: string,
-  clerkUserId: string,
-): Promise<string> {
-  const result = await runMutationAsUser(
-    convexUrl,
+async function ensureUserExists(clerkUserId: string): Promise<string> {
+  const result = await runAsUser(
+    "mutation",
     clerkUserId,
     "auth:ensureUserExists",
     {},
@@ -402,7 +336,7 @@ export const getContext = internalAction({
       clerkId: clerkUserId,
     });
     const userId =
-      user?._id ?? (await ensureUserExists(getEvaConvexCloudUrl(), clerkUserId));
+      user?._id ?? (await ensureUserExists(clerkUserId));
     return { userId };
   },
 });
@@ -467,7 +401,9 @@ export const getRepoConvexCredentials = internalAction({
     if (!urlEntry || !keyEntry) return null;
 
     const creds: { convexUrl: string; deployKey: string; expiresAt: number } = {
-      convexUrl: urlEntry.value.replace(/\/$/, ""),
+      // Every deploy-key request (listTables, queryTable, runTestQuery) uses
+      // this URL, so this is the one place it is checked.
+      convexUrl: customerConvexOrigin(urlEntry.value.trim()),
       deployKey: keyEntry.value,
       expiresAt: Date.now() + CACHE_TTL_MS,
     };
@@ -502,22 +438,11 @@ export const listTables = internalAction({
       .parse(await shapesResponse.json());
 
     // Fetch declared schema
-    const schemaResponse = await fetch(`${convexUrl}/api/query`, {
-      method: "POST",
-      headers: authHeaders(deployKey),
-      body: JSON.stringify({
-        path: "_system/frontend/getSchemas",
-        args: {},
-        format: "json",
-      }),
-    });
-    if (!schemaResponse.ok) {
-      throw new Error(
-        `HTTP ${schemaResponse.status}: ${await schemaResponse.text()}`,
-      );
-    }
-    const schemaJson = await schemaResponse.json();
-    const schemaResult = parseConvexResponse(jsonValue.parse(schemaJson));
+    const schemaResult = await postConvex(
+      `${convexUrl}/api/query`,
+      authHeaders(deployKey),
+      { path: "_system/frontend/getSchemas", args: {}, format: "json" },
+    );
     const schemaValue = z
       .object({ active: z.string().nullable() })
       .parse(schemaResult.value);
@@ -573,20 +498,15 @@ export const queryTable = internalAction({
     _ctx,
     { convexUrl, deployKey, table, order, numItems, cursor },
   ) => {
-    const response = await fetch(`${convexUrl}/api/query`, {
-      method: "POST",
-      headers: authHeaders(deployKey),
-      body: JSON.stringify({
+    const result = await postConvex(
+      `${convexUrl}/api/query`,
+      authHeaders(deployKey),
+      {
         path: "_system/cli/tableData",
         args: { table, order, paginationOpts: { numItems, cursor } },
         format: "json",
-      }),
-    });
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${await response.text()}`);
-    }
-    const json = await response.json();
-    const result = parseConvexResponse(jsonValue.parse(json));
+      },
+    );
     return paginationResultSchema.parse(result.value);
   },
 });
@@ -620,205 +540,6 @@ export const runTestQuery = internalAction({
   },
 });
 
-// Task and session creation deliberately take no model: the mutations behind
-// them fall back to `repo.defaultModel`, and that per-repo choice (provider,
-// cost, plan limits) is the one the MCP surface must not override. Per-turn
-// sends (orchestratorSendMessage) keep their model override.
-export const createTask = internalAction({
-  args: {
-    clerkUserId: v.string(),
-    repoId: v.string(),
-    title: v.string(),
-    description: v.string(),
-    baseBranch: v.optional(v.string()),
-    projectId: v.optional(v.string()),
-  },
-  returns: v.string(),
-  handler: async (
-    _ctx,
-    { clerkUserId, repoId, title, description, baseBranch, projectId },
-  ) => {
-    const convexUrl = getEvaConvexCloudUrl();
-    const mutationArgs: Record<string, JsonValue> = {
-      repoId,
-      title,
-      description,
-    };
-    if (baseBranch) mutationArgs.baseBranch = baseBranch;
-    if (projectId) mutationArgs.projectId = projectId;
-
-    const taskId = await runMutationAsUser(
-      convexUrl,
-      clerkUserId,
-      "_agentTasks/mutations:createQuickTask",
-      mutationArgs,
-    );
-
-    if (typeof taskId !== "string") {
-      throw new Error("Unexpected response from createQuickTask");
-    }
-    return taskId;
-  },
-});
-
-export const startTaskExecution = internalAction({
-  args: { clerkUserId: v.string(), taskId: v.string() },
-  returns: v.null(),
-  handler: async (_ctx, { clerkUserId, taskId }) => {
-    const convexUrl = getEvaConvexCloudUrl();
-    await runMutationAsUser(
-      convexUrl,
-      clerkUserId,
-      "_agentTasks/execution:startExecution",
-      { id: taskId },
-    );
-    return null;
-  },
-});
-
-export const createTasksBatch = internalAction({
-  args: {
-    clerkUserId: v.string(),
-    repoId: v.string(),
-    tasks: v.array(
-      v.object({
-        title: v.string(),
-        description: v.optional(v.string()),
-        dependsOn: v.optional(v.array(v.number())),
-      }),
-    ),
-    projectTitle: v.optional(v.string()),
-    baseBranch: v.optional(v.string()),
-  },
-  returns: v.any(),
-  handler: async (
-    _ctx,
-    { clerkUserId, repoId, tasks, projectTitle, baseBranch },
-  ) => {
-    const convexUrl = getEvaConvexCloudUrl();
-    const mutationArgs: Record<string, JsonValue> = {
-      repoId,
-      tasks: tasks.map((t) => ({
-        title: t.title,
-        ...(t.description ? { description: t.description } : {}),
-        ...(t.dependsOn ? { dependsOn: t.dependsOn } : {}),
-      })),
-    };
-    if (projectTitle) mutationArgs.projectTitle = projectTitle;
-    if (baseBranch) mutationArgs.baseBranch = baseBranch;
-
-    const result = await runMutationAsUser(
-      convexUrl,
-      clerkUserId,
-      "_agentTasks/mutations:createBatchWithDependencies",
-      mutationArgs,
-    );
-    return result;
-  },
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Eva document (docs table) actions
-//
-// These operate on Eva's OWN docs (design docs/PRDs), not a connected repo's
-// database. Reads use runQueryAsUser and writes use runMutationAsUser, so the
-// docs.ts authQuery/authMutation access checks (hasRepoAccess) apply.
-// ─────────────────────────────────────────────────────────────────────────────
-
-export const createEvaDoc = internalAction({
-  args: {
-    clerkUserId: v.string(),
-    repoId: v.string(),
-    title: v.string(),
-    content: v.string(),
-    sourceKind: v.optional(
-      v.union(v.literal("session"), v.literal("task"), v.literal("project")),
-    ),
-    sourceId: v.optional(v.string()),
-  },
-  returns: v.string(),
-  handler: async (
-    _ctx,
-    { clerkUserId, repoId, title, content, sourceKind, sourceId },
-  ) => {
-    const createArgs: Record<string, JsonValue> = { repoId, title, content };
-    if (sourceKind !== undefined && sourceId !== undefined) {
-      createArgs.source =
-        sourceKind === "session"
-          ? { kind: "session", sessionId: sourceId }
-          : sourceKind === "task"
-            ? { kind: "task", taskId: sourceId }
-            : { kind: "project", projectId: sourceId };
-    }
-    const docId = await runMutationAsUser(
-      getEvaConvexCloudUrl(),
-      clerkUserId,
-      "docs:create",
-      createArgs,
-    );
-    if (typeof docId !== "string") {
-      throw new Error("Unexpected response from docs:create");
-    }
-    return docId;
-  },
-});
-
-export const getEvaDoc = internalAction({
-  args: { clerkUserId: v.string(), docId: v.string() },
-  returns: v.any(),
-  handler: async (_ctx, { clerkUserId, docId }) => {
-    return runQueryAsUser(getEvaConvexCloudUrl(), clerkUserId, "docs:get", {
-      id: docId,
-    });
-  },
-});
-
-export const listEvaDocs = internalAction({
-  args: {
-    clerkUserId: v.string(),
-    repoId: v.string(),
-    kind: v.optional(v.union(v.literal("document"), v.literal("pr-recap"))),
-  },
-  returns: v.any(),
-  handler: async (_ctx, { clerkUserId, repoId, kind }) => {
-    const args: Record<string, string> = { repoId };
-    if (kind !== undefined) args.kind = kind;
-    return runQueryAsUser(
-      getEvaConvexCloudUrl(),
-      clerkUserId,
-      "docs:list",
-      args,
-    );
-  },
-});
-
-export const updateEvaDoc = internalAction({
-  args: {
-    clerkUserId: v.string(),
-    docId: v.string(),
-    title: v.optional(v.string()),
-    content: v.optional(v.string()),
-    description: v.optional(v.string()),
-  },
-  returns: v.null(),
-  handler: async (
-    _ctx,
-    { clerkUserId, docId, title, content, description },
-  ) => {
-    const mutationArgs: Record<string, JsonValue> = { id: docId };
-    if (title !== undefined) mutationArgs.title = title;
-    if (content !== undefined) mutationArgs.content = content;
-    if (description !== undefined) mutationArgs.description = description;
-    await runMutationAsUser(
-      getEvaConvexCloudUrl(),
-      clerkUserId,
-      "docs:update",
-      mutationArgs,
-    );
-    return null;
-  },
-});
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Team + artifact actions
 // ─────────────────────────────────────────────────────────────────────────────
@@ -831,9 +552,7 @@ export const createArtifact = internalAction({
     description: v.optional(v.string()),
     boundTeamId: v.string(),
     declaredTools: v.array(v.string()),
-    sourceKind: v.optional(
-      v.union(v.literal("session"), v.literal("task"), v.literal("project")),
-    ),
+    sourceKind: v.optional(chatEntityKindValidator),
     sourceId: v.optional(v.string()),
   },
   returns: v.object({ artifactId: v.string(), viewUrl: v.string() }),
@@ -850,11 +569,9 @@ export const createArtifact = internalAction({
       sourceId,
     },
   ) => {
-    const convexUrl = getEvaConvexCloudUrl();
-
     // 1. Get a short-lived storage upload URL (as the user).
-    const uploadUrl = await runMutationAsUser(
-      convexUrl,
+    const uploadUrl = await runAsUser(
+      "mutation",
       clerkUserId,
       "artifacts:generateUploadUrl",
       {},
@@ -885,15 +602,10 @@ export const createArtifact = internalAction({
     };
     if (description) createArgs.description = description;
     if (sourceKind !== undefined && sourceId !== undefined) {
-      createArgs.source =
-        sourceKind === "session"
-          ? { kind: "session", sessionId: sourceId }
-          : sourceKind === "task"
-            ? { kind: "task", taskId: sourceId }
-            : { kind: "project", projectId: sourceId };
+      createArgs.source = chatSourceArg(sourceKind, sourceId);
     }
-    const artifactId = await runMutationAsUser(
-      convexUrl,
+    const artifactId = await runAsUser(
+      "mutation",
       clerkUserId,
       "artifacts:create",
       createArgs,
@@ -913,12 +625,9 @@ export const getArtifact = internalAction({
   args: { clerkUserId: v.string(), artifactId: v.string() },
   returns: v.any(),
   handler: async (_ctx, { clerkUserId, artifactId }) => {
-    const artifact = await runQueryAsUser(
-      getEvaConvexCloudUrl(),
-      clerkUserId,
-      "artifacts:get",
-      { id: artifactId },
-    );
+    const artifact = await runAsUser("query", clerkUserId, "artifacts:get", {
+      id: artifactId,
+    });
     if (artifact === null) return null;
     return {
       artifact,
@@ -931,8 +640,8 @@ export const listArtifacts = internalAction({
   args: { clerkUserId: v.string() },
   returns: v.any(),
   handler: async (_ctx, { clerkUserId }) => {
-    const artifacts = await runQueryAsUser(
-      getEvaConvexCloudUrl(),
+    const artifacts = await runAsUser(
+      "query",
       clerkUserId,
       "artifacts:listAll",
       {},
@@ -957,30 +666,15 @@ export const listArtifacts = internalAction({
 // ─────────────────────────────────────────────────────────────────────────────
 // Orchestrator actions (master session fleet control)
 //
-// Every call below goes through runQueryAsUser / runMutationAsUser, i.e. a
+// Every call below goes through runAsUser, i.e. a
 // signed user JWT hitting authQuery/authMutation. Their hasRepoAccess checks
 // are the ONLY authorisation for orchestrator tools — unlike the repo-scoped
 // tools these deliberately skip the sandbox token's single-repo pin, so the
 // master can reach every agent the user can reach and nothing more.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * State, stop and watch reach all three chat surfaces, including a project's
- * sandbox chat. Listing still only enumerates sessions and tasks.
- */
-const agentKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
-type AgentKind = "session" | "task" | "project";
-
-/** Every surface a chat message can be sent into. */
-const chatKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
+// State, stop and watch reach all three chat surfaces, including a project's
+// sandbox chat. Listing still only enumerates sessions and tasks.
 
 /** The user-authorised read that proves the caller may reach each surface. */
 const CHAT_DOC_QUERY: Record<ChatTargetKind, string> = {
@@ -990,7 +684,7 @@ const CHAT_DOC_QUERY: Record<ChatTargetKind, string> = {
 };
 
 const orchestratorAgentValidator = v.object({
-  kind: agentKindValidator,
+  kind: chatEntityKindValidator,
   id: v.string(),
   numId: v.optional(v.number()),
   repo: v.string(),
@@ -1002,7 +696,7 @@ const orchestratorAgentValidator = v.object({
 });
 
 interface OrchestratorAgent {
-  kind: AgentKind;
+  kind: ChatEntityKind;
   id: string;
   numId?: number;
   repo: string;
@@ -1036,8 +730,7 @@ const agentTaskSchema = z.object({
   status: z.string(),
   updatedAt: z.number(),
   model: z.string().optional(),
-  lastChatModel: z.string().optional(),
-  reviewTaskSandboxStatus: z.string().optional(),
+  projectId: z.string().optional(),
 });
 
 /** One row of `getActiveTasksSlim`: the busy state is computed server-side. */
@@ -1049,7 +742,6 @@ const agentTaskListItemSchema = z.object({
   status: z.string(),
   updatedAt: z.number(),
   model: z.string().optional(),
-  lastChatModel: z.string().optional(),
   isExecuting: z.boolean(),
 });
 
@@ -1062,19 +754,22 @@ const projectDocSchema = z.object({
   phase: z.string(),
   updatedAt: z.number().optional(),
   activeWorkflowId: z.string().optional(),
-  activeBuildWorkflowId: z.string().optional(),
-  activeChatWorkflowId: z.string().optional(),
-  reviewProjectSandboxStatus: z.string().optional(),
+  build: z.object({ state: z.enum(["scheduled", "running"]) }).optional(),
   model: z.string().optional(),
-  lastChatModel: z.string().optional(),
 });
+
+/** `isProjectBuilding` for a parsed doc. */
+function projectDocBuildRunning(
+  project: z.infer<typeof projectDocSchema>,
+): boolean {
+  return project.build?.state === "running";
+}
 
 /** `sessionChats:resolveDeliveryChat` — the chat a session message lands in. */
 const deliveryChatSchema = z.object({
   chatId: z.string(),
   title: z.string(),
   number: z.number(),
-  activeWorkflowId: z.string().optional(),
   lastModel: z.string().optional(),
 });
 
@@ -1089,20 +784,11 @@ const sessionChatRowSchema = z.object({
 });
 
 /** A session's open chats; its transcript is the Main chat's. */
-async function loadSessionChatsAsUser(
-  convexUrl: string,
-  clerkUserId: string,
-  sessionId: string,
-) {
+async function loadSessionChatsAsUser(clerkUserId: string, sessionId: string) {
   const rows = z.array(sessionChatRowSchema).parse(
-    await runQueryAsUser(
-      convexUrl,
-      clerkUserId,
-      "sessionChats:listForSession",
-      {
-        sessionId,
-      },
-    ),
+    await runAsUser("query", clerkUserId, "sessionChats:listForSession", {
+      sessionId,
+    }),
   );
   return rows.filter((row) => row.archived !== true);
 }
@@ -1117,7 +803,6 @@ const sessionDocSchema = z.object({
   status: z.string(),
   updatedAt: z.number().optional(),
   lastModel: z.string().optional(),
-  activeWorkflowId: z.string().optional(),
   deploymentUrl: z.string().optional(),
   deploymentStatus: z.string().optional(),
   linkedRepoCount: z.number().optional(),
@@ -1154,18 +839,18 @@ const TRANSCRIPT_CHAR_LIMIT = 2000;
  */
 async function setWatchedByAve(
   clerkUserId: string,
-  kind: AgentKind,
+  kind: ChatEntityKind,
   id: string,
   aveThreadId: string | undefined,
 ): Promise<void> {
   const { fn, idArg } = WATCH_MUTATION[kind];
   const args: Record<string, JsonValue> = { [idArg]: id };
   if (aveThreadId !== undefined) args.aveThreadId = aveThreadId;
-  await runMutationAsUser(getEvaConvexCloudUrl(), clerkUserId, fn, args);
+  await runAsUser("mutation", clerkUserId, fn, args);
 }
 
 /** The watch-pointer mutation per surface, and the id argument it takes. */
-const WATCH_MUTATION: Record<AgentKind, { fn: string; idArg: string }> = {
+const WATCH_MUTATION: Record<ChatEntityKind, { fn: string; idArg: string }> = {
   session: { fn: "orchestratorWatch:setSessionWatchedBy", idArg: "sessionId" },
   task: { fn: "orchestratorWatch:setTaskWatchedBy", idArg: "taskId" },
   project: { fn: "orchestratorWatch:setProjectWatchedBy", idArg: "projectId" },
@@ -1180,7 +865,7 @@ const WATCH_MUTATION: Record<AgentKind, { fn: string; idArg: string }> = {
  */
 async function registerWatchIfAve(
   clerkUserId: string,
-  kind: AgentKind,
+  kind: ChatEntityKind,
   id: string,
   aveThreadId: string | undefined,
 ): Promise<void> {
@@ -1200,13 +885,12 @@ export const orchestratorListAgents = internalAction({
     _ctx,
     { clerkUserId, repos, includeIdle, excludeEntityId },
   ): Promise<OrchestratorAgent[]> => {
-    const convexUrl = getEvaConvexCloudUrl();
     const repoNameById = new Map(repos.map((r) => [r.id, r.fullName]));
 
     const [sessionGroups, rawTasks] = await Promise.all([
       Promise.all(
         repos.map((repo) =>
-          runQueryAsUser(convexUrl, clerkUserId, "_sessions/queries:list", {
+          runAsUser("query", clerkUserId, "_sessions/queries:list", {
             repoId: repo.id,
           }),
         ),
@@ -1214,8 +898,8 @@ export const orchestratorListAgents = internalAction({
       // Already user-wide, so one call covers every repo. The slim projection
       // keeps the fleet list cheap: full task docs measured up to 38KB each
       // (backgroundAgents, description), all of it discarded below.
-      runQueryAsUser(
-        convexUrl,
+      runAsUser(
+        "query",
         clerkUserId,
         "_agentTasks/queries:getActiveTasksSlim",
         {},
@@ -1251,7 +935,7 @@ export const orchestratorListAgents = internalAction({
         title: task.title,
         status: task.status,
         isExecuting: task.isExecuting,
-        model: task.lastChatModel ?? task.model,
+        model: task.model,
         updatedAt: task.updatedAt,
       });
     }
@@ -1308,12 +992,11 @@ const sessionGroupSchema = z
 
 /** The session's linked-session group, read as the calling user. */
 async function readSessionGroup(
-  convexUrl: string,
   clerkUserId: string,
   sessionId: string,
 ): Promise<Infer<typeof mcpSessionGroupValidator> | undefined> {
   const group = sessionGroupSchema.parse(
-    await runQueryAsUser(convexUrl, clerkUserId, "sessions:listGroup", {
+    await runAsUser("query", clerkUserId, "sessions:listGroup", {
       id: sessionId,
     }),
   );
@@ -1332,7 +1015,7 @@ async function readSessionGroup(
 }
 
 const orchestratorAgentStateValidator = v.object({
-  kind: agentKindValidator,
+  kind: chatEntityKindValidator,
   id: v.string(),
   numId: v.optional(v.number()),
   title: v.string(),
@@ -1377,7 +1060,7 @@ const orchestratorAgentStateValidator = v.object({
 export const orchestratorGetAgentState = internalAction({
   args: {
     clerkUserId: v.string(),
-    kind: agentKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
     transcriptTail: v.number(),
   },
@@ -1386,54 +1069,50 @@ export const orchestratorGetAgentState = internalAction({
     ctx,
     { clerkUserId, kind, id, transcriptTail },
   ): Promise<Infer<typeof orchestratorAgentStateValidator>> => {
-    const convexUrl = getEvaConvexCloudUrl();
     // The access check runs first, on its own. `messages:listByParent` *throws*
     // "Not authorized" while the entity read merely returns null, so in a
     // Promise.all the raw throw won the race and the agent saw a stack instead
     // of the sentence below.
-    const rawDoc = await runQueryAsUser(
-      convexUrl,
-      clerkUserId,
-      CHAT_DOC_QUERY[kind],
-      { id },
-    );
-    if (rawDoc === null) {
-      throw new Error(`No ${kind} ${id} found, or you do not have access.`);
-    }
+    const rawDoc = await readChatDocAsUser(clerkUserId, kind, id);
 
     // A session's transcript is its Main chat's (parallel chats keep their
-    // own); the streaming row is that chat's too.
-    // Same rule as list_agents / stop_sandbox: a daemon `/loop` continuation
-    // never sets `activeWorkflowId`, so that field alone is not "is executing".
+    // own); a task's or project's is the chat it talks in on its session
+    // (none before it first chatted). The streaming row is that chat's too.
+    // Same rule as list_agents / stop_sandbox: the open turn is "is executing",
+    // daemon `/loop` continuations included.
+    const owned =
+      kind === "session" ? null : await readOwnedChatAsUser(clerkUserId, kind, id);
     const [sessionChats, isExecuting, pullRequests] = await Promise.all([
       kind === "session"
-        ? loadSessionChatsAsUser(convexUrl, clerkUserId, id)
-        : [],
+        ? loadSessionChatsAsUser(clerkUserId, id)
+        : owned
+          ? loadSessionChatsAsUser(clerkUserId, owned.sessionId)
+          : [],
       ctx.runQuery(internal.mcp.queries.entityIsExecuting, { kind, id }),
       ctx.runQuery(internal.mcp.queries.chatPullRequests, { kind, id }),
     ]);
-    const mainChat =
-      sessionChats.find((chat) => chat.isMain) ?? sessionChats[0];
-    const transcriptParentId = kind === "session" ? (mainChat?._id ?? id) : id;
-    const streamingEntityId =
+    const ownChat =
       kind === "session"
-        ? transcriptParentId
-        : `${kind === "task" ? TASK_CHAT_STREAM_PREFIX : PROJECT_CHAT_STREAM_PREFIX}${id}`;
+        ? (sessionChats.find((chat) => chat.isMain) ?? sessionChats[0])
+        : sessionChats.find((chat) => chat._id === owned?.chatId);
+    const transcriptParentId =
+      kind === "session" ? (ownChat?._id ?? id) : owned?.chatId;
 
-    const [rawStreaming, rawMessages, rawQueued] = await Promise.all([
-      runQueryAsUser(convexUrl, clerkUserId, "streaming:get", {
-        entityId: streamingEntityId,
-      }),
-      runQueryAsUser(convexUrl, clerkUserId, "messages:listByParent", {
-        parentId: transcriptParentId,
-      }),
-      runQueryAsUser(convexUrl, clerkUserId, "queuedMessages:listByParent", {
-        parentId: transcriptParentId,
-      }),
-    ]);
+    const [rawStreaming, rawMessages, queued] =
+      transcriptParentId === undefined
+        ? [null, [], []]
+        : await Promise.all([
+            runAsUser("query", clerkUserId, "streaming:get", {
+              entityId: transcriptParentId,
+            }),
+            runAsUser("query", clerkUserId, "messages:listByParent", {
+              parentId: transcriptParentId,
+            }),
+            listQueuedAsUser(clerkUserId, transcriptParentId),
+          ]);
 
     const streaming = streamingStateSchema.parse(rawStreaming);
-    const queuedMessageCount = z.array(z.unknown()).parse(rawQueued).length;
+    const queuedMessageCount = queued.length;
     const messages = z.array(transcriptMessageSchema).parse(rawMessages);
     const tail = transcriptTail > 0 ? messages.slice(-transcriptTail) : [];
     const transcript = tail.map((message) => ({
@@ -1463,14 +1142,14 @@ export const orchestratorGetAgentState = internalAction({
               sessionId: id,
             })
           : undefined,
-        readSessionGroup(convexUrl, clerkUserId, id),
+        readSessionGroup(clerkUserId, id),
       ]);
       return {
         ...common,
         numId: session.numId,
         title: session.title,
         status: session.status,
-        model: mainChat?.lastModel ?? session.lastModel,
+        model: ownChat?.lastModel ?? session.lastModel,
         updatedAt: session.updatedAt ?? session._creationTime,
         deploymentUrl: session.deploymentUrl,
         deploymentStatus: session.deploymentStatus,
@@ -1486,11 +1165,11 @@ export const orchestratorGetAgentState = internalAction({
         numId: project.numId,
         title: project.title,
         status: project.phase,
-        model: project.lastChatModel ?? project.model,
+        model: ownChat?.lastModel ?? project.model,
         updatedAt: project.updatedAt ?? project._creationTime,
         deploymentUrl: undefined,
         deploymentStatus: undefined,
-        buildRunning: project.activeBuildWorkflowId !== undefined,
+        buildRunning: projectDocBuildRunning(project),
       };
     }
 
@@ -1500,7 +1179,7 @@ export const orchestratorGetAgentState = internalAction({
       numId: task.numId,
       title: task.title,
       status: task.status,
-      model: task.lastChatModel ?? task.model,
+      model: ownChat?.lastModel ?? task.model,
       updatedAt: task.updatedAt,
       deploymentUrl: undefined,
       deploymentStatus: undefined,
@@ -1525,137 +1204,173 @@ export const orchestratorUpdateSessionGroup = internalAction({
   },
   returns: v.object({ sessionGroup: v.optional(mcpSessionGroupValidator) }),
   handler: async (_ctx, { clerkUserId, sessionId, change }) => {
-    const convexUrl = getEvaConvexCloudUrl();
     if (change.kind === "add") {
-      await runMutationAsUser(convexUrl, clerkUserId, "sessions:addToGroup", {
+      await runAsUser("mutation", clerkUserId, "sessions:addToGroup", {
         sessionId,
         groupSessionId: change.groupSessionId,
       });
     } else if (change.kind === "rename") {
-      await runMutationAsUser(convexUrl, clerkUserId, "sessions:renameGroup", {
+      await runAsUser("mutation", clerkUserId, "sessions:renameGroup", {
         sessionId,
         name: change.name,
       });
     } else {
-      await runMutationAsUser(
-        convexUrl,
-        clerkUserId,
-        "sessions:removeFromGroup",
-        { sessionId },
-      );
+      await runAsUser("mutation", clerkUserId, "sessions:removeFromGroup", {
+        sessionId,
+      });
     }
     return {
-      sessionGroup: await readSessionGroup(convexUrl, clerkUserId, sessionId),
+      sessionGroup: await readSessionGroup(clerkUserId, sessionId),
     };
   },
 });
 
-async function delay(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Reads one chat's own document as the calling user, so the read doubles as
+ * the access check. Throws one plain sentence when it is missing or hidden.
+ */
+async function readChatDocAsUser(
+  clerkUserId: string,
+  kind: ChatTargetKind,
+  id: string,
+): Promise<JsonValue> {
+  const raw = await runAsUser("query", clerkUserId, CHAT_DOC_QUERY[kind], {
+    id,
+  });
+  if (raw === null) {
+    throw new Error(`No ${kind} ${id} found, or you do not have access.`);
+  }
+  return raw;
 }
 
 /**
- * Reads one entity's preview sandbox state as the calling user, so the read
- * doubles as the access check. Each surface parks that state somewhere
- * different: a session in `status`, a task and a project in their own
- * `review*SandboxStatus` field.
+ * Reads one session's sandbox status as the calling user, so the read doubles
+ * as the access check.
  *
  * Deliberately not "is a turn running" — that answer needs the `turns` table,
  * which no per-entity read exposes (see `mcp.queries.entityIsExecuting`).
  */
-async function readEntitySandboxStatus(
-  convexUrl: string,
+async function readSessionSandboxStatus(
   clerkUserId: string,
-  kind: ChatTargetKind,
-  id: string,
+  sessionId: string,
 ): Promise<string> {
-  const raw = await runQueryAsUser(
-    convexUrl,
-    clerkUserId,
-    CHAT_DOC_QUERY[kind],
-    { id },
-  );
-  if (raw === null) {
-    throw new Error(`No ${kind} ${id} found, or you do not have access.`);
-  }
-  if (kind === "session") return sessionDocSchema.parse(raw).status;
-  if (kind === "task") {
-    return agentTaskSchema.parse(raw).reviewTaskSandboxStatus ?? "closed";
-  }
-  return projectDocSchema.parse(raw).reviewProjectSandboxStatus ?? "closed";
+  const raw = await readChatDocAsUser(clerkUserId, "session", sessionId);
+  return sessionDocSchema.parse(raw).status;
 }
 
 /**
- * Brings one entity's preview sandbox up and waits until it is actually
- * `active`. A completed entity tears its sandbox down, and resuming the closed
- * id in-place hangs on "Resuming sandbox…", so this drives the same
- * Start-button mutation the Eva UI does and then polls.
+ * Brings one session's sandbox up and waits until it is actually `active`. A
+ * retired session tears its sandbox down, and resuming the closed id
+ * in-place hangs on "Resuming sandbox…", so this drives the same Start-button
+ * mutation the Eva UI does and then polls.
  *
  * Returns whether it had to issue a start; throws — rather than returning a
  * half-started sandbox — when the VM never comes up.
  */
-async function ensureEntitySandboxActive(
-  convexUrl: string,
+async function ensureSessionSandboxActive(
   clerkUserId: string,
-  kind: ChatTargetKind,
-  id: string,
+  sessionId: string,
 ): Promise<{ startRequested: boolean }> {
-  const surface = SANDBOX_SURFACES[kind];
   return await awaitSandboxActive({
-    kind,
-    readStatus: () => readEntitySandboxStatus(convexUrl, clerkUserId, kind, id),
+    kind: "session",
+    readStatus: () => readSessionSandboxStatus(clerkUserId, sessionId),
     start: async () => {
-      await runMutationAsUser(convexUrl, clerkUserId, surface.start, {
-        [surface.idArg]: id,
+      await runAsUser("mutation", clerkUserId, "sessions:startSandbox", {
+        sessionId,
       });
     },
-    sleep: delay,
+    sleep,
   });
 }
 
 /**
  * Decides whether a message starts a turn or joins the queue, and which model
- * the turn falls back to. `isExecuting` is `entityIsExecuting`: the open
- * durable turn (synthetic turns included), plus a task's main run or a
- * project's build. A busy answer is always safe — the queue drain starts the
+ * the turn falls back to. `isExecuting` is `entityIsExecuting` for the
+ * delivery chat. A busy answer is always safe — the queue drain starts the
  * message at once when the chat itself is free.
  */
 function chatDelivery(
-  kind: ChatTargetKind,
-  rawDoc: unknown,
+  chat: z.infer<typeof deliveryChatSchema>,
   queuedAhead: number,
   requestedModel: string | undefined,
   isExecuting: boolean,
 ): AgentDelivery {
-  const isBusy = isExecuting || queuedAhead > 0;
-  if (kind === "session") {
-    const chat = deliveryChatSchema.parse(rawDoc);
-    return resolveAgentDelivery({
-      isBusy,
-      requestedModel,
-      storedModel: chat.lastModel,
-    });
-  }
-  if (kind === "task") {
-    const task = agentTaskSchema.parse(rawDoc);
-    return resolveAgentDelivery({
-      isBusy,
-      requestedModel,
-      storedModel: task.lastChatModel ?? task.model,
-    });
-  }
-  const project = projectDocSchema.parse(rawDoc);
   return resolveAgentDelivery({
-    isBusy,
+    isBusy: isExecuting || queuedAhead > 0,
     requestedModel,
-    storedModel: project.lastChatModel ?? project.model,
+    storedModel: chat.lastModel,
   });
+}
+
+const ownedSessionRefSchema = z.object({
+  sessionId: z.string(),
+  chatId: z.string(),
+});
+
+/** `sessions:getOwned`: the chat is absent while a project task has not chatted. */
+const ownedSessionReadSchema = z.object({
+  sessionId: z.string(),
+  chatId: z.string().optional(),
+});
+
+function ownerArg(
+  kind: "task" | "project",
+  id: string,
+): Record<string, string> {
+  return kind === "task"
+    ? { kind: "task", taskId: id }
+    : { kind: "project", projectId: id };
+}
+
+/**
+ * The session and chat a task or project talks in, created on first use
+ * (`sessions.ensureOwned`): a quick task's or project's Main chat, a project
+ * task's own chat.
+ */
+async function ensureOwnedChatAsUser(
+  clerkUserId: string,
+  kind: "task" | "project",
+  id: string,
+): Promise<z.infer<typeof ownedSessionRefSchema>> {
+  return ownedSessionRefSchema.parse(
+    await runAsUser("mutation", clerkUserId, "sessions:ensureOwned", {
+      owner: ownerArg(kind, id),
+    }),
+  );
+}
+
+/** `ensureOwnedChatAsUser` without creating it: null before first use. */
+async function readOwnedChatAsUser(
+  clerkUserId: string,
+  kind: "task" | "project",
+  id: string,
+): Promise<z.infer<typeof ownedSessionReadSchema> | null> {
+  return ownedSessionReadSchema
+    .nullable()
+    .parse(
+      await runAsUser("query", clerkUserId, "sessions:getOwned", {
+        owner: ownerArg(kind, id),
+      }),
+    );
+}
+
+/**
+ * Where a message to `kind`/`id` is delivered: a session, with the chat a
+ * task or project talks in on it. A session is delivered to itself.
+ */
+async function resolveSessionTarget(
+  clerkUserId: string,
+  kind: ChatTargetKind,
+  id: string,
+): Promise<{ sessionId: string; chatId?: string }> {
+  if (kind === "session") return { sessionId: id };
+  return await ensureOwnedChatAsUser(clerkUserId, kind, id);
 }
 
 export const orchestratorSendMessage = internalAction({
   args: {
     clerkUserId: v.string(),
-    kind: chatKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
     message: v.string(),
     model: v.optional(v.string()),
@@ -1691,96 +1406,72 @@ export const orchestratorSendMessage = internalAction({
       sentViaOrchestrator,
     },
   ) => {
-    const convexUrl = getEvaConvexCloudUrl();
-    // A session message lands in one of its chats: the named one, else Main.
-    // From here on `targetId` is that chat; the session id is only kept for
-    // the sandbox wake and the Ave watch pointer.
-    let targetId = id;
-    let deliveryChat: z.infer<typeof deliveryChatSchema> | undefined;
-    let rawDoc: unknown;
-    if (kind === "session") {
-      rawDoc = await runQueryAsUser(
-        convexUrl,
-        clerkUserId,
-        "sessionChats:resolveDeliveryChat",
-        { sessionId: id, ...(chat !== undefined ? { chat } : {}) },
+    // A task or project chats in a chat of its session, so its message is
+    // delivered there; the Ave watch below stays on the task or project.
+    const delivery = await resolveSessionTarget(clerkUserId, kind, id);
+    // A session message lands in one of its chats: the named one, else Main;
+    // a task's or project's lands in its own chat. From here on `targetId` is
+    // that chat.
+    const chatName = delivery.chatId ?? chat;
+    const rawDoc = await runAsUser(
+      "query",
+      clerkUserId,
+      "sessionChats:resolveDeliveryChat",
+      {
+        sessionId: delivery.sessionId,
+        ...(chatName !== undefined ? { chat: chatName } : {}),
+      },
+    );
+    if (rawDoc === null) {
+      throw new Error(
+        chat === undefined
+          ? `No session ${id} found, or you do not have access.`
+          : `Session ${id} has no open chat named "${chat}".`,
       );
-      if (rawDoc === null) {
-        throw new Error(
-          chat === undefined
-            ? `No session ${id} found, or you do not have access.`
-            : `Session ${id} has no open chat named "${chat}".`,
-        );
-      }
-      deliveryChat = deliveryChatSchema.parse(rawDoc);
-      if (deliveryChat.chatId === excludeChatId) {
-        throw new Error(
-          "That is this sandbox's own chat. Reply in your own turn instead of messaging yourself.",
-        );
-      }
-      targetId = deliveryChat.chatId;
-    } else {
-      rawDoc = await runQueryAsUser(
-        convexUrl,
-        clerkUserId,
-        CHAT_DOC_QUERY[kind],
-        { id },
+    }
+    const deliveryChat = deliveryChatSchema.parse(rawDoc);
+    if (deliveryChat.chatId === excludeChatId) {
+      throw new Error(
+        "That is this sandbox's own chat. Reply in your own turn instead of messaging yourself.",
       );
-      if (rawDoc === null) {
-        throw new Error(`No ${kind} ${id} found, or you do not have access.`);
-      }
     }
-
-    if (kind === "task") {
-      await ensureEntitySandboxActive(convexUrl, clerkUserId, kind, id);
-    }
+    const targetId = deliveryChat.chatId;
 
     // A child with anything already queued is NOT idle, even with no workflow
     // in flight: a brand-new session parks its first turn in the queue until
     // its sandbox reports ready. Starting a turn then would run this message
     // ahead of the one the child was created with (observed live: "probe
     // second message" answered while "probe first message" sat queued).
-    const queuedAhead = z
-      .array(z.unknown())
-      .parse(
-        await runQueryAsUser(
-          convexUrl,
-          clerkUserId,
-          "queuedMessages:listByParent",
-          { parentId: targetId },
-        ),
-      ).length;
+    const queuedAhead = (await listQueuedAsUser(clerkUserId, targetId)).length;
 
     // For a session this is the named chat's own turn, not any sibling's:
     // parallel chats run side by side, so a busy sibling must not queue it.
     const isExecuting: boolean = await ctx.runQuery(
       internal.mcp.queries.entityIsExecuting,
-      { kind, id: targetId },
+      { kind: "session", id: targetId },
     );
-    const delivery = chatDelivery(
-      kind,
-      rawDoc,
+    const agentDelivery = chatDelivery(
+      deliveryChat,
       queuedAhead,
       model,
       isExecuting,
     );
     for (const call of buildChatMessageCalls({
-      kind,
-      id: targetId,
+      chatId: targetId,
       message,
-      delivery,
+      delivery: agentDelivery,
       sentViaOrchestrator,
     })) {
-      await runMutationAsUser(convexUrl, clerkUserId, call.fn, call.args);
+      await runAsUser("mutation", clerkUserId, call.fn, call.args);
     }
 
     await registerWatchIfAve(clerkUserId, kind, id, aveThreadId);
     const delivered: "queued" | "started" =
-      delivery.action === "queue" ? "queued" : "started";
+      agentDelivery.action === "queue" ? "queued" : "started";
     return {
       delivered,
-      model: delivery.model,
-      ...(deliveryChat !== undefined
+      model: agentDelivery.model,
+      ...(kind === "session"
         ? { chat: { title: deliveryChat.title, number: deliveryChat.number } }
         : {}),
     };
@@ -1790,54 +1481,49 @@ export const orchestratorSendMessage = internalAction({
 export const orchestratorStopAgent = internalAction({
   args: {
     clerkUserId: v.string(),
-    kind: agentKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
   },
   returns: v.object({ buildRunning: v.boolean() }),
   handler: async (_ctx, { clerkUserId, kind, id }) => {
-    const convexUrl = getEvaConvexCloudUrl();
     if (kind === "session") {
       // Every chat of the session: a stop means the whole agent goes quiet.
-      await runMutationAsUser(
-        convexUrl,
+      await runAsUser(
+        "mutation",
         clerkUserId,
         "_sessions/execution:cancelSessionExecution",
         { sessionId: id },
       );
       return { buildRunning: false };
     }
-    if (kind === "project") {
-      // Only the sandbox chat. A running build is its own workflow and is
-      // reported back rather than cancelled (cancel_project_build owns that).
-      const rawDoc = await runQueryAsUser(
-        convexUrl,
+    // A project's session goes quiet (every chat of it); a task's own chat
+    // does. A project's running build is its own workflow and is reported
+    // back rather than cancelled (cancel_project_build owns that).
+    const owned = await readOwnedChatAsUser(clerkUserId, kind, id);
+    if (owned && kind === "project") {
+      await runAsUser(
+        "mutation",
         clerkUserId,
-        CHAT_DOC_QUERY.project,
-        { id },
+        "_sessions/execution:cancelSessionExecution",
+        { sessionId: owned.sessionId },
       );
-      if (rawDoc === null) {
-        throw new Error(`No project ${id} found, or you do not have access.`);
-      }
-      const project = projectDocSchema.parse(rawDoc);
-      await runMutationAsUser(
-        convexUrl,
+    } else if (owned?.chatId !== undefined) {
+      await runAsUser(
+        "mutation",
         clerkUserId,
-        "projectChatWorkflow:cancelExecution",
-        { projectId: id },
+        "_sessions/execution:cancelExecution",
+        { chatId: owned.chatId },
       );
-      return { buildRunning: project.activeBuildWorkflowId !== undefined };
     }
-    // A task has two independent workflow slots: its main run and its sandbox
-    // chat. Cancelling only the chat one reported success while a run kept
-    // going, so stop both — each cancel is a no-op when that slot is idle.
-    await runMutationAsUser(
-      convexUrl,
-      clerkUserId,
-      "agentTaskChatWorkflow:cancelExecution",
-      { taskId: id },
-    );
-    await runMutationAsUser(
-      convexUrl,
+    if (kind === "project") {
+      const project = projectDocSchema.parse(
+        await readChatDocAsUser(clerkUserId, "project", id),
+      );
+      return { buildRunning: projectDocBuildRunning(project) };
+    }
+    // A task's run is its own workflow slot: stop it too (a no-op when idle).
+    await runAsUser(
+      "mutation",
       clerkUserId,
       "_taskWorkflow/publicMutations:cancelExecution",
       { taskId: id },
@@ -1857,7 +1543,7 @@ export const orchestratorStopAgent = internalAction({
 export const mcpStartEntitySandbox = internalAction({
   args: {
     clerkUserId: v.string(),
-    kind: chatKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
   },
   returns: v.object({
@@ -1865,11 +1551,11 @@ export const mcpStartEntitySandbox = internalAction({
     startRequested: v.boolean(),
   }),
   handler: async (_ctx, { clerkUserId, kind, id }) => {
-    const { startRequested } = await ensureEntitySandboxActive(
-      getEvaConvexCloudUrl(),
+    // A task's or project's sandbox is its session's.
+    const target = await resolveSessionTarget(clerkUserId, kind, id);
+    const { startRequested } = await ensureSessionSandboxActive(
       clerkUserId,
-      kind,
-      id,
+      target.sessionId,
     );
     // ensureEntitySandboxActive only returns once the VM is up, so there is no
     // "resuming" limbo to report back.
@@ -1880,29 +1566,33 @@ export const mcpStartEntitySandbox = internalAction({
 export const mcpStopEntitySandbox = internalAction({
   args: {
     clerkUserId: v.string(),
-    kind: chatKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
   },
   returns: v.object({
     sandboxStatus: v.string(),
     stopRequested: v.boolean(),
   }),
-  handler: async (ctx, { clerkUserId, kind, id }) => {
-    const convexUrl = getEvaConvexCloudUrl();
-    // Reading the entity as the user is the access check, so it comes first —
+  handler: async (ctx, { clerkUserId, kind, id: entityId }) => {
+    // A task's or project's sandbox is its session's. Stopping never creates
+    // one: no session means no sandbox. Reading the owner as the user is the
+    // access check, so it comes first.
+    let id = entityId;
+    if (kind !== "session") {
+      await readChatDocAsUser(clerkUserId, kind, entityId);
+      const owned = await readOwnedChatAsUser(clerkUserId, kind, entityId);
+      if (!owned) return { sandboxStatus: "closed", stopRequested: false };
+      id = owned.sessionId;
+    }
+    // Reading the session as the user is the access check, so it comes first —
     // the turn lookup below runs on an id the caller has already proven.
-    const sandboxStatus = await readEntitySandboxStatus(
-      convexUrl,
-      clerkUserId,
-      kind,
-      id,
-    );
+    const sandboxStatus = await readSessionSandboxStatus(clerkUserId, id);
 
     // Tearing the VM down mid-turn kills the turn. Stopping and cancelling are
     // separate decisions, so this refuses rather than deciding for the caller.
     const isExecuting = await ctx.runQuery(
       internal.mcp.queries.entityIsExecuting,
-      { kind, id },
+      { kind: "session", id },
     );
     if (isExecuting) {
       throw new Error(
@@ -1914,9 +1604,8 @@ export const mcpStopEntitySandbox = internalAction({
       return { sandboxStatus: "closed", stopRequested: false };
     }
 
-    const surface = SANDBOX_SURFACES[kind];
-    await runMutationAsUser(convexUrl, clerkUserId, surface.stop, {
-      [surface.idArg]: id,
+    await runAsUser("mutation", clerkUserId, "sessions:stopSandbox", {
+      sessionId: id,
     });
 
     // Teardown finalizes in a scheduled action, so poll for the settled state
@@ -1924,8 +1613,8 @@ export const mcpStopEntitySandbox = internalAction({
     const deadline = Date.now() + SANDBOX_STOP_SETTLE_TIMEOUT_MS;
     let settled = "stopping";
     while (Date.now() < deadline) {
-      await delay(TASK_PREVIEW_SANDBOX_READY_POLL_MS);
-      settled = await readEntitySandboxStatus(convexUrl, clerkUserId, kind, id);
+      await sleep(TASK_PREVIEW_SANDBOX_READY_POLL_MS);
+      settled = await readSessionSandboxStatus(clerkUserId, id);
       if (settled !== "stopping") break;
     }
     // A still-`stopping` status is reported as-is: the stop was accepted and
@@ -1941,6 +1630,15 @@ const queuedMessageSchema = z.object({
   order: z.number().optional(),
 });
 
+/** One chat's pending queue, read as the user (the read is the access check). */
+async function listQueuedAsUser(clerkUserId: string, parentId: string) {
+  return z.array(queuedMessageSchema).parse(
+    await runAsUser("query", clerkUserId, "queuedMessages:listByParent", {
+      parentId,
+    }),
+  );
+}
+
 export const mcpCancelQueuedMessages = internalAction({
   args: {
     clerkUserId: v.string(),
@@ -1954,20 +1652,7 @@ export const mcpCancelQueuedMessages = internalAction({
     remaining: v.number(),
   }),
   handler: async (_ctx, { clerkUserId, id, queuedMessageId, all }) => {
-    const convexUrl = getEvaConvexCloudUrl();
-    const listQueue = async () =>
-      z
-        .array(queuedMessageSchema)
-        .parse(
-          await runQueryAsUser(
-            convexUrl,
-            clerkUserId,
-            "queuedMessages:listByParent",
-            { parentId: id },
-          ),
-        );
-
-    const queued = await listQueue();
+    const queued = await listQueuedAsUser(clerkUserId, id);
     let doomed = queued;
     if (!all) {
       const match = queued.find((message) => message._id === queuedMessageId);
@@ -1983,7 +1668,7 @@ export const mcpCancelQueuedMessages = internalAction({
     }
 
     for (const message of doomed) {
-      await runMutationAsUser(convexUrl, clerkUserId, "queuedMessages:remove", {
+      await runAsUser("mutation", clerkUserId, "queuedMessages:remove", {
         id: message._id,
       });
     }
@@ -1992,7 +1677,7 @@ export const mcpCancelQueuedMessages = internalAction({
     // its own while this action was deleting others. A drained message is also
     // gone from the queue, which is why the tool tells the caller that a
     // same-instant dequeue cannot be taken back.
-    const remaining = await listQueue();
+    const remaining = await listQueuedAsUser(clerkUserId, id);
     const stillQueued = new Set(remaining.map((message) => message._id));
     return {
       cancelled: doomed
@@ -2059,8 +1744,8 @@ export const orchestratorCreateSession = internalAction({
     if (fromSessionId) createArgs.fromSessionId = fromSessionId;
 
     const created = createdSessionSchema.parse(
-      await runMutationAsUser(
-        getEvaConvexCloudUrl(),
+      await runAsUser(
+        "mutation",
         clerkUserId,
         "_sessions/mutations:create",
         createArgs,
@@ -2089,7 +1774,7 @@ export const orchestratorCreateSession = internalAction({
 export const orchestratorSetWatch = internalAction({
   args: {
     clerkUserId: v.string(),
-    kind: agentKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
     aveThreadId: v.optional(v.string()),
   },
@@ -2104,51 +1789,53 @@ export const orchestratorSetWatch = internalAction({
 // Supabase Proxy Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const supabaseTokenCache = new Map<
+const supabaseCredentialsCache = new Map<
   string,
-  { token: string; expiresAt: number }
+  { token: string; projects: SupabaseProject[]; expiresAt: number }
 >();
 
-export const resolveSupabaseToken = internalAction({
-  args: { clerkUserId: v.string() },
-  returns: v.union(v.string(), v.null()),
-  handler: async (ctx, { clerkUserId }): Promise<string | null> => {
-    const cached = supabaseTokenCache.get(clerkUserId);
+/**
+ * The repo's own Supabase access token and allowed projects. A Supabase token
+ * reaches every project in its account, so tools only run against the
+ * projects the repo names, never a token borrowed from another of the user's
+ * repos.
+ */
+export const resolveSupabaseCredentials = internalAction({
+  args: { repoId: v.string() },
+  returns: v.union(
+    v.object({
+      token: v.string(),
+      projects: v.array(
+        v.object({ ref: v.string(), label: v.union(v.string(), v.null()) }),
+      ),
+    }),
+    v.null(),
+  ),
+  handler: async (
+    ctx,
+    { repoId },
+  ): Promise<{ token: string; projects: SupabaseProject[] } | null> => {
+    const cached = supabaseCredentialsCache.get(repoId);
     if (cached && cached.expiresAt > Date.now()) {
-      return cached.token;
+      return { token: cached.token, projects: cached.projects };
     }
 
-    const user = await ctx.runQuery(internal.auth.getUserByClerkId, {
-      clerkId: clerkUserId,
-    });
-    if (!user) return null;
-    const repos = await ctx.runQuery(internal.mcp.queries.listUserRepos, {
-      userId: user._id,
-    });
+    const vars: EnvVar[] = await ctx.runAction(
+      internal.mcp.routes.getDecryptedRepoEnvVars,
+      { repoId },
+    );
+    const token = vars
+      .find((entry) => entry.key === "SUPABASE_ACCESS_TOKEN")
+      ?.value.trim();
+    const projects = supabaseProjects(vars);
+    if (!token || projects.length === 0) return null;
 
-    // Search for Supabase token in each repo's env vars
-    for (const { id: repoId } of repos) {
-      try {
-        const vars: EnvVar[] = await ctx.runAction(
-          internal.mcp.routes.getDecryptedRepoEnvVars,
-          { repoId },
-        );
-        const match: EnvVar | undefined = vars.find(
-          (entry) => entry.key === "SUPABASE_ACCESS_TOKEN",
-        );
-        if (match) {
-          supabaseTokenCache.set(clerkUserId, {
-            token: match.value,
-            expiresAt: Date.now() + CACHE_TTL_MS,
-          });
-          return match.value;
-        }
-      } catch {
-        // Skip failed repos
-      }
-    }
-
-    return null;
+    supabaseCredentialsCache.set(repoId, {
+      token,
+      projects,
+      expiresAt: Date.now() + CACHE_TTL_MS,
+    });
+    return { token, projects };
   },
 });
 
@@ -2161,7 +1848,7 @@ export const handleMcpRequest = internalAction({
     clerkUserId: v.string(),
     scopedRepoId: v.optional(v.string()),
     entityId: v.optional(v.string()),
-    entityKind: v.optional(mcpEntityKindValidator),
+    entityKind: v.optional(chatEntityKindValidator),
     chatId: v.optional(v.string()),
     body: v.string(),
   },

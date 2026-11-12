@@ -1,5 +1,5 @@
 import type { FunctionReturnType } from "convex/server";
-import type { Id, api } from "@eva/backend";
+import { isProjectBuilding, type Id, type api } from "@eva/backend";
 import { m, AnimatePresence } from "motion/react";
 import { Virtuoso } from "react-virtuoso";
 import { entityPathSegment } from "@/lib/numId";
@@ -131,15 +131,14 @@ function VirtualProjectColumn({
                   rawInput={project.rawInput}
                   branchName={project.branchName}
                   numId={project.numId}
-                  repoFullName={`${owner}/${name}`}
                   createdAt={project._creationTime}
                   accentColor={phaseConfig[phase].bar}
                   members={project.members}
                   projectLead={project.projectLead}
                   phase={phase}
                   planningMode={project.planningMode}
-                  isBuilding={project.activeBuildWorkflowId !== undefined}
-                  sandboxStatus={project.reviewProjectSandboxStatus}
+                  isBuilding={isProjectBuilding(project)}
+                  sandboxStatus={project.sandboxStatus}
                   hasUnread={project.hasUnread}
                   isAwaitingAnswer={project.isAwaitingAnswer}
                   href={

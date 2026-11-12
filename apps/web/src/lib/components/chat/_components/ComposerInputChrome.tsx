@@ -87,6 +87,7 @@ export function ComposerInputChrome({
   messageHistory,
   allowEmptySubmit,
   predictionTarget,
+  warnFor,
   onDraftChange,
 }: {
   repo?: ChatRepo;
@@ -110,10 +111,13 @@ export function ComposerInputChrome({
   messageHistory: string[];
   allowEmptySubmit?: boolean;
   predictionTarget?: ComposerPredictionTarget;
+  /** Amber border while the draft-readiness nudge is up for this text; it beats the focus border. */
+  warnFor?: (text: string) => boolean;
   /** The visible draft after every edit; drives the skill suggestion chips. */
   onDraftChange?: (value: string) => void;
 }) {
   const { textInput, attachments } = usePromptInputController();
+  const warn = warnFor?.(textInput.value) ?? false;
   // A PR row dropped here becomes a context chip. Absent outside ChatBody
   // (Manager Ave), where the drop is left to the browser.
   const pullRequests = usePendingPullRequests();
@@ -128,7 +132,7 @@ export function ComposerInputChrome({
     fileCount: attachments.files.length,
   });
 
-  // Up to five session shells plus Manager Ave stay mounted, so a shortcut
+  // Up to three session shells plus Manager Ave stay mounted, so a shortcut
   // registered here fires once per mounted composer. Only the one on screen
   // may act — see composerVisibility.ts.
   const isVisibleComposer = () =>
@@ -260,6 +264,8 @@ export function ComposerInputChrome({
               compact
                 ? "h-12 items-center rounded-full py-1"
                 : "h-auto rounded-surface",
+              // `!`: the InputGroup focus state sets its own border and ring colour.
+              warn && "border-warning! ring-warning/40!",
             )}
           >
             <ChatAttachmentPreview />
