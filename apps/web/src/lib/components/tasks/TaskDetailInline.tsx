@@ -32,13 +32,11 @@ import { TaskReactionsProvider } from "./_components/TaskReactionsProvider";
 import { StatusFieldsSection } from "./_components/StatusFieldsSection";
 import { TaskFooter } from "./_components/TaskFooter";
 import {
-  StopConfirmDialog,
   ResolveConfirmDialog,
   RunDevServerConfirmDialog,
 } from "@/lib/components/tasks/_components/TaskConfirmDialogs";
 import { TaskSandboxPanel } from "./TaskSandboxPanel";
 import { TaskSandboxChatPanel } from "./TaskSandboxChatPanel";
-import { findFirstRunChatTurnRun, isRunInProgress } from "./firstRunChatTurn";
 import { useTaskAgentActive } from "./taskAgentActivity";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import {
@@ -114,36 +112,28 @@ export function TaskDetailInline({
     isNotFound,
     task,
     status,
-    runs,
     comments,
     taskActivity,
     users,
     creatorUser,
     projects,
-    streaming,
     isOwner,
     isBlocked,
     hasActiveRun,
     isProjectTask,
     hasRuns,
     canEditTaskText,
-    isActivityBusy,
-    activeRunElapsed,
     latestPrUrl,
     latestPrError,
     latestDeployment,
     baseBranch,
     executionError,
-    showStopConfirm,
-    setShowStopConfirm,
     showResolveConfirm,
     setShowResolveConfirm,
     showRunDevServerConfirm,
     setShowRunDevServerConfirm,
     isStarting,
-    isStopping,
     handleStartExecution,
-    handleStopExecution,
     handleResolveConflicts,
     // Sandbox preview
     canStartSandbox,
@@ -251,21 +241,6 @@ export function TaskDetailInline({
 
   const isQuickTask = task.projectId === undefined;
   const isSandboxViewActive = showSandbox;
-
-  // A quick task's first run renders as the opening chat turn in the sandbox
-  // view (see firstRunChatTurn.ts). Once it settles there its timeline
-  // accordion goes away entirely; while it is still running the row stays —
-  // it is the only place with a Stop button and it may yet fail back into the
-  // timeline — but its activity steps and log render in the chat, not here.
-  const firstRunInChat = isQuickTask
-    ? findFirstRunChatTurnRun(runs)
-    : undefined;
-  const firstRunStreamingToChat =
-    firstRunInChat !== undefined && isRunInProgress(firstRunInChat.status);
-  const timelineRuns =
-    firstRunInChat && !firstRunStreamingToChat
-      ? runs?.filter((run) => run._id !== firstRunInChat._id)
-      : runs;
 
   const routeSandboxTab: TaskRouteSandboxTab =
     routing?.mode === "quick-sandbox" ? routing.quick.sandboxTab : "preview";
@@ -476,11 +451,8 @@ export function TaskDetailInline({
                     <TaskAttachments taskId={taskId} />
 
                     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
-                      <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                      <div className="text-sm font-medium text-foreground">
                         Activity
-                        {isActivityBusy ? (
-                          <span className="h-1.5 w-1.5 rounded-full bg-warning" />
-                        ) : null}
                       </div>
                       <TaskSubscribers taskId={taskId} users={users} />
                     </div>
@@ -490,22 +462,9 @@ export function TaskDetailInline({
                       taskId={taskId}
                       createdAt={task.createdAt}
                       creatorUser={creatorUser}
-                      runs={timelineRuns}
-                      {...(firstRunStreamingToChat && firstRunInChat
-                        ? { activityInChatRunId: firstRunInChat._id }
-                        : {})}
                       comments={comments}
                       taskActivity={taskActivity}
                       users={users}
-                      streaming={streaming}
-                      activeRunElapsed={activeRunElapsed}
-                      isStopping={isStopping}
-                      onStopConfirm={() =>
-                        requestConfirm(
-                          () => setShowStopConfirm(true),
-                          handleStopExecution,
-                        )
-                      }
                       isProjectTask={isProjectTask}
                     />
                   </div>
@@ -638,12 +597,6 @@ export function TaskDetailInline({
           )}
         </AnimatePresence>
       </div>
-      <StopConfirmDialog
-        open={showStopConfirm}
-        onOpenChange={setShowStopConfirm}
-        onConfirm={handleStopExecution}
-        isLoading={isStopping}
-      />
       <ResolveConfirmDialog
         open={showResolveConfirm}
         onOpenChange={setShowResolveConfirm}
