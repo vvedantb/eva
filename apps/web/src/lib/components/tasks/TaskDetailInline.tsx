@@ -38,7 +38,6 @@ import {
 } from "@/lib/components/tasks/_components/TaskConfirmDialogs";
 import { TaskSandboxPanel } from "./TaskSandboxPanel";
 import { TaskSandboxChatPanel } from "./TaskSandboxChatPanel";
-import { findFirstRunChatTurnRun, isRunInProgress } from "./firstRunChatTurn";
 import { useTaskAgentActive } from "./taskAgentActivity";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import {
@@ -252,20 +251,9 @@ export function TaskDetailInline({
   const isQuickTask = task.projectId === undefined;
   const isSandboxViewActive = showSandbox;
 
-  // A quick task's first run renders as the opening chat turn in the sandbox
-  // view (see firstRunChatTurn.ts). Once it settles there its timeline
-  // accordion goes away entirely; while it is still running the row stays —
-  // it is the only place with a Stop button and it may yet fail back into the
-  // timeline — but its activity steps and log render in the chat, not here.
-  const firstRunInChat = isQuickTask
-    ? findFirstRunChatTurnRun(runs)
-    : undefined;
-  const firstRunStreamingToChat =
-    firstRunInChat !== undefined && isRunInProgress(firstRunInChat.status);
-  const timelineRuns =
-    firstRunInChat && !firstRunStreamingToChat
-      ? runs?.filter((run) => run._id !== firstRunInChat._id)
-      : runs;
+  // A quick task's agent work belongs to the sandbox chat only. Its overview
+  // timeline shows comments and task updates, no agent runs.
+  const timelineRuns = isQuickTask ? undefined : runs;
 
   const routeSandboxTab: TaskRouteSandboxTab =
     routing?.mode === "quick-sandbox" ? routing.quick.sandboxTab : "preview";
@@ -478,7 +466,7 @@ export function TaskDetailInline({
                     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
                       <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
                         Activity
-                        {isActivityBusy ? (
+                        {isActivityBusy && !isQuickTask ? (
                           <span className="h-1.5 w-1.5 rounded-full bg-warning" />
                         ) : null}
                       </div>
@@ -491,9 +479,6 @@ export function TaskDetailInline({
                       createdAt={task.createdAt}
                       creatorUser={creatorUser}
                       runs={timelineRuns}
-                      {...(firstRunStreamingToChat && firstRunInChat
-                        ? { activityInChatRunId: firstRunInChat._id }
-                        : {})}
                       comments={comments}
                       taskActivity={taskActivity}
                       users={users}

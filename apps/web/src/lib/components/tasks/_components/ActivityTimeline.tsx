@@ -68,7 +68,6 @@ export function ActivityTimeline({
   createdAt,
   creatorUser,
   runs,
-  activityInChatRunId,
   comments,
   taskActivity,
   users,
@@ -82,13 +81,12 @@ export function ActivityTimeline({
   createdAt: number | undefined;
   creatorUser: User | undefined;
   isProjectTask: boolean;
-  runs: Runs | undefined;
   /**
-   * The run whose live activity belongs to the sandbox chat instead of this
-   * timeline. Its row still renders (status, timing, Stop) with the activity
-   * steps and log left out.
+   * Agent runs to show on the rail. Quick tasks pass none: their agent work
+   * lives in the sandbox chat, so the overview shows only comments and
+   * task updates.
    */
-  activityInChatRunId?: Id<"agentRuns">;
+  runs: Runs | undefined;
   comments: Comments | undefined;
   taskActivity: TaskActivity | undefined;
   users: Users | undefined;
@@ -235,7 +233,6 @@ export function ActivityTimeline({
         <RunTimelineItem
           run={run}
           isActiveRun={isActiveRun}
-          activityInChat={run._id === activityInChatRunId}
           streaming={streaming}
           activeRunElapsed={activeRunElapsed}
           isStopping={isStopping}

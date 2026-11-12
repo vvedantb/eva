@@ -81,7 +81,6 @@ function getRunStatusLabel(run: Run, hasRunComment: boolean): string {
 export function RunTimelineItem({
   run,
   isActiveRun,
-  activityInChat = false,
   streaming,
   activeRunElapsed,
   isStopping,
@@ -92,11 +91,6 @@ export function RunTimelineItem({
 }: {
   run: Run;
   isActiveRun: boolean;
-  /**
-   * This run's activity streams into the sandbox chat as a normal turn, so the
-   * steps and the log are left out here rather than shown twice.
-   */
-  activityInChat?: boolean;
   streaming: Streaming | undefined;
   activeRunElapsed: number;
   isStopping: boolean;
@@ -268,56 +262,42 @@ export function RunTimelineItem({
                 ))}
               </div>
             ) : null}
-            {activityInChat ? (
-              <p className="text-xs text-muted-foreground">
-                Eva is working in the sandbox chat — open the Sandbox tab to
-                follow along.
-              </p>
-            ) : (
-              <>
-                {run.status === "running" &&
-                  streaming?.currentActivity &&
-                  (() => {
-                    const steps = parseActivitySteps(streaming.currentActivity);
-                    return steps ? (
-                      <ActivityTasks steps={steps} isStreaming />
-                    ) : (
-                      <AgentTraceCollapsible defaultOpen>
-                        <AgentTraceCollapsibleTrigger>
-                          <AgentTraceLine status="running">
-                            <AgentTraceIcon>
-                              <IconBrain />
-                            </AgentTraceIcon>
-                            <AgentTraceTitle shimmer>
-                              Working...
-                            </AgentTraceTitle>
-                          </AgentTraceLine>
-                        </AgentTraceCollapsibleTrigger>
-                        <AgentTraceCollapsibleContent>
-                          <Markdown className="text-sm">
-                            {streaming.currentActivity}
-                          </Markdown>
-                        </AgentTraceCollapsibleContent>
-                      </AgentTraceCollapsible>
-                    );
-                  })()}
-                <RunActivityLog
-                  runId={run._id}
-                  isActive={isActiveRun}
-                  finalText={run.resultSummary}
-                  startedAt={run.startedAt}
-                  finishedAt={run.finishedAt}
-                />
-              </>
-            )}
-            {/* Captures the run left behind. Skipped when the run renders in
-                the sandbox chat — the chat turn shows the same files. */}
-            {activityInChat ? null : (
-              <RunMedia
-                runId={run._id}
-                hasMedia={(run.mediaStorageIds?.length ?? 0) > 0}
-              />
-            )}
+            {run.status === "running" &&
+              streaming?.currentActivity &&
+              (() => {
+                const steps = parseActivitySteps(streaming.currentActivity);
+                return steps ? (
+                  <ActivityTasks steps={steps} isStreaming />
+                ) : (
+                  <AgentTraceCollapsible defaultOpen>
+                    <AgentTraceCollapsibleTrigger>
+                      <AgentTraceLine status="running">
+                        <AgentTraceIcon>
+                          <IconBrain />
+                        </AgentTraceIcon>
+                        <AgentTraceTitle shimmer>Working...</AgentTraceTitle>
+                      </AgentTraceLine>
+                    </AgentTraceCollapsibleTrigger>
+                    <AgentTraceCollapsibleContent>
+                      <Markdown className="text-sm">
+                        {streaming.currentActivity}
+                      </Markdown>
+                    </AgentTraceCollapsibleContent>
+                  </AgentTraceCollapsible>
+                );
+              })()}
+            <RunActivityLog
+              runId={run._id}
+              isActive={isActiveRun}
+              finalText={run.resultSummary}
+              startedAt={run.startedAt}
+              finishedAt={run.finishedAt}
+            />
+            {/* Captures the run left behind. */}
+            <RunMedia
+              runId={run._id}
+              hasMedia={(run.mediaStorageIds?.length ?? 0) > 0}
+            />
             {run.resultSummary && (
               <Markdown className="text-sm text-muted-foreground">
                 {run.resultSummary}

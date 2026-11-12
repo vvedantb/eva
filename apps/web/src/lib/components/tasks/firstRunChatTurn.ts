@@ -35,21 +35,14 @@ export function taskRunStreamingEntityId(runId: string): string {
 }
 
 /**
- * The run that renders as the opening assistant turn of the sandbox chat
- * rather than as activity in the timeline — both surfaces key off this one
- * function so they can never disagree about which run moved. It is the
- * earliest initial run that is either still in flight (its live activity
- * streams into the chat bubble) or a settled success with a `resultSummary`
- * (its activity log and reply render as a finished turn).
+ * The run that renders as the opening assistant turn of the sandbox chat. It
+ * is the earliest initial run that is either still in flight (its live
+ * activity streams into the chat bubble) or a settled success with a
+ * `resultSummary` (its activity log and reply render as a finished turn).
  *
- * Everything else stays with the timeline: failed or cancelled attempts (that
- * is where `run.error` and the raw launch logs render), a success with no
- * `resultSummary` (the chat turn would have no reply text), "Make changes"
- * runs (they belong to their triggering comment) and Resolve Conflicts runs.
- *
- * A run that fails therefore hands its slot back to the timeline when it
- * settles. The timeline keeps its row throughout — see `TaskDetailInline`,
- * which only drops the row once the run has settled into the chat.
+ * Failed or cancelled attempts, a success with no `resultSummary` (the turn
+ * would have no reply text), "Make changes" runs and Resolve Conflicts runs
+ * are skipped. The quick task overview timeline shows no runs at all.
  */
 export function findFirstRunChatTurnRun<Run extends ChatTurnRunFields>(
   runs: readonly Run[] | undefined,
