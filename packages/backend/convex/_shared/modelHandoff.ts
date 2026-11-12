@@ -254,7 +254,7 @@ export async function detectModelHandoff(
 }
 
 /** The chat's newest rows, oldest first, within the count and byte bounds. */
-async function readHandoffHistory(
+export async function readHandoffHistory(
   ctx: QueryCtx,
   parentId: HandoffParentId,
 ): Promise<Doc<"messages">[]> {
