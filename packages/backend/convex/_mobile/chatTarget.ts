@@ -32,11 +32,15 @@ export const mobileChatValidator = v.object({
   repoLabel: v.string(),
   /** The chat's repo, for starting a session from it (fork). */
   repoId: v.id("githubRepos"),
-  /** The chat's id for `messages.listByParent`, `turns` and `pendingQuestions`. */
-  parentId: v.union(v.id("sessionChats"), v.id("projects"), v.id("agentTasks")),
   /**
-   * True when the app can reply: pass `parentId` as `target` to
-   * `mobile.sendMessage` (and `mobile.stopTurn`). False for an archived
+   * The chat's id for `messages.listByParent`, `turns` and
+   * `pendingQuestions`; absent while a task or project has not chatted yet.
+   */
+  parentId: v.optional(v.id("sessionChats")),
+  /** What to pass as `target` to `mobile.sendMessage` and `mobile.stopTurn`. */
+  target: v.string(),
+  /**
+   * True when the app can reply (see `target`). False for an archived
    * session or session chat (read-only, as the web) or a deleted task / project.
    */
   canReply: v.boolean(),
@@ -178,6 +182,7 @@ export async function resolveMobileChat(
         repoLabel: repoLabel(repo),
         repoId: repo._id,
         parentId: chat._id,
+        target: chat._id,
         canReply: chat.archived !== true && !isSessionArchived(session) && session.deletedAt === undefined,
         model: chat.lastModel ?? session.lastModel,
         providerAccountId: chat.providerAccountId,
@@ -221,6 +226,7 @@ export async function resolveMobileChat(
           repoLabel: repoLabel(repo),
           repoId: repo._id,
           parentId: chat._id,
+          target: chat._id,
           canReply: task.deletedAt === undefined && chat.archived !== true,
           model: chat.lastModel ?? session.lastModel,
           providerAccountId: chat.providerAccountId,
@@ -248,7 +254,7 @@ export async function resolveMobileChat(
         title: task.title,
         repoLabel: repoLabel(repo),
         repoId: repo._id,
-        parentId: task._id,
+        target: task._id,
         canReply: task.deletedAt === undefined,
         // The web task chat picks and sends `agentTasks.model`, not the `lastChatModel` a turn records.
         model: task.model ?? repo.defaultModel,
@@ -287,6 +293,7 @@ export async function resolveMobileChat(
           repoLabel: repoLabel(repo),
           repoId: repo._id,
           parentId: chat._id,
+          target: chat._id,
           canReply: project.deletedAt === undefined && chat.archived !== true,
           model: chat.lastModel ?? session.lastModel,
           providerAccountId: chat.providerAccountId,
@@ -311,7 +318,7 @@ export async function resolveMobileChat(
         title: project.title,
         repoLabel: repoLabel(repo),
         repoId: repo._id,
-        parentId: project._id,
+        target: project._id,
         canReply: project.deletedAt === undefined,
         model: project.model ?? repo.defaultModel,
         providerAccountId: project.providerAccountId,

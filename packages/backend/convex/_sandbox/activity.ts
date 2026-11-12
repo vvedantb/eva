@@ -2,7 +2,6 @@ import { v } from "convex/values";
 import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { internalMutation, type MutationCtx } from "../_generated/server";
-import { chatEntityKindValidator } from "../_validators/enums";
 import {
   sandboxActivitySourceValidator,
   type SandboxActivitySource,
@@ -17,7 +16,7 @@ export interface SandboxActivityRef {
 }
 
 export const sandboxActivityRefArgs = {
-  kind: chatEntityKindValidator,
+  kind: v.literal("session"),
   entityId: v.string(),
 };
 

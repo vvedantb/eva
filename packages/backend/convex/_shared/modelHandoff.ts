@@ -31,7 +31,7 @@ export type HandoffMessage = Pick<
   "content" | "finishedAt" | "isSystemAlert" | "model" | "role"
 >;
 
-type HandoffParentId = Id<"sessionChats"> | Id<"sessions"> | Id<"projects"> | Id<"agentTasks">;
+type HandoffParentId = Id<"sessionChats"> | Id<"sessions">;
 
 export type ModelHandoff =
   | { kind: "none" }

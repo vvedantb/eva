@@ -274,8 +274,26 @@ export const turnStateValidator = v.union(
 
 export type TurnState = Infer<typeof turnStateValidator>;
 
+/**
+ * What chat rows hang off: a session chat, or a session that predates chats.
+ * Task and project parents were removed once their transcripts moved to
+ * session chats (1b/2). schema-narrowing-ok: clearLegacyOwnerChatFields
+ */
+export const chatParentIdValidator = v.union(
+  v.id("sessionChats"),
+  v.id("sessions"),
+);
+
+export type ChatParentId = Infer<typeof chatParentIdValidator>;
+
 /** Chat entities that own durable turns; the id's table picks the surface. */
-export const chatTurnEntityIdValidator = v.union(
+export const chatTurnEntityIdValidator = chatParentIdValidator;
+
+/**
+ * A read marker's parent: a chat, or the task or project whose card shows
+ * unread (`chatReads.markRead` stamps the owner too).
+ */
+export const chatReadParentIdValidator = v.union(
   v.id("sessionChats"),
   v.id("sessions"),
   v.id("agentTasks"),
@@ -286,10 +304,11 @@ export const chatTurnEntityIdValidator = v.union(
  * Every durable turn owner: the three chats, quick-task runs, and the rows the
  * one-shot agents work on (automation runs, docs, evaluation reports).
  */
+// Task chat turns removed (moved to session chats in 1b/2); a project keeps
+// its interview lane turns. schema-narrowing-ok: clearLegacyOwnerChatFields
 export const turnEntityIdValidator = v.union(
   v.id("sessionChats"),
   v.id("sessions"),
-  v.id("agentTasks"),
   v.id("projects"),
   v.id("agentRuns"),
   v.id("automationRuns"),
@@ -1365,12 +1384,7 @@ export const messageFields = {
   finishedAt: v.optional(v.number()),
   activityLog: v.optional(v.string()),
   userId: v.optional(v.id("users")),
-  parentId: v.union(
-    v.id("sessionChats"),
-    v.id("sessions"),
-    v.id("projects"),
-    v.id("agentTasks"),
-  ),
+  parentId: chatParentIdValidator,
   // Client-generated id (crypto.randomUUID) set when a user message is sent
   // optimistically. Lets the client dedup its local pending row against the
   // server row once the reactive query delivers it.
@@ -1485,12 +1499,7 @@ export const aveMessageFields = {
 };
 
 export const queuedMessageFields = {
-  parentId: v.union(
-    v.id("sessionChats"),
-    v.id("sessions"),
-    v.id("projects"),
-    v.id("agentTasks"),
-  ),
+  parentId: chatParentIdValidator,
   content: v.string(),
   /** Compact chat-display text; `content` remains the full agent message. */
   displayContent: v.optional(v.string()),
@@ -1579,7 +1588,7 @@ export const taskSubscriberFields = {
 // user's rows for one repo in a single indexed read.
 export const chatReadFields = {
   userId: v.id("users"),
-  parentId: chatTurnEntityIdValidator, // sessions | agentTasks | projects
+  parentId: chatReadParentIdValidator,
   repoId: v.id("githubRepos"),
   lastReadAt: v.number(),
 };
@@ -1644,7 +1653,9 @@ export type SandboxActivitySource = Infer<
 // its own table (not on the session/task/project doc) so the frequent, throttled
 // touches never join the write set of hot entity documents.
 export const sandboxActivityFields = {
-  kind: chatEntityKindValidator,
+  // Task and project clocks removed: a sandbox is its session's.
+  // schema-narrowing-ok: deleteLegacyOwnerSandboxActivity
+  kind: v.literal("session"),
   entityId: v.string(),
   /** Last human interaction: message sent, tab opened, preview traffic, presence. */
   lastUserActivityAt: v.optional(v.number()),
@@ -1927,7 +1938,16 @@ export const artifactFields = {
   // The chat thread and turn the artifact was created in, for its inline card
   // in the transcript. Same anchor as a `render_html` page. Rows made before
   // the card existed, and manual uploads, have neither.
-  chatParentId: v.optional(messageFields.parentId),
+  // Artifacts were not moved with the 1b/2 transcripts: an artifact made in
+  // an old task or project chat keeps that chat's id as its anchor.
+  chatParentId: v.optional(
+    v.union(
+      v.id("sessionChats"),
+      v.id("sessions"),
+      v.id("projects"),
+      v.id("agentTasks"),
+    ),
+  ),
   messageId: v.optional(v.id("messages")),
 };
 
@@ -2027,12 +2047,7 @@ export const agentUsageLimitFields = {
  * client boundary (`@eva/shared/generativeUi`).
  */
 export const chatUiPanelFields = {
-  parentId: v.union(
-    v.id("sessionChats"),
-    v.id("sessions"),
-    v.id("projects"),
-    v.id("agentTasks"),
-  ),
+  parentId: chatParentIdValidator,
   /** The assistant turn the panel appeared under; absent anchors it last. */
   messageId: v.optional(v.id("messages")),
   title: v.optional(v.string()),
@@ -2048,12 +2063,7 @@ export const chatUiPanelFields = {
  * `chatHtmlRenderBodies` row, so listing a chat's renders never reads pages.
  */
 export const chatHtmlRenderFields = {
-  parentId: v.union(
-    v.id("sessionChats"),
-    v.id("sessions"),
-    v.id("projects"),
-    v.id("agentTasks"),
-  ),
+  parentId: chatParentIdValidator,
   /** The assistant turn the page appeared under; absent anchors it last. */
   messageId: v.optional(v.id("messages")),
   title: v.string(),
@@ -2080,12 +2090,7 @@ export const envVarRequestScopeValidator = v.union(
  * lands here.
  */
 export const envVarRequestFields = {
-  parentId: v.union(
-    v.id("sessionChats"),
-    v.id("sessions"),
-    v.id("projects"),
-    v.id("agentTasks"),
-  ),
+  parentId: chatParentIdValidator,
   /** The assistant turn the card appeared under; absent anchors it last. */
   messageId: v.optional(v.id("messages")),
   key: v.string(),

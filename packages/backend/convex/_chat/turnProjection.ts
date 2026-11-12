@@ -147,7 +147,7 @@ async function idsOfTurns(
 /** True while one named chat entity has a turn open. */
 export async function hasOpenChatTurn(
   db: DatabaseReader,
-  entityId: Doc<"turns">["entityId"],
+  entityId: Doc<"turns">["entityId"] | Id<"agentTasks">,
 ): Promise<boolean> {
   // A quick task or a project chats (and runs) through its session: those
   // turns count too. A project task chats in its own chat of the project's
@@ -175,19 +175,38 @@ export async function hasOpenChatTurn(
       .first();
     if (chatTurn !== null) return true;
   }
+  // A task owns no turn of its own: its chat and runs are covered above.
+  const turnEntityId = taskId ? null : turnOwnerId(db, entityId);
+  if (turnEntityId === null) return false;
   const turn = await db
     .query("turns")
     .withIndex("by_entity_open", (q) =>
-      q.eq("entityId", entityId).eq("lane", undefined).eq("open", true),
+      q.eq("entityId", turnEntityId).eq("lane", undefined).eq("open", true),
     )
     .first();
   return turn !== null;
 }
 
+/** `id` as a turn owner, or null for an id of another table. */
+function turnOwnerId(
+  db: DatabaseReader,
+  id: string,
+): Doc<"turns">["entityId"] | null {
+  return (
+    db.normalizeId("sessionChats", id) ??
+    db.normalizeId("sessions", id) ??
+    db.normalizeId("projects", id) ??
+    db.normalizeId("agentRuns", id) ??
+    db.normalizeId("automationRuns", id) ??
+    db.normalizeId("docs", id) ??
+    db.normalizeId("evaluationReports", id)
+  );
+}
+
 /** The open-turn set for one entity, in the shape the projections take. */
 export async function openChatEntityIdsFor(
   db: DatabaseReader,
-  entityId: Doc<"turns">["entityId"],
+  entityId: Doc<"turns">["entityId"] | Id<"agentTasks">,
 ): Promise<ReadonlySet<string>> {
   return new Set(
     (await hasOpenChatTurn(db, entityId)) ? [String(entityId)] : [],

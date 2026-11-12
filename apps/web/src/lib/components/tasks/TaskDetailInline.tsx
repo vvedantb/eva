@@ -171,7 +171,7 @@ export function TaskDetailInline({
   // A task chats in a session chat (a project task's own chat in the
   // project's session); before that chat exists, the task id reads empty.
   const chatId = taskSession.owned?.chatId;
-  const chatParentId = chatId ?? taskId;
+  const chatParentId = chatId;
   const isAgentActive = useTaskAgentActive(chatParentId, task);
   const scheduledAt = task ? taskScheduledAt(task) : undefined;
   const chatUnread = useChatUnread(chatParentId);

@@ -52,11 +52,7 @@ export type CompletionTurnResolution =
 export type TurnEntityId = Doc<"turns">["entityId"];
 
 /** Chat entities that own durable turns. */
-export type ChatTurnEntityId =
-  | Id<"sessionChats">
-  | Id<"sessions">
-  | Id<"agentTasks">
-  | Id<"projects">;
+export type ChatTurnEntityId = Id<"sessionChats"> | Id<"sessions">;
 
 /** Open turns across every chat of a session (the parallel-chat cap reads this). */
 export async function listOpenSessionTurns(
