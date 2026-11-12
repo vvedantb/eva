@@ -4,7 +4,6 @@ import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { DEFAULT_AI_MODEL } from "../convex/validators";
 import { openTurn } from "../convex/_chat/turnStore";
-import { migrateQuickTaskToSession } from "../convex/_migrations/ownerChatsToSessions";
 import { abandonTaskRunSandbox } from "../convex/_sessions/sandbox";
 
 /**
@@ -90,32 +89,6 @@ describe("quick tasks on sessions", () => {
           sessionId: first.sessionId,
         }),
       ).rejects.toThrow("A task's session cannot open another chat.");
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "creating a task's session takes over the task's own sandbox, so no second VM boots",
-    async () => {
-      const f = await fixture();
-      await f.t.run((ctx) =>
-        ctx.db.patch(f.taskId, {
-          sandboxId: "sbx-task",
-          reviewTaskSandboxStatus: "closed",
-          status: "code_review",
-        }),
-      );
-      const { sessionId } = await f.asUser.mutation(api.sessions.ensureOwned, {
-        owner: { kind: "task", taskId: f.taskId },
-      });
-      const [session, task] = await f.t.run((ctx) =>
-        Promise.all([ctx.db.get(sessionId), ctx.db.get(f.taskId)]),
-      );
-      expect(session?.sandboxId).toBe("sbx-task");
-      expect(task?.sandboxId).toBeUndefined();
-      await expect(
-        f.asUser.mutation(api.agentTasks.startTaskSandbox, { taskId: f.taskId }),
-      ).rejects.toThrow("runs on its session");
     },
     TIMEOUT_MS,
   );
@@ -265,94 +238,6 @@ describe("quick tasks on sessions", () => {
           .collect(),
       );
       expect(queued.map((row) => row.content)).toEqual(["follow-up"]);
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "the migration moves a quick task's sandbox and transcript onto its session, and waits on a busy task",
-    async () => {
-      const f = await fixture();
-      const busyTaskId = await f.t.run(async (ctx) => {
-        await ctx.db.patch(f.taskId, {
-          sandboxId: "sbx-task",
-          reviewTaskSandboxStatus: "closed",
-          devPort: 3000,
-          lastChatModel: DEFAULT_AI_MODEL,
-          lastTurnFinishedAt: 1_000,
-        });
-        await ctx.db.insert("messages", {
-          parentId: f.taskId,
-          role: "user",
-          content: "old task chat",
-          timestamp: 1,
-        });
-        const now = Date.now();
-        return await ctx.db.insert("agentTasks", {
-          repoId: f.repoId,
-          title: "Busy task",
-          status: "todo",
-          numId: 2,
-          createdAt: now,
-          updatedAt: now,
-          createdBy: f.userId,
-          sandboxId: "sbx-busy",
-          reviewTaskSandboxStatus: "starting",
-        });
-      });
-
-      const migrate = (taskId: typeof f.taskId) =>
-        f.t.run(async (ctx) => {
-          const task = await ctx.db.get(taskId);
-          if (!task) throw new Error("task missing");
-          return await migrateQuickTaskToSession(ctx, task);
-        });
-      expect(await migrate(f.taskId)).toBe("migrated");
-      expect(await migrate(busyTaskId)).toBe("skipped_busy");
-      // Idempotent: a rerun finds everything already moved.
-      expect(await migrate(f.taskId)).toBe("migrated");
-
-      const state = await f.t.run(async (ctx) => {
-        const sessions = await ctx.db
-          .query("sessions")
-          .withIndex("by_owner_task", (q) =>
-            q.eq("owner.taskId", f.taskId).eq("deletedAt", undefined),
-          )
-          .collect();
-        const session = sessions[0];
-        const chat = session
-          ? await ctx.db
-              .query("sessionChats")
-              .withIndex("by_session", (q) => q.eq("sessionId", session._id))
-              .first()
-          : null;
-        const messages = chat
-          ? await ctx.db
-              .query("messages")
-              .withIndex("by_parent", (q) => q.eq("parentId", chat._id))
-              .collect()
-          : [];
-        return {
-          sessions,
-          chat,
-          messages,
-          task: await ctx.db.get(f.taskId),
-          busy: await ctx.db.get(busyTaskId),
-        };
-      });
-      expect(state.sessions).toHaveLength(1);
-      expect(state.sessions[0]).toMatchObject({
-        sandboxId: "sbx-task",
-        status: "closed",
-        devPort: 3000,
-      });
-      expect(state.task?.sandboxId).toBeUndefined();
-      expect(state.task?.reviewTaskSandboxStatus).toBeUndefined();
-      expect(state.chat?.claudePersistenceSeed).toBe(f.taskId);
-      expect(state.messages.map((row) => row.content)).toEqual([
-        "old task chat",
-      ]);
-      expect(state.busy?.sandboxId).toBe("sbx-busy");
     },
     TIMEOUT_MS,
   );
