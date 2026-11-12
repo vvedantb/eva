@@ -1,5 +1,6 @@
 import { api, type Doc, type Id } from "@eva/backend";
 import { getNotificationAppearance } from "@eva/shared";
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import { groupNotifications, type InboxGroup } from "@eva/shared/notificationGroups";
 import { IconArchive, IconArchiveOff, IconInbox, IconMail, IconMailOpened } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
@@ -12,7 +13,7 @@ import {
   SkeletonList,
   SkeletonRow,
 } from "@vvedantb/native-ui/primitives";
-import { tokens, useLargerText } from "@vvedantb/native-ui/theme";
+import { useLargerText } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "expo-router";
@@ -173,9 +174,9 @@ export default function InboxScreen() {
             <View
               className="px-4 py-1.5"
               style={{
-                backgroundColor: tokens.color.background[scheme],
+                backgroundColor: EVA_THEME[scheme].background,
                 borderBottomWidth: 1,
-                borderBottomColor: tokens.color.border[scheme],
+                borderBottomColor: EVA_THEME[scheme].border,
               }}
             >
               {/* The web label is an inline `text-xs` span in a 24 line box. */}

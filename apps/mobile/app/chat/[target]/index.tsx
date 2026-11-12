@@ -17,6 +17,7 @@ import {
   type SessionMenuAction,
   toRepoRelativePath,
 } from "@eva/shared";
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import { messageLinkHref } from "@eva/shared/messageLink";
 import { type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { IconChevronDown, IconMessageCircle, IconPlayerStopFilled } from "@tabler/icons-react-native";
@@ -283,7 +284,7 @@ export default function ChatScreen() {
         />
         {/* The composer or the question card: the scroll button rides 16 above it, as the web's `bottom-4` over the dock. */}
         {/* Solid: the keyboard lifts the dock over the transcript, which must not show through it. */}
-        <ConversationDock style={{ backgroundColor: tokens.color.background[scheme] }}>
+        <ConversationDock style={{ backgroundColor: EVA_THEME[scheme].background }}>
           <ChatDock
             target={target}
             chat={chat}

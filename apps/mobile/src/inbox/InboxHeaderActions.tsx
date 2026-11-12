@@ -1,8 +1,8 @@
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import type { InboxGroup } from "@eva/shared/notificationGroups";
 import { IconChecklist, IconChecks, IconChevronDown, IconFilter, type IconProps } from "@tabler/icons-react-native";
 import { selectionHaptic } from "@vvedantb/native-ui/haptics";
 import { SectionLabel, Sheet, SheetBody, SheetContent, SheetRow } from "@vvedantb/native-ui/primitives";
-import { tokens } from "@vvedantb/native-ui/theme";
 import { useState, type ComponentType } from "react";
 import { Pressable, Text, View } from "react-native";
 import { MenuDivider } from "@/ui/MenuSheet";
@@ -46,7 +46,7 @@ function HeaderPill({
     >
       <View
         className="h-8 items-center justify-center rounded-full px-3"
-        style={outline ? { borderWidth: 1, borderColor: tokens.color.border[scheme] } : undefined}
+        style={outline ? { borderWidth: 1, borderColor: EVA_THEME[scheme].border } : undefined}
       >
         <Icon size={16} color={color} />
       </View>
@@ -80,7 +80,7 @@ export function InboxHeaderActions({
   onToggleSelecting: () => void;
 }) {
   const scheme = useScheme();
-  const muted = tokens.color.muted[scheme];
+  const muted = EVA_THEME[scheme].mutedForeground;
   const [filterOpen, setFilterOpen] = useState(false);
   // A new pick ticks; the sheet closes, as the web menu does.
   const pick = (changed: boolean, apply: () => void) => {
@@ -97,7 +97,7 @@ export function InboxHeaderActions({
         icon={IconChecklist}
         label={selecting ? "Cancel selection" : "Select notifications"}
         outline={false}
-        color={selecting ? tokens.color.foreground[scheme] : muted}
+        color={selecting ? EVA_THEME[scheme].foreground : muted}
         onPress={onToggleSelecting}
       />
       <Pressable

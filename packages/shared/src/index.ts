@@ -5,6 +5,12 @@
 export { getUserInitials } from "./components/getUserInitials";
 export { FALLBACK_GIT_BASE_BRANCH } from "./gitDefaults";
 export {
+  isThemeMode,
+  themeAppearance,
+  type ThemeAppearance,
+  type ThemeMode,
+} from "./themeMode";
+export {
   isProjectPreviewPhase,
   PROJECT_PREVIEW_PHASES,
 } from "./projectPreview";

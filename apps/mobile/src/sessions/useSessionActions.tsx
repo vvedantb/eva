@@ -1,5 +1,6 @@
 import { api, type Id } from "@eva/backend";
 import { sessionMenuActions, type SessionMenuAction } from "@eva/shared";
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
   IconArchive,
   IconArchiveOff,
@@ -22,7 +23,6 @@ import {
   Input,
   SheetRow,
 } from "@vvedantb/native-ui/primitives";
-import { tokens } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useAction, useMutation } from "convex/react";
 import * as Clipboard from "expo-clipboard";
@@ -232,7 +232,7 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
             This will stop the sandbox and remove{" "}
             <Text
               className="font-instrument-sans-medium"
-              style={{ fontWeight: "500", color: tokens.color.foreground[scheme] }}
+              style={{ fontWeight: "500", color: EVA_THEME[scheme].foreground }}
             >
               {archiveTarget?.title}
             </Text>{" "}

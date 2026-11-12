@@ -1,6 +1,7 @@
 import { formatClockTime, formatDayLabel } from "@eva/shared/dayLabel";
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import { META_TEXT_STYLE } from "@vvedantb/native-ui/ai";
-import { tokens, withAlpha } from "@vvedantb/native-ui/theme";
+import { withAlpha } from "@vvedantb/native-ui/theme";
 import { Text, View } from "react-native";
 import { useScheme } from "@/ui/theme";
 
@@ -12,7 +13,7 @@ export function DayDivider({ timestamp }: { timestamp: number }) {
   const scheme = useScheme();
   const day = formatDayLabel(timestamp);
   const time = formatClockTime(timestamp);
-  const muted = tokens.color.muted[scheme];
+  const muted = EVA_THEME[scheme].mutedForeground;
   return (
     <View
       accessibilityRole="text"

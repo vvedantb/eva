@@ -5,6 +5,7 @@ import { Button } from "@vvedantb/native-ui/button";
 import { CenteredSpinner, EmptyState } from "@vvedantb/native-ui/primitives";
 import { useConvexAuth, useMutation } from "convex/react";
 import { useEffect, useState, type ReactNode } from "react";
+import { AccountThemeSync } from "@/settings/themeMode";
 
 /** Milliseconds `ensureUserExists` may take before the screen shows an error. */
 export const ENSURE_USER_TIMEOUT_MS = 20_000;
@@ -80,7 +81,14 @@ export function EnsureUser({ children }: { children: ReactNode }) {
     };
   }, [ensureUserExists, attempt]);
 
-  if (state.kind === "ready") return children;
+  if (state.kind === "ready")
+    return (
+      <>
+        {children}
+        {/* The account's appearance mode needs the user row, so it waits for it here. */}
+        <AccountThemeSync />
+      </>
+    );
   if (state.kind === "pending") return <CenteredSpinner label="Signing in" />;
   return (
     <EmptyState.Root>
