@@ -13,11 +13,13 @@ import type { ModelAccount } from "@vvedantb/ui";
 import type { AnnotationSubmit } from "@/lib/components/sandbox/annotationSend";
 import type { ChatModelPicker } from "./ChatComposer";
 import { isChatTurnExecuting, type ChatBodyMessage } from "./chatBodyUtils";
-import type { SandboxChatOwnerDoc } from "./sandboxChatSurface";
+import type {
+  ChatEntityRef,
+  SandboxChatOwnerDoc,
+} from "./sandboxChatSurface";
 import {
   sandboxAnnotationSender,
   sandboxChatKeys,
-  type SandboxChatEntity,
   type SandboxTurnPorts,
   type SandboxTurnSettings,
 } from "./sandboxChatTurn";
@@ -26,12 +28,16 @@ import { useChatTurnStatus } from "./useChatTurnOpen";
 type StreamingRow = FunctionReturnType<typeof api.streaming.get>;
 
 /**
- * Everything that differs between a task and a project sandbox chat. Each
- * entity builds one (`useTaskChatBinding`, `useProjectChatBinding`); the
- * shared panel and annotation send do the rest.
+ * Everything that differs between the chats on the shared sandbox panel: a
+ * quick task (its owned session's Main chat), a project task or a project.
+ * Each builds one (`useTaskChatBinding`, `useProjectChatBinding`); the shared
+ * panel and annotation send do the rest.
  */
 export interface SandboxChatBinding {
-  entity: SandboxChatEntity;
+  /** The owner's chat on its session; undefined until the session exists. */
+  entity: ChatEntityRef | undefined;
+  /** What the chat speaks for, for copy. */
+  ownerLabel: "task" | "project";
   /** The entity's live doc; undefined while it loads. */
   doc:
     | (SandboxChatOwnerDoc & { title: string; sandboxBranch?: string })
@@ -88,7 +94,7 @@ export function sandboxTurnSettings(
 export function useSandboxChatTranscript(binding: SandboxChatBinding) {
   const { parentId } = sandboxChatKeys(binding.entity);
   const status = useChatTurnStatus(parentId);
-  const messages = useChatTranscript(parentId);
+  const messages = useChatTranscript(parentId ?? "skip");
   const isExecuting = isChatTurnExecuting({
     status,
     messages,

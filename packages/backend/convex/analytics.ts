@@ -4,6 +4,7 @@ import { internalQuery } from "./_generated/server";
 import { authQuery, hasRepoAccess } from "./functions";
 import { filterActiveEntities } from "./numId";
 import { loadLastSeenAt } from "./_users/lastSeen";
+import { standaloneOnly } from "./_sessions/owner";
 
 /**
  * Sidebar cook-rate strip: done + cancelled task counts only.
@@ -119,13 +120,13 @@ export const getImpactStats = authQuery({
         ? await ctx.db
             .query("sessions")
             .withIndex("by_repo", (q) => q.eq("repoId", args.repoId))
-            .collect()
+            .filter(standaloneOnly).collect()
         : await ctx.db
             .query("sessions")
             .withIndex("by_repo", (q) =>
               q.eq("repoId", args.repoId).gte("_creationTime", rangeStart),
             )
-            .collect();
+            .filter(standaloneOnly).collect();
 
     const allTasks =
       rangeStart === undefined
@@ -352,7 +353,7 @@ export const getActiveUsers = authQuery({
       .withIndex("by_repo_and_status", (q) =>
         q.eq("repoId", args.repoId).eq("status", "active"),
       )
-      .collect();
+      .filter(standaloneOnly).collect();
 
     const repoUserIds = [
       ...new Set<Id<"users">>(activeSessions.map((session) => session.userId)),
@@ -481,13 +482,13 @@ export const getActivityTimeline = authQuery({
         .withIndex("by_repo", (q) =>
           q.eq("repoId", args.repoId).gte("_creationTime", args.startTime),
         )
-        .collect(),
+        .filter(standaloneOnly).collect(),
       ctx.db
         .query("sessions")
         .withIndex("by_repo_and_status", (q) =>
           q.eq("repoId", args.repoId).eq("status", "active"),
         )
-        .collect(),
+        .filter(standaloneOnly).collect(),
     ]);
     for (const session of windowSessions) {
       const bucket = getBucket(session._creationTime);
@@ -677,7 +678,7 @@ export const getLeaderboard = authQuery({
           ? q.eq("repoId", args.repoId)
           : q.eq("repoId", args.repoId).gte("_creationTime", startTime),
       )
-      .collect();
+      .filter(standaloneOnly).collect();
     for (const session of filteredSessions) {
       if (session.prUrl) {
         const cur = userStats.get(session.userId) ?? {

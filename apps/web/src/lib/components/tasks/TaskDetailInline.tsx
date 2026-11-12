@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useQueryState } from "nuqs";
 import { useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
-import { api, type Id, type SandboxOwner } from "@eva/backend";
+import {
+  api,
+  taskScheduledAt,
+  type Id,
+  type SandboxOwner,
+} from "@eva/backend";
 import { cn } from "@eva/ui";
 import {
   Badge,
@@ -42,7 +47,10 @@ import {
 } from "@/lib/components/sandbox/SandboxWorkspace";
 import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
 import { useAgentBrowsingAutoSwitch } from "@/lib/components/sandbox/useSandboxLifecycle";
-import { SandboxEmptyRailFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
+import {
+  SandboxEmptyRailFrame,
+  SandboxNotStartedRail,
+} from "@/lib/components/sandbox/SandboxPanelFrame";
 import { SandboxSurfaceProviders } from "@/lib/components/sandbox/SandboxSurfaceProviders";
 import type { SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
 import { SandboxSurfaceTabs } from "@/lib/components/sandbox/SandboxSurfaceTabs";
@@ -97,8 +105,8 @@ export function TaskDetailInline({
         : "preview";
   const embeddedSandboxTab = pickedSandboxTab ?? urlSandboxTab;
   const sandboxRailWidthPx = useSandboxRailWidthPx();
-  const prewarmChatDaemon = useMutation(
-    api.agentTaskChatWorkflow.prewarmChatDaemon,
+  const prewarmSessionChatDaemon = useMutation(
+    api.sessionWorkflow.prewarmDaemon,
   );
 
   const {
@@ -157,15 +165,22 @@ export function TaskDetailInline({
     canCreatePr,
     isCreatingPr,
     handleCreatePr,
+    taskSession,
   } = useTaskDetail(taskId, routing);
-  const isAgentActive = useTaskAgentActive(taskId, task);
-  const chatUnread = useChatUnread(taskId);
+  const { sandbox } = taskSession;
+  // A task chats in a session chat (a project task's own chat in the
+  // project's session); before that chat exists, the task id reads empty.
+  const chatId = taskSession.owned?.chatId;
+  const chatParentId = chatId;
+  const isAgentActive = useTaskAgentActive(chatParentId, task);
+  const scheduledAt = task ? taskScheduledAt(task) : undefined;
+  const chatUnread = useChatUnread(chatParentId);
   const { request: requestConfirm } = useRequestConfirm();
 
   useEffect(() => {
-    if (!isSandboxActive || !sandboxId) return;
-    void prewarmChatDaemon({ taskId });
-  }, [taskId, isSandboxActive, sandboxId, prewarmChatDaemon]);
+    if (!isSandboxActive || !sandboxId || !chatId) return;
+    void prewarmSessionChatDaemon({ chatId });
+  }, [chatId, isSandboxActive, sandboxId, prewarmSessionChatDaemon]);
 
   const [expandRightSignal, setExpandRightSignal] = useState(0);
 
@@ -217,7 +232,7 @@ export function TaskDetailInline({
     setExpandRightSignal((n) => n + 1);
   };
 
-  useAgentBrowsingAutoSwitch(task?.agentBrowsingAt, () => {
+  useAgentBrowsingAutoSwitch(sandbox.agentBrowsingAt, () => {
     handleSandboxTabChange("browser");
     setExpandRightSignal((n) => n + 1);
   });
@@ -274,13 +289,12 @@ export function TaskDetailInline({
         sandboxId={sandboxId}
         isActive={isSandboxActive}
         repoId={task.repoId}
-        devPort={task.devPort}
-        devCommand={task.devCommand}
+        devPort={sandbox.devPort}
+        devCommand={sandbox.devCommand}
         owner={owner}
         panes={panes}
         terminalPanel={terminalPanel}
         prUrl={latestPrUrl}
-        backgroundAgents={task.backgroundAgents}
         activeTab={activeSandboxTab}
         onTabChange={handleSandboxTabChange}
         onStartSandbox={
@@ -288,7 +302,7 @@ export function TaskDetailInline({
         }
         isSandboxStarting={isSandboxStarting}
         autoWakeEligible={
-          task.reviewTaskSandboxStatus === "closed" &&
+          sandbox.status === "closed" &&
           sandboxId !== undefined &&
           canStartSandbox &&
           !hasActiveRun
@@ -315,60 +329,85 @@ export function TaskDetailInline({
       </SandboxEmptyRailFrame>
     );
 
+  const layout = (
+    rightPanel: (ctx: {
+      rightPanelCollapsed: boolean;
+      onToggleRightPanel: () => void;
+    }) => ReactNode,
+  ) => (
+    <ResizablePanelLayout
+      storageKey="task-sandbox-panel"
+      leftDefaultSize="40%"
+      leftMinWidthPx={350}
+      rightMinWidthPx={300}
+      rightCollapsedSizePx={sandboxRailWidthPx}
+      defaultRightCollapsed={false}
+      expandRightSignal={expandRightSignal}
+      mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
+      leftPanel={() => (
+        <TaskSandboxChatPanel
+          taskId={taskId}
+          isSandboxActive={isSandboxActive}
+          isSandboxToggling={isSandboxStarting || isSandboxStopping}
+          sandboxStartupActivity={sandboxStartupActivity}
+          onOpenFile={openFile}
+          onViewDiff={openDiffs}
+          onOpenAgentsTab={openAgentsTab}
+          onSandboxToggle={
+            canStartSandbox || isSandboxActive
+              ? (action) => {
+                  if (action === "start") void handleStartSandbox();
+                  else void handleStopSandbox();
+                }
+              : undefined
+          }
+        />
+      )}
+      rightPanel={rightPanel}
+    />
+  );
+
   const sandboxContent = (
     <SandboxSurfaceProviders
       onOpenFile={openFile}
       onOpenDiffsTab={() => openDiffs()}
     >
-      <SandboxWorkspace
-        ownerKind="task"
-        ownerId={taskId}
-        storageScope={`task:${taskId}`}
-        sandboxId={sandboxId}
-        isActive={isSandboxActive}
-        terminalPanes={task.terminalPanes}
-      >
-        {(panes, owner, terminalPanel) => (
-          <ResizablePanelLayout
-            storageKey="task-sandbox-panel"
-            leftDefaultSize="40%"
-            leftMinWidthPx={350}
-            rightMinWidthPx={300}
-            rightCollapsedSizePx={sandboxRailWidthPx}
-            defaultRightCollapsed={false}
-            expandRightSignal={expandRightSignal}
-            mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
-            leftPanel={() => (
-              <TaskSandboxChatPanel
-                taskId={taskId}
-                isSandboxActive={isSandboxActive}
-                isSandboxToggling={isSandboxStarting || isSandboxStopping}
-                sandboxStartupActivity={sandboxStartupActivity}
-                onOpenFile={openFile}
-                onViewDiff={openDiffs}
-                onOpenAgentsTab={openAgentsTab}
-                onSandboxToggle={
-                  canStartSandbox || isSandboxActive
-                    ? (action) => {
-                        if (action === "start") void handleStartSandbox();
-                        else void handleStopSandbox();
-                      }
-                    : undefined
-                }
-              />
-            )}
-            rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) =>
+      {sandbox.owner ? (
+        <SandboxWorkspace
+          owner={sandbox.owner}
+          storageScope={`task:${taskId}`}
+          sandboxId={sandboxId}
+          isActive={isSandboxActive}
+          terminalPanes={sandbox.terminalPanes}
+        >
+          {(panes, owner, terminalPanel) =>
+            layout(({ rightPanelCollapsed, onToggleRightPanel }) =>
               sandboxRightPanel(
                 panes,
                 owner,
                 terminalPanel,
                 rightPanelCollapsed,
                 onToggleRightPanel,
-              )
+              ),
+            )
+          }
+        </SandboxWorkspace>
+      ) : (
+        layout(({ rightPanelCollapsed, onToggleRightPanel }) => (
+          <SandboxNotStartedRail
+            collapsed={rightPanelCollapsed}
+            onToggle={onToggleRightPanel}
+            ownerLabel="task"
+            isPending={sandbox.sessionPending}
+            onStart={
+              canStartSandbox && !isSandboxStopping
+                ? () => void handleStartSandbox()
+                : undefined
             }
+            isStarting={isSandboxStarting}
           />
-        )}
-      </SandboxWorkspace>
+        ))
+      )}
     </SandboxSurfaceProviders>
   );
 
@@ -411,7 +450,7 @@ export function TaskDetailInline({
                         hasActiveRun={hasActiveRun}
                         taskId={taskId}
                       />
-                      {task?.scheduledAt ? (
+                      {scheduledAt ? (
                         <div className="mt-2 flex items-center gap-2">
                           <Badge
                             variant="outline"
@@ -421,7 +460,7 @@ export function TaskDetailInline({
                             {status === "todo"
                               ? "Scheduled for"
                               : "Was scheduled for"}{" "}
-                            {dayjs(task.scheduledAt).format("DD/MM/YYYY HH:mm")}
+                            {dayjs(scheduledAt).format("DD/MM/YYYY HH:mm")}
                           </Badge>
                         </div>
                       ) : null}
@@ -523,6 +562,7 @@ export function TaskDetailInline({
         isSandboxActive={isSandboxActive}
         isSandboxStarting={isSandboxStarting}
         isSandboxStopping={isSandboxStopping}
+        sandbox={sandbox}
         canCreatePr={canCreatePr}
         isCreatingPr={isCreatingPr}
         onCreatePr={handleCreatePr}

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { authQuery, hasRepoAccess, isTaskVisibleTo } from "../functions";
 import { entityVisible } from "../numId";
+import { standaloneOnly } from "../_sessions/owner";
 import { OPEN_TASK_STATUSES } from "../validators";
 import {
   DATA_MENTION_BADGE,
@@ -92,12 +93,14 @@ export const listData = authQuery({
       });
     }
 
-    // Include archived sessions — soft-deleted only are excluded below.
+    // Include archived sessions — soft-deleted only are excluded below. A
+    // task's session is not mentionable: mention the task.
     const sessions = await ctx.db
       .query("sessions")
       .withIndex("by_repo_and_deleted", (q) =>
         q.eq("repoId", args.repoId).eq("deletedAt", undefined),
       )
+      .filter(standaloneOnly)
       .order("desc")
       .take(MENTION_LIST_CAP);
     for (const session of sessions) {

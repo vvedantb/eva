@@ -37,7 +37,7 @@ export function SandboxChatPreInput({
       {/* Not gated by simple view: recovery is a user action, not internals. */}
       <UsageLimitRecoveryBanner surface={surface} />
       {afterBanner}
-      <RoutedThreadsBanner entity={surface.entity} />
+      {surface.entity ? <RoutedThreadsBanner entity={surface.entity} /> : null}
     </>
   );
 }

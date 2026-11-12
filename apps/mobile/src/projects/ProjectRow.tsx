@@ -1,4 +1,4 @@
-import type { api, Id } from "@eva/backend";
+import { isProjectBuilding, type api, type Id } from "@eva/backend";
 import { formatEntityNumLabel, PROJECT_PHASE_LABELS, type ProjectTaskProgress } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconListCheck, IconSparkles } from "@tabler/icons-react-native";
@@ -81,10 +81,10 @@ export function ProjectRow({
   const appearance = phaseAppearance(project.phase, scheme);
   const numLabel = formatEntityNumLabel({ numId: project.numId });
   const preview = project.description ?? project.rawInput;
-  const sandbox = project.reviewProjectSandboxStatus ? SANDBOX_DOT[project.reviewProjectSandboxStatus] : undefined;
+  const sandbox = project.sandboxStatus ? SANDBOX_DOT[project.sandboxStatus] : undefined;
   // The web `showsSandboxStatusDot`: simple view shows none.
   const showSandbox = sandbox !== undefined && !simpleView;
-  const isBuilding = project.activeBuildWorkflowId !== undefined;
+  const isBuilding = isProjectBuilding(project);
   const memberIds = [...new Set([project.projectLead, ...(project.members ?? [])].filter((id): id is Id<"users"> => id !== undefined))];
   const avatarIds = memberIds.length > 0 ? memberIds : [project.userId];
   const hiddenCount = avatarIds.length - MAX_AVATARS;

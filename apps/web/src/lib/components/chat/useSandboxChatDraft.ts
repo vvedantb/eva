@@ -6,14 +6,16 @@ import {
 
 /**
  * The persisted chat draft for `target`, once its query has resolved. ChatBody
- * must not seed its editor while `isDraftLoading` is true.
+ * must not seed its editor while `isDraftLoading` is true. No target (a chat
+ * not created yet) has nothing to persist.
  */
-export function useSandboxChatDraft(target: ChatDraftTarget): {
+export function useSandboxChatDraft(target: ChatDraftTarget | undefined): {
   draftBundle: ChatDraftSeed | undefined;
   isDraftLoading: boolean;
 } {
   const draftSeed = useChatDraftSeed(target);
-  const draftBundle = draftSeed.isReady
+  const draftBundle =
+    target && draftSeed.isReady
     ? {
         target,
         initialDisplay: draftSeed.initialDisplay,

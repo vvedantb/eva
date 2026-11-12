@@ -1,4 +1,4 @@
-import { api } from "@eva/backend";
+import { api, isProjectBuilding } from "@eva/backend";
 import { BUILDABLE_PROJECT_PHASES, isProjectPlanning } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconDots, IconHammer, IconLayoutKanban, IconMessage, IconPlayerStop } from "@tabler/icons-react-native";
@@ -139,14 +139,17 @@ function ProjectDock({ project }: { project: Project }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const theme = EVA_THEME[useScheme()];
-  const unread = useQuery(api.chatReads.isUnread, { parentId: project._id })?.hasUnread === true;
+  // The project chats in its session's Main chat; no chat yet, nothing unread.
+  const owned = useQuery(api.sessions.getOwned, { owner: { kind: "project", projectId: project._id } });
+  const chatId = owned?.chatId;
+  const unread = useQuery(api.chatReads.isUnread, chatId ? { parentId: chatId } : "skip")?.hasUnread === true;
   const startBuild = useMutation(api.buildWorkflow.startBuild);
   const cancelBuild = useMutation(api.buildWorkflow.cancelBuild);
   const [confirm, setConfirm] = useState<"build" | "stop" | null>(null);
   const [busy, setBusy] = useState(false);
   const showChat = SANDBOX_PHASES.includes(project.phase);
   const canBuild = BUILDABLE_PROJECT_PHASES.includes(project.phase);
-  const building = project.activeBuildWorkflowId !== undefined;
+  const building = isProjectBuilding(project);
   if (!showChat && !canBuild) return null;
 
   const run = async (action: () => Promise<unknown>, success: string | undefined, failure: string) => {

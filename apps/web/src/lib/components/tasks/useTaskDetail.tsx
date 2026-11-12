@@ -9,6 +9,8 @@ import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { taskPrUrl } from "@/lib/githubPr";
 import { canEditTaskText } from "./_components/task-detail-constants";
 import { taskRunStreamingEntityId } from "./firstRunChatTurn";
+import { useTaskSession } from "./useTaskSession";
+import type { OwnedSandboxFields } from "@/lib/components/sandbox/useOwnedSession";
 import {
   type UseTaskDetailRouting,
   useTaskDetailTab,
@@ -28,18 +30,21 @@ type RepoRow = FunctionReturnType<typeof api.githubRepos.get> | undefined;
  * writes through `updateTask`, whose optimistic update patches this same
  * query, so the value still changes the instant it is picked.
  */
-function deriveTaskRowFields(task: TaskRow, repoForTask: RepoRow) {
+function deriveTaskRowFields(
+  task: TaskRow,
+  repoForTask: RepoRow,
+  sandbox: OwnedSandboxFields,
+) {
   return {
     baseBranch:
       task?.baseBranch?.trim() ||
       repoForTask?.defaultBaseBranch?.trim() ||
       FALLBACK_GIT_BASE_BRANCH,
     devServerCommandLabel:
-      task?.devCommand?.trim() ||
+      sandbox.devCommand?.trim() ||
       repoForTask?.devCommand?.trim() ||
       "Auto-detected from package.json (e.g. pnpm run dev)",
-    sandboxId: task?.sandboxId,
-    reviewTaskSandboxStatus: task?.reviewTaskSandboxStatus,
+    sandboxId: sandbox.sandboxId,
   };
 }
 
@@ -50,6 +55,7 @@ function deriveTaskRowFields(task: TaskRow, repoForTask: RepoRow) {
 function useTaskDetailQueries(taskId: Id<"agentTasks">) {
   const taskResult = useQuery(api.agentTasks.get, { id: taskId });
   const task = taskResult === null ? null : (taskResult ?? undefined);
+  const taskSession = useTaskSession(taskId, task);
   const currentUserId = useQuery(api.auth.me);
   const isOwner = currentUserId === task?.createdBy;
   const isBlocked = useQuery(api.taskDependencies.isBlocked, { taskId });
@@ -98,7 +104,8 @@ function useTaskDetailQueries(taskId: Id<"agentTasks">) {
     projects,
     comments,
     taskActivity,
-    ...deriveTaskRowFields(task, repoForTask),
+    taskSession,
+    ...deriveTaskRowFields(task, repoForTask, taskSession.sandbox),
   };
 }
 
@@ -138,8 +145,8 @@ export function useTaskDetail(
   const data = useTaskDetailQueries(taskId);
   const execution = useTaskExecutionControls(taskId);
   const sandbox = useTaskSandboxControls({
-    taskId,
     task: data.task,
+    taskSession: data.taskSession,
     hasRuns: data.hasRuns,
     routing,
     setExecutionError: execution.setExecutionError,

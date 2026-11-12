@@ -6,6 +6,8 @@ import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import { hasRepoAccess } from "../functions";
 import { getAIModelProvider } from "../validators";
 import { sessionChatFields } from "../_validators/tableFields";
+import { sessionOwnerProjectId } from "../_sessions/owner";
+import { isProjectBuilding } from "../_projects/buildState";
 
 /** Title of the chat every session starts with. */
 export const MAIN_CHAT_TITLE = "Main";
@@ -137,31 +139,54 @@ export async function findChatByNumber(
  * slots. One indexed read over the session's open turns. The chat's own open
  * turn never counts: at send time the new turn supersedes it, and at dequeue
  * time the chat is idle so any open turn of its own is a leftover.
+ *
+ * A task's run is filed under its session too (a project task's under the
+ * project's), and it holds the whole sandbox: while one is open no chat may
+ * start, so a message sent mid-run queues behind it (the run's `closeTurn`
+ * drains the queue). A project's build holds it from start to finish, gaps
+ * between its tasks included (`finishProjectBuild` drains the queue).
  */
 export async function sessionChatHasFreeSlot(
   db: DatabaseReader,
   context: SessionChatContext,
 ): Promise<boolean> {
-  const openTurns = await db
-    .query("turns")
-    .withIndex("by_session_open", (q) =>
-      q.eq("sessionId", context.session._id).eq("open", true),
-    )
-    .collect();
+  const projectId = sessionOwnerProjectId(context.session);
+  const [project, openTurns] = await Promise.all([
+    projectId ? db.get(projectId) : null,
+    db
+      .query("turns")
+      .withIndex("by_session_open", (q) =>
+        q.eq("sessionId", context.session._id).eq("open", true),
+      )
+      .collect(),
+  ]);
+  if (project && isProjectBuilding(project)) return false;
+  if (openTurns.some((turn) => db.normalizeId("agentRuns", turn.entityId))) {
+    return false;
+  }
   const siblingsRunning = openTurns.filter(
     (turn) => turn.entityId !== String(context.chat._id),
   ).length;
   return siblingsRunning < MAX_PARALLEL_CHATS;
 }
 
+/** What `sessionChatPersistenceId` returns, for return validators. */
+export const sessionChatPersistenceIdValidator = v.union(
+  v.id("sessions"),
+  v.id("sessionChats"),
+  v.id("agentTasks"),
+  v.id("projects"),
+);
+
 /**
  * The id Claude's transcript is derived from (`sessionClaudeUuid`). A
- * backfilled Main chat keeps the session's seed so it resumes the
- * conversation Claude already holds; every other chat is its own transcript.
+ * backfilled Main chat keeps the session's seed, and a migrated quick task's
+ * or project's chat its old owner's, so it resumes the conversation Claude
+ * already holds; every other chat is its own transcript.
  */
 export function sessionChatPersistenceId(
   chat: Doc<"sessionChats">,
-): Id<"sessions"> | Id<"sessionChats"> {
+): Id<"sessions"> | Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects"> {
   return chat.claudePersistenceSeed ?? chat._id;
 }
 
@@ -172,7 +197,7 @@ export function sessionChatStreamingEntityId(
   return String(chatId);
 }
 
-type ChatSettingsSource = Pick<
+export type ChatSettingsSource = Pick<
   Doc<"sessionChats">,
   | "providerAccountId"
   | "provider"
@@ -207,15 +232,7 @@ const LEGACY_TRANSCRIPT_PAGE_ROWS = 500;
  * Reads the next bounded page of an index range. `full` means the page hit
  * the budget, so more rows may remain.
  */
-async function takeBoundedPage<
-  T extends Doc<
-    | "messages"
-    | "queuedMessages"
-    | "chatUiPanels"
-    | "chatHtmlRenders"
-    | "envVarRequests"
-  >,
->(
+async function takeBoundedPage<T extends Doc<LegacyChatRowTable>>(
   rows: AsyncIterable<T>,
   maxBytes: number,
 ): Promise<{ page: T[]; bytes: number; full: boolean }> {
@@ -231,88 +248,84 @@ async function takeBoundedPage<
   return { page, bytes, full: false };
 }
 
-/** Moves one bounded page of legacy rows onto the chat. */
-async function repointPage<
-  T extends Doc<
-    | "messages"
-    | "queuedMessages"
-    | "chatUiPanels"
-    | "chatHtmlRenders"
-    | "envVarRequests"
-  >,
->(
-  ctx: MutationCtx,
+/** Moves one bounded page of legacy rows onto the chat with `move`. */
+async function repointPage<T extends Doc<LegacyChatRowTable>>(
   rows: AsyncIterable<T>,
-  chatId: Id<"sessionChats">,
   maxBytes: number,
+  move: (row: T) => Promise<void>,
 ): Promise<{ bytes: number; full: boolean }> {
   const { page, bytes, full } = await takeBoundedPage(rows, maxBytes);
-  for (const row of page) {
-    await ctx.db.patch(row._id, { parentId: chatId });
-  }
+  for (const row of page) await move(row);
   return { bytes, full };
 }
 
+/** Tables whose rows hang off a chat parent and move with its transcript. */
+type LegacyChatRowTable =
+  | "messages"
+  | "queuedMessages"
+  | "chatUiPanels"
+  | "chatHtmlRenders"
+  | "envVarRequests";
+
 /**
- * Repoints one bounded page of a session's legacy chat rows onto its Main
- * chat: the transcript, the queue and the inline cards (UI panels, HTML
- * renders, env var requests). Once those are empty it links the chat owner's
- * pre-chat composer draft. Returns true once no legacy row is left. Moved rows
- * leave the `parentId = sessionId` range, so every call starts from the front
- * and a rerun after a failure resumes where the last commit stopped.
+ * Repoints one bounded page of a session's pre-chat rows onto a chat: the
+ * transcript, the queue and the inline cards (UI panels, HTML renders, env
+ * var requests). Once those are empty it links the chat owner's pre-chat
+ * composer draft. Returns true once no legacy row is left. Moved rows leave
+ * the `parentId = from` range, so every call starts from the front and a
+ * rerun after a failure resumes where the last commit stopped. A session's
  * `chatReads` stay on the session id: the sidebar unread dot reads them there.
  */
 export async function moveLegacyTranscriptPage(
   ctx: MutationCtx,
-  sessionId: Id<"sessions">,
+  from: Id<"sessions">,
   chatId: Id<"sessionChats">,
 ): Promise<boolean> {
+  const moveParent = async (row: { _id: Id<LegacyChatRowTable> }) => {
+    await ctx.db.patch(row._id, { parentId: chatId });
+  };
+  const chat = await ctx.db.get(chatId);
   // Each table reads into what is left of the one byte budget.
   const tables = [
     (left: number) =>
       repointPage(
-        ctx,
         ctx.db
           .query("messages")
-          .withIndex("by_parent", (q) => q.eq("parentId", sessionId)),
-        chatId,
+          .withIndex("by_parent", (q) => q.eq("parentId", from)),
         left,
+        moveParent,
       ),
     (left: number) =>
       repointPage(
-        ctx,
         ctx.db
           .query("queuedMessages")
-          .withIndex("by_parent_and_order", (q) => q.eq("parentId", sessionId)),
-        chatId,
+          .withIndex("by_parent_and_order", (q) => q.eq("parentId", from)),
         left,
+        moveParent,
       ),
     (left: number) =>
       repointPage(
-        ctx,
         ctx.db
           .query("chatUiPanels")
-          .withIndex("by_parent", (q) => q.eq("parentId", sessionId)),
-        chatId,
+          .withIndex("by_parent", (q) => q.eq("parentId", from)),
         left,
+        moveParent,
       ),
     (left: number) =>
       repointPage(
-        ctx,
         ctx.db
           .query("chatHtmlRenders")
-          .withIndex("by_parent", (q) => q.eq("parentId", sessionId)),
-        chatId,
+          .withIndex("by_parent", (q) => q.eq("parentId", from)),
         left,
+        moveParent,
       ),
     (left: number) =>
       repointPage(
-        ctx,
         ctx.db
           .query("envVarRequests")
-          .withIndex("by_parent", (q) => q.eq("parentId", sessionId)),
-        chatId,
+          .withIndex("by_parent", (q) => q.eq("parentId", from)),
         left,
+        moveParent,
       ),
   ];
   let budget = LEGACY_TRANSCRIPT_PAGE_BYTES;
@@ -322,9 +335,9 @@ export async function moveLegacyTranscriptPage(
     budget -= page.bytes;
   }
 
+  const sessionId = from;
   // `drafts` is indexed by user first; other users' pre-chat drafts are moved
   // by `_migrations/moveLegacyChatRows:moveLegacySessionDrafts`.
-  const chat = await ctx.db.get(chatId);
   if (!chat) return true;
   const drafts = await ctx.db
     .query("drafts")
@@ -392,7 +405,7 @@ export async function ensureMainChat(
     await ctx.scheduler.runAfter(
       0,
       internal._sessionChats.mutations.moveLegacyTranscript,
-      { sessionId: session._id, chatId: chat._id },
+      { from: session._id, chatId: chat._id },
     );
   }
   return chat;
@@ -410,7 +423,9 @@ export async function createSessionChat(
     session: Doc<"sessions">;
     createdBy: Id<"users">;
     title?: string;
-    inheritFrom?: Doc<"sessionChats">;
+    inheritFrom?: ChatSettingsSource;
+    /** A project task's own chat in its project's session. */
+    taskId?: Id<"agentTasks">;
   },
 ): Promise<Doc<"sessionChats">> {
   const { session } = params;
@@ -435,6 +450,7 @@ export async function createSessionChat(
     createdBy: params.createdBy,
     updatedAt: Date.now(),
     ...copyChatSettings(source),
+    ...(params.taskId !== undefined ? { taskId: params.taskId } : {}),
   });
   const chat = await ctx.db.get(chatId);
   if (!chat) throw new Error("Chat was not created");

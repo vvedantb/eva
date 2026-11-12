@@ -127,11 +127,10 @@ export const inspectSnapshotRetention = internalAction({
     }> = [];
 
     let cursor: string | undefined;
-    let phase: "sessions" | "projects" | "agentTasks" | undefined;
     while (samples.length < limit) {
       const page = await ctx.runQuery(
         internal.sandboxCleanup.listLiveSandboxCandidates,
-        { cursor, phase },
+        { cursor },
       );
       for (const candidate of page.candidates) {
         if (samples.length >= limit) break;
@@ -282,19 +281,15 @@ export const inspectSnapshotRetention = internalAction({
           });
         }
       }
-      if (page.isDone || page.nextPhase === null) break;
-      cursor =
-        page.nextPhase === page.phase
-          ? (page.continueCursor ?? undefined)
-          : undefined;
-      phase = page.nextPhase;
+      if (page.isDone || page.continueCursor === null) break;
+      cursor = page.continueCursor;
     }
     return { samples };
   },
 });
 
 type Candidate = {
-  kind: "session" | "project" | "agentTask";
+  kind: "session";
   entityId: string;
   sandboxId: string;
   repoId: Id<"githubRepos">;
@@ -321,13 +316,6 @@ type CandidateResult =
 export const bulkUpdateSnapshotRetention = internalAction({
   args: {
     cursor: v.optional(v.string()),
-    phase: v.optional(
-      v.union(
-        v.literal("sessions"),
-        v.literal("projects"),
-        v.literal("agentTasks"),
-      ),
-    ),
     cycleIfNeeded: v.optional(v.boolean()),
     cleared: v.optional(v.number()),
     stillExpiring: v.optional(v.number()),
@@ -350,10 +338,7 @@ export const bulkUpdateSnapshotRetention = internalAction({
 
     const page = await ctx.runQuery(
       internal.sandboxCleanup.listLiveSandboxCandidates,
-      {
-        cursor: args.cursor,
-        phase: args.phase,
-      },
+      { cursor: args.cursor },
     );
 
     const processOne = async (
@@ -458,16 +443,12 @@ export const bulkUpdateSnapshotRetention = internalAction({
       }
     }
 
-    if (!page.isDone && page.nextPhase !== null) {
+    if (!page.isDone && page.continueCursor !== null) {
       await ctx.scheduler.runAfter(
         0,
         internal.sandbox.bulkUpdateSnapshotRetention,
         {
-          cursor:
-            page.nextPhase === page.phase
-              ? (page.continueCursor ?? undefined)
-              : undefined,
-          phase: page.nextPhase,
+          cursor: page.continueCursor,
           cycleIfNeeded,
           cleared,
           stillExpiring,

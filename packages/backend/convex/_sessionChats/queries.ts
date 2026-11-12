@@ -78,7 +78,6 @@ const deliveryChatValidator = v.object({
   chatId: v.id("sessionChats"),
   title: v.string(),
   number: v.number(),
-  activeWorkflowId: v.optional(v.string()),
   lastModel: v.optional(v.string()),
 });
 
@@ -90,6 +89,9 @@ function pickDeliveryChat(
   if (chat === undefined) {
     return live.find((candidate) => candidate.isMain) ?? live[0] ?? null;
   }
+  // A project task's own chat is named by its id (`orchestratorSendMessage`).
+  const byId = live.find((candidate) => String(candidate._id) === chat);
+  if (byId) return byId;
   const asNumber = Number(chat);
   if (Number.isInteger(asNumber)) {
     const byNumber = live.find((candidate) => candidate.number === asNumber);
@@ -123,7 +125,6 @@ export const resolveDeliveryChat = authQuery({
       chatId: chat._id,
       title: chat.title,
       number: chat.number,
-      activeWorkflowId: chat.activeWorkflowId,
       lastModel: chat.lastModel,
     };
   },
@@ -133,6 +134,5 @@ export type DeliveryChat = {
   chatId: Id<"sessionChats">;
   title: string;
   number: number;
-  activeWorkflowId?: string;
   lastModel?: string;
 };

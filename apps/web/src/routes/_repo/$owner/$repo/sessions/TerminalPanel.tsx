@@ -146,12 +146,7 @@ export function TerminalPanel({
     sandboxId ?? "no-sandbox",
     ptyInstanceId,
   );
-  const ownerKey =
-    owner.kind === "session"
-      ? `session:${owner.sessionId}`
-      : owner.kind === "task"
-        ? `task:${owner.taskId}`
-        : `project:${owner.projectId}`;
+  const ownerKey = `session:${owner.sessionId}`;
   const [terminalHistory, setTerminalHistory] = useSessionStorage(
     terminalHistoryKey,
     "",

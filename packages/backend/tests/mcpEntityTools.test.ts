@@ -1,12 +1,10 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { recordPullRequest } from "../convex/_pullRequests/store";
-import {
-  decideSandboxStartPlan,
-  SANDBOX_SURFACES,
-} from "../convex/mcp/orchestratorDelivery";
+import { findOpenTurn } from "../convex/_chat/turnStore";
+import { decideSandboxStartPlan } from "../convex/mcp/orchestratorDelivery";
 
 /**
  * The entity tools an orchestrator drives between sends: what exists
@@ -16,8 +14,6 @@ import {
 
 const modules = import.meta.glob("../convex/**/*.ts");
 
-/** Loading the sandbox action module graph costs seconds on a cold worker. */
-const TIMEOUT_MS = 30_000;
 const OWNER_CLERK_ID = "clerk|entity-tools-owner";
 const TASK_PR_URL = "https://github.com/vvedantb/eva/pull/701";
 
@@ -47,6 +43,7 @@ async function fixture() {
     });
 
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId: ownerUserId,
       title: "Fix the login bug",
@@ -54,9 +51,22 @@ async function fixture() {
       numId: 11,
       updatedAt: now - 1_000,
       branchName: "eva/session-login",
-      activeWorkflowId: "wf_session",
+    });
+    // The session's turn in flight.
+    await ctx.db.insert("turns", {
+      entityId: sessionId,
+      streamingEntityId: String(sessionId),
+      state: "running",
+      open: true,
+      turnStartedAt: now,
+      leaseExpiresAt: now + 120_000,
+      leaseGeneration: 1,
+      model: "claude:sonnet",
+      repoId,
+      workflowId: "wf_session",
     });
     const closedSessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId: ownerUserId,
       title: "Old work",
@@ -72,7 +82,14 @@ async function fixture() {
       createdAt: now,
       updatedAt: now - 2_000,
       createdBy: ownerUserId,
-      reviewTaskSandboxStatus: "active",
+    });
+    // A quick task's sandbox is its owned session's (hidden from lists).
+    const taskSessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "task", taskId },
+      repoId,
+      userId: ownerUserId,
+      title: "Bump the deps",
+      status: "active",
     });
     const runId = await ctx.db.insert("agentRuns", {
       taskId,
@@ -97,6 +114,7 @@ async function fixture() {
       updatedAt: now - 3_000,
     });
     const strangerSessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId: otherRepoId,
       userId: strangerUserId,
       title: "Not yours",
@@ -112,28 +130,12 @@ async function fixture() {
       sessionId,
       closedSessionId,
       taskId,
+      taskSessionId,
       projectId,
       strangerSessionId,
     };
   });
   return { t, ...ids };
-}
-
-/**
- * Runs `body` with only `setTimeout` faked, so the teardown/startup actions
- * `convex-test` schedules on a zero delay never fire. Without this the
- * assertion races a provider call that cannot succeed in a test, and the
- * status under test is overwritten by that call's failure path.
- */
-async function withoutRunningScheduledWork<T>(
-  body: () => Promise<T>,
-): Promise<T> {
-  vi.useFakeTimers({ toFake: ["setTimeout"] });
-  try {
-    return await body();
-  } finally {
-    vi.useRealTimers();
-  }
 }
 
 function listFor(
@@ -189,7 +191,7 @@ describe("list_entities returns what the caller can already open", () => {
     expect(byId.get(f.sessionId)?.sandboxStatus).toBe("active");
     expect(byId.get(f.sessionId)?.isExecuting).toBe(true);
 
-    // A task tracks lifecycle and sandbox separately.
+    // A task tracks lifecycle and sandbox (its session's) separately.
     expect(byId.get(f.taskId)?.status).toBe("code_review");
     expect(byId.get(f.taskId)?.sandboxStatus).toBe("active");
     expect(byId.get(f.taskId)?.isExecuting).toBe(false);
@@ -313,26 +315,6 @@ describe("list_entities never leaks another user's work", () => {
 });
 
 describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () => {
-  test("each surface is mapped to the mutation its button calls", () => {
-    expect(SANDBOX_SURFACES).toEqual({
-      session: {
-        idArg: "sessionId",
-        start: "sessions:startSandbox",
-        stop: "sessions:stopSandbox",
-      },
-      task: {
-        idArg: "taskId",
-        start: "agentTasks:startTaskSandbox",
-        stop: "agentTasks:stopTaskSandbox",
-      },
-      project: {
-        idArg: "projectId",
-        start: "projects:startProjectSandbox",
-        stop: "projects:stopProjectSandbox",
-      },
-    });
-  });
-
   test("only an active sandbox is ready; an in-flight one is waited on", () => {
     expect(decideSandboxStartPlan("active")).toBe("run");
     expect(decideSandboxStartPlan("starting")).toBe("wait");
@@ -341,88 +323,17 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
     expect(decideSandboxStartPlan(undefined)).toBe("start");
   });
 
-  test(
-    "starting a task from closed moves it to starting",
-    async () => {
-      const f = await fixture();
-      const closedTaskId = await f.t.run(async (ctx) => {
-        const now = Date.now();
-        return ctx.db.insert("agentTasks", {
-          repoId: f.repoId,
-          title: "Closed sandbox",
-          status: "business_review",
-          numId: 22,
-          createdAt: now,
-          updatedAt: now,
-          createdBy: f.ownerUserId,
-          // A resumable sandbox id takes the direct-start path rather than
-          // scheduling the whole startup workflow.
-          sandboxId: "sbx_closed",
-          reviewTaskSandboxStatus: "closed",
-        });
-      });
-
-      const after = await withoutRunningScheduledWork(async () => {
-        await f.t
-          .withIdentity({ subject: OWNER_CLERK_ID })
-          .mutation(api.agentTasks.startTaskSandbox, { taskId: closedTaskId });
-        return f.t.run(async (ctx) => ctx.db.get(closedTaskId));
-      });
-
-      expect(after?.reviewTaskSandboxStatus).toBe("starting");
-      // The resumable id is kept, so the paused filesystem comes back.
-      expect(after?.sandboxId).toBe("sbx_closed");
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "stopping a task from active moves it to stopping, keeping the sandbox id",
-    async () => {
-      const f = await fixture();
-      await f.t.run(async (ctx) => {
-        await ctx.db.patch(f.taskId, { sandboxId: "sbx_live" });
-      });
-
-      const after = await withoutRunningScheduledWork(async () => {
-        await f.t
-          .withIdentity({ subject: OWNER_CLERK_ID })
-          .mutation(api.agentTasks.stopTaskSandbox, { taskId: f.taskId });
-        return f.t.run(async (ctx) => ctx.db.get(f.taskId));
-      });
-
-      expect(after?.reviewTaskSandboxStatus).toBe("stopping");
-      // Kept so the same paused filesystem can be resumed by a later start.
-      expect(after?.sandboxId).toBe("sbx_live");
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "stopping a task that never had a sandbox closes it outright",
-    async () => {
-      const f = await fixture();
-      await f.t
-        .withIdentity({ subject: OWNER_CLERK_ID })
-        .mutation(api.agentTasks.stopTaskSandbox, { taskId: f.taskId });
-
-      const after = await f.t.run(async (ctx) => ctx.db.get(f.taskId));
-      expect(after?.reviewTaskSandboxStatus).toBe("closed");
-    },
-    TIMEOUT_MS,
-  );
-
   test("a session running a daemon continuation counts as executing", async () => {
     const f = await fixture();
-    // A `/loop` turn: an open row in `turns`, and no activeWorkflowId at all.
+    // A `/loop` turn: an open row in `turns` with no workflow bound.
     const loopingSessionId = await f.t.run(async (ctx) => {
       const sessionId = await ctx.db.insert("sessions", {
+        owner: { kind: "standalone" },
         repoId: f.repoId,
         userId: f.ownerUserId,
         title: "Looping",
         status: "active",
         numId: 13,
-        turnLifecycleVersion: 2,
       });
       await ctx.db.insert("turns", {
         entityId: sessionId,
@@ -461,9 +372,11 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
   test("a task and a project report their own workflow slots", async () => {
     const f = await fixture();
     await f.t.run(async (ctx) => {
-      await ctx.db.patch(f.taskId, { activeChatWorkflowId: "wf_task_chat" });
+      await ctx.db.patch(f.taskId, {
+        run: { state: "running", workflowId: "wf_task_run" },
+      });
       await ctx.db.patch(f.projectId, {
-        activeBuildWorkflowId: "wf_project_build",
+        build: { state: "running", workflowId: "wf_project_build" },
       });
     });
 
@@ -514,8 +427,8 @@ describe("cancel_queued_message only touches the queue", () => {
     expect(remaining.map((message) => message._id)).toEqual([f.queuedIds[1]]);
 
     // The turn in flight is untouched — that is stop_agent's job, not this.
-    const session = await f.t.run(async (ctx) => ctx.db.get(f.sessionId));
-    expect(session?.activeWorkflowId).toBe("wf_session");
+    const turn = await f.t.run(async (ctx) => findOpenTurn(ctx, f.sessionId));
+    expect(turn?.workflowId).toBe("wf_session");
   });
 
   test("clearing every pending message empties the queue", async () => {
@@ -588,7 +501,7 @@ describe("get_preview_url can find the running app behind a chat", () => {
         sandboxId: "sbx_session",
         devPort: 5173,
       });
-      await ctx.db.patch(f.taskId, { sandboxId: "sbx_task" });
+      await ctx.db.patch(f.taskSessionId, { sandboxId: "sbx_task" });
     });
 
     // A session's own status is its sandbox's, and its port beats the repo's.
@@ -597,8 +510,8 @@ describe("get_preview_url can find the running app behind a chat", () => {
     expect(session?.sandboxId).toBe("sbx_session");
     expect(session?.devPort).toBe(5173);
 
-    // A task parks the reviewer-facing VM state in its own field, and has no
-    // port of its own — the repo default answers for it.
+    // A task's sandbox is its session's; with no port of its own there, the
+    // repo default answers for it.
     const task = await resolve(f, "task", f.taskId);
     expect(task?.sandboxStatus).toBe("active");
     expect(task?.sandboxId).toBe("sbx_task");

@@ -15,84 +15,86 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { useState } from "react";
+import type { ActivityStep } from "@vvedantb/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 
-/** One row of the agent's task list, in composer-badge shape. */
-export interface ComposerTaskStep {
-  readonly durationMs?: number;
-  readonly step: string;
-  readonly status: "pending" | "inProgress" | "completed";
-}
+/** One row of the agent's task list: the activity trace's todo item as is. */
+export type ComposerTaskStep = NonNullable<ActivityStep["todos"]>[number];
+type TaskStatus = ComposerTaskStep["status"];
 
-interface ComposerTasksProgress {
-  readonly step: string;
-  readonly completedSteps: number;
-  readonly totalSteps: number;
-}
+/** Every status's look in one place; a new status fails the type check here. */
+const TASK_STATUS_STYLE: Record<
+  TaskStatus,
+  {
+    readonly segment: string;
+    readonly icon: string;
+    readonly text: string;
+    readonly Icon: typeof IconCheck;
+    readonly iconSize: string;
+    readonly trailing: string | null;
+  }
+> = {
+  completed: {
+    segment: "bg-success",
+    icon: "text-success",
+    text: "text-muted-foreground/55",
+    Icon: IconCheck,
+    iconSize: "size-3",
+    trailing: null,
+  },
+  in_progress: {
+    segment: "bg-primary",
+    icon: "text-primary",
+    text: "text-foreground/90",
+    Icon: IconPointFilled,
+    iconSize: "size-3",
+    trailing: "now",
+  },
+  pending: {
+    segment: "bg-muted-foreground/25",
+    icon: "text-muted-foreground/40",
+    text: "text-muted-foreground/70",
+    Icon: IconCircle,
+    iconSize: "size-2.5",
+    trailing: null,
+  },
+};
 
-/**
- * Reads the live turn's todo snapshot out of the streaming activity payload.
- * Eva's todos carry no timings, so every step renders without a duration.
- */
+/** Reads the live turn's todo snapshot out of the streaming activity payload. */
 export function composerTaskStepsFromActivity(
   activity: string | undefined,
-): ComposerTaskStep[] {
-  const todos = parseActivitySteps(activity)?.find(
-    (step) => step.type === "todos",
-  )?.todos;
-  if (!todos) return [];
-  return todos.map((todo) => ({
-    step: todo.content,
-    status:
-      todo.status === "in_progress" ? ("inProgress" as const) : todo.status,
-  }));
-}
-
-/** "850ms" / "9.5s" / "42s" / "3m 12s". */
-function formatTaskDuration(durationMs: number): string {
-  if (!Number.isFinite(durationMs) || durationMs < 0) return "0ms";
-  if (durationMs < 1_000) return `${Math.max(1, Math.round(durationMs))}ms`;
-  if (durationMs < 10_000) {
-    const tenths = Math.round(durationMs / 100) / 10;
-    // 9.95s+ rounds up into the next bucket — render "10s", not "10.0s".
-    return tenths >= 10 ? "10s" : `${tenths.toFixed(1)}s`;
-  }
-  if (durationMs < 60_000) return `${Math.round(durationMs / 1_000)}s`;
-  const minutes = Math.floor(durationMs / 60_000);
-  const seconds = Math.round((durationMs % 60_000) / 1_000);
-  if (seconds === 0) return `${minutes}m`;
-  if (seconds === 60) return `${minutes + 1}m`;
-  return `${minutes}m ${seconds}s`;
+): readonly ComposerTaskStep[] {
+  return (
+    parseActivitySteps(activity)?.find((step) => step.type === "todos")
+      ?.todos ?? []
+  );
 }
 
 /** Step names repeat across a task list, so keys need an occurrence suffix. */
 function keyedTaskSteps(steps: readonly ComposerTaskStep[]) {
   const occurrences = new Map<string, number>();
   return steps.map((step) => {
-    const occurrence = occurrences.get(step.step) ?? 0;
-    occurrences.set(step.step, occurrence + 1);
-    return { key: `${step.step}:${occurrence}`, step };
+    const occurrence = occurrences.get(step.content) ?? 0;
+    occurrences.set(step.content, occurrence + 1);
+    return { key: `${step.content}:${occurrence}`, step };
   });
 }
 
+/** Headline step: the first in progress, else the last completed, else the first. */
 function deriveProgress(
+  first: ComposerTaskStep,
   steps: readonly ComposerTaskStep[],
-): ComposerTasksProgress {
-  let completedSteps = 0;
-  let current = "";
-  let lastCompleted = "";
-  for (const step of steps) {
-    if (step.status === "completed") {
-      completedSteps += 1;
-      lastCompleted = step.step;
-    }
-    if (step.status === "inProgress" && !current) current = step.step;
-  }
-  const firstStep = steps[0];
+) {
+  const completed = steps.filter((step) => step.status === "completed");
+  const current =
+    steps.find((step) => step.status === "in_progress") ??
+    completed.at(-1) ??
+    first;
   return {
-    step: current || lastCompleted || firstStep?.step || "",
-    completedSteps,
+    step: current.content,
+    completedSteps: completed.length,
     totalSteps: steps.length,
+    allDone: completed.length === steps.length,
   };
 }
 
@@ -115,11 +117,7 @@ function TaskSegments({
           key={key}
           className={cn(
             "h-[3px] min-w-0 flex-1 rounded-full",
-            step.status === "completed"
-              ? "bg-success"
-              : step.status === "inProgress"
-                ? "bg-primary"
-                : "bg-muted-foreground/25",
+            TASK_STATUS_STYLE[step.status].segment,
           )}
         />
       ))}
@@ -128,45 +126,21 @@ function TaskSegments({
 }
 
 function TaskStepRow({ step }: { readonly step: ComposerTaskStep }) {
+  const style = TASK_STATUS_STYLE[step.status];
   return (
     <div className="flex items-center gap-2 text-xs leading-5" role="listitem">
       <span
         aria-hidden
         className={cn(
           "flex w-3 shrink-0 items-center justify-center",
-          step.status === "completed"
-            ? "text-success"
-            : step.status === "inProgress"
-              ? "text-primary"
-              : "text-muted-foreground/40",
+          style.icon,
         )}
       >
-        {step.status === "completed" ? (
-          <IconCheck className="size-3" />
-        ) : step.status === "inProgress" ? (
-          <IconPointFilled className="size-3" />
-        ) : (
-          <IconCircle className="size-2.5" />
-        )}
+        <style.Icon className={style.iconSize} />
       </span>
-      <span
-        className={cn(
-          "min-w-0 flex-1",
-          step.status === "completed"
-            ? "text-muted-foreground/55"
-            : step.status === "inProgress"
-              ? "text-foreground/90"
-              : "text-muted-foreground/70",
-        )}
-      >
-        {step.step}
-      </span>
+      <span className={cn("min-w-0 flex-1", style.text)}>{step.content}</span>
       <span className="ml-auto w-12 shrink-0 text-right text-3xs text-muted-foreground/45 tabular-nums">
-        {step.durationMs !== undefined
-          ? formatTaskDuration(step.durationMs)
-          : step.status === "inProgress"
-            ? "now"
-            : null}
+        {style.trailing}
       </span>
     </div>
   );
@@ -177,7 +151,7 @@ interface ComposerTasksPanelProps {
   steps: readonly ComposerTaskStep[];
   /**
    * Identifies the turn the steps belong to. Dismissal is scoped to it, so a
-   * new turn brings the panel back. Undefined means "no live turn".
+   * new turn brings the panel back. Undefined means "no live turn": no panel.
    */
   turnId?: string;
 }
@@ -186,21 +160,20 @@ export function ComposerTasksPanel({ steps, turnId }: ComposerTasksPanelProps) {
   const [expanded, setExpanded] = useState(false);
   const [dismissedTurnId, setDismissedTurnId] = useState<string | null>(null);
 
-  const turnKey = turnId ?? "current";
-  const visible = steps.length > 0 && dismissedTurnId !== turnKey;
-  const progress = visible ? deriveProgress(steps) : null;
-  const allDone = progress
-    ? progress.completedSteps >= progress.totalSteps
-    : false;
+  const [first] = steps;
+  const progress =
+    turnId !== undefined && first && dismissedTurnId !== turnId
+      ? deriveProgress(first, steps)
+      : null;
   const label = progress
     ? `Tasks: ${progress.completedSteps} of ${progress.totalSteps} complete. Current task: ${progress.step}`
     : "Tasks";
 
   return (
     <AnimatePresence initial={false}>
-      {visible && progress ? (
+      {progress && turnId !== undefined ? (
         <m.div
-          key={turnKey}
+          key={turnId}
           className="w-full rounded-b-none rounded-t-surface bg-muted/50"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -234,7 +207,7 @@ export function ComposerTasksPanel({ steps, turnId }: ComposerTasksPanelProps) {
                     className={cn(
                       "shrink-0 font-medium tabular-nums",
                       expanded ? "ml-auto" : "",
-                      allDone ? "text-success" : "text-muted-foreground",
+                      progress.allDone ? "text-success" : "text-muted-foreground",
                     )}
                   >
                     {progress.completedSteps}/{progress.totalSteps}
@@ -249,7 +222,7 @@ export function ComposerTasksPanel({ steps, turnId }: ComposerTasksPanelProps) {
                 variant="ghost"
                 aria-label="Dismiss tasks for this turn"
                 className="shrink-0"
-                onClick={() => setDismissedTurnId(turnKey)}
+                onClick={() => setDismissedTurnId(turnId)}
                 onPointerDown={(event) => event.preventDefault()}
               >
                 <IconX aria-hidden className="size-3" />

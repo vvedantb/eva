@@ -111,13 +111,7 @@ const schema = defineSchema({
     .index("by_user", ["userId"])
     .index("by_repo_and_phase", ["repoId", "phase"])
     .index("by_repo_and_numId", ["repoId", "numId"])
-    .index("by_repo_and_build_workflow", ["repoId", "activeBuildWorkflowId"])
-    .index("by_repo_and_sandbox_status", [
-      "repoId",
-      "reviewProjectSandboxStatus",
-    ])
-    .index("by_sandbox_status", ["reviewProjectSandboxStatus"])
-    .index("by_sandbox", ["sandboxId"]),
+    .index("by_repo_and_build_state", ["repoId", "build.state"]),
 
   projectDetails: defineTable(projectDetailsFields).index("by_project", [
     "projectId",
@@ -136,10 +130,7 @@ const schema = defineSchema({
     .index("by_repo_and_updatedAt", ["repoId", "updatedAt"])
     .index("by_project", ["projectId"])
     .index("by_project_and_status", ["projectId", "status"])
-    .index("by_repo_and_numId", ["repoId", "numId"])
-    .index("by_repo_and_sandbox_status", ["repoId", "reviewTaskSandboxStatus"])
-    .index("by_sandbox_status", ["reviewTaskSandboxStatus"])
-    .index("by_sandbox", ["sandboxId"]),
+    .index("by_repo_and_numId", ["repoId", "numId"]),
 
   agentRuns: defineTable(agentRunFields)
     .index("by_task", ["taskId"])
@@ -237,18 +228,30 @@ const schema = defineSchema({
     .index("by_user", ["userId"])
     .index("by_repo_and_status", ["repoId", "status"])
     .index("by_status", ["status"])
-    .index("by_repo_and_archived", ["repoId", "archived"])
-    .index("by_repo_archived_and_deleted", ["repoId", "archived", "deletedAt"])
+    // The Sessions list: standalone sessions only (owned ones are hidden).
+    .index("by_repo_owner_deleted_and_archived_at", [
+      "repoId",
+      "owner.kind",
+      "deletedAt",
+      "archive.archivedAt",
+    ])
     .index("by_repo_and_numId", ["repoId", "numId"])
     .index("by_sandbox", ["sandboxId"])
     .index("by_forked_from", ["forkedFromSessionId"])
-    .index("by_session_group", ["sessionGroupId"]),
+    .index("by_session_group", ["sessionGroupId"])
+    // The hidden session a task or project owns (`_sessions/owner.ts`).
+    // `deletedAt`: a task moved to another repo or into a project detaches
+    // (soft-deletes) its session, so the next use creates a fresh one.
+    .index("by_owner_task", ["owner.taskId", "deletedAt"])
+    .index("by_owner_project", ["owner.projectId"]),
   // Chat threads inside a session (Main + parallel chats). See
   // `sessionChatFields` for the session/chat ownership split.
   sessionChats: defineTable(sessionChatFields)
     .index("by_session", ["sessionId"])
     .index("by_session_and_number", ["sessionId", "number"])
-    .index("by_repo", ["repoId"]),
+    .index("by_repo", ["repoId"])
+    // A project task's chat in its project's session.
+    .index("by_task", ["taskId"]),
   // Legacy daemon-poll mirror. Chat daemons poll their `sessionChats` row
   // directly; `backfillSessionChats` empties this table and it can then be
   // dropped from the schema.

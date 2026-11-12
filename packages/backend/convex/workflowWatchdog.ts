@@ -3,7 +3,10 @@ import { type MutationCtx, internalMutation } from "./_generated/server";
 import { type WorkflowId } from "@convex-dev/workflow";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
-import { cancelTrackedWorkflow } from "./workflowManager";
+import {
+  cancelTrackedWorkflow,
+  isTrackedWorkflowRunning,
+} from "./workflowManager";
 import { RUN_TIMEOUT_MS } from "./_taskWorkflow/staleness";
 import { scheduleArenaCheckCompletion } from "./_arena/browserRun";
 import {
@@ -12,13 +15,11 @@ import {
 } from "./_projects/helpers";
 import { recomputeProjectPhase } from "./functions";
 import {
-  PROJECT_CHAT_STREAM_PREFIX,
-  TASK_CHAT_STREAM_PREFIX,
-  projectChatAdapter,
+  finishProjectBuild,
+  markProjectBuildStarted,
+} from "./_projects/buildState";
+import {
   sessionChatAdapter,
-  taskChatAdapter,
-  trackAgentTaskChatWorkflow,
-  trackProjectChatWorkflow,
   trackSessionChatWorkflow,
   trackSessionWorkflow,
   type ChatAlert,
@@ -31,20 +32,10 @@ import { buildStaleDocPatch } from "./_prRecapWorkflow/staleDoc";
 import { sessionSummaryStreamingEntityId } from "./_chat/agentStreamIds";
 import { ensureMainChat } from "./_sessionChats/helpers";
 
-// Re-exported so existing importers (agentTaskChatWorkflow.ts,
-// projectChatWorkflow.ts, _queues/helpers.ts, and others — see
-// chatSurfaceUnificationContract.test.ts) keep resolving these names from
-// "./workflowWatchdog" unchanged; the implementations now live in
+// Re-exported so importers keep resolving these names from
+// "./workflowWatchdog"; the implementations live in
 // _chat/surfaceAdapters.ts and _taskWorkflow/staleness.ts.
-export {
-  PROJECT_CHAT_STREAM_PREFIX,
-  TASK_CHAT_STREAM_PREFIX,
-  RUN_TIMEOUT_MS,
-  trackAgentTaskChatWorkflow,
-  trackProjectChatWorkflow,
-  trackSessionChatWorkflow,
-  trackSessionWorkflow,
-};
+export { RUN_TIMEOUT_MS, trackSessionChatWorkflow, trackSessionWorkflow };
 
 /** Records a workflow as the active workflow for a doc and schedules a stale handler. */
 export async function trackDocWorkflow(
@@ -110,10 +101,10 @@ export async function trackProjectBuildWorkflow(
   timeoutMs: number = RUN_TIMEOUT_MS,
 ): Promise<void> {
   const id = String(workflowId);
-  await ctx.db.patch(projectId, {
-    activeBuildWorkflowId: id,
-    ...(options.clearLastBuildError ? { lastBuildError: undefined } : {}),
-  });
+  await markProjectBuildStarted(ctx, projectId, id);
+  if (options.clearLastBuildError) {
+    await ctx.db.patch(projectId, { lastBuildError: undefined });
+  }
   await recomputeProjectPhase(ctx, projectId);
   await ctx.scheduler.runAfter(
     timeoutMs,
@@ -142,8 +133,8 @@ export const handleStaleSession = internalMutation({
 
 /**
  * Tears down a session-level workflow (the summary — chat turns live on their
- * chat) the `TURN_BACKSTOP_MS` backstop or the lease reconciler gave up on. No-op once
- * the session tracks another workflow. The alert lands in the Main chat.
+ * chat) the `TURN_BACKSTOP_MS` backstop or the lease reconciler gave up on.
+ * No-op once that workflow has ended. The alert lands in the Main chat.
  */
 export async function tearDownStaleSessionWorkflow(
   ctx: MutationCtx,
@@ -152,7 +143,7 @@ export async function tearDownStaleSessionWorkflow(
   alert: ChatAlert,
 ): Promise<void> {
   const session = await ctx.db.get(sessionId);
-  if (!session || session.activeWorkflowId !== workflowId) return;
+  if (!session || !(await isTrackedWorkflowRunning(ctx, workflowId))) return;
   await cancelStaleWorkflow(ctx, workflowId, [
     sessionSummaryStreamingEntityId(sessionId),
   ]);
@@ -165,10 +156,7 @@ export async function tearDownStaleSessionWorkflow(
     isSystemAlert: true,
     ...(alert.detail !== undefined ? { errorDetail: alert.detail } : {}),
   });
-  await ctx.db.patch(sessionId, {
-    activeWorkflowId: undefined,
-    updatedAt: Date.now(),
-  });
+  await ctx.db.patch(sessionId, { updatedAt: Date.now() });
 }
 
 /** Cancels a stale session chat workflow and starts the next queued message. */
@@ -182,7 +170,8 @@ export const handleStaleSessionChat = internalMutation({
     const context = await sessionChatAdapter.getEntity(ctx, args.chatId);
     if (
       !context ||
-      sessionChatAdapter.activeWorkflowId(context) !== args.workflowId
+      (await sessionChatAdapter.activeWorkflowId(context, ctx)) !==
+        args.workflowId
     ) {
       return null;
     }
@@ -302,66 +291,8 @@ export async function tearDownStaleProjectWorkflow(
   await setProjectConversation(ctx.db, projectId, messages);
   await ctx.db.patch(projectId, {
     activeWorkflowId: undefined,
-    lastSandboxActivity: Date.now(),
   });
 }
-
-/** Cancels a stale project chat workflow via the `TURN_BACKSTOP_MS` workflow-timeout backstop. */
-export const handleStaleProjectChat = internalMutation({
-  args: {
-    projectId: v.id("projects"),
-    workflowId: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const project = await projectChatAdapter.getEntity(ctx, args.projectId);
-    if (
-      !project ||
-      projectChatAdapter.activeWorkflowId(project) !== args.workflowId
-    )
-      return null;
-
-    await finalizeStaleChatTurn(
-      ctx,
-      projectChatAdapter,
-      args.projectId,
-      project,
-      args.workflowId,
-      projectChatAdapter.alerts.timeout,
-    );
-
-    return null;
-  },
-});
-
-
-
-/** Cancels a stale task chat workflow via the `TURN_BACKSTOP_MS` workflow-timeout backstop. */
-export const handleStaleAgentTaskChat = internalMutation({
-  args: {
-    taskId: v.id("agentTasks"),
-    workflowId: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const task = await taskChatAdapter.getEntity(ctx, args.taskId);
-    if (!task || taskChatAdapter.activeWorkflowId(task) !== args.workflowId)
-      return null;
-
-    await finalizeStaleChatTurn(
-      ctx,
-      taskChatAdapter,
-      args.taskId,
-      task,
-      args.workflowId,
-      taskChatAdapter.alerts.timeout,
-    );
-
-    return null;
-  },
-});
-
-
 
 /** Cancels a stale build workflow and clears the active build reference. */
 export const handleStaleBuild = internalMutation({
@@ -371,15 +302,14 @@ export const handleStaleBuild = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project || project.activeBuildWorkflowId !== args.workflowId)
-      return null;
+    const finished = await finishProjectBuild(
+      ctx,
+      args.projectId,
+      args.workflowId,
+    );
+    if (!finished.ok) return null;
 
     await cancelTrackedWorkflow(ctx, args.workflowId);
-
-    await ctx.db.patch(args.projectId, {
-      activeBuildWorkflowId: undefined,
-    });
     await recomputeProjectPhase(ctx, args.projectId);
 
     return null;

@@ -16,13 +16,13 @@ export const STUCK_STOPPING_RECOVER_MS = 20_000;
  * sandbox was stopping found it "transitioning" and waited, but no later event
  * drained it: a stop that closed never woke Eva, and a failed stop reverted to
  * active silently. The quiet drain wakes a closed sandbox only when a message
- * is waiting, so an empty queue stays asleep. Shared by the session, task, and
- * project `mark*Closed` mutations; scheduled, not imported, to avoid the cycle
- * with `_queues/helpers`.
+ * is waiting, so an empty queue stays asleep. Called by the session's
+ * `markSandboxClosed`; scheduled, not imported, to avoid the cycle with
+ * `_queues/helpers`.
  */
 export async function scheduleDrainAfterStopSettles(
   ctx: MutationCtx,
-  parentId: Id<"sessions"> | Id<"agentTasks"> | Id<"projects">,
+  parentId: Id<"sessions">,
 ): Promise<void> {
   await ctx.scheduler.runAfter(0, internal._queues.helpers.drainQueueQuietly, {
     parentId,

@@ -1,6 +1,6 @@
 ---
 name: audit
-description: "Run a read-only code audit against a path, a PR, a diff or the whole repo, then (on request) fix the findings in small split PRs. Modes: single source of truth (duplicated facts and state with two owners), implicit state machines (lifecycles spread across flags, unguarded status writes, stale async writes), architecture (shallow modules). Use when the user asks for an audit, a 'single source of truth audit', to 'find implicit state machines', hunt drift, duplication, race conditions or stuck states, or to audit a PR or diff for these."
+description: "Run a read-only code audit against a path, a PR, a diff or the whole repo, then (on request) fix the findings in small split PRs. Modes: single source of truth (duplicated facts and state with two owners), implicit state machines (lifecycles spread across flags, unguarded status writes, stale async writes), domain model (edge cases a better data shape would remove), architecture (shallow modules). Use when the user asks for an audit, a 'single source of truth audit', to 'find implicit state machines', check the domain model, hunt drift, duplication, race conditions or stuck states, or to audit a PR or diff for these."
 ---
 
 # Audit
@@ -22,6 +22,7 @@ Read-only until the user asks for fixes.
 |---|---|---|
 | `ssot` | `modes/single-source-of-truth.md` | "single source of truth audit", "find drift / duplication" |
 | `state-machines` | `modes/implicit-state-machines.md` | "find all implicit state machines", "race conditions", "stuck states" |
+| `domain-model` | `modes/domain-model.md` | "model the domain", "remove edge cases", "too many branches" |
 | `architecture` | the `improve-codebase-architecture` skill | "deepen modules", "improve architecture" |
 | `all` | every mode above | "full audit" |
 

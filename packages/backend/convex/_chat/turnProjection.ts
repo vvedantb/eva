@@ -1,43 +1,19 @@
-import type { DatabaseReader } from "../_generated/server";
+import type { DatabaseReader, QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-
-/**
- * Deployment bridge for workflows that started before durable Turns existed.
- * Once a session opens any durable Turn, the marker permanently removes these
- * fallbacks so stale legacy fields can never become authoritative again.
- */
-export function isLegacySessionExecuting(
-  session: Pick<
-    Doc<"sessions">,
-    "activeWorkflowId" | "syntheticTurnMessageId" | "turnLifecycleVersion"
-  >,
-): boolean {
-  return (
-    session.turnLifecycleVersion === undefined &&
-    (session.activeWorkflowId !== undefined ||
-      session.syntheticTurnMessageId !== undefined)
-  );
-}
-
-/**
- * The same bridge for task and project chats, keyed on
- * `chatTurnLifecycleVersion`. A workflow turn sets `activeChatWorkflowId`; a
- * daemon-minted (synthetic) turn sets only `syntheticTurnMessageId`.
- */
-export function isLegacyChatExecuting(
-  entity: Pick<
-    Doc<"agentTasks"> | Doc<"projects">,
-    | "activeChatWorkflowId"
-    | "syntheticTurnMessageId"
-    | "chatTurnLifecycleVersion"
-  >,
-): boolean {
-  return (
-    entity.chatTurnLifecycleVersion === undefined &&
-    (entity.activeChatWorkflowId !== undefined ||
-      entity.syntheticTurnMessageId !== undefined)
-  );
-}
+import { isTaskRunning, type TaskRunSource } from "../_agentTasks/runState";
+import {
+  isProjectBuilding,
+  type ProjectBuildSource,
+} from "../_projects/buildState";
+import type { TurnLane } from "../validators";
+import { findOpenTurn, type TurnEntityId } from "./turnStore";
+import {
+  chatOwnerEntityId,
+  findProjectSession,
+  findProjectTaskChat,
+  findTaskSession,
+  sessionOwnerEntityId,
+} from "../_sessions/owner";
 
 /**
  * Every chat entity in one repo with a turn open. One indexed query per list
@@ -50,7 +26,7 @@ export async function openChatEntityIdsForRepo(
   db: DatabaseReader,
   repoId: Id<"githubRepos">,
 ): Promise<ReadonlySet<string>> {
-  return idsOfTurns(await openChatTurnsForRepo(db, repoId));
+  return idsOfTurns(db, await openChatTurnsForRepo(db, repoId));
 }
 
 /**
@@ -83,7 +59,7 @@ export async function chatTurnFlagsForRepos(
     )
   ).flat();
   return {
-    openIds: idsOfTurns(turns),
+    openIds: await idsOfTurns(db, turns),
     awaitingAnswerIds: await awaitingAnswerIdsOf(db, turns),
   };
 }
@@ -101,7 +77,10 @@ async function awaitingAnswerIdsOf(
       return rows.some((row) => row.answer === undefined) ? turn : null;
     }),
   );
-  return idsOfTurns(asking.filter((turn) => turn !== null));
+  return idsOfTurns(
+    db,
+    asking.filter((turn) => turn !== null),
+  );
 }
 
 /** Open chat turns in one repo. A lane turn (summary, interview) is a one-shot agent, not a chat turn. */
@@ -116,21 +95,76 @@ async function openChatTurnsForRepo(
   return turns.filter((turn) => turn.lane === undefined);
 }
 
-function idsOfTurns(turns: ReadonlyArray<Doc<"turns">>): ReadonlySet<string> {
+/**
+ * A turn lights up its entity and its session. A task's or project's session
+ * also lights up its owner (its card is where that chat lives), and a project
+ * task's own chat lights up that task. One point read per distinct open-turn
+ * session (and per open chat turn in a project's session), never one per
+ * list row.
+ */
+async function idsOfTurns(
+  db: DatabaseReader,
+  turns: ReadonlyArray<Doc<"turns">>,
+): Promise<ReadonlySet<string>> {
   const ids = new Set<string>();
+  const sessionIds = new Set<Id<"sessions">>();
   for (const turn of turns) {
     ids.add(String(turn.entityId));
-    if (turn.sessionId !== undefined) ids.add(String(turn.sessionId));
+    if (turn.sessionId !== undefined) {
+      ids.add(String(turn.sessionId));
+      sessionIds.add(turn.sessionId);
+    }
   }
+  const sessions = new Map(
+    (await Promise.all([...sessionIds].map((id) => db.get(id))))
+      .filter((session) => session !== null)
+      .map((session) => [String(session._id), session]),
+  );
+  // Only an owned session's chats can speak for an owner (`chatOwner`).
+  const ownedTurns = turns.filter((turn) => {
+    const session = sessions.get(String(turn.sessionId));
+    return session !== undefined && sessionOwnerEntityId(session) !== undefined;
+  });
+  const chats = await Promise.all(
+    ownedTurns.map((turn) => {
+      const chatId = db.normalizeId("sessionChats", turn.entityId);
+      return chatId ? db.get(chatId) : null;
+    }),
+  );
+  ownedTurns.forEach((turn, index) => {
+    const session = sessions.get(String(turn.sessionId));
+    if (!session) return;
+    const chat = chats[index];
+    // A run's turn (no chat) lights up the session's owner.
+    const ownerId = chat
+      ? chatOwnerEntityId(chat, session)
+      : sessionOwnerEntityId(session);
+    if (ownerId) ids.add(String(ownerId));
+  });
   return ids;
 }
 
 /** True while one named chat entity has a turn open. */
 export async function hasOpenChatTurn(
   db: DatabaseReader,
-  entityId: Doc<"turns">["entityId"],
+  entityId: Doc<"turns">["entityId"] | Id<"agentTasks">,
 ): Promise<boolean> {
-  const sessionId = db.normalizeId("sessions", entityId);
+  // A quick task or a project chats (and runs) through its session: those
+  // turns count too. A project task chats in its own chat of the project's
+  // session: that chat's turn counts.
+  const taskId = db.normalizeId("agentTasks", entityId);
+  const projectId = db.normalizeId("projects", entityId);
+  const task = taskId ? await db.get(taskId) : null;
+  if (task?.projectId !== undefined) {
+    const taskChat = await findProjectTaskChat(db, task._id);
+    if (taskChat && (await hasOpenChatTurn(db, taskChat._id))) return true;
+  }
+  const ownedSession = taskId
+    ? await findTaskSession(db, taskId)
+    : projectId
+      ? await findProjectSession(db, projectId)
+      : null;
+  const sessionId = ownedSession?._id ?? db.normalizeId("sessions", entityId);
   if (sessionId) {
     // A session runs through its chats: any chat's open turn counts.
     const chatTurn = await db
@@ -141,19 +175,38 @@ export async function hasOpenChatTurn(
       .first();
     if (chatTurn !== null) return true;
   }
+  // A task owns no turn of its own: its chat and runs are covered above.
+  const turnEntityId = taskId ? null : turnOwnerId(db, entityId);
+  if (turnEntityId === null) return false;
   const turn = await db
     .query("turns")
     .withIndex("by_entity_open", (q) =>
-      q.eq("entityId", entityId).eq("lane", undefined).eq("open", true),
+      q.eq("entityId", turnEntityId).eq("lane", undefined).eq("open", true),
     )
     .first();
   return turn !== null;
 }
 
+/** `id` as a turn owner, or null for an id of another table. */
+function turnOwnerId(
+  db: DatabaseReader,
+  id: string,
+): Doc<"turns">["entityId"] | null {
+  return (
+    db.normalizeId("sessionChats", id) ??
+    db.normalizeId("sessions", id) ??
+    db.normalizeId("projects", id) ??
+    db.normalizeId("agentRuns", id) ??
+    db.normalizeId("automationRuns", id) ??
+    db.normalizeId("docs", id) ??
+    db.normalizeId("evaluationReports", id)
+  );
+}
+
 /** The open-turn set for one entity, in the shape the projections take. */
 export async function openChatEntityIdsFor(
   db: DatabaseReader,
-  entityId: Doc<"turns">["entityId"],
+  entityId: Doc<"turns">["entityId"] | Id<"agentTasks">,
 ): Promise<ReadonlySet<string>> {
   return new Set(
     (await hasOpenChatTurn(db, entityId)) ? [String(entityId)] : [],
@@ -161,40 +214,28 @@ export async function openChatEntityIdsFor(
 }
 
 /**
- * Whether a session is mid-turn. `activeWorkflowId` alone is NOT the answer: a
- * daemon-minted continuation (`/loop`) never gets one, so anything keying off
- * that field alone reports an actively running session as idle.
+ * Whether a session is mid-turn: one of its chats has a turn open. The open
+ * turn is the only signal; synthetic (`/loop`) turns open one too.
  */
 export function sessionIsExecuting(
-  session: Pick<
-    Doc<"sessions">,
-    | "_id"
-    | "activeWorkflowId"
-    | "syntheticTurnMessageId"
-    | "turnLifecycleVersion"
-  >,
+  session: Pick<Doc<"sessions">, "_id">,
   openChatEntityIds: ReadonlySet<string>,
 ): boolean {
-  return (
-    openChatEntityIds.has(String(session._id)) ||
-    isLegacySessionExecuting(session)
-  );
+  return openChatEntityIds.has(String(session._id));
 }
 
-/** Whether a task or project chat has a turn open, synthetic turns included. */
-export function chatTurnIsOpen(
-  entity: Pick<
-    Doc<"agentTasks"> | Doc<"projects">,
-    | "_id"
-    | "activeChatWorkflowId"
-    | "syntheticTurnMessageId"
-    | "chatTurnLifecycleVersion"
-  >,
-  openChatEntityIds: ReadonlySet<string>,
-): boolean {
-  return (
-    openChatEntityIds.has(String(entity._id)) || isLegacyChatExecuting(entity)
-  );
+/**
+ * The workflow that runs an entity's open turn in one lane. Undefined when
+ * the entity is idle or its open turn is synthetic (daemon-minted, no
+ * workflow). Session chats and the session summary keep no workflow slot of
+ * their own: cancel, completion and the stall backstop read it here.
+ */
+export async function openTurnWorkflowId(
+  ctx: QueryCtx,
+  entityId: TurnEntityId,
+  lane?: TurnLane,
+): Promise<string | undefined> {
+  return (await findOpenTurn(ctx, entityId, lane))?.workflowId;
 }
 
 /**
@@ -202,38 +243,21 @@ export function chatTurnIsOpen(
  * share one sandbox, and the queue already treats them as exclusive.
  */
 export function taskIsExecuting(
-  task: Pick<
-    Doc<"agentTasks">,
-    | "_id"
-    | "activeWorkflowId"
-    | "activeChatWorkflowId"
-    | "syntheticTurnMessageId"
-    | "chatTurnLifecycleVersion"
-  >,
+  task: Pick<Doc<"agentTasks">, "_id"> & TaskRunSource,
   openChatEntityIds: ReadonlySet<string>,
 ): boolean {
-  return (
-    task.activeWorkflowId !== undefined ||
-    chatTurnIsOpen(task, openChatEntityIds)
-  );
+  return isTaskRunning(task) || openChatEntityIds.has(String(task._id));
 }
 
 /** A project adds a build workflow to the same pair of slots. */
 export function projectIsExecuting(
-  project: Pick<
-    Doc<"projects">,
-    | "_id"
-    | "activeWorkflowId"
-    | "activeBuildWorkflowId"
-    | "activeChatWorkflowId"
-    | "syntheticTurnMessageId"
-    | "chatTurnLifecycleVersion"
-  >,
+  project: Pick<Doc<"projects">, "_id" | "activeWorkflowId"> &
+    ProjectBuildSource,
   openChatEntityIds: ReadonlySet<string>,
 ): boolean {
   return (
     project.activeWorkflowId !== undefined ||
-    project.activeBuildWorkflowId !== undefined ||
-    chatTurnIsOpen(project, openChatEntityIds)
+    isProjectBuilding(project) ||
+    openChatEntityIds.has(String(project._id))
   );
 }

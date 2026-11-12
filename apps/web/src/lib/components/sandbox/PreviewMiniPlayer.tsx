@@ -116,31 +116,12 @@ function useOwnerSandboxStale(entry: PreviewMiniPlayerEntry): boolean {
     entry.src.startsWith("blob:") || entry.src.startsWith("data:");
   const session = useQuery(
     api.sessions.get,
-    !fixture && owner.kind === "session" ? { id: owner.sessionId } : "skip",
+    !fixture ? { id: owner.sessionId } : "skip",
   );
-  const task = useQuery(
-    api.agentTasks.get,
-    !fixture && owner.kind === "task" ? { id: owner.taskId } : "skip",
-  );
-  const project = useQuery(
-    api.projects.get,
-    !fixture && owner.kind === "project" ? { id: owner.projectId } : "skip",
-  );
-  const live =
-    owner.kind === "session"
-      ? session && {
-          sandboxId: session.sandboxId,
-          active: session.status === "active",
-        }
-      : owner.kind === "task"
-        ? task && {
-            sandboxId: task.sandboxId,
-            active: task.reviewTaskSandboxStatus === "active",
-          }
-        : project && {
-            sandboxId: project.sandboxId,
-            active: project.reviewProjectSandboxStatus === "active",
-          };
+  const live = session && {
+    sandboxId: session.sandboxId,
+    active: session.status === "active",
+  };
   return (
     live === null ||
     (live !== undefined && (live.sandboxId !== entry.sandboxId || !live.active))

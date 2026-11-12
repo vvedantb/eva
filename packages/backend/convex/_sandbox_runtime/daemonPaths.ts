@@ -181,20 +181,3 @@ export const SESSION_DAEMON_MUTATIONS: DaemonMutationEnv = {
   updateBackgroundAgentsMutation: "sessionWorkflow:updateBackgroundAgents",
   updateGoalMutation: "sessionWorkflow:updateGoal",
 };
-
-export const TASK_CHAT_DAEMON_MUTATIONS: DaemonMutationEnv = {
-  claimMutation: "agentTaskChatWorkflow:claimPendingTurn",
-  openSyntheticTurnMutation: "agentTaskChatWorkflow:openSyntheticTurn",
-  completeSyntheticTurnMutation: "agentTaskChatWorkflow:completeSyntheticTurn",
-  updateBackgroundAgentsMutation:
-    "agentTaskChatWorkflow:updateBackgroundAgents",
-  updateGoalMutation: "agentTaskChatWorkflow:updateGoal",
-};
-
-export const PROJECT_CHAT_DAEMON_MUTATIONS: DaemonMutationEnv = {
-  claimMutation: "projectChatWorkflow:claimPendingTurn",
-  openSyntheticTurnMutation: "projectChatWorkflow:openSyntheticTurn",
-  completeSyntheticTurnMutation: "projectChatWorkflow:completeSyntheticTurn",
-  updateBackgroundAgentsMutation: "projectChatWorkflow:updateBackgroundAgents",
-  updateGoalMutation: "projectChatWorkflow:updateGoal",
-};
