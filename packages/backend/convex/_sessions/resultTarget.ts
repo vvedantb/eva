@@ -1,4 +1,8 @@
 import { errorMessage } from "@vvedantb/server";
+import {
+  isDiskFullErrorText,
+  SANDBOX_DISK_FULL_ADVICE,
+} from "../_sandbox_runtime/sandboxFiles";
 
 /**
  * Which message a finished turn's result belongs on, and which leftover bubbles
@@ -125,9 +129,14 @@ export function assistantReplyContent(args: {
   result: string | null;
   error: string | null;
 }): string {
-  return args.success
-    ? args.result || "I couldn't process your message."
-    : `Error: ${args.error || "Unknown error during execution."}`;
+  if (args.success) return args.result || "I couldn't process your message.";
+  const error = args.error || "Unknown error during execution.";
+  // A raw "ENOSPC: no space left on device, write" names no cause a user can
+  // act on (session 96, 2026-11-11). Lead with the cause and the fix; keep the
+  // raw text for debugging.
+  return isDiskFullErrorText(error)
+    ? `Error: Sandbox disk is full. ${SANDBOX_DISK_FULL_ADVICE}\n\n${error}`
+    : `Error: ${error}`;
 }
 
 /** An assistant bubble this turn owns — not an alert, not a synthetic turn. */
