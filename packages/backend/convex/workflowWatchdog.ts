@@ -19,13 +19,7 @@ import {
   markProjectBuildStarted,
 } from "./_projects/buildState";
 import {
-  PROJECT_CHAT_STREAM_PREFIX,
-  TASK_CHAT_STREAM_PREFIX,
-  projectChatAdapter,
   sessionChatAdapter,
-  taskChatAdapter,
-  trackAgentTaskChatWorkflow,
-  trackProjectChatWorkflow,
   trackSessionChatWorkflow,
   trackSessionWorkflow,
   type ChatAlert,
@@ -38,20 +32,10 @@ import { buildStaleDocPatch } from "./_prRecapWorkflow/staleDoc";
 import { sessionSummaryStreamingEntityId } from "./_chat/agentStreamIds";
 import { ensureMainChat } from "./_sessionChats/helpers";
 
-// Re-exported so existing importers (agentTaskChatWorkflow.ts,
-// projectChatWorkflow.ts, _queues/helpers.ts, and others — see
-// chatSurfaceUnificationContract.test.ts) keep resolving these names from
-// "./workflowWatchdog" unchanged; the implementations now live in
+// Re-exported so importers keep resolving these names from
+// "./workflowWatchdog"; the implementations live in
 // _chat/surfaceAdapters.ts and _taskWorkflow/staleness.ts.
-export {
-  PROJECT_CHAT_STREAM_PREFIX,
-  TASK_CHAT_STREAM_PREFIX,
-  RUN_TIMEOUT_MS,
-  trackAgentTaskChatWorkflow,
-  trackProjectChatWorkflow,
-  trackSessionChatWorkflow,
-  trackSessionWorkflow,
-};
+export { RUN_TIMEOUT_MS, trackSessionChatWorkflow, trackSessionWorkflow };
 
 /** Records a workflow as the active workflow for a doc and schedules a stale handler. */
 export async function trackDocWorkflow(
@@ -311,66 +295,23 @@ export async function tearDownStaleProjectWorkflow(
   });
 }
 
-/** Cancels a stale project chat workflow via the `TURN_BACKSTOP_MS` workflow-timeout backstop. */
+/**
+ * In-flight safety only: the deleted task and project chat workflows
+ * scheduled these backstops `TURN_BACKSTOP_MS` ahead. Chats run on sessions
+ * now, so a job that still fires has nothing to tear down. Remove in 3b.
+ */
 export const handleStaleProjectChat = internalMutation({
-  args: {
-    projectId: v.id("projects"),
-    workflowId: v.string(),
-  },
+  args: { projectId: v.id("projects"), workflowId: v.string() },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const project = await projectChatAdapter.getEntity(ctx, args.projectId);
-    if (
-      !project ||
-      (await projectChatAdapter.activeWorkflowId(project, ctx)) !==
-        args.workflowId
-    )
-      return null;
-
-    await finalizeStaleChatTurn(
-      ctx,
-      projectChatAdapter,
-      args.projectId,
-      project,
-      args.workflowId,
-      projectChatAdapter.alerts.timeout,
-    );
-
-    return null;
-  },
+  handler: async () => null,
 });
 
-
-
-/** Cancels a stale task chat workflow via the `TURN_BACKSTOP_MS` workflow-timeout backstop. */
+/** In-flight safety only; see `handleStaleProjectChat`. Remove in 3b. */
 export const handleStaleAgentTaskChat = internalMutation({
-  args: {
-    taskId: v.id("agentTasks"),
-    workflowId: v.string(),
-  },
+  args: { taskId: v.id("agentTasks"), workflowId: v.string() },
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const task = await taskChatAdapter.getEntity(ctx, args.taskId);
-    if (
-      !task ||
-      (await taskChatAdapter.activeWorkflowId(task, ctx)) !== args.workflowId
-    )
-      return null;
-
-    await finalizeStaleChatTurn(
-      ctx,
-      taskChatAdapter,
-      args.taskId,
-      task,
-      args.workflowId,
-      taskChatAdapter.alerts.timeout,
-    );
-
-    return null;
-  },
+  handler: async () => null,
 });
-
-
 
 /** Cancels a stale build workflow and clears the active build reference. */
 export const handleStaleBuild = internalMutation({

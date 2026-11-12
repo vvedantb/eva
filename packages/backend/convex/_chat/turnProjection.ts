@@ -16,27 +16,6 @@ import {
 } from "../_sessions/owner";
 
 /**
- * Deployment bridge for task and project chats whose workflow started before
- * durable Turns existed, keyed on `chatTurnLifecycleVersion`. A workflow turn
- * sets `activeChatWorkflowId`; a daemon-minted (synthetic) turn sets only
- * `syntheticTurnMessageId`. Sessions have no such bridge any more.
- */
-export function isLegacyChatExecuting(
-  entity: Pick<
-    Doc<"agentTasks"> | Doc<"projects">,
-    | "activeChatWorkflowId"
-    | "syntheticTurnMessageId"
-    | "chatTurnLifecycleVersion"
-  >,
-): boolean {
-  return (
-    entity.chatTurnLifecycleVersion === undefined &&
-    (entity.activeChatWorkflowId !== undefined ||
-      entity.syntheticTurnMessageId !== undefined)
-  );
-}
-
-/**
  * Every chat entity in one repo with a turn open. One indexed query per list
  * subscription, never one turn lookup per row. Ids are unique across tables,
  * so one set serves sessions, tasks and projects alike. A session chat's turn
@@ -240,56 +219,26 @@ export async function openTurnWorkflowId(
   return (await findOpenTurn(ctx, entityId, lane))?.workflowId;
 }
 
-/** Whether a task or project chat has a turn open, synthetic turns included. */
-export function chatTurnIsOpen(
-  entity: Pick<
-    Doc<"agentTasks"> | Doc<"projects">,
-    | "_id"
-    | "activeChatWorkflowId"
-    | "syntheticTurnMessageId"
-    | "chatTurnLifecycleVersion"
-  >,
-  openChatEntityIds: ReadonlySet<string>,
-): boolean {
-  return (
-    openChatEntityIds.has(String(entity._id)) || isLegacyChatExecuting(entity)
-  );
-}
-
 /**
  * One "sandbox busy" status for a quick task: its main run and its chat turn
  * share one sandbox, and the queue already treats them as exclusive.
  */
 export function taskIsExecuting(
-  task: Pick<
-    Doc<"agentTasks">,
-    | "_id"
-    | "activeChatWorkflowId"
-    | "syntheticTurnMessageId"
-    | "chatTurnLifecycleVersion"
-  > &
-    TaskRunSource,
+  task: Pick<Doc<"agentTasks">, "_id"> & TaskRunSource,
   openChatEntityIds: ReadonlySet<string>,
 ): boolean {
-  return isTaskRunning(task) || chatTurnIsOpen(task, openChatEntityIds);
+  return isTaskRunning(task) || openChatEntityIds.has(String(task._id));
 }
 
 /** A project adds a build workflow to the same pair of slots. */
 export function projectIsExecuting(
-  project: Pick<
-    Doc<"projects">,
-    | "_id"
-    | "activeWorkflowId"
-    | "activeChatWorkflowId"
-    | "syntheticTurnMessageId"
-    | "chatTurnLifecycleVersion"
-  > &
+  project: Pick<Doc<"projects">, "_id" | "activeWorkflowId"> &
     ProjectBuildSource,
   openChatEntityIds: ReadonlySet<string>,
 ): boolean {
   return (
     project.activeWorkflowId !== undefined ||
     isProjectBuilding(project) ||
-    chatTurnIsOpen(project, openChatEntityIds)
+    openChatEntityIds.has(String(project._id))
   );
 }

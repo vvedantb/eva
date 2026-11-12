@@ -28,25 +28,17 @@ export function activityRefForOwner(
 }
 
 /**
- * Builds the ref from a bare chat parent id (session, task or project). Uses
- * `normalizeId` only, so it costs no reads; null for ids from other tables.
+ * Builds the ref from a bare session id. Uses `normalizeId` only, so it costs
+ * no reads; null for ids from other tables. Session chats share their
+ * session's sandbox; callers that hold a chat pass the session id.
  */
 export function activityRefForParentId(
   db: GenericDatabaseReader<DataModel>,
   parentId: string,
 ): SandboxActivityRef | null {
-  if (db.normalizeId("sessions", parentId)) {
-    return { kind: "session", entityId: parentId };
-  }
-  // Session chats share their session's sandbox; callers that hold a chat
-  // pass the session id (see `sessionActivityParentId`).
-  if (db.normalizeId("agentTasks", parentId)) {
-    return { kind: "task", entityId: parentId };
-  }
-  if (db.normalizeId("projects", parentId)) {
-    return { kind: "project", entityId: parentId };
-  }
-  return null;
+  return db.normalizeId("sessions", parentId)
+    ? { kind: "session", entityId: parentId }
+    : null;
 }
 
 export async function getSandboxActivity(
