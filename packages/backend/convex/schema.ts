@@ -336,6 +336,8 @@ const schema = defineSchema({
   // second check-then-launch window and boot duplicate daemons; only the
   // lease claimant launches, the rest no-op. Short TTL so a crashed launcher
   // never blocks the next boot for long. One row per entity, upserted.
+  // Also holds the per-sandbox launch lock (`sandbox:<id>` keys, see
+  // `withSandboxLaunchLock`): launches share fixed /tmp runner files.
   daemonLaunchLeases: defineTable({
     entityId: v.string(),
     expiresAt: v.number(),

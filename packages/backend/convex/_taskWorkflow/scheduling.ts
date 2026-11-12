@@ -9,6 +9,7 @@ import {
 import {
   buildQuickTaskRetryDelayMs,
   isDaytonaNetworkIssue,
+  isRetryableWatchdogExit,
   TASK_CHAT_BUSY_ERROR,
   TASK_CHAT_BUSY_RETRY_MS,
 } from "./recovery";
@@ -44,6 +45,7 @@ export const maybeScheduleQuickTaskRetry = internalMutation({
     const chatBusy = errorMessage === TASK_CHAT_BUSY_ERROR;
     const retryableFailure =
       chatBusy ||
+      isRetryableWatchdogExit(run.exitReason) ||
       (errorMessage.length > 0 && isDaytonaNetworkIssue(errorMessage));
     if (!retryableFailure) return null;
 

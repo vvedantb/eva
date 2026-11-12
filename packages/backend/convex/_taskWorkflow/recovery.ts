@@ -84,6 +84,24 @@ export function isDaytonaNetworkIssue(errorMsg: string): boolean {
   return hasNetworkMarker || hasDaytonaStatusMarker;
 }
 
+/**
+ * Watchdog stops that earn one auto-retry: the agent went silent, died, or
+ * never started. A launch race once left quick task 284 with no agent at all;
+ * the next run on a fresh launch succeeds. Finalisation stalls are left out —
+ * that run's work already landed, and a rerun could duplicate it.
+ */
+const RETRYABLE_WATCHDOG_EXIT_REASONS = new Set([
+  "watchdog_killed",
+  "watchdog_startup_stalled",
+  "watchdog_no_sandbox",
+]);
+
+export function isRetryableWatchdogExit(exitReason: string | undefined) {
+  return (
+    exitReason !== undefined && RETRYABLE_WATCHDOG_EXIT_REASONS.has(exitReason)
+  );
+}
+
 // Usage-limit text parsing lives in ./usageLimitReset (pure module shared with
 // the web app's recovery card); re-exported here so existing importers keep
 // working, and so the web never pulls this module's workflow imports.
