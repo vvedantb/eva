@@ -2,7 +2,7 @@ import { taskScheduledAt, type api } from "@eva/backend";
 import { TASK_STATUS_LABELS, firstNameFromUser, formatEntityNumLabel, type DisplayTaskStatus } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconClock, IconTag } from "@tabler/icons-react-native";
-import { Spinner, SurfaceRow } from "@vvedantb/native-ui/primitives";
+import { SurfaceRow } from "@vvedantb/native-ui/primitives";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import type { FunctionReturnType } from "convex/server";
 import dayjs from "dayjs";
@@ -13,7 +13,7 @@ import { PriorityIcon } from "@/quickTasks/PriorityIcon";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
 import { displayTitle, timeAgo } from "@/ui/format";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
-import { AwaitingAnswerMark } from "@/ui/RowStatus";
+import { AwaitingAnswerMark, WorkingMark } from "@/ui/RowStatus";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 
 type QuickTask = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
@@ -124,7 +124,7 @@ export function QuickTaskRow({
           {task.isAwaitingAnswer ? (
             <AwaitingAnswerMark />
           ) : showWorking ? (
-            <Spinner size="sm" decorative />
+            <WorkingMark />
           ) : showSandbox ? (
             <View
               className="size-2 rounded-full"
