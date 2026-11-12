@@ -531,7 +531,7 @@ const schema = defineSchema({
     ["repoId", "entityType"],
   ),
 
-  // Unused after Clerk MCP OAuth. Kept until a drain migration removes them.
+  // Unused after Clerk MCP OAuth. dataMigrations:drainLegacyMcpOAuthTables empties it; a follow-up removes the table.
   mcpAuthCodes: defineTable({
     code: v.string(),
     clerkUserId: v.string(),
@@ -542,7 +542,7 @@ const schema = defineSchema({
     expiresAt: v.number(),
   }).index("by_code", ["code"]),
 
-  // Unused after Clerk MCP OAuth. Kept until a drain migration removes them.
+  // Unused after Clerk MCP OAuth. dataMigrations:drainLegacyMcpOAuthTables empties it; a follow-up removes the table.
   mcpClientRegistrations: defineTable({
     clientId: v.string(),
     clientSecret: v.optional(v.string()),
