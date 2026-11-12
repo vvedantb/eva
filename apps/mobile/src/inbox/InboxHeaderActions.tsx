@@ -56,7 +56,7 @@ function HeaderPill({
 
 /**
  * The web inbox header actions at phone width: Mark all as read (only while
- * something is unread), Select, and the filter (Show and Group by, the web
+ * something is unread), Select (a long press on a row starts it too), and the filter (Show and Group by, the web
  * `InboxFilterMenu`). The web filter is a dropdown; here it is a bottom
  * sheet in thumb reach, with the same groups and wording.
  */
@@ -67,8 +67,7 @@ export function InboxHeaderActions({
   onGroupChange,
   unreadCount,
   onMarkAllRead,
-  selecting,
-  onToggleSelecting,
+  onSelect,
 }: {
   filter: InboxFilter;
   onFilterChange: (filter: InboxFilter) => void;
@@ -76,8 +75,7 @@ export function InboxHeaderActions({
   onGroupChange: (group: InboxGroup) => void;
   unreadCount: number;
   onMarkAllRead: () => void;
-  selecting: boolean;
-  onToggleSelecting: () => void;
+  onSelect: () => void;
 }) {
   const scheme = useScheme();
   const muted = EVA_THEME[scheme].mutedForeground;
@@ -93,13 +91,7 @@ export function InboxHeaderActions({
       {unreadCount > 0 ? (
         <HeaderPill icon={IconChecks} label="Mark all as read" outline color={muted} onPress={onMarkAllRead} />
       ) : null}
-      <HeaderPill
-        icon={IconChecklist}
-        label={selecting ? "Cancel selection" : "Select notifications"}
-        outline={false}
-        color={selecting ? EVA_THEME[scheme].foreground : muted}
-        onPress={onToggleSelecting}
-      />
+      <HeaderPill icon={IconChecklist} label="Select notifications" outline={false} color={muted} onPress={onSelect} />
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Filter notifications: ${FILTER_LABELS[filter]}, grouped by ${GROUP_LABELS[group]}`}
