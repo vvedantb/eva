@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: image attachments upload on Android
+
+Date: 2026-11-12
+
+WHY: An image picked on the phone never reached the chat: the message went out with an empty `attachmentStorageIds`, and the failed upload dropped the chip with no message.
+
+Architectural: `useAttachments` asks the picker for base64 and posts the bytes (an `ArrayBuffer`) to the Convex upload URL with `expo/fetch`, not React Native's `fetch` of a file-URI Blob. A failed upload shows "Couldn't upload the image" instead of vanishing.
+
 ## Phone: the live turn shows its steps and text
 
 Date: 2026-11-12
