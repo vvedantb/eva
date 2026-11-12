@@ -82,7 +82,7 @@ export function ProjectDetailMainContent({
             <ProjectTabs
               projectId={projectId}
               projectPhase={project.phase}
-              activeWorkflowId={project.activeWorkflowId}
+              interviewRunning={project.interview !== undefined}
               rawInput={project.rawInput}
               generatedSpec={project.generatedSpec}
               conversationHistory={project.conversationHistory}

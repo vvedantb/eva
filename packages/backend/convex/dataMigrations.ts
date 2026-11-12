@@ -14,6 +14,8 @@ import { recordPullRequest } from "./_pullRequests/store";
 import { recordRunPullRequest } from "./_taskWorkflow/helpers";
 import { pruneSettledBackgroundAgents } from "./_sessions/backgroundAgents";
 import type { BackgroundAgentEntry } from "./_validators/tableFields";
+import { findProjectSession } from "./_sessions/owner";
+import { projectInterviewState } from "./_projects/interviewState";
 
 /**
  * Convex Migrations component — batched online migrations with progress,
@@ -354,3 +356,47 @@ export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionChatBackgroundAgents,
   internal.dataMigrations.pruneSessionBackgroundAgents,
 ]);
+
+/**
+ * `npx convex run dataMigrations:migrateProjectInterviewState` after the
+ * deploy that adds `projects.interview`. Idempotent. Per project:
+ * - Folds `activeWorkflowId` + `interviewSandboxClaim` into `interview`
+ *   (`legacyProjectInterview`) and clears them. Until it runs, the interview
+ *   state reads the legacy fields.
+ * - Files its interview-lane turns (open and closed) under the project's
+ *   session: `entityId` and `sessionId` become the session, as new interview
+ *   turns are. Completion, stop and the reconciler find either key, so an
+ *   open turn moves safely. A project without a session keeps its turns;
+ *   `migrations:projectEntityTurnsLeft` counts what is left.
+ */
+export const migrateProjectInterviewState = dataMigrations.define({
+  table: "projects",
+  migrateOne: async (ctx, project) => {
+    const session = await findProjectSession(ctx.db, project._id);
+    if (session) {
+      const turns = await ctx.db
+        .query("turns")
+        .withIndex("by_entity_open", (q) =>
+          q.eq("entityId", project._id).eq("lane", "interview"),
+        )
+        .collect();
+      for (const turn of turns) {
+        await ctx.db.patch(turn._id, {
+          entityId: session._id,
+          sessionId: session._id,
+        });
+      }
+    }
+    if (
+      project.activeWorkflowId === undefined &&
+      project.interviewSandboxClaim === undefined
+    ) {
+      return;
+    }
+    return {
+      interview: projectInterviewState(project),
+      activeWorkflowId: undefined,
+      interviewSandboxClaim: undefined,
+    };
+  },
+});

@@ -1162,6 +1162,29 @@ export const projectBuildValidator = v.union(
   }),
 );
 
+/**
+ * A project interview or spec workflow, from start to sandbox release
+ * (`_projects/interviewState.ts`). `sessionStartAttempt` is the session start
+ * the interview claimed (`closed` → `starting`): a cancel before the attach
+ * fails exactly that start (`abandonTaskRunSandbox`), as
+ * `agentRuns.sessionStartAttempt` does for runs. `sandboxId` is the VM it
+ * prepared on that claim, recorded before the attach so none goes unrecorded.
+ */
+export const projectInterviewValidator = v.union(
+  v.object({ state: v.literal("started"), workflowId: v.string() }),
+  v.object({
+    state: v.literal("claimed"),
+    workflowId: v.string(),
+    sessionStartAttempt: v.number(),
+  }),
+  v.object({
+    state: v.literal("prepared"),
+    workflowId: v.string(),
+    sessionStartAttempt: v.number(),
+    sandboxId: v.string(),
+  }),
+);
+
 export const projectFields = {
   ...entityNumIdFields,
   repoId: v.id("githubRepos"),
@@ -1182,13 +1205,12 @@ export const projectFields = {
   members: v.optional(v.array(v.id("users"))),
   projectStartDate: v.optional(v.number()),
   projectEndDate: v.optional(v.number()),
-  activeWorkflowId: v.optional(v.string()),
   /**
-   * The interview / spec agent's claim on the project session's sandbox,
-   * from claim to release: the start attempt it owns and, once prepared, its
-   * VM. A cancel before the attach fails exactly that start and stops the VM
-   * (`abandonTaskRunSandbox`), as `agentRuns.sessionStartAttempt` does for runs.
+   * Legacy interview fields, folded into `interview` by
+   * `dataMigrations:migrateProjectInterviewState`. Nothing writes them; the
+   * interview state reads them only until the migration has run.
    */
+  activeWorkflowId: v.optional(v.string()),
   interviewSandboxClaim: v.optional(
     v.object({
       sessionStartAttempt: v.number(),
@@ -1197,6 +1219,8 @@ export const projectFields = {
   ),
   /** The project build lifecycle; absent = idle. Written only by `_projects/buildState.ts`. */
   build: v.optional(projectBuildValidator),
+  /** The interview / spec agent lifecycle; absent = idle. Written only by `_projects/interviewState.ts`. */
+  interview: v.optional(projectInterviewValidator),
   // Legacy build fields removed. schema-narrowing-ok: migrateProjectBuildState
   lastBuildError: v.optional(v.string()),
   branchVersion: v.optional(v.number()),

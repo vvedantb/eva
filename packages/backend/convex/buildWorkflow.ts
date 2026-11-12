@@ -7,7 +7,6 @@ import {
   type MutationCtx,
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { closeOpenTurn } from "./_chat/turnStore";
 import { findProjectSession } from "./_sessions/owner";
 import { abandonTaskRunSandbox } from "./_sessions/sandbox";
 import { internal } from "./_generated/api";
@@ -19,7 +18,10 @@ import {
   recomputeProjectPhase,
 } from "./functions";
 import { buildTaskDoneEvent } from "./taskWorkflow";
-import { trackProjectBuildWorkflow } from "./workflowWatchdog";
+import {
+  stopProjectInterview,
+  trackProjectBuildWorkflow,
+} from "./workflowWatchdog";
 import { resolveProjectBranchName } from "./_git/branchNames";
 import { resolveProjectBaseBranch } from "./_taskWorkflow/resolveBaseBranch";
 import {
@@ -483,24 +485,10 @@ export const releaseProjectSessionForRetire = internalMutation({
         "Build stopped: the project was closed",
       );
     }
-    if (project.activeWorkflowId !== undefined) {
-      await cancelTrackedWorkflow(ctx, project.activeWorkflowId);
-      await closeOpenTurn(ctx, args.projectId, "cancelled", {
-        lane: "interview",
-      });
-      await ctx.db.patch(args.projectId, { activeWorkflowId: undefined });
-      // Fail the start the interview claimed, or finish its VM (no VM left
-      // unrecorded), then drop the claim.
-      const session = await findProjectSession(ctx.db, args.projectId);
-      if (session && project.interviewSandboxClaim) {
-        await abandonTaskRunSandbox(
-          ctx,
-          session._id,
-          project.interviewSandboxClaim,
-        );
-      }
-      await ctx.db.patch(args.projectId, { interviewSandboxClaim: undefined });
-    }
+    await stopProjectInterview(ctx, args.projectId, undefined, {
+      state: "cancelled",
+      error: "Interview stopped: the project was closed",
+    });
     await syncProjectSession(ctx, args.projectId);
     return null;
   },

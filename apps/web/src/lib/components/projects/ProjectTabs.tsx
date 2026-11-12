@@ -14,7 +14,8 @@ import type { ProjectPhase } from "@/lib/components/projects/ProjectPhaseBadge";
 interface ProjectTabsProps {
   projectId: Id<"projects">;
   projectPhase: ProjectPhase;
-  activeWorkflowId?: string;
+  /** An interview or spec workflow holds the project (`projects.interview`). */
+  interviewRunning: boolean;
   rawInput: string;
   generatedSpec: string | undefined;
   conversationHistory: ConversationMessage[];
@@ -27,7 +28,7 @@ interface ProjectTabsProps {
 export function ProjectTabs({
   projectId,
   projectPhase,
-  activeWorkflowId,
+  interviewRunning,
   rawInput,
   generatedSpec,
   conversationHistory,
@@ -71,7 +72,7 @@ export function ProjectTabs({
       <ProjectChatTab
         projectId={projectId}
         projectPhase={projectPhase}
-        activeWorkflowId={activeWorkflowId}
+        interviewRunning={interviewRunning}
         initialMessages={conversationHistory}
         streamingActivity={streamingActivity ?? sandboxStartupActivity}
         rawInput={rawInput}
@@ -103,7 +104,7 @@ export function ProjectTabs({
         <ProjectChatTab
           projectId={projectId}
           projectPhase={projectPhase}
-          activeWorkflowId={activeWorkflowId}
+          interviewRunning={interviewRunning}
           initialMessages={conversationHistory}
           streamingActivity={streamingActivity ?? sandboxStartupActivity}
           rawInput={rawInput}

@@ -5,6 +5,10 @@ import {
   isProjectBuilding,
   type ProjectBuildSource,
 } from "../_projects/buildState";
+import {
+  isProjectInterviewing,
+  type ProjectInterviewSource,
+} from "../_projects/interviewState";
 import type { TurnLane } from "../validators";
 import { findOpenTurn, type TurnEntityId } from "./turnStore";
 import {
@@ -251,12 +255,13 @@ export function taskIsExecuting(
 
 /** A project adds a build workflow to the same pair of slots. */
 export function projectIsExecuting(
-  project: Pick<Doc<"projects">, "_id" | "activeWorkflowId"> &
-    ProjectBuildSource,
+  project: Pick<Doc<"projects">, "_id"> &
+    ProjectBuildSource &
+    ProjectInterviewSource,
   openChatEntityIds: ReadonlySet<string>,
 ): boolean {
   return (
-    project.activeWorkflowId !== undefined ||
+    isProjectInterviewing(project) ||
     isProjectBuilding(project) ||
     openChatEntityIds.has(String(project._id))
   );

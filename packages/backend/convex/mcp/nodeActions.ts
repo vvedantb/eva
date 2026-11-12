@@ -753,7 +753,6 @@ const projectDocSchema = z.object({
   title: z.string(),
   phase: z.string(),
   updatedAt: z.number().optional(),
-  activeWorkflowId: z.string().optional(),
   build: z.object({ state: z.enum(["scheduled", "running"]) }).optional(),
   model: z.string().optional(),
 });
