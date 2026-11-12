@@ -143,7 +143,11 @@ export {
   type PrStateTone,
 } from "./prState";
 export { sessionMenuActions, type SessionMenuAction } from "./sessionMenu";
-export { draftCountAfterRemove, draftsAfterRemove, visibleDrafts } from "./draftVisibility";
+export {
+  draftCountAfterRemove,
+  draftsAfterRemove,
+  visibleDrafts,
+} from "./draftVisibility";
 export {
   draftContextTitle,
   draftKindLabel,
@@ -274,7 +278,12 @@ export {
   type StatusTone,
   type SummaryComment,
 } from "./prReview";
-export { appLeafName, repoDisplayLabel, repoTileSlot, type RepoTileSlot } from "./repoTile";
+export {
+  appLeafName,
+  repoDisplayLabel,
+  repoTileSlot,
+  type RepoTileSlot,
+} from "./repoTile";
 
 export { storedRunTraits, toRunTraitArgs } from "./runTraits";
 export {
@@ -314,3 +323,4 @@ export {
   type ProjectTaskProgress,
   type SectionableProjectTask,
 } from "./projectMeta";
+export { MAINTENANCE_ERROR, isMaintenanceError } from "./maintenance";

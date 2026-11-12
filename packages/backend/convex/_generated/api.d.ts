@@ -449,6 +449,7 @@ import type * as http from "../http.js";
 import type * as legacyIds from "../legacyIds.js";
 import type * as linearActions from "../linearActions.js";
 import type * as logs from "../logs.js";
+import type * as maintenance from "../maintenance.js";
 import type * as mcp_agentInteractionQueries from "../mcp/agentInteractionQueries.js";
 import type * as mcp_agentInteractionTools from "../mcp/agentInteractionTools.js";
 import type * as mcp_authenticate from "../mcp/authenticate.js";
@@ -1026,6 +1027,7 @@ declare const fullApi: ApiFromModules<{
   legacyIds: typeof legacyIds;
   linearActions: typeof linearActions;
   logs: typeof logs;
+  maintenance: typeof maintenance;
   "mcp/agentInteractionQueries": typeof mcp_agentInteractionQueries;
   "mcp/agentInteractionTools": typeof mcp_agentInteractionTools;
   "mcp/authenticate": typeof mcp_authenticate;
