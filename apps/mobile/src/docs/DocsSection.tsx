@@ -25,6 +25,7 @@ import { displayTitle, timeAgo } from "@/ui/format";
 import { MenuDivider, MenuSheet } from "@/ui/MenuSheet";
 import { RepoSection } from "@/ui/RepoPicker";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
+import { LIST_WINDOW } from "@/ui/listWindow";
 
 type DocRow = FunctionReturnType<typeof api.docs.list>[number];
 type DocSource = NonNullable<DocRow["source"]>;
@@ -68,6 +69,7 @@ function DocList({ repoId }: { repoId: Id<"githubRepos"> }) {
   return (
     <>
       <FlatList
+        {...LIST_WINDOW}
         data={shown}
         keyExtractor={(doc) => doc._id}
         ItemSeparatorComponent={ListDivider}
