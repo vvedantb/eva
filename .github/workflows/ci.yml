@@ -19,7 +19,7 @@ concurrency:
 jobs:
   check:
     name: typecheck / lint / compiler / design / schema
-    runs-on: boat
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
       # Skip the husky `prepare` hook during install.
