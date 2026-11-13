@@ -529,7 +529,6 @@ import type * as sandbox from "../sandbox.js";
 import type * as sandboxAuthConfig from "../sandboxAuthConfig.js";
 import type * as sandboxAutoStop from "../sandboxAutoStop.js";
 import type * as sandboxCleanup from "../sandboxCleanup.js";
-import type * as sandboxConfigFiles from "../sandboxConfigFiles.js";
 import type * as sandboxDaemon from "../sandboxDaemon.js";
 import type * as sandboxGit from "../sandboxGit.js";
 import type * as sandboxGitCredentials from "../sandboxGitCredentials.js";
@@ -1109,7 +1108,6 @@ declare const fullApi: ApiFromModules<{
   sandboxAuthConfig: typeof sandboxAuthConfig;
   sandboxAutoStop: typeof sandboxAutoStop;
   sandboxCleanup: typeof sandboxCleanup;
-  sandboxConfigFiles: typeof sandboxConfigFiles;
   sandboxDaemon: typeof sandboxDaemon;
   sandboxGit: typeof sandboxGit;
   sandboxGitCredentials: typeof sandboxGitCredentials;

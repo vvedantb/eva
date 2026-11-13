@@ -1,5 +1,16 @@
 # Changelog
 
+## Removed the snapshot Config Files settings page
+
+Date: 2026-11-13
+
+WHY: No repo used it. The `sandboxConfigFiles` table had 0 rows on prod and dev.
+
+- Web: removed the Config Files tab and its upload UI from snapshot settings. `/settings/snapshots/config-files` is no longer a tab; the existing unknown-tab guard sends it to `configuration`.
+- Convex: deleted `sandboxConfigFiles.ts` and dropped the `sandboxConfigFiles` table.
+- Snapshot build: no config-file download, no `/home/eva/sandbox-config` copy. The `startup-pre-daemon` stage existed only for config-file moves, so all startup commands now run after the daemons.
+- Sandbox start: removed `copySandboxConfigFilesToWorkspace` and the "Restoring config files..." step.
+
 ## Chats: the agent can suggest a new session in a card
 
 Date: 2026-11-13

@@ -77,7 +77,6 @@ import {
   notificationFields,
   repoEnvVarFields,
   repoSnapshotFields,
-  sandboxConfigFileFields,
   teamMemberFields,
   teamEnvVarFields,
   presentationStatusValidator,
@@ -448,7 +447,6 @@ const schema = defineSchema({
     .index("by_repo_snapshot", ["repoSnapshotId"])
     .index("by_repo_snapshot_and_status", ["repoSnapshotId", "status"])
     .index("by_status", ["status"]),
-  sandboxConfigFiles: defineTable(sandboxConfigFileFields).index("by_repo", ["repoId"]),
   teams: defineTable(teamFields).index("by_created_by", ["createdBy"]),
   teamMembers: defineTable(teamMemberFields)
     .index("by_team", ["teamId"])

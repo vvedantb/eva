@@ -2259,20 +2259,6 @@ export const repoSnapshotFields = {
   updatedAt: v.number(),
 };
 
-export const sandboxConfigFileFields = {
-  repoId: v.id("githubRepos"),
-  // Legacy single-blob storage (kept for backwards compat with existing records).
-  // New uploads always use `chunks` instead.
-  storageId: v.optional(v.id("_storage")),
-  // Ordered list of storage blob IDs that, when concatenated in order, form the file.
-  // Single-blob files use a 1-element array; multi-chunk files split a large file by ~100MB.
-  chunks: v.optional(v.array(v.id("_storage"))),
-  fileName: v.string(),
-  fileSize: v.number(),
-  uploadedBy: v.id("users"),
-  createdAt: v.number(),
-};
-
 export const teamMemberFields = {
   teamId: v.id("teams"),
   userId: v.id("users"),

@@ -27,7 +27,6 @@ import {
   isUnresolvedGitIndexError,
   recoverUnresolvedGitIndex,
   retryGitNetworkOperation,
-  copySandboxConfigFilesToWorkspace,
   dependencyInstallCommand,
   SESSION_LIFECYCLE,
 } from "./git";
@@ -848,11 +847,6 @@ async function prepareSessionSandboxInternal(
           );
           // No setupBranch here: resumeReusedSandbox already owns the branch
           // step, and a `checkout -B` would undo a branch the user switched to.
-          await runLoggedSessionStep(
-            "reuseSessionSandbox.copyConfigFiles",
-            sandboxDetails,
-            () => copySandboxConfigFilesToWorkspace(handle),
-          );
           const services = await runLoggedSessionStep(
             "reuseSessionSandbox.startSessionServices",
             sandboxDetails,
@@ -1268,33 +1262,6 @@ async function prepareSessionSandboxInternal(
         sessionId: args.sessionId,
       });
     }
-
-    // Restore baked config files from /home/eva/sandbox-config into the workspace.
-    // Skipped when usedSnapshot: createSandboxAndPrepareRepo already ran this
-    // exact copy (force: true) on the snapshot-restore path, and the
-    // checkout step above does not touch untracked files, so
-    // re-copying here would be a pure duplicate on the common Vercel path.
-    await emitSessionProgress(
-      ctx,
-      args.sessionId,
-      completedSteps,
-      "Restoring config files...",
-    );
-    if (!prepared.usedSnapshot) {
-      await runLoggedSessionStep(
-        "newSessionSandbox.copyConfigFiles",
-        sandboxDetails,
-        () =>
-          copySandboxConfigFilesToWorkspace(handle, {
-            force: true,
-          }),
-      );
-    }
-    completedSteps.push({
-      type: "tool",
-      label: "Restoring config files...",
-      status: "complete",
-    });
 
     await emitSessionProgress(
       ctx,
