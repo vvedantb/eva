@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: chat ⋯ menu rows lay out icon and label in one row again
+
+Date: 2026-11-13
+
+WHY: On Android every menu row stacked its icon above its label. The kit's `MenuRow` kept its layout in a function `style`; NativeWind's `Pressable` interop rebuilds `style` from the inline value on native and drops a function, so the row fell back to React Native's default column. Web does not take that path, so the preview looked right.
+
+Architectural: native-ui packages#205 moves the layout to a plain style object and draws the press highlight from the `pressed` render state; the labelled Conversation scroll pill gets the same fix. Kit tests assert both styles are objects.
+
 ## CI: one backend for web and phone, and installed APKs keep working
 
 Date: 2026-11-13
