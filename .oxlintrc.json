@@ -163,6 +163,26 @@
         "no-restricted-imports": "off",
         "no-alert": "off"
       }
+    },
+    {
+      "files": ["apps/mobile/src/**", "apps/mobile/app/**", "packages/shared/src/**"],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          {
+            "property": "toSorted",
+            "message": "Hermes (the phone engine) lacks the ES2023 array copy methods; this crashed the phone Sessions tab. Copy, then sort: [...list].sort()."
+          },
+          {
+            "property": "toReversed",
+            "message": "Hermes (the phone engine) lacks the ES2023 array copy methods. Copy, then reverse: [...list].reverse()."
+          },
+          {
+            "property": "toSpliced",
+            "message": "Hermes (the phone engine) lacks the ES2023 array copy methods. Copy, then splice."
+          }
+        ]
+      }
     }
   ],
   "ignorePatterns": [
