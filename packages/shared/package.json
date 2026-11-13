@@ -50,7 +50,7 @@
     "@json-render/core": "0.21.0",
     "@json-render/react": "0.21.0",
     "@types/react": "^19.0.0",
-    "@vvedantb/ui": "^0.39.0",
+    "@vvedantb/ui": "0.41.1-next-14f3254e2c6a4bf3602f8963281b86ef58fe9338",
     "tailwind-merge": "^2.6.1",
     "zod": "3.25.76"
   }
