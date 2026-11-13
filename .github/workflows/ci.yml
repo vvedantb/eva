@@ -61,6 +61,21 @@ jobs:
         if: ${{ !cancelled() }}
         run: pnpm test
 
+      # One backend for both apps: fails when the phone calls a Convex
+      # function the web never calls, unless it is allowed with a reason.
+      - name: Shared backend
+        if: ${{ !cancelled() }}
+        run: node scripts/check-shared-backend.mjs
+
+      # Installed APKs keep their code: fails when this backend change would
+      # break the newest published APK (type-checks its phone code against it).
+      # Skips when the backend did not change.
+      - name: APK compatibility
+        if: ${{ !cancelled() }}
+        env:
+          BASE_REF: origin/${{ github.base_ref || 'main' }}
+        run: ./scripts/check-apk-compat.sh
+
       # Fails on a new React Compiler bailout that is not in the baseline.
       - name: React Compiler bailouts
         if: ${{ !cancelled() }}
