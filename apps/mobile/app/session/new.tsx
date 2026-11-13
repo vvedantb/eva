@@ -52,7 +52,7 @@ export default function NewSessionScreen() {
   const scheme = useScheme();
   const { user } = useUser();
   const repos = useQuery(api.githubRepos.list, {});
-  const startSession = useMutation(api.mobile.startSession);
+  const startSession = useMutation(api.chats.start);
   const attachments = useAttachments();
   const [picked, setPicked] = useState<Id<"githubRepos"> | null>(null);
   const [pickingRepo, setPickingRepo] = useState(false);

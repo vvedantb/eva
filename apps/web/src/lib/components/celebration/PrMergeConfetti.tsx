@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
+import { ConfettiBurst } from "@vvedantb/ui";
 import { api, type PrOwnerRef } from "@eva/backend";
-import { ConfettiBurst } from "./ConfettiBurst";
 import { hasNewlyMergedPr } from "./prMergeCelebration";
 
 /**

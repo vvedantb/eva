@@ -87,9 +87,9 @@ function agentLoginPlugin(): Plugin {
   };
 }
 
-/** Everything in node_modules except @vvedantb/ui (also under pnpm's `.pnpm` store), plus vendored code. */
+/** All of node_modules (@vvedantb/ui ships React Compiler output in `dist`), plus vendored code. */
 const COMPILER_EXCLUDE = [
-  /\/node_modules\/(?!\.pnpm\/@vvedantb\+ui@|@vvedantb\/ui\/)/,
+  /\/node_modules\//,
   // Vendored Stageshow kit: written for plain React (refs read in render,
   // hand-tuned effects), so the compiler must not rewrite it.
   /\/src\/lib\/stageshow\//,
@@ -114,8 +114,8 @@ export default defineConfig({
     // memoization. `compiler: true` runs oxc-transform-react (Rust) in-process —
     // no Babel pass. Bailouts surface as build warnings; `pnpm compiler:check`
     // is the gate that fails on a new one.
-    // @vvedantb/ui ships TSX source and holds what used to be @eva/ui, so it
-    // is compiled like app code; the plugin skips node_modules by default.
+    // @vvedantb/ui ships already compiled (its `dist`), so node_modules is
+    // excluded whole: compiling it again would only add work.
     react({ compiler: true, exclude: COMPILER_EXCLUDE }),
     // Nothing imports the icon barrel anymore: static imports are rewritten to
     // deep paths here, and icon-by-name resolution reads raw path data from
@@ -133,9 +133,9 @@ export default defineConfig({
         brotliSize: true,
       }),
   ].filter(Boolean),
-  // Served as source in dev (not pre-bundled) so the React Compiler sees it.
-  // Its own dependencies are still pre-bundled: several ship CommonJS, which
-  // the browser cannot import from unbundled source.
+  // @vvedantb/ui is served unbundled in dev (it imports CSS files). Its own
+  // dependencies are still pre-bundled: several ship CommonJS, which the
+  // browser cannot import from unbundled source.
   optimizeDeps: {
     exclude: ["@vvedantb/ui"],
     include: [

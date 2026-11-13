@@ -7,6 +7,85 @@ Date: 2026-11-13
 WHY: A quick task worked on only through its sandbox chat never got a PR. The chat pushed `eva/task-<id>`, but only a task run opened the task PR, and the agent was told Eva would open it.
 
 Architectural: `_sessions/workflow.ts` calls the new `taskWorkflowActions.ensureTaskChatPr` after a quick-task turn pushes or commits onto a published branch. It and the manual `createTaskPr` share `openTaskPr`. The PR is ready in code_review and draft otherwise; a cancelled task is skipped, and a branch level with base is ignored. `getTaskPrCreationData.existingPrUrl` now reads the live PR on the task branch, not any run's old `prUrl`, so commits after a merge get a fresh PR. Project chats still rely on a task run for the project PR.
+## Phone: fix the Sessions/Projects tab crash; Java crashes show their stack
+
+Date: 2026-11-13
+
+WHY: Changing tab closed the app on the compiled native-ui kit (0.1.56–0.1.60). The stack from 0.1.60: "[Worklets] Tried to synchronously call a Remote Function" in `tabIndicator`'s `useAnimatedStyle`. React Compiler hoisted the arrow functions inside that worklet (`box => box.x`) to module-level `_temp` functions, which the UI thread cannot call.
+
+Architectural: The kit's `build-dist.mjs` puts compiler-hoisted `_temp` functions back inline inside worklet callbacks (vvedantb/packages#226); `apps/mobile` pins `@vvedantb/native-ui@0.18.2-next-10a55be`, compiled again. `ExitInfoModule.kt` installs a default uncaught-exception handler that writes the Java stack to `filesDir/eva-java-crash.txt`, since Android keeps no trace for `REASON_CRASH`; `lastExit` returns it, and the dialog shows the exception line.
+
+## Phone: native crashes show on the next launch too
+
+Date: 2026-11-13
+
+WHY: The Sessions/Projects tab crash is native: it closes the app before JavaScript can save anything (0.1.56's JS crash report never showed). Android 11+ keeps why the last process ended, with the tombstone for a native crash.
+
+Architectural: Local Expo module `apps/mobile/modules/exit-info` (`ExitInfoModule.kt`, autolinked) returns the last `ApplicationExitInfo`: reason, time, description and the trace (ANR text, or the printable parts of a native tombstone: signal, abort message, libraries, functions; 6 KB max). `loadLastCrash` shows a crash, native crash or ANR newer than the last one shown (`eva.lastExitSeen`) in the same "Eva closed after an error" dialog, with Copy details.
+
+## Web and backend: adopt shared pieces from @vvedantb packages
+
+Date: 2026-11-13
+
+WHY: Several components and helpers were copied into eva from the shared packages. One source means one place to fix and one behaviour across apps.
+
+Architectural: `apps/web` moves `@vvedantb/server` from `^0.10.0` to `^0.14.0`, so web and backend share one installed copy. The local `ConfettiBurst` is deleted; `PrMergeConfetti` imports `ConfettiBurst` from `@vvedantb/ui` (the package adds an optional `colors` prop; the rest is the same). `SettingsPage` now wraps the kit `SettingsPage`, giving it eva's `PageWrapper` as the `layout`. In the backend, `_auth/currentUser.ts` builds `userAuth` with `createClerkUserAuth<DataModel>()`, and `getCurrentUserId`, `requireCurrentUserId` and `auth.ts`'s `getUserByClerkId` delegate to it; `userAuth` stays in the leaf `currentUser.ts` to keep the module-cycle workaround. `ensureUserExists` is unchanged: the package `ensureUser` has no verified-email rebind. `textGen.ts` uses `FLEX_GATEWAY_PROVIDER_OPTIONS` from `@vvedantb/server/ai` for both title calls.
+
+## Web: the `scrollbar` utility comes from @vvedantb/ui
+
+Date: 2026-11-13
+
+WHY: vibot and eva each had their own copy of the same thin-scrollbar utility. One shared copy stops the two from drifting.
+
+Architectural: `apps/web/src/globals.css` imports `@vvedantb/ui/tokens/css/scrollbar.css` and the local `@utility scrollbar` block is gone. The shared utility reads `--scrollbar-base`; eva sets it to `rgb(var(--muted-foreground))` for `:root`, `.dark` and `.dark.neutral`, so the colours stay the same. `@vvedantb/ui` moves from the `0.41.1-next` pre-release pin to `^0.42.0` in web, chrome-extension, `packages/shared` and `packages/ui`.
+
+## Phone: back to the uncompiled native-ui while the tab crash is found
+
+Date: 2026-11-13
+
+WHY: Since 0.1.53 the Sessions and Projects tabs close the app at once (native crash, no JS error). The app code changed only in action handlers since 0.1.51; the kit became React Compiler output. The kit's Android e2e opens every component those tabs use, compiled, without a crash, so this build tells the two apart.
+
+Architectural: `apps/mobile` pins native-ui to `github:vvedantb/packages#a6d0b28` again (0.1.51's kit: the same source, not compiled; it still has the hand-written `TabBarItem` memo). Web keeps the compiled `@vvedantb/ui`.
+
+## Phone: an error that closes the app is shown on the next launch
+
+Date: 2026-11-13
+
+WHY: The Sessions and Projects tabs close the release app with no message, and a phone has no log the user can read. Render errors already show "Could not start Eva"; this covers fatal errors outside render (handlers, effects, Reanimated worklets).
+
+Architectural: `installUnhandledRejectionLogging` takes `onFatal`: on a fatal error it saves `{ name, message, stack }` (`src/logging/lastCrash.ts`, expo-secure-store, under 1.8 KB) for at most 1 s, then calls the previous handler as before. The next launch shows `LastCrashDialog` (the `UpdateDialog` pattern): the error, and Copy details (version, time, message, 15 stack lines).
+
+## Web and phone: both kits from npm, compiled with React Compiler
+
+Date: 2026-11-13
+
+WHY: `@vvedantb/ui` now ships React Compiler output like native-ui (packages#213, #217). Eva web compiled the ui source itself; the package build does it once, for Eva and vmem.
+
+Architectural: Every Eva package pins `@vvedantb/ui@0.41.1-next-14f3254` (web, @eva/ui, shared, chrome-extension; one version, so `dedupe` keeps one copy and `UiConfigProvider` context reaches it; it includes 0.41.0's shared chat and page pieces). The phone pins `@vvedantb/native-ui@0.18.1-next-5a5ab8f`. `vite.config.ts` excludes all of node_modules from the React Compiler; `vitest.config.ts` inlines `@vvedantb/ui` (its compiled `.js` imports CSS, which Node cannot load). The ui package no longer has `"use client"`. Measured on the web build at 4× CPU: chat composer 145 → 86 renders per keystroke; home and sessions pages render the same DOM.
+
+## Web: Five UI pieces move to @vvedantb/ui
+
+Date: 2026-11-13
+
+WHY: These components and the scroll-fade CSS were copied into eva from the shared kit. One source means one place to fix and one look across apps (packages#211, `@vvedantb/ui` 0.41.0).
+
+Architectural: `ChatLastTurn`, `ChatDayDivider` and `CollapsibleUserMessageBody` now import from `@vvedantb/ui`; the local copies are deleted and their importers repointed. The divider uses the kit's default day/time labels, which match eva's `formatDayLabel` / `formatClockTime` output exactly, so no formatter is passed. The collapsible keeps its look: the kit's default `hover:bg-surface-secondary/55` resolves to `rgb(var(--muted))` under eva's `compat-shadcn-rgb.css`, the same colour as eva's old `hover:bg-muted/55`. `PageHeader` and `PageWrapper` become thin adapters over the kit's `PageHeaderBar` / `PageWrapper`, fixing eva's layout (`titleLayout="inline"`, `headerColumns="three-at-md"`, `animated`, and `bodyScrollbar` for the wrapper); the adapter keeps eva's prop surface and import paths, and `PageWrapper` calls `usePageTitleSync` itself. `globals.css` drops the local scroll-fade blocks and imports `@vvedantb/ui/tokens/css/scroll-fade.css`; with no `--scroll-fade-max` set the masks stay uncapped as before. Needs the dependency bump to 0.41.0 to resolve.
+
+## Web: Archive uses chats.archive, as the phone does
+
+Date: 2026-11-13
+
+WHY: One backend for both apps (#1302): each action the phone and web share runs one server function.
+
+Architectural: `useArchiveSession` calls `chats.archive` instead of `sessions.stopSandbox` then `sessions.archive`. Same helpers and checks; the stop and the archive now run in one mutation, and the sandbox check reads the server's `sandboxId`, not the client's. `check-shared-backend` no longer allows `chats.archive` as phone-only. Send, stop, model and start stay on the web's own path for now: they carry optimistic updates and more arguments than `chats.*` takes.
+
+## Phone: native-ui from npm, compiled with React Compiler
+
+Date: 2026-11-13
+
+WHY: Expo never runs React Compiler on node_modules, so every kit component re-rendered its whole subtree. The kit now compiles itself and publishes compiled code (packages#210), as React's library guidance says.
+
+Architectural: `apps/mobile` installs `@vvedantb/native-ui` from npm (`0.18.0-next-54cc54a`, the `next` pre-release published on each kit merge) instead of a git pin, because a git pin installs source and runs no build. The kit's `dist` keeps JSX, so NativeWind's `className` transform still applies. Measured on the phone web build at 4× CPU: chat composer 68 → 55 renders per keystroke, tab switch 195 → 165 renders; screens are byte-identical. To take a kit change, pin the new `next` version.
 
 ## Phone: cheaper tab switches
 
@@ -49,6 +128,14 @@ Date: 2026-11-13
 WHY: The phone drifted onto its own Convex functions (`mobile.*`), and a backend change broke installed APKs (0.1.33). The owner wants one backend, logic in `@eva/shared`, and apps that hold only UI.
 
 Architectural: `scripts/check-shared-backend.mjs` fails when the phone calls an `api.*` function the web never calls, unless `ALLOWED` gives the reason (push tokens; `mobile.*` while it moves to `chats.*`). `scripts/check-apk-compat.sh` type-checks the newest `eva-apk-*` release's phone and shared code against the changed backend, and fails on any error (it catches the 0.1.33 break; skips when the backend did not change). Both run in CI. CLAUDE.md gains the three rules.
+
+## Phone: calls chats.* (needs the prod Convex deploy first)
+
+Date: 2026-11-13
+
+WHY: Step 1 of one backend for both apps: the phone stops calling `mobile.*` and calls the neutral `chats.*` (#1302).
+
+Architectural: Every `api.mobile.*` call in apps/mobile is now `api.chats.*` (`get`, `send`, `setModel`, `stop`, `start`, `archive`). Ship only after prod Convex has `chats.ts`, or the new APK's chats fail.
 
 ## Backend: chat actions under one neutral name (chats.*)
 

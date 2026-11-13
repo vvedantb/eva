@@ -1,5 +1,6 @@
 import "../global.css";
 import { installUnhandledRejectionLogging } from "@/logging/unhandledRejections";
+import { loadLastCrash, saveLastCrash } from "@/logging/lastCrash";
 
 import { useAuth } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
@@ -35,12 +36,15 @@ import { EVA_FONT } from "@/ui/fonts";
 import { MaintenanceGate, MaintenanceScreen, useMaintenanceMode } from "@/ui/MaintenanceScreen";
 import { StartupFailure } from "@/ui/StartupFailure";
 import { UpdateDialog } from "@/update/UpdateDialog";
+import { LastCrashDialog } from "@/logging/LastCrashDialog";
 import { checkForUpdate } from "@/update/updateCheck";
 import { useStackScreenOptions } from "@/ui/stackOptions";
 import { navigationTheme, useScheme } from "@/ui/theme";
 
-// Release builds swallow unhandled rejections: log them first.
-installUnhandledRejectionLogging();
+// Release builds swallow unhandled rejections: log them first. A fatal error
+// is saved before the app closes, and shown on the next launch.
+installUnhandledRejectionLogging(globalThis, { onFatal: saveLastCrash });
+void loadLastCrash();
 
 // Eva's web colours for every native-ui part, before anything renders.
 applyEvaTheme();
@@ -172,6 +176,7 @@ export default function RootLayout() {
                       </ClerkGate>
                     </MaintenanceGate>
                     <UpdateDialog />
+                    <LastCrashDialog />
                     <Toaster />
                     <StatusBar style={scheme === "light" ? "dark" : "light"} />
                   </NativeUiProvider>

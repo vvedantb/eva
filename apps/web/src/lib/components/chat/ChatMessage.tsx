@@ -1,5 +1,6 @@
 import { cn } from "@eva/ui";
 import {
+  CollapsibleUserMessageBody,
   formatModelDisplayLabel,
   Message as AIMessage,
   MessageContent,
@@ -12,7 +13,7 @@ import {
 } from "@vvedantb/ui";
 import { memo, type ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
-import { useActivityLayout } from "@/lib/hooks/useActivityLayout";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   AgentSpawnCtaRow,
   deriveAgentSpawnSummary,
@@ -27,7 +28,6 @@ import {
 } from "@eva/backend";
 import { AgentMedia } from "@/lib/components/AgentMedia";
 import { ReviewCommentMessage } from "@/lib/components/chat/ReviewCommentMessage";
-import { CollapsibleUserMessageBody } from "@/lib/components/chat/CollapsibleUserMessageBody";
 import { ChatMessageActions } from "@/lib/components/chat/ChatMessageActions";
 import type { ChatMessageActionItem } from "@/lib/components/chat/ChatMessageActions";
 import { TurnFeedbackActions } from "@/lib/components/chat/feedback/TurnFeedbackActions";
@@ -681,7 +681,7 @@ function AssistantTurnContent({
   turnErrorTitle: string | null;
   panelTabs: boolean;
 }) {
-  const activityLayout = useActivityLayout();
+  const simpleView = useSimpleView();
   const { isStreamingPlaceholder, changedFiles, questionSteps } = turnState;
   // While the turn is live the settled activityLog is not written yet, so the
   // just-answered question comes off the streaming payload instead — that is
@@ -690,11 +690,11 @@ function AssistantTurnContent({
     ? (parseActivitySteps(streamingActivity) ?? [])
     : [];
   const streamingQuestionSteps = collectQuestionSteps(streamingSteps);
-  // Inline layout already shows the live text between the steps. Older
-  // callbacks send no response steps, so the text block stays for them.
+  // The timeline shows the live text between the steps, in order. Simple view
+  // has no timeline, and older callbacks send no response steps, so the
+  // joined text block stays for them.
   const streamingTextIsInline =
-    activityLayout === "inline" &&
-    streamingSteps.some((step) => step.type === "response");
+    !simpleView && streamingSteps.some((step) => step.type === "response");
 
   const mediaEntries = message.media ?? [];
 

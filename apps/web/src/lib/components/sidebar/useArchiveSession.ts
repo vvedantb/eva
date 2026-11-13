@@ -12,22 +12,22 @@ import {
 } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 
 export interface ArchiveSessionTarget {
-  session: { _id: Id<"sessions">; sandboxId?: string };
+  session: { _id: Id<"sessions"> };
   /** Scopes the "am I on this session?" check; ids are only unique per app. */
   repo: RepoPathParts;
   pathSegment: string;
 }
 
 /**
- * Stops the sandbox (when one is up), archives the session, and leaves the
- * session route if the user is on it. Shared by the archive confirm dialogs
+ * Archives the session with `chats.archive`, the one archive the phone uses
+ * too: it stops the sandbox (when one is up) and archives in one mutation.
+ * Then leaves the session route if the user is on it. Shared by the archive confirm dialogs
  * and the Alt-click bypass on every Archive control.
  */
 export function useArchiveSession() {
   const navigate = useNavigate();
-  const archiveSession = useMutation(api.sessions.archive);
+  const archiveSession = useMutation(api.chats.archive);
   const unarchiveSession = useMutation(api.sessions.unarchive);
-  const stopSandboxMutation = useMutation(api.sessions.stopSandbox);
   const [isArchiving, setIsArchiving] = useState(false);
 
   const archive = async (
@@ -37,10 +37,7 @@ export function useArchiveSession() {
   ): Promise<boolean> => {
     setIsArchiving(true);
     try {
-      if (target.session.sandboxId) {
-        await stopSandboxMutation({ sessionId: target.session._id });
-      }
-      await archiveSession({ id: target.session._id });
+      await archiveSession({ sessionId: target.session._id });
       // Archiving stops a sandbox and closes a pull request, so it says so and
       // offers the way back: `unarchive` reopens the PR it closed.
       toast.success("Session archived", {
