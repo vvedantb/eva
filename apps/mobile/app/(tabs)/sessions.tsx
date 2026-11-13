@@ -38,6 +38,7 @@ import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme } from "@/ui/theme";
 import { sectionIndex } from "@/ui/sectionIndex";
+import { LIST_WINDOW } from "@/ui/listWindow";
 
 type SessionTab = "active" | "archived";
 type Section = "sessions" | "quick-tasks" | "reviews";
@@ -207,6 +208,7 @@ function SessionsSection() {
           sections={sections}
           keyExtractor={(row) => row.session._id}
           stickySectionHeadersEnabled={false}
+          {...LIST_WINDOW}
           renderSectionHeader={({ section }) => {
             const { entry } = section;
             return (
