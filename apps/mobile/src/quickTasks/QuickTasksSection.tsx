@@ -30,6 +30,7 @@ import { useQuickTaskActions } from "@/quickTasks/useQuickTaskActions";
 import { CardGap, FoldFooter, FoldHeader } from "@/ui/FoldHeader";
 import { RepoPicker, useRepoParam } from "@/ui/RepoPicker";
 import { useScheme } from "@/ui/theme";
+import { LIST_WINDOW } from "@/ui/listWindow";
 
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 
@@ -160,6 +161,7 @@ function QuickTaskList({ repo }: { repo: Repo }) {
         />
       ) : (
         <SectionList
+          {...LIST_WINDOW}
           sections={sections.map((section) => {
             const open = !closed.has(section.status);
             return { status: section.status, count: section.tasks.length, open, data: open ? section.tasks : [] };

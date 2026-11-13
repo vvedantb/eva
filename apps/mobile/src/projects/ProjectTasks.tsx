@@ -13,6 +13,7 @@ import { statusAppearance } from "@/quickTasks/statusAppearance";
 import { useQuickTaskActions } from "@/quickTasks/useQuickTaskActions";
 import { CardGap, FoldFooter, FoldHeader } from "@/ui/FoldHeader";
 import { useScheme } from "@/ui/theme";
+import { LIST_WINDOW } from "@/ui/listWindow";
 
 type Project = NonNullable<FunctionReturnType<typeof api.projects.get>>;
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
@@ -70,6 +71,7 @@ export function ProjectTasks({ project, repo, users }: { project: Project; repo:
   return (
     <>
       <SectionList
+        {...LIST_WINDOW}
         sections={projectTaskSections(tasks).map((section) => {
           const open = section.defaultOpen !== toggled.has(section.status);
           return { status: section.status, count: section.tasks.length, open, data: open ? section.tasks : [] };

@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: lighter first open of list tabs
+
+Date: 2026-11-13
+
+WHY: The first open of Sessions and Projects mounted 600 to 1,000 components.
+
+Architectural: native-ui `SwipeableRow` mounts its action strips on the row's first touch (packages#202), so Inbox and Sessions rows no longer mount hidden buttons and icons up front (Sessions first open 641 → 596 mounts on the preview). Every long list (Projects, Project tasks, Quick Tasks, Reviews, Timeline, Docs, Drafts, Today) now uses `LIST_WINDOW`, as Inbox and Sessions do; the diff view keeps its own sizing (22 pt lines). The rest of the Projects cost is card weight (NativeWind wrappers, SVG icons).
+
 ## Phone: chats load like the web (newest 30, then older pages)
 
 Date: 2026-11-13
