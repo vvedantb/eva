@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: an error that closes the app is shown on the next launch
+
+Date: 2026-11-13
+
+WHY: The Sessions and Projects tabs close the release app with no message, and a phone has no log the user can read. Render errors already show "Could not start Eva"; this covers fatal errors outside render (handlers, effects, Reanimated worklets).
+
+Architectural: `installUnhandledRejectionLogging` takes `onFatal`: on a fatal error it saves `{ name, message, stack }` (`src/logging/lastCrash.ts`, expo-secure-store, under 1.8 KB) for at most 1 s, then calls the previous handler as before. The next launch shows `LastCrashDialog` (the `UpdateDialog` pattern): the error, and Copy details (version, time, message, 15 stack lines).
+
 ## Web and phone: both kits from npm, compiled with React Compiler
 
 Date: 2026-11-13
