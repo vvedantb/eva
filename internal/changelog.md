@@ -1,5 +1,21 @@
 # Changelog
 
+## CI: one backend for web and phone, and installed APKs keep working
+
+Date: 2026-11-13
+
+WHY: The phone drifted onto its own Convex functions (`mobile.*`), and a backend change broke installed APKs (0.1.33). The owner wants one backend, logic in `@eva/shared`, and apps that hold only UI.
+
+Architectural: `scripts/check-shared-backend.mjs` fails when the phone calls an `api.*` function the web never calls, unless `ALLOWED` gives the reason (push tokens; `mobile.*` while it moves to `chats.*`). `scripts/check-apk-compat.sh` type-checks the newest `eva-apk-*` release's phone and shared code against the changed backend, and fails on any error (it catches the 0.1.33 break; skips when the backend did not change). Both run in CI. CLAUDE.md gains the three rules.
+
+## Backend: chat actions under one neutral name (chats.*)
+
+Date: 2026-11-13
+
+WHY: The owner wants one backend for both apps. The phone's `mobile.*` functions (open a chat by target, send, stop, set model, start a session, archive) already make each decision once on the server; the web makes the same decisions in the browser. They now live in `convex/chats.ts` (`get`, `send`, `setModel`, `stop`, `start`, `archive`) for both apps to use.
+
+Architectural: `mobile.ts` keeps the old names as re-exports of `chats.*` for installed APKs (a test checks `mobile.getChat` equals `chats.get`), plus the deprecated `listChats`. Next: the phone switches to `chats.*` once prod Convex has this module; then the web moves onto `chats.*` one action at a time; then `mobile.ts` goes.
+
 ## Lint: wider Hermes guard for phone and shared code
 
 Date: 2026-11-13

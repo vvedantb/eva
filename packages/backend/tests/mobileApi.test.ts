@@ -150,13 +150,25 @@ describe("mobile api", () => {
   });
 
   test(
+    "the old mobile.* names still answer, for installed APKs",
+    async () => {
+      const { ids, asUser } = await fixture();
+      const viaAlias = await asUser.query(api.mobile.getChat, { target: ids.sessionId });
+      const viaChats = await asUser.query(api.chats.get, { target: ids.sessionId });
+      expect(viaAlias).toEqual(viaChats);
+      expect(viaAlias).toMatchObject({ kind: "session", canReply: true });
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "getChat lets the app reply in session, task and project chats",
     async () => {
       const { ids, asUser } = await fixture();
-      const session = await asUser.query(api.mobile.getChat, { target: ids.sessionId });
-      const task = await asUser.query(api.mobile.getChat, { target: ids.taskId });
-      const project = await asUser.query(api.mobile.getChat, { target: ids.projectId });
-      const archived = await asUser.query(api.mobile.getChat, { target: ids.archivedChatId });
+      const session = await asUser.query(api.chats.get, { target: ids.sessionId });
+      const task = await asUser.query(api.chats.get, { target: ids.taskId });
+      const project = await asUser.query(api.chats.get, { target: ids.projectId });
+      const archived = await asUser.query(api.chats.get, { target: ids.archivedChatId });
       expect(session).toMatchObject({ kind: "session", canReply: true, model: "codex:gpt-5.6-sol" });
       expect(task).toMatchObject({ kind: "task", canReply: true, model: "claude:opus" });
       expect(project).toMatchObject({ kind: "project", canReply: true, webPath: "/vvedantb/eva/projects/3" });
@@ -217,9 +229,9 @@ describe("mobile api", () => {
     "sendMessage delivers to each chat kind with its sticky model",
     async () => {
       const { t, ids, asUser } = await fixture();
-      await asUser.mutation(api.mobile.sendMessage, { target: ids.sessionId, message: " hi session " });
-      await asUser.mutation(api.mobile.sendMessage, { target: ids.taskId, message: "hi task" });
-      await asUser.mutation(api.mobile.sendMessage, { target: ids.projectId, message: "hi project" });
+      await asUser.mutation(api.chats.send, { target: ids.sessionId, message: " hi session " });
+      await asUser.mutation(api.chats.send, { target: ids.taskId, message: "hi task" });
+      await asUser.mutation(api.chats.send, { target: ids.projectId, message: "hi project" });
       expect(await sent(t, ids.chatId)).toEqual([
         { content: "hi session", model: "codex:gpt-5.6-sol", userId: ids.userId },
       ]);
@@ -255,7 +267,7 @@ describe("mobile api", () => {
           repoId: ids.repoId,
         });
       });
-      await asUser.mutation(api.mobile.sendMessage, { target: ids.taskId, message: "next" });
+      await asUser.mutation(api.chats.send, { target: ids.taskId, message: "next" });
       const queued = await t.run((ctx) =>
         ctx.db
           .query("queuedMessages")
@@ -272,12 +284,12 @@ describe("mobile api", () => {
     async () => {
       const { ids, asUser } = await fixture();
       await expect(
-        asUser.mutation(api.mobile.sendMessage, { target: ids.archivedChatId, message: "hi" }),
+        asUser.mutation(api.chats.send, { target: ids.archivedChatId, message: "hi" }),
       ).rejects.toThrow("This chat is closed");
       await expect(
-        asUser.mutation(api.mobile.sendMessage, { target: ids.strangerTaskId, message: "hi" }),
+        asUser.mutation(api.chats.send, { target: ids.strangerTaskId, message: "hi" }),
       ).rejects.toThrow("Not authorized");
-      await expect(asUser.mutation(api.mobile.sendMessage, { target: "nope", message: "hi" })).rejects.toThrow(
+      await expect(asUser.mutation(api.chats.send, { target: "nope", message: "hi" })).rejects.toThrow(
         "Chat not found",
       );
     },
@@ -297,16 +309,16 @@ describe("mobile api", () => {
         await ctx.db.patch(ids.chatId, { pendingTurn: { prompt: "work", requestedAt } });
         await ctx.db.patch(projectChatId, { pendingTurn: { prompt: "work", requestedAt } });
       });
-      await asUser.mutation(api.mobile.stopTurn, { target: ids.sessionId });
-      await asUser.mutation(api.mobile.stopTurn, { target: ids.projectId });
-      await asUser.mutation(api.mobile.stopTurn, { target: ids.taskId });
+      await asUser.mutation(api.chats.stop, { target: ids.sessionId });
+      await asUser.mutation(api.chats.stop, { target: ids.projectId });
+      await asUser.mutation(api.chats.stop, { target: ids.taskId });
       const [chat, projectChat] = await t.run(async (ctx) => [
         await ctx.db.get(ids.chatId),
         await ctx.db.get(projectChatId),
       ]);
       expect(chat?.pendingTurn).toBeUndefined();
       expect(projectChat?.pendingTurn).toBeUndefined();
-      await expect(asUser.mutation(api.mobile.stopTurn, { target: ids.strangerTaskId })).rejects.toThrow(
+      await expect(asUser.mutation(api.chats.stop, { target: ids.strangerTaskId })).rejects.toThrow(
         "Not authorized",
       );
     },
@@ -317,18 +329,18 @@ describe("mobile api", () => {
     "startSession creates a session whose Main chat holds the prompt",
     async () => {
       const { t, ids, asUser } = await fixture();
-      const { sessionId, numId } = await asUser.mutation(api.mobile.startSession, {
+      const { sessionId, numId } = await asUser.mutation(api.chats.start, {
         repoId: ids.repoId,
         prompt: "Add dark mode",
       });
       expect(numId).toBeGreaterThan(0);
-      const chat = await asUser.query(api.mobile.getChat, { target: sessionId });
+      const chat = await asUser.query(api.chats.get, { target: sessionId });
       expect(chat).toMatchObject({ kind: "session", canReply: true });
       if (!chat) throw new Error("no chat");
       expect(await sent(t, chat.parentId)).toEqual([
         { content: "Add dark mode", model: DEFAULT_AI_MODEL, userId: ids.userId },
       ]);
-      await expect(asUser.mutation(api.mobile.startSession, { repoId: ids.repoId, prompt: "  " })).rejects.toThrow();
+      await expect(asUser.mutation(api.chats.start, { repoId: ids.repoId, prompt: "  " })).rejects.toThrow();
     },
     TIMEOUT_MS,
   );
@@ -341,15 +353,15 @@ describe("mobile api", () => {
         await ctx.db.patch(ids.chatId, { lastReasoningLevel: "high", lastFastMode: true });
         await ctx.db.patch(ids.sessionId, { sandboxBranch: "eva/fix-login", branchName: "eva/fix-login" });
       });
-      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).toMatchObject({
+      expect(await asUser.query(api.chats.get, { target: ids.sessionId })).toMatchObject({
         traits: { effortLevel: "high", fastMode: true },
         intendedBranch: "eva/fix-login",
       });
       // A stopped sandbox has no worktree, so its last branch is not shown.
       await t.run((ctx) => ctx.db.patch(ids.sessionId, { status: "closed" }));
-      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).not.toHaveProperty("sandboxBranch");
+      expect(await asUser.query(api.chats.get, { target: ids.sessionId })).not.toHaveProperty("sandboxBranch");
       await t.run((ctx) => ctx.db.patch(ids.sessionId, { status: "active" }));
-      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).toMatchObject({
+      expect(await asUser.query(api.chats.get, { target: ids.sessionId })).toMatchObject({
         sandboxBranch: "eva/fix-login",
       });
     },
@@ -369,7 +381,7 @@ describe("mobile api", () => {
       const awake = async () =>
         Promise.all(
           [ids.sessionId, ids.taskId, ids.projectId].map(
-            async (target) => (await asUser.query(api.mobile.getChat, { target }))?.sandboxActive,
+            async (target) => (await asUser.query(api.chats.get, { target }))?.sandboxActive,
           ),
         );
       const setStatus = (status: "closed" | "active") =>
@@ -390,18 +402,18 @@ describe("mobile api", () => {
       const { t, ids, asUser } = await fixture();
       const prUrl = "https://github.com/vvedantb/eva/pull/12";
       const projectPr = "https://github.com/vvedantb/eva/pull/13";
-      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).not.toHaveProperty("prUrl");
+      expect(await asUser.query(api.chats.get, { target: ids.sessionId })).not.toHaveProperty("prUrl");
       await t.run(async (ctx) => {
         await ctx.db.patch(ids.sessionId, { prUrl });
         await ctx.db.patch(ids.taskId, { prUrl });
         await ctx.db.patch(ids.projectId, { prUrl: projectPr });
       });
-      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).toMatchObject({ prUrl });
-      expect(await asUser.query(api.mobile.getChat, { target: ids.taskId })).toMatchObject({ prUrl });
-      expect(await asUser.query(api.mobile.getChat, { target: ids.projectId })).toMatchObject({ prUrl: projectPr });
+      expect(await asUser.query(api.chats.get, { target: ids.sessionId })).toMatchObject({ prUrl });
+      expect(await asUser.query(api.chats.get, { target: ids.taskId })).toMatchObject({ prUrl });
+      expect(await asUser.query(api.chats.get, { target: ids.projectId })).toMatchObject({ prUrl: projectPr });
       // A task in a project ships through the project's pull request.
       await t.run((ctx) => ctx.db.patch(ids.taskId, { projectId: ids.projectId }));
-      expect(await asUser.query(api.mobile.getChat, { target: ids.taskId })).toMatchObject({ prUrl: projectPr });
+      expect(await asUser.query(api.chats.get, { target: ids.taskId })).toMatchObject({ prUrl: projectPr });
     },
     TIMEOUT_MS,
   );
@@ -410,24 +422,24 @@ describe("mobile api", () => {
     "setChatModel sets the sticky model and traits a reply then uses",
     async () => {
       const { t, ids, asUser } = await fixture();
-      await asUser.mutation(api.mobile.setChatModel, { target: ids.sessionId, model: "claude:opus", reasoningLevel: "low" });
-      await asUser.mutation(api.mobile.setChatModel, { target: ids.projectId, model: "claude:opus" });
-      await asUser.mutation(api.mobile.setChatModel, { target: ids.projectId, reasoningLevel: "low" });
-      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).toMatchObject({
+      await asUser.mutation(api.chats.setModel, { target: ids.sessionId, model: "claude:opus", reasoningLevel: "low" });
+      await asUser.mutation(api.chats.setModel, { target: ids.projectId, model: "claude:opus" });
+      await asUser.mutation(api.chats.setModel, { target: ids.projectId, reasoningLevel: "low" });
+      expect(await asUser.query(api.chats.get, { target: ids.sessionId })).toMatchObject({
         model: "claude:opus",
         traits: { effortLevel: "low" },
       });
-      expect(await asUser.query(api.mobile.getChat, { target: ids.projectId })).toMatchObject({
+      expect(await asUser.query(api.chats.get, { target: ids.projectId })).toMatchObject({
         model: "claude:opus",
         traits: { effortLevel: "low" },
       });
-      await asUser.mutation(api.mobile.sendMessage, { target: ids.sessionId, message: "hi" });
+      await asUser.mutation(api.chats.send, { target: ids.sessionId, message: "hi" });
       expect(await sent(t, ids.chatId)).toEqual([{ content: "hi", model: "claude:opus", userId: ids.userId }]);
       await expect(
-        asUser.mutation(api.mobile.setChatModel, { target: ids.archivedChatId, model: "claude:opus" }),
+        asUser.mutation(api.chats.setModel, { target: ids.archivedChatId, model: "claude:opus" }),
       ).rejects.toThrow("This chat is closed");
       await expect(
-        asUser.mutation(api.mobile.setChatModel, { target: ids.strangerTaskId, model: "claude:opus" }),
+        asUser.mutation(api.chats.setModel, { target: ids.strangerTaskId, model: "claude:opus" }),
       ).rejects.toThrow("Not authorized");
     },
     TIMEOUT_MS,
@@ -439,22 +451,22 @@ describe("mobile api", () => {
       const { t, ids, asUser } = await fixture();
       const { chatId } = await asUser.mutation(api.sessions.ensureOwned, { owner: { kind: "task", taskId: ids.taskId } });
       // Shown as the task, read and written as its session's Main chat.
-      expect(await asUser.query(api.mobile.getChat, { target: ids.taskId })).toMatchObject({
+      expect(await asUser.query(api.chats.get, { target: ids.taskId })).toMatchObject({
         kind: "task",
         parentId: chatId,
         model: "claude:opus",
         accountOwnerId: ids.userId,
         task: { id: ids.taskId, sessionChatId: chatId },
       });
-      await asUser.mutation(api.mobile.setChatModel, { target: ids.taskId, model: "claude:sonnet", reasoningLevel: "low" });
-      expect(await asUser.query(api.mobile.getChat, { target: chatId })).toMatchObject({
+      await asUser.mutation(api.chats.setModel, { target: ids.taskId, model: "claude:sonnet", reasoningLevel: "low" });
+      expect(await asUser.query(api.chats.get, { target: chatId })).toMatchObject({
         kind: "task",
         model: "claude:sonnet",
         traits: { effortLevel: "low" },
       });
       // The run's model on the task row is untouched.
       expect((await t.run((ctx) => ctx.db.get(ids.taskId)))?.model).toBe("claude:opus");
-      await asUser.mutation(api.mobile.sendMessage, { target: ids.taskId, message: "hi" });
+      await asUser.mutation(api.chats.send, { target: ids.taskId, message: "hi" });
       expect(await sent(t, chatId)).toEqual([{ content: "hi", model: "claude:sonnet", userId: ids.userId }]);
     },
     TIMEOUT_MS,
@@ -476,10 +488,10 @@ describe("mobile api", () => {
       );
       // The web session picker's own mutation.
       await asUser.mutation(api.sessionChats.setProviderAccountId, { chatId: ids.chatId, providerAccountId: accountId });
-      const chat = await asUser.query(api.mobile.getChat, { target: ids.sessionId });
+      const chat = await asUser.query(api.chats.get, { target: ids.sessionId });
       expect(chat).toMatchObject({ providerAccountId: accountId, session: { chatId: ids.chatId } });
       expect(chat).not.toHaveProperty("accountOwnerId");
-      expect(await asUser.query(api.mobile.getChat, { target: ids.projectId })).toMatchObject({
+      expect(await asUser.query(api.chats.get, { target: ids.projectId })).toMatchObject({
         accountOwnerId: ids.userId,
         project: { id: ids.projectId },
       });
@@ -502,10 +514,10 @@ describe("mobile api", () => {
         }),
       );
       const accountOf = async (sessionId: Id<"sessions">) =>
-        (await asUser.query(api.mobile.getChat, { target: sessionId }))?.providerAccountId;
+        (await asUser.query(api.chats.get, { target: sessionId }))?.providerAccountId;
       const model = "codex:gpt-5.6-sol";
-      const picked = await asUser.mutation(api.mobile.startSession, { repoId: ids.repoId, prompt: "a", model, providerAccountId: accountId });
-      const team = await asUser.mutation(api.mobile.startSession, { repoId: ids.repoId, prompt: "b", model, providerAccountId: null });
+      const picked = await asUser.mutation(api.chats.start, { repoId: ids.repoId, prompt: "a", model, providerAccountId: accountId });
+      const team = await asUser.mutation(api.chats.start, { repoId: ids.repoId, prompt: "b", model, providerAccountId: null });
       expect(await accountOf(picked.sessionId)).toBe(accountId);
       expect(await accountOf(team.sessionId)).toBeUndefined();
     },
@@ -516,7 +528,7 @@ describe("mobile api", () => {
     "startSession takes the composer footer's model, traits and base branch",
     async () => {
       const { t, ids, asUser } = await fixture();
-      const { sessionId } = await asUser.mutation(api.mobile.startSession, {
+      const { sessionId } = await asUser.mutation(api.chats.start, {
         repoId: ids.repoId,
         prompt: "Add dark mode",
         model: "claude:opus",
@@ -525,7 +537,7 @@ describe("mobile api", () => {
       });
       const session = await t.run((ctx) => ctx.db.get(sessionId));
       expect(session).toMatchObject({ baseBranch: "staging", lastModel: "claude:opus", lastReasoningLevel: "low" });
-      const chat = await asUser.query(api.mobile.getChat, { target: sessionId });
+      const chat = await asUser.query(api.chats.get, { target: sessionId });
       if (!chat) throw new Error("no chat");
       expect(await sent(t, chat.parentId)).toEqual([
         { content: "Add dark mode", model: "claude:opus", userId: ids.userId },
@@ -541,19 +553,19 @@ describe("mobile api", () => {
       // Revert (and a blocker fix): a titled session on the branch it must land on,
       // with the shared `revertSessionRequest` (or `PrRemedy`) prompt.
       const revert = { title: "Revert #7", message: "Revert merge commit `abc123` on `staging`.", baseBranch: "staging" };
-      const reverted = await asUser.mutation(api.mobile.startSession, {
+      const reverted = await asUser.mutation(api.chats.start, {
         repoId: ids.repoId,
         title: revert.title,
         prompt: revert.message,
         baseBranch: revert.baseBranch,
       });
       expect(await t.run((ctx) => ctx.db.get(reverted.sessionId))).toMatchObject({ title: "Revert #7", baseBranch: "staging" });
-      const chat = await asUser.query(api.mobile.getChat, { target: reverted.sessionId });
+      const chat = await asUser.query(api.chats.get, { target: reverted.sessionId });
       if (!chat) throw new Error("no chat");
       expect((await sent(t, chat.parentId))[0]?.content).toBe(revert.message);
 
       // Stack: on the PR's head branch, and the session remembers the PR it stacks on.
-      const stacked = await asUser.mutation(api.mobile.startSession, {
+      const stacked = await asUser.mutation(api.chats.start, {
         repoId: ids.repoId,
         prompt: "Follow up",
         baseBranch: "feature",
@@ -605,7 +617,7 @@ describe("mobile api", () => {
         ["done", []],
         ["cancelled", []],
       ]);
-      expect(await asUser.query(api.mobile.getChat, { target: taskId })).toMatchObject({ kind: "task", canReply: true });
+      expect(await asUser.query(api.chats.get, { target: taskId })).toMatchObject({ kind: "task", canReply: true });
     },
     TIMEOUT_MS,
   );
@@ -688,10 +700,10 @@ describe("mobile api", () => {
       expect([...message.matchAll(SKILL_TOKEN_REGEX)].map((match) => [match[1], match[2]])).toEqual([
         ["eva-capture", skillId],
       ]);
-      await asUser.mutation(api.mobile.sendMessage, { target: ids.sessionId, message });
+      await asUser.mutation(api.chats.send, { target: ids.sessionId, message });
       expect(await sent(t, ids.chatId)).toEqual([expect.objectContaining({ content: message })]);
-      const { sessionId } = await asUser.mutation(api.mobile.startSession, { repoId: ids.repoId, prompt: message });
-      const chat = await asUser.query(api.mobile.getChat, { target: sessionId });
+      const { sessionId } = await asUser.mutation(api.chats.start, { repoId: ids.repoId, prompt: message });
+      const chat = await asUser.query(api.chats.get, { target: sessionId });
       if (!chat) throw new Error("no chat");
       expect(await sent(t, chat.parentId)).toEqual([expect.objectContaining({ content: message })]);
     },
@@ -709,7 +721,7 @@ describe("mobile api", () => {
         branchName: "eva/login",
         webPath: "/vvedantb/eva/sessions/42",
       });
-      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).toMatchObject({
+      expect(await asUser.query(api.chats.get, { target: ids.sessionId })).toMatchObject({
         session: { id: ids.sessionId, title: "Fix the login bug", archived: false },
       });
 
@@ -718,7 +730,7 @@ describe("mobile api", () => {
       expect((await asUser.query(api.mobile.listChats, {})).map((r) => r.title)).toEqual(["Fix the sign-in bug"]);
 
       // Archive stops the sandbox first, then leaves the Active list for Archived.
-      await asUser.mutation(api.mobile.archiveSession, { sessionId: ids.sessionId });
+      await asUser.mutation(api.chats.archive, { sessionId: ids.sessionId });
       const archived = await t.run((ctx) => ctx.db.get(ids.sessionId));
       expect(archived).toMatchObject({ archive: { archivedAt: expect.any(Number) }, status: "closed" });
       expect(await asUser.query(api.mobile.listChats, {})).toEqual([]);
@@ -726,7 +738,7 @@ describe("mobile api", () => {
         ids.sessionId,
       ]);
       // Read-only while archived, as the web session page.
-      expect(await asUser.query(api.mobile.getChat, { target: ids.sessionId })).toMatchObject({
+      expect(await asUser.query(api.chats.get, { target: ids.sessionId })).toMatchObject({
         canReply: false,
         session: { archived: true },
       });
@@ -756,7 +768,7 @@ describe("mobile api", () => {
           status: "closed",
         });
       });
-      await expect(asUser.mutation(api.mobile.archiveSession, { sessionId: strangerSessionId })).rejects.toThrow();
+      await expect(asUser.mutation(api.chats.archive, { sessionId: strangerSessionId })).rejects.toThrow();
       expect(await t.run((ctx) => ctx.db.get(strangerSessionId))).not.toHaveProperty("archive");
     },
     TIMEOUT_MS,
