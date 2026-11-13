@@ -67,6 +67,7 @@ import {
   chatHtmlRenderFields,
   chatHtmlRenderBodyFields,
   envVarRequestFields,
+  sessionProposalFields,
   previewToolCallFields,
   proposedPlanFields,
   agentUsageLimitFields,
@@ -277,6 +278,10 @@ const schema = defineSchema({
   // Secret requests the agent posts as an inline card (`request_env_var`).
   // Status only: the value goes to the encrypted env var stores.
   envVarRequests: defineTable(envVarRequestFields).index("by_parent", [
+    "parentId",
+  ]),
+  // "Start this in a new session" cards the agent posts (`propose_session`).
+  sessionProposals: defineTable(sessionProposalFields).index("by_parent", [
     "parentId",
   ]),
   // Agent → live-preview WebMCP tool calls relayed through the user's open Eva

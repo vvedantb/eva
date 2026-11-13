@@ -214,6 +214,7 @@ async function takeBoundedPage<
     | "chatUiPanels"
     | "chatHtmlRenders"
     | "envVarRequests"
+    | "sessionProposals"
   >,
 >(
   rows: AsyncIterable<T>,
@@ -239,6 +240,7 @@ async function repointPage<
     | "chatUiPanels"
     | "chatHtmlRenders"
     | "envVarRequests"
+    | "sessionProposals"
   >,
 >(
   ctx: MutationCtx,
@@ -256,8 +258,8 @@ async function repointPage<
 /**
  * Repoints one bounded page of a session's legacy chat rows onto its Main
  * chat: the transcript, the queue and the inline cards (UI panels, HTML
- * renders, env var requests). Once those are empty it links the chat owner's
- * pre-chat composer draft. Returns true once no legacy row is left. Moved rows
+ * renders, env var requests, session proposals). Once those are empty it
+ * links the chat owner's pre-chat composer draft. Returns true once no legacy row is left. Moved rows
  * leave the `parentId = sessionId` range, so every call starts from the front
  * and a rerun after a failure resumes where the last commit stopped.
  * `chatReads` stay on the session id: the sidebar unread dot reads them there.
@@ -310,6 +312,15 @@ export async function moveLegacyTranscriptPage(
         ctx,
         ctx.db
           .query("envVarRequests")
+          .withIndex("by_parent", (q) => q.eq("parentId", sessionId)),
+        chatId,
+        left,
+      ),
+    (left: number) =>
+      repointPage(
+        ctx,
+        ctx.db
+          .query("sessionProposals")
           .withIndex("by_parent", (q) => q.eq("parentId", sessionId)),
         chatId,
         left,

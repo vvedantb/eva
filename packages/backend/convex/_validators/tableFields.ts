@@ -2119,6 +2119,40 @@ export const envVarRequestFields = {
 };
 
 /**
+ * One agent proposal (`propose_session`) to run a task in a new session,
+ * shown as an inline card with two choices. Nothing starts until the user
+ * picks one: "started" opened `sessionId` on `brief`, "here" told the agent to
+ * do the work in the chat the card sits in.
+ */
+export const sessionProposalFields = {
+  parentId: v.union(
+    v.id("sessionChats"),
+    v.id("sessions"),
+    v.id("projects"),
+    v.id("agentTasks"),
+  ),
+  /** The assistant turn the card appeared under; absent anchors it last. */
+  messageId: v.optional(v.id("messages")),
+  /** The repo (and app) the proposing chat runs in; the new session opens there. */
+  repoId: v.id("githubRepos"),
+  title: v.string(),
+  /** One or two sentences on why this is a task of its own. Shown on the card. */
+  reason: v.string(),
+  /** The first message of the new session, written by the agent. */
+  brief: v.string(),
+  status: v.union(
+    v.literal("pending"),
+    v.literal("started"),
+    v.literal("here"),
+  ),
+  /** Set when `status` is "started": the session the user opened. */
+  sessionId: v.optional(v.id("sessions")),
+  sessionNumId: v.optional(v.number()),
+  createdAt: v.number(),
+  answeredAt: v.optional(v.number()),
+};
+
+/**
  * One agent request to run a WebMCP tool inside the chat's live preview. The
  * sandbox cannot reach the page, so the request is relayed through the user's
  * open Eva tab: the MCP tool inserts a row, a tab claims and runs it in the

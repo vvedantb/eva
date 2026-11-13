@@ -478,6 +478,77 @@ Use it when list_env_vars shows a secret is missing. Never ask the user to paste
   );
 
   // ───────────────────────────────────────────────────────────────────────────
+  // propose_session
+  // ───────────────────────────────────────────────────────────────────────────
+
+  tools.push(
+    defineTool({
+      name: "propose_session",
+      description: `Recommend that a task runs in a new session, through a card in the chat with two buttons: "New session" and "Do it here". Nothing starts until the user clicks. "New session" opens a session in this chat's repo on the repo's default branch and model, and runs your "brief" as its first message. "Do it here" sends you a chat message telling you to do the work in this chat.
+
+Use it in two cases: the user asks for work unrelated to what this chat is doing, or you notice a follow-up that is a task of its own (it lands apart from this change, and a short brief is enough to start it). Do not use it for a correction, a question, the next step of the current work, or anything a few tool calls settle: just do those. After calling it, do not start the task yourself; say in one line that you proposed it and end your turn or continue with your current work.
+
+The new session knows nothing about this chat, so the brief must stand alone. Name no chat and the card lands in your own.`,
+      mutating: true,
+      input: {
+        ...entityRefArgs,
+        title: z
+          .string()
+          .min(1)
+          .max(80)
+          .describe(
+            'Short name of the task, shown on the card and used as the session title, e.g. "Fix flaky login test".',
+          ),
+        reason: z
+          .string()
+          .min(1)
+          .max(300)
+          .describe(
+            "One sentence on why this is better as its own session. Shown to the user.",
+          ),
+        brief: z
+          .string()
+          .min(1)
+          .max(8000)
+          .describe(
+            "The first message of the new session: the task, the files or area, what done looks like, and the background it needs from this chat.",
+          ),
+      },
+      handler: async ({ title, reason, brief, ...ref }) => {
+        const resolved = await resolveChat(ref);
+        if ("content" in resolved) return resolved;
+        const { target } = resolved;
+
+        const proposalId = await ctx.runMutation(
+          internal.sessionProposals.create,
+          {
+            entityKind: target.kind,
+            // The caller's own session: the card lands in the chat it runs
+            // in, not the session's Main chat.
+            entityId:
+              target.targetId === credentials.entityId
+                ? (credentials.chatId ?? target.targetId)
+                : target.targetId,
+            repoId: target.repoId,
+            title,
+            reason,
+            brief,
+          },
+        );
+        if (proposalId === null) {
+          return toolErrorResult("That chat no longer exists.");
+        }
+        return toolJsonResult({
+          ...entitySummary(target),
+          proposalId,
+          status: "proposed",
+          note: 'The user sees the card. Do not start this task yourself. If they pick "Do it here", a chat message tells you; if they pick "New session", the new session does the work and you hear nothing.',
+        });
+      },
+    }),
+  );
+
+  // ───────────────────────────────────────────────────────────────────────────
   // set_preview_path
   // ───────────────────────────────────────────────────────────────────────────
 

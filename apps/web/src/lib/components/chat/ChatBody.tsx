@@ -67,6 +67,7 @@ import { useChatReadState } from "@/lib/components/chat/useChatReadState";
 import { ChatUiPanel } from "@/lib/components/chat/generativeUi/ChatUiPanel";
 import { ChatHtmlFrame } from "@/lib/components/chat/generativeHtml/ChatHtmlFrame";
 import { EnvVarRequestCard } from "@/lib/components/chat/_components/EnvVarRequestCard";
+import { SessionProposalCard } from "@/lib/components/chat/_components/SessionProposalCard";
 import { placeChatUiPanels } from "@/lib/components/chat/generativeUi/chatUiPanelPlacement";
 import { ChatArtifactCard } from "@/lib/components/artifacts/ChatArtifactCard";
 import { AgentFeedbackCard } from "@/lib/components/chat/feedback/AgentFeedbackCard";
@@ -149,7 +150,8 @@ interface InlineCard {
   card:
     | { kind: "panel"; spec: string }
     | { kind: "html"; render: Doc<"chatHtmlRenders"> }
-    | { kind: "envVarRequest"; request: Doc<"envVarRequests"> };
+    | { kind: "envVarRequest"; request: Doc<"envVarRequests"> }
+    | { kind: "sessionProposal"; proposal: Doc<"sessionProposals"> };
 }
 
 interface ChatBodyProps {
@@ -705,6 +707,10 @@ function ChatBodyInner({
     api.envVarRequests.listByParent,
     chatParentId ? { parentId: chatParentId } : "skip",
   );
+  const sessionProposals = useQuery(
+    api.sessionProposals.listByParent,
+    chatParentId ? { parentId: chatParentId } : "skip",
+  );
   const visibleMessageIds = new Set(
     displayMessages.map((message) => message._id),
   );
@@ -732,6 +738,14 @@ function ChatBodyInner({
           messageId: request.messageId,
           createdAt: request.createdAt,
           card: { kind: "envVarRequest", request },
+        }),
+      ),
+      ...(sessionProposals ?? []).map(
+        (proposal): InlineCard => ({
+          _id: proposal._id,
+          messageId: proposal.messageId,
+          createdAt: proposal.createdAt,
+          card: { kind: "sessionProposal", proposal },
         }),
       ),
     ],
@@ -825,6 +839,15 @@ function ChatBodyInner({
                 <EnvVarRequestCard
                   key={_id}
                   request={card.request}
+                  onReply={handlePanelReply}
+                />
+              );
+            case "sessionProposal":
+              return (
+                <SessionProposalCard
+                  key={_id}
+                  proposal={card.proposal}
+                  basePath={repo?.basePath}
                   onReply={handlePanelReply}
                 />
               );
