@@ -20,11 +20,9 @@ export function useSandboxLifecycle(status: SandboxStatus | undefined) {
   /** Runs `request` with `action` pending. `request` owns its error toast. */
   const run = async (action: SandboxAction, request: () => Promise<void>) => {
     setPending(action);
-    try {
-      await request();
-    } finally {
-      setPending(null);
-    }
+    // `.finally`, not a `try`/`finally` statement: React Compiler bails on
+    // the whole file for a `try` without a `catch`.
+    await request().finally(() => setPending(null));
   };
 
   return {
@@ -47,9 +45,10 @@ export function useAgentBrowsingAutoSwitch(
   enabled = true,
 ) {
   const prevAgentBrowsingAt = useRef<number | undefined>(undefined);
-  // The agent taking the browser happens in the sandbox and arrives as a live
-  // query change, so there is no local event to switch the tab from. Full
-  // deps are safe: the ref guard makes re-runs no-ops.
+  /* eslint-disable no-effect/no-event-handler --
+     The agent taking the browser happens in the sandbox and arrives as a live
+     query change, so there is no local event to switch the tab from. Full
+     deps are safe: the ref guard makes re-runs no-ops. */
   useEffect(() => {
     const prev = prevAgentBrowsingAt.current;
     prevAgentBrowsingAt.current = agentBrowsingAt;
@@ -57,4 +56,5 @@ export function useAgentBrowsingAutoSwitch(
     if (agentBrowsingAt === undefined || prev !== undefined) return;
     onAgentTookBrowser();
   }, [agentBrowsingAt, enabled, onAgentTookBrowser]);
+  /* eslint-enable no-effect/no-event-handler */
 }

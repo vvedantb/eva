@@ -7,7 +7,8 @@ import schema from "../convex/schema";
  * Closing a parallel chat and opening another must read "Chat 2" again (not
  * "Chat 3"), while `number` stays unique so old `?chat=N` links never point at
  * the new tab. A link to a closed chat opens Main: a closed chat has no tab
- * and no composer.
+ * and no composer. The app no longer closes chats (c686b9ad3), but chats
+ * closed before that keep `archived: true`, so the tests set it on the row.
  */
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -43,7 +44,7 @@ async function fixture() {
     });
     return { sessionId, mainChatId };
   });
-  return { asUser: t.withIdentity({ subject: CLERK_ID }), ...ids };
+  return { t, asUser: t.withIdentity({ subject: CLERK_ID }), ...ids };
 }
 
 describe("session chat tabs", () => {
@@ -56,9 +57,7 @@ describe("session chat tabs", () => {
       });
       expect(first).toMatchObject({ title: "Chat 2", number: 2 });
 
-      await f.asUser.mutation(api._sessionChats.mutations.archive, {
-        chatId: first._id,
-      });
+      await f.t.run((ctx) => ctx.db.patch(first._id, { archived: true }));
       const reopened = await f.asUser.mutation(
         api._sessionChats.mutations.create,
         { sessionId: f.sessionId },
@@ -87,9 +86,7 @@ describe("session chat tabs", () => {
       );
       expect(open?._id).toBe(side._id);
 
-      await f.asUser.mutation(api._sessionChats.mutations.archive, {
-        chatId: side._id,
-      });
+      await f.t.run((ctx) => ctx.db.patch(side._id, { archived: true }));
       const closed = await f.asUser.query(
         api._sessionChats.queries.resolveForSession,
         { sessionId: f.sessionId, number: side.number },
