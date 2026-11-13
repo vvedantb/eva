@@ -253,6 +253,7 @@ export const ChatMessage = memo(function ChatMessage({
       <SystemAlertMessage
         content={message.content ?? ""}
         errorDetail={message.errorDetail}
+        alertTone={message.alertTone}
         timestamp={message.timestamp}
       />
     );

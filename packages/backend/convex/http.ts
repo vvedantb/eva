@@ -108,6 +108,14 @@ http.route({
     if (!Number.isSafeInteger(leaseGeneration) || leaseGeneration <= 0) {
       return new Response("Invalid turn lease generation", { status: 400 });
     }
+    // VM memory sample (the daemon sends one at most every 30s). Logged only,
+    // so Axiom shows memory pressure before a VM dies with no stop reason.
+    const memAvailableMb = params.get("memAvailableMb");
+    if (memAvailableMb !== null) {
+      console.log(
+        `[heartbeat][vm] entityId=${entityId} turnId=${turnId} memAvailableMb=${memAvailableMb} memTotalMb=${params.get("memTotalMb") ?? "?"} swapUsedMb=${params.get("swapUsedMb") ?? "?"}`,
+      );
+    }
     const lease = await ctx.runMutation(internal.turns.heartbeat, {
       turnId,
       leaseGeneration,
