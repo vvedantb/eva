@@ -78,7 +78,7 @@ import {
   sessionChatStreamingEntityId,
 } from "../_sessionChats/helpers";
 import { errorMessage } from "@vvedantb/server";
-import { isStandaloneSession } from "./owner";
+import { isStandaloneSession, sessionOwnerTaskId } from "./owner";
 
 // --- Completion event ---
 
@@ -527,8 +527,33 @@ export const sessionExecuteWorkflow = workflow.define({
       // missing PR when it confirms the session branch already contains HEAD.
       // A chat-only first turn has no remote session branch, so `published` is
       // false and still avoids the old compare-404 alerts.
-      // A task's session pushes the task branch but never opens a session
-      // PR: the task owns its PRs (`eva/task-<id>` → the task's run).
+      // A task's session never opens a session PR: the task owns its PRs.
+      // A quick task's chat push opens the task PR when the branch has none
+      // live, so a task worked on only through chat still gets one. The
+      // callback usually pushed already (`pushedCommits` false), so a turn
+      // that moved HEAD onto a published branch also counts.
+      const turnCommitted =
+        result.afterSha !== undefined && result.afterSha !== result.beforeSha;
+      if (
+        data.ownerTaskId !== undefined &&
+        (pushedCommits || (branchPublished && turnCommitted))
+      ) {
+        try {
+          await step.runAction(internal.taskWorkflowActions.ensureTaskChatPr, {
+            taskId: data.ownerTaskId,
+          });
+        } catch (error) {
+          const errorDetail = errorMessage(error);
+          console.error(
+            `[sessionWorkflow] ensureTaskChatPr failed taskId=${data.ownerTaskId}: ${errorDetail}`,
+          );
+          await step.runMutation(internal.sessionWorkflow.postSystemAlert, {
+            chatId: args.chatId,
+            content: "Failed to create task PR",
+            errorDetail,
+          });
+        }
+      }
       if (
         data.ownsPullRequests !== false &&
         (pushedCommits || (branchPublished && data.primaryPrUrl === undefined))
@@ -797,6 +822,8 @@ export const getSessionData = internalQuery({
      * journaled before this field replays.
      */
     ownsPullRequests: v.optional(v.boolean()),
+    /** The quick task that owns this session; its chat pushes open its PR. */
+    ownerTaskId: v.optional(v.id("agentTasks")),
   }),
   handler: async (ctx, args) => {
     const [{ chat, session }, user, triggeringUserMessage] = await Promise.all([
@@ -851,6 +878,7 @@ export const getSessionData = internalQuery({
       linkedRepoCount: session.linkedRepoCount,
       sandboxSetupPending: session.sandboxSetupPending === true,
       ownsPullRequests: isStandaloneSession(session),
+      ownerTaskId: sessionOwnerTaskId(session),
     };
   },
 });
