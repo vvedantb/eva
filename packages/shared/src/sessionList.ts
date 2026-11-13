@@ -18,6 +18,10 @@ export function sessionActivityAt(session: {
   return session.updatedAt ?? session._creationTime;
 }
 
+// Sorting here copies with `[...list].sort`, not `toSorted`: Hermes on the
+// phone lacks the ES2023 copy methods (`toSorted`, `toReversed`), and the
+// phone Sessions tab crashed with "undefined is not a function".
+
 /**
  * Orders a repo's sessions for any sidebar list. Every sidebar surface (global
  * list, chrome tabs, session switcher, the phone list) sorts through it.
@@ -26,11 +30,11 @@ export function sortSessionsForSidebar<
   T extends { updatedAt?: number; _creationTime: number },
 >(sessions: readonly T[], order: SessionSortOrder): T[] {
   if (order === "updated_at") {
-    return sessions.toSorted(
+    return [...sessions].sort(
       (a, b) => sessionActivityAt(b) - sessionActivityAt(a),
     );
   }
-  return sessions.toSorted((a, b) => b._creationTime - a._creationTime);
+  return [...sessions].sort((a, b) => b._creationTime - a._creationTime);
 }
 
 export function sortAppsForSidebar<
@@ -42,9 +46,9 @@ export function sortAppsForSidebar<
 ): T[] {
   if (order === "manual") return apps;
   if (order === "created_at") {
-    return apps.toSorted((a, b) => b._creationTime - a._creationTime);
+    return [...apps].sort((a, b) => b._creationTime - a._creationTime);
   }
-  return apps.toSorted((a, b) => {
+  return [...apps].sort((a, b) => {
     const aAt = latestActivityByAppId.get(a._id) ?? a._creationTime;
     const bAt = latestActivityByAppId.get(b._id) ?? b._creationTime;
     return bAt - aAt;
@@ -105,7 +109,7 @@ export function linkedSessionGroups<S extends GroupableSession, R>(
   }
   const groups: Array<LinkedSessionGroup<S, R>> = [];
   for (const [groupId, byId] of byGroup) {
-    const members = [...byId.values()].toSorted(
+    const members = [...byId.values()].sort(
       (a, b) => a.session._creationTime - b.session._creationTime,
     );
     const name = members[0].session.sessionGroupName;
@@ -118,7 +122,7 @@ export function linkedSessionGroups<S extends GroupableSession, R>(
       latestAt: Math.max(...members.map((m) => sessionActivityAt(m.session))),
     });
   }
-  return groups.toSorted((a, b) => b.latestAt - a.latestAt);
+  return [...groups].sort((a, b) => b.latestAt - a.latestAt);
 }
 
 /** One top-level section of the Sessions list: a linked-session group or an app. */
