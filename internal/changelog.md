@@ -1,5 +1,13 @@
 # Changelog
 
+## Sandboxes: a deployment never touches another deployment's VMs
+
+Date: 2026-11-13
+
+WHY: Session sandboxes stopped in the middle of a turn. The prod-to-dev sync copies prod's Vercel credentials and session rows to dev, so dev's leak sweep and idle pause stopped running prod VMs from a stale copy of their owner rows. Prod never asked for the stop, so the chat showed only "Sandbox stopped while this turn was running."
+
+Architectural: `foreignSandboxDeployment` (`_sandbox/tags.ts`) compares a VM's `eva.deployment` tag with the own Convex slug. `VercelSandboxClient.get` throws a 404 `SandboxProviderError` for a foreign VM, so every stop, exec and delete classifies it as sandbox-gone and drops the mirrored row. `sandboxLeakSweep` skips foreign VMs in the list. `sync-prod-to-dev.mjs` runs the new `sandboxIdlePause.switchOffInternal` after the import. Untagged VMs (created without `ENVIRONMENT`, or with five caller tags) are not protected.
+
 ## Phone: Sessions tab reads the web's session lists and shows linked groups
 
 Date: 2026-11-12
