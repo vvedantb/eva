@@ -31,6 +31,7 @@ import { prStatusAppearance, ToneIcon } from "@/reviews/prAppearance";
 import { CommentCard, PrAvatar, TEXT_SM, TEXT_XS } from "@/reviews/ReviewSummary";
 import { timeAgo } from "@/ui/format";
 import { type Scheme, useScheme } from "@/ui/theme";
+import { LIST_WINDOW } from "@/ui/listWindow";
 
 /** The full commit list, read on demand (the web `usePrCommits`). */
 type CommitsLoad =
@@ -95,6 +96,7 @@ export function ReviewTimeline({ repoId, overview }: { repoId: Id<"githubRepos">
 
   return (
     <FlatList
+      {...LIST_WINDOW}
       data={rows}
       keyExtractor={(row) => row.key}
       ListHeaderComponent={header}

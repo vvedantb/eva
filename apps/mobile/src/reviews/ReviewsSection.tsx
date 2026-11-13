@@ -17,6 +17,7 @@ import { timeAgo } from "@/ui/format";
 import { RepoPicker, useRepoParam } from "@/ui/RepoPicker";
 import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
+import { LIST_WINDOW } from "@/ui/listWindow";
 
 type PullRequest = FunctionReturnType<typeof api.github.listPullRequests>[number];
 
@@ -82,6 +83,7 @@ export function ReviewsSection() {
         />
       ) : (
         <FlatList
+          {...LIST_WINDOW}
           data={state.data}
           keyExtractor={(pr) => String(pr.number)}
           ItemSeparatorComponent={ListDivider}

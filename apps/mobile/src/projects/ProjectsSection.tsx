@@ -32,6 +32,7 @@ import { FilterChipsBar } from "@/ui/FilterChipsBar";
 import { MenuDivider, MenuSheet, SubmenuRow } from "@/ui/MenuSheet";
 import { RepoPicker, useRepoParam } from "@/ui/RepoPicker";
 import { useScheme } from "@/ui/theme";
+import { LIST_WINDOW } from "@/ui/listWindow";
 
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 
@@ -146,6 +147,7 @@ function ProjectList({ repo }: { repo: Repo }) {
         />
       ) : (
         <SectionList
+          {...LIST_WINDOW}
           sections={PROJECT_PHASES.filter((phase) => !filters.hiddenPhases.includes(phase)).map((phase) => {
             const rows = shown.filter((project) => project.phase === phase);
             const open = (rows.length > 0) !== toggled.has(phase);
