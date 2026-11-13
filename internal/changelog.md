@@ -6,7 +6,7 @@ Date: 2026-11-13
 
 WHY: Tapping tabs quickly lagged. Each switch re-rendered all four tab bar buttons with their SVG icons (the kit is not built with React Compiler), and the Android glass blur target was a context value above every tab, changed twice per switch, so React walked every mounted tab each time.
 
-Architectural: native-ui packages#206 memoises each tab (`TabBarItem`) and keeps the blur target in a small store read with `useSyncExternalStore`. Measured on the phone web build, 12 switches at 4× CPU: app JS 439 → 277–294 ms, renders per switch 276 → ~195, median tap → first commit 77 → 64.5 ms. Not done: `freezeOnBlur` (a frozen tab never re-renders to inactive, so the blur hand-off would break).
+Architectural: native-ui packages#206 and #207 memoise each tab (`TabBarItem`) and keeps the blur target in a small store read with `useSyncExternalStore`. Measured on the phone web build, 12 switches at 4× CPU: app JS 439 → 277–294 ms, renders per switch 276 → ~195, median tap → first commit 77 → 64.5 ms. Not done: `freezeOnBlur` (a frozen tab never re-renders to inactive, so the blur hand-off would break).
 
 ## Session chats: Delete a parallel chat and all its messages
 
