@@ -1,5 +1,37 @@
 # Changelog
 
+## Phone: native crashes show on the next launch too
+
+Date: 2026-11-13
+
+WHY: The Sessions/Projects tab crash is native: it closes the app before JavaScript can save anything (0.1.56's JS crash report never showed). Android 11+ keeps why the last process ended, with the tombstone for a native crash.
+
+Architectural: Local Expo module `apps/mobile/modules/exit-info` (`ExitInfoModule.kt`, autolinked) returns the last `ApplicationExitInfo`: reason, time, description and the trace (ANR text, or the printable parts of a native tombstone: signal, abort message, libraries, functions; 6 KB max). `loadLastCrash` shows a crash, native crash or ANR newer than the last one shown (`eva.lastExitSeen`) in the same "Eva closed after an error" dialog, with Copy details.
+
+## Web: the `scrollbar` utility comes from @vvedantb/ui
+
+Date: 2026-11-13
+
+WHY: vibot and eva each had their own copy of the same thin-scrollbar utility. One shared copy stops the two from drifting.
+
+Architectural: `apps/web/src/globals.css` imports `@vvedantb/ui/tokens/css/scrollbar.css` and the local `@utility scrollbar` block is gone. The shared utility reads `--scrollbar-base`; eva sets it to `rgb(var(--muted-foreground))` for `:root`, `.dark` and `.dark.neutral`, so the colours stay the same. `@vvedantb/ui` moves from the `0.41.1-next` pre-release pin to `^0.42.0` in web, chrome-extension, `packages/shared` and `packages/ui`.
+
+## Phone: back to the uncompiled native-ui while the tab crash is found
+
+Date: 2026-11-13
+
+WHY: Since 0.1.53 the Sessions and Projects tabs close the app at once (native crash, no JS error). The app code changed only in action handlers since 0.1.51; the kit became React Compiler output. The kit's Android e2e opens every component those tabs use, compiled, without a crash, so this build tells the two apart.
+
+Architectural: `apps/mobile` pins native-ui to `github:vvedantb/packages#a6d0b28` again (0.1.51's kit: the same source, not compiled; it still has the hand-written `TabBarItem` memo). Web keeps the compiled `@vvedantb/ui`.
+
+## Phone: an error that closes the app is shown on the next launch
+
+Date: 2026-11-13
+
+WHY: The Sessions and Projects tabs close the release app with no message, and a phone has no log the user can read. Render errors already show "Could not start Eva"; this covers fatal errors outside render (handlers, effects, Reanimated worklets).
+
+Architectural: `installUnhandledRejectionLogging` takes `onFatal`: on a fatal error it saves `{ name, message, stack }` (`src/logging/lastCrash.ts`, expo-secure-store, under 1.8 KB) for at most 1 s, then calls the previous handler as before. The next launch shows `LastCrashDialog` (the `UpdateDialog` pattern): the error, and Copy details (version, time, message, 15 stack lines).
+
 ## Web and phone: both kits from npm, compiled with React Compiler
 
 Date: 2026-11-13

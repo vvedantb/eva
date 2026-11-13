@@ -8,6 +8,7 @@
 @import "@vvedantb/ui/tokens/css/border-beam.css";
 @import "@vvedantb/ui/tokens/css/marquee.css";
 @import "@vvedantb/ui/tokens/css/scroll-fade.css";
+@import "@vvedantb/ui/tokens/css/scrollbar.css";
 /* The `text-*` scale: each tier has its own line height and tracking. */
 @import "@vvedantb/ui/tokens/css/type-scale.css";
 /* vvedantb components read their colour names (`surface-*`, `field-*`,
@@ -314,36 +315,12 @@
   transform-origin: 50% 70%;
 }
 
-@utility scrollbar {
-  /* Matches global base scrollbar chrome; class kept for scroll-fade pairing.
-     Do not put overscroll-behavior here: Chrome treats every overflow:auto
-     element as a scroll container even when it has no overflow, so contain on
-     this utility created wheel dead-zones — nested panes and horizontal boards
-     (overflow-y-hidden) swallowed vertical wheel while the ancestor scrollbar
-     still dragged fine. Opt in per pane with overscroll-y-contain /
-     overscroll-contain instead. */
-  scrollbar-width: thin;
-  scrollbar-color: rgb(var(--muted-foreground) / 0.35) transparent;
-  &:hover {
-    scrollbar-color: rgb(var(--muted-foreground) / 0.55) transparent;
-  }
-  &::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: rgb(var(--muted-foreground) / 0.32);
-    border: 2px solid transparent;
-    border-radius: 999px;
-    background-clip: padding-box;
-  }
-  &::-webkit-scrollbar-thumb:hover {
-    background: rgb(var(--muted-foreground) / 0.52);
-    background-clip: padding-box;
-  }
+/* `scrollbar` comes from @vvedantb/ui/tokens/css/scrollbar.css. The base is
+   set on each theme scope because --muted-foreground is an rgb triplet here. */
+:root,
+.dark,
+.dark.neutral {
+  --scrollbar-base: rgb(var(--muted-foreground));
 }
 
 @utility scrollbar-thin {
