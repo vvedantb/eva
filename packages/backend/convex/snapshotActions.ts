@@ -29,9 +29,11 @@ import {
   renderEvaEnvFile,
 } from "./_sandbox/vercelEnvFile";
 import {
+  buildConvexBackendWatchdogLines,
   buildConvexBackgroundScriptBody,
   buildConvexPostSeedPushLines,
   isConvexBackendCommand,
+  STOP_CONVEX_BACKEND_WATCHDOG_LINE,
   CONVEX_FUNCTIONS_READY_ATTEMPTS,
   CONVEX_FUNCTIONS_READY_LOG_LINE,
   CONVEX_LOCAL_BACKEND_HEALTH_URL,
@@ -485,6 +487,10 @@ export const launchSeedRun = internalAction({
         `grep -q "${CONVEX_FUNCTIONS_READY_LOG_LINE}" /tmp/bg-${i}.log 2>/dev/null && echo "convex-ready-${i}: functions pushed; safe to import" || echo "convex-ready-${i}: backend up, functions not pushed yet — seed commands run next"`,
       );
     });
+    // From here on a dead backend fails the seed at once instead of hanging it
+    // until the workflow timeout — see buildConvexBackendWatchdogLines.
+    const runsConvex = (backgroundCommands ?? []).some(isConvexBackendCommand);
+    if (runsConvex) lines.push(...buildConvexBackendWatchdogLines());
     // ---- seed (post-daemon) ----
     lines.push('echo "SEEDRUN-STAGE:startup-post-daemon"');
     (startupCommands ?? []).forEach((command, i) => {
@@ -502,7 +508,7 @@ export const launchSeedRun = internalAction({
     });
     // Functions land on the local backend only now, once the seeds have set the
     // env vars its auth config needs — see buildConvexPostSeedPushLines.
-    if ((backgroundCommands ?? []).some(isConvexBackendCommand)) {
+    if (runsConvex) {
       lines.push(...buildConvexPostSeedPushLines("/tmp/repo"));
     }
     lines.push(...seededRuntimeStateCaptureLines(requireSupabaseDump));
@@ -512,6 +518,8 @@ export const launchSeedRun = internalAction({
     lines.push(
       `printf %s ${computeStartupFingerprint(startupCommands ?? [])} > ${STARTUP_MARKER_PATH}`,
     );
+    // Stop commands shut the backend down on purpose.
+    if (runsConvex) lines.push(STOP_CONVEX_BACKEND_WATCHDOG_LINE);
     (stopCommands ?? []).forEach((command, i) => {
       lines.push(
         `( ${command} ) || { echo "SEEDRUN-FAILED:stop-${i}"; exit 1; }`,
@@ -598,7 +606,11 @@ export const fetchSeedDiagnostics = internalAction({
           "df -h / 2>&1; du -xsh /swapfile /tmp/repo/node_modules ~/.local/share/pnpm ~/.cache ~/.convex 2>/dev/null || true",
           'echo "== 3210 listening? =="',
           "curl -s -o /dev/null -w 'backend http:%{http_code}\\n' http://127.0.0.1:3210 2>&1 || echo '3210 unreachable'",
-          'echo "== seedrun.log (tail) =="; tail -c 4000 /tmp/seedrun.log 2>/dev/null',
+          // A process killed for memory leaves no line in its own log.
+          'echo "== memory =="',
+          "free -m 2>&1; sudo dmesg 2>/dev/null | grep -iE 'out of memory|killed process' | tail -n 10",
+          // 4 KB held only the last few retry lines of a wedged `convex dev`.
+          'echo "== seedrun.log (tail) =="; tail -c 16000 /tmp/seedrun.log 2>/dev/null',
           'for f in /tmp/bg-*.log; do echo; echo "== $f =="; tail -c 3000 "$f" 2>/dev/null; done',
           "true",
         ].join("; "),
