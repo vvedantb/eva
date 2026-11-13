@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: back to the uncompiled native-ui while the tab crash is found
+
+Date: 2026-11-13
+
+WHY: Since 0.1.53 the Sessions and Projects tabs close the app at once (native crash, no JS error). The app code changed only in action handlers since 0.1.51; the kit became React Compiler output. The kit's Android e2e opens every component those tabs use, compiled, without a crash, so this build tells the two apart.
+
+Architectural: `apps/mobile` pins native-ui to `github:vvedantb/packages#a6d0b28` again (0.1.51's kit: the same source, not compiled; it still has the hand-written `TabBarItem` memo). Web keeps the compiled `@vvedantb/ui`.
+
 ## Phone: an error that closes the app is shown on the next launch
 
 Date: 2026-11-13
