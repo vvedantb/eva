@@ -111,7 +111,7 @@ export function ReviewCommentMessage({
   text,
   repo,
 }: ReviewCommentMessageProps) {
-  const segments = parseReviewCommentSegments(text).flatMap<
+  const parsed = parseReviewCommentSegments(text).flatMap<
     ReviewCommentMessageSegment | CitationMessageSegment
   >((segment) =>
     segment.kind === "text"
@@ -121,12 +121,18 @@ export function ReviewCommentMessage({
         }))
       : [segment],
   );
+  // The prompt appends cited quotes after the text; show them first, like a
+  // reply quoting what it answers.
+  const segments = [
+    ...parsed.filter((segment) => segment.kind === "citation"),
+    ...parsed.filter((segment) => segment.kind !== "citation"),
+  ];
   const hasCards = segments.some((segment) => segment.kind !== "text");
 
   if (!hasCards) return <MessageText text={text} repo={repo} />;
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-4">
       {segments.map((segment, index) =>
         segment.kind === "text" ? (
           segment.text.trim().length > 0 ? (
