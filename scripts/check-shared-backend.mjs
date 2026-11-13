@@ -17,7 +17,6 @@ const ALLOWED = {
   "chats.setModel": "The web moves onto chats.* one action at a time (#1302).",
   "chats.stop": "The web moves onto chats.* one action at a time (#1302).",
   "chats.start": "The web moves onto chats.* one action at a time (#1302).",
-  "chats.archive": "The web moves onto chats.* one action at a time (#1302).",
 };
 
 /** `api.module.fn` references (not URLs such as https://api.github.com). */
