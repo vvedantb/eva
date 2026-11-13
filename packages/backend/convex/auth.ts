@@ -11,7 +11,7 @@ import {
   shortcutOverridesValidator,
 } from "./validators";
 import { authQuery, authMutation } from "./functions";
-import { getCurrentUserId } from "./_auth/currentUser";
+import { getCurrentUserId, userAuth } from "./_auth/currentUser";
 import { resolveExperimentalFlags } from "./_auth/experimentalFlags";
 import type { ExperimentalFlagKey } from "./_auth/experimentalFlags";
 import type { Doc } from "./_generated/dataModel";
@@ -38,11 +38,7 @@ export const getUserByClerkId = internalQuery({
     v.null(),
   ),
   handler: async (ctx, args) => {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
-      .first();
-    return user ?? null;
+    return userAuth.getUserByClerkId(ctx, args.clerkId);
   },
 });
 

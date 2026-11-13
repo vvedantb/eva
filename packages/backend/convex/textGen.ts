@@ -2,6 +2,7 @@
 
 import { ActionCache } from "@convex-dev/action-cache";
 import { generateText } from "ai";
+import { FLEX_GATEWAY_PROVIDER_OPTIONS } from "@vvedantb/server/ai";
 import {
   isTitleRegenerating,
   selectTagsByProbability,
@@ -54,11 +55,7 @@ export const generateSessionTitle = internalAction({
       const { text } = await generateText({
         model: TEXT_GEN_MODEL,
         prompt: `Generate a concise 3-8 word title for this coding task. Summarize the request, don't restate it. Reply with the title only — no quotes, no trailing punctuation.\n\nTask: ${args.message.slice(0, 2000)}`,
-        providerOptions: {
-          gateway: {
-            serviceTier: "flex",
-          },
-        },
+        providerOptions: { ...FLEX_GATEWAY_PROVIDER_OPTIONS },
       });
       const title = cleanGeneratedTitle(text);
       if (!title) {
@@ -113,11 +110,7 @@ Previous title: ${context.title}
 
 Conversation:
 ${digest}`,
-        providerOptions: {
-          gateway: {
-            serviceTier: "flex",
-          },
-        },
+        providerOptions: { ...FLEX_GATEWAY_PROVIDER_OPTIONS },
       });
       title = cleanGeneratedTitle(text);
     } catch (error) {

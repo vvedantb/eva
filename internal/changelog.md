@@ -8,6 +8,14 @@ WHY: The Sessions/Projects tab crash is native: it closes the app before JavaScr
 
 Architectural: Local Expo module `apps/mobile/modules/exit-info` (`ExitInfoModule.kt`, autolinked) returns the last `ApplicationExitInfo`: reason, time, description and the trace (ANR text, or the printable parts of a native tombstone: signal, abort message, libraries, functions; 6 KB max). `loadLastCrash` shows a crash, native crash or ANR newer than the last one shown (`eva.lastExitSeen`) in the same "Eva closed after an error" dialog, with Copy details.
 
+## Web and backend: adopt shared pieces from @vvedantb packages
+
+Date: 2026-11-13
+
+WHY: Several components and helpers were copied into eva from the shared packages. One source means one place to fix and one behaviour across apps.
+
+Architectural: `apps/web` moves `@vvedantb/server` from `^0.10.0` to `^0.14.0`, so web and backend share one installed copy. The local `ConfettiBurst` is deleted; `PrMergeConfetti` imports `ConfettiBurst` from `@vvedantb/ui` (the package adds an optional `colors` prop; the rest is the same). `SettingsPage` now wraps the kit `SettingsPage`, giving it eva's `PageWrapper` as the `layout`. In the backend, `_auth/currentUser.ts` builds `userAuth` with `createClerkUserAuth<DataModel>()`, and `getCurrentUserId`, `requireCurrentUserId` and `auth.ts`'s `getUserByClerkId` delegate to it; `userAuth` stays in the leaf `currentUser.ts` to keep the module-cycle workaround. `ensureUserExists` is unchanged: the package `ensureUser` has no verified-email rebind. `textGen.ts` uses `FLEX_GATEWAY_PROVIDER_OPTIONS` from `@vvedantb/server/ai` for both title calls.
+
 ## Web: the `scrollbar` utility comes from @vvedantb/ui
 
 Date: 2026-11-13
