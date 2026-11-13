@@ -35,10 +35,10 @@ import {
   Shimmer,
 } from "@vvedantb/native-ui/ai";
 import { goBackOrReplace, RouterStackPageHeader } from "@vvedantb/native-ui/expo-router";
-import { CenteredSpinner, EmptyState, Text } from "@vvedantb/native-ui/primitives";
+import { CenteredSpinner, EmptyState, Spinner, Text } from "@vvedantb/native-ui/primitives";
 import { tokens } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
-import { useMutation, useQuery } from "convex/react";
+import { useConvex, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -63,6 +63,7 @@ import { WEB_URL } from "@/config";
 import { TEAMMATE_FOOTER_INSET, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
 import { useSessionActions } from "@/sessions/useSessionActions";
 import { textColor, useScheme } from "@/ui/theme";
+import { useChatTranscript } from "@/chat/useChatTranscript";
 
 /** The agent's open question in the chat (`pendingQuestions.getActive`). */
 type PendingQuestion = NonNullable<FunctionReturnType<typeof api.pendingQuestions.getActive>>;
@@ -88,7 +89,10 @@ export default function ChatScreen() {
   const scheme = useScheme();
   const chat = useQuery(api.mobile.getChat, { target });
   const parentId = chat?.parentId;
-  const messages = useQuery(api.messages.listByParent, parentId ? { parentId } : "skip");
+  // The web's load plan: newest 30, live after that, older pages as the reader scrolls up.
+  const transcript = useChatTranscript(parentId);
+  const messages = transcript.messages;
+  const convex = useConvex();
   const turn = useQuery(api.turns.getChatStatus, parentId ? { entityId: parentId } : "skip");
   const pending = useQuery(api.pendingQuestions.getActive, parentId ? { entityId: parentId } : "skip");
   const feedbackRows = useQuery(api.feedback.listForChat, parentId ? { parentId } : "skip");
@@ -156,14 +160,23 @@ export default function ChatScreen() {
     stop({ target: chat.target }).catch(() => toast.error("Couldn't stop Eva"));
   };
 
+  // The transcript a fork carries. With history above the loaded rows, the
+  // server builds it, as the web does. (Outside the try below: the React
+  // Compiler cannot compile a conditional inside a try.)
+  const forkPrefix = (messageId: string) =>
+    transcript.hasOlder && parentId
+      ? convex.query(api.messages.forkPrefixByParent, { parentId, throughMessageId: messageId })
+      : Promise.resolve(
+          collectForkPrefix(
+            visible.map((message) => ({ id: message._id, role: message.role, content: message.content, isSystemAlert: message.isSystemAlert })),
+            messageId,
+          ),
+        );
   // Fork: a new session that starts from the transcript up to this message, as the web.
   const handleFork = async (messageId: string) => {
-    const prefix = collectForkPrefix(
-      visible.map((message) => ({ id: message._id, role: message.role, content: message.content, isSystemAlert: message.isSystemAlert })),
-      messageId,
-    );
-    if (!prefix) return;
     try {
+      const prefix = await forkPrefix(messageId);
+      if (!prefix) return;
       const { sessionId } = await startSession({ repoId: chat.repoId, prompt: formatForkPrompt(prefix), title: forkThreadTitle(prefix) });
       router.push({ pathname: "/chat/[target]", params: { target: sessionId } });
     } catch {
@@ -207,6 +220,16 @@ export default function ChatScreen() {
           contentContainerClassName="px-0"
           // Web: messages `gap-3`.
           ItemSeparatorComponent={MessageGap}
+          // Inverted, the end is the top: the next page of older history as the reader nears it.
+          onEndReached={transcript.loadOlder}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            transcript.isLoadingOlder ? (
+              <View className="items-center py-3">
+                <Spinner size="sm" accessibilityLabel="Loading older messages" />
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
             messages === undefined ? (
               <CenteredSpinner label="Loading messages" />
