@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: fix the Sessions/Projects tab crash; Java crashes show their stack
+
+Date: 2026-11-13
+
+WHY: Changing tab closed the app on the compiled native-ui kit (0.1.56–0.1.60). The stack from 0.1.60: "[Worklets] Tried to synchronously call a Remote Function" in `tabIndicator`'s `useAnimatedStyle`. React Compiler hoisted the arrow functions inside that worklet (`box => box.x`) to module-level `_temp` functions, which the UI thread cannot call.
+
+Architectural: The kit's `build-dist.mjs` puts compiler-hoisted `_temp` functions back inline inside worklet callbacks (vvedantb/packages#226); `apps/mobile` pins `@vvedantb/native-ui@0.18.2-next-10a55be`, compiled again. `ExitInfoModule.kt` installs a default uncaught-exception handler that writes the Java stack to `filesDir/eva-java-crash.txt`, since Android keeps no trace for `REASON_CRASH`; `lastExit` returns it, and the dialog shows the exception line.
+
 ## Phone: native crashes show on the next launch too
 
 Date: 2026-11-13
