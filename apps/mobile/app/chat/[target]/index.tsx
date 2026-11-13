@@ -87,7 +87,7 @@ export default function ChatScreen() {
   const { target } = useLocalSearchParams<{ target: string }>();
   const router = useRouter();
   const scheme = useScheme();
-  const chat = useQuery(api.mobile.getChat, { target });
+  const chat = useQuery(api.chats.get, { target });
   const parentId = chat?.parentId;
   // The web's load plan: newest 30, live after that, older pages as the reader scrolls up.
   const transcript = useChatTranscript(parentId);
@@ -100,8 +100,8 @@ export default function ChatScreen() {
   // A teammate's turn shows their avatar and first name, from the same lookup as the web `ChatBody`.
   const teammateIds = otherUserIdsInChat(messages ?? [], me ?? undefined);
   const teammates = useQuery(api.users.getMany, teammateIds.length > 0 ? { ids: teammateIds } : "skip");
-  const stop = useMutation(api.mobile.stopTurn);
-  const startSession = useMutation(api.mobile.startSession);
+  const stop = useMutation(api.chats.stop);
+  const startSession = useMutation(api.chats.start);
   const rate = useMutation(api.feedback.rateTurn);
   const simpleView = useSimpleView();
   // The web leaves a session's page once it is archived; the phone goes back (to Sessions after a deep link).
@@ -323,7 +323,7 @@ function ChatDock({
 }) {
   const scheme = useScheme();
   const insets = useSafeAreaInsets();
-  const send = useMutation(api.mobile.sendMessage);
+  const send = useMutation(api.chats.send);
   const answer = useMutation(api.pendingQuestions.answer);
   const attachments = useAttachments();
   // The `/` list follows the chat's model provider, as the web composer.
