@@ -59,6 +59,9 @@ jobs:
       mark_as_latest: false
       version: ${{ inputs.version }}
       dry_run: ${{ inputs.dry_run == true }}
+      # A boat.dev runner. It has no Android SDK: the shared workflow installs
+      # the command line tools and sdk_packages when it finds none.
+      runs_on: boat-large
       upload_dry_run_artifact: true # artifact eva-android-dry-run
       pre_setup_command: |
         df -h /
