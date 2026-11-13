@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: native-ui from npm, compiled with React Compiler
+
+Date: 2026-11-13
+
+WHY: Expo never runs React Compiler on node_modules, so every kit component re-rendered its whole subtree. The kit now compiles itself and publishes compiled code (packages#210), as React's library guidance says.
+
+Architectural: `apps/mobile` installs `@vvedantb/native-ui` from npm (`0.18.0-next-54cc54a`, the `next` pre-release published on each kit merge) instead of a git pin, because a git pin installs source and runs no build. The kit's `dist` keeps JSX, so NativeWind's `className` transform still applies. Measured on the phone web build at 4× CPU: chat composer 68 → 55 renders per keystroke, tab switch 195 → 165 renders; screens are byte-identical. To take a kit change, pin the new `next` version.
+
 ## Phone: cheaper tab switches
 
 Date: 2026-11-13
