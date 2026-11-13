@@ -66,7 +66,8 @@ async function nativeExitCrash(): Promise<LastCrash | null> {
     at: exit.timestamp,
     version: Constants.expoConfig?.version ?? "?",
     name,
-    message: (exit.description || exit.reason).slice(0, 500),
+    // A Java crash's description is only "crash"; its exception line (after "thread: …") says more.
+    message: ((exit.reason === "crash" && exit.trace.split("\n")[1]) || exit.description || exit.reason).slice(0, 500),
     stack: exit.trace,
   };
 }
