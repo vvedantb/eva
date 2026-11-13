@@ -35,6 +35,7 @@ import { SESSION_ACTION_ITEMS, useSessionActions } from "@/sessions/useSessionAc
 import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme } from "@/ui/theme";
+import { sectionIndex } from "@/ui/sectionIndex";
 
 type SessionTab = "active" | "archived";
 type Section = "sessions" | "quick-tasks" | "reviews";
@@ -45,19 +46,9 @@ const SECTIONS: ReadonlyArray<{ id: Section; label: string }> = [
   { id: "reviews", label: "Reviews" },
 ];
 
-/** The section pills shown: simple view drops Reviews. */
+/** The section pills shown: simple view drops Reviews (outside the screen, see `sectionIndex`). */
 function visibleSections(simpleView: boolean) {
   return simpleView ? SECTIONS.filter((option) => option.id !== "reviews") : SECTIONS;
-}
-
-/**
- * The page for `?section=`, else the first. A plain function: inline in the
- * screen, this lookup on the pill list made the React Compiler bail on the
- * whole screen ("MethodCall::property must be an unpromoted + unmemoized
- * MemberExpression"), so every change redrew the Sessions tab in full.
- */
-function sectionIndex(sections: ReadonlyArray<{ id: Section }>, param: string | undefined) {
-  return Math.max(0, sections.findIndex((option) => option.id === param));
 }
 
 /**
