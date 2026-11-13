@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: Archive uses chats.archive, as the phone does
+
+Date: 2026-11-13
+
+WHY: One backend for both apps (#1302): each action the phone and web share runs one server function.
+
+Architectural: `useArchiveSession` calls `chats.archive` instead of `sessions.stopSandbox` then `sessions.archive`. Same helpers and checks; the stop and the archive now run in one mutation, and the sandbox check reads the server's `sandboxId`, not the client's. `check-shared-backend` no longer allows `chats.archive` as phone-only. Send, stop, model and start stay on the web's own path for now: they carry optimistic updates and more arguments than `chats.*` takes.
+
 ## Phone: native-ui from npm, compiled with React Compiler
 
 Date: 2026-11-13
