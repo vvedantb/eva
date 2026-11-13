@@ -14,6 +14,13 @@ Date: 2026-11-13
 WHY: Changing tab closed the app on the compiled native-ui kit (0.1.56–0.1.60). The stack from 0.1.60: "[Worklets] Tried to synchronously call a Remote Function" in `tabIndicator`'s `useAnimatedStyle`. React Compiler hoisted the arrow functions inside that worklet (`box => box.x`) to module-level `_temp` functions, which the UI thread cannot call.
 
 Architectural: The kit's `build-dist.mjs` puts compiler-hoisted `_temp` functions back inline inside worklet callbacks (vvedantb/packages#226); `apps/mobile` pins `@vvedantb/native-ui@0.18.2-next-10a55be`, compiled again. `ExitInfoModule.kt` installs a default uncaught-exception handler that writes the Java stack to `filesDir/eva-java-crash.txt`, since Android keeps no trace for `REASON_CRASH`; `lastExit` returns it, and the dialog shows the exception line.
+## Web, backend and mobile: adopt more shared exports from @vvedantb packages
+
+Date: 2026-11-13
+
+WHY: More code was still copied into eva from the shared packages. One source means one place to fix and one behaviour across apps. This round bumps `@vvedantb/ui` to `^0.43.0`, `@vvedantb/server` to `^0.15.0` and `@vvedantb/config` to `^0.5.0`.
+
+Architectural: `apps/web` adopts the stale-deploy reload from `@vvedantb/ui`; the local `staleDeployReload.ts`, `isChunkLoadError.ts` and their tests are deleted, and `main.tsx` plus `DeploymentErrorFallback.tsx` use the package. In the backend, `convex/_shared/hmac.ts` re-exports `hmacSha256Hex` from `@vvedantb/server` (a shim keeps the Convex module registry stable), `convex/http.ts` uses the package `verifyGithubStyleSignature` for the GitHub webhook, and `convex/functions.ts` builds the six auth function wrappers from `createAuthFunctions`. On mobile, `plugins/withReleaseSigning.js` wraps the package `withReleaseSigning` (eva's signing marker kept, because `scripts/build-android-release.sh` greps for it), and `metro.config.js` uses `defineExpoMetroConfig`; all four resolver singletons are kept. The `@vvedantb/native-ui` git pin is unchanged. Not adopted: the Convex admin API client (the JWT-authed runAsUser stack must stay, and listTables output differs); the shared oxlint plugin (the package `no-source-text-in-tests` widens the test-file match, and the other rules drop eva's curated CLAUDE.md messages).
 
 ## Phone: native crashes show on the next launch too
 

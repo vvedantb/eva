@@ -6,13 +6,14 @@ import {
   CollapsibleTrigger,
 } from "@vvedantb/ui";
 import { IconChevronRight } from "@tabler/icons-react";
-import { isChunkLoadError } from "@/lib/utils/isChunkLoadError";
-import { isMaintenanceError } from "@eva/shared";
-import { MaintenanceScreen } from "./MaintenanceScreen";
 import {
   claimStaleDeployReload,
+  isChunkLoadError,
   reloadForStaleDeploy,
-} from "@/lib/utils/staleDeployReload";
+} from "@vvedantb/ui/client";
+import { isMaintenanceError } from "@eva/shared";
+import { MaintenanceScreen } from "./MaintenanceScreen";
+import { STALE_DEPLOY_RELOAD_PARAM } from "@/lib/utils/staleDeployReloadParam";
 
 /**
  * TanStack Router error fallback that silently reloads on stale deployment errors
@@ -28,7 +29,7 @@ export function DeploymentErrorFallback({ error }: { error: Error }) {
 
   useEffect(() => {
     if (shouldReload) {
-      reloadForStaleDeploy();
+      reloadForStaleDeploy({ reloadParam: STALE_DEPLOY_RELOAD_PARAM });
     }
   }, [shouldReload]);
 
@@ -52,7 +53,12 @@ export function DeploymentErrorFallback({ error }: { error: Error }) {
         </p>
 
         <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-          <Button size="sm" onClick={() => reloadForStaleDeploy()}>
+          <Button
+            size="sm"
+            onClick={() =>
+              reloadForStaleDeploy({ reloadParam: STALE_DEPLOY_RELOAD_PARAM })
+            }
+          >
             Refresh
           </Button>
           {/* Not `<Link>`: the router is a plausible cause of whatever threw,

@@ -3,6 +3,7 @@ import {
   registerMcpRoutes,
   sha256Hex,
   timingSafeEqual,
+  verifyGithubStyleSignature,
 } from "@vvedantb/server";
 import { z } from "zod";
 import { httpAction } from "./_generated/server";
@@ -532,16 +533,6 @@ function pushTouchesRoots(
   return !sawAnyPath;
 }
 
-/** Verifies a GitHub webhook HMAC-SHA256 signature against the shared secret. */
-async function verifyWebhookSignature(
-  body: string,
-  signature: string,
-  secret: string,
-): Promise<boolean> {
-  const computed = `sha256=${await hmacSha256Hex(secret, body)}`;
-  return timingSafeEqual(computed, signature);
-}
-
 /** Larger bodies are refused before parsing; a real alert is a few KB. */
 const MAX_ALERT_BODY_BYTES = 256 * 1024;
 
@@ -606,10 +597,9 @@ http.route({
       });
     }
 
-    if (
-      !signature ||
-      !(await verifyWebhookSignature(body, signature, secret))
-    ) {
+    // `verifyGithubStyleSignature` checks the `sha256=<hex>` header in constant
+    // time and rejects a null header, so a missing signature fails here too.
+    if (!(await verifyGithubStyleSignature(secret, body, signature))) {
       return new Response("Invalid signature", { status: 401 });
     }
 

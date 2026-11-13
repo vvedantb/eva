@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { isChunkLoadError } from "./isChunkLoadError";
+import { isChunkLoadError } from "@vvedantb/ui/client";
 
 test("isChunkLoadError detects ChunkLoadError name and common messages", () => {
   const named = new Error("boom");
