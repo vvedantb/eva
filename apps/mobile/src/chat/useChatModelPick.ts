@@ -8,12 +8,12 @@ import { useState } from "react";
 import type { ModelPick } from "@/chat/ModelChip";
 
 /** An open chat (`mobile.getChat`). */
-export type Chat = NonNullable<FunctionReturnType<typeof api.mobile.getChat>>;
+export type Chat = NonNullable<FunctionReturnType<typeof api.chats.get>>;
 
 /** Shows a pick on the open chat at once (`mobile.getChat`), before the server has it. */
 function patchChat(store: OptimisticLocalStore, target: string, patch: (chat: Chat) => Partial<Chat>) {
-  const current = store.getQuery(api.mobile.getChat, { target });
-  if (current) store.setQuery(api.mobile.getChat, { target }, { ...current, ...patch(current) });
+  const current = store.getQuery(api.chats.get, { target });
+  if (current) store.setQuery(api.chats.get, { target }, { ...current, ...patch(current) });
 }
 
 /** The traits a pick set over the ones the chat had. */
@@ -46,7 +46,7 @@ export function useChatModelPick(target: string, chat: Chat | null | undefined, 
   const sessionAccounts = useQuery(api.userProviderAccounts.listForSessionOwner, chat?.session ? { sessionId: chat.session.id } : "skip");
   const taskAccounts = useQuery(api.userProviderAccounts.listForTaskOwner, chat?.task ? { taskId: chat.task.id } : "skip");
   const ownAccounts = useQuery(api.userProviderAccounts.listSelectable, chat?.project ? {} : "skip");
-  const setChatModel = useMutation(api.mobile.setChatModel).withOptimisticUpdate((store, pick) =>
+  const setChatModel = useMutation(api.chats.setModel).withOptimisticUpdate((store, pick) =>
     patchChat(store, target, (current) => ({ model: pick.model ?? current.model, traits: mergeTraits(current.traits, pick) })),
   );
   const setSessionAccount = useMutation(api.sessionChats.setProviderAccountId).withOptimisticUpdate((store, args) =>

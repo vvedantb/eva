@@ -50,6 +50,14 @@ WHY: The phone drifted onto its own Convex functions (`mobile.*`), and a backend
 
 Architectural: `scripts/check-shared-backend.mjs` fails when the phone calls an `api.*` function the web never calls, unless `ALLOWED` gives the reason (push tokens; `mobile.*` while it moves to `chats.*`). `scripts/check-apk-compat.sh` type-checks the newest `eva-apk-*` release's phone and shared code against the changed backend, and fails on any error (it catches the 0.1.33 break; skips when the backend did not change). Both run in CI. CLAUDE.md gains the three rules.
 
+## Phone: calls chats.* (needs the prod Convex deploy first)
+
+Date: 2026-11-13
+
+WHY: Step 1 of one backend for both apps: the phone stops calling `mobile.*` and calls the neutral `chats.*` (#1302).
+
+Architectural: Every `api.mobile.*` call in apps/mobile is now `api.chats.*` (`get`, `send`, `setModel`, `stop`, `start`, `archive`). Ship only after prod Convex has `chats.ts`, or the new APK's chats fail.
+
 ## Backend: chat actions under one neutral name (chats.*)
 
 Date: 2026-11-13

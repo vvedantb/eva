@@ -86,7 +86,7 @@ export const SESSION_ACTION_ITEMS: Record<
  */
 export function useSessionActions({ onArchived }: { onArchived?: () => void } = {}) {
   const updateSession = useMutation(api.sessions.update);
-  const archiveSession = useMutation(api.mobile.archiveSession);
+  const archiveSession = useMutation(api.chats.archive);
   const unarchiveSession = useMutation(api.sessions.unarchive);
   const removeFromGroup = useMutation(api.sessions.removeFromGroup);
   const renameGroup = useMutation(api.sessions.renameGroup);
