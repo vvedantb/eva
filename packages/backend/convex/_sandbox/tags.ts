@@ -42,6 +42,21 @@ export function resolveConvexDeploymentSlug(): string | null {
 }
 
 /**
+ * The other Convex deployment that owns this sandbox, or null when it is ours
+ * or untagged. The prod-to-dev sync copies prod's Vercel credentials and
+ * session rows, so dev can reach prod VMs: it must never stop, exec in or
+ * delete one.
+ */
+export function foreignSandboxDeployment(
+  tags: Record<string, string> | undefined,
+): string | null {
+  const owner = tags?.[SANDBOX_TAG.deployment];
+  if (!owner) return null;
+  const own = resolveConvexDeploymentSlug();
+  return own !== null && owner !== own ? owner : null;
+}
+
+/**
  * General deployment environment (`development` / `production` / …).
  * Set `ENVIRONMENT` per Convex deployment. Undefined when unset.
  */

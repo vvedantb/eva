@@ -82,6 +82,12 @@ async function deleteChatRows(
     .collect();
   for (const row of envRequests) await ctx.db.delete(row._id);
   deleted += envRequests.length;
+  const proposals = await ctx.db
+    .query("sessionProposals")
+    .withIndex("by_parent", (q) => q.eq("parentId", parentId))
+    .collect();
+  for (const row of proposals) await ctx.db.delete(row._id);
+  deleted += proposals.length;
   return deleted;
 }
 

@@ -291,15 +291,22 @@ export function SessionGroupFooter({ section, onToggleExpanded }: { section: Ses
  * tap. A long press opens its menu (the web right-click).
  */
 export function SessionListRow({
-  row: { session, repo, inGroup },
-  onLongPress,
-  swipeAction,
+  row,
+  onOpenMenu,
+  swipe,
+  onSwipe,
 }: {
   row: SessionRow;
-  onLongPress: () => void;
-  /** The row menu's Archive (or Unarchive), revealed by a swipe left. */
-  swipeAction: SwipeAction;
+  /** A long press: the row menu. The same function for every row, so an unchanged row keeps its output. */
+  onOpenMenu: (row: SessionRow) => void;
+  /** The look of the row menu's Archive (or Unarchive), revealed by a swipe left. */
+  swipe: Omit<SwipeAction, "onPress">;
+  /** Runs that action on this row; the same function for every row. */
+  onSwipe: (row: SessionRow) => ReturnType<SwipeAction["onPress"]>;
 }) {
+  const { session, repo, inGroup } = row;
+  const onLongPress = () => onOpenMenu(row);
+  const swipeAction: SwipeAction = { ...swipe, onPress: () => onSwipe(row) };
   const router = useRouter();
   const scheme = useScheme();
   const muted = EVA_THEME[scheme].mutedForeground;

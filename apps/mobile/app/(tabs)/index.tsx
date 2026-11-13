@@ -28,6 +28,7 @@ import { InboxHeaderActions, type InboxFilter } from "@/inbox/InboxHeaderActions
 import { NotificationRow, type NotificationRepo } from "@/inbox/NotificationRow";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
+import { LIST_WINDOW } from "@/ui/listWindow";
 
 /**
  * The web inbox at phone width: All / Unread / Archived, grouped by day,
@@ -199,6 +200,7 @@ export default function InboxScreen() {
           keyExtractor={(notification) => notification._id}
           // Each group header sticks while its rows scroll, as the web `sticky top-0` header.
           stickySectionHeadersEnabled
+          {...LIST_WINDOW}
           renderSectionHeader={({ section }) => (
             <View
               className="px-4 py-1.5"

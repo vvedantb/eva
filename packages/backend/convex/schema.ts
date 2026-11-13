@@ -67,6 +67,7 @@ import {
   chatHtmlRenderFields,
   chatHtmlRenderBodyFields,
   envVarRequestFields,
+  sessionProposalFields,
   previewToolCallFields,
   proposedPlanFields,
   agentUsageLimitFields,
@@ -76,7 +77,6 @@ import {
   notificationFields,
   repoEnvVarFields,
   repoSnapshotFields,
-  sandboxConfigFileFields,
   teamMemberFields,
   teamEnvVarFields,
   presentationStatusValidator,
@@ -290,6 +290,10 @@ const schema = defineSchema({
   envVarRequests: defineTable(envVarRequestFields).index("by_parent", [
     "parentId",
   ]),
+  // "Start this in a new session" cards the agent posts (`propose_session`).
+  sessionProposals: defineTable(sessionProposalFields).index("by_parent", [
+    "parentId",
+  ]),
   // Agent → live-preview WebMCP tool calls relayed through the user's open Eva
   // tab. Short-lived: cleared when the entity's sandbox stops.
   previewToolCalls: defineTable(previewToolCallFields).index(
@@ -443,7 +447,6 @@ const schema = defineSchema({
     .index("by_repo_snapshot", ["repoSnapshotId"])
     .index("by_repo_snapshot_and_status", ["repoSnapshotId", "status"])
     .index("by_status", ["status"]),
-  sandboxConfigFiles: defineTable(sandboxConfigFileFields).index("by_repo", ["repoId"]),
   teams: defineTable(teamFields).index("by_created_by", ["createdBy"]),
   teamMembers: defineTable(teamMemberFields)
     .index("by_team", ["teamId"])

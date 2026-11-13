@@ -1,5 +1,48 @@
 # Changelog
 
+## Phone: Sessions and Projects tabs compile; lighter lists and chat rows
+
+Date: 2026-11-13
+
+WHY: Tab switches still lagged. The React Compiler bailed on the whole Sessions and Projects screens, session rows got new handlers on each render, the Inbox mounted all 100 rows at start, and every chat message redrew on each list batch.
+
+Architectural: The section lookup moved out of the screens (`src/ui/sectionIndex.ts`): a `findIndex` on a pill list that was sometimes the module constant hit a compiler internal error ("MethodCall::property must be an unpromoted + unmemoized MemberExpression"). `SessionListRow` takes stable `onOpenMenu` / `swipe` / `onSwipe`. Inbox and Sessions lists use `LIST_WINDOW` (12 first, window 7, batches of 8). Chat messages are a compiled `ChatMessageRow` with id-taking handlers. A full compiler scan of apps/mobile now finds no bailouts.
+
+## Removed the snapshot Config Files settings page
+
+Date: 2026-11-13
+
+WHY: No repo used it. The `sandboxConfigFiles` table had 0 rows on prod and dev.
+
+- Web: removed the Config Files tab and its upload UI from snapshot settings. `/settings/snapshots/config-files` is no longer a tab; the existing unknown-tab guard sends it to `configuration`.
+- Convex: deleted `sandboxConfigFiles.ts` and dropped the `sandboxConfigFiles` table.
+- Snapshot build: no config-file download, no `/home/eva/sandbox-config` copy. The `startup-pre-daemon` stage existed only for config-file moves, so all startup commands now run after the daemons.
+- Sandbox start: removed `copySandboxConfigFilesToWorkspace` and the "Restoring config files..." step.
+
+## Chats: the agent can suggest a new session in a card
+
+Date: 2026-11-13
+
+WHY: An agent asked for unrelated work mid-task either did it in the same chat, which mixed two changes on one branch, or called `create_session` on its own. The user had no say.
+
+Architectural: New eva MCP tool `propose_session` (`mcp/chatSelfTools.ts`, mounted for sessions, quick tasks and projects) stores a `sessionProposals` row (title, reason, brief) anchored to the latest message. `ChatBody` places it as an inline card like `request_env_var`. "New session" calls `sessionProposals.start`: `createSession` in the same repo on the repo defaults, the brief as first message, joined to the linked-session group; the user stays in the chat and the card becomes a link. "Do it here" calls `sessionProposals.keepHere` and posts the returned message to the agent. Nothing runs before a click and cards do not expire. The chat runtime prompt names the tool. Needs a Convex deploy.
+
+## Sandboxes: a deployment never touches another deployment's VMs
+
+Date: 2026-11-13
+
+WHY: Session sandboxes stopped in the middle of a turn. The prod-to-dev sync copies prod's Vercel credentials and session rows to dev, so dev's leak sweep and idle pause stopped running prod VMs from a stale copy of their owner rows. Prod never asked for the stop, so the chat showed only "Sandbox stopped while this turn was running."
+
+Architectural: `foreignSandboxDeployment` (`_sandbox/tags.ts`) compares a VM's `eva.deployment` tag with the own Convex slug. `VercelSandboxClient.get` throws a 404 `SandboxProviderError` for a foreign VM, so every stop, exec and delete classifies it as sandbox-gone and drops the mirrored row. `sandboxLeakSweep` skips foreign VMs in the list. `sync-prod-to-dev.mjs` runs the new `sandboxIdlePause.switchOffInternal` after the import. Untagged VMs (created without `ENVIRONMENT`, or with five caller tags) are not protected.
+
+## Chat alerts: amber warnings, icons; VM memory on the turn heartbeat
+
+Date: 2026-11-13
+
+WHY: Session 427's VM stopped three times with no reason in the logs, and the "Sandbox startup unfinished" warning (session still running) looked like a red error.
+
+Architectural: `messages.alertTone` (optional `"warning"`) marks system alerts that did not fail the session; `sandboxStartupWarning` and the seeded-restore alert set it. `SystemAlertMessage` renders warnings with an amber triangle and "View details", and alerts with `errorDetail` with a red circle and "View error"; plain dividers stay icon-less. The callback daemon reads `/proc/meminfo` (`runtime/vmMemory.ts`) and adds `memTotalMb`/`memAvailableMb`/`swapUsedMb` to the HMAC heartbeat at most every 30s; the `/api/streaming/heartbeat` route logs `[heartbeat][vm]` so Axiom shows memory pressure before a VM dies.
+
 ## Phone: Sessions tab reads the web's session lists and shows linked groups
 
 Date: 2026-11-12
