@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: the `scrollbar` utility comes from @vvedantb/ui
+
+Date: 2026-11-13
+
+WHY: vibot and eva each had their own copy of the same thin-scrollbar utility. One shared copy stops the two from drifting.
+
+Architectural: `apps/web/src/globals.css` imports `@vvedantb/ui/tokens/css/scrollbar.css` and the local `@utility scrollbar` block is gone. The shared utility reads `--scrollbar-base`; eva sets it to `rgb(var(--muted-foreground))` for `:root`, `.dark` and `.dark.neutral`, so the colours stay the same. `@vvedantb/ui` moves from the `0.41.1-next` pre-release pin to `^0.42.0` in web, chrome-extension, `packages/shared` and `packages/ui`.
+
 ## Phone: back to the uncompiled native-ui while the tab crash is found
 
 Date: 2026-11-13
