@@ -61,6 +61,12 @@ jobs:
         if: ${{ !cancelled() }}
         run: pnpm test
 
+      # One backend for both apps: fails when the phone calls a Convex
+      # function the web never calls, unless it is allowed with a reason.
+      - name: Shared backend
+        if: ${{ !cancelled() }}
+        run: node scripts/check-shared-backend.mjs
+
       # Fails on a new React Compiler bailout that is not in the baseline.
       - name: React Compiler bailouts
         if: ${{ !cancelled() }}
