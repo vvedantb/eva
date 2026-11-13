@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: native crashes show on the next launch too
+
+Date: 2026-11-13
+
+WHY: The Sessions/Projects tab crash is native: it closes the app before JavaScript can save anything (0.1.56's JS crash report never showed). Android 11+ keeps why the last process ended, with the tombstone for a native crash.
+
+Architectural: Local Expo module `apps/mobile/modules/exit-info` (`ExitInfoModule.kt`, autolinked) returns the last `ApplicationExitInfo`: reason, time, description and the trace (ANR text, or the printable parts of a native tombstone: signal, abort message, libraries, functions; 6 KB max). `loadLastCrash` shows a crash, native crash or ANR newer than the last one shown (`eva.lastExitSeen`) in the same "Eva closed after an error" dialog, with Copy details.
+
 ## Web: the `scrollbar` utility comes from @vvedantb/ui
 
 Date: 2026-11-13

@@ -3,6 +3,7 @@ import * as SecureStore from "expo-secure-store";
 import { useSyncExternalStore } from "react";
 import { z } from "zod";
 import type { FatalReport } from "@/logging/unhandledRejections";
+import { lastExit } from "../../modules/exit-info";
 
 // The last error that closed the app. A release build closes with no message
 // and no log a phone user can read, so the error handler saves it here and
@@ -40,13 +41,46 @@ const publish = (next: LastCrash | null) => {
   for (const listener of listeners) listener();
 };
 
-/** Reads the saved crash once at start (`app/_layout.tsx`). */
+/** Android's exit records shown already: the last one's time. */
+const SEEN_EXIT_KEY = "eva.lastExitSeen";
+const EXIT_TITLES: Record<string, string> = {
+  crash_native: "Native crash",
+  crash: "Android crash",
+  anr: "App not responding",
+};
+
+/**
+ * A native crash closes the app before JavaScript runs, so nothing is saved.
+ * Android keeps why the last process ended (`modules/exit-info`): a crash or
+ * ANR newer than the last one shown becomes the report.
+ */
+async function nativeExitCrash(): Promise<LastCrash | null> {
+  const exit = await lastExit();
+  if (!exit) return null;
+  const name = EXIT_TITLES[exit.reason];
+  if (!name) return null;
+  const seen = Number((await SecureStore.getItemAsync(SEEN_EXIT_KEY)) ?? 0);
+  if (exit.timestamp <= seen) return null;
+  await SecureStore.setItemAsync(SEEN_EXIT_KEY, String(exit.timestamp));
+  return {
+    at: exit.timestamp,
+    version: Constants.expoConfig?.version ?? "?",
+    name,
+    message: (exit.description || exit.reason).slice(0, 500),
+    stack: exit.trace,
+  };
+}
+
+/** Reads the saved crash once at start (`app/_layout.tsx`): a JS fatal first, else Android's record. */
 export async function loadLastCrash(): Promise<void> {
   try {
     const text = await SecureStore.getItemAsync(KEY);
-    if (!text) return;
-    const parsed = crashSchema.safeParse(JSON.parse(text));
-    publish(parsed.success ? parsed.data : null);
+    const parsed = text ? crashSchema.safeParse(JSON.parse(text)) : null;
+    if (parsed?.success) {
+      publish(parsed.data);
+      return;
+    }
+    publish(await nativeExitCrash());
   } catch {
     // Nothing to show.
   }
