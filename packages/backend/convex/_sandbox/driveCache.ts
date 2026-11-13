@@ -144,7 +144,8 @@ export type DriveCacheRole =
  * were created in iad1 (2026-10-06); sandboxes moved to cdg1 the next day, and
  * from then on every `getOrCreate` failed with "409 already exists in a
  * different region", so no sandbox mounted its Drive. Moving
- * {@link SANDBOX_REGION} again now creates a new Drive instead of failing.
+ * {@link SANDBOX_REGION} (back to iad1 on 2026-11-13) now creates a new Drive
+ * instead of failing.
  */
 export function driveCacheName(repoId: string): string {
   return `eva-${SANDBOX_REGION}-${repoId}`;
