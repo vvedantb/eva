@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: chats load like the web (newest 30, then older pages)
+
+Date: 2026-11-13
+
+WHY: The phone read a chat's whole transcript at once (`messages.listByParent` with no range: about 3.2 MB for 400 messages), which the web stopped doing.
+
+Architectural: The load plan moved to `@eva/shared` (`transcriptTailArgs`, `transcriptLiveArgs`, `olderTranscriptArgs`); the web's `useChatTranscript` uses it. The phone's new `src/chat/useChatTranscript.ts` opens on the newest 30, follows `since` the oldest of them, and loads older pages (50, 100, 200, 400, then the rest) when the inverted list nears its top (`onEndReached`), with a spinner while one loads. Fork asks the server for its prefix (`forkPrefixByParent`) while history above is not loaded, as the web does.
+
 ## Phone: Sessions and Projects tabs compile; lighter lists and chat rows
 
 Date: 2026-11-13
