@@ -42,7 +42,7 @@ import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { Linking, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AssistantMessage, LiveAssistantMessage } from "@/chat/AssistantMessage";
@@ -55,7 +55,7 @@ import { DayDivider } from "@/chat/DayDivider";
 import { UserMessageText } from "@/chat/MentionChip";
 import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
 import { MentionMenu } from "@/chat/MentionMenu";
-import { MessageFooter } from "@/chat/MessageFooter";
+import { MessageFooter, type Sentiment } from "@/chat/MessageFooter";
 import { useAttachments } from "@/chat/useAttachments";
 import { type Chat, useChatModelPick } from "@/chat/useChatModelPick";
 import { useMentionComposer } from "@/chat/useMentionComposer";
@@ -170,6 +170,11 @@ export default function ChatScreen() {
       toast.error("Couldn't fork the chat");
     }
   };
+  // One function each for every row (see `ChatMessageRow`).
+  const forkFrom = chat.kind === "session" ? (messageId: string) => void handleFork(messageId) : undefined;
+  const rateReply = (messageId: ChatMessage["_id"], sentiment: Sentiment | null) => {
+    rate({ messageId, sentiment }).catch(() => toast.error("Couldn't save your rating"));
+  };
 
   return (
     <View className="flex-1">
@@ -218,67 +223,26 @@ export default function ChatScreen() {
               </View>
             ) : null
           }
+          // Plain values and stable handlers, so a message that did not change keeps its output
+          // when the list draws a new batch or the screen re-renders.
           renderItem={({ item: message }) => {
-            // A teammate's turn is theirs, not yours: on the left with their avatar and name, as the web.
             const fromTeammate = isOtherUserChatMessage(message, me ?? undefined);
-            const senderName = fromTeammate && message.userId ? teammateNames.get(message.userId) : undefined;
             return (
-              <View className={`gap-3 ${THREAD_INSET}`}>
-                {dayStarts.has(message._id) ? <DayDivider timestamp={message.timestamp} /> : null}
-                {/* Web: parts `gap-0.5`; a reply is full width, a user message at most 95%. */}
-                <Message
-                  from={message.role}
-                  className={message.role === "user" ? "gap-0.5" : "max-w-full gap-0.5"}
-                  style={fromTeammate ? TEAMMATE_SIDE : undefined}
-                >
-                  {senderName ? <TeammateName name={senderName} /> : null}
-                  {fromTeammate ? (
-                    <TeammateBubble sender={message.userId ? teammateById.get(message.userId) : undefined}>
-                      <UserMessageText content={message.content} />
-                    </TeammateBubble>
-                  ) : (
-                    // Eva's web chat tints the user bubble (bg-primary/10), not the solid default. A reply is `px-1 py-2`.
-                    <MessageContent bubble="tint" className={message.role === "user" ? undefined : "px-1 py-2"}>
-                      {message.role === "user" ? (
-                        // The web user text is markdown in `text-sm` (14 / 20), its tokens as chips.
-                        <UserMessageText content={message.content} />
-                      ) : message._id === liveReplyId && streamingEntityId ? (
-                        <LiveAssistantMessage streamingEntityId={streamingEntityId} messageId={message._id} />
-                      ) : (
-                        <AssistantMessage
-                          messageId={message._id}
-                          content={message.content}
-                          activityLog={message.activityLog}
-                          duration={message.finishedAt ? formatDuration(message.timestamp, message.finishedAt) : undefined}
-                          isLatestAssistantTurn={message._id === latestReplyId}
-                          onOpenDiff={openDiff}
-                        />
-                      )}
-                    </MessageContent>
-                  )}
-                  {message.content.trim() !== "" ? (
-                    <MessageFooter
-                      className={fromTeammate ? TEAMMATE_FOOTER_INSET : undefined}
-                      text={message.content}
-                      at={message.timestamp}
-                      finishedAt={message.role === "assistant" ? message.finishedAt : undefined}
-                      link={webUrl(messageLinkHref(chat.webPath, message._id))}
-                      onFork={chat.kind === "session" ? () => void handleFork(message._id) : undefined}
-                      turn={message.role === "assistant" ? precedingUserTurns.get(message._id) : undefined}
-                      rating={
-                        message.role === "assistant"
-                          ? {
-                              sentiment: mine.get(message._id)?.sentiment,
-                              onRate: (sentiment) => {
-                                rate({ messageId: message._id, sentiment }).catch(() => toast.error("Couldn't save your rating"));
-                              },
-                            }
-                          : undefined
-                      }
-                    />
-                  ) : null}
-                </Message>
-              </View>
+              <ChatMessageRow
+                message={message}
+                dayStart={dayStarts.has(message._id)}
+                fromTeammate={fromTeammate}
+                senderName={fromTeammate && message.userId ? teammateNames.get(message.userId) : undefined}
+                teammate={fromTeammate && message.userId ? teammateById.get(message.userId) : undefined}
+                live={message._id === liveReplyId ? streamingEntityId : undefined}
+                isLatestReply={message._id === latestReplyId}
+                link={webUrl(messageLinkHref(chat.webPath, message._id))}
+                turn={message.role === "assistant" ? precedingUserTurns.get(message._id) : undefined}
+                sentiment={mine.get(message._id)?.sentiment}
+                onOpenDiff={openDiff}
+                onFork={forkFrom}
+                onRate={rateReply}
+              />
             );
           }}
         />
@@ -432,6 +396,102 @@ function ChatDock({
     <Text variant="muted" className="px-4 pb-8 pt-3 text-center" style={textColor(scheme, "muted")}>
       This chat is closed.
     </Text>
+  );
+}
+
+type ChatMessage = FunctionReturnType<typeof api.messages.listByParent>[number];
+
+/**
+ * One transcript message: its day divider, bubble or reply, and footer. Its
+ * own component with plain values and handlers that take the message id, so
+ * the React Compiler keeps an unchanged message's output when the inverted
+ * list draws a new batch or the screen re-renders.
+ */
+function ChatMessageRow({
+  message,
+  dayStart,
+  fromTeammate,
+  senderName,
+  teammate,
+  live,
+  isLatestReply,
+  link,
+  turn,
+  sentiment,
+  onOpenDiff,
+  onFork,
+  onRate,
+}: {
+  message: ChatMessage;
+  dayStart: boolean;
+  fromTeammate: boolean;
+  senderName: string | undefined;
+  teammate: ComponentProps<typeof TeammateBubble>["sender"];
+  /** The streaming row's entity id while this is the live reply. */
+  live: string | undefined;
+  isLatestReply: boolean;
+  link: string;
+  turn: ComponentProps<typeof MessageFooter>["turn"];
+  sentiment: Sentiment | undefined;
+  onOpenDiff: ComponentProps<typeof AssistantMessage>["onOpenDiff"];
+  onFork: ((messageId: string) => void) | undefined;
+  onRate: (messageId: ChatMessage["_id"], sentiment: Sentiment | null) => void;
+}) {
+  return (
+              <View className={`gap-3 ${THREAD_INSET}`}>
+                {dayStart ? <DayDivider timestamp={message.timestamp} /> : null}
+                {/* Web: parts `gap-0.5`; a reply is full width, a user message at most 95%. */}
+                <Message
+                  from={message.role}
+                  className={message.role === "user" ? "gap-0.5" : "max-w-full gap-0.5"}
+                  style={fromTeammate ? TEAMMATE_SIDE : undefined}
+                >
+                  {senderName ? <TeammateName name={senderName} /> : null}
+                  {fromTeammate ? (
+                    <TeammateBubble sender={teammate}>
+                      <UserMessageText content={message.content} />
+                    </TeammateBubble>
+                  ) : (
+                    // Eva's web chat tints the user bubble (bg-primary/10), not the solid default. A reply is `px-1 py-2`.
+                    <MessageContent bubble="tint" className={message.role === "user" ? undefined : "px-1 py-2"}>
+                      {message.role === "user" ? (
+                        // The web user text is markdown in `text-sm` (14 / 20), its tokens as chips.
+                        <UserMessageText content={message.content} />
+                      ) : live ? (
+                        <LiveAssistantMessage streamingEntityId={live} messageId={message._id} />
+                      ) : (
+                        <AssistantMessage
+                          messageId={message._id}
+                          content={message.content}
+                          activityLog={message.activityLog}
+                          duration={message.finishedAt ? formatDuration(message.timestamp, message.finishedAt) : undefined}
+                          isLatestAssistantTurn={isLatestReply}
+                          onOpenDiff={onOpenDiff}
+                        />
+                      )}
+                    </MessageContent>
+                  )}
+                  {message.content.trim() !== "" ? (
+                    <MessageFooter
+                      className={fromTeammate ? TEAMMATE_FOOTER_INSET : undefined}
+                      text={message.content}
+                      at={message.timestamp}
+                      finishedAt={message.role === "assistant" ? message.finishedAt : undefined}
+                      link={link}
+                      onFork={onFork ? () => onFork(message._id) : undefined}
+                      turn={turn}
+                      rating={
+                        message.role === "assistant"
+                          ? {
+                              sentiment,
+                              onRate: (next) => onRate(message._id, next),
+                            }
+                          : undefined
+                      }
+                    />
+                  ) : null}
+                </Message>
+              </View>
   );
 }
 
