@@ -1051,6 +1051,7 @@ export const sandboxStartupWarning = internalMutation({
         : "Sandbox startup unfinished — session left running. Some services may still be starting.",
       timestamp: Date.now(),
       isSystemAlert: true,
+      alertTone: "warning",
       errorDetail: args.error,
     });
     return null;

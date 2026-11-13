@@ -1390,6 +1390,9 @@ export const messageFields = {
   // server row once the reactive query delivers it.
   clientId: v.optional(v.string()),
   isSystemAlert: v.optional(v.boolean()),
+  // System alerts that did not fail the session (it keeps running) render
+  // amber. Unset alerts with `errorDetail` render as errors.
+  alertTone: v.optional(v.literal("warning")),
   errorDetail: v.optional(v.string()),
   // Assistant rows: why the turn failed, when the client needs to react to the
   // class of failure (the usage-limit recovery banner). Only "rate_limit" is
