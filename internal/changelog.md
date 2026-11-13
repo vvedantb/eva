@@ -1,5 +1,13 @@
 # Changelog
 
+## Backend: chat actions under one neutral name (chats.*)
+
+Date: 2026-11-13
+
+WHY: The owner wants one backend for both apps. The phone's `mobile.*` functions (open a chat by target, send, stop, set model, start a session, archive) already make each decision once on the server; the web makes the same decisions in the browser. They now live in `convex/chats.ts` (`get`, `send`, `setModel`, `stop`, `start`, `archive`) for both apps to use.
+
+Architectural: `mobile.ts` keeps the old names as re-exports of `chats.*` for installed APKs (a test checks `mobile.getChat` equals `chats.get`), plus the deprecated `listChats`. Next: the phone switches to `chats.*` once prod Convex has this module; then the web moves onto `chats.*` one action at a time; then `mobile.ts` goes.
+
 ## Lint: wider Hermes guard for phone and shared code
 
 Date: 2026-11-13
