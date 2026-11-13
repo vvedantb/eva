@@ -1,5 +1,13 @@
 # Changelog
 
+## Lint: wider Hermes guard for phone and shared code
+
+Date: 2026-11-13
+
+WHY: `toSorted` in shared code crashed the phone Sessions tab (#1299). TypeScript cannot catch this here: some packages pull in ESNext lib types for every project, and `packages/shared` is not in the root typecheck.
+
+Architectural: The apps/mobile + packages/shared override in `.oxlintrc.json` also forbids `Object.groupBy`, `Map.groupBy`, `Promise.withResolvers`, `Array.fromAsync` and the `structuredClone` global. Set methods (`union`, ...) stay allowed: their names collide with `z.union`. The mobile `test` script no longer runs `hermesApis.test.mjs`, deleted in #1156.
+
 ## Phone: Sessions tab no longer crashes ("undefined is not a function")
 
 Date: 2026-11-13
