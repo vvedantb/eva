@@ -1,5 +1,23 @@
 # Changelog
 
+## Session chats: Delete a parallel chat and all its messages
+
+Date: 2026-11-13
+
+WHY: Users could only rename chat tabs. Extra chats piled up with no way to clear them.
+
+- Web: right-click a chat tab → Delete → confirm dialog. Not on Main; disabled while the chat runs. Deleting the open chat switches to Main.
+- Backend: `sessionChats.remove` hides the chat (`archived`), drops its queued sends and the caller's draft, then `_sessionChats/purge.purgeDeletedChat` deletes messages 100 per run, then cards, env requests, proposals and closed turns. The chat row stays as a tombstone so `?chat=N` numbers are never reused.
+- Architectural: `deleteChatRows` moved from `_migrations/deleteRepos.ts` to `_sessionChats/purge.ts` (optional page size) and is shared by both. `tests/sessionChatTabs.test.ts` called a removed `archive` mutation; it now covers `remove`.
+
+## CI: main is green again
+
+Date: 2026-11-13
+
+WHY: Main's CI failed on every run, so new failures hid among old ones and PRs merged with `--admin`; the Hermes, shared-backend and APK guards only block once main is green.
+
+Architectural: `useSandboxLifecycle.run` uses `.finally` instead of a `try`/`finally` statement (React Compiler bailed on the whole file); the agent-browsing auto-switch effect keeps its `no-event-handler` disable with the reason (a live query change has no local event). `sessionChatTabs.test.ts` sets `archived: true` on the row, since `_sessionChats.mutations.archive` was removed (c686b9ad3) but old closed chats keep the flag. `MaintenanceScreen` uses `ui-surface` (16 px corners, was 8); the BackgroundProcessesChip pill is marked deliberate like its BackgroundAgentsChip sibling. The design baseline drops one stale entry.
+
 ## Phone: chat ⋯ menu rows lay out icon and label in one row again
 
 Date: 2026-11-13

@@ -98,6 +98,48 @@ export function buildConvexPostSeedPushLines(repoDir: string): string[] {
   ];
 }
 
+/** Consecutive failed health checks, 10s apart, before the watchdog fails the seed. */
+const CONVEX_BACKEND_WATCHDOG_MISSES = 6;
+
+/**
+ * Shell lines that start a watchdog on the local backend for the rest of the
+ * seed run, once the readiness gate has seen it healthy.
+ *
+ * The supervisor only restarts a backend that never came up. One that dies
+ * later — mid-import on CarePulse eprocurement, every build since 2026-10-28 —
+ * leaves `convex dev` retrying forever and the seed command blocked on it, so
+ * the build only ends at the workflow timeout as "state: running", with the
+ * cause scrolled out of the log tail. The watchdog writes the failure marker
+ * (the poll step reads it at once), records memory and OOM evidence at the
+ * moment of death, and kills the seed script. `$$` is the script's own PID.
+ */
+export function buildConvexBackendWatchdogLines(): string[] {
+  return [
+    "(",
+    // A check every 10s would flood the xtrace'd seed log.
+    "  { set +x; } 2>/dev/null",
+    "  eva_misses=0",
+    "  while sleep 10; do",
+    `    if curl -sf -m 10 ${CONVEX_LOCAL_BACKEND_HEALTH_URL} >/dev/null 2>&1; then eva_misses=0; continue; fi`,
+    "    eva_misses=$((eva_misses+1))",
+    `    [ $eva_misses -lt ${CONVEX_BACKEND_WATCHDOG_MISSES} ] && continue`,
+    '    echo "convex-watchdog: local backend stopped answering on :3210 during the seed run"',
+    "    free -m 2>&1",
+    "    sudo dmesg 2>/dev/null | grep -iE 'out of memory|killed process|oom' | tail -n 10",
+    "    pgrep -a convex-local-backend 2>&1 || echo 'convex-watchdog: no convex-local-backend process'",
+    '    echo "SEEDRUN-FAILED:convex-backend-down"',
+    "    kill -TERM $$ 2>/dev/null",
+    "    exit 0",
+    "  done",
+    ") &",
+    "eva_convex_watchdog=$!",
+  ];
+}
+
+/** Stops the watchdog before stop commands shut the backend down on purpose. */
+export const STOP_CONVEX_BACKEND_WATCHDOG_LINE =
+  'kill "$eva_convex_watchdog" 2>/dev/null || true';
+
 /**
  * Wedge signature `convex dev` prints while it cannot reach the local backend.
  * Cloud-mode `convex dev` never prints this, so its presence in the bg log

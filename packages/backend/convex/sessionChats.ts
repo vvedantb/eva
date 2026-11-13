@@ -10,6 +10,7 @@ export {
   ensureMain,
   create,
   rename,
+  remove,
   setModel,
   setProviderAccountId,
   setTraits,

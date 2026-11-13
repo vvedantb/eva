@@ -317,6 +317,7 @@ import type * as _scopeCheck_verdict from "../_scopeCheck/verdict.js";
 import type * as _scopeCheck_visual from "../_scopeCheck/visual.js";
 import type * as _sessionChats_helpers from "../_sessionChats/helpers.js";
 import type * as _sessionChats_mutations from "../_sessionChats/mutations.js";
+import type * as _sessionChats_purge from "../_sessionChats/purge.js";
 import type * as _sessionChats_queries from "../_sessionChats/queries.js";
 import type * as _sessionProposals_proposals from "../_sessionProposals/proposals.js";
 import type * as _sessions_archive from "../_sessions/archive.js";
@@ -897,6 +898,7 @@ declare const fullApi: ApiFromModules<{
   "_scopeCheck/visual": typeof _scopeCheck_visual;
   "_sessionChats/helpers": typeof _sessionChats_helpers;
   "_sessionChats/mutations": typeof _sessionChats_mutations;
+  "_sessionChats/purge": typeof _sessionChats_purge;
   "_sessionChats/queries": typeof _sessionChats_queries;
   "_sessionProposals/proposals": typeof _sessionProposals_proposals;
   "_sessions/archive": typeof _sessions_archive;

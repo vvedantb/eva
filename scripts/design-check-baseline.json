@@ -209,7 +209,6 @@
   "apps/web/src/lib/components/theme/_components/PresetsSection.tsx :: raw-button",
   "apps/web/src/lib/components/theme/_components/ThemePreview.tsx :: raw-button",
   "apps/web/src/lib/components/theme/_components/ThemePreview.tsx :: raw-radius",
-  "apps/web/src/lib/components/ui/providerLogos.tsx :: text-white-black",
   "apps/web/src/routes/_components/LandingPage.tsx :: shadow-outside-overlay",
   "apps/web/src/routes/_components/LandingTaskDetailMock.tsx :: arbitrary-font-size",
   "apps/web/src/routes/_components/LandingTaskDetailMock.tsx :: raw-palette-colour",
