@@ -12,6 +12,7 @@ import {
   PillTabs,
   SkeletonList,
   SkeletonRow,
+  type SwipeAction,
 } from "@vvedantb/native-ui/primitives";
 import { useLargerText } from "@vvedantb/native-ui/theme";
 import { useQueries, useQuery } from "convex/react";
@@ -30,6 +31,7 @@ import {
   sessionActionTarget,
   useSessionGroups,
   type SessionListItem,
+  type SessionRow,
 } from "@/sessions/SessionGroup";
 import { SESSION_ACTION_ITEMS, useSessionActions } from "@/sessions/useSessionActions";
 import { SegmentedTabs } from "@/ui/SegmentedTabs";
@@ -141,6 +143,17 @@ function SessionsSection() {
   const router = useRouter();
   const [tab, setTab] = useState<SessionTab>("active");
   const sessionActions = useSessionActions();
+  // The row menu and its swipe action, the same for every row in this tab.
+  const swipeKind = tab === "archived" ? "unarchive" : "archive";
+  const swipeItem = SESSION_ACTION_ITEMS[swipeKind];
+  const swipe: Omit<SwipeAction, "onPress"> = {
+    key: swipeKind,
+    label: swipeItem.label,
+    icon: swipeItem.icon,
+    tone: swipeItem.warning ? "warning" : "default",
+  };
+  const openRowMenu = (row: SessionRow) => sessionActions.openSheet(sessionActionTarget(row));
+  const runSwipe = (row: SessionRow) => sessionActions.run(swipeKind, sessionActionTarget(row));
   const repos = useQuery(api.githubRepos.list, {});
   const results = useQueries(
     sessionListQueries(
@@ -223,24 +236,10 @@ function SessionsSection() {
           }}
           // The Inbox hairline between the rows of a group.
           ItemSeparatorComponent={ListDivider}
-          renderItem={({ item: row }) => {
-            const target = sessionActionTarget(row);
-            const action = tab === "archived" ? "unarchive" : "archive";
-            const item = SESSION_ACTION_ITEMS[action];
-            return (
-              <SessionListRow
-                row={row}
-                onLongPress={() => sessionActions.openSheet(target)}
-                swipeAction={{
-                  key: action,
-                  label: item.label,
-                  icon: item.icon,
-                  tone: item.warning ? "warning" : "default",
-                  onPress: () => sessionActions.run(action, target),
-                }}
-              />
-            );
-          }}
+          // Stable handlers and swipe look, so a row whose session did not change keeps its output.
+          renderItem={({ item: row }) => (
+            <SessionListRow row={row} onOpenMenu={openRowMenu} swipe={swipe} onSwipe={runSwipe} />
+          )}
           renderSectionFooter={({ section }) => (
             <SessionGroupFooter section={section} onToggleExpanded={() => toggleExpanded(section.key)} />
           )}
