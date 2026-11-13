@@ -30,7 +30,6 @@
   "apps/web/src/lib/components/chat/ChangedFilesCard.tsx :: raw-button",
   "apps/web/src/lib/components/chat/ChangedFilesCard.tsx :: raw-radius",
   "apps/web/src/lib/components/chat/ChatMessage.tsx :: raw-radius",
-  "apps/web/src/lib/components/chat/CollapsibleUserMessageBody.tsx :: raw-radius",
   "apps/web/src/lib/components/chat/MarkdownMentionText.tsx :: raw-button",
   "apps/web/src/lib/components/chat/MessageForkDialog.tsx :: raw-radius",
   "apps/web/src/lib/components/chat/MessageMentionText.tsx :: raw-button",

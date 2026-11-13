@@ -1,5 +1,7 @@
 import {
+  ChatDayDivider,
   ChatJumpRail,
+  ChatLastTurn,
   Conversation,
   ConversationContent,
   ConversationScrollButton,
@@ -11,8 +13,6 @@ import {
   ChatTranscriptLoading,
 } from "@/lib/components/chat/_components/ChatTranscriptStates";
 import { AnimatePresence, m } from "motion/react";
-import { ChatLastTurn } from "@/lib/components/chat/ChatLastTurn";
-import { ChatDayDivider } from "@/lib/components/chat/_components/ChatDayDivider";
 import { ChatNewDivider } from "@/lib/components/chat/_components/ChatNewDivider";
 import { ChatNewMessagesPill } from "@/lib/components/chat/_components/ChatNewMessagesPill";
 import { ChatBottomPin } from "@/lib/components/chat/_components/ChatBottomPin";

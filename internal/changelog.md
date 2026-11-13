@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: Five UI pieces move to @vvedantb/ui
+
+Date: 2026-11-13
+
+WHY: These components and the scroll-fade CSS were copied into eva from the shared kit. One source means one place to fix and one look across apps (packages#211, `@vvedantb/ui` 0.41.0).
+
+Architectural: `ChatLastTurn`, `ChatDayDivider` and `CollapsibleUserMessageBody` now import from `@vvedantb/ui`; the local copies are deleted and their importers repointed. The divider uses the kit's default day/time labels, which match eva's `formatDayLabel` / `formatClockTime` output exactly, so no formatter is passed. The collapsible keeps its look: the kit's default `hover:bg-surface-secondary/55` resolves to `rgb(var(--muted))` under eva's `compat-shadcn-rgb.css`, the same colour as eva's old `hover:bg-muted/55`. `PageHeader` and `PageWrapper` become thin adapters over the kit's `PageHeaderBar` / `PageWrapper`, fixing eva's layout (`titleLayout="inline"`, `headerColumns="three-at-md"`, `animated`, and `bodyScrollbar` for the wrapper); the adapter keeps eva's prop surface and import paths, and `PageWrapper` calls `usePageTitleSync` itself. `globals.css` drops the local scroll-fade blocks and imports `@vvedantb/ui/tokens/css/scroll-fade.css`; with no `--scroll-fade-max` set the masks stay uncapped as before. Needs the dependency bump to 0.41.0 to resolve.
+
 ## Web: Archive uses chats.archive, as the phone does
 
 Date: 2026-11-13
