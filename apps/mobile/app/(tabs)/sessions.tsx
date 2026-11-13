@@ -45,6 +45,21 @@ const SECTIONS: ReadonlyArray<{ id: Section; label: string }> = [
   { id: "reviews", label: "Reviews" },
 ];
 
+/** The section pills shown: simple view drops Reviews. */
+function visibleSections(simpleView: boolean) {
+  return simpleView ? SECTIONS.filter((option) => option.id !== "reviews") : SECTIONS;
+}
+
+/**
+ * The page for `?section=`, else the first. A plain function: inline in the
+ * screen, this lookup on the pill list made the React Compiler bail on the
+ * whole screen ("MethodCall::property must be an unpromoted + unmemoized
+ * MemberExpression"), so every change redrew the Sessions tab in full.
+ */
+function sectionIndex(sections: ReadonlyArray<{ id: Section }>, param: string | undefined) {
+  return Math.max(0, sections.findIndex((option) => option.id === param));
+}
+
 /**
  * The Sessions tab holds the web's places to work on a repo: Sessions, Quick
  * Tasks and Reviews (pull requests), switched by pills under the title
@@ -61,8 +76,8 @@ export default function SessionsScreen() {
   const router = useRouter();
   const { section: sectionParam } = useLocalSearchParams<{ section?: string }>();
   const simpleView = useSimpleView();
-  const sections = simpleView ? SECTIONS.filter((option) => option.id !== "reviews") : SECTIONS;
-  const index = Math.max(0, sections.findIndex((option) => option.id === sectionParam));
+  const sections = visibleSections(simpleView);
+  const index = sectionIndex(sections, sectionParam);
   const section = sections[index] ?? { id: "sessions", label: "Sessions" };
   // Where the pages are, shared by the pager and the pill indicator.
   const progress = useSharedValue(index);
