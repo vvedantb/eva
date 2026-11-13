@@ -1,4 +1,4 @@
-import { tokens } from "@vvedantb/native-ui/theme";
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import type { ReactNode } from "react";
 import { Image } from "react-native";
 import { useScheme } from "@/ui/theme";
@@ -34,7 +34,7 @@ export function RepoLogo({
         height: size,
         borderRadius: Math.min(ROUNDED_MD, size / 2),
         borderWidth: bordered ? 1 : 0,
-        borderColor: tokens.color.border[scheme],
+        borderColor: EVA_THEME[scheme].border,
       }}
     />
   );

@@ -459,6 +459,8 @@
     --app-shell: 244 245 246;
     --foreground: 9 9 11;
     --card: 255 255 255;
+    /* Active pill of segmented tabs (web) and the phone tab bar. */
+    --segment-active: 255 255 255;
     --card-foreground: 9 9 11;
     --popover: 255 255 255;
     --popover-foreground: 9 9 11;
@@ -594,6 +596,7 @@
     --primary-foreground: 9 9 11;
     --secondary: 32 32 32;
     --secondary-foreground: 252 252 252;
+    --segment-active: 71 71 71;
     --muted: 26 26 26;
     --muted-foreground: 159 160 162;
     --accent: 20 20 20;
@@ -686,6 +689,7 @@
     --popover-foreground: 250 250 250;
     --secondary: 68 69 72;
     --secondary-foreground: 252 252 252;
+    --segment-active: 68 69 72;
     --muted: 58 59 62;
     --muted-foreground: 159 160 162;
     --destructive-foreground: 252 252 252;
@@ -744,10 +748,11 @@
   }
 
   /*
-   * Smooth anchor scrolling for the marketing page only — `#top` is the
-   * landing page root, so in-app routes keep instant scrolling.
+   * Smooth anchor scrolling for the marketing page only — `data-landing` is
+   * set by the landing root (`markLandingRoot`), so in-app routes keep instant
+   * scrolling. Never `html:has(...)`: see `markLandingRoot` for the cost.
    */
-  html:has(#top) {
+  html[data-landing] {
     scroll-behavior: smooth;
   }
   ::selection {
@@ -823,10 +828,10 @@
    * The app has its own scroll panes and live data, so a pull past the top
    * must not reload the page (Android pull-to-refresh) or bounce the shell.
    * Y only: `x` would also turn off trackpad swipe-back on desktop. The landing
-   * page (`#top`) is a document, so it keeps both.
+   * page (`data-landing`) is a document, so it keeps both.
    */
-  html:not(:has(#top)),
-  html:not(:has(#top)) body {
+  html:not([data-landing]),
+  html:not([data-landing]) body {
     overscroll-behavior-y: none;
   }
 
@@ -1134,9 +1139,9 @@ html[data-blur-pid] [data-pii] {
  * correct in BOTH light and dark.
  *
  * Why plain CSS here instead of Tailwind `dark:` utilities:
- *  1. --card and --secondary swap lightness between modes (light: card is
- *     lightest; dark: secondary is lightest), so the active pill cannot be
- *     expressed as a single utility — it needs a per-mode value.
+ *  1. The trough and the pill change per mode (the pill is
+ *     `--segment-active`, shared with the phone through `@eva/shared`), so
+ *     they cannot be one utility.
  *  2. New utility classes added in eva's UI config are not recompiled by the
  *     running dev server without a full restart; these CSS-variable rules
  *     hot-reload reliably. Placed after `@tailwind utilities`, so they win
@@ -1145,18 +1150,13 @@ html[data-blur-pid] [data-pii] {
 .tabs-segmented {
   background-color: rgb(var(--secondary)); /* light: grey trough */
 }
-.tabs-segmented [role="tab"][data-state="active"] {
-  background-color: rgb(
-    var(--card)
-  ); /* light: white pill (lighter than trough) */
+/* The sliding pill (`t-tabs-pill`, `bg-card` from the Tabs config): white in
+ * light, #474747 in dark, so it shows on the trough as the phone tab bar's. */
+.tabs-segmented .t-tabs-pill {
+  background-color: rgb(var(--segment-active));
 }
 .dark .tabs-segmented {
   background-color: rgb(var(--card)); /* dark: card-grey trough */
-}
-.dark .tabs-segmented [role="tab"][data-state="active"] {
-  background-color: rgb(
-    var(--secondary)
-  ); /* dark: lighter pill (lighter than trough) */
 }
 
 /* ───────────────────────────────────────────────────────────────────

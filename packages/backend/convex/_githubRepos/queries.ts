@@ -18,34 +18,31 @@ import {
   PROVIDER_PRIMARY_AUTH_KEY,
 } from "../validators";
 import { filterActiveEntities } from "../numId";
+import { isSessionArchived } from "../_sessions/archive";
+import { isStandaloneSession } from "../_sessions/owner";
 import { listTeammateUserIds } from "../_userProviderAccounts/sharing";
 
-/** How many live sandboxes this app has across quick tasks and projects. */
+/** How many live sandboxes this app's quick tasks and projects hold (their sessions'). */
 async function repoActiveSandboxCount(
   db: GenericDatabaseReader<DataModel>,
   repoId: Id<"githubRepos">,
 ): Promise<number> {
-  // Indexed reads (not full table scans): the index pins both repo and status,
-  // and the take caps a pathological app the way `countActiveSessions` does.
-  const activeProjects = filterActiveEntities(
+  // Indexed read pinning repo and status; the take caps a pathological app
+  // the way `countActiveSessions` does.
+  const activeOwnedSessions = (
     await db
-      .query("projects")
-      .withIndex("by_repo_and_sandbox_status", (q) =>
-        q.eq("repoId", repoId).eq("reviewProjectSandboxStatus", "active"),
+      .query("sessions")
+      .withIndex("by_repo_and_status", (q) =>
+        q.eq("repoId", repoId).eq("status", "active"),
       )
-      .take(64),
-  ).filter((p) => p.sandboxId !== undefined);
-
-  const activeTasks = filterActiveEntities(
-    await db
-      .query("agentTasks")
-      .withIndex("by_repo_and_sandbox_status", (q) =>
-        q.eq("repoId", repoId).eq("reviewTaskSandboxStatus", "active"),
-      )
-      .take(64),
-  ).filter((t) => t.sandboxId !== undefined);
-
-  return activeProjects.length + activeTasks.length;
+      .take(64)
+  ).filter(
+    (s) =>
+      !isStandaloneSession(s) &&
+      s.deletedAt === undefined &&
+      s.sandboxId !== undefined,
+  );
+  return activeOwnedSessions.length;
 }
 
 /** Attaches a resolved `logoUrl` (from `logoStorageId`) to each repo. */
@@ -117,7 +114,9 @@ export const countActiveSessions = authQuery({
             )
             .take(64),
         );
-        return sessions.filter((s) => s.archived !== true).length;
+        return sessions.filter(
+          (s) => isStandaloneSession(s) && !isSessionArchived(s),
+        ).length;
       }),
     );
     return perRepo.reduce((total, n) => total + n, 0);

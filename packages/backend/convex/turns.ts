@@ -57,10 +57,6 @@ import {
   turnStateValidator,
 } from "./_validators/tableFields";
 import { normalizeAIModel } from "./_validators/aiModels";
-import {
-  isLegacyChatExecuting,
-  isLegacySessionExecuting,
-} from "./_chat/turnProjection";
 
 const chatTurnStatusValidator = v.union(
   v.object({
@@ -77,9 +73,8 @@ type ChatTurnStatus = Infer<typeof chatTurnStatusValidator>;
 
 /**
  * Whether one chat has a turn open, for a reader who may see it. The open
- * durable turn is canonical, synthetic turns included. Entities that never
- * opened one fall back to their workflow fields until the lifecycle marker
- * (`turnLifecycleVersion` / `chatTurnLifecycleVersion`) says otherwise.
+ * durable turn is canonical, synthetic turns included. `legacy` is only the
+ * web's optimistic shape before a send's turn exists.
  */
 async function readChatStatus(
   ctx: QueryCtx,
@@ -100,13 +95,16 @@ async function readChatStatus(
   };
 }
 
-/** The legacy bridge for one entity; null when the reader may not see it. */
+/**
+ * The access check for one chat entity: false when the reader may see it,
+ * null otherwise. Every chat runs on durable turns, so nothing else counts.
+ */
 async function readLegacyExecuting(
   ctx: QueryCtx,
   userId: Id<"users">,
   entityId: ChatTurnEntityId,
 ): Promise<boolean | null> {
-  // Session chats are born on the durable turn model: no legacy fields.
+  // Sessions and their chats run only on durable turns: no legacy fields.
   const chatId = ctx.db.normalizeId("sessionChats", entityId);
   if (chatId) {
     const chat = await ctx.db.get(chatId);
@@ -121,13 +119,13 @@ async function readLegacyExecuting(
     if (!session || !(await hasRepoAccess(ctx.db, session.repoId, userId))) {
       return null;
     }
-    return isLegacySessionExecuting(session);
+    return false;
   }
   const taskId = ctx.db.normalizeId("agentTasks", entityId);
   if (taskId) {
     const task = await ctx.db.get(taskId);
     if (!task || !(await hasTaskAccess(ctx.db, task, userId))) return null;
-    return isLegacyChatExecuting(task);
+    return false;
   }
   const projectId = ctx.db.normalizeId("projects", entityId);
   if (!projectId) return null;
@@ -135,7 +133,7 @@ async function readLegacyExecuting(
   if (!project || !(await hasRepoAccess(ctx.db, project.repoId, userId))) {
     return null;
   }
-  return isLegacyChatExecuting(project);
+  return false;
 }
 
 /** Canonical UI projection for whether one chat (session, task or project) has a turn open. */

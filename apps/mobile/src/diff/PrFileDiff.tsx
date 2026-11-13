@@ -1,4 +1,5 @@
 import { lineCommentTarget, lineRangeCommentTarget, unifiedDiffLines, type DiffFileEntry } from "@eva/shared";
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
   IconAlertTriangle,
   IconArrowsVertical,
@@ -27,7 +28,6 @@ import {
   Text,
   Textarea,
 } from "@vvedantb/native-ui/primitives";
-import { tokens } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import * as Clipboard from "expo-clipboard";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -96,7 +96,7 @@ export function TruncatedNote() {
     <Text
       variant="muted"
       className="mx-4 my-2 rounded-lg px-3 py-2 text-xs"
-      style={[textColor(scheme, "muted"), { backgroundColor: tokens.color.surfaceSecondary[scheme] }]}
+      style={[textColor(scheme, "muted"), { backgroundColor: EVA_THEME[scheme].muted }]}
     >
       This diff exceeds the size limit. Changes shown are incomplete.
     </Text>
@@ -207,7 +207,7 @@ export function PrFileDiff({
     <View className="flex-1">
       {diff.truncated ? <TruncatedNote /> : null}
       {/* The web file bar: the whole path (wrapping), the counts, the menu and the tick. */}
-      <View className="flex-row items-center gap-1 py-1 pr-1 pl-4" style={{ borderBottomWidth: 1, borderColor: tokens.color.border[scheme] }}>
+      <View className="flex-row items-center gap-1 py-1 pr-1 pl-4" style={{ borderBottomWidth: 1, borderColor: EVA_THEME[scheme].border }}>
         <View className="min-w-0 flex-1 flex-row flex-wrap items-center gap-x-3 gap-y-1 py-2">
           <FilePath entry={entry} />
           <PendingCommentCount count={fileComments.length} />
@@ -219,7 +219,7 @@ export function PrFileDiff({
           onPress={() => setMenuOpen(true)}
           className="size-11 items-center justify-center rounded-full active:opacity-70"
         >
-          <IconDots size={18} color={tokens.color.foreground[scheme]} />
+          <IconDots size={18} color={EVA_THEME[scheme].foreground} />
         </Pressable>
         <View className="size-11 items-center justify-center">
           <Checkbox
@@ -265,7 +265,7 @@ export function PrFileDiff({
         <View
           accessibilityLiveRegion="polite"
           className="flex-row items-center gap-2 pr-1 pl-4"
-          style={{ borderTopWidth: 1, borderColor: tokens.color.border[scheme], backgroundColor: tokens.color.surfaceSecondary[scheme] }}
+          style={{ borderTopWidth: 1, borderColor: EVA_THEME[scheme].border, backgroundColor: EVA_THEME[scheme].muted }}
         >
           <IconArrowsVertical size={14} color={muted.color} />
           <Text className="min-w-0 flex-1 text-sm" style={textColor(scheme)}>
@@ -285,7 +285,7 @@ export function PrFileDiff({
       )}
       <View
         className="flex-row items-center justify-between px-2 pt-1"
-        style={{ paddingBottom: Math.max(insets.bottom, 8), borderTopWidth: 1, borderColor: tokens.color.border[scheme] }}
+        style={{ paddingBottom: Math.max(insets.bottom, 8), borderTopWidth: 1, borderColor: EVA_THEME[scheme].border }}
       >
         <StepButton direction="previous" disabled={index === 0} onPress={() => step(-1)} />
         <Text variant="muted" className="text-xs" style={[muted, { fontVariant: ["tabular-nums"] }]}>
@@ -444,7 +444,7 @@ function LineCommentSheet({
             <View
               key={comment.id}
               className="flex-row items-start gap-2 rounded-lg py-1 pl-3"
-              style={{ borderWidth: 1, borderColor: tokens.color.border[scheme] }}
+              style={{ borderWidth: 1, borderColor: EVA_THEME[scheme].border }}
             >
               <Text className="min-w-0 flex-1 py-2 text-sm" style={textColor(scheme)}>
                 {comment.body}
@@ -516,7 +516,7 @@ function StepButton({ direction, disabled, onPress }: { direction: "previous" | 
       className="size-11 items-center justify-center rounded-full"
       style={{ opacity: disabled ? 0.4 : 1 }}
     >
-      <Icon size={20} color={tokens.color.foreground[scheme]} />
+      <Icon size={20} color={EVA_THEME[scheme].foreground} />
     </Pressable>
   );
 }

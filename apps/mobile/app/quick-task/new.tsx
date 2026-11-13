@@ -44,7 +44,9 @@ type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
  * Drafts are the web's: leaving with a title or description saves one
  * (`agentTasks.saveDraft`, as the dialog's close), and "Drafts (N)" beside
  * Create lists the repo's saved drafts, from any device, to load or delete.
- * Create on a loaded draft promotes it (`agentTasks.activateDraft`).
+ * Create on a loaded draft promotes it (`agentTasks.activateDraft`). A
+ * link with `draftId` (a Drafts card) opens with that draft loaded, as the
+ * web Drafts page opens the dialog with `?draft=`.
  *
  * Not here from the web dialog: attachments, voice input, @ mentions and /
  * skills, the readiness check, the provider account (the server picks the
@@ -52,11 +54,16 @@ type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
  */
 export default function NewQuickTaskScreen() {
   const router = useRouter();
-  const { repoId: repoParam } = useLocalSearchParams<{ repoId?: string }>();
+  const params = useLocalSearchParams<{ repoId?: string; projectId?: string; draftId?: string }>();
   const leave = () => goBackOrReplace(router, "/sessions?section=quick-tasks");
   const repos = useQuery(api.githubRepos.list, {});
-  const first = repos?.find((candidate) => candidate._id === repoParam) ?? repos?.[0];
-  if (repos === undefined) return <Screen onBack={leave}><CenteredSpinner label="Loading repos" /></Screen>;
+  const first = repos?.find((candidate) => candidate._id === params.repoId) ?? repos?.[0];
+  // The linked draft, once the repo's drafts are in; a removed one opens a blank form.
+  const linkedDrafts = useQuery(api.agentTasks.listDrafts, params.draftId && first ? { repoId: first._id } : "skip");
+  const initialDraft = linkedDrafts === undefined ? undefined : visibleDrafts(linkedDrafts).find((draft) => draft._id === params.draftId);
+  if (repos === undefined || (params.draftId && first && linkedDrafts === undefined)) {
+    return <Screen onBack={leave}><CenteredSpinner label="Loading repos" /></Screen>;
+  }
   if (!first) {
     return (
       <Screen onBack={leave}>
@@ -64,11 +71,27 @@ export default function NewQuickTaskScreen() {
       </Screen>
     );
   }
-  return <NewQuickTaskForm repos={repos} initialRepo={first} onLeave={leave} />;
+  return <NewQuickTaskForm repos={repos} initialRepo={first} projectParam={params.projectId} initialDraft={initialDraft} onLeave={leave} />;
 }
 
-/** The form, once the repos are in: the screen's repo starts as the link's (else the first). */
-function NewQuickTaskForm({ repos, initialRepo, onLeave: leave }: { repos: Repo[]; initialRepo: Repo; onLeave: () => void }) {
+/**
+ * The form, once the repos are in: the screen's repo starts as the link's
+ * (else the first), and the project as the link's (a project's To Do "+").
+ * With `initialDraft` the form starts with that draft loaded (`loadDraft`).
+ */
+function NewQuickTaskForm({
+  repos,
+  initialRepo,
+  projectParam,
+  initialDraft,
+  onLeave: leave,
+}: {
+  repos: Repo[];
+  initialRepo: Repo;
+  projectParam: string | undefined;
+  initialDraft: QuickTaskDraft | undefined;
+  onLeave: () => void;
+}) {
   const scheme = useScheme();
   const theme = EVA_THEME[scheme];
   const insets = useSafeAreaInsets();
@@ -89,19 +112,26 @@ function NewQuickTaskForm({ repos, initialRepo, onLeave: leave }: { repos: Repo[
   const drafts = draftRows === undefined ? undefined : visibleDrafts(draftRows);
   const navigation = useNavigation();
 
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const [title, setTitle] = useState(initialDraft?.title ?? "");
+  const [description, setDescription] = useState(initialDraft?.description ?? "");
   const [priority, setPriority] = useState<Priority | undefined>(undefined);
   const [assignedTo, setAssignedTo] = useState<Id<"users"> | undefined>(undefined);
-  const [tags, setTags] = useState<string[]>([]);
-  const [projectId, setProjectId] = useState<Id<"projects"> | undefined>(undefined);
+  const [tags, setTags] = useState<string[]>(initialDraft?.tags ?? []);
+  // A pick wins; until then, the link's project once the repo's projects resolve it (route params are strings).
+  const [pickedProject, setPickedProject] = useState<{ id: Id<"projects"> | undefined } | null>(
+    initialDraft ? { id: initialDraft.projectId } : null,
+  );
+  const projectId = pickedProject ? pickedProject.id : projects?.find((candidate) => candidate._id === projectParam)?._id;
+  const setProjectId = (id: Id<"projects"> | undefined) => setPickedProject({ id });
   // As the new-session screen: model and traits start from the repo defaults
   // and a pick overrides them; the base branch is kept with its repo.
   const [pickedModel, setPickedModel] = useState<AIModel | null>(null);
   const [pickedTraits, setPickedTraits] = useState<StoredModelTraits>({});
-  const [pickedBranch, setPickedBranch] = useState<{ repoId: Id<"githubRepos">; branch: string } | null>(null);
+  const [pickedBranch, setPickedBranch] = useState<{ repoId: Id<"githubRepos">; branch: string } | null>(
+    initialDraft?.baseBranch ? { repoId: initialRepo._id, branch: initialDraft.baseBranch } : null,
+  );
   const [saving, setSaving] = useState(false);
-  const [activeDraftId, setActiveDraftId] = useState<Id<"agentTasks"> | null>(null);
+  const [activeDraftId, setActiveDraftId] = useState<Id<"agentTasks"> | null>(initialDraft?._id ?? null);
 
   // A task in a project takes the project's base branch (web `useEffectiveProject`).
   const project = useQuery(api.projects.get, projectId ? { id: projectId } : "skip");

@@ -66,7 +66,7 @@ export function useSessionChatHeader({
   const sessionId = session._id;
   // Same gate as the sidebar row: an archived session is read-only.
   const canSendForReview =
-    session.archived !== true && canSendSessionForReview(session);
+    session.archive === undefined && canSendSessionForReview(session);
   // A start that failed leaves the session `closed`, which the header would
   // otherwise render as an ordinary sleeping sandbox. The hook reads the row
   // itself because nothing upstream hands this header the failure.

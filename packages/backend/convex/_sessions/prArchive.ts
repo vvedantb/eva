@@ -2,10 +2,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { resolveExperimentalFlags } from "../_auth/experimentalFlags";
 import { createNotification } from "../notifications";
-import {
-  cancelSessionSandboxGraceDelete,
-  scheduleSessionSandboxGraceDelete,
-} from "../sandboxCleanup";
+import { archiveSession, isSessionArchived, unarchiveSession } from "./archive";
 import {
   clearArchivedPrStates,
   listOwnerPullRequests,
@@ -117,20 +114,14 @@ export async function reconcileSessionArchiveState(
     sessionId,
   });
   const archive = shouldArchiveSession(rows.map((row) => row.state));
+  const archived = isSessionArchived(session);
   const needsArchive =
-    archive &&
-    session.archived !== true &&
-    !(await ownerDisabledAutoArchive(ctx, session));
-  const needsUnarchive = !archive && session.archived === true;
+    archive && !archived && !(await ownerDisabledAutoArchive(ctx, session));
+  const needsUnarchive = !archive && archived;
   if (!needsArchive && !needsUnarchive) return;
 
-  await ctx.db.patch(session._id, {
-    archived: needsArchive,
-    updatedAt: Date.now(),
-  });
-
   if (needsArchive) {
-    const archivedSession: Doc<"sessions"> = { ...session, archived: true };
+    await archiveSession(ctx, session);
     // Merged/closed sessions are read-only — stop any live sandbox so VMs
     // aren't left running forever after the last PR the session opened lands.
     if (
@@ -141,7 +132,6 @@ export async function reconcileSessionArchiveState(
     ) {
       await requestSessionSandboxStop(ctx, session._id);
     }
-    await scheduleSessionSandboxGraceDelete(ctx, archivedSession);
     // Primary first, then in the order the PRs were opened.
     const ordered = [...rows].sort(
       (a, b) => Number(b.primary) - Number(a.primary) || a.createdAt - b.createdAt,
@@ -156,7 +146,7 @@ export async function reconcileSessionArchiveState(
       })),
     );
   } else {
+    await unarchiveSession(ctx, session._id, { touch: true });
     await clearArchivedPrStates(ctx, { kind: "session", sessionId });
-    await cancelSessionSandboxGraceDelete(ctx, session._id);
   }
 }

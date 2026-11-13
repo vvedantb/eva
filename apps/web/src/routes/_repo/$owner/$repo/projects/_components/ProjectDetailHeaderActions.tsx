@@ -14,7 +14,11 @@ import {
   skipConfirmTitle,
   useRequestConfirm,
 } from "@vvedantb/ui";
-import type { Id } from "@eva/backend";
+import {
+  isProjectBuilding,
+  projectScheduledBuildAt,
+  type Id,
+} from "@eva/backend";
 import {
   IconHammer,
   IconPlayerStop,
@@ -186,9 +190,9 @@ export function ProjectDetailHeaderActions({
             only wake/sleep control now, the sandbox chat header carries
             usage alone. */}
         <SandboxCommitPushButton
-          gitSync={project.sandboxGitSync}
+          gitSync={sandbox.sandbox.sandboxGitSync}
           isSandboxActive={isSandboxActive}
-          target={{ kind: "project", projectId }}
+          target={sandbox.sandbox.gitTarget}
         />
         {isSandboxActive || canStartSandbox ? (
           <SandboxStartStopButton
@@ -202,7 +206,7 @@ export function ProjectDetailHeaderActions({
           />
         ) : null}
         {flags.canBuildProject ? (
-          project.activeBuildWorkflowId ? (
+          isProjectBuilding(project) ? (
             <Button
               size="sm"
               variant="destructive"
@@ -229,8 +233,8 @@ export function ProjectDetailHeaderActions({
           ) : (
             <SplitBuildButton
               projectId={projectId}
-              scheduledBuildAt={project.scheduledBuildAt}
-              hasActiveBuild={!!project.activeBuildWorkflowId}
+              scheduledBuildAt={projectScheduledBuildAt(project)}
+              hasActiveBuild={isProjectBuilding(project)}
               onBuild={() => setIsBuildModalOpen(true)}
             />
           )

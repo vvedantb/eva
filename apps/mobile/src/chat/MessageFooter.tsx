@@ -1,10 +1,10 @@
 import { findAIModelOption, getReasoningLevelLabel } from "@eva/backend";
 import { formatClockTime } from "@eva/shared/dayLabel";
 import { formatDuration } from "@eva/shared/duration";
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconCheck, IconGitFork, IconLink } from "@tabler/icons-react-native";
 import { MessageAction, MessageActionsBar, MessageMeta } from "@vvedantb/native-ui/ai";
 import { ProviderIcon } from "@vvedantb/native-ui/brand";
-import { palette } from "@vvedantb/native-ui/theme";
 import * as Clipboard from "expo-clipboard";
 import { useState } from "react";
 import { View } from "react-native";
@@ -96,18 +96,21 @@ export function MessageFooter({
 }
 
 /**
- * The 12 provider mark in a 16 box, as the web `MessageModelIcon`. Its
- * accessible name is the web tooltip's model, effort and account, without the
- * provider prefix the web adds to the model (`formatModelDisplayLabel`).
+ * The provider mark (12, or the queue row's 14) in a 16 box, as the web
+ * `MessageModelIcon`. Its accessible name is the web tooltip's model, effort
+ * and account, without the provider prefix the web adds to the model
+ * (`formatModelDisplayLabel`).
  */
-function ModelIcon({
+export function ModelIcon({
   model,
   reasoningLevel,
   credentialSourceLabel,
+  size = 12,
 }: {
   model: string;
   reasoningLevel?: string;
   credentialSourceLabel?: string;
+  size?: 12 | 14;
 }) {
   const option = findAIModelOption(model);
   const title = [option.label, reasoningLevel ? getReasoningLevelLabel(reasoningLevel) : undefined, credentialSourceLabel]
@@ -115,7 +118,7 @@ function ModelIcon({
     .join(" · ");
   return (
     <View className="size-4 shrink-0 items-center justify-center">
-      <ProviderIcon provider={option.provider} size={12} title={title} />
+      <ProviderIcon provider={option.provider} size={size} title={title} />
     </View>
   );
 }
@@ -123,5 +126,5 @@ function ModelIcon({
 /** The success-coloured check the web shows after a copy. */
 function SuccessCheck(props: { size?: number | string }) {
   const scheme = useScheme();
-  return <IconCheck {...props} color={palette.success[scheme]} />;
+  return <IconCheck {...props} color={EVA_THEME[scheme].success} />;
 }

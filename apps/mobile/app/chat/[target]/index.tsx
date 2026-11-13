@@ -1,10 +1,12 @@
-import { api, getAIModelProvider, normalizeAIModel } from "@eva/backend";
+import { api, getAIModelProvider, normalizeAIModel, type Id } from "@eva/backend";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
 import { formatDuration } from "@eva/shared/duration";
 import {
   buildPrecedingUserTurns,
+  chatStreamingEntityId,
   collectForkPrefix,
+  findStreamingTargetMessage,
   firstNameByUserId,
   forkThreadTitle,
   formatForkPrompt,
@@ -15,8 +17,9 @@ import {
   type SessionMenuAction,
   toRepoRelativePath,
 } from "@eva/shared";
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import { messageLinkHref } from "@eva/shared/messageLink";
-import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
+import { type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { IconChevronDown, IconMessageCircle, IconPlayerStopFilled } from "@tabler/icons-react-native";
 import {
   ChoiceQuestion,
@@ -33,13 +36,16 @@ import {
 } from "@vvedantb/native-ui/ai";
 import { goBackOrReplace, RouterStackPageHeader } from "@vvedantb/native-ui/expo-router";
 import { CenteredSpinner, EmptyState, Text } from "@vvedantb/native-ui/primitives";
+import { tokens } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import type { ReactNode } from "react";
 import { Linking, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AssistantMessage } from "@/chat/AssistantMessage";
+import { AssistantMessage, LiveAssistantMessage } from "@/chat/AssistantMessage";
 import { AttachButton } from "@/chat/AttachButton";
 import { SandboxBranchChip } from "@/chat/BranchChips";
 import { ComposerFooter, ComposerHeader, useSimpleView } from "@/chat/ComposerFooter";
@@ -47,18 +53,23 @@ import { ModelChip } from "@/chat/ModelChip";
 import { ChatHeader } from "@/chat/ChatHeader";
 import { DayDivider } from "@/chat/DayDivider";
 import { UserMessageText } from "@/chat/MentionChip";
+import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { MessageFooter } from "@/chat/MessageFooter";
 import { useAttachments } from "@/chat/useAttachments";
-import { useChatModelPick } from "@/chat/useChatModelPick";
+import { type Chat, useChatModelPick } from "@/chat/useChatModelPick";
 import { useMentionComposer } from "@/chat/useMentionComposer";
 import { WEB_URL } from "@/config";
 import { TEAMMATE_FOOTER_INSET, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
 import { useSessionActions } from "@/sessions/useSessionActions";
 import { textColor, useScheme } from "@/ui/theme";
 
+/** The agent's open question in the chat (`pendingQuestions.getActive`). */
+type PendingQuestion = NonNullable<FunctionReturnType<typeof api.pendingQuestions.getActive>>;
+
 /** The session actions the chat header ⋯ adds; it has Copy link of its own. */
-const HEADER_SESSION_ACTIONS: ReadonlySet<SessionMenuAction> = new Set(["rename", "archive", "unarchive"]);
+// The header has its own Copy link (every chat kind), so the session's is left out.
+const HEADER_HIDDEN_ACTIONS: ReadonlySet<SessionMenuAction> = new Set(["copyLink"]);
 
 /**
  * One chat (session, quick task or project): the transcript with the web
@@ -66,15 +77,15 @@ const HEADER_SESSION_ACTIONS: ReadonlySet<SessionMenuAction> = new Set(["rename"
  * name, as the web), the agent's question when it asks one, and the composer
  * (attachments, Stop beside Send while the agent works, the web `@` / `/`
  * picker) with the web footer: the live sandbox branch, the stash and the
- * chat's sticky model. The transcript is a `ConversationList`, so a long chat
- * draws only the messages near the view. Back returns to where the chat was
- * opened from, or to the Inbox after a deep link.
+ * chat's sticky model. The transcript is an inverted `ConversationList`
+ * (newest first), so a chat opens at its newest message with no scroll, and a
+ * long chat draws only the messages near the view. Back returns to where the
+ * chat was opened from, or to the Inbox after a deep link.
  */
 export default function ChatScreen() {
   const { target } = useLocalSearchParams<{ target: string }>();
   const router = useRouter();
   const scheme = useScheme();
-  const insets = useSafeAreaInsets();
   const chat = useQuery(api.mobile.getChat, { target });
   const parentId = chat?.parentId;
   const messages = useQuery(api.messages.listByParent, parentId ? { parentId } : "skip");
@@ -85,16 +96,10 @@ export default function ChatScreen() {
   // A teammate's turn shows their avatar and first name, from the same lookup as the web `ChatBody`.
   const teammateIds = otherUserIdsInChat(messages ?? [], me ?? undefined);
   const teammates = useQuery(api.users.getMany, teammateIds.length > 0 ? { ids: teammateIds } : "skip");
-  const send = useMutation(api.mobile.sendMessage);
   const stop = useMutation(api.mobile.stopTurn);
   const startSession = useMutation(api.mobile.startSession);
   const rate = useMutation(api.feedback.rateTurn);
-  const answer = useMutation(api.pendingQuestions.answer);
-  const attachments = useAttachments();
   const simpleView = useSimpleView();
-  // The `/` list follows the chat's model provider, as the web composer.
-  const composer = useMentionComposer(chat?.repoId, chat ? getAIModelProvider(normalizeAIModel(chat.model)) : undefined);
-  const modelPick = useChatModelPick(target, chat, me);
   // The web leaves a session's page once it is archived; the phone goes back (to Sessions after a deep link).
   const sessionActions = useSessionActions({ onArchived: () => goBackOrReplace(router, "/sessions") });
 
@@ -112,12 +117,17 @@ export default function ChatScreen() {
   }
 
   const working = turn !== undefined && turn !== null;
+  // The oldest unfinished reply owns the chat's streaming row, as the web (turns run in order).
+  const liveReplyId = findStreamingTargetMessage(messages ?? [])?._id;
+  const streamingEntityId = parentId ? chatStreamingEntityId(parentId) : undefined;
   const visible = (messages ?? []).filter(
     (message) =>
       message.isSystemAlert !== true &&
-      (message.content.trim() !== "" || (message.role === "assistant" && message.activityLog)),
+      (message.content.trim() !== "" || (message.role === "assistant" && message.activityLog) || message._id === liveReplyId),
   );
   const dayStarts = findDayBoundaryIds(visible);
+  // The inverted transcript draws its first row at the bottom. A copy, as `toReversed` is missing in some Hermes release builds.
+  const newestFirst = [...visible].reverse();
   // The user turn before each reply holds the model it ran on (the footer mark), as the web.
   const precedingUserTurns = buildPrecedingUserTurns(messages ?? []);
   const questions = pending ? parsePendingQuestion(pending.payload) : null;
@@ -125,21 +135,6 @@ export default function ChatScreen() {
   const teammateNames = firstNameByUserId(teammates ?? []);
   const teammateById = new Map((teammates ?? []).map((user) => [user._id, user]));
   const latestReplyId = visible.findLast((message) => message.role === "assistant")?._id;
-  // The web composer's placeholder: asleep, a send wakes Eva up; mid-turn, a follow-up.
-  // The phone has no usage-limit hold yet (the web's needs a ticking clock), so that line never shows.
-  // Awake, the web's "Ask Eva anything... / for skills · @ to mention" would wrap the one-row pill
-  // (a native field cannot ellipsise its placeholder), so the phone keeps the first part.
-  const composerState = sandboxComposerState({
-    isSandboxActive: chat.sandboxActive,
-    isSwitchingAccount: modelPick.switching,
-    isExecuting: working,
-    isUsageLimitHeld: false,
-  });
-  const placeholder = working
-    ? "Add a follow-up..."
-    : composerState.placeholder === SANDBOX_CHAT_COPY.activePlaceholder
-      ? "Ask Eva anything..."
-      : composerState.placeholder;
   // A changed file opens the PR diff, as the web Review pane; simple view has no card, as the web.
   const openDiff = simpleView
     ? undefined
@@ -147,28 +142,18 @@ export default function ChatScreen() {
         router.push({ pathname: "/chat/[target]/diff", params: path ? { target, file: toRepoRelativePath(path) } : { target } });
   const webUrl = (path: string) => `${WEB_URL}${path}`;
   const sessionTarget = chat.session
-    ? { sessionId: chat.session.id, title: chat.session.title, archived: chat.session.archived, webPath: chat.webPath }
+    ? {
+        sessionId: chat.session.id,
+        title: chat.session.title,
+        archived: chat.session.archived,
+        webPath: chat.webPath,
+        branchName: chat.intendedBranch,
+        prUrl: chat.prUrl,
+      }
     : null;
 
-  const handleSend = (text: string) => {
-    if (attachments.uploading) {
-      toast.error("Wait for the attachments to upload");
-      return;
-    }
-    // The web composer is locked while the new account's daemon starts.
-    if (modelPick.switching) {
-      toast.error("Wait for the account switch");
-      return;
-    }
-    const attachmentStorageIds = attachments.storageIds;
-    attachments.clear();
-    send({ target: chat.parentId, message: composer.tokenize(text), attachmentStorageIds }).catch(() => {
-      toast.error("Couldn't send your message");
-    });
-  };
-
   const handleStop = () => {
-    stop({ target: chat.parentId }).catch(() => toast.error("Couldn't stop Eva"));
+    stop({ target: chat.target }).catch(() => toast.error("Couldn't stop Eva"));
   };
 
   // Fork: a new session that starts from the transcript up to this message, as the web.
@@ -201,7 +186,7 @@ export default function ChatScreen() {
             ? {
                 groups: sessionActions
                   .actionsFor(sessionTarget)
-                  .map((group) => group.filter((action) => HEADER_SESSION_ACTIONS.has(action))),
+                  .map((group) => group.filter((action) => !HEADER_HIDDEN_ACTIONS.has(action))),
                 onSelect: (action) => sessionActions.run(action, sessionTarget),
               }
             : undefined
@@ -209,12 +194,12 @@ export default function ChatScreen() {
       />
       {sessionActions.dialogs}
       <Conversation>
-        {/* The web thread at 390: the panel (10 in on the left, 20 on the right) and the column's `p-3`, messages `gap-3`. */}
         <ConversationList
-          data={visible}
+          inverted
+          data={newestFirst}
           keyExtractor={(message) => message._id}
-          // The web thread at 390: the panel (10 in on the left, 20 on the right) and the column's `p-3`.
-          contentContainerClassName="pl-[22px] pr-8"
+          // The side padding is in each row: Android flips an inverted list on both axes, which would swap it here.
+          contentContainerClassName="px-0"
           // Web: messages `gap-3`.
           ItemSeparatorComponent={MessageGap}
           ListEmptyComponent={
@@ -224,9 +209,11 @@ export default function ChatScreen() {
               <ConversationEmptyState icon={IconMessageCircle} title="No messages yet" />
             ) : null
           }
-          ListFooterComponent={
-            working && questions === null ? (
-              <View className="pt-3">
+          ListHeaderComponent={
+            // Inverted, the header is the bottom, under the newest message.
+            // The live reply shows its own status; this covers a turn whose reply is not written yet.
+            working && questions === null && liveReplyId === undefined ? (
+              <View className={`pt-3 ${THREAD_INSET}`}>
                 <Shimmer>Working…</Shimmer>
               </View>
             ) : null
@@ -236,7 +223,7 @@ export default function ChatScreen() {
             const fromTeammate = isOtherUserChatMessage(message, me ?? undefined);
             const senderName = fromTeammate && message.userId ? teammateNames.get(message.userId) : undefined;
             return (
-              <View className="gap-3">
+              <View className={`gap-3 ${THREAD_INSET}`}>
                 {dayStarts.has(message._id) ? <DayDivider timestamp={message.timestamp} /> : null}
                 {/* Web: parts `gap-0.5`; a reply is full width, a user message at most 95%. */}
                 <Message
@@ -255,6 +242,8 @@ export default function ChatScreen() {
                       {message.role === "user" ? (
                         // The web user text is markdown in `text-sm` (14 / 20), its tokens as chips.
                         <UserMessageText content={message.content} />
+                      ) : message._id === liveReplyId && streamingEntityId ? (
+                        <LiveAssistantMessage streamingEntityId={streamingEntityId} messageId={message._id} />
                       ) : (
                         <AssistantMessage
                           messageId={message._id}
@@ -294,62 +283,19 @@ export default function ChatScreen() {
           }}
         />
         {/* The composer or the question card: the scroll button rides 16 above it, as the web's `bottom-4` over the dock. */}
-        <ConversationDock>
-          {pending && questions ? (
-            // The web dock: p-3 around the card, in place of the composer, and the thread's 10 more on the right.
-            // Over the bottom inset, as the composer: the dock rises with the keyboard (its "Other..." field) less that inset.
-            <View className="p-3 pr-[22px]" style={{ paddingBottom: insets.bottom + 12 }}>
-              <ChoiceQuestion
-                key={pending.toolUseId}
-                questions={questions}
-                buttonWeight="semibold"
-                onSubmit={async (answers) => {
-                  try {
-                    await answer({ entityId: chat.parentId, toolUseId: pending.toolUseId, answer: JSON.stringify(answers) });
-                  } catch {
-                    toast.error("Couldn't submit answer");
-                  }
-                }}
-              />
-            </View>
-          ) : chat.canReply ? (
-            // Eva's web pill composer, the + on the muted fill, 10 more in on the right as the
-            // thread. Send stays ready during a turn (a send queues behind it) and Stop sits beside
-            // it, as `stopMode="alongside"`.
-            <View className="pr-2.5">
-              <PromptInput
-                layout="inline"
-                shape="pill"
-                value={composer.text}
-                onChangeText={composer.setText}
-                onSubmit={handleSend}
-                menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} /> : null}
-                placeholder={placeholder}
-                leading={
-                  <AttachButton onPress={() => void attachments.pick()} />
-                }
-                header={<ComposerHeader attachments={attachments} composer={composer} />}
-                toolbar={working ? <PromptInputButton icon={IconPlayerStopFilled} label="Stop generating" onPress={handleStop} /> : null}
-                footer={
-                  <ComposerFooter
-                    repoId={chat.repoId}
-                    composer={composer}
-                    attachments={attachments}
-                    leading={
-                      chat.sandboxBranch && !simpleView ? (
-                        <SandboxBranchChip branch={chat.sandboxBranch} intendedBranch={chat.intendedBranch} />
-                      ) : undefined
-                    }
-                    model={modelPick.pick ? <ModelChip repoId={chat.repoId} {...modelPick.pick} /> : undefined}
-                  />
-                }
-              />
-            </View>
-          ) : (
-            <Text variant="muted" className="px-4 pb-8 pt-3 text-center" style={textColor(scheme, "muted")}>
-              This chat is closed.
-            </Text>
-          )}
+        {/* Solid: the keyboard lifts the dock over the transcript, which must not show through it. */}
+        <ConversationDock style={{ backgroundColor: EVA_THEME[scheme].background }}>
+          <ChatDock
+            target={target}
+            chat={chat}
+            me={me}
+            working={working}
+            simpleView={simpleView}
+            pending={pending}
+            questions={questions}
+            onStop={handleStop}
+            queue={<QueuedMessagesPanel parentId={parentId} isExecuting={working} isSandboxActive={chat.sandboxActive} />}
+          />
         </ConversationDock>
         {/* Centred on the thread, which sits 10 left of the screen's centre, as the web panel. */}
         <ConversationScrollButton label="Scroll to end" icon={IconChevronDown} showLabel insets={{ right: 10 }} />
@@ -357,6 +303,140 @@ export default function ChatScreen() {
     </View>
   );
 }
+
+/**
+ * The chat's dock: the agent's question card, the composer or "This chat is
+ * closed". It owns the draft, the attachments and the model pick, so a
+ * keystroke redraws the dock only, not the transcript above it. It stays
+ * mounted while the chat is open, so a draft outlives a question card. The
+ * queue panel sits on the composer, as the web; the screen builds it, so a
+ * keystroke here does not redraw it either.
+ */
+function ChatDock({
+  target,
+  chat,
+  me,
+  working,
+  simpleView,
+  pending,
+  questions,
+  onStop,
+  queue,
+}: {
+  target: string;
+  chat: Chat;
+  me: Id<"users"> | undefined;
+  working: boolean;
+  simpleView: boolean;
+  pending: PendingQuestion | null | undefined;
+  questions: ParsedQuestion[] | null;
+  onStop: () => void;
+  /** The queued messages, above the composer only (not over a question card), as the web. */
+  queue: ReactNode;
+}) {
+  const scheme = useScheme();
+  const insets = useSafeAreaInsets();
+  const send = useMutation(api.mobile.sendMessage);
+  const answer = useMutation(api.pendingQuestions.answer);
+  const attachments = useAttachments();
+  // The `/` list follows the chat's model provider, as the web composer.
+  const composer = useMentionComposer(chat.repoId, getAIModelProvider(normalizeAIModel(chat.model)));
+  const modelPick = useChatModelPick(target, chat, me);
+
+  // The web composer's placeholder: asleep, a send wakes Eva up; mid-turn, a follow-up.
+  // The phone has no usage-limit hold yet (the web's needs a ticking clock), so that line never shows.
+  // Awake, the web's "Ask Eva anything... / for skills · @ to mention" would wrap the one-row pill
+  // (a native field cannot ellipsise its placeholder), so the phone keeps the first part.
+  const composerState = sandboxComposerState({
+    isSandboxActive: chat.sandboxActive,
+    isSwitchingAccount: modelPick.switching,
+    isExecuting: working,
+    isUsageLimitHeld: false,
+  });
+  const placeholder = working
+    ? "Add a follow-up..."
+    : composerState.placeholder === SANDBOX_CHAT_COPY.activePlaceholder
+      ? "Ask Eva anything..."
+      : composerState.placeholder;
+
+  const handleSend = (text: string) => {
+    if (attachments.uploading) {
+      toast.error("Wait for the attachments to upload");
+      return;
+    }
+    // The web composer is locked while the new account's daemon starts.
+    if (modelPick.switching) {
+      toast.error("Wait for the account switch");
+      return;
+    }
+    const attachmentStorageIds = attachments.storageIds;
+    attachments.clear();
+    send({ target: chat.target, message: composer.tokenize(text), attachmentStorageIds }).catch(() => {
+      toast.error("Couldn't send your message");
+    });
+  };
+
+  return pending && questions ? (
+    // The web dock: p-3 around the card, in place of the composer, and the thread's 10 more on the right.
+    // Over the bottom inset, as the composer: the dock rises with the keyboard (its "Other..." field) less that inset.
+    <View className="p-3 pr-[22px]" style={{ paddingBottom: insets.bottom + 12 }}>
+      <ChoiceQuestion
+        key={pending.toolUseId}
+        questions={questions}
+        buttonWeight="semibold"
+        onSubmit={async (answers) => {
+          if (!chat.parentId) return;
+          try {
+            await answer({ entityId: chat.parentId, toolUseId: pending.toolUseId, answer: JSON.stringify(answers) });
+          } catch {
+            toast.error("Couldn't submit answer");
+          }
+        }}
+      />
+    </View>
+  ) : chat.canReply ? (
+    // Eva's web pill composer, the + on the muted fill, 10 more in on the right as the
+    // thread. Send stays ready during a turn (a send queues behind it) and Stop sits beside
+    // it, as `stopMode="alongside"`.
+    <View className="pr-2.5">
+      {queue}
+      <PromptInput
+        layout="inline"
+        shape="pill"
+        value={composer.text}
+        onChangeText={composer.setText}
+        onSubmit={handleSend}
+        menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} onDismiss={composer.dismiss} /> : null}
+        placeholder={placeholder}
+        leading={
+          <AttachButton onPress={() => void attachments.pick()} />
+        }
+        header={<ComposerHeader attachments={attachments} composer={composer} />}
+        toolbar={working ? <PromptInputButton icon={IconPlayerStopFilled} label="Stop generating" onPress={onStop} /> : null}
+        footer={
+          <ComposerFooter
+            repoId={chat.repoId}
+            composer={composer}
+            attachments={attachments}
+            leading={
+              chat.sandboxBranch && !simpleView ? (
+                <SandboxBranchChip branch={chat.sandboxBranch} intendedBranch={chat.intendedBranch} />
+              ) : undefined
+            }
+            model={modelPick.pick ? <ModelChip repoId={chat.repoId} {...modelPick.pick} /> : undefined}
+          />
+        }
+      />
+    </View>
+  ) : (
+    <Text variant="muted" className="px-4 pb-8 pt-3 text-center" style={textColor(scheme, "muted")}>
+      This chat is closed.
+    </Text>
+  );
+}
+
+/** The web thread at 390: the panel (10 in on the left, 20 on the right) and the column's `p-3`. */
+const THREAD_INSET = "pl-[22px] pr-8";
 
 /** The web `gap-3` between two messages. */
 function MessageGap() {

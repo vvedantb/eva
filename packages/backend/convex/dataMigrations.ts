@@ -4,6 +4,7 @@ import type { DataModel } from "./_generated/dataModel";
 import schema from "./schema";
 import { deriveLogUsage } from "./_logs/usage";
 import { archiveSessionDoc } from "./_sessions/mutations";
+import { isSessionArchived } from "./_sessions/archive";
 import type { MutationCtx } from "./_generated/server";
 import {
   buildProjectBranchName,
@@ -128,7 +129,7 @@ export const retireOrchestratorSessions = dataMigrations.define({
     if (user.orchestratorSessionId === undefined) return;
     const session = await ctx.db.get(user.orchestratorSessionId);
     if (session) {
-      if (session.archived !== true) await archiveSessionDoc(ctx, session);
+      if (!isSessionArchived(session)) await archiveSessionDoc(ctx, session);
       // A wake-up queued behind a busy old master would otherwise drain into
       // the archived chat and restart its sandbox.
       const queued = await ctx.db
@@ -348,22 +349,8 @@ export const pruneSessionBackgroundAgents = dataMigrations.define({
   migrateOne: (_ctx, doc) => pruneBackgroundAgentsPatch(doc),
 });
 
-export const pruneAgentTaskBackgroundAgents = dataMigrations.define({
-  table: "agentTasks",
-  batchSize: PRUNE_BACKGROUND_AGENTS_BATCH,
-  migrateOne: (_ctx, doc) => pruneBackgroundAgentsPatch(doc),
-});
-
-export const pruneProjectBackgroundAgents = dataMigrations.define({
-  table: "projects",
-  batchSize: PRUNE_BACKGROUND_AGENTS_BATCH,
-  migrateOne: (_ctx, doc) => pruneBackgroundAgentsPatch(doc),
-});
-
 /** `npx convex run --prod dataMigrations:pruneBackgroundAgents` */
 export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionChatBackgroundAgents,
   internal.dataMigrations.pruneSessionBackgroundAgents,
-  internal.dataMigrations.pruneAgentTaskBackgroundAgents,
-  internal.dataMigrations.pruneProjectBackgroundAgents,
 ]);

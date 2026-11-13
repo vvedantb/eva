@@ -5,46 +5,25 @@ import type {
 } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { SANDBOX_STARTUP_PREFIX, sandboxOwnerKey } from "@eva/shared";
-import { hasRepoAccess, hasTaskAccess } from "../functions";
+import { hasRepoAccess } from "../functions";
 
 /**
  * One sandbox owner contract shared by view state, PTYs, panes, and runtime
- * APIs. A sandbox belongs to a session, a quick task, or a project, and the
- * backend resolves the sandbox and repo from whichever is provided.
+ * APIs. Every sandbox belongs to a session (a quick task's or project's
+ * sandbox is its owned session's).
  */
-export const sandboxOwnerValidator = v.union(
-  v.object({
-    kind: v.literal("session"),
-    sessionId: v.id("sessions"),
-  }),
-  v.object({
-    kind: v.literal("task"),
-    taskId: v.id("agentTasks"),
-  }),
-  v.object({
-    kind: v.literal("project"),
-    projectId: v.id("projects"),
-  }),
-);
+export const sandboxOwnerValidator = v.object({
+  kind: v.literal("session"),
+  sessionId: v.id("sessions"),
+});
 
 export type SandboxOwner = Infer<typeof sandboxOwnerValidator>;
 
-export type ResolvedSandboxOwner =
-  | {
-      kind: "session";
-      ownerKey: string;
-      doc: Doc<"sessions">;
-    }
-  | {
-      kind: "task";
-      ownerKey: string;
-      doc: Doc<"agentTasks">;
-    }
-  | {
-      kind: "project";
-      ownerKey: string;
-      doc: Doc<"projects">;
-    };
+export type ResolvedSandboxOwner = {
+  kind: "session";
+  ownerKey: string;
+  doc: Doc<"sessions">;
+};
 
 /** Inverse of `sandboxStartupEntityId`: null when `entityId` is not a startup row. */
 export function parseSandboxStartupEntityId(
@@ -58,23 +37,12 @@ export function parseSandboxStartupEntityId(
     const sessionId = db.normalizeId("sessions", session);
     return sessionId ? { kind: "session", sessionId } : null;
   }
-  const task = after(SANDBOX_STARTUP_PREFIX.task);
-  if (task !== null) {
-    const taskId = db.normalizeId("agentTasks", task);
-    return taskId ? { kind: "task", taskId } : null;
-  }
-  const project = after(SANDBOX_STARTUP_PREFIX.project);
-  if (project !== null) {
-    const projectId = db.normalizeId("projects", project);
-    return projectId ? { kind: "project", projectId } : null;
-  }
   return null;
 }
 
 /**
- * Reverse lookup: which entity owns `sandboxId`. Sessions first, then projects,
- * then quick tasks — the same order `sandboxHeal.isBoundToRepo` always used.
- * Unauthenticated by design: callers are internal (sweeps, HTTP heartbeats).
+ * Reverse lookup: which session owns `sandboxId`. Unauthenticated by design:
+ * callers are internal (sweeps, HTTP heartbeats).
  */
 export async function findSandboxOwnerBySandboxId(
   db: GenericDatabaseReader<DataModel>,
@@ -92,29 +60,6 @@ export async function findSandboxOwnerBySandboxId(
     };
   }
 
-  const project = await db
-    .query("projects")
-    .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
-    .first();
-  if (project) {
-    return {
-      kind: "project",
-      ownerKey: sandboxOwnerKey({ kind: "project", projectId: project._id }),
-      doc: project,
-    };
-  }
-
-  const task = await db
-    .query("agentTasks")
-    .withIndex("by_sandbox", (q) => q.eq("sandboxId", sandboxId))
-    .first();
-  if (task) {
-    return {
-      kind: "task",
-      ownerKey: sandboxOwnerKey({ kind: "task", taskId: task._id }),
-      doc: task,
-    };
-  }
   return null;
 }
 
@@ -124,36 +69,14 @@ export async function resolveSandboxOwnerForUser(
   userId: Id<"users">,
   owner: SandboxOwner,
 ): Promise<ResolvedSandboxOwner | null> {
-  if (owner.kind === "session") {
-    const session = await db.get(owner.sessionId);
-    if (!session || !(await hasRepoAccess(db, session.repoId, userId))) {
-      return null;
-    }
-    return {
-      kind: "session",
-      ownerKey: sandboxOwnerKey(owner),
-      doc: session,
-    };
-  }
-
-  if (owner.kind === "task") {
-    const task = await db.get(owner.taskId);
-    if (!task || !(await hasTaskAccess(db, task, userId))) return null;
-    return {
-      kind: "task",
-      ownerKey: sandboxOwnerKey(owner),
-      doc: task,
-    };
-  }
-
-  const project = await db.get(owner.projectId);
-  if (!project || !(await hasRepoAccess(db, project.repoId, userId))) {
+  const session = await db.get(owner.sessionId);
+  if (!session || !(await hasRepoAccess(db, session.repoId, userId))) {
     return null;
   }
   return {
-    kind: "project",
+    kind: "session",
     ownerKey: sandboxOwnerKey(owner),
-    doc: project,
+    doc: session,
   };
 }
 
@@ -168,7 +91,6 @@ export async function resolveSandboxOwnerOrThrow(
   return resolved;
 }
 
-/** Fields every sandbox owner table declares, so one patch fits all three. */
 type SandboxOwnerPatch = Partial<
   Pick<
     Doc<"sessions">,
@@ -182,13 +104,11 @@ type SandboxOwnerPatch = Partial<
   >
 >;
 
-/** The one place that narrows a resolved owner back to its table for db.patch. */
+/** Patches the owner session's sandbox view fields. */
 export async function patchSandboxOwner(
   db: GenericDatabaseWriter<DataModel>,
   owner: ResolvedSandboxOwner,
   fields: SandboxOwnerPatch,
 ): Promise<void> {
-  if (owner.kind === "session") await db.patch(owner.doc._id, fields);
-  else if (owner.kind === "task") await db.patch(owner.doc._id, fields);
-  else await db.patch(owner.doc._id, fields);
+  await db.patch(owner.doc._id, fields);
 }

@@ -1,31 +1,35 @@
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { api, type Id } from "@eva/backend";
+import { api } from "@eva/backend";
 import type { OptimisticLocalStore } from "convex/browser";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 
+type ChatTurnEntityId = FunctionArgs<
+  typeof api.turns.getChatStatus
+>["entityId"];
+
 /**
- * Whether one chat (session, task or project) has a turn open, read from its
- * durable turn. Synthetic turns count, so a daemon-minted continuation shows
- * as working. `undefined` while the status loads; callers pick the fallback.
+ * One chat's (session, task or project) open durable turn: `null` when none,
+ * `undefined` while it loads. Pass it to `isChatTurnExecuting` with the
+ * transcript wherever the chat is rendered.
  */
-export function useChatTurnOpen(
-  entityId: Id<"sessions"> | Id<"agentTasks"> | Id<"projects"> | undefined,
-): boolean | undefined {
-  return chatTurnOpenFromStatus(
-    useQuery(
-      api.turns.getChatStatus,
-      entityId === undefined ? "skip" : { entityId },
-    ),
+export function useChatTurnStatus(
+  entityId: ChatTurnEntityId | undefined,
+): FunctionReturnType<typeof api.turns.getChatStatus> | undefined {
+  return useQuery(
+    api.turns.getChatStatus,
+    entityId === undefined ? "skip" : { entityId },
   );
 }
 
 /**
- * `api.turns.getChatStatus` as "is a turn open": `null` means none,
- * `undefined` means the status is still loading.
+ * Whether one chat has a turn open, for surfaces that show a running badge
+ * without the transcript. Synthetic turns count, so a daemon-minted
+ * continuation shows as working. `undefined` while the status loads.
  */
-export function chatTurnOpenFromStatus(
-  status: FunctionReturnType<typeof api.turns.getChatStatus> | undefined,
+export function useChatTurnOpen(
+  entityId: ChatTurnEntityId | undefined,
 ): boolean | undefined {
+  const status = useChatTurnStatus(entityId);
   return status === undefined ? undefined : status !== null;
 }
 
@@ -38,7 +42,7 @@ export function chatTurnOpenFromStatus(
  */
 export function openChatTurnOptimistically(
   localStore: OptimisticLocalStore,
-  entityId: FunctionArgs<typeof api.turns.getChatStatus>["entityId"],
+  entityId: ChatTurnEntityId,
 ): void {
   const args = { entityId };
   if (localStore.getQuery(api.turns.getChatStatus, args)) return;

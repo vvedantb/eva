@@ -74,6 +74,7 @@ async function fixture() {
       parentRepoId: rootRepoId,
     });
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId: appRepoId,
       userId,
       title: "PR owner",

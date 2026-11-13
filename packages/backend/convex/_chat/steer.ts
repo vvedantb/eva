@@ -5,9 +5,8 @@ import { drainChatQueueQuietly } from "../_queues/helpers";
 import { findOpenChatQuestion } from "../pendingQuestions";
 import { loadSessionChat } from "../_sessionChats/helpers";
 import { cancelChatExecution } from "../_sessions/execution";
-import { cancelTaskChatExecution } from "../agentTaskChatWorkflow";
-import { cancelProjectChatExecution } from "../projectChatWorkflow";
 import type { ChatEntityId } from "./surfaceAdapters";
+import { openTurnWorkflowId } from "./turnProjection";
 
 /**
  * Steering: the user presses Steer on a queued message to send it now and
@@ -67,34 +66,10 @@ async function loadSteerTarget(
     const { chat } = context;
     return {
       entityId: chatId,
-      hasActiveTurn: chat.activeWorkflowId !== undefined,
+      hasActiveTurn: (await openTurnWorkflowId(ctx, chatId)) !== undefined,
       isBusy: chat.syntheticTurnMessageId !== undefined,
       runningModel: chat.lastModel,
       interrupt: () => cancelChatExecution(ctx, context),
-    };
-  }
-  const taskId = ctx.db.normalizeId("agentTasks", parentId);
-  if (taskId) {
-    const task = await ctx.db.get(taskId);
-    if (!task) return null;
-    return {
-      entityId: taskId,
-      hasActiveTurn: task.activeChatWorkflowId !== undefined,
-      isBusy: task.syntheticTurnMessageId !== undefined,
-      runningModel: task.lastChatModel ?? task.model,
-      interrupt: () => cancelTaskChatExecution(ctx, task),
-    };
-  }
-  const projectId = ctx.db.normalizeId("projects", parentId);
-  if (projectId) {
-    const project = await ctx.db.get(projectId);
-    if (!project) return null;
-    return {
-      entityId: projectId,
-      hasActiveTurn: project.activeChatWorkflowId !== undefined,
-      isBusy: project.syntheticTurnMessageId !== undefined,
-      runningModel: project.lastChatModel ?? project.model,
-      interrupt: () => cancelProjectChatExecution(ctx, project),
     };
   }
   return null;

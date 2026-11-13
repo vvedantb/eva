@@ -5,6 +5,16 @@
 export { getUserInitials } from "./components/getUserInitials";
 export { FALLBACK_GIT_BASE_BRANCH } from "./gitDefaults";
 export {
+  isThemeMode,
+  themeAppearance,
+  type ThemeAppearance,
+  type ThemeMode,
+} from "./themeMode";
+export {
+  isProjectPreviewPhase,
+  PROJECT_PREVIEW_PHASES,
+} from "./projectPreview";
+export {
   CONVEX_ID_PATTERN,
   MENTION_HREF_REGEX,
   MENTION_TOKEN_REGEX,
@@ -124,6 +134,10 @@ export {
 export { MESSAGE_LINK_PARAM, messageLinkHref } from "./messageLink";
 export { buildPrecedingUserTurns } from "./precedingUserTurns";
 export {
+  chatStreamingEntityId,
+  findStreamingTargetMessage,
+} from "./chatStreaming";
+export {
   firstNameByUserId,
   firstNameFromUser,
   isOtherUserChatMessage,
@@ -139,7 +153,28 @@ export {
   type PrStateTone,
 } from "./prState";
 export { sessionMenuActions, type SessionMenuAction } from "./sessionMenu";
-export { draftCountAfterRemove, draftsAfterRemove, visibleDrafts } from "./draftVisibility";
+export {
+  draftCountAfterRemove,
+  draftsAfterRemove,
+  visibleDrafts,
+} from "./draftVisibility";
+export {
+  draftContextTitle,
+  draftKindLabel,
+  draftSnippet,
+  mergeDrafts,
+  type CommentDraftFields,
+  type DraftListItem,
+  type TaskDraftFields,
+} from "./draftList";
+export {
+  chatSourceKindLabel,
+  chatSourceLabel,
+  chatSourceShortLabel,
+  type ChatSourceKind,
+  type ChatSourceLabelFields,
+} from "./chatSourceLabel";
+export { standupEntryHeading, standupEntryTime } from "./standup";
 export {
   QUICK_TASK_FILTER_DEFAULTS,
   QUICK_TASK_LIST_DEFAULTS,
@@ -253,7 +288,12 @@ export {
   type StatusTone,
   type SummaryComment,
 } from "./prReview";
-export { appLeafName, repoDisplayLabel, repoTileSlot, type RepoTileSlot } from "./repoTile";
+export {
+  appLeafName,
+  repoDisplayLabel,
+  repoTileSlot,
+  type RepoTileSlot,
+} from "./repoTile";
 
 export { storedRunTraits, toRunTraitArgs } from "./runTraits";
 export {
@@ -264,3 +304,62 @@ export {
   type TimelineRow,
 } from "./prTimeline";
 export { SANDBOX_CHAT_COPY, sandboxComposerState } from "./sandboxComposer";
+export {
+  QUEUE_PANEL_LABEL,
+  moveQueuedId,
+  orderQueuedRows,
+  queuePanelLabel,
+  queuedMessagePreview,
+} from "./queuedMessages";
+export {
+  parseReviewCommentSegments,
+  stripReviewCommentBlocks,
+  type ReviewComment,
+  type ReviewCommentAnchor,
+  type ReviewCommentMessageSegment,
+  type ReviewCommentSide,
+} from "./reviewCommentBlocks";
+export {
+  ACTIVE_PROJECT_PHASES,
+  BUILDABLE_PROJECT_PHASES,
+  PROJECT_LIST_DEFAULTS,
+  PROJECT_PHASE_LABELS,
+  PROJECT_SORT_FIELDS,
+  PROJECT_SORT_FIELD_LABELS,
+  clearedProjectFilter,
+  clearedProjectFilters,
+  filterAndSortProjects,
+  interviewTurnText,
+  isProjectPlanning,
+  newProjectSubmitBlocker,
+  parseProjectSpec,
+  projectFilterChips,
+  projectProgressSegments,
+  projectTaskSections,
+  toggleHiddenProjectPhase,
+  type FilterableProject,
+  type ProjectFilterKey,
+  type ProjectListFilters,
+  type ProjectPhase,
+  type ProjectSortDir,
+  type ProjectSortField,
+  type ProjectSpec,
+  type ProjectSpecTask,
+  type ProjectTaskProgress,
+  type SectionableProjectTask,
+} from "./projectMeta";
+export { MAINTENANCE_ERROR, isMaintenanceError } from "./maintenance";
+export {
+  APP_SORT_ORDERS,
+  SESSION_SORT_ORDERS,
+  linkedSessionGroups,
+  perRepoQueryCache,
+  sessionActivityAt,
+  sessionListEntries,
+  sortAppsForSidebar,
+  sortSessionsForSidebar,
+  type AppSortOrder,
+  type LinkedSessionGroup,
+  type SessionListEntry,
+  type SessionSortOrder,
+} from "./sessionList";

@@ -1,4 +1,6 @@
-import { api } from "@eva/backend";
+import { api, type Id } from "@eva/backend";
+import { perRepoQueryCache, sessionListEntries } from "@eva/shared";
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconPlus, IconTerminal2 } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
 import { PageHeader } from "@vvedantb/native-ui/layout";
@@ -11,8 +13,8 @@ import {
   SkeletonList,
   SkeletonRow,
 } from "@vvedantb/native-ui/primitives";
-import { tokens, useLargerText } from "@vvedantb/native-ui/theme";
-import { useQuery } from "convex/react";
+import { useLargerText } from "@vvedantb/native-ui/theme";
+import { useQueries, useQuery } from "convex/react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, SectionList, View } from "react-native";
@@ -21,7 +23,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { QuickTasksSection, useQuickTaskRepo } from "@/quickTasks/QuickTasksSection";
 import { useSimpleView } from "@/chat/ComposerFooter";
 import { ReviewsSection } from "@/reviews/ReviewsSection";
-import { SessionGroupFooter, SessionGroupHeader, SessionListRow, useSessionGroups } from "@/sessions/SessionGroup";
+import {
+  SessionGroupFooter,
+  SessionGroupHeader,
+  SessionListRow,
+  sessionActionTarget,
+  useSessionGroups,
+  type SessionListItem,
+} from "@/sessions/SessionGroup";
 import { SESSION_ACTION_ITEMS, useSessionActions } from "@/sessions/useSessionActions";
 import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { TabScreen } from "@/ui/TabScreen";
@@ -58,7 +67,7 @@ export default function SessionsScreen() {
   // Where the pages are, shared by the pager and the pill indicator.
   const progress = useSharedValue(index);
   const { openNew: openNewQuickTask } = useQuickTaskRepo();
-  const muted = tokens.color.muted[useScheme()];
+  const muted = EVA_THEME[useScheme()].mutedForeground;
   const isQuickTasks = section.id === "quick-tasks";
 
   return (
@@ -102,24 +111,51 @@ export default function SessionsScreen() {
   );
 }
 
+/** The web sidebar's list query for each tab (`GlobalSessionsSidebar`). */
+const SESSION_LIST_QUERIES = {
+  active: api.sessions.list,
+  archived: api.sessions.listArchived,
+};
+
+/** One list query per repo for the tab, cached so `useQueries` keeps its subscriptions. */
+const sessionListQueries = perRepoQueryCache<(typeof SESSION_LIST_QUERIES)[SessionTab], Id<"githubRepos">>();
+
 /**
  * Sessions across every repo the user can access, as the web sessions sidebar
- * at phone width: Active and Archived tabs, then one collapsible group per
- * repo (`useSessionGroups`) with Inbox-sized rows, divided as the Inbox, and
- * "Show more", in a `SectionList`. A long press on a row opens the web row menu as a sheet
- * (`useSessionActions`); a swipe left reveals its Archive (with the web
+ * at phone width, from the same subscriptions: `githubRepos.list`, then one
+ * `sessions.list` (Active) or `sessions.listArchived` (Archived) per repo.
+ * Active and Archived tabs, then linked-session groups and repos as
+ * collapsible sections (`useSessionGroups`) with Inbox-sized rows, divided as
+ * the Inbox, and "Show more", in a `SectionList`. A long press on a row opens
+ * the web row menu as a sheet (`useSessionActions`), and on a linked group's
+ * header its Rename group; a swipe left reveals a row's Archive (with the web
  * confirm, then the Undo toast), or Unarchive in the Archived tab.
  */
 function SessionsSection() {
   const router = useRouter();
   const [tab, setTab] = useState<SessionTab>("active");
   const sessionActions = useSessionActions();
-  const sessions = useQuery(api.mobile.listChats, { archived: tab === "archived" });
-  // The repo logos for the group headers, from the list the web sidebar reads.
   const repos = useQuery(api.githubRepos.list, {});
+  const results = useQueries(
+    sessionListQueries(
+      SESSION_LIST_QUERIES[tab],
+      tab,
+      (repos ?? []).map((repo) => repo._id),
+    ),
+  );
+  // Loading until every repo's list answers. A failed list (an `Error`) leaves
+  // its repo out rather than holding the whole tab on the skeleton.
+  const entries =
+    repos === undefined || repos.some((repo) => results[repo._id] === undefined)
+      ? undefined
+      : sessionListEntries(
+          repos.map((repo) => ({ repo, sessions: listedSessions(results[repo._id]) })),
+          // The web default "Sort projects": by the newest row each section shows.
+          "updated_at",
+        );
   const largerText = useLargerText();
   const insets = useSafeAreaInsets();
-  const { sections, toggleOpen, toggleExpanded } = useSessionGroups(sessions);
+  const { sections, toggleOpen, toggleExpanded } = useSessionGroups(entries);
 
   return (
     <>
@@ -134,13 +170,13 @@ function SessionsSection() {
           onChange={setTab}
         />
       </View>
-      {sessions === undefined ? (
+      {entries === undefined ? (
         <SkeletonList
           label="Loading sessions"
           count={8}
           renderRow={(row) => <SkeletonRow index={row} leading={10} />}
         />
-      ) : sessions.length === 0 ? (
+      ) : sections.length === 0 ? (
         // The web sidebar's empty copy (`GlobalSessionGroup`).
         <EmptyState
           icon={IconTerminal2}
@@ -150,31 +186,44 @@ function SessionsSection() {
       ) : (
         <SectionList
           sections={sections}
-          keyExtractor={(session) => session.sessionId}
+          keyExtractor={(row) => row.session._id}
           stickySectionHeadersEnabled={false}
-          renderSectionHeader={({ section }) => (
-            <SessionGroupHeader
-              section={section}
-              logoUrl={repos?.find((repo) => repo._id === section.repoId)?.logoUrl}
-              // The web counts running sessions, and offers "+", in the Active list only.
-              live={tab === "active" ? section.rows.filter((row) => row.status === "active").length : 0}
-              onToggle={() => toggleOpen(section.repoId)}
-              onNew={
-                tab === "active"
-                  ? () => router.push({ pathname: "/session/new", params: { repo: section.repoId } })
-                  : undefined
-              }
-            />
-          )}
+          renderSectionHeader={({ section }) => {
+            const { entry } = section;
+            return (
+              <SessionGroupHeader
+                section={section}
+                // The web counts running sessions, and offers "+", on an app in the Active list only.
+                live={tab === "active" ? section.rows.filter((row) => row.session.status === "active").length : 0}
+                onToggle={() => toggleOpen(section.key)}
+                onNew={
+                  tab === "active" && entry.kind === "repo"
+                    ? () => router.push({ pathname: "/session/new", params: { repo: entry.repo._id } })
+                    : undefined
+                }
+                onLongPress={
+                  entry.kind === "group"
+                    ? () =>
+                        sessionActions.openGroupSheet({
+                          // The oldest member, as the web group's rename.
+                          sessionId: entry.group.members[0].session._id,
+                          name: entry.group.name,
+                          label: entry.group.label,
+                        })
+                    : undefined
+                }
+              />
+            );
+          }}
           // The Inbox hairline between the rows of a group.
           ItemSeparatorComponent={ListDivider}
-          renderItem={({ item: session }) => {
-            const target = { ...session, archived: tab === "archived" };
+          renderItem={({ item: row }) => {
+            const target = sessionActionTarget(row);
             const action = tab === "archived" ? "unarchive" : "archive";
             const item = SESSION_ACTION_ITEMS[action];
             return (
               <SessionListRow
-                session={session}
+                row={row}
                 onLongPress={() => sessionActions.openSheet(target)}
                 swipeAction={{
                   key: action,
@@ -187,7 +236,7 @@ function SessionsSection() {
             );
           }}
           renderSectionFooter={({ section }) => (
-            <SessionGroupFooter section={section} onToggleExpanded={() => toggleExpanded(section.repoId)} />
+            <SessionGroupFooter section={section} onToggleExpanded={() => toggleExpanded(section.key)} />
           )}
           // A scroll closes a row swiped open.
           onScrollBeginDrag={closeSwipeRows}
@@ -197,4 +246,12 @@ function SessionsSection() {
       {sessionActions.dialogs}
     </>
   );
+}
+
+/**
+ * One repo's rows out of the `useQueries` map, as the web sidebar reads it:
+ * a failed query (an `Error` value) has no rows.
+ */
+function listedSessions(result: SessionListItem[] | Error | undefined): SessionListItem[] | undefined {
+  return result === undefined || result instanceof Error ? undefined : result;
 }

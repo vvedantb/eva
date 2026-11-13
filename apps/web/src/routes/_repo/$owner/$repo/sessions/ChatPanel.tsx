@@ -25,9 +25,11 @@ import { buildSandboxChatSurface } from "@/lib/components/chat/sandboxChatSurfac
 import { SubagentThreadLayer } from "@/lib/components/chat/SubagentThreadLayer";
 import { useChatSend } from "@/lib/components/chat/useChatSend";
 import { useSandboxChatDraft } from "@/lib/components/chat/useSandboxChatDraft";
-import { chatTurnOpenFromStatus } from "@/lib/components/chat/useChatTurnOpen";
 import { isChatTurnExecuting } from "@/lib/components/chat/chatBodyUtils";
-import type { TranscriptMessage } from "@/lib/hooks/useChatTranscript";
+import {
+  useOlderTranscript,
+  type TranscriptMessage,
+} from "@/lib/hooks/useChatTranscript";
 import { BackgroundProcessesChip } from "./_components/BackgroundProcessesChip";
 import { PublishRecoveryBanner } from "./_components/PublishRecoveryBanner";
 import { useSessionChatHeader } from "./_components/SessionChatHeader";
@@ -155,6 +157,14 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const { repo, basePath } = useRepo();
   const chatId = chat._id;
+  // `messages` is the live part; the rendered transcript adds the history
+  // above it once the reader goes there.
+  const history = useOlderTranscript({
+    parentId: isRouteActive ? chatId : "skip",
+    live: isLoadingMessages ? undefined : messages,
+    active: isRouteActive,
+  });
+  const transcript = history.messages ?? messages;
   const navigate = useNavigate();
   const createSession = useMutation(api.sessions.create);
   const simpleView = useSimpleView();
@@ -248,7 +258,7 @@ export function ChatPanel({
     isRouteActive ? { entityId: chatId } : "skip",
   );
   const isExecuting = isChatTurnExecuting({
-    turnOpen: chatTurnOpenFromStatus(turnStatus),
+    status: turnStatus,
     messages,
   });
   const composer = sandboxComposerState({
@@ -468,7 +478,7 @@ export function ChatPanel({
       <SubagentThreadLayer
         surface={chatSurface}
         parentTitle={title}
-        messages={messages}
+        messages={transcript}
         streamingActivity={streamingActivity}
         sandboxRunning={isSandboxActive}
         onOpenFile={onOpenFile}
@@ -478,8 +488,12 @@ export function ChatPanel({
           conversationId={chatId}
           chatParentId={chatId}
           isRouteActive={isRouteActive}
-          messages={messages}
+          messages={transcript}
           isLoadingMessages={isLoadingMessages}
+          hasOlderHistory={history.hasOlder}
+          onLoadOlderHistory={history.loadOlder}
+          onReachHistory={history.reach}
+          isReachingHistory={history.isReaching}
           queuedMessages={queuedMessages}
           queueLabel={queueGate.queueLabel(isExecuting)}
           streamingActivity={streamingActivity}

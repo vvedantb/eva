@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader } from "../_generated/server";
-import { authQuery, hasRepoAccess } from "../functions";
+import { authQuery, hasRepoAccess, hasTaskAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { firstUserMessagePreview } from "../_messages/preview";
 import { findMainChat } from "../_sessionChats/helpers";
@@ -14,11 +14,24 @@ import {
   reasoningLevelValidator,
 } from "../validators";
 import { sessionValidator } from "./helpers";
+import { isSessionArchived, listRepoSessionsByArchive } from "./archive";
 import {
   chatTurnFlagsForRepos,
   sessionIsExecuting,
 } from "../_chat/turnProjection";
 import { unreadLookupForRepo } from "../chatReads";
+import {
+  findProjectSession,
+  findTaskWorkSession,
+  isStandaloneSession,
+  ownedSessionOwnerValidator,
+  type OwnedSessionOwner,
+} from "./owner";
+import {
+  findOwnerChat,
+  loadOwnerEntity,
+  type OwnerEntity,
+} from "./ownedSession";
 
 /** The primary repo a linked-in session actually belongs to. */
 const linkedFromValidator = v.object({
@@ -54,7 +67,7 @@ const sessionListItemValidator = v.object({
   sandboxError: v.optional(v.string()),
   updatedAt: v.optional(v.number()),
   status: sessionStatusValidator,
-  archived: v.optional(v.boolean()),
+  archived: v.boolean(),
   createdBy: v.optional(v.id("users")),
   lastModel: v.optional(aiModelValidator),
   lastReasoningLevel: v.optional(reasoningLevelValidator),
@@ -64,11 +77,10 @@ const sessionListItemValidator = v.object({
   deploymentStatus: v.optional(deploymentStatusValidator),
   deploymentUrl: v.optional(v.string()),
   /**
-   * True while a turn is in flight — either a tracked chat workflow, or a
-   * daemon-minted continuation (`/loop`), which never gets an
-   * `activeWorkflowId`. Same window as composer BorderBeam in practice
-   * (message-level isExecuting needs the open thread; list rows use this field
-   * instead of N+1 into messages).
+   * True while one of the session's chats has a turn open — a workflow turn
+   * or a daemon-minted continuation (`/loop`). Same window as composer
+   * BorderBeam in practice (message-level isExecuting needs the open thread;
+   * list rows use this field instead of N+1 into messages).
    */
   isExecuting: v.boolean(),
   /**
@@ -127,7 +139,7 @@ function toSessionListItem(
     sandboxError: session.sandboxError,
     updatedAt: session.updatedAt,
     status: session.status,
-    archived: session.archived,
+    archived: isSessionArchived(session),
     createdBy: session.createdBy,
     lastModel: session.lastModel,
     lastReasoningLevel: session.lastReasoningLevel,
@@ -184,7 +196,7 @@ async function gatherLinkedSessions(
     (session): session is Doc<"sessions"> =>
       session !== null &&
       session.deletedAt === undefined &&
-      (session.archived === true) === archived,
+      isSessionArchived(session) === archived,
   );
   const primaryRepoIds = [...new Set(sessions.map((s) => s.repoId))];
   const primaryRepoDocs = await Promise.all(
@@ -294,26 +306,8 @@ export const list = authQuery({
   returns: v.array(sessionListItemValidator),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const sessionGroups = await Promise.all(
-      [undefined, false].map((archived) =>
-        ctx.db
-          .query("sessions")
-          .withIndex("by_repo_archived_and_deleted", (q) =>
-            q
-              .eq("repoId", args.repoId)
-              .eq("archived", archived)
-              .eq("deletedAt", undefined),
-          )
-          .collect(),
-      ),
-    );
-    return toSessionListItems(
-      ctx.db,
-      ctx.userId,
-      args.repoId,
-      sessionGroups.flat(),
-      false,
-    );
+    const sessions = await listRepoSessionsByArchive(ctx.db, args.repoId, false);
+    return toSessionListItems(ctx.db, ctx.userId, args.repoId, sessions, false);
   },
 });
 
@@ -323,15 +317,7 @@ export const listArchived = authQuery({
   returns: v.array(sessionListItemValidator),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const sessions = await ctx.db
-      .query("sessions")
-      .withIndex("by_repo_archived_and_deleted", (q) =>
-        q
-          .eq("repoId", args.repoId)
-          .eq("archived", true)
-          .eq("deletedAt", undefined),
-      )
-      .collect();
+    const sessions = await listRepoSessionsByArchive(ctx.db, args.repoId, true);
     return toSessionListItems(ctx.db, ctx.userId, args.repoId, sessions, true);
   },
 });
@@ -455,7 +441,7 @@ export const listGroup = authQuery({
       await Promise.all(
         rows.map(async (row) => {
           const link = await toForkLink(ctx.db, ctx.userId, row);
-          return link ? { ...link, archived: row.archived === true } : null;
+          return link ? { ...link, archived: isSessionArchived(row) } : null;
         }),
       )
     ).filter((member) => member !== null);
@@ -475,10 +461,11 @@ export const countActive = authQuery({
         .withIndex("by_repo_and_status", (q) =>
           q.eq("repoId", args.repoId).eq("status", "active"),
         )
-        .filter((q) => q.neq(q.field("archived"), true))
         .collect(),
     );
-    return sessions.length;
+    return sessions.filter(
+      (session) => isStandaloneSession(session) && !isSessionArchived(session),
+    ).length;
   },
 });
 
@@ -491,6 +478,63 @@ export const get = authQuery({
     if (!session) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) return null;
     return entityVisible(session);
+  },
+});
+
+/**
+ * The task or project behind an owner, when `userId` may reach it; null
+ * otherwise. The access check for `getOwned` and `ensureOwned`.
+ */
+export async function loadOwnerEntityWithAccess(
+  db: DatabaseReader,
+  owner: OwnedSessionOwner,
+  userId: Id<"users">,
+): Promise<OwnerEntity | null> {
+  const entity = await loadOwnerEntity(db, owner);
+  if (!entity) return null;
+  const allowed =
+    entity.kind === "task"
+      ? await hasTaskAccess(db, entity.task, userId)
+      : await hasRepoAccess(db, entity.project.repoId, userId);
+  return allowed ? entity : null;
+}
+
+/** What `getOwned` / `ensureOwned` return: the session and the owner's chat. */
+export const ownerChatRefValidator = v.object({
+  sessionId: v.id("sessions"),
+  chatId: v.id("sessionChats"),
+});
+
+/**
+ * The session a task or project works on (its sandbox) and the chat it talks
+ * in (a quick task's or project's Main chat, a project task's own chat in the
+ * project's session), for the owner's chat and sandbox panels. Null until
+ * the session exists; `chatId` absent while a project task has not chatted
+ * yet (its project's session may already run). `ensureOwned` creates both.
+ */
+export const getOwned = authQuery({
+  args: { owner: ownedSessionOwnerValidator },
+  returns: v.union(
+    v.object({
+      sessionId: v.id("sessions"),
+      chatId: v.optional(v.id("sessionChats")),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const entity = await loadOwnerEntityWithAccess(
+      ctx.db,
+      args.owner,
+      ctx.userId,
+    );
+    if (!entity) return null;
+    const session =
+      entity.kind === "task"
+        ? await findTaskWorkSession(ctx.db, entity.task)
+        : await findProjectSession(ctx.db, entity.project._id);
+    if (!session) return null;
+    const found = await findOwnerChat(ctx.db, entity);
+    return { sessionId: session._id, chatId: found?.chat._id };
   },
 });
 

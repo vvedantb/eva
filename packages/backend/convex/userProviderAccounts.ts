@@ -57,8 +57,8 @@ export const listSelectable = authQuery({
 
 /**
  * Lists the accounts the task owner can run on (masked) for the model picker.
- * Teammates with task access can see which accounts power the sticky
- * credential; only the owner can change the selection.
+ * The task chat runs on the owner's credentials whoever sends the turn, so
+ * collaborators pick from the owner's accounts.
  */
 export const listForTaskOwner = authQuery({
   args: { taskId: v.id("agentTasks") },
@@ -69,6 +69,26 @@ export const listForTaskOwner = authQuery({
       return [];
     }
     return await listSelectableAccountsFor(ctx, task.createdBy);
+  },
+});
+
+/**
+ * Lists the accounts the project owner can run on (masked) for the project
+ * chat's model picker. The chat runs on the owner's credentials whoever sends
+ * the turn, so collaborators pick from the owner's accounts.
+ */
+export const listForProjectOwner = authQuery({
+  args: { projectId: v.id("projects") },
+  returns: v.array(accountListItemValidator),
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    if (
+      !project ||
+      !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))
+    ) {
+      return [];
+    }
+    return await listSelectableAccountsFor(ctx, project.userId);
   },
 });
 

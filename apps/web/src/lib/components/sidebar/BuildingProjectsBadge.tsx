@@ -30,12 +30,11 @@ export function BuildingProjectsBadge({
 }: BuildingProjectsBadgeProps) {
   const projects = useQuery(api.projects.getActive, { repoId });
   const buildingProjects =
-    projects?.filter((p) => p.activeBuildWorkflowId !== undefined) ?? [];
+    projects?.filter((p) => p.isBuilding) ?? [];
   const sandboxProjects =
     projects?.filter(
       (p) =>
-        p.reviewProjectSandboxStatus === "active" ||
-        p.reviewProjectSandboxStatus === "starting",
+        p.sandboxStatus === "active" || p.sandboxStatus === "starting",
     ) ?? [];
 
   const visible = buildingProjects.length > 0 || sandboxProjects.length > 0;

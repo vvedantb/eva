@@ -17,7 +17,7 @@ import {
 import { api, type Id } from "@eva/backend";
 import { repoDisplayLabel, repoTileSlot, type SessionMenuAction } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { tokens, withAlpha } from "@vvedantb/native-ui/theme";
+import { withAlpha } from "@vvedantb/native-ui/theme";
 import { useQuery } from "convex/react";
 import { Fragment, type ComponentType } from "react";
 import { Text, View } from "react-native";
@@ -71,8 +71,8 @@ export function ChatHeader({
 }) {
   const scheme = useScheme();
   const insets = useSafeAreaInsets();
-  const muted = tokens.color.muted[scheme];
-  const foreground = tokens.color.foreground[scheme];
+  const muted = EVA_THEME[scheme].mutedForeground;
+  const foreground = EVA_THEME[scheme].foreground;
   const repo = useQuery(api.githubRepos.get, { id: repoId });
   const logoUrl = useQuery(api.githubRepos.getLogoUrl, { repoId });
   // The web seed (`SessionSwitcher`): owner, name and display label.
@@ -80,13 +80,17 @@ export function ChatHeader({
   const sessionItems = (actions: SessionMenuAction[]): MenuEntry[] =>
     actions.map((action) => ({ ...SESSION_ACTION_ITEMS[action], onSelect: () => sessionMenu?.onSelect(action) }));
   const [sessionMain = [], ...sessionRest] = sessionMenu?.groups ?? [];
-  // The web groups: the session's own block (Rename) with the links, then
-  // Archive / Unarchive alone (the web tab menu), then Stop, the destructive
-  // item, last. Empty groups drop out, so no divider stands alone.
+  // The web More menu's groups: Rename and Regenerate title; then its Copy
+  // submenu (title, link, branch name) laid flat with Open PR and Open on web;
+  // then Archive / Unarchive alone; then Stop, the destructive item, last.
+  // Empty groups drop out, so no divider stands alone.
+  const isEdit = (action: SessionMenuAction) => action === "rename" || action === "regenerateTitle";
   const menuGroups: MenuEntry[][] = [
+    sessionItems(sessionMain.filter(isEdit)),
     [
-      ...sessionItems(sessionMain),
+      ...sessionItems(sessionMain.filter((action) => action === "copyTitle")),
       { label: "Copy link", icon: IconLink, onSelect: onCopyLink },
+      ...sessionItems(sessionMain.filter((action) => !isEdit(action) && action !== "copyTitle")),
       { label: "Open on web", icon: IconExternalLink, onSelect: onOpenWeb },
     ],
     ...sessionRest.map(sessionItems),
@@ -106,7 +110,7 @@ export function ChatHeader({
           fallback={
             <View
               className="h-4 w-4 items-center justify-center rounded"
-              style={{ backgroundColor: tileColor ? withAlpha(tileColor, 0.12) : tokens.color.surfaceSecondary[scheme] }}
+              style={{ backgroundColor: tileColor ? withAlpha(tileColor, 0.12) : EVA_THEME[scheme].muted }}
             >
               <Text className="font-instrument-sans-semibold" style={{ fontSize: 9, color: tileColor ?? muted, fontWeight: "600" }}>
                 {repoLabel.charAt(0).toUpperCase()}

@@ -1,3 +1,4 @@
+import { api } from "@eva/backend";
 import { collectChangedFiles } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { parseActivityLog, type ActivityLogStep } from "@eva/shared/activityTrace";
@@ -49,21 +50,17 @@ import {
   type ActivityRow,
   type ActivitySegment,
   type AgentTraceStatus,
+  Shimmer,
 } from "@vvedantb/native-ui/ai";
 import { Markdown } from "@vvedantb/native-ui/markdown";
 import { Spinner, Text } from "@vvedantb/native-ui/primitives";
-import { tokens } from "@vvedantb/native-ui/theme";
-import * as Clipboard from "expo-clipboard";
-import { useState, type ComponentType, type ReactNode } from "react";
+import { useQuery } from "convex/react";
+import { useDeferredValue, useState, type ComponentType, type ReactNode } from "react";
 import { Pressable, View } from "react-native";
+import { copyText } from "@/ui/copyText";
 import { textColor, useScheme } from "@/ui/theme";
 import { ChangedFilesCard } from "./ChangedFilesCard";
 import { StepDetail } from "./StepDetail";
-
-/** The code block's and table's copy buttons, as the web. */
-const copyText = async (text: string) => {
-  await Clipboard.setStringAsync(text);
-};
 
 /** Same icon per step type as the web trace (`activityStepConfig` in @vvedantb/ui). `status` draws a spinner. */
 const STEP_ICONS: Record<Exclude<ActivityLogStep["type"], "status">, ComponentType<IconProps>> = {
@@ -143,7 +140,7 @@ function TodoChecklist({ step }: { step: ActivityLogStep }) {
             ) : todo.status === "in_progress" ? (
               <Spinner size="sm" decorative />
             ) : (
-              <IconCircle size={14} color={tokens.color.muted[scheme]} />
+              <IconCircle size={14} color={EVA_THEME[scheme].mutedForeground} />
             )}
           </View>
           {/* Web `leading-snug` (1.375). */}
@@ -263,7 +260,8 @@ function StepRow({ row, steps, messageId }: RowProps) {
           {chip ? null : descriptionText}
         </AgentTraceLine>
       </AgentTraceCollapsibleTrigger>
-      <AgentTraceCollapsibleContent className="gap-2">
+      {/* The 28 high rows bring their own 4 above and below, so 4 more keeps the detail 8 clear of them. */}
+      <AgentTraceCollapsibleContent className="gap-1">
         {hasDetail ? <StepDetail step={step} index={index} messageId={messageId} /> : null}
         {children.shown.map((child, childIndex) => (
           <StepRow key={activityRowKey(child, childIndex)} row={child} steps={steps} messageId={messageId} />
@@ -291,7 +289,8 @@ function StepRun({ rows, steps, messageId }: { rows: ActivityRow[]; steps: Activ
           <AgentTraceTitle shimmer={active}>{deriveActionGroupSummary(rows.map(({ step }) => step))}</AgentTraceTitle>
         </AgentTraceLine>
       </AgentTraceCollapsibleTrigger>
-      <AgentTraceCollapsibleContent className="gap-2">
+      {/* The rows stack at the trace's 28 pitch, each line its own whole target. */}
+      <AgentTraceCollapsibleContent>
         {rows.map((row, index) => (
           <StepRow key={activityRowKey(row, index)} row={row} steps={steps} messageId={messageId} />
         ))}
@@ -353,6 +352,22 @@ function SegmentList({ segments, steps, messageId, live }: { segments: ActivityS
 }
 
 /**
+ * The web `ActivityStreamingHeader`: before the turn has a step to show (the
+ * folded layout hides thinking and reply text), the spinner and the live
+ * step's label, or "Working..." until the first activity arrives.
+ */
+function LiveStatus({ steps }: { steps: ActivityLogStep[] }) {
+  const work = steps.filter((step) => step.type !== "response");
+  const current = work.find((step) => step.status === "active") ?? work[0];
+  return (
+    <View className="flex-row items-center gap-2">
+      <Spinner size="sm" decorative />
+      <Shimmer duration={2.5}>{current?.label ?? "Working..."}</Shimmer>
+    </View>
+  );
+}
+
+/**
  * An agent reply: its trace as the web's folded `ActivityTasks` (reasoning as
  * prose, each run of tool steps behind a summary line, to-dos and notices on
  * their own lines), all behind "Worked for …" once the turn finished, then
@@ -367,6 +382,7 @@ export function AssistantMessage({
   duration,
   isLatestAssistantTurn,
   onOpenDiff,
+  live = false,
 }: {
   /** For loading a trimmed step's full detail. */
   messageId: string;
@@ -378,6 +394,8 @@ export function AssistantMessage({
   isLatestAssistantTurn: boolean;
   /** Opens the diff screen at a changed file. Without it (simple view, as the web) there is no card. */
   onOpenDiff?: (path: string | undefined) => void;
+  /** The turn is still running (`LiveAssistantMessage`): until it has a step to show, the live status stands in. */
+  live?: boolean;
 }) {
   const steps = parseActivityLog(activityLog);
   const segments = foldedActivitySegments(steps);
@@ -387,7 +405,13 @@ export function AssistantMessage({
   const trace = <SegmentList segments={segments} steps={steps} messageId={messageId} live={duration === undefined} />;
   return (
     <>
-      {segments.length === 0 ? null : duration !== undefined ? (
+      {segments.length === 0 ? (
+        live ? (
+          <AgentTrace>
+            <LiveStatus steps={steps} />
+          </AgentTrace>
+        ) : null
+      ) : duration !== undefined ? (
         <AgentTraceFold duration={duration}>{trace}</AgentTraceFold>
       ) : (
         <AgentTrace>{trace}</AgentTrace>
@@ -401,5 +425,22 @@ export function AssistantMessage({
         <ChangedFilesCard files={changedFiles} isLatestAssistantTurn={isLatestAssistantTurn} onOpenDiff={onOpenDiff} />
       ) : null}
     </>
+  );
+}
+
+/**
+ * The reply of the turn that is running, drawn from the chat's streaming row
+ * (`api.streaming.get`) as the web `ChatBody` streaming bubble: the live
+ * timeline, then the streamed text. Only this row reads the stream, so a token
+ * re-renders it and not the transcript. The activity is deferred, as the web:
+ * the text the user reads commits first, and the timeline (a large JSON
+ * payload) re-renders at transition priority. No changed-files card until the
+ * turn settles, as the web.
+ */
+export function LiveAssistantMessage({ streamingEntityId, messageId }: { streamingEntityId: string; messageId: string }) {
+  const streaming = useQuery(api.streaming.get, { entityId: streamingEntityId });
+  const activity = useDeferredValue(streaming?.currentActivity);
+  return (
+    <AssistantMessage messageId={messageId} content={streaming?.currentContent ?? ""} activityLog={activity} isLatestAssistantTurn={false} live />
   );
 }

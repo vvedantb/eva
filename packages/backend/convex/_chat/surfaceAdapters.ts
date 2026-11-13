@@ -1,6 +1,11 @@
 import { TURN_BACKSTOP_ERROR } from "@eva/shared/agentTurnLimits";
-import type { Doc, Id } from "../_generated/dataModel";
-import type { DatabaseReader, MutationCtx } from "../_generated/server";
+import type { Id } from "../_generated/dataModel";
+import type {
+  DatabaseReader,
+  MutationCtx,
+  QueryCtx,
+} from "../_generated/server";
+import { openTurnWorkflowId } from "./turnProjection";
 import { internal } from "../_generated/api";
 import {
   getAIModelProvider,
@@ -8,11 +13,7 @@ import {
   usesChatDaemon,
 } from "../validators";
 import { RUN_TIMEOUT_MS } from "../_taskWorkflow/staleness";
-import {
-  drainSessionChatQueues,
-  startNextQueuedProjectChatMessage,
-  startNextQueuedTaskChatMessage,
-} from "../_queues/helpers";
+import { drainSessionChatQueues } from "../_queues/helpers";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { STALL_ALERT_TEXT } from "./stallRetry";
 import { markAllRunningExited } from "../backgroundProcesses";
@@ -22,29 +23,12 @@ import {
   sessionChatStreamingEntityId,
   type SessionChatContext,
 } from "../_sessionChats/helpers";
-import {
-  PROJECT_CHAT_STREAM_PREFIX,
-  TASK_CHAT_STREAM_PREFIX,
-} from "./agentStreamIds";
-
-export { PROJECT_CHAT_STREAM_PREFIX, TASK_CHAT_STREAM_PREFIX };
-
-export function taskChatStreamEntityId(taskId: Id<"agentTasks">): string {
-  return `${TASK_CHAT_STREAM_PREFIX}${String(taskId)}`;
-}
-
-export function projectChatStreamEntityId(projectId: Id<"projects">): string {
-  return `${PROJECT_CHAT_STREAM_PREFIX}${String(projectId)}`;
-}
 
 /** A standalone system-alert message surfaced when a stale turn is torn down. */
 export type ChatAlert = { text: string; detail?: string };
 
-/** Every chat entity id. The table, not a label, decides the surface. */
-export type ChatEntityId =
-  | Id<"sessionChats">
-  | Id<"agentTasks">
-  | Id<"projects">;
+/** Every chat entity id: a session chat. */
+export type ChatEntityId = Id<"sessionChats">;
 
 /**
  * Everything the shared stall-watchdog logic (`_chat/stallWatchdog.ts`) needs
@@ -56,7 +40,7 @@ export type ChatEntityId =
  * instead of writing table-specific patches itself.
  */
 export type ChatSurfaceAdapter<TId extends ChatEntityId, TEntity> = {
-  kind: "sessionChat" | "taskChat" | "projectChat";
+  kind: "sessionChat";
   /** Console-log prefix, e.g. "session", "task-chat", "project-chat". */
   logLabel: string;
   /** Console-log key for the id, e.g. "sessionId". */
@@ -64,7 +48,11 @@ export type ChatSurfaceAdapter<TId extends ChatEntityId, TEntity> = {
   /** This surface's id when `raw` names a row of its table, else null. */
   parseId: (db: DatabaseReader, raw: string) => TId | null;
   getEntity: (ctx: MutationCtx, id: TId) => Promise<TEntity | null>;
-  activeWorkflowId: (entity: TEntity) => string | undefined;
+  /** The workflow running the entity's chat turn (a session chat reads its open turn). */
+  activeWorkflowId: (
+    entity: TEntity,
+    ctx: QueryCtx,
+  ) => string | undefined | Promise<string | undefined>;
   /** Entity id used for the turn's own streamingActivity row. */
   streamingEntityId: (id: TId) => string;
   /** Inverse of `streamingEntityId`: null when the row is not this surface's turn row. */
@@ -140,7 +128,7 @@ const sessionChatAdapter: ChatSurfaceAdapter<
   idLogLabel: "chatId",
   parseId: (db, raw) => db.normalizeId("sessionChats", raw),
   getEntity: (ctx, id) => loadSessionChat(ctx.db, id),
-  activeWorkflowId: ({ chat }) => chat.activeWorkflowId,
+  activeWorkflowId: ({ chat }, ctx) => openTurnWorkflowId(ctx, chat._id),
   streamingEntityId: (id) => sessionChatStreamingEntityId(id),
   parseStreamingEntityId: (db, streamingEntityId) =>
     db.normalizeId("sessionChats", streamingEntityId),
@@ -175,7 +163,6 @@ const sessionChatAdapter: ChatSurfaceAdapter<
     // opens turns no daemon can claim and stalls each one out forever.
     // Cleared before `drainQueue` restages the next message.
     await ctx.db.patch(id, {
-      activeWorkflowId: undefined,
       syntheticTurnMessageId: undefined,
       pendingTurn: undefined,
       updatedAt: Date.now(),
@@ -226,193 +213,14 @@ const sessionChatAdapter: ChatSurfaceAdapter<
   },
 };
 
-const taskChatAdapter: ChatSurfaceAdapter<
-  Id<"agentTasks">,
-  Doc<"agentTasks">
-> = {
-  kind: "taskChat",
-  logLabel: "task-chat",
-  idLogLabel: "taskId",
-  parseId: (db, raw) => db.normalizeId("agentTasks", raw),
-  getEntity: (ctx, id) => ctx.db.get(id),
-  activeWorkflowId: (task) => task.activeChatWorkflowId,
-  streamingEntityId: (id) => `${TASK_CHAT_STREAM_PREFIX}${String(id)}`,
-  parseStreamingEntityId: (db, streamingEntityId) =>
-    streamingEntityId.startsWith(TASK_CHAT_STREAM_PREFIX)
-      ? db.normalizeId(
-          "agentTasks",
-          streamingEntityId.slice(TASK_CHAT_STREAM_PREFIX.length),
-        )
-      : null,
-  extraStreamingClears: () => [],
-  syntheticTurnMessageId: (task) => task.syntheticTurnMessageId,
-  sandboxId: (task) => task.sandboxId,
-  repoId: (task) => task.repoId,
-  interrupt: async (ctx, task) => {
-    if (
-      getAIModelProvider(normalizeAIModel(task.lastChatModel ?? task.model)) ===
-      "claude"
-    ) {
-      await ctx.db.patch(task._id, { cancelRequestedAt: Date.now() });
-    } else if (task.sandboxId && task.repoId) {
-      if (task.activeWorkflowId) {
-        await ctx.scheduler.runAfter(0, internal.sandbox.killEntityDaemon, {
-          sandboxId: task.sandboxId,
-          repoId: task.repoId,
-          entityIdField: "taskId",
-          entityId: String(task._id),
-        });
-      } else {
-        await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
-          sandboxId: task.sandboxId,
-          repoId: task.repoId,
-        });
-      }
-    }
-  },
-  release: async (ctx, id, opts) => {
-    const patch: {
-      activeChatWorkflowId: undefined;
-      syntheticTurnMessageId: undefined;
-      updatedAt: number;
-      reviewTaskSandboxStatus?: "closed";
-    } = {
-      activeChatWorkflowId: undefined,
-      syntheticTurnMessageId: undefined,
-      updatedAt: Date.now(),
-    };
-    if (opts.sandboxStopped) {
-      // Mirrors sessionPatch.status = "closed" above; reviewTaskSandboxStatus
-      // tracks the lifecycle of this same task.sandboxId (see
-      // _agentTasks/sandbox.ts).
-      patch.reviewTaskSandboxStatus = "closed";
-    }
-    await ctx.db.patch(id, patch);
-  },
-  drainQueue: (ctx, id) => startNextQueuedTaskChatMessage(ctx, id),
-  finalizeOrphanTurn: async (ctx, id) => {
-    await ctx.db.patch(id, {
-      syntheticTurnMessageId: undefined,
-      updatedAt: Date.now(),
-    });
-  },
-  afterStallFinalize: async (ctx, id, turnId) => {
-    await ctx.scheduler.runAfter(
-      0,
-      internal.agentTaskChatWorkflow.retryEmptyStalledTurn,
-      { taskId: id, turnId },
-    );
-  },
-  alerts: {
-    timeout: timeoutAlert,
-    sandboxStopped: (staleSeconds) => ({
-      text: "Sandbox stopped while this turn was running.",
-      detail: `The sandbox VM is no longer running — it likely hit its runtime limit or was stopped outside Eva (no heartbeat for ${staleSeconds}s). The sandbox is now closed; committed work is preserved. Send a new message or start the sandbox to continue.`,
-    }),
-    stalled: stalledAlert,
-  },
-};
-
-const projectChatAdapter: ChatSurfaceAdapter<
-  Id<"projects">,
-  Doc<"projects">
-> = {
-  kind: "projectChat",
-  logLabel: "project-chat",
-  idLogLabel: "projectId",
-  parseId: (db, raw) => db.normalizeId("projects", raw),
-  getEntity: (ctx, id) => ctx.db.get(id),
-  activeWorkflowId: (project) => project.activeChatWorkflowId,
-  streamingEntityId: (id) => `${PROJECT_CHAT_STREAM_PREFIX}${String(id)}`,
-  parseStreamingEntityId: (db, streamingEntityId) =>
-    streamingEntityId.startsWith(PROJECT_CHAT_STREAM_PREFIX)
-      ? db.normalizeId(
-          "projects",
-          streamingEntityId.slice(PROJECT_CHAT_STREAM_PREFIX.length),
-        )
-      : null,
-  extraStreamingClears: () => [],
-  syntheticTurnMessageId: (project) => project.syntheticTurnMessageId,
-  sandboxId: (project) => project.sandboxId,
-  repoId: (project) => project.repoId,
-  interrupt: async (ctx, project) => {
-    if (
-      getAIModelProvider(
-        normalizeAIModel(project.lastChatModel ?? project.model),
-      ) === "claude"
-    ) {
-      await ctx.db.patch(project._id, { cancelRequestedAt: Date.now() });
-    } else if (project.sandboxId) {
-      if (project.activeWorkflowId || project.activeBuildWorkflowId) {
-        await ctx.scheduler.runAfter(0, internal.sandbox.killEntityDaemon, {
-          sandboxId: project.sandboxId,
-          repoId: project.repoId,
-          entityIdField: "projectId",
-          entityId: String(project._id),
-        });
-      } else {
-        await ctx.scheduler.runAfter(0, internal.sandbox.killSandboxProcess, {
-          sandboxId: project.sandboxId,
-          repoId: project.repoId,
-        });
-      }
-    }
-  },
-  release: async (ctx, id, opts) => {
-    const patch: {
-      activeChatWorkflowId: undefined;
-      syntheticTurnMessageId: undefined;
-      updatedAt: number;
-      reviewProjectSandboxStatus?: "closed";
-    } = {
-      activeChatWorkflowId: undefined,
-      syntheticTurnMessageId: undefined,
-      updatedAt: Date.now(),
-    };
-    if (opts.sandboxStopped) {
-      // Mirrors sessionPatch.status = "closed" above;
-      // reviewProjectSandboxStatus tracks the lifecycle of this same
-      // project.sandboxId (see _projects/sandbox.ts).
-      patch.reviewProjectSandboxStatus = "closed";
-    }
-    await ctx.db.patch(id, patch);
-  },
-  drainQueue: (ctx, id) => startNextQueuedProjectChatMessage(ctx, id),
-  finalizeOrphanTurn: async (ctx, id) => {
-    await ctx.db.patch(id, {
-      syntheticTurnMessageId: undefined,
-      updatedAt: Date.now(),
-    });
-  },
-  afterStallFinalize: async (ctx, id, turnId) => {
-    await ctx.scheduler.runAfter(
-      0,
-      internal.projectChatWorkflow.retryEmptyStalledTurn,
-      { projectId: id, turnId },
-    );
-  },
-  alerts: {
-    timeout: timeoutAlert,
-    sandboxStopped: (staleSeconds) => ({
-      text: "Sandbox stopped while this turn was running.",
-      detail: `The sandbox VM is no longer running — it likely hit its runtime limit or was stopped outside Eva (no heartbeat for ${staleSeconds}s). The sandbox is now closed; committed work is preserved. Send a new message or start the sandbox to continue.`,
-    }),
-    stalled: stalledAlert,
-  },
-};
-
 /**
  * Every chat surface's adapter, registered once. The drift-guard test
  * (`tests/chatSurfaceUnificationContract.test.ts`) pins that a fourth surface
  * cannot exist without appearing here.
  */
-export const chatSurfaceAdapters = [
-  sessionChatAdapter,
-  taskChatAdapter,
-  projectChatAdapter,
-] as const;
+export const chatSurfaceAdapters = [sessionChatAdapter] as const;
 
-export { sessionChatAdapter, taskChatAdapter, projectChatAdapter };
+export { sessionChatAdapter };
 
 /** Generic over the surface, so one body serves every adapter type-safely. */
 export type ChatAdapterVisitor<R> = <TId extends ChatEntityId, TEntity>(
@@ -484,17 +292,15 @@ export function turnAdapterForEntity<R>(
   }
   const chatId = sessionChatAdapter.parseId(db, turn.entityId);
   if (chatId) return visit.chat(sessionChatAdapter, chatId);
-  const taskId = taskChatAdapter.parseId(db, turn.entityId);
-  if (taskId) return visit.chat(taskChatAdapter, taskId);
-  const projectId = projectChatAdapter.parseId(db, turn.entityId);
-  if (projectId) return visit.chat(projectChatAdapter, projectId);
   const owner = laneFreeAgentOwner(db, turn.entityId);
   return owner ? visit.agent(owner) : null;
 }
 
 /**
- * Records a workflow as the active workflow for a session chat and schedules
- * the `TURN_BACKSTOP_MS` backstop. The turn lease (`turns.reconcile`) is the stall check.
+ * Schedules the `TURN_BACKSTOP_MS` backstop for a session chat workflow. The
+ * caller has already bound the workflow to the chat's open turn
+ * (`bindTurnWorkflow`): that turn is the only record of it. The turn lease
+ * (`turns.reconcile`) is the stall check.
  */
 export async function trackSessionChatWorkflow(
   ctx: MutationCtx,
@@ -502,19 +308,18 @@ export async function trackSessionChatWorkflow(
   workflowId: WorkflowId,
   timeoutMs: number = RUN_TIMEOUT_MS,
 ): Promise<void> {
-  const id = String(workflowId);
-  await ctx.db.patch(chatId, { activeWorkflowId: id });
   await ctx.scheduler.runAfter(
     timeoutMs,
     internal.workflowWatchdog.handleStaleSessionChat,
-    { chatId, workflowId: id },
+    { chatId, workflowId: String(workflowId) },
   );
 }
 
 /**
- * Records a session-level workflow (the summary) as the session's active
- * workflow and schedules the `TURN_BACKSTOP_MS` backstop. Chat turns track on their chat
- * (`trackSessionChatWorkflow`); this slot is only for work on the session row.
+ * Schedules the `TURN_BACKSTOP_MS` backstop for a session-level workflow (the
+ * summary). The session row keeps no workflow slot: the summary's lane turn
+ * holds the id once the agent launches, and the backstop asks the workflow
+ * itself.
  */
 export async function trackSessionWorkflow(
   ctx: MutationCtx,
@@ -523,42 +328,9 @@ export async function trackSessionWorkflow(
   timeoutMs: number = RUN_TIMEOUT_MS,
 ): Promise<void> {
   const id = String(workflowId);
-  await ctx.db.patch(sessionId, { activeWorkflowId: id });
   await ctx.scheduler.runAfter(
     timeoutMs,
     internal.workflowWatchdog.handleStaleSession,
     { sessionId, workflowId: id },
-  );
-}
-
-/** Records the active chat workflow for a project; see `trackSessionWorkflow`. */
-export async function trackProjectChatWorkflow(
-  ctx: MutationCtx,
-  projectId: Id<"projects">,
-  workflowId: WorkflowId,
-  timeoutMs: number = RUN_TIMEOUT_MS,
-): Promise<void> {
-  const id = String(workflowId);
-  await ctx.db.patch(projectId, { activeChatWorkflowId: id });
-  await ctx.scheduler.runAfter(
-    timeoutMs,
-    internal.workflowWatchdog.handleStaleProjectChat,
-    { projectId, workflowId: id },
-  );
-}
-
-/** Records the active chat workflow for an agent task; see `trackSessionWorkflow`. */
-export async function trackAgentTaskChatWorkflow(
-  ctx: MutationCtx,
-  taskId: Id<"agentTasks">,
-  workflowId: WorkflowId,
-  timeoutMs: number = RUN_TIMEOUT_MS,
-): Promise<void> {
-  const id = String(workflowId);
-  await ctx.db.patch(taskId, { activeChatWorkflowId: id });
-  await ctx.scheduler.runAfter(
-    timeoutMs,
-    internal.workflowWatchdog.handleStaleAgentTaskChat,
-    { taskId, workflowId: id },
   );
 }

@@ -66,6 +66,7 @@ import {
   openSessionChatTurn,
   resolveCompletionTurn,
 } from "../_chat/turnStore";
+import { openTurnWorkflowId } from "../_chat/turnProjection";
 import {
   daemonChatTargetArgs,
   ensureMainChat,
@@ -73,9 +74,11 @@ import {
   loadSessionChat,
   resolveDaemonChatId,
   sessionChatPersistenceId,
+  sessionChatPersistenceIdValidator,
   sessionChatStreamingEntityId,
 } from "../_sessionChats/helpers";
 import { errorMessage } from "@vvedantb/server";
+import { isStandaloneSession } from "./owner";
 
 // --- Completion event ---
 
@@ -376,7 +379,7 @@ export const sessionExecuteWorkflow = workflow.define({
     } else {
       // A failed launch must finalize the turn: without this catch the
       // workflow dies after its step retries with no saveResult, leaving the
-      // empty placeholder (and activeWorkflowId) stuck on "Working…" until
+      // empty placeholder (and the open turn) stuck on "Working…" until
       // the `TURN_BACKSTOP_MS` backstop.
       try {
         // One-shot providers push the prompt at launch, so hold it until the
@@ -524,7 +527,12 @@ export const sessionExecuteWorkflow = workflow.define({
       // missing PR when it confirms the session branch already contains HEAD.
       // A chat-only first turn has no remote session branch, so `published` is
       // false and still avoids the old compare-404 alerts.
-      if (pushedCommits || (branchPublished && data.primaryPrUrl === undefined)) {
+      // A task's session pushes the task branch but never opens a session
+      // PR: the task owns its PRs (`eva/task-<id>` → the task's run).
+      if (
+        data.ownsPullRequests !== false &&
+        (pushedCommits || (branchPublished && data.primaryPrUrl === undefined))
+      ) {
         try {
           await step.runAction(internal.github.createDraftSessionPr, {
             sessionId,
@@ -554,7 +562,11 @@ export const sessionExecuteWorkflow = workflow.define({
     // before completion is even posted.
     // Not gated on the primary's `pushSucceeded`: a primary that failed to
     // publish must not strand a linked repo's commits in the sandbox.
-    if (result.success && (data.linkedRepoCount ?? 0) > 0) {
+    if (
+      result.success &&
+      data.ownsPullRequests !== false &&
+      (data.linkedRepoCount ?? 0) > 0
+    ) {
       let linkedPushes: Array<{
         sessionRepoId: Id<"sessionRepos">;
         pushed: boolean;
@@ -712,7 +724,6 @@ export const clearStuckWorkingState = internalMutation({
     }
     await clearStreamingActivity(ctx, sessionChatStreamingEntityId(args.chatId));
     await ctx.db.patch(args.chatId, {
-      activeWorkflowId: undefined,
       pendingTurn: undefined,
       syntheticTurnMessageId: undefined,
       updatedAt: Date.now(),
@@ -763,7 +774,7 @@ export const getSessionData = internalQuery({
   },
   returns: v.object({
     sessionId: v.id("sessions"),
-    sessionPersistenceId: v.union(v.id("sessions"), v.id("sessionChats")),
+    sessionPersistenceId: sessionChatPersistenceIdValidator,
     sandboxId: v.optional(v.string()),
     status: sessionStatusValidator,
     repoOwner: v.string(),
@@ -780,6 +791,12 @@ export const getSessionData = internalQuery({
     linkedRepoCount: v.optional(v.number()),
     /** startSessionSandbox still owns repo prep, swap and Docker. */
     sandboxSetupPending: v.boolean(),
+    /**
+     * False for a task's session: it pushes the task branch, but the draft PR
+     * and linked-repo publish belong to the task. Optional only so a workflow
+     * journaled before this field replays.
+     */
+    ownsPullRequests: v.optional(v.boolean()),
   }),
   handler: async (ctx, args) => {
     const [{ chat, session }, user, triggeringUserMessage] = await Promise.all([
@@ -833,6 +850,7 @@ export const getSessionData = internalQuery({
       attachmentStorageIds: triggeringUserMessage?.attachmentStorageIds,
       linkedRepoCount: session.linkedRepoCount,
       sandboxSetupPending: session.sandboxSetupPending === true,
+      ownsPullRequests: isStandaloneSession(session),
     };
   },
 });
@@ -927,7 +945,11 @@ export const saveResult = internalMutation({
     if (!context) return null;
     const { chat, session } = context;
     const turn = await ctx.db.get(args.turnId);
-    if (isSupersededChatResult(turn, chat.activeWorkflowId)) return null;
+    if (
+      isSupersededChatResult(turn, await openTurnWorkflowId(ctx, chat._id))
+    ) {
+      return null;
+    }
 
     // Any successful turn may have ended with the eva-design JSON, so this is
     // keyed on the reply's content rather than on what the turn was asked to do.
@@ -966,7 +988,7 @@ export const saveResult = internalMutation({
     if (outcome === "publish-failure" || outcome === "no-target") return null;
 
     const now = Date.now();
-    await ctx.db.patch(chat._id, { activeWorkflowId: undefined, updatedAt: now });
+    await ctx.db.patch(chat._id, { updatedAt: now });
     const sessionPatch: {
       updatedAt: number;
       planContent?: string;
@@ -1605,7 +1627,7 @@ export const handleCompletion = authMutation({
     const context = await loadSessionChat(ctx.db, chatId);
     if (!context) return null;
     const { chat, session } = context;
-    const activeWorkflowId = chat.activeWorkflowId;
+    const activeWorkflowId = await openTurnWorkflowId(ctx, chat._id);
     if (activeWorkflowId === undefined) return null;
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");

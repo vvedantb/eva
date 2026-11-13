@@ -8,15 +8,12 @@ import { MCP_CLAUDE_MODELS } from "../convex/mcp/toolShared";
 import {
   buildChatMessageCalls,
   resolveAgentDelivery,
-  type ChatTargetKind,
 } from "../convex/mcp/orchestratorDelivery";
 import { normalizeAIModel } from "../convex/_validators/aiModels";
 import { z } from "zod";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 
-/** Loading the chat-workflow module graph costs seconds on a cold worker. */
-const TIMEOUT_MS = 30_000;
 
 const PR_URL = "https://github.com/vvedantb/eva/pull/664";
 const TASK_PR_URL = "https://github.com/vvedantb/eva/pull/665";
@@ -46,6 +43,7 @@ async function fixture() {
       connectedBy: strangerUserId,
     });
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId: ownerUserId,
       title: "Fix the login bug",
@@ -54,6 +52,7 @@ async function fixture() {
       branchName: "eva/session-login",
     });
     const strangerSessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId: otherRepoId,
       userId: strangerUserId,
       title: "Not yours",
@@ -384,14 +383,13 @@ describe("PR links the tool accepts", () => {
 });
 
 describe("what a send does to the chat", () => {
-  const KINDS: ChatTargetKind[] = ["session", "task", "project"];
+  // Every MCP send lands in one session chat: a session's (named or Main), or
+  // the one a task or project talks in on its session, resolved upstream.
+  const BUSY = [false, true];
 
-  test("an idle session chat gets a user message and then a turn", () => {
-    // A session send is addressed to one of its chats (resolved upstream by
-    // `sessionChats:resolveDeliveryChat`), so both mutations take `chatId`.
+  test("an idle chat gets a user message and then a turn", () => {
     const calls = buildChatMessageCalls({
-      kind: "session",
-      id: "c1",
+      chatId: "c1",
       message: "keep going",
       delivery: resolveAgentDelivery({ isBusy: false, storedModel: "opus" }),
       sentViaOrchestrator: false,
@@ -415,97 +413,36 @@ describe("what a send does to the chat", () => {
     });
   });
 
-  test("an idle quick task chat runs on the task's own chat workflow", () => {
-    const calls = buildChatMessageCalls({
-      kind: "task",
-      id: "t1",
-      message: "keep going",
-      delivery: resolveAgentDelivery({ isBusy: false, storedModel: "sonnet" }),
-      sentViaOrchestrator: false,
-    });
-
-    expect(calls.map((call) => call.fn)).toEqual([
-      "agentTaskChatWorkflow:addMessage",
-      "agentTaskChatWorkflow:startExecute",
-    ]);
-    expect(calls[0]?.args.taskId).toBe("t1");
-    expect(calls[1]?.args).toEqual({
-      taskId: "t1",
-      message: "keep going",
-      model: "claude:sonnet",
-    });
-  });
-
-  test("an idle project chat runs on the project's own chat workflow", () => {
-    const calls = buildChatMessageCalls({
-      kind: "project",
-      id: "p1",
-      message: "keep going",
-      delivery: resolveAgentDelivery({ isBusy: false, storedModel: "opus" }),
-      sentViaOrchestrator: false,
-    });
-
-    expect(calls.map((call) => call.fn)).toEqual([
-      "projectChatWorkflow:addMessage",
-      "projectChatWorkflow:startExecute",
-    ]);
-    expect(calls[0]?.args.projectId).toBe("p1");
-  });
-
   test("a busy chat queues one message instead of starting a second turn", () => {
-    for (const kind of KINDS) {
-      const calls = buildChatMessageCalls({
-        kind,
-        id: "x1",
-        message: "and this next",
-        delivery: resolveAgentDelivery({ isBusy: true }),
-        sentViaOrchestrator: true,
-      });
+    const calls = buildChatMessageCalls({
+      chatId: "x1",
+      message: "and this next",
+      delivery: resolveAgentDelivery({ isBusy: true }),
+      sentViaOrchestrator: true,
+    });
 
-      expect(calls).toHaveLength(1);
-      expect(calls[0]?.fn).toContain("enqueueMessage");
-      expect(Object.values(calls[0]?.args ?? {})).toContain("x1");
-    }
-  });
-
-  test("the via-master badge only goes where a validator declares it", () => {
-    // Convex rejects an argument no validator declares. Project chat has no
-    // `sentViaOrchestrator` — the master session cannot drive a project — so
-    // passing one there would fail the send outright.
-    for (const kind of KINDS) {
-      const args = [false, true].flatMap((isBusy) =>
-        buildChatMessageCalls({
-          kind,
-          id: "x1",
-          message: "hi",
-          delivery: resolveAgentDelivery({ isBusy }),
-          sentViaOrchestrator: true,
-        }).flatMap((call) => Object.keys(call.args)),
-      );
-      expect(args.includes("sentViaOrchestrator")).toBe(kind !== "project");
-    }
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.fn).toBe("_sessions/execution:enqueueMessage");
+    expect(calls[0]?.args).toEqual({
+      chatId: "x1",
+      message: "and this next",
+      model: normalizeAIModel(undefined),
+      sentViaOrchestrator: true,
+    });
   });
 
   test("no send path creates a task, session or project", () => {
-    const everyCall = KINDS.flatMap((kind) =>
-      [false, true].flatMap((isBusy) =>
-        buildChatMessageCalls({
-          kind,
-          id: "x1",
-          message: "hi",
-          delivery: resolveAgentDelivery({ isBusy }),
-          sentViaOrchestrator: false,
-        }),
-      ),
+    const everyCall = BUSY.flatMap((isBusy) =>
+      buildChatMessageCalls({
+        chatId: "x1",
+        message: "hi",
+        delivery: resolveAgentDelivery({ isBusy }),
+        sentViaOrchestrator: false,
+      }),
     );
     for (const call of everyCall) {
       expect(call.fn).not.toContain("create");
-      // Only the three chat surfaces' own modules are ever called.
-      expect(
-        /^(_sessions\/|agentTaskChatWorkflow:|projectChatWorkflow:)/.test(
-          call.fn,
-        ),
-      ).toBe(true);
+      expect(call.fn.startsWith("_sessions/")).toBe(true);
     }
   });
 
@@ -513,16 +450,13 @@ describe("what a send does to the chat", () => {
     // Sessions lost their plan/edit `mode` long ago, but the MCP send kept
     // passing one. Convex rejects an argument no validator declares, so that
     // leftover failed the whole send.
-    const args = KINDS.flatMap((kind) =>
-      [false, true].flatMap((isBusy) =>
-        buildChatMessageCalls({
-          kind,
-          id: "x1",
-          message: "hi",
-          delivery: resolveAgentDelivery({ isBusy }),
-          sentViaOrchestrator: false,
-        }).flatMap((call) => Object.keys(call.args)),
-      ),
+    const args = BUSY.flatMap((isBusy) =>
+      buildChatMessageCalls({
+        chatId: "x1",
+        message: "hi",
+        delivery: resolveAgentDelivery({ isBusy }),
+        sentViaOrchestrator: false,
+      }).flatMap((call) => Object.keys(call.args)),
     );
     expect(args).not.toContain("mode");
   });
@@ -574,89 +508,6 @@ describe("user-MCP watch resolves the live Manager Ave thread", () => {
         userId: "not-an-id",
       }),
     ).toBeNull();
-  });
-});
-
-describe("MCP follow-up on a completed/closed-sandbox quick task", () => {
-  test(
-    "markTaskSandboxStartingForChat flips closed to starting so ready is accepted",
-    async () => {
-      const f = await fixture();
-      const now = Date.now();
-      const taskId = await f.t.run(async (ctx) => {
-        return await ctx.db.insert("agentTasks", {
-          repoId: f.repoId,
-          title: "Closed sandbox follow-up",
-          status: "business_review",
-          numId: 470,
-          createdAt: now,
-          updatedAt: now,
-          createdBy: f.ownerUserId,
-          sandboxId: "sbx_closed",
-          reviewTaskSandboxStatus: "closed",
-        });
-      });
-
-      await f.t.mutation(
-        internal.agentTaskChatWorkflow.markTaskSandboxStartingForChat,
-        { taskId },
-      );
-
-      const after = await f.t.run(async (ctx) => ctx.db.get(taskId));
-      expect(after?.reviewTaskSandboxStatus).toBe("starting");
-
-      const activity = await f.t.run(async (ctx) =>
-        ctx.db
-          .query("streamingActivity")
-          .withIndex("by_entity", (q) =>
-            q.eq("entityId", `task-sandbox-startup-${taskId}`),
-          )
-          .first(),
-      );
-      expect(activity?.currentActivity).toContain("Starting sandbox...");
-    },
-    TIMEOUT_MS,
-  );
-
-  test("waitForTaskPreviewSandboxActive is ready only when status is active", async () => {
-    const f = await fixture();
-    const now = Date.now();
-    const { closedId, activeId } = await f.t.run(async (ctx) => {
-      const closedId = await ctx.db.insert("agentTasks", {
-        repoId: f.repoId,
-        title: "Closed",
-        status: "business_review",
-        numId: 471,
-        createdAt: now,
-        updatedAt: now,
-        createdBy: f.ownerUserId,
-        reviewTaskSandboxStatus: "closed",
-      });
-      const activeId = await ctx.db.insert("agentTasks", {
-        repoId: f.repoId,
-        title: "Active",
-        status: "business_review",
-        numId: 472,
-        createdAt: now,
-        updatedAt: now,
-        createdBy: f.ownerUserId,
-        reviewTaskSandboxStatus: "active",
-      });
-      return { closedId, activeId };
-    });
-
-    expect(
-      await f.t.action(
-        internal._agentTasks.sandbox.waitForTaskPreviewSandboxActive,
-        { taskId: closedId, timeoutMs: 1 },
-      ),
-    ).toEqual({ ready: false });
-    expect(
-      await f.t.action(
-        internal._agentTasks.sandbox.waitForTaskPreviewSandboxActive,
-        { taskId: activeId, timeoutMs: 1 },
-      ),
-    ).toEqual({ ready: true });
   });
 });
 

@@ -33,6 +33,7 @@ async function fixture() {
       defaultBaseBranch: "main",
     });
     const id = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Seed the invoices table",

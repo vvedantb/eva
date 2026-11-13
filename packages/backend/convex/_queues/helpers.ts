@@ -11,7 +11,6 @@ import { internal } from "../_generated/api";
 import { workflow } from "../workflowManager";
 import {
   DEFAULT_AI_MODEL,
-  getAIModelProvider,
   launchTraitsFromStored,
   normalizeAIModel,
   usesChatDaemon,
@@ -24,17 +23,12 @@ import {
   runningBackgroundAgents,
 } from "../_sessions/backgroundAgents";
 import type { BackgroundAgentEntry } from "../_validators/tableFields";
-import {
-  PROJECT_CHAT_STREAM_PREFIX,
-  TASK_CHAT_STREAM_PREFIX,
-  trackAgentTaskChatWorkflow,
-  trackProjectChatWorkflow,
-  trackSessionChatWorkflow,
-} from "../_chat/surfaceAdapters";
+import { trackSessionChatWorkflow } from "../_chat/surfaceAdapters";
 import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
+import { hasOpenChatTurn } from "../_chat/turnProjection";
 import {
   activityRefForParentId,
   touchUserActivity,
@@ -48,17 +42,15 @@ import {
 import { findOpenChatQuestion } from "../pendingQuestions";
 import { requestSessionSandboxStart } from "../_sessions/sandbox";
 import { buildSessionPrompt } from "../_sessions/sessionPrompt";
+import { chatOwner } from "../_sessions/owner";
 import {
   buildDaemonPendingTurn,
   scheduleChatDaemonPrewarm,
 } from "../_sessions/daemonTurn";
-import { wakeTaskSandboxForQueue } from "../_agentTasks/sandbox";
-import { wakeProjectSandboxForQueue } from "../_projects/sandbox";
 import {
   bindTurnWorkflow,
   closeTurn,
   findOpenTurn,
-  openChatTurn,
   openSessionChatTurn,
   type ChatTurnEntityId,
 } from "../_chat/turnStore";
@@ -110,11 +102,15 @@ type ChatQueueGuardResult<TPrepared> =
  * itself.
  */
 /** Chat surfaces the queue serves; a session queues per chat tab. */
-type ChatQueueId = Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">;
+type ChatQueueId = Id<"sessionChats">;
 
 type ChatQueueConfig<TId extends ChatQueueId, TEntity, TPrepared> = {
   getEntity: (ctx: MutationCtx, id: TId) => Promise<TEntity | null>;
-  hasActiveWorkflow: (entity: TEntity) => boolean;
+  /** A turn is running. A session chat reads its open turn; ctx is for that read. */
+  hasActiveWorkflow: (
+    entity: TEntity,
+    ctx: MutationCtx,
+  ) => boolean | Promise<boolean>;
   /**
    * Whether the surface may start a turn right now even though it is idle.
    * Session chats share a per-session cap on concurrently running chats
@@ -191,19 +187,21 @@ type ChatQueueConfig<TId extends ChatQueueId, TEntity, TPrepared> = {
   /**
    * The wake-up payload for the master session watching this entity, or
    * `undefined` when it is unwatched (or when the surface cannot be watched at
-   * all). Read off the already-loaded entity, so the shared core below pays no
-   * extra read and never has to guess a field name per surface.
+   * all). Read off the already-loaded entity, so the shared core below never
+   * has to guess a field name per surface. A task's session reads its task,
+   * which holds the watch.
    */
   orchestratorNotifyChild: (
+    ctx: MutationCtx,
     entity: TEntity,
     id: TId,
-  ) => OrchestratorNotifyChild | undefined;
+  ) => Promise<OrchestratorNotifyChild | undefined>;
   defaultStartErrorMessage: string;
 };
 
 /**
- * True while the surface is still working on the previous turn. `activeWorkflowId`
- * alone is not enough: a backgrounded Agent/Task subagent keeps running after
+ * True while the surface is still working on the previous turn. A running
+ * workflow (`hasActiveWorkflow`) alone is not enough: a backgrounded Agent/Task subagent keeps running after
  * the turn that spawned it completes, and the daemon opens a synthetic turn to
  * process whatever that subagent reports back. Dequeuing in either window
  * starts the queued message on top of work the user is still waiting on — the
@@ -218,7 +216,7 @@ async function isSurfaceBusy<TId extends ChatQueueId, TEntity, TPrepared>(
   entity: TEntity,
   config: ChatQueueConfig<TId, TEntity, TPrepared>,
 ): Promise<boolean> {
-  if (config.hasActiveWorkflow(entity)) {
+  if (await config.hasActiveWorkflow(entity, ctx)) {
     return true;
   }
   if (!(await config.hasCapacity(ctx, entity))) {
@@ -260,7 +258,7 @@ async function scheduleDrainAtBackgroundAgentExpiry<
   entity: TEntity,
   config: ChatQueueConfig<TId, TEntity, TPrepared>,
 ): Promise<void> {
-  if (config.hasActiveWorkflow(entity)) return;
+  if (await config.hasActiveWorkflow(entity, ctx)) return;
   if (config.sandboxState(entity) !== "awake") return;
   const now = Date.now();
   const expiresAt = backgroundAgentsExpireAt(
@@ -410,7 +408,7 @@ async function startNextQueuedChatMessage<
    */
   const watchedChild =
     trigger === "turn-ended"
-      ? config.orchestratorNotifyChild(entity, id)
+      ? await config.orchestratorNotifyChild(ctx, entity, id)
       : undefined;
   async function notifyWatchingOrchestrator(status: string): Promise<void> {
     if (!watchedChild) return;
@@ -575,58 +573,13 @@ async function bindOpenTurnWorkflow(
   if (turn) await bindTurnWorkflow(ctx, turn._id, String(workflowId));
 }
 
-/**
- * Opens the placeholder and durable turn for a queued task or project chat
- * message, then starts its workflow with the turn id. The workflow restages
- * `pendingTurn` with this turn id and prewarms the daemon itself.
- */
-async function startQueuedEntityChatTurn(
-  ctx: MutationCtx,
-  params: {
-    entityId: Id<"agentTasks"> | Id<"projects">;
-    streamingEntityId: string;
-    next: Doc<"queuedMessages">;
-    sandboxId: string | undefined;
-    repoId: Id<"githubRepos">;
-  },
-  start: (turnId: Id<"turns">) => Promise<WorkflowId>,
-): Promise<WorkflowId> {
-  const placeholderMessageId = await ctx.db.insert("messages", {
-    parentId: params.entityId,
-    role: "assistant",
-    content: "",
-    timestamp: Date.now(),
-    activityLog: "",
-  });
-  const turnId = await openChatTurn(ctx, {
-    entityId: params.entityId,
-    streamingEntityId: params.streamingEntityId,
-    placeholderMessageId,
-    prompt: params.next.content,
-    attachmentStorageIds: params.next.attachmentStorageIds,
-    model: normalizeAIModel(params.next.model ?? DEFAULT_AI_MODEL),
-    sandboxId: params.sandboxId,
-    repoId: params.repoId,
-  });
-  try {
-    return await start(turnId);
-  } catch (error) {
-    await rollbackQueuedChatStart(ctx, {
-      entityId: params.entityId,
-      turnId,
-      placeholderMessageId,
-    });
-    throw error;
-  }
-}
-
 const sessionChatQueueConfig: ChatQueueConfig<
   Id<"sessionChats">,
   SessionChatContext,
   SessionQueuePrepared
 > = {
   getEntity: (ctx, id) => loadSessionChat(ctx.db, id),
-  hasActiveWorkflow: ({ chat }) => chat.activeWorkflowId !== undefined,
+  hasActiveWorkflow: ({ chat }, ctx) => hasOpenChatTurn(ctx.db, chat._id),
   // One slot check for both the send path and the dequeue, so the cap cannot
   // drift between them.
   hasCapacity: (ctx, context) => sessionChatHasFreeSlot(ctx.db, context),
@@ -779,242 +732,27 @@ const sessionChatQueueConfig: ChatQueueConfig<
     });
     await ctx.db.patch(id, { updatedAt: Date.now() });
   },
-  orchestratorNotifyChild: ({ session }, id) =>
-    session.watchedByAve === undefined
+  orchestratorNotifyChild: async (ctx, { chat, session }, id) => {
+    // An owned session's chat reports as its owner (`chatOwner`): the
+    // watch lives on the owner.
+    const owner = chatOwner(chat, session);
+    if (owner.kind === "task") {
+      const task = await ctx.db.get(owner.taskId);
+      return task?.watchedByAve === undefined
+        ? undefined
+        : { kind: "task", taskId: owner.taskId };
+    }
+    if (owner.kind === "project") {
+      const project = await ctx.db.get(owner.projectId);
+      return project?.watchedByAve === undefined
+        ? undefined
+        : { kind: "project", projectId: owner.projectId };
+    }
+    return session.watchedByAve === undefined
       ? undefined
-      : { kind: "session", sessionId: session._id, chatId: id },
+      : { kind: "session", sessionId: session._id, chatId: id };
+  },
   defaultStartErrorMessage: "Failed to start queued message.",
-};
-
-type ChatQueuePrepared = {
-  providerAccountId: Id<"userProviderAccounts"> | undefined;
-};
-
-const projectChatQueueConfig: ChatQueueConfig<
-  Id<"projects">,
-  Doc<"projects">,
-  ChatQueuePrepared
-> = {
-  getEntity: (ctx, id) => ctx.db.get(id),
-  hasActiveWorkflow: (project) => project.activeChatWorkflowId !== undefined,
-  hasCapacity: async () => true,
-  activityParentId: (_project, id) => String(id),
-  sandboxState: (project) =>
-    sandboxStateFromStatus(project.reviewProjectSandboxStatus),
-  wakeSandbox: wakeProjectSandboxForQueue,
-  backgroundAgents: (project) => project.backgroundAgents,
-  syntheticTurnMessageId: (project) => project.syntheticTurnMessageId,
-  streamingEntityId: (id) => `${PROJECT_CHAT_STREAM_PREFIX}${String(id)}`,
-  fallbackProvider: (project) => getAIModelProvider(project.model),
-  stickyTraits: (project) => project,
-  // Owner-only, and a collaborator's stored override is dropped rather than
-  // resolved: raising here would strand the whole queue on one bad row.
-  turnAccountId: (ctx, project, next) =>
-    resolveTurnProviderAccountId(ctx.db, {
-      requestedAccountId:
-        next.userId === project.userId ? next.providerAccountId : undefined,
-      ownerUserId: project.userId,
-      currentAccountId: project.providerAccountId,
-      model: next.model,
-      senderUserId: next.userId,
-      changePolicy: "owner-only",
-      ownerNoun: "project owner",
-    }),
-  prepareGuard: async (_ctx, _project, _next, providerAccountId) => ({
-    ok: true,
-    data: { providerAccountId },
-  }),
-  insertUserMessage: async (ctx, id, project, next, prepared, now) => {
-    await ctx.db.insert("messages", {
-      parentId: id,
-      role: "user",
-      content: next.displayContent ?? next.content,
-      timestamp: now,
-      userId: next.userId,
-      attachmentStorageIds: next.attachmentStorageIds,
-      ...(await resolveMessageCredential(
-        ctx.db,
-        prepared.providerAccountId,
-        project.userId,
-      )),
-      model: next.model,
-      reasoningLevel: next.reasoningLevel,
-    });
-  },
-  startWorkflow: async (ctx, id, project, next, prepared) => {
-    return await startQueuedEntityChatTurn(
-      ctx,
-      {
-        entityId: id,
-        streamingEntityId: `${PROJECT_CHAT_STREAM_PREFIX}${String(id)}`,
-        next,
-        sandboxId: project.sandboxId,
-        repoId: project.repoId,
-      },
-      (turnId) =>
-        workflow.start(
-          ctx,
-          internal.projectChatWorkflow.projectChatExecuteWorkflow,
-          {
-            projectId: id,
-            message: next.content,
-            model: next.model ?? DEFAULT_AI_MODEL,
-            // Normalised, not forwarded raw: the composer enqueues model defaults
-            // explicitly (e.g. reasoning "high"), and the workflow feeds these
-            // straight into prewarmEntityDaemon — a raw default yields a different
-            // opts sig from the page-open prewarm and kills its daemon.
-            ...launchTraitsFromStored(
-              normalizeAIModel(next.model ?? DEFAULT_AI_MODEL),
-              {
-                reasoningLevel: next.reasoningLevel,
-                thinkingEnabled: next.thinkingEnabled,
-                use1mContext: next.use1mContext,
-                fastMode: next.fastMode,
-              },
-            ),
-            providerAccountId: prepared.providerAccountId,
-            credentialOwnerUserId: project.userId,
-            userId: next.userId,
-            turnId,
-          },
-        ),
-    );
-  },
-  onStarted: async (ctx, id, workflowId, now) => {
-    await bindOpenTurnWorkflow(ctx, id, workflowId);
-    await ctx.db.patch(id, { updatedAt: now });
-    await trackProjectChatWorkflow(ctx, id, workflowId);
-  },
-  recordError: async (ctx, id, content) => {
-    await ctx.db.insert("messages", {
-      parentId: id,
-      role: "assistant",
-      content,
-      timestamp: Date.now(),
-    });
-    await ctx.db.patch(id, { updatedAt: Date.now() });
-  },
-  orchestratorNotifyChild: (project, id) =>
-    project.watchedByAve === undefined
-      ? undefined
-      : { kind: "project", projectId: id },
-  defaultStartErrorMessage: "Failed to start queued chat message.",
-};
-
-const taskChatQueueConfig: ChatQueueConfig<
-  Id<"agentTasks">,
-  Doc<"agentTasks">,
-  ChatQueuePrepared
-> = {
-  getEntity: (ctx, id) => ctx.db.get(id),
-  // `activeWorkflowId` counts too: the task's own run owns the sandbox, and a
-  // follow-up may now be queued while that first run is still going. Starting
-  // a chat turn on top of it would have two agents in one sandbox.
-  hasActiveWorkflow: (task) =>
-    task.activeChatWorkflowId !== undefined ||
-    task.activeWorkflowId !== undefined,
-  hasCapacity: async () => true,
-  activityParentId: (_task, id) => String(id),
-  sandboxState: (task) => sandboxStateFromStatus(task.reviewTaskSandboxStatus),
-  wakeSandbox: wakeTaskSandboxForQueue,
-  backgroundAgents: (task) => task.backgroundAgents,
-  syntheticTurnMessageId: (task) => task.syntheticTurnMessageId,
-  streamingEntityId: (id) => `${TASK_CHAT_STREAM_PREFIX}${String(id)}`,
-  fallbackProvider: (task) => getAIModelProvider(task.model),
-  stickyTraits: (task) => task,
-  // Owner-only, and a collaborator's stored override is dropped rather than
-  // resolved: raising here would strand the whole queue on one bad row.
-  turnAccountId: (ctx, task, next) =>
-    resolveTurnProviderAccountId(ctx.db, {
-      requestedAccountId:
-        next.userId === task.createdBy ? next.providerAccountId : undefined,
-      ownerUserId: task.createdBy,
-      currentAccountId: task.providerAccountId,
-      model: next.model,
-      senderUserId: next.userId,
-      changePolicy: "owner-only",
-      ownerNoun: "task owner",
-    }),
-  prepareGuard: async (_ctx, _task, _next, providerAccountId) => ({
-    ok: true,
-    data: { providerAccountId },
-  }),
-  insertUserMessage: async (ctx, id, task, next, prepared, now) => {
-    await ctx.db.insert("messages", {
-      parentId: id,
-      role: "user",
-      content: next.displayContent ?? next.content,
-      timestamp: now,
-      userId: next.userId,
-      attachmentStorageIds: next.attachmentStorageIds,
-      ...(await resolveMessageCredential(
-        ctx.db,
-        prepared.providerAccountId,
-        task.createdBy,
-      )),
-      model: next.model,
-      reasoningLevel: next.reasoningLevel,
-      sentViaOrchestrator: next.sentViaOrchestrator,
-    });
-  },
-  startWorkflow: async (ctx, id, task, next, prepared) => {
-    const repoId = task.repoId;
-    if (!repoId) throw new Error("Task is not associated with a repo");
-    return await startQueuedEntityChatTurn(
-      ctx,
-      {
-        entityId: id,
-        streamingEntityId: `${TASK_CHAT_STREAM_PREFIX}${String(id)}`,
-        next,
-        sandboxId: task.sandboxId,
-        repoId,
-      },
-      (turnId) =>
-        workflow.start(
-          ctx,
-          internal.agentTaskChatWorkflow.agentTaskChatExecuteWorkflow,
-          {
-            taskId: id,
-            message: next.content,
-            model: next.model ?? DEFAULT_AI_MODEL,
-            // Normalised, not forwarded raw: the composer enqueues model defaults
-            // explicitly (e.g. reasoning "high"), and the workflow feeds these
-            // straight into prewarmEntityDaemon — a raw default yields a different
-            // opts sig from the page-open prewarm and kills its daemon.
-            ...launchTraitsFromStored(
-              normalizeAIModel(next.model ?? DEFAULT_AI_MODEL),
-              {
-                reasoningLevel: next.reasoningLevel,
-                thinkingEnabled: next.thinkingEnabled,
-                use1mContext: next.use1mContext,
-                fastMode: next.fastMode,
-              },
-            ),
-            providerAccountId: prepared.providerAccountId,
-            credentialOwnerUserId: task.createdBy,
-            userId: next.userId,
-            turnId,
-          },
-        ),
-    );
-  },
-  onStarted: async (ctx, id, workflowId, now) => {
-    await bindOpenTurnWorkflow(ctx, id, workflowId);
-    await ctx.db.patch(id, { updatedAt: now });
-    await trackAgentTaskChatWorkflow(ctx, id, workflowId);
-  },
-  recordError: async (ctx, id, content) => {
-    await ctx.db.insert("messages", {
-      parentId: id,
-      role: "assistant",
-      content,
-      timestamp: Date.now(),
-    });
-    await ctx.db.patch(id, { updatedAt: Date.now() });
-  },
-  orchestratorNotifyChild: (task, id) =>
-    task.watchedByAve === undefined ? undefined : { kind: "task", taskId: id },
-  defaultStartErrorMessage: "Failed to start queued chat message.",
 };
 
 /**
@@ -1054,32 +792,6 @@ export async function drainSessionChatQueues(
   return started;
 }
 
-/** Dequeues and starts the next pending chat message for a project. */
-export function startNextQueuedProjectChatMessage(
-  ctx: MutationCtx,
-  projectId: Id<"projects">,
-): Promise<boolean> {
-  return startNextQueuedChatMessage(
-    ctx,
-    projectId,
-    projectChatQueueConfig,
-    "turn-ended",
-  );
-}
-
-/** Dequeues and starts the next pending chat message for an agent task. */
-export function startNextQueuedTaskChatMessage(
-  ctx: MutationCtx,
-  taskId: Id<"agentTasks">,
-): Promise<boolean> {
-  return startNextQueuedChatMessage(
-    ctx,
-    taskId,
-    taskChatQueueConfig,
-    "turn-ended",
-  );
-}
-
 /**
  * A drain that is not a turn ending — sandbox ready, a fresh enqueue, a
  * usage-limit resume, a provider switch. Never wakes a watching orchestrator,
@@ -1088,7 +800,7 @@ export function startNextQueuedTaskChatMessage(
  */
 export async function drainChatQueueQuietly(
   ctx: MutationCtx,
-  parentId: Id<"sessions"> | ChatQueueId,
+  parentId: string,
 ): Promise<boolean> {
   const sessionId = ctx.db.normalizeId("sessions", parentId);
   if (sessionId) {
@@ -1103,24 +815,6 @@ export async function drainChatQueueQuietly(
       ctx,
       chatId,
       sessionChatQueueConfig,
-      "quiet",
-    );
-  }
-  const taskId = ctx.db.normalizeId("agentTasks", parentId);
-  if (taskId) {
-    return startNextQueuedChatMessage(
-      ctx,
-      taskId,
-      taskChatQueueConfig,
-      "quiet",
-    );
-  }
-  const projectId = ctx.db.normalizeId("projects", parentId);
-  if (projectId) {
-    return startNextQueuedChatMessage(
-      ctx,
-      projectId,
-      projectChatQueueConfig,
       "quiet",
     );
   }
@@ -1158,16 +852,6 @@ export const drainQueueAfterBackgroundAgents = internalMutation({
     if (chatId) {
       const chat = await ctx.db.get(chatId);
       if (chat) await drainSessionChatQueues(ctx, chat.sessionId, chatId);
-      return null;
-    }
-    const taskId = ctx.db.normalizeId("agentTasks", args.parentId);
-    if (taskId) {
-      await startNextQueuedTaskChatMessage(ctx, taskId);
-      return null;
-    }
-    const projectId = ctx.db.normalizeId("projects", args.parentId);
-    if (projectId) {
-      await startNextQueuedProjectChatMessage(ctx, projectId);
     }
     return null;
   },

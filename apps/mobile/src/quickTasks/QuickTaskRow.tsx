@@ -1,8 +1,8 @@
-import type { api } from "@eva/backend";
+import { taskScheduledAt, type api } from "@eva/backend";
 import { TASK_STATUS_LABELS, firstNameFromUser, formatEntityNumLabel, type DisplayTaskStatus } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconClock, IconTag } from "@tabler/icons-react-native";
-import { Spinner, SurfaceRow } from "@vvedantb/native-ui/primitives";
+import { SurfaceRow } from "@vvedantb/native-ui/primitives";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import type { FunctionReturnType } from "convex/server";
 import dayjs from "dayjs";
@@ -13,7 +13,7 @@ import { PriorityIcon } from "@/quickTasks/PriorityIcon";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
 import { displayTitle, timeAgo } from "@/ui/format";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
-import { AwaitingAnswerMark } from "@/ui/RowStatus";
+import { AwaitingAnswerMark, WorkingMark } from "@/ui/RowStatus";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 
 type QuickTask = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
@@ -23,14 +23,14 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
 const MAX_TAGS = 3;
 
 /** The card's secondary text (number, tags, creator, age): the Inbox `text-xs` (12 / 16), not the web 10 and 11. */
-const META_TEXT = { fontSize: 12, lineHeight: 16, letterSpacing: XS_TRACKING };
+export const META_TEXT = { fontSize: 12, lineHeight: 16, letterSpacing: XS_TRACKING };
 
 /** The web sandbox dot: Awake emerald, waking or going to sleep amber, asleep muted. */
-const SANDBOX_DOT = {
-  active: { light: "#10b981", dark: "#10b981", label: "Awake" },
-  starting: { light: "#fbbf24", dark: "#fbbf24", label: "Waking up" },
-  stopping: { light: "#fbbf24", dark: "#fbbf24", label: "Going to sleep" },
-  closed: { light: undefined, dark: undefined, label: "Asleep" },
+export const SANDBOX_DOT = {
+  active: { color: "#10b981", label: "Awake" },
+  starting: { color: "#fbbf24", label: "Waking up" },
+  stopping: { color: "#fbbf24", label: "Going to sleep" },
+  closed: { color: undefined, label: "Asleep" },
 };
 
 /**
@@ -48,12 +48,15 @@ export function QuickTaskRow({
   status,
   hasError,
   creator,
+  projectNumId,
   onLongPress,
 }: {
   task: QuickTask;
   status: DisplayTaskStatus;
   hasError: boolean;
   creator: User | undefined;
+  /** In a project's task list: the number reads "#project/task", as the web card. */
+  projectNumId?: number;
   onLongPress: () => void;
 }) {
   const router = useRouter();
@@ -67,13 +70,14 @@ export function QuickTaskRow({
   // because the web draws its border beam instead; the phone has no beam.
   const isInProgress = !hasError && status === "in_progress";
   const showWorking = !hasError && !isInProgress && task.isExecuting;
-  const sandbox = task.reviewTaskSandboxStatus ? SANDBOX_DOT[task.reviewTaskSandboxStatus] : undefined;
+  const sandbox = task.sandboxStatus ? SANDBOX_DOT[task.sandboxStatus] : undefined;
   const showSandbox = sandbox !== undefined && !simpleView;
   const showUnread = task.hasUnread && !task.isExecuting;
-  const numLabel = formatEntityNumLabel({ numId: task.numId });
+  const numLabel = formatEntityNumLabel({ numId: task.numId, projectNumId });
   const creatorFirstName = creator ? firstNameFromUser(creator) : null;
-  const scheduled = task.scheduledAt
-    ? `${status === "todo" ? "Scheduled for" : "Was scheduled for"} ${dayjs(task.scheduledAt).format("MMM D, h:mm A")}`
+  const scheduledAt = taskScheduledAt(task);
+  const scheduled = scheduledAt
+    ? `${status === "todo" ? "Scheduled for" : "Was scheduled for"} ${dayjs(scheduledAt).format("MMM D, h:mm A")}`
     : undefined;
   const hint = [
     TASK_STATUS_LABELS[status],
@@ -120,11 +124,11 @@ export function QuickTaskRow({
           {task.isAwaitingAnswer ? (
             <AwaitingAnswerMark />
           ) : showWorking ? (
-            <Spinner size="sm" decorative />
+            <WorkingMark />
           ) : showSandbox ? (
             <View
               className="size-2 rounded-full"
-              style={{ backgroundColor: sandbox[scheme] ?? withAlpha(muted, 0.4) }}
+              style={{ backgroundColor: sandbox.color ?? withAlpha(muted, 0.4) }}
             />
           ) : null}
           {showUnread ? <View className="size-1.5 rounded-full" style={{ backgroundColor: theme.primary }} /> : null}

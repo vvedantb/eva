@@ -5,10 +5,9 @@ import { toast } from "@vvedantb/ui";
 import type { ModelAccount } from "@vvedantb/ui";
 import { useMutation } from "convex/react";
 import type { OptimisticLocalStore } from "convex/browser";
-import {
-  transcriptTailArgs,
-  type TranscriptMessage,
-  type TranscriptParentId,
+import type {
+  TranscriptMessage,
+  TranscriptParentId,
 } from "@/lib/hooks/useChatTranscript";
 import { resolveCredentialSourceLabel } from "@/lib/utils/credentialSourceLabel";
 import { appendReviewCommentsToPrompt } from "@/lib/reviewComments";
@@ -28,8 +27,8 @@ import type { ChatDraftTarget } from "./useChatDraftSeed";
  * Optimistic update for a chat's `addMessage`: the user's bubble and an empty
  * assistant placeholder show at once, before the mutation round-trips. Every
  * chat (session, quick task, project) attaches this to its own `addMessage`.
- * Patches both transcript subscriptions (`useChatTranscript`): the tail the
- * chat paints first and the full list that replaces it.
+ * Patches every live transcript subscription of the chat (`useChatTranscript`):
+ * the tail it paints first and the `since` list it follows.
  */
 export function insertSentTurnOptimistically(
   localStore: OptimisticLocalStore,
@@ -64,11 +63,20 @@ export function insertSentTurnOptimistically(
     timestamp: now + 1,
     activityLog: "",
   };
-  for (const queryArgs of [{ parentId }, transcriptTailArgs(parentId)]) {
-    const existing = localStore.getQuery(api.messages.listByParent, queryArgs);
-    if (existing === undefined) continue;
+  for (const { args: queryArgs, value } of localStore.getAllQueries(
+    api.messages.listByParent,
+  )) {
+    // Older-history pages (`before`) end above the live rows: a new turn is
+    // never theirs.
+    if (
+      value === undefined ||
+      queryArgs.parentId !== parentId ||
+      queryArgs.before !== undefined
+    ) {
+      continue;
+    }
     localStore.setQuery(api.messages.listByParent, queryArgs, [
-      ...existing,
+      ...value,
       userMsg,
       assistantPlaceholder,
     ]);
@@ -105,7 +113,8 @@ export function useChatSend({
   /** Stops whatever turn owns the chat bubble. */
   cancel: () => Promise<null>;
   /** The `drafts` row "Restore draft" writes back to. */
-  draftTarget: ChatDraftTarget;
+  /** Undefined for a chat not created yet: a failed send cannot restore a draft. */
+  draftTarget: ChatDraftTarget | undefined;
   /** A turn owns the chat: the send queues behind it. */
   isExecuting: boolean;
   /**
@@ -124,14 +133,18 @@ export function useChatSend({
   // `drafts` row the composer reads (ChatDraftSync pulls it live).
   const raiseSendFailure = (errorMessage: string, draftContent: string) => {
     toast.error("Couldn't send your message", {
-      id: `${draftTarget.kind}-send`,
+      id: "chat-send",
       description: readableSendError(errorMessage),
-      action: {
-        label: "Restore draft",
-        onClick: () => {
-          void setDraft({ target: draftTarget, content: draftContent });
-        },
-      },
+      ...(draftTarget
+        ? {
+            action: {
+              label: "Restore draft",
+              onClick: () => {
+                void setDraft({ target: draftTarget, content: draftContent });
+              },
+            },
+          }
+        : {}),
     });
   };
 
@@ -182,7 +195,7 @@ export function useChatSend({
     await catchMutationError(
       cancel(),
       "Couldn't cancel execution",
-      `${draftTarget.kind}-cancel-execution`,
+      "chat-cancel-execution",
     );
   };
 

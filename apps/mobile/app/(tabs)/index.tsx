@@ -1,21 +1,25 @@
 import { api, type Doc, type Id } from "@eva/backend";
 import { getNotificationAppearance } from "@eva/shared";
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import { groupNotifications, type InboxGroup } from "@eva/shared/notificationGroups";
-import { IconArchive, IconArchiveOff, IconInbox, IconMail, IconMailOpened } from "@tabler/icons-react-native";
+import { IconArchive, IconArchiveOff, IconInbox, IconMail, IconMailOpened, IconX } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
+import { impactHaptic } from "@vvedantb/native-ui/haptics";
 import { PageHeader, SectionLabel } from "@vvedantb/native-ui/layout";
 import {
   BulkActionBar,
   closeSwipeRows,
   EmptyState,
+  HeaderIconButton,
   ListDivider,
   SkeletonList,
   SkeletonRow,
 } from "@vvedantb/native-ui/primitives";
-import { tokens, useLargerText } from "@vvedantb/native-ui/theme";
+import { useLargerText } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "expo-router";
+import { Tabs } from "expo-router/js-tabs";
 import { useEffect, useState } from "react";
 import { BackHandler, Linking, SectionList, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -31,6 +35,12 @@ import { useScheme, XS_TRACKING } from "@/ui/theme";
  * headers, and select mode with the web bulk bar. The web row menu is a
  * swipe on each row (`NotificationRow`). A `SectionList`: the inbox holds up
  * to 100 rows, and only those near the view are drawn.
+ *
+ * Select mode is Android's contextual action bar: it starts from the header
+ * Select button or a long press on a row, the header shows "N selected" with
+ * a close X, and the bulk bar takes the tab bar's place (the tab bar hides,
+ * so no tab switch mid-selection). Back, either X, a filter change or a bulk
+ * action leaves it.
  */
 export default function InboxScreen() {
   const [filter, setFilter] = useState<InboxFilter>("all");
@@ -52,6 +62,20 @@ export default function InboxScreen() {
   const largerText = useLargerText();
   const insets = useSafeAreaInsets();
 
+  // Android back leaves select mode first, as it closes a sheet first. An
+  // effect because the hardware back button is a subscription outside React.
+  // It comes before the values below: the React Compiler memoises nothing
+  // across a hook call, and the list and its rows are memoised only when no
+  // hook sits between the queries and the JSX.
+  useEffect(() => {
+    if (!selecting) return;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      setSelecting(false);
+      setSelected(new Set());
+      return true;
+    });
+    return () => subscription.remove();
+  }, [selecting]);
   // The web Unread filter: the inbox list, unread rows only.
   const notifications = filter === "unread" ? listed?.filter((notification) => !notification.read) : listed;
   const repoById = new Map<Id<"githubRepos">, NotificationRepo>(
@@ -68,18 +92,14 @@ export default function InboxScreen() {
     setSelecting(false);
     setSelected(new Set());
   };
-  // Android back leaves select mode first, as it closes a sheet first. An
-  // effect because the hardware back button is a subscription outside React.
-  useEffect(() => {
-    if (!selecting) return;
-    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      setSelecting(false);
-      setSelected(new Set());
-      return true;
-    });
-    return () => subscription.remove();
-  }, [selecting]);
-  const toggle = (id: Id<"notifications">) => {
+  /** Select mode from a long press: that row ticked, and a light tap to say the mode changed. */
+  const startSelect = ({ _id: id }: Doc<"notifications">) => {
+    closeSwipeRows();
+    impactHaptic("light");
+    setSelecting(true);
+    setSelected(new Set([id]));
+  };
+  const toggle = ({ _id: id }: Doc<"notifications">) => {
     const next = new Set(selected);
     if (next.has(id)) next.delete(id);
     else next.add(id);
@@ -110,6 +130,9 @@ export default function InboxScreen() {
       markAsRead({ id }).catch(() => toast.error("Couldn't mark as read", { id: "inbox-mark-read" }));
     }
   };
+  const markRead = (notification: Doc<"notifications">) => void markAsRead({ id: notification._id });
+  const toggleArchive = (notification: Doc<"notifications">) =>
+    notification.archivedAt === undefined ? archive([notification._id]) : unarchive([notification._id]);
   const open = (notification: Doc<"notifications">) => {
     if (!notification.read) void markAsRead({ id: notification._id });
     if (notification.chatTarget) {
@@ -122,28 +145,41 @@ export default function InboxScreen() {
 
   return (
     <TabScreen>
-      <PageHeader
-        title="Inbox"
-        action={
-          <InboxHeaderActions
-            filter={filter}
-            onFilterChange={(next) => {
-              setFilter(next);
-              exitSelect();
-            }}
-            group={group}
-            onGroupChange={setGroup}
-            unreadCount={unreadCount}
-            onMarkAllRead={() => void markAllAsRead({})}
-            selecting={selecting}
-            onToggleSelecting={() => {
-              closeSwipeRows();
-              if (selecting) exitSelect();
-              else setSelecting(true);
-            }}
-          />
-        }
-      />
+      {/* The bulk bar stands in for the tab bar (`FloatingTabBar` hides on `display: "none"`). */}
+      <Tabs.Screen options={{ tabBarStyle: selecting ? { display: "none" } : undefined }} />
+      {selecting ? (
+        // Android's contextual action bar: the count in place of the title, a
+        // close X before it, and no page actions (the bulk bar holds them).
+        <PageHeader
+          title={`${selected.size} selected`}
+          leading={
+            <HeaderIconButton label="Cancel selection" onPress={exitSelect}>
+              <IconX size={18} color={EVA_THEME[scheme].foreground} />
+            </HeaderIconButton>
+          }
+        />
+      ) : (
+        <PageHeader
+          title="Inbox"
+          action={
+            <InboxHeaderActions
+              filter={filter}
+              onFilterChange={(next) => {
+                setFilter(next);
+                exitSelect();
+              }}
+              group={group}
+              onGroupChange={setGroup}
+              unreadCount={unreadCount}
+              onMarkAllRead={() => void markAllAsRead({})}
+              onSelect={() => {
+                closeSwipeRows();
+                setSelecting(true);
+              }}
+            />
+          }
+        />
+      )}
       {notifications === undefined ? (
         // Rows shaped as `NotificationRow`: the 28 mark, subject over event line, the time.
         <SkeletonList
@@ -167,9 +203,9 @@ export default function InboxScreen() {
             <View
               className="px-4 py-1.5"
               style={{
-                backgroundColor: tokens.color.background[scheme],
+                backgroundColor: EVA_THEME[scheme].background,
                 borderBottomWidth: 1,
-                borderBottomColor: tokens.color.border[scheme],
+                borderBottomColor: EVA_THEME[scheme].border,
               }}
             >
               {/* The web label is an inline `text-xs` span in a 24 line box. */}
@@ -178,26 +214,24 @@ export default function InboxScreen() {
           )}
           // The `DividedList` hairline between the rows of a group.
           ItemSeparatorComponent={ListDivider}
+          // The same handlers for every row (each row closes over its own notification), so a
+          // row whose notification did not change keeps its drawing when the list draws more.
           renderItem={({ item: notification }) => (
             <NotificationRow
               notification={notification}
               repo={repoOf(notification)}
-              onPress={() => open(notification)}
-              onMarkRead={() => void markAsRead({ id: notification._id })}
-              onToggleRead={() => toggleRead(notification)}
-              onToggleArchive={() =>
-                notification.archivedAt === undefined ? archive([notification._id]) : unarchive([notification._id])
-              }
-              selection={
-                selecting
-                  ? { checked: selected.has(notification._id), onToggle: () => toggle(notification._id) }
-                  : undefined
-              }
+              onOpen={open}
+              onMarkRead={markRead}
+              onToggleRead={toggleRead}
+              onToggleArchive={toggleArchive}
+              onStartSelect={startSelect}
+              selection={selecting ? { checked: selected.has(notification._id), onToggle: toggle } : undefined}
             />
           )}
           // A scroll closes a row swiped open.
           onScrollBeginDrag={closeSwipeRows}
-          contentContainerStyle={{ paddingBottom: tabBarReserve(largerText, insets.bottom) + (selecting ? 72 : 0) }}
+          // The bulk bar takes the tab bar's slot and height, so one reserve clears either.
+          contentContainerStyle={{ paddingBottom: tabBarReserve(largerText, insets.bottom) }}
         />
       )}
       <BulkActionBar
@@ -208,13 +242,25 @@ export default function InboxScreen() {
         onExitSelect={exitSelect}
         onSelectAll={() => setSelected(new Set((notifications ?? []).map((notification) => notification._id)))}
         onClearSelection={() => setSelected(new Set())}
-        bottomOffset={tabBarReserve(largerText, insets.bottom) - 24}
-        // At 390 the bar is wider than the screen: Cancel stays in view, the rest scrolls.
-        pinCancel
-        // The web `InboxBulkBar` actions; Archive is reversible, so not destructive.
+        placement="tabBar"
+        // The web `InboxBulkBar` actions and names; Archive is reversible, so not destructive.
+        // The web bar is icon-only at phone width, so the labels under the icons are
+        // shortened to fit five controls in 390: "Mark unread" would not.
         primaryActions={[
-          { key: "read", label: "Mark read", icon: IconMailOpened, onClick: bulk((ids) => markManyAsRead({ ids })) },
-          { key: "unread", label: "Mark unread", icon: IconMail, onClick: bulk((ids) => markManyAsUnread({ ids })) },
+          {
+            key: "read",
+            label: "Mark read",
+            shortLabel: "Read",
+            icon: IconMailOpened,
+            onClick: bulk((ids) => markManyAsRead({ ids })),
+          },
+          {
+            key: "unread",
+            label: "Mark unread",
+            shortLabel: "Unread",
+            icon: IconMail,
+            onClick: bulk((ids) => markManyAsUnread({ ids })),
+          },
           filter === "archived"
             ? { key: "unarchive", label: "Unarchive", icon: IconArchiveOff, onClick: bulk(unarchive) }
             : { key: "archive", label: "Archive", icon: IconArchive, onClick: bulk(archive) },

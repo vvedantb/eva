@@ -38,14 +38,13 @@ export {
   launchOnExistingSandbox,
   launchAgentTurn,
   prewarmSessionDaemon,
-  prewarmEntityDaemon,
   killEntityDaemon,
   extendSandboxDeadline,
   reconcileStaleActiveSandboxes,
   validateSandbox,
 } from "./_sandbox_runtime/execution";
 
-export { runDevServerInTaskSandbox } from "./_sandbox_runtime/runDevServer";
+export { runDevServerInSandbox } from "./_sandbox_runtime/runDevServer";
 
 export { ensureSessionPreviewServices } from "./_sandbox_runtime/previewRecovery";
 
@@ -71,8 +70,6 @@ export {
   startSessionSandbox,
   prepareSessionSandbox,
   performForcePushBranch,
-  startTaskPreviewSandbox,
-  startProjectPreviewSandbox,
 } from "./_sandbox_runtime/sessions";
 
 export { prepareLinkedRepo } from "./_sandbox_runtime/linkedRepos";

@@ -1,11 +1,11 @@
 import { createContext, useContext } from "react";
 import type { Doc } from "@eva/backend";
+import type { ThemeAppearance } from "@eva/shared";
+
+export type { ThemeAppearance };
 
 /** User preference. Every mode, System included, is persisted to Convex. */
 export type ThemeMode = NonNullable<Doc<"users">["theme"]>;
-
-/** Resolved appearance applied to the DOM (`dark neutral` for Neutral). */
-export type ThemeAppearance = "light" | "neutral" | "dark";
 
 /** Third-party APIs (Sonner, diffs) only know light/dark — Neutral maps to dark. */
 export type ResolvedTheme = "light" | "dark";

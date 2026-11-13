@@ -6,6 +6,7 @@ import type {
   ModelTraitsExecutionArgs,
   ReasoningLevel,
 } from "@eva/backend";
+import { chatStreamingEntityId } from "@eva/shared";
 import {
   annotationSender,
   type AnnotationSubmit,
@@ -14,33 +15,40 @@ import type { ChatDraftTarget } from "./useChatDraftSeed";
 import type { ChatEntityRef } from "./sandboxChatSurface";
 
 /**
- * The chats that run on an entity-owned sandbox workflow
- * (`agentTaskChatWorkflow` / `projectChatWorkflow`). Sessions send through the
- * same `sendSandboxTurn`, with ports bound to `api.sessions.*`.
+ * A session chat, or one not created yet: a quick task's session is made on
+ * its first need (`sessions.ensureOwned`), so its chat id may still be ahead.
  */
-export type SandboxChatEntity = Extract<
-  ChatEntityRef,
-  { kind: "task" | "project" }
->;
+export type SessionChatSource =
+  | Id<"sessionChats">
+  | (() => Promise<Id<"sessionChats">>);
 
-// The project validators are the canonical shape: the task and session
-// validators accept the same fields plus surface-only extras, so a binding
-// that spreads these into any chat workflow type-checks, and a drift breaks
-// the build.
-export type SandboxTurnAddArgs = Omit<
-  FunctionArgs<typeof api.projectChatWorkflow.addMessage>,
-  "projectId"
->;
+/**
+ * Runs `run` on the chat. A known id runs at once (no extra tick), so the
+ * optimistic updates of a session send still apply together.
+ */
+export function withSessionChat<T>(
+  chat: SessionChatSource,
+  run: (chatId: Id<"sessionChats">) => Promise<T>,
+): Promise<T> {
+  return typeof chat === "string" ? run(chat) : chat().then(run);
+}
+
+// The session chat validators, with the chat id bound by the ports.
+type SessionAddArgs = FunctionArgs<typeof api.sessions.addMessage>;
+export type SandboxTurnAddArgs = Omit<SessionAddArgs, "chatId" | "role"> & {
+  /** Defaults to `user`. */
+  role?: SessionAddArgs["role"];
+};
 export type SandboxTurnStartArgs = Omit<
-  FunctionArgs<typeof api.projectChatWorkflow.startExecute>,
-  "projectId"
+  FunctionArgs<typeof api.sessionWorkflow.startExecute>,
+  "chatId" | "attachmentStorageIds" | "sourceProposedPlanId"
 >;
 export type SandboxTurnEnqueueArgs = Omit<
-  FunctionArgs<typeof api.projectChatWorkflow.enqueueMessage>,
-  "projectId"
+  FunctionArgs<typeof api.sessionWorkflow.enqueueMessage>,
+  "chatId"
 >;
 
-/** Start fields only a session turn takes; task and project ports drop them. */
+/** Start fields passed apart from the composer settings. */
 export interface SandboxTurnStartExtras {
   attachmentStorageIds?: Id<"_storage">[];
   /** The proposed plan this turn implements. */
@@ -158,25 +166,30 @@ export function sandboxAnnotationSender(
   });
 }
 
-/** The ids and keys one sandbox chat is addressed by. */
-export function sandboxChatKeys(entity: SandboxChatEntity): {
-  parentId: Id<"agentTasks"> | Id<"projects">;
+/**
+ * The ids and keys one sandbox chat is addressed by; all undefined for a
+ * task's or project's chat before its session exists (nothing to read yet).
+ */
+export function sandboxChatKeys(entity: ChatEntityRef | undefined): {
+  parentId: Id<"sessionChats"> | undefined;
   /** The chat's streaming row (not the first-run row). */
-  streamingEntityId: string;
-  draftTarget: ChatDraftTarget;
+  streamingEntityId: string | undefined;
+  draftTarget: ChatDraftTarget | undefined;
 } {
-  switch (entity.kind) {
-    case "task":
-      return {
-        parentId: entity.taskId,
-        streamingEntityId: `task-chat-${entity.taskId}`,
-        draftTarget: { kind: "taskChat", taskId: entity.taskId },
-      };
-    case "project":
-      return {
-        parentId: entity.projectId,
-        streamingEntityId: `project-chat-${entity.projectId}`,
-        draftTarget: { kind: "projectChat", projectId: entity.projectId },
-      };
+  if (!entity) {
+    return {
+      parentId: undefined,
+      streamingEntityId: undefined,
+      draftTarget: undefined,
+    };
   }
+  return {
+    parentId: entity.chatId,
+    streamingEntityId: chatStreamingEntityId(entity.chatId),
+    draftTarget: {
+      kind: "sessionChat",
+      sessionId: entity.sessionId,
+      chatId: entity.chatId,
+    },
+  };
 }

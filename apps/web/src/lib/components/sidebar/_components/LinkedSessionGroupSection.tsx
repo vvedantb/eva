@@ -20,9 +20,18 @@ import { SharedLayoutNav } from "@/lib/components/sidebar/SharedLayoutNav";
 import { SESSIONS_ROW_X } from "@/lib/components/sidebar/_utils/sessionsSidebarLayout";
 import { SessionGroupRenameDialog } from "@/lib/components/sidebar/_components/SessionGroupRenameDialog";
 import { SidebarSessionListRow } from "@/lib/components/sidebar/_components/SidebarSessionListRow";
-import { repoBasePaths } from "@/lib/components/sidebar/_utils/repoSessionPaths";
-import type { LinkedSessionGroup } from "@/lib/components/sidebar/_utils/linkedSessionGroups";
-import type { SessionListMode } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
+import { SessionListShowMore } from "@/lib/components/sidebar/_components/SessionListShowMore";
+import {
+  repoBasePaths,
+  sessionRowMatchesPath,
+} from "@/lib/components/sidebar/_utils/repoSessionPaths";
+import type { LinkedSessionGroup } from "@eva/shared";
+import { previewSessions } from "@/lib/components/sidebar/_utils/sessionListPreview";
+import {
+  sortSessionsForSidebar,
+  type SessionListMode,
+  type SessionSortOrder,
+} from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
 import type { RepoWithLogo } from "@/lib/utils/repoGrouping";
 
 type SessionListItem = FunctionReturnType<typeof api.sessions.list>[number];
@@ -34,6 +43,8 @@ interface LinkedSessionGroupSectionProps {
   pathname: string;
   listMode: SessionListMode;
   onNavigate?: () => void;
+  sessionSortOrder: SessionSortOrder;
+  sessionPreviewCount: number;
   onRenameRequest: (session: SessionListItem, repo: RepoWithLogo) => void;
   onArchiveRequest: (session: SessionListItem, repo: RepoWithLogo) => void;
 }
@@ -50,12 +61,35 @@ export function LinkedSessionGroupSection({
   pathname,
   listMode,
   onNavigate,
+  sessionSortOrder,
+  sessionPreviewCount,
   onRenameRequest,
   onArchiveRequest,
 }: LinkedSessionGroupSectionProps) {
   const navigate = useNavigate();
   const [isRenameOpen, setIsRenameOpen] = useState(false);
+  const [isListExpanded, setIsListExpanded] = useState(false);
+  // `members` stays oldest first: the oldest names the group and owns rename.
   const [first] = group.members;
+  const sortedSessions = sortSessionsForSidebar(
+    group.members.map(({ session }) => session),
+    sessionSortOrder,
+  );
+  const repoBySessionId = new Map(
+    group.members.map(({ session, repo }) => [session._id, repo]),
+  );
+  const selectedSessionId =
+    group.members.find(({ session, repo }) =>
+      sessionRowMatchesPath(repo, session, pathname),
+    )?.session._id ?? null;
+  const { visible, hasOverflow, hiddenCount } = previewSessions(
+    sortedSessions,
+    {
+      expanded: isListExpanded,
+      selectedId: selectedSessionId,
+      limit: sessionPreviewCount,
+    },
+  );
 
   return (
     <Collapsible open={open} onOpenChange={onOpenChange}>
@@ -105,26 +139,37 @@ export function LinkedSessionGroupSection({
           className="space-y-0.5 pb-1"
         >
           <AnimatePresence initial={false}>
-            {group.members.map(({ session, repo }) => (
-              <SidebarSessionListRow
-                key={session._id}
-                session={session}
-                repo={repo}
-                pathname={pathname}
-                listMode={listMode}
-                inGroup
-                onNavigate={onNavigate}
-                onRenameRequest={onRenameRequest}
-                onArchiveRequest={onArchiveRequest}
-                onForkNavigate={(segment) => {
-                  navigate({
-                    to: `${repoBasePaths(session.linkedFrom ?? repo)[0]}/sessions/${segment}`,
-                  });
-                  onNavigate?.();
-                }}
-              />
-            ))}
+            {visible.map((session) => {
+              const repo = repoBySessionId.get(session._id);
+              if (!repo) return null;
+              return (
+                <SidebarSessionListRow
+                  key={session._id}
+                  session={session}
+                  repo={repo}
+                  pathname={pathname}
+                  listMode={listMode}
+                  inGroup
+                  onNavigate={onNavigate}
+                  onRenameRequest={onRenameRequest}
+                  onArchiveRequest={onArchiveRequest}
+                  onForkNavigate={(segment) => {
+                    navigate({
+                      to: `${repoBasePaths(session.linkedFrom ?? repo)[0]}/sessions/${segment}`,
+                    });
+                    onNavigate?.();
+                  }}
+                />
+              );
+            })}
           </AnimatePresence>
+          {hasOverflow ? (
+            <SessionListShowMore
+              expanded={isListExpanded}
+              hiddenCount={hiddenCount}
+              onToggle={() => setIsListExpanded((prev) => !prev)}
+            />
+          ) : null}
         </SharedLayoutNav>
       </CollapsibleContent>
       {first ? (

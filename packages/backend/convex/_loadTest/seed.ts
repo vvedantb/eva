@@ -15,6 +15,7 @@ import type { MutationCtx } from "../_generated/server";
 type SeedDb = Pick<MutationCtx["db"], "insert">;
 import type { Id } from "../_generated/dataModel";
 import { DAILY_STANDUP_KEY } from "../_automations/systemAutomations";
+import { STANDALONE_SESSION_OWNER } from "../_sessions/owner";
 
 export const FOCAL_CLERK_ID = "loadtest_focal_user";
 
@@ -171,22 +172,6 @@ function activityLog(seed: number, bytes: number): string {
   return `[${steps.join(",")}]`;
 }
 
-/**
- * Sub-agent roster on a task or project row, about 850 bytes: the production
- * average for `backgroundAgents` (400 newest tasks, 10 November 2026). List
- * queries drop it, so it shows in bytes returned.
- */
-function backgroundAgents(seed: number, startedAt: number) {
-  return Array.from({ length: 5 }, (_, i) => ({
-    toolUseId: `toolu_loadtest_${seed}_${i}_${"x".repeat(12)}`,
-    taskId: `b${seed}${i}loadtest`,
-    description: filler(seed + i, 60),
-    status: "completed",
-    startedAt: startedAt + i * 1000,
-    settledAt: startedAt + i * 1000 + 30_000,
-  }));
-}
-
 /** Spread timestamps across the last 60 days, newest last. */
 function ago(now: number, i: number, total: number): number {
   return now - Math.floor(((total - i) / Math.max(total, 1)) * 60 * DAY);
@@ -240,6 +225,7 @@ export const setup = internalMutation({
       repoId,
       userId,
       title: "Focal session",
+      owner: STANDALONE_SESSION_OWNER,
       numId: 1,
       status: "active",
       lastTurnFinishedAt: now - 3_600_000,
@@ -406,7 +392,6 @@ async function insertTaskWithChildren(
     repoId,
     projectId,
     taskNumber: i,
-    backgroundAgents: backgroundAgents(i, createdAt),
     ...(status === "draft" ? {} : { lastTurnFinishedAt: createdAt + DAY }),
     ...(i % 10 === 7 ? { deletedAt: createdAt + 2 * DAY } : {}),
   });
@@ -485,9 +470,10 @@ const SEEDERS: Record<SeedChunkKind, Seeder> = {
       repoId,
       userId: i % 2 === 0 ? userId : teammate(refs, i),
       title: `Session ${i}: ${filler(i, 40)}`,
+      owner: STANDALONE_SESSION_OWNER,
       status: i % 3 === 0 ? "active" : "closed",
       lastTurnFinishedAt: createdAt + 3_600_000,
-      ...(i % 6 === 5 ? { archived: true } : {}),
+      ...(i % 6 === 5 ? { archive: { archivedAt: createdAt } } : {}),
       ...(i % 10 === 9 ? { deletedAt: createdAt + DAY } : {}),
     });
     const chatId = await db.insert("sessionChats", {
@@ -620,7 +606,6 @@ const SEEDERS: Record<SeedChunkKind, Seeder> = {
       phase: i % 4 === 0 ? "completed" : "in_progress",
       planningMode: i % 2 === 0 ? "interview" : "tasks_only",
       lastTurnFinishedAt: ago(now, i, total) + DAY,
-      backgroundAgents: backgroundAgents(i, ago(now, i, total)),
       ...(i % 10 === 9 ? { deletedAt: ago(now, i, total) } : {}),
     });
     await db.insert("projectDetails", {

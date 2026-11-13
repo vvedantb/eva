@@ -95,6 +95,20 @@ export function useTaskOwnerProviderAccounts(
   return toModelAccounts(accounts);
 }
 
+/** Accounts the project owner can run on (same shape as `useProviderAccounts`). */
+export function useProjectOwnerProviderAccounts(
+  projectId: Id<"projects">,
+): {
+  options: ReadonlyArray<ModelAccount>;
+  resolveId: (id: string | null) => Id<"userProviderAccounts"> | undefined;
+  ready: boolean;
+} {
+  const accounts = useQuery(api.userProviderAccounts.listForProjectOwner, {
+    projectId,
+  });
+  return toModelAccounts(accounts);
+}
+
 /**
  * Accounts the session owner can run on, for the model picker (same shape as
  * `useProviderAccounts`). A session runs on its owner's credentials whoever
