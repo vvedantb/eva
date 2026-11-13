@@ -83,8 +83,9 @@ function entryRows(entry: SessionEntry): SessionRow[] {
       inGroup: false,
     }));
   }
-  return entry.group.members
-    .toSorted((a, b) => sessionActivityAt(b.session) - sessionActivityAt(a.session))
+  // A sorted copy: Hermes has no `toSorted`.
+  return [...entry.group.members]
+    .sort((a, b) => sessionActivityAt(b.session) - sessionActivityAt(a.session))
     .map(({ session, repo }) => ({ session, repo, inGroup: true }));
 }
 

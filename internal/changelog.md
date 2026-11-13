@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: Sessions tab no longer crashes ("undefined is not a function")
+
+Date: 2026-11-13
+
+WHY: The phone Sessions tab showed "Could not start Eva — undefined is not a function". The shared session-list code (`sessionList.ts`, used by the phone since #1291) and `SessionGroup.tsx` call `Array.prototype.toSorted`, which Hermes lacks; the web preview runs on Chrome, which has it.
+
+Architectural: Every `toSorted` became `[...list].sort(...)` (same result). `.oxlintrc.json` now forbids `toSorted`, `toReversed` and `toSpliced` in apps/mobile and packages/shared, so this cannot come back unnoticed (the old `hermesApis.test.mjs` guard was removed in #1156).
+
 ## Phone: lighter first open of list tabs
 
 Date: 2026-11-13
