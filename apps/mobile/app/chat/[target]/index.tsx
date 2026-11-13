@@ -33,6 +33,7 @@ import {
 } from "@vvedantb/native-ui/ai";
 import { goBackOrReplace, RouterStackPageHeader } from "@vvedantb/native-ui/expo-router";
 import { CenteredSpinner, EmptyState, Text } from "@vvedantb/native-ui/primitives";
+import { tokens } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import * as Clipboard from "expo-clipboard";
@@ -302,7 +303,8 @@ export default function ChatScreen() {
           }}
         />
         {/* The composer or the question card: the scroll button rides 16 above it, as the web's `bottom-4` over the dock. */}
-        <ConversationDock>
+        {/* Solid: the keyboard lifts the dock over the transcript, which must not show through it. */}
+        <ConversationDock style={{ backgroundColor: tokens.color.background[scheme] }}>
           {pending && questions ? (
             // The web dock: p-3 around the card, in place of the composer, and the thread's 10 more on the right.
             // Over the bottom inset, as the composer: the dock rises with the keyboard (its "Other..." field) less that inset.
