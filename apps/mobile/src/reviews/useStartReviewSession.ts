@@ -16,7 +16,7 @@ export function useStartReviewSession(repoId: Id<"githubRepos">): {
   starting: boolean;
 } {
   const router = useRouter();
-  const startSession = useMutation(api.mobile.startSession);
+  const startSession = useMutation(api.chats.start);
   const [starting, setStarting] = useState(false);
   const start = (request: { title: string; message: string; baseBranch: string }, onStarted?: () => void) => {
     if (starting) return;

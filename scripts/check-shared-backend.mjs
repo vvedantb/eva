@@ -10,15 +10,13 @@ import { join } from "node:path";
 const ALLOWED = {
   "push.register": "Device push tokens: the web has no phone push.",
   "push.unregister": "Device push tokens: the web has no phone push.",
-  // The phone's own wrappers (open a chat by target, send, stop, model,
-  // start, archive). They are moving to the neutral chats.* (#1302), which the
-  // web then adopts one action at a time.
-  "mobile.getChat": "Moving to chats.get (#1302).",
-  "mobile.sendMessage": "Moving to chats.send (#1302).",
-  "mobile.setChatModel": "Moving to chats.setModel (#1302).",
-  "mobile.stopTurn": "Moving to chats.stop (#1302).",
-  "mobile.startSession": "Moving to chats.start (#1302).",
-  "mobile.archiveSession": "Moving to chats.archive (#1302).",
+  // The neutral chat actions (#1302): the web moves onto them one action at
+  // a time; remove each entry as the web starts calling it.
+  "chats.get": "The web moves onto chats.* one action at a time (#1302).",
+  "chats.send": "The web moves onto chats.* one action at a time (#1302).",
+  "chats.setModel": "The web moves onto chats.* one action at a time (#1302).",
+  "chats.stop": "The web moves onto chats.* one action at a time (#1302).",
+  "chats.start": "The web moves onto chats.* one action at a time (#1302).",
 };
 
 /** `api.module.fn` references (not URLs such as https://api.github.com). */

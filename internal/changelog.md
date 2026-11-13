@@ -1,5 +1,29 @@
 # Changelog
 
+## Web and phone: both kits from npm, compiled with React Compiler
+
+Date: 2026-11-13
+
+WHY: `@vvedantb/ui` now ships React Compiler output like native-ui (packages#213, #217). Eva web compiled the ui source itself; the package build does it once, for Eva and vmem.
+
+Architectural: Every Eva package pins `@vvedantb/ui@0.41.1-next-14f3254` (web, @eva/ui, shared, chrome-extension; one version, so `dedupe` keeps one copy and `UiConfigProvider` context reaches it; it includes 0.41.0's shared chat and page pieces). The phone pins `@vvedantb/native-ui@0.18.1-next-5a5ab8f`. `vite.config.ts` excludes all of node_modules from the React Compiler; `vitest.config.ts` inlines `@vvedantb/ui` (its compiled `.js` imports CSS, which Node cannot load). The ui package no longer has `"use client"`. Measured on the web build at 4× CPU: chat composer 145 → 86 renders per keystroke; home and sessions pages render the same DOM.
+
+## Web: Five UI pieces move to @vvedantb/ui
+
+Date: 2026-11-13
+
+WHY: These components and the scroll-fade CSS were copied into eva from the shared kit. One source means one place to fix and one look across apps (packages#211, `@vvedantb/ui` 0.41.0).
+
+Architectural: `ChatLastTurn`, `ChatDayDivider` and `CollapsibleUserMessageBody` now import from `@vvedantb/ui`; the local copies are deleted and their importers repointed. The divider uses the kit's default day/time labels, which match eva's `formatDayLabel` / `formatClockTime` output exactly, so no formatter is passed. The collapsible keeps its look: the kit's default `hover:bg-surface-secondary/55` resolves to `rgb(var(--muted))` under eva's `compat-shadcn-rgb.css`, the same colour as eva's old `hover:bg-muted/55`. `PageHeader` and `PageWrapper` become thin adapters over the kit's `PageHeaderBar` / `PageWrapper`, fixing eva's layout (`titleLayout="inline"`, `headerColumns="three-at-md"`, `animated`, and `bodyScrollbar` for the wrapper); the adapter keeps eva's prop surface and import paths, and `PageWrapper` calls `usePageTitleSync` itself. `globals.css` drops the local scroll-fade blocks and imports `@vvedantb/ui/tokens/css/scroll-fade.css`; with no `--scroll-fade-max` set the masks stay uncapped as before. Needs the dependency bump to 0.41.0 to resolve.
+
+## Web: Archive uses chats.archive, as the phone does
+
+Date: 2026-11-13
+
+WHY: One backend for both apps (#1302): each action the phone and web share runs one server function.
+
+Architectural: `useArchiveSession` calls `chats.archive` instead of `sessions.stopSandbox` then `sessions.archive`. Same helpers and checks; the stop and the archive now run in one mutation, and the sandbox check reads the server's `sandboxId`, not the client's. `check-shared-backend` no longer allows `chats.archive` as phone-only. Send, stop, model and start stay on the web's own path for now: they carry optimistic updates and more arguments than `chats.*` takes.
+
 ## Phone: native-ui from npm, compiled with React Compiler
 
 Date: 2026-11-13
@@ -49,6 +73,14 @@ Date: 2026-11-13
 WHY: The phone drifted onto its own Convex functions (`mobile.*`), and a backend change broke installed APKs (0.1.33). The owner wants one backend, logic in `@eva/shared`, and apps that hold only UI.
 
 Architectural: `scripts/check-shared-backend.mjs` fails when the phone calls an `api.*` function the web never calls, unless `ALLOWED` gives the reason (push tokens; `mobile.*` while it moves to `chats.*`). `scripts/check-apk-compat.sh` type-checks the newest `eva-apk-*` release's phone and shared code against the changed backend, and fails on any error (it catches the 0.1.33 break; skips when the backend did not change). Both run in CI. CLAUDE.md gains the three rules.
+
+## Phone: calls chats.* (needs the prod Convex deploy first)
+
+Date: 2026-11-13
+
+WHY: Step 1 of one backend for both apps: the phone stops calling `mobile.*` and calls the neutral `chats.*` (#1302).
+
+Architectural: Every `api.mobile.*` call in apps/mobile is now `api.chats.*` (`get`, `send`, `setModel`, `stop`, `start`, `archive`). Ship only after prod Convex has `chats.ts`, or the new APK's chats fail.
 
 ## Backend: chat actions under one neutral name (chats.*)
 
