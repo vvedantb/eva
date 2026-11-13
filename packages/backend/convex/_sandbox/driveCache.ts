@@ -1,3 +1,5 @@
+import { SANDBOX_REGION } from "./vercelRegion";
+
 /**
  * Shared package-manager cache backed by a Vercel Drive.
  *
@@ -26,8 +28,8 @@
  *
  * Package managers write to their own cache even on a cache hit (metadata,
  * lockfiles, new packages), so pointing pnpm straight at a read-only mount
- * fails. Readers therefore overlay a tmpfs-backed upper dir on top of the
- * read-only mount (verified available: Vercel Sandbox has `overlay` in
+ * fails. Readers therefore overlay an upper dir on local disk (`/var/tmp`, not
+ * tmpfs) on top of the read-only mount (verified available: Vercel Sandbox has `overlay` in
  * /proc/filesystems and passwordless sudo). Reads fall through to the Drive,
  * writes land locally and are discarded with the sandbox.
  *
@@ -68,19 +70,36 @@ const LOCAL_CACHES_REPLACED_BY_DRIVE: ReadonlyArray<string> = [
   ".npm/_cacache",
 ];
 
+/** Home directories that may hold tool caches. Both users exist on the image. */
+export const SANDBOX_HOME_DIRS: ReadonlyArray<string> = [
+  "/home/vercel-sandbox",
+  "/home/eva",
+  "/root",
+];
+
 /**
- * Snapshot-time deletion of the local caches the Drive has made redundant.
- * Runs AFTER {@link driveCacheTeardownScript}: the mount must be down first,
- * or `rm` would empty the Drive itself instead of the local disk under it.
+ * Deletes package caches that live on the sandbox's local disk. Pure caches:
+ * an existing `node_modules` keeps its own copy (see
+ * {@link LOCAL_CACHES_REPLACED_BY_DRIVE}), so the only cost is a cold install.
+ *
+ * Covers the old per-home caches and {@link DRIVE_CACHE_ROOT} itself when it is
+ * a plain local directory. That second case is every sandbox whose Drive did
+ * not mount (2026-10-07 to 2026-11-12, every Drive was in the wrong region),
+ * and it was baked into seeded snapshots: 5.2 GB measured 2026-11-11. A
+ * mounted cache root (Drive bind or reader overlay) is never touched, so this
+ * can never empty the Drive.
  */
-export function driveRedundantLocalPruneLines(
-  homes: ReadonlyArray<string>,
-): string[] {
-  return homes.flatMap((home) =>
-    LOCAL_CACHES_REPLACED_BY_DRIVE.map(
-      (dir) => `sudo rm -rf ${home}/${dir} 2>/dev/null || true`,
-    ),
-  );
+export function localCachePruneLines(): string[] {
+  // One loop line, not one line per path: the disk-full reclaim runs this
+  // inline, inside a size-capped command.
+  return [
+    `for h in ${SANDBOX_HOME_DIRS.join(" ")}; do for d in ${LOCAL_CACHES_REPLACED_BY_DRIVE.join(" ")}; do sudo rm -rf "$h/$d" 2>/dev/null || true; done; done`,
+    `if ! mountpoint -q ${DRIVE_CACHE_ROOT} 2>/dev/null; then`,
+    // `npm/_npx` holds packages `npx` is running right now (a preview's
+    // `serve`, for example), so it stays.
+    `  sudo find ${DRIVE_CACHE_ROOT} -mindepth 2 -maxdepth 2 ! -path ${DRIVE_CACHE_ROOT}/npm/_npx -exec rm -rf {} + 2>/dev/null || true`,
+    `fi`,
+  ];
 }
 
 /**
@@ -119,9 +138,17 @@ export type DriveCacheRole =
  * Drive name for a repo's cache. Names are unique per Vercel project, and
  * `repoId` is a stable Convex id, so this is the natural key. Prefixed so the
  * drives are identifiable in the Vercel dashboard alongside non-eva drives.
+ *
+ * The region is part of the name because a Drive is pinned to the region it
+ * was created in, and a name can exist in one region only. The first Drives
+ * were created in iad1 (2026-10-06); sandboxes moved to cdg1 the next day, and
+ * from then on every `getOrCreate` failed with "409 already exists in a
+ * different region", so no sandbox mounted its Drive. With the region in
+ * the name, each region has its own Drive, and a move of
+ * {@link SANDBOX_REGION} creates a new Drive instead of failing.
  */
 export function driveCacheName(repoId: string): string {
-  return `eva-${repoId}`;
+  return `eva-${SANDBOX_REGION}-${repoId}`;
 }
 
 /**

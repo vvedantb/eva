@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
-import { api, type Id } from "@eva/backend";
+import { api, PROVIDER_LABELS, type Id } from "@eva/backend";
 import { SettingsPage } from "@/lib/components/settings/SettingsPage";
 import {
   Button,
@@ -25,7 +25,6 @@ import {
 } from "@vvedantb/ui";
 import { IconKey, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
 import { relativeTime } from "@/lib/components/artifacts/_format";
-import { PROVIDER_LABELS } from "./_credentialSpec";
 import { AddAccountDialog, type EditingAccount } from "./AddAccountDialog";
 import {
   catchMutationError,

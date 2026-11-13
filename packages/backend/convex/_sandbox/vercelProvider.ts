@@ -29,6 +29,7 @@
 import { Drive, Sandbox } from "@vercel/sandbox";
 import type { SandboxMounts, SandboxRegion } from "@vercel/sandbox";
 import { z } from "zod";
+import { DEFAULT_PREVIEW_PORT, DESKTOP_PORT, EDITOR_PORT } from "@eva/shared";
 import { SandboxProviderError } from "./provider";
 import type {
   CreateSnapshotParams,
@@ -52,6 +53,7 @@ import {
 import { driveCacheSetupScript, driveCacheTeardownScript } from "./driveCache";
 import { FFMPEG_INSTALL_SCRIPT } from "./ffmpegInstall";
 import { snapshotPruneScript } from "./snapshotPrune";
+import { foreignSandboxDeployment } from "./tags";
 import { EVA_ENV_SOURCE_CMD } from "./vercelEnvFile";
 import { SANDBOX_REGION, sandboxPlacement } from "./vercelRegion";
 import {
@@ -106,7 +108,10 @@ const STOP_CONFIRMATION_POLL_MS = 1_000;
  */
 const SNAPSHOT_REQUEST_TIMEOUT_MS = 120_000;
 export const VERCEL_DEFAULT_EXPOSED_PORTS: ReadonlyArray<number> = [
-  3000, 8080, 6080, 54321,
+  DEFAULT_PREVIEW_PORT,
+  EDITOR_PORT,
+  DESKTOP_PORT,
+  54321,
 ];
 /**
  * Provisioned ceiling per cache Drive, not an allocation: Vercel bills stored
@@ -207,14 +212,23 @@ function providerError(message: string, e: unknown): SandboxProviderError {
   });
 }
 
-/** True when the Vercel command NDJSON stream died while the VM is still up. */
-function isVercelCommandStreamClosed(detail: string): boolean {
+/**
+ * True when an exec failed in transit, not in the sandbox: the command NDJSON
+ * stream died while the VM is still up, or undici dropped the HTTP connection
+ * to the Vercel API ("fetch failed", socket reset). A retry can run the
+ * command twice; that is the same trade-off the stream-closed retry accepts.
+ */
+function isRetryableExecFailure(detail: string): boolean {
   const lower = detail.toLowerCase();
   return (
     lower.includes("stream was closed") ||
     lower.includes("not accepting commands") ||
     lower.includes("stream_ended_early") ||
-    lower.includes("stream ended before")
+    lower.includes("stream ended before") ||
+    lower.includes("fetch failed") ||
+    lower.includes("und_err_socket") ||
+    lower.includes("econnreset") ||
+    lower.includes("socket hang up")
   );
 }
 
@@ -223,7 +237,7 @@ class VercelGit implements SandboxGit {
   constructor(private readonly handle: VercelSandboxHandle) {}
 
   private async sh(cmd: string): Promise<string> {
-    // Goes through handle.exec so stream-closed refresh+retry applies.
+    // Goes through handle.exec so its transit-failure refresh+retry applies.
     const result = await this.handle.exec(cmd);
     if (result.exitCode !== 0) {
       throw new Error(
@@ -774,8 +788,8 @@ class VercelSandboxHandle implements SandboxHandle {
     cmd: string,
     opts?: SandboxExecOptions,
   ): Promise<SandboxExecResult> {
-    // One refresh+retry on "stream was closed" — common after resume when the
-    // SDK's command stream dies while the VM is still running.
+    // One refresh+retry on a transit failure (`isRetryableExecFailure`): the
+    // command stream dying after resume, or a dropped API connection.
     const maxAttempts = 2;
     let lastError: Error | undefined;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -801,11 +815,12 @@ class VercelSandboxHandle implements SandboxHandle {
           `vercel exec failed (cwd=${opts?.cwd ?? "(default)"}, cmd=${cmd.slice(0, 120)})`,
           e,
         );
-        if (attempt < maxAttempts && isVercelCommandStreamClosed(detail)) {
+        if (attempt < maxAttempts && isRetryableExecFailure(detail)) {
           console.log(
-            `[vercel] exec stream closed on ${this.id}; refreshing and retrying (attempt ${attempt}/${maxAttempts})`,
+            `[vercel] exec transit failure on ${this.id}; refreshing and retrying (attempt ${attempt}/${maxAttempts}): ${detail.slice(0, 200)}`,
           );
-          await this.refresh();
+          // A failed refresh must not hide the exec error; the retry reports it.
+          await this.refresh().catch(() => undefined);
           continue;
         }
         throw lastError;
@@ -1267,7 +1282,7 @@ class VercelSandboxClient implements SandboxClient {
   /**
    * Regions the create's snapshot lives in, for {@link sandboxPlacement}.
    * A fork restores from the source sandbox's current snapshot, so it follows
-   * that one — a source made before the move to cdg1 only forks in iad1.
+   * that one — a source made while sandboxes ran in cdg1 only forks in cdg1.
    * `undefined` when there is no snapshot to follow or the lookup failed.
    */
   private async snapshotRegions(
@@ -1400,6 +1415,14 @@ class VercelSandboxClient implements SandboxClient {
       name: sandboxId,
       resume: false,
     });
+    // Every stop / exec / delete starts from this lookup, so one check here
+    // keeps a deployment off another deployment's VMs. 404 classifies as
+    // sandbox-gone: the caller drops its mirrored row instead of retrying.
+    const owner = foreignSandboxDeployment(sandbox.tags);
+    if (owner !== null) {
+      const detail = `sandbox ${sandboxId} belongs to Convex deployment ${owner}`;
+      throw new SandboxProviderError(detail, { httpStatus: 404, detail });
+    }
     return new VercelSandboxHandle(sandbox, this.creds);
   }
 

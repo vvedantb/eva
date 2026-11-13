@@ -10,6 +10,25 @@ function tuple<const Values extends readonly [string, ...string[]]>(
 export const AI_PROVIDERS = tuple("claude", "codex", "opencode", "cursor");
 export type AIProvider = (typeof AI_PROVIDERS)[number];
 
+/** Provider name shown in the web UI (Accounts page, provider pickers). */
+export const PROVIDER_LABELS: Record<AIProvider, string> = {
+  claude: "Claude Code",
+  codex: "Codex",
+  opencode: "opencode",
+  cursor: "Cursor",
+};
+
+/**
+ * Provider name in model-handoff alerts and the handoff prompt. Shorter than
+ * {@link PROVIDER_LABELS} because it follows a model name ("Opus (Claude)").
+ */
+export const PROVIDER_HANDOFF_LABELS: Record<AIProvider, string> = {
+  claude: "Claude",
+  codex: "Codex",
+  opencode: "OpenCode",
+  cursor: "Cursor",
+};
+
 export const aiProviderValidator = v.union(
   ...AI_PROVIDERS.map((provider) => v.literal(provider)),
 );
@@ -458,22 +477,6 @@ export const CURSOR_MODELS: ReadonlyArray<AIModel> = AI_MODEL_OPTIONS.filter(
   (option) => option.provider === "cursor",
 ).map((option) => option.id);
 
-export const CODEX_AUTH_ENV_KEYS: ReadonlyArray<string> = [
-  "CODEX_AUTH_JSON",
-  "CODEX_AUTH_JSON_BASE64",
-];
-export const CODEX_CONFIG_ENV_KEYS: ReadonlyArray<string> = [
-  "CODEX_CONFIG_TOML",
-  "CODEX_CONFIG_TOML_BASE64",
-];
-export const OPENCODE_AUTH_ENV_KEYS: ReadonlyArray<string> = [
-  "OPENCODE_CONFIG_JSON",
-  "OPENCODE_CONFIG_JSON_BASE64",
-  "OPENCODE_AUTH_JSON",
-  "OPENCODE_AUTH_JSON_BASE64",
-];
-export const CURSOR_AUTH_ENV_KEYS: ReadonlyArray<string> = ["CURSOR_API_KEY"];
-
 /**
  * The canonical auth env-var key per provider. Used to mark a provider
  * "available" when a user has their own account for it, and as the primary
@@ -486,13 +489,40 @@ export const PROVIDER_PRIMARY_AUTH_KEY: Record<AIProvider, string> = {
   cursor: "CURSOR_API_KEY",
 };
 
+/** The optional config env-var key the Accounts UI collects per provider. */
+export const PROVIDER_CONFIG_KEY = {
+  codex: "CODEX_CONFIG_TOML",
+  opencode: "OPENCODE_CONFIG_JSON",
+} as const satisfies Partial<Record<AIProvider, string>>;
+
+export const CLAUDE_AUTH_ENV_KEYS: ReadonlyArray<string> = [
+  PROVIDER_PRIMARY_AUTH_KEY.claude,
+];
+export const CODEX_AUTH_ENV_KEYS: ReadonlyArray<string> = [
+  PROVIDER_PRIMARY_AUTH_KEY.codex,
+  "CODEX_AUTH_JSON_BASE64",
+];
+export const CODEX_CONFIG_ENV_KEYS: ReadonlyArray<string> = [
+  PROVIDER_CONFIG_KEY.codex,
+  "CODEX_CONFIG_TOML_BASE64",
+];
+export const OPENCODE_AUTH_ENV_KEYS: ReadonlyArray<string> = [
+  PROVIDER_CONFIG_KEY.opencode,
+  "OPENCODE_CONFIG_JSON_BASE64",
+  PROVIDER_PRIMARY_AUTH_KEY.opencode,
+  "OPENCODE_AUTH_JSON_BASE64",
+];
+export const CURSOR_AUTH_ENV_KEYS: ReadonlyArray<string> = [
+  PROVIDER_PRIMARY_AUTH_KEY.cursor,
+];
+
 /** Determines which AI providers are available based on the presence of required env var keys. */
 export function getAIProviderAvailability(
   envVarKeys: Iterable<string>,
 ): AIProviderAvailability {
   const keys = envVarKeys instanceof Set ? envVarKeys : new Set(envVarKeys);
   return {
-    claude: keys.has("CLAUDE_CODE_OAUTH_TOKEN"),
+    claude: CLAUDE_AUTH_ENV_KEYS.some((key) => keys.has(key)),
     codex: CODEX_AUTH_ENV_KEYS.some((key) => keys.has(key)),
     opencode: OPENCODE_AUTH_ENV_KEYS.some((key) => keys.has(key)),
     cursor: CURSOR_AUTH_ENV_KEYS.some((key) => keys.has(key)),

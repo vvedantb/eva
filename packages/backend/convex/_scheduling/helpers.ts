@@ -1,4 +1,3 @@
-import { internal } from "../_generated/api";
 import type { MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 
@@ -13,39 +12,4 @@ export async function cancelScheduledFunction(
   } catch {
     // may have already fired
   }
-}
-
-/** Schedules a task execution at `scheduledAt` and records it on the task. */
-export async function scheduleTaskExecutionAt(
-  ctx: MutationCtx,
-  taskId: Id<"agentTasks">,
-  scheduledAt: number,
-): Promise<void> {
-  const scheduledFunctionId = await ctx.scheduler.runAt(
-    scheduledAt,
-    internal.taskWorkflow.executeScheduledTask,
-    { taskId, scheduledAt },
-  );
-  await ctx.db.patch(taskId, {
-    scheduledAt,
-    scheduledFunctionId,
-    updatedAt: Date.now(),
-  });
-}
-
-/** Schedules a project build at `scheduledAt` and records it on the project. */
-export async function scheduleProjectBuildAt(
-  ctx: MutationCtx,
-  projectId: Id<"projects">,
-  scheduledAt: number,
-): Promise<void> {
-  const scheduledBuildFunctionId = await ctx.scheduler.runAt(
-    scheduledAt,
-    internal.buildWorkflow.executeScheduledBuild,
-    { projectId, scheduledAt },
-  );
-  await ctx.db.patch(projectId, {
-    scheduledBuildAt: scheduledAt,
-    scheduledBuildFunctionId,
-  });
 }

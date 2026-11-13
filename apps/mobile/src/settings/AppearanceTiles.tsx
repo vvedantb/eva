@@ -1,34 +1,38 @@
+import type { ThemeMode } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconCheck, IconDeviceDesktop, IconMoon, IconSun, type IconProps } from "@tabler/icons-react-native";
-import { palette, tokens, withAlpha } from "@vvedantb/native-ui/theme";
+import { IconCheck, IconCircleHalf, IconDeviceDesktop, IconMoon, IconSun, type IconProps } from "@tabler/icons-react-native";
+import { withAlpha } from "@vvedantb/native-ui/theme";
 import type { ComponentType } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
-import { useScheme, XS_TRACKING } from "@/ui/theme";
-import { setColorSchemeChoice, useColorSchemeChoice, type ColorSchemeChoice } from "./colorScheme";
+import { useScheme } from "@/ui/theme";
+import { useSetThemeMode, useThemeMode } from "./themeMode";
+
+/** Web `bg-zinc-900`. */
+const ZINC_900 = "#18181b";
 
 /**
- * The web `AppearanceSection` tiles at phone width: two columns, a swatch with
- * the mode icon over the label; the active tile gets the border, a primary
- * wash and a check badge on the swatch corner. The web's Neutral theme has no
- * phone counterpart, so three tiles.
+ * The web `AppearanceSection` tiles at phone width: a swatch with the mode
+ * icon over the label; the active tile gets the border, a primary wash and a
+ * check badge on the swatch corner. The web's four modes in its order, in one
+ * row that they share evenly (the web pairs them up below 640 px wide; at
+ * 390 pt each tile is 76 pt wide and 102 pt high).
  */
 const MODES: ReadonlyArray<{
-  mode: ColorSchemeChoice;
+  mode: ThemeMode;
   label: string;
   icon: ComponentType<IconProps>;
   /** A fixed web colour; none for the web `text-muted-foreground` of the scheme. */
   iconColor?: string;
-  swatch: "light" | "dark" | "gradient";
+  /** The swatch fill (web `bg-white`, `bg-zinc-700`, `bg-zinc-900`); none for the System gradient. */
+  swatch?: string;
 }> = [
-  // Web icon colours: text-amber-500, text-blue-300, muted.
-  { mode: "light", label: "Light", icon: IconSun, iconColor: "#f59e0b", swatch: "light" },
-  { mode: "dark", label: "Dark", icon: IconMoon, iconColor: "#93c5fd", swatch: "dark" },
-  { mode: "system", label: "System", icon: IconDeviceDesktop, swatch: "gradient" },
+  // Web icon colours: text-amber-500, text-zinc-300, text-blue-300, muted.
+  { mode: "light", label: "Light", icon: IconSun, iconColor: "#f59e0b", swatch: "#ffffff" },
+  { mode: "neutral", label: "Neutral", icon: IconCircleHalf, iconColor: "#d4d4d8", swatch: "#3f3f46" },
+  { mode: "dark", label: "Dark", icon: IconMoon, iconColor: "#93c5fd", swatch: ZINC_900 },
+  { mode: "system", label: "System", icon: IconDeviceDesktop },
 ];
-
-/** Web `bg-zinc-900`. */
-const ZINC_900 = "#18181b";
 
 /** The web System swatch, `bg-linear-to-br from-white to-zinc-900`. */
 function GradientSwatch() {
@@ -46,72 +50,68 @@ function GradientSwatch() {
   );
 }
 
-/** Two columns with the 8 gap, as the web `grid-cols-2 gap-2`; the odd tile sits beside a spacer. */
-const ROWS = [MODES.slice(0, 2), MODES.slice(2)];
-
 export function AppearanceTiles() {
   const scheme = useScheme();
-  const choice = useColorSchemeChoice();
+  const choice = useThemeMode();
+  const setMode = useSetThemeMode();
   return (
-    <View className="gap-2">
-      {ROWS.map((row) => (
-        <View key={row[0].mode} className="flex-row gap-2">
-          {row.map(({ mode, label, icon: Icon, iconColor, swatch }) => {
-            const active = choice === mode;
-            return (
-              <Pressable
-                key={mode}
-                accessibilityRole="button"
-                accessibilityLabel={label}
-                accessibilityState={{ selected: active }}
-                onPress={() => setColorSchemeChoice(mode)}
-                className="flex-1 items-center gap-2 rounded-2xl border p-3 active:opacity-80"
-                style={{
-                  borderColor: active ? tokens.color.border[scheme] : "transparent",
-                  backgroundColor: active
-                    ? withAlpha(palette.primary[scheme], 0.08)
-                    : withAlpha(EVA_THEME[scheme].muted, 0.4),
-                }}
+    // The web 8 gap (`gap-2`).
+    <View className="flex-row gap-2">
+      {MODES.map(({ mode, label, icon: Icon, iconColor, swatch }) => {
+        const active = choice === mode;
+        return (
+          <Pressable
+            key={mode}
+            accessibilityRole="button"
+            accessibilityLabel={label}
+            accessibilityState={{ selected: active }}
+            onPress={() => setMode(mode)}
+            className="flex-1 items-center gap-2 rounded-2xl border px-1 py-3 active:opacity-80"
+            style={{
+              borderColor: active ? EVA_THEME[scheme].border : "transparent",
+              backgroundColor: active
+                ? withAlpha(EVA_THEME[scheme].primary, 0.08)
+                : withAlpha(EVA_THEME[scheme].muted, 0.4),
+            }}
+          >
+            {/* Web `rounded-lg` is 16 in Eva. The web `p-3` sides are on the swatch (`mx-2` in the tile's
+                `px-1`), so the label below may use them. */}
+            <View
+              className="mx-2 h-12 items-center self-stretch justify-center overflow-hidden rounded-2xl"
+              style={swatch ? { backgroundColor: swatch } : undefined}
+            >
+              {swatch ? null : <GradientSwatch />}
+              {/* Positioned, so the web build paints it over the positioned gradient. */}
+              <View className="absolute inset-0 items-center justify-center">
+                <Icon size={22} color={iconColor ?? EVA_THEME[scheme].mutedForeground} />
+              </View>
+            </View>
+            {/* After the swatch, so it draws on top of the swatch corner as on the web. */}
+            {active ? (
+              <View
+                className="absolute right-2 top-2 h-4 w-4 items-center justify-center rounded-full"
+                style={{ backgroundColor: EVA_THEME[scheme].primary }}
               >
-                {/* Web `rounded-lg` is 16 in Eva. */}
-                <View
-                  className="h-12 w-full items-center justify-center overflow-hidden rounded-2xl"
-                  style={
-                    swatch === "gradient" ? undefined : { backgroundColor: swatch === "light" ? "#ffffff" : ZINC_900 }
-                  }
-                >
-                  {swatch === "gradient" ? <GradientSwatch /> : null}
-                  {/* Positioned, so the web build paints it over the positioned gradient. */}
-                  <View className="absolute inset-0 items-center justify-center">
-                    <Icon size={22} color={iconColor ?? tokens.color.muted[scheme]} />
-                  </View>
-                </View>
-                {/* After the swatch, so it draws on top of the swatch corner as on the web. */}
-                {active ? (
-                  <View
-                    className="absolute right-2 top-2 h-4 w-4 items-center justify-center rounded-full"
-                    style={{ backgroundColor: palette.primary[scheme] }}
-                  >
-                    <IconCheck size={10} strokeWidth={3} color={palette.primaryForeground[scheme]} />
-                  </View>
-                ) : null}
-                <Text
-                  className="font-instrument-sans-medium text-xs"
-                  style={{
-                    fontWeight: "500",
-                    letterSpacing: XS_TRACKING,
-                    color: active ? palette.primary[scheme] : tokens.color.muted[scheme],
-                  }}
-                >
-                  {label}
-                </Text>
-              </Pressable>
-            );
-          })}
-          {/* A tile's padding and border, so flex gives it a tile's width. */}
-          {row.length === 1 ? <View className="flex-1 border border-transparent p-3" /> : null}
-        </View>
-      ))}
+                <IconCheck size={10} strokeWidth={3} color={EVA_THEME[scheme].primaryForeground} />
+              </View>
+            ) : null}
+            {/* `text-sm` (web `text-xs`): a tappable title. The muted colour off the pick stays, as it marks the choice.
+                With the swatch's side room, "Neutral" fits at 1.3x font scale on a 390 pt phone; past that
+                (a 360 dp phone at a large scale) it shrinks to fit, not wraps. */}
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              className="font-instrument-sans-medium text-sm"
+              style={{
+                fontWeight: "500",
+                color: active ? EVA_THEME[scheme].primary : EVA_THEME[scheme].mutedForeground,
+              }}
+            >
+              {label}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }

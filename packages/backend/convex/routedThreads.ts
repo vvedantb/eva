@@ -8,19 +8,25 @@ import {
   hasTeamAccess,
 } from "./functions";
 import { createNotification } from "./notifications";
+import { entityHref } from "@eva/shared";
 import { isEntityDeleted } from "./numId";
+import { isSessionArchived } from "./_sessions/archive";
 import {
   drainSessionChatQueues,
-  startNextQueuedProjectChatMessage,
-  startNextQueuedTaskChatMessage,
 } from "./_queues/helpers";
 import { ensureMainChat, findMainChat } from "./_sessionChats/helpers";
+import {
+  ensureOwnerChat,
+  findOwnerChat,
+  loadOwnerEntity,
+} from "./_sessions/ownedSession";
 import { listDirectoryForTeam, teamHasOtherMembers } from "./workProfiles";
 import {
   DEFAULT_AI_MODEL,
   roleUserValidator,
   routedSourceKindValidator,
   routedThreadStatusValidator,
+  type RoleUser,
 } from "./validators";
 import type { Infer } from "convex/values";
 
@@ -133,11 +139,20 @@ async function latestUserRequest(
   ctx: QueryCtx,
   sourceId: string,
 ): Promise<string | undefined> {
+  // A task's or project's chat is its session's (none before it chatted).
   const sessionId = ctx.db.normalizeId("sessions", sourceId);
+  const taskId = ctx.db.normalizeId("agentTasks", sourceId);
+  const projectId = ctx.db.normalizeId("projects", sourceId);
+  const owner = taskId
+    ? await loadOwnerEntity(ctx.db, { kind: "task", taskId })
+    : projectId
+      ? await loadOwnerEntity(ctx.db, { kind: "project", projectId })
+      : null;
   const parentId = sessionId
     ? (await findMainChat(ctx.db, sessionId))?._id
-    : ctx.db.normalizeId("agentTasks", sourceId) ??
-    ctx.db.normalizeId("projects", sourceId);
+    : owner
+      ? (await findOwnerChat(ctx.db, owner))?.chat._id
+      : undefined;
   if (!parentId) return undefined;
   const rows = await ctx.db
     .query("messages")
@@ -162,26 +177,13 @@ function displayName(user: {
   return user.fullName || user.firstName || user.email || "Teammate";
 }
 
-function repoHref(
-  owner: string,
-  name: string,
-  rootDirectory?: string,
-): string {
-  if (!rootDirectory) return `/${owner}/${name}`;
-  const appName = rootDirectory.split("/").pop();
-  return `/${owner}/${name}/${appName}`;
-}
-
 function sourceHref(
   repo: { owner: string; name: string; rootDirectory?: string },
   kind: SourceKind,
   numId: number | undefined,
 ): string | undefined {
   if (numId === undefined) return undefined;
-  const base = repoHref(repo.owner, repo.name, repo.rootDirectory);
-  if (kind === "session") return `${base}/sessions/${numId}`;
-  if (kind === "task") return `${base}/quick-tasks/${numId}`;
-  return `${base}/projects/${numId}`;
+  return entityHref(kind, repo, numId);
 }
 
 /**
@@ -227,7 +229,7 @@ async function loadSource(
       ownerUserId: session.userId,
       lastModel: session.lastModel,
       deleted: isEntityDeleted(session),
-      archived: session.archived === true,
+      archived: isSessionArchived(session),
     };
   }
   if (sourceKind === "task") {
@@ -377,27 +379,44 @@ function notifyEntityArgs(
 }
 
 /**
- * Where a source's transcript and queue live. A session's rows hang off its
- * Main chat (sessions hold several chats); tasks and projects key on their own
- * id. Undefined when the session is gone.
+ * Where a source's transcript and queue live: a session's Main chat, or the
+ * chat a task or project talks in (`ensureOwnerChat`, created on first need).
+ * Undefined when the source is gone.
  */
 async function transcriptParent(
   ctx: MutationCtx,
   source: SourceRecord,
 ): Promise<
   | {
-      parentId: Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">;
+      sessionId: Id<"sessions">;
+      parentId: Id<"sessionChats">;
       model: Doc<"sessions">["lastModel"];
     }
   | undefined
 > {
-  if (source.ref.kind !== "session") {
-    return { parentId: source.ref.id, model: source.lastModel };
+  if (source.ref.kind === "session") {
+    const session = await ctx.db.get(source.ref.id);
+    if (!session) return undefined;
+    const chat = await ensureMainChat(ctx, session);
+    return {
+      sessionId: session._id,
+      parentId: chat._id,
+      model: chat.lastModel ?? source.lastModel,
+    };
   }
-  const session = await ctx.db.get(source.ref.id);
-  if (!session) return undefined;
-  const chat = await ensureMainChat(ctx, session);
-  return { parentId: chat._id, model: chat.lastModel ?? source.lastModel };
+  const entity = await loadOwnerEntity(
+    ctx.db,
+    source.ref.kind === "task"
+      ? { kind: "task", taskId: source.ref.id }
+      : { kind: "project", projectId: source.ref.id },
+  );
+  if (!entity) return undefined;
+  const { session, chat } = await ensureOwnerChat(ctx, entity);
+  return {
+    sessionId: session._id,
+    parentId: chat._id,
+    model: chat.lastModel ?? source.lastModel,
+  };
 }
 
 async function insertSystemAlert(
@@ -436,19 +455,13 @@ async function enqueueSourceWake(
     userId,
     model: parent.model ?? DEFAULT_AI_MODEL,
   });
-  if (source.ref.kind === "session") {
-    await drainSessionChatQueues(ctx, source.ref.id);
-  } else if (source.ref.kind === "task") {
-    await startNextQueuedTaskChatMessage(ctx, source.ref.id);
-  } else {
-    await startNextQueuedProjectChatMessage(ctx, source.ref.id);
-  }
+  await drainSessionChatQueues(ctx, parent.sessionId);
 }
 
 type DirectoryMember = {
   userId: Id<"users">;
   name: string;
-  role: "business" | "dev" | "designer" | null;
+  role: RoleUser | null;
 };
 
 /**
@@ -461,7 +474,7 @@ async function resolveParticipants(
     teamId: Id<"teams">;
     actorUserId: Id<"users">;
     userIds?: Id<"users">[];
-    role?: "business" | "dev" | "designer";
+    role?: RoleUser;
   },
 ): Promise<
   | { ok: true; users: DirectoryMember[] }
@@ -837,7 +850,7 @@ async function askCore(
     question: string;
     context: string;
     topicKey: string;
-    role?: "business" | "dev" | "designer";
+    role?: RoleUser;
     assigneeUserIds?: Id<"users">[];
   },
 ): Promise<Infer<typeof askResult>> {

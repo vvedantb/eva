@@ -1062,29 +1062,6 @@ export async function normalizeSnapshotWorktree(
   );
 }
 
-/** Copies baked sandbox config files into the codebase root after git cleanup. */
-export async function copySandboxConfigFilesToWorkspace(
-  sandbox: SandboxHandle,
-  options?: { force?: boolean },
-): Promise<void> {
-  const workspaceDir = workspaceDirShell();
-  const markerGuard =
-    options?.force === true
-      ? ""
-      : 'if [ -f /tmp/.startup-commands-done ]; then echo "startup commands already ran; skipping sandbox-config copy"; exit 0; fi; ';
-  await runLoggedGitStep(
-    "copySandboxConfigFilesToWorkspace",
-    WORKSPACE_DIR,
-    async () => {
-      await execGitCommand(
-        sandbox,
-        `${markerGuard}if [ -d /home/eva/sandbox-config ] && find /home/eva/sandbox-config -mindepth 1 -maxdepth 1 | read first; then cp -a /home/eva/sandbox-config/. ${workspaceDir}/; fi`,
-        30,
-      );
-    },
-  );
-}
-
 /** Shell for a non-interactive dependency install of `dir` with package manager `pm`. */
 export function dependencyInstallCommand(pm: string, dir: string): string {
   if (pm === "pnpm") {
@@ -1923,7 +1900,6 @@ export async function createSandboxAndPrepareRepo(
             if (onProgress) await onProgress("Syncing repository...");
             await syncRepo(sandbox, owner, name, syncStrategy);
           }
-          await copySandboxConfigFilesToWorkspace(sandbox, { force: true });
           return { sandbox, usedSnapshot: true, dockerReady };
         }
         if (lifecycle.ephemeral && syncStrategy.mode === "none") {

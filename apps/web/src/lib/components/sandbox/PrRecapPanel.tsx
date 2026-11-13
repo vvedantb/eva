@@ -39,7 +39,7 @@ import { RecapTourBody } from "@/lib/components/sandbox/_components/RecapTourBod
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { storedRunTraits, toRunTraitArgs } from "@/lib/utils/runTraits";
+import { storedRunTraits, toRunTraitArgs } from "@eva/shared";
 
 type RecapDoc = FunctionReturnType<typeof api.docs.getRecapByPrUrl>;
 

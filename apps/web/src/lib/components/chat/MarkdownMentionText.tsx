@@ -23,7 +23,8 @@ import {
   SKILL_CHIP_CLASS,
 } from "@/lib/components/mentions";
 import { useDataMentionNavigate } from "@/lib/useDataMentionNavigate";
-import { remarkMentionChips, MENTION_HREF_REGEX } from "./remarkMentionChips";
+import { parseMentionChipHref } from "@eva/shared";
+import { remarkMentionChips } from "./remarkMentionChips";
 
 interface MarkdownMentionTextProps {
   text: string;
@@ -178,14 +179,14 @@ export function MarkdownMentionText({
         },
         a: ({ href, children }) => {
           const match =
-            typeof href === "string" ? href.match(MENTION_HREF_REGEX) : null;
+            typeof href === "string" ? parseMentionChipHref(href) : null;
 
           if (!match) {
             return <MarkdownLink href={href}>{children}</MarkdownLink>;
           }
 
-          const prefix = match[1];
-          const id = match[2];
+          const prefix = match.kind;
+          const id = match.id;
           const label = childrenToText(children);
 
           // `/` → skill

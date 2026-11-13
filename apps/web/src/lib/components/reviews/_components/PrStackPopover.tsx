@@ -7,7 +7,7 @@ import { useRepo } from "@/lib/contexts/RepoContext";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import type { StatusTone } from "./prOverviewMeta";
 import { PrRow } from "@/lib/components/pr-menu/PrRow";
-import { stackVerdict, type PrStack } from "./prStack";
+import { stackVerdict, type PrStack } from "@eva/shared";
 
 const VERDICT_TONE_CLASS: Record<StatusTone, string> = {
   success: "text-emerald-700 dark:text-emerald-300",

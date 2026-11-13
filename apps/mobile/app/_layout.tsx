@@ -1,5 +1,6 @@
 import "../global.css";
 import { installUnhandledRejectionLogging } from "@/logging/unhandledRejections";
+import { loadLastCrash, saveLastCrash } from "@/logging/lastCrash";
 
 import { useAuth } from "@clerk/clerk-expo";
 import { tokenCache } from "@clerk/clerk-expo/token-cache";
@@ -11,34 +12,56 @@ import {
   useFonts,
 } from "@expo-google-fonts/inter";
 import { AuthProviders } from "@vvedantb/native-ui/auth";
+import { GestureHandlerProvider } from "@vvedantb/native-ui/gesture-handler";
+import { KeyboardControllerProvider } from "@vvedantb/native-ui/keyboard-controller";
 import { NativeUiProvider } from "@vvedantb/native-ui/theme";
 import { Toaster } from "@vvedantb/native-ui/toast";
-import { ConvexReactClient } from "convex/react";
-import { type ErrorBoundaryProps, Slot, ThemeProvider } from "expo-router";
+import { isMaintenanceError } from "@eva/shared";
+import { ConvexProvider } from "convex/react";
+import { type ErrorBoundaryProps, Stack, ThemeProvider } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { type ReactNode, useEffect, useState } from "react";
+import { StyleSheet, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { CONVEX_URL, PUBLISHABLE_KEY } from "@/config";
-import { restoreColorSchemeChoice } from "@/settings/colorScheme";
+import { StableConvexClient } from "@/convex/StableConvexClient";
+import { restoreThemeMode } from "@/settings/themeMode";
 import {
   isClerkNativeApiEnabled,
   NATIVE_API_DISABLED_MESSAGE,
 } from "@/ui/clerkNativeApi";
-import { applyEvaTheme } from "@/ui/evaTheme";
+import { applyEvaTheme, NEUTRAL_CLASS_VARS } from "@/ui/evaTheme";
 import { EVA_FONT } from "@/ui/fonts";
+import { MaintenanceGate, MaintenanceScreen, useMaintenanceMode } from "@/ui/MaintenanceScreen";
 import { StartupFailure } from "@/ui/StartupFailure";
+import { UpdateDialog } from "@/update/UpdateDialog";
+import { LastCrashDialog } from "@/logging/LastCrashDialog";
+import { checkForUpdate } from "@/update/updateCheck";
+import { useStackScreenOptions } from "@/ui/stackOptions";
 import { navigationTheme, useScheme } from "@/ui/theme";
 
-// Release builds swallow unhandled rejections: log them first.
-installUnhandledRejectionLogging();
+// Release builds swallow unhandled rejections: log them first. A fatal error
+// is saved before the app closes, and shown on the next launch.
+installUnhandledRejectionLogging(globalThis, { onFatal: saveLastCrash });
+void loadLastCrash();
 
 // Eva's web colours for every native-ui part, before anything renders.
 applyEvaTheme();
 
-// The saved light / dark / system choice, applied before the first screen.
-void restoreColorSchemeChoice();
+// This phone's last appearance mode, applied before the first screen; the
+// account's mode follows once signed in (`AccountThemeSync`).
+void restoreThemeMode();
 
-/** One client for the app's life, outside render (it holds the socket). */
-const convex = new ConvexReactClient(CONVEX_URL, { unsavedChangesWarning: false });
+// A newer APK on GitHub Releases, offered once the app is up (`UpdateDialog`).
+void checkForUpdate();
+
+/**
+ * One client for the app's life, outside render (it holds the socket). Its
+ * results keep their identity while their data is the same, so a reconnect
+ * on resume does not redraw every list (`StableConvexClient`).
+ */
+const convex = new StableConvexClient(CONVEX_URL, { unsavedChangesWarning: false });
 
 /** Fonts wait at most this long, then the app starts with system fonts. */
 const FONT_TIMEOUT_MS = 3_000;
@@ -59,9 +82,30 @@ function useTimedOut(ms: number): boolean {
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   return (
     <NativeUiProvider>
-      <StartupFailure message={error.message} onRetry={() => void retry()} />
+      {isMaintenanceError(error) ? (
+        // The layout's providers are gone here, so the status query gets its own (no sign-in needed).
+        <ConvexProvider client={convex}>
+          <MaintenanceFallback onEnded={() => void retry()} />
+        </ConvexProvider>
+      ) : (
+        <StartupFailure message={error.message} onRetry={() => void retry()} />
+      )}
     </NativeUiProvider>
   );
+}
+
+/**
+ * A screen threw the backend's maintenance error before `MaintenanceGate`
+ * saw the status: the maintenance screen, then the app again on its own once
+ * the status says maintenance is over.
+ */
+function MaintenanceFallback({ onEnded }: { onEnded: () => void }) {
+  const inMaintenance = useMaintenanceMode();
+  // Effect: the end of maintenance is a server event, and `retry` remounts the app.
+  useEffect(() => {
+    if (inMaintenance === false) onEnded();
+  }, [inMaintenance, onEnded]);
+  return <MaintenanceScreen />;
 }
 
 /**
@@ -96,6 +140,7 @@ function ClerkGate({ children }: { children: ReactNode }) {
 
 export default function RootLayout() {
   const scheme = useScheme();
+  const stackOptions = useStackScreenOptions();
   const fontsTimedOut = useTimedOut(FONT_TIMEOUT_MS);
   // Inter under the names the classes and JS styles use (`@/ui/fonts`).
   const [fontsLoaded, fontError] = useFonts({
@@ -107,16 +152,44 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError && !fontsTimedOut) return null;
 
   return (
-    <AuthProviders loaded={false} publishableKey={PUBLISHABLE_KEY} tokenCache={tokenCache} convex={convex}>
-      <ThemeProvider value={navigationTheme(scheme)}>
-        <NativeUiProvider>
-          <ClerkGate>
-            <Slot />
-          </ClerkGate>
-          <Toaster />
-          <StatusBar style={scheme === "dark" ? "light" : "dark"} />
-        </NativeUiProvider>
-      </ThemeProvider>
-    </AuthProviders>
+    // Gesture Handler for the whole app; the kit's sheets drag on it, on the
+    // UI thread (each sheet's `Modal` adds its own root view). The keyboard's
+    // real position, frame by frame, for the kit's composer, transcript and
+    // forms (`KeyboardControllerProvider`).
+    <GestureHandlerRootView style={styles.root}>
+      {/* Neutral repaints the class colours: global.css has light and dark only. */}
+      <View className="flex-1" style={scheme === "neutral" ? NEUTRAL_CLASS_VARS : undefined}>
+        <KeyboardProvider>
+          <KeyboardControllerProvider>
+            <GestureHandlerProvider>
+              <AuthProviders loaded={false} publishableKey={PUBLISHABLE_KEY} tokenCache={tokenCache} convex={convex}>
+                <ThemeProvider value={navigationTheme(scheme)}>
+                  <NativeUiProvider>
+                    {/* Maintenance replaces the app, signed in or not (its status needs no sign-in). */}
+                    <MaintenanceGate>
+                      <ClerkGate>
+                        {/* A stack, not a `Slot`: a `Slot` unmounts the tabs under a pushed chat and
+                            drops their state, so Back landed on the Inbox, not the tab it came from.
+                            A push deeper (a chat, a review, a new session) runs the platform's own
+                            transition (`useStackScreenOptions`). */}
+                        <Stack screenOptions={stackOptions} />
+                      </ClerkGate>
+                    </MaintenanceGate>
+                    <UpdateDialog />
+                    <LastCrashDialog />
+                    <Toaster />
+                    <StatusBar style={scheme === "light" ? "dark" : "light"} />
+                  </NativeUiProvider>
+                </ThemeProvider>
+              </AuthProviders>
+            </GestureHandlerProvider>
+          </KeyboardControllerProvider>
+        </KeyboardProvider>
+      </View>
+    </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+});

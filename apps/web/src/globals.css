@@ -7,6 +7,8 @@
 @import "@vvedantb/ui/tokens/css/utilities.css";
 @import "@vvedantb/ui/tokens/css/border-beam.css";
 @import "@vvedantb/ui/tokens/css/marquee.css";
+@import "@vvedantb/ui/tokens/css/scroll-fade.css";
+@import "@vvedantb/ui/tokens/css/scrollbar.css";
 /* The `text-*` scale: each tier has its own line height and tracking. */
 @import "@vvedantb/ui/tokens/css/type-scale.css";
 /* vvedantb components read their colour names (`surface-*`, `field-*`,
@@ -313,36 +315,12 @@
   transform-origin: 50% 70%;
 }
 
-@utility scrollbar {
-  /* Matches global base scrollbar chrome; class kept for scroll-fade pairing.
-     Do not put overscroll-behavior here: Chrome treats every overflow:auto
-     element as a scroll container even when it has no overflow, so contain on
-     this utility created wheel dead-zones — nested panes and horizontal boards
-     (overflow-y-hidden) swallowed vertical wheel while the ancestor scrollbar
-     still dragged fine. Opt in per pane with overscroll-y-contain /
-     overscroll-contain instead. */
-  scrollbar-width: thin;
-  scrollbar-color: rgb(var(--muted-foreground) / 0.35) transparent;
-  &:hover {
-    scrollbar-color: rgb(var(--muted-foreground) / 0.55) transparent;
-  }
-  &::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: rgb(var(--muted-foreground) / 0.32);
-    border: 2px solid transparent;
-    border-radius: 999px;
-    background-clip: padding-box;
-  }
-  &::-webkit-scrollbar-thumb:hover {
-    background: rgb(var(--muted-foreground) / 0.52);
-    background-clip: padding-box;
-  }
+/* `scrollbar` comes from @vvedantb/ui/tokens/css/scrollbar.css. The base is
+   set on each theme scope because --muted-foreground is an rgb triplet here. */
+:root,
+.dark,
+.dark.neutral {
+  --scrollbar-base: rgb(var(--muted-foreground));
 }
 
 @utility scrollbar-thin {
@@ -385,67 +363,6 @@
     /* Reserve scrollbar space so appearing/disappearing overflow does not shift layout. */
     scrollbar-gutter: stable;
   }
-
-  /*
- * Mask stops for `.scroll-fade` / `.scroll-fade-x` (defined in @layer
- * utilities). Custom properties only interpolate once registered, so these
- * cannot be plain `--vars`. Each is driven by its own range of the element's
- * scroll timeline: the leading fade grows in over the first 1.5rem of scroll,
- * the trailing fade shrinks out over the last 1.5rem. Content flush against an
- * edge therefore never fades — only content that continues past it does.
- */
-  @property --scroll-fade-top {
-    syntax: "<length>";
-    inherits: false;
-    initial-value: 0px;
-  }
-  @property --scroll-fade-bottom {
-    syntax: "<length>";
-    inherits: false;
-    initial-value: 0px;
-  }
-  @property --scroll-fade-left {
-    syntax: "<length>";
-    inherits: false;
-    initial-value: 0px;
-  }
-  @property --scroll-fade-right {
-    syntax: "<length>";
-    inherits: false;
-    initial-value: 0px;
-  }
-  @keyframes scroll-fade-top {
-    from {
-      --scroll-fade-top: 0px;
-    }
-    to {
-      --scroll-fade-top: 1.5rem;
-    }
-  }
-  @keyframes scroll-fade-bottom {
-    from {
-      --scroll-fade-bottom: 1.5rem;
-    }
-    to {
-      --scroll-fade-bottom: 0px;
-    }
-  }
-  @keyframes scroll-fade-left {
-    from {
-      --scroll-fade-left: 0px;
-    }
-    to {
-      --scroll-fade-left: 1.5rem;
-    }
-  }
-  @keyframes scroll-fade-right {
-    from {
-      --scroll-fade-right: 1.5rem;
-    }
-    to {
-      --scroll-fade-right: 0px;
-    }
-  }
 }
 
 @layer base {
@@ -459,6 +376,8 @@
     --app-shell: 244 245 246;
     --foreground: 9 9 11;
     --card: 255 255 255;
+    /* Active pill of segmented tabs (web) and the phone tab bar. */
+    --segment-active: 255 255 255;
     --card-foreground: 9 9 11;
     --popover: 255 255 255;
     --popover-foreground: 9 9 11;
@@ -594,6 +513,7 @@
     --primary-foreground: 9 9 11;
     --secondary: 32 32 32;
     --secondary-foreground: 252 252 252;
+    --segment-active: 71 71 71;
     --muted: 26 26 26;
     --muted-foreground: 159 160 162;
     --accent: 20 20 20;
@@ -686,6 +606,7 @@
     --popover-foreground: 250 250 250;
     --secondary: 68 69 72;
     --secondary-foreground: 252 252 252;
+    --segment-active: 68 69 72;
     --muted: 58 59 62;
     --muted-foreground: 159 160 162;
     --destructive-foreground: 252 252 252;
@@ -744,10 +665,11 @@
   }
 
   /*
-   * Smooth anchor scrolling for the marketing page only — `#top` is the
-   * landing page root, so in-app routes keep instant scrolling.
+   * Smooth anchor scrolling for the marketing page only — `data-landing` is
+   * set by the landing root (`markLandingRoot`), so in-app routes keep instant
+   * scrolling. Never `html:has(...)`: see `markLandingRoot` for the cost.
    */
-  html:has(#top) {
+  html[data-landing] {
     scroll-behavior: smooth;
   }
   ::selection {
@@ -781,6 +703,53 @@
   [role="button"][aria-disabled="true"],
   [aria-disabled="true"] {
     cursor: not-allowed;
+  }
+
+  /*
+   * Phone feel for controls. `manipulation` drops the double-tap-zoom wait, so
+   * a tap fires `click` at once. `user-select: none` stops a long press from
+   * selecting a button label. Links and inputs stay selectable: their text is
+   * content. Opt a control back in with `select-text`.
+   */
+  button,
+  a,
+  label,
+  summary,
+  [role="button"],
+  [role="tab"],
+  [role="option"],
+  [role="menuitem"],
+  [role="menuitemcheckbox"],
+  [role="menuitemradio"],
+  [role="checkbox"],
+  [role="radio"],
+  [role="switch"] {
+    touch-action: manipulation;
+  }
+  button,
+  summary,
+  [role="button"],
+  [role="tab"],
+  [role="option"],
+  [role="menuitem"],
+  [role="menuitemcheckbox"],
+  [role="menuitemradio"],
+  [role="checkbox"],
+  [role="radio"],
+  [role="switch"] {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /*
+   * The app has its own scroll panes and live data, so a pull past the top
+   * must not reload the page (Android pull-to-refresh) or bounce the shell.
+   * Y only: `x` would also turn off trackpad swipe-back on desktop. The landing
+   * page (`data-landing`) is a document, so it keeps both.
+   */
+  html:not([data-landing]),
+  html:not([data-landing]) body {
+    overscroll-behavior-y: none;
   }
 
   /* Cap radius on form controls when theme radius is "full" (9999px). */
@@ -1008,68 +977,6 @@
 }
 
 /* ───────────────────────────────────────────────────────────────────
- * Scroll edge fade — pair with `.scrollbar` on an inline scroll area so
- * its content does not hard-cut at the boundary. The mask stops are the
- * registered properties declared near the top of this file, each driven
- * by its own range of the element's scroll timeline, so an edge only
- * fades while there is more content past it.
- *
- * Duration must be a non-zero time (`1ms`, stretched across the range by
- * the timeline). The shorthand's initial duration is `0s`, which pins
- * both animations at their end keyframes — a fade on every edge even
- * when the list is flush with the top or bottom.
- *
- * `.scroll-fade` is the vertical (block) axis; `.scroll-fade-x` is the
- * horizontal (inline) axis — same recipe, used by the quick-task / project
- * kanban column row.
- *
- * Gated on scroll-driven animation support: without it the fade could not
- * follow the scroll position, and a permanently faded edge dims content
- * that is already fully visible — worse than the hard cut. Unsupported
- * browsers therefore get no mask at all.
- *
- * Do not use on page-level scroll, on a text input (it dims the caret), on
- * a container with a `sticky` child (the pinned child sits inside the
- * fade), or on an element that already sets `animation` (the shorthand
- * here would replace it — Radix menu content is the usual case).
- * ─────────────────────────────────────────────────────────────────── */
-@supports (animation-timeline: scroll()) {
-  .scroll-fade {
-    mask-image: linear-gradient(
-      to bottom,
-      transparent 0,
-      #000 var(--scroll-fade-top),
-      #000 calc(100% - var(--scroll-fade-bottom)),
-      transparent 100%
-    );
-    animation:
-      scroll-fade-top 1ms linear both,
-      scroll-fade-bottom 1ms linear both;
-    animation-timeline: scroll(self y), scroll(self y);
-    animation-range:
-      0px 1.5rem,
-      calc(100% - 1.5rem) 100%;
-  }
-
-  .scroll-fade-x {
-    mask-image: linear-gradient(
-      to right,
-      transparent 0,
-      #000 var(--scroll-fade-left),
-      #000 calc(100% - var(--scroll-fade-right)),
-      transparent 100%
-    );
-    animation:
-      scroll-fade-left 1ms linear both,
-      scroll-fade-right 1ms linear both;
-    animation-timeline: scroll(self x), scroll(self x);
-    animation-range:
-      0px 1.5rem,
-      calc(100% - 1.5rem) 100%;
-  }
-}
-
-/* ───────────────────────────────────────────────────────────────────
  * Blur PID — Settings → Experimental toggles `data-blur-pid` on <html>
  * (see BlurPidEffect.tsx). Every element rendering a user name or email
  * address carries `data-pii`, so one rule covers all of them, including
@@ -1087,9 +994,9 @@ html[data-blur-pid] [data-pii] {
  * correct in BOTH light and dark.
  *
  * Why plain CSS here instead of Tailwind `dark:` utilities:
- *  1. --card and --secondary swap lightness between modes (light: card is
- *     lightest; dark: secondary is lightest), so the active pill cannot be
- *     expressed as a single utility — it needs a per-mode value.
+ *  1. The trough and the pill change per mode (the pill is
+ *     `--segment-active`, shared with the phone through `@eva/shared`), so
+ *     they cannot be one utility.
  *  2. New utility classes added in eva's UI config are not recompiled by the
  *     running dev server without a full restart; these CSS-variable rules
  *     hot-reload reliably. Placed after `@tailwind utilities`, so they win
@@ -1098,18 +1005,13 @@ html[data-blur-pid] [data-pii] {
 .tabs-segmented {
   background-color: rgb(var(--secondary)); /* light: grey trough */
 }
-.tabs-segmented [role="tab"][data-state="active"] {
-  background-color: rgb(
-    var(--card)
-  ); /* light: white pill (lighter than trough) */
+/* The sliding pill (`t-tabs-pill`, `bg-card` from the Tabs config): white in
+ * light, #474747 in dark, so it shows on the trough as the phone tab bar's. */
+.tabs-segmented .t-tabs-pill {
+  background-color: rgb(var(--segment-active));
 }
 .dark .tabs-segmented {
   background-color: rgb(var(--card)); /* dark: card-grey trough */
-}
-.dark .tabs-segmented [role="tab"][data-state="active"] {
-  background-color: rgb(
-    var(--secondary)
-  ); /* dark: lighter pill (lighter than trough) */
 }
 
 /* ───────────────────────────────────────────────────────────────────
@@ -1823,5 +1725,33 @@ html[data-page-hidden] .ave-face *,
 @media (hover: none) {
   .group-hover\:opacity-100 {
     opacity: 1;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────
+ * No zoom on focus. iOS Safari zooms the page when a field under 16px gets
+ * focus, and does not zoom back out. The composer (`text-sm`) and about
+ * thirty `text-xs` / `text-sm` fields trip it. Set the floor once here, by
+ * capability (`pointer: coarse` also covers tablets, which `sm:` misses),
+ * instead of a `pointer-coarse:text-base` at every call site.
+ *
+ * Unlayered for the same reason as the rule above: `.text-sm` is a single
+ * class in `@layer utilities` and would win against a layered rule. Fields
+ * already set larger than 16px keep their size.
+ * ─────────────────────────────────────────────────────────────────── */
+@media (pointer: coarse) {
+  :is(
+      input:not(
+          [type="checkbox"],
+          [type="radio"],
+          [type="range"],
+          [type="file"],
+          [type="color"]
+        ),
+      textarea,
+      select,
+      [contenteditable="true"]
+    ):not(.text-lg, .text-xl, .text-2xl, .text-3xl) {
+    font-size: 16px;
   }
 }

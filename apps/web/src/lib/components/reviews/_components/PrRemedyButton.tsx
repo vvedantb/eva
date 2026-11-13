@@ -9,7 +9,7 @@ import { CrossfadeIconSlot, Spinner, toast } from "@vvedantb/ui";
 import { IconArrowUpRight } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import type { PrRemedy } from "./prMergeState";
+import type { PrRemedy } from "@eva/shared";
 import type { StatusTone } from "./prOverviewMeta";
 
 const TONE_CLASS: Record<StatusTone, string> = {

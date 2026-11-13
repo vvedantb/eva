@@ -67,6 +67,7 @@ import {
   chatHtmlRenderFields,
   chatHtmlRenderBodyFields,
   envVarRequestFields,
+  sessionProposalFields,
   previewToolCallFields,
   proposedPlanFields,
   agentUsageLimitFields,
@@ -76,7 +77,6 @@ import {
   notificationFields,
   repoEnvVarFields,
   repoSnapshotFields,
-  sandboxConfigFileFields,
   teamMemberFields,
   teamEnvVarFields,
   presentationStatusValidator,
@@ -111,13 +111,7 @@ const schema = defineSchema({
     .index("by_user", ["userId"])
     .index("by_repo_and_phase", ["repoId", "phase"])
     .index("by_repo_and_numId", ["repoId", "numId"])
-    .index("by_repo_and_build_workflow", ["repoId", "activeBuildWorkflowId"])
-    .index("by_repo_and_sandbox_status", [
-      "repoId",
-      "reviewProjectSandboxStatus",
-    ])
-    .index("by_sandbox_status", ["reviewProjectSandboxStatus"])
-    .index("by_sandbox", ["sandboxId"]),
+    .index("by_repo_and_build_state", ["repoId", "build.state"]),
 
   projectDetails: defineTable(projectDetailsFields).index("by_project", [
     "projectId",
@@ -136,10 +130,7 @@ const schema = defineSchema({
     .index("by_repo_and_updatedAt", ["repoId", "updatedAt"])
     .index("by_project", ["projectId"])
     .index("by_project_and_status", ["projectId", "status"])
-    .index("by_repo_and_numId", ["repoId", "numId"])
-    .index("by_repo_and_sandbox_status", ["repoId", "reviewTaskSandboxStatus"])
-    .index("by_sandbox_status", ["reviewTaskSandboxStatus"])
-    .index("by_sandbox", ["sandboxId"]),
+    .index("by_repo_and_numId", ["repoId", "numId"]),
 
   agentRuns: defineTable(agentRunFields)
     .index("by_task", ["taskId"])
@@ -214,7 +205,15 @@ const schema = defineSchema({
     "taskId",
   ]),
   taskActivity: defineTable(taskActivityFields).index("by_task", ["taskId"]),
-  messages: defineTable(messageFields).index("by_parent", ["parentId"]),
+  messages: defineTable(messageFields)
+    .index("by_parent", ["parentId"])
+    // User rows only: the jump rail and up-arrow recall (listUserMessagesByParent).
+    .index("by_parent_and_role", ["parentId", "role"])
+    // Find-in-chat above the loaded history (searchOlderByParent).
+    .searchIndex("search_content", {
+      searchField: "content",
+      filterFields: ["parentId"],
+    }),
   aveThreads: defineTable(aveThreadFields).index("by_user_and_archived", [
     "userId",
     "archivedAt",
@@ -229,19 +228,30 @@ const schema = defineSchema({
     .index("by_user", ["userId"])
     .index("by_repo_and_status", ["repoId", "status"])
     .index("by_status", ["status"])
-    .index("by_repo_and_archived", ["repoId", "archived"])
-    .index("by_repo_archived_and_deleted", ["repoId", "archived", "deletedAt"])
+    // The Sessions list: standalone sessions only (owned ones are hidden).
+    .index("by_repo_owner_deleted_and_archived_at", [
+      "repoId",
+      "owner.kind",
+      "deletedAt",
+      "archive.archivedAt",
+    ])
     .index("by_repo_and_numId", ["repoId", "numId"])
     .index("by_sandbox", ["sandboxId"])
     .index("by_forked_from", ["forkedFromSessionId"])
-    .index("by_session_group", ["sessionGroupId"]),
+    .index("by_session_group", ["sessionGroupId"])
+    // The hidden session a task or project owns (`_sessions/owner.ts`).
+    // `deletedAt`: a task moved to another repo or into a project detaches
+    // (soft-deletes) its session, so the next use creates a fresh one.
+    .index("by_owner_task", ["owner.taskId", "deletedAt"])
+    .index("by_owner_project", ["owner.projectId"]),
   // Chat threads inside a session (Main + parallel chats). See
   // `sessionChatFields` for the session/chat ownership split.
   sessionChats: defineTable(sessionChatFields)
     .index("by_session", ["sessionId"])
     .index("by_session_and_number", ["sessionId", "number"])
     .index("by_repo", ["repoId"])
-    .index("by_repo_main_and_archived", ["repoId", "isMain", "archived"]),
+    // A project task's chat in its project's session.
+    .index("by_task", ["taskId"]),
   // Legacy daemon-poll mirror. Chat daemons poll their `sessionChats` row
   // directly; `backfillSessionChats` empties this table and it can then be
   // dropped from the schema.
@@ -278,6 +288,10 @@ const schema = defineSchema({
   // Secret requests the agent posts as an inline card (`request_env_var`).
   // Status only: the value goes to the encrypted env var stores.
   envVarRequests: defineTable(envVarRequestFields).index("by_parent", [
+    "parentId",
+  ]),
+  // "Start this in a new session" cards the agent posts (`propose_session`).
+  sessionProposals: defineTable(sessionProposalFields).index("by_parent", [
     "parentId",
   ]),
   // Agent → live-preview WebMCP tool calls relayed through the user's open Eva
@@ -326,6 +340,8 @@ const schema = defineSchema({
   // second check-then-launch window and boot duplicate daemons; only the
   // lease claimant launches, the rest no-op. Short TTL so a crashed launcher
   // never blocks the next boot for long. One row per entity, upserted.
+  // Also holds the per-sandbox launch lock (`sandbox:<id>` keys, see
+  // `withSandboxLaunchLock`): launches share fixed /tmp runner files.
   daemonLaunchLeases: defineTable({
     entityId: v.string(),
     expiresAt: v.number(),
@@ -431,7 +447,6 @@ const schema = defineSchema({
     .index("by_repo_snapshot", ["repoSnapshotId"])
     .index("by_repo_snapshot_and_status", ["repoSnapshotId", "status"])
     .index("by_status", ["status"]),
-  sandboxConfigFiles: defineTable(sandboxConfigFileFields).index("by_repo", ["repoId"]),
   teams: defineTable(teamFields).index("by_created_by", ["createdBy"]),
   teamMembers: defineTable(teamMemberFields)
     .index("by_team", ["teamId"])
@@ -521,25 +536,9 @@ const schema = defineSchema({
     ["repoId", "entityType"],
   ),
 
-  // Unused after Clerk MCP OAuth. Kept until a drain migration removes them.
-  mcpAuthCodes: defineTable({
-    code: v.string(),
-    clerkUserId: v.string(),
-    codeChallenge: v.string(),
-    codeChallengeMethod: v.string(),
-    redirectUri: v.string(),
-    clientId: v.string(),
-    expiresAt: v.number(),
-  }).index("by_code", ["code"]),
-
-  // Unused after Clerk MCP OAuth. Kept until a drain migration removes them.
-  mcpClientRegistrations: defineTable({
-    clientId: v.string(),
-    clientSecret: v.optional(v.string()),
-    redirectUris: v.array(v.string()),
-    registeredAt: v.number(),
-  }).index("by_clientId", ["clientId"]),
-
+  // Legacy MCP OAuth tables removed after the drain migrations emptied them.
+  // schema-narrowing-ok: drainMcpAuthCodes
+  // schema-narrowing-ok: drainMcpClientRegistrations
   // MCP bearer token-cache table removed after the drain migration emptied it.
   // schema-narrowing-ok: drainMcpTokenCache
 

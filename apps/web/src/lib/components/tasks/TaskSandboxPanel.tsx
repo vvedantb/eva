@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@eva/backend";
-import type { BackgroundAgentEntry, Id, SandboxOwner } from "@eva/backend";
+import type { Id, SandboxOwner } from "@eva/backend";
 import { isSessionSandboxTab, type SandboxTab } from "@/lib/search-params";
 import { SandboxTabBar } from "@/routes/_repo/$owner/$repo/sessions/_components/SandboxTabBar";
 import { ReviewChatTargetProvider } from "@/lib/contexts/ReviewChatTargetContext";
@@ -19,6 +19,7 @@ import { FilesPanel } from "@/routes/_repo/$owner/$repo/sessions/FilesPanel";
 import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { useSandboxAnnotationSend } from "@/lib/components/chat/sandboxChatBinding";
+import { sandboxChatKeys } from "@/lib/components/chat/sandboxChatTurn";
 import { useTaskChatBinding } from "./TaskSandboxChatPanel";
 import {
   SessionArtifactsPanel,
@@ -35,9 +36,9 @@ interface TaskSandboxPanelProps {
   isActive: boolean;
   repoId: Id<"githubRepos">;
   /**
-   * Resolved dev port for the current sandbox (taken from `agentTasks.devPort`,
-   * which `taskSandboxReady` populates from `startSessionServices` — already
-   * accounts for any per-app override on the repo).
+   * Resolved dev port for the current sandbox (the quick task session's
+   * `devPort`, or a project task's own) — already accounts for any per-app
+   * override on the repo.
    */
   devPort?: number;
   /**
@@ -49,8 +50,6 @@ interface TaskSandboxPanelProps {
   panes: SandboxPanesApi;
   terminalPanel: TerminalPanelApi;
   prUrl?: string;
-  /** Sub-agent lifecycle entries from the task doc (Agents tab). */
-  backgroundAgents?: BackgroundAgentEntry[];
   activeTab: SandboxTab;
   onTabChange: (tab: SandboxTab) => void;
   onStartSandbox?: () => void;
@@ -86,7 +85,6 @@ export function TaskSandboxPanel({
   panes,
   terminalPanel,
   prUrl,
-  backgroundAgents,
   activeTab,
   onTabChange,
   onStartSandbox,
@@ -97,39 +95,32 @@ export function TaskSandboxPanel({
   miniPlayer,
 }: TaskSandboxPanelProps) {
   const simpleView = useSimpleView();
-  const taskIdStr = String(taskId);
-  const submitAnnotation = useSandboxAnnotationSend(
-    useTaskChatBinding(taskId),
-  );
+  const chatBinding = useTaskChatBinding(taskId);
+  const submitAnnotation = useSandboxAnnotationSend(chatBinding);
+  const chatKeys = sandboxChatKeys(chatBinding.entity);
 
   // Content-keyed Agents tab, folded from the chat transcript the task's chat
-  // panel already subscribes to (same entity ids).
+  // panel already subscribes to (same entity ids). Artifacts stay on the task:
+  // the backend files a quick task's session artifacts under it.
   const artifactSource = { kind: "task" as const, taskId };
   const { artifactCount } = useSourceArtifacts(artifactSource);
   const { documentCount } = useSourceDocuments(artifactSource);
   const { agents, hasAgents, hasRunningAgents } = useSubagentRoster({
-    parentId: taskId,
-    streamingEntityId: `task-chat-${taskIdStr}`,
-    backgroundAgents,
+    parentId: chatKeys.parentId,
+    streamingEntityId: chatKeys.streamingEntityId,
+    backgroundAgents: chatBinding.doc?.backgroundAgents,
     sandboxRunning: isActive,
   });
 
   const viewState = useQuery(api.sandboxPanes.getViewState, { owner });
-  const setPreviewPath = useMutation(api.sandboxPanes.setPreviewPath);
-  const setPreviewPort = useMutation(api.sandboxPanes.setPreviewPort);
-  const setTerminalHistoryTail = useMutation(
-    api.sandboxPanes.setTerminalHistoryTail,
-  );
   const releaseBrowserLock = useMutation(api.sandboxPanes.releaseBrowserLock);
 
   const preview = useSandboxPreview({
+    owner,
     sandboxId,
     isActive,
     repoId,
     devPort,
-    onPortPersist: (port) => {
-      void setPreviewPort({ owner, port });
-    },
   });
 
   const fileList = useSandboxFileList({ sandboxId, repoId, isActive });
@@ -219,12 +210,9 @@ export function TaskSandboxPanel({
               : "hidden"
           }
         >
-          <SandboxAgentsPanel
-            entity={{ kind: "task", taskId }}
-            agents={agents}
-          />
+          <SandboxAgentsPanel entity={chatBinding.entity} agents={agents} />
         </div>
-        <ReviewChatTargetProvider value={{ kind: "taskChat", taskId }}>
+        <ReviewChatTargetProvider value={chatKeys.draftTarget ?? null}>
           <SandboxPaneSlots
             activeTab={tabBarValue}
             panes={panes}
@@ -233,7 +221,7 @@ export function TaskSandboxPanel({
             sandboxId={sandboxId}
             isActive={isActive}
             repoId={repoId}
-            cacheKey={taskIdStr}
+            cacheKey={String(taskId)}
             devCommand={devCommand}
             prUrl={prUrl}
             agentBrowsingAt={viewState?.agentBrowsingAt}
@@ -249,21 +237,10 @@ export function TaskSandboxPanel({
             // A collapsed rail keeps its preview parked.
             miniPlayer={
               miniPlayer !== undefined && !collapsed
-                ? { ...miniPlayer, owner: { kind: "task", taskId } }
+                ? { ...miniPlayer, owner }
                 : undefined
             }
-            stickyPreviewPath={viewState?.previewPath}
-            onStickyPreviewPathChange={(path) => {
-              void setPreviewPath({ owner, path });
-            }}
-            stickyTerminalHistoryTail={
-              viewState === undefined
-                ? undefined
-                : (viewState?.terminalHistoryTail ?? "")
-            }
-            onStickyTerminalHistoryTailChange={(tail) => {
-              void setTerminalHistoryTail({ owner, tail });
-            }}
+            viewState={viewState}
           />
         </ReviewChatTargetProvider>
       </div>

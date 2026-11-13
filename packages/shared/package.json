@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./activityTrace": "./src/activityTrace.ts",
     "./agentTurnLimits": "./src/agentTurnLimits.ts",
+    "./appTabSlug": "./src/appTabSlug.ts",
     "./chatFeedback": "./src/chatFeedback.ts",
     "./chatLog": "./src/chatLog.ts",
     "./dates": "./src/utils/dates.ts",
@@ -25,6 +26,7 @@
     "./notificationTitle": "./src/notificationTitle.ts",
     "./parseActivitySteps": "./src/utils/parseActivitySteps.ts",
     "./pendingQuestion": "./src/pendingQuestion.ts",
+    "./previewFrameMessages": "./src/previewFrameMessages.ts",
     "./redactSecrets": "./src/redactSecrets.ts",
     "./resultEvent": "./src/resultEvent.ts",
     "./safeUrl": "./src/safeUrl.ts",
@@ -48,7 +50,7 @@
     "@json-render/core": "0.21.0",
     "@json-render/react": "0.21.0",
     "@types/react": "^19.0.0",
-    "@vvedantb/ui": "^0.39.0",
+    "@vvedantb/ui": "^0.42.0",
     "tailwind-merge": "^2.6.1",
     "zod": "3.25.76"
   }

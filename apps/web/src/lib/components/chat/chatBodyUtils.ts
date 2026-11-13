@@ -1,17 +1,30 @@
-import { getAIModelProvider, type Doc, type Id } from "@eva/backend";
+import { getAIModelProvider, type api, type Doc, type Id } from "@eva/backend";
+import type { FunctionReturnType } from "convex/server";
 import { getProviderLabel } from "@vvedantb/ui";
 import type { ActivityStep } from "@vvedantb/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
-import { isSandboxPausedAlert } from "@eva/shared";
-import { tokenizedToEditable } from "@/lib/components/mentions";
-import { stripReviewCommentBlocks } from "@/lib/reviewComments";
 import {
   collectChangedFiles,
+  isOtherUserChatMessage,
+  isSandboxPausedAlert,
+  otherUserIdsInChat,
+  stripReviewCommentBlocks,
   type ChangedFile,
-} from "@/lib/components/chat/ChangedFilesCard";
+  type ChatUserAttribution,
+} from "@eva/shared";
+import { tokenizedToEditable } from "@/lib/components/mentions";
 
 // Moved to `@eva/shared` so the mobile chat footer reads the same turn model.
 export { buildPrecedingUserTurns } from "@eva/shared";
+// Moved to `@eva/shared` so the mobile chat streams into the same bubble.
+export { findStreamingTargetMessage } from "@eva/shared";
+// Moved to `@eva/shared` so the mobile chat draws a teammate's turn as the web.
+export {
+  firstNameByUserId,
+  firstNameFromUser,
+  isOtherUserChatMessage,
+  otherUserIdsInChat,
+} from "@eva/shared";
 
 /**
  * The codebase a chat belongs to. Manager Ave has none, so it passes nothing:
@@ -23,12 +36,8 @@ export interface ChatRepo {
   basePath: string;
 }
 
-/** The id a chat's messages hang off: session, quick task or project. */
-export type ChatParentId =
-  | Id<"sessionChats">
-  | Id<"sessions">
-  | Id<"projects">
-  | Id<"agentTasks">;
+/** The id a chat's messages hang off: a session chat, or a pre-chat session. */
+export type ChatParentId = Id<"sessionChats"> | Id<"sessions">;
 
 // `_id` is widened to `string` so callers can prepend client-built synthetic
 // turns (the quick task's first-run activity in the sandbox chat) without
@@ -149,58 +158,12 @@ export function visibleChatMessages<
   return messages.filter((message) => !hidden(message));
 }
 
-/** First name for chat labels; falls back to the first word of full name. */
-export function firstNameFromUser(user: {
-  firstName?: string | null;
-  fullName?: string | null;
-}): string | null {
-  return user.firstName?.trim() || user.fullName?.trim().split(" ")[0] || null;
-}
-
-type ChatUserAttribution = {
-  role: ChatBodyMessage["role"];
-  userId?: string;
-  isSystemAlert?: boolean;
-};
-
-/** Teammate user turn (not yours). Missing ids → treat as own to avoid layout flash. */
-export function isOtherUserChatMessage(
-  message: ChatUserAttribution,
-  currentUserId: string | undefined,
-): boolean {
-  return (
-    !message.isSystemAlert &&
-    message.role === "user" &&
-    message.userId !== undefined &&
-    currentUserId !== undefined &&
-    message.userId !== currentUserId
-  );
-}
-
 /** True when the transcript has a teammate bubble that needs a display name. */
 export function chatNeedsOtherUserDirectory(
   messages: ReadonlyArray<ChatUserAttribution>,
   currentUserId: string | undefined,
 ): boolean {
   return otherUserIdsInChat(messages, currentUserId).length > 0;
-}
-
-/** Sorted unique teammate ids that need a name lookup. Empty → skip the query. */
-export function otherUserIdsInChat<TUserId extends string>(
-  messages: ReadonlyArray<{
-    role: ChatBodyMessage["role"];
-    userId?: TUserId;
-    isSystemAlert?: boolean;
-  }>,
-  currentUserId: TUserId | undefined,
-): TUserId[] {
-  const ids = new Set<TUserId>();
-  for (const message of messages) {
-    if (!isOtherUserChatMessage(message, currentUserId)) continue;
-    if (message.userId === undefined) continue;
-    ids.add(message.userId);
-  }
-  return [...ids].sort();
 }
 
 /**
@@ -281,74 +244,6 @@ export function turnErrorTitle({
 }
 
 /**
- * One wording for the sandbox across every chat panel (session, quick task,
- * project). The header buttons already say "Wake up Eva" / "Put Eva to sleep",
- * so the transcript and the composer speak about Eva too rather than about a
- * "sandbox" the user never named.
- */
-export const SANDBOX_CHAT_COPY = {
-  startingTitle: "Waking Eva up…",
-  stoppingTitle: "Putting Eva to sleep…",
-  asleepTitle: "Eva is asleep",
-  asleepDescription: "Eva's sandbox is asleep.",
-  /** Sending while asleep queues the message and wakes Eva to run it. */
-  asleepPlaceholder: "Send a message to wake Eva up…",
-  /** The last turn hit a usage limit; sends queue until just after the reset. */
-  usageLimitPlaceholder: "Usage limit reached — messages send after the reset…",
-  /** Why the composer will not send while Eva sleeps. */
-  asleepDisabledReason: "Wake Eva up to send",
-  wakeAction: "Wake up Eva",
-  switchingAccountPlaceholder: "Switching Claude account…",
-  activePlaceholder: "Ask Eva anything... / for skills · @ to mention",
-  /** Teaches the three composer affordances on an empty, awake chat. */
-  activeDescription:
-    "Type / for skills, @ to mention, or drop files to attach.",
-} as const;
-
-/**
- * Whether a sandbox chat composer accepts input, where its sends go, and the
- * copy that goes with it. One rule for all three surfaces (session, quick
- * task, project):
- * - only an account swap locks the composer. A running turn, a sleeping
- *   sandbox and a usage limit all take the message into the queue instead.
- * - `queuesSends` is that queue rule for an idle chat: asleep (the queue wakes
- *   Eva and sends once she is up) or held by a usage limit on the chosen
- *   provider (it sends just after the reset). A running turn queues too, but
- *   each surface already routes that through its own `isExecuting`.
- */
-export function sandboxComposerState({
-  isSandboxActive,
-  isSwitchingAccount,
-  isExecuting,
-  isUsageLimitHeld,
-}: {
-  isSandboxActive: boolean;
-  isSwitchingAccount: boolean;
-  isExecuting: boolean;
-  isUsageLimitHeld: boolean;
-}): {
-  isInputDisabled: boolean;
-  queuesSends: boolean;
-  placeholder: string;
-  disabledReason: string;
-} {
-  const isAsleep = !isSandboxActive && !isExecuting;
-  const isHeld = isUsageLimitHeld && !isExecuting;
-  return {
-    isInputDisabled: isSwitchingAccount,
-    queuesSends: isAsleep || isHeld,
-    placeholder: isSwitchingAccount
-      ? SANDBOX_CHAT_COPY.switchingAccountPlaceholder
-      : isHeld
-        ? SANDBOX_CHAT_COPY.usageLimitPlaceholder
-        : isAsleep
-          ? SANDBOX_CHAT_COPY.asleepPlaceholder
-          : SANDBOX_CHAT_COPY.activePlaceholder,
-    disabledReason: SANDBOX_CHAT_COPY.switchingAccountPlaceholder,
-  };
-}
-
-/**
  * The failure a send threw, as the user should read it. Convex wraps a server
  * error in `[CONVEX …] [Request ID: …] Server Error` plus an `Uncaught Error:`
  * line and a stack, none of which means anything outside the dashboard.
@@ -366,32 +261,12 @@ export function readableSendError(message: string): string {
   return trimmed.length > 0 ? trimmed : "Something went wrong";
 }
 
-/**
- * The bubble the session-scoped streaming row belongs to: the oldest empty,
- * unfinished assistant bubble. Turns execute FIFO, so when a queued turn's
- * placeholder is inserted while an older turn (a synthetic loop continuation,
- * say) is still streaming, the older bubble owns the streamed tokens and the
- * new placeholder takes over only once that turn finalises. Attaching to the
- * newest bubble instead made the old turn's stream jump below the user's newer
- * message, then vanish when the old turn finalised above it.
- */
-export function findStreamingTargetMessage<
-  M extends Pick<
-    ChatBodyMessage,
-    "role" | "content" | "isSystemAlert" | "finishedAt"
-  >,
->(messages: ReadonlyArray<M>): M | undefined {
-  return messages.find(
-    (message) =>
-      message.role === "assistant" &&
-      message.isSystemAlert !== true &&
-      !message.content &&
-      message.finishedAt === undefined,
-  );
-}
-
 /** Previously sent user messages as editable display text, newest-first. */
-export function buildMessageHistory(messages: ChatBodyMessage[]): string[] {
+export function buildMessageHistory(
+  messages: ReadonlyArray<
+    Pick<ChatBodyMessage, "role" | "isSystemAlert" | "content">
+  >,
+): string[] {
   return messages
     .flatMap((m) => {
       if (m.role !== "user" || m.isSystemAlert || !m.content) return [];
@@ -458,6 +333,10 @@ export function findTurnWindowStart(
 type TurnShapeMessage = Pick<
   ChatBodyMessage,
   "role" | "content" | "isSystemAlert" | "finishedAt"
+> & { _id: string };
+
+type ChatTurnStatus = NonNullable<
+  FunctionReturnType<typeof api.turns.getChatStatus>
 >;
 
 /**
@@ -468,25 +347,36 @@ type TurnShapeMessage = Pick<
  * - a run the surface renders as a turn (a quick task's first run) counts
  *   while it runs;
  * - otherwise the chat's durable turn is canonical, synthetic turns included;
+ * - except when that turn's own reply bubble has finished: the server closes
+ *   the turn and finishes its bubble in one mutation, so a finished bubble
+ *   proves the turn is over even if the status the client holds is stale
+ *   (seen in prod: Stop button and beam stayed until a refresh);
  * - message shape only covers the first render while that status loads, so a
  *   stale empty bubble cannot keep a settled turn "executing".
  * Streaming rows are not an input: they can outlive their turn, so callers
  * gate them on this result instead.
  */
 export function isChatTurnExecuting({
-  turnOpen,
+  status,
   messages,
   isFirstRunInProgress = false,
 }: {
-  /** The chat's durable turn is open; `undefined` while its status loads. */
-  turnOpen: boolean | undefined;
+  /** `api.turns.getChatStatus`: `null` = no open turn, `undefined` = loading. */
+  status: ChatTurnStatus | null | undefined;
   /** The chat transcript; `undefined` while it loads. */
   messages: ReadonlyArray<TurnShapeMessage> | undefined;
   /** A quick task's first run, rendered as this chat's first turn. */
   isFirstRunInProgress?: boolean;
 }): boolean {
   if (isFirstRunInProgress) return true;
-  return turnOpen ?? isAssistantTurnInProgress(messages ?? []);
+  if (status === undefined) return isAssistantTurnInProgress(messages ?? []);
+  if (status === null) return false;
+  if (status.source !== "durable" || status.placeholderMessageId === undefined) {
+    return true;
+  }
+  // Not in the transcript yet (or deleted): trust the open turn.
+  const reply = messages?.find((m) => m._id === status.placeholderMessageId);
+  return reply?.finishedAt === undefined;
 }
 
 /**

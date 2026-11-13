@@ -97,9 +97,10 @@ describe("sendSandboxTurn", () => {
       content: "hello",
       reasoningLevel: "low",
     });
+    // The picker's effort wins over the execution payload on both rows.
     expect(calls[1]?.args).toMatchObject({
       message: "hello",
-      reasoningLevel: "high",
+      reasoningLevel: "low",
     });
   });
 
@@ -126,18 +127,22 @@ describe("sendSandboxTurn", () => {
 });
 
 describe("sandboxChatKeys", () => {
-  test("task and project chats address their own rows", () => {
-    const taskId = z.custom<Id<"agentTasks">>().parse("task_1");
-    const projectId = z.custom<Id<"projects">>().parse("project_1");
-    expect(sandboxChatKeys({ kind: "task", taskId })).toEqual({
-      parentId: taskId,
-      streamingEntityId: "task-chat-task_1",
-      draftTarget: { kind: "taskChat", taskId },
+  test("a chat not created yet has nothing to read or persist", () => {
+    expect(sandboxChatKeys(undefined)).toEqual({
+      parentId: undefined,
+      streamingEntityId: undefined,
+      draftTarget: undefined,
     });
-    expect(sandboxChatKeys({ kind: "project", projectId })).toEqual({
-      parentId: projectId,
-      streamingEntityId: "project-chat-project_1",
-      draftTarget: { kind: "projectChat", projectId },
+  });
+
+  test("a quick task's session chat is addressed by the chat, not the session", () => {
+    const sessionId = z.custom<Id<"sessions">>().parse("session_1");
+    const chatId = z.custom<Id<"sessionChats">>().parse("chat_1");
+    // The stream id must match the backend's `sessionChatStreamingEntityId`.
+    expect(sandboxChatKeys({ kind: "session", sessionId, chatId })).toEqual({
+      parentId: chatId,
+      streamingEntityId: "chat_1",
+      draftTarget: { kind: "sessionChat", sessionId, chatId },
     });
   });
 });

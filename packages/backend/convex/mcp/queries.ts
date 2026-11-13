@@ -4,7 +4,21 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 import { hasRepoAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
-import { prOriginValidator, prStateValidator } from "../validators";
+import { isSessionArchived } from "../_sessions/archive";
+import { standaloneOnly } from "../_sessions/owner";
+import {
+  findProjectSession,
+  findTaskWorkSession,
+  liveTaskSandboxStatuses,
+  projectSandboxStatus,
+} from "../_sessions/ownedSession";
+import {
+  ALL_TASK_STATUSES,
+  PROJECT_PHASES,
+  SANDBOX_STATUSES,
+  prOriginValidator,
+  prStateValidator,
+} from "../validators";
 import {
   findPullRequestByUrl,
   listOwnerPullRequests,
@@ -291,6 +305,8 @@ export const resolveChatTargetForUser = internalQuery({
       sandboxId: v.optional(v.string()),
       /** Port the app dev server listens on, entity setting before repo default. */
       devPort: v.optional(v.number()),
+      /** A task or project on its session: the session that holds its sandbox. */
+      sandboxSessionId: v.optional(v.id("sessions")),
     }),
   ),
   handler: async (ctx, args) => {
@@ -308,6 +324,15 @@ export const resolveChatTargetForUser = internalQuery({
     if (!repo) return null;
 
     const doc = hit.doc;
+    // A task's or project's sandbox lives on its session (a project task's
+    // on the project's); none before that session exists.
+    const ownerSession =
+      hit.kind === "task"
+        ? await findTaskWorkSession(ctx.db, hit.doc)
+        : hit.kind === "project"
+          ? await findProjectSession(ctx.db, hit.doc._id)
+          : null;
+    const sandboxRow = hit.kind === "session" ? hit.doc : ownerSession;
     return {
       kind: hit.kind,
       targetId: doc._id,
@@ -322,16 +347,12 @@ export const resolveChatTargetForUser = internalQuery({
       repoOwner: repo.owner,
       repoName: repo.name,
       repoRootDirectory: repo.rootDirectory,
-      // A session's own status IS its sandbox's; the other two park the
-      // reviewer-facing VM state in their own field (see list_entities).
-      sandboxStatus:
-        hit.kind === "session"
-          ? hit.doc.status
-          : hit.kind === "task"
-            ? (hit.doc.reviewTaskSandboxStatus ?? "closed")
-            : (hit.doc.reviewProjectSandboxStatus ?? "closed"),
-      sandboxId: doc.sandboxId,
-      devPort: doc.devPort ?? repo.devPort,
+      // A session's own status IS its sandbox's; a task's or project's is its
+      // session's, the same rule lists use (`taskSandboxStatus`).
+      sandboxStatus: sandboxRow?.status ?? "closed",
+      sandboxId: sandboxRow?.sandboxId,
+      devPort: sandboxRow?.devPort ?? repo.devPort,
+      sandboxSessionId: ownerSession?._id,
     };
   },
 });
@@ -383,28 +404,6 @@ const listedEntityValidator = v.object({
 
 type ListedEntity = Infer<typeof listedEntityValidator>;
 
-const SESSION_STATUSES = ["active", "starting", "stopping", "closed"] as const;
-
-const TASK_STATUSES = [
-  "draft",
-  "todo",
-  "in_progress",
-  "code_review",
-  "business_review",
-  "done",
-  "cancelled",
-] as const;
-
-const PROJECT_PHASES = [
-  "draft",
-  "finalized",
-  "in_progress",
-  "business_review",
-  "code_review",
-  "completed",
-  "cancelled",
-] as const;
-
 /**
  * Narrows the caller's free-text status onto one kind's own vocabulary, so the
  * per-status index can be used without an assertion. A status that belongs to
@@ -412,14 +411,14 @@ const PROJECT_PHASES = [
  */
 function asSessionStatus(
   status: string,
-): (typeof SESSION_STATUSES)[number] | undefined {
-  return SESSION_STATUSES.find((candidate) => candidate === status);
+): (typeof SANDBOX_STATUSES)[number] | undefined {
+  return SANDBOX_STATUSES.find((candidate) => candidate === status);
 }
 
 function asTaskStatus(
   status: string,
-): (typeof TASK_STATUSES)[number] | undefined {
-  return TASK_STATUSES.find((candidate) => candidate === status);
+): (typeof ALL_TASK_STATUSES)[number] | undefined {
+  return ALL_TASK_STATUSES.find((candidate) => candidate === status);
 }
 
 function asProjectPhase(
@@ -458,15 +457,18 @@ async function scanSessions(
         q.eq("repoId", repoId).eq("status", narrowed),
       )
       .order("desc")
+      .filter(standaloneOnly)
       .take(take);
     return filterActiveEntities(rows);
   }
+  // A task's session lists as its task, never as a session of its own.
   return ctx.db
     .query("sessions")
     .withIndex("by_repo_and_deleted", (q) =>
       q.eq("repoId", repoId).eq("deletedAt", undefined),
     )
     .order("desc")
+    .filter(standaloneOnly)
     .take(take);
 }
 
@@ -592,9 +594,14 @@ export const listEntitiesForUser = internalQuery({
       repoIds.map(async (repoId) => {
         // Access first: a denied repo reads nothing else.
         if (!(await hasRepoAccess(ctx.db, repoId, userId))) return;
-        const [repo, openChatEntityIds] = await Promise.all([
+        const [
+          repo,
+          openChatEntityIds,
+          taskSandboxStatus,
+        ] = await Promise.all([
           ctx.db.get(repoId),
           openChatEntityIdsForRepo(ctx.db, repoId),
+          liveTaskSandboxStatuses(ctx.db, [repoId]),
         ]);
         if (!repo) return;
         const columns = repoColumns(repo);
@@ -614,7 +621,7 @@ export const listEntitiesForUser = internalQuery({
                   status: doc.status,
                   sandboxStatus: doc.status,
                   isExecuting: sessionIsExecuting(doc, openChatEntityIds),
-                  archived: doc.archived,
+                  archived: isSessionArchived(doc),
                   prUrl: doc.prUrl,
                   branchName: doc.branchName,
                   updatedAt: doc.updatedAt ?? doc._creationTime,
@@ -634,7 +641,7 @@ export const listEntitiesForUser = internalQuery({
                   numId: doc.numId,
                   title: doc.title,
                   status: doc.status,
-                  sandboxStatus: doc.reviewTaskSandboxStatus ?? "closed",
+                  sandboxStatus: (await taskSandboxStatus(doc)) ?? "closed",
                   isExecuting: taskIsExecuting(doc, openChatEntityIds),
                   updatedAt: doc.updatedAt,
                   ...columns,
@@ -651,7 +658,8 @@ export const listEntitiesForUser = internalQuery({
                 numId: doc.numId,
                 title: doc.title,
                 status: doc.phase,
-                sandboxStatus: doc.reviewProjectSandboxStatus ?? "closed",
+                sandboxStatus:
+                  (await projectSandboxStatus(ctx.db, doc)) ?? "closed",
                 isExecuting: projectIsExecuting(doc, openChatEntityIds),
                 prUrl: doc.prUrl,
                 branchName: doc.branchName,
@@ -695,9 +703,8 @@ export const listEntitiesForUser = internalQuery({
 
 /**
  * Whether one entity has a turn in flight, by the same rule the app's own list
- * uses. `stop_sandbox` reads this before tearing a VM down: a session running a
- * daemon-minted continuation (`/loop`) never gets an `activeWorkflowId`, so
- * keying the refusal off that field alone would stop the VM under a live turn.
+ * uses. `stop_sandbox` reads this before tearing a VM down. For a session the
+ * open turn is the only signal, daemon-minted continuations (`/loop`) included.
  *
  * The caller has already proven access to `id` by reading the entity as the
  * user; this only adds the turn lookup that read cannot do.

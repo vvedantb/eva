@@ -1,3 +1,4 @@
+import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { cancelTrackedWorkflow } from "../workflowManager";
@@ -5,7 +6,10 @@ import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import type { ChatAlert, ChatSurfaceAdapter } from "./surfaceAdapters";
 import { closeTurnForWorkflow } from "./turnStore";
-import { detachPendingQuestions } from "../pendingQuestions";
+import {
+  detachPendingQuestions,
+  findOpenChatQuestion,
+} from "../pendingQuestions";
 
 /**
  * Cancels a workflow by ID and clears streaming activity for associated
@@ -23,14 +27,14 @@ export async function cancelStaleWorkflow(
   }
 }
 
-type ChatId = Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">;
+type ChatId = Id<"sessionChats">;
 
 /**
- * Tears down one tracked chat turn (session, task chat, or project chat):
+ * Tears down one tracked session chat turn:
  * cancels the workflow, salvages the open assistant bubble (streamed text and
  * tool steps survive; an empty bubble is dropped), surfaces the failure as a
  * standalone system alert, interrupts any still-alive agent process the way
- * cancelExecution does, and starts the next queued message. The caller must
+ * cancelExecution does, and schedules the next queued message. The caller must
  * have verified `adapter.activeWorkflowId(entity) === workflowId`; mutation
  * atomicity makes that guard plus these writes race-free against a
  * concurrent startExecute.
@@ -88,17 +92,7 @@ export async function finalizeStaleChatTurn<TId extends ChatId, TEntity>(
   // card renders only on the last message, so no alert goes after it — the
   // turn was waiting on the user, not failing.
   await detachPendingQuestions(ctx.db, String(id));
-  const tail = await ctx.db
-    .query("messages")
-    .withIndex("by_parent", (q) => q.eq("parentId", id))
-    .order("desc")
-    .first();
-  const questionLeftForUser =
-    tail !== null &&
-    tail.role === "assistant" &&
-    tail.isSystemAlert !== true &&
-    tail.pendingQuestion !== undefined;
-  if (!questionLeftForUser) {
+  if ((await findOpenChatQuestion(ctx.db, id)) === null) {
     await ctx.db.insert("messages", {
       parentId: id,
       role: "assistant",
@@ -119,7 +113,7 @@ export async function finalizeStaleChatTurn<TId extends ChatId, TEntity>(
     await adapter.interrupt(ctx, entity);
   }
 
-  // The 2-hour backstop and the lease reconciler can both reach one turn.
+  // The `TURN_BACKSTOP_MS` backstop and the lease reconciler can both reach one turn.
   // Closing the durable turn here stops the reconciler from tearing the same
   // turn down a second time.
   await closeTurnForWorkflow(ctx, id, workflowId, "error", {
@@ -130,5 +124,23 @@ export async function finalizeStaleChatTurn<TId extends ChatId, TEntity>(
     sandboxStopped: opts.sandboxStopped === true,
   });
 
-  await adapter.drainQueue(ctx, id);
+  await scheduleTurnEndedDrain(ctx, id);
+}
+
+/**
+ * Starts the next queued message in its OWN mutation, after the stall teardown
+ * commits. Inline, any drain failure rolled the teardown back with it: on
+ * 2026-11-11 a drain that hit Convex's 16 MiB read limit left a dead turn open
+ * for hours, retried every minute, with Stop failing the same way. The turn
+ * close must never depend on the next turn starting.
+ */
+export async function scheduleTurnEndedDrain(
+  ctx: MutationCtx,
+  id: ChatId,
+): Promise<void> {
+  await ctx.scheduler.runAfter(
+    0,
+    internal._queues.helpers.drainQueueAfterBackgroundAgents,
+    { parentId: id },
+  );
 }

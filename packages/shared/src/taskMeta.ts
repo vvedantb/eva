@@ -1,12 +1,7 @@
+import type { Doc } from "@eva/backend";
+
 /** An agent task's lifecycle (the backend `taskStatusValidator`). */
-export type TaskStatus =
-  | "draft"
-  | "todo"
-  | "in_progress"
-  | "code_review"
-  | "business_review"
-  | "done"
-  | "cancelled";
+export type TaskStatus = Doc<"agentTasks">["status"];
 
 /** Statuses a task list shows; drafts live in the new-task drafts menu. */
 export type DisplayTaskStatus = Exclude<TaskStatus, "draft">;
@@ -55,22 +50,6 @@ export function groupByTaskStatus<T extends { status: TaskStatus }>(
   }));
 }
 
-/**
- * The Quick Tasks list as the web opens it with no filters set: tasks outside
- * any project, most recently updated first, in status sections.
- */
-export function defaultQuickTaskSections<
-  T extends { status: TaskStatus; projectId?: string; updatedAt: number },
->(tasks: readonly T[]): Array<{ status: DisplayTaskStatus; tasks: T[] }> {
-  // `filter` copies, so `sort` mutates nothing shared; `toSorted` is missing
-  // in some Hermes release builds (see `notificationGroups.ts`).
-  return groupByTaskStatus(
-    tasks
-      .filter((task) => task.projectId === undefined)
-      .sort((a, b) => b.updatedAt - a.updatedAt),
-  );
-}
-
 /** "#12", or "#3/12" inside project 3; null without a number. */
 export function formatEntityNumLabel(options: {
   numId?: number;
@@ -82,7 +61,7 @@ export function formatEntityNumLabel(options: {
 }
 
 /** A task's priority (the backend `priorityValidator`). */
-export type Priority = "urgent" | "high" | "medium" | "low";
+export type Priority = NonNullable<Doc<"agentTasks">["priority"]>;
 
 /** Most urgent first: the priority picker's order. */
 export const PRIORITY_ORDER: Priority[] = ["urgent", "high", "medium", "low"];

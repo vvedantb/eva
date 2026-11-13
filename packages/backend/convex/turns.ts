@@ -8,7 +8,10 @@ import {
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
-import { finalizeStaleChatTurn } from "./_chat/stallWatchdog";
+import {
+  finalizeStaleChatTurn,
+  scheduleTurnEndedDrain,
+} from "./_chat/stallWatchdog";
 import {
   stalledAlert,
   turnAdapterForEntity,
@@ -57,10 +60,6 @@ import {
   turnStateValidator,
 } from "./_validators/tableFields";
 import { normalizeAIModel } from "./_validators/aiModels";
-import {
-  isLegacyChatExecuting,
-  isLegacySessionExecuting,
-} from "./_chat/turnProjection";
 
 const chatTurnStatusValidator = v.union(
   v.object({
@@ -77,9 +76,8 @@ type ChatTurnStatus = Infer<typeof chatTurnStatusValidator>;
 
 /**
  * Whether one chat has a turn open, for a reader who may see it. The open
- * durable turn is canonical, synthetic turns included. Entities that never
- * opened one fall back to their workflow fields until the lifecycle marker
- * (`turnLifecycleVersion` / `chatTurnLifecycleVersion`) says otherwise.
+ * durable turn is canonical, synthetic turns included. `legacy` is only the
+ * web's optimistic shape before a send's turn exists.
  */
 async function readChatStatus(
   ctx: QueryCtx,
@@ -100,13 +98,16 @@ async function readChatStatus(
   };
 }
 
-/** The legacy bridge for one entity; null when the reader may not see it. */
+/**
+ * The access check for one chat entity: false when the reader may see it,
+ * null otherwise. Every chat runs on durable turns, so nothing else counts.
+ */
 async function readLegacyExecuting(
   ctx: QueryCtx,
   userId: Id<"users">,
   entityId: ChatTurnEntityId,
 ): Promise<boolean | null> {
-  // Session chats are born on the durable turn model: no legacy fields.
+  // Sessions and their chats run only on durable turns: no legacy fields.
   const chatId = ctx.db.normalizeId("sessionChats", entityId);
   if (chatId) {
     const chat = await ctx.db.get(chatId);
@@ -121,13 +122,13 @@ async function readLegacyExecuting(
     if (!session || !(await hasRepoAccess(ctx.db, session.repoId, userId))) {
       return null;
     }
-    return isLegacySessionExecuting(session);
+    return false;
   }
   const taskId = ctx.db.normalizeId("agentTasks", entityId);
   if (taskId) {
     const task = await ctx.db.get(taskId);
     if (!task || !(await hasTaskAccess(ctx.db, task, userId))) return null;
-    return isLegacyChatExecuting(task);
+    return false;
   }
   const projectId = ctx.db.normalizeId("projects", entityId);
   if (!projectId) return null;
@@ -135,7 +136,7 @@ async function readLegacyExecuting(
   if (!project || !(await hasRepoAccess(ctx.db, project.repoId, userId))) {
     return null;
   }
-  return isLegacyChatExecuting(project);
+  return false;
 }
 
 /** Canonical UI projection for whether one chat (session, task or project) has a turn open. */
@@ -181,32 +182,6 @@ export const listSessionChatStatuses = authQuery({
       statuses.push({ chatId, turnId: turn._id, state: turn.state });
     }
     return statuses;
-  },
-});
-
-/**
- * Every session chat in a repo with a turn open, for the sidebar's indented
- * chat rows. One indexed read per repo group, like the session rows' own
- * executing projection.
- */
-export const listRunningChatIdsForRepo = authQuery({
-  args: { repoId: v.id("githubRepos") },
-  returns: v.array(v.id("sessionChats")),
-  handler: async (ctx, args) => {
-    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const turns = await ctx.db
-      .query("turns")
-      .withIndex("by_repo_open", (q) =>
-        q.eq("repoId", args.repoId).eq("open", true),
-      )
-      .collect();
-    const chatIds = [];
-    for (const turn of turns) {
-      if (turn.lane !== undefined) continue;
-      const chatId = ctx.db.normalizeId("sessionChats", turn.entityId);
-      if (chatId) chatIds.push(chatId);
-    }
-    return chatIds;
   },
 });
 
@@ -482,7 +457,7 @@ async function finalizeExpiredChatTurn<TId extends ChatEntityId, TEntity>(
     }
     await clearStreamingActivity(ctx, turn.streamingEntityId);
     await adapter.finalizeOrphanTurn(ctx, id);
-    await adapter.drainQueue(ctx, id);
+    await scheduleTurnEndedDrain(ctx, id);
   }
   if (!sandboxStopped) {
     await adapter.afterStallFinalize(ctx, id, turn._id);
@@ -492,7 +467,7 @@ async function finalizeExpiredChatTurn<TId extends ChatEntityId, TEntity>(
 /**
  * Finalises one expired agent turn (a quick-task run or a one-shot agent)
  * through that agent's own stall teardown: the run's `cleanUpStaleRun`, or the
- * teardown the 2-hour backstop uses for the others.
+ * teardown the `TURN_BACKSTOP_MS` backstop uses for the others.
  */
 async function finalizeExpiredAgentTurn(
   ctx: MutationCtx,

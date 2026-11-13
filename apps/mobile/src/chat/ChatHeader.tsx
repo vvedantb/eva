@@ -1,4 +1,11 @@
-import { IconChevronLeft, IconDots, IconExternalLink, IconLink, IconPlayerStopFilled } from "@tabler/icons-react-native";
+import {
+  IconChevronLeft,
+  IconDots,
+  IconExternalLink,
+  IconLink,
+  IconPlayerStopFilled,
+  type IconProps,
+} from "@tabler/icons-react-native";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -7,24 +14,51 @@ import {
   DropdownMenuTrigger,
   HeaderIconButton,
 } from "@vvedantb/native-ui/primitives";
-import { tokens } from "@vvedantb/native-ui/theme";
+import { api, type Id } from "@eva/backend";
+import { repoDisplayLabel, repoTileSlot, type SessionMenuAction } from "@eva/shared";
+import { EVA_THEME } from "@eva/shared/evaTheme";
+import { withAlpha } from "@vvedantb/native-ui/theme";
+import { useQuery } from "convex/react";
+import { Fragment, type ComponentType } from "react";
 import { Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SESSION_ACTION_ITEMS } from "@/sessions/useSessionActions";
+import { RepoLogo } from "@/ui/RepoLogo";
+import { displayTitle } from "@/ui/format";
 import { useScheme } from "@/ui/theme";
 
+/** One ⋯ menu item: the `DropdownMenuItem` label, icon and tone. */
+type MenuEntry = {
+  label: string;
+  icon: ComponentType<IconProps>;
+  warning?: boolean;
+  destructive?: boolean;
+  onSelect: () => void;
+};
+
 /**
- * The chat header, as the web chat bar: the repo initial and name, then the
- * chat title ("S Storefront / Add dark mode…"), and a ⋯ menu. A back button
- * leads, as phones expect; the web's drawer has no back.
+ * The chat header, as the web chat bar: the repo logo (else its initial) and name, then the
+ * chat title ("S Storefront / Add dark mode…"), and a ⋯ menu. The tile
+ * takes the repo's web colour (`repoTileSlot`, the `--cat-*` ramp) once the
+ * repo loads, grey until then. A back button
+ * leads, as phones expect; the web's drawer has no back. In a session the
+ * menu also has the session's Rename and Archive / Unarchive, which the web
+ * puts on the session's own tab; the phone has no tab strip. The menu keeps
+ * the web groups, a divider between each.
  */
+
 export function ChatHeader({
+  repoId,
   repoLabel,
   title,
   onBack,
   onOpenWeb,
   onCopyLink,
   onStop,
+  sessionMenu,
 }: {
+  /** The chat's repo (the web `githubRepos.get`), for the tile colour. */
+  repoId: Id<"githubRepos">;
   repoLabel: string;
   title: string;
   onBack: () => void;
@@ -32,55 +66,90 @@ export function ChatHeader({
   onCopyLink: () => void;
   /** Set while the agent works: Stop in the menu. */
   onStop?: () => void;
+  /** Session chats: these session actions (`useSessionActions`) in their web groups. */
+  sessionMenu?: { groups: SessionMenuAction[][]; onSelect: (action: SessionMenuAction) => void };
 }) {
   const scheme = useScheme();
   const insets = useSafeAreaInsets();
-  const muted = tokens.color.muted[scheme];
-  const foreground = tokens.color.foreground[scheme];
+  const muted = EVA_THEME[scheme].mutedForeground;
+  const foreground = EVA_THEME[scheme].foreground;
+  const repo = useQuery(api.githubRepos.get, { id: repoId });
+  const logoUrl = useQuery(api.githubRepos.getLogoUrl, { repoId });
+  // The web seed (`SessionSwitcher`): owner, name and display label.
+  const tileColor = repo ? EVA_THEME[scheme][`cat${repoTileSlot(`${repo.owner}/${repo.name}/${repoDisplayLabel(repo)}`)}`] : undefined;
+  const sessionItems = (actions: SessionMenuAction[]): MenuEntry[] =>
+    actions.map((action) => ({ ...SESSION_ACTION_ITEMS[action], onSelect: () => sessionMenu?.onSelect(action) }));
+  const [sessionMain = [], ...sessionRest] = sessionMenu?.groups ?? [];
+  // The web More menu's groups: Rename and Regenerate title; then its Copy
+  // submenu (title, link, branch name) laid flat with Open PR and Open on web;
+  // then Archive / Unarchive alone; then Stop, the destructive item, last.
+  // Empty groups drop out, so no divider stands alone.
+  const isEdit = (action: SessionMenuAction) => action === "rename" || action === "regenerateTitle";
+  const menuGroups: MenuEntry[][] = [
+    sessionItems(sessionMain.filter(isEdit)),
+    [
+      ...sessionItems(sessionMain.filter((action) => action === "copyTitle")),
+      { label: "Copy link", icon: IconLink, onSelect: onCopyLink },
+      ...sessionItems(sessionMain.filter((action) => !isEdit(action) && action !== "copyTitle")),
+      { label: "Open on web", icon: IconExternalLink, onSelect: onOpenWeb },
+    ],
+    ...sessionRest.map(sessionItems),
+    onStop ? [{ label: "Stop", icon: IconPlayerStopFilled, destructive: true, onSelect: onStop }] : [],
+  ].filter((group) => group.length > 0);
   return (
     <View className="flex-row items-center gap-2 px-3 pb-2" style={{ paddingTop: insets.top + 8 }}>
       <HeaderIconButton label="Back" onPress={onBack}>
         <IconChevronLeft size={20} color={foreground} />
       </HeaderIconButton>
-      <View className="min-w-0 flex-1 flex-row items-center gap-1.5" accessibilityRole="header" accessibilityLabel={`${repoLabel}, ${title}`}>
-        {/* Web breadcrumb: an 18 initial tile, the repo in medium muted, a slash, the title in semibold. */}
-        <View
-          className="h-[18px] w-[18px] items-center justify-center rounded"
-          style={{ backgroundColor: tokens.color.surfaceSecondary[scheme] }}
-        >
-          <Text className="font-instrument-sans-semibold" style={{ fontSize: 10, color: muted, fontWeight: "600" }}>
-            {repoLabel.charAt(0).toUpperCase()}
-          </Text>
-        </View>
-        <Text className="font-instrument-sans-medium text-sm" style={{ color: muted, fontWeight: "500" }}>
+      <View className="min-w-0 flex-1 flex-row items-center gap-1.5" accessibilityRole="header" accessibilityLabel={`${repoLabel}, ${displayTitle(title)}`}>
+        {/* Web breadcrumb: the logo at 16 with no border, else a 16 initial tile (the cat colour on a 12% tint), the repo in medium muted, a slash at 50%, the title in semibold. */}
+        <RepoLogo
+          logoUrl={logoUrl}
+          size={16}
+          bordered={false}
+          fallback={
+            <View
+              className="h-4 w-4 items-center justify-center rounded"
+              style={{ backgroundColor: tileColor ? withAlpha(tileColor, 0.12) : EVA_THEME[scheme].muted }}
+            >
+              <Text className="font-instrument-sans-semibold" style={{ fontSize: 9, color: tileColor ?? muted, fontWeight: "600" }}>
+                {repoLabel.charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          }
+        />
+        {/* A long repo name gives up width too, so the title keeps at least half the row. */}
+        <Text numberOfLines={1} className="font-instrument-sans-medium max-w-[50%] shrink text-sm" style={{ color: muted, fontWeight: "500" }}>
           {repoLabel}
         </Text>
-        <Text className="font-instrument-sans text-sm" style={{ color: muted }}>
+        <Text className="font-instrument-sans text-sm" style={{ color: withAlpha(muted, 0.5) }}>
           /
         </Text>
         <Text numberOfLines={1} className="font-instrument-sans-semibold min-w-0 flex-1 text-sm" style={{ color: foreground, fontWeight: "600" }}>
-          {title}
+          {displayTitle(title)}
         </Text>
       </View>
       <DropdownMenu>
-        <DropdownMenuTrigger accessibilityLabel="Chat options" hitSlop={4} className="h-11 w-11 items-center justify-center rounded-full active:opacity-70" style={{ backgroundColor: tokens.color.surfaceSecondary[scheme] }}>
+        <DropdownMenuTrigger accessibilityLabel="Chat options" hitSlop={4} className="h-11 w-11 items-center justify-center rounded-full active:opacity-70" style={{ backgroundColor: EVA_THEME[scheme].secondary }}>
           <IconDots size={18} color={foreground} />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem icon={IconExternalLink} onSelect={onOpenWeb}>
-            Open on web
-          </DropdownMenuItem>
-          <DropdownMenuItem icon={IconLink} onSelect={onCopyLink}>
-            Copy link
-          </DropdownMenuItem>
-          {onStop ? (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem icon={IconPlayerStopFilled} destructive onSelect={onStop}>
-                Stop
-              </DropdownMenuItem>
-            </>
-          ) : null}
+          {menuGroups.map((group, index) => (
+            <Fragment key={group.map((item) => item.label).join()}>
+              {index > 0 ? <DropdownMenuSeparator /> : null}
+              {group.map((item) => (
+                <DropdownMenuItem
+                  key={item.label}
+                  icon={item.icon}
+                  warning={item.warning}
+                  destructive={item.destructive}
+                  onSelect={item.onSelect}
+                >
+                  {item.label}
+                </DropdownMenuItem>
+              ))}
+            </Fragment>
+          ))}
         </DropdownMenuContent>
       </DropdownMenu>
     </View>

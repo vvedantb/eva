@@ -5,13 +5,13 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@eva/backend";
 import { Button, Spinner } from "@vvedantb/ui";
 import {
+  DEFAULT_PREVIEW_PORT,
   PREVIEW_WAKE_KINDS,
   previewWakeSearchSchema,
   type PreviewWakeKind,
 } from "@eva/shared";
 import { buildUrlWithPath } from "@/lib/components/PreviewNavBar";
 
-const DEFAULT_PREVIEW_PORT = 3000;
 /** Same cadence as the Preview pane's readiness poll (useSandboxPreview). */
 const READY_POLL_MS = 3_000;
 /** Mirrors TASK_PREVIEW_SANDBOX_READY_TIMEOUT_MS on the backend. */

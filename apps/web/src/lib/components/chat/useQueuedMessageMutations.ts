@@ -1,4 +1,5 @@
 import { api } from "@eva/backend";
+import { orderQueuedRows } from "@eva/shared";
 import { useMutation } from "convex/react";
 import { patchLoadedQuery } from "@vvedantb/server";
 import type { ChatBodyQueuedMessage } from "@/lib/components/chat/chatBodyUtils";
@@ -40,12 +41,7 @@ export function useQueuedMessageMutations(
       localStore,
       api.queuedMessages.listByParent,
       { parentId: args.parentId },
-      (current) => {
-        const byId = new Map(current.map((m) => [m._id, m]));
-        return args.orderedIds
-          .map((id) => byId.get(id))
-          .filter((m): m is (typeof current)[number] => m !== undefined);
-      },
+      (current) => orderQueuedRows(current, args.orderedIds),
     );
   });
 

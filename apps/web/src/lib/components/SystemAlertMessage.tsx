@@ -12,20 +12,46 @@ import {
   tokenTransition,
   RelativeDateTime,
 } from "@vvedantb/ui";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { IconAlertCircle, IconAlertTriangle } from "@tabler/icons-react";
+import { cn } from "@eva/ui";
 
 interface SystemAlertMessageProps {
   content: string;
   errorDetail?: string;
+  /** "warning": the session kept running. Unset with detail: an error. */
+  alertTone?: "warning";
   timestamp?: number;
 }
+
+/** Warning and error alerts get an icon and colour; plain dividers get none. */
+const TONES = {
+  warning: {
+    Icon: IconAlertTriangle,
+    color: "text-warning",
+    action: "View details",
+    title: "Sandbox Warning",
+  },
+  error: {
+    Icon: IconAlertCircle,
+    color: "text-destructive",
+    action: "View error",
+    title: "Sandbox Error",
+  },
+};
 
 export function SystemAlertMessage({
   content,
   errorDetail,
+  alertTone,
   timestamp,
 }: SystemAlertMessageProps) {
   const [showError, setShowError] = useState(false);
+  const tone =
+    alertTone === "warning"
+      ? TONES.warning
+      : errorDetail
+        ? TONES.error
+        : undefined;
 
   return (
     <>
@@ -36,6 +62,13 @@ export function SystemAlertMessage({
         className="flex items-center gap-3 py-1"
       >
         <div className="h-px flex-1 bg-border" />
+        {tone && (
+          <tone.Icon
+            size={14}
+            aria-hidden
+            className={cn("-mr-1.5 shrink-0", tone.color)}
+          />
+        )}
         <span className="text-xs font-medium text-muted-foreground whitespace-nowrap max-w-[60%] truncate sm:max-w-none sm:truncate-none">
           {content}
           {timestamp !== undefined ? (
@@ -50,24 +83,27 @@ export function SystemAlertMessage({
             </>
           ) : null}
         </span>
-        {errorDetail && (
+        {errorDetail && tone && (
           <button
             type="button"
             onClick={() => setShowError(true)}
-            className="max-sm:hit-target text-xs font-medium text-destructive hover:underline whitespace-nowrap"
+            className={cn(
+              "max-sm:hit-target text-xs font-medium hover:underline whitespace-nowrap",
+              tone.color,
+            )}
           >
-            View error
+            {tone.action}
           </button>
         )}
         <div className="h-px flex-1 bg-border" />
       </m.div>
-      {errorDetail && (
+      {errorDetail && tone && (
         <Dialog open={showError} onOpenChange={setShowError}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <IconAlertTriangle size={16} className="text-destructive" />
-                Sandbox Error
+                <tone.Icon size={16} className={tone.color} />
+                {tone.title}
               </DialogTitle>
             </DialogHeader>
             <pre className="whitespace-pre-wrap max-sm:wrap-break-word text-sm text-muted-foreground bg-muted rounded-surface p-4 max-h-[min(16rem,50dvh)] overflow-y-auto scroll-fade">

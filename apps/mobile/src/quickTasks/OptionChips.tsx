@@ -1,5 +1,5 @@
 import type { api, Id } from "@eva/backend";
-import { PRIORITY_LABELS, PRIORITY_ORDER, getUserInitials, type Priority } from "@eva/shared";
+import { PRIORITY_LABELS, PRIORITY_ORDER, type Priority } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconFolder, IconPlus, IconTag, IconUserPlus } from "@tabler/icons-react-native";
 import { SheetRow, Text } from "@vvedantb/native-ui/primitives";
@@ -9,6 +9,7 @@ import { useState, type ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { FooterSheet } from "@/chat/ComposerFooter";
 import { PriorityIcon } from "@/quickTasks/PriorityIcon";
+import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { textColor, useScheme } from "@/ui/theme";
 
 type User = FunctionReturnType<typeof api.users.listAll>[number];
@@ -16,8 +17,9 @@ type Project = FunctionReturnType<typeof api.projects.list>[number];
 
 /**
  * The web quick-task option chip (`QUICK_TASK_OPTION_BADGE_CLASS` below `sm`):
- * 40 high, fully round, `bg-secondary`, `px-2.5 gap-1.5`, `text-xs` medium,
- * muted until it holds a value, then the value in the foreground colour.
+ * 40 high, fully round, `bg-secondary`, `px-2.5 gap-1.5`, medium (`text-sm`,
+ * up from the web `text-xs`), muted until it holds a value, then the value in
+ * the foreground colour.
  */
 export function OptionPill({
   icon,
@@ -53,7 +55,7 @@ export function OptionPill({
       {icon}
       <Text
         numberOfLines={1}
-        className="font-instrument-sans-medium shrink text-xs"
+        className="font-instrument-sans-medium shrink text-sm"
         style={{ fontWeight: "500", color: set ? theme.foreground : theme.mutedForeground }}
       >
         {label}
@@ -113,16 +115,6 @@ function displayName(user: User): string {
   return parts.length > 0 ? parts.join(" ") : "Unknown";
 }
 
-/** A 20 initials disc, in place of the web face mark. */
-function Initials({ user }: { user: User }) {
-  const theme = EVA_THEME[useScheme()];
-  return (
-    <View className="size-5 items-center justify-center rounded-full" style={{ backgroundColor: theme.muted }}>
-      <Text style={{ fontSize: 9, lineHeight: 12, fontWeight: "600", color: theme.mutedForeground }}>{getUserInitials(user)}</Text>
-    </View>
-  );
-}
-
 /**
  * The web `AssigneeSelector` ("Code Reviewer"): searchable, "Unassigned",
  * then the teammates with the dev role. A pick closes the sheet.
@@ -151,7 +143,7 @@ export function ReviewerChip({
   return (
     <>
       <OptionPill
-        icon={assigned ? <Initials user={assigned} /> : <IconUserPlus size={14} color={muted} />}
+        icon={assigned ? <InitialsAvatar user={assigned} size={20} /> : <IconUserPlus size={14} color={muted} />}
         label={assigned ? displayName(assigned) : "Code Reviewer"}
         set={assigned !== undefined}
         accessibilityLabel={`Code reviewer: ${assigned ? displayName(assigned) : "Unassigned"}`}
@@ -173,7 +165,7 @@ export function ReviewerChip({
       >
         {"unassigned".includes(query) ? <SheetRow icon={IconUserPlus} title="Unassigned" active={value === undefined} onPress={() => pick(undefined)} /> : null}
         {reviewers.map((user) => (
-          <SheetRow key={user._id} leading={<Initials user={user} />} title={displayName(user)} active={user._id === value} onPress={() => pick(user._id)} />
+          <SheetRow key={user._id} leading={<InitialsAvatar user={user} size={20} />} title={displayName(user)} active={user._id === value} onPress={() => pick(user._id)} />
         ))}
         {reviewers.length === 0 && !"unassigned".includes(query) ? (
           <Text variant="muted" className="py-6 text-center" style={textColor(scheme, "muted")}>
@@ -243,7 +235,7 @@ export function TagsChip({
         {typed && !allTags.includes(typed) ? <SheetRow icon={IconPlus} title={`Create "${typed}"`} onPress={create} /> : null}
         {/* Tags made here are not in `allTags` yet; list them so they can be removed. */}
         {[...value.filter((tag) => !allTags.includes(tag)), ...shown].map((tag) => (
-          <SheetRow key={tag} icon={IconTag} title={tag} active={value.includes(tag)} onPress={() => toggle(tag)} />
+          <SheetRow key={tag} icon={IconTag} title={tag} active={value.includes(tag)} multiple onPress={() => toggle(tag)} />
         ))}
         {shown.length === 0 && !typed ? (
           <Text variant="muted" className="py-6 text-center" style={textColor(scheme, "muted")}>

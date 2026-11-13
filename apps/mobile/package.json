@@ -11,8 +11,7 @@
     "typecheck": "tsc -p tsconfig.json",
     "test:babel": "node --test babel.config.test.mjs",
     "test:logging": "node --test src/logging/unhandledRejections.test.mjs",
-    "test:hermes-apis": "node --test src/hermesApis.test.mjs",
-    "test": "pnpm test:logging && pnpm test:hermes-apis && pnpm test:babel",
+    "test": "pnpm test:logging && pnpm test:babel",
     "web:export": "expo export --platform web"
   },
   "dependencies": {
@@ -26,7 +25,7 @@
     "@rn-primitives/slot": "^1.5.2",
     "@rn-primitives/switch": "^1.5.2",
     "@tabler/icons-react-native": "^3.49.0",
-    "@vvedantb/native-ui": "github:vvedantb/packages#a7571553369b48a5a92510ba5615f72416ce33b7&path:/packages/native-ui",
+    "@vvedantb/native-ui": "github:vvedantb/packages#a6d0b2862f434f4dd2b3ad3aff9d3bf34d6d932b&path:/packages/native-ui",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "convex": "^1.40.0",
@@ -55,6 +54,8 @@
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
     "react-native-css-interop": "0.2.7",
+    "react-native-gesture-handler": "~2.32.0",
+    "react-native-keyboard-controller": "1.21.9",
     "react-native-marked": "^8.0.0",
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",

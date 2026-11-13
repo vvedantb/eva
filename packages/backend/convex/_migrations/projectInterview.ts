@@ -1,27 +1,21 @@
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
-import { sandboxStartupEntityId } from "../_sandbox/owner";
 
-/** Clears a project interview stuck after sandbox or agent failure. */
+/**
+ * Clears a project interview stuck after sandbox or agent failure. The
+ * interview's sandbox is the project session's: stop it there.
+ */
 export const repairStuckProjectInterview = internalMutation({
-  args: {
-    projectId: v.id("projects"),
-    clearSandboxId: v.optional(v.boolean()),
-  },
+  args: { projectId: v.id("projects") },
   returns: v.object({
     clearedWorkflow: v.boolean(),
     removedEmptyAssistant: v.boolean(),
-    resetSandboxStatus: v.boolean(),
   }),
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
     if (!project) {
-      return {
-        clearedWorkflow: false,
-        removedEmptyAssistant: false,
-        resetSandboxStatus: false,
-      };
+      return { clearedWorkflow: false, removedEmptyAssistant: false };
     }
 
     let removedEmptyAssistant = false;
@@ -46,24 +40,10 @@ export const repairStuckProjectInterview = internalMutation({
     }
 
     await clearStreamingActivity(ctx, String(args.projectId));
-    await clearStreamingActivity(
-      ctx,
-      sandboxStartupEntityId({ kind: "project", projectId: args.projectId }),
-    );
 
     const clearedWorkflow = project.activeWorkflowId !== undefined;
-    const resetSandboxStatus =
-      project.reviewProjectSandboxStatus !== "closed" ||
-      clearedWorkflow ||
-      args.clearSandboxId === true;
+    await ctx.db.patch(args.projectId, { activeWorkflowId: undefined });
 
-    await ctx.db.patch(args.projectId, {
-      activeWorkflowId: undefined,
-      reviewProjectSandboxStatus: "closed",
-      lastSandboxActivity: Date.now(),
-      ...(args.clearSandboxId === true ? { sandboxId: undefined } : {}),
-    });
-
-    return { clearedWorkflow, removedEmptyAssistant, resetSandboxStatus };
+    return { clearedWorkflow, removedEmptyAssistant };
   },
 });

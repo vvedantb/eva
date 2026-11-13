@@ -1,4 +1,4 @@
-import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
+import { FALLBACK_GIT_BASE_BRANCH, isLivePrState } from "@eva/shared";
 import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -8,14 +8,17 @@ import {
   notifySubscribers,
 } from "./taskSubscribers";
 import { logTaskActivity } from "./taskActivity";
-import { preferPersistedSandboxId } from "./_sandbox/resolveExistingSandboxId";
 import { buildProjectBranchName } from "./_projects/helpers";
 import {
   deriveProjectPhaseFromPrEvent,
   isProjectReviewPhase,
 } from "./_projects/prSync";
-import { requestTaskSandboxStop } from "./_agentTasks/sandbox";
-import { scheduleTaskSandboxGraceDelete } from "./sandboxCleanup";
+import { cancelTaskRunSchedule } from "./_agentTasks/runState";
+import {
+  rotateProjectBranch,
+  syncOwnedSessionWithTaskStatus,
+  syncProjectSession,
+} from "./_sessions/ownedSession";
 import { reconcileSessionArchiveState } from "./_sessions/prArchive";
 import {
   allPullRequestsTerminal,
@@ -66,14 +69,23 @@ export const handlePullRequestEvent = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     if (!TRACKED_ACTIONS.has(args.action)) return null;
-    const nextState = derivePrStateFromEvent(
+    let row = await findPullRequestByUrl(ctx.db, args.prUrl);
+    const previousState: PrState | undefined = row?.state;
+    const eventState = derivePrStateFromEvent(
       args.action,
       args.draft,
       args.merged,
     );
-
-    let row = await findPullRequestByUrl(ctx.db, args.prUrl);
-    const previousState: PrState | undefined = row?.state;
+    // GitHub does not order deliveries: a `ready_for_review` sent a second
+    // before the merge can land after it (PR 1274 read open once merged).
+    // Only `reopened` takes a merged or closed PR back to a live state.
+    const staleLiveEvent =
+      previousState !== undefined &&
+      !isLivePrState(previousState) &&
+      eventState !== null &&
+      isLivePrState(eventState) &&
+      args.action !== "reopened";
+    const nextState = staleLiveEvent ? null : eventState;
     if (row) {
       await setPullRequestState(ctx, row, {
         state: nextState ?? row.state,
@@ -219,20 +231,7 @@ async function applyProjectPrEvent(
     project.branchName ??
     buildProjectBranchName(projectId, project.branchVersion);
   if (row.state === "merged" && row.headBranch === currentBranch) {
-    const nextVersion = (project.branchVersion ?? 1) + 1;
-    const deleteId = preferPersistedSandboxId({ sandboxId: project.sandboxId });
-    if (deleteId) {
-      await ctx.scheduler.runAfter(0, internal.sandbox.deleteSandbox, {
-        sandboxId: deleteId,
-        repoId: project.repoId,
-      });
-    }
-    await ctx.db.patch(projectId, {
-      sandboxId: undefined,
-      lastSandboxActivity: undefined,
-      branchVersion: nextVersion,
-      branchName: buildProjectBranchName(projectId, nextVersion),
-    });
+    await rotateProjectBranch(ctx, project);
   }
 
   const rows = await listOwnerPullRequests(ctx.db, {
@@ -242,6 +241,7 @@ async function applyProjectPrEvent(
   if (!allPullRequestsTerminal(rows)) return false;
   const merged = rows.some((pr) => pr.state === "merged");
   await ctx.db.patch(projectId, { phase: merged ? "completed" : "cancelled" });
+  await syncProjectSession(ctx, projectId);
 
   // One notification for the project as a whole, never one per task, and a
   // single activity entry on the task that opened the PR so the merge/close
@@ -292,17 +292,7 @@ async function applyQuickTaskPrClosed(
   const newStatus = merged ? "done" : "cancelled";
   await ctx.db.patch(task._id, { status: newStatus, updatedAt: now });
 
-  if (task.scheduledFunctionId) {
-    try {
-      await ctx.scheduler.cancel(task.scheduledFunctionId);
-    } catch {
-      // may have already fired
-    }
-    await ctx.db.patch(task._id, {
-      scheduledAt: undefined,
-      scheduledFunctionId: undefined,
-    });
-  }
+  await cancelTaskRunSchedule(ctx, task._id);
 
   await notifySubscribers(ctx, {
     taskId: task._id,
@@ -327,23 +317,9 @@ async function applyQuickTaskPrClosed(
     merged ? "merged" : "closed",
   );
 
-  // A merged/closed PR makes the task read-only, so stop any live preview
-  // sandbox now (mirrors the session archive) and then grace-delete it.
-  if (
-    task.reviewTaskSandboxStatus === "active" ||
-    task.reviewTaskSandboxStatus === "starting" ||
-    task.reviewTaskSandboxStatus === "stopping" ||
-    task.sandboxId !== undefined
-  ) {
-    await requestTaskSandboxStop(ctx, task._id);
-  }
-  if (task.sandboxId) {
-    await scheduleTaskSandboxGraceDelete(ctx, {
-      ...task,
-      status: newStatus,
-      updatedAt: now,
-    });
-  }
+  // A merged/closed PR makes the task read-only: retiring its session stops
+  // the sandbox and starts the grace delete (mirrors the session archive).
+  await syncOwnedSessionWithTaskStatus(ctx, task, task.status, newStatus);
   return true;
 }
 

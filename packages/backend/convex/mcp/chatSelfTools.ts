@@ -61,15 +61,15 @@ function prNumber(prUrl: string | undefined): number | undefined {
   return match ? Number(match[1]) : undefined;
 }
 
-/** The `{ kind, <kind>Id }` owner shape `sandboxPanes` mutations take. */
-function sandboxOwner(target: EntityTarget): Record<string, string> {
-  if (target.kind === "session") {
-    return { kind: target.kind, sessionId: target.targetId };
-  }
-  if (target.kind === "task") {
-    return { kind: target.kind, taskId: target.targetId };
-  }
-  return { kind: target.kind, projectId: target.targetId };
+/**
+ * The `{ kind: "session", sessionId }` owner shape `sandboxPanes` mutations
+ * take: the session itself, or the one a task or project works on. Null for
+ * a task or project with no session yet.
+ */
+function sandboxOwner(target: EntityTarget): Record<string, string> | null {
+  const sessionId =
+    target.kind === "session" ? target.targetId : target.sandboxSessionId;
+  return sessionId === undefined ? null : { kind: "session", sessionId };
 }
 
 /**
@@ -111,13 +111,13 @@ export function chatSelfTools(
     return target.sandboxId;
   }
 
-  /** The session row when the target is a session (orchestrators run no repo services). */
+  /** The session that holds the target's sandbox (its own, or its owner's). */
   async function sessionRow(target: EntityTarget) {
-    return target.kind === "session"
-      ? await ctx.runQuery(internal.sessions.getInternal, {
-          id: target.targetId,
-        })
-      : null;
+    const sessionId =
+      target.kind === "session" ? target.targetId : target.sandboxSessionId;
+    return sessionId === undefined
+      ? null
+      : await ctx.runQuery(internal.sessions.getInternal, { id: sessionId });
   }
 
   /** Resolves the named chat (or the caller's own) plus its details row. */
@@ -478,13 +478,84 @@ Use it when list_env_vars shows a secret is missing. Never ask the user to paste
   );
 
   // ───────────────────────────────────────────────────────────────────────────
+  // propose_session
+  // ───────────────────────────────────────────────────────────────────────────
+
+  tools.push(
+    defineTool({
+      name: "propose_session",
+      description: `Recommend that a task runs in a new session, through a card in the chat with two buttons: "New session" and "Do it here". Nothing starts until the user clicks. "New session" opens a session in this chat's repo on the repo's default branch and model, and runs your "brief" as its first message. "Do it here" sends you a chat message telling you to do the work in this chat.
+
+Use it in two cases: the user asks for work unrelated to what this chat is doing, or you notice a follow-up that is a task of its own (it lands apart from this change, and a short brief is enough to start it). Do not use it for a correction, a question, the next step of the current work, or anything a few tool calls settle: just do those. After calling it, do not start the task yourself; say in one line that you proposed it and end your turn or continue with your current work.
+
+The new session knows nothing about this chat, so the brief must stand alone. Name no chat and the card lands in your own.`,
+      mutating: true,
+      input: {
+        ...entityRefArgs,
+        title: z
+          .string()
+          .min(1)
+          .max(80)
+          .describe(
+            'Short name of the task, shown on the card and used as the session title, e.g. "Fix flaky login test".',
+          ),
+        reason: z
+          .string()
+          .min(1)
+          .max(300)
+          .describe(
+            "One sentence on why this is better as its own session. Shown to the user.",
+          ),
+        brief: z
+          .string()
+          .min(1)
+          .max(8000)
+          .describe(
+            "The first message of the new session: the task, the files or area, what done looks like, and the background it needs from this chat.",
+          ),
+      },
+      handler: async ({ title, reason, brief, ...ref }) => {
+        const resolved = await resolveChat(ref);
+        if ("content" in resolved) return resolved;
+        const { target } = resolved;
+
+        const proposalId = await ctx.runMutation(
+          internal.sessionProposals.create,
+          {
+            entityKind: target.kind,
+            // The caller's own session: the card lands in the chat it runs
+            // in, not the session's Main chat.
+            entityId:
+              target.targetId === credentials.entityId
+                ? (credentials.chatId ?? target.targetId)
+                : target.targetId,
+            repoId: target.repoId,
+            title,
+            reason,
+            brief,
+          },
+        );
+        if (proposalId === null) {
+          return toolErrorResult("That chat no longer exists.");
+        }
+        return toolJsonResult({
+          ...entitySummary(target),
+          proposalId,
+          status: "proposed",
+          note: 'The user sees the card. Do not start this task yourself. If they pick "Do it here", a chat message tells you; if they pick "New session", the new session does the work and you hear nothing.',
+        });
+      },
+    }),
+  );
+
+  // ───────────────────────────────────────────────────────────────────────────
   // set_preview_path
   // ───────────────────────────────────────────────────────────────────────────
 
   tools.push(
     defineTool({
       name: "set_preview_path",
-      description: `Point the user's Preview tab at a route and/or port, the same as typing it into the Preview address bar. Use it to show the user the page you just built ("/settings/billing") or an app on another port.
+      description: `Point the user's main (first) Preview pane at a route and/or port, the same as typing it into its address bar. Use it to show the user the page you just built ("/settings/billing") or an app on another port.
 
 Name no chat and it steers your own. Pass "path", "port" or both. The choice sticks for that chat. Changing "port" also changes which port Eva treats as the app port for that chat (get_preview_url, restart_dev_server), so only set it to a port something is serving.`,
       mutating: true,
@@ -511,6 +582,11 @@ Name no chat and it steers your own. Pass "path", "port" or both. The choice sti
         if ("content" in chat) return chat;
         const { target } = chat;
         const owner = sandboxOwner(target);
+        if (!owner) {
+          return toolErrorResult(
+            `This ${target.kind} has no sandbox yet. Call start_sandbox first.`,
+          );
+        }
 
         if (port !== undefined) {
           await mcpCallAsUser(
@@ -557,7 +633,7 @@ Name no chat and it steers your own. Pass "path", "port" or both. The choice sti
 
 Every command is relaunched, including ones still alive: each is stopped first (its whole process group, and any stray Convex backend for a Convex command), then started again. So it never leaves duplicate daemons, but it does briefly interrupt the healthy ones. If the VM turns out to be wedged, Eva may stop and resume it once.
 
-Name no chat and it relaunches your own. Refused unless the sandbox is active and its VM running; it never wakes a stopped VM, and it errors when the repo has no background commands. For sessions the reply lists launch errors; for tasks and projects the launch is queued and the reply means it was sent. Background commands never re-run startup commands (seeds, imports) — that is rerun_startup_commands.`,
+Name no chat and it relaunches your own. Refused unless the sandbox is active and its VM running; it never wakes a stopped VM, and it errors when the repo has no background commands. The reply lists launch errors. Background commands never re-run startup commands (seeds, imports) — that is rerun_startup_commands.`,
       mutating: true,
       input: entityRefArgs,
       handler: async (ref) => {
@@ -580,30 +656,6 @@ Name no chat and it relaunches your own. Refused unless the sandbox is active an
           ...entitySummary(target),
           backgroundCommands: details.backgroundCommands,
         };
-        if (target.kind === "task" || target.kind === "project") {
-          await mcpCallAsUser(
-            ctx,
-            clerkUserId,
-            target.kind === "task"
-              ? {
-                  type: "mutation",
-                  path: "agentTasks:runBackgroundCommands",
-                  args: { taskId: target.targetId },
-                }
-              : {
-                  type: "mutation",
-                  path: "projects:runProjectBackgroundCommands",
-                  args: { projectId: target.targetId },
-                },
-            z.null(),
-          );
-          return toolJsonResult({
-            ...summary,
-            relaunched: "queued",
-            note: "Relaunch queued. Check /tmp/bg-<index>.log in the sandbox in a few seconds to confirm each daemon came up.",
-          });
-        }
-
         // Sessions have no public mutation for this; resolveChat has already
         // access-checked the chat, so the launcher is called directly.
         const session = await sessionRow(target);
@@ -637,9 +689,9 @@ Name no chat and it relaunches your own. Refused unless the sandbox is active an
       name: "rerun_startup_commands",
       description: `Re-run the repo's startup commands — the one-time setup Eva runs on a fresh sandbox, such as seeding a database, importing data or running migrations — even though they already ran. Use it to recover when a seed or import failed.
 
-WARNING: startup commands can reset, reseed or overwrite the sandbox's local data, and for tasks and projects this restarts the whole sandbox startup flow (the sandbox goes to "starting", and a stopped one is started). If local data might be lost, ask the user before calling this. It is not the fix for a dead daemon; use restart_background_commands for that.
+WARNING: startup commands can reset, reseed or overwrite the sandbox's local data. If local data might be lost, ask the user before calling this. It is not the fix for a dead daemon; use restart_background_commands for that.
 
-Name no chat and it runs for your own. Refused while the sandbox is starting or stopping, and it errors when the repo has no startup commands. Sessions: only on an active sandbox with a running VM (it never wakes a stopped one); the commands run in the background, each for up to 10 minutes, alongside whatever is already running. The reply means the run was started, not that it finished.`,
+Name no chat and it runs for your own. Only on an active sandbox with a running VM (it never wakes a stopped one), and it errors when the repo has no startup commands. The commands run in the background, each for up to 10 minutes, alongside whatever is already running. The reply means the run was started, not that it finished.`,
       mutating: true,
       input: entityRefArgs,
       handler: async (ref) => {
@@ -656,40 +708,6 @@ Name no chat and it runs for your own. Refused while the sandbox is starting or 
           ...entitySummary(target),
           startupCommands: details.startupCommands,
         };
-
-        if (target.kind === "task" || target.kind === "project") {
-          if (
-            target.sandboxStatus === "starting" ||
-            target.sandboxStatus === "stopping"
-          ) {
-            return toolErrorResult(
-              `This ${target.kind}'s sandbox is "${target.sandboxStatus}". Wait for it to settle before re-running startup commands.`,
-            );
-          }
-          // The public mutation applies the status and phase gates and starts
-          // the regular startup workflow with the force flag set.
-          await mcpCallAsUser(
-            ctx,
-            clerkUserId,
-            target.kind === "task"
-              ? {
-                  type: "mutation",
-                  path: "agentTasks:retryStartupCommands",
-                  args: { taskId: target.targetId },
-                }
-              : {
-                  type: "mutation",
-                  path: "projects:retryProjectStartupCommands",
-                  args: { projectId: target.targetId },
-                },
-            z.null(),
-          );
-          return toolJsonResult({
-            ...summary,
-            rerun: "started",
-            note: 'The sandbox startup flow is running with startup commands forced. Its status is "starting" until it finishes; check get_chat_context, then get_dev_server_logs.',
-          });
-        }
 
         const sandboxId = await runningSandboxId(
           target,

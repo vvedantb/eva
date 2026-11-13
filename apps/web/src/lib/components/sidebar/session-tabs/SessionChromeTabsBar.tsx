@@ -20,10 +20,10 @@ import {
   type ArchivedMenuGroup,
 } from "@/lib/components/sidebar/session-tabs/SessionTabsArchivedMenu";
 import {
-  SessionTabsDialogs,
+  SessionDialogs,
   type SessionArchiveTarget,
   type SessionRenameTarget,
-} from "@/lib/components/sidebar/session-tabs/SessionTabsDialogs";
+} from "@/lib/components/sidebar/SessionDialogs";
 import { SessionTabsNewMenu } from "@/lib/components/sidebar/session-tabs/SessionTabsNewMenu";
 import {
   SessionTabsOverflowMenu,
@@ -182,8 +182,8 @@ export function SessionChromeTabsBar({ pathname }: SessionChromeTabsBarProps) {
                   setGroupOpen(repo._id, open);
                 }}
                 hideWhenEmpty
-                onRenameRequest={(session, groupRepo) => {
-                  setSessionToRename({ session, repo: groupRepo });
+                onRenameRequest={(session) => {
+                  setSessionToRename({ session });
                   setRenameValue(session.title);
                 }}
                 onArchiveRequest={(session, groupRepo) => {
@@ -223,7 +223,7 @@ export function SessionChromeTabsBar({ pathname }: SessionChromeTabsBarProps) {
         </div>
       </div>
 
-      <SessionTabsDialogs
+      <SessionDialogs
         pathname={pathname}
         renameTarget={sessionToRename}
         renameValue={renameValue}

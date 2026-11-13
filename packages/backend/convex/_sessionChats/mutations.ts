@@ -17,7 +17,8 @@ import {
   assertProviderAccountUsableBy,
   reconcileProviderAccountForModel,
 } from "../_userProviderAccounts/defaults";
-import { cancelChatExecution } from "../_sessions/execution";
+import { isSessionArchived } from "../_sessions/archive";
+import { assertStandaloneSession } from "../_sessions/owner";
 import {
   createSessionChat,
   ensureMainChat,
@@ -26,21 +27,22 @@ import {
   sessionChatValidator,
   type SessionChatContext,
 } from "./helpers";
+import { deleteQueuedMessages } from "./purge";
+import { findOpenTurn } from "../_chat/turnStore";
 
 /**
  * Continuation of `ensureMainChat`: moves the next bounded page of a heavy
- * session's legacy transcript onto its Main chat and reschedules itself
- * until none is left.
+ * pre-chat session transcript onto its chat and reschedules itself until
+ * none is left.
  */
 export const moveLegacyTranscript = internalMutation({
-  args: { sessionId: v.id("sessions"), chatId: v.id("sessionChats") },
+  args: {
+    from: v.id("sessions"),
+    chatId: v.id("sessionChats"),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const done = await moveLegacyTranscriptPage(
-      ctx,
-      args.sessionId,
-      args.chatId,
-    );
+    const done = await moveLegacyTranscriptPage(ctx, args.from, args.chatId);
     if (!done) {
       await ctx.scheduler.runAfter(
         0,
@@ -84,9 +86,10 @@ export const create = authMutation({
       args.sessionId,
       ctx.userId,
     );
-    if (session.archived === true) {
+    if (isSessionArchived(session)) {
       throw new Error("This session is archived");
     }
+    assertStandaloneSession(session, "open another chat");
     await ensureMainChat(ctx, session);
     const inheritFrom =
       args.fromChatId !== undefined
@@ -105,11 +108,12 @@ export const rename = authMutation({
   args: { chatId: v.id("sessionChats"), title: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { chat } = await getSessionChatWithAccess(
+    const { chat, session } = await getSessionChatWithAccess(
       ctx.db,
       args.chatId,
       ctx.userId,
     );
+    assertStandaloneSession(session, "rename its chat");
     const title = args.title.trim();
     if (!title) return null;
     await ctx.db.patch(chat._id, { title });
@@ -118,31 +122,39 @@ export const rename = authMutation({
 });
 
 /**
- * Closes a parallel chat: cancels its turn, kills its daemon and hides its
- * tab. Main cannot be closed — it is the session's own transcript.
+ * Deletes a parallel chat and all its messages. The chat is hidden at once
+ * (`archived`: no tab, its link opens Main), then `purgeDeletedChat` removes
+ * its rows in pages. Main and a running chat can't be deleted.
  */
-export const archive = authMutation({
+export const remove = authMutation({
   args: { chatId: v.id("sessionChats") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const context = await getSessionChatWithAccess(
+    const { chat, session } = await getSessionChatWithAccess(
       ctx.db,
       args.chatId,
       ctx.userId,
     );
-    const { chat, session } = context;
-    if (chat.isMain) throw new Error("The Main chat cannot be closed");
-    if (chat.archived === true) return null;
-    await cancelChatExecution(ctx, context);
-    await ctx.db.patch(chat._id, { archived: true, updatedAt: Date.now() });
-    if (session.sandboxId && session.status === "active") {
-      await ctx.scheduler.runAfter(0, internal.sandbox.killEntityDaemon, {
-        sandboxId: session.sandboxId,
-        repoId: session.repoId,
-        entityIdField: "chatId",
-        entityId: String(chat._id),
-      });
+    assertStandaloneSession(session, "delete its chat");
+    if (chat.isMain) throw new Error("The Main chat can't be deleted");
+    if (await findOpenTurn(ctx, chat._id)) {
+      throw new Error("Stop this chat before you delete it");
     }
+    await ctx.db.patch(chat._id, { archived: true });
+    // Now, not in the purge: a queued send must not start a turn meanwhile.
+    await deleteQueuedMessages(ctx, chat._id);
+    const drafts = await ctx.db
+      .query("drafts")
+      .withIndex("by_user_and_chat", (q) =>
+        q.eq("userId", ctx.userId).eq("chatId", chat._id),
+      )
+      .collect();
+    for (const draft of drafts) await ctx.db.delete(draft._id);
+    await ctx.scheduler.runAfter(
+      0,
+      internal._sessionChats.purge.purgeDeletedChat,
+      { chatId: chat._id },
+    );
     return null;
   },
 });
@@ -240,11 +252,7 @@ export const setTraits = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const { chatId, ...traits } = args;
-    const { chat } = await getSessionChatWithAccess(
-      ctx.db,
-      chatId,
-      ctx.userId,
-    );
+    const { chat } = await getSessionChatWithAccess(ctx.db, chatId, ctx.userId);
     await setSessionChatTraits(ctx, chat._id, traits);
     return null;
   },

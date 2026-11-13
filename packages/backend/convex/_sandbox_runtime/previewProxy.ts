@@ -5,6 +5,7 @@ import {
   SANDBOX_ENGAGED_WINDOW_MS,
   SANDBOX_ENGAGEMENT_INPUT_EVENTS,
 } from "@eva/shared";
+import { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
 import type { SandboxHandle } from "../_sandbox/provider";
 import { execHandle } from "./helpers";
 import { writeSandboxFile } from "./sandboxFiles";
@@ -691,7 +692,7 @@ const injectedScript = "(" + function () {
     const href = window.location.href;
     if (href === lastHref) return;
     lastHref = href;
-    window.parent.postMessage({ type: "navigation", url: href }, parentOrigin);
+    window.parent.postMessage({ type: ${JSON.stringify(PREVIEW_FRAME_MESSAGE.navigation)}, url: href }, parentOrigin);
   }
 
   function scheduleLocationSend() {
@@ -720,7 +721,7 @@ const injectedScript = "(" + function () {
   // iframe's next load, like a browser tab. beforeunload fires at the start
   // (an SSR route compiling server-side is the slow part); pagehide is late.
   window.addEventListener("beforeunload", function () {
-    window.parent.postMessage({ type: "eva-preview-unload" }, parentOrigin);
+    window.parent.postMessage({ type: ${JSON.stringify(PREVIEW_FRAME_MESSAGE.unload)} }, parentOrigin);
   });
   document.addEventListener("click", function () {
     window.setTimeout(sendLocation, 0);
@@ -729,10 +730,10 @@ const injectedScript = "(" + function () {
   window.addEventListener("message", function (event) {
     const data = event.data;
     if (!data || typeof data !== "object") return;
-    if (data.type === "eva-preview-history-back") {
+    if (data.type === ${JSON.stringify(PREVIEW_FRAME_MESSAGE.historyBack)}) {
       window.history.back();
     }
-    if (data.type === "eva-preview-history-forward") {
+    if (data.type === ${JSON.stringify(PREVIEW_FRAME_MESSAGE.historyForward)}) {
       window.history.forward();
     }
   });

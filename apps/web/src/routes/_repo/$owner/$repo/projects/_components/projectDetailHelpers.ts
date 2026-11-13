@@ -1,9 +1,8 @@
 import type { FunctionReturnType } from "convex/server";
-import type { api } from "@eva/backend";
-import { isLivePrState } from "@/lib/githubPr";
+import { isProjectBuilding, type api } from "@eva/backend";
+import { isLivePrState, parseProjectSpec as parseSpec, type ProjectSpec } from "@eva/shared";
 import { BUILDABLE_PROJECT_PHASES } from "@/lib/components/projects/ProjectPhaseBadge";
 import type { useProjectSandbox } from "@/lib/components/projects/useProjectSandbox";
-import { parseSpec } from "@/lib/utils/parseSpec";
 
 export type ProjectDetailProject = NonNullable<
   FunctionReturnType<typeof api.projects.get>
@@ -15,15 +14,7 @@ type LatestDeployment = FunctionReturnType<
 
 export type ProjectSandboxState = ReturnType<typeof useProjectSandbox>;
 
-export type ParsedProjectSpec = ReturnType<typeof parseSpec>;
-
-export function getAgentBrowsingAt(
-  project: ProjectDetailProject | null | undefined,
-) {
-  return project === null || project === undefined
-    ? undefined
-    : project.agentBrowsingAt;
-}
+export type ParsedProjectSpec = ProjectSpec;
 
 // Written with optional chaining so usePrLinkMenuItems can run above the
 // early returns in ProjectDetailClient (both read `project` /
@@ -38,7 +29,7 @@ export function getProjectPrFlags(
   // A merged PR stays linked as history, so only a live one blocks a new PR.
   const canCreatePr =
     !isLivePrState(project?.prState) &&
-    !project?.activeBuildWorkflowId &&
+    !(project && isProjectBuilding(project)) &&
     (project?.phase === "business_review" || project?.phase === "in_progress");
   return { hasDeployedPreview, canCreatePr };
 }
@@ -52,20 +43,14 @@ export function getProjectMenuFlags(
   sandbox: ProjectSandboxState,
 ) {
   const canBuildProject = BUILDABLE_PROJECT_PHASES.includes(project.phase);
-  const showRetryStartupCommands =
-    sandbox.canStartSandbox &&
-    !sandbox.isSandboxStarting &&
-    !sandbox.isSandboxStopping;
   const showRunBackgroundCommands = sandbox.isSandboxActive;
   const showResolveConflicts =
     isLivePrState(project.prState) &&
-    !project.activeBuildWorkflowId &&
+    !isProjectBuilding(project) &&
     (project.phase === "business_review" || project.phase === "code_review");
-  const hasSandboxCommandItems =
-    showRetryStartupCommands || showRunBackgroundCommands;
+  const hasSandboxCommandItems = showRunBackgroundCommands;
   return {
     canBuildProject,
-    showRetryStartupCommands,
     showRunBackgroundCommands,
     showResolveConflicts,
     hasSandboxCommandItems,
@@ -75,10 +60,5 @@ export function getProjectMenuFlags(
 export function parseProjectSpec(
   generatedSpec: ProjectDetailProject["generatedSpec"],
 ) {
-  if (!generatedSpec) return null;
-  try {
-    return parseSpec(generatedSpec);
-  } catch {
-    return null;
-  }
+  return generatedSpec ? parseSpec(generatedSpec) : null;
 }

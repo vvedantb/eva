@@ -1,3 +1,4 @@
+import { TURN_BACKSTOP_ERROR } from "@eva/shared/agentTurnLimits";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
@@ -16,6 +17,10 @@ import {
   touchAgentFinished,
 } from "../_sandbox/activity";
 import { chatParentIdOf } from "./chatParent";
+import {
+  chatOwnerEntityId,
+  sessionOwnerEntityId,
+} from "../_sessions/owner";
 
 export type TurnLeaseIdentity = {
   turnId: Id<"turns">;
@@ -47,11 +52,7 @@ export type CompletionTurnResolution =
 export type TurnEntityId = Doc<"turns">["entityId"];
 
 /** Chat entities that own durable turns. */
-export type ChatTurnEntityId =
-  | Id<"sessionChats">
-  | Id<"sessions">
-  | Id<"agentTasks">
-  | Id<"projects">;
+export type ChatTurnEntityId = Id<"sessionChats"> | Id<"sessions">;
 
 /** Open turns across every chat of a session (the parallel-chat cap reads this). */
 export async function listOpenSessionTurns(
@@ -154,24 +155,7 @@ export async function openSessionChatTurn(
   },
 ): Promise<Id<"turns">> {
   const { chatId, sessionId, ...turn } = params;
-  const turnId = await openTurn(ctx, { ...turn, entityId: chatId, sessionId });
-  // Marks the session as a durable-turn user so the legacy "activeWorkflowId
-  // means executing" bridge never becomes authoritative for it again.
-  await ctx.db.patch(sessionId, { turnLifecycleVersion: 2 });
-  return turnId;
-}
-
-/**
- * Opens a task-chat or project-chat turn and marks the entity as a durable-turn
- * user (`chatTurnLifecycleVersion`), as `openSessionTurn` does for sessions.
- */
-export async function openChatTurn(
-  ctx: MutationCtx,
-  params: OpenTurnFields & { entityId: Id<"agentTasks"> | Id<"projects"> },
-): Promise<Id<"turns">> {
-  const turnId = await openTurn(ctx, params);
-  await ctx.db.patch(params.entityId, { chatTurnLifecycleVersion: 2 });
-  return turnId;
+  return await openTurn(ctx, { ...turn, entityId: chatId, sessionId });
 }
 
 /**
@@ -295,7 +279,7 @@ export async function renewTurnLease(
   const now = Date.now();
   if (turnExceededAbsoluteLimit(turn.turnStartedAt, now)) {
     await closeTurn(ctx, turn, "error", {
-      error: "Turn exceeded the 2-hour limit",
+      error: TURN_BACKSTOP_ERROR,
     });
     return { status: "terminal", reason: "timeout" };
   }
@@ -348,7 +332,7 @@ export async function renewTurnLease(
  * Extends an expired lease for a turn whose sandbox process the watchdog can
  * still see running. Stamps `silentSince` on the first grace cycle so the
  * reconciler can bound how long it keeps waiting; later cycles keep the
- * original stamp. The absolute 2-hour limit is enforced exactly as
+ * original stamp. The absolute `TURN_BACKSTOP_MS` limit is enforced exactly as
  * `renewTurnLease` does.
  */
 export async function graceExpiredTurnLease(
@@ -359,7 +343,7 @@ export async function graceExpiredTurnLease(
   if (!turn.open || isTerminalTurnState(turn.state)) return;
   if (turnExceededAbsoluteLimit(turn.turnStartedAt, now)) {
     await closeTurn(ctx, turn, "error", {
-      error: "Turn exceeded the 2-hour limit",
+      error: TURN_BACKSTOP_ERROR,
     });
     return;
   }
@@ -411,6 +395,7 @@ export async function resolveCompletionTurn(
  * write into the newer turn's reply and clear its slot, so the queue starts a
  * third turn on top of the live one. Every chat surface binds the turn's
  * workflow id before it fills the slot, so a mismatch means "not mine".
+ * Session chats pass their open turn's workflow (`openTurnWorkflowId`).
  */
 export function isSupersededChatResult(
   turn: Doc<"turns"> | null,
@@ -451,17 +436,39 @@ export async function closeTurn(
   if (chatParentId && (await ctx.db.get(chatParentId))) {
     await ctx.db.patch(chatParentId, { lastTurnFinishedAt: finishedAt });
   }
-  if (turn.sessionId !== undefined && (await ctx.db.get(turn.sessionId))) {
-    await ctx.db.patch(turn.sessionId, { lastTurnFinishedAt: finishedAt });
+  const session =
+    turn.sessionId !== undefined ? await ctx.db.get(turn.sessionId) : null;
+  const runId = ctx.db.normalizeId("agentRuns", turn.entityId);
+  if (session && chatParentId) {
+    await ctx.db.patch(session._id, { lastTurnFinishedAt: finishedAt });
+    // A task's or project's session reads unread on its owner's card (a
+    // project task's own chat on the task's), so the owner gets the
+    // watermark too (`chatReads.markRead` reads it with the chat).
+    const chatId = ctx.db.normalizeId("sessionChats", chatParentId);
+    const chat = chatId ? await ctx.db.get(chatId) : null;
+    const ownerId = chat
+      ? chatOwnerEntityId(chat, session)
+      : sessionOwnerEntityId(session);
+    if (ownerId && (await ctx.db.get(ownerId))) {
+      await ctx.db.patch(ownerId, { lastTurnFinishedAt: finishedAt });
+    }
+  }
+  if (session && runId) {
+    // A task's run held its session's chats (`sessionChatHasFreeSlot`):
+    // offer them their queued messages now. Scheduled, since the queue
+    // module imports this one.
+    await ctx.scheduler.runAfter(
+      0,
+      internal._queues.helpers.drainQueueQuietly,
+      { parentId: session._id },
+    );
   }
   // Every durable turn ends here, so this is the one place the idle-pause
-  // sweep learns "the agent finished". The id's table names the surface; a
-  // run counts for its task, a session chat for its session.
-  const runId = ctx.db.normalizeId("agentRuns", turn.entityId);
-  const run = runId ? await ctx.db.get(runId) : null;
+  // sweep learns "the agent finished": a chat turn or a run counts for the
+  // session that holds the sandbox.
   const activityRef = activityRefForParentId(
     ctx.db,
-    run ? run.taskId : (turn.sessionId ?? turn.entityId),
+    turn.sessionId ?? turn.entityId,
   );
   if (activityRef) await touchAgentFinished(ctx, activityRef, finishedAt);
 }
@@ -493,7 +500,7 @@ export async function closeTurnForWorkflow(
  * completion holds no current lease, so the caller drops it. True: the caller
  * handles it; the turn is closed here, since
  * the agent's work is over once it reports (the workflow's own steps after
- * that are covered by the 2-hour backstop, as before).
+ * that are covered by the `TURN_BACKSTOP_MS` backstop, as before).
  */
 export async function settleAgentTurnCompletion(
   ctx: MutationCtx,

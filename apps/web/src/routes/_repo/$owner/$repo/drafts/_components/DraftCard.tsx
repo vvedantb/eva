@@ -6,6 +6,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { cn } from "@eva/ui";
+import { draftContextTitle, draftKindLabel, draftSnippet } from "@eva/shared";
 import {
   Badge,
   ContextMenu,
@@ -19,7 +20,6 @@ import {
 } from "@vvedantb/ui";
 import { IconDots } from "@tabler/icons-react";
 import { DraftCardMenuItems } from "./DraftCardMenuItems";
-import { tokenizedToDisplayText } from "@/lib/components/mentions";
 import { entityPathSegment } from "@/lib/numId";
 import type { DraftCardModel } from "../_utils";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
@@ -29,32 +29,6 @@ import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
 interface DraftCardProps {
   model: DraftCardModel;
   basePath: string;
-}
-
-function kindLabel(model: DraftCardModel): string {
-  if (model.source === "task") return "Task";
-  const { kind, parentCommentId } = model.row;
-  if (kind === "taskComment") {
-    return parentCommentId ? "Reply" : "Comment";
-  }
-  if (kind === "taskChat") return "Task chat";
-  if (kind === "projectChat") return "Project chat";
-  if (kind === "sessionChat") return "Session";
-  return "Draft";
-}
-
-function contextTitle(model: DraftCardModel): string {
-  if (model.source === "task") {
-    return model.row.title || "Untitled";
-  }
-  return model.row.contextTitle;
-}
-
-function snippetText(model: DraftCardModel): string {
-  if (model.source === "task") {
-    return tokenizedToDisplayText(model.row.description ?? "");
-  }
-  return tokenizedToDisplayText(model.row.content);
 }
 
 async function resolveTaskActivityPath(
@@ -77,26 +51,6 @@ async function resolveTaskActivityPath(
     return `${basePath}/projects/${projectSegment}/${taskSegment}/activity`;
   }
   return `${basePath}/quick-tasks/${taskSegment}`;
-}
-
-/** Opens the surface where the task sandbox chat draft was written. */
-async function resolveTaskChatPath(
-  convex: ConvexReactClient,
-  basePath: string,
-  taskId: Id<"agentTasks">,
-  taskProjectId: Id<"projects"> | undefined,
-): Promise<string | null> {
-  const root = await resolveTaskActivityPath(
-    convex,
-    basePath,
-    taskId,
-    taskProjectId,
-  );
-  if (!root) return null;
-  // Quick tasks have a dedicated sandbox route; project tasks embed sandbox
-  // in the detail layout, so land on activity.
-  if (taskProjectId) return root;
-  return `${root}/sandbox/preview`;
 }
 
 export function DraftCard({ model, basePath }: DraftCardProps) {
@@ -127,7 +81,7 @@ export function DraftCard({ model, basePath }: DraftCardProps) {
       return;
     }
 
-    const { kind, taskId, taskProjectId, projectId, sessionId } = model.row;
+    const { kind, taskId, taskProjectId, sessionId } = model.row;
 
     if (kind === "taskComment" && taskId) {
       void (async () => {
@@ -140,37 +94,6 @@ export function DraftCard({ model, basePath }: DraftCardProps) {
         if (path) {
           await navigate({ to: toInternalRepoHref(path) });
         }
-      })();
-      return;
-    }
-
-    if (kind === "taskChat" && taskId) {
-      void (async () => {
-        const path = await resolveTaskChatPath(
-          convex,
-          basePath,
-          taskId,
-          taskProjectId,
-        );
-        if (path) {
-          await navigate({ to: toInternalRepoHref(path) });
-        }
-      })();
-      return;
-    }
-
-    if (kind === "projectChat" && projectId) {
-      void (async () => {
-        const project = await convex.query(api.projects.get, { id: projectId });
-        const segment = project ? entityPathSegment(project) : null;
-        if (!segment) {
-          return;
-        }
-        await navigate({
-          to: toInternalRepoHref(
-            `${basePath}/projects/${segment}/sandbox/preview`,
-          ),
-        });
       })();
       return;
     }
@@ -190,9 +113,9 @@ export function DraftCard({ model, basePath }: DraftCardProps) {
     }
   };
 
-  const snippet = snippetText(model);
-  const label = kindLabel(model);
-  const title = contextTitle(model);
+  const snippet = draftSnippet(model);
+  const label = draftKindLabel(model);
+  const title = draftContextTitle(model);
   const ts = model.row.updatedAt;
 
   return (

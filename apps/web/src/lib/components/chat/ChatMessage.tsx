@@ -1,5 +1,6 @@
 import { cn } from "@eva/ui";
 import {
+  CollapsibleUserMessageBody,
   formatModelDisplayLabel,
   Message as AIMessage,
   MessageContent,
@@ -27,7 +28,6 @@ import {
 } from "@eva/backend";
 import { AgentMedia } from "@/lib/components/AgentMedia";
 import { ReviewCommentMessage } from "@/lib/components/chat/ReviewCommentMessage";
-import { CollapsibleUserMessageBody } from "@/lib/components/chat/CollapsibleUserMessageBody";
 import { ChatMessageActions } from "@/lib/components/chat/ChatMessageActions";
 import type { ChatMessageActionItem } from "@/lib/components/chat/ChatMessageActions";
 import { TurnFeedbackActions } from "@/lib/components/chat/feedback/TurnFeedbackActions";
@@ -253,6 +253,7 @@ export const ChatMessage = memo(function ChatMessage({
       <SystemAlertMessage
         content={message.content ?? ""}
         errorDetail={message.errorDetail}
+        alertTone={message.alertTone}
         timestamp={message.timestamp}
       />
     );

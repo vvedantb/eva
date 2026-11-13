@@ -5,6 +5,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 import { resolveSandboxCredentialsOnly } from "./envVarResolver";
+import { foreignSandboxDeployment } from "./_sandbox/tags";
 import { errorMessage } from "@vvedantb/server";
 
 /**
@@ -52,6 +53,8 @@ export const run = internalAction({
         });
         for await (const sandbox of list) {
           if (sandbox.status !== "running") continue;
+          // Another deployment's VM: its owner rows here are a stale mirror.
+          if (foreignSandboxDeployment(sandbox.tags) !== null) continue;
           const since = sandbox.statusUpdatedAt ?? sandbox.updatedAt;
           if (now - since < MIN_RUNNING_MS) continue;
           running.add(sandbox.name);

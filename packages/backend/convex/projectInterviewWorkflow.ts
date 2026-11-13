@@ -1,8 +1,9 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
+import type { WorkflowCtx } from "@convex-dev/workflow";
 import { launchAgentStep } from "./_sandbox_runtime/agentLaunchStep";
 import { settleAgentTurnCompletion } from "./_chat/turnStore";
 import { z } from "zod";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
@@ -13,7 +14,10 @@ import {
   workflowCompleteValidator,
 } from "./validators";
 import { trackProjectWorkflow } from "./workflowWatchdog";
-import { ensureSandboxStartedSteps } from "./_sandbox_runtime/resumeSandboxSteps";
+import { prepareSandboxSteps } from "./_sandbox_runtime/prepareSandboxSteps";
+import { ensureOwnedSession } from "./_sessions/ownedSession";
+import { resolveSessionBaseBranch } from "./_sessions/baseBranch";
+import { buildSessionBranchName } from "./_git/branchNames";
 import { PROJECT_INTERVIEW_SYSTEM_PROMPT, SPEC_SYSTEM_PROMPT } from "./prompts";
 import {
   clearStreamingActivity,
@@ -26,8 +30,12 @@ import {
   setProjectConversation,
   setProjectGeneratedSpec,
 } from "./_projects/helpers";
-import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
-import { resolveProjectBaseBranch } from "./_taskWorkflow/resolveBaseBranch";
+import { sandboxStartupEntityId } from "@eva/shared";
+import { errorMessage } from "@vvedantb/server";
+import {
+  TASK_CHAT_BUSY_ERROR,
+  TASK_CHAT_BUSY_RETRY_MS,
+} from "./_taskWorkflow/recovery";
 
 const projectInterviewCompleteEvent = defineEvent({
   name: "projectInterviewComplete",
@@ -109,9 +117,9 @@ export const projectInterviewWorkflow = workflow.define({
     installationId: v.number(),
   },
   handler: async (step, args): Promise<void> => {
-    // Step 1: Fetch project + repo data
-    const projectData = await step.runQuery(
-      internal.projectInterviewWorkflow.getProjectData,
+    // Step 1: The project's session (created on first need) and repo data
+    const projectData = await step.runMutation(
+      internal.projectInterviewWorkflow.ensureInterviewSession,
       { projectId: args.projectId },
     );
 
@@ -127,41 +135,18 @@ export const projectInterviewWorkflow = workflow.define({
     );
     const fullPrompt = `${PROJECT_INTERVIEW_SYSTEM_PROMPT} ${questionPrompt}`;
 
-    // Use the shared project-preview lifecycle so the sandbox id is persisted
-    // on the project (otherwise every answer would spawn a fresh sandbox) and
-    // the card/sidebar "active" indicator lights up while the interview runs.
+    let held: InterviewSandbox | undefined;
     try {
-      if (projectData.sandboxId) {
-        // Thaw an archived/stopped sandbox across polling steps first so a
-        // cold-storage restore can exceed the per-action 10-minute limit; the
-        // surrounding catch handles thaw failures.
-        await ensureSandboxStartedSteps(step, {
-          sandboxId: projectData.sandboxId,
-
-          repoId: projectData.repoId,
-        });
-      }
-      const { sandboxId } = await step.runAction(
-        internal.sandbox.startProjectPreviewSandbox,
-        {
-          projectId: args.projectId,
-          existingSandboxId: projectData.sandboxId,
-
-          installationId: args.installationId,
-          repoOwner: projectData.repoOwner,
-          repoName: projectData.repoName,
-          branchName: projectData.branchName,
-          baseBranch: projectData.baseBranch,
-          repoId: projectData.repoId,
-          // Interview agents only read the repo; skip convex import / env setup.
-          skipStartupCommands: true,
-        },
+      held = await prepareInterviewSandbox(
+        step,
+        projectData,
+        args.installationId,
       );
 
       await launchAgentStep(
         step,
         {
-          sandboxId,
+          sandboxId: held.sandboxId,
           entityId: args.projectId,
           prompt: fullPrompt,
           userId: args.userId,
@@ -214,46 +199,193 @@ export const projectInterviewWorkflow = workflow.define({
         activityLog: message,
       });
       throw error;
+    } finally {
+      await releaseInterviewSandbox(step, projectData, held);
     }
   },
 });
 
 // --- Supporting internal functions ---
 
-/** Fetches project and repository data needed for sandbox preparation. */
-export const getProjectData = internalQuery({
-  args: { projectId: v.id("projects") },
-  returns: v.object({
-    sandboxId: v.optional(v.string()),
+/** What `ensureInterviewSession` returns. */
+const interviewSessionValidator = v.object({
+  sessionId: v.id("sessions"),
+  projectId: v.id("projects"),
+  repoOwner: v.string(),
+  repoName: v.string(),
+  repoId: v.id("githubRepos"),
+  branchName: v.string(),
+  baseBranch: v.string(),
+});
 
-    repoOwner: v.string(),
-    repoName: v.string(),
-    repoId: v.id("githubRepos"),
-    branchName: v.string(),
-    baseBranch: v.string(),
-  }),
+type InterviewTarget = Infer<typeof interviewSessionValidator>;
+
+/**
+ * The project's session (created on first need, `ensureOwnedSession`) and
+ * what an interview or spec agent needs to run on its sandbox: its branch
+ * and the repo. The sandbox itself is claimed like a task run's.
+ */
+export const ensureInterviewSession = internalMutation({
+  args: { projectId: v.id("projects") },
+  returns: interviewSessionValidator,
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
     if (!project) throw new Error("Project not found");
-
     const repo = await ctx.db.get(project.repoId);
     if (!repo) throw new Error("Repository not found");
-
-    // During interview/spec the project usually has no branch yet, so fall back
-    // to the repo's default branch — the sandbox just needs a valid checkout.
-    const branchName =
-      project.branchName ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
-    const baseBranch = resolveProjectBaseBranch(project, repo);
-
+    const { session } = await ensureOwnedSession(ctx, {
+      kind: "project",
+      project,
+    });
     return {
-      sandboxId: project.sandboxId,
-
+      sessionId: session._id,
+      projectId: project._id,
       repoOwner: repo.owner,
       repoName: repo.name,
       repoId: project.repoId,
-      branchName,
-      baseBranch,
+      branchName: session.branchName || buildSessionBranchName(session._id),
+      baseBranch: resolveSessionBaseBranch(session, repo),
     };
+  },
+});
+
+/** The VM an interview or spec agent runs on, and whether the session holds it. */
+type InterviewSandbox = {
+  sandboxId: string;
+  /** The session was `active` before: it stays `active` afterwards. */
+  wasActive: boolean;
+};
+
+/** How many times an interview waits out a busy session before it fails. */
+const INTERVIEW_CLAIM_MAX_WAITS = 10;
+
+/**
+ * The sandbox an interview or spec agent runs on, through the same session
+ * lifecycle as a task run: the session is claimed (`closed` → `starting`,
+ * the attempt recorded in `projects.interviewSandboxClaim`), its VM resumed
+ * or a fresh one prepared and recorded, then attached (`starting` →
+ * `active`, fenced by the claim's attempt), so the row never reads `closed`
+ * over a running VM and no VM goes unrecorded. A start or stop in flight is
+ * waited out (then the busy error). A failed prepare is the claim's start
+ * failure. Interview agents only read the repo, so the repo's startup
+ * commands are skipped.
+ */
+async function prepareInterviewSandbox(
+  step: WorkflowCtx,
+  target: InterviewTarget,
+  installationId: number,
+): Promise<InterviewSandbox> {
+  const claimArgs = {
+    sessionId: target.sessionId,
+    projectId: target.projectId,
+  };
+  let claim = await step.runMutation(
+    internal.sessions.claimSandboxForTaskRun,
+    claimArgs,
+  );
+  for (
+    let wait = 0;
+    claim === null && wait < INTERVIEW_CLAIM_MAX_WAITS;
+    wait++
+  ) {
+    claim = await step.runMutation(
+      internal.sessions.claimSandboxForTaskRun,
+      claimArgs,
+      { runAfter: TASK_CHAT_BUSY_RETRY_MS },
+    );
+  }
+  if (claim === null) throw new Error(TASK_CHAT_BUSY_ERROR);
+  let sandboxId: string;
+  try {
+    ({ sandboxId } = await prepareSandboxSteps(step, {
+      existingSandboxId: claim.sandboxId,
+      installationId,
+      repoOwner: target.repoOwner,
+      repoName: target.repoName,
+      repoId: target.repoId,
+      ephemeral: false,
+      streamingEntityId: sandboxStartupEntityId({
+        kind: "session",
+        sessionId: target.sessionId,
+      }),
+      baseBranch: target.baseBranch,
+      branchName: target.branchName,
+      skipStartupCommands: true,
+    }));
+  } catch (prepareError) {
+    if (!claim.wasActive) {
+      await step.runMutation(internal.sessions.sandboxError, {
+        sessionId: target.sessionId,
+        error: errorMessage(prepareError),
+        startAttempt: claim.attempt,
+      });
+    }
+    await step.runMutation(
+      internal.projectInterviewWorkflow.clearInterviewSandboxClaim,
+      { projectId: target.projectId },
+    );
+    throw prepareError;
+  }
+  await step.runMutation(
+    internal.projectInterviewWorkflow.recordInterviewSandbox,
+    { projectId: target.projectId, sandboxId },
+  );
+  await step.runMutation(internal.sessions.attachTaskRunSandbox, {
+    sessionId: target.sessionId,
+    sandboxId,
+    attempt: claim.attempt,
+  });
+  return { sandboxId, wasActive: claim.wasActive };
+}
+
+/**
+ * The agent is done: the session's VM stops through the session stop path
+ * unless the session was already `active` (the reviewer has it open); a VM
+ * the session never took stops directly (`finishTaskRunSandbox`). The claim
+ * record is cleared either way.
+ */
+async function releaseInterviewSandbox(
+  step: WorkflowCtx,
+  target: InterviewTarget,
+  held: InterviewSandbox | undefined,
+): Promise<void> {
+  if (held !== undefined) {
+    await step.runMutation(internal.sessions.finishTaskRunSandboxMutation, {
+      sessionId: target.sessionId,
+      sandboxId: held.sandboxId,
+      keepActive: held.wasActive,
+    });
+  }
+  await step.runMutation(
+    internal.projectInterviewWorkflow.clearInterviewSandboxClaim,
+    { projectId: target.projectId },
+  );
+}
+
+/** Records the VM the interview prepared on its claim, before the attach. */
+export const recordInterviewSandbox = internalMutation({
+  args: { projectId: v.id("projects"), sandboxId: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    const claim = project?.interviewSandboxClaim;
+    if (!claim) return null;
+    await ctx.db.patch(args.projectId, {
+      interviewSandboxClaim: { ...claim, sandboxId: args.sandboxId },
+    });
+    return null;
+  },
+});
+
+/** The interview released (or never got) the session's sandbox. */
+export const clearInterviewSandboxClaim = internalMutation({
+  args: { projectId: v.id("projects") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.projectId);
+    if (project?.interviewSandboxClaim === undefined) return null;
+    await ctx.db.patch(args.projectId, { interviewSandboxClaim: undefined });
+    return null;
   },
 });
 
@@ -306,8 +438,6 @@ export const saveResult = internalMutation({
       await setProjectConversation(ctx.db, args.projectId, messages);
       await ctx.db.patch(args.projectId, {
         activeWorkflowId: undefined,
-        reviewProjectSandboxStatus: "closed",
-        lastSandboxActivity: Date.now(),
       });
       return "error";
     }
@@ -322,8 +452,6 @@ export const saveResult = internalMutation({
       await setProjectConversation(ctx.db, args.projectId, messages);
       await ctx.db.patch(args.projectId, {
         activeWorkflowId: undefined,
-        reviewProjectSandboxStatus: "closed",
-        lastSandboxActivity: Date.now(),
       });
       return "error";
     }
@@ -337,7 +465,6 @@ export const saveResult = internalMutation({
       await setProjectConversation(ctx.db, args.projectId, messages);
       await ctx.db.patch(args.projectId, {
         activeWorkflowId: undefined,
-        lastSandboxActivity: Date.now(),
       });
       return "ready";
     }
@@ -350,7 +477,6 @@ export const saveResult = internalMutation({
     await setProjectConversation(ctx.db, args.projectId, messages);
     await ctx.db.patch(args.projectId, {
       activeWorkflowId: undefined,
-      lastSandboxActivity: Date.now(),
     });
     return "question";
   },
@@ -528,8 +654,8 @@ export const projectSpecWorkflow = workflow.define({
     installationId: v.number(),
   },
   handler: async (step, args): Promise<void> => {
-    const projectData = await step.runQuery(
-      internal.projectInterviewWorkflow.getProjectData,
+    const projectData = await step.runMutation(
+      internal.projectInterviewWorkflow.ensureInterviewSession,
       { projectId: args.projectId },
     );
 
@@ -546,38 +672,18 @@ Based on the interview conversation above, generate an implementation spec with 
 
 Output ONLY valid JSON.`;
 
+    let held: InterviewSandbox | undefined;
     try {
-      if (projectData.sandboxId) {
-        // Thaw an archived/stopped sandbox across polling steps first so a
-        // cold-storage restore can exceed the per-action 10-minute limit; the
-        // surrounding catch handles thaw failures.
-        await ensureSandboxStartedSteps(step, {
-          sandboxId: projectData.sandboxId,
-
-          repoId: projectData.repoId,
-        });
-      }
-      const { sandboxId } = await step.runAction(
-        internal.sandbox.startProjectPreviewSandbox,
-        {
-          projectId: args.projectId,
-          existingSandboxId: projectData.sandboxId,
-
-          installationId: args.installationId,
-          repoOwner: projectData.repoOwner,
-          repoName: projectData.repoName,
-          branchName: projectData.branchName,
-          baseBranch: projectData.baseBranch,
-          repoId: projectData.repoId,
-          // Interview agents only read the repo; skip convex import / env setup.
-          skipStartupCommands: true,
-        },
+      held = await prepareInterviewSandbox(
+        step,
+        projectData,
+        args.installationId,
       );
 
       await launchAgentStep(
         step,
         {
-          sandboxId,
+          sandboxId: held.sandboxId,
           entityId: args.projectId,
           prompt,
           userId: args.userId,
@@ -612,6 +718,8 @@ Output ONLY valid JSON.`;
         activityLog: message,
       });
       throw error;
+    } finally {
+      await releaseInterviewSandbox(step, projectData, held);
     }
   },
 });
@@ -647,7 +755,6 @@ export const saveSpecResult = internalMutation({
         await ctx.db.patch(args.projectId, {
           phase: "finalized",
           activeWorkflowId: undefined,
-          lastSandboxActivity: Date.now(),
         });
         return null;
       }
@@ -661,7 +768,6 @@ export const saveSpecResult = internalMutation({
     await setProjectConversation(ctx.db, args.projectId, messages);
     await ctx.db.patch(args.projectId, {
       activeWorkflowId: undefined,
-      lastSandboxActivity: Date.now(),
     });
     return null;
   },

@@ -4,10 +4,12 @@ import { IconRefresh, IconTerminal2 } from "@tabler/icons-react";
 import { useAction } from "convex/react";
 import { api } from "@eva/backend";
 import type { SandboxOwner } from "@eva/backend";
+import { terminalHistoryTail } from "@eva/shared";
 import { useSessionStorage } from "usehooks-ts";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 import {
   attachNormalBufferWheelScroll,
@@ -17,7 +19,6 @@ import {
   parseTerminalControlMessage,
   parseVercelExitMessage,
   sendVercelPtyControl,
-  terminalHistoryTail,
   type PtyProtocol,
   type TerminalHistoryWriter,
 } from "./_utils";
@@ -103,6 +104,23 @@ function getCssRgba(
   return `rgba(${value.split(/\s+/).join(", ")}, ${alpha})`;
 }
 
+/**
+ * Draws on a WebGL canvas instead of xterm's DOM renderer. Background
+ * terminals stay mounted under `display: none`, where the DOM renderer measures
+ * every glyph as 0px wide, never caches it, and forces a full-page style
+ * recalc per character on each redraw (a 12.9 s freeze in a prod profile).
+ * Without WebGL2, or after a context loss, xterm keeps the DOM renderer.
+ */
+function loadWebglRenderer(terminal: Terminal) {
+  try {
+    const webgl = new WebglAddon();
+    webgl.onContextLoss(() => webgl.dispose());
+    terminal.loadAddon(webgl);
+  } catch {
+    // WebGL2 unavailable: the DOM renderer stays.
+  }
+}
+
 export function TerminalPanel({
   owner,
   sandboxId,
@@ -128,12 +146,7 @@ export function TerminalPanel({
     sandboxId ?? "no-sandbox",
     ptyInstanceId,
   );
-  const ownerKey =
-    owner.kind === "session"
-      ? `session:${owner.sessionId}`
-      : owner.kind === "task"
-        ? `task:${owner.taskId}`
-        : `project:${owner.projectId}`;
+  const ownerKey = `session:${owner.sessionId}`;
   const [terminalHistory, setTerminalHistory] = useSessionStorage(
     terminalHistoryKey,
     "",
@@ -463,6 +476,7 @@ export function TerminalPanel({
         terminal.loadAddon(fitAddon);
         terminal.loadAddon(webLinksAddon);
         terminal.open(containerEl);
+        loadWebglRenderer(terminal);
 
         terminalInstanceRef.current = terminal;
         fitAddonRef.current = fitAddon;

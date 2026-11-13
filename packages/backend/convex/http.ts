@@ -19,6 +19,8 @@ import {
   parseCiPassed,
   parseRepoEvents,
 } from "./_automationEvents/events";
+import { parseAxiomAlert } from "./_automationEvents/axiomAlert";
+import { AXIOM_ALERT_PATH_PREFIX } from "./_automations/alertWebhook";
 import { prWatchUrls } from "./_pullRequests/watchEvaluate";
 import { hmacSha256Hex } from "./_shared/hmac";
 import {
@@ -105,6 +107,14 @@ http.route({
     const leaseGeneration = Number(params.get("leaseGeneration"));
     if (!Number.isSafeInteger(leaseGeneration) || leaseGeneration <= 0) {
       return new Response("Invalid turn lease generation", { status: 400 });
+    }
+    // VM memory sample (the daemon sends one at most every 30s). Logged only,
+    // so Axiom shows memory pressure before a VM dies with no stop reason.
+    const memAvailableMb = params.get("memAvailableMb");
+    if (memAvailableMb !== null) {
+      console.log(
+        `[heartbeat][vm] entityId=${entityId} turnId=${turnId} memAvailableMb=${memAvailableMb} memTotalMb=${params.get("memTotalMb") ?? "?"} swapUsedMb=${params.get("swapUsedMb") ?? "?"}`,
+      );
     }
     const lease = await ctx.runMutation(internal.turns.heartbeat, {
       turnId,
@@ -531,6 +541,55 @@ async function verifyWebhookSignature(
   const computed = `sha256=${await hmacSha256Hex(secret, body)}`;
   return timingSafeEqual(computed, signature);
 }
+
+/** Larger bodies are refused before parsing; a real alert is a few KB. */
+const MAX_ALERT_BODY_BYTES = 256 * 1024;
+
+/**
+ * Axiom custom webhook notifier for an "Axiom alerts to tasks" install. The
+ * path names the automation; `Authorization: Bearer <secret>` proves the
+ * caller. Resolved monitors and repeat alerts answer 200 and do nothing.
+ */
+http.route({
+  pathPrefix: AXIOM_ALERT_PATH_PREFIX,
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const automationId = new URL(request.url).pathname.slice(
+      AXIOM_ALERT_PATH_PREFIX.length,
+    );
+    const body = await request.text();
+    if (body.length > MAX_ALERT_BODY_BYTES) {
+      return new Response("Alert body too large", { status: 413 });
+    }
+    const auth = request.headers.get("Authorization") ?? "";
+    const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+
+    const parsed = parseAxiomAlert(body);
+    if (parsed.kind === "invalid") {
+      return new Response("Expected Axiom's default webhook JSON", {
+        status: 400,
+      });
+    }
+    // Check the secret even for a resolve, so the URL answers the same way
+    // to every caller without one.
+    const result = await ctx.runMutation(
+      internal._automationEvents.dispatch.receiveAlert,
+      {
+        automationId,
+        secretHash: token === "" ? null : await sha256Hex(token),
+        alert: parsed.kind === "alert" ? parsed.alert : null,
+      },
+    );
+    switch (result) {
+      case "unauthorized":
+        return new Response("Invalid secret", { status: 401 });
+      case "not_found":
+        return new Response("Unknown alert webhook", { status: 404 });
+      default:
+        return new Response(result, { status: 200 });
+    }
+  }),
+});
 
 http.route({
   path: "/api/github/webhook",

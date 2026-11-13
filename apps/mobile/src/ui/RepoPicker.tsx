@@ -1,14 +1,35 @@
-import type { api, Id } from "@eva/backend";
+import { api, type Id } from "@eva/backend";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconBrandGithub, IconChevronDown } from "@tabler/icons-react-native";
-import { SheetRow } from "@vvedantb/native-ui/primitives";
+import { IconBrandGithub, IconChevronDown, type IconProps } from "@tabler/icons-react-native";
+import { EmptyState, SheetRow } from "@vvedantb/native-ui/primitives";
+import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useState } from "react";
-import { Pressable, Text } from "react-native";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { Fragment, useState, type ComponentType, type ReactNode } from "react";
+import { Pressable, Text, View } from "react-native";
 import { FooterSheet } from "@/chat/ComposerFooter";
+import { RepoLogo } from "@/ui/RepoLogo";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
+
+/**
+ * The repo a per-repo section of a tab shows (Quick Tasks and Reviews in
+ * Sessions; Projects, Documents, Drafts and Today in Projects), kept in the
+ * URL (`?repo=`) as the web keeps it in its path, so a tab's sections stay
+ * on one repo. Default: the first repo.
+ */
+export function useRepoParam() {
+  const router = useRouter();
+  const { repo: repoParam } = useLocalSearchParams<{ repo?: string }>();
+  const repos = useQuery(api.githubRepos.list, {});
+  const repo = repos?.find((candidate) => candidate._id === repoParam) ?? repos?.[0];
+  return {
+    repos,
+    repo,
+    setRepo: (repoId: Id<"githubRepos">) => router.setParams({ repo: repoId }),
+  };
+}
 
 /** A repo's name as the web shows it: its label, else its GitHub name. */
 export function repoName(repo: Repo): string {
@@ -16,8 +37,8 @@ export function repoName(repo: Repo): string {
 }
 
 /**
- * The repo a per-repo screen shows (the web reads it from the URL): the
- * GitHub mark, the name and a chevron, 44 high. It opens a bottom sheet of
+ * The repo a per-repo screen shows (the web reads it from the URL): its logo
+ * (`RepoLogo`, else the GitHub mark), the name and a chevron, 44 high. It opens a bottom sheet of
  * the repos, in place of the web app switcher.
  */
 export function RepoPicker({
@@ -40,7 +61,7 @@ export function RepoPicker({
         onPress={() => setOpen(true)}
         className="min-h-11 flex-row items-center gap-1.5 self-start active:opacity-70"
       >
-        <IconBrandGithub size={16} color={theme.mutedForeground} />
+        <RepoLogo logoUrl={value.logoUrl} size={16} fallback={<IconBrandGithub size={16} color={theme.mutedForeground} />} />
         <Text
           numberOfLines={1}
           className="font-instrument-sans-medium shrink text-sm"
@@ -50,20 +71,72 @@ export function RepoPicker({
         </Text>
         <IconChevronDown size={14} color={theme.mutedForeground} />
       </Pressable>
-      <FooterSheet open={open} onOpenChange={setOpen} title="Repo">
-        {repos.map((repo) => (
-          <SheetRow
-            key={repo._id}
-            icon={IconBrandGithub}
-            title={repoName(repo)}
-            active={repo._id === value._id}
-            onPress={() => {
-              onChange(repo._id);
-              setOpen(false);
-            }}
-          />
-        ))}
-      </FooterSheet>
+      <RepoSheet open={open} onOpenChange={setOpen} repos={repos} value={value} onChange={onChange} />
     </>
+  );
+}
+
+/**
+ * The bottom sheet of the user's repos (logo, else the GitHub mark, at the
+ * row's 22 icon size, and the name; the current one checked); a pick closes it.
+ */
+export function RepoSheet({
+  open,
+  onOpenChange,
+  repos,
+  value,
+  onChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  repos: Repo[];
+  value: Repo | undefined;
+  onChange: (repoId: Id<"githubRepos">) => void;
+}) {
+  return (
+    <FooterSheet open={open} onOpenChange={onOpenChange} title="Repo">
+      {repos.map((repo) => (
+        <SheetRow
+          key={repo._id}
+          icon={IconBrandGithub}
+          leading={repo.logoUrl ? <RepoLogo logoUrl={repo.logoUrl} size={22} /> : undefined}
+          title={repoName(repo)}
+          active={repo._id === value?._id}
+          onPress={() => {
+            onChange(repo._id);
+            onOpenChange(false);
+          }}
+        />
+      ))}
+    </FooterSheet>
+  );
+}
+
+/**
+ * A per-repo section (`?repo=`, `useRepoParam`): `placeholder` while the
+ * repos load, "No repos" with `icon` when there are none, else the picker
+ * over `children` for the repo, keyed on it so its state starts fresh.
+ */
+export function RepoSection({
+  icon,
+  placeholder,
+  children,
+}: {
+  icon: ComponentType<IconProps>;
+  placeholder: ReactNode;
+  children: (repo: Repo) => ReactNode;
+}) {
+  const { repos, repo, setRepo } = useRepoParam();
+  if (repos === undefined) return placeholder;
+  if (!repo) {
+    return <EmptyState icon={icon} title="No repos" description="Connect a repo on the web. It shows up here." />;
+  }
+  return (
+    <View className="flex-1">
+      <View className="px-4">
+        <RepoPicker repos={repos} value={repo} onChange={setRepo} />
+      </View>
+      <Fragment key={repo._id}>{children(repo)}</Fragment>
+    </View>
   );
 }

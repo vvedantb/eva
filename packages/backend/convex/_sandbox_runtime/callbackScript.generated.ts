@@ -10,6 +10,7 @@ import { existsSync } from "fs";
 var TURN_MAX_RUNTIME_MS = 3 * 60 * 60 * 1e3;
 var TURN_BACKSTOP_MS = TURN_MAX_RUNTIME_MS + 30 * 60 * 1e3;
 var TURN_MAX_RUNTIME_HOURS = TURN_MAX_RUNTIME_MS / 36e5;
+var TURN_BACKSTOP_ERROR = \`Turn exceeded the \${TURN_BACKSTOP_MS / 36e5}-hour limit\`;
 var TURN_MAX_RUNTIME_ERROR = "The assistant exceeded the maximum turn runtime.";
 var ATTEMPT_MAX_RUNTIME_ERROR_FRAGMENT = "terminated after max runtime of";
 var TURN_CONTINUE_DISPLAY = \`Continue: the last turn hit the \${TURN_MAX_RUNTIME_HOURS}-hour limit.\`;
@@ -1182,6 +1183,43 @@ function noteHeartbeatResponse(response, sentUnder) {
   return true;
 }
 
+// callback-src/runtime/vmMemory.ts
+import { readFileSync as readFileSync3 } from "fs";
+var VM_MEMORY_SAMPLE_INTERVAL_MS = 3e4;
+var lastSampleAt = 0;
+function parseMeminfo(text) {
+  const kb = (key) => {
+    const match = new RegExp(\`^\${key}:\\\\s+(\\\\d+) kB\$\`, "m").exec(text);
+    return match ? Number(match[1]) : null;
+  };
+  const total = kb("MemTotal");
+  const available = kb("MemAvailable");
+  const swapTotal = kb("SwapTotal");
+  const swapFree = kb("SwapFree");
+  if (total === null || available === null || swapTotal === null || swapFree === null) {
+    return null;
+  }
+  return {
+    memTotalMb: Math.round(total / 1024),
+    memAvailableMb: Math.round(available / 1024),
+    swapUsedMb: Math.round((swapTotal - swapFree) / 1024)
+  };
+}
+function appendVmMemory(body, now = Date.now()) {
+  if (now - lastSampleAt < VM_MEMORY_SAMPLE_INTERVAL_MS) return;
+  let sample = null;
+  try {
+    sample = parseMeminfo(readFileSync3("/proc/meminfo", "utf8"));
+  } catch {
+    return;
+  }
+  if (sample === null) return;
+  lastSampleAt = now;
+  body.set("memTotalMb", String(sample.memTotalMb));
+  body.set("memAvailableMb", String(sample.memAvailableMb));
+  body.set("swapUsedMb", String(sample.swapUsedMb));
+}
+
 // callback-src/http/convexClient.ts
 function appendTurnLease(body, identity) {
   if (identity === null) return;
@@ -1296,6 +1334,7 @@ async function callStreamingHeartbeatTouchOnce(entityId) {
     body.set("hmac", STREAMING_HMAC);
     body.set("touchOnly", "1");
     appendTurnLease(body, identity);
+    appendVmMemory(body);
     const response2 = await postSignedForm(
       CONVEX_SITE_URL + "/api/streaming/heartbeat",
       body,
@@ -1323,6 +1362,7 @@ async function callStreamingHeartbeatOnce(entityId, currentActivity, currentCont
     body.set("currentActivity", currentActivity);
     body.set("currentContent", currentContent || "");
     appendTurnLease(body, identity);
+    appendVmMemory(body);
     if (pendingQuestion) {
       body.set("pendingQuestion", pendingQuestion);
     }
@@ -2248,7 +2288,7 @@ function routeClaimedTurn(input) {
 }
 
 // callback-src/runtime/daemonProcess.ts
-import { readFileSync as readFileSync5, unlinkSync, writeFileSync as writeFileSync7 } from "fs";
+import { readFileSync as readFileSync6, unlinkSync, writeFileSync as writeFileSync7 } from "fs";
 
 // callback-src/providers/githubToken.ts
 function tokenFromActionResponse(data) {
@@ -2313,7 +2353,7 @@ async function refreshDaemonGithubTokenFromEnv() {
 }
 
 // callback-src/session/claudeSession.ts
-import { existsSync as existsSync4, mkdirSync as mkdirSync2, readFileSync as readFileSync3, writeFileSync as writeFileSync2 } from "fs";
+import { existsSync as existsSync4, mkdirSync as mkdirSync2, readFileSync as readFileSync4, writeFileSync as writeFileSync2 } from "fs";
 function buildClaudeStartupStep() {
   if (callbackState.waitingForFirstAssistantEvent && callbackState.claudeInitAt > 0) {
     const elapsedSeconds = Math.max(
@@ -2341,7 +2381,7 @@ function readClaudeSessionState() {
     return null;
   }
   const parsed = tryParseJsonObject(
-    readFileSync3(CLAUDE_LOCAL_STATE_FILE, "utf8")
+    readFileSync4(CLAUDE_LOCAL_STATE_FILE, "utf8")
   );
   if (!parsed) return null;
   const resumeSessionId = typeof parsed.resumeSessionId === "string" ? parsed.resumeSessionId.trim() : "";
@@ -2421,7 +2461,7 @@ function hydratePersistedClaudeState() {
 function ensureClaudeWorkspaceTrust() {
   const configPath = CLAUDE_RUNTIME_CONFIG_DIR + "/.claude.json";
   mkdirSync2(CLAUDE_RUNTIME_CONFIG_DIR, { recursive: true });
-  const parsed = existsSync4(configPath) ? tryParseJsonObject(readFileSync3(configPath, "utf8")) : null;
+  const parsed = existsSync4(configPath) ? tryParseJsonObject(readFileSync4(configPath, "utf8")) : null;
   const config = parsed ? { ...parsed } : {};
   const rawProjects = config.projects;
   const projects = rawProjects && typeof rawProjects === "object" && !Array.isArray(rawProjects) ? { ...rawProjects } : {};
@@ -3487,7 +3527,7 @@ var claudeAdapter = {
 import { mkdirSync as mkdirSync4, writeFileSync as writeFileSync4 } from "fs";
 
 // callback-src/session/createSessionStore.ts
-import { existsSync as existsSync5, mkdirSync as mkdirSync3, readFileSync as readFileSync4, writeFileSync as writeFileSync3 } from "fs";
+import { existsSync as existsSync5, mkdirSync as mkdirSync3, readFileSync as readFileSync5, writeFileSync as writeFileSync3 } from "fs";
 function createSessionStore(config) {
   const readSessionState = () => {
     const statePath = existsSync5(config.localStateFile) ? config.localStateFile : existsSync5(config.persistStateFile) ? config.persistStateFile : "";
@@ -3495,7 +3535,7 @@ function createSessionStore(config) {
       return null;
     }
     try {
-      const parsed = JSON.parse(readFileSync4(statePath, "utf8"));
+      const parsed = JSON.parse(readFileSync5(statePath, "utf8"));
       if (!isJsonObject(parsed)) {
         return null;
       }
@@ -5083,7 +5123,7 @@ function pidAlive(pid) {
 function isCallbackRunnerPid(pid) {
   if (!pidAlive(pid)) return false;
   try {
-    return readFileSync5(\`/proc/\${pid}/cmdline\`, "utf8").includes(
+    return readFileSync6(\`/proc/\${pid}/cmdline\`, "utf8").includes(
       "run-design.mjs"
     );
   } catch {
@@ -5101,7 +5141,7 @@ function writeOomScoreAdj(target2, score) {
 function callbackBundleWentStale(expectedFingerprint) {
   if (!expectedFingerprint) return false;
   try {
-    return readFileSync5(CALLBACK_FINGERPRINT_PATH, "utf8").trim() !== expectedFingerprint;
+    return readFileSync6(CALLBACK_FINGERPRINT_PATH, "utf8").trim() !== expectedFingerprint;
   } catch {
     return false;
   }
@@ -5111,7 +5151,7 @@ function callbackScriptWentStale() {
 }
 function readPidFromFile(pidPath) {
   try {
-    return Number(readFileSync5(pidPath, "utf8").trim());
+    return Number(readFileSync6(pidPath, "utf8").trim());
   } catch {
     return Number.NaN;
   }
@@ -5226,7 +5266,7 @@ import {
   existsSync as existsSync6,
   lstatSync,
   mkdirSync as mkdirSync6,
-  readFileSync as readFileSync6,
+  readFileSync as readFileSync7,
   readdirSync as readdirSync2,
   renameSync,
   writeFileSync as writeFileSync8
@@ -5574,7 +5614,7 @@ async function uploadMediaFile(filePath, mimeType) {
   );
   const urlValue = urlRes && typeof urlRes === "object" && !Array.isArray(urlRes) && urlRes.value && typeof urlRes.value === "string" ? urlRes.value : "";
   if (!urlValue) throw new Error("Missing upload URL");
-  const fileData = readFileSync6(filePath);
+  const fileData = readFileSync7(filePath);
   const uploadRes = await fetchWithTimeout(
     urlValue,
     {
@@ -5659,7 +5699,7 @@ async function uploadAndAttachSandboxMedia(target2) {
   const uploaded = [];
   const seenDigests = /* @__PURE__ */ new Set();
   const isDuplicate = (filePath) => {
-    const digest = createHash("sha256").update(readFileSync6(filePath)).digest("hex");
+    const digest = createHash("sha256").update(readFileSync7(filePath)).digest("hex");
     if (seenDigests.has(digest)) return true;
     seenDigests.add(digest);
     return false;
@@ -5805,7 +5845,7 @@ function handleRealtimeStreamLine(line) {
 
 // callback-src/providers/claudeSdk.ts
 import { execSync } from "child_process";
-import { existsSync as existsSync7, readFileSync as readFileSync7 } from "fs";
+import { existsSync as existsSync7, readFileSync as readFileSync8 } from "fs";
 import { dirname } from "path";
 
 // callback-src/runtime/pendingQuestion.ts
@@ -5974,7 +6014,7 @@ var SDK_LOCAL_PREFIX = "/home/eva/.eva-agent-sdk";
 function installedPackageVersion(packageRoot) {
   try {
     const manifest = JSON.parse(
-      readFileSync7(packageRoot + "/package.json", "utf8")
+      readFileSync8(packageRoot + "/package.json", "utf8")
     );
     if (typeof manifest !== "object" || manifest === null || Array.isArray(manifest)) {
       return null;
@@ -7241,7 +7281,7 @@ function handleCancelRequested(agentRunner) {
   });
 }
 function canTakeSteer() {
-  return supervisor.phase === "running" && supervisor.currentTurn?.kind === "real";
+  return supervisor.phase === "running" && supervisor.currentTurn?.kind === "real" && !callbackState.awaitingQuestionAnswer;
 }
 function startClaimWatcher(agentRunner) {
   void (async () => {
@@ -8695,12 +8735,12 @@ async function runCodexAppServerDaemon() {
 
 // callback-src/providers/cursorSdkDaemon.ts
 import { spawn as spawn3 } from "child_process";
-import { readFileSync as readFileSync9, unlinkSync as unlinkSync2, writeFileSync as writeFileSync11 } from "fs";
+import { readFileSync as readFileSync10, unlinkSync as unlinkSync2, writeFileSync as writeFileSync11 } from "fs";
 
 // callback-src/providers/cursorSdk.ts
 import {
   mkdirSync as mkdirSync7,
-  readFileSync as readFileSync8,
+  readFileSync as readFileSync9,
   renameSync as renameSync2,
   statSync as statSync4,
   writeFileSync as writeFileSync10
@@ -8872,7 +8912,7 @@ function readCachedCursorModelResolution() {
     const ageMs = Date.now() - statSync4(CURSOR_MODEL_RESOLUTION_CACHE_FILE).mtimeMs;
     if (ageMs > CURSOR_MODEL_RESOLUTION_MAX_AGE_MS) return null;
     const cached = JSON.parse(
-      readFileSync8(CURSOR_MODEL_RESOLUTION_CACHE_FILE, "utf8")
+      readFileSync9(CURSOR_MODEL_RESOLUTION_CACHE_FILE, "utf8")
     );
     if (!isJsonObject(cached)) {
       return null;
@@ -9518,7 +9558,7 @@ function readCursorTurnWorkerClaim() {
   if (!CURSOR_TURN_WORKER_PROMPT_FILE) {
     throw new Error("Cursor turn worker prompt file is missing");
   }
-  const prompt = readFileSync9(CURSOR_TURN_WORKER_PROMPT_FILE, "utf8");
+  const prompt = readFileSync10(CURSOR_TURN_WORKER_PROMPT_FILE, "utf8");
   if (!CURSOR_TURN_WORKER_TURN_ID || CURSOR_TURN_WORKER_LEASE_GENERATION <= 0) {
     throw new Error("Cursor turn worker received an invalid durable lease");
   }
@@ -9859,7 +9899,7 @@ import {
   existsSync as existsSync8,
   mkdirSync as mkdirSync8,
   readdirSync as readdirSync4,
-  readFileSync as readFileSync10,
+  readFileSync as readFileSync11,
   rmSync,
   writeFileSync as writeFileSync12
 } from "fs";
@@ -9921,7 +9961,7 @@ function isEvaStub(directory) {
   const skillFile = \`\${directory}/SKILL.md\`;
   if (!existsSync8(skillFile)) return false;
   try {
-    return readFileSync10(skillFile, "utf8").includes(SYSTEM_SKILL_MARKER);
+    return readFileSync11(skillFile, "utf8").includes(SYSTEM_SKILL_MARKER);
   } catch {
     return false;
   }
@@ -9963,7 +10003,7 @@ function updateGitExclude(names) {
   if (!existsSync8(gitDir)) return;
   const infoDir = \`\${gitDir}/info\`;
   const excludeFile = \`\${infoDir}/exclude\`;
-  const existing = existsSync8(excludeFile) ? readFileSync10(excludeFile, "utf8") : "";
+  const existing = existsSync8(excludeFile) ? readFileSync11(excludeFile, "utf8") : "";
   const next = renderExcludeContent(existing, names);
   if (next === existing) return;
   mkdirSync8(infoDir, { recursive: true });
@@ -9992,7 +10032,7 @@ function materializeSystemSkills() {
       return;
     }
     const skills = parseSystemSkillsFile(
-      readFileSync10(SYSTEM_SKILLS_STATE_FILE, "utf8")
+      readFileSync11(SYSTEM_SKILLS_STATE_FILE, "utf8")
     );
     if (skills === null) {
       log("[system-skills] state file unreadable \\u2014 skipping");
@@ -10011,7 +10051,7 @@ import {
   existsSync as existsSync9,
   mkdirSync as mkdirSync9,
   openSync,
-  readFileSync as readFileSync11,
+  readFileSync as readFileSync12,
   rmSync as rmSync2,
   statSync as statSync5,
   writeFileSync as writeFileSync13
@@ -10028,7 +10068,7 @@ var LOG_TAIL_BYTES = 4e3;
 var opencodeServerBaseUrl = "http://127.0.0.1:" + String(OPENCODE_SERVER_PORT);
 function readOpencodeServerLogTail(maxBytes = LOG_TAIL_BYTES) {
   try {
-    const contents = readFileSync11(SERVER_LOG_FILE, "utf8");
+    const contents = readFileSync12(SERVER_LOG_FILE, "utf8");
     return contents.length > maxBytes ? contents.slice(-maxBytes) : contents;
   } catch {
     return "";
@@ -10046,7 +10086,7 @@ async function probeHealth(timeoutMs = HEALTH_PROBE_TIMEOUT_MS) {
 }
 function readRecordedPid() {
   try {
-    const parsed = tryParseJsonObject(readFileSync11(SERVER_STATE_FILE, "utf8"));
+    const parsed = tryParseJsonObject(readFileSync12(SERVER_STATE_FILE, "utf8"));
     if (!parsed) return 0;
     return typeof parsed.pid === "number" && parsed.pid > 0 ? parsed.pid : 0;
   } catch {
@@ -10058,7 +10098,7 @@ function killRecordedServer() {
   if (!pid) return;
   let cmdline = "";
   try {
-    cmdline = readFileSync11("/proc/" + String(pid) + "/cmdline", "utf8");
+    cmdline = readFileSync12("/proc/" + String(pid) + "/cmdline", "utf8");
   } catch {
     return;
   }

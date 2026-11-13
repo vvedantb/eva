@@ -57,7 +57,10 @@ export async function cancelChatTurn<TEntity extends CancellableChatEntity>(
   p: {
     id: ChatTurnEntityId;
     entity: TEntity;
-    activeWorkflowId: (entity: TEntity) => string | undefined;
+    /** A session chat reads its open turn's workflow, so this may be async. */
+    activeWorkflowId: (
+      entity: TEntity,
+    ) => string | undefined | Promise<string | undefined>;
     streamingEntityId: string;
     interrupt: () => Promise<void>;
     getLatest: () => Promise<TEntity | null>;
@@ -70,7 +73,7 @@ export async function cancelChatTurn<TEntity extends CancellableChatEntity>(
   // Snapshot what this cancel owns. A concurrent startExecute may stage a
   // newer pendingTurn / workflow while we run — must not clear those or mark
   // the newer assistant placeholder as cancelled.
-  const workflowIdToCancel = p.activeWorkflowId(p.entity);
+  const workflowIdToCancel = await p.activeWorkflowId(p.entity);
   const pendingRequestedAt = p.entity.pendingTurn?.requestedAt;
 
   await cancelTrackedWorkflow(ctx, workflowIdToCancel);
@@ -89,7 +92,7 @@ export async function cancelChatTurn<TEntity extends CancellableChatEntity>(
 
   const latest = await p.getLatest();
   if (!latest) return null;
-  const latestWorkflowId = p.activeWorkflowId(latest);
+  const latestWorkflowId = await p.activeWorkflowId(latest);
 
   const { cancelOwnsCurrentTurn } = detectCancelSupersession({
     latestPendingTurn: latest.pendingTurn,

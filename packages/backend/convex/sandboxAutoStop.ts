@@ -7,9 +7,6 @@ import {
 } from "./_generated/server";
 import { authMutation, authQuery, requireAppAdmin } from "./functions";
 import { requestSessionSandboxStop } from "./_sessions/sandbox";
-import { requestTaskSandboxStop } from "./_agentTasks/sandbox";
-import { requestProjectSandboxStop } from "./_projects/sandbox";
-import { loadActiveSandboxRows } from "./_sandbox_runtime/daemonEntitySnapshot";
 
 const DAY_MS = 86_400_000;
 
@@ -152,59 +149,28 @@ export const recordRun = internalMutation({
 });
 
 /**
- * Internal: collects the ids of every sandbox currently in the `active` state
- * across the three user-facing sandbox surfaces. Shared by the daily sweep and
- * the idle sweep (`sandboxIdlePause.ts`).
+ * Internal: the ids of every session whose sandbox is `active`. Shared by the
+ * daily sweep and the idle sweep (`sandboxIdlePause.ts`).
  */
 export const listActiveSandboxes = internalQuery({
   args: {},
-  returns: v.object({
-    taskIds: v.array(v.id("agentTasks")),
-    projectIds: v.array(v.id("projects")),
-    sessionIds: v.array(v.id("sessions")),
-  }),
+  returns: v.object({ sessionIds: v.array(v.id("sessions")) }),
   handler: async (ctx) => {
-    const { sessions, tasks, projects } = await loadActiveSandboxRows(ctx.db);
+    const sessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_status", (q) => q.eq("status", "active"))
+      .collect();
     return {
-      taskIds: tasks.filter((t) => t.sandboxId).map((t) => t._id),
-      projectIds: projects.filter((p) => p.sandboxId).map((p) => p._id),
       sessionIds: sessions.filter((s) => s.sandboxId).map((s) => s._id),
     };
   },
 });
 
 /**
- * Internal: stops one task preview sandbox. Delegates to the shared
- * `requestTaskSandboxStop` helper (same path as the Stop button, minus the auth
- * check) and only re-validates `active` first, so a sandbox a user restarted
+ * Internal: stops one session sandbox, the same path as the Stop button minus
+ * the auth check. Re-validates `active` first, so a sandbox a user restarted
  * between the scan and this call is left alone.
  */
-export const stopTask = internalMutation({
-  args: { taskId: v.id("agentTasks") },
-  returns: v.null(),
-  handler: async (ctx, { taskId }) => {
-    const task = await ctx.db.get(taskId);
-    if (!task || task.reviewTaskSandboxStatus !== "active") return null;
-    await requestTaskSandboxStop(ctx, taskId);
-    return null;
-  },
-});
-
-/** Internal: stops one project preview sandbox. See `stopTask`. */
-export const stopProject = internalMutation({
-  args: { projectId: v.id("projects") },
-  returns: v.null(),
-  handler: async (ctx, { projectId }) => {
-    const project = await ctx.db.get(projectId);
-    if (!project || project.reviewProjectSandboxStatus !== "active") {
-      return null;
-    }
-    await requestProjectSandboxStop(ctx, projectId);
-    return null;
-  },
-});
-
-/** Internal: stops one session sandbox. See `stopTask`. */
 export const stopSession = internalMutation({
   args: { sessionId: v.id("sessions") },
   returns: v.null(),
@@ -258,14 +224,6 @@ export const run = internalAction({
       internal.sandboxAutoStop.listActiveSandboxes,
       {},
     );
-    for (const taskId of active.taskIds) {
-      await ctx.runMutation(internal.sandboxAutoStop.stopTask, { taskId });
-    }
-    for (const projectId of active.projectIds) {
-      await ctx.runMutation(internal.sandboxAutoStop.stopProject, {
-        projectId,
-      });
-    }
     for (const sessionId of active.sessionIds) {
       await ctx.runMutation(internal.sandboxAutoStop.stopSession, {
         sessionId,

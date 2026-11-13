@@ -26,6 +26,7 @@ export default function SettingsScreen() {
   const setEmailEnabled = useMutation(api.auth.setEmailNotificationsEnabled).withOptimisticUpdate((store, args) => {
     store.setQuery(api.auth.getEmailNotificationsEnabled, {}, args.enabled);
   });
+  const toggleEmail = (enabled: boolean) => void setEmailEnabled({ enabled });
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const scheme = useScheme();
 
@@ -43,7 +44,7 @@ export default function SettingsScreen() {
       <ScreenContainer reserveTabBar>
         {/* The web `SettingsStack` rhythm: 32 between sections. */}
         <View className="gap-8">
-          <SettingsSection title="Appearance" description="Choose light, dark, or system.">
+          <SettingsSection title="Appearance" description="Choose light, neutral, dark, or system.">
             <AppearanceTiles />
           </SettingsSection>
           <SettingsSection
@@ -52,16 +53,19 @@ export default function SettingsScreen() {
             // The web section is `bodyVariant="list"`: the row carries its own padding.
             bodyVariant="list"
           >
+            {/* The whole row toggles, as the web `<label htmlFor>`; TalkBack reads one switch. */}
             <SettingsToggleRow
               title="Send summary and changelog"
               description="Receive a daily summary of unread notifications and the weekly changelog by email."
+              checked={emailEnabled ?? false}
+              disabled={emailEnabled === undefined}
+              onCheckedChange={toggleEmail}
               action={
                 <Switch
                   size="md"
                   checked={emailEnabled ?? false}
                   disabled={emailEnabled === undefined}
-                  onCheckedChange={(enabled: boolean) => void setEmailEnabled({ enabled })}
-                  accessibilityLabel="Email notifications"
+                  onCheckedChange={toggleEmail}
                   // Eva's web switch is off on `bg-muted` with a `bg-white` thumb in both schemes.
                   offColor={EVA_THEME[scheme].muted}
                   thumbStyle={{ backgroundColor: emailEnabled ? EVA_THEME[scheme].primaryForeground : tokens.color.white }}
@@ -74,7 +78,8 @@ export default function SettingsScreen() {
             description="Eva notifies this phone when an agent needs your input or someone mentions you. Turn them off in Android settings."
           />
           <SettingsSection title="Account" description={user?.primaryEmailAddress?.emailAddress ?? "Signed in"}>
-            <Button variant="outline" onPress={() => setConfirmSignOut(true)}>
+            {/* `lg`, a whole 44 target (the web `default` is 40). */}
+            <Button variant="outline" size="lg" onPress={() => setConfirmSignOut(true)}>
               Sign out
             </Button>
           </SettingsSection>

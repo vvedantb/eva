@@ -29,6 +29,7 @@ FOLLOW ALL OF THESE RULES
 - Tests: default is no new test; a test must call real code and fail when behaviour breaks; never regex source files.
 - Before a PR that touches async code, run `/parallel-awaits` with `--diff origin/main`.
 - Eliminate duplication, centralise your changes so its easier to update them
+- Keep-alive UI hides with React `<Activity>`; use a `hidden` class only where effects must keep running (terminals, on WebGL xterm).
 - Never put a live `filter: blur()` / beam halo on a spinning BorderBeam — measured GPU floor, already removed.
 - For debugging, use Eva MCP and Convex CLI for prod logs
 
@@ -44,5 +45,8 @@ FOLLOW ALL OF THESE RULES
 - This repo is a platform for managing other codebases and running them remotely (sandbox app ≠ this codebase).
 - Sandbox provider is Vercel; Daytona is legacy. Sandboxes: IPv4 only (no IPv6).
 - Chat is one surface: sessions, quick tasks and projects share `ChatBody`/`SandboxChatPreInput`; ship chat changes to all three panels and workflow modules.
+- One backend for web and phone: no client-only Convex functions (CI: `scripts/check-shared-backend.mjs` needs a reason for any).
+- Logic both apps need lives in `@eva/shared`; `apps/web` and `apps/mobile` hold only UI and platform code.
+- Backend changes must keep the newest published APK working (CI: `scripts/check-apk-compat.sh`); keep old names or args until it updates.
 
 Fight entropy. Leave the codebase better than you found it.

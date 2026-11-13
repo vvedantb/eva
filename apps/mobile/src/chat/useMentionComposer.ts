@@ -1,6 +1,8 @@
 import { api, type AIProvider, type Id } from "@eva/backend";
 import {
   acceptMentionTrigger,
+  buildMentionPattern,
+  buildSkillPattern,
   dataMentionItems,
   filterMentionItems,
   findMentionTrigger,
@@ -13,6 +15,7 @@ import {
   tokenizeMentionText,
   tokenizedToEditable,
   type InsertedToken,
+  type MentionChipKind,
   type MentionItem,
   type MentionTrigger,
 } from "@eva/shared";
@@ -29,9 +32,19 @@ type Draft = {
   skillMap: ReadonlyMap<string, string>;
   /** The chip the last pick inserted (see `isInsertedTokenTrigger`). */
   inserted: InsertedToken | null;
+  /** The picker was closed (Android back, as the web Escape) and stays shut until the text changes. */
+  dismissed: boolean;
 };
 
-const EMPTY_DRAFT: Draft = { text: "", mentionMap: new Map(), skillMap: new Map(), inserted: null };
+const EMPTY_DRAFT: Draft = { text: "", mentionMap: new Map(), skillMap: new Map(), inserted: null, dismissed: false };
+
+/** A pick still in the draft text: an `@` mention or a `/` skill, by its label. */
+export type ComposerPick = { kind: MentionChipKind; label: string };
+
+/** The labels of `map` whose `@Label` (or `/Label`) is still in `text`. */
+function labelsIn(text: string, map: ReadonlyMap<string, string>, pattern: (labels: string[]) => RegExp): string[] {
+  return [...map.keys()].filter((label) => pattern([label]).test(text));
+}
 
 /** The open picker: what it lists for the trigger the draft is typing. */
 export type MentionMenuState = {
@@ -74,7 +87,7 @@ export function useMentionComposer(repoId: Id<"githubRepos"> | undefined, provid
   const trigger = found && !isInsertedTokenTrigger(draft.text, found.startIndex, draft.inserted) ? found : null;
   const pool = trigger?.kind === "slash" ? skills : items;
   const menu: MentionMenuState | null =
-    trigger && shouldShowMentionPicker(trigger, { mentions: items.length, skills: skills.length, hasEmptySkills: true })
+    trigger && !draft.dismissed && shouldShowMentionPicker(trigger, { mentions: items.length, skills: skills.length, hasEmptySkills: true })
       ? { trigger, rows: filterMentionItems(pool, trigger.query), peopleIds, hasAny: pool.length > 0 }
       : null;
 
@@ -85,6 +98,7 @@ export function useMentionComposer(repoId: Id<"githubRepos"> | undefined, provid
     setDraft({
       text: accepted.value,
       inserted: accepted.inserted,
+      dismissed: false,
       mentionMap: slash ? draft.mentionMap : new Map(draft.mentionMap).set(item.label, item.id),
       skillMap: slash ? new Map(draft.skillMap).set(item.label, item.id) : draft.skillMap,
     });
@@ -103,8 +117,11 @@ export function useMentionComposer(repoId: Id<"githubRepos"> | undefined, provid
     }
     // The guard holds only while the chip it names is still there.
     const inserted = draft.inserted && text.startsWith(draft.inserted.token, draft.inserted.startIndex) ? draft.inserted : null;
-    setDraft({ ...draft, text, inserted });
+    setDraft({ ...draft, text, inserted, dismissed: false });
   };
+
+  /** Closes the picker until the next edit, as the web Escape (`closeTrigger`). */
+  const dismiss = () => setDraft({ ...draft, dismissed: true });
 
   /** Adds stored tokenized text (a stash entry) after the draft, as the web stash restore. */
   const restore = (tokenized: string) => {
@@ -114,14 +131,42 @@ export function useMentionComposer(repoId: Id<"githubRepos"> | undefined, provid
       mentionMap: new Map([...draft.mentionMap, ...restored.mentionMap]),
       skillMap: new Map([...draft.skillMap, ...restored.skillMap]),
       inserted: null,
+      dismissed: false,
     });
   };
 
+  /** Takes a pick out: each `@Label` (or `/Label`) and the space after it, and its id. */
+  const removePick = (pick: ComposerPick) => {
+    const pattern = (pick.kind === "slash" ? buildSkillPattern : buildMentionPattern)([pick.label]);
+    const without = (map: ReadonlyMap<string, string>) => new Map([...map].filter(([label]) => label !== pick.label));
+    const text = draft.text.replace(new RegExp(`${pattern.source} ?`, "g"), "");
+    if (text.trim() === "") {
+      setDraft(EMPTY_DRAFT);
+      return;
+    }
+    setDraft({
+      text,
+      inserted: null,
+      dismissed: false,
+      mentionMap: pick.kind === "at" ? without(draft.mentionMap) : draft.mentionMap,
+      skillMap: pick.kind === "slash" ? without(draft.skillMap) : draft.skillMap,
+    });
+  };
+
+  const picks: ComposerPick[] = [
+    ...labelsIn(draft.text, draft.mentionMap, buildMentionPattern).map((label): ComposerPick => ({ kind: "at", label })),
+    ...labelsIn(draft.text, draft.skillMap, buildSkillPattern).map((label): ComposerPick => ({ kind: "slash", label })),
+  ];
+
   return {
     text: draft.text,
+    /** The picks still in the text, `@` mentions first, as chips above the field. */
+    picks,
+    removePick,
     setText,
     menu,
     pick,
+    dismiss,
     restore,
     /** The wire text for a send: each `@Label` / `/Label` picked becomes its token. */
     tokenize: (text: string) => tokenizeMentionText(text, draft),

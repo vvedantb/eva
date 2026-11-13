@@ -27,6 +27,7 @@
     "react/static-components": "warn",
     "react/purity": "warn",
     "import/no-duplicates": "error",
+    "no-unused-vars": "warn",
     "anti-slop/no-chained-type-assertions": "error",
     "anti-slop/no-conditional-empty-object-spread": "off",
     "anti-slop/no-known-value-widening": "off",
@@ -161,6 +162,53 @@
         "no-console": "off",
         "no-restricted-imports": "off",
         "no-alert": "off"
+      }
+    },
+    {
+      "files": ["apps/mobile/src/**", "apps/mobile/app/**", "packages/shared/src/**"],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          {
+            "property": "toSorted",
+            "message": "Hermes (the phone engine) lacks the ES2023 array copy methods; this crashed the phone Sessions tab. Copy, then sort: [...list].sort()."
+          },
+          {
+            "property": "toReversed",
+            "message": "Hermes (the phone engine) lacks the ES2023 array copy methods. Copy, then reverse: [...list].reverse()."
+          },
+          {
+            "property": "toSpliced",
+            "message": "Hermes (the phone engine) lacks the ES2023 array copy methods. Copy, then splice."
+          },
+          {
+            "object": "Object",
+            "property": "groupBy",
+            "message": "Hermes (the phone engine) lacks Object.groupBy. Build the groups with a loop or a Map."
+          },
+          {
+            "object": "Map",
+            "property": "groupBy",
+            "message": "Hermes (the phone engine) lacks Map.groupBy. Build the Map with a loop."
+          },
+          {
+            "object": "Promise",
+            "property": "withResolvers",
+            "message": "Hermes (the phone engine) lacks Promise.withResolvers. Use new Promise((resolve, reject) => ...)."
+          },
+          {
+            "object": "Array",
+            "property": "fromAsync",
+            "message": "Hermes (the phone engine) lacks Array.fromAsync. Collect with for await."
+          }
+        ],
+        "no-restricted-globals": [
+          "error",
+          {
+            "name": "structuredClone",
+            "message": "Hermes (the phone engine) has no structuredClone. Copy the shape you need explicitly."
+          }
+        ]
       }
     }
   ],

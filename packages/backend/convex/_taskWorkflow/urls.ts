@@ -1,10 +1,9 @@
+import { ENTITY_SECTION, repoBasePath } from "@eva/shared";
 import { getEvaBaseUrl } from "../_env/webAppUrl";
 
-function repoPath(repoName: string, rootDirectory?: string): string {
-  if (!rootDirectory) return repoName;
-  const appName = rootDirectory.split("/").pop();
-  if (!appName) return repoName;
-  return `${repoName}/${appName}`;
+/** Absolute web URL of a repo: Eva's base URL plus `repoBasePath`. */
+function repoUrl(owner: string, name: string, rootDirectory?: string): string {
+  return `${getEvaBaseUrl()}${repoBasePath({ owner, name, rootDirectory })}`;
 }
 
 /** Builds a link to view a task in the Eva web app. */
@@ -15,12 +14,9 @@ export function buildEvaTaskUrl(
   projectId?: string,
   rootDirectory?: string,
 ): string {
-  const segment = repoPath(repoName, rootDirectory);
-  const baseUrl = getEvaBaseUrl();
-  if (projectId) {
-    return `${baseUrl}/${repoOwner}/${segment}/projects/${projectId}`;
-  }
-  return `${baseUrl}/${repoOwner}/${segment}/quick-tasks/${taskId}`;
+  const base = repoUrl(repoOwner, repoName, rootDirectory);
+  if (projectId) return `${base}/${ENTITY_SECTION.project}/${projectId}`;
+  return `${base}/${ENTITY_SECTION.task}/${taskId}`;
 }
 
 /** Builds a link to view a session in the Eva web app. */
@@ -30,8 +26,7 @@ export function buildEvaSessionUrl(
   sessionId: string,
   rootDirectory?: string,
 ): string {
-  const segment = repoPath(repoName, rootDirectory);
-  return `${getEvaBaseUrl()}/${repoOwner}/${segment}/sessions/${sessionId}`;
+  return `${repoUrl(repoOwner, repoName, rootDirectory)}/${ENTITY_SECTION.session}/${sessionId}`;
 }
 
 /** Builds a link to view a project in the Eva web app. */
@@ -41,8 +36,7 @@ export function buildEvaProjectUrl(
   projectId: string,
   rootDirectory?: string,
 ): string {
-  const segment = repoPath(repoName, rootDirectory);
-  return `${getEvaBaseUrl()}/${repoOwner}/${segment}/projects/${projectId}`;
+  return `${repoUrl(repoOwner, repoName, rootDirectory)}/${ENTITY_SECTION.project}/${projectId}`;
 }
 
 /** Builds a link to view a doc in the Eva web app (path uses per-repo numId). */
@@ -58,8 +52,7 @@ export function buildEvaDocUrl(
     | "user-flows" = "content",
   rootDirectory?: string,
 ): string {
-  const segment = repoPath(repoName, rootDirectory);
-  return `${getEvaBaseUrl()}/${repoOwner}/${segment}/docs/${docNumId}/${docTab}`;
+  return `${repoUrl(repoOwner, repoName, rootDirectory)}/docs/${docNumId}/${docTab}`;
 }
 
 /** Builds a link to a doc's Testing Arena tab (path uses per-repo numId). */
@@ -70,8 +63,7 @@ export function buildEvaArenaUrl(
   arenaTab: "code" | "browser",
   rootDirectory?: string,
 ): string {
-  const segment = repoPath(repoName, rootDirectory);
-  return `${getEvaBaseUrl()}/${repoOwner}/${segment}/testing-arena/${docNumId}/${arenaTab}`;
+  return `${repoUrl(repoOwner, repoName, rootDirectory)}/testing-arena/${docNumId}/${arenaTab}`;
 }
 
 /** Builds a link to a PR under Reviews (keyed by GitHub PR number). */
@@ -82,6 +74,5 @@ export function buildEvaReviewUrl(
   reviewTab: "overview" | "recap" | "diff" = "recap",
   rootDirectory?: string,
 ): string {
-  const segment = repoPath(repoName, rootDirectory);
-  return `${getEvaBaseUrl()}/${repoOwner}/${segment}/reviews/${prNumber}/${reviewTab}`;
+  return `${repoUrl(repoOwner, repoName, rootDirectory)}/reviews/${prNumber}/${reviewTab}`;
 }

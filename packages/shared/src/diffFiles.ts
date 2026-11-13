@@ -1,0 +1,499 @@
+/**
+ * A git diff split into per-file entries, with GitHub-style counts. Pure, so
+ * the web Diffs tab and the phone diff screen read one parser.
+ */
+
+/** A changed file's git status: the subset of the web tree's `GitStatus` a patch header can name. */
+export type DiffFileStatus = "added" | "deleted" | "renamed" | "modified";
+
+/** Splits a multi-file git diff into one self-contained patch string per file. */
+function splitDiffFiles(diff: string): string[] {
+  if (diff.trim().length === 0) return [];
+  return diff
+    .split(/\n(?=diff --git )/)
+    .map((section) => section.trim())
+    .filter((section) => section.startsWith("diff --git "));
+}
+
+/** Reads the (new) file path from a single-file git patch, for a stable key. */
+function fileNameFromPatch(patch: string, fallback: string): string {
+  const match = patch.match(/^diff --git a\/.+? b\/(.+)$/m);
+  return match ? match[1] : fallback;
+}
+
+/**
+ * Classifies a single-file git patch into a git status the file tree can colour.
+ * Reads the patch's extended header lines (new/deleted/rename) rather than
+ * counting +/- lines, so it mirrors git's own semantics; anything else is a
+ * plain content change ("modified").
+ */
+function diffFileStatus(patch: string): DiffFileStatus {
+  if (/^new file mode /m.test(patch)) return "added";
+  if (/^deleted file mode /m.test(patch)) return "deleted";
+  if (/^rename (from|to) /m.test(patch)) return "renamed";
+  return "modified";
+}
+
+/** Reads the old path from a rename patch, so headers can show `old → new`. */
+function renamedFromPatch(patch: string): string | null {
+  const match = patch.match(/^rename from (.+)$/m);
+  return match ? match[1] : null;
+}
+
+/**
+ * Counts changed lines the way GitHub's file header does: `+`/`-` content
+ * lines only. Context lines and hunk count come from the same pass — they are
+ * only used to estimate a file's rendered height before it is mounted.
+ *
+ * Only lines inside a hunk are counted. The `---`/`+++` file markers live in
+ * the patch header, before the first `@@`, so skipping everything up to it is
+ * what excludes them — testing for a `---`/`+++` prefix instead would miss a
+ * deleted `---` (YAML front matter), `--brand: red;` (CSS), or an added `++i`.
+ */
+function diffFileStats(patch: string): {
+  additions: number;
+  deletions: number;
+  contextLines: number;
+  hunkCount: number;
+} {
+  let additions = 0;
+  let deletions = 0;
+  let contextLines = 0;
+  let hunkCount = 0;
+  for (const line of patch.split("\n")) {
+    if (line.startsWith("@@ ")) {
+      hunkCount += 1;
+      continue;
+    }
+    if (hunkCount === 0) continue;
+    if (line.startsWith("+")) additions += 1;
+    else if (line.startsWith("-")) deletions += 1;
+    else if (line.startsWith(" ")) contextLines += 1;
+  }
+  return { additions, deletions, contextLines, hunkCount };
+}
+
+/** One changed file, with everything the header and body need to render it. */
+export interface DiffFileEntry {
+  /** Self-contained single-file patch. */
+  readonly patch: string;
+  /** The file's (new) path — also the accordion/tree key. */
+  readonly path: string;
+  readonly status: DiffFileStatus;
+  readonly additions: number;
+  readonly deletions: number;
+  /** Unchanged lines carried as hunk context — for height estimation only. */
+  readonly contextLines: number;
+  /** Number of `@@` hunks — each renders one separator row. */
+  readonly hunkCount: number;
+  /** Old path when the file was renamed or moved. */
+  readonly renamedFrom: string | null;
+  /** GitHub does not render binary contents, and neither can we. */
+  readonly binary: boolean;
+  /**
+   * False for patches with no `@@` hunks — pure renames, mode changes, and
+   * empty new files. There is nothing to diff, so the body says so instead of
+   * rendering an empty code view.
+   */
+  readonly hasHunks: boolean;
+}
+
+/**
+ * Turns a multi-file diff into the per-file entries the Diffs tab renders.
+ * Everything here is derived from the patch text, so a single pass over the
+ * diff gives the tree, the headers, and the totals.
+ *
+ * Paths are unique: the first patch for a path wins. `@pierre/trees` throws
+ * `Duplicate path` when the same path is appended twice, and the Review pane is
+ * always mounted (just hidden), so one repeated path would take down the whole
+ * sandbox route. A repeat is not a legal git diff, but it does reach us — the
+ * `pulls.listFiles` fallback for 300+ file PRs can repeat an entry across pages,
+ * and a path is also the React key for each accordion item and scroll ref.
+ */
+export function buildDiffFileEntries(diff: string): DiffFileEntry[] {
+  const seenPaths = new Set<string>();
+  return splitDiffFiles(diff).flatMap((patch, index) => {
+    const stats = diffFileStats(patch);
+    const path = fileNameFromPatch(patch, `file-${index}`);
+    if (seenPaths.has(path)) return [];
+    seenPaths.add(path);
+    return {
+      patch,
+      path,
+      status: diffFileStatus(patch),
+      additions: stats.additions,
+      deletions: stats.deletions,
+      contextLines: stats.contextLines,
+      hunkCount: stats.hunkCount,
+      renamedFrom: renamedFromPatch(patch),
+      binary:
+        /^GIT binary patch/m.test(patch) ||
+        /^Binary files .* differ$/m.test(patch),
+      hasHunks: /^@@ /m.test(patch),
+    };
+  });
+}
+
+/** One row of a unified diff view: a hunk separator, or a line with its old and new line numbers. */
+export type UnifiedDiffLine =
+  | { readonly kind: "hunk"; readonly text: string }
+  | {
+      readonly kind: "added" | "removed" | "context";
+      /** The line's content, without its `+`/`-`/space marker. */
+      readonly text: string;
+      /** Line number on the old side; null for an added line. */
+      readonly oldLine: number | null;
+      /** Line number on the new side; null for a removed line. */
+      readonly newLine: number | null;
+    };
+
+const HUNK_HEADER = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
+
+/**
+ * The rows a unified diff view draws for one file's patch: each `@@` header,
+ * then its lines numbered from the header's start lines. The patch header
+ * before the first hunk is skipped, as `diffFileStats` does, and so are
+ * `\ No newline at end of file` markers.
+ */
+export function unifiedDiffLines(patch: string): UnifiedDiffLine[] {
+  const rows: UnifiedDiffLine[] = [];
+  let oldLine = 0;
+  let newLine = 0;
+  let inHunk = false;
+  for (const line of patch.split("\n")) {
+    const header = HUNK_HEADER.exec(line);
+    if (header) {
+      inHunk = true;
+      oldLine = Number(header[1]);
+      newLine = Number(header[2]);
+      rows.push({ kind: "hunk", text: line });
+      continue;
+    }
+    if (!inHunk) continue;
+    if (line.startsWith("+")) {
+      rows.push({ kind: "added", text: line.slice(1), oldLine: null, newLine });
+      newLine += 1;
+    } else if (line.startsWith("-")) {
+      rows.push({ kind: "removed", text: line.slice(1), oldLine, newLine: null });
+      oldLine += 1;
+    } else if (line.startsWith(" ")) {
+      rows.push({ kind: "context", text: line.slice(1), oldLine, newLine });
+      oldLine += 1;
+      newLine += 1;
+    }
+  }
+  return rows;
+}
+
+/**
+ * Where a review comment on one unified diff row attaches in GitHub's review
+ * model, and the web range label for it. A removed line is on the base side
+ * (`LEFT`, its old number); an added or context line is on the head side
+ * (`RIGHT`, its new number), as the web Code tab anchors a one-line
+ * selection. The label is the number with the row's `+`/`-` marker, so `+12`,
+ * `-4` or `9`. Null for a hunk header, which takes no comment.
+ */
+export function lineCommentTarget(
+  row: UnifiedDiffLine,
+): { line: number; side: "LEFT" | "RIGHT"; label: string } | null {
+  if (row.kind === "hunk") return null;
+  const line = row.kind === "removed" ? row.oldLine : row.newLine;
+  if (line === null) return null;
+  const marker = row.kind === "added" ? "+" : row.kind === "removed" ? "-" : "";
+  return {
+    line,
+    side: row.kind === "removed" ? "LEFT" : "RIGHT",
+    label: `${marker}${line}`,
+  };
+}
+
+/**
+ * Where a review comment on the rows `from` to `to` (indexes into one file's
+ * `unifiedDiffLines`, either order) attaches in GitHub's review model, as the
+ * web Code tab anchors a selected range: the last row carries the comment,
+ * and `startLine` / `startSide` are set only when the range covers more than
+ * that one line (GitHub rejects a start equal to the end). The label is the
+ * web range label: `+3 to +5` when every row is the same kind of change,
+ * `3 to 7` otherwise, or the one row's label. Null when the range touches a
+ * hunk header, since a GitHub range stays inside one hunk.
+ */
+export function lineRangeCommentTarget(
+  rows: readonly UnifiedDiffLine[],
+  from: number,
+  to: number,
+): {
+  line: number;
+  side: "LEFT" | "RIGHT";
+  startLine: number | null;
+  startSide: "LEFT" | "RIGHT" | null;
+  label: string;
+} | null {
+  const span = rows.slice(Math.min(from, to), Math.max(from, to) + 1);
+  const first = span[0];
+  const last = span.at(-1);
+  if (first === undefined || last === undefined) return null;
+  if (span.some((row) => row.kind === "hunk")) return null;
+  const start = lineCommentTarget(first);
+  const end = lineCommentTarget(last);
+  if (start === null || end === null) return null;
+  const multiLine = start.side !== end.side || start.line < end.line;
+  if (!multiLine) return { ...end, startLine: null, startSide: null };
+  const marker =
+    first.kind !== "context" && span.every((row) => row.kind === first.kind)
+      ? first.kind === "added"
+        ? "+"
+        : "-"
+      : "";
+  const number = (row: UnifiedDiffLine) =>
+    row.kind === "hunk" ? null : (row.newLine ?? row.oldLine);
+  return {
+    line: end.line,
+    side: end.side,
+    startLine: start.line,
+    startSide: start.side,
+    label: `${marker}${number(first)} to ${marker}${number(last)}`,
+  };
+}
+
+/** What a changed file is, for splitting a PR's size the way t3code does. */
+export type DiffFileKind = "code" | "tests" | "mocks" | "generated";
+
+export const DIFF_FILE_KINDS: readonly DiffFileKind[] = [
+  "code",
+  "tests",
+  "mocks",
+  "generated",
+];
+
+const LOCKFILES = new Set([
+  "pnpm-lock.yaml",
+  "package-lock.json",
+  "npm-shrinkwrap.json",
+  "yarn.lock",
+  "bun.lock",
+  "bun.lockb",
+  "Cargo.lock",
+  "go.sum",
+  "poetry.lock",
+  "uv.lock",
+  "Gemfile.lock",
+  "composer.lock",
+  "Podfile.lock",
+  "flake.lock",
+]);
+
+/**
+ * Classifies a file by its path alone. Order matters: a fixture under `tests/`
+ * is a mock, and a snapshot under `__tests__/` is generated.
+ */
+export function diffFileKind(path: string): DiffFileKind {
+  const segments = path.split("/");
+  const fileName = segments.at(-1) ?? path;
+  const dirs = segments.slice(0, -1);
+  if (
+    LOCKFILES.has(fileName) ||
+    /\.(gen|generated|min)\.[^.]+$/.test(fileName) ||
+    /\.(snap|map)$/.test(fileName) ||
+    dirs.some((dir) =>
+      ["_generated", "__generated__", "__snapshots__", "generated"].includes(
+        dir,
+      ),
+    )
+  ) {
+    return "generated";
+  }
+  if (
+    /[.-](mock|mocks|fixture|fixtures|stub|stubs)\.[^.]+$/.test(fileName) ||
+    /(Mock|Mocks|Fixture|Fixtures)\.[^.]+$/.test(fileName) ||
+    dirs.some((dir) =>
+      ["__mocks__", "mocks", "fixtures", "__fixtures__", "stubs"].includes(dir),
+    )
+  ) {
+    return "mocks";
+  }
+  if (
+    /\.(test|spec|e2e)\.[^.]+$/.test(fileName) ||
+    /_test\.[^.]+$/.test(fileName) ||
+    /^test_.+\.py$/.test(fileName) ||
+    dirs.some((dir) =>
+      ["__tests__", "test", "tests", "e2e", "spec"].includes(dir),
+    )
+  ) {
+    return "tests";
+  }
+  return "code";
+}
+
+interface DiffSizeTotals {
+  readonly files: number;
+  readonly additions: number;
+  readonly deletions: number;
+}
+
+/** A diff's line totals, overall and per {@link DiffFileKind}. */
+export interface DiffSize {
+  readonly total: DiffSizeTotals;
+  readonly byKind: Record<DiffFileKind, DiffSizeTotals>;
+}
+
+export function summarizeDiffSize(
+  entries: ReadonlyArray<DiffFileEntry>,
+): DiffSize {
+  const empty: DiffSizeTotals = { files: 0, additions: 0, deletions: 0 };
+  const add = (sum: DiffSizeTotals, entry: DiffFileEntry): DiffSizeTotals => ({
+    files: sum.files + 1,
+    additions: sum.additions + entry.additions,
+    deletions: sum.deletions + entry.deletions,
+  });
+  const byKind: Record<DiffFileKind, DiffSizeTotals> = {
+    code: empty,
+    tests: empty,
+    mocks: empty,
+    generated: empty,
+  };
+  let total = empty;
+  for (const entry of entries) {
+    const kind = diffFileKind(entry.path);
+    byKind[kind] = add(byKind[kind], entry);
+    total = add(total, entry);
+  }
+  return { total, byKind };
+}
+
+/** Collapse whitespace so `foo  bar` and `foo bar` compare equal. */
+function collapseWhitespace(value: string): string {
+  return value.replace(/\s+/g, "");
+}
+
+/*
+ * Hunk-body classification: a leading `-`/`+` is always a real change. The
+ * `---`/`+++` file markers only occur in the patch header, which
+ * `ignoreWhitespaceInPatch` copies straight through before it ever reaches a
+ * hunk, so excluding them here would silently swallow genuine edits to lines
+ * whose own content starts with `-`/`+` (`---`, `--brand: red;`, `++i`).
+ */
+function isMinusLine(line: string): boolean {
+  return line.startsWith("-");
+}
+
+function isPlusLine(line: string): boolean {
+  return line.startsWith("+");
+}
+
+/**
+ * Pair deleted/added lines that differ only by whitespace and turn those
+ * pairs into context. Unmatched +/- lines stay as real changes — the same
+ * idea as `git diff --ignore-all-space`, applied to an already-fetched
+ * unified patch so the GitHub PR payload does not need a second fetch.
+ */
+function filterHunkLines(lines: string[]): {
+  lines: string[];
+  hasChanges: boolean;
+} {
+  const out: string[] = [];
+  let hasChanges = false;
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index];
+    if (line === undefined) break;
+    if (!isMinusLine(line) && !isPlusLine(line)) {
+      out.push(line);
+      index += 1;
+      continue;
+    }
+    const minus: string[] = [];
+    const plus: string[] = [];
+    while (index < lines.length) {
+      const current = lines[index];
+      if (current === undefined || !isMinusLine(current)) break;
+      minus.push(current);
+      index += 1;
+    }
+    while (index < lines.length) {
+      const current = lines[index];
+      if (current === undefined || !isPlusLine(current)) break;
+      plus.push(current);
+      index += 1;
+    }
+    const usedPlus = new Set<number>();
+    for (const removed of minus) {
+      const normalized = collapseWhitespace(removed.slice(1));
+      const matchAt = plus.findIndex(
+        (added, plusIndex) =>
+          !usedPlus.has(plusIndex) &&
+          collapseWhitespace(added.slice(1)) === normalized,
+      );
+      if (matchAt >= 0) {
+        usedPlus.add(matchAt);
+        const kept = plus[matchAt];
+        out.push(` ${kept ? kept.slice(1) : removed.slice(1)}`);
+        continue;
+      }
+      out.push(removed);
+      hasChanges = true;
+    }
+    for (const [plusIndex, added] of plus.entries()) {
+      if (usedPlus.has(plusIndex)) continue;
+      out.push(added);
+      hasChanges = true;
+    }
+  }
+  return { lines: out, hasChanges };
+}
+
+/**
+ * Re-emit a unified patch with whitespace-only edits dropped. Binary patches
+ * and header-only files are left alone.
+ */
+export function ignoreWhitespaceInPatch(patch: string): string {
+  if (
+    /^GIT binary patch/m.test(patch) ||
+    /^Binary files .* differ$/m.test(patch)
+  ) {
+    return patch;
+  }
+  const lines = patch.split("\n");
+  const out: string[] = [];
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index];
+    if (line === undefined) break;
+    if (!line.startsWith("@@ ")) {
+      out.push(line);
+      index += 1;
+      continue;
+    }
+    const header = line;
+    index += 1;
+    const hunk: string[] = [];
+    while (index < lines.length) {
+      const current = lines[index];
+      if (current === undefined) break;
+      if (current.startsWith("@@ ") || current.startsWith("diff --git ")) {
+        break;
+      }
+      hunk.push(current);
+      index += 1;
+    }
+    const filtered = filterHunkLines(hunk);
+    if (!filtered.hasChanges) continue;
+    out.push(header);
+    out.push(...filtered.lines);
+  }
+  return out.join("\n");
+}
+
+/** Apply ignore-whitespace to each file entry and recompute header stats. */
+export function applyIgnoreWhitespace(
+  entries: ReadonlyArray<DiffFileEntry>,
+): DiffFileEntry[] {
+  return entries.flatMap((entry) => {
+    if (entry.binary || !entry.hasHunks) return [entry];
+    // A file whose every hunk was whitespace-only filters down to a header-only
+    // patch. GitHub drops such files from the list entirely; keeping them would
+    // render a "nothing to diff" body and inflate the toolbar's file count.
+    return buildDiffFileEntries(ignoreWhitespaceInPatch(entry.patch)).filter(
+      (filtered) => filtered.hasHunks,
+    );
+  });
+}

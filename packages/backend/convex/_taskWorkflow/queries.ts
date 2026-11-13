@@ -70,6 +70,8 @@ export const getTaskData = internalQuery({
     repoId: v.id("githubRepos"),
     runId: v.id("agentRuns"),
     projectId: v.optional(v.id("projects")),
+    /** The task's session (a project task's: the project's): its sandbox is the one the run reuses. */
+    ownedSessionId: v.optional(v.id("sessions")),
     branchName: v.optional(v.string()),
     mode: v.optional(runModeValidator),
   },
@@ -91,9 +93,6 @@ export const getTaskData = internalQuery({
       use1mContext: v.optional(v.boolean()),
       fastMode: v.optional(v.boolean()),
     }),
-    projectSandboxId: v.optional(v.string()),
-    taskSandboxId: v.optional(v.string()),
-    keepTaskSandboxActiveAfterRun: v.boolean(),
     deploymentProjectName: v.optional(v.string()),
     rootDirectory: v.string(),
     devPort: v.optional(v.number()),
@@ -135,14 +134,11 @@ export const getTaskData = internalQuery({
       return resolvedMessage;
     };
 
-    let projectSandboxId: string | undefined;
     let projectContext: { title: string; description?: string } | undefined;
     let project = null;
     if (args.projectId) {
       project = await ctx.db.get(args.projectId);
       if (project) {
-        projectSandboxId = project.sandboxId;
-
         projectContext = {
           title: project.title,
           description: await resolveDescriptionForPrompt(
@@ -155,12 +151,6 @@ export const getTaskData = internalQuery({
     const resolvedTaskDescription = await resolveDescriptionForPrompt(
       task.description ?? undefined,
     );
-
-    // Non-project (quick) tasks persist their sandbox on the task itself so
-    // change-request / resolve_conflicts runs reuse the same paused filesystem.
-    const taskSandboxId = args.projectId ? undefined : task.sandboxId;
-    const keepTaskSandboxActiveAfterRun =
-      !args.projectId && task.reviewTaskSandboxStatus === "active";
 
     // Only surface comments the last successful run hasn't already addressed,
     // so subsequent "Make changes" runs focus on NEW feedback. Cutoff is the
@@ -284,9 +274,6 @@ export const getTaskData = internalQuery({
         use1mContext: task.use1mContext,
         fastMode: task.fastMode,
       }),
-      projectSandboxId,
-      taskSandboxId,
-      keepTaskSandboxActiveAfterRun,
       deploymentProjectName: repo.deploymentProjectName,
       rootDirectory,
       devPort: repo.devPort,

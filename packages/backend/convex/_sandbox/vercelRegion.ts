@@ -4,20 +4,25 @@ import type { SandboxRegion } from "@vercel/sandbox";
  * Region for both sandboxes and Drives. Drives are region-pinned and a sandbox
  * can only mount one created in its own region, so the two must be set from a
  * single value.
+ *
+ * iad1 (Washington, D.C.): Active CPU, memory and Drive rates there are about
+ * 30% under cdg1 (Paris) and lhr1 (London), checked 2026-11-13. Sandboxes ran
+ * in cdg1 from 2026-10-07 (#899) to 2026-11-13.
  */
-export const SANDBOX_REGION: SandboxRegion = "cdg1";
+export const SANDBOX_REGION: SandboxRegion = "iad1";
 /**
  * Regions a sandbox may land in when {@link SANDBOX_REGION} has no capacity.
- * Drives are region-pinned, so a failed-over sandbox cannot mount the cdg1
- * Drive; if that fails the create, the mount fallback ladder retries without it.
+ * cle1 (Cleveland) is the nearest other Sandbox region. Drives are
+ * region-pinned, so a failed-over sandbox cannot mount the iad1 Drive; if that
+ * fails the create, the mount fallback ladder retries without it.
  */
-export const SANDBOX_FAILOVER_REGIONS: SandboxRegion[] = ["iad1"];
+export const SANDBOX_FAILOVER_REGIONS: SandboxRegion[] = ["cle1"];
 
 /**
  * Where a create runs. A snapshot only restores in a region it lives in, and
- * seed snapshots taken before the move to {@link SANDBOX_REGION} live in iad1
- * only — so a snapshot create follows its snapshot. `undefined` (no snapshot,
- * or the lookup failed) keeps the default and lets the create report the real
+ * snapshots taken while sandboxes ran in cdg1 live there only — so a snapshot
+ * create follows its snapshot until the repo is seeded again. `undefined` (no
+ * snapshot, or the lookup failed) keeps the default and lets the create report the real
  * error. Drives stay pinned to {@link SANDBOX_REGION}, so any other region
  * skips them rather than spend a failed create.
  */
