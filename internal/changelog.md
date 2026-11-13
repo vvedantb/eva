@@ -1,5 +1,15 @@
 # Changelog
 
+## Session chats: Delete a parallel chat and all its messages
+
+Date: 2026-11-13
+
+WHY: Users could only rename chat tabs. Extra chats piled up with no way to clear them.
+
+- Web: right-click a chat tab → Delete → confirm dialog. Not on Main; disabled while the chat runs. Deleting the open chat switches to Main.
+- Backend: `sessionChats.remove` hides the chat (`archived`), drops its queued sends and the caller's draft, then `_sessionChats/purge.purgeDeletedChat` deletes messages 100 per run, then cards, env requests, proposals and closed turns. The chat row stays as a tombstone so `?chat=N` numbers are never reused.
+- Architectural: `deleteChatRows` moved from `_migrations/deleteRepos.ts` to `_sessionChats/purge.ts` (optional page size) and is shared by both. `tests/sessionChatTabs.test.ts` called a removed `archive` mutation; it now covers `remove`.
+
 ## Phone: chats load like the web (newest 30, then older pages)
 
 Date: 2026-11-13

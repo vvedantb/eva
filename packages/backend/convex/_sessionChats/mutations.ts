@@ -27,6 +27,8 @@ import {
   sessionChatValidator,
   type SessionChatContext,
 } from "./helpers";
+import { deleteQueuedMessages } from "./purge";
+import { findOpenTurn } from "../_chat/turnStore";
 
 /**
  * Continuation of `ensureMainChat`: moves the next bounded page of a heavy
@@ -115,6 +117,44 @@ export const rename = authMutation({
     const title = args.title.trim();
     if (!title) return null;
     await ctx.db.patch(chat._id, { title });
+    return null;
+  },
+});
+
+/**
+ * Deletes a parallel chat and all its messages. The chat is hidden at once
+ * (`archived`: no tab, its link opens Main), then `purgeDeletedChat` removes
+ * its rows in pages. Main and a running chat can't be deleted.
+ */
+export const remove = authMutation({
+  args: { chatId: v.id("sessionChats") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const { chat, session } = await getSessionChatWithAccess(
+      ctx.db,
+      args.chatId,
+      ctx.userId,
+    );
+    assertStandaloneSession(session, "delete its chat");
+    if (chat.isMain) throw new Error("The Main chat can't be deleted");
+    if (await findOpenTurn(ctx, chat._id)) {
+      throw new Error("Stop this chat before you delete it");
+    }
+    await ctx.db.patch(chat._id, { archived: true });
+    // Now, not in the purge: a queued send must not start a turn meanwhile.
+    await deleteQueuedMessages(ctx, chat._id);
+    const drafts = await ctx.db
+      .query("drafts")
+      .withIndex("by_user_and_chat", (q) =>
+        q.eq("userId", ctx.userId).eq("chatId", chat._id),
+      )
+      .collect();
+    for (const draft of drafts) await ctx.db.delete(draft._id);
+    await ctx.scheduler.runAfter(
+      0,
+      internal._sessionChats.purge.purgeDeletedChat,
+      { chatId: chat._id },
+    );
     return null;
   },
 });
@@ -212,11 +252,7 @@ export const setTraits = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const { chatId, ...traits } = args;
-    const { chat } = await getSessionChatWithAccess(
-      ctx.db,
-      chatId,
-      ctx.userId,
-    );
+    const { chat } = await getSessionChatWithAccess(ctx.db, chatId, ctx.userId);
     await setSessionChatTraits(ctx, chat._id, traits);
     return null;
   },

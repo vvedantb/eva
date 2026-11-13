@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Doc, Id } from "@eva/backend";
 import { cn } from "@eva/ui";
 import {
+  ConfirmDialog,
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
@@ -13,7 +14,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@vvedantb/ui";
-import { IconPencil, IconPlus } from "@tabler/icons-react";
+import { IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
 import { ChatRenameDialog } from "@/lib/components/chat/ChatRenameDialog";
 import { useSessionChatActions } from "@/lib/components/chat/useSessionChatActions";
 
@@ -31,9 +32,10 @@ interface ChatTabsBarProps {
 
 /**
  * One tab per chat of the session, Main first, always visible so the `+`
- * that opens a parallel chat is discoverable. Tabs never close: a chat lives
- * as long as its session, so its history and agent are never lost by a stray
- * click. Anatomy follows `PreviewPaneTabs` (tone-only selected tab); the
+ * that opens a parallel chat is discoverable. Tabs have no close button: a
+ * parallel chat goes only through Delete in its context menu, behind a
+ * confirm, so a stray click never loses its history. Main can't be deleted.
+ * Anatomy follows `PreviewPaneTabs` (tone-only selected tab); the
  * running indicator is the sidebar's Drive grid so "working" reads the same
  * everywhere.
  */
@@ -46,12 +48,32 @@ export function ChatTabsBar({
   isReadOnly,
   isCreating,
 }: ChatTabsBarProps) {
-  const { renameChat } = useSessionChatActions();
+  const { renameChat, deleteChat } = useSessionChatActions();
   const [renameTarget, setRenameTarget] = useState<Doc<"sessionChats"> | null>(
     null,
   );
+  const [deleteTarget, setDeleteTarget] = useState<Doc<"sessionChats"> | null>(
+    null,
+  );
+  const [isDeleting, setIsDeleting] = useState(false);
   // Chats closed before tabs became permanent stay hidden.
   const openChats = chats.filter((chat) => chat.archived !== true);
+
+  const handleDelete = async (chat: Doc<"sessionChats">) => {
+    setIsDeleting(true);
+    try {
+      await deleteChat(chat._id);
+    } catch {
+      // The toast already explains it; keep the dialog open to retry.
+      setIsDeleting(false);
+      return;
+    }
+    setIsDeleting(false);
+    setDeleteTarget(null);
+    // The server already falls back to Main; this also clears `?chat=N`.
+    const mainChat = openChats.find((c) => c.isMain);
+    if (chat._id === activeChatId && mainChat) onSelect(mainChat);
+  };
 
   return (
     <>
@@ -106,6 +128,21 @@ export function ChatTabsBar({
                   <IconPencil size={16} />
                   Rename
                 </ContextMenuItem>
+                {!chat.isMain ? (
+                  <ContextMenuItem
+                    className="text-destructive"
+                    disabled={running}
+                    title={
+                      running
+                        ? "Stop this chat before you delete it"
+                        : undefined
+                    }
+                    onSelect={() => setDeleteTarget(chat)}
+                  >
+                    <IconTrash size={16} />
+                    Delete
+                  </ContextMenuItem>
+                ) : null}
               </ContextMenuContent>
             </ContextMenu>
           );
@@ -135,6 +172,27 @@ export function ChatTabsBar({
         onClose={() => setRenameTarget(null)}
         onSave={async (title) => {
           if (renameTarget) await renameChat(renameTarget._id, title);
+        }}
+      />
+      <ConfirmDialog
+        size="md"
+        open={deleteTarget !== null}
+        // Cancel, Escape and outside click are ignored while `pending`.
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        title="Delete this chat?"
+        description={
+          <>
+            <strong>{deleteTarget?.title}</strong> and all its messages are
+            deleted. This cannot be undone.
+          </>
+        }
+        confirmLabel="Delete chat"
+        variant="destructive"
+        pending={isDeleting}
+        onConfirm={() => {
+          if (deleteTarget) void handleDelete(deleteTarget);
         }}
       />
     </>
