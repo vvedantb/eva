@@ -12,6 +12,7 @@ import {
   PillTabs,
   SkeletonList,
   SkeletonRow,
+  type SwipeAction,
 } from "@vvedantb/native-ui/primitives";
 import { useLargerText } from "@vvedantb/native-ui/theme";
 import { useQueries, useQuery } from "convex/react";
@@ -30,11 +31,14 @@ import {
   sessionActionTarget,
   useSessionGroups,
   type SessionListItem,
+  type SessionRow,
 } from "@/sessions/SessionGroup";
 import { SESSION_ACTION_ITEMS, useSessionActions } from "@/sessions/useSessionActions";
 import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme } from "@/ui/theme";
+import { sectionIndex } from "@/ui/sectionIndex";
+import { LIST_WINDOW } from "@/ui/listWindow";
 
 type SessionTab = "active" | "archived";
 type Section = "sessions" | "quick-tasks" | "reviews";
@@ -44,6 +48,11 @@ const SECTIONS: ReadonlyArray<{ id: Section; label: string }> = [
   { id: "quick-tasks", label: "Quick Tasks" },
   { id: "reviews", label: "Reviews" },
 ];
+
+/** The section pills shown: simple view drops Reviews (outside the screen, see `sectionIndex`). */
+function visibleSections(simpleView: boolean) {
+  return simpleView ? SECTIONS.filter((option) => option.id !== "reviews") : SECTIONS;
+}
 
 /**
  * The Sessions tab holds the web's places to work on a repo: Sessions, Quick
@@ -61,8 +70,8 @@ export default function SessionsScreen() {
   const router = useRouter();
   const { section: sectionParam } = useLocalSearchParams<{ section?: string }>();
   const simpleView = useSimpleView();
-  const sections = simpleView ? SECTIONS.filter((option) => option.id !== "reviews") : SECTIONS;
-  const index = Math.max(0, sections.findIndex((option) => option.id === sectionParam));
+  const sections = visibleSections(simpleView);
+  const index = sectionIndex(sections, sectionParam);
   const section = sections[index] ?? { id: "sessions", label: "Sessions" };
   // Where the pages are, shared by the pager and the pill indicator.
   const progress = useSharedValue(index);
@@ -135,6 +144,17 @@ function SessionsSection() {
   const router = useRouter();
   const [tab, setTab] = useState<SessionTab>("active");
   const sessionActions = useSessionActions();
+  // The row menu and its swipe action, the same for every row in this tab.
+  const swipeKind = tab === "archived" ? "unarchive" : "archive";
+  const swipeItem = SESSION_ACTION_ITEMS[swipeKind];
+  const swipe: Omit<SwipeAction, "onPress"> = {
+    key: swipeKind,
+    label: swipeItem.label,
+    icon: swipeItem.icon,
+    tone: swipeItem.warning ? "warning" : "default",
+  };
+  const openRowMenu = (row: SessionRow) => sessionActions.openSheet(sessionActionTarget(row));
+  const runSwipe = (row: SessionRow) => sessionActions.run(swipeKind, sessionActionTarget(row));
   const repos = useQuery(api.githubRepos.list, {});
   const results = useQueries(
     sessionListQueries(
@@ -188,6 +208,7 @@ function SessionsSection() {
           sections={sections}
           keyExtractor={(row) => row.session._id}
           stickySectionHeadersEnabled={false}
+          {...LIST_WINDOW}
           renderSectionHeader={({ section }) => {
             const { entry } = section;
             return (
@@ -217,24 +238,10 @@ function SessionsSection() {
           }}
           // The Inbox hairline between the rows of a group.
           ItemSeparatorComponent={ListDivider}
-          renderItem={({ item: row }) => {
-            const target = sessionActionTarget(row);
-            const action = tab === "archived" ? "unarchive" : "archive";
-            const item = SESSION_ACTION_ITEMS[action];
-            return (
-              <SessionListRow
-                row={row}
-                onLongPress={() => sessionActions.openSheet(target)}
-                swipeAction={{
-                  key: action,
-                  label: item.label,
-                  icon: item.icon,
-                  tone: item.warning ? "warning" : "default",
-                  onPress: () => sessionActions.run(action, target),
-                }}
-              />
-            );
-          }}
+          // Stable handlers and swipe look, so a row whose session did not change keeps its output.
+          renderItem={({ item: row }) => (
+            <SessionListRow row={row} onOpenMenu={openRowMenu} swipe={swipe} onSwipe={runSwipe} />
+          )}
           renderSectionFooter={({ section }) => (
             <SessionGroupFooter section={section} onToggleExpanded={() => toggleExpanded(section.key)} />
           )}

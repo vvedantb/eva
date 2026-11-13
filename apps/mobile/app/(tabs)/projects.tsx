@@ -11,6 +11,7 @@ import { ProjectsSection, useProjectRepo } from "@/projects/ProjectsSection";
 import { TodaySection, useShowsToday } from "@/today/TodaySection";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme } from "@/ui/theme";
+import { sectionIndex } from "@/ui/sectionIndex";
 
 type Section = "projects" | "docs" | "drafts" | "today";
 
@@ -20,6 +21,11 @@ const SECTIONS: ReadonlyArray<{ id: Section; label: string }> = [
   { id: "drafts", label: "Drafts" },
   { id: "today", label: "Today" },
 ];
+
+/** The section pills shown: Today only while the standup is on or has history (outside the screen, see `sectionIndex`). */
+function visibleSections(showsToday: boolean) {
+  return showsToday ? SECTIONS : SECTIONS.filter((option) => option.id !== "today");
+}
 
 /**
  * The Projects tab holds the web's per-repo pages that are not a place to
@@ -36,8 +42,8 @@ export default function ProjectsScreen() {
   const { section: sectionParam } = useLocalSearchParams<{ section?: string }>();
   const { repo, openNew } = useProjectRepo();
   const showsToday = useShowsToday(repo?._id);
-  const sections = showsToday ? SECTIONS : SECTIONS.filter((option) => option.id !== "today");
-  const index = Math.max(0, sections.findIndex((option) => option.id === sectionParam));
+  const sections = visibleSections(showsToday);
+  const index = sectionIndex(sections, sectionParam);
   const section = sections[index] ?? { id: "projects", label: "Projects" };
   // Where the pages are, shared by the pager and the pill indicator.
   const progress = useSharedValue(index);
