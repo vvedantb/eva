@@ -2,7 +2,7 @@
 
 import { SignInButton } from "@clerk/clerk-react";
 import { cn } from "@eva/ui";
-import { Button } from "@vvedantb/ui";
+import { Button, FloatingBar } from "@vvedantb/ui";
 import { BrandMark } from "./BrandMark";
 import { LandingBrand } from "./LandingBrand";
 import { LandingHero } from "./LandingHero";
@@ -46,16 +46,14 @@ export function LandingCompact() {
       <div className="landing-atmosphere landing-grain relative overflow-hidden">
         <div aria-hidden className="landing-grid" />
 
-        <header className="relative z-10 px-3 pt-3 sm:px-5">
-          <nav className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-4 rounded-full bg-background/70 pl-4 pr-2 ring-1 ring-border/70 backdrop-blur-md sm:pl-5">
-            <LandingBrand />
-            <SignInButton mode="modal">
-              <Button size="sm" className="px-4">
-                Sign in
-              </Button>
-            </SignInButton>
-          </nav>
-        </header>
+        <FloatingBar barClassName="justify-between gap-4 pl-5">
+          <LandingBrand />
+          <SignInButton mode="modal">
+            <Button size="sm" className="rounded-full px-4">
+              Sign in
+            </Button>
+          </SignInButton>
+        </FloatingBar>
 
         <div className="relative z-10">
           <LandingHero signInOnly />
