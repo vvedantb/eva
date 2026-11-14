@@ -1,5 +1,13 @@
 # Changelog
 
+## Chat panels (`render_ui`) render from the kits
+
+Date: 2026-11-14
+
+WHY: The panel catalog and renderers now live in the shared kits (vvedantb/packages#236, #240), so any app, and Eva's phone, draws the same panels from one definition.
+
+Architectural: Web `ChatBody` renders `GenerativeUiPanel` from `@vvedantb/ui/generative-ui`; Eva's renderer, layout, content and tone files are deleted (`ChatUiPanelTabs` and panel placement stay). The backend builds `chatUiCatalog` in `_generativeUi/catalog.ts` from `generativeUiCatalogDefinition` (`@vvedantb/server/generative-ui`) on json-render's React schema, so the `"use node"` composer loads no React; the request schema uses the kit tones and styles, and tests use `parseGenerativeUiSpec`. `@eva/shared/generativeUi` is deleted. Every package pins `@vvedantb/ui` 0.47.0-next-7db4f19 and `@vvedantb/server` 0.16.0-next-bf81bce, so the web app loads one copy.
+
 ## Eva moves to zod 4
 
 Date: 2026-11-14

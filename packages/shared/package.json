@@ -16,7 +16,6 @@
     "./escapeHtml": "./src/escapeHtml.ts",
     "./evaMark": "./src/evaMark.ts",
     "./evaTheme": "./src/evaTheme.ts",
-    "./generativeUi": "./src/generativeUi/index.ts",
     "./gitDefaults": "./src/gitDefaults.ts",
     "./htmlRender": "./src/htmlRender.ts",
     "./mentionText": "./src/mentionText.ts",
@@ -50,7 +49,7 @@
     "@json-render/core": "0.21.0",
     "@json-render/react": "0.21.0",
     "@types/react": "^19.0.0",
-    "@vvedantb/ui": "^0.46.0",
+    "@vvedantb/ui": "0.47.0-next-7db4f194aeaa25b5352ce5524cd236d6f386f404",
     "tailwind-merge": "^2.6.1",
     "zod": "4.6.7"
   }

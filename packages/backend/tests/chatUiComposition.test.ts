@@ -4,7 +4,8 @@ import {
   type Experimental_CompositionEvaluator,
   type Spec,
 } from "@json-render/core";
-import { chatUiCatalog, parseChatUiSpec } from "@eva/shared/generativeUi";
+import { parseGenerativeUiSpec } from "@vvedantb/server/generative-ui";
+import { chatUiCatalog } from "../convex/_generativeUi/catalog";
 import { buildChatUiCandidates } from "../convex/_generativeUi/candidates";
 import { appendMissingBlocks } from "../convex/_generativeUi/completeness";
 import { renderUiInput, type ChatUiBlock } from "../convex/_generativeUi/schema";
@@ -99,7 +100,7 @@ describe("chat UI composition", () => {
       "Text",
     ]);
     expect(chatUiCatalog.validate(spec).success).toBe(true);
-    expect(parseChatUiSpec(JSON.stringify(spec))).not.toBeNull();
+    expect(parseGenerativeUiSpec(JSON.stringify(spec))).not.toBeNull();
   });
 
   it("shows every block exactly once when the evaluator takes them all", async () => {
