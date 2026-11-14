@@ -14,6 +14,7 @@ import { Redirect } from "expo-router";
 import { Tabs } from "expo-router/js-tabs";
 import type { ColorValue } from "react-native";
 import { EnsureUser } from "@/auth/EnsureUser";
+import { useReportLastCrash } from "@/logging/useReportLastCrash";
 import { usePush } from "@/push/push";
 
 type TabIconProps = { color: ColorValue; size: number };
@@ -40,9 +41,10 @@ const settingsIcon = ({ color, size }: TabIconProps) => (
   <IconSettings color={iconColor(color)} size={size} />
 );
 
-/** Mounted only when signed in, so push registers for the right user. */
+/** Mounted only when signed in, so push registers and crashes report for the right user. */
 function SignedInEffects() {
   usePush();
+  useReportLastCrash();
   return null;
 }
 

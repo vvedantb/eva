@@ -10,6 +10,7 @@ import { join } from "node:path";
 const ALLOWED = {
   "push.register": "Device push tokens: the web has no phone push.",
   "push.unregister": "Device push tokens: the web has no phone push.",
+  "crashReports.report": "Phone crash reports: a native or JS crash closes the phone app; the web has no such crash to report.",
   // The neutral chat actions (#1302): the web moves onto them one action at
   // a time; remove each entry as the web starts calling it.
   "chats.get": "The web moves onto chats.* one action at a time (#1302).",
