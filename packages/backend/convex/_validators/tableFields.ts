@@ -2047,7 +2047,7 @@ export const agentUsageLimitFields = {
  * One agent-generated UI panel rendered inline in a chat. `spec` is a
  * json-render Spec serialised as JSON — kept as a string because its shape is
  * the catalog's business, not the database's, and it is re-parsed at the
- * client boundary (`@eva/shared/generativeUi`).
+ * client boundary (`parseGenerativeUiSpec` in `@vvedantb/server/generative-ui`).
  */
 export const chatUiPanelFields = {
   parentId: chatParentIdValidator,

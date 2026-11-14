@@ -9,8 +9,8 @@
  * answer is picked from candidates we built, so composition is fast and the
  * output cannot contain anything the catalog does not define.
  *
- * Imports stay confined to json-render, the shared catalog and the two leaf
- * modules beside this file; reaching into `mcp/*` would put a `"use node"`
+ * Imports stay confined to json-render and the leaf modules beside this
+ * file (the catalog among them); reaching into `mcp/*` would put a `"use node"`
  * chunk in an import cycle, which breaks the Convex prod push.
  */
 
@@ -19,7 +19,7 @@ import {
   experimental_createEvaluator,
   type Spec,
 } from "@json-render/core";
-import { chatUiCatalog } from "@eva/shared/generativeUi";
+import { chatUiCatalog } from "./catalog";
 import { buildChatUiCandidates } from "./candidates";
 import { appendMissingBlocks } from "./completeness";
 import { AI_GATEWAY_KEY_MISSING, readAiGatewayKey } from "../_env/aiGateway";

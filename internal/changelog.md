@@ -1,5 +1,21 @@
 # Changelog
 
+## Chat panels (`render_ui`) render from the kits
+
+Date: 2026-11-14
+
+WHY: The panel catalog and renderers now live in the shared kits (vvedantb/packages#236, #240), so any app, and Eva's phone, draws the same panels from one definition.
+
+Architectural: Web `ChatBody` renders `GenerativeUiPanel` from `@vvedantb/ui/generative-ui`; Eva's renderer, layout, content and tone files are deleted (`ChatUiPanelTabs` and panel placement stay). The backend builds `chatUiCatalog` in `_generativeUi/catalog.ts` from `generativeUiCatalogDefinition` (`@vvedantb/server/generative-ui`) on json-render's React schema, so the `"use node"` composer loads no React; the request schema uses the kit tones and styles, and tests use `parseGenerativeUiSpec`. `@eva/shared/generativeUi` is deleted. Every package pins `@vvedantb/ui` 0.47.0-next-7db4f19 and `@vvedantb/server` 0.16.0-next-bf81bce, so the web app loads one copy.
+
+## Eva moves to zod 4
+
+Date: 2026-11-14
+
+WHY: The shared kits (`@vvedantb/server`, `@vvedantb/ui`, `@vvedantb/native-ui`) publish zod 4 types, and json-render (chat panels) requires zod 4. On zod 3, the kit's generative UI props resolved to `unknown` in Eva, so Eva could not use the kit panels.
+
+Architectural: web, backend, shared and mobile pin zod 4.6.7. Four code changes: `_evaConfig/config.ts` uses `.prefault({})` (zod 4's `.default` no longer runs the inner schema, so inner defaults would be lost) and the two-argument `z.record`; `jsonValue` is `z.ZodType<JsonValue, JsonValue>` (zod 4's second type argument is the input, `unknown` by default); `search_tools` uses zod's own `z.toJSONSchema` (`toolInputJsonSchema`), and `zod-to-json-schema` is removed; the mobile `exit-info` module checks `lastExit` is a function and parses its result (zod 4 removed `z.function().args().returns()`). Follow-up: about 20 deprecated `.strict()` / `.passthrough()` calls still work and can move to `z.strictObject` / `z.looseObject`.
+
 ## Phone: crashes report themselves to Axiom
 
 Date: 2026-11-14
