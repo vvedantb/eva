@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: crashes report themselves to Axiom
+
+Date: 2026-11-14
+
+WHY: A phone crash was known only when the user pasted Copy details from the crash dialog. Now each crash reaches the logs on the next signed-in launch, with no action from the user.
+
+Architectural: New mutation `crashReports.report` (phone-only, listed in `check-shared-backend.mjs`). It has no table: for a signed-in user it writes one `[phone-crash] {json}` console.error line, which Convex's log stream sends to Axiom (dataset `eva`, `data.message`). Signed-out calls are dropped, so it is not an open log sink. `useReportLastCrash` (in `SignedInEffects`) sends the crash `LastCrashDialog` shows (JS fatal, native crash, ANR or Java crash) once, keyed by `eva.lastCrashReported`; a failed send retries on the next launch. The report holds the error and stack only, never chat content. The dialog and Copy details stay.
+
 ## Quick tasks: a chat push opens the task PR
 
 Date: 2026-11-13
