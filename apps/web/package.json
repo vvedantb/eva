@@ -95,7 +95,7 @@
     "tailwind-merge": "^2.6.0",
     "use-stick-to-bottom": "^1.1.2",
     "usehooks-ts": "^3.1.1",
-    "zod": "^3.24.0"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19",

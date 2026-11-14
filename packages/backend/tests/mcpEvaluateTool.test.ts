@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { z } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
-import { codeModeTools } from "../convex/_mcp/codeModeTools";
+import { codeModeTools, toolInputJsonSchema } from "../convex/_mcp/codeModeTools";
 import {
   EVALUATE_MODEL,
   MAX_IMAGES,
@@ -232,7 +231,7 @@ describe("evaluate input schema", () => {
   });
 
   test("exports a described JSON schema for search_tools", () => {
-    const schema = zodToJsonSchema(z.object(evaluateInputShape));
+    const schema = toolInputJsonSchema(evaluateInputShape);
     const json = JSON.stringify(schema);
     expect(json).toContain('"state"');
     expect(json).toContain('"questions"');

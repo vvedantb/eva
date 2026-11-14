@@ -13,7 +13,7 @@ export type JsonValue =
   | JsonValue[]
   | { [key: string]: JsonValue };
 
-export const jsonValue: z.ZodType<JsonValue> = z.lazy(() =>
+export const jsonValue: z.ZodType<JsonValue, JsonValue> = z.lazy(() =>
   z.union([
     z.string(),
     z.number(),
