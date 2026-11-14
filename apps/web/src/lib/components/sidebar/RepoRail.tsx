@@ -73,7 +73,7 @@ function isRowActive(
 }
 
 const RAIL_TILE_CLASS =
-  "relative flex size-11 items-center justify-center rounded-lg border motion-press active:scale-[0.96] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/35";
+  "relative flex size-11 lg:size-10 items-center justify-center rounded-lg border motion-press active:scale-[0.96] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/35";
 
 /**
  * Cut-out tone for the solid active rail icons. `--sidebar-accent` holds bare
@@ -200,13 +200,13 @@ function RepoRailView({
     repoSectionHref(row.owner, row.name, row.rootDirectory, currentSection);
 
   return (
-    <div className="flex h-full w-16 shrink-0 flex-col items-center border-r border-sidebar-border bg-sidebar">
+    <div className="flex h-full w-16 lg:w-14 shrink-0 flex-col items-center border-r border-sidebar-border bg-sidebar">
       <RailAppHotkeys
         repos={repos}
         section={currentSection}
         onNavigate={onNavigate}
       />
-      <div className="flex w-full flex-col items-center gap-1.5 px-0 pt-3">
+      <div className="flex w-full flex-col items-center gap-1.5 lg:gap-1 px-0 pt-3">
         <Tooltip>
           <TooltipTrigger asChild>
             <Link
@@ -286,7 +286,7 @@ function RepoRailView({
         <div className="h-px w-8 bg-sidebar-border" aria-hidden />
       </div>
       {/* Drawer below `lg`: keep a scroll here off the page behind. */}
-      <div className="scrollbar scroll-fade flex w-full flex-1 flex-col items-center gap-1.5 overflow-y-auto py-2 max-lg:overscroll-y-contain">
+      <div className="scrollbar scroll-fade flex w-full flex-1 flex-col items-center gap-1.5 lg:gap-1 overflow-y-auto py-2 max-lg:overscroll-y-contain">
         {repos.map((row, index) => {
           const displayName = repoDisplayLabel(row);
           // Mirrors RailAppHotkeys: only the first nine tiles get a slot.
@@ -383,7 +383,7 @@ function RepoRailView({
           fallbackName={appLeafName(renameRepo)}
         />
       ) : null}
-      <div className="flex w-full flex-col items-center gap-1.5 border-t border-sidebar-border py-3">
+      <div className="flex w-full flex-col items-center gap-1.5 lg:gap-1 border-t border-sidebar-border py-3">
         {simpleView ? null : (
           <Tooltip>
             <TooltipTrigger asChild>
