@@ -160,9 +160,9 @@ export function Sidebar() {
           showSidePanel
             ? cn(
                 "w-[min(20rem,calc(100vw-1.5rem))]",
-                collapsed ? "lg:w-16" : "lg:w-(--eva-sidebar-width,20rem)",
+                collapsed ? "lg:w-14" : "lg:w-(--eva-sidebar-width,20rem)",
               )
-            : "w-16",
+            : "w-16 lg:w-14",
         )}
         initial={false}
         animate={{ x: isDesktop || mobileOpen ? 0 : "-100%" }}
