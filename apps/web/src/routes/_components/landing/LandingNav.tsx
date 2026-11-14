@@ -8,8 +8,7 @@ import { LandingBrand } from "./LandingBrand";
 import { LandingNavMenu } from "./LandingNavMenu";
 
 /**
- * Floating pill nav. The header itself is transparent and 80px tall; the hero
- * pulls up under it with `-mt-20` so the atmosphere shows behind the glass.
+ * Floating pill nav. The header itself is transparent and 80px tall.
  * Section links are anchors rather than router links — they scroll the
  * marketing page, they do not navigate.
  */

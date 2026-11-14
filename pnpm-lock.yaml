@@ -128,8 +128,8 @@ importers:
         specifier: ^3.36.1
         version: 3.41.1(react@19.3.0)
       '@vvedantb/ui':
-        specifier: ^0.43.0
-        version: 0.43.0(a9b6189fd154e177115b785ac719b96b)
+        specifier: ^0.44.0
+        version: 0.44.0(a9b6189fd154e177115b785ac719b96b)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -526,8 +526,8 @@ importers:
         specifier: ^0.15.0
         version: 0.15.0(@ai-sdk/gateway@4.0.134(zod@3.25.76))(@clerk/backend@2.33.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@jitl/quickjs-singlefile-cjs-release-sync@0.32.0)(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ai@7.0.161(zod@3.25.76))(convex-helpers@0.1.114(@standard-schema/spec@1.1.0)(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(hono@4.12.25)(react@19.3.0)(typescript@7.0.1-rc)(zod@3.25.76))(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(quickjs-emscripten-core@0.32.0)(zod@3.25.76)
       '@vvedantb/ui':
-        specifier: ^0.43.0
-        version: 0.43.0(d0f74a72d97928e47f9890ad0df8a3da)
+        specifier: ^0.44.0
+        version: 0.44.0(d0f74a72d97928e47f9890ad0df8a3da)
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
@@ -865,8 +865,8 @@ importers:
         specifier: 19.3.0
         version: 19.3.0
       '@vvedantb/ui':
-        specifier: ^0.43.0
-        version: 0.43.0(0796054d64ffb3264c1cbe97e1c18ac3)
+        specifier: ^0.44.0
+        version: 0.44.0(0796054d64ffb3264c1cbe97e1c18ac3)
       tailwind-merge:
         specifier: ^2.6.1
         version: 2.6.1
@@ -880,8 +880,8 @@ importers:
         specifier: ^3.33.0
         version: 3.41.1(react@19.3.0)
       '@vvedantb/ui':
-        specifier: ^0.43.0
-        version: 0.43.0(596554ebdbae10019747352c7cc83c22)
+        specifier: ^0.44.0
+        version: 0.44.0(596554ebdbae10019747352c7cc83c22)
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -6510,8 +6510,8 @@ packages:
       zod:
         optional: true
 
-  '@vvedantb/ui@0.43.0':
-    resolution: {integrity: sha512-aJThORePqrGxNEl65E954cbsGS44U5DiAqmAD39X+DFeJ1FZAHapPKj5b6aihSEd7KTcl2TPkdAOYyK2H+zH2Q==}
+  '@vvedantb/ui@0.44.0':
+    resolution: {integrity: sha512-dmn4mLGDB8s5e3lZHtG3cjgKYVmqOGv7F/Kg+PI3Rgm3Pm65rWXjlRclVFjBJtsaqoWvk1YQabcOncrXddmZKQ==}
     peerDependencies:
       '@clerk/clerk-react': 5.61.6
       '@radix-ui/react-accordion': ^1.2.12
@@ -17825,7 +17825,7 @@ snapshots:
       zod: 4.4.3
     optional: true
 
-  '@vvedantb/ui@0.43.0(0796054d64ffb3264c1cbe97e1c18ac3)':
+  '@vvedantb/ui@0.44.0(0796054d64ffb3264c1cbe97e1c18ac3)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -17884,7 +17884,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 3.25.76
 
-  '@vvedantb/ui@0.43.0(596554ebdbae10019747352c7cc83c22)':
+  '@vvedantb/ui@0.44.0(596554ebdbae10019747352c7cc83c22)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -17943,7 +17943,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 4.4.3
 
-  '@vvedantb/ui@0.43.0(a9b6189fd154e177115b785ac719b96b)':
+  '@vvedantb/ui@0.44.0(a9b6189fd154e177115b785ac719b96b)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -18002,7 +18002,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 4.4.3
 
-  '@vvedantb/ui@0.43.0(d0f74a72d97928e47f9890ad0df8a3da)':
+  '@vvedantb/ui@0.44.0(d0f74a72d97928e47f9890ad0df8a3da)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
