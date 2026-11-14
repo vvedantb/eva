@@ -1,5 +1,13 @@
 # Changelog
 
+## Web shell comes from the kit `AppShell`
+
+Date: 2026-11-14
+
+WHY: Eva carried its own sidebar shell (rail width, tile size, panel layout, resize, mobile drawer). The kit now owns these, so every app has the same shell and Eva has no shell CSS of its own.
+
+Architectural: `Sidebar` renders `AppShell.Root` (`scroll="document"`, `resizable`) with the kit `Sidebar` parts (`Root`, `MobileHeader`, `Backdrop`, `Aside`, `Rail`, `RailItem`, `Panel`, `ResizeHandle`); `@vvedantb/ui` is 0.50.0. The rail is 3.5rem and the tiles are the kit `railTileClass`; Eva adds only its themed active tone. The shell breakpoint moves from `lg` (1024px) to the kit `md` (768px): the drawer, the mobile header and the Ave launcher follow. The stored width moves once from `eva-sidebar-width` (rail plus panel) to `eva-sidebar-panel-width` (panel only) in `shellLayout.ts`; the total widths stay 240 / 320 / 480. Routes take their height from `SHELL_VIEWPORT_ROUTE_CLASS` / `SHELL_DOCUMENT_ROUTE_CLASS`. Deleted: `useSidebarContentOffset`, `useMobileSidebarDrawer`, `SidebarResizeHandle`, the width state in `SidebarContext`. Differences from before: the drawer closes on the kit drag rule (offset or velocity, no projected velocity), the keyboard resize step is 16px, a double-click on the handle resets the width, and the mobile header has the kit look.
+
 ## Phone: chats show attachments, agent media, generative UI panels and turn outputs
 
 Date: 2026-11-14
