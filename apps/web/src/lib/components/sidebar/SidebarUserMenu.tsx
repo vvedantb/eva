@@ -12,6 +12,9 @@ import {
   skipConfirmTitle,
   useRequestConfirm,
   SignOutDialog,
+  cn,
+  railTileClass,
+  railTileStateClass,
 } from "@vvedantb/ui";
 import { useClerk } from "@clerk/clerk-react";
 import { UserInitials } from "@eva/shared/user-initials";
@@ -65,7 +68,7 @@ export function SidebarUserMenu({ name, showSearch }: SidebarUserMenuProps) {
             type="button"
             title={name}
             aria-label={`Account menu for ${name}`}
-            className="relative flex size-11 lg:size-10 items-center justify-center rounded-lg border border-transparent opacity-75 motion-press active:scale-[0.96] hover:bg-sidebar-accent/50 hover:opacity-100 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/35"
+            className={cn(railTileClass, railTileStateClass(false))}
           >
             <UserInitials
               user={{ fullName: name }}

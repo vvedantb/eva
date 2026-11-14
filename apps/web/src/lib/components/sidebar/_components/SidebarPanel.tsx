@@ -2,8 +2,8 @@
 
 import type { RefCallback } from "react";
 import { cn } from "@eva/ui";
+import { Sidebar } from "@vvedantb/ui";
 import { OnlineTeamAvatars } from "@/lib/components/sidebar/TeamMembers";
-import { SidebarResizeHandle } from "@/lib/components/sidebar/SidebarResizeHandle";
 import { ContextSidebarHeaderActionProvider } from "@/lib/components/sidebar/ContextSidebarHeaderAction";
 import { SidebarPanelBody } from "@/lib/components/sidebar/_components/SidebarPanelBody";
 import { SidebarPanelHeader } from "@/lib/components/sidebar/_components/SidebarPanelHeader";
@@ -26,14 +26,12 @@ interface SidebarPanelProps {
   teamBackgroundUrl: string | null;
   scrollRef: RefCallback<HTMLDivElement>;
   onNavigate: () => void;
-  collapsed: boolean;
-  sidebarWidth: number;
-  previewSidebarWidth: (width: number) => void;
-  commitSidebarWidth: (width: number) => void;
-  setSidebarWidth: (width: number) => void;
 }
 
-/** Secondary sidebar column next to the rail: header, nav list, footer, resize handle. */
+/**
+ * Secondary sidebar column next to the rail: header, nav list, footer. The
+ * package `Sidebar.Panel` owns the layout and hides it when collapsed on desktop.
+ */
 export function SidebarPanel({
   panelKey,
   flags,
@@ -46,22 +44,11 @@ export function SidebarPanel({
   teamBackgroundUrl,
   scrollRef,
   onNavigate,
-  collapsed,
-  sidebarWidth,
-  previewSidebarWidth,
-  commitSidebarWidth,
-  setSidebarWidth,
 }: SidebarPanelProps) {
   const { repoBasePath, repoName, appName, isRepoRoute } = route;
   const { showGlobalSessionsPanel, showGlobalAutomationsPanel } = flags;
   return (
-    <div
-      className={cn(
-        "relative flex h-full min-w-0 flex-1 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar",
-        // Keep the drawer content on mobile even when the desktop panel is hidden.
-        collapsed && "lg:hidden",
-      )}
-    >
+    <Sidebar.Panel className="border-r border-sidebar-border bg-sidebar">
       <ContextSidebarHeaderActionProvider key={panelKey}>
         {(headerAction) => (
           <>
@@ -79,12 +66,12 @@ export function SidebarPanel({
               onBackToMain={() => setContextSidebarMode("main")}
             />
 
-            {/* `max-lg:overscroll-y-contain`: below `lg` this is a drawer over
+            {/* `max-md:overscroll-y-contain`: below `md` this is a drawer over
                 the page, and a scroll past its end moved the page behind. */}
             <nav
               ref={scrollRef}
               className={cn(
-                "scrollbar scroll-fade flex min-h-0 flex-1 flex-col justify-between overflow-y-auto px-2 max-lg:overscroll-y-contain",
+                "scrollbar scroll-fade flex min-h-0 flex-1 flex-col justify-between overflow-y-auto px-2 max-md:overscroll-y-contain",
                 flags.isSourceListHeader ? "pb-2 pt-1.5" : "py-2",
               )}
             >
@@ -116,17 +103,9 @@ export function SidebarPanel({
                 <OnlineTeamAvatars collapsed={false} />
               </div>
             ) : null}
-            {!collapsed ? (
-              <SidebarResizeHandle
-                width={sidebarWidth}
-                onWidthPreview={previewSidebarWidth}
-                onWidthCommit={commitSidebarWidth}
-                onWidthChange={setSidebarWidth}
-              />
-            ) : null}
           </>
         )}
       </ContextSidebarHeaderActionProvider>
-    </div>
+    </Sidebar.Panel>
   );
 }

@@ -25,6 +25,7 @@ import {
   countLabel,
   CORNER_BADGE_CLASS,
   UnreadCornerBadge,
+  Sidebar,
 } from "@vvedantb/ui";
 import { LogoMark } from "@/lib/components/LogoMark";
 import { RepoLogo } from "@/lib/components/RepoLogo";
@@ -72,19 +73,15 @@ function isRowActive(
   return appName === undefined;
 }
 
-const RAIL_TILE_CLASS =
-  "relative flex size-11 lg:size-10 items-center justify-center rounded-lg border motion-press active:scale-[0.96] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/35";
-
 /**
  * Cut-out tone for the solid active rail icons. `--sidebar-accent` holds bare
  * RGB channels, so this is what `stroke-sidebar-accent` compiles to.
  */
 const CUTOUT_COLOR = "rgb(var(--sidebar-accent) / 1)";
 
-function railTileActive(active: boolean): string {
-  return active
-    ? railTileActiveClass
-    : "border-transparent text-muted-foreground opacity-75 hover:bg-sidebar-accent/50 hover:opacity-100 hover:text-sidebar-foreground";
+/** Eva's themed active tone, on top of the package tile. */
+function railActiveTone(active: boolean): string | undefined {
+  return active ? railTileActiveClass : undefined;
 }
 
 /** Green: something is running right now (sessions, sandboxes). */
@@ -200,93 +197,76 @@ function RepoRailView({
     repoSectionHref(row.owner, row.name, row.rootDirectory, currentSection);
 
   return (
-    <div className="flex h-full w-16 lg:w-14 shrink-0 flex-col items-center border-r border-sidebar-border bg-sidebar">
+    <Sidebar.Rail showDivider className="border-sidebar-border">
       <RailAppHotkeys
         repos={repos}
         section={currentSection}
         onNavigate={onNavigate}
       />
-      <div className="flex w-full flex-col items-center gap-1.5 lg:gap-1 px-0 pt-3">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Link
-              to="/home"
-              onClick={onNavigate}
-              aria-label="Eva home"
-              className={cn(RAIL_TILE_CLASS, railTileActive(homeActive))}
-            >
-              <span className="flex size-8 items-center justify-center rounded-full bg-white">
-                <LogoMark size={20} className="shrink-0" />
-              </span>
-            </Link>
-          </TooltipTrigger>
-          <TooltipContent side="right">Home</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Link
-              to="/inbox"
-              onClick={onNavigate}
-              aria-label="Inbox"
-              className={cn(
-                RAIL_TILE_CLASS,
-                "group",
-                railTileActive(inboxActive),
-              )}
-            >
-              <InboxArrowIcon
-                size={22}
-                active={inboxActive}
-                cutoutColor={CUTOUT_COLOR}
-                className="shrink-0"
-              />
-              <ErrorBoundary>
-                <InboxUnreadBadge />
-              </ErrorBoundary>
-            </Link>
-          </TooltipTrigger>
-          <TooltipContent side="right">Inbox</TooltipContent>
-        </Tooltip>
-        <div className="h-px w-8 bg-sidebar-border" aria-hidden />
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Link
-              to="/sessions"
-              onClick={() => {
-                setSessionsNavMode("global");
-                onNavigate();
-              }}
-              aria-label={
-                sessionsLabel ? `Sessions, ${sessionsLabel} active` : "Sessions"
-              }
-              className={cn(
-                RAIL_TILE_CLASS,
-                "group",
-                railTileActive(sessionsActive),
-              )}
-            >
-              <TerminalIcon
-                size={22}
-                active={sessionsActive}
-                cutoutColor={CUTOUT_COLOR}
-                className="shrink-0"
-              />
-              <CountPop
-                label={sessionsLabel}
-                className={RAIL_BADGE_LIVE_CLASS}
-              />
-            </Link>
-          </TooltipTrigger>
-          <TooltipContent side="right">
-            {sessionsLabel ? `Sessions (${sessionsLabel})` : "Sessions"}
-          </TooltipContent>
-        </Tooltip>
+      <Sidebar.RailHeader>
+        <Sidebar.RailItem
+          asChild
+          label="Eva home"
+          tooltip="Home"
+          active={homeActive}
+          className={railActiveTone(homeActive)}
+        >
+          <Link to="/home" onClick={onNavigate}>
+            <span className="flex size-8 items-center justify-center rounded-full bg-white">
+              <LogoMark size={20} className="shrink-0" />
+            </span>
+          </Link>
+        </Sidebar.RailItem>
+        <Sidebar.RailItem
+          asChild
+          label="Inbox"
+          active={inboxActive}
+          className={railActiveTone(inboxActive)}
+        >
+          <Link to="/inbox" onClick={onNavigate}>
+            <InboxArrowIcon
+              size={22}
+              active={inboxActive}
+              cutoutColor={CUTOUT_COLOR}
+              className="shrink-0"
+            />
+            <ErrorBoundary>
+              <InboxUnreadBadge />
+            </ErrorBoundary>
+          </Link>
+        </Sidebar.RailItem>
+        <Sidebar.RailSeparator className="bg-sidebar-border" />
+        <Sidebar.RailItem
+          asChild
+          label={
+            sessionsLabel ? `Sessions, ${sessionsLabel} active` : "Sessions"
+          }
+          tooltip={sessionsLabel ? `Sessions (${sessionsLabel})` : "Sessions"}
+          active={sessionsActive}
+          className={railActiveTone(sessionsActive)}
+        >
+          <Link
+            to="/sessions"
+            onClick={() => {
+              setSessionsNavMode("global");
+              onNavigate();
+            }}
+          >
+            <TerminalIcon
+              size={22}
+              active={sessionsActive}
+              cutoutColor={CUTOUT_COLOR}
+              className="shrink-0"
+            />
+            <CountPop label={sessionsLabel} className={RAIL_BADGE_LIVE_CLASS} />
+          </Link>
+        </Sidebar.RailItem>
         {/* Manager Ave used to sit here. It now lives in the floating launcher
             (`AveLauncherProvider`), which owns the orchestrator query too. */}
-        <div className="h-px w-8 bg-sidebar-border" aria-hidden />
-      </div>
-      {/* Drawer below `lg`: keep a scroll here off the page behind. */}
-      <div className="scrollbar scroll-fade flex w-full flex-1 flex-col items-center gap-1.5 lg:gap-1 overflow-y-auto py-2 max-lg:overscroll-y-contain">
+        <Sidebar.RailSeparator className="bg-sidebar-border" />
+      </Sidebar.RailHeader>
+      {/* Drawer below `md`: keep a scroll here off the page behind. */}
+      <Sidebar.RailBody className="scrollbar scroll-fade max-md:overscroll-y-contain">
         {repos.map((row, index) => {
           const displayName = repoDisplayLabel(row);
           // Mirrors RailAppHotkeys: only the first nine tiles get a slot.
@@ -310,46 +290,46 @@ function RepoRailView({
 
           return (
             <ContextMenu key={row._id}>
+              {/* Eva's tooltip, not the tile's: it shows the hotkey keycap. */}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <ContextMenuTrigger asChild>
-                    <Link
-                      to={railHref(row)}
-                      onClick={onNavigate}
-                      aria-label={
+                    <Sidebar.RailItem
+                      asChild
+                      showTooltip={false}
+                      label={
                         sandboxLabel === null
                           ? tooltip
                           : `${tooltip}, ${sandboxLabel} ${
                               sandboxCount === 1 ? "sandbox" : "sandboxes"
                             } active`
                       }
-                      className={cn(
-                        RAIL_TILE_CLASS,
-                        active
-                          ? cn(railTileActiveClass, "opacity-100")
-                          : "border-transparent opacity-50 hover:bg-sidebar-accent/50 hover:opacity-100",
-                      )}
+                      active={active}
+                      // Idle app logos sit further back than the icon tiles.
+                      className={active ? railTileActiveClass : "opacity-50"}
                     >
-                      <RepoLogo
-                        logoUrl={row.logoUrl}
-                        size={30}
-                        fallback={
-                          <span
-                            className={cn(
-                              "flex size-[30px] items-center justify-center rounded-md text-sm font-semibold",
-                              tileColor.bg,
-                              tileColor.text,
-                            )}
-                          >
-                            {displayName.charAt(0).toUpperCase()}
-                          </span>
-                        }
-                      />
-                      <CountPop
-                        label={sandboxLabel}
-                        className={RAIL_BADGE_LIVE_CLASS}
-                      />
-                    </Link>
+                      <Link to={railHref(row)} onClick={onNavigate}>
+                        <RepoLogo
+                          logoUrl={row.logoUrl}
+                          size={30}
+                          fallback={
+                            <span
+                              className={cn(
+                                "flex size-[30px] items-center justify-center rounded-md text-sm font-semibold",
+                                tileColor.bg,
+                                tileColor.text,
+                              )}
+                            >
+                              {displayName.charAt(0).toUpperCase()}
+                            </span>
+                          }
+                        />
+                        <CountPop
+                          label={sandboxLabel}
+                          className={RAIL_BADGE_LIVE_CLASS}
+                        />
+                      </Link>
+                    </Sidebar.RailItem>
                   </ContextMenuTrigger>
                 </TooltipTrigger>
                 <TooltipContent
@@ -371,7 +351,7 @@ function RepoRailView({
             </ContextMenu>
           );
         })}
-      </div>
+      </Sidebar.RailBody>
       {renameRepo ? (
         <RepoLabelDialog
           open
@@ -383,71 +363,47 @@ function RepoRailView({
           fallbackName={appLeafName(renameRepo)}
         />
       ) : null}
-      <div className="flex w-full flex-col items-center gap-1.5 lg:gap-1 border-t border-sidebar-border py-3">
+      <Sidebar.RailFooter className="border-t border-sidebar-border">
         {simpleView ? null : (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Link
-                to="/automations"
-                onClick={onNavigate}
-                aria-label="Automations"
-                className={cn(
-                  RAIL_TILE_CLASS,
-                  "group",
-                  railTileActive(automationsActive),
-                )}
-              >
-                <AutomationIcon
-                  size={22}
-                  active={automationsActive}
-                  cutoutColor={CUTOUT_COLOR}
-                  className="shrink-0"
-                />
-                <ErrorBoundary>
-                  <AutomationsUnreadBadge />
-                </ErrorBoundary>
-              </Link>
-            </TooltipTrigger>
-            <TooltipContent side="right">Automations</TooltipContent>
-          </Tooltip>
-        )}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={() => setCollapsed(!collapsed)}
-              aria-label={collapsed ? "Show sidebar" : "Hide sidebar"}
-              title={collapsed ? "Show sidebar" : "Hide sidebar"}
-              className={cn(
-                RAIL_TILE_CLASS,
-                "group border-transparent text-muted-foreground opacity-75 hover:bg-sidebar-accent/50 hover:opacity-100 hover:text-sidebar-foreground",
-              )}
-            >
-              <SidebarToggleIcon
+          <Sidebar.RailItem
+            asChild
+            label="Automations"
+            active={automationsActive}
+            className={railActiveTone(automationsActive)}
+          >
+            <Link to="/automations" onClick={onNavigate}>
+              <AutomationIcon
                 size={22}
-                collapsed={collapsed}
+                active={automationsActive}
+                cutoutColor={CUTOUT_COLOR}
                 className="shrink-0"
               />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="right">
-            {collapsed ? "Show sidebar" : "Hide sidebar"}
-          </TooltipContent>
-        </Tooltip>
+              <ErrorBoundary>
+                <AutomationsUnreadBadge />
+              </ErrorBoundary>
+            </Link>
+          </Sidebar.RailItem>
+        )}
+        <Sidebar.RailItem
+          label={collapsed ? "Show sidebar" : "Hide sidebar"}
+          onClick={() => setCollapsed(!collapsed)}
+        >
+          <SidebarToggleIcon
+            size={22}
+            collapsed={collapsed}
+            className="shrink-0"
+          />
+        </Sidebar.RailItem>
+        {/* Eva's tooltip, not the tile's: it shows the shortcut keycap. */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
-              type="button"
+            <Sidebar.RailItem
+              label="Search"
+              showTooltip={false}
               onClick={() => openSearch()}
-              aria-label="Search"
-              title="Search"
-              className={cn(
-                RAIL_TILE_CLASS,
-                "group border-transparent text-muted-foreground opacity-75 hover:bg-sidebar-accent/50 hover:opacity-100 hover:text-sidebar-foreground",
-              )}
             >
               <SearchIcon size={22} className="shrink-0" />
-            </button>
+            </Sidebar.RailItem>
           </TooltipTrigger>
           <TooltipContent side="right" className="flex items-center gap-2">
             Search
@@ -456,7 +412,7 @@ function RepoRailView({
         </Tooltip>
         <SidebarUserMenu name={userName} showSearch={showSearch} />
         <RailSettingsMenu onNavigate={onNavigate} />
-      </div>
-    </div>
+      </Sidebar.RailFooter>
+    </Sidebar.Rail>
   );
 }
