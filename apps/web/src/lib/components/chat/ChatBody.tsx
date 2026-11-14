@@ -45,6 +45,7 @@ import {
   collectForkPrefix,
   forkThreadTitle,
   formatForkPrompt,
+  placeChatUiPanels,
   SANDBOX_CHAT_COPY,
 } from "@eva/shared";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
@@ -69,7 +70,6 @@ import { useChatReadState } from "@/lib/components/chat/useChatReadState";
 import { ChatHtmlFrame } from "@/lib/components/chat/generativeHtml/ChatHtmlFrame";
 import { EnvVarRequestCard } from "@/lib/components/chat/_components/EnvVarRequestCard";
 import { SessionProposalCard } from "@/lib/components/chat/_components/SessionProposalCard";
-import { placeChatUiPanels } from "@/lib/components/chat/generativeUi/chatUiPanelPlacement";
 import { ChatArtifactCard } from "@/lib/components/artifacts/ChatArtifactCard";
 import { AgentFeedbackCard } from "@/lib/components/chat/feedback/AgentFeedbackCard";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";

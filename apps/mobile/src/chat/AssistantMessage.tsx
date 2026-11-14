@@ -55,11 +55,14 @@ import {
 import { Markdown } from "@vvedantb/native-ui/markdown";
 import { Spinner, Text } from "@vvedantb/native-ui/primitives";
 import { useQuery } from "convex/react";
+import type { ResolvedMediaEntry } from "@eva/shared";
 import { useDeferredValue, useState, type ComponentType, type ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { copyText } from "@/ui/copyText";
 import { textColor, useScheme } from "@/ui/theme";
+import { ChatUiPanelTabs } from "./cards/ChatUiPanelTabs";
 import { ChangedFilesCard } from "./ChangedFilesCard";
+import { AgentMedia } from "./media/AgentMedia";
 import { StepDetail } from "./StepDetail";
 
 /** Same icon per step type as the web trace (`activityStepConfig` in @vvedantb/ui). `status` draws a spinner. */
@@ -373,7 +376,9 @@ function LiveStatus({ steps }: { steps: ActivityLogStep[] }) {
  * their own lines), all behind "Worked for …" once the turn finished, then
  * the reply as markdown (native-ui `/markdown`, the web `markdown.css` scale),
  * then the files the turn changed (the web `ChangedFilesCard`) once it has
- * text or has finished.
+ * text or has finished, then the screenshots and recordings the agent posted
+ * (the web `AgentMedia`). With `tabPanels` (the turn's agent-composed cards)
+ * the reply is behind a "Text" tab and the cards in front ("UI"), as the web.
  */
 export function AssistantMessage({
   messageId,
@@ -382,6 +387,8 @@ export function AssistantMessage({
   duration,
   isLatestAssistantTurn,
   onOpenDiff,
+  media,
+  tabPanels,
   live = false,
 }: {
   /** For loading a trimmed step's full detail. */
@@ -394,6 +401,10 @@ export function AssistantMessage({
   isLatestAssistantTurn: boolean;
   /** Opens the diff screen at a changed file. Without it (simple view, as the web) there is no card. */
   onOpenDiff?: (path: string | undefined) => void;
+  /** The agent's captures on this reply (`message.media`). */
+  media?: ResolvedMediaEntry[];
+  /** The turn's cards, when they take the prose's slot behind tabs (the web `panelTabs`). */
+  tabPanels?: ReactNode;
   /** The turn is still running (`LiveAssistantMessage`): until it has a step to show, the live status stands in. */
   live?: boolean;
 }) {
@@ -403,6 +414,11 @@ export function AssistantMessage({
   const settled = content !== "" || duration !== undefined;
   const changedFiles = onOpenDiff && settled ? collectChangedFiles(steps) : [];
   const trace = <SegmentList segments={segments} steps={steps} messageId={messageId} live={duration === undefined} />;
+  const prose = (
+    <Markdown onCopyCode={copyText} onCopyTable={copyText}>
+      {content}
+    </Markdown>
+  );
   return (
     <>
       {segments.length === 0 ? (
@@ -417,13 +433,16 @@ export function AssistantMessage({
         <AgentTrace>{trace}</AgentTrace>
       )}
       {content.trim() !== "" ? (
-        <Markdown onCopyCode={copyText} onCopyTable={copyText}>
-          {content}
-        </Markdown>
+        tabPanels ? (
+          <ChatUiPanelTabs panel={tabPanels} text={prose} />
+        ) : (
+          prose
+        )
       ) : null}
       {onOpenDiff ? (
         <ChangedFilesCard files={changedFiles} isLatestAssistantTurn={isLatestAssistantTurn} onOpenDiff={onOpenDiff} />
       ) : null}
+      {media ? <AgentMedia entries={media} /> : null}
     </>
   );
 }

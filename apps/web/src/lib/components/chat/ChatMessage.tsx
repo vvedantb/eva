@@ -18,6 +18,7 @@ import {
   AgentSpawnCtaRow,
   deriveAgentSpawnSummary,
 } from "@/lib/components/chat/_components/AgentSpawnCtaRow";
+import { messageAttachments } from "@eva/shared";
 import { formatClockTime } from "@eva/shared/dayLabel";
 import { formatDuration } from "@eva/shared/duration";
 import {
@@ -918,15 +919,7 @@ function UserMessageBody({
 }) {
   return (
     <>
-      <UserMessageAttachments
-        attachments={
-          message.attachments ??
-          message.attachmentUrls?.map((url) => ({
-            url,
-            contentType: url ? "image/*" : null,
-          }))
-        }
-      />
+      <UserMessageAttachments attachments={messageAttachments(message)} />
       {message.content ? (
         <CollapsibleUserMessageBody text={message.content}>
           <ReviewCommentMessage text={message.content} repo={repo} />
