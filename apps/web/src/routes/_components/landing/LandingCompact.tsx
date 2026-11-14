@@ -1,15 +1,14 @@
 "use client";
 
 import { SignInButton } from "@clerk/clerk-react";
-import { IconArrowRight } from "@tabler/icons-react";
 import { cn } from "@eva/ui";
 import { Button } from "@vvedantb/ui";
 import { BrandMark } from "./BrandMark";
 import { LandingBrand } from "./LandingBrand";
+import { LandingHero } from "./LandingHero";
 import { markLandingRoot } from "./markLandingRoot";
 import {
   LANDING_AGENTS,
-  LANDING_HERO,
   LANDING_HERO_CAPABILITIES,
   LANDING_PILLARS,
   LANDING_STACK,
@@ -18,7 +17,6 @@ import {
   LANDING_CARD,
   LandingCapabilityLine,
   LandingEyebrow,
-  LandingHeadline,
 } from "./LandingPrimitives";
 
 /**
@@ -33,7 +31,8 @@ import {
  * Deliberately static — no previews, no motion, no auto-cycling tabs. Anything
  * that needed those belongs on the full page.
  *
- * Sign-in is the only call to action here. There is no sign-up, no link to the
+ * The hero is the shared `ProductHero`, as on the full page. Sign-in is the
+ * only call to action here. There is no sign-up, no link to the
  * repository and no licence line — the full page carries all of that, and this
  * version is for instances that want a door rather than a pitch.
  */
@@ -58,26 +57,11 @@ export function LandingCompact() {
           </nav>
         </header>
 
-        <section className="relative z-10 mx-auto grid w-full max-w-6xl gap-12 px-5 pb-16 pt-16 sm:px-8 sm:pb-20 sm:pt-24 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-end lg:gap-16 lg:px-10">
-          <div>
-            <LandingHeadline className="lg:text-6xl" />
-            <p className="mt-7 max-w-xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg">
-              {LANDING_HERO.lede}
-            </p>
-            <div className="mt-10">
-              <SignInButton mode="modal">
-                <Button size="lg" className="group w-full px-7 sm:w-auto">
-                  Sign in
-                  <IconArrowRight
-                    size={16}
-                    aria-hidden
-                    className="motion-base group-hover:translate-x-0.5"
-                  />
-                </Button>
-              </SignInButton>
-            </div>
-          </div>
+        <div className="relative z-10">
+          <LandingHero signInOnly />
+        </div>
 
+        <section className="relative z-10 mx-auto w-full max-w-6xl px-5 pb-16 sm:px-8 sm:pb-20 lg:px-10">
           <div className={cn(LANDING_CARD, "bg-card/80 p-6 backdrop-blur-sm")}>
             <p className="text-xs text-muted-foreground">In every sandbox</p>
             <LandingCapabilityLine
