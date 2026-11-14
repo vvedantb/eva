@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: chats show attachments, agent media, generative UI panels and turn outputs
+
+Date: 2026-11-14
+
+WHY: The phone chat drew none of the rich content the web chat draws: user attachments, the agent's screenshots and recordings, `render_ui` panels and `render_html` pages, and artifact and agent-report cards. Revives #1292 on today's main.
+
+Architectural: The screen's own `ChatMessageRow` (on the paged transcript) gains the content: a user bubble shows `messageAttachments` (`UserAttachments`: 96 pt thumbs into the native-ui `ImageViewer`, text chips into a read-only sheet, as the web); a reply shows `message.media` (`AgentMedia`: `InlineVideo` from `@vvedantb/native-ui/video` with `expo-video`, and `ImageGallery`). `useChatCards` reads `chatUi.listByParent`, `chatHtml.listByParent` and `artifacts.listForChat` once per chat and places them, and the agent reports, with `placeChatUiPanels` (moved to `@eva/shared`; the web imports it from there). Panels use the kit `GenerativeUiPanel` (`@vvedantb/native-ui/generative-ui`, on json-render's React Native renderer) behind the web's UI and Text tabs; links open in the in-app browser, code copies with `copyText`, and a type this version does not know is a card that opens the chat on the web. Pages use `HtmlView` (`react-native-webview`), mounted once the row is seen. A panel button replies through `chats.send`, as the composer. The attachment labels and `splitAgentMedia` move to `@eva/shared` (web unchanged). The PR's own 419-line panel renderer is not used: the kit replaces it. New native modules `expo-video` and `react-native-webview`: a new APK.
+
 ## Chat panels (`render_ui`) render from the kits
 
 Date: 2026-11-14

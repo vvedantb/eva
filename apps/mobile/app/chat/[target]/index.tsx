@@ -1,7 +1,6 @@
 import { api, getAIModelProvider, normalizeAIModel, type Id } from "@eva/backend";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
-import { formatDuration } from "@eva/shared/duration";
 import {
   buildPrecedingUserTurns,
   chatStreamingEntityId,
@@ -11,6 +10,8 @@ import {
   forkThreadTitle,
   formatForkPrompt,
   isOtherUserChatMessage,
+  messageAttachments,
+  type ResolvedMediaEntry,
   otherUserIdsInChat,
   SANDBOX_CHAT_COPY,
   sandboxComposerState,
@@ -42,17 +43,22 @@ import { useConvex, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import * as Clipboard from "expo-clipboard";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import type { ComponentProps, ReactNode } from "react";
+import { useState, type ComponentProps, type ReactNode } from "react";
 import { Linking, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AssistantMessage, LiveAssistantMessage } from "@/chat/AssistantMessage";
 import { AttachButton } from "@/chat/AttachButton";
+import { formatDuration } from "@eva/shared/duration";
+import { AssistantMessage, LiveAssistantMessage } from "@/chat/AssistantMessage";
+import { DayDivider } from "@/chat/DayDivider";
+import { UserMessageText } from "@/chat/MentionChip";
+import { TEAMMATE_FOOTER_INSET, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
+import { InlineCards, TurnOutputs, useChatCards, type InlineCard, type TurnOutput } from "@/chat/cards/ChatCards";
+import { UserAttachments } from "@/chat/media/UserAttachments";
+import { createSeenRows, SeenRowsContext } from "@/chat/cards/seenRows";
 import { SandboxBranchChip } from "@/chat/BranchChips";
 import { ComposerFooter, ComposerHeader, useSimpleView } from "@/chat/ComposerFooter";
 import { ModelChip } from "@/chat/ModelChip";
 import { ChatHeader } from "@/chat/ChatHeader";
-import { DayDivider } from "@/chat/DayDivider";
-import { UserMessageText } from "@/chat/MentionChip";
 import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { MessageFooter, type Sentiment } from "@/chat/MessageFooter";
@@ -60,7 +66,6 @@ import { useAttachments } from "@/chat/useAttachments";
 import { type Chat, useChatModelPick } from "@/chat/useChatModelPick";
 import { useMentionComposer } from "@/chat/useMentionComposer";
 import { WEB_URL } from "@/config";
-import { TEAMMATE_FOOTER_INSET, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
 import { useSessionActions } from "@/sessions/useSessionActions";
 import { textColor, useScheme } from "@/ui/theme";
 import { useChatTranscript } from "@/chat/useChatTranscript";
@@ -91,7 +96,7 @@ export default function ChatScreen() {
   const parentId = chat?.parentId;
   // The web's load plan: newest 30, live after that, older pages as the reader scrolls up.
   const transcript = useChatTranscript(parentId);
-  const messages = transcript.messages;
+  const messages: ChatMessage[] | undefined = transcript.messages;
   const convex = useConvex();
   const turn = useQuery(api.turns.getChatStatus, parentId ? { entityId: parentId } : "skip");
   const pending = useQuery(api.pendingQuestions.getActive, parentId ? { entityId: parentId } : "skip");
@@ -103,9 +108,26 @@ export default function ChatScreen() {
   const stop = useMutation(api.chats.stop);
   const startSession = useMutation(api.chats.start);
   const rate = useMutation(api.feedback.rateTurn);
+  const send = useMutation(api.chats.send);
   const simpleView = useSimpleView();
   // The web leaves a session's page once it is archived; the phone goes back (to Sessions after a deep link).
   const sessionActions = useSessionActions({ onArchived: () => goBackOrReplace(router, "/sessions") });
+
+  // The oldest unfinished reply owns the chat's streaming row, as the web (turns run in order).
+  const liveReplyId = findStreamingTargetMessage(messages ?? [])?._id;
+  // A user message with only attachments still shows, as the web; so does a reply with only captures.
+  const visible = (messages ?? []).filter(
+    (message) =>
+      message.isSystemAlert !== true &&
+      (message.content.trim() !== "" ||
+        (message.role === "assistant" && (message.activityLog || (message.media?.length ?? 0) > 0)) ||
+        (message.role === "user" && messageAttachments(message).length > 0) ||
+        message._id === liveReplyId),
+  );
+  const { mineByMessageId: mine, agentReports } = groupChatFeedback(feedbackRows ?? [], me ?? undefined);
+  const { cards, outputs } = useChatCards(parentId, visible, agentReports);
+  // Rows seen on screen, so an agent page mounts its WebView only once its row shows.
+  const [seenRows] = useState(createSeenRows);
 
   if (chat === undefined || chat === null) {
     return (
@@ -121,21 +143,13 @@ export default function ChatScreen() {
   }
 
   const working = turn !== undefined && turn !== null;
-  // The oldest unfinished reply owns the chat's streaming row, as the web (turns run in order).
-  const liveReplyId = findStreamingTargetMessage(messages ?? [])?._id;
   const streamingEntityId = parentId ? chatStreamingEntityId(parentId) : undefined;
-  const visible = (messages ?? []).filter(
-    (message) =>
-      message.isSystemAlert !== true &&
-      (message.content.trim() !== "" || (message.role === "assistant" && message.activityLog) || message._id === liveReplyId),
-  );
   const dayStarts = findDayBoundaryIds(visible);
   // The inverted transcript draws its first row at the bottom. A copy, as `toReversed` is missing in some Hermes release builds.
   const newestFirst = [...visible].reverse();
   // The user turn before each reply holds the model it ran on (the footer mark), as the web.
   const precedingUserTurns = buildPrecedingUserTurns(messages ?? []);
   const questions = pending ? parsePendingQuestion(pending.payload) : null;
-  const mine = groupChatFeedback(feedbackRows ?? [], me ?? undefined).mineByMessageId;
   const teammateNames = firstNameByUserId(teammates ?? []);
   const teammateById = new Map((teammates ?? []).map((user) => [user._id, user]));
   const latestReplyId = visible.findLast((message) => message.role === "assistant")?._id;
@@ -189,6 +203,16 @@ export default function ChatScreen() {
     rate({ messageId, sentiment }).catch(() => toast.error("Couldn't save your rating"));
   };
 
+  const openWebChat = () => void Linking.openURL(webUrl(chat.webPath));
+  // A panel button sends its text as a message, as the web: withheld on a closed
+  // chat and on one whose sandbox is asleep, which disables the buttons.
+  const panelReply =
+    chat.canReply && chat.sandboxActive
+      ? (message: string) => {
+          send({ target: chat.target, message }).catch(() => toast.error("Couldn't send your message"));
+        }
+      : undefined;
+
   return (
     <View className="flex-1">
       <ChatHeader
@@ -196,7 +220,7 @@ export default function ChatScreen() {
         repoLabel={chat.repoLabel}
         title={chat.title}
         onBack={() => goBackOrReplace(router)}
-        onOpenWeb={() => void Linking.openURL(webUrl(chat.webPath))}
+        onOpenWeb={openWebChat}
         onCopyLink={() => void Clipboard.setStringAsync(webUrl(chat.webPath))}
         onStop={working ? handleStop : undefined}
         sessionMenu={
@@ -212,8 +236,10 @@ export default function ChatScreen() {
       />
       {sessionActions.dialogs}
       <Conversation>
+        <SeenRowsContext.Provider value={seenRows}>
         <ConversationList
           inverted
+          onViewableItemsChanged={seenRows.onViewableItemsChanged}
           data={newestFirst}
           keyExtractor={(message) => message._id}
           // The side padding is in each row: Android flips an inverted list on both axes, which would swap it here.
@@ -239,12 +265,25 @@ export default function ChatScreen() {
           }
           ListHeaderComponent={
             // Inverted, the header is the bottom, under the newest message.
-            // The live reply shows its own status; this covers a turn whose reply is not written yet.
-            working && questions === null && liveReplyId === undefined ? (
-              <View className={`pt-3 ${THREAD_INSET}`}>
-                <Shimmer>Working…</Shimmer>
-              </View>
-            ) : null
+            <>
+              {/* The live reply shows its own status; this covers a turn whose reply is not written yet. */}
+              {working && questions === null && liveReplyId === undefined ? (
+                <View className={`pt-3 ${THREAD_INSET}`}>
+                  <Shimmer>Working…</Shimmer>
+                </View>
+              ) : null}
+              {/* Cards and outputs with no row at or before them sit after the last message, as the web. */}
+              {cards.trailing.length > 0 ? (
+                <View className={`pt-3 ${THREAD_INSET}`}>
+                  <InlineCards cards={cards.trailing} rowKey="trailing" onReply={panelReply} onOpenWebChat={openWebChat} />
+                </View>
+              ) : null}
+              {outputs.trailing.length > 0 ? (
+                <View className={`pt-2 ${THREAD_INSET}`}>
+                  <TurnOutputs outputs={outputs.trailing} />
+                </View>
+              ) : null}
+            </>
           }
           // Plain values and stable handlers, so a message that did not change keeps its output
           // when the list draws a new batch or the screen re-renders.
@@ -265,10 +304,15 @@ export default function ChatScreen() {
                 onOpenDiff={openDiff}
                 onFork={forkFrom}
                 onRate={rateReply}
+                cards={cards.byMessageId.get(message._id)}
+                outputs={outputs.byMessageId.get(message._id)}
+                onPanelReply={panelReply}
+                onOpenWebChat={openWebChat}
               />
             );
           }}
         />
+      </SeenRowsContext.Provider>
         {/* The composer or the question card: the scroll button rides 16 above it, as the web's `bottom-4` over the dock. */}
         {/* Solid: the keyboard lifts the dock over the transcript, which must not show through it. */}
         <ConversationDock style={{ backgroundColor: EVA_THEME[scheme].background }}>
@@ -422,7 +466,16 @@ function ChatDock({
   );
 }
 
-type ChatMessage = FunctionReturnType<typeof api.messages.listByParent>[number];
+/**
+ * A transcript message as `messages.listByParent` returns it. The query's
+ * validator adds the resolved captures and attachments, which its handler's
+ * inferred type drops, so they are named here as the web `ChatBodyMessage` does.
+ */
+type ChatMessage = FunctionReturnType<typeof api.messages.listByParent>[number] & {
+  media?: ResolvedMediaEntry[];
+  attachments?: ResolvedMediaEntry[];
+  attachmentUrls?: Array<string | null>;
+};
 
 /**
  * One transcript message: its day divider, bubble or reply, and footer. Its
@@ -444,6 +497,10 @@ function ChatMessageRow({
   onOpenDiff,
   onFork,
   onRate,
+  cards,
+  outputs,
+  onPanelReply,
+  onOpenWebChat,
 }: {
   message: ChatMessage;
   dayStart: boolean;
@@ -459,7 +516,30 @@ function ChatMessageRow({
   onOpenDiff: ComponentProps<typeof AssistantMessage>["onOpenDiff"];
   onFork: ((messageId: string) => void) | undefined;
   onRate: (messageId: ChatMessage["_id"], sentiment: Sentiment | null) => void;
+  /** The agent's cards placed under this message (`render_ui`, `render_html`). */
+  cards: readonly InlineCard[] | undefined;
+  /** The artifacts and reports placed under this message. */
+  outputs: readonly TurnOutput[] | undefined;
+  /** Sends a panel button's text; undefined disables the buttons. */
+  onPanelReply: ((message: string) => void) | undefined;
+  onOpenWebChat: () => void;
 }) {
+  const isUser = message.role === "user";
+  const attachments = isUser ? messageAttachments(message) : [];
+  const cardList =
+    cards && cards.length > 0 ? (
+      <InlineCards cards={cards} rowKey={message._id} onReply={onPanelReply} onOpenWebChat={onOpenWebChat} />
+    ) : null;
+  // The web `panelTabs`: a settled reply with prose trades places with its cards.
+  const tabbed = !isUser && cardList !== null && live === undefined && message.content.trim() !== "";
+  const outputList = outputs && outputs.length > 0 ? <TurnOutputs outputs={outputs} /> : null;
+  // The user turn: attachments above the text, as the web.
+  const userBody = (
+    <>
+      <UserAttachments attachments={attachments} />
+      {message.content ? <UserMessageText content={message.content} /> : null}
+    </>
+  );
   return (
               <View className={`gap-3 ${THREAD_INSET}`}>
                 {dayStart ? <DayDivider timestamp={message.timestamp} /> : null}
@@ -471,15 +551,13 @@ function ChatMessageRow({
                 >
                   {senderName ? <TeammateName name={senderName} /> : null}
                   {fromTeammate ? (
-                    <TeammateBubble sender={teammate}>
-                      <UserMessageText content={message.content} />
-                    </TeammateBubble>
+                    <TeammateBubble sender={teammate}>{userBody}</TeammateBubble>
                   ) : (
                     // Eva's web chat tints the user bubble (bg-primary/10), not the solid default. A reply is `px-1 py-2`.
                     <MessageContent bubble="tint" className={message.role === "user" ? undefined : "px-1 py-2"}>
-                      {message.role === "user" ? (
+                      {isUser ? (
                         // The web user text is markdown in `text-sm` (14 / 20), its tokens as chips.
-                        <UserMessageText content={message.content} />
+                        userBody
                       ) : live ? (
                         <LiveAssistantMessage streamingEntityId={live} messageId={message._id} />
                       ) : (
@@ -490,10 +568,16 @@ function ChatMessageRow({
                           duration={message.finishedAt ? formatDuration(message.timestamp, message.finishedAt) : undefined}
                           isLatestAssistantTurn={isLatestReply}
                           onOpenDiff={onOpenDiff}
+                          media={message.media}
+                          tabPanels={tabbed ? cardList : undefined}
                         />
                       )}
                     </MessageContent>
                   )}
+                  {/* The web user turn: its cards, then its outputs. A reply: outputs, then the cards the tabs did not take. */}
+                  {isUser && cardList ? <View className="mt-1 w-full">{cardList}</View> : null}
+                  {outputList}
+                  {!isUser && cardList && !tabbed ? <View className="mt-2">{cardList}</View> : null}
                   {message.content.trim() !== "" ? (
                     <MessageFooter
                       className={fromTeammate ? TEAMMATE_FOOTER_INSET : undefined}

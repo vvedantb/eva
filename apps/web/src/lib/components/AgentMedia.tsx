@@ -1,12 +1,10 @@
 "use client";
 
+import { splitAgentMedia, type ResolvedMediaEntry } from "@eva/shared";
 import { VideoPreview, ImageGalleryPreview } from "@vvedantb/ui";
 
 /** A resolved capture: `url` is null when the stored blob is gone. */
-export type AgentMediaEntry = {
-  url: string | null;
-  contentType: string | null;
-};
+export type AgentMediaEntry = ResolvedMediaEntry;
 
 /**
  * Screenshots and recordings an agent left behind, rendered the one way Eva
@@ -17,26 +15,19 @@ export type AgentMediaEntry = {
  * run doc, which has no message to hang it off).
  */
 export function AgentMedia({ entries }: { entries: AgentMediaEntry[] }) {
-  const videos = entries.flatMap((entry) =>
-    entry.url && entry.contentType?.startsWith("video/")
-      ? [{ url: entry.url }]
-      : [],
-  );
-  const images = entries.flatMap((entry) =>
-    entry.url && !entry.contentType?.startsWith("video/")
-      ? [{ url: entry.url }]
-      : [],
-  );
+  const { videos, images } = splitAgentMedia(entries);
 
   return (
     <>
-      {videos.map((video, index) => (
+      {videos.map((url, index) => (
         // Capped to the same width `ImageGalleryPreview` uses, so a video and a
         // screenshot in the same reply line up instead of the video spanning
         // the whole pane.
-        <VideoPreview key={index} url={video.url} className="max-w-lg" />
+        <VideoPreview key={index} url={url} className="max-w-lg" />
       ))}
-      {images.length > 0 ? <ImageGalleryPreview images={images} /> : null}
+      {images.length > 0 ? (
+        <ImageGalleryPreview images={images.map((url) => ({ url }))} />
+      ) : null}
     </>
   );
 }
