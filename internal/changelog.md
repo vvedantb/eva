@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: composer drafts are saved, as on the web
+
+Date: 2026-11-15
+
+WHY: Text typed in a phone chat's composer was lost when the app closed or the chat was left. The web keeps it on the server (`drafts`), so it also follows the person between devices.
+
+Architectural: `useChatDraftSync(chat)` (session chats, as the web; quick tasks and projects have no draft row) reads `drafts.getForTarget` and returns `save` and `pull`. `save` is the composer's new `onChange` (`useMentionComposer` calls it after the person's edits only: typing, picks, chip removal, stash restore, the clear after a send), coalesced to one `drafts.set` in flight per chat, and skipped until the saved draft has loaded so opening a chat never overwrites it; an empty composer deletes the row. `pull(composer)` runs in render when the saved draft changes (its first load, or a write from the web) and applies it with `composer.load` by the web's rules: `decideDraftPull` and `rememberOwnSave` move from `apps/web` to `@eva/shared` (web unchanged). No effects. Also adds the `_generativeUi/catalog` entry #1321 left out of `api.d.ts`.
+
 ## Phone: agent cards stay with their turn in long chats
 
 Date: 2026-11-15
