@@ -2,7 +2,7 @@ import { taskScheduledAt, type api } from "@eva/backend";
 import { TASK_STATUS_LABELS, firstNameFromUser, formatEntityNumLabel, type DisplayTaskStatus } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconClock, IconTag } from "@tabler/icons-react-native";
-import { SurfaceRow } from "@vvedantb/native-ui/primitives";
+import { Checkbox, SurfaceRow } from "@vvedantb/native-ui/primitives";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import type { FunctionReturnType } from "convex/server";
 import dayjs from "dayjs";
@@ -50,6 +50,7 @@ export function QuickTaskRow({
   creator,
   projectNumId,
   onLongPress,
+  selection,
 }: {
   task: QuickTask;
   status: DisplayTaskStatus;
@@ -58,6 +59,8 @@ export function QuickTaskRow({
   /** In a project's task list: the number reads "#project/task", as the web card. */
   projectNumId?: number;
   onLongPress: () => void;
+  /** In select mode: a tap or long press ticks the row, and a checkbox leads it, as the inbox. */
+  selection?: { checked: boolean; onToggle: () => void };
 }) {
   const router = useRouter();
   const scheme = useScheme();
@@ -93,17 +96,22 @@ export function QuickTaskRow({
   return (
     <SurfaceRow
       accessibilityLabel={displayTitle(task.title)}
-      accessibilityHint={hint}
+      accessibilityHint={selection ? (selection.checked ? "Selected" : "Not selected") : hint}
       accentColor={showError ? theme.destructive : appearance.bar}
       backgroundColor={showError ? withAlpha(theme.destructive, 0.05) : theme.card}
       borderColor={showError ? withAlpha(theme.destructive, 0.3) : undefined}
       // The web `px-2.5 pl-3` and `gap-1.5`; `py-3` (web `py-2`) for a thumb.
       className="min-h-[72px] gap-1.5 px-3 py-3 pl-3.5"
-      onPress={() => router.push({ pathname: "/quick-task/[taskId]", params: { taskId: task._id, repo: task.repoId } })}
-      onLongPress={onLongPress}
+      onPress={
+        selection
+          ? selection.onToggle
+          : () => router.push({ pathname: "/quick-task/[taskId]", params: { taskId: task._id, repo: task.repoId } })
+      }
+      onLongPress={selection ? selection.onToggle : onLongPress}
       longPressLabel="Task actions"
     >
       <View className="flex-row items-start gap-2">
+        {selection ? <Checkbox checked={selection.checked} onCheckedChange={selection.onToggle} accessibilityLabel="Select task" /> : null}
         <View className="min-w-0 flex-1 flex-row items-baseline gap-1.5">
           {numLabel ? (
             <Text style={{ ...META_TEXT, fontFamily: "monospace", color: withAlpha(muted, 0.55), fontVariant: ["tabular-nums"] }}>
