@@ -1,4 +1,5 @@
 import { api, type Id } from "@eva/backend";
+import { mentionTokensToEditableText } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
   buildRepliesByParentId,
@@ -15,12 +16,15 @@ import {
   type TaskComment,
   type TaskTimelineItem,
 } from "@eva/shared/taskDetail";
+import { IconDots } from "@tabler/icons-react-native";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
+import { useState } from "react";
 import { Pressable, Text, View, type TextStyle } from "react-native";
 import { UserMessageText } from "@/chat/MentionChip";
+import { DeleteCommentDialog, ReactableMenu } from "@/quickTasks/TaskDiscussion";
 import { TimeAgo } from "@/ui/TimeAgo";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { useScheme } from "@/ui/theme";
@@ -56,7 +60,8 @@ export function useTaskReactions(taskId: Id<"agentTasks">, users: User[] | undef
  * who created the task, each field change and PR event on a shared rail, and
  * each top-level comment in its own card with its replies and reactions. The
  * order, wording and grouping come from `@eva/shared/taskDetail`, as on the
- * web. A tap on a reaction chip adds or removes yours.
+ * web. A tap on a reaction chip adds or removes yours; a comment's "…" opens
+ * its menu (reactions, Reply, and Edit, Copy text and Delete on your own).
  */
 export function TaskActivity({
   taskId,
@@ -65,6 +70,10 @@ export function TaskActivity({
   users,
   reactionsFor,
   isProjectTask,
+  currentUserId,
+  onReply,
+  onEdit,
+  onDelete,
 }: {
   taskId: Id<"agentTasks">;
   isProjectTask: boolean;
@@ -72,8 +81,14 @@ export function TaskActivity({
   creator: User | undefined;
   users: User[] | undefined;
   reactionsFor: ReactionsFor;
+  currentUserId: Id<"users"> | null | undefined;
+  onReply: (comment: TaskComment) => void;
+  onEdit: (comment: TaskComment) => void;
+  onDelete: (id: Id<"taskComments">) => void;
 }) {
   const theme = EVA_THEME[useScheme()];
+  const [menuFor, setMenuFor] = useState<TaskComment | null>(null);
+  const [deleting, setDeleting] = useState<TaskComment | null>(null);
   const comments = useQuery(api.taskComments.listByTask, { taskId });
   const activity = useQuery(api.taskActivity.listByTask, { taskId });
   const userComments = comments?.filter((comment) => comment.authorId) ?? [];
@@ -84,7 +99,7 @@ export function TaskActivity({
     const reaction = reactionsFor("comment", comment._id);
     return (
       <View key={comment._id} className="gap-2">
-        <CommentBody comment={comment} users={users} />
+        <CommentBody comment={comment} users={users} onMenu={isCommentDeleted(comment) ? undefined : () => setMenuFor(comment)} />
         {reaction.groups.length > 0 ? <ReactionChips groups={reaction.groups} onToggle={reaction.toggle} /> : null}
         {(replies.get(comment._id) ?? []).length > 0 ? (
           // Replies indent under their parent with a hairline, as the web thread.
@@ -96,8 +111,34 @@ export function TaskActivity({
     );
   };
 
+  const menuReactions = menuFor ? reactionsFor("comment", menuFor._id) : undefined;
+  const ownComment = menuFor !== null && menuFor.authorId === currentUserId;
   return (
     <View className="gap-3">
+      {menuFor && menuReactions ? (
+        <ReactableMenu
+          open
+          onOpenChange={(open) => {
+            if (!open) setMenuFor(null);
+          }}
+          title="Comment"
+          groups={menuReactions.groups}
+          onToggleReaction={menuReactions.toggle}
+          onReply={() => onReply(menuFor)}
+          onEdit={ownComment ? () => onEdit(menuFor) : undefined}
+          copyText={mentionTokensToEditableText(menuFor.content)}
+          onDelete={ownComment ? () => setDeleting(menuFor) : undefined}
+        />
+      ) : null}
+      <DeleteCommentDialog
+        open={deleting !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleting(null);
+        }}
+        onConfirm={() => {
+          if (deleting) onDelete(deleting._id);
+        }}
+      />
       {segments.map((segment) =>
         segment.kind === "comment" ? (
           <View
@@ -191,19 +232,33 @@ function RailRow({
   );
 }
 
-/** A comment's author, age and text; a deleted one reads the web placeholder. */
-function CommentBody({ comment, users }: { comment: TaskComment; users: User[] | undefined }) {
+/**
+ * A comment's author, age and text; a deleted one reads the web placeholder.
+ * Its "…" (or a long press) opens the comment menu.
+ */
+function CommentBody({ comment, users, onMenu }: { comment: TaskComment; users: User[] | undefined; onMenu: (() => void) | undefined }) {
   const theme = EVA_THEME[useScheme()];
   const author = users?.find((user) => user._id === comment.authorId);
   const deleted = isCommentDeleted(comment);
   return (
-    <View className="gap-1.5">
+    <Pressable onLongPress={onMenu} disabled={!onMenu} className="gap-1.5">
       <View className="flex-row items-center gap-2">
         {author ? <InitialsAvatar user={author} size={20} /> : null}
         <Text numberOfLines={1} className="font-instrument-sans-medium min-w-0 shrink text-sm" style={{ color: theme.foreground, fontWeight: "500" }}>
           {author ? getUserDisplayName(author) : "Someone"}
         </Text>
-        <TimeAgo at={comment.createdAt} className="font-instrument-sans" style={{ ...META, color: withAlpha(theme.mutedForeground, 0.7) }} />
+        <TimeAgo at={comment.createdAt} className="font-instrument-sans min-w-0 flex-1" style={{ ...META, color: withAlpha(theme.mutedForeground, 0.7) }} />
+        {onMenu ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Comment actions"
+            onPress={onMenu}
+            hitSlop={6}
+            className="-my-2 size-8 items-center justify-center rounded-lg active:opacity-70"
+          >
+            <IconDots size={16} color={theme.mutedForeground} />
+          </Pressable>
+        ) : null}
       </View>
       {deleted ? (
         <Text className="font-instrument-sans text-sm italic" style={{ color: theme.mutedForeground }}>
@@ -212,7 +267,7 @@ function CommentBody({ comment, users }: { comment: TaskComment; users: User[] |
       ) : (
         <UserMessageText content={comment.content} />
       )}
-    </View>
+    </Pressable>
   );
 }
 
