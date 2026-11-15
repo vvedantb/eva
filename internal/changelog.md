@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: agent cards stay with their turn in long chats
+
+Date: 2026-11-15
+
+WHY: In a long chat, a turn's agent report ("Feedback sent"), artifacts, panels and pages fell to the bottom of the chat on the phone. The phone transcript loads in pages (newest 30 first), but `useChatCards` told `placeChatUiPanels` the whole history was loaded, so a card whose turn was above the first page went to the "after everything" list.
+
+Architectural: `useChatCards` takes `hasOlderHistory` (the screen passes `transcript.hasOlder`) and gives it to both placements, as the web `ChatBody`. A card above the loaded rows now waits for its page and then sits under its turn. Reproduced and checked in the phone web export with 40 extra messages on the seeded mock chat: before, the cards sat at the bottom; after, nothing at the bottom, and the cards appear under their reply once the older page loads.
+
 ## Web shell comes from the kit `AppShell`
 
 Date: 2026-11-14
