@@ -64,6 +64,7 @@ import { MentionMenu } from "@/chat/MentionMenu";
 import { MessageFooter, type Sentiment } from "@/chat/MessageFooter";
 import { useAttachments } from "@/chat/useAttachments";
 import { type Chat, useChatModelPick } from "@/chat/useChatModelPick";
+import { useChatDraftSync } from "@/chat/useChatDraftSync";
 import { useMentionComposer } from "@/chat/useMentionComposer";
 import { WEB_URL } from "@/config";
 import { useSessionActions } from "@/sessions/useSessionActions";
@@ -371,7 +372,10 @@ function ChatDock({
   const answer = useMutation(api.pendingQuestions.answer);
   const attachments = useAttachments();
   // The `/` list follows the chat's model provider, as the web composer.
-  const composer = useMentionComposer(chat.repoId, getAIModelProvider(normalizeAIModel(chat.model)));
+  // The draft is kept on the server, as the web composer: it survives closing the app and follows you between devices.
+  const draft = useChatDraftSync(chat);
+  const composer = useMentionComposer(chat.repoId, getAIModelProvider(normalizeAIModel(chat.model)), draft.save);
+  draft.pull(composer);
   const modelPick = useChatModelPick(target, chat, me);
 
   // The web composer's placeholder: asleep, a send wakes Eva up; mid-turn, a follow-up.
