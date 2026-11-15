@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: context and plan usage from the chat header
+
+Date: 2026-11-15
+
+WHY: The phone had no way to see a chat's context use or the Claude plan limits, which the web shows in its chat header (the context ring and the plan-usage chip).
+
+Architectural: The rules moved out of the web into `@eva/shared/usageLimits` (the old `usage-limits/_utils.ts`: snapshots, tones, chip summaries, reset labels, the empty copy, and now the refresh failure copy) and `@eva/shared/contextUsage` (`aggregateUsage`, `contextUsedRatio`, `CONTEXT_OVERLOAD_RATIO`, `contextCompactsAutomatically`); the web imports them, keeping only its Tailwind tone classes (`usage-limits/toneClasses.ts`), and its tests now test the shared code. On the phone, `src/chat/UsageSheet.tsx` adds `UsageButton` to `ChatHeader` (the context % and ring, red past 90%; hidden in simple view): a tap refreshes every account (`usageLimitsActions.refreshAll`, failures as toasts) and opens a sheet with the context card (used of the window, the token rows, tokens left, total cost) and plan usage per Claude account (each window's %, bar and reset). The context reads the session chat's logs, a task's, or a project's (`logs.getByProjectId`), as the web. `src/ui/clock.ts` (`useNow`) is a shared ticking clock; `TimeAgo` now uses it.
+
 ## Phone: the chat Stop button is red, and the composer lost its extra top padding
 
 Date: 2026-11-15

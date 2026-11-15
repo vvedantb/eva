@@ -7,10 +7,10 @@ import {
   resetsInLabel,
   snapshotOf,
   toneForUtilization,
-  USAGE_TONE_TEXT_CLASS,
   type UsageAccountEntry,
   type UsageTone,
-} from "@/lib/components/usage-limits/_utils";
+} from "@eva/shared/usageLimits";
+import { USAGE_TONE_TEXT_CLASS } from "@/lib/components/usage-limits/toneClasses";
 import { UsageBar } from "@/lib/components/usage-limits/UsageBar";
 
 /** Utilisation at which an account is no better than the one that just failed. */
