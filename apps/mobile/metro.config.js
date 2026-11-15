@@ -16,6 +16,9 @@ const projectRoot = __dirname;
 // Resolve these singletons from this app's folder, wherever the import comes
 // from.
 const SINGLETONS = [
+  // One Convex client context: `@eva/shared/artifactBridge` calls Convex hooks, and a
+  // second copy resolved from packages/shared would not see the app's ConvexProvider.
+  "convex",
   "react",
   "react-dom",
   "react-native-gesture-handler",

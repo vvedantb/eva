@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./activityTrace": "./src/activityTrace.ts",
+    "./artifactBridge": "./src/artifactBridge.ts",
     "./agentTurnLimits": "./src/agentTurnLimits.ts",
     "./appTabSlug": "./src/appTabSlug.ts",
     "./chatFeedback": "./src/chatFeedback.ts",
