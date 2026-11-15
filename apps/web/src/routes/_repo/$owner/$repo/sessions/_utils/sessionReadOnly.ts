@@ -11,20 +11,9 @@ export function isSessionSidebarActive(session: {
   return session.archived !== true;
 }
 
-/**
- * "Send for Review" opens (or un-drafts) this session's PR, so it needs a
- * branch to open one from and a PR that is not already out for review.
- *
- * Shared by the session chat header and the sessions sidebar row so the two
- * entry points cannot offer the action under different conditions.
- */
-export function canSendSessionForReview(session: {
-  branchName?: string;
-  prState?: PrState;
-}): boolean {
-  if (!session.branchName) return false;
-  return session.prState === undefined || session.prState === "draft";
-}
+// Moved to `@eva/shared` so the phone menus offer it under the same rule.
+export { canSendSessionForReview } from "@eva/shared";
+
 
 /**
  * Banner copy for an archived session. A merged/closed PR names the reason

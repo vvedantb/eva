@@ -1,12 +1,14 @@
 import { api, type Id } from "@eva/backend";
-import { sessionMenuActions, type SessionMenuAction } from "@eva/shared";
+import { prNumberFromGithubUrl, sessionMenuActions, type PrState, type SessionMenuAction } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
   IconArchive,
   IconArchiveOff,
   IconClipboard,
-  IconExternalLink,
+  IconCloudUpload,
+  IconEye,
   IconGitBranch,
+  IconGitPullRequest,
   IconLink,
   IconLinkOff,
   IconPencil,
@@ -27,6 +29,7 @@ import {
 import { toast } from "@vvedantb/native-ui/toast";
 import { useAction, useMutation } from "convex/react";
 import * as Clipboard from "expo-clipboard";
+import { useRouter } from "expo-router";
 import { Fragment, useRef, useState, type ComponentType } from "react";
 import { Linking, Text, type TextInput } from "react-native";
 import { useSimpleView } from "@/chat/ComposerFooter";
@@ -43,6 +46,12 @@ export type SessionActionTarget = {
   webPath: string;
   branchName?: string;
   prUrl?: string;
+  /** Send for Review shows while the PR is a draft or there is none (`canSendSessionForReview`). */
+  prState?: PrState;
+  /** Open PR opens the phone's PR screen in this repo (else the browser). */
+  repoId?: Id<"githubRepos">;
+  /** The awake sandbox has work to push: Commit & push shows. */
+  hasUnpushedWork?: boolean;
   /** A row in a linked-session group: its menu has Remove from group. */
   inGroup?: boolean;
 };
@@ -70,7 +79,9 @@ export const SESSION_ACTION_ITEMS: Record<
   copyTitle: { label: "Copy title", icon: IconClipboard },
   copyLink: { label: "Copy link", icon: IconLink },
   copyBranchName: { label: "Copy branch name", icon: IconGitBranch },
-  openPr: { label: "Open PR", icon: IconExternalLink },
+  openPr: { label: "Open PR", icon: IconGitPullRequest },
+  sendForReview: { label: "Send for Review", icon: IconEye },
+  commitPush: { label: "Commit & push", icon: IconCloudUpload },
   removeFromGroup: { label: "Remove from group", icon: IconLinkOff },
   unarchive: { label: "Unarchive", icon: IconArchiveOff },
   archive: { label: "Archive", icon: IconArchive, warning: true },
@@ -99,8 +110,16 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
   const [renameValue, setRenameValue] = useState("");
   const [isRenaming, setIsRenaming] = useState(false);
   const [archiveTarget, setArchiveTarget] = useState<SessionActionTarget | null>(null);
+  const [reviewTarget, setReviewTarget] = useState<SessionActionTarget | null>(null);
+  const createSessionPr = useAction(api.github.createSessionPr);
+  const commitAndPush = useAction(api.sandbox.commitAndPushSandbox);
+  const router = useRouter();
   // The Rename field, focused once its dialog is on screen (`onShow`): focus is imperative.
   const renameInput = useRef<TextInput>(null);
+
+  /** An action's label and icon; Commit & push reads "Save to GitHub" in simple view, as the web. */
+  const itemFor = (action: SessionMenuAction) =>
+    action === "commitPush" && simpleView ? { ...SESSION_ACTION_ITEMS.commitPush, label: "Save to GitHub" } : SESSION_ACTION_ITEMS[action];
 
   /** The actions for one session, in the web order and groups (`sessionMenuActions`). */
   const actionsFor = (target: SessionActionTarget) => sessionMenuActions({ ...target, simpleView });
@@ -141,8 +160,26 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
           void Clipboard.setStringAsync(target.branchName).then(() => toast.success("Branch name copied"));
         }
         return;
-      case "openPr":
-        if (target.prUrl) void Linking.openURL(target.prUrl);
+      case "openPr": {
+        if (!target.prUrl) return;
+        // The phone's PR screen when the URL names a PR in a known repo, else the browser.
+        const prNumber = prNumberFromGithubUrl(target.prUrl);
+        if (prNumber !== undefined && target.repoId) {
+          router.push({ pathname: "/review/[repoId]/[prNumber]", params: { repoId: target.repoId, prNumber: String(prNumber) } });
+        } else {
+          void Linking.openURL(target.prUrl);
+        }
+        return;
+      }
+      case "sendForReview":
+        setReviewTarget(target);
+        return;
+      case "commitPush":
+        // The web `SandboxCommitPushButton`: no confirm, a toast either way.
+        commitAndPush({ target: { kind: "session", sessionId: target.sessionId } }).then(
+          () => toast.success(simpleView ? "Saved to GitHub" : "Pushed to GitHub", { id: "session-commit-push" }),
+          () => toast.error("Couldn't push the branch", { id: "session-commit-push" }),
+        );
         return;
       case "removeFromGroup":
         removeFromGroup({ sessionId: target.sessionId }).then(
@@ -214,7 +251,7 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
                 {/* A line parts the groups, as the web separators. */}
                 {index > 0 ? <MenuDivider /> : null}
                 {group.map((action) => {
-                  const item = SESSION_ACTION_ITEMS[action];
+                  const item = itemFor(action);
                   return (
                     <SheetRow
                       key={action}
@@ -280,6 +317,24 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* The web `SessionReviewModal` confirm: it marks the PR ready (opening one when there is none). */}
+      <ConfirmDialog
+        open={reviewTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setReviewTarget(null);
+        }}
+        title="Send for Code Review"
+        description="Marks your PR ready for review. The session stays open."
+        confirmLabel="Confirm"
+        onConfirm={() => {
+          const target = reviewTarget;
+          if (!target) return;
+          createSessionPr({ sessionId: target.sessionId }).then(
+            () => toast.success("Review sent", { id: "session-review" }),
+            () => toast.error("Couldn't create pull request", { id: "session-review" }),
+          );
+        }}
+      />
       <ConfirmDialog
         open={archiveTarget !== null}
         onOpenChange={(open) => {
@@ -313,6 +368,8 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
     /** Opens a linked group's header menu (the web right-click on the group). */
     openGroupSheet: setGroupSheetTarget,
     actionsFor,
+    /** An action's label and icon, as the menus draw it. */
+    itemFor,
     run,
     dialogs,
   };

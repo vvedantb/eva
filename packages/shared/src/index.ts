@@ -152,7 +152,7 @@ export {
   type PrState,
   type PrStateTone,
 } from "./prState";
-export { sessionMenuActions, type SessionMenuAction } from "./sessionMenu";
+export { canSendSessionForReview, sessionMenuActions, type SessionMenuAction } from "./sessionMenu";
 export {
   draftCountAfterRemove,
   draftsAfterRemove,

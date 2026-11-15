@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: Commit & push, Send for Review and the PR screen from a session's menu
+
+Date: 2026-11-15
+
+WHY: The web session header pushes the sandbox's work (Commit & push), sends the PR for review and opens PRs; the phone menu stopped at Open PR, which went to the browser.
+
+Architectural: `sessionMenuActions` (`@eva/shared`) gains the web's git group after the main block: Commit & push while the awake sandbox has uncommitted files or unpushed commits ("Save to GitHub" in simple view), Open PR, and Send for Review under `canSendSessionForReview`, which moved there from the web (`sessionReadOnly.ts` re-exports it). The phone's `useSessionActions` runs `sandbox.commitAndPushSandbox` (the web's toasts) and `github.createSessionPr` behind the web "Send for Code Review" confirm, and Open PR opens the phone's PR screen (`prNumberFromGithubUrl` in the session's repo), else the browser. The chat reads `sessions.get` for the PR state and git sync; the session rows pass theirs.
+
 ## Phone: the agent's secret requests and session proposals in chat
 
 Date: 2026-11-15
