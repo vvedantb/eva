@@ -31,6 +31,7 @@
     "./resultEvent": "./src/resultEvent.ts",
     "./safeUrl": "./src/safeUrl.ts",
     "./storageUpload": "./src/storageUpload.ts",
+    "./taskDetail": "./src/taskDetail.ts",
     "./uiTaskPrompt": "./src/uiTaskPrompt.ts",
     "./user-initials": "./src/components/user-initials.tsx"
   },

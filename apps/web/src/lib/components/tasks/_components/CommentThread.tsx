@@ -6,7 +6,7 @@ import { cn } from "@eva/ui";
 import { Separator, Surface, ListEnter } from "@vvedantb/ui";
 import { CommentActivityItem } from "./CommentActivityItem";
 import { CommentReplyComposer } from "./CommentReplyComposer";
-import type { TaskComment } from "../_utils/commentThread";
+import type { TaskComment } from "@eva/shared/taskDetail";
 
 type Users = FunctionReturnType<typeof api.users.listAll>;
 

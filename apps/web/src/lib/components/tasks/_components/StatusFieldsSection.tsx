@@ -8,7 +8,7 @@ import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
 import type { TaskStatus } from "../TaskStatusBadge";
 import { FieldsSection } from "@/lib/components/fields/FieldsSection";
-import { canEditTaskModel } from "./task-detail-constants";
+import { canEditTaskModel } from "@eva/shared/taskDetail";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   useAvailableAiModels,

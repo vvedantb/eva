@@ -17,7 +17,7 @@ import { UserInitials } from "@eva/shared/user-initials";
 import { Facehash } from "facehash";
 import type { FunctionReturnType } from "convex/server";
 import type { api, Id } from "@eva/backend";
-import { getUserDisplayName } from "@/lib/components/tasks/_components/task-detail-constants";
+import { getUserDisplayName } from "@eva/shared/taskDetail";
 import { QUICK_TASK_OPTION_BADGE_CLASS } from "@/lib/components/quick-tasks/_utils/optionBadge";
 
 type User = FunctionReturnType<typeof api.users.listAll>[number];

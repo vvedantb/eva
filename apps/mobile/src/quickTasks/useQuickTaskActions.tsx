@@ -1,5 +1,5 @@
 import { api, type Id } from "@eva/backend";
-import { TASK_STATUSES, TASK_STATUS_LABELS, repoBasePath, type DisplayTaskStatus } from "@eva/shared";
+import { repoBasePath } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
   IconArrowMoveRight,
@@ -19,6 +19,7 @@ import { useState } from "react";
 import { Text, type TextStyle } from "react-native";
 import { WEB_URL } from "@/config";
 import { MenuDivider, MenuSheet, SubmenuRow } from "@/ui/MenuSheet";
+import { TaskStatusRows } from "@/quickTasks/OptionChips";
 import { userLabel } from "@/quickTasks/QuickTaskListOptions";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
 import { useScheme } from "@/ui/theme";
@@ -49,10 +50,13 @@ export function useQuickTaskActions({
   repo,
   users,
   projects,
+  onDeleted,
 }: {
   repo: Repo;
   users: User[] | undefined;
   projects: Project[] | undefined;
+  /** After a delete: the overview leaves the deleted task. */
+  onDeleted?: () => void;
 }) {
   const scheme = useScheme();
   const theme = EVA_THEME[scheme];
@@ -143,18 +147,12 @@ export function useQuickTaskActions({
           </>
         );
       case "status":
-        return TASK_STATUSES.map((status: DisplayTaskStatus) => {
-          const { icon: Icon, text } = statusAppearance(status, scheme);
-          return (
-            <SheetRow
-              key={status}
-              leading={<Icon size={20} color={text} />}
-              title={TASK_STATUS_LABELS[status]}
-              active={task.status === status}
-              onPress={() => act(() => updateStatus({ id: task._id, status }), "Couldn't change the status")}
-            />
-          );
-        });
+        return (
+          <TaskStatusRows
+            value={task.status}
+            onPick={(status) => act(() => updateStatus({ id: task._id, status }), "Couldn't change the status")}
+          />
+        );
       case "reviewer":
         return (
           <>
@@ -253,7 +251,9 @@ export function useQuickTaskActions({
         variant="destructive"
         onConfirm={() => {
           if (!deleteTarget) return;
-          deleteTask({ id: deleteTarget._id }).catch(() => toast.error("Could not delete the task. Try again."));
+          deleteTask({ id: deleteTarget._id })
+            .then(() => onDeleted?.())
+            .catch(() => toast.error("Could not delete the task. Try again."));
         }}
       />
       {/* The web `MoveTaskDialog`. */}

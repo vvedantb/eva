@@ -25,32 +25,15 @@ import { TaskActivityComposer } from "./TaskActivityComposer";
 import { CommentThread } from "./CommentThread";
 import {
   buildRepliesByParentId,
+  buildTaskTimeline,
   DELETED_COMMENT_PLACEHOLDER,
-  getTopLevelComments,
-} from "../_utils/commentThread";
+  type TaskTimelineItem,
+} from "@eva/shared/taskDetail";
 
 type Comments = FunctionReturnType<typeof api.taskComments.listByTask>;
-type Comment = NonNullable<Comments>[number];
 type TaskActivity = FunctionReturnType<typeof api.taskActivity.listByTask>;
-type TaskActivityEvent = NonNullable<TaskActivity>[number];
 type Users = FunctionReturnType<typeof api.users.listAll>;
 type User = NonNullable<Users>[number];
-
-type ActivityItem =
-  | {
-      kind: "created";
-      timestamp: number;
-    }
-  | {
-      kind: "taskActivity";
-      timestamp: number;
-      activity: TaskActivityEvent;
-    }
-  | {
-      kind: "comment";
-      timestamp: number;
-      comment: Comment;
-    };
 
 export function ActivityTimeline({
   taskId,
@@ -107,46 +90,15 @@ export function ActivityTimeline({
   };
 
   const userComments = comments?.filter((c) => c.authorId) ?? [];
-  const topLevelComments = getTopLevelComments(userComments);
   const repliesByParentId = buildRepliesByParentId(userComments);
-
   // Comments and task updates only: agent runs live in the sandbox chat.
-  const activityTimeline: ActivityItem[] = [
-    ...(createdAt !== undefined
-      ? [{ kind: "created" as const, timestamp: createdAt }]
-      : []),
-    ...(taskActivity ?? []).map((activity) => ({
-      kind: "taskActivity" as const,
-      timestamp: activity.createdAt,
-      activity,
-    })),
-    ...topLevelComments.map((comment) => ({
-      kind: "comment" as const,
-      timestamp: comment.createdAt,
-      comment,
-    })),
-  ].sort((a, b) => a.timestamp - b.timestamp);
+  const segments = buildTaskTimeline({
+    createdAt,
+    activity: taskActivity,
+    comments: userComments,
+  });
 
-  // Comments sit in cards off the rail; contiguous non-comment events share a line.
-  type TimelineSegment =
-    | { kind: "rail"; items: ActivityItem[] }
-    | { kind: "comment"; item: Extract<ActivityItem, { kind: "comment" }> };
-
-  const segments: TimelineSegment[] = [];
-  for (const item of activityTimeline) {
-    if (item.kind === "comment") {
-      segments.push({ kind: "comment", item });
-      continue;
-    }
-    const last = segments[segments.length - 1];
-    if (last?.kind === "rail") {
-      last.items.push(item);
-    } else {
-      segments.push({ kind: "rail", items: [item] });
-    }
-  }
-
-  const renderTimelineItem = (item: ActivityItem) => {
+  const renderTimelineItem = (item: TaskTimelineItem) => {
     if (item.kind === "created") {
       return (
         <CreatedTimelineItem
@@ -172,7 +124,7 @@ export function ActivityTimeline({
   return (
     <div className="flex flex-col">
       <div className="flex flex-col gap-4 px-4 py-4 md:px-6">
-        {activityTimeline.length === 0 ? (
+        {segments.length === 0 ? (
           <ConversationEmptyState title="No activity yet" />
         ) : (
           segments.map((segment, segmentIndex) => {
