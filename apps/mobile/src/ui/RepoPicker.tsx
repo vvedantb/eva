@@ -7,27 +7,51 @@ import type { FunctionReturnType } from "convex/server";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Fragment, useState, type ComponentType, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
+import { z } from "zod";
 import { FooterSheet } from "@/chat/ComposerFooter";
+import { jsonParser, persistedStore } from "@/storage/persistedStore";
 import { RepoLogo } from "@/ui/RepoLogo";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 
+const lastRepo = persistedStore<string | null>("repo", null, jsonParser(z.string().nullable()));
+
+/**
+ * The repo last picked on this device. The web stays on a repo because its
+ * path holds it (`/owner/repo/...`) and the browser reopens the last page; a
+ * phone screen opened with no repo starts on this one instead of the first.
+ */
+export function useLastRepoId(): string | null {
+  return lastRepo.useValue("last");
+}
+
+/** Remembers `repoId` as the repo to start on (`useLastRepoId`). */
+export function rememberRepo(repoId: string) {
+  lastRepo.set("last", repoId);
+}
+
 /**
  * The repo a per-repo section of a tab shows (Quick Tasks and Reviews in
  * Sessions; Projects, Documents, Drafts and Today in Projects), kept in the
  * URL (`?repo=`) as the web keeps it in its path, so a tab's sections stay
- * on one repo. Default: the first repo.
+ * on one repo. With none in the URL, the repo last picked (`useLastRepoId`),
+ * else the first.
  */
 export function useRepoParam() {
   const router = useRouter();
   const { repo: repoParam } = useLocalSearchParams<{ repo?: string }>();
   const repos = useQuery(api.githubRepos.list, {});
-  const repo = repos?.find((candidate) => candidate._id === repoParam) ?? repos?.[0];
+  const last = useLastRepoId();
+  const repo =
+    repos?.find((candidate) => candidate._id === repoParam) ?? repos?.find((candidate) => candidate._id === last) ?? repos?.[0];
   return {
     repos,
     repo,
-    setRepo: (repoId: Id<"githubRepos">) => router.setParams({ repo: repoId }),
+    setRepo: (repoId: Id<"githubRepos">) => {
+      rememberRepo(repoId);
+      router.setParams({ repo: repoId });
+    },
   };
 }
 

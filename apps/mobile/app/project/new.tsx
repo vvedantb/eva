@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BaseBranchChip } from "@/chat/BranchChips";
 import { FooterSheet } from "@/chat/ComposerFooter";
 import { OptionPill, OptionPillFrame, PriorityChip } from "@/quickTasks/OptionChips";
-import { RepoPicker } from "@/ui/RepoPicker";
+import { rememberRepo, RepoPicker, useLastRepoId } from "@/ui/RepoPicker";
 import { useScheme } from "@/ui/theme";
 
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
@@ -38,7 +38,9 @@ export default function NewProjectScreen() {
   const { repoId: repoParam } = useLocalSearchParams<{ repoId?: string }>();
   const leave = () => goBackOrReplace(router, "/projects");
   const repos = useQuery(api.githubRepos.list, {});
-  const first = repos?.find((candidate) => candidate._id === repoParam) ?? repos?.[0];
+  const lastRepoId = useLastRepoId();
+  const first =
+    repos?.find((candidate) => candidate._id === repoParam) ?? repos?.find((candidate) => candidate._id === lastRepoId) ?? repos?.[0];
   if (repos === undefined) {
     return (
       <Screen onBack={leave}>
@@ -110,7 +112,14 @@ function NewProjectForm({ repos, initialRepo, onLeave: leave }: { repos: Repo[];
       {/* The kit's: it pads frame by frame with the keyboard (`KeyboardControllerProvider`). */}
       <KeyboardAvoidingView style={{ flex: 1 }}>
         <ScrollView className="flex-1" keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 4, paddingHorizontal: 16, paddingBottom: 16 }}>
-          <RepoPicker repos={repos} value={repo} onChange={setPicked} />
+          <RepoPicker
+            repos={repos}
+            value={repo}
+            onChange={(repoId) => {
+              setPicked(repoId);
+              rememberRepo(repoId);
+            }}
+          />
           {/* Web: a borderless `text-base font-medium` title over the description, min 160 high. */}
           <TextInput
             value={title}

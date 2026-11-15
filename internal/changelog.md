@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: settings you change stay after the app closes
+
+Date: 2026-11-15
+
+WHY: The web keeps per-person UI choices in localStorage; on the phone they were React state, so a restart reset them (the repo picked for Quick Tasks, folded session groups, and more). An audit of every web localStorage key against the phone found the phone kept only Hide whitespace, the Viewed ticks and the theme.
+
+Architectural: `src/storage/persistedStore.ts` (moved out of `prDiffStore.ts` and shared): `persistedStore`, `persistedIdSet` and `jsonParser` (zod), in secure store on a phone and in localStorage on the web preview build (which has no secure store, so a value used to last one session). Now kept: the repo last picked (`useLastRepoId` / `rememberRepo`: Quick Tasks, Projects, Reviews, Docs, Drafts and Today fall back to it with no `?repo=`, and the new session, quick task and project screens start on it), session group folds (the web's app and linked group open state), quick task status folds, project phase and project task folds, the section each tab last showed, the new-session prompt draft per repo (the web's `new-session-composer`, cleared on send), the changed-files card open state per reply, and the pull request comment order. Not kept, as on the web, where they live in the URL: filters, sort, Active/Archived and Open/Closed.
+
 ## Phone: artifacts open live in the chat
 
 Date: 2026-11-15

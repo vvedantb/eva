@@ -22,6 +22,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { z } from "zod";
 import { AttachButton } from "@/chat/AttachButton";
 import { BaseBranchChip } from "@/chat/BranchChips";
 import { ComposerFooter, ComposerHeader } from "@/chat/ComposerFooter";
@@ -29,9 +30,13 @@ import { MentionMenu } from "@/chat/MentionMenu";
 import { ModelChip } from "@/chat/ModelChip";
 import { useAttachments } from "@/chat/useAttachments";
 import { useMentionComposer } from "@/chat/useMentionComposer";
+import { jsonParser, persistedStore } from "@/storage/persistedStore";
 import { RepoLogo } from "@/ui/RepoLogo";
-import { repoName, RepoSheet } from "@/ui/RepoPicker";
+import { rememberRepo, repoName, RepoSheet, useLastRepoId } from "@/ui/RepoPicker";
 import { useScheme } from "@/ui/theme";
+
+/** The new-session prompt draft per repo (tokenized), kept on the device. */
+const newSessionDrafts = persistedStore<string | null>("newSessionDraft", null, jsonParser(z.string()));
 
 /**
  * A new session, as the web sessions landing (`NewSessionComposer`): "Sam,
@@ -67,7 +72,8 @@ export default function NewSessionScreen() {
   // the model's provider (else Team), a pick holds; null is Team.
   const [pickedAccount, setPickedAccount] = useState<Id<"userProviderAccounts"> | null | undefined>(undefined);
   const accounts = toPickerAccounts(useQuery(api.userProviderAccounts.listSelectable, {}) ?? []);
-  const repo = repos?.find((candidate) => candidate._id === (picked ?? repoParam)) ?? repos?.[0];
+  const lastRepoId = useLastRepoId();
+  const repo = repos?.find((candidate) => candidate._id === (picked ?? repoParam ?? lastRepoId)) ?? repos?.[0];
   const firstName = user?.firstName?.trim();
   const foreground = EVA_THEME[scheme].foreground;
   const muted = EVA_THEME[scheme].mutedForeground;
@@ -85,7 +91,18 @@ export default function NewSessionScreen() {
       : (stack?.base ?? repo?.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH);
   // Picking another branch abandons the stack: the session's PR would no longer sit on that pull request.
   const stackOnPrNumber = stack !== null && baseBranch === stack.base ? stack.prNumber : undefined;
-  const composer = useMentionComposer(repo?._id, getAIModelProvider(model));
+  // The prompt draft is kept per repo on the device, as the web's `new-session-composer`;
+  // model and traits start from the repo defaults each visit, as on the web.
+  const savedDraft = newSessionDrafts.useValue(repo?._id ?? "");
+  const composer = useMentionComposer(repo?._id, getAIModelProvider(model), (tokenized) => {
+    if (repo) newSessionDrafts.set(repo._id, tokenized);
+  });
+  // A repo's saved draft goes into the composer when the repo changes, or when it finishes loading into an empty one.
+  const [shownDraft, setShownDraft] = useState<{ repoId: string; loaded: boolean } | null>(null);
+  if (repo && (shownDraft?.repoId !== repo._id || (!shownDraft.loaded && savedDraft !== null && composer.text === ""))) {
+    setShownDraft({ repoId: repo._id, loaded: savedDraft !== null });
+    composer.load(savedDraft ?? "");
+  }
   const providerAccountId = pickedAccount === undefined ? defaultAccountForProvider(accounts, getAIModelProvider(model)) : pickedAccount;
 
   const handleSend = async (prompt: string) => {
@@ -161,7 +178,10 @@ export default function NewSessionScreen() {
               </Text>
               <IconChevronDown size={16} color={foreground} />
             </Pressable>
-            <RepoSheet open={pickingRepo} onOpenChange={setPickingRepo} repos={repos} value={repo} onChange={setPicked} />
+            <RepoSheet open={pickingRepo} onOpenChange={setPickingRepo} repos={repos} value={repo} onChange={(repoId) => {
+                setPicked(repoId);
+                rememberRepo(repoId);
+              }} />
             <Text className="font-instrument-sans-semibold text-xl" style={{ color: foreground, fontWeight: "600", letterSpacing: -0.5 }}>
               ?
             </Text>
