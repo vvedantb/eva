@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: notifications open their phone screen, not the browser
+
+Date: 2026-11-15
+
+WHY: A notification without a chat (quick task done, PR merged, a doc or project comment) opened the web in the browser, and a push tap opened only chats, though the phone has screens for tasks, projects, sessions, docs and pull requests.
+
+Architectural: `@eva/shared/appHref` `parseAppHref` reads what a repo link names (`/<owner>/<name>[/<app>]/<section>/<n>`, a project task's `/projects/<p>/<t>/activity`; anchors and queries ignored). `src/push/openLink.ts` `openAppLink` opens a chat, else a PR at once, else `/open` (`app/open/index.tsx`), which looks the item up by number (`getByNumId`) and replaces itself with its phone screen, or says it is gone with "Open on the web"; drafts, automations and settings still open the web. The inbox and push taps both use it, and pushes now carry `href` and `repoId` when there is no chat (older builds read `target` only).
+
 ## Phone: "someone is typing" in chats
 
 Date: 2026-11-15

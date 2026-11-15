@@ -213,7 +213,7 @@ export async function createNotification(
   return notificationId;
 }
 
-/** Pushes one notification row to the user's phone, opening its chat. */
+/** Pushes one notification row to the user's phone, opening its chat or the screen its link names. */
 async function pushNotification(
   ctx: MutationCtx,
   notificationId: Id<"notifications">,
@@ -224,7 +224,13 @@ async function pushNotification(
     userId: notification.userId,
     title: notification.title,
     body: notification.message ?? notification.contextLabel,
-    data: notification.chatTarget ? { target: notification.chatTarget } : undefined,
+    // `target` opens a chat; otherwise the phone opens its own screen for
+    // `href` (with `repoId`), or the web. Older app builds read `target` only.
+    data: notification.chatTarget
+      ? { target: notification.chatTarget }
+      : notification.href
+        ? { href: notification.href, repoId: notification.repoId }
+        : undefined,
   });
 }
 
