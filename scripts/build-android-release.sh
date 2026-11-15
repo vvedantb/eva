@@ -10,4 +10,7 @@
 # (.github/workflows/release-android.yml chooses both). Signing and the
 # EXPO_PUBLIC_* runtime config also come from the environment. Linux CI only.
 set -euo pipefail
+# The reusable workflow does not install dependencies, and the bin below comes
+# from @vvedantb/config, so install first.
+pnpm install --frozen-lockfile --filter '@eva/mobile...' --filter '{.}'
 exec pnpm exec vvedantb-android-release --config scripts/android-release.config.json
