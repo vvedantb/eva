@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: answer a project's interview and accept or reject its plan
+
+Date: 2026-11-15
+
+WHY: The phone's Plan tab only showed the interview and the plan, and said to answer and approve on the web.
+
+Architectural: `@eva/shared` `projectMeta.ts` gains `parseInterviewQuestion`, `currentInterviewQuestion`, `formatInterviewAnswer` (the web's `Q: … A: …`), and the web's `isInterviewTransitionContent` / `isSpecContent`, which the web utils now re-export. The phone `ProjectPlan` runs the web Plan tab: "Start Interview" (`projectInterviewWorkflow.startInterview`), the open question as the kit `ChoiceQuestion` (with "Other"; the answer goes through `projects.addMessage`, then the next question is asked), "Thinking…" while the workflow runs, "Continue interview" when a run stopped early, and on the generated plan Accept Plan (`projects.startDevelopment`) and Reject with a reason (back to Draft, the interview restarting with `rejectionReason`), as the web. Clear transcript stays on the web.
+
 ## Phone: Commit & push, Send for Review and the PR screen from a session's menu
 
 Date: 2026-11-15
