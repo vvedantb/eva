@@ -26,6 +26,7 @@ import {
   type PreviewMiniPlayerSource,
 } from "@/lib/components/sandbox/previewMiniPlayerStore";
 import type { AnnotationSubmit } from "@/lib/components/sandbox/annotationSend";
+import { PreviewActionBar } from "./_components/PreviewActionBar";
 import { PreviewAnnotationLayer } from "./_components/PreviewAnnotationLayer";
 import { PreviewSketchLayer } from "./_components/PreviewSketchLayer";
 import { usePendingPreviewSnapshots } from "@/lib/contexts/PendingPreviewSnapshotsContext";
@@ -312,24 +313,6 @@ export function WebPreviewPanel({
         onToggleDevice={handleToggleDevice}
         contain={contain}
         onToggleContain={handleToggleContain}
-        annotationMode={annotationMode}
-        onAnnotationModeChange={(active) => {
-          setAnnotationMode(active);
-          if (active) setSketchMode(false);
-        }}
-        showAnnotationToggle={Boolean(onAnnotationSubmit)}
-        sketch={
-          canSketch
-            ? {
-                active: sketchMode,
-                onToggle: () => {
-                  setSketchMode(!sketchMode);
-                  // One tool at a time: both read pointer input on the page.
-                  setAnnotationMode(false);
-                },
-              }
-            : undefined
-        }
         popOut={popOut}
       />
       <PreviewToolCallExecutor
@@ -400,12 +383,37 @@ export function WebPreviewPanel({
               }
             />
           </PreviewViewportFrame>
+          {/* Sketch brings its own toolbar to the same spot, with Close. */}
           {sketchMode ? (
             <PreviewSketchLayer
               iframeElement={iframeElement}
               onClose={() => setSketchMode(false)}
             />
-          ) : null}
+          ) : (
+            <PreviewActionBar
+              iframeElement={iframeElement}
+              selectElement={
+                onAnnotationSubmit
+                  ? {
+                      active: annotationMode,
+                      onToggle: () => setAnnotationMode(!annotationMode),
+                    }
+                  : undefined
+              }
+              sketch={
+                canSketch
+                  ? {
+                      active: false,
+                      onToggle: () => {
+                        setSketchMode(true);
+                        // One tool at a time: both read pointer input on the page.
+                        setAnnotationMode(false);
+                      },
+                    }
+                  : undefined
+              }
+            />
+          )}
           {onAnnotationSubmit ? (
             <PreviewAnnotationLayer
               mode={annotationMode}
