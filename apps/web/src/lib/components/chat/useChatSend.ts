@@ -9,7 +9,7 @@ import type {
   TranscriptMessage,
   TranscriptParentId,
 } from "@/lib/hooks/useChatTranscript";
-import { resolveCredentialSourceLabel } from "@/lib/utils/credentialSourceLabel";
+import { resolveCredentialSourceLabel } from "@eva/shared/usageLimitRecovery";
 import { appendReviewCommentsToPrompt } from "@/lib/reviewComments";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
 import { catchMutationError } from "@/lib/utils/mutationToast";

@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: retry a usage-limit failure on another account
+
+Date: 2026-11-15
+
+WHY: When a turn hit the provider's usage limit, the phone showed only the error, so the only way to keep going was to switch accounts and resend by hand, or open the web.
+
+Architectural: the recovery card's logic moved from the web (`usageLimitBanner.ts`, `utils/credentialSourceLabel.ts`, the headroom maths in `UsageLimitAccountOption`) to `@eva/shared/usageLimitRecovery` (`isUsageLimitFailure`, the reset text and subtitle, the title and copy, `usageLimitRetryCandidates`, now generic over the account id type, `usageLimitHeadroom` and `resolveCredentialSourceLabel`); the web banner and row read it. The phone's `src/chat/UsageLimitRecovery.tsx` shows the card above the chat composer while the newest message is a usage-limit failure, for whoever may change the chat's account: one row per other account of the provider with its headroom, and a tap switches the account (the new awaitable `switchAccount` of `useChatModelPick`) and then calls `sessionWorkflow.retryLastTurnWithAccount`.
+
 ## Phone: select quick tasks and act on them together
 
 Date: 2026-11-15

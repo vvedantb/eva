@@ -22,6 +22,7 @@ import {
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { chatTypingRoom } from "@eva/shared/typingPresence";
+import { isUsageLimitFailure } from "@eva/shared/usageLimitRecovery";
 import { messageLinkHref } from "@eva/shared/messageLink";
 import { type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { IconChevronDown, IconMessageCircle, IconPlayerStop } from "@tabler/icons-react-native";
@@ -68,6 +69,7 @@ import { SessionChatTabs } from "@/chat/SessionChatTabs";
 import { SandboxControl, SandboxErrorBanner, useSessionSandbox } from "@/chat/SandboxControl";
 import { UsageButton } from "@/chat/UsageSheet";
 import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
+import { UsageLimitRecoveryCard } from "@/chat/UsageLimitRecovery";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { MessageFooter, type Sentiment } from "@/chat/MessageFooter";
 import { useAttachments } from "@/chat/useAttachments";
@@ -174,6 +176,8 @@ export default function ChatScreen() {
   const teammateNames = firstNameByUserId(teammates ?? []);
   const teammateById = new Map((teammates ?? []).map((user) => [user._id, user]));
   const latestReplyId = visible.findLast((message) => message.role === "assistant")?._id;
+  // The web recovery card reads every message, so a later system alert also hides it.
+  const newestMessage = messages?.[messages.length - 1];
   // A changed file opens the PR diff, as the web Review pane; simple view has no card, as the web.
   const openDiff = simpleView
     ? undefined
@@ -372,6 +376,7 @@ export default function ChatScreen() {
             questions={questions}
             onStop={handleStop}
             queue={<QueuedMessagesPanel parentId={parentId} isExecuting={working} isSandboxActive={chat.sandboxActive} />}
+            usageLimitFailure={isUsageLimitFailure(newestMessage) ? newestMessage.content : undefined}
           />
           ) : null}
         </ConversationDock>
@@ -400,6 +405,7 @@ function ChatDock({
   questions,
   onStop,
   queue,
+  usageLimitFailure,
 }: {
   target: string;
   chat: Chat;
@@ -411,6 +417,8 @@ function ChatDock({
   onStop: () => void;
   /** The queued messages, above the composer only (not over a question card), as the web. */
   queue: ReactNode;
+  /** The newest reply's text while it is a usage-limit failure: the retry card shows above the composer. */
+  usageLimitFailure: string | undefined;
 }) {
   const scheme = useScheme();
   const insets = useSafeAreaInsets();
@@ -489,6 +497,15 @@ function ChatDock({
     // thread. Send stays ready during a turn (a send queues behind it) and Stop sits beside
     // it, as `stopMode="alongside"`.
     <View className="pr-2.5">
+      {usageLimitFailure !== undefined && modelPick.pick?.account && modelPick.switchAccount ? (
+        <UsageLimitRecoveryCard
+          chat={chat}
+          failure={usageLimitFailure}
+          accounts={modelPick.pick.account.accounts}
+          switchAccount={modelPick.switchAccount}
+          working={working}
+        />
+      ) : null}
       {queue}
       <View className="pl-3">
         <TypingIndicator users={typing.typingUsers} />

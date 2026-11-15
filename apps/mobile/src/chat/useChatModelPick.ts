@@ -55,7 +55,7 @@ export function useChatModelPick(target: string, chat: Chat | null | undefined, 
   const ensureOwned = useMutation(api.sessions.ensureOwned);
   const prewarmSession = useAction(api.sessionWorkflow.prewarmDaemonNow);
 
-  if (!chat) return { pick: undefined, switching };
+  if (!chat) return { pick: undefined, switching, switchAccount: undefined };
   const { session, task, project } = chat;
   const sessionChatId = session?.chatId ?? task?.sessionChatId ?? project?.sessionChatId;
   // The chat to save an account on, created for a task or project on first need.
@@ -77,17 +77,26 @@ export function useChatModelPick(target: string, chat: Chat | null | undefined, 
     }).catch(failed);
   };
 
-  const changeAccount = (providerAccountId: Id<"userProviderAccounts"> | null) => {
+  // The switch the usage-limit card waits on before it retries; it rejects when the switch fails.
+  // Chained, not try / finally, which React Compiler cannot compile.
+  const switchAccount = (providerAccountId: Id<"userProviderAccounts"> | null): Promise<void> => {
     setSwitching(true);
-    // Chained, not try / finally, which React Compiler cannot compile.
-    resolveChatId()
+    return resolveChatId()
       .then(async (chatId) => {
         if (!chatId) return;
         await setSessionAccount({ chatId, providerAccountId });
         await prewarmSession({ chatId });
       })
-      .catch(() => toast.error("Couldn't switch the account"))
-      .then(() => setSwitching(false));
+      .then(
+        () => setSwitching(false),
+        (error: Error) => {
+          setSwitching(false);
+          throw error;
+        },
+      );
+  };
+  const changeAccount = (providerAccountId: Id<"userProviderAccounts"> | null) => {
+    switchAccount(providerAccountId).catch(() => toast.error("Couldn't switch the account"));
   };
   const accounts = sessionAccounts ?? taskAccounts ?? ownAccounts;
   // The web lets only a task's or project's owner change its account.
@@ -105,5 +114,5 @@ export function useChatModelPick(target: string, chat: Chat | null | undefined, 
         ? { accounts: toPickerAccounts(accounts), value: chat.providerAccountId ?? null, onChange: changeAccount }
         : undefined,
   };
-  return { pick, switching };
+  return { pick, switching, switchAccount };
 }
