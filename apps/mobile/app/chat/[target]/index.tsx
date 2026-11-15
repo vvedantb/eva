@@ -62,6 +62,7 @@ import { SandboxBranchChip } from "@/chat/BranchChips";
 import { ComposerFooter, composerHeader, useSimpleView } from "@/chat/ComposerFooter";
 import { ModelChip } from "@/chat/ModelChip";
 import { ChatHeader } from "@/chat/ChatHeader";
+import { SandboxControl, SandboxErrorBanner, useSessionSandbox } from "@/chat/SandboxControl";
 import { UsageButton } from "@/chat/UsageSheet";
 import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
 import { MentionMenu } from "@/chat/MentionMenu";
@@ -113,6 +114,8 @@ export default function ChatScreen() {
   const focused = useIsFocused();
   const appActive = useAppActive();
   const { newSinceAt } = useChatReadState({ parentId, active: focused && appActive });
+  // A session chat's sandbox: the header wakes or sleeps it, and a failed wake shows under the header.
+  const sandbox = useSessionSandbox(chat?.session?.id);
   const me = useQuery(api.auth.me, {});
   // A teammate's turn shows their avatar and first name, from the same lookup as the web `ChatBody`.
   const teammateIds = otherUserIdsInChat(messages ?? [], me ?? undefined);
@@ -237,6 +240,7 @@ export default function ChatScreen() {
         onCopyLink={() => void Clipboard.setStringAsync(webUrl(chat.webPath))}
         onStop={working ? handleStop : undefined}
         usage={<UsageButton chat={chat} />}
+        sandbox={<SandboxControl sandbox={sandbox} working={working} />}
         sessionMenu={
           sessionTarget
             ? {
@@ -248,6 +252,7 @@ export default function ChatScreen() {
             : undefined
         }
       />
+      <SandboxErrorBanner sandbox={sandbox} />
       {sessionActions.dialogs}
       <Conversation>
         <SeenRowsContext.Provider value={seenRows}>
