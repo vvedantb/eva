@@ -21,7 +21,7 @@ import {
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { messageLinkHref } from "@eva/shared/messageLink";
 import { type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
-import { IconChevronDown, IconMessageCircle, IconPlayerStopFilled } from "@tabler/icons-react-native";
+import { IconChevronDown, IconMessageCircle, IconPlayerStop } from "@tabler/icons-react-native";
 import {
   ChoiceQuestion,
   Conversation,
@@ -56,7 +56,7 @@ import { InlineCards, TurnOutputs, useChatCards, type InlineCard, type TurnOutpu
 import { UserAttachments } from "@/chat/media/UserAttachments";
 import { createSeenRows, SeenRowsContext } from "@/chat/cards/seenRows";
 import { SandboxBranchChip } from "@/chat/BranchChips";
-import { ComposerFooter, ComposerHeader, useSimpleView } from "@/chat/ComposerFooter";
+import { ComposerFooter, composerHeader, useSimpleView } from "@/chat/ComposerFooter";
 import { ModelChip } from "@/chat/ModelChip";
 import { ChatHeader } from "@/chat/ChatHeader";
 import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
@@ -446,8 +446,9 @@ function ChatDock({
         leading={
           <AttachButton onPress={() => void attachments.pick()} />
         }
-        header={<ComposerHeader attachments={attachments} composer={composer} />}
-        toolbar={working ? <PromptInputButton icon={IconPlayerStopFilled} label="Stop generating" onPress={onStop} /> : null}
+        header={composerHeader(attachments, composer)}
+        // The web stop beside send: red (`variant="destructive"`), the outline stop icon.
+        toolbar={working ? <PromptInputButton variant="destructive" icon={IconPlayerStop} label="Stop generating" onPress={onStop} /> : null}
         footer={
           <ComposerFooter
             repoId={chat.repoId}

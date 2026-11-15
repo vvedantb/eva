@@ -25,7 +25,7 @@ import { Pressable, Text, View } from "react-native";
 import { z } from "zod";
 import { AttachButton } from "@/chat/AttachButton";
 import { BaseBranchChip } from "@/chat/BranchChips";
-import { ComposerFooter, ComposerHeader } from "@/chat/ComposerFooter";
+import { ComposerFooter, composerHeader } from "@/chat/ComposerFooter";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { ModelChip } from "@/chat/ModelChip";
 import { useAttachments } from "@/chat/useAttachments";
@@ -203,7 +203,7 @@ export default function NewSessionScreen() {
             leading={
               <AttachButton onPress={() => void attachments.pick()} />
             }
-            header={<ComposerHeader attachments={attachments} composer={composer} />}
+            header={composerHeader(attachments, composer)}
             footer={
               repo ? (
                 <ComposerFooter

@@ -38,8 +38,13 @@ function mutedFooterFill(theme: { muted: string; background: string }): string {
   return `#${mix(1)}${mix(3)}${mix(5)}`;
 }
 
-export function ComposerHeader({ attachments, composer }: { attachments: ComposerAttachments; composer: Composer }) {
-  if (attachments.items.length === 0 && composer.picks.length === 0) return null;
+/**
+ * The composer's `header`: the attachments and the mention chips, or
+ * `undefined` when there are none. `PromptInput` pads a header row for any
+ * header it gets, so an empty one must not be passed at all.
+ */
+export function composerHeader(attachments: ComposerAttachments, composer: Composer): ReactNode {
+  if (attachments.items.length === 0 && composer.picks.length === 0) return undefined;
   return (
     <>
       {attachments.items.length > 0 ? (

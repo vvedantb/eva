@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: the chat Stop button is red, and the composer lost its extra top padding
+
+Date: 2026-11-15
+
+WHY: The chat composer's Stop was a grey ghost button, where the web's is red, and the composer had extra space above the field.
+
+Architectural: `ComposerHeader` (a component) became `composerHeader()` in `src/chat/ComposerFooter.tsx`, which returns `undefined` when there are no attachments or mention chips. `PromptInput` pads a header row (`pt-1.5`) for any `header` element it gets, and a component that renders null is still an element, so every composer had 6 extra above the field. The chat Stop is `PromptInputButton variant="destructive"` with the outline `IconPlayerStop`, as the web `Button variant="destructive"`.
+
 ## Phone: the keyboard no longer covers the composer on New session and the task overview
 
 Date: 2026-11-15
