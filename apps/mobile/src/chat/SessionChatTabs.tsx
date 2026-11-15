@@ -17,7 +17,7 @@ import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text } from "react-native";
 import { MenuSheet } from "@/ui/MenuSheet";
 import { WorkingMark } from "@/ui/RowStatus";
 import { useScheme } from "@/ui/theme";
