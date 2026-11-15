@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: the agent's secret requests and session proposals in chat
+
+Date: 2026-11-15
+
+WHY: When the agent asked for a secret (`request_env_var`) or proposed a session (`propose_session`), the phone showed nothing, so the agent waited until someone opened the web.
+
+Architectural: `useChatCards` also reads `envVarRequests.listByParent` and `sessionProposals.listByParent` and places them with the panels, as the web `ChatBody`. `src/chat/cards/AgentRequestCards.tsx`: `EnvVarRequestCard` (the key, the reason, a masked field kept out of autofill, "Save securely" through `envVarRequestsActions.save`, "Decline"; the value is never logged or shown; answered, one line) and `SessionProposalCard` ("Suggested for a new session", "New session" through `sessionProposals.start`, "Do it here" through `keepHere`; answered, one line, a started one opening its session).
+
 ## Phone: schedule a task's run or a project's build
 
 Date: 2026-11-15
