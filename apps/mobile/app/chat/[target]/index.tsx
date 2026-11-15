@@ -64,6 +64,7 @@ import { SandboxBranchChip } from "@/chat/BranchChips";
 import { ComposerFooter, composerHeader, useSimpleView } from "@/chat/ComposerFooter";
 import { ModelChip } from "@/chat/ModelChip";
 import { ChatHeader } from "@/chat/ChatHeader";
+import { SessionChatTabs } from "@/chat/SessionChatTabs";
 import { SandboxControl, SandboxErrorBanner, useSessionSandbox } from "@/chat/SandboxControl";
 import { UsageButton } from "@/chat/UsageSheet";
 import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
@@ -265,6 +266,7 @@ export default function ChatScreen() {
         }
       />
       <SandboxErrorBanner sandbox={sandbox} />
+      {chat.session ? <SessionChatTabs sessionId={chat.session.id} activeChatId={chat.session.chatId} archived={chat.session.archived} /> : null}
       {sessionActions.dialogs}
       <Conversation>
         <SeenRowsContext.Provider value={seenRows}>
