@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: wake or sleep a session's Eva, and retry a failed wake
+
+Date: 2026-11-15
+
+WHY: The phone could not start or stop a session's sandbox, so a sleeping Eva woke only when a message was sent, and a failed wake showed nowhere.
+
+Architectural: `sandboxDisplayStatus`, the status types, the control labels and `MID_TURN_SLEEP_HINT` moved from the web (`sandboxStatusStyles.ts`, `SleepControlTooltip.tsx`) to `@eva/shared` (`sandboxStatus.ts`). The phone's `src/chat/SandboxControl.tsx` has `useSessionSandbox` (`sessions.get`, `startSandbox` / `stopSandbox`, a pending action as the web `useSandboxLifecycle`), `SandboxControl` in the session chat header (a green play to wake, a red stop to sleep, a spinner while either runs; mid-turn it stays dimmed and says to stop Eva first; in simple view only where nothing else wakes Eva) and `SandboxErrorBanner` under the header ("Eva couldn't wake up", the error, "Try again").
+
 ## Phone: chats are marked read, with the "NEW" divider and unread dots
 
 Date: 2026-11-15
