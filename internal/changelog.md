@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: artifacts open live in the chat
+
+Date: 2026-11-15
+
+WHY: On the phone an artifact card only linked to the web viewer. The web shows the artifact in the chat, live: it calls Eva's read-only tools and keeps its own state through the cowork bridge.
+
+Architectural: The phone `ChatArtifactCard` opens the artifact under the card on a tap (480 high, as the web preview) and closes it on the next tap; Fullscreen fills the screen (a modal with its name and Close); the other icon opens the web viewer in the in-app browser. The page is the kit `HtmlView` (native-ui 0.21.0-next-90c9e82, vvedantb/packages#258: `onPageMessage` and a `postMessage` handle). The bridge is shared: `@eva/shared/artifactBridge` (a subpath, so the backend's root import stays React-free) holds the shim (`buildArtifactSrcDoc`, which posts through `window.ReactNativeWebView` on the phone and takes JSON-text replies), `loadArtifactHtml`, and `useArtifactBridge(artifactId, target)`; the web `ArtifactFrame` uses it too, and its own copies are deleted. Metro keeps `convex` a singleton, so the shared hook sees the app's `ConvexProvider`.
+
 ## Phone: composer drafts are saved, as on the web
 
 Date: 2026-11-15
