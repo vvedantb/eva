@@ -125,7 +125,7 @@ export default function ChatScreen() {
         message._id === liveReplyId),
   );
   const { mineByMessageId: mine, agentReports } = groupChatFeedback(feedbackRows ?? [], me ?? undefined);
-  const { cards, outputs } = useChatCards(parentId, visible, agentReports);
+  const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder);
   // Rows seen on screen, so an agent page mounts its WebView only once its row shows.
   const [seenRows] = useState(createSeenRows);
 
