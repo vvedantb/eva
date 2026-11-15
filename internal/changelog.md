@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: hover card on GitHub pull request links in chat
+
+Date: 2026-11-15
+
+WHY: A PR link in chat showed only its URL or label; to see its state, title or size the reader had to open GitHub.
+
+Architectural: `ChatMarkdownLink` (`apps/web/src/lib/components/chat/ChatMarkdownLink.tsx`) is the chat `a` renderer: a link that `@eva/shared` `parseGithubPrLink` reads as `github.com/owner/name/pull/n` gets a hover card with state, `owner/name #n`, updated time, title, author, `+/−` and file count (reusing the review page's `statusMeta`, `PrAvatar`, `PrDiffStat`); other links stay `MarkdownLink`. Agent replies (`ChatMessage`) and user messages (`MarkdownMentionText`) use it. The card fetches only when open, through the new `github.getPullRequestCard`, which resolves the owner/name to a repo the caller can read (`githubRepos.findAccessibleIdByOwnerAndName`) and returns null otherwise. It shares the PR header cache with the Reviews page; the header payload gained `status`, `draft`, `authorAvatarUrl`, `additions`, `deletions` and `changedFiles` (cache renamed `prHeaderV2`).
+
 ## Phone: retry a usage-limit failure on another account
 
 Date: 2026-11-15
