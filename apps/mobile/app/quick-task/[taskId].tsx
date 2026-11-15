@@ -1,7 +1,7 @@
 import { api, getAIModelProvider, normalizeAIModel, taskScheduledAt, type Id } from "@eva/backend";
-import { PRIORITY_LABELS, TASK_STATUS_LABELS, formatEntityNumLabel } from "@eva/shared";
+import { PRIORITY_LABELS, TASK_STATUS_LABELS, formatEntityNumLabel, mentionTokensToEditableText } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { canEditTaskText, getUserDisplayName, taskTextLockReason } from "@eva/shared/taskDetail";
+import { canEditTaskText, getUserDisplayName, taskTextLockReason, type ReactionGroup } from "@eva/shared/taskDetail";
 import { IconChecklist, IconClock, IconDots, IconFolder, IconMessage, IconPlayerPlay, IconTag, IconUserPlus } from "@tabler/icons-react-native";
 import { PromptInput } from "@vvedantb/native-ui/ai";
 import { goBackOrReplace } from "@vvedantb/native-ui/expo-router";
@@ -13,7 +13,7 @@ import { useMutation, useQuery } from "convex/react";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import dayjs from "dayjs";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View, type TextStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ComposerMentionChips, UserMessageText } from "@/chat/MentionChip";
@@ -25,6 +25,7 @@ import { FooterSheet } from "@/chat/ComposerFooter";
 import { PriorityIcon } from "@/quickTasks/PriorityIcon";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
 import { ReactionChips, TaskActivity, useTaskReactions } from "@/quickTasks/TaskActivity";
+import { CommentModeChip, ReactableMenu, TaskSubscribers, useCommentMutations, type CommentMode } from "@/quickTasks/TaskDiscussion";
 import { useQuickTaskActions } from "@/quickTasks/useQuickTaskActions";
 import { FieldGroup, FieldRow } from "@/ui/FieldRows";
 import { displayTitle } from "@/ui/format";
@@ -40,7 +41,9 @@ type Field = "status" | "priority" | "reviewer" | "tags" | "project";
  * One quick task, as the web task page (`TaskDetailInline`) on a phone, in one
  * column: the number and title, the description, the attachments, the web
  * Properties pane (Status, Priority, Code Reviewer, Labels, Project, each a
- * sheet that writes at once), then Activity and a comment box. The header
+ * sheet that writes at once), then Activity (subscribers, the timeline, and
+ * each comment's menu: reactions, Reply, Edit, Copy text, Delete) and the
+ * comment box, which also replies and edits. The header
  * "…" is the row's long-press menu. The bottom bar opens the task chat (with
  * the unread dot) and, when the web shows it, Run Eva. The title and the
  * description edit in place while the web allows it (`canEditTaskText`).
@@ -92,7 +95,14 @@ function TaskOverview({ task, repo, allTags, onLeave }: { task: QuickTask; repo:
   };
   const creator = users?.find((user) => user._id === task.createdBy);
   const scheduledAt = taskScheduledAt(task);
-  const descriptionReactions = reactionsFor("description", task._id);
+  const comments = useCommentMutations(task._id);
+  const [commentMode, setCommentMode] = useState<CommentMode>({ kind: "new" });
+  const scroll = useRef<ScrollView>(null);
+  // Reply and Edit happen in the comment box at the end: bring it into view.
+  const changeCommentMode = (mode: CommentMode) => {
+    setCommentMode(mode);
+    if (mode.kind !== "new") scroll.current?.scrollToEnd({ animated: true });
+  };
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }}>
@@ -101,7 +111,7 @@ function TaskOverview({ task, repo, allTags, onLeave }: { task: QuickTask; repo:
         onBack={onLeave}
         headerRight={<MoreButton onPress={() => actions.openSheet(task)} />}
       />
-      <ScrollView className="flex-1" keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24 }}>
+      <ScrollView ref={scroll} className="flex-1" keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24 }}>
         <TaskTitle
           title={task.title}
           editable={editable}
@@ -123,11 +133,9 @@ function TaskOverview({ task, repo, allTags, onLeave }: { task: QuickTask; repo:
             repoId={repo._id}
             model={task.model}
             editable={editable}
+            reactions={reactionsFor("description", task._id)}
             onSave={(description) => update({ description }, "Couldn't save the description")}
           />
-          {descriptionReactions.groups.length > 0 ? (
-            <ReactionChips groups={descriptionReactions.groups} onToggle={descriptionReactions.toggle} />
-          ) : null}
         </View>
         {attachments && attachments.length > 0 ? (
           <View className="mt-4">
@@ -138,12 +146,34 @@ function TaskOverview({ task, repo, allTags, onLeave }: { task: QuickTask; repo:
         <TaskProperties task={task} users={users} projects={projects} allTags={allTags} update={update} />
 
         <FieldGroup title="Activity">
+          <TaskSubscribers taskId={task._id} users={users} />
           <View className="px-1 pt-1">
-            <TaskActivity taskId={task._id} createdAt={task.createdAt} creator={creator} users={users} reactionsFor={reactionsFor} isProjectTask={task.projectId !== undefined} />
+            <TaskActivity
+              taskId={task._id}
+              createdAt={task.createdAt}
+              creator={creator}
+              users={users}
+              reactionsFor={reactionsFor}
+              isProjectTask={task.projectId !== undefined}
+              currentUserId={currentUserId}
+              onReply={(comment) => changeCommentMode({ kind: "reply", comment })}
+              onEdit={(comment) => changeCommentMode({ kind: "edit", comment })}
+              onDelete={(id) => {
+                comments.remove(id);
+                if (commentMode.kind !== "new" && commentMode.comment._id === id) setCommentMode({ kind: "new" });
+              }}
+            />
           </View>
         </FieldGroup>
         <View className="mt-4">
-          <CommentComposer taskId={task._id} repoId={repo._id} model={task.model} />
+          <CommentComposer
+            taskId={task._id}
+            repoId={repo._id}
+            model={task.model}
+            users={users}
+            mode={commentMode}
+            onModeChange={changeCommentMode}
+          />
         </View>
       </ScrollView>
       <TaskDock task={task} runs={runs} hasActiveRun={hasActiveRun} />
@@ -314,23 +344,27 @@ function TaskTitle({
  * The web `TaskDescription`: the Markdown with mention chips, or "No
  * description". While editable a tap opens the mention composer on it ("Add
  * description..." when empty); its send saves, Cancel leaves it as it was.
+ * A long press opens the reactions (and Edit, Copy text), as the web hover.
  */
 function TaskDescription({
   description,
   repoId,
   model,
   editable,
+  reactions,
   onSave,
 }: {
   description: string | undefined;
   repoId: Id<"githubRepos">;
   model: QuickTask["model"];
   editable: boolean;
+  reactions: { groups: ReactionGroup[]; toggle: (emoji: string) => void };
   onSave: (description: string) => void;
 }) {
   const theme = EVA_THEME[useScheme()];
   const composer = useMentionComposer(repoId, getAIModelProvider(normalizeAIModel(model)));
   const [editing, setEditing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const text = description?.trim() ?? "";
   if (editing) {
     return (
@@ -363,36 +397,87 @@ function TaskDescription({
       {editable ? "Add description..." : "No description"}
     </Text>
   );
-  if (!editable) return body;
+  const startEditing = () => {
+    composer.load(text);
+    setEditing(true);
+  };
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={text ? "Edit description" : "Add description"}
-      onPress={() => {
-        composer.load(text);
-        setEditing(true);
-      }}
-      className="rounded-lg active:opacity-70"
-    >
-      {body}
-    </Pressable>
+    <>
+      <Pressable
+        accessibilityRole={editable ? "button" : undefined}
+        accessibilityLabel={editable ? (text ? "Edit description" : "Add description") : undefined}
+        accessibilityHint="Long press to react"
+        onPress={editable ? startEditing : undefined}
+        onLongPress={() => setMenuOpen(true)}
+        className="rounded-lg active:opacity-70"
+      >
+        {body}
+      </Pressable>
+      {reactions.groups.length > 0 ? <ReactionChips groups={reactions.groups} onToggle={reactions.toggle} /> : null}
+      <ReactableMenu
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
+        title="Description"
+        groups={reactions.groups}
+        onToggleReaction={reactions.toggle}
+        onEdit={editable ? startEditing : undefined}
+        copyText={text ? mentionTokensToEditableText(text) : undefined}
+      />
+    </>
   );
 }
 
-/** The web "Add a comment...": the mention composer; a send posts a top-level comment. */
-function CommentComposer({ taskId, repoId, model }: { taskId: Id<"agentTasks">; repoId: Id<"githubRepos">; model: QuickTask["model"] }) {
+const COMMENT_PLACEHOLDER: Record<CommentMode["kind"], string> = {
+  new: "Add a comment...",
+  reply: "Leave a reply...",
+  edit: "Edit comment...",
+};
+
+/**
+ * The web comment boxes in one: "Add a comment..." posts a top-level comment;
+ * after Reply it answers that comment, and after Edit it holds your comment's
+ * text and saves it. The chip above it names the comment; its X goes back to
+ * a new comment.
+ */
+function CommentComposer({
+  taskId,
+  repoId,
+  model,
+  users,
+  mode,
+  onModeChange,
+}: {
+  taskId: Id<"agentTasks">;
+  repoId: Id<"githubRepos">;
+  model: QuickTask["model"];
+  users: User[] | undefined;
+  mode: CommentMode;
+  onModeChange: (mode: CommentMode) => void;
+}) {
   const composer = useMentionComposer(repoId, getAIModelProvider(normalizeAIModel(model)));
-  const createComment = useMutation(api.taskComments.create);
+  const comments = useCommentMutations(taskId);
   const [sending, setSending] = useState(false);
+  // A new mode adjusts the box during render: an edit loads its comment, and leaving an edit clears it.
+  const [shownMode, setShownMode] = useState(mode);
+  if (shownMode !== mode) {
+    setShownMode(mode);
+    if (mode.kind === "edit") composer.load(mode.comment.content);
+    else if (shownMode.kind === "edit") composer.load("");
+  }
   const send = async (text: string) => {
     const content = composer.tokenize(text).trim();
     if (!content) return;
     setSending(true);
     try {
-      await createComment({ taskId, content });
+      if (mode.kind === "edit") {
+        if (content !== mode.comment.content) await comments.update({ id: mode.comment._id, content });
+      } else {
+        await comments.create({ taskId, content, parentId: mode.kind === "reply" ? mode.comment._id : undefined });
+      }
       composer.load("");
+      onModeChange({ kind: "new" });
     } catch {
-      toast.error("Couldn't post the comment");
+      toast.error(mode.kind === "edit" ? "Couldn't save the comment" : "Couldn't post the comment");
     }
     setSending(false);
   };
@@ -402,11 +487,12 @@ function CommentComposer({ taskId, repoId, model }: { taskId: Id<"agentTasks">; 
       onChangeText={composer.setText}
       status={sending ? "submitted" : "ready"}
       disabled={sending}
+      replyTo={mode.kind === "new" ? undefined : <CommentModeChip mode={mode} users={users} onDismiss={() => onModeChange({ kind: "new" })} />}
       menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} onDismiss={composer.dismiss} /> : null}
       header={composer.picks.length > 0 ? <ComposerMentionChips picks={composer.picks} onRemove={composer.removePick} /> : undefined}
       onSubmit={(text) => void send(text)}
-      placeholder="Add a comment..."
-      accessibilityLabel="Add a comment"
+      placeholder={COMMENT_PLACEHOLDER[mode.kind]}
+      accessibilityLabel={COMMENT_PLACEHOLDER[mode.kind].replace("...", "")}
     />
   );
 }

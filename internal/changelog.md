@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: comments on a task can be replied to, edited, deleted and reacted to
+
+Date: 2026-11-15
+
+WHY: The phone task overview (#1334) could post comments but not take part in a discussion, as the web task page does.
+
+Architectural: `src/quickTasks/TaskDiscussion.tsx`: `ReactableMenu` (a comment's "…" or long press: the six quick reactions, Reply, Edit, Copy text, Delete behind `DeleteCommentDialog`; the description gets reactions, Edit and Copy text by long press), `useCommentMutations` (optimistic delete to the web placeholder and optimistic edit), `CommentMode` with `CommentModeChip` (the comment box at the end replies with a `ReplyQuoteChip` and edits your comment in place, then goes back to a new comment), and `TaskSubscribers` (Subscribe/Subscribed, initials, Manage subscribers sheet). Not here from the web: the full emoji picker and its suggestions, comment drafts on the server, and typing presence.
+
 ## Phone: a quick task opens on its overview
 
 Date: 2026-11-15
