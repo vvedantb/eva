@@ -15,7 +15,7 @@ import { useUser } from "@clerk/clerk-expo";
 import { IconBrandGithub, IconChevronDown, IconStack2 } from "@tabler/icons-react-native";
 import { PromptInput } from "@vvedantb/native-ui/ai";
 import { RouterStackPageHeader } from "@vvedantb/native-ui/expo-router";
-import { CenteredSpinner, EmptyState } from "@vvedantb/native-ui/primitives";
+import { CenteredSpinner, EmptyState, KeyboardAvoidingView } from "@vvedantb/native-ui/primitives";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
@@ -144,7 +144,11 @@ export default function NewSessionScreen() {
         // As the new quick task screen.
         <EmptyState icon={IconBrandGithub} title="No repos" description="Connect a repo on the web. It shows up here." />
       ) : (
-        // The web landing at 390: `p-4` in a column 10 short of the right edge.
+        // The kit's keyboard view: the column shrinks to the space above the
+        // keyboard, so the centred composer moves up with it. The composer's own
+        // lift measures it within the column and so never sees the keyboard.
+        <KeyboardAvoidingView style={{ flex: 1 }}>
+        {/* The web landing at 390: `p-4` in a column 10 short of the right edge. */}
         <View className="flex-1 justify-center gap-3 pl-4 pr-[26px]">
           {/* Web: text-xl semibold tracking-tight, centred, the repo picker inline (logo or GitHub mark, name underlined at 30%). */}
           <View className="flex-row flex-wrap items-center justify-center gap-x-2 gap-y-1">
@@ -241,6 +245,7 @@ export default function NewSessionScreen() {
             }
           />
         </View>
+        </KeyboardAvoidingView>
       )}
     </View>
   );
