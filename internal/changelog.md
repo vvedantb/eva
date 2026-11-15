@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: pages load again (app shell under strict LazyMotion)
+
+Date: 2026-11-15
+
+WHY: Since the move to the `@vvedantb/ui` AppShell (#1327), every web page showed "Something went wrong": the shell's drawer was a `motion.aside` (and its backdrop a `motion.button`), which throws inside Eva's strict `LazyMotion`.
+
+Architectural: `@vvedantb/ui` 0.50.2 (vvedantb/packages#261) renders both as `m.*` in their own `LazyMotion features={domMax}`; web, the chrome extension, `@eva/shared` and `@eva/ui` move to it. The phone moves from the 0.21.0 `next` snapshot to the published `@vvedantb/native-ui` 0.21.0 (same code).
+
 ## Phone: zoom into images in the full-screen viewer
 
 Date: 2026-11-15
