@@ -37,6 +37,7 @@
     "./taskDetail": "./src/taskDetail.ts",
     "./typingPresence": "./src/typingPresence.ts",
     "./uiTaskPrompt": "./src/uiTaskPrompt.ts",
+    "./usageLimitRecovery": "./src/usageLimitRecovery.ts",
     "./usageLimits": "./src/usageLimits.ts",
     "./user-initials": "./src/components/user-initials.tsx"
   },

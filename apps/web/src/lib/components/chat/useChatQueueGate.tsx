@@ -22,7 +22,7 @@ import {
 import type { ModelAccount } from "@vvedantb/ui";
 import { formatResetDistanceMs } from "@eva/shared/usageLimits";
 import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
-import { resolveCredentialSourceLabel } from "@/lib/utils/credentialSourceLabel";
+import { resolveCredentialSourceLabel } from "@eva/shared/usageLimitRecovery";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import type { ChatBodyMessage, ChatBodyQueuedMessage } from "./chatBodyUtils";
 

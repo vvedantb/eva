@@ -220,7 +220,7 @@ function Row({ label, value, color }: { label: string; value: string; color?: st
 }
 
 /** The web usage bar: a 4-high track, the fill in the tone's colour. */
-function Bar({ ratio, color }: { ratio: number; color: string }) {
+export function UsageBar({ ratio, color }: { ratio: number; color: string }) {
   const theme = EVA_THEME[useScheme()];
   return (
     <View className="h-1 overflow-hidden rounded-full" style={{ backgroundColor: theme.muted }}>
@@ -229,7 +229,7 @@ function Bar({ ratio, color }: { ratio: number; color: string }) {
   );
 }
 
-function useToneColor(): (tone: UsageTone) => { text: string; fill: string } {
+export function useToneColor(): (tone: UsageTone) => { text: string; fill: string } {
   const theme = EVA_THEME[useScheme()];
   return (tone) =>
     tone === "danger"
@@ -260,7 +260,7 @@ function ContextCard({ usage }: { usage: Aggregated }) {
       ) : (
         <>
           <Row label={percent(ratio)} value={`${compactTokens(usedTokens)} / ${compactTokens(maxTokens)}`} color={overloaded ? theme.destructive : undefined} />
-          <Bar ratio={ratio} color={overloaded ? theme.destructive : theme.primary} />
+          <UsageBar ratio={ratio} color={overloaded ? theme.destructive : theme.primary} />
         </>
       )}
       <View className="gap-1 pt-1">
@@ -312,7 +312,7 @@ function PlanUsage({ entries, now }: { entries: readonly UsageAccountEntry[]; no
                 return (
                   <View key={usageWindow.key} className="gap-1">
                     <Row label={usageWindow.label} value={formatUtilization(utilization)} color={colors.text} />
-                    <Bar ratio={utilization / 100} color={colors.fill} />
+                    <UsageBar ratio={utilization / 100} color={colors.fill} />
                     {usageWindow.resetsAt === undefined ? null : (
                       <Text className="font-instrument-sans" style={{ ...META, color: theme.mutedForeground }}>
                         {resetsInLabel(usageWindow.resetsAt, now)}

@@ -3,7 +3,7 @@ import {
   usageLimitResetClock,
   usageLimitResetText,
   usageLimitRetryCandidates,
-} from "./usageLimitBanner";
+} from "@eva/shared/usageLimitRecovery";
 
 /**
  * The recovery banner repeats the provider's own reset hint back to the user,
