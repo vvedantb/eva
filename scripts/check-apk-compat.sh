@@ -28,6 +28,9 @@ trap cleanup EXIT
 
 # This checkout's backend, with the release's phone and shared code (what the APK bundles).
 git worktree add -q --detach "$WORK" HEAD
+# Remove first: checking the tag's paths out restores its files but keeps files
+# added since, which the APK does not have (they would import code it lacks).
+rm -rf "$WORK/apps/mobile" "$WORK/packages/shared"
 git -C "$WORK" checkout -q "$TAG" -- apps/mobile packages/shared
 (cd "$WORK" && pnpm install --frozen-lockfile=false --prefer-offline >/dev/null 2>&1)
 
