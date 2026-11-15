@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: switch between a session's chats and start a parallel one
+
+Date: 2026-11-15
+
+WHY: The web session has a chat tab bar (parallel chats on one sandbox); the phone opened only the Main chat and could not start another.
+
+Architectural: `src/chat/SessionChatTabs.tsx` is the web `ChatTabsBar` under a session chat's header: one tab per open chat from `sessionChats.listForSession`, Main first, the open one tinted, a working mark from `turns.listSessionChatStatuses`, and "+" (`sessionChats.create` from the open chat; hidden when archived) that opens the new chat in place. A long press offers Rename (`sessionChats.rename`) and, on a parallel chat, Delete behind the web confirm (`sessionChats.remove`, moving to Main when it was open). The phone already opens a session chat by its own id.
+
 ## Phone: a failed turn shows as a failure, with Retry
 
 Date: 2026-11-15
