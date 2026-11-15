@@ -1,27 +1,50 @@
-import { api, type Id } from "@eva/backend";
+import { api } from "@eva/backend";
 import { decideDraftPull, rememberOwnSave } from "@eva/shared";
 import { useMutation, useQuery } from "convex/react";
+import type { FunctionArgs } from "convex/server";
 import { useState } from "react";
-import type { Chat } from "@/chat/useChatModelPick";
 
-type DraftTarget = { kind: "sessionChat"; sessionId: Id<"sessions">; chatId: Id<"sessionChats"> };
-type SaveDraft = (args: { target: DraftTarget; content: string }) => Promise<null>;
+/** What a draft belongs to: a session chat, or a task comment (a reply when it has `parentCommentId`). */
+export type DraftTarget = FunctionArgs<
+  typeof api.drafts.getForTarget
+>["target"];
+type SaveDraft = (args: {
+  target: DraftTarget;
+  content: string;
+}) => Promise<null>;
+
+/** One key per target, for the per-target sync state. */
+function targetKey(target: DraftTarget): string {
+  return target.kind === "sessionChat"
+    ? `sessionChat:${target.chatId}`
+    : `taskComment:${target.taskId}:${target.parentCommentId ?? ""}`;
+}
 
 /**
- * Per chat: the contents this client put on the server or took from it (the
+ * Per target: the contents this client put on the server or took from it (the
  * echo guard), the last content saved, and the one save in flight with the
  * newest content waiting behind it. Module scope, not component state: there is
- * one composer per chat, and a late echo must still be recognised after the
+ * one composer per target, and a late echo must still be recognised after the
  * screen remounts.
  */
-type DraftSync = { ownSaves: string[]; lastSaved: string | null; inFlight: boolean; next: string | null };
+type DraftSync = {
+  ownSaves: string[];
+  lastSaved: string | null;
+  inFlight: boolean;
+  next: string | null;
+};
 const syncs = new Map<string, DraftSync>();
 
-function syncFor(chatId: string): DraftSync {
-  const existing = syncs.get(chatId);
+function syncFor(key: string): DraftSync {
+  const existing = syncs.get(key);
   if (existing) return existing;
-  const created: DraftSync = { ownSaves: [], lastSaved: null, inFlight: false, next: null };
-  syncs.set(chatId, created);
+  const created: DraftSync = {
+    ownSaves: [],
+    lastSaved: null,
+    inFlight: false,
+    next: null,
+  };
+  syncs.set(key, created);
   return created;
 }
 
@@ -43,10 +66,11 @@ async function flush(sync: DraftSync, save: SaveDraft, target: DraftTarget) {
 }
 
 /**
- * The composer draft of a session chat, kept on the server (`drafts`) as the
- * web composer does, so it survives closing the app and follows the person
- * between the phone and the web. Quick tasks and projects have no draft row,
- * as on the web.
+ * A composer draft kept on the server (`drafts`) as the web composers keep
+ * theirs, so it survives closing the app and follows the person between the
+ * phone and the web: a session chat's composer, and a task's comment and reply
+ * boxes. `target` null (a quick task or project chat, which have no draft row,
+ * as on the web) syncs nothing.
  *
  * - `save`: the composer's `onChange`, so only the person's edits save
  *   (typing, picks, a stash restore, the clear after a send, which deletes the
@@ -58,18 +82,20 @@ async function flush(sync: DraftSync, save: SaveDraft, target: DraftTarget) {
  *   ignores this client's echoes, only takes text that adds to what is typed).
  *   It adjusts state when the query changes, so no effect is needed.
  */
-export function useChatDraftSync(chat: Chat) {
-  const target: DraftTarget | null = chat.session
-    ? { kind: "sessionChat", sessionId: chat.session.id, chatId: chat.session.chatId }
-    : null;
-  const remote = useQuery(api.drafts.getForTarget, target ? { target } : "skip");
+export function useDraftSync(target: DraftTarget | null) {
+  const remote = useQuery(
+    api.drafts.getForTarget,
+    target ? { target } : "skip",
+  );
   const setDraft = useMutation(api.drafts.set);
   // The saved draft value this screen has already considered.
-  const [considered, setConsidered] = useState<string | null | undefined>(undefined);
+  const [considered, setConsidered] = useState<string | null | undefined>(
+    undefined,
+  );
 
   const save = (tokenized: string) => {
     if (!target || remote === undefined) return;
-    const sync = syncFor(target.chatId);
+    const sync = syncFor(targetKey(target));
     if (tokenized === sync.lastSaved) return;
     sync.lastSaved = tokenized;
     sync.ownSaves = rememberOwnSave(sync.ownSaves, tokenized);
@@ -77,11 +103,18 @@ export function useChatDraftSync(chat: Chat) {
     if (!sync.inFlight) void flush(sync, setDraft, target);
   };
 
-  const pull = (composer: { text: string; load: (tokenized: string) => void }) => {
+  const pull = (composer: {
+    text: string;
+    load: (tokenized: string) => void;
+  }) => {
     if (!target || remote === considered) return;
     setConsidered(remote);
-    const sync = syncFor(target.chatId);
-    const decision = decideDraftPull({ remoteContent: remote, editorValue: composer.text, ownSaves: sync.ownSaves });
+    const sync = syncFor(targetKey(target));
+    const decision = decideDraftPull({
+      remoteContent: remote,
+      editorValue: composer.text,
+      ownSaves: sync.ownSaves,
+    });
     if (!decision.apply || typeof remote !== "string") return;
     // Taken from the server: it is already saved, and its echo is ours.
     sync.lastSaved = remote;
@@ -89,5 +122,13 @@ export function useChatDraftSync(chat: Chat) {
     composer.load(remote);
   };
 
-  return { save, pull };
+  /**
+   * The newest content known for `other` (saved from this client or taken
+   * from the server), or null: a composer that switches targets loads it,
+   * since `pull` ignores this client's own saves.
+   */
+  const lastKnown = (other: DraftTarget): string | null =>
+    syncs.get(targetKey(other))?.lastSaved ?? null;
+
+  return { save, pull, lastKnown };
 }
