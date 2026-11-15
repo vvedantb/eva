@@ -383,3 +383,4 @@ export {
   type AttachmentFileKind,
   type ResolvedMediaEntry,
 } from "./attachmentLabels";
+export { ECHO_HISTORY_LIMIT, decideDraftPull, rememberOwnSave, type DraftPullDecision } from "./chatDraftPull";

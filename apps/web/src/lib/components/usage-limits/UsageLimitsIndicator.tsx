@@ -15,8 +15,8 @@ import {
   claudeUsageAccountScope,
   snapshotsOf,
   usageRowsForAccount,
-  USAGE_TONE_TEXT_CLASS,
-} from "./_utils";
+} from "@eva/shared/usageLimits";
+import { USAGE_TONE_TEXT_CLASS } from "./toneClasses";
 import { UsageBar } from "./UsageBar";
 import { UsageLimitsDetails } from "./UsageLimitsDetails";
 import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";

@@ -47,9 +47,9 @@ import {
   FIELD_TEXT_CLASS,
   FIELD_TRIGGER_CLASS,
 } from "@/lib/components/fields/FieldsSection";
+import { getUserDisplayName } from "@eva/shared/taskDetail";
 import {
   DEPLOYMENT_STATUS_CONFIG,
-  getUserDisplayName,
   NO_PROJECT_VALUE,
   NEW_PROJECT_VALUE,
   NO_PRIORITY_VALUE,

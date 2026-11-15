@@ -1,4 +1,4 @@
-import { tokenizedToEditable } from "@eva/shared";
+import { tokenizedToEditable } from "./mentionText";
 
 /**
  * How many of this client's own saves to remember for the echo guard. The
@@ -45,8 +45,9 @@ export type DraftPullDecision =
  * Decides whether a `drafts` row arriving over the subscription should be
  * pushed into the mounted composer.
  *
- * Writes from outside the composer — `useSeedChatDraft`, used by the Approve
- * plan action and the design-variation picker — must appear live rather than only after a remount. Everything else must be ignored: the
+ * Writes from outside the composer (the web `useSeedChatDraft`, used by the
+ * Approve plan action and the design-variation picker, or the same draft typed
+ * on another device) must appear live rather than only after a remount. Everything else must be ignored: the
  * editor's own saves echo back through the same subscription, and the row may
  * lag the user's latest keystroke, so applying it blindly would delete
  * characters mid-typing.

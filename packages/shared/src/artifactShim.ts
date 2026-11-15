@@ -1,8 +1,11 @@
-// The cowork bridge injected into every hosted artifact iframe before the
-// artifact's own scripts run. It recreates `window.cowork.callMcpTool` — the API
-// Claude's Cowork host normally injects — by posting each call to the parent
+// The cowork bridge injected into every hosted artifact page before the
+// artifact's own scripts run: the web's sandboxed iframe and the phone's
+// WebView (`HtmlView`). It recreates `window.cowork.callMcpTool` — the API
+// Claude's Cowork host normally injects — by posting each call to the host
 // (eva), which runs it through eva's read-only MCP tools and posts the result
-// back, correlated by a per-call id. The artifact runs unmodified.
+// back, correlated by a per-call id. The artifact runs unmodified. On the
+// phone the page posts through `window.ReactNativeWebView` (a WebView has no
+// parent), and the host's replies arrive as the same `message` events.
 // It also adds `window.cowork.state`, eva's persistent per-artifact key/value
 // store (see convex/artifactState.ts), so artifacts can work as small apps.
 //
@@ -36,7 +39,10 @@ const COWORK_SHIM = `<script>
   ensureStore("sessionStorage");
 
   var seq = 0, pending = {}, ready = false, queue = [];
-  function send(m) { parent.postMessage(m, "*"); }
+  function send(m) {
+    if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(m));
+    else parent.postMessage(m, "*");
+  }
   function flush() { if (ready) return; ready = true; while (queue.length) send(queue.shift()); }
   // Sends one request to the parent and resolves with its correlated result.
   function request(fields) {
@@ -87,6 +93,8 @@ const COWORK_SHIM = `<script>
   };
   window.addEventListener("message", function (e) {
     var d = e.data;
+    // The host sends JSON text from the web iframe; the phone's WebView delivers an object.
+    if (typeof d === "string") { try { d = JSON.parse(d); } catch (err) { return; } }
     if (!d || typeof d !== "object") return;
     if (d.type === "eva-bridge-ready") { flush(); return; }
     if (d.type === "eva-state-snapshot") {

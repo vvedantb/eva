@@ -21,7 +21,7 @@ import {
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { messageLinkHref } from "@eva/shared/messageLink";
 import { type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
-import { IconChevronDown, IconMessageCircle, IconPlayerStopFilled } from "@tabler/icons-react-native";
+import { IconChevronDown, IconMessageCircle, IconPlayerStop } from "@tabler/icons-react-native";
 import {
   ChoiceQuestion,
   Conversation,
@@ -56,14 +56,16 @@ import { InlineCards, TurnOutputs, useChatCards, type InlineCard, type TurnOutpu
 import { UserAttachments } from "@/chat/media/UserAttachments";
 import { createSeenRows, SeenRowsContext } from "@/chat/cards/seenRows";
 import { SandboxBranchChip } from "@/chat/BranchChips";
-import { ComposerFooter, ComposerHeader, useSimpleView } from "@/chat/ComposerFooter";
+import { ComposerFooter, composerHeader, useSimpleView } from "@/chat/ComposerFooter";
 import { ModelChip } from "@/chat/ModelChip";
 import { ChatHeader } from "@/chat/ChatHeader";
+import { UsageButton } from "@/chat/UsageSheet";
 import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { MessageFooter, type Sentiment } from "@/chat/MessageFooter";
 import { useAttachments } from "@/chat/useAttachments";
 import { type Chat, useChatModelPick } from "@/chat/useChatModelPick";
+import { useChatDraftSync } from "@/chat/useChatDraftSync";
 import { useMentionComposer } from "@/chat/useMentionComposer";
 import { WEB_URL } from "@/config";
 import { useSessionActions } from "@/sessions/useSessionActions";
@@ -125,7 +127,7 @@ export default function ChatScreen() {
         message._id === liveReplyId),
   );
   const { mineByMessageId: mine, agentReports } = groupChatFeedback(feedbackRows ?? [], me ?? undefined);
-  const { cards, outputs } = useChatCards(parentId, visible, agentReports);
+  const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder);
   // Rows seen on screen, so an agent page mounts its WebView only once its row shows.
   const [seenRows] = useState(createSeenRows);
 
@@ -223,6 +225,7 @@ export default function ChatScreen() {
         onOpenWeb={openWebChat}
         onCopyLink={() => void Clipboard.setStringAsync(webUrl(chat.webPath))}
         onStop={working ? handleStop : undefined}
+        usage={<UsageButton chat={chat} />}
         sessionMenu={
           sessionTarget
             ? {
@@ -371,7 +374,10 @@ function ChatDock({
   const answer = useMutation(api.pendingQuestions.answer);
   const attachments = useAttachments();
   // The `/` list follows the chat's model provider, as the web composer.
-  const composer = useMentionComposer(chat.repoId, getAIModelProvider(normalizeAIModel(chat.model)));
+  // The draft is kept on the server, as the web composer: it survives closing the app and follows you between devices.
+  const draft = useChatDraftSync(chat);
+  const composer = useMentionComposer(chat.repoId, getAIModelProvider(normalizeAIModel(chat.model)), draft.save);
+  draft.pull(composer);
   const modelPick = useChatModelPick(target, chat, me);
 
   // The web composer's placeholder: asleep, a send wakes Eva up; mid-turn, a follow-up.
@@ -442,8 +448,9 @@ function ChatDock({
         leading={
           <AttachButton onPress={() => void attachments.pick()} />
         }
-        header={<ComposerHeader attachments={attachments} composer={composer} />}
-        toolbar={working ? <PromptInputButton icon={IconPlayerStopFilled} label="Stop generating" onPress={onStop} /> : null}
+        header={composerHeader(attachments, composer)}
+        // The web stop beside send: red (`variant="destructive"`), the outline stop icon.
+        toolbar={working ? <PromptInputButton variant="destructive" icon={IconPlayerStop} label="Stop generating" onPress={onStop} /> : null}
         footer={
           <ComposerFooter
             repoId={chat.repoId}

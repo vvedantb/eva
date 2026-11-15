@@ -13,7 +13,7 @@ import { AnimatePresence, m } from "motion/react";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { resolveCredentialSourceLabel } from "@/lib/utils/credentialSourceLabel";
-import { formatResetDistanceMs } from "@/lib/components/usage-limits/_utils";
+import { formatResetDistanceMs } from "@eva/shared/usageLimits";
 import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
 import {
   usageLimitResetClock,

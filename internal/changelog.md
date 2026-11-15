@@ -1,5 +1,85 @@
 # Changelog
 
+## Phone: zoom into images in the full-screen viewer
+
+Date: 2026-11-15
+
+WHY: An opened image could not be zoomed.
+
+Architectural: `@vvedantb/native-ui` 0.21.0-next-c9211cd (packages#260): under `GestureHandlerProvider` (already in the app root) each `ImageViewer` page pinches up to 5x about the fingers, double-taps to 2.5x on the tapped point and back, and pans while zoomed instead of turning the page.
+
+## Phone: context and plan usage from the chat header
+
+Date: 2026-11-15
+
+WHY: The phone had no way to see a chat's context use or the Claude plan limits, which the web shows in its chat header (the context ring and the plan-usage chip).
+
+Architectural: The rules moved out of the web into `@eva/shared/usageLimits` (the old `usage-limits/_utils.ts`: snapshots, tones, chip summaries, reset labels, the empty copy, and now the refresh failure copy) and `@eva/shared/contextUsage` (`aggregateUsage`, `contextUsedRatio`, `CONTEXT_OVERLOAD_RATIO`, `contextCompactsAutomatically`); the web imports them, keeping only its Tailwind tone classes (`usage-limits/toneClasses.ts`), and its tests now test the shared code. On the phone, `src/chat/UsageSheet.tsx` adds `UsageButton` to `ChatHeader` (the context % and ring, red past 90%; hidden in simple view): a tap refreshes every account (`usageLimitsActions.refreshAll`, failures as toasts) and opens a sheet with the context card (used of the window, the token rows, tokens left, total cost) and plan usage per Claude account (each window's %, bar and reset). The context reads the session chat's logs, a task's, or a project's (`logs.getByProjectId`), as the web. `src/ui/clock.ts` (`useNow`) is a shared ticking clock; `TimeAgo` now uses it.
+
+## Phone: the chat Stop button is red, and the composer lost its extra top padding
+
+Date: 2026-11-15
+
+WHY: The chat composer's Stop was a grey ghost button, where the web's is red, and the composer had extra space above the field.
+
+Architectural: `ComposerHeader` (a component) became `composerHeader()` in `src/chat/ComposerFooter.tsx`, which returns `undefined` when there are no attachments or mention chips. `PromptInput` pads a header row (`pt-1.5`) for any `header` element it gets, and a component that renders null is still an element, so every composer had 6 extra above the field. The chat Stop is `PromptInputButton variant="destructive"` with the outline `IconPlayerStop`, as the web `Button variant="destructive"`.
+
+## Phone: the keyboard no longer covers the composer on New session and the task overview
+
+Date: 2026-11-15
+
+WHY: On New session the composer sits in a centred column, and the keyboard covered it while typing. The composer's own keyboard lift (react-native-keyboard-controller's `KeyboardAvoidingView` inside `PromptInput`) measures itself relative to its parent, not the screen, so in the middle of a column it decided the keyboard did not reach it and added no lift.
+
+Architectural: `app/session/new.tsx` wraps the centred column in the kit `KeyboardAvoidingView` (as New quick task and New project), so the column shrinks to the space above the keyboard and the composer stays centred in it. The task overview (`app/quick-task/[taskId].tsx`) uses react-native-keyboard-controller's `KeyboardAwareScrollView` (`bottomOffset` 16) in place of a `ScrollView` in a `KeyboardAvoidingView`, so the focused comment box, description or title scrolls into view above the keyboard.
+
+## Phone: comments on a task can be replied to, edited, deleted and reacted to
+
+Date: 2026-11-15
+
+WHY: The phone task overview (#1334) could post comments but not take part in a discussion, as the web task page does.
+
+Architectural: `src/quickTasks/TaskDiscussion.tsx`: `ReactableMenu` (a comment's "…" or long press: the six quick reactions, Reply, Edit, Copy text, Delete behind `DeleteCommentDialog`; the description gets reactions, Edit and Copy text by long press), `useCommentMutations` (optimistic delete to the web placeholder and optimistic edit), `CommentMode` with `CommentModeChip` (the comment box at the end replies with a `ReplyQuoteChip` and edits your comment in place, then goes back to a new comment), and `TaskSubscribers` (Subscribe/Subscribed, initials, Manage subscribers sheet). Not here from the web: the full emoji picker and its suggestions, comment drafts on the server, and typing presence.
+
+## Phone: a quick task opens on its overview
+
+Date: 2026-11-15
+
+WHY: On the phone a tap on a quick task went straight to its chat, so there was no way to read or change the description, the fields or the comments, as the web task page does.
+
+Architectural: The task page rules moved from web-only files into `@eva/shared/taskDetail` (who may edit the text, comment threads, the activity timeline and its wording, reaction grouping and the optimistic toggle); the web task detail now imports them, and `_utils/commentThread.ts` is gone. The phone route `app/quick-task/[taskId].tsx` shows the number and title (tap to edit), the description (tap to edit with the mention composer), attachments, the Properties rows (Status, Priority, Code Reviewer, Labels, Project, each a sheet), the Activity timeline with comments, replies and reaction chips, and a comment box; the bottom bar holds Chat and Run Eva and the header "…" is the row menu. Project task rows open it too. The field sheets are split out of the option chips (`PrioritySheet`, `ReviewerSheet`, `TagsSheet`, `ProjectSheet`, `TaskStatusRows`), `FieldGroup`/`FieldRow` moved to `src/ui/FieldRows.tsx`, and `src/ui/TimeAgo.tsx` keeps relative times current. Still to come: replies, comment edit and delete, the reaction picker and subscribers.
+
+## Phone: settings you change stay after the app closes
+
+Date: 2026-11-15
+
+WHY: The web keeps per-person UI choices in localStorage; on the phone they were React state, so a restart reset them (the repo picked for Quick Tasks, folded session groups, and more). An audit of every web localStorage key against the phone found the phone kept only Hide whitespace, the Viewed ticks and the theme.
+
+Architectural: `src/storage/persistedStore.ts` (moved out of `prDiffStore.ts` and shared): `persistedStore`, `persistedIdSet` and `jsonParser` (zod), in secure store on a phone and in localStorage on the web preview build (which has no secure store, so a value used to last one session). Now kept: the repo last picked (`useLastRepoId` / `rememberRepo`: Quick Tasks, Projects, Reviews, Docs, Drafts and Today fall back to it with no `?repo=`, and the new session, quick task and project screens start on it), session group folds (the web's app and linked group open state), quick task status folds, project phase and project task folds, the section each tab last showed, the new-session prompt draft per repo (the web's `new-session-composer`, cleared on send), the changed-files card open state per reply, and the pull request comment order. Not kept, as on the web, where they live in the URL: filters, sort, Active/Archived and Open/Closed.
+
+## Phone: artifacts open live in the chat
+
+Date: 2026-11-15
+
+WHY: On the phone an artifact card only linked to the web viewer. The web shows the artifact in the chat, live: it calls Eva's read-only tools and keeps its own state through the cowork bridge.
+
+Architectural: The phone `ChatArtifactCard` opens the artifact under the card on a tap (480 high, as the web preview) and closes it on the next tap; Fullscreen fills the screen (a modal with its name and Close); the other icon opens the web viewer in the in-app browser. The page is the kit `HtmlView` (native-ui 0.21.0-next-90c9e82, vvedantb/packages#258: `onPageMessage` and a `postMessage` handle). The bridge is shared: `@eva/shared/artifactBridge` (a subpath, so the backend's root import stays React-free) holds the shim (`buildArtifactSrcDoc`, which posts through `window.ReactNativeWebView` on the phone and takes JSON-text replies), `loadArtifactHtml`, and `useArtifactBridge(artifactId, target)`; the web `ArtifactFrame` uses it too, and its own copies are deleted. Metro keeps `convex` a singleton, so the shared hook sees the app's `ConvexProvider`.
+
+## Phone: composer drafts are saved, as on the web
+
+Date: 2026-11-15
+
+WHY: Text typed in a phone chat's composer was lost when the app closed or the chat was left. The web keeps it on the server (`drafts`), so it also follows the person between devices.
+
+Architectural: `useChatDraftSync(chat)` (session chats, as the web; quick tasks and projects have no draft row) reads `drafts.getForTarget` and returns `save` and `pull`. `save` is the composer's new `onChange` (`useMentionComposer` calls it after the person's edits only: typing, picks, chip removal, stash restore, the clear after a send), coalesced to one `drafts.set` in flight per chat, and skipped until the saved draft has loaded so opening a chat never overwrites it; an empty composer deletes the row. `pull(composer)` runs in render when the saved draft changes (its first load, or a write from the web) and applies it with `composer.load` by the web's rules: `decideDraftPull` and `rememberOwnSave` move from `apps/web` to `@eva/shared` (web unchanged). No effects. Also adds the `_generativeUi/catalog` entry #1321 left out of `api.d.ts`.
+
+## Phone: agent cards stay with their turn in long chats
+
+Date: 2026-11-15
+
+WHY: In a long chat, a turn's agent report ("Feedback sent"), artifacts, panels and pages fell to the bottom of the chat on the phone. The phone transcript loads in pages (newest 30 first), but `useChatCards` told `placeChatUiPanels` the whole history was loaded, so a card whose turn was above the first page went to the "after everything" list.
+
+Architectural: `useChatCards` takes `hasOlderHistory` (the screen passes `transcript.hasOlder`) and gives it to both placements, as the web `ChatBody`. A card above the loaded rows now waits for its page and then sits under its turn. Reproduced and checked in the phone web export with 40 extra messages on the seeded mock chat: before, the cards sat at the bottom; after, nothing at the bottom, and the cards appear under their reply once the older page loads.
+
 ## Web shell comes from the kit `AppShell`
 
 Date: 2026-11-14

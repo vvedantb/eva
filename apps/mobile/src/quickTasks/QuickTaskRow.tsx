@@ -39,7 +39,7 @@ export const SANDBOX_DOT = {
  * the number and title with the priority, live mark, unread dot and schedule
  * clock; the tags; and the creator and age. Sized for a thumb, not the web
  * board: a 14 title, 12 secondary text, `py-3`, at least 72 high and 8 apart
- * (`QuickTasksSection`). A tap opens the task chat; a
+ * (`QuickTasksSection`). A tap opens the task overview; a
  * long press opens the row menu (`onLongPress`), as the web kebab and
  * right-click. The web hover tooltips are spoken in the row's hint instead.
  */
@@ -99,7 +99,7 @@ export function QuickTaskRow({
       borderColor={showError ? withAlpha(theme.destructive, 0.3) : undefined}
       // The web `px-2.5 pl-3` and `gap-1.5`; `py-3` (web `py-2`) for a thumb.
       className="min-h-[72px] gap-1.5 px-3 py-3 pl-3.5"
-      onPress={() => router.push({ pathname: "/chat/[target]", params: { target: task._id } })}
+      onPress={() => router.push({ pathname: "/quick-task/[taskId]", params: { taskId: task._id, repo: task.repoId } })}
       onLongPress={onLongPress}
       longPressLabel="Task actions"
     >

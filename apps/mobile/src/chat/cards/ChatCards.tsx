@@ -35,14 +35,17 @@ export type TurnOutput = {
  * The chat's agent-posted cards (`render_ui` panels, `render_html` pages) and
  * turn outputs (`create_artifact` artifacts, `submit_feedback` reports), each
  * placed under its turn, else under the newest row before it, else after the
- * last message, as the web `ChatBody`. One query each per chat; the phone
- * loads the whole history, so nothing waits for older rows. The web's secret
- * request cards (`request_env_var`) are not on the phone yet.
+ * last message, as the web `ChatBody`. One query each per chat. The
+ * transcript loads in pages: while `hasOlderHistory`, a card whose turn is
+ * above the loaded rows waits for that page, as the web, instead of falling
+ * to the end of the chat. The web's secret request cards (`request_env_var`)
+ * are not on the phone yet.
  */
 export function useChatCards(
   parentId: Doc<"messages">["parentId"] | undefined,
   rows: readonly PlacementMessage[],
   agentReports: readonly ChatFeedbackRow[],
+  hasOlderHistory: boolean,
 ) {
   const panels = useQuery(api.chatUi.listByParent, parentId ? { parentId } : "skip");
   const htmlRenders = useQuery(api.chatHtml.listByParent, parentId ? { parentId } : "skip");
@@ -63,7 +66,7 @@ export function useChatCards(
       })),
     ],
     rows,
-    false,
+    hasOlderHistory,
   );
   const outputs = placeChatUiPanels<TurnOutput>(
     [
@@ -81,7 +84,7 @@ export function useChatCards(
       })),
     ],
     rows,
-    false,
+    hasOlderHistory,
   );
   return { cards, outputs };
 }

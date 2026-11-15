@@ -10,7 +10,7 @@ import {
 } from "@vvedantb/ui";
 import { UserInitials } from "@eva/shared/user-initials";
 import { EmojiReactionPicker } from "./EmojiReactionPicker";
-import type { ReactionGroup } from "./TaskReactionsProvider";
+import type { ReactionGroup } from "@eva/shared/taskDetail";
 
 interface ReactionBarProps {
   groups: ReactionGroup[];

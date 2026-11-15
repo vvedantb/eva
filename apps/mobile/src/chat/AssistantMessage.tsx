@@ -440,7 +440,7 @@ export function AssistantMessage({
         )
       ) : null}
       {onOpenDiff ? (
-        <ChangedFilesCard files={changedFiles} isLatestAssistantTurn={isLatestAssistantTurn} onOpenDiff={onOpenDiff} />
+        <ChangedFilesCard messageId={messageId} files={changedFiles} isLatestAssistantTurn={isLatestAssistantTurn} onOpenDiff={onOpenDiff} />
       ) : null}
       {media ? <AgentMedia entries={media} /> : null}
     </>
