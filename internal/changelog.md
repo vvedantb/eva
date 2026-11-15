@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: task comment drafts, "someone is typing" and the full emoji search
+
+Date: 2026-11-15
+
+WHY: The phone task overview lacked three things the web task page has: comment and reply drafts kept on the server, the "X is typing" indicator, and reactions beyond the six quick ones.
+
+Architectural: `src/chat/useChatDraftSync.ts` became `useDraftSync(target)` for any `drafts` target (a session chat, a task comment, a reply), with `lastKnown(target)` for a composer that switches targets; the task comment box keeps one draft for a new comment and one per reply, as the web. "Typing" rules moved to `@eva/shared/typingPresence` (`typingUsersFrom`, `typingLabelParts`, `createTypingSignal`, the room ids, `TYPING_TIMEOUT_MS`); the web hook and indicator use them, and the phone adds `@convex-dev/presence` (its react-native hook) with `src/chat/useTypingPresence.ts` and `TypingIndicator`. The comment box mounts once the user is known, since a heartbeat with no user id is rejected. "More reactions" in the reaction menus opens `EmojiPickerSheet`: a typed emoji is offered as is, a word asks `emojiSuggestions.suggest` after 400 ms (as the web picker's search). Phone files touched here are now prettier-formatted (the repo's lint-staged style).
+
 ## Web: pages load again (app shell under strict LazyMotion)
 
 Date: 2026-11-15

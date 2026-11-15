@@ -24,7 +24,11 @@ import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { Pressable, Text, View, type TextStyle } from "react-native";
 import { UserMessageText } from "@/chat/MentionChip";
-import { DeleteCommentDialog, ReactableMenu } from "@/quickTasks/TaskDiscussion";
+import {
+  DeleteCommentDialog,
+  EmojiPickerSheet,
+  ReactableMenu,
+} from "@/quickTasks/TaskDiscussion";
 import { TimeAgo } from "@/ui/TimeAgo";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { useScheme } from "@/ui/theme";
@@ -39,18 +43,30 @@ type ReactionsFor = ReturnType<typeof useTaskReactions>;
  * Every reaction on the task, loaded once (the web `TaskReactionsProvider`):
  * call it with a target for its chips and a toggle, which shows at once.
  */
-export function useTaskReactions(taskId: Id<"agentTasks">, users: User[] | undefined, currentUserId: Id<"users"> | null | undefined) {
+export function useTaskReactions(
+  taskId: Id<"agentTasks">,
+  users: User[] | undefined,
+  currentUserId: Id<"users"> | null | undefined,
+) {
   const reactions = useQuery(api.taskReactions.listByTask, { taskId });
-  const toggleMutation = useMutation(api.taskReactions.toggle).withOptimisticUpdate((store, args) => {
+  const toggleMutation = useMutation(
+    api.taskReactions.toggle,
+  ).withOptimisticUpdate((store, args) => {
     const current = store.getQuery(api.taskReactions.listByTask, { taskId });
     if (!current || !currentUserId) return;
-    store.setQuery(api.taskReactions.listByTask, { taskId }, toggleReaction(current, { ...args, userId: currentUserId }));
+    store.setQuery(
+      api.taskReactions.listByTask,
+      { taskId },
+      toggleReaction(current, { ...args, userId: currentUserId }),
+    );
   });
   const groups = groupReactions(reactions, users, currentUserId);
   return (targetType: ReactionTargetType, targetId: string) => ({
     groups: groups.get(reactionTargetKey(targetType, targetId)) ?? [],
     toggle: (emoji: string) => {
-      toggleMutation({ taskId, targetType, targetId, emoji }).catch(() => toast.error("Couldn't update the reaction"));
+      toggleMutation({ taskId, targetType, targetId, emoji }).catch(() =>
+        toast.error("Couldn't update the reaction"),
+      );
     },
   });
 }
@@ -89,29 +105,57 @@ export function TaskActivity({
   const theme = EVA_THEME[useScheme()];
   const [menuFor, setMenuFor] = useState<TaskComment | null>(null);
   const [deleting, setDeleting] = useState<TaskComment | null>(null);
+  // "More reactions" outlives the menu it opens from, so it lives here.
+  const [pickingFor, setPickingFor] = useState<TaskComment | null>(null);
+  const pickingReactions = pickingFor
+    ? reactionsFor("comment", pickingFor._id)
+    : undefined;
   const comments = useQuery(api.taskComments.listByTask, { taskId });
   const activity = useQuery(api.taskActivity.listByTask, { taskId });
   const userComments = comments?.filter((comment) => comment.authorId) ?? [];
   const replies = buildRepliesByParentId(userComments);
-  const segments = buildTaskTimeline({ createdAt, activity, comments: userComments });
+  const segments = buildTaskTimeline({
+    createdAt,
+    activity,
+    comments: userComments,
+  });
 
   const renderComment = (comment: TaskComment, depth: number) => {
     const reaction = reactionsFor("comment", comment._id);
     return (
       <View key={comment._id} className="gap-2">
-        <CommentBody comment={comment} users={users} onMenu={isCommentDeleted(comment) ? undefined : () => setMenuFor(comment)} />
-        {reaction.groups.length > 0 ? <ReactionChips groups={reaction.groups} onToggle={reaction.toggle} /> : null}
+        <CommentBody
+          comment={comment}
+          users={users}
+          onMenu={
+            isCommentDeleted(comment) ? undefined : () => setMenuFor(comment)
+          }
+        />
+        {reaction.groups.length > 0 ? (
+          <ReactionChips groups={reaction.groups} onToggle={reaction.toggle} />
+        ) : null}
         {(replies.get(comment._id) ?? []).length > 0 ? (
           // Replies indent under their parent with a hairline, as the web thread.
-          <View className="gap-3 pl-3" style={{ borderLeftWidth: 1, borderLeftColor: theme.border, marginLeft: depth === 0 ? 4 : 0 }}>
-            {(replies.get(comment._id) ?? []).map((reply) => renderComment(reply, depth + 1))}
+          <View
+            className="gap-3 pl-3"
+            style={{
+              borderLeftWidth: 1,
+              borderLeftColor: theme.border,
+              marginLeft: depth === 0 ? 4 : 0,
+            }}
+          >
+            {(replies.get(comment._id) ?? []).map((reply) =>
+              renderComment(reply, depth + 1),
+            )}
           </View>
         ) : null}
       </View>
     );
   };
 
-  const menuReactions = menuFor ? reactionsFor("comment", menuFor._id) : undefined;
+  const menuReactions = menuFor
+    ? reactionsFor("comment", menuFor._id)
+    : undefined;
   const ownComment = menuFor !== null && menuFor.authorId === currentUserId;
   return (
     <View className="gap-3">
@@ -124,12 +168,21 @@ export function TaskActivity({
           title="Comment"
           groups={menuReactions.groups}
           onToggleReaction={menuReactions.toggle}
+          onMoreReactions={() => setPickingFor(menuFor)}
           onReply={() => onReply(menuFor)}
           onEdit={ownComment ? () => onEdit(menuFor) : undefined}
           copyText={mentionTokensToEditableText(menuFor.content)}
           onDelete={ownComment ? () => setDeleting(menuFor) : undefined}
         />
       ) : null}
+      <EmojiPickerSheet
+        open={pickingFor !== null}
+        onOpenChange={(open) => {
+          if (!open) setPickingFor(null);
+        }}
+        groups={pickingReactions?.groups ?? []}
+        onPick={(emoji) => pickingReactions?.toggle(emoji)}
+      />
       <DeleteCommentDialog
         open={deleting !== null}
         onOpenChange={(open) => {
@@ -154,7 +207,15 @@ export function TaskActivity({
             className="gap-1 pl-3.5"
           >
             {segment.items.map((item) => (
-              <RailRow key={item.kind === "taskActivity" ? item.activity._id : "created"} item={item} creator={creator} users={users} isProjectTask={isProjectTask} />
+              <RailRow
+                key={
+                  item.kind === "taskActivity" ? item.activity._id : "created"
+                }
+                item={item}
+                creator={creator}
+                users={users}
+                isProjectTask={isProjectTask}
+              />
             ))}
           </View>
         ),
@@ -178,8 +239,16 @@ function RailRow({
   const theme = EVA_THEME[useScheme()];
   const muted = theme.mutedForeground;
   const strong: TextStyle = { color: theme.foreground, fontWeight: "500" };
-  const value: TextStyle = { color: withAlpha(theme.foreground, 0.8), fontWeight: "500" };
-  const dot = <View className="size-1.5 rounded-full" style={{ backgroundColor: theme.border }} />;
+  const value: TextStyle = {
+    color: withAlpha(theme.foreground, 0.8),
+    fontWeight: "500",
+  };
+  const dot = (
+    <View
+      className="size-1.5 rounded-full"
+      style={{ backgroundColor: theme.border }}
+    />
+  );
 
   let avatar = dot;
   let sentence;
@@ -187,7 +256,9 @@ function RailRow({
     if (creator) avatar = <InitialsAvatar user={creator} size={16} />;
     sentence = (
       <>
-        <Text style={strong}>{creator ? getUserDisplayName(creator) : "Someone"}</Text>
+        <Text style={strong}>
+          {creator ? getUserDisplayName(creator) : "Someone"}
+        </Text>
         {isProjectTask ? " created the task" : " created the quick task"}
       </>
     );
@@ -197,12 +268,15 @@ function RailRow({
       sentence = (
         <>
           <Text style={strong}>GitHub</Text>
-          {description.merged ? " merged the PR — task moved to " : " closed the PR — task moved to "}
+          {description.merged
+            ? " merged the PR — task moved to "
+            : " closed the PR — task moved to "}
           <Text style={value}>{description.movedTo}</Text>
         </>
       );
     } else {
-      if (description.actor) avatar = <InitialsAvatar user={description.actor} size={16} />;
+      if (description.actor)
+        avatar = <InitialsAvatar user={description.actor} size={16} />;
       sentence = (
         <>
           <Text style={strong}>{description.actorName}</Text>
@@ -223,7 +297,10 @@ function RailRow({
   return (
     <View className="min-h-7 flex-row items-center gap-2">
       <View className="size-4 items-center justify-center">{avatar}</View>
-      <Text className="font-instrument-sans min-w-0 flex-1" style={{ ...META, color: muted }}>
+      <Text
+        className="font-instrument-sans min-w-0 flex-1"
+        style={{ ...META, color: muted }}
+      >
         {sentence}
         <Text style={{ color: withAlpha(muted, 0.7) }}>{" · "}</Text>
         <TimeAgo at={item.timestamp} style={{ color: withAlpha(muted, 0.7) }} />
@@ -236,7 +313,15 @@ function RailRow({
  * A comment's author, age and text; a deleted one reads the web placeholder.
  * Its "…" (or a long press) opens the comment menu.
  */
-function CommentBody({ comment, users, onMenu }: { comment: TaskComment; users: User[] | undefined; onMenu: (() => void) | undefined }) {
+function CommentBody({
+  comment,
+  users,
+  onMenu,
+}: {
+  comment: TaskComment;
+  users: User[] | undefined;
+  onMenu: (() => void) | undefined;
+}) {
   const theme = EVA_THEME[useScheme()];
   const author = users?.find((user) => user._id === comment.authorId);
   const deleted = isCommentDeleted(comment);
@@ -244,10 +329,18 @@ function CommentBody({ comment, users, onMenu }: { comment: TaskComment; users: 
     <Pressable onLongPress={onMenu} disabled={!onMenu} className="gap-1.5">
       <View className="flex-row items-center gap-2">
         {author ? <InitialsAvatar user={author} size={20} /> : null}
-        <Text numberOfLines={1} className="font-instrument-sans-medium min-w-0 shrink text-sm" style={{ color: theme.foreground, fontWeight: "500" }}>
+        <Text
+          numberOfLines={1}
+          className="font-instrument-sans-medium min-w-0 shrink text-sm"
+          style={{ color: theme.foreground, fontWeight: "500" }}
+        >
           {author ? getUserDisplayName(author) : "Someone"}
         </Text>
-        <TimeAgo at={comment.createdAt} className="font-instrument-sans min-w-0 flex-1" style={{ ...META, color: withAlpha(theme.mutedForeground, 0.7) }} />
+        <TimeAgo
+          at={comment.createdAt}
+          className="font-instrument-sans min-w-0 flex-1"
+          style={{ ...META, color: withAlpha(theme.mutedForeground, 0.7) }}
+        />
         {onMenu ? (
           <Pressable
             accessibilityRole="button"
@@ -261,7 +354,10 @@ function CommentBody({ comment, users, onMenu }: { comment: TaskComment; users: 
         ) : null}
       </View>
       {deleted ? (
-        <Text className="font-instrument-sans text-sm italic" style={{ color: theme.mutedForeground }}>
+        <Text
+          className="font-instrument-sans text-sm italic"
+          style={{ color: theme.mutedForeground }}
+        >
           {DELETED_COMMENT_PLACEHOLDER}
         </Text>
       ) : (
@@ -272,7 +368,13 @@ function CommentBody({ comment, users, onMenu }: { comment: TaskComment; users: 
 }
 
 /** The web `ReactionBar`: a chip per emoji with its count, tinted when you reacted; a tap toggles yours. */
-export function ReactionChips({ groups, onToggle }: { groups: ReactionGroup[]; onToggle: (emoji: string) => void }) {
+export function ReactionChips({
+  groups,
+  onToggle,
+}: {
+  groups: ReactionGroup[];
+  onToggle: (emoji: string) => void;
+}) {
   const theme = EVA_THEME[useScheme()];
   return (
     <View className="flex-row flex-wrap gap-1.5">
@@ -286,14 +388,23 @@ export function ReactionChips({ groups, onToggle }: { groups: ReactionGroup[]; o
           hitSlop={{ top: 6, bottom: 6 }}
           className="h-8 flex-row items-center gap-1 rounded-full border px-2.5 active:opacity-70"
           style={{
-            backgroundColor: group.reactedByMe ? withAlpha(theme.primary, 0.12) : theme.secondary,
-            borderColor: group.reactedByMe ? withAlpha(theme.primary, 0.4) : theme.border,
+            backgroundColor: group.reactedByMe
+              ? withAlpha(theme.primary, 0.12)
+              : theme.secondary,
+            borderColor: group.reactedByMe
+              ? withAlpha(theme.primary, 0.4)
+              : theme.border,
           }}
         >
           <Text style={{ fontSize: 14 }}>{group.emoji}</Text>
           <Text
             className="font-instrument-sans-medium"
-            style={{ ...META, fontWeight: "500", color: group.reactedByMe ? theme.primary : theme.mutedForeground, fontVariant: ["tabular-nums"] }}
+            style={{
+              ...META,
+              fontWeight: "500",
+              color: group.reactedByMe ? theme.primary : theme.mutedForeground,
+              fontVariant: ["tabular-nums"],
+            }}
           >
             {group.count}
           </Text>

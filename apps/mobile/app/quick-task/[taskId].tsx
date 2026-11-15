@@ -1,12 +1,45 @@
-import { api, getAIModelProvider, normalizeAIModel, taskScheduledAt, type Id } from "@eva/backend";
-import { PRIORITY_LABELS, TASK_STATUS_LABELS, formatEntityNumLabel, mentionTokensToEditableText } from "@eva/shared";
+import {
+  api,
+  getAIModelProvider,
+  normalizeAIModel,
+  taskScheduledAt,
+  type Id,
+} from "@eva/backend";
+import {
+  PRIORITY_LABELS,
+  TASK_STATUS_LABELS,
+  formatEntityNumLabel,
+  mentionTokensToEditableText,
+} from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { canEditTaskText, getUserDisplayName, taskTextLockReason, type ReactionGroup } from "@eva/shared/taskDetail";
-import { IconChecklist, IconClock, IconDots, IconFolder, IconMessage, IconPlayerPlay, IconTag, IconUserPlus } from "@tabler/icons-react-native";
+import {
+  taskReplyTypingRoom,
+  taskTypingRoom,
+} from "@eva/shared/typingPresence";
+import {
+  canEditTaskText,
+  getUserDisplayName,
+  taskTextLockReason,
+  type ReactionGroup,
+} from "@eva/shared/taskDetail";
+import {
+  IconChecklist,
+  IconClock,
+  IconDots,
+  IconFolder,
+  IconMessage,
+  IconPlayerPlay,
+  IconTag,
+  IconUserPlus,
+} from "@tabler/icons-react-native";
 import { PromptInput } from "@vvedantb/native-ui/ai";
 import { goBackOrReplace } from "@vvedantb/native-ui/expo-router";
 import { StackPageHeader } from "@vvedantb/native-ui/layout";
-import { Button, CenteredSpinner, EmptyState } from "@vvedantb/native-ui/primitives";
+import {
+  Button,
+  CenteredSpinner,
+  EmptyState,
+} from "@vvedantb/native-ui/primitives";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
@@ -15,18 +48,41 @@ import dayjs from "dayjs";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useRef, useState } from "react";
 import { Pressable, Text, TextInput, View, type TextStyle } from "react-native";
-import { KeyboardAwareScrollView, type KeyboardAwareScrollViewRef } from "react-native-keyboard-controller";
+import {
+  KeyboardAwareScrollView,
+  type KeyboardAwareScrollViewRef,
+} from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ComposerMentionChips, UserMessageText } from "@/chat/MentionChip";
 import { MentionMenu } from "@/chat/MentionMenu";
+import { TypingIndicator } from "@/chat/TypingIndicator";
+import { useDraftSync, type DraftTarget } from "@/chat/useDraftSync";
 import { useMentionComposer } from "@/chat/useMentionComposer";
+import { useTypingPresence } from "@/chat/useTypingPresence";
 import { UserAttachments } from "@/chat/media/UserAttachments";
-import { PrioritySheet, ProjectSheet, ReviewerSheet, TagsSheet, TaskStatusRows } from "@/quickTasks/OptionChips";
+import {
+  PrioritySheet,
+  ProjectSheet,
+  ReviewerSheet,
+  TagsSheet,
+  TaskStatusRows,
+} from "@/quickTasks/OptionChips";
 import { FooterSheet } from "@/chat/ComposerFooter";
 import { PriorityIcon } from "@/quickTasks/PriorityIcon";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
-import { ReactionChips, TaskActivity, useTaskReactions } from "@/quickTasks/TaskActivity";
-import { CommentModeChip, ReactableMenu, TaskSubscribers, useCommentMutations, type CommentMode } from "@/quickTasks/TaskDiscussion";
+import {
+  ReactionChips,
+  TaskActivity,
+  useTaskReactions,
+} from "@/quickTasks/TaskActivity";
+import {
+  CommentModeChip,
+  EmojiPickerSheet,
+  ReactableMenu,
+  TaskSubscribers,
+  useCommentMutations,
+  type CommentMode,
+} from "@/quickTasks/TaskDiscussion";
 import { useQuickTaskActions } from "@/quickTasks/useQuickTaskActions";
 import { FieldGroup, FieldRow } from "@/ui/FieldRows";
 import { displayTitle } from "@/ui/format";
@@ -57,10 +113,14 @@ export default function QuickTaskScreen() {
   const leave = () => goBackOrReplace(router, "/sessions");
   const repos = useQuery(api.githubRepos.list, {});
   const repo = repos?.find((candidate) => candidate._id === params.repo);
-  const tasks = useQuery(api.agentTasks.getAllTasks, repo ? { repoId: repo._id } : "skip");
+  const tasks = useQuery(
+    api.agentTasks.getAllTasks,
+    repo ? { repoId: repo._id } : "skip",
+  );
   const task = tasks?.find((candidate) => candidate._id === params.taskId);
 
-  const loading = repos === undefined || (repo !== undefined && tasks === undefined);
+  const loading =
+    repos === undefined || (repo !== undefined && tasks === undefined);
   if (loading || !repo || !task || !tasks) {
     return (
       <View className="flex-1">
@@ -69,28 +129,56 @@ export default function QuickTaskScreen() {
           <CenteredSpinner label="Loading task" />
         ) : (
           // The web `EntityNotFound` for a task.
-          <EmptyState icon={IconChecklist} title="Task not found" description="It was deleted, or you no longer have access." />
+          <EmptyState
+            icon={IconChecklist}
+            title="Task not found"
+            description="It was deleted, or you no longer have access."
+          />
         )}
       </View>
     );
   }
-  const allTags = [...new Set(tasks.flatMap((entry) => entry.tags ?? []))].sort();
-  return <TaskOverview task={task} repo={repo} allTags={allTags} onLeave={leave} />;
+  const allTags = [
+    ...new Set(tasks.flatMap((entry) => entry.tags ?? [])),
+  ].sort();
+  return (
+    <TaskOverview task={task} repo={repo} allTags={allTags} onLeave={leave} />
+  );
 }
 
-function TaskOverview({ task, repo, allTags, onLeave }: { task: QuickTask; repo: Repo; allTags: string[]; onLeave: () => void }) {
+function TaskOverview({
+  task,
+  repo,
+  allTags,
+  onLeave,
+}: {
+  task: QuickTask;
+  repo: Repo;
+  allTags: string[];
+  onLeave: () => void;
+}) {
   const users = useQuery(api.users.listAll, {});
   const projects = useQuery(api.projects.list, { repoId: repo._id });
-  const actions = useQuickTaskActions({ repo, users, projects, onDeleted: onLeave });
+  const actions = useQuickTaskActions({
+    repo,
+    users,
+    projects,
+    onDeleted: onLeave,
+  });
   const theme = EVA_THEME[useScheme()];
   const currentUserId = useQuery(api.auth.me, {});
   const runs = useQuery(api.agentRuns.listByTask, { taskId: task._id });
-  const attachments = useQuery(api.agentTasks.listAttachments, { taskId: task._id });
+  const attachments = useQuery(api.agentTasks.listAttachments, {
+    taskId: task._id,
+  });
   const updateTask = useMutation(api.agentTasks.update);
   const reactionsFor = useTaskReactions(task._id, users, currentUserId);
 
-  const hasActiveRun = runs?.some((run) => run.status === "queued" || run.status === "running") ?? false;
-  const editable = runs !== undefined && canEditTaskText(task.status, hasActiveRun);
+  const hasActiveRun =
+    runs?.some((run) => run.status === "queued" || run.status === "running") ??
+    false;
+  const editable =
+    runs !== undefined && canEditTaskText(task.status, hasActiveRun);
   const update: UpdateTask = (fields, failure) => {
     updateTask({ id: task._id, ...fields }).catch(() => toast.error(failure));
   };
@@ -119,17 +207,32 @@ function TaskOverview({ task, repo, allTags, onLeave }: { task: QuickTask; repo:
         // A style, not a class: the keyboard-controller view takes no NativeWind `className`.
         style={{ flex: 1 }}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24 }}>
+        contentContainerStyle={{
+          paddingHorizontal: 16,
+          paddingTop: 8,
+          paddingBottom: 24,
+        }}
+      >
         <TaskTitle
           title={task.title}
           editable={editable}
-          lockReason={runs === undefined ? undefined : taskTextLockReason(hasActiveRun, "Title")}
+          lockReason={
+            runs === undefined
+              ? undefined
+              : taskTextLockReason(hasActiveRun, "Title")
+          }
           onSave={(title) => update({ title }, "Couldn't rename the task")}
         />
         {scheduledAt ? (
-          <View className="mt-2 flex-row items-center gap-1.5 self-start rounded-full px-2.5 py-1" style={{ backgroundColor: withAlpha(theme.primary, 0.1) }}>
+          <View
+            className="mt-2 flex-row items-center gap-1.5 self-start rounded-full px-2.5 py-1"
+            style={{ backgroundColor: withAlpha(theme.primary, 0.1) }}
+          >
             <IconClock size={12} color={theme.primary} />
-            <Text className="font-instrument-sans-medium text-xs" style={{ color: theme.primary, fontWeight: "500" }}>
+            <Text
+              className="font-instrument-sans-medium text-xs"
+              style={{ color: theme.primary, fontWeight: "500" }}
+            >
               {`${task.status === "todo" ? "Scheduled for" : "Was scheduled for"} ${dayjs(scheduledAt).format("MMM D, h:mm A")}`}
             </Text>
           </View>
@@ -142,16 +245,30 @@ function TaskOverview({ task, repo, allTags, onLeave }: { task: QuickTask; repo:
             model={task.model}
             editable={editable}
             reactions={reactionsFor("description", task._id)}
-            onSave={(description) => update({ description }, "Couldn't save the description")}
+            onSave={(description) =>
+              update({ description }, "Couldn't save the description")
+            }
           />
         </View>
         {attachments && attachments.length > 0 ? (
           <View className="mt-4">
-            <UserAttachments attachments={attachments.flatMap((entry) => (entry.url ? [{ url: entry.url, contentType: entry.contentType }] : []))} />
+            <UserAttachments
+              attachments={attachments.flatMap((entry) =>
+                entry.url
+                  ? [{ url: entry.url, contentType: entry.contentType }]
+                  : [],
+              )}
+            />
           </View>
         ) : null}
 
-        <TaskProperties task={task} users={users} projects={projects} allTags={allTags} update={update} />
+        <TaskProperties
+          task={task}
+          users={users}
+          projects={projects}
+          allTags={allTags}
+          update={update}
+        />
 
         <FieldGroup title="Activity">
           <TaskSubscribers taskId={task._id} users={users} />
@@ -164,24 +281,34 @@ function TaskOverview({ task, repo, allTags, onLeave }: { task: QuickTask; repo:
               reactionsFor={reactionsFor}
               isProjectTask={task.projectId !== undefined}
               currentUserId={currentUserId}
-              onReply={(comment) => changeCommentMode({ kind: "reply", comment })}
+              onReply={(comment) =>
+                changeCommentMode({ kind: "reply", comment })
+              }
               onEdit={(comment) => changeCommentMode({ kind: "edit", comment })}
               onDelete={(id) => {
                 comments.remove(id);
-                if (commentMode.kind !== "new" && commentMode.comment._id === id) setCommentMode({ kind: "new" });
+                if (
+                  commentMode.kind !== "new" &&
+                  commentMode.comment._id === id
+                )
+                  setCommentMode({ kind: "new" });
               }}
             />
           </View>
         </FieldGroup>
         <View className="mt-4">
-          <CommentComposer
-            taskId={task._id}
-            repoId={repo._id}
-            model={task.model}
-            users={users}
-            mode={commentMode}
-            onModeChange={changeCommentMode}
-          />
+          {/* Once the person is known: presence heartbeats need their id. */}
+          {currentUserId ? (
+            <CommentComposer
+              currentUserId={currentUserId}
+              taskId={task._id}
+              repoId={repo._id}
+              model={task.model}
+              users={users}
+              mode={commentMode}
+              onModeChange={changeCommentMode}
+            />
+          ) : null}
         </View>
       </KeyboardAwareScrollView>
       <TaskDock task={task} runs={runs} hasActiveRun={hasActiveRun} />
@@ -191,7 +318,10 @@ function TaskOverview({ task, repo, allTags, onLeave }: { task: QuickTask; repo:
   );
 }
 
-type UpdateTask = (fields: Omit<FunctionArgs<typeof api.agentTasks.update>, "id">, failure: string) => void;
+type UpdateTask = (
+  fields: Omit<FunctionArgs<typeof api.agentTasks.update>, "id">,
+  failure: string,
+) => void;
 
 /** The web Properties pane (`StatusFieldsSection`): a row per field; a tap opens its sheet, and a pick writes at once. */
 function TaskProperties({
@@ -211,9 +341,14 @@ function TaskProperties({
   const muted = EVA_THEME[scheme].mutedForeground;
   const updateStatus = useMutation(api.agentTasks.updateStatus);
   const [field, setField] = useState<Field | null>(null);
-  const reviewer = task.assignedTo ? users?.find((user) => user._id === task.assignedTo) : undefined;
-  const project = task.projectId ? projects?.find((entry) => entry._id === task.projectId) : undefined;
-  const status = task.status === "draft" ? undefined : statusAppearance(task.status, scheme);
+  const reviewer = task.assignedTo
+    ? users?.find((user) => user._id === task.assignedTo)
+    : undefined;
+  const project = task.projectId
+    ? projects?.find((entry) => entry._id === task.projectId)
+    : undefined;
+  const status =
+    task.status === "draft" ? undefined : statusAppearance(task.status, scheme);
   return (
     <>
       <FieldGroup title="Properties">
@@ -235,7 +370,13 @@ function TaskProperties({
         />
         <FieldRow
           label="Code Reviewer"
-          icon={reviewer ? <InitialsAvatar user={reviewer} size={16} /> : <IconUserPlus size={16} color={muted} />}
+          icon={
+            reviewer ? (
+              <InitialsAvatar user={reviewer} size={16} />
+            ) : (
+              <IconUserPlus size={16} color={muted} />
+            )
+          }
           value={reviewer ? getUserDisplayName(reviewer) : "Code Reviewer"}
           color={reviewer ? undefined : muted}
           onPress={() => setField("reviewer")}
@@ -243,7 +384,9 @@ function TaskProperties({
         <FieldRow
           label="Labels"
           icon={<IconTag size={16} color={muted} />}
-          value={task.tags && task.tags.length > 0 ? task.tags.join(", ") : "Labels"}
+          value={
+            task.tags && task.tags.length > 0 ? task.tags.join(", ") : "Labels"
+          }
           color={task.tags && task.tags.length > 0 ? undefined : muted}
           onPress={() => setField("tags")}
         />
@@ -255,12 +398,18 @@ function TaskProperties({
           onPress={() => setField("project")}
         />
       </FieldGroup>
-      <FooterSheet open={field === "status"} onOpenChange={(open) => setField(open ? "status" : null)} title="Status">
+      <FooterSheet
+        open={field === "status"}
+        onOpenChange={(open) => setField(open ? "status" : null)}
+        title="Status"
+      >
         <TaskStatusRows
           value={task.status}
           onPick={(next) => {
             setField(null);
-            updateStatus({ id: task._id, status: next }).catch(() => toast.error("Couldn't change the status"));
+            updateStatus({ id: task._id, status: next }).catch(() =>
+              toast.error("Couldn't change the status"),
+            );
           }}
         />
       </FooterSheet>
@@ -268,14 +417,18 @@ function TaskProperties({
         open={field === "priority"}
         onOpenChange={(open) => setField(open ? "priority" : null)}
         value={task.priority}
-        onChange={(priority) => update({ priority: priority ?? null }, "Couldn't change the priority")}
+        onChange={(priority) =>
+          update({ priority: priority ?? null }, "Couldn't change the priority")
+        }
       />
       <ReviewerSheet
         open={field === "reviewer"}
         onOpenChange={(open) => setField(open ? "reviewer" : null)}
         users={users}
         value={task.assignedTo}
-        onChange={(assignedTo) => update({ assignedTo: assignedTo ?? null }, "Couldn't assign the task")}
+        onChange={(assignedTo) =>
+          update({ assignedTo: assignedTo ?? null }, "Couldn't assign the task")
+        }
       />
       <TagsSheet
         open={field === "tags"}
@@ -289,7 +442,12 @@ function TaskProperties({
         onOpenChange={(open) => setField(open ? "project" : null)}
         projects={projects}
         value={task.projectId}
-        onChange={(projectId) => update({ projectId: projectId ?? null }, "Couldn't change the project")}
+        onChange={(projectId) =>
+          update(
+            { projectId: projectId ?? null },
+            "Couldn't change the project",
+          )
+        }
       />
     </>
   );
@@ -309,7 +467,12 @@ function TaskTitle({
 }) {
   const theme = EVA_THEME[useScheme()];
   const [editing, setEditing] = useState<string | null>(null);
-  const style: TextStyle = { fontSize: 18, lineHeight: 26, fontWeight: "600", color: theme.foreground };
+  const style: TextStyle = {
+    fontSize: 18,
+    lineHeight: 26,
+    fontWeight: "600",
+    color: theme.foreground,
+  };
   if (editing !== null) {
     const save = () => {
       const trimmed = editing.trim();
@@ -328,7 +491,11 @@ function TaskTitle({
         submitBehavior="blurAndSubmit"
         multiline
         className="font-instrument-sans-semibold rounded-lg px-2 py-1"
-        style={{ ...style, marginHorizontal: -8, backgroundColor: theme.secondary }}
+        style={{
+          ...style,
+          marginHorizontal: -8,
+          backgroundColor: theme.secondary,
+        }}
       />
     );
   }
@@ -341,7 +508,11 @@ function TaskTitle({
       onPress={() => setEditing(title)}
       className="active:opacity-70"
     >
-      <Text accessibilityRole="header" className="font-instrument-sans-semibold" style={style}>
+      <Text
+        accessibilityRole="header"
+        className="font-instrument-sans-semibold"
+        style={style}
+      >
         {displayTitle(title)}
       </Text>
     </Pressable>
@@ -370,9 +541,13 @@ function TaskDescription({
   onSave: (description: string) => void;
 }) {
   const theme = EVA_THEME[useScheme()];
-  const composer = useMentionComposer(repoId, getAIModelProvider(normalizeAIModel(model)));
+  const composer = useMentionComposer(
+    repoId,
+    getAIModelProvider(normalizeAIModel(model)),
+  );
   const [editing, setEditing] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [pickingEmoji, setPickingEmoji] = useState(false);
   const text = description?.trim() ?? "";
   if (editing) {
     return (
@@ -380,8 +555,23 @@ function TaskDescription({
         <PromptInput
           value={composer.text}
           onChangeText={composer.setText}
-          menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} onDismiss={composer.dismiss} /> : null}
-          header={composer.picks.length > 0 ? <ComposerMentionChips picks={composer.picks} onRemove={composer.removePick} /> : undefined}
+          menu={
+            composer.menu ? (
+              <MentionMenu
+                menu={composer.menu}
+                onPick={composer.pick}
+                onDismiss={composer.dismiss}
+              />
+            ) : null
+          }
+          header={
+            composer.picks.length > 0 ? (
+              <ComposerMentionChips
+                picks={composer.picks}
+                onRemove={composer.removePick}
+              />
+            ) : undefined
+          }
           onSubmit={(next) => {
             const tokenized = composer.tokenize(next).trim();
             if (tokenized !== text) onSave(tokenized);
@@ -401,7 +591,10 @@ function TaskDescription({
   const body = text ? (
     <UserMessageText content={text} />
   ) : (
-    <Text className="font-instrument-sans text-sm" style={{ color: withAlpha(theme.mutedForeground, 0.6) }}>
+    <Text
+      className="font-instrument-sans text-sm"
+      style={{ color: withAlpha(theme.mutedForeground, 0.6) }}
+    >
       {editable ? "Add description..." : "No description"}
     </Text>
   );
@@ -413,7 +606,9 @@ function TaskDescription({
     <>
       <Pressable
         accessibilityRole={editable ? "button" : undefined}
-        accessibilityLabel={editable ? (text ? "Edit description" : "Add description") : undefined}
+        accessibilityLabel={
+          editable ? (text ? "Edit description" : "Add description") : undefined
+        }
         accessibilityHint="Long press to react"
         onPress={editable ? startEditing : undefined}
         onLongPress={() => setMenuOpen(true)}
@@ -421,15 +616,24 @@ function TaskDescription({
       >
         {body}
       </Pressable>
-      {reactions.groups.length > 0 ? <ReactionChips groups={reactions.groups} onToggle={reactions.toggle} /> : null}
+      {reactions.groups.length > 0 ? (
+        <ReactionChips groups={reactions.groups} onToggle={reactions.toggle} />
+      ) : null}
       <ReactableMenu
         open={menuOpen}
         onOpenChange={setMenuOpen}
         title="Description"
         groups={reactions.groups}
         onToggleReaction={reactions.toggle}
+        onMoreReactions={() => setPickingEmoji(true)}
         onEdit={editable ? startEditing : undefined}
         copyText={text ? mentionTokensToEditableText(text) : undefined}
+      />
+      <EmojiPickerSheet
+        open={pickingEmoji}
+        onOpenChange={setPickingEmoji}
+        groups={reactions.groups}
+        onPick={reactions.toggle}
       />
     </>
   );
@@ -448,6 +652,7 @@ const COMMENT_PLACEHOLDER: Record<CommentMode["kind"], string> = {
  * a new comment.
  */
 function CommentComposer({
+  currentUserId,
   taskId,
   repoId,
   model,
@@ -455,6 +660,7 @@ function CommentComposer({
   mode,
   onModeChange,
 }: {
+  currentUserId: Id<"users">;
   taskId: Id<"agentTasks">;
   repoId: Id<"githubRepos">;
   model: QuickTask["model"];
@@ -462,15 +668,48 @@ function CommentComposer({
   mode: CommentMode;
   onModeChange: (mode: CommentMode) => void;
 }) {
-  const composer = useMentionComposer(repoId, getAIModelProvider(normalizeAIModel(model)));
+  // A new comment and each reply keep their own draft on the server, as the
+  // web boxes do; an edit has none. Each has its own typing room too.
+  const draftTargetFor = (next: CommentMode): DraftTarget | null =>
+    next.kind === "edit"
+      ? null
+      : {
+          kind: "taskComment",
+          taskId,
+          parentCommentId: next.kind === "reply" ? next.comment._id : undefined,
+        };
+  const draft = useDraftSync(draftTargetFor(mode));
+  const typing = useTypingPresence(
+    mode.kind === "reply"
+      ? taskReplyTypingRoom(mode.comment._id)
+      : taskTypingRoom(taskId),
+    currentUserId,
+  );
+  const composer = useMentionComposer(
+    repoId,
+    getAIModelProvider(normalizeAIModel(model)),
+    (tokenized) => {
+      draft.save(tokenized);
+      if (tokenized) typing.onActivity();
+    },
+  );
   const comments = useCommentMutations(taskId);
   const [sending, setSending] = useState(false);
-  // A new mode adjusts the box during render: an edit loads its comment, and leaving an edit clears it.
+  // A new mode resets the box during render: an edit loads its comment; a new
+  // comment or a reply loads its last known draft, and a draft from elsewhere
+  // (the web) comes in on a later render (`pull`).
   const [shownMode, setShownMode] = useState(mode);
-  if (shownMode !== mode) {
+  const modeChanged = shownMode !== mode;
+  if (modeChanged) {
     setShownMode(mode);
-    if (mode.kind === "edit") composer.load(mode.comment.content);
-    else if (shownMode.kind === "edit") composer.load("");
+    const target = draftTargetFor(mode);
+    composer.load(
+      mode.kind === "edit"
+        ? mode.comment.content
+        : ((target && draft.lastKnown(target)) ?? ""),
+    );
+  } else {
+    draft.pull(composer);
   }
   const send = async (text: string) => {
     const content = composer.tokenize(text).trim();
@@ -478,30 +717,67 @@ function CommentComposer({
     setSending(true);
     try {
       if (mode.kind === "edit") {
-        if (content !== mode.comment.content) await comments.update({ id: mode.comment._id, content });
+        if (content !== mode.comment.content)
+          await comments.update({ id: mode.comment._id, content });
       } else {
-        await comments.create({ taskId, content, parentId: mode.kind === "reply" ? mode.comment._id : undefined });
+        await comments.create({
+          taskId,
+          content,
+          parentId: mode.kind === "reply" ? mode.comment._id : undefined,
+        });
       }
-      composer.load("");
+      typing.stopTyping();
+      // An edit by the person, so the sent draft is cleared on the server too.
+      composer.setText("");
       onModeChange({ kind: "new" });
     } catch {
-      toast.error(mode.kind === "edit" ? "Couldn't save the comment" : "Couldn't post the comment");
+      toast.error(
+        mode.kind === "edit"
+          ? "Couldn't save the comment"
+          : "Couldn't post the comment",
+      );
     }
     setSending(false);
   };
   return (
-    <PromptInput
-      value={composer.text}
-      onChangeText={composer.setText}
-      status={sending ? "submitted" : "ready"}
-      disabled={sending}
-      replyTo={mode.kind === "new" ? undefined : <CommentModeChip mode={mode} users={users} onDismiss={() => onModeChange({ kind: "new" })} />}
-      menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} onDismiss={composer.dismiss} /> : null}
-      header={composer.picks.length > 0 ? <ComposerMentionChips picks={composer.picks} onRemove={composer.removePick} /> : undefined}
-      onSubmit={(text) => void send(text)}
-      placeholder={COMMENT_PLACEHOLDER[mode.kind]}
-      accessibilityLabel={COMMENT_PLACEHOLDER[mode.kind].replace("...", "")}
-    />
+    <View>
+      <TypingIndicator users={typing.typingUsers} />
+      <PromptInput
+        value={composer.text}
+        onChangeText={composer.setText}
+        status={sending ? "submitted" : "ready"}
+        disabled={sending}
+        replyTo={
+          mode.kind === "new" ? undefined : (
+            <CommentModeChip
+              mode={mode}
+              users={users}
+              onDismiss={() => onModeChange({ kind: "new" })}
+            />
+          )
+        }
+        menu={
+          composer.menu ? (
+            <MentionMenu
+              menu={composer.menu}
+              onPick={composer.pick}
+              onDismiss={composer.dismiss}
+            />
+          ) : null
+        }
+        header={
+          composer.picks.length > 0 ? (
+            <ComposerMentionChips
+              picks={composer.picks}
+              onRemove={composer.removePick}
+            />
+          ) : undefined
+        }
+        onSubmit={(text) => void send(text)}
+        placeholder={COMMENT_PLACEHOLDER[mode.kind]}
+        accessibilityLabel={COMMENT_PLACEHOLDER[mode.kind].replace("...", "")}
+      />
+    </View>
   );
 }
 
@@ -542,7 +818,8 @@ function TaskDock({
   const canRun =
     task.projectId === undefined &&
     runs !== undefined &&
-    ((task.status === "todo" && runs.length === 0) || (task.status === "in_progress" && !hasActiveRun));
+    ((task.status === "todo" && runs.length === 0) ||
+      (task.status === "in_progress" && !hasActiveRun));
   const unread = task.hasUnread && !task.isExecuting;
   const run = async () => {
     setBusy(true);
@@ -554,21 +831,42 @@ function TaskDock({
     setBusy(false);
   };
   return (
-    <View className="flex-row gap-2 px-4 pt-2" style={{ paddingBottom: insets.bottom + 12 }}>
+    <View
+      className="flex-row gap-2 px-4 pt-2"
+      style={{ paddingBottom: insets.bottom + 12 }}
+    >
       <View className="min-w-0 flex-1">
         <Button
           variant="secondary"
           accessibilityLabel={unread ? "Chat, unread reply" : "Chat"}
           leftIcon={<IconMessage size={16} color={theme.secondaryForeground} />}
-          onPress={() => router.push({ pathname: "/chat/[target]", params: { target: task._id } })}
+          onPress={() =>
+            router.push({
+              pathname: "/chat/[target]",
+              params: { target: task._id },
+            })
+          }
         >
           Chat
         </Button>
-        {unread ? <View pointerEvents="none" className="absolute right-3 top-3 size-1.5 rounded-full" style={{ backgroundColor: theme.primary }} /> : null}
+        {unread ? (
+          <View
+            pointerEvents="none"
+            className="absolute right-3 top-3 size-1.5 rounded-full"
+            style={{ backgroundColor: theme.primary }}
+          />
+        ) : null}
       </View>
       {canRun ? (
         <View className="min-w-0 flex-1">
-          <Button loading={busy} disabled={busy} leftIcon={<IconPlayerPlay size={16} color={theme.primaryForeground} />} onPress={() => void run()}>
+          <Button
+            loading={busy}
+            disabled={busy}
+            leftIcon={
+              <IconPlayerPlay size={16} color={theme.primaryForeground} />
+            }
+            onPress={() => void run()}
+          >
             Run Eva
           </Button>
         </View>
