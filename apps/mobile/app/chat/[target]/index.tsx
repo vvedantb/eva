@@ -18,6 +18,7 @@ import {
   sandboxComposerState,
   type SessionMenuAction,
   toRepoRelativePath,
+  turnErrorTitle,
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { chatTypingRoom } from "@eva/shared/typingPresence";
@@ -37,6 +38,7 @@ import {
   PromptInputButton,
   Shimmer,
 } from "@vvedantb/native-ui/ai";
+import { providerLabel } from "@vvedantb/native-ui/brand";
 import { goBackOrReplace, RouterStackPageHeader } from "@vvedantb/native-ui/expo-router";
 import { CenteredSpinner, EmptyState, Spinner, Text } from "@vvedantb/native-ui/primitives";
 import { tokens } from "@vvedantb/native-ui/theme";
@@ -222,6 +224,16 @@ export default function ChatScreen() {
   const openWebChat = () => void Linking.openURL(webUrl(chat.webPath));
   // A panel button sends its text as a message, as the web: withheld on a closed
   // chat and on one whose sandbox is asleep, which disables the buttons.
+  // Retry on a failed turn re-sends the prompt that turn answered, attachments included, as the web.
+  const retryFor = (messageId: string) => {
+    const prompt = precedingUserTurns.get(messageId);
+    if (!chat.canReply || !prompt) return undefined;
+    return () => {
+      send({ target: chat.target, message: prompt.content, attachmentStorageIds: prompt.attachmentStorageIds }).catch(() =>
+        toast.error("Couldn't send your message"),
+      );
+    };
+  };
   const panelReply =
     chat.canReply && chat.sandboxActive
       ? (message: string) => {
@@ -327,6 +339,8 @@ export default function ChatScreen() {
                 cards={cards.byMessageId.get(message._id)}
                 outputs={outputs.byMessageId.get(message._id)}
                 onPanelReply={panelReply}
+                // Only a failed turn gets one, so the rest keep their props (the web `onRetryTurn`).
+                onRetryTurn={message.errorType !== undefined ? retryFor(message._id) : undefined}
                 onOpenWebChat={openWebChat}
               />
             );
@@ -540,6 +554,7 @@ function ChatMessageRow({
   cards,
   outputs,
   onPanelReply,
+  onRetryTurn,
   onOpenWebChat,
 }: {
   message: ChatMessage;
@@ -553,6 +568,8 @@ function ChatMessageRow({
   live: string | undefined;
   isLatestReply: boolean;
   link: string;
+  /** Re-sends the prompt a failed turn answered; set only on a failed turn that can be retried. */
+  onRetryTurn?: () => void;
   turn: ComponentProps<typeof MessageFooter>["turn"];
   sentiment: Sentiment | undefined;
   onOpenDiff: ComponentProps<typeof AssistantMessage>["onOpenDiff"];
@@ -567,6 +584,10 @@ function ChatMessageRow({
   onOpenWebChat: () => void;
 }) {
   const isUser = message.role === "user";
+  // A failed turn's title ("This turn failed", "Claude usage limit reached"), or null for a reply.
+  const failure = isUser
+    ? null
+    : turnErrorTitle({ errorType: message.errorType, turnModel: turn?.model, messageModel: message.model, providerLabel });
   const attachments = isUser ? messageAttachments(message) : [];
   const cardList =
     cards && cards.length > 0 ? (
@@ -613,6 +634,7 @@ function ChatMessageRow({
                           onOpenDiff={onOpenDiff}
                           media={message.media}
                           tabPanels={tabbed ? cardList : undefined}
+                          failure={failure ? { title: failure, onRetry: onRetryTurn } : undefined}
                         />
                       )}
                     </MessageContent>

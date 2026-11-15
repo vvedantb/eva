@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: a failed turn shows as a failure, with Retry
+
+Date: 2026-11-15
+
+WHY: On the phone a failed turn ("Error: …", a usage limit) read as Eva replying with an error in the text, with no way to re-send it.
+
+Architectural: `stripErrorPrefix` and `turnErrorTitle` moved to `@eva/shared` (`turnError.ts`; the provider is named by each app's kit, `getProviderLabel` / `providerLabel`). The phone's `AssistantMessage` takes `failure`: `TurnErrorNotice` (the web's: a destructive 10% panel, warning icon, "This turn failed" or "<Provider> usage limit reached", the provider's own text) in the prose's place, with Retry re-sending the prompt the turn answered and its attachments, set only on a failed turn in a chat that can reply.
+
 ## Phone: wake or sleep a session's Eva, and retry a failed wake
 
 Date: 2026-11-15

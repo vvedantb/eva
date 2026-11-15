@@ -1,8 +1,9 @@
 import { api } from "@eva/backend";
-import { collectChangedFiles } from "@eva/shared";
+import { collectChangedFiles, stripErrorPrefix } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { parseActivityLog, type ActivityLogStep } from "@eva/shared/activityTrace";
 import {
+  IconAlertTriangle,
   IconAnchor,
   IconBook2,
   IconBrain,
@@ -53,7 +54,8 @@ import {
   Shimmer,
 } from "@vvedantb/native-ui/ai";
 import { Markdown } from "@vvedantb/native-ui/markdown";
-import { Spinner, Text } from "@vvedantb/native-ui/primitives";
+import { Button, Spinner, Text } from "@vvedantb/native-ui/primitives";
+import { withAlpha } from "@vvedantb/native-ui/theme";
 import { useQuery } from "convex/react";
 import type { ResolvedMediaEntry } from "@eva/shared";
 import { useDeferredValue, useState, type ComponentType, type ReactNode } from "react";
@@ -390,6 +392,7 @@ export function AssistantMessage({
   media,
   tabPanels,
   live = false,
+  failure,
 }: {
   /** For loading a trimmed step's full detail. */
   messageId: string;
@@ -407,6 +410,8 @@ export function AssistantMessage({
   tabPanels?: ReactNode;
   /** The turn is still running (`LiveAssistantMessage`): until it has a step to show, the live status stands in. */
   live?: boolean;
+  /** A failed turn (`turnErrorTitle`): the notice takes the prose's place, with Retry when there is a prompt to re-send. */
+  failure?: { title: string; onRetry?: () => void };
 }) {
   const steps = parseActivityLog(activityLog);
   const segments = foldedActivitySegments(steps);
@@ -432,7 +437,9 @@ export function AssistantMessage({
       ) : (
         <AgentTrace>{trace}</AgentTrace>
       )}
-      {content.trim() !== "" ? (
+      {failure ? (
+        <TurnErrorNotice title={failure.title} detail={stripErrorPrefix(content)} onRetry={failure.onRetry} />
+      ) : content.trim() !== "" ? (
         tabPanels ? (
           <ChatUiPanelTabs panel={tabPanels} text={prose} />
         ) : (
@@ -461,5 +468,37 @@ export function LiveAssistantMessage({ streamingEntityId, messageId }: { streami
   const activity = useDeferredValue(streaming?.currentActivity);
   return (
     <AssistantMessage messageId={messageId} content={streaming?.currentContent ?? ""} activityLog={activity} isLatestAssistantTurn={false} live />
+  );
+}
+
+/**
+ * The web `TurnErrorNotice`: a turn that failed, as a failure rather than a
+ * reply. A destructive 10% panel with the warning icon, the title ("This turn
+ * failed", "Claude usage limit reached"), the provider's own text under it,
+ * and Retry when the prompt can be re-sent.
+ */
+function TurnErrorNotice({ title, detail, onRetry }: { title: string; detail: string; onRetry?: () => void }) {
+  const theme = EVA_THEME[useScheme()];
+  return (
+    <View accessibilityRole="alert" className="flex-row items-start gap-2 rounded-xl px-3 py-2.5" style={{ backgroundColor: withAlpha(theme.destructive, 0.1) }}>
+      <View className="pt-0.5">
+        <IconAlertTriangle size={16} color={theme.destructive} />
+      </View>
+      <View className="min-w-0 flex-1 gap-0.5">
+        <Text className="font-instrument-sans-medium text-sm" style={{ color: theme.foreground, fontWeight: "500" }}>
+          {title}
+        </Text>
+        {detail ? (
+          <Text className="font-instrument-sans text-xs" style={{ color: theme.mutedForeground }}>
+            {detail}
+          </Text>
+        ) : null}
+      </View>
+      {onRetry ? (
+        <Button size="sm" variant="outline" fullWidth={false} onPress={onRetry}>
+          Retry
+        </Button>
+      ) : null}
+    </View>
   );
 }
