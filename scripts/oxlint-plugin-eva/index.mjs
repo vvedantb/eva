@@ -1,22 +1,21 @@
-// Eva custom oxlint plugin — enforces "parse at the boundary with Zod,
-// don't hand-roll narrowing" conventions the built-in rules can't express.
+// Local oxlint plugin — holds only the rules that the shared
+// `@vvedantb/config` oxlint plugin does not (yet) register at runtime.
 //
-// Wired via `jsPlugins` in ../../.oxlintrc.json. Rules are ESLint-compatible
-// AST visitors (oxlint JS plugins are alpha and not subject to semver).
+// `no-is-record` is documented in @vvedantb/config and imported by its
+// plugin.mjs, but @vvedantb/config@0.7.0 omits it from the exported `rules`
+// map, so it is unavailable from the shared plugin. Keeping it here preserves
+// the `isRecord` ban the codebase relies on (see CLAUDE.md). Remove this
+// plugin once a @vvedantb/config release registers `no-is-record`.
+//
+// Wired via `jsPlugins` in ../../.oxlintrc.json. The other former `eva/*`
+// rules (no-json-parse, no-double-cast, no-value-block-in-try,
+// no-source-text-in-tests) now come from the shared `vvedantb` plugin.
 
 import noIsRecord from "./rules/no-is-record.mjs";
-import noJsonParse from "./rules/no-json-parse.mjs";
-import noDoubleCast from "./rules/no-double-cast.mjs";
-import noValueBlockInTry from "./rules/no-value-block-in-try.mjs";
-import noSourceTextInTests from "./rules/no-source-text-in-tests.mjs";
 
 export default {
   meta: { name: "eva" },
   rules: {
     "no-is-record": noIsRecord,
-    "no-json-parse": noJsonParse,
-    "no-double-cast": noDoubleCast,
-    "no-value-block-in-try": noValueBlockInTry,
-    "no-source-text-in-tests": noSourceTextInTests,
   },
 };

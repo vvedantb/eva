@@ -2,11 +2,9 @@
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["eslint", "typescript", "react", "unicorn", "oxc", "import"],
   "jsPlugins": [
+    { "name": "vvedantb", "specifier": "@vvedantb/config/oxlint/plugin.mjs" },
+    { "name": "anti-slop", "specifier": "@vvedantb/config/oxlint/anti-slop.js" },
     { "name": "eva", "specifier": "./scripts/oxlint-plugin-eva/index.mjs" },
-    {
-      "name": "anti-slop",
-      "specifier": "./scripts/oxlint-plugin-anti-slop/index.mjs"
-    },
     {
       "name": "no-effect",
       "specifier": "eslint-plugin-react-you-might-not-need-an-effect"
@@ -48,10 +46,10 @@
     "no-effect/no-external-store-subscription": "error",
     "no-effect/no-initialize-state": "error",
     "eva/no-is-record": "error",
-    "eva/no-json-parse": "warn",
-    "eva/no-double-cast": "warn",
-    "eva/no-value-block-in-try": "off",
-    "eva/no-source-text-in-tests": "error",
+    "vvedantb/no-json-parse": "warn",
+    "vvedantb/no-double-cast": "warn",
+    "vvedantb/no-value-block-in-try": "off",
+    "vvedantb/no-source-text-in-tests": "error",
     "typescript/no-explicit-any": "error",
     "typescript/no-non-null-assertion": "error",
     "typescript/consistent-type-assertions": [
@@ -85,7 +83,7 @@
     {
       "files": ["apps/web/src/**"],
       "rules": {
-        "eva/no-value-block-in-try": "error",
+        "vvedantb/no-value-block-in-try": "error",
         "no-restricted-globals": [
           "error",
           {
@@ -226,7 +224,6 @@
     "video/**",
     ".claude/skills/**",
     ".agents/skills/**",
-    "apps/web/src/lib/stageshow/**",
-    "scripts/oxlint-plugin-anti-slop/**"
+    "apps/web/src/lib/stageshow/**"
   ]
 }

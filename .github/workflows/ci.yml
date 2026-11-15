@@ -1,9 +1,12 @@
 # PR gate. This exists because #755 and #758 shipped a React hook-order crash
 # to production with no automated check standing in the way. Tests run here
 # since the source-text tests (regex over source files) were deleted: those
-# broke on every refactor and were the reason tests were once excluded. Make
-# this a required status check in branch protection so the automerge bot cannot
-# bypass it.
+# broke on every refactor and were the reason tests were once excluded.
+#
+# The job now runs through the shared reusable workflow (vvedantb/packages). Its
+# status check is named "CI / check / Check" (it was "CI / typecheck / lint /
+# compiler / design / schema"). Make that the required status check in branch
+# protection so the automerge bot cannot bypass it.
 
 name: CI
 
@@ -16,101 +19,39 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   check:
-    name: typecheck / lint / compiler / design / schema
-    runs-on: boat
-    timeout-minutes: 30
-    env:
-      # Skip the husky `prepare` hook during install.
-      HUSKY: "0"
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          # The schema gate diffs against the merge base, so it needs history.
-          fetch-depth: 0
-
-      # Reads the version from the root package.json `packageManager` field,
-      # which satisfies engines.pnpm (>=10 <11).
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
-      # The pnpm store, with a fallback key: after a lockfile change the last
-      # store is restored and only the changed packages are downloaded.
-      - name: Find the pnpm store
-        id: pnpm-store
-        shell: bash
-        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
-      - name: Restore the pnpm store
-        id: pnpm-cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ steps.pnpm-store.outputs.path }}
-          key: pnpm-store-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            pnpm-store-${{ runner.os }}-${{ runner.arch }}-
-
-      - run: pnpm install --frozen-lockfile
-      # A store restored from the fallback key still holds packages the new
-      # lockfile dropped: remove them before the store is saved.
-      - name: Prune the pnpm store
-        if: steps.pnpm-cache.outputs.cache-hit != 'true'
-        run: pnpm store prune
-
-      # Every step below runs even after an earlier one fails, so one push
-      # reports every problem instead of one per round trip.
-
-      # tsc only — `convex codegen` must never run in automation because it
-      # uploads to the linked deployment. convex/_generated is checked in, so
-      # `tsc -p convex/tsconfig.json` resolves without it.
-      - name: Typecheck
-        if: ${{ !cancelled() }}
-        run: pnpm typecheck
-
-      - name: Lint
-        if: ${{ !cancelled() }}
-        run: pnpm lint
-
-      # A test that never runs has no value. Web + backend vitest, plus the
-      # node tests for the oxlint plugin and the schema gate.
-      - name: Tests
-        if: ${{ !cancelled() }}
-        run: pnpm test
-
-      # One backend for both apps: fails when the phone calls a Convex
-      # function the web never calls, unless it is allowed with a reason.
-      - name: Shared backend
-        if: ${{ !cancelled() }}
-        run: node scripts/check-shared-backend.mjs
-
-      # Installed APKs keep their code: fails when this backend change would
-      # break the newest published APK (type-checks its phone code against it).
-      # Skips when the backend did not change.
-      - name: APK compatibility
-        if: ${{ !cancelled() }}
-        env:
-          BASE_REF: origin/${{ github.base_ref || 'main' }}
-        run: ./scripts/check-apk-compat.sh
-
-      # Fails on a new React Compiler bailout that is not in the baseline.
-      - name: React Compiler bailouts
-        if: ${{ !cancelled() }}
-        run: node scripts/compiler-check.mjs
-
-      # Fails on new Tailwind/JSX design-system drift that is not in the baseline.
-      - name: Design system drift
-        if: ${{ !cancelled() }}
-        run: node scripts/design-check.mjs
-
-      # Blocks a Convex schema field/table/union member being removed while
-      # live rows may still hold it. See docs/eva-convex.md > Migrations.
-      - name: Schema narrowing gate
-        if: ${{ !cancelled() }}
-        env:
-          # On push, GITHUB_BASE_REF is empty; compare against the pushed-from
-          # commit instead so direct-to-main commits are covered too.
-          SCHEMA_NARROWING_BASE: ${{ github.event_name == 'push' && github.event.before || '' }}
-        run: node scripts/check-schema-narrowing.mjs
+    uses: vvedantb/packages/.github/workflows/ci-app.yml@main
+    with:
+      runs_on: boat
+      node_version: "24"
+      # The schema gate diffs against the merge base, so it needs history.
+      fetch_depth: 0
+      env: |
+        BASE_REF=origin/${{ github.base_ref || 'main' }}
+        SCHEMA_NARROWING_BASE=${{ github.event_name == 'push' && github.event.before || '' }}
+      commands: |
+        # tsc only — `convex codegen` must never run in automation because it
+        # uploads to the linked deployment. convex/_generated is checked in, so
+        # `tsc -p convex/tsconfig.json` resolves without it.
+        pnpm typecheck
+        pnpm lint
+        # A test that never runs has no value. Web + backend vitest, plus the
+        # node test for the schema gate.
+        pnpm test
+        # One backend for both apps: fails when the phone calls a Convex
+        # function the web never calls, unless it is allowed with a reason.
+        node scripts/check-shared-backend.mjs
+        # Installed APKs keep their code: fails when this backend change would
+        # break the newest published APK. Skips when the backend did not change.
+        ./scripts/check-apk-compat.sh
+        # Fails on a new React Compiler bailout that is not in the baseline.
+        node scripts/compiler-check.mjs
+        # Fails on new Tailwind/JSX design-system drift that is not in the baseline.
+        node scripts/design-check.mjs
+        # Blocks a Convex schema field/table/union member being removed while
+        # live rows may still hold it. See docs/eva-convex.md > Migrations.
+        node scripts/check-schema-narrowing.mjs

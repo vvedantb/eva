@@ -61,6 +61,6 @@ Surface tokens map 1:1 to the HeroUI palette: `--background` (page canvas) → `
 ## React Compiler (`apps/web`)
 
 - Do not add `useMemo`/`useCallback` by default; only for proven identity/perf needs the compiler cannot cover.
-- Compiler bails on a whole file for `finally`, a catch-less `try`, or `throw`/`?:`/`&&`/`??`/`?.`/loops inside `try` (`eva/no-value-block-in-try`).
+- Compiler bails on a whole file for `finally`, a catch-less `try`, or `throw`/`?:`/`&&`/`??`/`?.`/loops inside `try` (`vvedantb/no-value-block-in-try`).
 - Never call a component as a function in render (`SessionChatHeader({...})`): the compiler memoises capitalised calls like pure values, so a cache hit skips the call, and if the callee runs hooks React throws #300 "Rendered fewer hooks than expected" (see PR #755/#758). Render components with JSX and name any hook-calling helper `use*`; `react/capitalized-calls` lints this as an error. A genuinely pure PascalCase call (e.g. `Intl.DateTimeFormat`) needs `new` or a lowercase local name.
 - `pnpm lint`, `pnpm typecheck`, `node scripts/compiler-check.mjs` and `node scripts/design-check.mjs` run in CI on every PR, so a new compiler bailout, design-system drift, or lint error blocks merge.
