@@ -1,5 +1,67 @@
 # Changelog
 
+## Web shell comes from the kit `AppShell`
+
+Date: 2026-11-14
+
+WHY: Eva carried its own sidebar shell (rail width, tile size, panel layout, resize, mobile drawer). The kit now owns these, so every app has the same shell and Eva has no shell CSS of its own.
+
+Architectural: `Sidebar` renders `AppShell.Root` (`scroll="document"`, `resizable`) with the kit `Sidebar` parts (`Root`, `MobileHeader`, `Backdrop`, `Aside`, `Rail`, `RailItem`, `Panel`, `ResizeHandle`); `@vvedantb/ui` is 0.50.0. The rail is 3.5rem and the tiles are the kit `railTileClass`; Eva adds only its themed active tone. The shell breakpoint moves from `lg` (1024px) to the kit `md` (768px): the drawer, the mobile header and the Ave launcher follow. The stored width moves once from `eva-sidebar-width` (rail plus panel) to `eva-sidebar-panel-width` (panel only) in `shellLayout.ts`; the total widths stay 240 / 320 / 480. Routes take their height from `SHELL_VIEWPORT_ROUTE_CLASS` / `SHELL_DOCUMENT_ROUTE_CLASS`. Deleted: `useSidebarContentOffset`, `useMobileSidebarDrawer`, `SidebarResizeHandle`, the width state in `SidebarContext`. Differences from before: the drawer closes on the kit drag rule (offset or velocity, no projected velocity), the keyboard resize step is 16px, a double-click on the handle resets the width, and the mobile header has the kit look.
+
+## Phone: chats show attachments, agent media, generative UI panels and turn outputs
+
+Date: 2026-11-14
+
+WHY: The phone chat drew none of the rich content the web chat draws: user attachments, the agent's screenshots and recordings, `render_ui` panels and `render_html` pages, and artifact and agent-report cards. Revives #1292 on today's main.
+
+Architectural: The screen's own `ChatMessageRow` (on the paged transcript) gains the content: a user bubble shows `messageAttachments` (`UserAttachments`: 96 pt thumbs into the native-ui `ImageViewer`, text chips into a read-only sheet, as the web); a reply shows `message.media` (`AgentMedia`: `InlineVideo` from `@vvedantb/native-ui/video` with `expo-video`, and `ImageGallery`). `useChatCards` reads `chatUi.listByParent`, `chatHtml.listByParent` and `artifacts.listForChat` once per chat and places them, and the agent reports, with `placeChatUiPanels` (moved to `@eva/shared`; the web imports it from there). Panels use the kit `GenerativeUiPanel` (`@vvedantb/native-ui/generative-ui`, on json-render's React Native renderer) behind the web's UI and Text tabs; links open in the in-app browser, code copies with `copyText`, and a type this version does not know is a card that opens the chat on the web. Pages use `HtmlView` (`react-native-webview`), mounted once the row is seen. A panel button replies through `chats.send`, as the composer. The attachment labels and `splitAgentMedia` move to `@eva/shared` (web unchanged). The PR's own 419-line panel renderer is not used: the kit replaces it. New native modules `expo-video` and `react-native-webview`: a new APK.
+
+## Chat panels (`render_ui`) render from the kits
+
+Date: 2026-11-14
+
+WHY: The panel catalog and renderers now live in the shared kits (vvedantb/packages#236, #240), so any app, and Eva's phone, draws the same panels from one definition.
+
+Architectural: Web `ChatBody` renders `GenerativeUiPanel` from `@vvedantb/ui/generative-ui`; Eva's renderer, layout, content and tone files are deleted (`ChatUiPanelTabs` and panel placement stay). The backend builds `chatUiCatalog` in `_generativeUi/catalog.ts` from `generativeUiCatalogDefinition` (`@vvedantb/server/generative-ui`) on json-render's React schema, so the `"use node"` composer loads no React; the request schema uses the kit tones and styles, and tests use `parseGenerativeUiSpec`. `@eva/shared/generativeUi` is deleted. Every package pins `@vvedantb/ui` 0.47.0-next-7db4f19 and `@vvedantb/server` 0.16.0-next-bf81bce, so the web app loads one copy.
+
+## Eva moves to zod 4
+
+Date: 2026-11-14
+
+WHY: The shared kits (`@vvedantb/server`, `@vvedantb/ui`, `@vvedantb/native-ui`) publish zod 4 types, and json-render (chat panels) requires zod 4. On zod 3, the kit's generative UI props resolved to `unknown` in Eva, so Eva could not use the kit panels.
+
+Architectural: web, backend, shared and mobile pin zod 4.6.7. Four code changes: `_evaConfig/config.ts` uses `.prefault({})` (zod 4's `.default` no longer runs the inner schema, so inner defaults would be lost) and the two-argument `z.record`; `jsonValue` is `z.ZodType<JsonValue, JsonValue>` (zod 4's second type argument is the input, `unknown` by default); `search_tools` uses zod's own `z.toJSONSchema` (`toolInputJsonSchema`), and `zod-to-json-schema` is removed; the mobile `exit-info` module checks `lastExit` is a function and parses its result (zod 4 removed `z.function().args().returns()`). Follow-up: about 20 deprecated `.strict()` / `.passthrough()` calls still work and can move to `z.strictObject` / `z.looseObject`.
+
+## Phone: crashes report themselves to Axiom
+
+Date: 2026-11-14
+
+WHY: A phone crash was known only when the user pasted Copy details from the crash dialog. Now each crash reaches the logs on the next signed-in launch, with no action from the user.
+
+Architectural: New mutation `crashReports.report` (phone-only, listed in `check-shared-backend.mjs`). It has no table: for a signed-in user it writes one `[phone-crash] {json}` console.error line, which Convex's log stream sends to Axiom (dataset `eva`, `data.message`). Signed-out calls are dropped, so it is not an open log sink. `useReportLastCrash` (in `SignedInEffects`) sends the crash `LastCrashDialog` shows (JS fatal, native crash, ANR or Java crash) once, keyed by `eva.lastCrashReported`; a failed send retries on the next launch. The report holds the error and stack only, never chat content. The dialog and Copy details stay.
+
+## Quick tasks: a chat push opens the task PR
+
+Date: 2026-11-13
+
+WHY: A quick task worked on only through its sandbox chat never got a PR. The chat pushed `eva/task-<id>`, but only a task run opened the task PR, and the agent was told Eva would open it.
+
+Architectural: `_sessions/workflow.ts` calls the new `taskWorkflowActions.ensureTaskChatPr` after a quick-task turn pushes or commits onto a published branch. It and the manual `createTaskPr` share `openTaskPr`. The PR is ready in code_review and draft otherwise; a cancelled task is skipped, and a branch level with base is ignored. `getTaskPrCreationData.existingPrUrl` now reads the live PR on the task branch, not any run's old `prUrl`, so commits after a merge get a fresh PR. Project chats still rely on a task run for the project PR.
+## Phone: fix the Sessions/Projects tab crash; Java crashes show their stack
+
+Date: 2026-11-13
+
+WHY: Changing tab closed the app on the compiled native-ui kit (0.1.56–0.1.60). The stack from 0.1.60: "[Worklets] Tried to synchronously call a Remote Function" in `tabIndicator`'s `useAnimatedStyle`. React Compiler hoisted the arrow functions inside that worklet (`box => box.x`) to module-level `_temp` functions, which the UI thread cannot call.
+
+Architectural: The kit's `build-dist.mjs` puts compiler-hoisted `_temp` functions back inline inside worklet callbacks (vvedantb/packages#226); `apps/mobile` pins `@vvedantb/native-ui@0.18.2-next-10a55be`, compiled again. `ExitInfoModule.kt` installs a default uncaught-exception handler that writes the Java stack to `filesDir/eva-java-crash.txt`, since Android keeps no trace for `REASON_CRASH`; `lastExit` returns it, and the dialog shows the exception line.
+## Web, backend and mobile: adopt more shared exports from @vvedantb packages
+
+Date: 2026-11-13
+
+WHY: More code was still copied into eva from the shared packages. One source means one place to fix and one behaviour across apps. This round bumps `@vvedantb/ui` to `^0.43.0`, `@vvedantb/server` to `^0.15.0` and `@vvedantb/config` to `^0.5.0`.
+
+Architectural: `apps/web` adopts the stale-deploy reload from `@vvedantb/ui`; the local `staleDeployReload.ts`, `isChunkLoadError.ts` and their tests are deleted, and `main.tsx` plus `DeploymentErrorFallback.tsx` use the package. In the backend, `convex/_shared/hmac.ts` re-exports `hmacSha256Hex` from `@vvedantb/server` (a shim keeps the Convex module registry stable), `convex/http.ts` uses the package `verifyGithubStyleSignature` for the GitHub webhook, and `convex/functions.ts` builds the six auth function wrappers from `createAuthFunctions`. On mobile, `plugins/withReleaseSigning.js` wraps the package `withReleaseSigning` (eva's signing marker kept, because `scripts/build-android-release.sh` greps for it), and `metro.config.js` uses `defineExpoMetroConfig`; all four resolver singletons are kept. The `@vvedantb/native-ui` git pin is unchanged. Not adopted: the Convex admin API client (the JWT-authed runAsUser stack must stay, and listTables output differs); the shared oxlint plugin (the package `no-source-text-in-tests` widens the test-file match, and the other rules drop eva's curated CLAUDE.md messages).
+
 ## Phone: native crashes show on the next launch too
 
 Date: 2026-11-13
@@ -7,6 +69,14 @@ Date: 2026-11-13
 WHY: The Sessions/Projects tab crash is native: it closes the app before JavaScript can save anything (0.1.56's JS crash report never showed). Android 11+ keeps why the last process ended, with the tombstone for a native crash.
 
 Architectural: Local Expo module `apps/mobile/modules/exit-info` (`ExitInfoModule.kt`, autolinked) returns the last `ApplicationExitInfo`: reason, time, description and the trace (ANR text, or the printable parts of a native tombstone: signal, abort message, libraries, functions; 6 KB max). `loadLastCrash` shows a crash, native crash or ANR newer than the last one shown (`eva.lastExitSeen`) in the same "Eva closed after an error" dialog, with Copy details.
+
+## Web and backend: adopt shared pieces from @vvedantb packages
+
+Date: 2026-11-13
+
+WHY: Several components and helpers were copied into eva from the shared packages. One source means one place to fix and one behaviour across apps.
+
+Architectural: `apps/web` moves `@vvedantb/server` from `^0.10.0` to `^0.14.0`, so web and backend share one installed copy. The local `ConfettiBurst` is deleted; `PrMergeConfetti` imports `ConfettiBurst` from `@vvedantb/ui` (the package adds an optional `colors` prop; the rest is the same). `SettingsPage` now wraps the kit `SettingsPage`, giving it eva's `PageWrapper` as the `layout`. In the backend, `_auth/currentUser.ts` builds `userAuth` with `createClerkUserAuth<DataModel>()`, and `getCurrentUserId`, `requireCurrentUserId` and `auth.ts`'s `getUserByClerkId` delegate to it; `userAuth` stays in the leaf `currentUser.ts` to keep the module-cycle workaround. `ensureUserExists` is unchanged: the package `ensureUser` has no verified-email rebind. `textGen.ts` uses `FLEX_GATEWAY_PROVIDER_OPTIONS` from `@vvedantb/server/ai` for both title calls.
 
 ## Web: the `scrollbar` utility comes from @vvedantb/ui
 

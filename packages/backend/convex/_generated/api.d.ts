@@ -417,6 +417,7 @@ import type * as chatUi from "../chatUi.js";
 import type * as chats from "../chats.js";
 import type * as composerPredictionContext from "../composerPredictionContext.js";
 import type * as connectedAccounts from "../connectedAccounts.js";
+import type * as crashReports from "../crashReports.js";
 import type * as cronManager from "../cronManager.js";
 import type * as crons from "../crons.js";
 import type * as dataMigrations from "../dataMigrations.js";
@@ -998,6 +999,7 @@ declare const fullApi: ApiFromModules<{
   chats: typeof chats;
   composerPredictionContext: typeof composerPredictionContext;
   connectedAccounts: typeof connectedAccounts;
+  crashReports: typeof crashReports;
   cronManager: typeof cronManager;
   crons: typeof crons;
   dataMigrations: typeof dataMigrations;

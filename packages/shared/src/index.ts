@@ -371,3 +371,15 @@ export {
   transcriptLiveArgs,
   transcriptTailArgs,
 } from "./chatTranscript";
+export { placeChatUiPanels, type PanelPlacement, type PlaceablePanel, type PlacementMessage } from "./chatUiPanelPlacement";
+export {
+  attachmentFileKind,
+  filenameExtension,
+  isImageContentType,
+  labelForAttachment,
+  messageAttachments,
+  normalizeContentType,
+  splitAgentMedia,
+  type AttachmentFileKind,
+  type ResolvedMediaEntry,
+} from "./attachmentLabels";

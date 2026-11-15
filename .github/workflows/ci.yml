@@ -37,9 +37,28 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
+
+      # The pnpm store, with a fallback key: after a lockfile change the last
+      # store is restored and only the changed packages are downloaded.
+      - name: Find the pnpm store
+        id: pnpm-store
+        shell: bash
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - name: Restore the pnpm store
+        id: pnpm-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-store-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-store-${{ runner.os }}-${{ runner.arch }}-
 
       - run: pnpm install --frozen-lockfile
+      # A store restored from the fallback key still holds packages the new
+      # lockfile dropped: remove them before the store is saved.
+      - name: Prune the pnpm store
+        if: steps.pnpm-cache.outputs.cache-hit != 'true'
+        run: pnpm store prune
 
       # Every step below runs even after an earlier one fails, so one push
       # reports every problem instead of one per round trip.

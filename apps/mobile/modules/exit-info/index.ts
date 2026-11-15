@@ -12,15 +12,18 @@ const exitSchema = z.object({
 });
 export type LastExit = z.infer<typeof exitSchema>;
 
-// zod wraps `lastExit` and checks what it resolves to.
-const nativeSchema = z.object({ lastExit: z.function().args().returns(z.promise(exitSchema.nullable())) });
+// The native module: `lastExit` is a function; what it resolves to is parsed below.
+const nativeSchema = z.object({
+  lastExit: z.custom<() => Promise<unknown>>((value) => typeof value === "function"),
+});
 
 /** Never throws: a missing module or an unexpected shape is null. */
 export async function lastExit(): Promise<LastExit | null> {
   const parsed = nativeSchema.safeParse(requireOptionalNativeModule("ExitInfo"));
   if (!parsed.success) return null;
   try {
-    return await parsed.data.lastExit();
+    const exit = exitSchema.nullable().safeParse(await parsed.data.lastExit());
+    return exit.success ? exit.data : null;
   } catch {
     return null;
   }

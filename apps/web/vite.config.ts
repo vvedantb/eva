@@ -176,6 +176,7 @@ export default defineConfig({
       "@vvedantb/ui > cmdk",
       "@vvedantb/ui > dayjs",
       "@vvedantb/ui > dayjs/plugin/relativeTime",
+      "@vvedantb/ui > dayjs/plugin/relativeTime.js",
       "@vvedantb/ui > embla-carousel-react",
       "@vvedantb/ui > media-chrome/react",
       "@vvedantb/ui > motion/react",

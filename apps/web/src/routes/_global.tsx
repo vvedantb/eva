@@ -7,7 +7,10 @@ import {
 import { isGlobalSettingsPath } from "@/lib/components/sidebar/homePaths";
 import { SessionChromeTabsBar } from "@/lib/components/sidebar/session-tabs/SessionChromeTabsBar";
 import { useChromeSessionTabsActive } from "@/lib/components/sidebar/session-tabs/useChromeSessionTabs";
-import { useSidebarContentOffset } from "@/lib/components/sidebar/useSidebarContentOffset";
+import {
+  SHELL_DOCUMENT_ROUTE_CLASS,
+  SHELL_VIEWPORT_ROUTE_CLASS,
+} from "@/lib/components/sidebar/shellLayout";
 import { cn } from "@eva/ui";
 
 export const Route = createFileRoute("/_global")({
@@ -22,7 +25,6 @@ export const Route = createFileRoute("/_global")({
 
 function GlobalMainContent() {
   const { pathname } = useLocation();
-  const contentOffset = useSidebarContentOffset();
   const isSessionsLanding =
     pathname === "/sessions" || pathname === "/sessions/";
   const chromeSessionTabs = useChromeSessionTabsActive(pathname);
@@ -42,8 +44,9 @@ function GlobalMainContent() {
         "relative flex flex-col",
         // Ave's chat is a virtualized session surface like the inbox: both need
         // a viewport-clamped shell, not a content-sized scrolling column.
-        isInbox || isAvePath ? "h-dvh overflow-hidden" : "min-h-dvh",
-        contentOffset,
+        isInbox || isAvePath
+          ? SHELL_VIEWPORT_ROUTE_CLASS
+          : SHELL_DOCUMENT_ROUTE_CLASS,
       )}
     >
       <div

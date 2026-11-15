@@ -7,6 +7,8 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import java.io.File
+import kotlin.math.abs
 
 /**
  * Why this app's last process ended (Android 11+ `ApplicationExitInfo`). A
@@ -18,6 +20,8 @@ class ExitInfoModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("ExitInfo")
 
+    OnCreate { installJavaCrashWriter() }
+
     AsyncFunction("lastExit") {
       val context = appContext.reactContext ?: return@AsyncFunction null
       if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return@AsyncFunction null
@@ -28,9 +32,35 @@ class ExitInfoModule : Module() {
         "reason" to reasonName(info.reason),
         "timestamp" to info.timestamp.toDouble(),
         "description" to (info.description ?: ""),
-        "trace" to readTrace(info),
+        "trace" to if (info.reason == ApplicationExitInfo.REASON_CRASH) readJavaCrash(context, info.timestamp) else readTrace(info),
       )
     }
+  }
+
+  /**
+   * Android keeps no trace for a Java crash (`REASON_CRASH`), so write the
+   * uncaught exception to a file, then let the previous handler close the app.
+   */
+  private fun installJavaCrashWriter() {
+    val file = javaCrashFile(appContext.reactContext ?: return)
+    val previous = Thread.getDefaultUncaughtExceptionHandler()
+    Thread.setDefaultUncaughtExceptionHandler { thread, error ->
+      try {
+        file.writeText("thread: ${thread.name}\n${error.stackTraceToString().take(8000)}")
+      } catch (e: Exception) {
+        // A crash writer must never throw.
+      }
+      previous?.uncaughtException(thread, error)
+    }
+  }
+
+  private fun javaCrashFile(context: Context) = File(context.applicationContext.filesDir, "eva-java-crash.txt")
+
+  /** The written stack, if it is from this crash (within a minute of Android's record). */
+  private fun readJavaCrash(context: Context, exitAt: Long): String {
+    val file = javaCrashFile(context)
+    if (!file.exists() || abs(file.lastModified() - exitAt) > 60_000) return ""
+    return try { file.readText() } catch (e: Exception) { "" }
   }
 
   @RequiresApi(Build.VERSION_CODES.R)
