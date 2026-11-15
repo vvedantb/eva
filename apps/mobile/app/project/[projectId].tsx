@@ -16,6 +16,7 @@ import { ProjectOverview } from "@/projects/ProjectOverview";
 import { ProjectPlan } from "@/projects/ProjectPlan";
 import { ProjectTasks } from "@/projects/ProjectTasks";
 import { useProjectActions } from "@/projects/useProjectActions";
+import { useProjectGitActions } from "@/sandbox/OwnedSandboxActions";
 import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { useScheme } from "@/ui/theme";
 
@@ -33,9 +34,10 @@ const SANDBOX_PHASES = ["in_progress", "business_review", "code_review"];
  * "Chat" in the bottom bar opens it, in the phases the web shows the
  * Sandbox tab, with the web unread dot. "Build" (the web "Build Project",
  * with its "Run Eva" confirm) or, while a build runs, "Stop Build" (with
- * the web stop confirm) sits beside it in thumb reach. Not here from the
- * web: the sandbox preview, files and review panes, sandbox wake and sleep,
- * commit and push, scheduled builds, Create PR and Resolve Conflicts.
+ * the web stop confirm) sits beside it in thumb reach. The "…" sheet leads
+ * with the web's sandbox and git actions (`useProjectGitActions`). Not here
+ * from the web: the sandbox preview, files and review panes, and scheduled
+ * builds.
  */
 export default function ProjectScreen() {
   const router = useRouter();
@@ -50,7 +52,9 @@ export default function ProjectScreen() {
   const project = useQuery(api.projects.get, listed ? { id: listed._id } : "skip");
   const users = useQuery(api.users.listAll, {});
   const tab: Tab = params.tab === "overview" ? "overview" : "work";
-  const actions = useProjectActions({ repo: repo ?? EMPTY_REPO, users, onDeleted: leave });
+  // The web page's sandbox and git actions, leading the "…" sheet.
+  const git = useProjectGitActions(project);
+  const actions = useProjectActions({ repo: repo ?? EMPTY_REPO, users, onDeleted: leave, extraRows: git.rows });
 
   const loading = repos === undefined || (repo !== undefined && (projects === undefined || (listed !== undefined && project === undefined)));
   if (loading || !repo || !project) {
@@ -97,6 +101,7 @@ export default function ProjectScreen() {
       )}
       {planning ? null : <ProjectDock project={project} />}
       {actions.dialogs}
+      {git.dialogs}
     </Screen>
   );
 }

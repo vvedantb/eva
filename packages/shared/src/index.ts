@@ -394,3 +394,11 @@ export {
   type SandboxStatus,
 } from "./sandboxStatus";
 export { stripErrorPrefix, turnErrorTitle } from "./turnError";
+export {
+  PREVIEW_SANDBOX_ALLOWED_STATUSES,
+  projectCanCreatePr,
+  projectCanResolveConflicts,
+  taskCanCreatePr,
+  taskCanResolveConflicts,
+  taskCanStartSandbox,
+} from "./ownedSandboxRules";
