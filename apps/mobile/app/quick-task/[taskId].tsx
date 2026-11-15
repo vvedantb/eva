@@ -24,6 +24,7 @@ import {
 } from "@eva/shared/taskDetail";
 import {
   IconChecklist,
+  IconCalendarClock,
   IconClock,
   IconDots,
   IconFolder,
@@ -58,6 +59,7 @@ import { MentionMenu } from "@/chat/MentionMenu";
 import { TypingIndicator } from "@/chat/TypingIndicator";
 import { useDraftSync, type DraftTarget } from "@/chat/useDraftSync";
 import { useMentionComposer } from "@/chat/useMentionComposer";
+import { ScheduleSheet } from "@/ui/ScheduleSheet";
 import { useTypingPresence } from "@/chat/useTypingPresence";
 import { UserAttachments } from "@/chat/media/UserAttachments";
 import {
@@ -188,6 +190,16 @@ function TaskOverview({
   };
   const creator = users?.find((user) => user._id === task.createdBy);
   const scheduledAt = taskScheduledAt(task);
+  // The web `SchedulePopover`: a first run at a time, changed or removed until it starts.
+  const [scheduling, setScheduling] = useState(false);
+  const schedule = useMutation(api.agentTasks.scheduleExecution);
+  const updateSchedule = useMutation(api.agentTasks.updateScheduledExecution);
+  const cancelSchedule = useMutation(api.agentTasks.cancelScheduledExecution);
+  const pendingSchedule = task.status === "todo" ? scheduledAt : undefined;
+  const writeSchedule = (write: Promise<unknown>, done: string, failure: string) => {
+    setScheduling(false);
+    write.then(() => toast.success(done)).catch(() => toast.error(failure));
+  };
   const comments = useCommentMutations(task._id);
   const [commentMode, setCommentMode] = useState<CommentMode>({ kind: "new" });
   const scroll = useRef<KeyboardAwareScrollViewRef>(null);
@@ -228,8 +240,13 @@ function TaskOverview({
           onSave={(title) => update({ title }, "Couldn't rename the task")}
         />
         {scheduledAt ? (
-          <View
-            className="mt-2 flex-row items-center gap-1.5 self-start rounded-full px-2.5 py-1"
+          <Pressable
+            accessibilityRole={task.status === "todo" ? "button" : "text"}
+            accessibilityHint={task.status === "todo" ? "Changes or removes the schedule" : undefined}
+            disabled={task.status !== "todo"}
+            onPress={() => setScheduling(true)}
+            hitSlop={{ top: 8, bottom: 8 }}
+            className="mt-2 flex-row items-center gap-1.5 self-start rounded-full px-2.5 py-1 active:opacity-70"
             style={{ backgroundColor: withAlpha(theme.primary, 0.1) }}
           >
             <IconClock size={12} color={theme.primary} />
@@ -239,7 +256,7 @@ function TaskOverview({
             >
               {`${task.status === "todo" ? "Scheduled for" : "Was scheduled for"} ${dayjs(scheduledAt).format("MMM D, h:mm A")}`}
             </Text>
-          </View>
+          </Pressable>
         ) : null}
 
         <View className="mt-4 gap-2">
@@ -315,7 +332,20 @@ function TaskOverview({
           ) : null}
         </View>
       </KeyboardAwareScrollView>
-      <TaskDock task={task} runs={runs} hasActiveRun={hasActiveRun} />
+      <ScheduleSheet
+        open={scheduling}
+        onOpenChange={setScheduling}
+        title="Schedule run"
+        scheduledAt={pendingSchedule}
+        onSchedule={(at) =>
+          pendingSchedule === undefined
+            ? writeSchedule(schedule({ id: task._id, scheduledAt: at }), "Task scheduled", "Couldn't schedule task")
+            : writeSchedule(updateSchedule({ id: task._id, scheduledAt: at }), "Schedule updated", "Couldn't update schedule")
+        }
+        onRemove={() => writeSchedule(cancelSchedule({ id: task._id }), "Schedule removed", "Couldn't remove schedule")}
+      />
+      <TaskDock
+        onSchedule={() => setScheduling(true)} task={task} runs={runs} hasActiveRun={hasActiveRun} />
 
       {actions.dialogs}
       {git.dialogs}
@@ -810,7 +840,10 @@ function TaskDock({
   task,
   runs,
   hasActiveRun,
+  onSchedule,
 }: {
+  /** The web Run button's schedule half: pick a time for the run instead. */
+  onSchedule: () => void;
   task: QuickTask;
   runs: FunctionReturnType<typeof api.agentRuns.listByTask> | undefined;
   hasActiveRun: boolean;
@@ -875,6 +908,18 @@ function TaskDock({
             Run Eva
           </Button>
         </View>
+      ) : null}
+      {canRun && task.status === "todo" ? (
+        // The web split button's schedule half, as a 44 square beside Run Eva.
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Schedule run"
+          onPress={onSchedule}
+          className="h-11 w-11 items-center justify-center rounded-xl active:opacity-70"
+          style={{ backgroundColor: theme.secondary }}
+        >
+          <IconCalendarClock size={18} color={theme.secondaryForeground} />
+        </Pressable>
       ) : null}
     </View>
   );
