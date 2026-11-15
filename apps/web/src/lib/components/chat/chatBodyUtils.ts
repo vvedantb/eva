@@ -5,7 +5,6 @@ import type { ActivityStep } from "@vvedantb/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import {
   collectChangedFiles,
-  isOtherUserChatMessage,
   isSandboxPausedAlert,
   otherUserIdsInChat,
   stripReviewCommentBlocks,
@@ -83,33 +82,6 @@ export function findHandoffBoundaryIds(
     previousProvider = provider;
   }
   return boundaries;
-}
-
-/**
- * Messages in the "new since you last read" block, in thread order. The first
- * id places the NEW divider; the length is the pill count. Uses `finishedAt`
- * when set (a reply counts from when it finished), else `timestamp` (a reply
- * still streaming). Only agent replies and teammate turns count: your own
- * messages and system alerts never do.
- */
-export function findNewMessageIds(
-  messages: ReadonlyArray<
-    Pick<ChatBodyMessage, "_id" | "timestamp" | "finishedAt"> &
-      ChatUserAttribution
-  >,
-  newSinceAt: number | undefined,
-  currentUserId: string | undefined,
-): string[] {
-  if (newSinceAt === undefined) return [];
-  return messages
-    .filter(
-      (message) =>
-        !message.isSystemAlert &&
-        (message.finishedAt ?? message.timestamp) > newSinceAt &&
-        (message.role === "assistant" ||
-          isOtherUserChatMessage(message, currentUserId)),
-    )
-    .map((message) => message._id);
 }
 
 export type ChatBodyQueuedMessage = Doc<"queuedMessages">;

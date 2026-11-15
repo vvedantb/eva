@@ -29,3 +29,22 @@ export function DayDivider({ timestamp }: { timestamp: number }) {
     </View>
   );
 }
+
+/**
+ * The web `ChatNewDivider`: where unseen replies start. Unlike the day line,
+ * the rules stay, so it reads as a boundary ("everything below is new"): two
+ * hairlines in the primary colour at 30% around "NEW" in primary, 11 medium,
+ * uppercase and slightly tracked.
+ */
+export function NewDivider() {
+  const primary = EVA_THEME[useScheme()].primary;
+  return (
+    <View accessibilityRole="text" accessibilityLabel="New messages" className="flex-row items-center gap-3 py-1">
+      <View className="h-px flex-1" style={{ backgroundColor: withAlpha(primary, 0.3) }} />
+      <Text className="font-instrument-sans-medium" style={[META_TEXT_STYLE, { color: primary, fontWeight: "500", letterSpacing: 0.4 }]}>
+        NEW
+      </Text>
+      <View className="h-px flex-1" style={{ backgroundColor: withAlpha(primary, 0.3) }} />
+    </View>
+  );
+}

@@ -8,6 +8,7 @@ import {
   buildChatJumpRailTicks,
   tokenTransition,
 } from "@vvedantb/ui";
+import { findNewMessageIds } from "@eva/shared/chatReadState";
 import { GenerativeUiPanel } from "@vvedantb/ui/generative-ui";
 import {
   ChatEmptyState,
@@ -94,7 +95,6 @@ import type { ChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
 import {
   buildMessageHistory,
   buildPrecedingUserTurns,
-  findNewMessageIds,
   type ChatParentId,
   findHandoffBoundaryIds,
   findLastUserMessageIndex,

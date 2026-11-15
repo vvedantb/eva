@@ -348,6 +348,10 @@ export function SessionListRow({
         >
           {displayTitle(session.title)}
         </Text>
+        {/* The web `UnreadDot`: a reply you have not read, while Eva is not working. */}
+        {session.hasUnread && !session.isExecuting ? (
+          <View accessibilityLabel="Unread" className="size-1.5 rounded-full" style={{ backgroundColor: EVA_THEME[scheme].primary }} />
+        ) : null}
         {session.prUrl ? <PrIcon state={session.prState} scheme={scheme} /> : null}
         <Text
           className="font-instrument-sans text-xs"
