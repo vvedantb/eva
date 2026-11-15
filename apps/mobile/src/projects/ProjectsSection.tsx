@@ -10,7 +10,6 @@ import {
   projectFilterChips,
   toggleHiddenProjectPhase,
   type ProjectListFilters,
-  type ProjectPhase,
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconFilter, IconLayoutKanban, IconPlus, IconSettings, IconSortDescending, IconX } from "@tabler/icons-react-native";
@@ -30,9 +29,13 @@ import { useProjectActions } from "@/projects/useProjectActions";
 import { CardGap, FoldFooter, FoldHeader } from "@/ui/FoldHeader";
 import { FilterChipsBar } from "@/ui/FilterChipsBar";
 import { MenuDivider, MenuSheet, SubmenuRow } from "@/ui/MenuSheet";
+import { persistedIdSet } from "@/storage/persistedStore";
 import { RepoPicker, useRepoParam } from "@/ui/RepoPicker";
 import { useScheme } from "@/ui/theme";
 import { LIST_WINDOW } from "@/ui/listWindow";
+
+/** The phase groups folded away from their default (open with projects), kept on the device. */
+const toggledProjectPhases = persistedIdSet("projectPhasesToggled");
 
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 
@@ -85,7 +88,7 @@ function ProjectList({ repo }: { repo: Repo }) {
   const users = useQuery(api.users.listAll, {});
   const [filters, setFilters] = useState<ProjectListFilters>(PROJECT_LIST_DEFAULTS);
   // Phases the user folded or unfolded: as the web, a phase starts open when it has projects.
-  const [toggled, setToggled] = useState<ReadonlySet<ProjectPhase>>(new Set());
+  const [toggled, toggle] = toggledProjectPhases.useSet("all");
   const actions = useProjectActions({ repo, users });
   const largerText = useLargerText();
   const insets = useSafeAreaInsets();
@@ -93,12 +96,6 @@ function ProjectList({ repo }: { repo: Repo }) {
   if (projects === undefined) return <ProjectPlaceholders />;
   const changeFilters = (patch: Partial<ProjectListFilters>) => setFilters({ ...filters, ...patch });
   const shown = filterAndSortProjects(projects, filters);
-  const toggle = (phase: ProjectPhase) => {
-    const next = new Set(toggled);
-    if (next.has(phase)) next.delete(phase);
-    else next.add(phase);
-    setToggled(next);
-  };
 
   if (projects.length === 0) {
     return (

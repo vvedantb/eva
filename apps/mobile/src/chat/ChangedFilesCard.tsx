@@ -9,9 +9,13 @@ import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconChevronDown, IconFileText } from "@tabler/icons-react-native";
 import { MONO_FONT } from "@vvedantb/native-ui/ai";
 import { withAlpha } from "@vvedantb/native-ui/theme";
-import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { z } from "zod";
+import { jsonParser, persistedStore } from "@/storage/persistedStore";
 import { useScheme } from "@/ui/theme";
+
+/** Each reply's open or closed changed-files card, once the reader picked, kept on the device. */
+const expandedByMessage = persistedStore<boolean | null>("changedFilesExpanded", null, jsonParser(z.boolean().nullable()));
 
 /** `text-sm` (14 / 20): every label here is tappable, so the phone floor, not the web `text-xs`. */
 const LABEL = { fontSize: 14, lineHeight: 20 } as const;
@@ -32,18 +36,22 @@ const HEADER_SLOP = { top: 20, bottom: 8 };
  * opens the first.
  */
 export function ChangedFilesCard({
+  messageId,
   files,
   isLatestAssistantTurn,
   onOpenDiff,
 }: {
+  /** The reply it belongs to: the open or closed choice is kept per reply, as the web. */
+  messageId: string;
   files: ChangedFile[];
   isLatestAssistantTurn: boolean;
   /** Open the diff screen at a file (its sandbox path), or the first file. */
   onOpenDiff: (path: string | undefined) => void;
 }) {
   const scheme = useScheme();
-  // The reader's toggle; until then the web default for this turn.
-  const [expanded, setExpanded] = useState<boolean | undefined>(undefined);
+  // The reader's toggle, kept on the device (the web `chat-changed-files`); until then the web default for this turn.
+  const expanded = expandedByMessage.useValue(messageId);
+  const setExpanded = (next: boolean) => expandedByMessage.set(messageId, next);
   if (files.length === 0) return null;
 
   const isExpanded = expanded ?? shouldAutoExpandChangedFiles(files, isLatestAssistantTurn);

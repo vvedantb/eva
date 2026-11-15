@@ -24,7 +24,7 @@ import { useSimpleView } from "@/chat/ComposerFooter";
 import { ModelChip } from "@/chat/ModelChip";
 import { DraftsMenu, type QuickTaskDraft } from "@/quickTasks/DraftsMenu";
 import { OptionPillFrame, PriorityChip, ProjectChip, ReviewerChip, TagsChip } from "@/quickTasks/OptionChips";
-import { RepoPicker } from "@/ui/RepoPicker";
+import { rememberRepo, RepoPicker, useLastRepoId } from "@/ui/RepoPicker";
 import { useScheme } from "@/ui/theme";
 
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
@@ -57,7 +57,9 @@ export default function NewQuickTaskScreen() {
   const params = useLocalSearchParams<{ repoId?: string; projectId?: string; draftId?: string }>();
   const leave = () => goBackOrReplace(router, "/sessions?section=quick-tasks");
   const repos = useQuery(api.githubRepos.list, {});
-  const first = repos?.find((candidate) => candidate._id === params.repoId) ?? repos?.[0];
+  const lastRepoId = useLastRepoId();
+  const first =
+    repos?.find((candidate) => candidate._id === params.repoId) ?? repos?.find((candidate) => candidate._id === lastRepoId) ?? repos?.[0];
   // The linked draft, once the repo's drafts are in; a removed one opens a blank form.
   const linkedDrafts = useQuery(api.agentTasks.listDrafts, params.draftId && first ? { repoId: first._id } : "skip");
   const initialDraft = linkedDrafts === undefined ? undefined : visibleDrafts(linkedDrafts).find((draft) => draft._id === params.draftId);
@@ -172,6 +174,7 @@ function NewQuickTaskForm({
 
   const changeRepo = (repoId: Id<"githubRepos">) => {
     setPicked(repoId);
+    rememberRepo(repoId);
     // A project belongs to one repo, and so does a draft: the next save starts a new one there.
     setProjectId(undefined);
     setActiveDraftId(null);

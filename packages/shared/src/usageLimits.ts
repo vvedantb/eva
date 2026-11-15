@@ -1,5 +1,8 @@
-import type { FunctionReturnType } from "convex/server";
 import { getAIModelProvider, type api, type Id } from "@eva/backend";
+import type { FunctionReturnType } from "convex/server";
+
+// Plan usage (Claude rate-limit windows) for every chat surface, web and phone:
+// which reading a chip shows, its tone, and the copy around it.
 
 /**
  * One credential the viewer can run on, with its latest reading or `null` when
@@ -84,20 +87,6 @@ const USAGE_READING_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 export type UsageTone = "neutral" | "warning" | "danger";
 
 const TONE_ORDER: UsageTone[] = ["neutral", "warning", "danger"];
-
-/** Text colour for a tone. One place, so chip and rows cannot disagree. */
-export const USAGE_TONE_TEXT_CLASS: Record<UsageTone, string> = {
-  neutral: "text-muted-foreground",
-  warning: "text-warning",
-  danger: "text-destructive",
-};
-
-/** Bar fill for a tone. `primary` is user-themed, so it is never hardcoded. */
-export const USAGE_TONE_FILL_CLASS: Record<UsageTone, string> = {
-  neutral: "bg-primary",
-  warning: "bg-warning",
-  danger: "bg-destructive",
-};
 
 export function toneForUtilization(utilization: number): UsageTone {
   if (utilization >= DANGER_UTILIZATION) return "danger";
@@ -405,4 +394,30 @@ export function emptyAccountUsageCopy(
       // discriminant — either way we never had the full picture.
       return "Plan usage for this account hasn't been fully reported yet.";
   }
+}
+
+/** One account's outcome from `usageLimitsActions.refreshAll`. */
+export type UsageRefreshOutcome = FunctionReturnType<typeof api.usageLimitsActions.refreshAll>["results"][number];
+
+/**
+ * Why a refresh came back with nothing, in the user's terms. Each one names a
+ * different next move, which is the only reason they are distinguished at all.
+ */
+const REFRESH_FAILURE_COPY: Record<string, string> = {
+  "no-token": "This account has no Claude OAuth token connected.",
+  unauthorized: "Claude rejected the token. Reconnect the account in Settings.",
+  unavailable: "Claude isn't reporting plan rate limits for this account.",
+  network: "Couldn't reach Claude. Try again.",
+  "rate-limited": "Claude rate-limited the usage lookup. Try again in a moment.",
+};
+
+export const USAGE_REFRESH_FAILED = "Couldn't refresh plan usage.";
+
+/**
+ * The toast for one account's failed refresh, named per account (several
+ * credentials are read at once), or null when it succeeded.
+ */
+export function usageRefreshFailure(result: UsageRefreshOutcome): string | null {
+  if (result.ok) return null;
+  return `${result.accountLabel}: ${REFRESH_FAILURE_COPY[result.reason ?? ""] ?? USAGE_REFRESH_FAILED}`;
 }

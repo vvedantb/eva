@@ -20,7 +20,7 @@ import {
   ConfirmDialog,
 } from "@vvedantb/ui";
 import type { ModelAccount } from "@vvedantb/ui";
-import { formatResetDistanceMs } from "@/lib/components/usage-limits/_utils";
+import { formatResetDistanceMs } from "@eva/shared/usageLimits";
 import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
 import { resolveCredentialSourceLabel } from "@/lib/utils/credentialSourceLabel";
 import { catchMutationError } from "@/lib/utils/mutationToast";

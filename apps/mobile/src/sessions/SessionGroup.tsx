@@ -20,10 +20,14 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { SessionActionTarget } from "@/sessions/useSessionActions";
+import { persistedIdSet } from "@/storage/persistedStore";
 import { displayTitle, timeAgo } from "@/ui/format";
 import { RepoLogo } from "@/ui/RepoLogo";
 import { RowStatus } from "@/ui/RowStatus";
 import { type Scheme, useScheme, XS_TRACKING } from "@/ui/theme";
+
+/** The session groups folded closed (a repo or a linked group), kept on the device. */
+const closedSessionGroups = persistedIdSet("sessionGroupsClosed");
 
 /** One row of the web `sessions.list` / `sessions.listArchived`. */
 export type SessionListItem = FunctionReturnType<typeof api.sessions.list>[number];
@@ -98,7 +102,8 @@ function entryRows(entry: SessionEntry): SessionRow[] {
  * this list mode is left out (the web draws its empty copy in the group).
  */
 export function useSessionGroups(entries: SessionEntry[] | undefined) {
-  const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
+  // Kept on the device, as the web's `sessions-app-groups-open` and `linked-session-groups-open`.
+  const [closed, toggleClosed] = closedSessionGroups.useSet("all");
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const sections: SessionGroupSection[] = (entries ?? []).flatMap((entry) => {
     const rows = entryRows(entry);
@@ -125,7 +130,7 @@ export function useSessionGroups(entries: SessionEntry[] | undefined) {
   };
   return {
     sections,
-    toggleOpen: (key: string) => setClosed(flip(closed, key)),
+    toggleOpen: toggleClosed,
     toggleExpanded: (key: string) => setExpanded(flip(expanded, key)),
   };
 }

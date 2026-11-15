@@ -28,9 +28,13 @@ import { QuickTaskRow } from "@/quickTasks/QuickTaskRow";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
 import { useQuickTaskActions } from "@/quickTasks/useQuickTaskActions";
 import { CardGap, FoldFooter, FoldHeader } from "@/ui/FoldHeader";
+import { persistedIdSet } from "@/storage/persistedStore";
 import { RepoPicker, useRepoParam } from "@/ui/RepoPicker";
 import { useScheme } from "@/ui/theme";
 import { LIST_WINDOW } from "@/ui/listWindow";
+
+/** The status groups folded closed (To do, Done…), kept on the device. */
+const closedQuickTaskStatuses = persistedIdSet("quickTaskStatusesClosed");
 
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 
@@ -89,7 +93,7 @@ function QuickTaskList({ repo }: { repo: Repo }) {
   const currentUserId = useQuery(api.auth.me, {});
   const startExecution = useMutation(api.agentTasks.startExecution);
   const [filters, setFilters] = useState<QuickTaskListFilters>(QUICK_TASK_LIST_DEFAULTS);
-  const [closed, setClosed] = useState<ReadonlySet<DisplayTaskStatus>>(new Set());
+  const [closed, toggle] = closedQuickTaskStatuses.useSet("all");
   const [runAllOpen, setRunAllOpen] = useState(false);
   const [runningAll, setRunningAll] = useState(false);
   const actions = useQuickTaskActions({ repo, users, projects });
@@ -106,12 +110,6 @@ function QuickTaskList({ repo }: { repo: Repo }) {
   const errors = new Set<string>(errorTaskIds ?? []);
   const todoCount = shown.filter((task) => task.status === "todo").length;
   const plan = runAllPlan(shown, currentUserId);
-  const toggle = (status: DisplayTaskStatus) => {
-    const next = new Set(closed);
-    if (next.has(status)) next.delete(status);
-    else next.add(status);
-    setClosed(next);
-  };
   const runAll = async () => {
     setRunningAll(true);
     const failed = await startAll(plan.owned, (task) => startExecution({ id: task._id }));

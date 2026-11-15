@@ -6,10 +6,12 @@
   "exports": {
     ".": "./src/index.ts",
     "./activityTrace": "./src/activityTrace.ts",
+    "./artifactBridge": "./src/artifactBridge.ts",
     "./agentTurnLimits": "./src/agentTurnLimits.ts",
     "./appTabSlug": "./src/appTabSlug.ts",
     "./chatFeedback": "./src/chatFeedback.ts",
     "./chatLog": "./src/chatLog.ts",
+    "./contextUsage": "./src/contextUsage.ts",
     "./dates": "./src/utils/dates.ts",
     "./dayLabel": "./src/utils/dayLabel.ts",
     "./duration": "./src/utils/duration.ts",
@@ -30,7 +32,10 @@
     "./resultEvent": "./src/resultEvent.ts",
     "./safeUrl": "./src/safeUrl.ts",
     "./storageUpload": "./src/storageUpload.ts",
+    "./taskDetail": "./src/taskDetail.ts",
+    "./typingPresence": "./src/typingPresence.ts",
     "./uiTaskPrompt": "./src/uiTaskPrompt.ts",
+    "./usageLimits": "./src/usageLimits.ts",
     "./user-initials": "./src/components/user-initials.tsx"
   },
   "peerDependencies": {
@@ -49,7 +54,7 @@
     "@json-render/core": "0.21.0",
     "@json-render/react": "0.21.0",
     "@types/react": "^19.0.0",
-    "@vvedantb/ui": "0.50.1",
+    "@vvedantb/ui": "0.50.2",
     "tailwind-merge": "^2.6.1",
     "zod": "4.6.7"
   }

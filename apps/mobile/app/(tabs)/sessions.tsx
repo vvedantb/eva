@@ -37,7 +37,7 @@ import { SESSION_ACTION_ITEMS, useSessionActions } from "@/sessions/useSessionAc
 import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme } from "@/ui/theme";
-import { sectionIndex } from "@/ui/sectionIndex";
+import { lastTabSection, sectionIndex } from "@/ui/sectionIndex";
 import { LIST_WINDOW } from "@/ui/listWindow";
 
 type SessionTab = "active" | "archived";
@@ -71,7 +71,12 @@ export default function SessionsScreen() {
   const { section: sectionParam } = useLocalSearchParams<{ section?: string }>();
   const simpleView = useSimpleView();
   const sections = visibleSections(simpleView);
-  const index = sectionIndex(sections, sectionParam);
+  const lastSection = lastTabSection.useValue("sessions");
+  const index = sectionIndex(sections, sectionParam ?? lastSection ?? undefined);
+  const showSection = (next: string | undefined) => {
+    if (next) lastTabSection.set("sessions", next);
+    router.setParams({ section: next });
+  };
   const section = sections[index] ?? { id: "sessions", label: "Sessions" };
   // Where the pages are, shared by the pager and the pill indicator.
   const progress = useSharedValue(index);
@@ -102,7 +107,7 @@ export default function SessionsScreen() {
         <PillTabs
           options={sections}
           value={section.id}
-          onChange={(next) => router.setParams({ section: next })}
+          onChange={showSection}
           progress={progress}
         />
       </View>
@@ -110,7 +115,7 @@ export default function SessionsScreen() {
         index={index}
         count={sections.length}
         progress={progress}
-        onIndexChange={(next) => router.setParams({ section: sections[next]?.id })}
+        onIndexChange={(next) => showSection(sections[next]?.id)}
         renderPage={(page) => {
           const id = sections[page]?.id;
           return id === "reviews" ? <ReviewsSection /> : id === "quick-tasks" ? <QuickTasksSection /> : <SessionsSection />;

@@ -3,7 +3,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import { usePromptInputController } from "@vvedantb/ui";
 import { useDraftAutosave } from "@/lib/hooks/useDraftAutosave";
-import { decideDraftPull, rememberOwnSave } from "./chatDraftPull";
+import { decideDraftPull, rememberOwnSave } from "@eva/shared";
 import type { MentionTextareaHandle } from "@/lib/components/chat/MentionTextarea";
 import type { ChatDraftTarget } from "./useChatDraftSeed";
 

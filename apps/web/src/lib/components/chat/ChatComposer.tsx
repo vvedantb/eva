@@ -3,6 +3,7 @@ import {
   toast,
   usePromptInputController,
 } from "@vvedantb/ui";
+import { chatTypingRoom } from "@eva/shared/typingPresence";
 import type {
   ModelAccount,
   ModelOption,
@@ -398,7 +399,7 @@ export function ChatComposer({
       ) : (
         <PromptInputProvider initialInput={seed?.initialDisplay}>
           <ChatTypingLayer
-            roomId={`typing:chat:${conversationId}`}
+            roomId={chatTypingRoom(conversationId)}
             userId={currentUserId}
           />
           <ChatTypeToFocus mentionRef={mentionRef} />

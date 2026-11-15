@@ -11,7 +11,7 @@ import { ProjectsSection, useProjectRepo } from "@/projects/ProjectsSection";
 import { TodaySection, useShowsToday } from "@/today/TodaySection";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme } from "@/ui/theme";
-import { sectionIndex } from "@/ui/sectionIndex";
+import { lastTabSection, sectionIndex } from "@/ui/sectionIndex";
 
 type Section = "projects" | "docs" | "drafts" | "today";
 
@@ -43,7 +43,12 @@ export default function ProjectsScreen() {
   const { repo, openNew } = useProjectRepo();
   const showsToday = useShowsToday(repo?._id);
   const sections = visibleSections(showsToday);
-  const index = sectionIndex(sections, sectionParam);
+  const lastSection = lastTabSection.useValue("projects");
+  const index = sectionIndex(sections, sectionParam ?? lastSection ?? undefined);
+  const showSection = (next: string | undefined) => {
+    if (next) lastTabSection.set("projects", next);
+    router.setParams({ section: next });
+  };
   const section = sections[index] ?? { id: "projects", label: "Projects" };
   // Where the pages are, shared by the pager and the pill indicator.
   const progress = useSharedValue(index);
@@ -71,7 +76,7 @@ export default function ProjectsScreen() {
         <PillTabs
           options={sections}
           value={section.id}
-          onChange={(next) => router.setParams({ section: next })}
+          onChange={showSection}
           progress={progress}
         />
       </View>
@@ -79,7 +84,7 @@ export default function ProjectsScreen() {
         index={index}
         count={sections.length}
         progress={progress}
-        onIndexChange={(next) => router.setParams({ section: sections[next]?.id })}
+        onIndexChange={(next) => showSection(sections[next]?.id)}
         renderPage={(page) => {
           switch (sections[page]?.id) {
             case "docs":

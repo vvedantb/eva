@@ -30,11 +30,16 @@ import { withAlpha } from "@vvedantb/native-ui/theme";
 import { useQuery } from "convex/react";
 import { useState, type ComponentType, type ReactNode } from "react";
 import { Linking, Pressable, Text, View } from "react-native";
+import { z } from "zod";
+import { jsonParser, persistedStore } from "@/storage/persistedStore";
 import { ToneIcon } from "@/reviews/prAppearance";
 import { DescriptionEditSheet, LabelDot, PrMetaEditButton, usePrMetaEdit } from "@/reviews/PrMetaEdit";
 import { ReviewRecap } from "@/reviews/ReviewRecap";
 import { timeAgo } from "@/ui/format";
 import { type Scheme, useScheme, XS_TRACKING } from "@/ui/theme";
+
+/** The pull request comment order (the web `pr-summary-comment-order`), kept on the device. */
+const commentOrder = persistedStore<"newest" | "oldest">("prCommentOrder", "newest", jsonParser(z.enum(["newest", "oldest"])));
 
 /** What a first render carries, as the web: the recent remarks are the ones worth arriving for. */
 const COMMENT_PAGE = 10;
@@ -395,11 +400,12 @@ function Note({ scheme, boxed = false, children }: { scheme: Scheme; boxed?: boo
 
 /**
  * The web `SummaryComments`: people first, newest first by default, ten at a
- * time; bots folded into one group beneath them. The order toggle is not
- * remembered between visits, as the web keeps it in local storage.
+ * time; bots folded into one group beneath them. The order toggle is kept on
+ * the device, as the web keeps it in local storage.
  */
 function Comments({ overview, scheme }: { overview: PrOverview; scheme: Scheme }) {
-  const [order, setOrder] = useState<"newest" | "oldest">("newest");
+  const order = commentOrder.useValue("all");
+  const setOrder = (next: "newest" | "oldest") => commentOrder.set("all", next);
   const [shown, setShown] = useState(COMMENT_PAGE);
   const all = buildSummaryComments(overview);
   const { people, bots } = splitSummaryComments(all, order);
