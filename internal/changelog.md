@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: "someone is typing" in chats
+
+Date: 2026-11-15
+
+WHY: The web chat composer shows teammates typing; the phone chat did not.
+
+Architectural: The chat dock uses `useTypingPresence` (`src/chat/useTypingPresence.ts`, the react-native presence hook with the `@eva/shared/typingPresence` rules) in the web's room, `chatTypingRoom(parentId)` (the session chat; before a task or project chats, its own target). Each keystroke flags typing and a send stops it; `TypingIndicator` sits above the composer. The dock now mounts once `auth.me` is known, since a presence heartbeat with no user id is rejected.
+
 ## Phone: task comment drafts, "someone is typing" and the full emoji search
 
 Date: 2026-11-15
