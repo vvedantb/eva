@@ -319,6 +319,31 @@ export function WebPreviewPanel({
         parentId={toolCallParentId}
         iframeElement={iframeElement}
       />
+      <PreviewActionBar
+        iframeElement={iframeElement}
+        // Sketch brings its own toolbar to the same spot, with Close.
+        hidden={showPlaceholder || sketchMode}
+        selectElement={
+          onAnnotationSubmit
+            ? {
+                active: annotationMode,
+                onToggle: () => setAnnotationMode(!annotationMode),
+              }
+            : undefined
+        }
+        sketch={
+          canSketch
+            ? {
+                active: sketchMode,
+                onToggle: () => {
+                  setSketchMode(!sketchMode);
+                  // One tool at a time: both read pointer input on the page.
+                  setAnnotationMode(false);
+                },
+              }
+            : undefined
+        }
+      />
       {!showPlaceholder && viewport.mode !== "fill" ? (
         <PreviewDeviceToolbar
           viewport={viewport}
@@ -383,37 +408,12 @@ export function WebPreviewPanel({
               }
             />
           </PreviewViewportFrame>
-          {/* Sketch brings its own toolbar to the same spot, with Close. */}
           {sketchMode ? (
             <PreviewSketchLayer
               iframeElement={iframeElement}
               onClose={() => setSketchMode(false)}
             />
-          ) : (
-            <PreviewActionBar
-              iframeElement={iframeElement}
-              selectElement={
-                onAnnotationSubmit
-                  ? {
-                      active: annotationMode,
-                      onToggle: () => setAnnotationMode(!annotationMode),
-                    }
-                  : undefined
-              }
-              sketch={
-                canSketch
-                  ? {
-                      active: false,
-                      onToggle: () => {
-                        setSketchMode(true);
-                        // One tool at a time: both read pointer input on the page.
-                        setAnnotationMode(false);
-                      },
-                    }
-                  : undefined
-              }
-            />
-          )}
+          ) : null}
           {onAnnotationSubmit ? (
             <PreviewAnnotationLayer
               mode={annotationMode}

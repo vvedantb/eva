@@ -14,12 +14,10 @@ import {
 } from "@vvedantb/ui";
 import {
   IconAspectRatio,
-  IconCamera,
   IconCheck,
   IconDevices,
   IconDotsVertical,
   IconListTree,
-  IconPlayerPause,
   IconPictureInPicture,
   IconPlug,
 } from "@tabler/icons-react";
@@ -28,8 +26,6 @@ import {
   normalizePreviewPath,
   type PreviewPortOption,
 } from "@/lib/components/PreviewNavBar";
-import { usePreviewScreenshot } from "./usePreviewScreenshot";
-import { usePreviewFreeze } from "./usePreviewFreeze";
 import { usePreviewSnapshot } from "@/lib/components/sandbox/PreviewSnapshotButton";
 import { usePreviewWebMcp } from "@/lib/components/sandbox/PreviewWebMcpButton";
 import type { PreviewViewport } from "../_utils/previewViewport";
@@ -82,18 +78,15 @@ export function PreviewPanelNavBar({
 }) {
   const { iframeRef } = useWebPreview();
   const frame = iframeElement ?? null;
-  const screenshot = usePreviewScreenshot(frame);
   const snapshot = usePreviewSnapshot({ iframeElement: frame });
   const webMcp = usePreviewWebMcp({ iframeElement: frame });
-  const freeze = usePreviewFreeze(frame);
   const deviceActive = viewport.mode !== "fill";
   const containActive = contain || deviceActive;
-  const busy = screenshot.capturing || snapshot.capturing || webMcp.discovering;
+  const busy = snapshot.capturing || webMcp.discovering;
   // The menu hides these modes, so the trigger carries their "on" state.
   const anyModeActive =
     deviceActive ||
     containActive ||
-    freeze.frozen ||
     popOut?.active === true;
 
   const toolsMenu = (
@@ -138,12 +131,6 @@ export function PreviewPanelNavBar({
           />
         ) : null}
         <PreviewToolItem
-          icon={<IconCamera className="size-3.5" />}
-          label="Screenshot"
-          disabled={screenshot.capturing || frame === null}
-          onSelect={screenshot.capture}
-        />
-        <PreviewToolItem
           icon={<IconListTree className="size-3.5" />}
           label="Semantic snapshot"
           disabled={snapshot.disabled}
@@ -154,13 +141,6 @@ export function PreviewPanelNavBar({
           label="Page tools"
           disabled={webMcp.disabled}
           onSelect={webMcp.discover}
-        />
-        <PreviewToolItem
-          icon={<IconPlayerPause className="size-3.5" />}
-          label="Freeze animations"
-          active={freeze.frozen}
-          disabled={frame === null}
-          onSelect={freeze.toggle}
         />
       </DropdownMenuContent>
     </DropdownMenu>
