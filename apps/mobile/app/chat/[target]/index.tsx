@@ -19,6 +19,7 @@ import {
   toRepoRelativePath,
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
+import { chatTypingRoom } from "@eva/shared/typingPresence";
 import { messageLinkHref } from "@eva/shared/messageLink";
 import { type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { IconChevronDown, IconMessageCircle, IconPlayerStop } from "@tabler/icons-react-native";
@@ -65,7 +66,9 @@ import { MentionMenu } from "@/chat/MentionMenu";
 import { MessageFooter, type Sentiment } from "@/chat/MessageFooter";
 import { useAttachments } from "@/chat/useAttachments";
 import { type Chat, useChatModelPick } from "@/chat/useChatModelPick";
+import { TypingIndicator } from "@/chat/TypingIndicator";
 import { useDraftSync } from "@/chat/useDraftSync";
+import { useTypingPresence } from "@/chat/useTypingPresence";
 import { useMentionComposer } from "@/chat/useMentionComposer";
 import { WEB_URL } from "@/config";
 import { useSessionActions } from "@/sessions/useSessionActions";
@@ -319,6 +322,8 @@ export default function ChatScreen() {
         {/* The composer or the question card: the scroll button rides 16 above it, as the web's `bottom-4` over the dock. */}
         {/* Solid: the keyboard lifts the dock over the transcript, which must not show through it. */}
         <ConversationDock style={{ backgroundColor: EVA_THEME[scheme].background }}>
+          {/* Once the person is known: the typing presence heartbeat needs their id. */}
+          {me ? (
           <ChatDock
             target={target}
             chat={chat}
@@ -330,6 +335,7 @@ export default function ChatScreen() {
             onStop={handleStop}
             queue={<QueuedMessagesPanel parentId={parentId} isExecuting={working} isSandboxActive={chat.sandboxActive} />}
           />
+          ) : null}
         </ConversationDock>
         {/* Centred on the thread, which sits 10 left of the screen's centre, as the web panel. */}
         <ConversationScrollButton label="Scroll to end" icon={IconChevronDown} showLabel insets={{ right: 10 }} />
@@ -359,7 +365,7 @@ function ChatDock({
 }: {
   target: string;
   chat: Chat;
-  me: Id<"users"> | undefined;
+  me: Id<"users">;
   working: boolean;
   simpleView: boolean;
   pending: PendingQuestion | null | undefined;
@@ -378,7 +384,13 @@ function ChatDock({
   const draft = useDraftSync(
     chat.session ? { kind: "sessionChat", sessionId: chat.session.id, chatId: chat.session.chatId } : null,
   );
-  const composer = useMentionComposer(chat.repoId, getAIModelProvider(normalizeAIModel(chat.model)), draft.save);
+  // "Someone is typing", as the web chat composer: the room is the session chat (`parentId`), as the web's;
+  // before a task or project chats it has none, so this chat's own target stands in.
+  const typing = useTypingPresence(chatTypingRoom(chat.parentId ?? target), me);
+  const composer = useMentionComposer(chat.repoId, getAIModelProvider(normalizeAIModel(chat.model)), (tokenized) => {
+    draft.save(tokenized);
+    if (tokenized) typing.onActivity();
+  });
   draft.pull(composer);
   const modelPick = useChatModelPick(target, chat, me);
 
@@ -410,6 +422,7 @@ function ChatDock({
     }
     const attachmentStorageIds = attachments.storageIds;
     attachments.clear();
+    typing.stopTyping();
     send({ target: chat.target, message: composer.tokenize(text), attachmentStorageIds }).catch(() => {
       toast.error("Couldn't send your message");
     });
@@ -439,6 +452,9 @@ function ChatDock({
     // it, as `stopMode="alongside"`.
     <View className="pr-2.5">
       {queue}
+      <View className="pl-3">
+        <TypingIndicator users={typing.typingUsers} />
+      </View>
       <PromptInput
         layout="inline"
         shape="pill"
