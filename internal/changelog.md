@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: the keyboard no longer covers the composer on New session and the task overview
+
+Date: 2026-11-15
+
+WHY: On New session the composer sits in a centred column, and the keyboard covered it while typing. The composer's own keyboard lift (react-native-keyboard-controller's `KeyboardAvoidingView` inside `PromptInput`) measures itself relative to its parent, not the screen, so in the middle of a column it decided the keyboard did not reach it and added no lift.
+
+Architectural: `app/session/new.tsx` wraps the centred column in the kit `KeyboardAvoidingView` (as New quick task and New project), so the column shrinks to the space above the keyboard and the composer stays centred in it. The task overview (`app/quick-task/[taskId].tsx`) uses react-native-keyboard-controller's `KeyboardAwareScrollView` (`bottomOffset` 16) in place of a `ScrollView` in a `KeyboardAvoidingView`, so the focused comment box, description or title scrolls into view above the keyboard.
+
 ## Phone: comments on a task can be replied to, edited, deleted and reacted to
 
 Date: 2026-11-15

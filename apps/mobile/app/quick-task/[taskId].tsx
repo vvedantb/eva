@@ -6,7 +6,7 @@ import { IconChecklist, IconClock, IconDots, IconFolder, IconMessage, IconPlayer
 import { PromptInput } from "@vvedantb/native-ui/ai";
 import { goBackOrReplace } from "@vvedantb/native-ui/expo-router";
 import { StackPageHeader } from "@vvedantb/native-ui/layout";
-import { Button, CenteredSpinner, EmptyState, KeyboardAvoidingView } from "@vvedantb/native-ui/primitives";
+import { Button, CenteredSpinner, EmptyState } from "@vvedantb/native-ui/primitives";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
@@ -14,7 +14,8 @@ import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import dayjs from "dayjs";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useRef, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View, type TextStyle } from "react-native";
+import { Pressable, Text, TextInput, View, type TextStyle } from "react-native";
+import { KeyboardAwareScrollView, type KeyboardAwareScrollViewRef } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ComposerMentionChips, UserMessageText } from "@/chat/MentionChip";
 import { MentionMenu } from "@/chat/MentionMenu";
@@ -97,7 +98,7 @@ function TaskOverview({ task, repo, allTags, onLeave }: { task: QuickTask; repo:
   const scheduledAt = taskScheduledAt(task);
   const comments = useCommentMutations(task._id);
   const [commentMode, setCommentMode] = useState<CommentMode>({ kind: "new" });
-  const scroll = useRef<ScrollView>(null);
+  const scroll = useRef<KeyboardAwareScrollViewRef>(null);
   // Reply and Edit happen in the comment box at the end: bring it into view.
   const changeCommentMode = (mode: CommentMode) => {
     setCommentMode(mode);
@@ -105,13 +106,20 @@ function TaskOverview({ task, repo, allTags, onLeave }: { task: QuickTask; repo:
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }}>
+    <View className="flex-1">
       <StackPageHeader
         title={formatEntityNumLabel({ numId: task.numId }) ?? "Task"}
         onBack={onLeave}
         headerRight={<MoreButton onPress={() => actions.openSheet(task)} />}
       />
-      <ScrollView ref={scroll} className="flex-1" keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24 }}>
+      {/* The focused field (the comment box, the description or the title) scrolls into view 16 above the keyboard. */}
+      <KeyboardAwareScrollView
+        ref={scroll}
+        bottomOffset={16}
+        // A style, not a class: the keyboard-controller view takes no NativeWind `className`.
+        style={{ flex: 1 }}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24 }}>
         <TaskTitle
           title={task.title}
           editable={editable}
@@ -175,11 +183,11 @@ function TaskOverview({ task, repo, allTags, onLeave }: { task: QuickTask; repo:
             onModeChange={changeCommentMode}
           />
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
       <TaskDock task={task} runs={runs} hasActiveRun={hasActiveRun} />
 
       {actions.dialogs}
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
