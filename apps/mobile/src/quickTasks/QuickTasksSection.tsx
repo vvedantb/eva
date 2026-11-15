@@ -1,4 +1,4 @@
-import { api } from "@eva/backend";
+import { api, type Id } from "@eva/backend";
 import {
   QUICK_TASK_LIST_DEFAULTS,
   TASK_STATUS_LABELS,
@@ -14,16 +14,19 @@ import {
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconChecklist, IconPlayerPlay, IconPlus } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
+import { impactHaptic } from "@vvedantb/native-ui/haptics";
 import { Button, ConfirmDialog, EmptyState, SkeletonList, SkeletonRow } from "@vvedantb/native-ui/primitives";
 import { useLargerText } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useRouter } from "expo-router";
-import { useState } from "react";
-import { SectionList, Text, View } from "react-native";
+import { Tabs } from "expo-router/js-tabs";
+import { useEffect, useState } from "react";
+import { BackHandler, SectionList, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ActiveFiltersBar, QuickTaskToolbar } from "@/quickTasks/QuickTaskListOptions";
+import { QuickTaskBulkBar } from "@/quickTasks/QuickTaskBulk";
 import { QuickTaskRow } from "@/quickTasks/QuickTaskRow";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
 import { useQuickTaskActions } from "@/quickTasks/useQuickTaskActions";
@@ -61,8 +64,9 @@ export function useQuickTaskRepo() {
  * has tasks; a long press on a row opens the web row menu as a sheet
  * (`useQuickTaskActions`). It opens as the web does: tasks outside projects,
  * recently updated first (`QUICK_TASK_LIST_DEFAULTS`). A `SectionList`, as a
- * repo's tasks have no cap. The web kanban, select mode and its bulk bar,
- * drag between sections and "Import from Linear" are not here.
+ * repo's tasks have no cap. "Select" in a row's menu starts the web select
+ * mode with its bulk bar (`QuickTaskBulkBar`). The web kanban, drag between
+ * sections and "Import from Linear" are not here.
  */
 export function QuickTasksSection() {
   const { repos, repo, setRepo } = useQuickTaskRepo();
@@ -96,12 +100,46 @@ function QuickTaskList({ repo }: { repo: Repo }) {
   const [closed, toggle] = closedQuickTaskStatuses.useSet("all");
   const [runAllOpen, setRunAllOpen] = useState(false);
   const [runningAll, setRunningAll] = useState(false);
-  const actions = useQuickTaskActions({ repo, users, projects });
+  // Select mode (the web bulk bar): from a row menu's "Select", that row ticked.
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<ReadonlySet<Id<"agentTasks">>>(new Set());
+  const exitSelect = () => {
+    setSelecting(false);
+    setSelected(new Set());
+  };
+  const actions = useQuickTaskActions({
+    repo,
+    users,
+    projects,
+    onSelect: (task) => {
+      impactHaptic("light");
+      setSelecting(true);
+      setSelected(new Set([task._id]));
+    },
+  });
   const largerText = useLargerText();
   const insets = useSafeAreaInsets();
   const scheme = useScheme();
 
+  // Android back leaves select mode first, as it closes a sheet first. An effect:
+  // the hardware back button is a subscription outside React.
+  useEffect(() => {
+    if (!selecting) return;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      setSelecting(false);
+      setSelected(new Set());
+      return true;
+    });
+    return () => subscription.remove();
+  }, [selecting]);
+
   if (tasks === undefined) return <QuickTaskPlaceholders />;
+  const toggleSelected = (id: Id<"agentTasks">) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelected(next);
+  };
   const changeFilters = (patch: Partial<QuickTaskListFilters>) => setFilters({ ...filters, ...patch });
   const shown = applyQuickTaskFilters(tasks, filters);
   // The web tag list: the stock tags and every tag on the repo's tasks. `sort` on a fresh array; Hermes lacks `toSorted`.
@@ -186,6 +224,7 @@ function QuickTaskList({ repo }: { repo: Repo }) {
               hasError={errors.has(task._id)}
               creator={users?.find((user) => user._id === task.createdBy)}
               onLongPress={() => actions.openSheet(task)}
+              selection={selecting ? { checked: selected.has(task._id), onToggle: () => toggleSelected(task._id) } : undefined}
             />
           )}
           renderSectionFooter={({ section }) => <FoldFooter open={section.open} count={section.count} empty="No tasks" />}
@@ -194,6 +233,21 @@ function QuickTaskList({ repo }: { repo: Repo }) {
         />
       )}
       {actions.dialogs}
+      {/* The bulk bar takes the tab bar's place while selecting, as the inbox. */}
+      <Tabs.Screen options={{ tabBarStyle: selecting ? { display: "none" } : undefined }} />
+      <QuickTaskBulkBar
+        isSelecting={selecting}
+        selected={selected}
+        tasks={tasks}
+        totalCount={shown.length}
+        users={users}
+        projects={projects}
+        allTags={allTags}
+        currentUserId={currentUserId}
+        onExitSelect={exitSelect}
+        onSelectAll={() => setSelected(new Set(shown.map((task) => task._id)))}
+        onClearSelection={() => setSelected(new Set())}
+      />
       <RunAllDialog
         open={runAllOpen}
         onOpenChange={setRunAllOpen}

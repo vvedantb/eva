@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: select quick tasks and act on them together
+
+Date: 2026-11-15
+
+WHY: The web Quick Tasks list has a select mode and bulk bar (status, assign, run, labels, project, delete); the phone could only act on one task at a time.
+
+Architectural: "Select" leads a quick task row's long-press menu (`useQuickTaskActions` `onSelect`) and starts select mode: rows show the inbox's checkbox (`QuickTaskRow` `selection`), Android back leaves it, and `QuickTaskBulkBar` (`src/quickTasks/QuickTaskBulk.tsx`, the kit `BulkActionBar`) takes the tab bar's place with Status, Assign and Run, then More: Assign to Me, Add Labels, Move to project and Delete All. Each runs the web's per-task writes (`updateStatus`, `update`, `startExecution`, `assignToProject`, `remove`); Run and Delete ask with the web's words, and Delete offers Undo (`restore`). The status, reviewer, tags and project sheets are the existing `OptionChips` sheets.
+
 ## Phone: answer a project's interview and accept or reject its plan
 
 Date: 2026-11-15
