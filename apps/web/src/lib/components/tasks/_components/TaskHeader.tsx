@@ -7,7 +7,7 @@ import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { patchLoadedQuery } from "@vvedantb/server";
 import { catchMutationError } from "@/lib/utils/mutationToast";
-import { taskTextLockReason } from "./task-detail-constants";
+import { taskTextLockReason } from "@eva/shared/taskDetail";
 
 export function TaskHeader({
   taskNumber,

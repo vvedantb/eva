@@ -6,7 +6,7 @@ import type { Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { taskPrUrl } from "@/lib/githubPr";
-import { canEditTaskText } from "./_components/task-detail-constants";
+import { canEditTaskText } from "@eva/shared/taskDetail";
 import { useTaskSession } from "./useTaskSession";
 import type { OwnedSandboxFields } from "@/lib/components/sandbox/useOwnedSession";
 import {

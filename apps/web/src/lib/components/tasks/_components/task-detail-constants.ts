@@ -1,44 +1,7 @@
-import type { TaskStatus } from "../TaskStatusBadge";
-
 export const NO_PROJECT_VALUE = "__none__";
 export const NEW_PROJECT_VALUE = "__new_project__";
 export const UNASSIGNED_VALUE = "__unassigned__";
 export const NO_PRIORITY_VALUE = "__no_priority__";
-
-/** Model can change on any active task; only terminal statuses lock it. */
-export function canEditTaskModel(status: TaskStatus | undefined): boolean {
-  return status !== "done" && status !== "cancelled";
-}
-
-/**
- * Statuses where the title/description are still the human's to edit: before a
- * run starts, and again while a finished run sits in review awaiting sign-off
- * (where refining the ask before a re-run is the point). Locked while an agent
- * is mid-flight or once the task is terminal.
- */
-const TASK_TEXT_EDITABLE_STATUSES: TaskStatus[] = [
-  "draft",
-  "todo",
-  "business_review",
-];
-
-export function canEditTaskText(
-  status: TaskStatus | undefined,
-  hasActiveRun: boolean,
-): boolean {
-  if (hasActiveRun) return false;
-  return TASK_TEXT_EDITABLE_STATUSES.some((s) => s === status);
-}
-
-/** Tooltip explaining why title/description are read-only right now. */
-export function taskTextLockReason(
-  hasActiveRun: boolean,
-  field: "Title" | "Description",
-): string {
-  return hasActiveRun
-    ? `${field} can't be edited while the agent is running`
-    : `${field} can only be edited in To Do or Business Review`;
-}
 
 export const DEPLOYMENT_STATUS_CONFIG: Record<
   string,
@@ -49,27 +12,6 @@ export const DEPLOYMENT_STATUS_CONFIG: Record<
   error: { iconColor: "text-red-500", label: "Deploy failed" },
   queued: { iconColor: "text-blue-500", label: "Queued" },
 };
-
-export function getUserDisplayName(user: {
-  fullName?: string | null;
-  firstName?: string | null;
-  lastName?: string | null;
-  email?: string | null;
-}): string {
-  if (user.fullName?.trim()) {
-    return user.fullName.trim();
-  }
-  const parts = [user.firstName, user.lastName].filter(
-    (p): p is string => typeof p === "string" && p.length > 0,
-  );
-  if (parts.length > 0) {
-    return parts.join(" ");
-  }
-  if (user.email?.trim()) {
-    return user.email.trim();
-  }
-  return "Unnamed User";
-}
 
 export type TaskDetailTab = "activity";
 

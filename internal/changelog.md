@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: a quick task opens on its overview
+
+Date: 2026-11-15
+
+WHY: On the phone a tap on a quick task went straight to its chat, so there was no way to read or change the description, the fields or the comments, as the web task page does.
+
+Architectural: The task page rules moved from web-only files into `@eva/shared/taskDetail` (who may edit the text, comment threads, the activity timeline and its wording, reaction grouping and the optimistic toggle); the web task detail now imports them, and `_utils/commentThread.ts` is gone. The phone route `app/quick-task/[taskId].tsx` shows the number and title (tap to edit), the description (tap to edit with the mention composer), attachments, the Properties rows (Status, Priority, Code Reviewer, Labels, Project, each a sheet), the Activity timeline with comments, replies and reaction chips, and a comment box; the bottom bar holds Chat and Run Eva and the header "…" is the row menu. Project task rows open it too. The field sheets are split out of the option chips (`PrioritySheet`, `ReviewerSheet`, `TagsSheet`, `ProjectSheet`, `TaskStatusRows`), `FieldGroup`/`FieldRow` moved to `src/ui/FieldRows.tsx`, and `src/ui/TimeAgo.tsx` keeps relative times current. Still to come: replies, comment edit and delete, the reaction picker and subscribers.
+
 ## Phone: settings you change stay after the app closes
 
 Date: 2026-11-15
