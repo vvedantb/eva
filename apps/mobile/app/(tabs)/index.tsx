@@ -18,12 +18,11 @@ import {
 import { useLargerText } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
-import { useRouter } from "expo-router";
 import { Tabs } from "expo-router/js-tabs";
 import { useEffect, useState } from "react";
-import { BackHandler, Linking, SectionList, View } from "react-native";
+import { BackHandler, SectionList, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { WEB_URL } from "@/config";
+import { openAppLink } from "@/push/openLink";
 import { InboxHeaderActions, type InboxFilter } from "@/inbox/InboxHeaderActions";
 import { NotificationRow, type NotificationRepo } from "@/inbox/NotificationRow";
 import { TabScreen } from "@/ui/TabScreen";
@@ -58,7 +57,6 @@ export default function InboxScreen() {
   const markManyAsUnread = useMutation(api.notifications.markManyAsUnread);
   const archiveMany = useMutation(api.notifications.archiveMany);
   const unarchiveMany = useMutation(api.notifications.unarchiveMany);
-  const router = useRouter();
   const scheme = useScheme();
   const largerText = useLargerText();
   const insets = useSafeAreaInsets();
@@ -136,12 +134,8 @@ export default function InboxScreen() {
     notification.archivedAt === undefined ? archive([notification._id]) : unarchive([notification._id]);
   const open = (notification: Doc<"notifications">) => {
     if (!notification.read) void markAsRead({ id: notification._id });
-    if (notification.chatTarget) {
-      router.push({ pathname: "/chat/[target]", params: { target: notification.chatTarget } });
-    } else if (notification.href) {
-      // Docs, comments and older rows have no chat: open them on the web.
-      void Linking.openURL(`${WEB_URL}${notification.href}`);
-    }
+    // Its chat, else the phone screen its link names (a task, project, PR, doc), else the web.
+    openAppLink({ chatTarget: notification.chatTarget, href: notification.href, repoId: notification.repoId });
   };
 
   return (
