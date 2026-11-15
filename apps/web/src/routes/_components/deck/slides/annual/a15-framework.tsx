@@ -11,28 +11,41 @@ import {
 } from "../../_components/DeckPrimitives";
 import { DUR, EASE, Sheen } from "../../_components/motion";
 
-/** Reading order: left to right, three per row. */
-const CAPABILITIES = [
-  "Owns technical design",
-  "Understands trade-offs",
-  "Debugs without flailing",
-  "A skill beyond coding",
-  "Breaks down large problems",
-  "Improves the process",
-  "Mentors and onboards",
-  "Business and user empathy",
-  "Identifies work to do",
+/** The framework's three sections, one column each, read top to bottom. */
+const SECTIONS: readonly { heading: string; items: readonly string[] }[] = [
+  {
+    heading: "Technical",
+    items: [
+      "Owns technical design",
+      "Understands trade-offs",
+      "Debugs without flailing",
+      "A skill beyond coding",
+    ],
+  },
+  {
+    heading: "Impact",
+    items: [
+      "Breaks down large problems",
+      "Improves the process",
+      "Identifies work to do",
+      "Business and user empathy",
+    ],
+  },
+  {
+    heading: "Collaboration",
+    items: ["Communicates clearly", "Gets buy-in", "Mentors and onboards"],
+  },
 ];
 
 const THIN = [
+  "Feedback and pairing not written down",
   "Page scores not routine",
-  "No on-call grading",
   "No designer or researcher",
 ];
 
 /**
  * The grid starts as a board seen from slightly above, then straightens as the
- * ticks arrive: all nine evidenced, read square on. It stays there for the thin
+ * ticks arrive: all eleven evidenced, read square on. It stays there for the thin
  * evidence and the closing figures.
  */
 const FRAMEWORK_SHOTS: readonly CameraShot[] = [
@@ -62,13 +75,20 @@ export function AnnualFramework() {
           className="-m-2 rounded-3xl p-2"
         >
           <div className="grid grid-cols-3 gap-3">
-            {CAPABILITIES.map((name, index) => (
-              <MoA4CapabilityCard
-                key={name}
-                name={name}
-                index={index}
-                evidenced={evidenced}
-              />
+            {SECTIONS.map((section, column) => (
+              <div key={section.heading} className="flex flex-col gap-3">
+                <div className="text-xs font-medium tracking-[0.18em] text-white/45 uppercase">
+                  {section.heading}
+                </div>
+                {section.items.map((name, row) => (
+                  <MoA4CapabilityCard
+                    key={name}
+                    name={name}
+                    index={row * SECTIONS.length + column}
+                    evidenced={evidenced}
+                  />
+                ))}
+              </div>
             ))}
           </div>
         </Sheen>

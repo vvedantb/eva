@@ -493,9 +493,9 @@ Detail: Eva now finishes work faster than we can check it in. The three strands 
 Framework: identifies work to do.
 Next: how all of this maps to the framework.`,
 
-  "a15-framework": `This is the map an assessor reads: nine capabilities, each evidenced by a slide already shown.
-→ Step 1: the ticks land. Technical design, trade-offs and breaking down large problems: slide 20, with 18, 23 and 31. Debugging: slides 21 and 22. A skill beyond coding: slide 26, measurement, and slides 33 to 34, Jev. Improves the process: slides 27 to 29, and 39. Mentors and onboards: slide 32. Business and user empathy: slides 34 to 36. Identifies work to do: slides 25 and 40.
-→ Step 2: the thin evidence. Volunteer the gaps before they are asked for. Page scores are not routine though the harness exists; there is no on-call rota or incident grading, as this is a one-person project; and there has been no work alongside a designer or user researcher.
+  "a15-framework": `This is the map an assessor reads: the framework's three sections, Technical, Impact and Collaboration, each evidenced by a slide already shown.
+→ Step 1: the ticks land, column by column. Technical: design and trade-offs, slide 20, with 18, 23 and 31; debugging, slides 21 and 22; a skill beyond coding, slide 26, measurement, and slides 33 to 34, Jev. Impact: breaking down large problems, slide 20; improving the process, slides 27 to 29 and 39; identifying work, slides 25 and 40; business and user empathy, slides 34 to 36. Collaboration: communicating clearly, the Friday sessions and this deck; getting buy-in, slides 9 to 10, where the team took Eva up; mentoring and onboarding, slide 32.
+→ Step 2: the thin evidence. Volunteer the gaps before they are asked for. Giving and seeking feedback, and pairing on reviews, happen but are not written down; page scores are not routine though the harness exists; and there has been no work alongside a designer or user researcher.
 Next: one last fact about how this deck was made.`,
 
   "annual-b01-day-one": `The data layer the product still runs on was settled on the first day, not migrated to later.
