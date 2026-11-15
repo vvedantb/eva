@@ -103,6 +103,7 @@ import type * as _evaConfig_config from "../_evaConfig/config.js";
 import type * as _evaConfig_sync from "../_evaConfig/sync.js";
 import type * as _generativeHtml_renders from "../_generativeHtml/renders.js";
 import type * as _generativeUi_candidates from "../_generativeUi/candidates.js";
+import type * as _generativeUi_catalog from "../_generativeUi/catalog.js";
 import type * as _generativeUi_completeness from "../_generativeUi/completeness.js";
 import type * as _generativeUi_compose from "../_generativeUi/compose.js";
 import type * as _generativeUi_panels from "../_generativeUi/panels.js";
@@ -685,6 +686,7 @@ declare const fullApi: ApiFromModules<{
   "_evaConfig/sync": typeof _evaConfig_sync;
   "_generativeHtml/renders": typeof _generativeHtml_renders;
   "_generativeUi/candidates": typeof _generativeUi_candidates;
+  "_generativeUi/catalog": typeof _generativeUi_catalog;
   "_generativeUi/completeness": typeof _generativeUi_completeness;
   "_generativeUi/compose": typeof _generativeUi_compose;
   "_generativeUi/panels": typeof _generativeUi_panels;
