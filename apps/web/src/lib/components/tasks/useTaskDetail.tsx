@@ -4,7 +4,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
-import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
+import { FALLBACK_GIT_BASE_BRANCH, taskCanCreatePr } from "@eva/shared";
 import { taskPrUrl } from "@/lib/githubPr";
 import { canEditTaskText } from "@eva/shared/taskDetail";
 import { useTaskSession } from "./useTaskSession";
@@ -116,7 +116,11 @@ function deriveRunSummary({
     latestPrUrl,
     latestPrError: runs?.find((r) => r.prError)?.prError,
     latestDeployment: runs?.find((r) => r.deploymentStatus),
-    canCreatePr: !latestPrUrl && (runs?.length ?? 0) > 0 && !hasActiveRun,
+    canCreatePr: taskCanCreatePr({
+      latestPrUrl,
+      runCount: runs?.length ?? 0,
+      hasActiveRun,
+    }),
     showTabsColumn: status !== "todo" || hasTabContent,
     creatorUser: task?.createdBy
       ? users?.find((u) => u._id === task.createdBy)

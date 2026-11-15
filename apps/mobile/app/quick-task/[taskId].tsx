@@ -84,6 +84,7 @@ import {
   type CommentMode,
 } from "@/quickTasks/TaskDiscussion";
 import { useQuickTaskActions } from "@/quickTasks/useQuickTaskActions";
+import { useTaskGitActions } from "@/sandbox/OwnedSandboxActions";
 import { FieldGroup, FieldRow } from "@/ui/FieldRows";
 import { displayTitle } from "@/ui/format";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
@@ -159,24 +160,27 @@ function TaskOverview({
 }) {
   const users = useQuery(api.users.listAll, {});
   const projects = useQuery(api.projects.list, { repoId: repo._id });
+  const runs = useQuery(api.agentRuns.listByTask, { taskId: task._id });
+  const hasActiveRun =
+    runs?.some((run) => run.status === "queued" || run.status === "running") ??
+    false;
+  // The web page's sandbox and git actions, leading the "…" sheet.
+  const git = useTaskGitActions({ task, runCount: runs?.length ?? 0, hasActiveRun });
   const actions = useQuickTaskActions({
     repo,
     users,
     projects,
     onDeleted: onLeave,
+    extraRows: git.rows,
   });
   const theme = EVA_THEME[useScheme()];
   const currentUserId = useQuery(api.auth.me, {});
-  const runs = useQuery(api.agentRuns.listByTask, { taskId: task._id });
   const attachments = useQuery(api.agentTasks.listAttachments, {
     taskId: task._id,
   });
   const updateTask = useMutation(api.agentTasks.update);
   const reactionsFor = useTaskReactions(task._id, users, currentUserId);
 
-  const hasActiveRun =
-    runs?.some((run) => run.status === "queued" || run.status === "running") ??
-    false;
   const editable =
     runs !== undefined && canEditTaskText(task.status, hasActiveRun);
   const update: UpdateTask = (fields, failure) => {
@@ -314,6 +318,7 @@ function TaskOverview({
       <TaskDock task={task} runs={runs} hasActiveRun={hasActiveRun} />
 
       {actions.dialogs}
+      {git.dialogs}
     </View>
   );
 }

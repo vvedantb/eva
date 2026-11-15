@@ -5,7 +5,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useAction, useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { sandboxStartupEntityId } from "@eva/shared";
+import { sandboxStartupEntityId, taskCanStartSandbox } from "@eva/shared";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
@@ -40,12 +40,6 @@ export type UseTaskDetailRouting =
   | { mode: "quick-detail"; quick: QuickTaskDetailRouting }
   | { mode: "quick-sandbox"; quick: QuickTaskSandboxRouting }
   | { mode: "project-detail"; project: ProjectTaskDetailRouting };
-
-const PREVIEW_SANDBOX_ALLOWED_STATUSES = [
-  "code_review",
-  "business_review",
-  "done",
-];
 
 type TaskDetailTask = FunctionReturnType<typeof api.agentTasks.get> | undefined;
 
@@ -141,10 +135,7 @@ function deriveSandboxFlags(
   sandbox: OwnedSandboxFields,
   hasRuns: boolean,
 ) {
-  const canStartSandbox =
-    task?.status !== undefined &&
-    (PREVIEW_SANDBOX_ALLOWED_STATUSES.includes(task.status) ||
-      (task.status === "todo" && hasRuns));
+  const canStartSandbox = taskCanStartSandbox(task?.status, hasRuns);
 
   const isSandboxActive = sandbox.status === "active";
   const isSandboxStartingFromStatus = sandbox.status === "starting";

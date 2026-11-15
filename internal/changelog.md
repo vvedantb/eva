@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: sandbox and git actions on a task's and a project's page
+
+Date: 2026-11-15
+
+WHY: The web task and project pages wake and sleep their sandbox, commit and push, create the PR, resolve conflicts and open the PR; the phone had none of these.
+
+Architectural: The rules moved into `@eva/shared` (`ownedSandboxRules.ts`: `taskCanStartSandbox`, `taskCanResolveConflicts`, `taskCanCreatePr`, `projectCanCreatePr`, `projectCanResolveConflicts`, `PREVIEW_SANDBOX_ALLOWED_STATUSES`); the web's `deriveSandboxFlags`, `getMoreMenuVisibility`, `useTaskDetail` and `projectDetailHelpers` call them. `src/sandbox/OwnedSandboxActions.tsx` drives the owner's own session (`sessions.getOwned`, `ensureOwned` on a first wake, `useSessionSandbox`, `sandbox.commitAndPushSandbox`) and gives `useTaskGitActions` / `useProjectGitActions` rows that lead the "…" sheets (`extraRows` on `useQuickTaskActions` and `useProjectActions`): Wake or Sleep Eva (sleep says to stop Eva first mid-turn), Commit & push, Create PR (`taskWorkflowActions.createTaskPr` / `createProjectPr`), Resolve Conflicts behind the web confirm (`agentTasks.startExecution` "resolve_conflicts" / `projects.resolveProjectConflicts`) and View PR on the phone's PR screen.
+
 ## Phone: switch between a session's chats and start a parallel one
 
 Date: 2026-11-15

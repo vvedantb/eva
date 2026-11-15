@@ -15,7 +15,7 @@ import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import * as Clipboard from "expo-clipboard";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Text, type TextStyle } from "react-native";
 import { WEB_URL } from "@/config";
 import { MenuDivider, MenuSheet, SubmenuRow } from "@/ui/MenuSheet";
@@ -51,7 +51,10 @@ export function useQuickTaskActions({
   users,
   projects,
   onDeleted,
+  extraRows,
 }: {
+  /** Rows that lead the menu (the overview's sandbox and git actions); given the menu's `close`. */
+  extraRows?: (close: () => void) => ReactNode;
   repo: Repo;
   users: User[] | undefined;
   projects: Project[] | undefined;
@@ -100,6 +103,7 @@ export function useQuickTaskActions({
       case "root":
         return (
           <>
+            {extraRows?.(close)}
             {task.projectId === undefined ? (
               <SheetRow
                 icon={IconPlayerPlay}
