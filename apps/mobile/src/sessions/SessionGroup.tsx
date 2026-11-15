@@ -47,6 +47,8 @@ export function sessionActionTarget({ session, repo, inGroup }: SessionRow): Ses
     webPath: entityHref("session", session.linkedFrom ?? repo, session.numId),
     branchName: session.branchName,
     prUrl: session.prUrl,
+    prState: session.prState,
+    repoId: repo._id,
     inGroup,
   };
 }

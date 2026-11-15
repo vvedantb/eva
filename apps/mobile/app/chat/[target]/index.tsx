@@ -111,6 +111,8 @@ export default function ChatScreen() {
   const convex = useConvex();
   const turn = useQuery(api.turns.getChatStatus, parentId ? { entityId: parentId } : "skip");
   const pending = useQuery(api.pendingQuestions.getActive, parentId ? { entityId: parentId } : "skip");
+  // A session chat's session row: its PR state (Send for Review) and the sandbox's unpushed work (Commit & push).
+  const sessionRow = useQuery(api.sessions.get, chat?.session ? { id: chat.session.id } : "skip");
   const feedbackRows = useQuery(api.feedback.listForChat, parentId ? { parentId } : "skip");
   // Read while it is on screen (this screen focused, the app in front), as the web marks its open chat;
   // `newSinceAt` places the "NEW" divider above the first reply you had not seen.
@@ -186,6 +188,11 @@ export default function ChatScreen() {
         webPath: chat.webPath,
         branchName: chat.intendedBranch,
         prUrl: chat.prUrl,
+        prState: sessionRow?.prState,
+        repoId: chat.repoId,
+        hasUnpushedWork:
+          sessionRow?.status === "active" &&
+          ((sessionRow.sandboxGitSync?.uncommittedFiles ?? 0) > 0 || (sessionRow.sandboxGitSync?.unpushedCommits ?? 0) > 0),
       }
     : null;
 
@@ -261,6 +268,7 @@ export default function ChatScreen() {
                   .actionsFor(sessionTarget)
                   .map((group) => group.filter((action) => !HEADER_HIDDEN_ACTIONS.has(action))),
                 onSelect: (action) => sessionActions.run(action, sessionTarget),
+                itemFor: sessionActions.itemFor,
               }
             : undefined
         }
