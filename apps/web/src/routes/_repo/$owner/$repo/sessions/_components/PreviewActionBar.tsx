@@ -3,7 +3,13 @@
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@eva/ui";
-import { Button, Spinner } from "@vvedantb/ui";
+import {
+  Button,
+  Spinner,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@vvedantb/ui";
 import {
   IconCamera,
   IconClick,
@@ -21,9 +27,9 @@ interface PreviewToggle {
 
 /**
  * Floating pill at the bottom of the preview for the tools that act on the
- * page. Icons only at rest so it covers little of the page; hover or keyboard
- * focus slides the labels open. Body portal (z-50) because the hosted iframe
- * paints in the fixed z-40 overlay, above anything inside the pane.
+ * page. Icons only, labels in tooltips: the bar never changes width, so a
+ * button never slides out from under the pointer. Body portal (z-50) because
+ * the hosted iframe paints in the fixed z-40 overlay, above the pane.
  *
  * Stays mounted while `hidden` so the freeze state survives Sketch and
  * pop-out: the page stays frozen, and the button must still say so.
@@ -51,7 +57,7 @@ export function PreviewActionBar({
   return createPortal(
     <div
       data-testid="preview-action-bar"
-      className="group/bar fixed z-50 flex -translate-x-1/2 -translate-y-full items-center gap-0.5 rounded-full bg-popover/95 p-1 backdrop-blur-md smooth-shadow-ring-lg"
+      className="fixed z-50 flex -translate-x-1/2 -translate-y-full items-center gap-0.5 rounded-full bg-popover/95 p-1 backdrop-blur-md smooth-shadow-ring-lg"
       style={{
         left: box.left + box.width / 2,
         top: box.top + box.height - 12,
@@ -111,24 +117,23 @@ function PreviewActionButton({
   onClick: () => void;
 }) {
   return (
-    <Button
-      size="sm"
-      variant="ghost"
-      aria-pressed={active}
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        "h-7 gap-0 rounded-full px-1.5 max-sm:hit-target",
-        active && "bg-secondary text-primary hover:text-primary",
-      )}
-    >
-      {icon}
-      {/* 0fr → 1fr animates the label to its own width without measuring. */}
-      <span className="grid grid-cols-[0fr] transition-[grid-template-columns] duration-200 ease-out group-focus-within/bar:grid-cols-[1fr] group-hover/bar:grid-cols-[1fr] motion-reduce:transition-none">
-        <span className="overflow-hidden whitespace-nowrap">
-          <span className="pl-1.5">{label}</span>
-        </span>
-      </span>
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label={label}
+          aria-pressed={active}
+          disabled={disabled}
+          onClick={onClick}
+          className={cn(
+            active && "bg-secondary text-primary hover:text-primary",
+          )}
+        >
+          {icon}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top">{label}</TooltipContent>
+    </Tooltip>
   );
 }
