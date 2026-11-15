@@ -4,7 +4,6 @@
   "jsPlugins": [
     { "name": "vvedantb", "specifier": "@vvedantb/config/oxlint/plugin.mjs" },
     { "name": "anti-slop", "specifier": "@vvedantb/config/oxlint/anti-slop.js" },
-    { "name": "eva", "specifier": "./scripts/oxlint-plugin-eva/index.mjs" },
     {
       "name": "no-effect",
       "specifier": "eslint-plugin-react-you-might-not-need-an-effect"
@@ -45,7 +44,7 @@
     "no-effect/no-pass-data-to-parent": "error",
     "no-effect/no-external-store-subscription": "error",
     "no-effect/no-initialize-state": "error",
-    "eva/no-is-record": "error",
+    "vvedantb/no-is-record": "error",
     "vvedantb/no-json-parse": "warn",
     "vvedantb/no-double-cast": "warn",
     "vvedantb/no-value-block-in-try": "off",
