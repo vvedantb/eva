@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: zoom into images in the full-screen viewer
+
+Date: 2026-11-15
+
+WHY: An opened image could not be zoomed.
+
+Architectural: `@vvedantb/native-ui` 0.21.0-next-c9211cd (packages#260): under `GestureHandlerProvider` (already in the app root) each `ImageViewer` page pinches up to 5x about the fingers, double-taps to 2.5x on the tapped point and back, and pans while zoomed instead of turning the page.
+
 ## Phone: context and plan usage from the chat header
 
 Date: 2026-11-15
