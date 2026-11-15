@@ -65,7 +65,7 @@ import { MentionMenu } from "@/chat/MentionMenu";
 import { MessageFooter, type Sentiment } from "@/chat/MessageFooter";
 import { useAttachments } from "@/chat/useAttachments";
 import { type Chat, useChatModelPick } from "@/chat/useChatModelPick";
-import { useChatDraftSync } from "@/chat/useChatDraftSync";
+import { useDraftSync } from "@/chat/useDraftSync";
 import { useMentionComposer } from "@/chat/useMentionComposer";
 import { WEB_URL } from "@/config";
 import { useSessionActions } from "@/sessions/useSessionActions";
@@ -375,7 +375,9 @@ function ChatDock({
   const attachments = useAttachments();
   // The `/` list follows the chat's model provider, as the web composer.
   // The draft is kept on the server, as the web composer: it survives closing the app and follows you between devices.
-  const draft = useChatDraftSync(chat);
+  const draft = useDraftSync(
+    chat.session ? { kind: "sessionChat", sessionId: chat.session.id, chatId: chat.session.chatId } : null,
+  );
   const composer = useMentionComposer(chat.repoId, getAIModelProvider(normalizeAIModel(chat.model)), draft.save);
   draft.pull(composer);
   const modelPick = useChatModelPick(target, chat, me);

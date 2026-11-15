@@ -8,15 +8,29 @@ import {
   type ReactionGroup,
   type TaskComment,
 } from "@eva/shared/taskDetail";
-import { IconArrowBackUp, IconBell, IconBellOff, IconClipboard, IconPencil, IconTrash, IconUserPlus } from "@tabler/icons-react-native";
+import {
+  IconMoodSmile,
+  IconArrowBackUp,
+  IconBell,
+  IconBellOff,
+  IconClipboard,
+  IconPencil,
+  IconTrash,
+  IconUserPlus,
+} from "@tabler/icons-react-native";
 import { ReplyQuoteChip } from "@vvedantb/native-ui/ai";
-import { Button, ConfirmDialog, SheetRow } from "@vvedantb/native-ui/primitives";
+import {
+  Button,
+  ConfirmDialog,
+  SheetRow,
+} from "@vvedantb/native-ui/primitives";
+import { SearchInput } from "@vvedantb/native-ui/search-input";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import * as Clipboard from "expo-clipboard";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { FooterSheet } from "@/chat/ComposerFooter";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
@@ -26,10 +40,21 @@ import { useScheme } from "@/ui/theme";
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 
 /** What the comment box sends: a new comment, a reply to one, or an edit of yours. */
-export type CommentMode = { kind: "new" } | { kind: "reply"; comment: TaskComment } | { kind: "edit"; comment: TaskComment };
+export type CommentMode =
+  | { kind: "new" }
+  | { kind: "reply"; comment: TaskComment }
+  | { kind: "edit"; comment: TaskComment };
 
 /** Above the comment box while it replies or edits: the comment it is about, with an X that goes back to a new comment. */
-export function CommentModeChip({ mode, users, onDismiss }: { mode: CommentMode; users: User[] | undefined; onDismiss: () => void }) {
+export function CommentModeChip({
+  mode,
+  users,
+  onDismiss,
+}: {
+  mode: CommentMode;
+  users: User[] | undefined;
+  onDismiss: () => void;
+}) {
   if (mode.kind === "new") return null;
   const author = users?.find((user) => user._id === mode.comment.authorId);
   const name = author ? getUserDisplayName(author) : "Someone";
@@ -37,14 +62,30 @@ export function CommentModeChip({ mode, users, onDismiss }: { mode: CommentMode;
   return mode.kind === "reply" ? (
     <ReplyQuoteChip author={name} text={text} onDismiss={onDismiss} />
   ) : (
-    <ReplyQuoteChip author="Editing comment" text={text} onDismiss={onDismiss} accessibilityLabel="Editing your comment" dismissLabel="Cancel edit" />
+    <ReplyQuoteChip
+      author="Editing comment"
+      text={text}
+      onDismiss={onDismiss}
+      accessibilityLabel="Editing your comment"
+      dismissLabel="Cancel edit"
+    />
   );
 }
 
 /** The web quick reactions as one row of 44 targets; yours are tinted, and a tap toggles one. */
-function QuickReactionRow({ groups, onToggle }: { groups: ReactionGroup[]; onToggle: (emoji: string) => void }) {
+function QuickReactionRow({
+  groups,
+  onToggle,
+  onMore,
+}: {
+  groups: ReactionGroup[];
+  onToggle: (emoji: string) => void;
+  onMore?: () => void;
+}) {
   const theme = EVA_THEME[useScheme()];
-  const mine = new Set(groups.filter((group) => group.reactedByMe).map((group) => group.emoji));
+  const mine = new Set(
+    groups.filter((group) => group.reactedByMe).map((group) => group.emoji),
+  );
   return (
     <View className="flex-row justify-between px-2 pb-2">
       {QUICK_REACTIONS.map((emoji) => (
@@ -55,12 +96,166 @@ function QuickReactionRow({ groups, onToggle }: { groups: ReactionGroup[]; onTog
           accessibilityState={{ selected: mine.has(emoji) }}
           onPress={() => onToggle(emoji)}
           className="size-11 items-center justify-center rounded-full active:opacity-70"
-          style={{ backgroundColor: mine.has(emoji) ? withAlpha(theme.primary, 0.12) : theme.secondary }}
+          style={{
+            backgroundColor: mine.has(emoji)
+              ? withAlpha(theme.primary, 0.12)
+              : theme.secondary,
+          }}
         >
           <Text style={{ fontSize: 20 }}>{emoji}</Text>
         </Pressable>
       ))}
+      {onMore ? (
+        // The web picker's trigger icon: every other emoji, by search.
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="More reactions"
+          onPress={onMore}
+          className="size-11 items-center justify-center rounded-full active:opacity-70"
+          style={{ backgroundColor: theme.secondary }}
+        >
+          <IconMoodSmile size={20} color={theme.mutedForeground} />
+        </Pressable>
+      ) : null}
     </View>
+  );
+}
+
+/** As the web picker: suggest after 400 ms without a keystroke, for at least 2 characters. */
+const SUGGEST_IDLE_MS = 400;
+const SUGGEST_MIN_CHARS = 2;
+/** One emoji, with its variation selector, skin tone and joined parts. */
+const EMOJI_SOURCE =
+  "\\p{Extended_Pictographic}(?:\\uFE0F|\\u200D\\p{Extended_Pictographic}|[\\u{1F3FB}-\\u{1F3FF}])*";
+/** The pictograph planes, for an engine without Unicode property escapes (a crash at load would take the screen down). */
+const EMOJI_FALLBACK =
+  "(?:[\\u2600-\\u27BF]|\\uD83C[\\uDC00-\\uDFFF]|\\uD83D[\\uDC00-\\uDFFF]|\\uD83E[\\uDC00-\\uDFFF])(?:\\uFE0F|\\u200D(?:[\\u2600-\\u27BF]|\\uD83C[\\uDC00-\\uDFFF]|\\uD83D[\\uDC00-\\uDFFF]|\\uD83E[\\uDC00-\\uDFFF]))*";
+function emojiPattern(flags: string): RegExp {
+  try {
+    return new RegExp(EMOJI_SOURCE, `${flags}u`);
+  } catch {
+    return new RegExp(EMOJI_FALLBACK, flags);
+  }
+}
+const EMOJI_ALL = emojiPattern("g");
+const HAS_EMOJI = emojiPattern("");
+
+/**
+ * The web full emoji picker on the phone, without an emoji data set: a search
+ * box. An emoji typed from the keyboard is offered as it is; a word asks Eva
+ * (`emojiSuggestions.suggest`, as the web picker's search) once typing pauses.
+ * With nothing typed it shows the quick reactions. A pick reacts and closes.
+ */
+export function EmojiPickerSheet({
+  open,
+  onOpenChange,
+  groups,
+  onPick,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  groups: ReactionGroup[];
+  onPick: (emoji: string) => void;
+}) {
+  const scheme = useScheme();
+  const theme = EVA_THEME[scheme];
+  const suggest = useAction(api.emojiSuggestions.suggest);
+  const [search, setSearch] = useState("");
+  // Answers are keyed by the query they answer, so a stale one never shows against newer text.
+  const [answered, setAnswered] = useState<{
+    query: string;
+    emoji: string[];
+  } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const query = search.trim();
+  const typed = [...new Set(query.match(EMOJI_ALL) ?? [])];
+  const change = (value: string) => {
+    setSearch(value);
+    if (timer.current) clearTimeout(timer.current);
+    const next = value.trim();
+    if (next.length < SUGGEST_MIN_CHARS || HAS_EMOJI.test(next)) return;
+    timer.current = setTimeout(() => {
+      suggest({ query: next })
+        .then((emoji) => setAnswered({ query: next, emoji }))
+        // A failed lookup just leaves the box as it is.
+        .catch(() => undefined);
+    }, SUGGEST_IDLE_MS);
+  };
+  const close = (next: boolean) => {
+    onOpenChange(next);
+    if (!next) {
+      setSearch("");
+      setAnswered(null);
+    }
+  };
+  const shown =
+    typed.length > 0
+      ? typed
+      : query === ""
+        ? QUICK_REACTIONS
+        : answered?.query === query
+          ? answered.emoji
+          : [];
+  const searching =
+    typed.length === 0 &&
+    query.length >= SUGGEST_MIN_CHARS &&
+    answered?.query !== query;
+  const mine = new Set(
+    groups.filter((group) => group.reactedByMe).map((group) => group.emoji),
+  );
+  return (
+    <FooterSheet
+      open={open}
+      onOpenChange={close}
+      title="Add reaction"
+      header={
+        <View className="px-2">
+          <SearchInput
+            size="md"
+            value={search}
+            onChange={change}
+            label="Search emoji"
+            placeholder="Search, or type an emoji…"
+          />
+        </View>
+      }
+    >
+      {shown.length > 0 ? (
+        <View className="flex-row flex-wrap gap-2 px-2 pb-4">
+          {shown.map((emoji) => (
+            <Pressable
+              key={emoji}
+              accessibilityRole="button"
+              accessibilityLabel={`${mine.has(emoji) ? "Remove" : "React with"} ${emoji}`}
+              accessibilityState={{ selected: mine.has(emoji) }}
+              onPress={() => {
+                onPick(emoji);
+                close(false);
+              }}
+              className="size-12 items-center justify-center rounded-xl active:opacity-70"
+              style={{
+                backgroundColor: mine.has(emoji)
+                  ? withAlpha(theme.primary, 0.12)
+                  : theme.secondary,
+              }}
+            >
+              <Text style={{ fontSize: 24 }}>{emoji}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : (
+        <Text
+          className="font-instrument-sans py-6 text-center text-sm"
+          style={{ color: theme.mutedForeground }}
+        >
+          {searching
+            ? "Searching…"
+            : query.length < SUGGEST_MIN_CHARS
+              ? "Keep typing to search."
+              : "No emoji found."}
+        </Text>
+      )}
+    </FooterSheet>
   );
 }
 
@@ -76,6 +271,7 @@ export function ReactableMenu({
   title,
   groups,
   onToggleReaction,
+  onMoreReactions,
   onReply,
   onEdit,
   copyText,
@@ -86,6 +282,8 @@ export function ReactableMenu({
   title: string;
   groups: ReactionGroup[];
   onToggleReaction: (emoji: string) => void;
+  /** Opens `EmojiPickerSheet`; the caller renders it, since this menu closes first. */
+  onMoreReactions?: () => void;
   onReply?: () => void;
   onEdit?: () => void;
   copyText?: string;
@@ -101,10 +299,23 @@ export function ReactableMenu({
         <QuickReactionRow
           groups={groups}
           onToggle={(emoji) => act(() => onToggleReaction(emoji))}
+          onMore={onMoreReactions ? () => act(onMoreReactions) : undefined}
         />
         {onReply || onEdit || copyText !== undefined ? <MenuDivider /> : null}
-        {onReply ? <SheetRow icon={IconArrowBackUp} title="Reply" onPress={() => act(onReply)} /> : null}
-        {onEdit ? <SheetRow icon={IconPencil} title="Edit" onPress={() => act(onEdit)} /> : null}
+        {onReply ? (
+          <SheetRow
+            icon={IconArrowBackUp}
+            title="Reply"
+            onPress={() => act(onReply)}
+          />
+        ) : null}
+        {onEdit ? (
+          <SheetRow
+            icon={IconPencil}
+            title="Edit"
+            onPress={() => act(onEdit)}
+          />
+        ) : null}
         {copyText !== undefined ? (
           <SheetRow
             icon={IconClipboard}
@@ -119,7 +330,12 @@ export function ReactableMenu({
         {onDelete ? (
           <>
             <MenuDivider />
-            <SheetRow icon={IconTrash} title="Delete" danger onPress={() => act(onDelete)} />
+            <SheetRow
+              icon={IconTrash}
+              title="Delete"
+              danger
+              onPress={() => act(onDelete)}
+            />
           </>
         ) : null}
       </MenuSheet>
@@ -128,7 +344,15 @@ export function ReactableMenu({
 }
 
 /** The web delete dialog for a comment. */
-export function DeleteCommentDialog({ open, onOpenChange, onConfirm }: { open: boolean; onOpenChange: (open: boolean) => void; onConfirm: () => void }) {
+export function DeleteCommentDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+}) {
   return (
     <ConfirmDialog
       open={open}
@@ -144,28 +368,44 @@ export function DeleteCommentDialog({ open, onOpenChange, onConfirm }: { open: b
 
 /** Comment writes that show at once: delete leaves the web placeholder, edit swaps the text. */
 export function useCommentMutations(taskId: Id<"agentTasks">) {
-  const remove = useMutation(api.taskComments.remove).withOptimisticUpdate((store, args) => {
-    const current = store.getQuery(api.taskComments.listByTask, { taskId });
-    if (!current) return;
-    store.setQuery(
-      api.taskComments.listByTask,
-      { taskId },
-      current.map((entry) => (entry._id === args.id ? { ...entry, deletedAt: Date.now(), content: DELETED_COMMENT_PLACEHOLDER } : entry)),
-    );
-  });
-  const update = useMutation(api.taskComments.update).withOptimisticUpdate((store, args) => {
-    const current = store.getQuery(api.taskComments.listByTask, { taskId });
-    if (!current) return;
-    store.setQuery(
-      api.taskComments.listByTask,
-      { taskId },
-      current.map((entry) => (entry._id === args.id ? { ...entry, content: args.content } : entry)),
-    );
-  });
+  const remove = useMutation(api.taskComments.remove).withOptimisticUpdate(
+    (store, args) => {
+      const current = store.getQuery(api.taskComments.listByTask, { taskId });
+      if (!current) return;
+      store.setQuery(
+        api.taskComments.listByTask,
+        { taskId },
+        current.map((entry) =>
+          entry._id === args.id
+            ? {
+                ...entry,
+                deletedAt: Date.now(),
+                content: DELETED_COMMENT_PLACEHOLDER,
+              }
+            : entry,
+        ),
+      );
+    },
+  );
+  const update = useMutation(api.taskComments.update).withOptimisticUpdate(
+    (store, args) => {
+      const current = store.getQuery(api.taskComments.listByTask, { taskId });
+      if (!current) return;
+      store.setQuery(
+        api.taskComments.listByTask,
+        { taskId },
+        current.map((entry) =>
+          entry._id === args.id ? { ...entry, content: args.content } : entry,
+        ),
+      );
+    },
+  );
   const create = useMutation(api.taskComments.create);
   return {
     remove: (id: Id<"taskComments">) => {
-      remove({ id }).catch(() => toast.error("Could not delete the comment. Try again."));
+      remove({ id }).catch(() =>
+        toast.error("Could not delete the comment. Try again."),
+      );
     },
     update,
     create,
@@ -178,7 +418,13 @@ export function useCommentMutations(taskId: Id<"agentTasks">) {
  * workspace, each a toggle). Subscribers hear about comments, status changes
  * and PR events.
  */
-export function TaskSubscribers({ taskId, users }: { taskId: Id<"agentTasks">; users: User[] | undefined }) {
+export function TaskSubscribers({
+  taskId,
+  users,
+}: {
+  taskId: Id<"agentTasks">;
+  users: User[] | undefined;
+}) {
   const theme = EVA_THEME[useScheme()];
   const currentUserId = useQuery(api.auth.me, {});
   const subscribers = useQuery(api.taskSubscribers.listByTask, { taskId });
@@ -189,7 +435,9 @@ export function TaskSubscribers({ taskId, users }: { taskId: Id<"agentTasks">; u
   const subscribed = (users ?? []).filter((user) => ids.has(user._id));
   const isSubscribed = currentUserId ? ids.has(currentUserId) : false;
   const set = (args: { subscribed: boolean; userId?: Id<"users"> }) => {
-    setSubscription({ taskId, ...args }).catch(() => toast.error("Couldn't change the subscription"));
+    setSubscription({ taskId, ...args }).catch(() =>
+      toast.error("Couldn't change the subscription"),
+    );
   };
   return (
     <View className="flex-row flex-wrap items-center gap-2 px-2 pb-2">
@@ -198,13 +446,23 @@ export function TaskSubscribers({ taskId, users }: { taskId: Id<"agentTasks">; u
         size="sm"
         fullWidth={false}
         disabled={!currentUserId}
-        leftIcon={isSubscribed ? <IconBellOff size={14} color={theme.secondaryForeground} /> : <IconBell size={14} color={theme.foreground} />}
+        leftIcon={
+          isSubscribed ? (
+            <IconBellOff size={14} color={theme.secondaryForeground} />
+          ) : (
+            <IconBell size={14} color={theme.foreground} />
+          )
+        }
         onPress={() => set({ subscribed: !isSubscribed })}
       >
         {isSubscribed ? "Subscribed" : "Subscribe"}
       </Button>
       {subscribed.length > 0 ? (
-        <View accessible accessibilityLabel={`Subscribers: ${subscribed.map((user) => getUserDisplayName(user)).join(", ")}`} className="flex-row">
+        <View
+          accessible
+          accessibilityLabel={`Subscribers: ${subscribed.map((user) => getUserDisplayName(user)).join(", ")}`}
+          className="flex-row"
+        >
           {subscribed.map((user, index) => (
             <View key={user._id} style={{ marginLeft: index === 0 ? 0 : -4 }}>
               <InitialsAvatar user={user} size={20} />
@@ -220,7 +478,11 @@ export function TaskSubscribers({ taskId, users }: { taskId: Id<"agentTasks">; u
       >
         <IconUserPlus size={16} color={theme.mutedForeground} />
       </Pressable>
-      <FooterSheet open={managing} onOpenChange={setManaging} title="Manage subscribers">
+      <FooterSheet
+        open={managing}
+        onOpenChange={setManaging}
+        title="Manage subscribers"
+      >
         {(users ?? []).map((user) => (
           <SheetRow
             key={user._id}
@@ -228,7 +490,9 @@ export function TaskSubscribers({ taskId, users }: { taskId: Id<"agentTasks">; u
             title={getUserDisplayName(user)}
             active={ids.has(user._id)}
             multiple
-            onPress={() => set({ userId: user._id, subscribed: !ids.has(user._id) })}
+            onPress={() =>
+              set({ userId: user._id, subscribed: !ids.has(user._id) })
+            }
           />
         ))}
       </FooterSheet>

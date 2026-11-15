@@ -33,6 +33,7 @@
     "./safeUrl": "./src/safeUrl.ts",
     "./storageUpload": "./src/storageUpload.ts",
     "./taskDetail": "./src/taskDetail.ts",
+    "./typingPresence": "./src/typingPresence.ts",
     "./uiTaskPrompt": "./src/uiTaskPrompt.ts",
     "./usageLimits": "./src/usageLimits.ts",
     "./user-initials": "./src/components/user-initials.tsx"

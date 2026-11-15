@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@clerk/clerk-expo": "^2.20.2",
+    "@convex-dev/presence": "^0.3.0",
     "@eva/backend": "workspace:*",
     "@eva/shared": "workspace:*",
     "@expo-google-fonts/inter": "^0.4.2",
