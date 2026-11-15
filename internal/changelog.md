@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: schedule a task's run or a project's build
+
+Date: 2026-11-15
+
+WHY: The web's Run and Build buttons can schedule instead of starting now; the phone could only show "Scheduled for …".
+
+Architectural: `src/ui/ScheduleSheet.tsx` is the web `SchedulePopover` as a bottom sheet on the kit `DateTimeField` (native date and time pickers, so the phone now depends on `@react-native-community/datetimepicker` 9.1.0, the Expo SDK 57 version): it opens on the current schedule or the next full hour, and offers Schedule, or Remove and Update, as the web; a passed time cannot be scheduled. The task overview has a calendar square beside Run Eva (To Do only, as the backend allows) and the "Scheduled for" chip opens the same sheet (`agentTasks.scheduleExecution` / `updateScheduledExecution` / `cancelScheduledExecution`); the project page has one beside Build, whose label shows a scheduled build (`buildWorkflow.scheduleBuild` / `updateScheduledBuild` / `cancelScheduledBuild`).
+
 ## Phone: sandbox and git actions on a task's and a project's page
 
 Date: 2026-11-15

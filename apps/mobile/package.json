@@ -24,6 +24,7 @@
     "@expo/vector-icons": "^15.1.1",
     "@json-render/core": "0.21.0",
     "@json-render/react-native": "0.21.0",
+    "@react-native-community/datetimepicker": "9.1.0",
     "@rn-primitives/select": "^1.5.2",
     "@rn-primitives/slot": "^1.5.2",
     "@rn-primitives/switch": "^1.5.2",
