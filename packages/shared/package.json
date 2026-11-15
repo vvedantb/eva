@@ -12,6 +12,7 @@
     "./appTabSlug": "./src/appTabSlug.ts",
     "./chatFeedback": "./src/chatFeedback.ts",
     "./chatLog": "./src/chatLog.ts",
+    "./chatReadState": "./src/chatReadState.ts",
     "./contextUsage": "./src/contextUsage.ts",
     "./dates": "./src/utils/dates.ts",
     "./dayLabel": "./src/utils/dayLabel.ts",

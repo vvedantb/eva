@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: chats are marked read, with the "NEW" divider and unread dots
+
+Date: 2026-11-15
+
+WHY: Reading a chat on the phone never told the server, so the web kept its unread dot set, and the phone showed no unread state at all.
+
+Architectural: The web's `useChatReadState` and `findNewMessageIds` moved to `@eva/shared/chatReadState` (the web wrapper adds tab visibility; `findNewMessageIds`' tests now test the shared code). The phone chat calls it while the screen is focused and the app is in front (`useAppActive`, `src/ui/appState.ts`), so opening a chat (or a reply landing while it is open) marks it read for both apps, and draws `NewDivider` (the web `ChatNewDivider`) above the first reply you had not seen. Session rows show the web's unread dot (primary, 6) when `hasUnread` and Eva is not working.
+
 ## Phone: notifications open their phone screen, not the browser
 
 Date: 2026-11-15
@@ -578,7 +586,6 @@ Date: 2026-11-11
 WHY: 0a–0d moved four lifecycles to one field each and kept the old fields, with read fallbacks, until their migrations ran. Once those migrations have run in prod, the old fields are dead data and the fallbacks are dead code.
 
 Architectural: removed `sessions.archived`, `sessions.sandboxDeleteAfter`, `sessions.activeWorkflowId`, `sessions.turnLifecycleVersion`, `sessionChats.activeWorkflowId`, `agentTasks.activeWorkflowId` / `scheduledAt` / `scheduledRetryAt` / `scheduledFunctionId`, and `projects.activeBuildWorkflowId` / `scheduledBuildAt` / `scheduledBuildFunctionId`. Removed the indexes `sessions.by_repo_archived_and_deleted` and `projects.by_repo_and_build_workflow`. `taskRunState` and `projectBuildState` now return the new field as is; `sessionArchive`, `withResolvedArchive`, the legacy-clearing writes and the unused prewarm arg `activeWorkflowField` are gone. The four migrations (`backfillSessionArchive`, `migrateTaskRunState`, `migrateProjectBuildState`, `clearSessionWorkflowSlots`) are deleted. `sessionChats.create` read `session.archived` directly; it now uses `isSessionArchived`. Deploy only after the four migrations have run, or schema validation fails.
-
 
 ## Projects: one explicit build state (0c)
 

@@ -1,5 +1,6 @@
 import { api, getAIModelProvider, normalizeAIModel, type Id } from "@eva/backend";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";
+import { findNewMessageIds, useChatReadState } from "@eva/shared/chatReadState";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
 import {
   buildPrecedingUserTurns,
@@ -43,14 +44,15 @@ import { toast } from "@vvedantb/native-ui/toast";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import * as Clipboard from "expo-clipboard";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
 import { useState, type ComponentProps, type ReactNode } from "react";
 import { Linking, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AttachButton } from "@/chat/AttachButton";
 import { formatDuration } from "@eva/shared/duration";
 import { AssistantMessage, LiveAssistantMessage } from "@/chat/AssistantMessage";
-import { DayDivider } from "@/chat/DayDivider";
+import { DayDivider, NewDivider } from "@/chat/DayDivider";
+import { useAppActive } from "@/ui/appState";
 import { UserMessageText } from "@/chat/MentionChip";
 import { TEAMMATE_FOOTER_INSET, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
 import { InlineCards, TurnOutputs, useChatCards, type InlineCard, type TurnOutput } from "@/chat/cards/ChatCards";
@@ -106,6 +108,11 @@ export default function ChatScreen() {
   const turn = useQuery(api.turns.getChatStatus, parentId ? { entityId: parentId } : "skip");
   const pending = useQuery(api.pendingQuestions.getActive, parentId ? { entityId: parentId } : "skip");
   const feedbackRows = useQuery(api.feedback.listForChat, parentId ? { parentId } : "skip");
+  // Read while it is on screen (this screen focused, the app in front), as the web marks its open chat;
+  // `newSinceAt` places the "NEW" divider above the first reply you had not seen.
+  const focused = useIsFocused();
+  const appActive = useAppActive();
+  const { newSinceAt } = useChatReadState({ parentId, active: focused && appActive });
   const me = useQuery(api.auth.me, {});
   // A teammate's turn shows their avatar and first name, from the same lookup as the web `ChatBody`.
   const teammateIds = otherUserIdsInChat(messages ?? [], me ?? undefined);
@@ -150,6 +157,7 @@ export default function ChatScreen() {
   const working = turn !== undefined && turn !== null;
   const streamingEntityId = parentId ? chatStreamingEntityId(parentId) : undefined;
   const dayStarts = findDayBoundaryIds(visible);
+  const newBoundaryId = findNewMessageIds(visible, newSinceAt, me ?? undefined)[0];
   // The inverted transcript draws its first row at the bottom. A copy, as `toReversed` is missing in some Hermes release builds.
   const newestFirst = [...visible].reverse();
   // The user turn before each reply holds the model it ran on (the footer mark), as the web.
@@ -299,6 +307,7 @@ export default function ChatScreen() {
               <ChatMessageRow
                 message={message}
                 dayStart={dayStarts.has(message._id)}
+                newStart={message._id === newBoundaryId}
                 fromTeammate={fromTeammate}
                 senderName={fromTeammate && message.userId ? teammateNames.get(message.userId) : undefined}
                 teammate={fromTeammate && message.userId ? teammateById.get(message.userId) : undefined}
@@ -511,6 +520,7 @@ type ChatMessage = FunctionReturnType<typeof api.messages.listByParent>[number] 
 function ChatMessageRow({
   message,
   dayStart,
+  newStart,
   fromTeammate,
   senderName,
   teammate,
@@ -529,6 +539,8 @@ function ChatMessageRow({
 }: {
   message: ChatMessage;
   dayStart: boolean;
+  /** The first reply you had not seen: the "NEW" divider goes above it. */
+  newStart: boolean;
   fromTeammate: boolean;
   senderName: string | undefined;
   teammate: ComponentProps<typeof TeammateBubble>["sender"];
@@ -568,6 +580,7 @@ function ChatMessageRow({
   return (
               <View className={`gap-3 ${THREAD_INSET}`}>
                 {dayStart ? <DayDivider timestamp={message.timestamp} /> : null}
+                {newStart ? <NewDivider /> : null}
                 {/* Web: parts `gap-0.5`; a reply is full width, a user message at most 95%. */}
                 <Message
                   from={message.role}
