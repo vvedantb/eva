@@ -59,6 +59,7 @@ import { SandboxBranchChip } from "@/chat/BranchChips";
 import { ComposerFooter, composerHeader, useSimpleView } from "@/chat/ComposerFooter";
 import { ModelChip } from "@/chat/ModelChip";
 import { ChatHeader } from "@/chat/ChatHeader";
+import { UsageButton } from "@/chat/UsageSheet";
 import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { MessageFooter, type Sentiment } from "@/chat/MessageFooter";
@@ -224,6 +225,7 @@ export default function ChatScreen() {
         onOpenWeb={openWebChat}
         onCopyLink={() => void Clipboard.setStringAsync(webUrl(chat.webPath))}
         onStop={working ? handleStop : undefined}
+        usage={<UsageButton chat={chat} />}
         sessionMenu={
           sessionTarget
             ? {

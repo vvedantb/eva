@@ -11,6 +11,7 @@
     "./appTabSlug": "./src/appTabSlug.ts",
     "./chatFeedback": "./src/chatFeedback.ts",
     "./chatLog": "./src/chatLog.ts",
+    "./contextUsage": "./src/contextUsage.ts",
     "./dates": "./src/utils/dates.ts",
     "./dayLabel": "./src/utils/dayLabel.ts",
     "./duration": "./src/utils/duration.ts",
@@ -33,6 +34,7 @@
     "./storageUpload": "./src/storageUpload.ts",
     "./taskDetail": "./src/taskDetail.ts",
     "./uiTaskPrompt": "./src/uiTaskPrompt.ts",
+    "./usageLimits": "./src/usageLimits.ts",
     "./user-initials": "./src/components/user-initials.tsx"
   },
   "peerDependencies": {

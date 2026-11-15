@@ -19,7 +19,7 @@ import { repoDisplayLabel, repoTileSlot, type SessionMenuAction } from "@eva/sha
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import { useQuery } from "convex/react";
-import { Fragment, type ComponentType } from "react";
+import { Fragment, type ComponentType, type ReactNode } from "react";
 import { Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SESSION_ACTION_ITEMS } from "@/sessions/useSessionActions";
@@ -38,7 +38,7 @@ type MenuEntry = {
 
 /**
  * The chat header, as the web chat bar: the repo logo (else its initial) and name, then the
- * chat title ("S Storefront / Add dark mode…"), and a ⋯ menu. The tile
+ * chat title ("S Storefront / Add dark mode…"), the usage button, and a ⋯ menu. The tile
  * takes the repo's web colour (`repoTileSlot`, the `--cat-*` ramp) once the
  * repo loads, grey until then. A back button
  * leads, as phones expect; the web's drawer has no back. In a session the
@@ -56,6 +56,7 @@ export function ChatHeader({
   onCopyLink,
   onStop,
   sessionMenu,
+  usage,
 }: {
   /** The chat's repo (the web `githubRepos.get`), for the tile colour. */
   repoId: Id<"githubRepos">;
@@ -68,6 +69,8 @@ export function ChatHeader({
   onStop?: () => void;
   /** Session chats: these session actions (`useSessionActions`) in their web groups. */
   sessionMenu?: { groups: SessionMenuAction[][]; onSelect: (action: SessionMenuAction) => void };
+  /** Before the ⋯ menu: the usage button (`UsageButton`), as the web header's context ring and plan chip. */
+  usage?: ReactNode;
 }) {
   const scheme = useScheme();
   const insets = useSafeAreaInsets();
@@ -129,6 +132,7 @@ export function ChatHeader({
           {displayTitle(title)}
         </Text>
       </View>
+      {usage}
       <DropdownMenu>
         <DropdownMenuTrigger accessibilityLabel="Chat options" hitSlop={4} className="h-11 w-11 items-center justify-center rounded-full active:opacity-70" style={{ backgroundColor: EVA_THEME[scheme].secondary }}>
           <IconDots size={18} color={foreground} />

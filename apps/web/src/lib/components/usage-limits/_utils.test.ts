@@ -16,7 +16,7 @@ import {
   usageRowsForAccount,
   worseTone,
   claudeUsageAccountScope,
-} from "./_utils";
+} from "@eva/shared/usageLimits";
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -166,7 +166,9 @@ test("plan-usage chip scope is omitted on non-Claude models", () => {
   expect(claudeUsageAccountScope("claude:sonnet", team)).toEqual(team);
   expect(claudeUsageAccountScope("cursor:grok-4.6", team)).toBeUndefined();
   expect(claudeUsageAccountScope("codex:gpt-5.5", team)).toBeUndefined();
-  expect(claudeUsageAccountScope("opencode:openai/gpt-5.4", team)).toBeUndefined();
+  expect(
+    claudeUsageAccountScope("opencode:openai/gpt-5.4", team),
+  ).toBeUndefined();
 });
 
 test("scoped weekly name follows the active Claude model", () => {
@@ -189,9 +191,9 @@ test("chip bar prefers Weekly (Fable) when the active model is Fable", () => {
     utilization: 12,
     tone: "neutral",
   });
-  expect(chipSummaryForActive([row], NOW, "claude:claude-sonnet-4-6")?.utilization).toBe(
-    90,
-  );
+  expect(
+    chipSummaryForActive([row], NOW, "claude:claude-sonnet-4-6")?.utilization,
+  ).toBe(90);
 });
 
 test("the scoped bar matches Anthropic's versioned display name", () => {
