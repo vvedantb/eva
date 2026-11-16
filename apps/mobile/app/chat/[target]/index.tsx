@@ -1,5 +1,6 @@
 import { api, getAIModelProvider, normalizeAIModel, type Id } from "@eva/backend";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";
+import { findNewMessageIds, useChatReadState } from "@eva/shared/chatReadState";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
 import {
   buildPrecedingUserTurns,
@@ -17,8 +18,11 @@ import {
   sandboxComposerState,
   type SessionMenuAction,
   toRepoRelativePath,
+  turnErrorTitle,
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
+import { chatTypingRoom } from "@eva/shared/typingPresence";
+import { isUsageLimitFailure } from "@eva/shared/usageLimitRecovery";
 import { messageLinkHref } from "@eva/shared/messageLink";
 import { type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { IconChevronDown, IconMessageCircle, IconPlayerStop } from "@tabler/icons-react-native";
@@ -35,6 +39,7 @@ import {
   PromptInputButton,
   Shimmer,
 } from "@vvedantb/native-ui/ai";
+import { providerLabel } from "@vvedantb/native-ui/brand";
 import { goBackOrReplace, RouterStackPageHeader } from "@vvedantb/native-ui/expo-router";
 import { CenteredSpinner, EmptyState, Spinner, Text } from "@vvedantb/native-ui/primitives";
 import { tokens } from "@vvedantb/native-ui/theme";
@@ -42,14 +47,15 @@ import { toast } from "@vvedantb/native-ui/toast";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import * as Clipboard from "expo-clipboard";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
 import { useState, type ComponentProps, type ReactNode } from "react";
 import { Linking, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AttachButton } from "@/chat/AttachButton";
 import { formatDuration } from "@eva/shared/duration";
 import { AssistantMessage, LiveAssistantMessage } from "@/chat/AssistantMessage";
-import { DayDivider } from "@/chat/DayDivider";
+import { DayDivider, NewDivider } from "@/chat/DayDivider";
+import { useAppActive } from "@/ui/appState";
 import { UserMessageText } from "@/chat/MentionChip";
 import { TEAMMATE_FOOTER_INSET, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
 import { InlineCards, TurnOutputs, useChatCards, type InlineCard, type TurnOutput } from "@/chat/cards/ChatCards";
@@ -59,13 +65,18 @@ import { SandboxBranchChip } from "@/chat/BranchChips";
 import { ComposerFooter, composerHeader, useSimpleView } from "@/chat/ComposerFooter";
 import { ModelChip } from "@/chat/ModelChip";
 import { ChatHeader } from "@/chat/ChatHeader";
+import { SessionChatTabs } from "@/chat/SessionChatTabs";
+import { SandboxControl, SandboxErrorBanner, useSessionSandbox } from "@/chat/SandboxControl";
 import { UsageButton } from "@/chat/UsageSheet";
 import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
+import { UsageLimitRecoveryCard } from "@/chat/UsageLimitRecovery";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { MessageFooter, type Sentiment } from "@/chat/MessageFooter";
 import { useAttachments } from "@/chat/useAttachments";
 import { type Chat, useChatModelPick } from "@/chat/useChatModelPick";
+import { TypingIndicator } from "@/chat/TypingIndicator";
 import { useDraftSync } from "@/chat/useDraftSync";
+import { useTypingPresence } from "@/chat/useTypingPresence";
 import { useMentionComposer } from "@/chat/useMentionComposer";
 import { WEB_URL } from "@/config";
 import { useSessionActions } from "@/sessions/useSessionActions";
@@ -102,7 +113,16 @@ export default function ChatScreen() {
   const convex = useConvex();
   const turn = useQuery(api.turns.getChatStatus, parentId ? { entityId: parentId } : "skip");
   const pending = useQuery(api.pendingQuestions.getActive, parentId ? { entityId: parentId } : "skip");
+  // A session chat's session row: its PR state (Send for Review) and the sandbox's unpushed work (Commit & push).
+  const sessionRow = useQuery(api.sessions.get, chat?.session ? { id: chat.session.id } : "skip");
   const feedbackRows = useQuery(api.feedback.listForChat, parentId ? { parentId } : "skip");
+  // Read while it is on screen (this screen focused, the app in front), as the web marks its open chat;
+  // `newSinceAt` places the "NEW" divider above the first reply you had not seen.
+  const focused = useIsFocused();
+  const appActive = useAppActive();
+  const { newSinceAt } = useChatReadState({ parentId, active: focused && appActive });
+  // A session chat's sandbox: the header wakes or sleeps it, and a failed wake shows under the header.
+  const sandbox = useSessionSandbox(chat?.session?.id);
   const me = useQuery(api.auth.me, {});
   // A teammate's turn shows their avatar and first name, from the same lookup as the web `ChatBody`.
   const teammateIds = otherUserIdsInChat(messages ?? [], me ?? undefined);
@@ -113,7 +133,7 @@ export default function ChatScreen() {
   const send = useMutation(api.chats.send);
   const simpleView = useSimpleView();
   // The web leaves a session's page once it is archived; the phone goes back (to Sessions after a deep link).
-  const sessionActions = useSessionActions({ onArchived: () => goBackOrReplace(router, "/sessions") });
+  const sessionActions = useSessionActions({ onArchived: () => goBackOrReplace(router, "/sessions"), sessionId: chat?.session?.id });
 
   // The oldest unfinished reply owns the chat's streaming row, as the web (turns run in order).
   const liveReplyId = findStreamingTargetMessage(messages ?? [])?._id;
@@ -147,6 +167,7 @@ export default function ChatScreen() {
   const working = turn !== undefined && turn !== null;
   const streamingEntityId = parentId ? chatStreamingEntityId(parentId) : undefined;
   const dayStarts = findDayBoundaryIds(visible);
+  const newBoundaryId = findNewMessageIds(visible, newSinceAt, me ?? undefined)[0];
   // The inverted transcript draws its first row at the bottom. A copy, as `toReversed` is missing in some Hermes release builds.
   const newestFirst = [...visible].reverse();
   // The user turn before each reply holds the model it ran on (the footer mark), as the web.
@@ -155,6 +176,8 @@ export default function ChatScreen() {
   const teammateNames = firstNameByUserId(teammates ?? []);
   const teammateById = new Map((teammates ?? []).map((user) => [user._id, user]));
   const latestReplyId = visible.findLast((message) => message.role === "assistant")?._id;
+  // The web recovery card reads every message, so a later system alert also hides it.
+  const newestMessage = messages?.[messages.length - 1];
   // A changed file opens the PR diff, as the web Review pane; simple view has no card, as the web.
   const openDiff = simpleView
     ? undefined
@@ -169,6 +192,11 @@ export default function ChatScreen() {
         webPath: chat.webPath,
         branchName: chat.intendedBranch,
         prUrl: chat.prUrl,
+        prState: sessionRow?.prState,
+        repoId: chat.repoId,
+        hasUnpushedWork:
+          sessionRow?.status === "active" &&
+          ((sessionRow.sandboxGitSync?.uncommittedFiles ?? 0) > 0 || (sessionRow.sandboxGitSync?.unpushedCommits ?? 0) > 0),
       }
     : null;
 
@@ -208,6 +236,16 @@ export default function ChatScreen() {
   const openWebChat = () => void Linking.openURL(webUrl(chat.webPath));
   // A panel button sends its text as a message, as the web: withheld on a closed
   // chat and on one whose sandbox is asleep, which disables the buttons.
+  // Retry on a failed turn re-sends the prompt that turn answered, attachments included, as the web.
+  const retryFor = (messageId: string) => {
+    const prompt = precedingUserTurns.get(messageId);
+    if (!chat.canReply || !prompt) return undefined;
+    return () => {
+      send({ target: chat.target, message: prompt.content, attachmentStorageIds: prompt.attachmentStorageIds }).catch(() =>
+        toast.error("Couldn't send your message"),
+      );
+    };
+  };
   const panelReply =
     chat.canReply && chat.sandboxActive
       ? (message: string) => {
@@ -226,6 +264,7 @@ export default function ChatScreen() {
         onCopyLink={() => void Clipboard.setStringAsync(webUrl(chat.webPath))}
         onStop={working ? handleStop : undefined}
         usage={<UsageButton chat={chat} />}
+        sandbox={<SandboxControl sandbox={sandbox} working={working} />}
         sessionMenu={
           sessionTarget
             ? {
@@ -233,10 +272,13 @@ export default function ChatScreen() {
                   .actionsFor(sessionTarget)
                   .map((group) => group.filter((action) => !HEADER_HIDDEN_ACTIONS.has(action))),
                 onSelect: (action) => sessionActions.run(action, sessionTarget),
+                itemFor: sessionActions.itemFor,
               }
             : undefined
         }
       />
+      <SandboxErrorBanner sandbox={sandbox} />
+      {chat.session ? <SessionChatTabs sessionId={chat.session.id} activeChatId={chat.session.chatId} archived={chat.session.archived} /> : null}
       {sessionActions.dialogs}
       <Conversation>
         <SeenRowsContext.Provider value={seenRows}>
@@ -296,6 +338,7 @@ export default function ChatScreen() {
               <ChatMessageRow
                 message={message}
                 dayStart={dayStarts.has(message._id)}
+                newStart={message._id === newBoundaryId}
                 fromTeammate={fromTeammate}
                 senderName={fromTeammate && message.userId ? teammateNames.get(message.userId) : undefined}
                 teammate={fromTeammate && message.userId ? teammateById.get(message.userId) : undefined}
@@ -310,6 +353,8 @@ export default function ChatScreen() {
                 cards={cards.byMessageId.get(message._id)}
                 outputs={outputs.byMessageId.get(message._id)}
                 onPanelReply={panelReply}
+                // Only a failed turn gets one, so the rest keep their props (the web `onRetryTurn`).
+                onRetryTurn={message.errorType !== undefined ? retryFor(message._id) : undefined}
                 onOpenWebChat={openWebChat}
               />
             );
@@ -319,6 +364,8 @@ export default function ChatScreen() {
         {/* The composer or the question card: the scroll button rides 16 above it, as the web's `bottom-4` over the dock. */}
         {/* Solid: the keyboard lifts the dock over the transcript, which must not show through it. */}
         <ConversationDock style={{ backgroundColor: EVA_THEME[scheme].background }}>
+          {/* Once the person is known: the typing presence heartbeat needs their id. */}
+          {me ? (
           <ChatDock
             target={target}
             chat={chat}
@@ -329,7 +376,9 @@ export default function ChatScreen() {
             questions={questions}
             onStop={handleStop}
             queue={<QueuedMessagesPanel parentId={parentId} isExecuting={working} isSandboxActive={chat.sandboxActive} />}
+            usageLimitFailure={isUsageLimitFailure(newestMessage) ? newestMessage.content : undefined}
           />
+          ) : null}
         </ConversationDock>
         {/* Centred on the thread, which sits 10 left of the screen's centre, as the web panel. */}
         <ConversationScrollButton label="Scroll to end" icon={IconChevronDown} showLabel insets={{ right: 10 }} />
@@ -356,10 +405,11 @@ function ChatDock({
   questions,
   onStop,
   queue,
+  usageLimitFailure,
 }: {
   target: string;
   chat: Chat;
-  me: Id<"users"> | undefined;
+  me: Id<"users">;
   working: boolean;
   simpleView: boolean;
   pending: PendingQuestion | null | undefined;
@@ -367,6 +417,8 @@ function ChatDock({
   onStop: () => void;
   /** The queued messages, above the composer only (not over a question card), as the web. */
   queue: ReactNode;
+  /** The newest reply's text while it is a usage-limit failure: the retry card shows above the composer. */
+  usageLimitFailure: string | undefined;
 }) {
   const scheme = useScheme();
   const insets = useSafeAreaInsets();
@@ -378,7 +430,13 @@ function ChatDock({
   const draft = useDraftSync(
     chat.session ? { kind: "sessionChat", sessionId: chat.session.id, chatId: chat.session.chatId } : null,
   );
-  const composer = useMentionComposer(chat.repoId, getAIModelProvider(normalizeAIModel(chat.model)), draft.save);
+  // "Someone is typing", as the web chat composer: the room is the session chat (`parentId`), as the web's;
+  // before a task or project chats it has none, so this chat's own target stands in.
+  const typing = useTypingPresence(chatTypingRoom(chat.parentId ?? target), me);
+  const composer = useMentionComposer(chat.repoId, getAIModelProvider(normalizeAIModel(chat.model)), (tokenized) => {
+    draft.save(tokenized);
+    if (tokenized) typing.onActivity();
+  });
   draft.pull(composer);
   const modelPick = useChatModelPick(target, chat, me);
 
@@ -410,6 +468,7 @@ function ChatDock({
     }
     const attachmentStorageIds = attachments.storageIds;
     attachments.clear();
+    typing.stopTyping();
     send({ target: chat.target, message: composer.tokenize(text), attachmentStorageIds }).catch(() => {
       toast.error("Couldn't send your message");
     });
@@ -438,7 +497,19 @@ function ChatDock({
     // thread. Send stays ready during a turn (a send queues behind it) and Stop sits beside
     // it, as `stopMode="alongside"`.
     <View className="pr-2.5">
+      {usageLimitFailure !== undefined && modelPick.pick?.account && modelPick.switchAccount ? (
+        <UsageLimitRecoveryCard
+          chat={chat}
+          failure={usageLimitFailure}
+          accounts={modelPick.pick.account.accounts}
+          switchAccount={modelPick.switchAccount}
+          working={working}
+        />
+      ) : null}
       {queue}
+      <View className="pl-3">
+        <TypingIndicator users={typing.typingUsers} />
+      </View>
       <PromptInput
         layout="inline"
         shape="pill"
@@ -495,6 +566,7 @@ type ChatMessage = FunctionReturnType<typeof api.messages.listByParent>[number] 
 function ChatMessageRow({
   message,
   dayStart,
+  newStart,
   fromTeammate,
   senderName,
   teammate,
@@ -509,10 +581,13 @@ function ChatMessageRow({
   cards,
   outputs,
   onPanelReply,
+  onRetryTurn,
   onOpenWebChat,
 }: {
   message: ChatMessage;
   dayStart: boolean;
+  /** The first reply you had not seen: the "NEW" divider goes above it. */
+  newStart: boolean;
   fromTeammate: boolean;
   senderName: string | undefined;
   teammate: ComponentProps<typeof TeammateBubble>["sender"];
@@ -520,6 +595,8 @@ function ChatMessageRow({
   live: string | undefined;
   isLatestReply: boolean;
   link: string;
+  /** Re-sends the prompt a failed turn answered; set only on a failed turn that can be retried. */
+  onRetryTurn?: () => void;
   turn: ComponentProps<typeof MessageFooter>["turn"];
   sentiment: Sentiment | undefined;
   onOpenDiff: ComponentProps<typeof AssistantMessage>["onOpenDiff"];
@@ -534,6 +611,10 @@ function ChatMessageRow({
   onOpenWebChat: () => void;
 }) {
   const isUser = message.role === "user";
+  // A failed turn's title ("This turn failed", "Claude usage limit reached"), or null for a reply.
+  const failure = isUser
+    ? null
+    : turnErrorTitle({ errorType: message.errorType, turnModel: turn?.model, messageModel: message.model, providerLabel });
   const attachments = isUser ? messageAttachments(message) : [];
   const cardList =
     cards && cards.length > 0 ? (
@@ -552,6 +633,7 @@ function ChatMessageRow({
   return (
               <View className={`gap-3 ${THREAD_INSET}`}>
                 {dayStart ? <DayDivider timestamp={message.timestamp} /> : null}
+                {newStart ? <NewDivider /> : null}
                 {/* Web: parts `gap-0.5`; a reply is full width, a user message at most 95%. */}
                 <Message
                   from={message.role}
@@ -579,6 +661,7 @@ function ChatMessageRow({
                           onOpenDiff={onOpenDiff}
                           media={message.media}
                           tabPanels={tabbed ? cardList : undefined}
+                          failure={failure ? { title: failure, onRetry: onRetryTurn } : undefined}
                         />
                       )}
                     </MessageContent>

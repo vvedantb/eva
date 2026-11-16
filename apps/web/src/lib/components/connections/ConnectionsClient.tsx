@@ -86,7 +86,6 @@ function ConnectionsView({
     <SettingsPage title="Connections">
       <SettingsSection
         title="Apps"
-        description="Sign in to Linear and Figma through Eva. Team API keys remain a fallback — agents use your OAuth account when you have one."
         bodyVariant="list"
       >
         {statuses === undefined ? (

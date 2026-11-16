@@ -838,12 +838,21 @@ describe("mobile api", () => {
 
   test("sessionMenuActions lists the web row menu in its order and groups, per list and view", () => {
     const pr = { branchName: "eva/login", prUrl: "https://github.com/vvedantb/eva/pull/1" };
+    // The git actions are a group of their own: no PR state yet, so Send for Review shows.
     expect(sessionMenuActions({ archived: false, simpleView: false, ...pr })).toEqual([
-      ["rename", "regenerateTitle", "copyTitle", "copyLink", "copyBranchName", "openPr"],
+      ["rename", "regenerateTitle", "copyTitle", "copyLink", "copyBranchName"],
+      ["openPr", "sendForReview"],
+      ["archive"],
+    ]);
+    // Unpushed work adds Commit & push; a PR already out for review drops Send for Review.
+    expect(sessionMenuActions({ archived: false, simpleView: false, ...pr, prState: "open", hasUnpushedWork: true })).toEqual([
+      ["rename", "regenerateTitle", "copyTitle", "copyLink", "copyBranchName"],
+      ["commitPush", "openPr"],
       ["archive"],
     ]);
     expect(sessionMenuActions({ archived: true, simpleView: false, ...pr })).toEqual([
-      ["copyTitle", "copyLink", "copyBranchName", "openPr"],
+      ["copyTitle", "copyLink", "copyBranchName"],
+      ["openPr"],
       ["unarchive"],
     ]);
     expect(sessionMenuActions({ archived: false, simpleView: true, ...pr })).toEqual([

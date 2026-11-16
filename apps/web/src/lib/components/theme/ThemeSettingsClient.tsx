@@ -63,7 +63,6 @@ export function ThemeSettingsClient() {
     <SettingsPage title="Theme">
       <SettingsSection
         title="Appearance"
-        description="Choose light, dark, or system."
         bodyClassName="max-w-2xl"
       >
         <AppearanceSection
@@ -74,7 +73,6 @@ export function ThemeSettingsClient() {
 
       <SettingsSection
         title="Presets"
-        description="Start from a ready-made look."
         bodyClassName="max-w-2xl"
       >
         <PresetsSection
@@ -85,7 +83,6 @@ export function ThemeSettingsClient() {
 
       <SettingsSection
         title="Customize"
-        description="Tune accent, type, spacing, and shape."
       >
         <div className="space-y-6">
           <AccentColorSection
@@ -105,7 +102,6 @@ export function ThemeSettingsClient() {
 
       <SettingsSection
         title="Preview"
-        description="See the current look on common controls."
       >
         <ThemePreview
           accentColor={accentColor}

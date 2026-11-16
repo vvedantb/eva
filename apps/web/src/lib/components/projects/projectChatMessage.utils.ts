@@ -27,40 +27,8 @@ export const isParsedQuestion = (v: unknown): v is ParsedQuestion =>
   Array.isArray(v.options) &&
   v.options.every(isValidOption);
 
-export const isInterviewTransitionContent = (content: string): boolean => {
-  try {
-    const parsed: unknown = JSON.parse(content);
-    if (typeof parsed !== "object" || parsed === null) {
-      return false;
-    }
-    if ("interviewComplete" in parsed && parsed.interviewComplete === true) {
-      return true;
-    }
-    if ("ready" in parsed && parsed.ready === true) {
-      return true;
-    }
-    return false;
-  } catch {
-    return false;
-  }
-};
-
-export const isSpecContent = (content: string): boolean => {
-  try {
-    const parsed: unknown = JSON.parse(content);
-    if (typeof parsed !== "object" || parsed === null) {
-      return false;
-    }
-    return (
-      "title" in parsed &&
-      typeof parsed.title === "string" &&
-      "tasks" in parsed &&
-      Array.isArray(parsed.tasks)
-    );
-  } catch {
-    return false;
-  }
-};
+// Moved to `@eva/shared` (`projectMeta.ts`) so the phone's interview reads turns the same way.
+export { isInterviewTransitionContent, isSpecContent } from "@eva/shared";
 
 // Walks backwards from `beforeIndex` collecting activity logs from adjacent
 // assistant rows that have no user-visible message yet (eg. intermediate

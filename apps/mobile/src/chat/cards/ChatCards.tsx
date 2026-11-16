@@ -10,6 +10,7 @@ import * as WebBrowser from "expo-web-browser";
 import { View } from "react-native";
 import { copyText } from "@/ui/copyText";
 import { useScheme } from "@/ui/theme";
+import { EnvVarRequestCard, SessionProposalCard } from "./AgentRequestCards";
 import { ChatHtmlFrame } from "./ChatHtmlFrame";
 import { AgentFeedbackCard, ChatArtifactCard } from "./TurnOutputs";
 
@@ -18,7 +19,11 @@ export type InlineCard = {
   _id: string;
   messageId?: string;
   createdAt: number;
-  card: { kind: "panel"; spec: string } | { kind: "html"; render: Doc<"chatHtmlRenders"> };
+  card:
+    | { kind: "panel"; spec: string }
+    | { kind: "html"; render: Doc<"chatHtmlRenders"> }
+    | { kind: "envVarRequest"; request: Doc<"envVarRequests"> }
+    | { kind: "sessionProposal"; proposal: Doc<"sessionProposals"> };
 };
 
 /** An artifact or agent report, placed by the same rule but kept with the turn's output. */
@@ -32,14 +37,14 @@ export type TurnOutput = {
 };
 
 /**
- * The chat's agent-posted cards (`render_ui` panels, `render_html` pages) and
+ * The chat's agent-posted cards (`render_ui` panels, `render_html` pages, a
+ * secret the agent asked for, a session it proposes) and
  * turn outputs (`create_artifact` artifacts, `submit_feedback` reports), each
  * placed under its turn, else under the newest row before it, else after the
  * last message, as the web `ChatBody`. One query each per chat. The
  * transcript loads in pages: while `hasOlderHistory`, a card whose turn is
  * above the loaded rows waits for that page, as the web, instead of falling
- * to the end of the chat. The web's secret request cards (`request_env_var`)
- * are not on the phone yet.
+ * to the end of the chat.
  */
 export function useChatCards(
   parentId: Doc<"messages">["parentId"] | undefined,
@@ -49,6 +54,8 @@ export function useChatCards(
 ) {
   const panels = useQuery(api.chatUi.listByParent, parentId ? { parentId } : "skip");
   const htmlRenders = useQuery(api.chatHtml.listByParent, parentId ? { parentId } : "skip");
+  const envVarRequests = useQuery(api.envVarRequests.listByParent, parentId ? { parentId } : "skip");
+  const sessionProposals = useQuery(api.sessionProposals.listByParent, parentId ? { parentId } : "skip");
   const artifacts = useQuery(api.artifacts.listForChat, parentId ? { parentId } : "skip");
   const cards = placeChatUiPanels<InlineCard>(
     [
@@ -64,6 +71,22 @@ export function useChatCards(
         createdAt: render.createdAt,
         card: { kind: "html" as const, render },
       })),
+      ...(envVarRequests ?? []).map(
+        (request): InlineCard => ({
+          _id: request._id,
+          messageId: request.messageId,
+          createdAt: request.createdAt,
+          card: { kind: "envVarRequest", request },
+        }),
+      ),
+      ...(sessionProposals ?? []).map(
+        (proposal): InlineCard => ({
+          _id: proposal._id,
+          messageId: proposal.messageId,
+          createdAt: proposal.createdAt,
+          card: { kind: "sessionProposal", proposal },
+        }),
+      ),
     ],
     rows,
     hasOlderHistory,
@@ -104,20 +127,27 @@ export function InlineCards({
 }) {
   return (
     <View className="gap-2">
-      {cards.map(({ _id, card }) =>
-        card.kind === "panel" ? (
-          <GenerativeUiPanel
-            key={_id}
-            spec={card.spec}
-            onReply={onReply}
-            onOpenUrl={openInApp}
-            onCopy={copyText}
-            renderUnsupported={(type) => <OpenOnWebCard type={type} onPress={onOpenWebChat} />}
-          />
-        ) : (
-          <ChatHtmlFrame key={_id} render={card.render} rowKey={rowKey} />
-        ),
-      )}
+      {cards.map(({ _id, card }) => {
+        switch (card.kind) {
+          case "panel":
+            return (
+              <GenerativeUiPanel
+                key={_id}
+                spec={card.spec}
+                onReply={onReply}
+                onOpenUrl={openInApp}
+                onCopy={copyText}
+                renderUnsupported={(type) => <OpenOnWebCard type={type} onPress={onOpenWebChat} />}
+              />
+            );
+          case "html":
+            return <ChatHtmlFrame key={_id} render={card.render} rowKey={rowKey} />;
+          case "envVarRequest":
+            return <EnvVarRequestCard key={_id} request={card.request} onReply={onReply} />;
+          case "sessionProposal":
+            return <SessionProposalCard key={_id} proposal={card.proposal} onReply={onReply} />;
+        }
+      })}
     </View>
   );
 }

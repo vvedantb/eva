@@ -7,6 +7,7 @@ import {
   IconFolder,
   IconLink,
   IconPlayerPlay,
+  IconSquareCheck,
   IconTrash,
   IconUserPlus,
 } from "@tabler/icons-react-native";
@@ -15,7 +16,7 @@ import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import * as Clipboard from "expo-clipboard";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Text, type TextStyle } from "react-native";
 import { WEB_URL } from "@/config";
 import { MenuDivider, MenuSheet, SubmenuRow } from "@/ui/MenuSheet";
@@ -51,12 +52,18 @@ export function useQuickTaskActions({
   users,
   projects,
   onDeleted,
+  extraRows,
+  onSelect,
 }: {
+  /** Rows that lead the menu (the overview's sandbox and git actions); given the menu's `close`. */
+  extraRows?: (close: () => void) => ReactNode;
   repo: Repo;
   users: User[] | undefined;
   projects: Project[] | undefined;
   /** After a delete: the overview leaves the deleted task. */
   onDeleted?: () => void;
+  /** The list's select mode, starting with this task ticked: "Select" leads the menu when set. */
+  onSelect?: (task: QuickTask) => void;
 }) {
   const scheme = useScheme();
   const theme = EVA_THEME[scheme];
@@ -100,6 +107,20 @@ export function useQuickTaskActions({
       case "root":
         return (
           <>
+            {extraRows?.(close)}
+            {onSelect ? (
+              <>
+                <SheetRow
+                  icon={IconSquareCheck}
+                  title="Select"
+                  onPress={() => {
+                    close();
+                    onSelect(task);
+                  }}
+                />
+                <MenuDivider />
+              </>
+            ) : null}
             {task.projectId === undefined ? (
               <SheetRow
                 icon={IconPlayerPlay}

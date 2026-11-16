@@ -1,5 +1,151 @@
 # Changelog
 
+## Settings: no explanatory sub-text under titles
+
+Date: 2026-11-16
+
+WHY: Every settings section, toggle and field had a line of explanation under its title. It was too much text to read.
+
+Architectural: static `description` props are removed from `SettingsSection`, `SettingsToggleRow` and `SettingsField` across global and repo settings. Kept: live data (counts, sandbox status, time zone, daily stop time, shortcut keys), input format hints (cron, Grok webhook URL, Tabler icon name), "never injected" secret warnings, instructional empty states and experimental flag descriptions. `isMonorepoCodebase` and the `listSiblingApps` query in `ConfigClient` are gone, because only the removed "Applies to every app" hint used them.
+
+## Phone: a chat with several PRs lists them all in its "…" menu
+
+Date: 2026-11-16
+
+WHY: The phone menus of a session, quick task or project showed one "Open PR" or "View PR" row, so a chat's other PRs (stacked or linked ones) could not be reached from the phone.
+
+Architectural: with two or more PRs (`pullRequests.listForOwner`) the row reads "Pull requests (N)" and opens a bottom sheet (`src/reviews/PullRequestsSheet.tsx`): one row per PR, open and draft first, and a page per PR with the web `PrActionsSubmenus` actions (Open PR on the phone's PR screen, View on GitHub, Copy link, Stack a new session, Close without merging). One PR keeps the direct row. `orderPrsLiveFirst` and `pullRequestsMenuLabel` moved to `@eva/shared` (`prState.ts`) and the web menu reads them; the close confirm is one phone `PrCloseDialog`, also used by the PR screen; `useOpenPr` replaces the session menu's and the task and project pages' own copies.
+
+## Automations Hub: "New" in the header, one `+` in the sidebar
+
+Date: 2026-11-16
+
+WHY: The sidebar had two buttons per app (hub, new) and the hub page repeated its own title and a long blurb.
+
+Architectural: the page title is now "Automations Hub" with a "New" header button (`automations/_components/NewAutomationButton.tsx`, the create dialog moved from `GlobalAutomationsSidebar`). The "Automations Hub" subheading and its blurb are gone; the "n of m installed" count stays. In `GlobalAutomationGroup` the grid hub link is removed and `+` links to that app's hub.
+
+## Snapshot seed settles live state from the prod export
+
+Date: 2026-11-16
+
+WHY: A sandbox seeded from a prod export showed sessions as running, turns in flight and task runs pending, because the export is taken while they are live.
+
+Architectural: `scripts/sync-to-local.mjs` rewrites the root tables during its existing python zip pass (`settle()`): sessions not closed → `closed`; turns that are live or open → `done`, `open: false`; agent runs queued/running → `cancelled`; `agentTasks.run` removed; `projects.activeWorkflowId` and `interviewSandboxClaim` removed. No rows or tables are dropped. The seed prints a count per table.
+
+## Web: hover cards on GitHub pull request and Eva links in chat
+
+Date: 2026-11-15
+
+WHY: A PR link in chat showed only its URL or label; to see its state, title or size the reader had to open GitHub.
+
+Architectural: `ChatMarkdownLink` (`apps/web/src/lib/components/chat/ChatMarkdownLink.tsx`) is the chat `a` renderer: a link that `@eva/shared` `parseGithubPrLink` reads as `github.com/owner/name/pull/n` gets a hover card with state, `owner/name #n`, updated time, title, author, `+/−` and file count (reusing the review page's `statusMeta`, `PrAvatar`, `PrDiffStat`); other links stay `MarkdownLink`. Agent replies (`ChatMessage`) and user messages (`MarkdownMentionText`) use it. The card fetches only when open, through the new `github.getPullRequestCard`, which resolves the owner/name to a repo the caller can read (`githubRepos.findAccessibleIdByOwnerAndName`) and returns null otherwise. It shares the PR header cache with the Reviews page; the header payload gained `status`, `draft`, `authorAvatarUrl`, `additions`, `deletions` and `changedFiles` (cache renamed `prHeaderV2`).
+
+Links to an Eva session, quick task, project or doc (`/owner/name[/app]/<section>/<numId>`, as a path or a full URL on this app's origin; `@eva/shared` `parseEvaEntityLink`) get the `@` mention chip's card: the new `mentions.getEntityByPath` resolves the path to the repo and entity id, and `DataMentionHoverCardBody` renders it. The repo-by-path rule moved from `githubRepos.getByOwnerAndName` into `findRepoByPath` so both pick the same row.
+
+## Phone: retry a usage-limit failure on another account
+
+Date: 2026-11-15
+
+WHY: When a turn hit the provider's usage limit, the phone showed only the error, so the only way to keep going was to switch accounts and resend by hand, or open the web.
+
+Architectural: the recovery card's logic moved from the web (`usageLimitBanner.ts`, `utils/credentialSourceLabel.ts`, the headroom maths in `UsageLimitAccountOption`) to `@eva/shared/usageLimitRecovery` (`isUsageLimitFailure`, the reset text and subtitle, the title and copy, `usageLimitRetryCandidates`, now generic over the account id type, `usageLimitHeadroom` and `resolveCredentialSourceLabel`); the web banner and row read it. The phone's `src/chat/UsageLimitRecovery.tsx` shows the card above the chat composer while the newest message is a usage-limit failure, for whoever may change the chat's account: one row per other account of the provider with its headroom, and a tap switches the account (the new awaitable `switchAccount` of `useChatModelPick`) and then calls `sessionWorkflow.retryLastTurnWithAccount`.
+
+## Phone: select quick tasks and act on them together
+
+Date: 2026-11-15
+
+WHY: The web Quick Tasks list has a select mode and bulk bar (status, assign, run, labels, project, delete); the phone could only act on one task at a time.
+
+Architectural: "Select" leads a quick task row's long-press menu (`useQuickTaskActions` `onSelect`) and starts select mode: rows show the inbox's checkbox (`QuickTaskRow` `selection`), Android back leaves it, and `QuickTaskBulkBar` (`src/quickTasks/QuickTaskBulk.tsx`, the kit `BulkActionBar`) takes the tab bar's place with Status, Assign and Run, then More: Assign to Me, Add Labels, Move to project and Delete All. Each runs the web's per-task writes (`updateStatus`, `update`, `startExecution`, `assignToProject`, `remove`); Run and Delete ask with the web's words, and Delete offers Undo (`restore`). The status, reviewer, tags and project sheets are the existing `OptionChips` sheets.
+
+## Phone: answer a project's interview and accept or reject its plan
+
+Date: 2026-11-15
+
+WHY: The phone's Plan tab only showed the interview and the plan, and said to answer and approve on the web.
+
+Architectural: `@eva/shared` `projectMeta.ts` gains `parseInterviewQuestion`, `currentInterviewQuestion`, `formatInterviewAnswer` (the web's `Q: … A: …`), and the web's `isInterviewTransitionContent` / `isSpecContent`, which the web utils now re-export. The phone `ProjectPlan` runs the web Plan tab: "Start Interview" (`projectInterviewWorkflow.startInterview`), the open question as the kit `ChoiceQuestion` (with "Other"; the answer goes through `projects.addMessage`, then the next question is asked), "Thinking…" while the workflow runs, "Continue interview" when a run stopped early, and on the generated plan Accept Plan (`projects.startDevelopment`) and Reject with a reason (back to Draft, the interview restarting with `rejectionReason`), as the web. Clear transcript stays on the web.
+
+## Phone: Commit & push, Send for Review and the PR screen from a session's menu
+
+Date: 2026-11-15
+
+WHY: The web session header pushes the sandbox's work (Commit & push), sends the PR for review and opens PRs; the phone menu stopped at Open PR, which went to the browser.
+
+Architectural: `sessionMenuActions` (`@eva/shared`) gains the web's git group after the main block: Commit & push while the awake sandbox has uncommitted files or unpushed commits ("Save to GitHub" in simple view), Open PR, and Send for Review under `canSendSessionForReview`, which moved there from the web (`sessionReadOnly.ts` re-exports it). The phone's `useSessionActions` runs `sandbox.commitAndPushSandbox` (the web's toasts) and `github.createSessionPr` behind the web "Send for Code Review" confirm, and Open PR opens the phone's PR screen (`prNumberFromGithubUrl` in the session's repo), else the browser. The chat reads `sessions.get` for the PR state and git sync; the session rows pass theirs.
+
+## Phone: the agent's secret requests and session proposals in chat
+
+Date: 2026-11-15
+
+WHY: When the agent asked for a secret (`request_env_var`) or proposed a session (`propose_session`), the phone showed nothing, so the agent waited until someone opened the web.
+
+Architectural: `useChatCards` also reads `envVarRequests.listByParent` and `sessionProposals.listByParent` and places them with the panels, as the web `ChatBody`. `src/chat/cards/AgentRequestCards.tsx`: `EnvVarRequestCard` (the key, the reason, a masked field kept out of autofill, "Save securely" through `envVarRequestsActions.save`, "Decline"; the value is never logged or shown; answered, one line) and `SessionProposalCard` ("Suggested for a new session", "New session" through `sessionProposals.start`, "Do it here" through `keepHere`; answered, one line, a started one opening its session).
+
+## Phone: schedule a task's run or a project's build
+
+Date: 2026-11-15
+
+WHY: The web's Run and Build buttons can schedule instead of starting now; the phone could only show "Scheduled for …".
+
+Architectural: `src/ui/ScheduleSheet.tsx` is the web `SchedulePopover` as a bottom sheet on the kit `DateTimeField` (native date and time pickers, so the phone now depends on `@react-native-community/datetimepicker` 9.1.0, the Expo SDK 57 version): it opens on the current schedule or the next full hour, and offers Schedule, or Remove and Update, as the web; a passed time cannot be scheduled. The task overview has a calendar square beside Run Eva (To Do only, as the backend allows) and the "Scheduled for" chip opens the same sheet (`agentTasks.scheduleExecution` / `updateScheduledExecution` / `cancelScheduledExecution`); the project page has one beside Build, whose label shows a scheduled build (`buildWorkflow.scheduleBuild` / `updateScheduledBuild` / `cancelScheduledBuild`).
+
+## Phone: sandbox and git actions on a task's and a project's page
+
+Date: 2026-11-15
+
+WHY: The web task and project pages wake and sleep their sandbox, commit and push, create the PR, resolve conflicts and open the PR; the phone had none of these.
+
+Architectural: The rules moved into `@eva/shared` (`ownedSandboxRules.ts`: `taskCanStartSandbox`, `taskCanResolveConflicts`, `taskCanCreatePr`, `projectCanCreatePr`, `projectCanResolveConflicts`, `PREVIEW_SANDBOX_ALLOWED_STATUSES`); the web's `deriveSandboxFlags`, `getMoreMenuVisibility`, `useTaskDetail` and `projectDetailHelpers` call them. `src/sandbox/OwnedSandboxActions.tsx` drives the owner's own session (`sessions.getOwned`, `ensureOwned` on a first wake, `useSessionSandbox`, `sandbox.commitAndPushSandbox`) and gives `useTaskGitActions` / `useProjectGitActions` rows that lead the "…" sheets (`extraRows` on `useQuickTaskActions` and `useProjectActions`): Wake or Sleep Eva (sleep says to stop Eva first mid-turn), Commit & push, Create PR (`taskWorkflowActions.createTaskPr` / `createProjectPr`), Resolve Conflicts behind the web confirm (`agentTasks.startExecution` "resolve_conflicts" / `projects.resolveProjectConflicts`) and View PR on the phone's PR screen.
+
+## Phone: switch between a session's chats and start a parallel one
+
+Date: 2026-11-15
+
+WHY: The web session has a chat tab bar (parallel chats on one sandbox); the phone opened only the Main chat and could not start another.
+
+Architectural: `src/chat/SessionChatTabs.tsx` is the web `ChatTabsBar` under a session chat's header: one tab per open chat from `sessionChats.listForSession`, Main first, the open one tinted, a working mark from `turns.listSessionChatStatuses`, and "+" (`sessionChats.create` from the open chat; hidden when archived) that opens the new chat in place. A long press offers Rename (`sessionChats.rename`) and, on a parallel chat, Delete behind the web confirm (`sessionChats.remove`, moving to Main when it was open). The phone already opens a session chat by its own id.
+
+## Phone: a failed turn shows as a failure, with Retry
+
+Date: 2026-11-15
+
+WHY: On the phone a failed turn ("Error: …", a usage limit) read as Eva replying with an error in the text, with no way to re-send it.
+
+Architectural: `stripErrorPrefix` and `turnErrorTitle` moved to `@eva/shared` (`turnError.ts`; the provider is named by each app's kit, `getProviderLabel` / `providerLabel`). The phone's `AssistantMessage` takes `failure`: `TurnErrorNotice` (the web's: a destructive 10% panel, warning icon, "This turn failed" or "<Provider> usage limit reached", the provider's own text) in the prose's place, with Retry re-sending the prompt the turn answered and its attachments, set only on a failed turn in a chat that can reply.
+
+## Phone: wake or sleep a session's Eva, and retry a failed wake
+
+Date: 2026-11-15
+
+WHY: The phone could not start or stop a session's sandbox, so a sleeping Eva woke only when a message was sent, and a failed wake showed nowhere.
+
+Architectural: `sandboxDisplayStatus`, the status types, the control labels and `MID_TURN_SLEEP_HINT` moved from the web (`sandboxStatusStyles.ts`, `SleepControlTooltip.tsx`) to `@eva/shared` (`sandboxStatus.ts`). The phone's `src/chat/SandboxControl.tsx` has `useSessionSandbox` (`sessions.get`, `startSandbox` / `stopSandbox`, a pending action as the web `useSandboxLifecycle`), `SandboxControl` in the session chat header (a green play to wake, a red stop to sleep, a spinner while either runs; mid-turn it stays dimmed and says to stop Eva first; in simple view only where nothing else wakes Eva) and `SandboxErrorBanner` under the header ("Eva couldn't wake up", the error, "Try again").
+
+## Phone: chats are marked read, with the "NEW" divider and unread dots
+
+Date: 2026-11-15
+
+WHY: Reading a chat on the phone never told the server, so the web kept its unread dot set, and the phone showed no unread state at all.
+
+Architectural: The web's `useChatReadState` and `findNewMessageIds` moved to `@eva/shared/chatReadState` (the web wrapper adds tab visibility; `findNewMessageIds`' tests now test the shared code). The phone chat calls it while the screen is focused and the app is in front (`useAppActive`, `src/ui/appState.ts`), so opening a chat (or a reply landing while it is open) marks it read for both apps, and draws `NewDivider` (the web `ChatNewDivider`) above the first reply you had not seen. Session rows show the web's unread dot (primary, 6) when `hasUnread` and Eva is not working.
+
+## Phone: notifications open their phone screen, not the browser
+
+Date: 2026-11-15
+
+WHY: A notification without a chat (quick task done, PR merged, a doc or project comment) opened the web in the browser, and a push tap opened only chats, though the phone has screens for tasks, projects, sessions, docs and pull requests.
+
+Architectural: `@eva/shared/appHref` `parseAppHref` reads what a repo link names (`/<owner>/<name>[/<app>]/<section>/<n>`, a project task's `/projects/<p>/<t>/activity`; anchors and queries ignored). `src/push/openLink.ts` `openAppLink` opens a chat, else a PR at once, else `/open` (`app/open/index.tsx`), which looks the item up by number (`getByNumId`) and replaces itself with its phone screen, or says it is gone with "Open on the web"; drafts, automations and settings still open the web. The inbox and push taps both use it, and pushes now carry `href` and `repoId` when there is no chat (older builds read `target` only).
+
+## Phone: "someone is typing" in chats
+
+Date: 2026-11-15
+
+WHY: The web chat composer shows teammates typing; the phone chat did not.
+
+Architectural: The chat dock uses `useTypingPresence` (`src/chat/useTypingPresence.ts`, the react-native presence hook with the `@eva/shared/typingPresence` rules) in the web's room, `chatTypingRoom(parentId)` (the session chat; before a task or project chats, its own target). Each keystroke flags typing and a send stops it; `TypingIndicator` sits above the composer. The dock now mounts once `auth.me` is known, since a presence heartbeat with no user id is rejected.
+
 ## Phone: task comment drafts, "someone is typing" and the full emoji search
 
 Date: 2026-11-15
@@ -562,7 +708,6 @@ Date: 2026-11-11
 WHY: 0a–0d moved four lifecycles to one field each and kept the old fields, with read fallbacks, until their migrations ran. Once those migrations have run in prod, the old fields are dead data and the fallbacks are dead code.
 
 Architectural: removed `sessions.archived`, `sessions.sandboxDeleteAfter`, `sessions.activeWorkflowId`, `sessions.turnLifecycleVersion`, `sessionChats.activeWorkflowId`, `agentTasks.activeWorkflowId` / `scheduledAt` / `scheduledRetryAt` / `scheduledFunctionId`, and `projects.activeBuildWorkflowId` / `scheduledBuildAt` / `scheduledBuildFunctionId`. Removed the indexes `sessions.by_repo_archived_and_deleted` and `projects.by_repo_and_build_workflow`. `taskRunState` and `projectBuildState` now return the new field as is; `sessionArchive`, `withResolvedArchive`, the legacy-clearing writes and the unused prewarm arg `activeWorkflowField` are gone. The four migrations (`backfillSessionArchive`, `migrateTaskRunState`, `migrateProjectBuildState`, `clearSessionWorkflowSlots`) are deleted. `sessionChats.create` read `session.archived` directly; it now uses `isSessionArchived`. Deploy only after the four migrations have run, or schema validation fails.
-
 
 ## Projects: one explicit build state (0c)
 

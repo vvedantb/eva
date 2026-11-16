@@ -14,6 +14,7 @@ import {
 import { memo, type ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { CHAT_MARKDOWN_COMPONENTS } from "@/lib/components/chat/ChatMarkdownLink";
 import {
   AgentSpawnCtaRow,
   deriveAgentSpawnSummary,
@@ -727,7 +728,11 @@ function AssistantTurnContent({
           <AssistantQuestionCards steps={streamingQuestionSteps} />
           {streamingContent && !streamingTextIsInline ? (
             <div data-assistant-cite-source={message._id}>
-              <Markdown className="mt-2" mode="streaming">
+              <Markdown
+                className="mt-2"
+                mode="streaming"
+                components={CHAT_MARKDOWN_COMPONENTS}
+              >
                 {streamingContent}
               </Markdown>
             </div>
@@ -797,7 +802,11 @@ function AssistantTurnOutcome({
   // Settled text: "static" skips Streamdown's streaming pass (repair of
   // unclosed syntax plus a post-mount transition re-render), which on a long
   // chat re-rendered every reply at once about two seconds after opening.
-  const turnProse = <Markdown mode="static">{message.content}</Markdown>;
+  const turnProse = (
+    <Markdown mode="static" components={CHAT_MARKDOWN_COMPONENTS}>
+      {message.content}
+    </Markdown>
+  );
   // Retrying means re-sending the prompt this turn answered, so it needs the
   // turn before it; a failure with nothing above it has nothing to repeat.
   const retryAction =

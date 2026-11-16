@@ -72,7 +72,6 @@ export function GrokBotSettingsClient() {
     <SettingsPage title="Grok Bot">
       <SettingsSection
         title="Routine webhook"
-        description="Paste the webhook from a Grok Bot routine (When to run → Webhook). Eva agents call request_local_computer to start a run. A 200 only means the Bot started — not that local work finished. Local files need the Grok Bot desktop app and local-computer approval."
         footer={
           <div className="flex items-center gap-2">
             {settings.hasKey || settings.url ? (

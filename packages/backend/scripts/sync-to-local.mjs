@@ -369,6 +369,39 @@ const SPLIT_PY = [
   "        comp.append(parts[i + 1])",
   "        i += 2",
   "    return '/'.join(comp), '/'.join(parts[i:])",
+  // A copy of a live deployment carries whatever was running at export time:
+  // sandboxes, turns, task runs and workflows that no local process will ever
+  // finish. Settle them in place so the local app shows them idle.
+  "import json",
+  "LIVE_TURN = {'staged', 'launching', 'running', 'finalizing'}",
+  "settled = {}",
+  "def settle(table, doc):",
+  "    if table == 'sessions' and doc.get('status') != 'closed':",
+  "        doc['status'] = 'closed'",
+  "    elif table == 'turns' and (doc.get('state') in LIVE_TURN or doc.get('open')):",
+  "        doc['state'], doc['open'] = 'done', False",
+  "    elif table == 'agentRuns' and doc.get('status') in ('queued', 'running'):",
+  "        doc['status'] = 'cancelled'",
+  "    elif table == 'agentTasks' and 'run' in doc:",
+  "        del doc['run']",
+  "    elif table == 'projects' and ('activeWorkflowId' in doc or 'interviewSandboxClaim' in doc):",
+  "        doc.pop('activeWorkflowId', None)",
+  "        doc.pop('interviewSandboxClaim', None)",
+  "    else:",
+  "        return False",
+  "    settled[table] = settled.get(table, 0) + 1",
+  "    return True",
+  "def settle_file(name, data):",
+  "    table, _, file = name.partition('/')",
+  "    if file != 'documents.jsonl' or table not in ('sessions', 'turns', 'agentRuns', 'agentTasks', 'projects'):",
+  "        return data",
+  "    out = []",
+  "    for line in data.decode('utf-8').splitlines():",
+  "        if not line.strip():",
+  "            continue",
+  "        doc = json.loads(line)",
+  "        out.append(json.dumps(doc, ensure_ascii=False) if settle(table, doc) else line)",
+  "    return ('\\n'.join(out) + '\\n').encode('utf-8')",
   "root_tmp = src + '.root'",
   "buckets = {}",
   "stats = {'component': 0, 'storage': 0, 'root': 0}",
@@ -381,7 +414,7 @@ const SPLIT_PY = [
   "                if not path and info.filename.startswith('_storage/'):",
   "                    stats['storage'] += 1",
   "            if not path:",
-  "                zout.writestr(info, zin.read(info.filename))",
+  "                zout.writestr(info, settle_file(info.filename, zin.read(info.filename)))",
   "            elif mode == 'split' and rest:",
   "                buckets.setdefault(path, []).append((info, rest))",
   // Shallowest first, so a parent component is imported before its children.
@@ -395,6 +428,8 @@ const SPLIT_PY = [
   "        print('COMPONENT\\t' + path + '\\t' + target + '\\t' + str(len(buckets[path])))",
   "os.replace(root_tmp, src)",
   "print('SUMMARY\\t%d\\t%d\\t%d' % (stats['component'], stats['storage'], stats['root']))",
+  "for table in sorted(settled):",
+  "    print('SETTLED\\t' + table + '\\t' + str(settled[table]))",
 ].join("\n");
 
 /** @returns {{path: string, zip: string}[]} component zips to import, in order. */
@@ -426,6 +461,10 @@ function splitComponents(zip, outDir, mode) {
     // impossible rather than merely unlikely: without this, an export that carried
     // no component data at all would split into nothing, import nothing, and still
     // go green.
+    for (const line of lines.filter((l) => l.startsWith("SETTLED\t"))) {
+      const [, table, count] = line.split("\t");
+      console.log(`  settled ${count} live ${table} row(s) (see settle() above)`);
+    }
     const summary = lines.find((line) => line.startsWith("SUMMARY\t"));
     if (summary === undefined) {
       fail(

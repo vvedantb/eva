@@ -1,21 +1,24 @@
-import { api, isProjectBuilding } from "@eva/backend";
+import { api, isProjectBuilding, projectScheduledBuildAt } from "@eva/backend";
 import { BUILDABLE_PROJECT_PHASES, isProjectPlanning } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconDots, IconHammer, IconLayoutKanban, IconMessage, IconPlayerStop } from "@tabler/icons-react-native";
+import { IconCalendarClock, IconDots, IconHammer, IconLayoutKanban, IconMessage, IconPlayerStop } from "@tabler/icons-react-native";
 import { goBackOrReplace } from "@vvedantb/native-ui/expo-router";
 import { StackPageHeader } from "@vvedantb/native-ui/layout";
 import { Button, CenteredSpinner, ConfirmDialog, EmptyState } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
+import dayjs from "dayjs";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState, type ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ProjectOverview } from "@/projects/ProjectOverview";
+import { ScheduleSheet } from "@/ui/ScheduleSheet";
 import { ProjectPlan } from "@/projects/ProjectPlan";
 import { ProjectTasks } from "@/projects/ProjectTasks";
 import { useProjectActions } from "@/projects/useProjectActions";
+import { useProjectGitActions } from "@/sandbox/OwnedSandboxActions";
 import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { useScheme } from "@/ui/theme";
 
@@ -33,9 +36,10 @@ const SANDBOX_PHASES = ["in_progress", "business_review", "code_review"];
  * "Chat" in the bottom bar opens it, in the phases the web shows the
  * Sandbox tab, with the web unread dot. "Build" (the web "Build Project",
  * with its "Run Eva" confirm) or, while a build runs, "Stop Build" (with
- * the web stop confirm) sits beside it in thumb reach. Not here from the
- * web: the sandbox preview, files and review panes, sandbox wake and sleep,
- * commit and push, scheduled builds, Create PR and Resolve Conflicts.
+ * the web stop confirm) sits beside it in thumb reach, with the web's build
+ * schedule as a calendar square. The "…" sheet leads with the web's sandbox
+ * and git actions (`useProjectGitActions`). Not here from the web: the
+ * sandbox preview, files and review panes.
  */
 export default function ProjectScreen() {
   const router = useRouter();
@@ -50,7 +54,9 @@ export default function ProjectScreen() {
   const project = useQuery(api.projects.get, listed ? { id: listed._id } : "skip");
   const users = useQuery(api.users.listAll, {});
   const tab: Tab = params.tab === "overview" ? "overview" : "work";
-  const actions = useProjectActions({ repo: repo ?? EMPTY_REPO, users, onDeleted: leave });
+  // The web page's sandbox and git actions, leading the "…" sheet.
+  const git = useProjectGitActions(project);
+  const actions = useProjectActions({ repo: repo ?? EMPTY_REPO, users, onDeleted: leave, extraRows: git.rows });
 
   const loading = repos === undefined || (repo !== undefined && (projects === undefined || (listed !== undefined && project === undefined)));
   if (loading || !repo || !project) {
@@ -97,6 +103,7 @@ export default function ProjectScreen() {
       )}
       {planning ? null : <ProjectDock project={project} />}
       {actions.dialogs}
+      {git.dialogs}
     </Screen>
   );
 }
@@ -144,6 +151,12 @@ function ProjectDock({ project }: { project: Project }) {
   const chatId = owned?.chatId;
   const unread = useQuery(api.chatReads.isUnread, chatId ? { parentId: chatId } : "skip")?.hasUnread === true;
   const startBuild = useMutation(api.buildWorkflow.startBuild);
+  // The web split Build button's schedule half (`ScheduleBuildPopover`).
+  const scheduleBuild = useMutation(api.buildWorkflow.scheduleBuild);
+  const updateScheduledBuild = useMutation(api.buildWorkflow.updateScheduledBuild);
+  const cancelScheduledBuild = useMutation(api.buildWorkflow.cancelScheduledBuild);
+  const [scheduling, setScheduling] = useState(false);
+  const scheduledBuildAt = projectScheduledBuildAt(project);
   const cancelBuild = useMutation(api.buildWorkflow.cancelBuild);
   const [confirm, setConfirm] = useState<"build" | "stop" | null>(null);
   const [busy, setBusy] = useState(false);
@@ -199,11 +212,39 @@ function ProjectDock({ project }: { project: Project }) {
               leftIcon={<IconHammer size={16} color={theme.primaryForeground} />}
               onPress={() => setConfirm("build")}
             >
-              Build
+              {scheduledBuildAt !== undefined ? `Build · ${dayjs(scheduledBuildAt).format("MMM D, h:mm A")}` : "Build"}
             </Button>
           )}
         </View>
       ) : null}
+      {canBuild && !building ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={scheduledBuildAt !== undefined ? "Change or remove the build schedule" : "Schedule build"}
+          onPress={() => setScheduling(true)}
+          className="h-11 w-11 items-center justify-center rounded-xl active:opacity-70"
+          style={{ backgroundColor: theme.secondary }}
+        >
+          <IconCalendarClock size={18} color={scheduledBuildAt !== undefined ? theme.primary : theme.secondaryForeground} />
+        </Pressable>
+      ) : null}
+      <ScheduleSheet
+        open={scheduling}
+        onOpenChange={setScheduling}
+        title="Schedule build"
+        scheduleLabel="Schedule build"
+        scheduledAt={scheduledBuildAt}
+        onSchedule={(at) => {
+          setScheduling(false);
+          void (scheduledBuildAt === undefined
+            ? run(() => scheduleBuild({ projectId: project._id, scheduledAt: at }), "Build scheduled", "Couldn't schedule build")
+            : run(() => updateScheduledBuild({ projectId: project._id, scheduledAt: at }), "Build schedule updated", "Couldn't update build schedule"));
+        }}
+        onRemove={() => {
+          setScheduling(false);
+          void run(() => cancelScheduledBuild({ projectId: project._id }), "Build schedule removed", "Couldn't remove build schedule");
+        }}
+      />
       {/* The web `RunEvaDialog`. */}
       <ConfirmDialog
         open={confirm === "build"}

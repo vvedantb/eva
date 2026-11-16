@@ -57,6 +57,7 @@ export function ChatHeader({
   onStop,
   sessionMenu,
   usage,
+  sandbox,
 }: {
   /** The chat's repo (the web `githubRepos.get`), for the tile colour. */
   repoId: Id<"githubRepos">;
@@ -68,9 +69,16 @@ export function ChatHeader({
   /** Set while the agent works: Stop in the menu. */
   onStop?: () => void;
   /** Session chats: these session actions (`useSessionActions`) in their web groups. */
-  sessionMenu?: { groups: SessionMenuAction[][]; onSelect: (action: SessionMenuAction) => void };
+  sessionMenu?: {
+    groups: SessionMenuAction[][];
+    onSelect: (action: SessionMenuAction) => void;
+    /** Each action's label and icon (`useSessionActions().itemFor`). */
+    itemFor: (action: SessionMenuAction) => { label: string; icon: ComponentType<IconProps>; warning?: boolean };
+  };
   /** Before the ⋯ menu: the usage button (`UsageButton`), as the web header's context ring and plan chip. */
   usage?: ReactNode;
+  /** Before the usage button: a session's wake / sleep control (`SandboxControl`), as the web session header. */
+  sandbox?: ReactNode;
 }) {
   const scheme = useScheme();
   const insets = useSafeAreaInsets();
@@ -81,7 +89,7 @@ export function ChatHeader({
   // The web seed (`SessionSwitcher`): owner, name and display label.
   const tileColor = repo ? EVA_THEME[scheme][`cat${repoTileSlot(`${repo.owner}/${repo.name}/${repoDisplayLabel(repo)}`)}`] : undefined;
   const sessionItems = (actions: SessionMenuAction[]): MenuEntry[] =>
-    actions.map((action) => ({ ...SESSION_ACTION_ITEMS[action], onSelect: () => sessionMenu?.onSelect(action) }));
+    actions.map((action) => ({ ...(sessionMenu ? sessionMenu.itemFor(action) : SESSION_ACTION_ITEMS[action]), onSelect: () => sessionMenu?.onSelect(action) }));
   const [sessionMain = [], ...sessionRest] = sessionMenu?.groups ?? [];
   // The web More menu's groups: Rename and Regenerate title; then its Copy
   // submenu (title, link, branch name) laid flat with Open PR and Open on web;
@@ -132,6 +140,7 @@ export function ChatHeader({
           {displayTitle(title)}
         </Text>
       </View>
+      {sandbox}
       {usage}
       <DropdownMenu>
         <DropdownMenuTrigger accessibilityLabel="Chat options" hitSlop={4} className="h-11 w-11 items-center justify-center rounded-full active:opacity-70" style={{ backgroundColor: EVA_THEME[scheme].secondary }}>

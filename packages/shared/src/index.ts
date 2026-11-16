@@ -146,13 +146,15 @@ export {
 } from "./teammateMessages";
 export {
   isLivePrState,
+  orderPrsLiveFirst,
   prStateLabel,
   prStateTone,
+  pullRequestsMenuLabel,
   type LivePrState,
   type PrState,
   type PrStateTone,
 } from "./prState";
-export { sessionMenuActions, type SessionMenuAction } from "./sessionMenu";
+export { canSendSessionForReview, sessionMenuActions, type SessionMenuAction } from "./sessionMenu";
 export {
   draftCountAfterRemove,
   draftsAfterRemove,
@@ -200,7 +202,14 @@ export {
   type QuickTaskSortField,
   type QuickTaskTimeRange,
 } from "./quickTaskFilters";
-export { ENTITY_SECTION, entityHref, repoBasePath } from "./repoPath";
+export {
+  ENTITY_SECTION,
+  entityHref,
+  parseEvaEntityLink,
+  repoBasePath,
+  type EvaEntityLink,
+  type EvaLinkSection,
+} from "./repoPath";
 export {
   PRIORITY_LABELS,
   PRIORITY_ORDER,
@@ -265,6 +274,7 @@ export {
   headerBlocker,
   mergeBlocker,
   mergeButtonLabel,
+  parseGithubPrLink,
   prNumberFromGithubUrl,
   prReviewers,
   revertSessionRequest,
@@ -275,6 +285,7 @@ export {
   stackVerdict,
   verdictSuccessTitle,
   type CheckCounts,
+  type GithubPrLink,
   type MergeMethod,
   type PrBlocker,
   type PrCheck,
@@ -329,7 +340,12 @@ export {
   clearedProjectFilter,
   clearedProjectFilters,
   filterAndSortProjects,
+  currentInterviewQuestion,
+  formatInterviewAnswer,
   interviewTurnText,
+  isInterviewTransitionContent,
+  isSpecContent,
+  parseInterviewQuestion,
   isProjectPlanning,
   newProjectSubmitBlocker,
   parseProjectSpec,
@@ -384,3 +400,21 @@ export {
   type ResolvedMediaEntry,
 } from "./attachmentLabels";
 export { ECHO_HISTORY_LIMIT, decideDraftPull, rememberOwnSave, type DraftPullDecision } from "./chatDraftPull";
+export {
+  MID_TURN_SLEEP_HINT,
+  sandboxDisplayStatus,
+  SLEEP_EVA_LABEL,
+  WAKE_EVA_LABEL,
+  WAKE_EVA_RETRY_LABEL,
+  type SandboxDisplayStatus,
+  type SandboxStatus,
+} from "./sandboxStatus";
+export { stripErrorPrefix, turnErrorTitle } from "./turnError";
+export {
+  PREVIEW_SANDBOX_ALLOWED_STATUSES,
+  projectCanCreatePr,
+  projectCanResolveConflicts,
+  taskCanCreatePr,
+  taskCanResolveConflicts,
+  taskCanStartSandbox,
+} from "./ownedSandboxRules";
