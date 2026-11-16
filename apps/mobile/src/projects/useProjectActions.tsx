@@ -7,7 +7,7 @@ import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import * as Clipboard from "expo-clipboard";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Text } from "react-native";
 import { WEB_URL } from "@/config";
 import { phaseAppearance } from "@/projects/phaseAppearance";
@@ -43,7 +43,10 @@ export function useProjectActions({
   repo,
   users,
   onDeleted,
+  extraRows,
 }: {
+  /** Rows that lead the menu (the project page's sandbox and git actions); given the menu's `close`. */
+  extraRows?: (close: () => void) => ReactNode;
   /** The repo's path fields, for Copy link. */
   repo: { owner: string; name: string; rootDirectory?: string };
   users: User[] | undefined;
@@ -78,6 +81,7 @@ export function useProjectActions({
       case "root":
         return (
           <>
+            {extraRows?.(close)}
             <SubmenuRow icon={phaseAppearance(project.phase, scheme).icon} title="Phase" onPress={() => setPage("phase")} />
             <SubmenuRow icon={IconUserPlus} title="Project Lead" onPress={() => setPage("lead")} />
             <MenuDivider />

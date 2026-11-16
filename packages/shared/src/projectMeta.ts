@@ -275,6 +275,48 @@ const interviewTransitionSchema = z.union([
 ]);
 const specSummarySchema = z.object({ title: z.string(), tasks: z.array(z.object({}).passthrough()) });
 
+function parseJson(content: string): unknown {
+  try {
+    return JSON.parse(content);
+  } catch {
+    return undefined;
+  }
+}
+
+/** A planning-interview turn that is a multiple-choice question: its text and options, else null. */
+export function parseInterviewQuestion(content: string): z.infer<typeof interviewQuestionSchema> | null {
+  const parsed = interviewQuestionSchema.safeParse(parseJson(content));
+  return parsed.success ? parsed.data : null;
+}
+
+/** The interview's hand-off to planning (`{"interviewComplete": true}`, or the legacy `{"ready": true}`). */
+export function isInterviewTransitionContent(content: string): boolean {
+  return interviewTransitionSchema.safeParse(parseJson(content)).success;
+}
+
+/** A turn holding the generated plan (a title and its tasks). */
+export function isSpecContent(content: string): boolean {
+  return specSummarySchema.safeParse(parseJson(content)).success;
+}
+
+/**
+ * The question waiting for an answer: the latest assistant turn, when it is a
+ * question and nothing is running (`running`: the interview workflow is).
+ */
+export function currentInterviewQuestion(
+  history: ReadonlyArray<{ role: string; content: string }>,
+  running: boolean,
+): z.infer<typeof interviewQuestionSchema> | null {
+  if (running) return null;
+  const lastAssistant = history.findLast((turn) => turn.role === "assistant");
+  return lastAssistant ? parseInterviewQuestion(lastAssistant.content) : null;
+}
+
+/** An interview answer as the web sends it: the question, then the answer. */
+export function formatInterviewAnswer(question: string, answer: string): string {
+  return `Q: ${question}\nA: ${answer}`;
+}
+
 /**
  * What one planning-interview turn says, as the web `ProjectChatMessageList`
  * shows it: a question's text, "Plan ready: <title> (N tasks)" for a plan,

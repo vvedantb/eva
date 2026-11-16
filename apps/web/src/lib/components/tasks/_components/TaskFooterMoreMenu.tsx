@@ -1,5 +1,6 @@
 "use client";
 
+import { taskCanResolveConflicts } from "@eva/shared";
 import type { ReactNode } from "react";
 import {
   Button,
@@ -47,9 +48,7 @@ export function getMoreMenuVisibility({
   hasPrItems: boolean;
 }): MoreMenuVisibility {
   const showResolveConflicts =
-    !simpleView &&
-    !hasActiveRun &&
-    (status === "code_review" || status === "business_review");
+    !simpleView && taskCanResolveConflicts(status, hasActiveRun);
   const showRunDevServer = !simpleView && isSandboxActive && canStartSandbox;
   const showRunBackgroundCommands =
     !simpleView && isSandboxActive && canStartSandbox;

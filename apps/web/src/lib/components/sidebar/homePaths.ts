@@ -4,7 +4,7 @@
  * keeps the same chrome instead of flashing the bare layout.
  *
  * Read through `routeHasSidePanel`, which both `Sidebar` (the panel) and
- * `useSidebarContentOffset` (the matching left padding) use.
+ * the package `AppShell` (the matching content offset) use.
  */
 const HOME_ROOTS = [
   "/home",

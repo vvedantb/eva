@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Id } from "@eva/backend";
 import { findAIModelOption, getReasoningLevelLabel } from "@eva/backend";
+import { moveQueuedId, QUEUE_PANEL_LABEL } from "@eva/shared";
 import { UserInitials } from "@eva/shared/user-initials";
 import {
   Button,
@@ -40,7 +41,6 @@ import {
 } from "@tabler/icons-react";
 import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
 import {
-  arrayMove,
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
@@ -251,7 +251,7 @@ function SortableQueuedItem<TId extends string>({
  */
 export function QueuedMessagesPanel<TId extends string>({
   items,
-  label = "Queued",
+  label = QUEUE_PANEL_LABEL,
   renderContent,
   onEdit,
   onDelete,
@@ -298,19 +298,27 @@ export function QueuedMessagesPanel<TId extends string>({
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!onReorder || !over || active.id === over.id) return;
-    const oldIndex = items.findIndex((item) => item.id === active.id);
+    const moved = items.find((item) => item.id === active.id);
     const newIndex = items.findIndex((item) => item.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-    const orderedIds = arrayMove(items, oldIndex, newIndex).map(
-      (item) => item.id,
+    if (!moved || newIndex === -1) return;
+    void onReorder(
+      moveQueuedId(
+        items.map((item) => item.id),
+        moved.id,
+        newIndex,
+      ),
     );
-    void onReorder(orderedIds);
   };
 
   const handleMoveToFront = (item: QueuedMessageItem<TId>) => {
     if (!onReorder) return;
-    const rest = items.filter((entry) => entry.id !== item.id);
-    void onReorder([item.id, ...rest.map((entry) => entry.id)]);
+    void onReorder(
+      moveQueuedId(
+        items.map((entry) => entry.id),
+        item.id,
+        0,
+      ),
+    );
   };
 
   return (

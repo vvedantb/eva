@@ -15,6 +15,7 @@ import { m } from "motion/react";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { SystemAutomationCard } from "./_components/SystemAutomationCard";
+import { NewAutomationButton } from "./_components/NewAutomationButton";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 /**
@@ -46,13 +47,14 @@ function patchInstalled(installed: boolean) {
 }
 
 export const Route = createFileRoute("/_repo/$owner/$repo/automations/")({
-  staticData: { title: "Automations" },
+  staticData: { title: "Automations Hub" },
   component: AutomationsHubPage,
 });
 
 /**
- * Automations Hub: the eva-managed automation catalog for this app. Installing
- * one adds it to the app's automations; the definition stays owned by eva.
+ * Automations Hub: the eva-managed automation catalog for this app, plus "New"
+ * for a custom one. Installing an entry adds it to the app's automations; the
+ * definition stays owned by eva.
  */
 function AutomationsHubPage() {
   const { repoId, basePath } = useRepo();
@@ -71,31 +73,23 @@ function AutomationsHubPage() {
     systemAutomations?.filter((entry) => entry.installed).length ?? 0;
 
   return (
-    <PageWrapper comfortable insetHeader title="Automations">
+    <PageWrapper
+      comfortable
+      insetHeader
+      title="Automations Hub"
+      headerRight={<NewAutomationButton />}
+    >
       <div className="flex flex-col gap-5">
-        {/* Divider stays full-bleed; the copy takes the same `px-4` card gutter
-            as section titles, so it lines up with the page title above. */}
-        <div className="border-b border-border pb-4">
-          <div className="flex flex-wrap items-end justify-between gap-3 px-4">
-            <div className="max-w-prose">
-              <h2 className="text-sm font-semibold">Automations Hub</h2>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                Automations built and maintained by eva. Install one to add it
-                to this app — set your own schedule, switch it off, run it on
-                demand. The prompt stays ours to improve, so every app gets the
-                fix.
-              </p>
-            </div>
-            {systemAutomations !== undefined && (
-              <CountPop
-                label={`${installedCount}/${systemAutomations.length}`}
-                className="shrink-0 text-2xs tabular-nums text-muted-foreground"
-              >
-                {installedCount} of {systemAutomations.length} installed
-              </CountPop>
-            )}
+        {systemAutomations !== undefined && (
+          <div className="flex justify-end px-4">
+            <CountPop
+              label={`${installedCount}/${systemAutomations.length}`}
+              className="shrink-0 text-2xs tabular-nums text-muted-foreground"
+            >
+              {installedCount} of {systemAutomations.length} installed
+            </CountPop>
           </div>
-        </div>
+        )}
 
         {systemAutomations === undefined ? (
           <CenteredSpinner label="Loading automations" />

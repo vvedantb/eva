@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { findNewMessageIds } from "@eva/shared/chatReadState";
 import { z } from "zod";
 import type { api, Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
@@ -8,7 +9,6 @@ import {
   collectQuestionSteps,
   findTurnWindowStart,
   findHandoffBoundaryIds,
-  findNewMessageIds,
   findStreamingTargetMessage,
   isChatTurnExecuting,
   visibleChatMessages,

@@ -3,7 +3,7 @@ import {
   newestCapturedAt,
   snapshotsOf,
   type UsageAccountEntry,
-} from "./_utils";
+} from "@eva/shared/usageLimits";
 import { UsageProviderSection } from "./UsageProviderSection";
 import { ListEnter, Spinner } from "@vvedantb/ui";
 
@@ -54,7 +54,9 @@ export function UsageLimitsDetails({
           className="flex size-8 items-center justify-center"
           aria-live="polite"
         >
-          {refreshing && <Spinner size="sm" aria-label="Refreshing plan usage" />}
+          {refreshing && (
+            <Spinner size="sm" aria-label="Refreshing plan usage" />
+          )}
         </span>
       </div>
       {entries.map((entry, index) => (

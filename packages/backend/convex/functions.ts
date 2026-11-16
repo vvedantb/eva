@@ -4,6 +4,7 @@ import {
   customQuery,
   customAction,
 } from "convex-helpers/server/customFunctions";
+import { createAuthFunctions } from "@vvedantb/server";
 import type { GenericDatabaseReader } from "convex/server";
 import { makeFunctionReference } from "convex/server";
 import {
@@ -515,27 +516,6 @@ export async function softDeleteAgentTask(
   await ctx.db.patch(taskId, { deletedAt: Date.now() });
 }
 
-/**
- * Authenticated query wrapper — injects userId into context, throws if not
- * authenticated or while maintenance mode is on (see `maintenance.ts`).
- */
-export const authQuery = customQuery(
-  query,
-  customCtx(async (ctx) => {
-    assertNotInMaintenance();
-    return { userId: await requireCurrentUserId(ctx) };
-  }),
-);
-
-/** Authenticated mutation wrapper — same gates as `authQuery`. */
-export const authMutation = customMutation(
-  mutation,
-  customCtx(async (ctx) => {
-    assertNotInMaintenance();
-    return { userId: await requireCurrentUserId(ctx) };
-  }),
-);
-
 const getUserIdFromIdentityRef = makeFunctionReference<
   "query",
   Record<string, never>,
@@ -551,31 +531,35 @@ async function resolveActionUserId(ctx: ActionCtx): Promise<Id<"users">> {
   return userId;
 }
 
-/** Authenticated action wrapper — same gates as `authQuery`; userId via a query roundtrip. */
-export const authAction = customAction(
+/**
+ * Authenticated function wrappers — inject `userId` into the handler context,
+ * throw if not authenticated, and throw while maintenance mode is on (see
+ * `maintenance.ts`). Actions resolve the userId through a query roundtrip.
+ */
+export const { authQuery, authMutation, authAction } = createAuthFunctions({
+  customFunctions: { customQuery, customMutation, customAction, customCtx },
+  query,
+  mutation,
   action,
-  customCtx(async (ctx: ActionCtx) => {
-    assertNotInMaintenance();
-    return { userId: await resolveActionUserId(ctx) };
-  }),
-);
+  resolveUserId: (ctx) => requireCurrentUserId(ctx),
+  resolveActionUserId: (ctx) => resolveActionUserId(ctx),
+  beforeEach: () => assertNotInMaintenance(),
+});
 
-/** Internal authenticated query — same as authQuery but for internal-only queries. */
-export const internalAuthQuery = customQuery(
-  internalQuery,
-  customCtx(async (ctx) => ({ userId: await requireCurrentUserId(ctx) })),
-);
-
-/** Internal authenticated mutation — same as authMutation but for internal-only mutations. */
-export const internalAuthMutation = customMutation(
-  internalMutation,
-  customCtx(async (ctx) => ({ userId: await requireCurrentUserId(ctx) })),
-);
-
-/** Internal authenticated action — same as authAction but for internal-only actions. */
-export const internalAuthAction = customAction(
-  internalAction,
-  customCtx(async (ctx: ActionCtx) => ({
-    userId: await resolveActionUserId(ctx),
-  })),
-);
+/**
+ * Internal authenticated wrappers — same as the public ones but on the
+ * internal builders and with no maintenance gate, so they run during
+ * maintenance.
+ */
+export const {
+  authQuery: internalAuthQuery,
+  authMutation: internalAuthMutation,
+  authAction: internalAuthAction,
+} = createAuthFunctions({
+  customFunctions: { customQuery, customMutation, customAction, customCtx },
+  query: internalQuery,
+  mutation: internalMutation,
+  action: internalAction,
+  resolveUserId: (ctx) => requireCurrentUserId(ctx),
+  resolveActionUserId: (ctx) => resolveActionUserId(ctx),
+});

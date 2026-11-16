@@ -50,15 +50,19 @@ export function MenuSheet({
   );
 }
 
-/** A root-page item that opens a submenu: its icon, its label and a chevron. */
+/** A root-page item that opens a submenu: its icon (or another `leading` mark), its label, an optional detail line and a chevron. */
 export function SubmenuRow({
   icon,
+  leading,
   title,
+  detail,
   disabled,
   onPress,
 }: {
-  icon: ComponentType<IconProps>;
+  icon?: ComponentType<IconProps>;
+  leading?: ReactNode;
   title: string;
+  detail?: string;
   disabled?: boolean;
   onPress: () => void;
 }) {
@@ -66,7 +70,7 @@ export function SubmenuRow({
   return (
     <View className="flex-row items-center">
       <View className="min-w-0 flex-1">
-        <SheetRow icon={icon} title={title} disabled={disabled} onPress={onPress} />
+        <SheetRow icon={icon} leading={leading} title={title} detail={detail} disabled={disabled} onPress={onPress} />
       </View>
       <View className="absolute right-4" style={{ pointerEvents: "none", opacity: disabled ? 0.5 : 1 }}>
         <IconChevronRight size={16} color={muted} />

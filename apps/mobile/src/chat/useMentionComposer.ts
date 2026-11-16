@@ -66,8 +66,18 @@ export type MentionMenuState = {
  * As the web on a touch screen, Return while the picker lists something picks
  * the first row instead of adding a line.
  */
-export function useMentionComposer(repoId: Id<"githubRepos"> | undefined, provider: AIProvider | undefined) {
+export function useMentionComposer(
+  repoId: Id<"githubRepos"> | undefined,
+  provider: AIProvider | undefined,
+  /** Called with the wire text after each edit by the person (typing, a pick, a restore, the clear after a send); not after `load`. */
+  onChange?: (tokenized: string) => void,
+) {
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
+  /** An edit by the person: the new draft, and `onChange` when its text changed. */
+  const edit = (next: Draft) => {
+    setDraft(next);
+    if (next.text !== draft.text) onChange?.(tokenizeMentionText(next.text, next));
+  };
   const args = repoId ? { repoId } : "skip";
   const members = useQuery(api.teamMembers.listForRepo, args);
   const data = useQuery(api.mentions.listData, args);
@@ -95,7 +105,7 @@ export function useMentionComposer(repoId: Id<"githubRepos"> | undefined, provid
     if (!trigger) return;
     const accepted = acceptMentionTrigger(draft.text, trigger, item.label);
     const slash = trigger.kind === "slash";
-    setDraft({
+    edit({
       text: accepted.value,
       inserted: accepted.inserted,
       dismissed: false,
@@ -112,12 +122,12 @@ export function useMentionComposer(repoId: Id<"githubRepos"> | undefined, provid
     }
     // An emptied field (cleared, or sent) drops the picks, as the web editor.
     if (text === "") {
-      setDraft(EMPTY_DRAFT);
+      edit(EMPTY_DRAFT);
       return;
     }
     // The guard holds only while the chip it names is still there.
     const inserted = draft.inserted && text.startsWith(draft.inserted.token, draft.inserted.startIndex) ? draft.inserted : null;
-    setDraft({ ...draft, text, inserted, dismissed: false });
+    edit({ ...draft, text, inserted, dismissed: false });
   };
 
   /** Closes the picker until the next edit, as the web Escape (`closeTrigger`). */
@@ -126,7 +136,7 @@ export function useMentionComposer(repoId: Id<"githubRepos"> | undefined, provid
   /** Adds stored tokenized text (a stash entry) after the draft, as the web stash restore. */
   const restore = (tokenized: string) => {
     const restored = tokenizedToEditable(tokenized);
-    setDraft({
+    edit({
       text: draft.text.trim() === "" ? restored.displayText : `${draft.text}\n\n${restored.displayText}`,
       mentionMap: new Map([...draft.mentionMap, ...restored.mentionMap]),
       skillMap: new Map([...draft.skillMap, ...restored.skillMap]),
@@ -141,15 +151,27 @@ export function useMentionComposer(repoId: Id<"githubRepos"> | undefined, provid
     const without = (map: ReadonlyMap<string, string>) => new Map([...map].filter(([label]) => label !== pick.label));
     const text = draft.text.replace(new RegExp(`${pattern.source} ?`, "g"), "");
     if (text.trim() === "") {
-      setDraft(EMPTY_DRAFT);
+      edit(EMPTY_DRAFT);
       return;
     }
-    setDraft({
+    edit({
       text,
       inserted: null,
       dismissed: false,
       mentionMap: pick.kind === "at" ? without(draft.mentionMap) : draft.mentionMap,
       skillMap: pick.kind === "slash" ? without(draft.skillMap) : draft.skillMap,
+    });
+  };
+
+  /** Replaces the draft with stored tokenized text (a saved draft), its picks as chips. */
+  const load = (tokenized: string) => {
+    const loaded = tokenizedToEditable(tokenized);
+    setDraft({
+      text: loaded.displayText,
+      mentionMap: loaded.mentionMap,
+      skillMap: loaded.skillMap,
+      inserted: null,
+      dismissed: false,
     });
   };
 
@@ -168,6 +190,7 @@ export function useMentionComposer(repoId: Id<"githubRepos"> | undefined, provid
     pick,
     dismiss,
     restore,
+    load,
     /** The wire text for a send: each `@Label` / `/Label` picked becomes its token. */
     tokenize: (text: string) => tokenizeMentionText(text, draft),
   };

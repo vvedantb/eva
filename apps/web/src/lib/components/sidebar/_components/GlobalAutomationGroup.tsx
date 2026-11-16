@@ -15,7 +15,7 @@ import {
   countLabel,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
-import { IconChevronDown, IconLayoutGrid, IconPlus } from "@tabler/icons-react";
+import { IconChevronDown, IconPlus } from "@tabler/icons-react";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { SessionListShowMore } from "@/lib/components/sidebar/_components/SessionListShowMore";
 import {
@@ -48,12 +48,11 @@ interface GlobalAutomationGroupProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onNavigate?: () => void;
-  onCreateRequest: () => void;
 }
 
 /**
  * One collapsible app group in the global Automations sidebar: logo + title,
- * `+` → new automation in that app, then that app's automations (capped with
+ * `+` → that app's Automations Hub (install or create), then that app's automations (capped with
  * Show more). Each row's dot shows whether the automation is enabled.
  */
 export function GlobalAutomationGroup({
@@ -66,7 +65,6 @@ export function GlobalAutomationGroup({
   open,
   onOpenChange,
   onNavigate,
-  onCreateRequest,
 }: GlobalAutomationGroupProps) {
   const [isListExpanded, setIsListExpanded] = useState(false);
   const label = repoDisplayLabel(repo);
@@ -125,26 +123,13 @@ export function GlobalAutomationGroup({
         </CollapsibleTrigger>
         <Link
           to={baseUrl}
-          aria-label={`Automations hub for ${label}`}
-          title={`Automations hub for ${label}`}
+          aria-label={`Add an automation in ${label}`}
+          title={`Add an automation in ${label}`}
           className="flex size-7 max-sm:size-10 shrink-0 items-center justify-center rounded-menu-item text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
           onClick={onNavigate}
         >
-          <IconLayoutGrid size={14} />
-        </Link>
-        <button
-          type="button"
-          aria-label={`New automation in ${label}`}
-          title={`New automation in ${label}`}
-          className="flex size-7 max-sm:size-10 shrink-0 items-center justify-center rounded-menu-item text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onCreateRequest();
-          }}
-        >
           <IconPlus size={14} />
-        </button>
+        </Link>
       </div>
       <CollapsibleContent>
         <div className="pb-1">

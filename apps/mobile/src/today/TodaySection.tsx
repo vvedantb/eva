@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { RepoSection } from "@/ui/RepoPicker";
 import { copyText } from "@/ui/copyText";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
+import { LIST_WINDOW } from "@/ui/listWindow";
 
 /** The rail's left inset and the dot on it: the web `pl-6`, `size-2`, `ring-4`. */
 const RAIL_INSET = 24;
@@ -64,6 +65,7 @@ function StandupList({ repoId }: { repoId: Id<"githubRepos"> }) {
   }
   return (
     <FlatList
+      {...LIST_WINDOW}
       data={entries}
       keyExtractor={(entry) => entry.id}
       renderItem={({ item: entry, index }) => (

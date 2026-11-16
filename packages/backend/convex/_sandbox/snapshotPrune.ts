@@ -22,10 +22,7 @@
  * `rm` would cost far more than the space it saves.
  */
 
-import { driveRedundantLocalPruneLines } from "./driveCache";
-
-/** Home directories that may hold tool caches. Both users exist on the image. */
-const HOME_DIRS = ["/home/vercel-sandbox", "/home/eva", "/root"];
+import { localCachePruneLines, SANDBOX_HOME_DIRS } from "./driveCache";
 
 /**
  * Collapses the identical Convex local-backend copies into one file.
@@ -77,11 +74,12 @@ function pruneSpentInstallers(home: string): string {
  */
 export function snapshotPruneScript(): string {
   return [
-    // Local caches the Drive now holds (~3.8 GB measured). Without this the
-    // Drive only ADDS storage: the old copies stay baked into every snapshot.
-    ...driveRedundantLocalPruneLines(HOME_DIRS),
-    ...HOME_DIRS.map(dedupeConvexBinaries),
-    ...HOME_DIRS.map(pruneSpentInstallers),
+    // Local caches the Drive now holds (~3.8 GB measured, plus 5.2 GB in an
+    // unmounted cache root). Without this the Drive only ADDS storage: the old
+    // copies stay baked into every snapshot.
+    ...localCachePruneLines(),
+    ...SANDBOX_HOME_DIRS.map(dedupeConvexBinaries),
+    ...SANDBOX_HOME_DIRS.map(pruneSpentInstallers),
     // dnf's metadata cache: 167 MB, rebuilt automatically on the next install.
     `sudo dnf clean all >/dev/null 2>&1 || true`,
     `sudo rm -rf /var/cache/dnf/* 2>/dev/null || true`,

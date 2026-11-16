@@ -600,7 +600,6 @@ function PreviewToolsPreview() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [path, setPath] = useState("/billing");
   const [contain, setContain] = useState(false);
-  const [annotationMode, setAnnotationMode] = useState(false);
   const [poppedOut, setPoppedOut] = useState(false);
   // The path input reads repo history, so borrow a real repo's context.
   return (
@@ -632,9 +631,6 @@ function PreviewToolsPreview() {
                 onToggleDevice={() => {}}
                 contain={contain}
                 onToggleContain={() => setContain(!contain)}
-                annotationMode={annotationMode}
-                onAnnotationModeChange={setAnnotationMode}
-                showAnnotationToggle
                 popOut={{
                   active: poppedOut,
                   onToggle: () => setPoppedOut(!poppedOut),

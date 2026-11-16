@@ -141,6 +141,7 @@ export function BackgroundProcessesChip({
         >
           <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
             <PopoverTrigger asChild>
+              {/* design-check-ignore-next-line — a composer-edge pill (COMPOSER_CHIP_CLASS), as BackgroundAgentsChip; Button would force control height and padding */}
               <button
                 type="button"
                 aria-label={`${count} background ${count === 1 ? "process" : "processes"}`}

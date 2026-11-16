@@ -81,11 +81,12 @@ beforeEach(() => {
 });
 
 describe("VercelSandboxClient.create with forkFrom", () => {
-  test("a fork of an old iad1 sandbox runs in iad1, without cdg1 Drives", async () => {
+  // Sandboxes are back in iad1, so cdg1 plays the old region.
+  test("a fork of an old cdg1 sandbox runs in cdg1, without iad1 Drives", async () => {
     sdk.sourceSnapshotId = "snap-old";
-    sdk.snapshotRegions.set("snap-old", ["iad1"]);
+    sdk.snapshotRegions.set("snap-old", ["cdg1"]);
     const opts = await forkOnce();
-    expect(opts?.region).toBe("iad1");
+    expect(opts?.region).toBe("cdg1");
     expect(opts?.mounts).toBeUndefined();
   });
 

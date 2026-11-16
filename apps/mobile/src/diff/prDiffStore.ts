@@ -1,77 +1,14 @@
 import { api, type Id } from "@eva/backend";
 import { applyIgnoreWhitespace, buildDiffFileEntries, type DiffFileEntry } from "@eva/shared";
 import { useAction } from "convex/react";
-import * as SecureStore from "expo-secure-store";
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect } from "react";
 import { z } from "zod";
+import { jsonParser, keyedStore, persistedStore } from "@/storage/persistedStore";
 
 /** One pull request, as every Code read and setting below is keyed. */
 export type PrRef = { repoId: Id<"githubRepos">; prNumber: number };
 
 const prKey = ({ repoId, prNumber }: PrRef) => `${repoId}.${prNumber}`;
-
-/**
- * Values by key that every screen reads, so the Code list, a file's diff and
- * the composer share them across routes. One listener set: a write
- * re-renders the readers, and each re-reads only its own key.
- */
-function keyedStore<T>(fallback: T) {
-  const values = new Map<string, T>();
-  const listeners = new Set<() => void>();
-  const get = (key: string) => values.get(key) ?? fallback;
-  const set = (key: string, value: T) => {
-    values.set(key, value);
-    for (const listener of listeners) listener();
-  };
-  const subscribe = (listener: () => void) => {
-    listeners.add(listener);
-    return () => {
-      listeners.delete(listener);
-    };
-  };
-  const useValue = (key: string) => useSyncExternalStore(subscribe, () => get(key));
-  return { get, set, has: (key: string) => values.has(key), subscribe, useValue };
-}
-
-/**
- * Restores a stored value once per key, the first time a screen reads it, and
- * writes every change back. Secure store is the phone's only device store
- * (it holds the colour scheme too); it is unavailable on the web preview
- * build, where a value lasts the session.
- */
-function persistedStore<T>(name: string, fallback: T, parse: (raw: string) => T | null) {
-  const store = keyedStore(fallback);
-  const restored = new Set<string>();
-  const storageKey = (key: string) => `eva.${name}.${key}`;
-  const restore = (key: string) => {
-    if (restored.has(key)) return;
-    restored.add(key);
-    SecureStore.getItemAsync(storageKey(key))
-      .then((raw) => {
-        const value = raw === null ? null : parse(raw);
-        // A change made while the read was in flight wins.
-        if (value !== null && !store.has(key)) store.set(key, value);
-      })
-      // No store (the web preview build) or an unreadable value: keep the default.
-      .catch(() => undefined);
-  };
-  return {
-    get: store.get,
-    set: (key: string, value: T) => {
-      store.set(key, value);
-      SecureStore.setItemAsync(storageKey(key), JSON.stringify(value)).catch(() => undefined);
-    },
-    /** Subscribing is the first read, so the restore starts there rather than in an effect. */
-    useValue: (key: string) =>
-      useSyncExternalStore(
-        (listener) => {
-          restore(key);
-          return store.subscribe(listener);
-        },
-        () => store.get(key),
-      ),
-  };
-}
 
 // ── The diff ────────────────────────────────────────────────────────────────
 
@@ -169,10 +106,7 @@ export function useIgnoreWhitespace(): [boolean, (next: boolean) => void] {
 
 const viewedPaths = z.array(z.string());
 
-const viewedStore = persistedStore<readonly string[]>("prDiffViewed", [], (raw) => {
-  const parsed = viewedPaths.safeParse(JSON.parse(raw));
-  return parsed.success ? parsed.data : null;
-});
+const viewedStore = persistedStore<readonly string[]>("prDiffViewed", [], jsonParser(viewedPaths));
 
 /**
  * The web Viewed ticks (`useDiffViewedFiles`): the paths marked Viewed on one

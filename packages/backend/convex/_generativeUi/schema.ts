@@ -13,10 +13,10 @@
 
 import { z } from "zod";
 import {
-  CHAT_UI_BUTTON_VARIANTS,
-  CHAT_UI_TEXT_STYLES,
-  CHAT_UI_TONES,
-} from "@eva/shared/generativeUi";
+  GENERATIVE_UI_BUTTON_VARIANTS,
+  GENERATIVE_UI_TEXT_STYLES,
+  GENERATIVE_UI_TONES,
+} from "@vvedantb/server/generative-ui";
 import { isHttpUrl } from "@eva/shared/safeUrl";
 
 export const MAX_BLOCKS = 24;
@@ -29,7 +29,7 @@ export const MAX_LIST_ITEMS = 12;
 /** Element budget for one panel: the blocks plus the layout around them. */
 export const MAX_PANEL_ELEMENTS = 32;
 
-const tone = z.enum(CHAT_UI_TONES);
+const tone = z.enum(GENERATIVE_UI_TONES);
 const shortText = z.string().min(1).max(200);
 const bodyText = z.string().min(1).max(MAX_TEXT_CHARS);
 
@@ -53,7 +53,7 @@ const headingBlock = z.object({
 const textBlock = z.object({
   kind: z.literal("text"),
   text: bodyText,
-  emphasis: z.enum(CHAT_UI_TEXT_STYLES).default("body"),
+  emphasis: z.enum(GENERATIVE_UI_TEXT_STYLES).default("body"),
 });
 
 const metricBlock = z.object({
@@ -124,7 +124,7 @@ const buttonBlock = z.object({
   reply: z.string().min(1).max(MAX_TEXT_CHARS).optional(),
   /** Opened in a new tab when pressed. Ignored when `reply` is set. */
   url: httpUrl.optional(),
-  variant: z.enum(CHAT_UI_BUTTON_VARIANTS).default("secondary"),
+  variant: z.enum(GENERATIVE_UI_BUTTON_VARIANTS).default("secondary"),
 });
 
 export const chatUiBlock = z.discriminatedUnion("kind", [

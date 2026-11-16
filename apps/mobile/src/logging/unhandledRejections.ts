@@ -37,8 +37,30 @@ function logUncaught(kind: "unhandled-rejection" | "uncaught-error", caught: Err
 
 let installed = false;
 
-/** Installs once. `env` is the global object; tests pass a fake. Never throws. */
-export function installUnhandledRejectionLogging(env: object = globalThis): boolean {
+/** What a fatal error leaves behind for the next launch (`lastCrash.ts`). */
+export type FatalReport = { name: string; message: string; stack: string };
+
+/** How long a fatal error waits for `onFatal` before the app closes anyway. */
+const FATAL_SAVE_MS = 1_000;
+
+function fatalReport(caught: Error | object | string | number | boolean | null | undefined): FatalReport {
+  const parsed = errorShape.safeParse(caught);
+  return {
+    name: (parsed.success && parsed.data.name) || "Error",
+    message: ((parsed.success && parsed.data.message) || String(caught)).slice(0, 500),
+    stack: ((parsed.success && parsed.data.stack) || "").split("\n").slice(0, 15).join("\n"),
+  };
+}
+
+/**
+ * Installs once. `env` is the global object; tests pass a fake. Never throws.
+ * `onFatal` runs before a fatal error closes the app (at most `FATAL_SAVE_MS`):
+ * a release build closes with no message, so this is how the error survives.
+ */
+export function installUnhandledRejectionLogging(
+  env: object = globalThis,
+  options: { onFatal?: (report: FatalReport) => Promise<void> } = {},
+): boolean {
   if (installed) return false;
   try {
     const parsed = envSchema.safeParse(env);
@@ -53,7 +75,14 @@ export function installUnhandledRejectionLogging(env: object = globalThis): bool
       const previous = ErrorUtils.getGlobalHandler();
       ErrorUtils.setGlobalHandler((error, isFatal) => {
         logUncaught("uncaught-error", error, { isFatal });
-        previous(error, isFatal);
+        const { onFatal } = options;
+        if (!isFatal || !onFatal) {
+          previous(error, isFatal);
+          return;
+        }
+        // Save first, then let the app close as before.
+        const timeout = new Promise<void>((resolve) => setTimeout(resolve, FATAL_SAVE_MS));
+        void Promise.race([onFatal(fatalReport(error)).catch(() => {}), timeout]).finally(() => previous(error, isFatal));
       });
     }
     return true;

@@ -18,12 +18,6 @@ import {
 import {
   Button,
   CenteredSpinner,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -38,7 +32,7 @@ import {
   TabsTrigger,
 } from "@vvedantb/native-ui/primitives";
 import { goBackOrReplace } from "@vvedantb/native-ui/expo-router";
-import { tokens, useLargerText } from "@vvedantb/native-ui/theme";
+import { useLargerText } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useAction, useQuery } from "convex/react";
 import * as Clipboard from "expo-clipboard";
@@ -50,6 +44,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DiffOptions } from "@/diff/DiffOptions";
 import { usePendingLineComments, usePrDiff } from "@/diff/prDiffStore";
 import { prStatusAppearance, ToneIcon, toneColour } from "@/reviews/prAppearance";
+import { PrCloseDialog, type PrCloseTarget } from "@/reviews/PrCloseDialog";
 import { RenameDialog } from "@/reviews/PrMetaEdit";
 import { PrPrimaryAction } from "@/reviews/PrPrimaryAction";
 import { ReviewCode } from "@/reviews/ReviewCode";
@@ -97,7 +92,7 @@ export default function ReviewScreen() {
     <View className="flex-1" style={{ paddingTop: insets.top + 8 }}>
       <View className="flex-row px-3 pb-2">
         <HeaderIconButton label="Back" onPress={back}>
-          <IconChevronLeft size={20} color={tokens.color.foreground[scheme]} />
+          <IconChevronLeft size={20} color={EVA_THEME[scheme].foreground} />
         </HeaderIconButton>
       </View>
       {body}
@@ -245,7 +240,7 @@ function ReviewTabs({
       {/* The web header's Merge and its floating composer, in thumb reach. */}
       <View
         className="flex-row items-center gap-2 px-4 pt-2"
-        style={{ paddingBottom: Math.max(insets.bottom, 8), borderTopWidth: 1, borderColor: tokens.color.border[scheme] }}
+        style={{ paddingBottom: Math.max(insets.bottom, 8), borderTopWidth: 1, borderColor: EVA_THEME[scheme].border }}
       >
         <View className="min-w-0 flex-1">
           <PrPrimaryAction repoId={repoId} overview={overview} onDone={onRefresh} />
@@ -294,8 +289,8 @@ function ReviewTabs({
  * The web `ReviewHeader`: Back (phones expect one), the state pill, `head →
  * base` and the ⋯ menu (Refresh, Copy link, View on GitHub, Rename; on an
  * open pull request Stack a new session and Close without merging, behind
- * the web confirm; its dots turn into a spinner while a refresh or a close
- * runs); then the title with `#N` linking to GitHub; then the blocker, when
+ * the web confirm (`PrCloseDialog`); its dots turn into a spinner while a
+ * refresh runs); then the title with `#N` linking to GitHub; then the blocker, when
  * there is one worth a line, with its fix (a session on the head branch, as
  * the web `PrRemedyButton`, no confirm); then the tabs. Rename sits in this
  * menu (chose: the web has it on the Reviews list row's menu).
@@ -322,27 +317,10 @@ function ReviewHeader({
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const theme = EVA_THEME[scheme];
-  const update = useAction(api.github.updatePullRequest);
   const remedySession = useStartReviewSession(repoId);
   const [renaming, setRenaming] = useState(false);
-  const [confirmingClose, setConfirmingClose] = useState(false);
-  const [closing, setClosing] = useState(false);
+  const [closeTarget, setCloseTarget] = useState<PrCloseTarget | null>(null);
   const isOpen = overview.status === "open";
-  const close = () => {
-    setClosing(true);
-    update({ repoId, prNumber: overview.number, state: "closed" }).then(
-      () => {
-        setClosing(false);
-        setConfirmingClose(false);
-        toast.success(`Pull request #${overview.number} closed`);
-        onRefresh();
-      },
-      (cause: Error) => {
-        setClosing(false);
-        toast.error(cause.message || "Could not close the branch");
-      },
-    );
-  };
   // The web `useStackNewSession`: the new-session screen on this repo, from the head branch.
   const stackNewSession = () =>
     router.push({
@@ -359,7 +337,7 @@ function ReviewHeader({
     );
 
   return (
-    <View className="gap-2 px-3 pb-3" style={{ paddingTop: insets.top + 8, borderBottomWidth: 1, borderColor: tokens.color.border[scheme] }}>
+    <View className="gap-2 px-3 pb-3" style={{ paddingTop: insets.top + 8, borderBottomWidth: 1, borderColor: EVA_THEME[scheme].border }}>
       <View className="flex-row items-center gap-2">
         <HeaderIconButton label="Back" onPress={onBack}>
           <IconChevronLeft size={20} color={theme.foreground} />
@@ -386,9 +364,9 @@ function ReviewHeader({
             accessibilityLabel={refreshing ? "Refreshing pull request" : "More pull request actions"}
             hitSlop={4}
             className="h-11 w-11 items-center justify-center rounded-full active:opacity-70"
-            style={{ backgroundColor: tokens.color.surfaceSecondary[scheme] }}
+            style={{ backgroundColor: EVA_THEME[scheme].muted }}
           >
-            {refreshing || closing ? <Spinner size="sm" decorative /> : <IconDots size={18} color={theme.foreground} />}
+            {refreshing ? <Spinner size="sm" decorative /> : <IconDots size={18} color={theme.foreground} />}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem icon={IconRefresh} disabled={refreshing} onSelect={onRefresh}>
@@ -410,7 +388,11 @@ function ReviewHeader({
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 {/* Closing notifies every reviewer and stops CI, so it asks first, as the web. */}
-                <DropdownMenuItem icon={IconGitPullRequestClosed} destructive disabled={closing} onSelect={() => setConfirmingClose(true)}>
+                <DropdownMenuItem
+                  icon={IconGitPullRequestClosed}
+                  destructive
+                  onSelect={() => setCloseTarget({ repoId, prNumber: overview.number })}
+                >
                   Close without merging
                 </DropdownMenuItem>
               </>
@@ -460,34 +442,13 @@ function ReviewHeader({
         title={overview.title}
         onSaved={onRefresh}
       />
-      <Dialog
-        open={confirmingClose}
+      <PrCloseDialog
+        target={closeTarget}
         onOpenChange={(open) => {
-          // Closing mid-request would hide the only progress the user sees.
-          if (!closing) setConfirmingClose(open);
+          if (!open) setCloseTarget(null);
         }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{`Close pull request #${overview.number} without merging?`}</DialogTitle>
-            <DialogDescription>Reviewers are notified and CI stops. You can reopen it later.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="ghost" disabled={closing} onPress={() => setConfirmingClose(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              loading={closing}
-              disabled={closing}
-              leftIcon={<IconGitPullRequestClosed size={16} color={theme.destructiveForeground} />}
-              onPress={close}
-            >
-              {closing ? "Closing" : "Close pull request"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onClosed={onRefresh}
+      />
     </View>
   );
 }

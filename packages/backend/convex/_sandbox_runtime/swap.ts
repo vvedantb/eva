@@ -34,7 +34,11 @@
  * (free − reserve), and skip entirely when that leaves too little to matter.
  */
 import type { SandboxHandle } from "../_sandbox/provider";
-import { SWAP_FILE_PATH, writeSandboxFile } from "./sandboxFiles";
+import {
+  lowDiskCleanupLines,
+  SWAP_FILE_PATH,
+  writeSandboxFile,
+} from "./sandboxFiles";
 import { errorMessage } from "@vvedantb/server";
 
 const ENSURE_SCRIPT_PATH = "/tmp/eva-ensure-swap.sh";
@@ -99,6 +103,14 @@ export function buildEnsureSwapScript(config: SwapConfig): string {
     "",
     "avail_mib() { df -Pm / 2>/dev/null | awk 'NR==2 {print $4}'; }",
     'file_mib() { s=$(stat -c %s "$SWAP" 2>/dev/null || echo 0); echo $((s / 1048576)); }',
+    "",
+    // Every boot path runs this script, so it is also where a low disk gets
+    // its Eva-owned caches back before the daemons start writing.
+    "DISK_BEFORE=$(avail_mib)",
+    ...lowDiskCleanupLines("avail_mib"),
+    'if [ "$CLEANED" = yes ]; then',
+    `  echo "${MARKER_PREFIX}low-disk-cleanup before=\${DISK_BEFORE}MiB after=$(avail_mib)MiB"`,
+    "fi",
     "",
     // Already swapping: nothing to do. This is the common case on a resume
     // where the VM kept running, and makes repeat calls per boot free.
@@ -229,13 +241,14 @@ async function runSwapScript(
   try {
     await writeSandboxFile(sandbox, path, script);
     const result = await sandbox.exec(`bash ${path}`, { timeoutSeconds });
-    const status =
-      result.output
-        .split("\n")
-        .map((line) => line.trim())
-        .findLast((line) => line.startsWith(MARKER_PREFIX)) ??
-      `no status (exit ${result.exitCode})`;
-    console.log(`[sandbox] ${label}: ${status} on ${sandbox.id}`);
+    const markers = result.output
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith(MARKER_PREFIX));
+    const status = markers.at(-1) ?? `no status (exit ${result.exitCode})`;
+    // Earlier markers (the low-disk cleanup) go in the log line too.
+    const logged = markers.length > 1 ? markers.join(" | ") : status;
+    console.log(`[sandbox] ${label}: ${logged} on ${sandbox.id}`);
     return status;
   } catch (error) {
     console.log(

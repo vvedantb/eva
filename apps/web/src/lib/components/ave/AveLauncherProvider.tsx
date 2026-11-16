@@ -29,7 +29,7 @@ interface AveLauncherProviderProps {
  * The popover chrome is eager so the first click can play its spring. The
  * session tree stays in `AvePanelBody`, loaded on hover/focus or first open.
  *
- * The same state is published on a context because below `lg` the summon
+ * The same state is published on a context because below `md` the summon
  * button is not the floating launcher at all — it is a header button rendered
  * by `Sidebar`, which sits inside this provider for exactly that reason.
  */

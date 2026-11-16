@@ -1,13 +1,7 @@
 "use client";
 
 import { Link, useLocation } from "@tanstack/react-router";
-import { cn } from "@eva/ui";
-import {
-  SettingsIcon,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@vvedantb/ui";
+import { SettingsIcon, Sidebar } from "@vvedantb/ui";
 import { GLOBAL_SETTINGS_NAV } from "@/lib/components/sidebar/globalSettingsNav";
 import { isGlobalSettingsPath } from "@/lib/components/sidebar/homePaths";
 import { railTileActiveClass } from "@/lib/components/sidebar/SharedLayoutNav";
@@ -28,24 +22,15 @@ export function RailSettingsMenu({ onNavigate }: { onNavigate?: () => void }) {
       (pathname === "/testing" || pathname.startsWith("/testing/")));
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Link
-          to={SETTINGS_LANDING_HREF}
-          onClick={onNavigate}
-          title="Settings"
-          aria-label="Settings"
-          className={cn(
-            "group relative flex size-11 items-center justify-center rounded-lg border motion-press active:scale-[0.96] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring/35",
-            isActive
-              ? railTileActiveClass
-              : "border-transparent text-muted-foreground opacity-75 hover:bg-sidebar-accent/50 hover:opacity-100 hover:text-sidebar-foreground",
-          )}
-        >
-          <SettingsIcon size={22} variant="turn" className="shrink-0" />
-        </Link>
-      </TooltipTrigger>
-      <TooltipContent side="right">Settings</TooltipContent>
-    </Tooltip>
+    <Sidebar.RailItem
+      asChild
+      label="Settings"
+      active={isActive}
+      className={isActive ? railTileActiveClass : undefined}
+    >
+      <Link to={SETTINGS_LANDING_HREF} onClick={onNavigate}>
+        <SettingsIcon size={22} variant="turn" className="shrink-0" />
+      </Link>
+    </Sidebar.RailItem>
   );
 }

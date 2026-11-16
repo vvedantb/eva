@@ -10,7 +10,10 @@ import {
  * failed: "The snapshot is available in `iad1`, but this sandbox runs in
  * `cdg1`" (fix #900). A create from a snapshot must follow the snapshot, and a
  * sandbox outside SANDBOX_REGION cannot mount its region-pinned Drives.
+ * Sandboxes are back in iad1 now, so cdg1 plays the old region.
  */
+const OLD_REGION = "cdg1";
+
 describe("sandboxPlacement", () => {
   test("no snapshot to follow keeps the default region, failover and Drives", () => {
     expect(sandboxPlacement(undefined)).toEqual({
@@ -21,18 +24,18 @@ describe("sandboxPlacement", () => {
   });
 
   test("a snapshot in the default region stays there", () => {
-    expect(sandboxPlacement(["iad1", SANDBOX_REGION]).region).toBe(
+    expect(sandboxPlacement([OLD_REGION, SANDBOX_REGION]).region).toBe(
       SANDBOX_REGION,
     );
   });
 
   test("an old snapshot outside the default region restores where it lives", () => {
-    const placement = sandboxPlacement(["iad1"]);
-    expect(placement.region).toBe("iad1");
+    const placement = sandboxPlacement([OLD_REGION]);
+    expect(placement.region).toBe(OLD_REGION);
     // Drives live in SANDBOX_REGION only; mounting them would fail the create.
     expect(placement.mountDrives).toBe(false);
     // Never list the chosen region as its own failover.
-    expect(placement.failoverRegions).not.toContain("iad1");
+    expect(placement.failoverRegions).not.toContain(OLD_REGION);
   });
 
   test("an empty region list falls back to the default", () => {

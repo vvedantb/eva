@@ -1,4 +1,4 @@
-import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
+import { FALLBACK_GIT_BASE_BRANCH, isLivePrState } from "@eva/shared";
 import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -69,14 +69,23 @@ export const handlePullRequestEvent = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     if (!TRACKED_ACTIONS.has(args.action)) return null;
-    const nextState = derivePrStateFromEvent(
+    let row = await findPullRequestByUrl(ctx.db, args.prUrl);
+    const previousState: PrState | undefined = row?.state;
+    const eventState = derivePrStateFromEvent(
       args.action,
       args.draft,
       args.merged,
     );
-
-    let row = await findPullRequestByUrl(ctx.db, args.prUrl);
-    const previousState: PrState | undefined = row?.state;
+    // GitHub does not order deliveries: a `ready_for_review` sent a second
+    // before the merge can land after it (PR 1274 read open once merged).
+    // Only `reopened` takes a merged or closed PR back to a live state.
+    const staleLiveEvent =
+      previousState !== undefined &&
+      !isLivePrState(previousState) &&
+      eventState !== null &&
+      isLivePrState(eventState) &&
+      args.action !== "reopened";
+    const nextState = staleLiveEvent ? null : eventState;
     if (row) {
       await setPullRequestState(ctx, row, {
         state: nextState ?? row.state,

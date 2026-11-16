@@ -51,6 +51,8 @@ export default (_context: ConfigContext): ExpoConfig => ({
     "expo-web-browser",
     "expo-secure-store",
     "expo-notifications",
+    // Inline players for the agent's screen recordings (`@vvedantb/native-ui/video`).
+    "expo-video",
     "./plugins/withReleaseSigning.js",
   ],
   experiments: {

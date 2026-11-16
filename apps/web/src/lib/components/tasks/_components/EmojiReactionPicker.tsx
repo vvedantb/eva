@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { QUICK_REACTIONS } from "@eva/shared/taskDetail";
 import { useAction } from "convex/react";
 import { EmojiPicker } from "frimousse";
 import { api } from "@eva/backend";
@@ -17,7 +18,6 @@ import {
 import { IconMoodSmile } from "@tabler/icons-react";
 
 // Fast-path reactions shown above the full searchable grid.
-const QUICK_REACTIONS = ["👍", "❤️", "🎉", "😄", "🚀", "👀"];
 
 /** How long the search box must sit still before Eva asks Jev about it. */
 const SUGGEST_IDLE_MS = 400;

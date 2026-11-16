@@ -17,7 +17,7 @@ import {
 import { ReactionBar } from "./ReactionBar";
 import { EmojiReactionPicker } from "./EmojiReactionPicker";
 import { useReactions } from "./TaskReactionsProvider";
-import { taskTextLockReason } from "./task-detail-constants";
+import { taskTextLockReason } from "@eva/shared/taskDetail";
 
 /**
  * Descriptions are authored and stored as Markdown. Legacy/imported content can

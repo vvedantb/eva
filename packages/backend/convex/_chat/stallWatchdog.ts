@@ -1,3 +1,4 @@
+import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { cancelTrackedWorkflow } from "../workflowManager";
@@ -33,7 +34,7 @@ type ChatId = Id<"sessionChats">;
  * cancels the workflow, salvages the open assistant bubble (streamed text and
  * tool steps survive; an empty bubble is dropped), surfaces the failure as a
  * standalone system alert, interrupts any still-alive agent process the way
- * cancelExecution does, and starts the next queued message. The caller must
+ * cancelExecution does, and schedules the next queued message. The caller must
  * have verified `adapter.activeWorkflowId(entity) === workflowId`; mutation
  * atomicity makes that guard plus these writes race-free against a
  * concurrent startExecute.
@@ -123,5 +124,23 @@ export async function finalizeStaleChatTurn<TId extends ChatId, TEntity>(
     sandboxStopped: opts.sandboxStopped === true,
   });
 
-  await adapter.drainQueue(ctx, id);
+  await scheduleTurnEndedDrain(ctx, id);
+}
+
+/**
+ * Starts the next queued message in its OWN mutation, after the stall teardown
+ * commits. Inline, any drain failure rolled the teardown back with it: on
+ * 2026-11-11 a drain that hit Convex's 16 MiB read limit left a dead turn open
+ * for hours, retried every minute, with Stop failing the same way. The turn
+ * close must never depend on the next turn starting.
+ */
+export async function scheduleTurnEndedDrain(
+  ctx: MutationCtx,
+  id: ChatId,
+): Promise<void> {
+  await ctx.scheduler.runAfter(
+    0,
+    internal._queues.helpers.drainQueueAfterBackgroundAgents,
+    { parentId: id },
+  );
 }

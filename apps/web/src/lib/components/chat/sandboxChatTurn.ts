@@ -6,6 +6,7 @@ import type {
   ModelTraitsExecutionArgs,
   ReasoningLevel,
 } from "@eva/backend";
+import { chatStreamingEntityId } from "@eva/shared";
 import {
   annotationSender,
   type AnnotationSubmit,
@@ -184,8 +185,7 @@ export function sandboxChatKeys(entity: ChatEntityRef | undefined): {
   }
   return {
     parentId: entity.chatId,
-    // Backend `sessionChatStreamingEntityId`.
-    streamingEntityId: String(entity.chatId),
+    streamingEntityId: chatStreamingEntityId(entity.chatId),
     draftTarget: {
       kind: "sessionChat",
       sessionId: entity.sessionId,
