@@ -1,10 +1,16 @@
 "use client";
 
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAction } from "convex/react";
+import { useQuery as useConvexQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { parseGithubPrLink, type GithubPrLink } from "@eva/shared";
+import {
+  parseEvaEntityLink,
+  parseGithubPrLink,
+  type EvaEntityLink,
+  type GithubPrLink,
+} from "@eva/shared";
 import {
   HoverCard,
   HoverCardContent,
@@ -18,27 +24,86 @@ import {
   PrDiffStat,
 } from "@/lib/components/reviews/_components/prReviewParts";
 import { relativeTime } from "@/lib/components/artifacts/_format";
+import { DataMentionHoverCardBody } from "@/lib/components/mentions";
+import { MentionContentPreview } from "@/lib/components/mentions/MentionContentPreview";
 
 /**
- * The `a` renderer for chat markdown. A GitHub pull request link gets a hover
- * card with its state, title, author and diff size; every other link renders
- * as the shared `MarkdownLink`.
+ * The `a` renderer for chat markdown. A GitHub pull request link gets a card
+ * with its state, title, author and diff size; a link to an Eva session, quick
+ * task, project or doc gets the same card its `@` mention chip shows. Every
+ * other link renders as the shared `MarkdownLink`.
  */
 export function ChatMarkdownLink(props: ComponentProps<typeof MarkdownLink>) {
-  const pr =
-    typeof props.href === "string" ? parseGithubPrLink(props.href) : null;
-  if (pr === null) return <MarkdownLink {...props} />;
+  const href = typeof props.href === "string" ? props.href : null;
+  const pr = href === null ? null : parseGithubPrLink(href);
+  if (pr !== null) {
+    return (
+      <LinkHoverCard link={props} contentClassName="w-80 p-3">
+        <PullRequestCardBody pr={pr} />
+      </LinkHoverCard>
+    );
+  }
+  const entity =
+    href === null ? null : parseEvaEntityLink(href, window.location.origin);
+  if (entity !== null) {
+    return (
+      <LinkHoverCard
+        link={props}
+        // The mention preview draws its own surface, as on `DataMentionChip`.
+        contentClassName="w-auto border-0 bg-transparent p-0 shadow-none backdrop-blur-none"
+      >
+        <EvaEntityCardBody link={entity} />
+      </LinkHoverCard>
+    );
+  }
+  return <MarkdownLink {...props} />;
+}
+
+function LinkHoverCard({
+  link,
+  contentClassName,
+  children,
+}: {
+  link: ComponentProps<typeof MarkdownLink>;
+  contentClassName: string;
+  children: ReactNode;
+}) {
   return (
     <HoverCard openDelay={300} closeDelay={100}>
       <HoverCardTrigger asChild>
         <span>
-          <MarkdownLink {...props} />
+          <MarkdownLink {...link} />
         </span>
       </HoverCardTrigger>
-      <HoverCardContent align="start" side="top" className="w-80 p-3">
-        <PullRequestCardBody pr={pr} />
+      <HoverCardContent align="start" side="top" className={contentClassName}>
+        {children}
       </HoverCardContent>
     </HoverCard>
+  );
+}
+
+/** Mounts only while the card is open, like the PR card below. */
+function EvaEntityCardBody({ link }: { link: EvaEntityLink }) {
+  const target = useConvexQuery(api.mentions.getEntityByPath, link);
+  if (target === undefined) {
+    return (
+      <MentionContentPreview title="Loading…">
+        <Spinner className="size-4" />
+      </MentionContentPreview>
+    );
+  }
+  if (target === null) {
+    return (
+      <MentionContentPreview title="Not found">
+        <p>This link may point to something deleted or in another team.</p>
+      </MentionContentPreview>
+    );
+  }
+  return (
+    <DataMentionHoverCardBody
+      entityId={target.entityId}
+      repoId={target.repoId}
+    />
   );
 }
 

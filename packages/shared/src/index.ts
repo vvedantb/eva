@@ -200,7 +200,14 @@ export {
   type QuickTaskSortField,
   type QuickTaskTimeRange,
 } from "./quickTaskFilters";
-export { ENTITY_SECTION, entityHref, repoBasePath } from "./repoPath";
+export {
+  ENTITY_SECTION,
+  entityHref,
+  parseEvaEntityLink,
+  repoBasePath,
+  type EvaEntityLink,
+  type EvaLinkSection,
+} from "./repoPath";
 export {
   PRIORITY_LABELS,
   PRIORITY_ORDER,
