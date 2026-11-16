@@ -69,6 +69,7 @@ import { SessionChatTabs } from "@/chat/SessionChatTabs";
 import { SandboxControl, SandboxErrorBanner, useSessionSandbox } from "@/chat/SandboxControl";
 import { UsageButton } from "@/chat/UsageSheet";
 import { useProposedPlans } from "@/chat/ProposedPlanCard";
+import { BackgroundAgentsChip } from "@/chat/BackgroundAgentsChip";
 import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
 import { UsageLimitRecoveryCard } from "@/chat/UsageLimitRecovery";
 import { MentionMenu } from "@/chat/MentionMenu";
@@ -537,6 +538,12 @@ function ChatDock({
               chat.sandboxBranch && !simpleView ? (
                 <SandboxBranchChip branch={chat.sandboxBranch} intendedBranch={chat.intendedBranch} />
               ) : undefined
+            }
+            status={
+              <BackgroundAgentsChip
+                chatId={chat.session?.chatId ?? chat.task?.sessionChatId ?? chat.project?.sessionChatId}
+                readOnly={!chat.canReply}
+              />
             }
             model={modelPick.pick ? <ModelChip repoId={chat.repoId} {...modelPick.pick} /> : undefined}
           />

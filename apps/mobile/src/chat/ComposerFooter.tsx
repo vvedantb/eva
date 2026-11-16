@@ -85,12 +85,15 @@ export function useFooterChipColor() {
  */
 export function ComposerFooter({
   leading,
+  status,
   repoId,
   composer,
   attachments,
   model,
 }: {
   leading?: ReactNode;
+  /** Chips for work running beside the chat (the background agents), after the leading control. */
+  status?: ReactNode;
   /** The repo the stash is saved against (the web stash is per user and repo). */
   repoId: Id<"githubRepos"> | undefined;
   /** The draft the stash saves and restores into. */
@@ -109,7 +112,7 @@ export function ComposerFooter({
       <StashChip repoId={repoId} entries={entries} composer={composer} attachments={attachments} />
     ) : null;
   const modelChip = simpleView ? null : model;
-  if (!leading && !stash && !modelChip) return null;
+  if (!leading && !status && !stash && !modelChip) return null;
   return (
     <View
       className="mx-3 flex-row items-center gap-0.5 px-2 py-1"
@@ -126,6 +129,7 @@ export function ComposerFooter({
           {leading}
         </View>
       ) : null}
+      {status ? <View className="shrink-0">{status}</View> : null}
       {stash ? <View className="shrink-0">{stash}</View> : null}
       {modelChip ? <View className="ml-auto min-w-0 shrink">{modelChip}</View> : null}
     </View>
