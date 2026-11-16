@@ -398,7 +398,7 @@ Bee's still in progress, but what do we think — would you use Bee?
   // Annual CDM deck
   // ---------------------------------------------------------------------------
   "a01-title": `Open on the span, not the product: an empty repository in January became how we build software.
-Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the shape: the origin, who uses it, how the platform is built, the craft behind it and the people, then the year ahead and the framework map on slide 41.
+Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the shape: the origin, who uses it, how the platform is built, the craft behind it and the people, then the year ahead and the framework map on slide 42.
 Figures: the window is 11 January to 16 September 2026.
 Next: it starts on a single evening in January.`,
 
@@ -491,10 +491,19 @@ Next: here is the slider those choices produced.`,
 → Step 2: the closing question. How fast can we build it becomes how fast can we decide.
 Detail: Eva now finishes work faster than we can check it in. The three strands are headings only. Automate the release. Guard the irreversible, so people concentrate on data, permissions and anything hard to undo. Software that fits us: tools shaped around how we work rather than the other way round. None of the three is a dated commitment.
 Framework: identifies work to do.
-Next: how all of this maps to the framework.`,
+Next: and outside Eva, four more things built this year.`,
 
+  "annual-e01-beyond": `Eva was the main project, but not the only one: four more were built and shipped alongside it, each solving a problem Eva's work exposed.
+→ Step 1: Bee, a desktop app for Windows and Mac that listens in a meeting and surfaces your own notes and short answers in a small bar at the top of the screen.
+→ Step 2: Redline, which builds two versions of an app, screenshots every page at both, and shows which pages changed, which look broken, and the files most likely responsible.
+→ Step 3: flowtape, which records a journey through an app and turns it into a prompt an agent can replay and explore as a test, with passwords and personal details such as NHS numbers hidden before anything is stored.
+→ Step 4: the shared packages, one set of components, server helpers and tooling used across every app; Eva itself moved onto them in October.
+Detail: all four are public: Bee ships as Windows and Mac releases, and Redline, flowtape and the packages are published on npm. Redline is the answer to the page-scores gap on the next slide: checking quality with a tool rather than by eye.
+Figures: Bee from 26 September, 85 releases to 13 November 2026; Redline and flowtape on npm from 5 October 2026; @vvedantb/ui on npm from 5 October 2026. GitHub and npm, checked 15 November 2026.
+Framework: a skill beyond coding; improves the process; contributes to common code and standards.
+Next: how all of this maps to the framework.`,
   "a15-framework": `This is the map an assessor reads: the framework's three sections, Technical, Impact and Collaboration, each evidenced by a slide already shown.
-→ Step 1: the ticks land, column by column. Technical: design and trade-offs, slide 20, with 18, 23 and 31; debugging, slides 21 and 22; a skill beyond coding, slide 26, measurement, and slides 33 to 34, Jev. Impact: breaking down large problems, slide 20; improving the process, slides 27 to 29 and 39; identifying work, slides 25 and 40; business and user empathy, slides 34 to 36. Collaboration: communicating clearly, the Friday sessions and this deck; getting buy-in, slides 9 to 10, where the team took Eva up; mentoring and onboarding, slide 32.
+→ Step 1: the ticks land, column by column. Technical: design and trade-offs, slide 20, with 18, 23 and 31; debugging, slides 21 and 22; a skill beyond coding, slide 26, measurement, and slides 33 to 34, Jev. Impact: breaking down large problems, slide 20; improving the process, slides 27 to 29, 39 and 41, Redline and the shared packages; identifying work, slides 25 and 40; business and user empathy, slides 34 to 36. Collaboration: communicating clearly, the Friday sessions and this deck; getting buy-in, slides 9 to 10, where the team took Eva up; mentoring and onboarding, slide 32.
 → Step 2: the thin evidence. Volunteer the gaps before they are asked for. Giving and seeking feedback, and pairing on reviews, happen but are not written down; page scores are not routine though the harness exists; and there has been no work alongside a designer or user researcher.
 Next: one last fact about how this deck was made.`,
 

@@ -1,4 +1,5 @@
 import type { DeckSlide } from "./types";
+import { AnnualBeyond } from "./annual/e01-beyond";
 import { Slide05SimpleMode } from "./05-simple-mode";
 import { Slide07Sandbox } from "./07-sandbox";
 import { FridayPipeline } from "./friday/b19-pipeline";
@@ -294,6 +295,12 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     title: "The bottleneck has moved",
     Component: AnnualAhead,
     steps: 2,
+  },
+  {
+    id: "annual-e01-beyond",
+    title: "Beyond Eva",
+    Component: AnnualBeyond,
+    steps: 4,
   },
   {
     id: "a15-framework",
