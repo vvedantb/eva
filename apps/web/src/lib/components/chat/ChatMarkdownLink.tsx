@@ -163,7 +163,9 @@ function PullRequestCardBody({ pr }: { pr: GithubPrLink }) {
       </p>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <PrAvatar login={data.authorLogin} avatarUrl={data.authorAvatarUrl} />
-        <span className="min-w-0 truncate">{data.authorLogin ?? "Unknown"}</span>
+        <span className="min-w-0 truncate">
+          {data.authorLogin ?? "Unknown"}
+        </span>
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
           <PrDiffStat
             additions={data.additions}

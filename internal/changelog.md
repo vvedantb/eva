@@ -1,5 +1,21 @@
 # Changelog
 
+## Automations Hub: "New" in the header, one `+` in the sidebar
+
+Date: 2026-11-16
+
+WHY: The sidebar had two buttons per app (hub, new) and the hub page repeated its own title and a long blurb.
+
+Architectural: the page title is now "Automations Hub" with a "New" header button (`automations/_components/NewAutomationButton.tsx`, the create dialog moved from `GlobalAutomationsSidebar`). The "Automations Hub" subheading and its blurb are gone; the "n of m installed" count stays. In `GlobalAutomationGroup` the grid hub link is removed and `+` links to that app's hub.
+
+## Snapshot seed settles live state from the prod export
+
+Date: 2026-11-16
+
+WHY: A sandbox seeded from a prod export showed sessions as running, turns in flight and task runs pending, because the export is taken while they are live.
+
+Architectural: `scripts/sync-to-local.mjs` rewrites the root tables during its existing python zip pass (`settle()`): sessions not closed → `closed`; turns that are live or open → `done`, `open: false`; agent runs queued/running → `cancelled`; `agentTasks.run` removed; `projects.activeWorkflowId` and `interviewSandboxClaim` removed. No rows or tables are dropped. The seed prints a count per table.
+
 ## Web: hover cards on GitHub pull request and Eva links in chat
 
 Date: 2026-11-15
