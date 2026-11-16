@@ -1,11 +1,9 @@
 import { describe, expect, test } from "vitest";
 import {
   buildPlanImplementationPrompt,
-  proposedPlanTitle,
-} from "@eva/shared/proposedPlan";
-import {
   findLatestProposedPlan,
   hasActionableProposedPlan,
+  proposedPlanTitle,
   type ProposedPlanRow,
 } from "@eva/shared/proposedPlan";
 import type { Id } from "@eva/backend";
