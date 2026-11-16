@@ -7,12 +7,13 @@ import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import type { ModelPick } from "@/chat/ModelChip";
 
-type Chat = NonNullable<FunctionReturnType<typeof api.mobile.getChat>>;
+/** An open chat (`mobile.getChat`). */
+export type Chat = NonNullable<FunctionReturnType<typeof api.chats.get>>;
 
 /** Shows a pick on the open chat at once (`mobile.getChat`), before the server has it. */
 function patchChat(store: OptimisticLocalStore, target: string, patch: (chat: Chat) => Partial<Chat>) {
-  const current = store.getQuery(api.mobile.getChat, { target });
-  if (current) store.setQuery(api.mobile.getChat, { target }, { ...current, ...patch(current) });
+  const current = store.getQuery(api.chats.get, { target });
+  if (current) store.setQuery(api.chats.get, { target }, { ...current, ...patch(current) });
 }
 
 /** The traits a pick set over the ones the chat had. */
@@ -45,7 +46,7 @@ export function useChatModelPick(target: string, chat: Chat | null | undefined, 
   const sessionAccounts = useQuery(api.userProviderAccounts.listForSessionOwner, chat?.session ? { sessionId: chat.session.id } : "skip");
   const taskAccounts = useQuery(api.userProviderAccounts.listForTaskOwner, chat?.task ? { taskId: chat.task.id } : "skip");
   const ownAccounts = useQuery(api.userProviderAccounts.listSelectable, chat?.project ? {} : "skip");
-  const setChatModel = useMutation(api.mobile.setChatModel).withOptimisticUpdate((store, pick) =>
+  const setChatModel = useMutation(api.chats.setModel).withOptimisticUpdate((store, pick) =>
     patchChat(store, target, (current) => ({ model: pick.model ?? current.model, traits: mergeTraits(current.traits, pick) })),
   );
   const setSessionAccount = useMutation(api.sessionChats.setProviderAccountId).withOptimisticUpdate((store, args) =>
@@ -54,7 +55,7 @@ export function useChatModelPick(target: string, chat: Chat | null | undefined, 
   const ensureOwned = useMutation(api.sessions.ensureOwned);
   const prewarmSession = useAction(api.sessionWorkflow.prewarmDaemonNow);
 
-  if (!chat) return { pick: undefined, switching };
+  if (!chat) return { pick: undefined, switching, switchAccount: undefined };
   const { session, task, project } = chat;
   const sessionChatId = session?.chatId ?? task?.sessionChatId ?? project?.sessionChatId;
   // The chat to save an account on, created for a task or project on first need.
@@ -76,17 +77,26 @@ export function useChatModelPick(target: string, chat: Chat | null | undefined, 
     }).catch(failed);
   };
 
-  const changeAccount = (providerAccountId: Id<"userProviderAccounts"> | null) => {
+  // The switch the usage-limit card waits on before it retries; it rejects when the switch fails.
+  // Chained, not try / finally, which React Compiler cannot compile.
+  const switchAccount = (providerAccountId: Id<"userProviderAccounts"> | null): Promise<void> => {
     setSwitching(true);
-    // Chained, not try / finally, which React Compiler cannot compile.
-    resolveChatId()
+    return resolveChatId()
       .then(async (chatId) => {
         if (!chatId) return;
         await setSessionAccount({ chatId, providerAccountId });
         await prewarmSession({ chatId });
       })
-      .catch(() => toast.error("Couldn't switch the account"))
-      .then(() => setSwitching(false));
+      .then(
+        () => setSwitching(false),
+        (error: Error) => {
+          setSwitching(false);
+          throw error;
+        },
+      );
+  };
+  const changeAccount = (providerAccountId: Id<"userProviderAccounts"> | null) => {
+    switchAccount(providerAccountId).catch(() => toast.error("Couldn't switch the account"));
   };
   const accounts = sessionAccounts ?? taskAccounts ?? ownAccounts;
   // The web lets only a task's or project's owner change its account.
@@ -104,5 +114,5 @@ export function useChatModelPick(target: string, chat: Chat | null | undefined, 
         ? { accounts: toPickerAccounts(accounts), value: chat.providerAccountId ?? null, onChange: changeAccount }
         : undefined,
   };
-  return { pick, switching };
+  return { pick, switching, switchAccount };
 }

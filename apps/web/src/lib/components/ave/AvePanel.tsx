@@ -40,7 +40,7 @@ const AvePanelBody = lazy(() =>
  * The chrome is eager so the first click can play this spring immediately. The
  * chat tree stays lazy — it is what used to delay the whole surface.
  *
- * Below `lg` there is no launcher to anchor to — the summon button lives in the
+ * Below `md` there is no launcher to anchor to — the summon button lives in the
  * mobile header — so the popover becomes a sheet filling the space under that
  * header. It cannot keep `PANEL_POSITION_STYLE`: that style carries the panel's
  * width and height as well as its offsets, and a 26rem box hung off a
@@ -53,7 +53,7 @@ export function AvePanel({
   visible: boolean;
   onMinimize: () => void;
 }) {
-  const isDesktop = useMediaQuery("(min-width: 1024px)");
+  const isDesktop = useMediaQuery("(min-width: 768px)");
 
   return (
     <m.div

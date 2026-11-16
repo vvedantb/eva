@@ -5,6 +5,11 @@ import { api } from "@eva/backend";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import type { FunctionArgs, FunctionReturnType } from "convex/server";
 import { useHeldResult } from "@vvedantb/ui";
+import {
+  olderTranscriptArgs,
+  transcriptLiveArgs,
+  transcriptTailArgs,
+} from "@eva/shared";
 import { useLinkedMessageId } from "@/lib/components/chat/messageLink";
 import { useHeldQuery } from "./useHeldQuery";
 
@@ -17,36 +22,8 @@ export type TranscriptMessage = FunctionReturnType<
   typeof api.messages.listByParent
 >[number];
 
-/**
- * Messages a chat opens with. 30 covers the last turn (the only one in the
- * viewport on open) and most of the first screen above it, at about a tenth
- * of a heavy chat's payload.
- */
-const TRANSCRIPT_TAIL_MESSAGES = 30;
-
-/** Args of the tail subscription; `prefetchSession` warms the same key. */
-export function transcriptTailArgs(parentId: TranscriptParentId) {
-  return { parentId, tail: TRANSCRIPT_TAIL_MESSAGES };
-}
-
-/**
- * Args of the live subscription the chat follows once its tail resolved:
- * every message from the tail's oldest row on. A tail shorter than a full
- * one already holds the whole chat, so it follows everything (`since: 0`);
- * that also keeps an optimistic row, stamped with the client's clock, from
- * becoming the anchor.
- */
-export function transcriptLiveArgs(
-  parentId: TranscriptParentId,
-  tail: ReadonlyArray<Pick<TranscriptMessage, "_creationTime">>,
-) {
-  const oldest = tail[0];
-  const since =
-    tail.length < TRANSCRIPT_TAIL_MESSAGES || oldest === undefined
-      ? 0
-      : oldest._creationTime;
-  return { parentId, since };
-}
+// The load plan (tail, live `since`, doubling older pages) is shared with the phone.
+export { transcriptLiveArgs, transcriptTailArgs };
 
 /**
  * The newest part of a chat's transcript, kept live.
@@ -71,7 +48,7 @@ export function useChatTranscript(parentId: TranscriptParentId | "skip") {
     skipped ? "skip" : transcriptTailArgs(parentId),
   );
   const [liveArgs, setLiveArgs] = useState<
-    ReturnType<typeof transcriptLiveArgs> | undefined
+    ReturnType<typeof transcriptLiveArgs<TranscriptParentId>> | undefined
   >(undefined);
   const ownArgs =
     !skipped && liveArgs?.parentId === parentId ? liveArgs : undefined;
@@ -84,11 +61,6 @@ export function useChatTranscript(parentId: TranscriptParentId | "skip") {
   return live ?? tail;
 }
 
-/** Older history loads in pages that double, so it re-reads at most 2×. */
-const OLDER_FIRST_PAGE = 50;
-/** After 50, 100, 200 and 400 older rows, the next step loads all of them. */
-const OLDER_PAGED_STEPS = 4;
-
 /**
  * What a chat needs loaded: one row (a rail tick, a link), or the oldest
  * older row matching a find query (`searchOlderByParent`).
@@ -97,18 +69,9 @@ export type TranscriptReach = { messageId: string } | { search: string };
 
 interface OlderState {
   parentId: TranscriptParentId | undefined;
-  /** 0: none loaded yet. Past `OLDER_PAGED_STEPS`: everything. */
+  /** 0: none loaded yet. Past `OLDER_TRANSCRIPT_PAGED_STEPS`: everything. */
   steps: number;
   reach: TranscriptReach | undefined;
-}
-
-function olderArgs(
-  parentId: TranscriptParentId,
-  before: number,
-  steps: number,
-): { parentId: TranscriptParentId; before: number; tail?: number } {
-  if (steps > OLDER_PAGED_STEPS) return { parentId, before };
-  return { parentId, before, tail: OLDER_FIRST_PAGE * 2 ** (steps - 1) };
 }
 
 /**
@@ -155,7 +118,7 @@ export function useOlderTranscript({
   const args =
     skipped || before === undefined || own.steps === 0
       ? "skip"
-      : olderArgs(parentId, before, own.steps);
+      : olderTranscriptArgs(parentId, before, own.steps);
   const loaded = useQuery(api.messages.listByParent, args);
   // Held across step changes, so a new step keeps the rows painted. Dropped
   // while hidden, like the live rows (`useChatTranscript`): the steps are

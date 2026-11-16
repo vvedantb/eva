@@ -1,6 +1,6 @@
 import { TURN_BACKSTOP_ERROR } from "@eva/shared/agentTurnLimits";
 import { convexTest } from "convex-test";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import {
@@ -398,6 +398,15 @@ describe("turn lifecycle integration", () => {
 });
 
 describe("a stale session chat turn torn down by the backstop", () => {
+  // Teardowns schedule the queue drain in its own mutation. Fake timers keep
+  // that job from firing after a test ends, against a closed database.
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   /** Tears the fixture's turn down the way the `TURN_BACKSTOP_MS` backstop does. */
   async function tearDown(
     f: Awaited<ReturnType<typeof createSessionFixture>>,

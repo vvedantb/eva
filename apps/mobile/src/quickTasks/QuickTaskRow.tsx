@@ -2,7 +2,7 @@ import { taskScheduledAt, type api } from "@eva/backend";
 import { TASK_STATUS_LABELS, firstNameFromUser, formatEntityNumLabel, type DisplayTaskStatus } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconClock, IconTag } from "@tabler/icons-react-native";
-import { Spinner, SurfaceRow } from "@vvedantb/native-ui/primitives";
+import { Checkbox, SurfaceRow } from "@vvedantb/native-ui/primitives";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import type { FunctionReturnType } from "convex/server";
 import dayjs from "dayjs";
@@ -13,7 +13,7 @@ import { PriorityIcon } from "@/quickTasks/PriorityIcon";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
 import { displayTitle, timeAgo } from "@/ui/format";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
-import { AwaitingAnswerMark } from "@/ui/RowStatus";
+import { AwaitingAnswerMark, WorkingMark } from "@/ui/RowStatus";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 
 type QuickTask = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
@@ -27,10 +27,10 @@ export const META_TEXT = { fontSize: 12, lineHeight: 16, letterSpacing: XS_TRACK
 
 /** The web sandbox dot: Awake emerald, waking or going to sleep amber, asleep muted. */
 export const SANDBOX_DOT = {
-  active: { light: "#10b981", dark: "#10b981", label: "Awake" },
-  starting: { light: "#fbbf24", dark: "#fbbf24", label: "Waking up" },
-  stopping: { light: "#fbbf24", dark: "#fbbf24", label: "Going to sleep" },
-  closed: { light: undefined, dark: undefined, label: "Asleep" },
+  active: { color: "#10b981", label: "Awake" },
+  starting: { color: "#fbbf24", label: "Waking up" },
+  stopping: { color: "#fbbf24", label: "Going to sleep" },
+  closed: { color: undefined, label: "Asleep" },
 };
 
 /**
@@ -39,7 +39,7 @@ export const SANDBOX_DOT = {
  * the number and title with the priority, live mark, unread dot and schedule
  * clock; the tags; and the creator and age. Sized for a thumb, not the web
  * board: a 14 title, 12 secondary text, `py-3`, at least 72 high and 8 apart
- * (`QuickTasksSection`). A tap opens the task chat; a
+ * (`QuickTasksSection`). A tap opens the task overview; a
  * long press opens the row menu (`onLongPress`), as the web kebab and
  * right-click. The web hover tooltips are spoken in the row's hint instead.
  */
@@ -50,6 +50,7 @@ export function QuickTaskRow({
   creator,
   projectNumId,
   onLongPress,
+  selection,
 }: {
   task: QuickTask;
   status: DisplayTaskStatus;
@@ -58,6 +59,8 @@ export function QuickTaskRow({
   /** In a project's task list: the number reads "#project/task", as the web card. */
   projectNumId?: number;
   onLongPress: () => void;
+  /** In select mode: a tap or long press ticks the row, and a checkbox leads it, as the inbox. */
+  selection?: { checked: boolean; onToggle: () => void };
 }) {
   const router = useRouter();
   const scheme = useScheme();
@@ -93,17 +96,22 @@ export function QuickTaskRow({
   return (
     <SurfaceRow
       accessibilityLabel={displayTitle(task.title)}
-      accessibilityHint={hint}
+      accessibilityHint={selection ? (selection.checked ? "Selected" : "Not selected") : hint}
       accentColor={showError ? theme.destructive : appearance.bar}
       backgroundColor={showError ? withAlpha(theme.destructive, 0.05) : theme.card}
       borderColor={showError ? withAlpha(theme.destructive, 0.3) : undefined}
       // The web `px-2.5 pl-3` and `gap-1.5`; `py-3` (web `py-2`) for a thumb.
       className="min-h-[72px] gap-1.5 px-3 py-3 pl-3.5"
-      onPress={() => router.push({ pathname: "/chat/[target]", params: { target: task._id } })}
-      onLongPress={onLongPress}
+      onPress={
+        selection
+          ? selection.onToggle
+          : () => router.push({ pathname: "/quick-task/[taskId]", params: { taskId: task._id, repo: task.repoId } })
+      }
+      onLongPress={selection ? selection.onToggle : onLongPress}
       longPressLabel="Task actions"
     >
       <View className="flex-row items-start gap-2">
+        {selection ? <Checkbox checked={selection.checked} onCheckedChange={selection.onToggle} accessibilityLabel="Select task" /> : null}
         <View className="min-w-0 flex-1 flex-row items-baseline gap-1.5">
           {numLabel ? (
             <Text style={{ ...META_TEXT, fontFamily: "monospace", color: withAlpha(muted, 0.55), fontVariant: ["tabular-nums"] }}>
@@ -124,11 +132,11 @@ export function QuickTaskRow({
           {task.isAwaitingAnswer ? (
             <AwaitingAnswerMark />
           ) : showWorking ? (
-            <Spinner size="sm" decorative />
+            <WorkingMark />
           ) : showSandbox ? (
             <View
               className="size-2 rounded-full"
-              style={{ backgroundColor: sandbox[scheme] ?? withAlpha(muted, 0.4) }}
+              style={{ backgroundColor: sandbox.color ?? withAlpha(muted, 0.4) }}
             />
           ) : null}
           {showUnread ? <View className="size-1.5 rounded-full" style={{ backgroundColor: theme.primary }} /> : null}

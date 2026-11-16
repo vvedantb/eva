@@ -1,0 +1,13 @@
+{
+  "packageId": "com.projectvdotuk.eva",
+  "apkPrefix": "eva",
+  "publicEnv": [
+    "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY",
+    "EXPO_PUBLIC_CONVEX_URL",
+    "EXPO_PUBLIC_WEB_URL"
+  ],
+  "optionalEnv": ["EAS_PROJECT_ID"],
+  "unsetEnv": ["EAS_BUILD"],
+  "preBuildSteps": ["pnpm run test:babel"],
+  "pnpmFilters": ["@eva/mobile...", "{.}"]
+}

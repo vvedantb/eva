@@ -1,6 +1,11 @@
 import type { FunctionReturnType } from "convex/server";
-import { isProjectBuilding, type api } from "@eva/backend";
-import { isLivePrState, parseProjectSpec as parseSpec, type ProjectSpec } from "@eva/shared";
+import type { api } from "@eva/backend";
+import {
+  parseProjectSpec as parseSpec,
+  projectCanCreatePr,
+  projectCanResolveConflicts,
+  type ProjectSpec,
+} from "@eva/shared";
 import { BUILDABLE_PROJECT_PHASES } from "@/lib/components/projects/ProjectPhaseBadge";
 import type { useProjectSandbox } from "@/lib/components/projects/useProjectSandbox";
 
@@ -27,10 +32,7 @@ export function getProjectPrFlags(
     latestDeployment?.deploymentStatus === "deployed" &&
     Boolean(latestDeployment.deploymentUrl);
   // A merged PR stays linked as history, so only a live one blocks a new PR.
-  const canCreatePr =
-    !isLivePrState(project?.prState) &&
-    !(project && isProjectBuilding(project)) &&
-    (project?.phase === "business_review" || project?.phase === "in_progress");
+  const canCreatePr = project ? projectCanCreatePr(project) : false;
   return { hasDeployedPreview, canCreatePr };
 }
 
@@ -44,10 +46,7 @@ export function getProjectMenuFlags(
 ) {
   const canBuildProject = BUILDABLE_PROJECT_PHASES.includes(project.phase);
   const showRunBackgroundCommands = sandbox.isSandboxActive;
-  const showResolveConflicts =
-    isLivePrState(project.prState) &&
-    !isProjectBuilding(project) &&
-    (project.phase === "business_review" || project.phase === "code_review");
+  const showResolveConflicts = projectCanResolveConflicts(project);
   const hasSandboxCommandItems = showRunBackgroundCommands;
   return {
     canBuildProject,

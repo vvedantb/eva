@@ -4,7 +4,7 @@ import {
   DRIVE_CACHE_ROOT,
   DRIVE_MOUNT_PATH,
   driveCacheSetupScript,
-  driveRedundantLocalPruneLines,
+  localCachePruneLines,
 } from "../convex/_sandbox/driveCache";
 import { snapshotPruneScript } from "../convex/_sandbox/snapshotPrune";
 
@@ -50,15 +50,22 @@ describe("driveCacheSetupScript", () => {
  * teardown unmounts the cache, or `rm` empties the Drive itself.
  */
 describe("snapshot prune never touches the Drive", () => {
-  test("prune targets are home-dir caches, never the Drive paths", () => {
+  test("prune targets are local caches, never a mounted Drive", () => {
     const script = snapshotPruneScript();
-    for (const line of driveRedundantLocalPruneLines(["/home/eva"])) {
+    for (const line of localCachePruneLines()) {
       expect(script).toContain(line);
     }
-    for (const line of script.split("\n").filter((l) => l.includes("rm "))) {
-      expect(line).not.toContain(DRIVE_CACHE_ROOT);
+    const lines = script.split("\n");
+    lines.forEach((line, index) => {
+      if (!line.includes("rm ")) return;
       expect(line).not.toContain(DRIVE_MOUNT_PATH);
-    }
+      // The cache root is only emptied while it is a plain local directory.
+      if (line.includes(DRIVE_CACHE_ROOT)) {
+        expect(lines[index - 1]).toBe(
+          `if ! mountpoint -q ${DRIVE_CACHE_ROOT} 2>/dev/null; then`,
+        );
+      }
+    });
   });
 
   test("prune is best-effort and always exits 0", () => {

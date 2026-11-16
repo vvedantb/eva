@@ -10,6 +10,7 @@ import type {
 import {
   buildReclaimDiskScript,
   isDiskFull,
+  LOW_DISK_CLEANUP_MIB,
   parseReclaimDiskOutput,
   SandboxDiskFullError,
   writeSandboxFile,
@@ -150,9 +151,20 @@ describe("reclaim script", () => {
     expect(activeCheck).toBeGreaterThan(-1);
     expect(remove).toBeGreaterThan(activeCheck);
     expect(script).toContain("SWAPFILE=active");
-    // Never touches anything except the swapfile.
-    expect(script.match(/rm -f/g)).toHaveLength(2);
-    expect(script).not.toMatch(/rm -rf/);
+    expect(script.match(/rm -f "\$SWAP"/g)).toHaveLength(2);
+  });
+
+  test("deletes caches only below the low-disk line, never user work", () => {
+    const guard = script.indexOf(
+      `if [ "$(free_mib)" -lt ${LOW_DISK_CLEANUP_MIB} ]`,
+    );
+    const firstCacheRm = script.indexOf("rm -rf");
+    expect(guard).toBeGreaterThan(-1);
+    expect(firstCacheRm).toBeGreaterThan(guard);
+    for (const userPath of ["/tmp/repo", "node_modules", ".next", ".convex"]) {
+      expect(script).not.toContain(userPath);
+    }
+    expect(script).toContain("cleaned=${CLEANED}");
   });
 
   test("run for real, it removes an inactive swapfile and reports free disk", () => {

@@ -5,17 +5,19 @@ import type { ActivityStep } from "@vvedantb/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import {
   collectChangedFiles,
-  isOtherUserChatMessage,
   isSandboxPausedAlert,
   otherUserIdsInChat,
+  stripReviewCommentBlocks,
+  turnErrorTitle as sharedTurnErrorTitle,
   type ChangedFile,
   type ChatUserAttribution,
 } from "@eva/shared";
 import { tokenizedToEditable } from "@/lib/components/mentions";
-import { stripReviewCommentBlocks } from "@/lib/reviewComments";
 
 // Moved to `@eva/shared` so the mobile chat footer reads the same turn model.
 export { buildPrecedingUserTurns } from "@eva/shared";
+// Moved to `@eva/shared` so the mobile chat streams into the same bubble.
+export { findStreamingTargetMessage } from "@eva/shared";
 // Moved to `@eva/shared` so the mobile chat draws a teammate's turn as the web.
 export {
   firstNameByUserId,
@@ -81,33 +83,6 @@ export function findHandoffBoundaryIds(
     previousProvider = provider;
   }
   return boundaries;
-}
-
-/**
- * Messages in the "new since you last read" block, in thread order. The first
- * id places the NEW divider; the length is the pill count. Uses `finishedAt`
- * when set (a reply counts from when it finished), else `timestamp` (a reply
- * still streaming). Only agent replies and teammate turns count: your own
- * messages and system alerts never do.
- */
-export function findNewMessageIds(
-  messages: ReadonlyArray<
-    Pick<ChatBodyMessage, "_id" | "timestamp" | "finishedAt"> &
-      ChatUserAttribution
-  >,
-  newSinceAt: number | undefined,
-  currentUserId: string | undefined,
-): string[] {
-  if (newSinceAt === undefined) return [];
-  return messages
-    .filter(
-      (message) =>
-        !message.isSystemAlert &&
-        (message.finishedAt ?? message.timestamp) > newSinceAt &&
-        (message.role === "assistant" ||
-          isOtherUserChatMessage(message, currentUserId)),
-    )
-    .map((message) => message._id);
 }
 
 export type ChatBodyQueuedMessage = Doc<"queuedMessages">;
@@ -202,43 +177,16 @@ export function getAssistantTurnState(message: ChatBodyMessage): {
   };
 }
 
-/**
- * The failure text without the harness's `Error: ` stamp. A failed turn is
- * already framed as an error by the notice around it, so the prefix only
- * repeats what the icon and the title say.
- */
-export function stripErrorPrefix(content: string): string {
-  const trimmed = content.trim();
-  const prefix = /^error:\s*/i.exec(trimmed);
-  return prefix === null ? trimmed : trimmed.slice(prefix[0].length);
-}
+// Moved to `@eva/shared` so the phone shows a failed turn the same way.
+export { stripErrorPrefix } from "@eva/shared";
 
-/**
- * The heading a failed turn is announced with, or null when the turn is not a
- * failure. Both failure classes are failures rather than replies: as markdown
- * they read as Eva answering "Error: …" in body copy.
- *
- * A usage limit belongs to whichever provider ran the turn, so the title reads
- * that turn's model stamp instead of naming Claude — a Cursor turn used to be
- * reported as a Claude limit. An unstamped legacy turn names no provider
- * rather than guessing one.
- */
-export function turnErrorTitle({
-  errorType,
-  turnModel,
-  messageModel,
-}: {
+/** `@eva/shared`'s `turnErrorTitle`, naming providers as the web kit does. */
+export function turnErrorTitle(args: {
   errorType: ChatBodyMessage["errorType"];
-  /** Stamp of the user turn this answers — what the run was actually sent on. */
   turnModel: string | undefined;
-  /** The assistant row's own stamp, for a failure with no user turn above it. */
   messageModel: string | undefined;
 }): string | null {
-  if (errorType === "generic") return "This turn failed";
-  if (errorType !== "rate_limit") return null;
-  const model = turnModel ?? messageModel;
-  if (model === undefined) return "Usage limit reached";
-  return `${getProviderLabel(getAIModelProvider(model))} usage limit reached`;
+  return sharedTurnErrorTitle({ ...args, providerLabel: getProviderLabel });
 }
 
 /**
@@ -257,30 +205,6 @@ export function readableSendError(message: string): string {
     .split(" at ")[0];
   const trimmed = (cleaned ?? "").trim();
   return trimmed.length > 0 ? trimmed : "Something went wrong";
-}
-
-/**
- * The bubble the session-scoped streaming row belongs to: the oldest empty,
- * unfinished assistant bubble. Turns execute FIFO, so when a queued turn's
- * placeholder is inserted while an older turn (a synthetic loop continuation,
- * say) is still streaming, the older bubble owns the streamed tokens and the
- * new placeholder takes over only once that turn finalises. Attaching to the
- * newest bubble instead made the old turn's stream jump below the user's newer
- * message, then vanish when the old turn finalised above it.
- */
-export function findStreamingTargetMessage<
-  M extends Pick<
-    ChatBodyMessage,
-    "role" | "content" | "isSystemAlert" | "finishedAt"
-  >,
->(messages: ReadonlyArray<M>): M | undefined {
-  return messages.find(
-    (message) =>
-      message.role === "assistant" &&
-      message.isSystemAlert !== true &&
-      !message.content &&
-      message.finishedAt === undefined,
-  );
 }
 
 /** Previously sent user messages as editable display text, newest-first. */

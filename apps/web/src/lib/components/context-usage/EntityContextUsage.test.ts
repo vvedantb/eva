@@ -4,7 +4,7 @@ import {
   aggregateUsage,
   contextCompactsAutomatically,
   contextUsedRatio,
-} from "./EntityContextUsage";
+} from "@eva/shared/contextUsage";
 
 test("aggregateUsage uses latest occupancy, not summed cache reads", () => {
   const logs = [

@@ -380,7 +380,7 @@ async function ensureEvaToolingAvailable(
       // the install after a failed mkdir.
       [
         // Same paths and permissions the seed run creates (snapshotActions.ts).
-        "{ [ -d /home/eva ] || { sudo mkdir -p /home/eva/sandbox-config /home/eva/.eva-snapshot-state && sudo chmod -R 777 /home/eva; } || true; }",
+        "{ [ -d /home/eva ] || { sudo mkdir -p /home/eva/.eva-snapshot-state && sudo chmod -R 777 /home/eva; } || true; }",
         // Detached via setsid+nohup so the exec returns immediately and the
         // install survives it; the log file is the debugging breadcrumb.
         "{ command -v agent-browser >/dev/null 2>&1 || sudo sh -c 'setsid nohup npm install -g agent-browser >/tmp/eva-tooling-install.log 2>&1 &' || true; }",

@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, type ReactNode } from "react";
-import type { ReviewComment } from "@/lib/reviewComments";
+import type { ReviewComment } from "@eva/shared";
 
 interface PendingReviewCommentsValue {
   readonly comments: ReadonlyArray<ReviewComment>;

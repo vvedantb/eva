@@ -1,1 +1,1 @@
-export { listData, getEntity } from "./_mentions/listData";
+export { listData, getEntity, getEntityByPath } from "./_mentions/listData";

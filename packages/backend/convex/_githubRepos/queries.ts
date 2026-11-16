@@ -11,7 +11,7 @@ import {
   gatherAccessibleRepos,
   githubRepoValidator,
   githubRepoWithLogoValidator,
-  pickDefaultVisibleAppRepo,
+  findRepoByPath,
 } from "./helpers";
 import {
   getAIProviderAvailability,
@@ -244,21 +244,26 @@ export const getByOwnerAndName = authQuery({
   },
   returns: v.union(githubRepoValidator, v.null()),
   handler: async (ctx, args) => {
-    const candidates = await findReposByOwnerAndName(ctx.db, args);
-
-    let repo = args.appName
-      ? candidates.find(
-          (r) => r.rootDirectory?.split("/").pop() === args.appName,
-        )
-      : candidates.find((r) => !r.rootDirectory && r.hidden !== true);
-
-    if (!repo && !args.appName) {
-      repo = pickDefaultVisibleAppRepo(candidates);
-    }
-
+    const repo = await findRepoByPath(ctx.db, args);
     if (!repo) return null;
-    if (repo.hidden === true) return null;
     return (await userCanAccessRepo(ctx.db, repo, ctx.userId)) ? repo : null;
+  },
+});
+
+/**
+ * The first row of a GitHub owner/name the caller can read, or null. Unlike
+ * `getByOwnerAndName` it ignores app rows and visibility: any accessible row
+ * holds the installation that can read the repo's pull requests.
+ */
+export const findAccessibleIdByOwnerAndName = authQuery({
+  args: { owner: v.string(), name: v.string() },
+  returns: v.union(v.id("githubRepos"), v.null()),
+  handler: async (ctx, args) => {
+    const candidates = await findReposByOwnerAndName(ctx.db, args);
+    const access = await Promise.all(
+      candidates.map((repo) => userCanAccessRepo(ctx.db, repo, ctx.userId)),
+    );
+    return candidates.find((_, index) => access[index])?._id ?? null;
   },
 });
 

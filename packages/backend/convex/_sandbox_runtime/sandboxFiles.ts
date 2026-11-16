@@ -1,12 +1,14 @@
 /**
  * The one way script/file content reaches a sandbox.
  *
- * Deliberately a leaf module (types only, no runtime imports) so every delivery
- * path — including `swap.ts` and `attachments.ts`, which `helpers.ts` imports —
- * can route through it without forming an import cycle.
+ * Deliberately a near-leaf module (its only runtime import is `driveCache.ts`,
+ * which imports only the region constant) so every delivery path — including `swap.ts` and
+ * `attachments.ts`, which `helpers.ts` imports — can route through it without
+ * forming an import cycle.
  */
 
 import type { SandboxHandle } from "../_sandbox/provider";
+import { localCachePruneLines } from "../_sandbox/driveCache";
 import { errorMessage } from "@vvedantb/server";
 
 /**
@@ -47,6 +49,54 @@ const DISK_FULL_FREE_INODES = 1000;
 
 const DISK_MARKER = "eva-disk:";
 
+/**
+ * Below this much free disk (MiB), boot and reclaim delete Eva-owned data that
+ * can be rebuilt. Above it the caches stay, because they keep installs warm.
+ * Session 96's sandbox ran a week near 1.4 GB free (2026-11-04 to 11), then
+ * a merge and reinstall filled it and the agent daemon failed with ENOSPC.
+ */
+export const LOW_DISK_CLEANUP_MIB = 2048;
+
+/** Eva-owned logs in /tmp. Emptied (not deleted: writers hold them open) past 64 MiB. */
+const EVA_TMP_LOGS = [
+  "bg-*.log",
+  "eva-*.log",
+  "callback-debug.log",
+  "run-design.raw.jsonl",
+  "seedrun.log",
+  "seed-install.log",
+];
+
+/**
+ * Shell that frees Eva-owned, rebuildable disk when free space is below
+ * {@link LOW_DISK_CLEANUP_MIB}: package caches ({@link localCachePruneLines})
+ * and oversized Eva logs. `freeMibFn` names a shell function, defined by the
+ * caller, that prints free MiB on `/`. Sets `CLEANED=yes` when it ran.
+ *
+ * Never touches the repo, build output, node_modules or local database data:
+ * a dev server may be running on them, and they are the user's work.
+ */
+export function lowDiskCleanupLines(freeMibFn: string): string[] {
+  const names = EVA_TMP_LOGS.map((name) => `-name '${name}'`).join(" -o ");
+  return [
+    "CLEANED=no",
+    `if [ "$(${freeMibFn})" -lt ${LOW_DISK_CLEANUP_MIB} ] 2>/dev/null; then`,
+    ...localCachePruneLines(),
+    `  sudo find /tmp -maxdepth 1 -type f \\( ${names} \\) -size +64M -exec truncate -s 0 {} + 2>/dev/null || true`,
+    "  CLEANED=yes",
+    "fi",
+  ];
+}
+
+/** What a user can do about a full disk. One text for every place that reports it. */
+export const SANDBOX_DISK_FULL_ADVICE =
+  "Free space in the sandbox (for example build output, logs or local database data) and start it again.";
+
+/** True for an error text that comes from a full disk (Node's ENOSPC or the kernel's wording). */
+export function isDiskFullErrorText(text: string): boolean {
+  return /\bENOSPC\b|no space left on device/i.test(text);
+}
+
 /** A file write failed because the sandbox disk is full; reclaim did not help. */
 export class SandboxDiskFullError extends Error {
   readonly freeMib: number;
@@ -58,7 +108,7 @@ export class SandboxDiskFullError extends Error {
     cause: unknown,
   ) {
     super(
-      `Sandbox disk is full (free=${disk.freeMib}MiB, free_inodes=${disk.freeInodes}): could not write ${path}. Free space in the sandbox (for example build output, logs or local database data) and start it again.`,
+      `Sandbox disk is full (free=${disk.freeMib}MiB, free_inodes=${disk.freeInodes}): could not write ${path}. ${SANDBOX_DISK_FULL_ADVICE}`,
       { cause },
     );
     this.name = "SandboxDiskFullError";
@@ -79,10 +129,11 @@ export function isTarballExtractError(error: unknown): boolean {
  * free. Runs as one small inline exec, because a full disk cannot take the
  * file write a script would normally need.
  *
- * Only an INACTIVE swapfile is deleted. It is eva's own artifact: a stop that
+ * An INACTIVE swapfile is deleted first. It is eva's own artifact: a stop that
  * could not release swap bakes it into the snapshot, where it restores as a
  * plain ~6 GB file. `ensureSwapFile` recreates it within its disk reserve.
- * User data is never touched.
+ * If space is still low, {@link lowDiskCleanupLines} drops Eva's package
+ * caches and oversized logs. User data is never touched.
  */
 export function buildReclaimDiskScript(): string {
   return [
@@ -100,7 +151,8 @@ export function buildReclaimDiskScript(): string {
     '    if [ -f "$SWAP" ]; then SWAPFILE=remove-failed; else SWAPFILE=removed; fi',
     "  fi",
     "fi",
-    `echo "${DISK_MARKER} before_mib=\${BEFORE:--1} free_mib=$(free_mib) free_inodes=$(free_inodes) swapfile=\${SWAPFILE}"`,
+    ...lowDiskCleanupLines("free_mib"),
+    `echo "${DISK_MARKER} before_mib=\${BEFORE:--1} free_mib=$(free_mib) free_inodes=$(free_inodes) swapfile=\${SWAPFILE} cleaned=\${CLEANED}"`,
     "exit 0",
   ].join("\n");
 }

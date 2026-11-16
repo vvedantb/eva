@@ -1,5 +1,6 @@
 import { cn } from "@eva/ui";
 import {
+  CollapsibleUserMessageBody,
   formatModelDisplayLabel,
   Message as AIMessage,
   MessageContent,
@@ -12,11 +13,13 @@ import {
 } from "@vvedantb/ui";
 import { memo, type ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
-import { useActivityLayout } from "@/lib/hooks/useActivityLayout";
+import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { CHAT_MARKDOWN_COMPONENTS } from "@/lib/components/chat/ChatMarkdownLink";
 import {
   AgentSpawnCtaRow,
   deriveAgentSpawnSummary,
 } from "@/lib/components/chat/_components/AgentSpawnCtaRow";
+import { messageAttachments } from "@eva/shared";
 import { formatClockTime } from "@eva/shared/dayLabel";
 import { formatDuration } from "@eva/shared/duration";
 import {
@@ -27,7 +30,6 @@ import {
 } from "@eva/backend";
 import { AgentMedia } from "@/lib/components/AgentMedia";
 import { ReviewCommentMessage } from "@/lib/components/chat/ReviewCommentMessage";
-import { CollapsibleUserMessageBody } from "@/lib/components/chat/CollapsibleUserMessageBody";
 import { ChatMessageActions } from "@/lib/components/chat/ChatMessageActions";
 import type { ChatMessageActionItem } from "@/lib/components/chat/ChatMessageActions";
 import { TurnFeedbackActions } from "@/lib/components/chat/feedback/TurnFeedbackActions";
@@ -253,6 +255,7 @@ export const ChatMessage = memo(function ChatMessage({
       <SystemAlertMessage
         content={message.content ?? ""}
         errorDetail={message.errorDetail}
+        alertTone={message.alertTone}
         timestamp={message.timestamp}
       />
     );
@@ -680,7 +683,7 @@ function AssistantTurnContent({
   turnErrorTitle: string | null;
   panelTabs: boolean;
 }) {
-  const activityLayout = useActivityLayout();
+  const simpleView = useSimpleView();
   const { isStreamingPlaceholder, changedFiles, questionSteps } = turnState;
   // While the turn is live the settled activityLog is not written yet, so the
   // just-answered question comes off the streaming payload instead — that is
@@ -689,11 +692,11 @@ function AssistantTurnContent({
     ? (parseActivitySteps(streamingActivity) ?? [])
     : [];
   const streamingQuestionSteps = collectQuestionSteps(streamingSteps);
-  // Inline layout already shows the live text between the steps. Older
-  // callbacks send no response steps, so the text block stays for them.
+  // The timeline shows the live text between the steps, in order. Simple view
+  // has no timeline, and older callbacks send no response steps, so the
+  // joined text block stays for them.
   const streamingTextIsInline =
-    activityLayout === "inline" &&
-    streamingSteps.some((step) => step.type === "response");
+    !simpleView && streamingSteps.some((step) => step.type === "response");
 
   const mediaEntries = message.media ?? [];
 
@@ -725,7 +728,11 @@ function AssistantTurnContent({
           <AssistantQuestionCards steps={streamingQuestionSteps} />
           {streamingContent && !streamingTextIsInline ? (
             <div data-assistant-cite-source={message._id}>
-              <Markdown className="mt-2" mode="streaming">
+              <Markdown
+                className="mt-2"
+                mode="streaming"
+                components={CHAT_MARKDOWN_COMPONENTS}
+              >
                 {streamingContent}
               </Markdown>
             </div>
@@ -795,7 +802,11 @@ function AssistantTurnOutcome({
   // Settled text: "static" skips Streamdown's streaming pass (repair of
   // unclosed syntax plus a post-mount transition re-render), which on a long
   // chat re-rendered every reply at once about two seconds after opening.
-  const turnProse = <Markdown mode="static">{message.content}</Markdown>;
+  const turnProse = (
+    <Markdown mode="static" components={CHAT_MARKDOWN_COMPONENTS}>
+      {message.content}
+    </Markdown>
+  );
   // Retrying means re-sending the prompt this turn answered, so it needs the
   // turn before it; a failure with nothing above it has nothing to repeat.
   const retryAction =
@@ -917,15 +928,7 @@ function UserMessageBody({
 }) {
   return (
     <>
-      <UserMessageAttachments
-        attachments={
-          message.attachments ??
-          message.attachmentUrls?.map((url) => ({
-            url,
-            contentType: url ? "image/*" : null,
-          }))
-        }
-      />
+      <UserMessageAttachments attachments={messageAttachments(message)} />
       {message.content ? (
         <CollapsibleUserMessageBody text={message.content}>
           <ReviewCommentMessage text={message.content} repo={repo} />

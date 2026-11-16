@@ -1,3 +1,10 @@
+import {
+  APP_SORT_ORDERS,
+  SESSION_SORT_ORDERS,
+  type AppSortOrder,
+  type SessionSortOrder,
+} from "@eva/shared";
+
 /** localStorage key for Sessions sidebar sort / preview prefs. */
 export const SESSIONS_SIDEBAR_SETTINGS_KEY = "eva:sessions-sidebar-settings:v1";
 
@@ -8,11 +15,19 @@ export const SESSIONS_APP_GROUPS_OPEN_KEY = "eva:sessions-app-groups-open:v1";
 export const LINKED_SESSION_GROUPS_OPEN_KEY =
   "eva:linked-session-groups-open:v1";
 
-export const APP_SORT_ORDERS = ["updated_at", "created_at", "manual"] as const;
-export type AppSortOrder = (typeof APP_SORT_ORDERS)[number];
-
-export const SESSION_SORT_ORDERS = ["updated_at", "created_at"] as const;
-export type SessionSortOrder = (typeof SESSION_SORT_ORDERS)[number];
+// The sort orders and sort helpers live in `@eva/shared`, which the phone
+// Sessions tab shares; this module stays the web's one import for them.
+export {
+  APP_SORT_ORDERS,
+  SESSION_SORT_ORDERS,
+  type AppSortOrder,
+  type SessionSortOrder,
+};
+export {
+  sessionActivityAt,
+  sortAppsForSidebar,
+  sortSessionsForSidebar,
+} from "@eva/shared";
 
 const SESSION_LIST_MODES = ["active", "archived"] as const;
 export type SessionListMode = (typeof SESSION_LIST_MODES)[number];
@@ -117,14 +132,6 @@ export function parseSessionsSidebarSettings(
   };
 }
 
-/** Activity timestamp for sidebar session rows. */
-export function sessionActivityAt(session: {
-  updatedAt?: number;
-  _creationTime: number;
-}): number {
-  return session.updatedAt ?? session._creationTime;
-}
-
 /** The user who started a session; older rows have no `createdBy`. */
 function sessionStartedBy<T extends string>(session: {
   userId: T;
@@ -142,37 +149,4 @@ export function filterSessionsStartedBy<
 >(sessions: T[] | undefined, userId: string | undefined): T[] | undefined {
   if (sessions === undefined || userId === undefined) return undefined;
   return sessions.filter((session) => sessionStartedBy(session) === userId);
-}
-
-/**
- * Orders a repo's sessions for any sidebar list. Every sidebar surface (global
- * list, chrome tabs, session switcher) sorts through it.
- */
-export function sortSessionsForSidebar<
-  T extends { updatedAt?: number; _creationTime: number },
->(sessions: T[], order: SessionSortOrder): T[] {
-  if (order === "updated_at") {
-    return sessions.toSorted(
-      (a, b) => sessionActivityAt(b) - sessionActivityAt(a),
-    );
-  }
-  return sessions.toSorted((a, b) => b._creationTime - a._creationTime);
-}
-
-export function sortAppsForSidebar<
-  T extends { _id: string; _creationTime: number },
->(
-  apps: T[],
-  order: AppSortOrder,
-  latestActivityByAppId: ReadonlyMap<string, number>,
-): T[] {
-  if (order === "manual") return apps;
-  if (order === "created_at") {
-    return apps.toSorted((a, b) => b._creationTime - a._creationTime);
-  }
-  return apps.toSorted((a, b) => {
-    const aAt = latestActivityByAppId.get(a._id) ?? a._creationTime;
-    const bAt = latestActivityByAppId.get(b._id) ?? b._creationTime;
-    return bAt - aAt;
-  });
 }

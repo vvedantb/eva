@@ -1390,6 +1390,9 @@ export const messageFields = {
   // server row once the reactive query delivers it.
   clientId: v.optional(v.string()),
   isSystemAlert: v.optional(v.boolean()),
+  // System alerts that did not fail the session (it keeps running) render
+  // amber. Unset alerts with `errorDetail` render as errors.
+  alertTone: v.optional(v.literal("warning")),
   errorDetail: v.optional(v.string()),
   // Assistant rows: why the turn failed, when the client needs to react to the
   // class of failure (the usage-limit recovery banner). Only "rate_limit" is
@@ -2044,7 +2047,7 @@ export const agentUsageLimitFields = {
  * One agent-generated UI panel rendered inline in a chat. `spec` is a
  * json-render Spec serialised as JSON — kept as a string because its shape is
  * the catalog's business, not the database's, and it is re-parsed at the
- * client boundary (`@eva/shared/generativeUi`).
+ * client boundary (`parseGenerativeUiSpec` in `@vvedantb/server/generative-ui`).
  */
 export const chatUiPanelFields = {
   parentId: chatParentIdValidator,
@@ -2106,6 +2109,40 @@ export const envVarRequestFields = {
     v.literal("saved"),
     v.literal("declined"),
   ),
+  createdAt: v.number(),
+  answeredAt: v.optional(v.number()),
+};
+
+/**
+ * One agent proposal (`propose_session`) to run a task in a new session,
+ * shown as an inline card with two choices. Nothing starts until the user
+ * picks one: "started" opened `sessionId` on `brief`, "here" told the agent to
+ * do the work in the chat the card sits in.
+ */
+export const sessionProposalFields = {
+  parentId: v.union(
+    v.id("sessionChats"),
+    v.id("sessions"),
+    v.id("projects"),
+    v.id("agentTasks"),
+  ),
+  /** The assistant turn the card appeared under; absent anchors it last. */
+  messageId: v.optional(v.id("messages")),
+  /** The repo (and app) the proposing chat runs in; the new session opens there. */
+  repoId: v.id("githubRepos"),
+  title: v.string(),
+  /** One or two sentences on why this is a task of its own. Shown on the card. */
+  reason: v.string(),
+  /** The first message of the new session, written by the agent. */
+  brief: v.string(),
+  status: v.union(
+    v.literal("pending"),
+    v.literal("started"),
+    v.literal("here"),
+  ),
+  /** Set when `status` is "started": the session the user opened. */
+  sessionId: v.optional(v.id("sessions")),
+  sessionNumId: v.optional(v.number()),
   createdAt: v.number(),
   answeredAt: v.optional(v.number()),
 };
@@ -2220,20 +2257,6 @@ export const repoSnapshotFields = {
   baseSnapshotId: v.optional(v.string()),
   createdAt: v.number(),
   updatedAt: v.number(),
-};
-
-export const sandboxConfigFileFields = {
-  repoId: v.id("githubRepos"),
-  // Legacy single-blob storage (kept for backwards compat with existing records).
-  // New uploads always use `chunks` instead.
-  storageId: v.optional(v.id("_storage")),
-  // Ordered list of storage blob IDs that, when concatenated in order, form the file.
-  // Single-blob files use a 1-element array; multi-chunk files split a large file by ~100MB.
-  chunks: v.optional(v.array(v.id("_storage"))),
-  fileName: v.string(),
-  fileSize: v.number(),
-  uploadedBy: v.id("users"),
-  createdAt: v.number(),
 };
 
 export const teamMemberFields = {

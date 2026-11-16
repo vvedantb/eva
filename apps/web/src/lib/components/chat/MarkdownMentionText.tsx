@@ -8,7 +8,6 @@ import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import {
   Markdown,
-  MarkdownLink,
   ScreenshotPreview,
   VideoPreview,
 } from "@vvedantb/ui";
@@ -25,6 +24,7 @@ import {
 import { useDataMentionNavigate } from "@/lib/useDataMentionNavigate";
 import { parseMentionChipHref } from "@eva/shared";
 import { remarkMentionChips } from "./remarkMentionChips";
+import { ChatMarkdownLink } from "./ChatMarkdownLink";
 
 interface MarkdownMentionTextProps {
   text: string;
@@ -182,7 +182,7 @@ export function MarkdownMentionText({
             typeof href === "string" ? parseMentionChipHref(href) : null;
 
           if (!match) {
-            return <MarkdownLink href={href}>{children}</MarkdownLink>;
+            return <ChatMarkdownLink href={href}>{children}</ChatMarkdownLink>;
           }
 
           const prefix = match.kind;

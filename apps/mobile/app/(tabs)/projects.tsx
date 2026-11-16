@@ -1,7 +1,7 @@
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconPlus } from "@tabler/icons-react-native";
 import { PageHeader } from "@vvedantb/native-ui/layout";
 import { Pager, PillTabs } from "@vvedantb/native-ui/primitives";
-import { tokens } from "@vvedantb/native-ui/theme";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Pressable, View } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
@@ -11,6 +11,7 @@ import { ProjectsSection, useProjectRepo } from "@/projects/ProjectsSection";
 import { TodaySection, useShowsToday } from "@/today/TodaySection";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme } from "@/ui/theme";
+import { lastTabSection, sectionIndex } from "@/ui/sectionIndex";
 
 type Section = "projects" | "docs" | "drafts" | "today";
 
@@ -20,6 +21,11 @@ const SECTIONS: ReadonlyArray<{ id: Section; label: string }> = [
   { id: "drafts", label: "Drafts" },
   { id: "today", label: "Today" },
 ];
+
+/** The section pills shown: Today only while the standup is on or has history (outside the screen, see `sectionIndex`). */
+function visibleSections(showsToday: boolean) {
+  return showsToday ? SECTIONS : SECTIONS.filter((option) => option.id !== "today");
+}
 
 /**
  * The Projects tab holds the web's per-repo pages that are not a place to
@@ -36,12 +42,17 @@ export default function ProjectsScreen() {
   const { section: sectionParam } = useLocalSearchParams<{ section?: string }>();
   const { repo, openNew } = useProjectRepo();
   const showsToday = useShowsToday(repo?._id);
-  const sections = showsToday ? SECTIONS : SECTIONS.filter((option) => option.id !== "today");
-  const index = Math.max(0, sections.findIndex((option) => option.id === sectionParam));
+  const sections = visibleSections(showsToday);
+  const lastSection = lastTabSection.useValue("projects");
+  const index = sectionIndex(sections, sectionParam ?? lastSection ?? undefined);
+  const showSection = (next: string | undefined) => {
+    if (next) lastTabSection.set("projects", next);
+    router.setParams({ section: next });
+  };
   const section = sections[index] ?? { id: "projects", label: "Projects" };
   // Where the pages are, shared by the pager and the pill indicator.
   const progress = useSharedValue(index);
-  const muted = tokens.color.muted[useScheme()];
+  const muted = EVA_THEME[useScheme()].mutedForeground;
   return (
     <TabScreen>
       <PageHeader
@@ -65,7 +76,7 @@ export default function ProjectsScreen() {
         <PillTabs
           options={sections}
           value={section.id}
-          onChange={(next) => router.setParams({ section: next })}
+          onChange={showSection}
           progress={progress}
         />
       </View>
@@ -73,7 +84,7 @@ export default function ProjectsScreen() {
         index={index}
         count={sections.length}
         progress={progress}
-        onIndexChange={(next) => router.setParams({ section: sections[next]?.id })}
+        onIndexChange={(next) => showSection(sections[next]?.id)}
         renderPage={(page) => {
           switch (sections[page]?.id) {
             case "docs":
