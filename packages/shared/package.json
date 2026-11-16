@@ -10,6 +10,7 @@
     "./artifactBridge": "./src/artifactBridge.ts",
     "./agentTurnLimits": "./src/agentTurnLimits.ts",
     "./appHref": "./src/appHref.ts",
+    "./spotlight": "./src/spotlight.ts",
     "./appTabSlug": "./src/appTabSlug.ts",
     "./chatFeedback": "./src/chatFeedback.ts",
     "./chatLog": "./src/chatLog.ts",

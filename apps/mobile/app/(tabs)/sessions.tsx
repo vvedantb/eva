@@ -1,7 +1,7 @@
 import { api, type Id } from "@eva/backend";
 import { perRepoQueryCache, sessionListEntries } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconPlus, IconTerminal2 } from "@tabler/icons-react-native";
+import { IconPlus, IconSearch, IconTerminal2 } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
 import { PageHeader } from "@vvedantb/native-ui/layout";
 import {
@@ -89,18 +89,30 @@ export default function SessionsScreen() {
       <PageHeader
         title={section.label}
         action={
-          section.id === "reviews" ? undefined : (
-            // The web "New session" button: a 40 ghost square, radius 8, muted 14 plus.
+          <View className="flex-row items-center">
+            {/* Search (the web ⌘K spotlight), in every section. */}
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={isQuickTasks ? "New quick task" : "New session"}
-              onPress={isQuickTasks ? openNewQuickTask : () => router.push("/session/new")}
+              accessibilityLabel="Search"
+              onPress={() => router.push("/search")}
               hitSlop={2}
               className="h-10 w-10 items-center justify-center rounded-lg active:opacity-70"
             >
-              <IconPlus size={14} color={muted} />
+              <IconSearch size={16} color={muted} />
             </Pressable>
-          )
+            {section.id === "reviews" ? null : (
+              // The web "New session" button: a 40 ghost square, radius 8, muted 14 plus.
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={isQuickTasks ? "New quick task" : "New session"}
+                onPress={isQuickTasks ? openNewQuickTask : () => router.push("/session/new")}
+                hitSlop={2}
+                className="h-10 w-10 items-center justify-center rounded-lg active:opacity-70"
+              >
+                <IconPlus size={14} color={muted} />
+              </Pressable>
+            )}
+          </View>
         }
       />
       <View className="px-4 pb-2">
