@@ -16,6 +16,16 @@ WHY: When the agent sent subagents off to run in the background, the web showed 
 
 Architectural: the visibility rule, the row text and the stop confirm's copy moved to `@eva/shared/backgroundAgents` (the web chip and `useStopBackgroundAgent` read them; `backgroundAgentVisibility.ts` removed). The phone's `src/chat/BackgroundAgentsChip.tsx` reads the chat's `sessionChats.get` doc and sits on the composer bar (a new `status` slot on `ComposerFooter`): "Agents N" opens a sheet of the agents with Stop, behind the web confirm (`sessionWorkflow.requestStopBackgroundAgent`). Not on the phone: View (the subagent's own thread).
 
+## UI copy rule in CLAUDE.md — 2026-11-16
+
+### Changes
+
+- `CLAUDE.md` has a new `## UI copy` section: subtext is the exception, not the default
+
+### Why
+
+Sections and rows had helper text that repeated the title or value. The rule is shared across the apps through `@vvedantb/config`.
+
 ## Phone: the agent's proposed plan shows as a card in the chat
 
 Date: 2026-11-16
