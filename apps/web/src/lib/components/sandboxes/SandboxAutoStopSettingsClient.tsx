@@ -110,12 +110,10 @@ export function SandboxAutoStopSettingsClient() {
     <SettingsPage title="Sandboxes">
       <SettingsSection
         title="Idle pause"
-        description="Pause sandboxes nobody is using. Opening a sandbox tab, sending a message or visiting a preview link wakes them again."
         bodyVariant="list"
       >
         <SettingsToggleRow
           title="Mode"
-          description="Dry run only logs which sandboxes would pause."
           action={
             <Tabs
               value={idlePause.mode}
@@ -146,7 +144,6 @@ export function SandboxAutoStopSettingsClient() {
             >
               <SettingsField
                 label="Pause after the agent finishes"
-                description="Minutes a sandbox stays up once the last agent turn ends."
               >
                 <Input
                   type="number"
@@ -165,7 +162,6 @@ export function SandboxAutoStopSettingsClient() {
               </SettingsField>
               <SettingsField
                 label="Pause after the last interaction"
-                description="Minutes since someone last sent a message, opened a sandbox tab or loaded the preview. Whichever grace ends later wins."
               >
                 <Input
                   type="number"
@@ -188,12 +184,10 @@ export function SandboxAutoStopSettingsClient() {
       </SettingsSection>
       <SettingsSection
         title="Daily auto-stop"
-        description="Stop running sandboxes every day."
         bodyVariant="list"
       >
         <SettingsToggleRow
           title="Enabled"
-          description="Applies to all sandboxes across the app."
           action={
             <Switch
               checked={settings.enabled}
@@ -220,7 +214,7 @@ export function SandboxAutoStopSettingsClient() {
             >
               <SettingsField
                 label="Stop time"
-                description={`Uses ${settings.timeZone}. The sweep runs within 15 minutes of this time.`}
+                description={settings.timeZone}
               >
                 <Input
                   type="time"

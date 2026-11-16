@@ -1,5 +1,13 @@
 # Changelog
 
+## Settings: no explanatory sub-text under titles
+
+Date: 2026-11-16
+
+WHY: Every settings section, toggle and field had a line of explanation under its title. It was too much text to read.
+
+Architectural: static `description` props are removed from `SettingsSection`, `SettingsToggleRow` and `SettingsField` across global and repo settings. Kept: live data (counts, sandbox status, time zone, daily stop time, shortcut keys), input format hints (cron, Grok webhook URL, Tabler icon name), "never injected" secret warnings, instructional empty states and experimental flag descriptions. `isMonorepoCodebase` and the `listSiblingApps` query in `ConfigClient` are gone, because only the removed "Applies to every app" hint used them.
+
 ## Phone: a chat with several PRs lists them all in its "…" menu
 
 Date: 2026-11-16

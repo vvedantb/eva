@@ -255,7 +255,6 @@ function SnapshotConfigurationTab({
 
       <SettingsSection
         title="Branch"
-        description="When disabled, scheduled rebuilds are paused. Manual rebuilds still work."
         action={
           snapshot ? (
             <Switch
