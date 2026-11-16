@@ -1,6 +1,11 @@
 "use client";
 
-import type { PrState } from "@eva/shared";
+import {
+  isLivePrState,
+  orderPrsLiveFirst,
+  pullRequestsMenuLabel,
+  type PrState,
+} from "@eva/shared";
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -43,9 +48,6 @@ export interface PrMenuPullRequest {
 /** Up to this many PRs sit in the menu itself; more fold into one submenu. */
 const INLINE_PR_LIMIT = 2;
 
-const isLive = (pr: PrMenuPullRequest) =>
-  pr.state === "open" || pr.state === "draft";
-
 /**
  * The PR entries of a chat's "…" menu and right-click menu: one row per pull
  * request, drawn like the stack popover's (`PrRow`). Each opens the same
@@ -68,11 +70,7 @@ export function PrActionsSubmenus({
     variant === "context" ? ContextMenuSubContent : DropdownMenuSubContent;
   const iconSize = variant === "context" ? 16 : 14;
 
-  // Stable sort: the query's order holds inside each half.
-  const ordered = [...prs].sort(
-    (a, b) => Number(isLive(b)) - Number(isLive(a)),
-  );
-  const rows = ordered.map((pr) => (
+  const rows = orderPrsLiveFirst(prs).map((pr) => (
     <Sub key={pr._id}>
       <SubTrigger className="max-w-56 items-start">
         {/* No branch line: a chat's PRs mostly share one session branch. */}
@@ -96,7 +94,7 @@ export function PrActionsSubmenus({
     <Sub>
       <SubTrigger>
         <IconGitPullRequest size={iconSize} aria-hidden />
-        Pull requests ({prs.length})
+        {pullRequestsMenuLabel(prs.length)}
       </SubTrigger>
       <SubContent>{rows}</SubContent>
     </Sub>
@@ -118,7 +116,7 @@ function PrActionItems({
   const { request: requestConfirm } = useRequestConfirm();
   const { close } = useClosePullRequest();
   const { canStack, stack } = useStackNewSession();
-  const live = isLive(pr);
+  const live = isLivePrState(pr.state);
   const headRef = pr.headBranch;
   const target = { repoId: pr.repoId, prNumber: pr.prNumber };
 

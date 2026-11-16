@@ -2,7 +2,6 @@ import { api, type Id } from "@eva/backend";
 import {
   isProjectPreviewPhase,
   MID_TURN_SLEEP_HINT,
-  prNumberFromGithubUrl,
   projectCanCreatePr,
   projectCanResolveConflicts,
   SLEEP_EVA_LABEL,
@@ -23,11 +22,10 @@ import { ConfirmDialog, SheetRow } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Linking } from "react-native";
 import { useSimpleView } from "@/chat/ComposerFooter";
 import { useSessionSandbox } from "@/chat/SandboxControl";
+import { useOwnerPrRow } from "@/reviews/PullRequestsSheet";
 import { MenuDivider } from "@/ui/MenuSheet";
 
 type Owner =
@@ -93,21 +91,6 @@ function useOwnedSandbox(owner: Owner | null) {
 }
 
 /** Opens a PR on the phone's PR screen in `repoId` when the URL names one, else in the browser. */
-function useOpenPr(repoId: Id<"githubRepos"> | undefined) {
-  const router = useRouter();
-  return (prUrl: string) => {
-    const prNumber = prNumberFromGithubUrl(prUrl);
-    if (prNumber !== undefined && repoId) {
-      router.push({
-        pathname: "/review/[repoId]/[prNumber]",
-        params: { repoId, prNumber: String(prNumber) },
-      });
-    } else {
-      void Linking.openURL(prUrl);
-    }
-  };
-}
-
 /** The sandbox rows both pages share: wake (or retry) or sleep, then Commit & push while there is work. */
 function SandboxRows({
   sandbox,
@@ -200,7 +183,7 @@ export function useTaskGitActions({
 }) {
   const sandbox = useOwnedSandbox({ kind: "task", taskId: task._id });
   const simpleView = useSimpleView();
-  const openPr = useOpenPr(task.repoId);
+  const prRow = useOwnerPrRow({ kind: "task", taskId: task._id }, task.prUrl, task.repoId);
   const createTaskPr = useAction(api.taskWorkflowActions.createTaskPr);
   const startExecution = useMutation(api.agentTasks.startExecution);
   const [resolving, setResolving] = useState(false);
@@ -245,29 +228,23 @@ export function useTaskGitActions({
           }}
         />
       ) : null}
-      {task.prUrl && !simpleView ? (
-        <SheetRow
-          icon={IconGitPullRequest}
-          title="View PR"
-          onPress={() => {
-            close();
-            if (task.prUrl) openPr(task.prUrl);
-          }}
-        />
-      ) : null}
+      {prRow.row(close)}
       <MenuDivider />
     </>
   );
   const dialogs = (
-    <ResolveDialog
-      open={resolving}
-      onOpenChange={setResolving}
-      onConfirm={() => {
-        startExecution({ id: task._id, mode: "resolve_conflicts" }).catch(() =>
-          toast.error("Couldn't resolve conflicts"),
-        );
-      }}
-    />
+    <>
+      <ResolveDialog
+        open={resolving}
+        onOpenChange={setResolving}
+        onConfirm={() => {
+          startExecution({ id: task._id, mode: "resolve_conflicts" }).catch(() =>
+            toast.error("Couldn't resolve conflicts"),
+          );
+        }}
+      />
+      {prRow.sheet}
+    </>
   );
   return { rows, dialogs };
 }
@@ -283,7 +260,7 @@ export function useProjectGitActions(project: Project | null | undefined) {
     project ? { kind: "project", projectId: project._id } : null,
   );
   const simpleView = useSimpleView();
-  const openPr = useOpenPr(project?.repoId);
+  const prRow = useOwnerPrRow(project ? { kind: "project", projectId: project._id } : undefined, project?.prUrl, project?.repoId);
   const createProjectPr = useAction(api.taskWorkflowActions.createProjectPr);
   const resolveConflicts = useMutation(api.projects.resolveProjectConflicts);
   const [resolving, setResolving] = useState(false);
@@ -319,30 +296,24 @@ export function useProjectGitActions(project: Project | null | undefined) {
             }}
           />
         ) : null}
-        {project.prUrl && !simpleView ? (
-          <SheetRow
-            icon={IconGitPullRequest}
-            title="View PR"
-            onPress={() => {
-              close();
-              if (project.prUrl) openPr(project.prUrl);
-            }}
-          />
-        ) : null}
+        {prRow.row(close)}
         <MenuDivider />
       </>
     ) : null;
   const dialogs = (
-    <ResolveDialog
-      open={resolving}
-      onOpenChange={setResolving}
-      onConfirm={() => {
-        if (project)
-          resolveConflicts({ projectId: project._id }).catch(() =>
-            toast.error("Couldn't resolve conflicts"),
-          );
-      }}
-    />
+    <>
+      <ResolveDialog
+        open={resolving}
+        onOpenChange={setResolving}
+        onConfirm={() => {
+          if (project)
+            resolveConflicts({ projectId: project._id }).catch(() =>
+              toast.error("Couldn't resolve conflicts"),
+            );
+        }}
+      />
+      {prRow.sheet}
+    </>
   );
   return { rows, dialogs };
 }

@@ -146,8 +146,10 @@ export {
 } from "./teammateMessages";
 export {
   isLivePrState,
+  orderPrsLiveFirst,
   prStateLabel,
   prStateTone,
+  pullRequestsMenuLabel,
   type LivePrState,
   type PrState,
   type PrStateTone,
