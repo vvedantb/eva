@@ -68,6 +68,7 @@ import { ChatHeader } from "@/chat/ChatHeader";
 import { SessionChatTabs } from "@/chat/SessionChatTabs";
 import { SandboxControl, SandboxErrorBanner, useSessionSandbox } from "@/chat/SandboxControl";
 import { UsageButton } from "@/chat/UsageSheet";
+import { useProposedPlans } from "@/chat/ProposedPlanCard";
 import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
 import { UsageLimitRecoveryCard } from "@/chat/UsageLimitRecovery";
 import { MentionMenu } from "@/chat/MentionMenu";
@@ -148,6 +149,8 @@ export default function ChatScreen() {
   );
   const { mineByMessageId: mine, agentReports } = groupChatFeedback(feedbackRows ?? [], me ?? undefined);
   const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder);
+  // The agent's proposed plans, each under the message that proposed it (session chats only, as the web).
+  const planAfter = useProposedPlans(chat);
   // Rows seen on screen, so an agent page mounts its WebView only once its row shows.
   const [seenRows] = useState(createSeenRows);
 
@@ -352,6 +355,7 @@ export default function ChatScreen() {
                 onRate={rateReply}
                 cards={cards.byMessageId.get(message._id)}
                 outputs={outputs.byMessageId.get(message._id)}
+                after={planAfter(message._id)}
                 onPanelReply={panelReply}
                 // Only a failed turn gets one, so the rest keep their props (the web `onRetryTurn`).
                 onRetryTurn={message.errorType !== undefined ? retryFor(message._id) : undefined}
@@ -583,6 +587,7 @@ function ChatMessageRow({
   onPanelReply,
   onRetryTurn,
   onOpenWebChat,
+  after,
 }: {
   message: ChatMessage;
   dayStart: boolean;
@@ -609,6 +614,8 @@ function ChatMessageRow({
   /** Sends a panel button's text; undefined disables the buttons. */
   onPanelReply: ((message: string) => void) | undefined;
   onOpenWebChat: () => void;
+  /** Under the whole message, as the web `afterMessage`: a proposed plan's card. */
+  after?: ReactNode;
 }) {
   const isUser = message.role === "user";
   // A failed turn's title ("This turn failed", "Claude usage limit reached"), or null for a reply.
@@ -690,6 +697,7 @@ function ChatMessageRow({
                     />
                   ) : null}
                 </Message>
+                {after}
               </View>
   );
 }

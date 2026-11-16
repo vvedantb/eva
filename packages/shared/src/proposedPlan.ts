@@ -1,4 +1,47 @@
-/** Helpers for treating session plan/PRD markdown as a downloadable artifact. */
+// A session's proposed plans (the agent's plan-mode proposals), web and phone:
+// which plan a message carries, and the plan markdown as a title, a preview,
+// an export and the prompt that implements it.
+
+import type { Id } from "@eva/backend";
+
+export type ProposedPlanRow = {
+  _id: Id<"proposedPlans">;
+  turnId?: Id<"turns">;
+  messageId?: Id<"messages">;
+  planMarkdown: string;
+  implementedAt?: number;
+  implementationSessionId?: Id<"sessions">;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export function findLatestProposedPlan(
+  proposedPlans: ReadonlyArray<ProposedPlanRow>,
+): ProposedPlanRow | null {
+  if (proposedPlans.length === 0) return null;
+  // A copy and `sort`, as `toSorted` is missing in some Hermes release builds.
+  return [...proposedPlans].sort(
+    (left, right) =>
+      right.updatedAt - left.updatedAt ||
+      right.createdAt - left.createdAt ||
+      left._id.localeCompare(right._id),
+  )[0];
+}
+
+export function hasActionableProposedPlan(
+  proposedPlan: Pick<ProposedPlanRow, "implementedAt"> | null,
+): boolean {
+  return proposedPlan !== null && proposedPlan.implementedAt === undefined;
+}
+
+export function proposedPlanForMessage(
+  proposedPlans: ReadonlyArray<ProposedPlanRow>,
+  messageId: string,
+): ProposedPlanRow | null {
+  return (
+    proposedPlans.find((plan) => plan.messageId === messageId) ?? null
+  );
+}
 
 export function proposedPlanTitle(planMarkdown: string): string | null {
   const heading = planMarkdown.match(/^\s{0,3}#{1,6}\s+(.+)$/m)?.[1]?.trim();
@@ -67,7 +110,7 @@ export function buildCollapsedProposedPlanPreviewMarkdown(
     }
   }
 
-  while (previewLines.length > 0 && previewLines.at(-1)?.trim().length === 0) {
+  while (previewLines.length > 0 && previewLines[previewLines.length - 1]?.trim().length === 0) {
     previewLines.pop();
   }
 

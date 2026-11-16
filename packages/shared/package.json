@@ -30,6 +30,7 @@
     "./parseActivitySteps": "./src/utils/parseActivitySteps.ts",
     "./pendingQuestion": "./src/pendingQuestion.ts",
     "./previewFrameMessages": "./src/previewFrameMessages.ts",
+    "./proposedPlan": "./src/proposedPlan.ts",
     "./redactSecrets": "./src/redactSecrets.ts",
     "./resultEvent": "./src/resultEvent.ts",
     "./safeUrl": "./src/safeUrl.ts",
