@@ -1,9 +1,9 @@
 "use client";
 
+import { docCommentThreads } from "@eva/shared/docComments";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import type { FunctionReturnType } from "convex/server";
 import { useQueryState } from "nuqs";
 import { docCommentFilterParser } from "@/lib/search-params";
 import { cn } from "@eva/ui";
@@ -14,7 +14,6 @@ import { DocCommentThread } from "./DocCommentThread";
 import { DocNewCommentComposer } from "./DocNewCommentComposer";
 import { DOC_SIDE_PANEL_CLASS } from "./docSidePanel";
 
-type DocComment = FunctionReturnType<typeof api.docComments.listByDoc>[number];
 
 export function DocCommentsPanel({
   docId,
@@ -42,19 +41,12 @@ export function DocCommentsPanel({
   const [filter, setFilter] = useQueryState("comments", docCommentFilterParser);
   const comments = useQuery(api.docComments.listByDoc, { docId }) ?? [];
 
-  const roots = comments.filter((c) => !c.parentId);
-  const openRoots = roots.filter((c) => c.resolvedAt === undefined);
-  const resolvedRoots = roots.filter((c) => c.resolvedAt !== undefined);
+  const {
+    open: openRoots,
+    resolved: resolvedRoots,
+    repliesByParent,
+  } = docCommentThreads(comments);
   const displayRoots = filter === "open" ? openRoots : resolvedRoots;
-
-  const repliesByParent = new Map<string, DocComment[]>();
-  for (const c of comments) {
-    if (c.parentId) {
-      const arr = repliesByParent.get(c.parentId) ?? [];
-      arr.push(c);
-      repliesByParent.set(c.parentId, arr);
-    }
-  }
 
   return (
     <div className={DOC_SIDE_PANEL_CLASS}>

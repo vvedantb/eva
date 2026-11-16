@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: read, reply to and resolve a doc's comments
+
+Date: 2026-11-16
+
+WHY: Teammates and Eva comment on docs on the web, but the phone showed no comments, so a question on a PRD could not be answered from the phone.
+
+Architectural: the thread split (open, resolved, replies by parent) and the failure toasts moved to `@eva/shared/docComments`; the web panel and thread read them. The phone doc screen gets a Comments button with the open count (`src/docs/DocCommentsButton.tsx`), which opens `app/doc/comments.tsx`: Open and Resolved threads with the quoted text, "For Eva", the comments and replies, Resolve or Reopen, and Reply (`docComments.create` with `parentId`). A new thread starts from a text selection, which stays on the web.
+
 ## Phone: sort and filter the Sessions list
 
 Date: 2026-11-16

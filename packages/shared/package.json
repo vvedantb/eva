@@ -20,6 +20,7 @@
     "./dayLabel": "./src/utils/dayLabel.ts",
     "./duration": "./src/utils/duration.ts",
     "./escapeHtml": "./src/escapeHtml.ts",
+    "./docComments": "./src/docComments.ts",
     "./evaMark": "./src/evaMark.ts",
     "./evaTheme": "./src/evaTheme.ts",
     "./gitDefaults": "./src/gitDefaults.ts",
