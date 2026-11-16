@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: the agent's proposed plan shows as a card in the chat
+
+Date: 2026-11-16
+
+WHY: A plan the agent proposed in a session chat showed on the web as a card with Implement, but the phone showed nothing, so a plan could only be read and acted on from the web.
+
+Architectural: the web `proposedPlanLogic.ts` and `planExport.ts` moved to `@eva/shared/proposedPlan` (the web card, Plan tab and tests read it; `toSorted` and `.at` dropped for Hermes). The phone's `src/chat/ProposedPlanCard.tsx` has `useProposedPlans` (`proposedPlans.listBySession`) and the card, which the chat screen puts under the message that proposed the plan (a new `after` slot on `ChatMessageRow`, the web `afterMessage`): badge, title, Copy, a folded preview with Expand plan, Save as Document (`docs.createFromSession`, then the doc screen), Implement (`chats.send` with the web prompt, then `proposedPlans.markImplemented`) and Implement in new session (`chats.start` on the chat's model and account, `sessions.updatePlanContent`, `markImplemented`). Not on the phone: Edit and Download.
+
 ## CI: the daemon kill test no longer fails at random under load
 
 Date: 2026-11-16

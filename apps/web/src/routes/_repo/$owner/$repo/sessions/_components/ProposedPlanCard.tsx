@@ -21,7 +21,7 @@ import {
   normalizePlanMarkdownForExport,
   proposedPlanTitle,
   stripDisplayedPlanMarkdown,
-} from "./planExport";
+} from "@eva/shared/proposedPlan";
 
 export function ProposedPlanCard({
   planMarkdown,
