@@ -490,7 +490,7 @@ export const launchSeedRun = internalAction({
     // From here on a dead backend fails the seed at once instead of hanging it
     // until the workflow timeout — see buildConvexBackendWatchdogLines.
     const runsConvex = (backgroundCommands ?? []).some(isConvexBackendCommand);
-    if (runsConvex) lines.push(...buildConvexBackendWatchdogLines());
+    if (runsConvex) lines.push(...buildConvexBackendWatchdogLines("/tmp/repo"));
     // ---- seed (post-daemon) ----
     lines.push('echo "SEEDRUN-STAGE:startup-post-daemon"');
     (startupCommands ?? []).forEach((command, i) => {
