@@ -375,6 +375,29 @@ export function prNumberFromGithubUrl(prUrl: string): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
+/** A link to a GitHub pull request, split into what its URL names. */
+export interface GithubPrLink {
+  owner: string;
+  name: string;
+  prNumber: number;
+}
+
+/**
+ * Reads `https://github.com/owner/name/pull/123` (with any sub-page, query or
+ * hash, e.g. `/files` or `#discussion_r1`). Null for every other URL.
+ */
+export function parseGithubPrLink(href: string): GithubPrLink | null {
+  if (!URL.canParse(href)) return null;
+  const url = new URL(href);
+  if (url.protocol !== "https:" || url.host !== "github.com") return null;
+  const [owner, name, kind, number] = url.pathname.split("/").slice(1);
+  if (!owner || !name || kind !== "pull" || !number || !/^\d+$/.test(number)) {
+    return null;
+  }
+  const prNumber = Number(number);
+  return prNumber > 0 ? { owner, name, prNumber } : null;
+}
+
 export type ReviewEvent = "COMMENT" | "APPROVE" | "REQUEST_CHANGES";
 
 /** The verdicts a review can carry, in the web composer order. */

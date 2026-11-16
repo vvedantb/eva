@@ -1,5 +1,6 @@
 "use client";
 
+import { taskTypingRoom } from "@eva/shared/typingPresence";
 import { useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { toast } from "@vvedantb/ui";
@@ -46,7 +47,7 @@ export function TaskActivityComposerForm({
   const createComment = useMutation(api.taskComments.create);
   const currentUserId = useQuery(api.auth.me);
   const { typingUsers, onActivity, stopTyping } = useTypingPresence(
-    `typing:task:${taskId}`,
+    taskTypingRoom(taskId),
     currentUserId,
   );
 

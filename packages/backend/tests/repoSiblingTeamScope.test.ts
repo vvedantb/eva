@@ -1,13 +1,12 @@
 import { convexTest } from "convex-test";
 import { describe, expect, test } from "vitest";
-import { api, internal } from "../convex/_generated/api";
+import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 
 /**
  * Rows with the same GitHub owner/name are "siblings" (monorepo apps) that
- * share config files and settings. A stranger's row for the same owner/name in
- * another team must not join the group, or the victim's sandbox config files
- * (often `.env`) are baked into the stranger's snapshot.
+ * share settings. A stranger's row for the same owner/name in another team
+ * must not join the group, or the stranger could see the victim's apps.
  */
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -61,36 +60,12 @@ async function fixture() {
       connectedBy: strangerId,
       teamId: strangerTeam,
     });
-    const storageId = await ctx.storage.store(new Blob(["SECRET=1"]));
-    await ctx.db.insert("sandboxConfigFiles", {
-      repoId: webApp,
-      chunks: [storageId],
-      fileName: ".env",
-      fileSize: 8,
-      uploadedBy: victimId,
-      createdAt: now,
-    });
     return { webApp, apiApp, strangerApp };
   });
   return { t, ids };
 }
 
 describe("repo siblings stay inside one team", () => {
-  test("config files reach same-team monorepo apps but not a stranger's row", async () => {
-    const { t, ids } = await fixture();
-    const forSibling = await t.query(
-      internal.sandboxConfigFiles.getConfigFilesForSnapshot,
-      { repoId: ids.apiApp },
-    );
-    expect(forSibling.map((file) => file.fileName)).toEqual([".env"]);
-
-    const forStranger = await t.query(
-      internal.sandboxConfigFiles.getConfigFilesForSnapshot,
-      { repoId: ids.strangerApp },
-    );
-    expect(forStranger).toEqual([]);
-  });
-
   test("listSiblingApps lists same-team apps only and needs access", async () => {
     const { t, ids } = await fixture();
     const victim = t.withIdentity({ subject: VICTIM });

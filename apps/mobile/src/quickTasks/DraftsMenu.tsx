@@ -2,7 +2,7 @@ import { api, type Id } from "@eva/backend";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconFileText, IconTrash } from "@tabler/icons-react-native";
 import { Button } from "@vvedantb/native-ui/primitives";
-import { palette, withAlpha } from "@vvedantb/native-ui/theme";
+import { withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -31,7 +31,7 @@ export function DraftsMenu({
 }) {
   const scheme = useScheme();
   const theme = EVA_THEME[scheme];
-  const danger = palette.danger[scheme];
+  const danger = EVA_THEME[scheme].destructive;
   const [open, setOpen] = useState(false);
   const [confirmId, setConfirmId] = useState<Id<"agentTasks"> | null>(null);
   const removeDraft = useMutation(api.agentTasks.remove);

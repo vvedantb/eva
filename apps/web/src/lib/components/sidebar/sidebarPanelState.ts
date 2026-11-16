@@ -131,7 +131,7 @@ function isGlobalSettingsPanelPath(pathname: string): boolean {
 
 /**
  * Whether the route has a second column beside the rail. Shared by `Sidebar`
- * (which renders it) and `useSidebarContentOffset` (which pads the content
+ * (which renders it and tells the package `AppShell` to offset the content
  * for it), so the two cannot drift.
  */
 export function routeHasSidePanel({

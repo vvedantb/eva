@@ -46,7 +46,7 @@ const evaConfigSchema = z
     $schema: z.string().optional(),
     version: z.literal(1),
     /** Snapshot commands shared by every app without its own block. */
-    snapshot: snapshotCommandsSchema.default({}),
+    snapshot: snapshotCommandsSchema.prefault({}),
     apps: z.array(evaAppSchema).min(1),
   })
   .strict();
@@ -155,7 +155,7 @@ const mcpServerSchema = z.union([
 ]);
 
 const mcpFileTextSchema = jsonText(
-  z.object({ mcpServers: z.record(mcpServerSchema) }),
+  z.object({ mcpServers: z.record(z.string(), mcpServerSchema) }),
 );
 
 export type EvaMcpServerSummary = {

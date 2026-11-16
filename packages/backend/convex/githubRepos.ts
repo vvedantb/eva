@@ -7,6 +7,7 @@ export {
   getByIdString,
   getProviderAvailability,
   getByOwnerAndName,
+  findAccessibleIdByOwnerAndName,
   getTeamIdForRepo,
   getLogoUrl,
   listByTeam,

@@ -7,6 +7,602 @@ Date: 2026-11-12
 WHY: The rule "a project and its tasks share the project's session; a quick task owns its own" was spread over about ten helpers and inline copies. A caller could pick the wrong one.
 
 Architectural: `_sessions/owner.ts` holds the rule (`workSessionOwner`) and the read path (`findWorkSession`, over the raw `findOwnedSession`). `ownerState.findWorkChat` resolves the chat. `ownedSession.ensureWorkSession` is the one create path; a project task always gets its project's session. Removed: `taskSessionOwner`, `projectSessionOwner`, `taskUsesOwnedSession`, `taskWorkSessionOwner`, `findTaskSession`, `findProjectSession`, `findQuickTaskSession`, `findTaskWorkSession`, `findOwnerChat`, `ensureOwnedSession`, `ensureTaskWorkSession`, and the `ownedSession.ts` re-exports. Behaviour is unchanged.
+## Phone: a chat with several PRs lists them all in its "…" menu
+
+Date: 2026-11-16
+
+WHY: The phone menus of a session, quick task or project showed one "Open PR" or "View PR" row, so a chat's other PRs (stacked or linked ones) could not be reached from the phone.
+
+Architectural: with two or more PRs (`pullRequests.listForOwner`) the row reads "Pull requests (N)" and opens a bottom sheet (`src/reviews/PullRequestsSheet.tsx`): one row per PR, open and draft first, and a page per PR with the web `PrActionsSubmenus` actions (Open PR on the phone's PR screen, View on GitHub, Copy link, Stack a new session, Close without merging). One PR keeps the direct row. `orderPrsLiveFirst` and `pullRequestsMenuLabel` moved to `@eva/shared` (`prState.ts`) and the web menu reads them; the close confirm is one phone `PrCloseDialog`, also used by the PR screen; `useOpenPr` replaces the session menu's and the task and project pages' own copies.
+
+## Automations Hub: "New" in the header, one `+` in the sidebar
+
+Date: 2026-11-16
+
+WHY: The sidebar had two buttons per app (hub, new) and the hub page repeated its own title and a long blurb.
+
+Architectural: the page title is now "Automations Hub" with a "New" header button (`automations/_components/NewAutomationButton.tsx`, the create dialog moved from `GlobalAutomationsSidebar`). The "Automations Hub" subheading and its blurb are gone; the "n of m installed" count stays. In `GlobalAutomationGroup` the grid hub link is removed and `+` links to that app's hub.
+
+## Snapshot seed settles live state from the prod export
+
+Date: 2026-11-16
+
+WHY: A sandbox seeded from a prod export showed sessions as running, turns in flight and task runs pending, because the export is taken while they are live.
+
+Architectural: `scripts/sync-to-local.mjs` rewrites the root tables during its existing python zip pass (`settle()`): sessions not closed → `closed`; turns that are live or open → `done`, `open: false`; agent runs queued/running → `cancelled`; `agentTasks.run` removed; `projects.activeWorkflowId` and `interviewSandboxClaim` removed. No rows or tables are dropped. The seed prints a count per table.
+
+## Web: hover cards on GitHub pull request and Eva links in chat
+
+Date: 2026-11-15
+
+WHY: A PR link in chat showed only its URL or label; to see its state, title or size the reader had to open GitHub.
+
+Architectural: `ChatMarkdownLink` (`apps/web/src/lib/components/chat/ChatMarkdownLink.tsx`) is the chat `a` renderer: a link that `@eva/shared` `parseGithubPrLink` reads as `github.com/owner/name/pull/n` gets a hover card with state, `owner/name #n`, updated time, title, author, `+/−` and file count (reusing the review page's `statusMeta`, `PrAvatar`, `PrDiffStat`); other links stay `MarkdownLink`. Agent replies (`ChatMessage`) and user messages (`MarkdownMentionText`) use it. The card fetches only when open, through the new `github.getPullRequestCard`, which resolves the owner/name to a repo the caller can read (`githubRepos.findAccessibleIdByOwnerAndName`) and returns null otherwise. It shares the PR header cache with the Reviews page; the header payload gained `status`, `draft`, `authorAvatarUrl`, `additions`, `deletions` and `changedFiles` (cache renamed `prHeaderV2`).
+
+Links to an Eva session, quick task, project or doc (`/owner/name[/app]/<section>/<numId>`, as a path or a full URL on this app's origin; `@eva/shared` `parseEvaEntityLink`) get the `@` mention chip's card: the new `mentions.getEntityByPath` resolves the path to the repo and entity id, and `DataMentionHoverCardBody` renders it. The repo-by-path rule moved from `githubRepos.getByOwnerAndName` into `findRepoByPath` so both pick the same row.
+
+## Phone: retry a usage-limit failure on another account
+
+Date: 2026-11-15
+
+WHY: When a turn hit the provider's usage limit, the phone showed only the error, so the only way to keep going was to switch accounts and resend by hand, or open the web.
+
+Architectural: the recovery card's logic moved from the web (`usageLimitBanner.ts`, `utils/credentialSourceLabel.ts`, the headroom maths in `UsageLimitAccountOption`) to `@eva/shared/usageLimitRecovery` (`isUsageLimitFailure`, the reset text and subtitle, the title and copy, `usageLimitRetryCandidates`, now generic over the account id type, `usageLimitHeadroom` and `resolveCredentialSourceLabel`); the web banner and row read it. The phone's `src/chat/UsageLimitRecovery.tsx` shows the card above the chat composer while the newest message is a usage-limit failure, for whoever may change the chat's account: one row per other account of the provider with its headroom, and a tap switches the account (the new awaitable `switchAccount` of `useChatModelPick`) and then calls `sessionWorkflow.retryLastTurnWithAccount`.
+
+## Phone: select quick tasks and act on them together
+
+Date: 2026-11-15
+
+WHY: The web Quick Tasks list has a select mode and bulk bar (status, assign, run, labels, project, delete); the phone could only act on one task at a time.
+
+Architectural: "Select" leads a quick task row's long-press menu (`useQuickTaskActions` `onSelect`) and starts select mode: rows show the inbox's checkbox (`QuickTaskRow` `selection`), Android back leaves it, and `QuickTaskBulkBar` (`src/quickTasks/QuickTaskBulk.tsx`, the kit `BulkActionBar`) takes the tab bar's place with Status, Assign and Run, then More: Assign to Me, Add Labels, Move to project and Delete All. Each runs the web's per-task writes (`updateStatus`, `update`, `startExecution`, `assignToProject`, `remove`); Run and Delete ask with the web's words, and Delete offers Undo (`restore`). The status, reviewer, tags and project sheets are the existing `OptionChips` sheets.
+
+## Phone: answer a project's interview and accept or reject its plan
+
+Date: 2026-11-15
+
+WHY: The phone's Plan tab only showed the interview and the plan, and said to answer and approve on the web.
+
+Architectural: `@eva/shared` `projectMeta.ts` gains `parseInterviewQuestion`, `currentInterviewQuestion`, `formatInterviewAnswer` (the web's `Q: … A: …`), and the web's `isInterviewTransitionContent` / `isSpecContent`, which the web utils now re-export. The phone `ProjectPlan` runs the web Plan tab: "Start Interview" (`projectInterviewWorkflow.startInterview`), the open question as the kit `ChoiceQuestion` (with "Other"; the answer goes through `projects.addMessage`, then the next question is asked), "Thinking…" while the workflow runs, "Continue interview" when a run stopped early, and on the generated plan Accept Plan (`projects.startDevelopment`) and Reject with a reason (back to Draft, the interview restarting with `rejectionReason`), as the web. Clear transcript stays on the web.
+
+## Phone: Commit & push, Send for Review and the PR screen from a session's menu
+
+Date: 2026-11-15
+
+WHY: The web session header pushes the sandbox's work (Commit & push), sends the PR for review and opens PRs; the phone menu stopped at Open PR, which went to the browser.
+
+Architectural: `sessionMenuActions` (`@eva/shared`) gains the web's git group after the main block: Commit & push while the awake sandbox has uncommitted files or unpushed commits ("Save to GitHub" in simple view), Open PR, and Send for Review under `canSendSessionForReview`, which moved there from the web (`sessionReadOnly.ts` re-exports it). The phone's `useSessionActions` runs `sandbox.commitAndPushSandbox` (the web's toasts) and `github.createSessionPr` behind the web "Send for Code Review" confirm, and Open PR opens the phone's PR screen (`prNumberFromGithubUrl` in the session's repo), else the browser. The chat reads `sessions.get` for the PR state and git sync; the session rows pass theirs.
+
+## Phone: the agent's secret requests and session proposals in chat
+
+Date: 2026-11-15
+
+WHY: When the agent asked for a secret (`request_env_var`) or proposed a session (`propose_session`), the phone showed nothing, so the agent waited until someone opened the web.
+
+Architectural: `useChatCards` also reads `envVarRequests.listByParent` and `sessionProposals.listByParent` and places them with the panels, as the web `ChatBody`. `src/chat/cards/AgentRequestCards.tsx`: `EnvVarRequestCard` (the key, the reason, a masked field kept out of autofill, "Save securely" through `envVarRequestsActions.save`, "Decline"; the value is never logged or shown; answered, one line) and `SessionProposalCard` ("Suggested for a new session", "New session" through `sessionProposals.start`, "Do it here" through `keepHere`; answered, one line, a started one opening its session).
+
+## Phone: schedule a task's run or a project's build
+
+Date: 2026-11-15
+
+WHY: The web's Run and Build buttons can schedule instead of starting now; the phone could only show "Scheduled for …".
+
+Architectural: `src/ui/ScheduleSheet.tsx` is the web `SchedulePopover` as a bottom sheet on the kit `DateTimeField` (native date and time pickers, so the phone now depends on `@react-native-community/datetimepicker` 9.1.0, the Expo SDK 57 version): it opens on the current schedule or the next full hour, and offers Schedule, or Remove and Update, as the web; a passed time cannot be scheduled. The task overview has a calendar square beside Run Eva (To Do only, as the backend allows) and the "Scheduled for" chip opens the same sheet (`agentTasks.scheduleExecution` / `updateScheduledExecution` / `cancelScheduledExecution`); the project page has one beside Build, whose label shows a scheduled build (`buildWorkflow.scheduleBuild` / `updateScheduledBuild` / `cancelScheduledBuild`).
+
+## Phone: sandbox and git actions on a task's and a project's page
+
+Date: 2026-11-15
+
+WHY: The web task and project pages wake and sleep their sandbox, commit and push, create the PR, resolve conflicts and open the PR; the phone had none of these.
+
+Architectural: The rules moved into `@eva/shared` (`ownedSandboxRules.ts`: `taskCanStartSandbox`, `taskCanResolveConflicts`, `taskCanCreatePr`, `projectCanCreatePr`, `projectCanResolveConflicts`, `PREVIEW_SANDBOX_ALLOWED_STATUSES`); the web's `deriveSandboxFlags`, `getMoreMenuVisibility`, `useTaskDetail` and `projectDetailHelpers` call them. `src/sandbox/OwnedSandboxActions.tsx` drives the owner's own session (`sessions.getOwned`, `ensureOwned` on a first wake, `useSessionSandbox`, `sandbox.commitAndPushSandbox`) and gives `useTaskGitActions` / `useProjectGitActions` rows that lead the "…" sheets (`extraRows` on `useQuickTaskActions` and `useProjectActions`): Wake or Sleep Eva (sleep says to stop Eva first mid-turn), Commit & push, Create PR (`taskWorkflowActions.createTaskPr` / `createProjectPr`), Resolve Conflicts behind the web confirm (`agentTasks.startExecution` "resolve_conflicts" / `projects.resolveProjectConflicts`) and View PR on the phone's PR screen.
+
+## Phone: switch between a session's chats and start a parallel one
+
+Date: 2026-11-15
+
+WHY: The web session has a chat tab bar (parallel chats on one sandbox); the phone opened only the Main chat and could not start another.
+
+Architectural: `src/chat/SessionChatTabs.tsx` is the web `ChatTabsBar` under a session chat's header: one tab per open chat from `sessionChats.listForSession`, Main first, the open one tinted, a working mark from `turns.listSessionChatStatuses`, and "+" (`sessionChats.create` from the open chat; hidden when archived) that opens the new chat in place. A long press offers Rename (`sessionChats.rename`) and, on a parallel chat, Delete behind the web confirm (`sessionChats.remove`, moving to Main when it was open). The phone already opens a session chat by its own id.
+
+## Phone: a failed turn shows as a failure, with Retry
+
+Date: 2026-11-15
+
+WHY: On the phone a failed turn ("Error: …", a usage limit) read as Eva replying with an error in the text, with no way to re-send it.
+
+Architectural: `stripErrorPrefix` and `turnErrorTitle` moved to `@eva/shared` (`turnError.ts`; the provider is named by each app's kit, `getProviderLabel` / `providerLabel`). The phone's `AssistantMessage` takes `failure`: `TurnErrorNotice` (the web's: a destructive 10% panel, warning icon, "This turn failed" or "<Provider> usage limit reached", the provider's own text) in the prose's place, with Retry re-sending the prompt the turn answered and its attachments, set only on a failed turn in a chat that can reply.
+
+## Phone: wake or sleep a session's Eva, and retry a failed wake
+
+Date: 2026-11-15
+
+WHY: The phone could not start or stop a session's sandbox, so a sleeping Eva woke only when a message was sent, and a failed wake showed nowhere.
+
+Architectural: `sandboxDisplayStatus`, the status types, the control labels and `MID_TURN_SLEEP_HINT` moved from the web (`sandboxStatusStyles.ts`, `SleepControlTooltip.tsx`) to `@eva/shared` (`sandboxStatus.ts`). The phone's `src/chat/SandboxControl.tsx` has `useSessionSandbox` (`sessions.get`, `startSandbox` / `stopSandbox`, a pending action as the web `useSandboxLifecycle`), `SandboxControl` in the session chat header (a green play to wake, a red stop to sleep, a spinner while either runs; mid-turn it stays dimmed and says to stop Eva first; in simple view only where nothing else wakes Eva) and `SandboxErrorBanner` under the header ("Eva couldn't wake up", the error, "Try again").
+
+## Phone: chats are marked read, with the "NEW" divider and unread dots
+
+Date: 2026-11-15
+
+WHY: Reading a chat on the phone never told the server, so the web kept its unread dot set, and the phone showed no unread state at all.
+
+Architectural: The web's `useChatReadState` and `findNewMessageIds` moved to `@eva/shared/chatReadState` (the web wrapper adds tab visibility; `findNewMessageIds`' tests now test the shared code). The phone chat calls it while the screen is focused and the app is in front (`useAppActive`, `src/ui/appState.ts`), so opening a chat (or a reply landing while it is open) marks it read for both apps, and draws `NewDivider` (the web `ChatNewDivider`) above the first reply you had not seen. Session rows show the web's unread dot (primary, 6) when `hasUnread` and Eva is not working.
+
+## Phone: notifications open their phone screen, not the browser
+
+Date: 2026-11-15
+
+WHY: A notification without a chat (quick task done, PR merged, a doc or project comment) opened the web in the browser, and a push tap opened only chats, though the phone has screens for tasks, projects, sessions, docs and pull requests.
+
+Architectural: `@eva/shared/appHref` `parseAppHref` reads what a repo link names (`/<owner>/<name>[/<app>]/<section>/<n>`, a project task's `/projects/<p>/<t>/activity`; anchors and queries ignored). `src/push/openLink.ts` `openAppLink` opens a chat, else a PR at once, else `/open` (`app/open/index.tsx`), which looks the item up by number (`getByNumId`) and replaces itself with its phone screen, or says it is gone with "Open on the web"; drafts, automations and settings still open the web. The inbox and push taps both use it, and pushes now carry `href` and `repoId` when there is no chat (older builds read `target` only).
+
+## Phone: "someone is typing" in chats
+
+Date: 2026-11-15
+
+WHY: The web chat composer shows teammates typing; the phone chat did not.
+
+Architectural: The chat dock uses `useTypingPresence` (`src/chat/useTypingPresence.ts`, the react-native presence hook with the `@eva/shared/typingPresence` rules) in the web's room, `chatTypingRoom(parentId)` (the session chat; before a task or project chats, its own target). Each keystroke flags typing and a send stops it; `TypingIndicator` sits above the composer. The dock now mounts once `auth.me` is known, since a presence heartbeat with no user id is rejected.
+
+## Phone: task comment drafts, "someone is typing" and the full emoji search
+
+Date: 2026-11-15
+
+WHY: The phone task overview lacked three things the web task page has: comment and reply drafts kept on the server, the "X is typing" indicator, and reactions beyond the six quick ones.
+
+Architectural: `src/chat/useChatDraftSync.ts` became `useDraftSync(target)` for any `drafts` target (a session chat, a task comment, a reply), with `lastKnown(target)` for a composer that switches targets; the task comment box keeps one draft for a new comment and one per reply, as the web. "Typing" rules moved to `@eva/shared/typingPresence` (`typingUsersFrom`, `typingLabelParts`, `createTypingSignal`, the room ids, `TYPING_TIMEOUT_MS`); the web hook and indicator use them, and the phone adds `@convex-dev/presence` (its react-native hook) with `src/chat/useTypingPresence.ts` and `TypingIndicator`. The comment box mounts once the user is known, since a heartbeat with no user id is rejected. "More reactions" in the reaction menus opens `EmojiPickerSheet`: a typed emoji is offered as is, a word asks `emojiSuggestions.suggest` after 400 ms (as the web picker's search). Phone files touched here are now prettier-formatted (the repo's lint-staged style).
+
+## Web: pages load again (app shell under strict LazyMotion)
+
+Date: 2026-11-15
+
+WHY: Since the move to the `@vvedantb/ui` AppShell (#1327), every web page showed "Something went wrong": the shell's drawer was a `motion.aside` (and its backdrop a `motion.button`), which throws inside Eva's strict `LazyMotion`.
+
+Architectural: `@vvedantb/ui` 0.50.2 (vvedantb/packages#261) renders both as `m.*` in their own `LazyMotion features={domMax}`; web, the chrome extension, `@eva/shared` and `@eva/ui` move to it. The phone moves from the 0.21.0 `next` snapshot to the published `@vvedantb/native-ui` 0.21.0 (same code).
+
+## Phone: zoom into images in the full-screen viewer
+
+Date: 2026-11-15
+
+WHY: An opened image could not be zoomed.
+
+Architectural: `@vvedantb/native-ui` 0.21.0-next-c9211cd (packages#260): under `GestureHandlerProvider` (already in the app root) each `ImageViewer` page pinches up to 5x about the fingers, double-taps to 2.5x on the tapped point and back, and pans while zoomed instead of turning the page.
+
+## Phone: context and plan usage from the chat header
+
+Date: 2026-11-15
+
+WHY: The phone had no way to see a chat's context use or the Claude plan limits, which the web shows in its chat header (the context ring and the plan-usage chip).
+
+Architectural: The rules moved out of the web into `@eva/shared/usageLimits` (the old `usage-limits/_utils.ts`: snapshots, tones, chip summaries, reset labels, the empty copy, and now the refresh failure copy) and `@eva/shared/contextUsage` (`aggregateUsage`, `contextUsedRatio`, `CONTEXT_OVERLOAD_RATIO`, `contextCompactsAutomatically`); the web imports them, keeping only its Tailwind tone classes (`usage-limits/toneClasses.ts`), and its tests now test the shared code. On the phone, `src/chat/UsageSheet.tsx` adds `UsageButton` to `ChatHeader` (the context % and ring, red past 90%; hidden in simple view): a tap refreshes every account (`usageLimitsActions.refreshAll`, failures as toasts) and opens a sheet with the context card (used of the window, the token rows, tokens left, total cost) and plan usage per Claude account (each window's %, bar and reset). The context reads the session chat's logs, a task's, or a project's (`logs.getByProjectId`), as the web. `src/ui/clock.ts` (`useNow`) is a shared ticking clock; `TimeAgo` now uses it.
+
+## Phone: the chat Stop button is red, and the composer lost its extra top padding
+
+Date: 2026-11-15
+
+WHY: The chat composer's Stop was a grey ghost button, where the web's is red, and the composer had extra space above the field.
+
+Architectural: `ComposerHeader` (a component) became `composerHeader()` in `src/chat/ComposerFooter.tsx`, which returns `undefined` when there are no attachments or mention chips. `PromptInput` pads a header row (`pt-1.5`) for any `header` element it gets, and a component that renders null is still an element, so every composer had 6 extra above the field. The chat Stop is `PromptInputButton variant="destructive"` with the outline `IconPlayerStop`, as the web `Button variant="destructive"`.
+
+## Phone: the keyboard no longer covers the composer on New session and the task overview
+
+Date: 2026-11-15
+
+WHY: On New session the composer sits in a centred column, and the keyboard covered it while typing. The composer's own keyboard lift (react-native-keyboard-controller's `KeyboardAvoidingView` inside `PromptInput`) measures itself relative to its parent, not the screen, so in the middle of a column it decided the keyboard did not reach it and added no lift.
+
+Architectural: `app/session/new.tsx` wraps the centred column in the kit `KeyboardAvoidingView` (as New quick task and New project), so the column shrinks to the space above the keyboard and the composer stays centred in it. The task overview (`app/quick-task/[taskId].tsx`) uses react-native-keyboard-controller's `KeyboardAwareScrollView` (`bottomOffset` 16) in place of a `ScrollView` in a `KeyboardAvoidingView`, so the focused comment box, description or title scrolls into view above the keyboard.
+
+## Phone: comments on a task can be replied to, edited, deleted and reacted to
+
+Date: 2026-11-15
+
+WHY: The phone task overview (#1334) could post comments but not take part in a discussion, as the web task page does.
+
+Architectural: `src/quickTasks/TaskDiscussion.tsx`: `ReactableMenu` (a comment's "…" or long press: the six quick reactions, Reply, Edit, Copy text, Delete behind `DeleteCommentDialog`; the description gets reactions, Edit and Copy text by long press), `useCommentMutations` (optimistic delete to the web placeholder and optimistic edit), `CommentMode` with `CommentModeChip` (the comment box at the end replies with a `ReplyQuoteChip` and edits your comment in place, then goes back to a new comment), and `TaskSubscribers` (Subscribe/Subscribed, initials, Manage subscribers sheet). Not here from the web: the full emoji picker and its suggestions, comment drafts on the server, and typing presence.
+
+## Phone: a quick task opens on its overview
+
+Date: 2026-11-15
+
+WHY: On the phone a tap on a quick task went straight to its chat, so there was no way to read or change the description, the fields or the comments, as the web task page does.
+
+Architectural: The task page rules moved from web-only files into `@eva/shared/taskDetail` (who may edit the text, comment threads, the activity timeline and its wording, reaction grouping and the optimistic toggle); the web task detail now imports them, and `_utils/commentThread.ts` is gone. The phone route `app/quick-task/[taskId].tsx` shows the number and title (tap to edit), the description (tap to edit with the mention composer), attachments, the Properties rows (Status, Priority, Code Reviewer, Labels, Project, each a sheet), the Activity timeline with comments, replies and reaction chips, and a comment box; the bottom bar holds Chat and Run Eva and the header "…" is the row menu. Project task rows open it too. The field sheets are split out of the option chips (`PrioritySheet`, `ReviewerSheet`, `TagsSheet`, `ProjectSheet`, `TaskStatusRows`), `FieldGroup`/`FieldRow` moved to `src/ui/FieldRows.tsx`, and `src/ui/TimeAgo.tsx` keeps relative times current. Still to come: replies, comment edit and delete, the reaction picker and subscribers.
+
+## Phone: settings you change stay after the app closes
+
+Date: 2026-11-15
+
+WHY: The web keeps per-person UI choices in localStorage; on the phone they were React state, so a restart reset them (the repo picked for Quick Tasks, folded session groups, and more). An audit of every web localStorage key against the phone found the phone kept only Hide whitespace, the Viewed ticks and the theme.
+
+Architectural: `src/storage/persistedStore.ts` (moved out of `prDiffStore.ts` and shared): `persistedStore`, `persistedIdSet` and `jsonParser` (zod), in secure store on a phone and in localStorage on the web preview build (which has no secure store, so a value used to last one session). Now kept: the repo last picked (`useLastRepoId` / `rememberRepo`: Quick Tasks, Projects, Reviews, Docs, Drafts and Today fall back to it with no `?repo=`, and the new session, quick task and project screens start on it), session group folds (the web's app and linked group open state), quick task status folds, project phase and project task folds, the section each tab last showed, the new-session prompt draft per repo (the web's `new-session-composer`, cleared on send), the changed-files card open state per reply, and the pull request comment order. Not kept, as on the web, where they live in the URL: filters, sort, Active/Archived and Open/Closed.
+
+## Phone: artifacts open live in the chat
+
+Date: 2026-11-15
+
+WHY: On the phone an artifact card only linked to the web viewer. The web shows the artifact in the chat, live: it calls Eva's read-only tools and keeps its own state through the cowork bridge.
+
+Architectural: The phone `ChatArtifactCard` opens the artifact under the card on a tap (480 high, as the web preview) and closes it on the next tap; Fullscreen fills the screen (a modal with its name and Close); the other icon opens the web viewer in the in-app browser. The page is the kit `HtmlView` (native-ui 0.21.0-next-90c9e82, vvedantb/packages#258: `onPageMessage` and a `postMessage` handle). The bridge is shared: `@eva/shared/artifactBridge` (a subpath, so the backend's root import stays React-free) holds the shim (`buildArtifactSrcDoc`, which posts through `window.ReactNativeWebView` on the phone and takes JSON-text replies), `loadArtifactHtml`, and `useArtifactBridge(artifactId, target)`; the web `ArtifactFrame` uses it too, and its own copies are deleted. Metro keeps `convex` a singleton, so the shared hook sees the app's `ConvexProvider`.
+
+## Phone: composer drafts are saved, as on the web
+
+Date: 2026-11-15
+
+WHY: Text typed in a phone chat's composer was lost when the app closed or the chat was left. The web keeps it on the server (`drafts`), so it also follows the person between devices.
+
+Architectural: `useChatDraftSync(chat)` (session chats, as the web; quick tasks and projects have no draft row) reads `drafts.getForTarget` and returns `save` and `pull`. `save` is the composer's new `onChange` (`useMentionComposer` calls it after the person's edits only: typing, picks, chip removal, stash restore, the clear after a send), coalesced to one `drafts.set` in flight per chat, and skipped until the saved draft has loaded so opening a chat never overwrites it; an empty composer deletes the row. `pull(composer)` runs in render when the saved draft changes (its first load, or a write from the web) and applies it with `composer.load` by the web's rules: `decideDraftPull` and `rememberOwnSave` move from `apps/web` to `@eva/shared` (web unchanged). No effects. Also adds the `_generativeUi/catalog` entry #1321 left out of `api.d.ts`.
+
+## Phone: agent cards stay with their turn in long chats
+
+Date: 2026-11-15
+
+WHY: In a long chat, a turn's agent report ("Feedback sent"), artifacts, panels and pages fell to the bottom of the chat on the phone. The phone transcript loads in pages (newest 30 first), but `useChatCards` told `placeChatUiPanels` the whole history was loaded, so a card whose turn was above the first page went to the "after everything" list.
+
+Architectural: `useChatCards` takes `hasOlderHistory` (the screen passes `transcript.hasOlder`) and gives it to both placements, as the web `ChatBody`. A card above the loaded rows now waits for its page and then sits under its turn. Reproduced and checked in the phone web export with 40 extra messages on the seeded mock chat: before, the cards sat at the bottom; after, nothing at the bottom, and the cards appear under their reply once the older page loads.
+
+## Web shell comes from the kit `AppShell`
+
+Date: 2026-11-14
+
+WHY: Eva carried its own sidebar shell (rail width, tile size, panel layout, resize, mobile drawer). The kit now owns these, so every app has the same shell and Eva has no shell CSS of its own.
+
+Architectural: `Sidebar` renders `AppShell.Root` (`scroll="document"`, `resizable`) with the kit `Sidebar` parts (`Root`, `MobileHeader`, `Backdrop`, `Aside`, `Rail`, `RailItem`, `Panel`, `ResizeHandle`); `@vvedantb/ui` is 0.50.0. The rail is 3.5rem and the tiles are the kit `railTileClass`; Eva adds only its themed active tone. The shell breakpoint moves from `lg` (1024px) to the kit `md` (768px): the drawer, the mobile header and the Ave launcher follow. The stored width moves once from `eva-sidebar-width` (rail plus panel) to `eva-sidebar-panel-width` (panel only) in `shellLayout.ts`; the total widths stay 240 / 320 / 480. Routes take their height from `SHELL_VIEWPORT_ROUTE_CLASS` / `SHELL_DOCUMENT_ROUTE_CLASS`. Deleted: `useSidebarContentOffset`, `useMobileSidebarDrawer`, `SidebarResizeHandle`, the width state in `SidebarContext`. Differences from before: the drawer closes on the kit drag rule (offset or velocity, no projected velocity), the keyboard resize step is 16px, a double-click on the handle resets the width, and the mobile header has the kit look.
+
+## Phone: chats show attachments, agent media, generative UI panels and turn outputs
+
+Date: 2026-11-14
+
+WHY: The phone chat drew none of the rich content the web chat draws: user attachments, the agent's screenshots and recordings, `render_ui` panels and `render_html` pages, and artifact and agent-report cards. Revives #1292 on today's main.
+
+Architectural: The screen's own `ChatMessageRow` (on the paged transcript) gains the content: a user bubble shows `messageAttachments` (`UserAttachments`: 96 pt thumbs into the native-ui `ImageViewer`, text chips into a read-only sheet, as the web); a reply shows `message.media` (`AgentMedia`: `InlineVideo` from `@vvedantb/native-ui/video` with `expo-video`, and `ImageGallery`). `useChatCards` reads `chatUi.listByParent`, `chatHtml.listByParent` and `artifacts.listForChat` once per chat and places them, and the agent reports, with `placeChatUiPanels` (moved to `@eva/shared`; the web imports it from there). Panels use the kit `GenerativeUiPanel` (`@vvedantb/native-ui/generative-ui`, on json-render's React Native renderer) behind the web's UI and Text tabs; links open in the in-app browser, code copies with `copyText`, and a type this version does not know is a card that opens the chat on the web. Pages use `HtmlView` (`react-native-webview`), mounted once the row is seen. A panel button replies through `chats.send`, as the composer. The attachment labels and `splitAgentMedia` move to `@eva/shared` (web unchanged). The PR's own 419-line panel renderer is not used: the kit replaces it. New native modules `expo-video` and `react-native-webview`: a new APK.
+
+## Chat panels (`render_ui`) render from the kits
+
+Date: 2026-11-14
+
+WHY: The panel catalog and renderers now live in the shared kits (vvedantb/packages#236, #240), so any app, and Eva's phone, draws the same panels from one definition.
+
+Architectural: Web `ChatBody` renders `GenerativeUiPanel` from `@vvedantb/ui/generative-ui`; Eva's renderer, layout, content and tone files are deleted (`ChatUiPanelTabs` and panel placement stay). The backend builds `chatUiCatalog` in `_generativeUi/catalog.ts` from `generativeUiCatalogDefinition` (`@vvedantb/server/generative-ui`) on json-render's React schema, so the `"use node"` composer loads no React; the request schema uses the kit tones and styles, and tests use `parseGenerativeUiSpec`. `@eva/shared/generativeUi` is deleted. Every package pins `@vvedantb/ui` 0.47.0-next-7db4f19 and `@vvedantb/server` 0.16.0-next-bf81bce, so the web app loads one copy.
+
+## Eva moves to zod 4
+
+Date: 2026-11-14
+
+WHY: The shared kits (`@vvedantb/server`, `@vvedantb/ui`, `@vvedantb/native-ui`) publish zod 4 types, and json-render (chat panels) requires zod 4. On zod 3, the kit's generative UI props resolved to `unknown` in Eva, so Eva could not use the kit panels.
+
+Architectural: web, backend, shared and mobile pin zod 4.6.7. Four code changes: `_evaConfig/config.ts` uses `.prefault({})` (zod 4's `.default` no longer runs the inner schema, so inner defaults would be lost) and the two-argument `z.record`; `jsonValue` is `z.ZodType<JsonValue, JsonValue>` (zod 4's second type argument is the input, `unknown` by default); `search_tools` uses zod's own `z.toJSONSchema` (`toolInputJsonSchema`), and `zod-to-json-schema` is removed; the mobile `exit-info` module checks `lastExit` is a function and parses its result (zod 4 removed `z.function().args().returns()`). Follow-up: about 20 deprecated `.strict()` / `.passthrough()` calls still work and can move to `z.strictObject` / `z.looseObject`.
+
+## Phone: crashes report themselves to Axiom
+
+Date: 2026-11-14
+
+WHY: A phone crash was known only when the user pasted Copy details from the crash dialog. Now each crash reaches the logs on the next signed-in launch, with no action from the user.
+
+Architectural: New mutation `crashReports.report` (phone-only, listed in `check-shared-backend.mjs`). It has no table: for a signed-in user it writes one `[phone-crash] {json}` console.error line, which Convex's log stream sends to Axiom (dataset `eva`, `data.message`). Signed-out calls are dropped, so it is not an open log sink. `useReportLastCrash` (in `SignedInEffects`) sends the crash `LastCrashDialog` shows (JS fatal, native crash, ANR or Java crash) once, keyed by `eva.lastCrashReported`; a failed send retries on the next launch. The report holds the error and stack only, never chat content. The dialog and Copy details stay.
+
+## Quick tasks: a chat push opens the task PR
+
+Date: 2026-11-13
+
+WHY: A quick task worked on only through its sandbox chat never got a PR. The chat pushed `eva/task-<id>`, but only a task run opened the task PR, and the agent was told Eva would open it.
+
+Architectural: `_sessions/workflow.ts` calls the new `taskWorkflowActions.ensureTaskChatPr` after a quick-task turn pushes or commits onto a published branch. It and the manual `createTaskPr` share `openTaskPr`. The PR is ready in code_review and draft otherwise; a cancelled task is skipped, and a branch level with base is ignored. `getTaskPrCreationData.existingPrUrl` now reads the live PR on the task branch, not any run's old `prUrl`, so commits after a merge get a fresh PR. Project chats still rely on a task run for the project PR.
+## Phone: fix the Sessions/Projects tab crash; Java crashes show their stack
+
+Date: 2026-11-13
+
+WHY: Changing tab closed the app on the compiled native-ui kit (0.1.56–0.1.60). The stack from 0.1.60: "[Worklets] Tried to synchronously call a Remote Function" in `tabIndicator`'s `useAnimatedStyle`. React Compiler hoisted the arrow functions inside that worklet (`box => box.x`) to module-level `_temp` functions, which the UI thread cannot call.
+
+Architectural: The kit's `build-dist.mjs` puts compiler-hoisted `_temp` functions back inline inside worklet callbacks (vvedantb/packages#226); `apps/mobile` pins `@vvedantb/native-ui@0.18.2-next-10a55be`, compiled again. `ExitInfoModule.kt` installs a default uncaught-exception handler that writes the Java stack to `filesDir/eva-java-crash.txt`, since Android keeps no trace for `REASON_CRASH`; `lastExit` returns it, and the dialog shows the exception line.
+## Web, backend and mobile: adopt more shared exports from @vvedantb packages
+
+Date: 2026-11-13
+
+WHY: More code was still copied into eva from the shared packages. One source means one place to fix and one behaviour across apps. This round bumps `@vvedantb/ui` to `^0.43.0`, `@vvedantb/server` to `^0.15.0` and `@vvedantb/config` to `^0.5.0`.
+
+Architectural: `apps/web` adopts the stale-deploy reload from `@vvedantb/ui`; the local `staleDeployReload.ts`, `isChunkLoadError.ts` and their tests are deleted, and `main.tsx` plus `DeploymentErrorFallback.tsx` use the package. In the backend, `convex/_shared/hmac.ts` re-exports `hmacSha256Hex` from `@vvedantb/server` (a shim keeps the Convex module registry stable), `convex/http.ts` uses the package `verifyGithubStyleSignature` for the GitHub webhook, and `convex/functions.ts` builds the six auth function wrappers from `createAuthFunctions`. On mobile, `plugins/withReleaseSigning.js` wraps the package `withReleaseSigning` (eva's signing marker kept, because `scripts/build-android-release.sh` greps for it), and `metro.config.js` uses `defineExpoMetroConfig`; all four resolver singletons are kept. The `@vvedantb/native-ui` git pin is unchanged. Not adopted: the Convex admin API client (the JWT-authed runAsUser stack must stay, and listTables output differs); the shared oxlint plugin (the package `no-source-text-in-tests` widens the test-file match, and the other rules drop eva's curated CLAUDE.md messages).
+
+## Phone: native crashes show on the next launch too
+
+Date: 2026-11-13
+
+WHY: The Sessions/Projects tab crash is native: it closes the app before JavaScript can save anything (0.1.56's JS crash report never showed). Android 11+ keeps why the last process ended, with the tombstone for a native crash.
+
+Architectural: Local Expo module `apps/mobile/modules/exit-info` (`ExitInfoModule.kt`, autolinked) returns the last `ApplicationExitInfo`: reason, time, description and the trace (ANR text, or the printable parts of a native tombstone: signal, abort message, libraries, functions; 6 KB max). `loadLastCrash` shows a crash, native crash or ANR newer than the last one shown (`eva.lastExitSeen`) in the same "Eva closed after an error" dialog, with Copy details.
+
+## Web and backend: adopt shared pieces from @vvedantb packages
+
+Date: 2026-11-13
+
+WHY: Several components and helpers were copied into eva from the shared packages. One source means one place to fix and one behaviour across apps.
+
+Architectural: `apps/web` moves `@vvedantb/server` from `^0.10.0` to `^0.14.0`, so web and backend share one installed copy. The local `ConfettiBurst` is deleted; `PrMergeConfetti` imports `ConfettiBurst` from `@vvedantb/ui` (the package adds an optional `colors` prop; the rest is the same). `SettingsPage` now wraps the kit `SettingsPage`, giving it eva's `PageWrapper` as the `layout`. In the backend, `_auth/currentUser.ts` builds `userAuth` with `createClerkUserAuth<DataModel>()`, and `getCurrentUserId`, `requireCurrentUserId` and `auth.ts`'s `getUserByClerkId` delegate to it; `userAuth` stays in the leaf `currentUser.ts` to keep the module-cycle workaround. `ensureUserExists` is unchanged: the package `ensureUser` has no verified-email rebind. `textGen.ts` uses `FLEX_GATEWAY_PROVIDER_OPTIONS` from `@vvedantb/server/ai` for both title calls.
+
+## Web: the `scrollbar` utility comes from @vvedantb/ui
+
+Date: 2026-11-13
+
+WHY: vibot and eva each had their own copy of the same thin-scrollbar utility. One shared copy stops the two from drifting.
+
+Architectural: `apps/web/src/globals.css` imports `@vvedantb/ui/tokens/css/scrollbar.css` and the local `@utility scrollbar` block is gone. The shared utility reads `--scrollbar-base`; eva sets it to `rgb(var(--muted-foreground))` for `:root`, `.dark` and `.dark.neutral`, so the colours stay the same. `@vvedantb/ui` moves from the `0.41.1-next` pre-release pin to `^0.42.0` in web, chrome-extension, `packages/shared` and `packages/ui`.
+
+## Phone: back to the uncompiled native-ui while the tab crash is found
+
+Date: 2026-11-13
+
+WHY: Since 0.1.53 the Sessions and Projects tabs close the app at once (native crash, no JS error). The app code changed only in action handlers since 0.1.51; the kit became React Compiler output. The kit's Android e2e opens every component those tabs use, compiled, without a crash, so this build tells the two apart.
+
+Architectural: `apps/mobile` pins native-ui to `github:vvedantb/packages#a6d0b28` again (0.1.51's kit: the same source, not compiled; it still has the hand-written `TabBarItem` memo). Web keeps the compiled `@vvedantb/ui`.
+
+## Phone: an error that closes the app is shown on the next launch
+
+Date: 2026-11-13
+
+WHY: The Sessions and Projects tabs close the release app with no message, and a phone has no log the user can read. Render errors already show "Could not start Eva"; this covers fatal errors outside render (handlers, effects, Reanimated worklets).
+
+Architectural: `installUnhandledRejectionLogging` takes `onFatal`: on a fatal error it saves `{ name, message, stack }` (`src/logging/lastCrash.ts`, expo-secure-store, under 1.8 KB) for at most 1 s, then calls the previous handler as before. The next launch shows `LastCrashDialog` (the `UpdateDialog` pattern): the error, and Copy details (version, time, message, 15 stack lines).
+
+## Web and phone: both kits from npm, compiled with React Compiler
+
+Date: 2026-11-13
+
+WHY: `@vvedantb/ui` now ships React Compiler output like native-ui (packages#213, #217). Eva web compiled the ui source itself; the package build does it once, for Eva and vmem.
+
+Architectural: Every Eva package pins `@vvedantb/ui@0.41.1-next-14f3254` (web, @eva/ui, shared, chrome-extension; one version, so `dedupe` keeps one copy and `UiConfigProvider` context reaches it; it includes 0.41.0's shared chat and page pieces). The phone pins `@vvedantb/native-ui@0.18.1-next-5a5ab8f`. `vite.config.ts` excludes all of node_modules from the React Compiler; `vitest.config.ts` inlines `@vvedantb/ui` (its compiled `.js` imports CSS, which Node cannot load). The ui package no longer has `"use client"`. Measured on the web build at 4× CPU: chat composer 145 → 86 renders per keystroke; home and sessions pages render the same DOM.
+
+## Web: Five UI pieces move to @vvedantb/ui
+
+Date: 2026-11-13
+
+WHY: These components and the scroll-fade CSS were copied into eva from the shared kit. One source means one place to fix and one look across apps (packages#211, `@vvedantb/ui` 0.41.0).
+
+Architectural: `ChatLastTurn`, `ChatDayDivider` and `CollapsibleUserMessageBody` now import from `@vvedantb/ui`; the local copies are deleted and their importers repointed. The divider uses the kit's default day/time labels, which match eva's `formatDayLabel` / `formatClockTime` output exactly, so no formatter is passed. The collapsible keeps its look: the kit's default `hover:bg-surface-secondary/55` resolves to `rgb(var(--muted))` under eva's `compat-shadcn-rgb.css`, the same colour as eva's old `hover:bg-muted/55`. `PageHeader` and `PageWrapper` become thin adapters over the kit's `PageHeaderBar` / `PageWrapper`, fixing eva's layout (`titleLayout="inline"`, `headerColumns="three-at-md"`, `animated`, and `bodyScrollbar` for the wrapper); the adapter keeps eva's prop surface and import paths, and `PageWrapper` calls `usePageTitleSync` itself. `globals.css` drops the local scroll-fade blocks and imports `@vvedantb/ui/tokens/css/scroll-fade.css`; with no `--scroll-fade-max` set the masks stay uncapped as before. Needs the dependency bump to 0.41.0 to resolve.
+
+## Web: Archive uses chats.archive, as the phone does
+
+Date: 2026-11-13
+
+WHY: One backend for both apps (#1302): each action the phone and web share runs one server function.
+
+Architectural: `useArchiveSession` calls `chats.archive` instead of `sessions.stopSandbox` then `sessions.archive`. Same helpers and checks; the stop and the archive now run in one mutation, and the sandbox check reads the server's `sandboxId`, not the client's. `check-shared-backend` no longer allows `chats.archive` as phone-only. Send, stop, model and start stay on the web's own path for now: they carry optimistic updates and more arguments than `chats.*` takes.
+
+## Phone: native-ui from npm, compiled with React Compiler
+
+Date: 2026-11-13
+
+WHY: Expo never runs React Compiler on node_modules, so every kit component re-rendered its whole subtree. The kit now compiles itself and publishes compiled code (packages#210), as React's library guidance says.
+
+Architectural: `apps/mobile` installs `@vvedantb/native-ui` from npm (`0.18.0-next-54cc54a`, the `next` pre-release published on each kit merge) instead of a git pin, because a git pin installs source and runs no build. The kit's `dist` keeps JSX, so NativeWind's `className` transform still applies. Measured on the phone web build at 4× CPU: chat composer 68 → 55 renders per keystroke, tab switch 195 → 165 renders; screens are byte-identical. To take a kit change, pin the new `next` version.
+
+## Phone: cheaper tab switches
+
+Date: 2026-11-13
+
+WHY: Tapping tabs quickly lagged. Each switch re-rendered all four tab bar buttons with their SVG icons (the kit is not built with React Compiler), and the Android glass blur target was a context value above every tab, changed twice per switch, so React walked every mounted tab each time.
+
+Architectural: native-ui packages#206 and #207 memoise each tab (`TabBarItem`) and keeps the blur target in a small store read with `useSyncExternalStore`. Measured on the phone web build, 12 switches at 4× CPU: app JS 439 → 277–294 ms, renders per switch 276 → ~195, median tap → first commit 77 → 64.5 ms. Not done: `freezeOnBlur` (a frozen tab never re-renders to inactive, so the blur hand-off would break).
+
+## Session chats: Delete a parallel chat and all its messages
+
+Date: 2026-11-13
+
+WHY: Users could only rename chat tabs. Extra chats piled up with no way to clear them.
+
+- Web: right-click a chat tab → Delete → confirm dialog. Not on Main; disabled while the chat runs. Deleting the open chat switches to Main.
+- Backend: `sessionChats.remove` hides the chat (`archived`), drops its queued sends and the caller's draft, then `_sessionChats/purge.purgeDeletedChat` deletes messages 100 per run, then cards, env requests, proposals and closed turns. The chat row stays as a tombstone so `?chat=N` numbers are never reused.
+- Architectural: `deleteChatRows` moved from `_migrations/deleteRepos.ts` to `_sessionChats/purge.ts` (optional page size) and is shared by both. `tests/sessionChatTabs.test.ts` called a removed `archive` mutation; it now covers `remove`.
+
+## CI: main is green again
+
+Date: 2026-11-13
+
+WHY: Main's CI failed on every run, so new failures hid among old ones and PRs merged with `--admin`; the Hermes, shared-backend and APK guards only block once main is green.
+
+Architectural: `useSandboxLifecycle.run` uses `.finally` instead of a `try`/`finally` statement (React Compiler bailed on the whole file); the agent-browsing auto-switch effect keeps its `no-event-handler` disable with the reason (a live query change has no local event). `sessionChatTabs.test.ts` sets `archived: true` on the row, since `_sessionChats.mutations.archive` was removed (c686b9ad3) but old closed chats keep the flag. `MaintenanceScreen` uses `ui-surface` (16 px corners, was 8); the BackgroundProcessesChip pill is marked deliberate like its BackgroundAgentsChip sibling. The design baseline drops one stale entry.
+
+## Phone: chat ⋯ menu rows lay out icon and label in one row again
+
+Date: 2026-11-13
+
+WHY: On Android every menu row stacked its icon above its label. The kit's `MenuRow` kept its layout in a function `style`; NativeWind's `Pressable` interop rebuilds `style` from the inline value on native and drops a function, so the row fell back to React Native's default column. Web does not take that path, so the preview looked right.
+
+Architectural: native-ui packages#205 moves the layout to a plain style object and draws the press highlight from the `pressed` render state; the labelled Conversation scroll pill gets the same fix. Kit tests assert both styles are objects.
+
+## CI: one backend for web and phone, and installed APKs keep working
+
+Date: 2026-11-13
+
+WHY: The phone drifted onto its own Convex functions (`mobile.*`), and a backend change broke installed APKs (0.1.33). The owner wants one backend, logic in `@eva/shared`, and apps that hold only UI.
+
+Architectural: `scripts/check-shared-backend.mjs` fails when the phone calls an `api.*` function the web never calls, unless `ALLOWED` gives the reason (push tokens; `mobile.*` while it moves to `chats.*`). `scripts/check-apk-compat.sh` type-checks the newest `eva-apk-*` release's phone and shared code against the changed backend, and fails on any error (it catches the 0.1.33 break; skips when the backend did not change). Both run in CI. CLAUDE.md gains the three rules.
+
+## Phone: calls chats.* (needs the prod Convex deploy first)
+
+Date: 2026-11-13
+
+WHY: Step 1 of one backend for both apps: the phone stops calling `mobile.*` and calls the neutral `chats.*` (#1302).
+
+Architectural: Every `api.mobile.*` call in apps/mobile is now `api.chats.*` (`get`, `send`, `setModel`, `stop`, `start`, `archive`). Ship only after prod Convex has `chats.ts`, or the new APK's chats fail.
+
+## Backend: chat actions under one neutral name (chats.*)
+
+Date: 2026-11-13
+
+WHY: The owner wants one backend for both apps. The phone's `mobile.*` functions (open a chat by target, send, stop, set model, start a session, archive) already make each decision once on the server; the web makes the same decisions in the browser. They now live in `convex/chats.ts` (`get`, `send`, `setModel`, `stop`, `start`, `archive`) for both apps to use.
+
+Architectural: `mobile.ts` keeps the old names as re-exports of `chats.*` for installed APKs (a test checks `mobile.getChat` equals `chats.get`), plus the deprecated `listChats`. Next: the phone switches to `chats.*` once prod Convex has this module; then the web moves onto `chats.*` one action at a time; then `mobile.ts` goes.
+
+## Lint: wider Hermes guard for phone and shared code
+
+Date: 2026-11-13
+
+WHY: `toSorted` in shared code crashed the phone Sessions tab (#1299). TypeScript cannot catch this here: some packages pull in ESNext lib types for every project, and `packages/shared` is not in the root typecheck.
+
+Architectural: The apps/mobile + packages/shared override in `.oxlintrc.json` also forbids `Object.groupBy`, `Map.groupBy`, `Promise.withResolvers`, `Array.fromAsync` and the `structuredClone` global. Set methods (`union`, ...) stay allowed: their names collide with `z.union`. The mobile `test` script no longer runs `hermesApis.test.mjs`, deleted in #1156.
+
+## Phone: Sessions tab no longer crashes ("undefined is not a function")
+
+Date: 2026-11-13
+
+WHY: The phone Sessions tab showed "Could not start Eva — undefined is not a function". The shared session-list code (`sessionList.ts`, used by the phone since #1291) and `SessionGroup.tsx` call `Array.prototype.toSorted`, which Hermes lacks; the web preview runs on Chrome, which has it.
+
+Architectural: Every `toSorted` became `[...list].sort(...)` (same result). `.oxlintrc.json` now forbids `toSorted`, `toReversed` and `toSpliced` in apps/mobile and packages/shared, so this cannot come back unnoticed (the old `hermesApis.test.mjs` guard was removed in #1156).
+
+## Phone: lighter first open of list tabs
+
+Date: 2026-11-13
+
+WHY: The first open of Sessions and Projects mounted 600 to 1,000 components.
+
+Architectural: native-ui `SwipeableRow` mounts its action strips on the row's first touch (packages#202), so Inbox and Sessions rows no longer mount hidden buttons and icons up front (Sessions first open 641 → 596 mounts on the preview). Every long list (Projects, Project tasks, Quick Tasks, Reviews, Timeline, Docs, Drafts, Today) now uses `LIST_WINDOW`, as Inbox and Sessions do; the diff view keeps its own sizing (22 pt lines). The rest of the Projects cost is card weight (NativeWind wrappers, SVG icons).
+
+## Phone: chats load like the web (newest 30, then older pages)
+
+Date: 2026-11-13
+
+WHY: The phone read a chat's whole transcript at once (`messages.listByParent` with no range: about 3.2 MB for 400 messages), which the web stopped doing.
+
+Architectural: The load plan moved to `@eva/shared` (`transcriptTailArgs`, `transcriptLiveArgs`, `olderTranscriptArgs`); the web's `useChatTranscript` uses it. The phone's new `src/chat/useChatTranscript.ts` opens on the newest 30, follows `since` the oldest of them, and loads older pages (50, 100, 200, 400, then the rest) when the inverted list nears its top (`onEndReached`), with a spinner while one loads. Fork asks the server for its prefix (`forkPrefixByParent`) while history above is not loaded, as the web does.
+
+## Phone: Sessions and Projects tabs compile; lighter lists and chat rows
+
+Date: 2026-11-13
+
+WHY: Tab switches still lagged. The React Compiler bailed on the whole Sessions and Projects screens, session rows got new handlers on each render, the Inbox mounted all 100 rows at start, and every chat message redrew on each list batch.
+
+Architectural: The section lookup moved out of the screens (`src/ui/sectionIndex.ts`): a `findIndex` on a pill list that was sometimes the module constant hit a compiler internal error ("MethodCall::property must be an unpromoted + unmemoized MemberExpression"). `SessionListRow` takes stable `onOpenMenu` / `swipe` / `onSwipe`. Inbox and Sessions lists use `LIST_WINDOW` (12 first, window 7, batches of 8). Chat messages are a compiled `ChatMessageRow` with id-taking handlers. A full compiler scan of apps/mobile now finds no bailouts.
+
+## Removed the snapshot Config Files settings page
+
+Date: 2026-11-13
+
+WHY: No repo used it. The `sandboxConfigFiles` table had 0 rows on prod and dev.
+
+- Web: removed the Config Files tab and its upload UI from snapshot settings. `/settings/snapshots/config-files` is no longer a tab; the existing unknown-tab guard sends it to `configuration`.
+- Convex: deleted `sandboxConfigFiles.ts` and dropped the `sandboxConfigFiles` table.
+- Snapshot build: no config-file download, no `/home/eva/sandbox-config` copy. The `startup-pre-daemon` stage existed only for config-file moves, so all startup commands now run after the daemons.
+- Sandbox start: removed `copySandboxConfigFilesToWorkspace` and the "Restoring config files..." step.
+
+## Chats: the agent can suggest a new session in a card
+
+Date: 2026-11-13
+
+WHY: An agent asked for unrelated work mid-task either did it in the same chat, which mixed two changes on one branch, or called `create_session` on its own. The user had no say.
+
+Architectural: New eva MCP tool `propose_session` (`mcp/chatSelfTools.ts`, mounted for sessions, quick tasks and projects) stores a `sessionProposals` row (title, reason, brief) anchored to the latest message. `ChatBody` places it as an inline card like `request_env_var`. "New session" calls `sessionProposals.start`: `createSession` in the same repo on the repo defaults, the brief as first message, joined to the linked-session group; the user stays in the chat and the card becomes a link. "Do it here" calls `sessionProposals.keepHere` and posts the returned message to the agent. Nothing runs before a click and cards do not expire. The chat runtime prompt names the tool. Needs a Convex deploy.
+
+## Sandboxes: a deployment never touches another deployment's VMs
+
+Date: 2026-11-13
+
+WHY: Session sandboxes stopped in the middle of a turn. The prod-to-dev sync copies prod's Vercel credentials and session rows to dev, so dev's leak sweep and idle pause stopped running prod VMs from a stale copy of their owner rows. Prod never asked for the stop, so the chat showed only "Sandbox stopped while this turn was running."
+
+Architectural: `foreignSandboxDeployment` (`_sandbox/tags.ts`) compares a VM's `eva.deployment` tag with the own Convex slug. `VercelSandboxClient.get` throws a 404 `SandboxProviderError` for a foreign VM, so every stop, exec and delete classifies it as sandbox-gone and drops the mirrored row. `sandboxLeakSweep` skips foreign VMs in the list. `sync-prod-to-dev.mjs` runs the new `sandboxIdlePause.switchOffInternal` after the import. Untagged VMs (created without `ENVIRONMENT`, or with five caller tags) are not protected.
+
+## Chat alerts: amber warnings, icons; VM memory on the turn heartbeat
+
+Date: 2026-11-13
+
+WHY: Session 427's VM stopped three times with no reason in the logs, and the "Sandbox startup unfinished" warning (session still running) looked like a red error.
+
+Architectural: `messages.alertTone` (optional `"warning"`) marks system alerts that did not fail the session; `sandboxStartupWarning` and the seeded-restore alert set it. `SystemAlertMessage` renders warnings with an amber triangle and "View details", and alerts with `errorDetail` with a red circle and "View error"; plain dividers stay icon-less. The callback daemon reads `/proc/meminfo` (`runtime/vmMemory.ts`) and adds `memTotalMb`/`memAvailableMb`/`swapUsedMb` to the HMAC heartbeat at most every 30s; the `/api/streaming/heartbeat` route logs `[heartbeat][vm]` so Axiom shows memory pressure before a VM dies.
+
+## Phone: Sessions tab reads the web's session lists and shows linked groups
+
+Date: 2026-11-12
+
+WHY: The phone Sessions tab read `mobile.listChats`, a cross-repo wrapper with its own fields and caps, and did not show linked session groups as the web sidebar does.
+
+Architectural: The tab subscribes as `GlobalSessionsSidebar` does: `githubRepos.list`, then one `sessions.list` (Active) or `sessions.listArchived` (Archived) per repo through `useQueries`. `linkedSessionGroups`, the sort orders and sort helpers, `sessionListEntries` (groups and apps as one ordered list, lifted out of the web sidebar) and `perRepoQueryCache` (stable `useQueries` maps) moved to `@eva/shared`; the web sidebar uses them with no behaviour change. Linked groups draw as a section with the link tile, name and member count, open by default; member rows show their app mark. A long press on a group header offers Rename group (`sessions.renameGroup`), and a group row's menu has Remove from group (`sessions.removeFromGroup`, via `sessionMenuActions({ inGroup })`). `mobile.listChats` stays for APKs up to 0.1.43 and is marked deprecated.
+
+## Phone: a working session shows the web "Working" grid
+
+Date: 2026-11-12
+
+WHY: A session whose agent was mid-turn showed only its status dot on the phone; the web sidebar shows the animated Drive pixel grid.
+
+Architectural: `mobile.listChats` returns `isExecuting`, from `sessionIsExecuting` over `chatTurnFlagsForRepos` (one open-turn read per listed repo, as the web list; it also replaces the separate awaiting-answer read). `RowStatus` follows the web `SessionStatusLeading` order: question mark, then native-ui `LoadingState` (`size="sm"`), then the dot. Quick task rows swap their system spinner for the same `WorkingMark`, as the web `QuickTaskCard`. The grid holds still while its tab is not focused.
+
+## Phone: Inbox select mode as Android's contextual action bar
+
+Date: 2026-11-12
+
+WHY: Select mode started only from a header icon, its bar showed unlabelled 36 pt icons, and it floated over the last row with the tab bar still under it.
+
+Architectural: A long press on a row starts select mode with that row ticked and a light haptic (in select mode it ticks, as a tap). While selecting, the Inbox sets `tabBarStyle: { display: "none" }` with `<Tabs.Screen options>`, native-ui `FloatingTabBar` hides on it, and `BulkActionBar placement="tabBar"` sits in the same slot with labelled 48 pt actions. The header shows "N selected" with a close X (native-ui `PageHeader leading`) and hides the page actions.
+
+## Phone: segmented switches slide
+
+Date: 2026-11-12
+
+WHY: Open / Closed / All (Reviews), Active / Archived (Sessions) and the project tabs jumped; the web segmented pill slides.
+
+Architectural: `SegmentedTabs` passes `TabsList` a `progress` value (`useDerivedValue(() => withTiming(index))`, the web `--tabs-dur` 200 ms and `--tabs-ease`, instant under Reduce Motion), so the kit draws one sliding thumb instead of a fill per trigger.
+
+## Phone: Neutral theme, shared with the web
+
+Date: 2026-11-12
+
+WHY: The web has four appearance modes (Light, Neutral, Dark, System); the phone had three, and kept its pick on the phone only, so the phone and the web could show different themes.
+
+Architectural: `EVA_THEME.neutral` (`@eva/shared`) is the dark palette with the web `.dark.neutral` surfaces. Neutral is dark-family: NativeWind runs "dark", `applyEvaTheme("neutral")` repaints the kit's dark slot (native-ui `configureTheme` now redraws mounted parts), and the root layout sets the changed global.css variables with NativeWind `vars` for class colours. The app's `useScheme()` returns light, dark or neutral, and app code reads its colours from `EVA_THEME[scheme]` only, so React Compiler memos follow a Dark to Neutral pick. The mode is the account's `auth.getTheme` once loaded (SecureStore is the start value); a pick writes both, as the web `ThemeModeProvider`. `isThemeMode` and `themeAppearance` moved to `@eva/shared`; the web uses them.
+
+## Phone: queued messages show above the composer
+
+Date: 2026-11-12
+
+WHY: On the phone, messages sent while Eva was busy disappeared until they ran. The web shows them above the composer, where you can steer with them, edit, reorder or delete them.
+
+Architectural: `QueuedMessagesPanel` (apps/mobile) reads `queuedMessages.listByParent` with the session chat id from `getChat` and calls the web's own `update`, `remove`, `reorder` and `steer`, with the same optimistic updates. The chat screen builds it and hands it to `ChatDock` as one element, so a keystroke does not redraw it. The web's hover actions and drag reorder are a sheet (Edit, Move to front, Move up, Move down, Delete); Steer stays on the row. The heading, the row text and the reorder rule are in `@eva/shared` (`queuePanelLabel`, `queuedMessagePreview`, `moveQueuedId`, `orderQueuedRows`), and the `<review_comment>` reader moved there too (`stripReviewCommentBlocks`, `parseReviewCommentSegments`); the web uses them with no change in behaviour.
+
+## Phone: a chat opens at its newest message
+
+Date: 2026-11-12
+
+WHY: On the APK, a chat opened at its top and then scrolled to the bottom. The list drew its oldest rows first, jumped to an end it measured, and then rendered and measured the newer rows in batches, so the content height changed again and the list jumped again after it showed.
+
+Architectural: The chat transcript is an inverted `ConversationList` (kit `inverted`, data newest first). The newest message is row 0 at the bottom, so the first frame is already at the end with no scroll. The "Working…" line is the list header (the bottom when inverted). The thread's side padding moves into each row, as Android flips an inverted list on both axes.
+
+## Phone: faster on resume, on the Inbox and while typing
+
+Date: 2026-11-12
+
+WHY: The phone app froze for a moment when it came back from the background, the Inbox stalled for seconds after it opened, and typing in a chat lagged. Measured on the 390×844 web preview at 4× CPU throttling: a reconnect redrew 7,720 components (a 650 ms task), the Inbox redrew about 40,000 while it drew its 100 rows, and each keystroke redrew the whole transcript.
+
+Architectural: The app's Convex client is a `StableConvexClient`: a query result whose JSON equals the last one keeps the last object, so the reconnect after resume (every query sent again, unchanged) redraws nothing. The Inbox passes the same handlers to every `NotificationRow`, and its `BackHandler` effect comes before the derived values, so the React Compiler memoises the list and a row draws only when its notification changes. The chat's question card and composer move into `ChatDock`, which owns the draft, the attachments and the model pick, so a keystroke redraws the dock only.
+
+## Phone: image attachments upload on Android
+
+Date: 2026-11-12
+
+WHY: An image picked on the phone never reached the chat: the message went out with an empty `attachmentStorageIds`, and the failed upload dropped the chip with no message.
+
+Architectural: `useAttachments` asks the picker for base64 and posts the bytes (an `ArrayBuffer`) to the Convex upload URL with `expo/fetch`, not React Native's `fetch` of a file-URI Blob. A failed upload shows "Couldn't upload the image" instead of vanishing.
+
+## Phone: the live turn shows its steps and text
+
+Date: 2026-11-12
+
+WHY: While Eva worked, the phone chat showed only "Working…" and then the finished reply. It never read the chat's streaming row, so the current step, the tool timeline and the streamed text that the web shows were missing.
+
+Architectural: `findStreamingTargetMessage` and `chatStreamingEntityId` move to `@eva/shared`; the web re-exports and uses them with no behaviour change. The phone's `LiveAssistantMessage` reads `api.streaming.get` for the oldest unfinished reply and draws it with `AssistantMessage`, the same trace as a finished reply. Only that row subscribes, so a token does not re-render the transcript, and the activity is deferred (`useDeferredValue`) as on the web. Before the first visible step it shows the web header: a spinner and the live step's label, or "Working...".
+
+## Late PR webhooks no longer reopen a merged PR
+
+Date: 2026-11-12
+
+WHY: Session 1004 showed PR 1274 as open after it merged. `gh pr ready` and `gh pr merge` ran a second apart; the merge webhook closed the session, then the late `ready_for_review` webhook set the PR row back to open.
+
+- `handlePullRequestEvent` ignores a live state (open/draft) for a merged or closed row unless the action is `reopened`. Title and branches still update.
+
+## Phone: "Update available" prompt; solid composer
+
+Date: 2026-11-12
+
+WHY: An APK has no over-the-air updates, so an old one kept calling the backend as it was built and broke silently (0.1.33 after #1266/#1267). On a phone the keyboard lifts the composer over the transcript, and its 70% footer and clear dock let the messages show through.
+
+Architectural: `src/update/updateCheck.ts` reads the public GitHub releases list once at start (Zod-parsed), takes the highest `eva-apk-*` tag above `Constants.expoConfig.version`, and `UpdateDialog` offers it (Download opens the APK; Later stores the version in SecureStore). Local builds (0.1.0) and failed checks offer nothing. The composer footer mixes the web `bg-muted/70` over the page background into one solid colour, and `ConversationDock` takes the page background.
 
 ## Collaborators can switch the account in quick task and project chats
 
@@ -111,7 +707,6 @@ Date: 2026-11-11
 WHY: 0a–0d moved four lifecycles to one field each and kept the old fields, with read fallbacks, until their migrations ran. Once those migrations have run in prod, the old fields are dead data and the fallbacks are dead code.
 
 Architectural: removed `sessions.archived`, `sessions.sandboxDeleteAfter`, `sessions.activeWorkflowId`, `sessions.turnLifecycleVersion`, `sessionChats.activeWorkflowId`, `agentTasks.activeWorkflowId` / `scheduledAt` / `scheduledRetryAt` / `scheduledFunctionId`, and `projects.activeBuildWorkflowId` / `scheduledBuildAt` / `scheduledBuildFunctionId`. Removed the indexes `sessions.by_repo_archived_and_deleted` and `projects.by_repo_and_build_workflow`. `taskRunState` and `projectBuildState` now return the new field as is; `sessionArchive`, `withResolvedArchive`, the legacy-clearing writes and the unused prewarm arg `activeWorkflowField` are gone. The four migrations (`backfillSessionArchive`, `migrateTaskRunState`, `migrateProjectBuildState`, `clearSessionWorkflowSlots`) are deleted. `sessionChats.create` read `session.archived` directly; it now uses `isSessionArchived`. Deploy only after the four migrations have run, or schema validation fails.
-
 
 ## Projects: one explicit build state (0c)
 

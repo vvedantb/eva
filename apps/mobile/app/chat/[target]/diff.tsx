@@ -22,7 +22,7 @@ import { usePrDiff } from "@/diff/prDiffStore";
 export default function DiffScreen() {
   const { target, file } = useLocalSearchParams<{ target: string; file?: string }>();
   const router = useRouter();
-  const chat = useQuery(api.mobile.getChat, { target });
+  const chat = useQuery(api.chats.get, { target });
   const prNumber = chat?.prUrl === undefined ? undefined : prNumberFromGithubUrl(chat.prUrl);
   const pr = chat?.repoId === undefined || prNumber === undefined ? null : { repoId: chat.repoId, prNumber };
   const { state, reload } = usePrDiff(pr);

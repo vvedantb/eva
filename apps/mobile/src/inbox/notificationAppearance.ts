@@ -20,7 +20,7 @@ import {
   IconUserPlus,
   type IconProps,
 } from "@tabler/icons-react-native";
-import { palette, tokens, withAlpha } from "@vvedantb/native-ui/theme";
+import { withAlpha } from "@vvedantb/native-ui/theme";
 import type { ComponentType } from "react";
 import type { Scheme } from "@/ui/theme";
 
@@ -55,11 +55,11 @@ export const NOTIFICATION_ICONS: Record<NotificationIconName, ComponentType<Icon
 export function toneColors(tone: NotificationTone, scheme: Scheme): { glyph: string; tint: string } {
   switch (tone) {
     case "secondary":
-      return { glyph: palette.defaultForeground[scheme], tint: palette.default[scheme] };
+      return { glyph: EVA_THEME[scheme].secondaryForeground, tint: EVA_THEME[scheme].secondary };
     case "muted":
-      return { glyph: tokens.color.muted[scheme], tint: EVA_THEME[scheme].muted };
+      return { glyph: EVA_THEME[scheme].mutedForeground, tint: EVA_THEME[scheme].muted };
     default: {
-      const glyph = palette[tone === "destructive" ? "danger" : tone][scheme];
+      const glyph = EVA_THEME[scheme][tone];
       return { glyph, tint: withAlpha(glyph, 0.1) };
     }
   }

@@ -136,7 +136,7 @@ function FlatPanelHeaderContent({
           shape="rounded"
           size="icon-sm"
           variant="ghost"
-          className="motion-press h-8 w-8 shrink-0 lg:hidden hover:scale-[1.03] active:scale-[0.96]"
+          className="motion-press h-8 w-8 shrink-0 md:hidden hover:scale-[1.03] active:scale-[0.96]"
           onClick={onClose}
           aria-label="Close navigation"
         >
@@ -181,7 +181,7 @@ function ContextPanelHeaderContent({
           shape="rounded"
           size="icon-sm"
           variant="ghost"
-          className="motion-press h-8 w-8 shrink-0 lg:hidden hover:scale-[1.03] active:scale-[0.96]"
+          className="motion-press h-8 w-8 shrink-0 md:hidden hover:scale-[1.03] active:scale-[0.96]"
           onClick={onClose}
           aria-label="Close navigation"
         >
@@ -244,7 +244,7 @@ function RepoIdentityHeaderContent({
         shape="rounded"
         size="icon"
         variant="ghost"
-        className="motion-press shrink-0 lg:hidden hover:scale-[1.03] active:scale-[0.96]"
+        className="motion-press shrink-0 md:hidden hover:scale-[1.03] active:scale-[0.96]"
         onClick={onClose}
         aria-label="Close navigation"
       >

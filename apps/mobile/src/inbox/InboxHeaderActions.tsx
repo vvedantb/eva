@@ -1,8 +1,8 @@
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import type { InboxGroup } from "@eva/shared/notificationGroups";
 import { IconChecklist, IconChecks, IconChevronDown, IconFilter, type IconProps } from "@tabler/icons-react-native";
 import { selectionHaptic } from "@vvedantb/native-ui/haptics";
 import { SectionLabel, Sheet, SheetBody, SheetContent, SheetRow } from "@vvedantb/native-ui/primitives";
-import { tokens } from "@vvedantb/native-ui/theme";
 import { useState, type ComponentType } from "react";
 import { Pressable, Text, View } from "react-native";
 import { MenuDivider } from "@/ui/MenuSheet";
@@ -46,7 +46,7 @@ function HeaderPill({
     >
       <View
         className="h-8 items-center justify-center rounded-full px-3"
-        style={outline ? { borderWidth: 1, borderColor: tokens.color.border[scheme] } : undefined}
+        style={outline ? { borderWidth: 1, borderColor: EVA_THEME[scheme].border } : undefined}
       >
         <Icon size={16} color={color} />
       </View>
@@ -56,7 +56,7 @@ function HeaderPill({
 
 /**
  * The web inbox header actions at phone width: Mark all as read (only while
- * something is unread), Select, and the filter (Show and Group by, the web
+ * something is unread), Select (a long press on a row starts it too), and the filter (Show and Group by, the web
  * `InboxFilterMenu`). The web filter is a dropdown; here it is a bottom
  * sheet in thumb reach, with the same groups and wording.
  */
@@ -67,8 +67,7 @@ export function InboxHeaderActions({
   onGroupChange,
   unreadCount,
   onMarkAllRead,
-  selecting,
-  onToggleSelecting,
+  onSelect,
 }: {
   filter: InboxFilter;
   onFilterChange: (filter: InboxFilter) => void;
@@ -76,11 +75,10 @@ export function InboxHeaderActions({
   onGroupChange: (group: InboxGroup) => void;
   unreadCount: number;
   onMarkAllRead: () => void;
-  selecting: boolean;
-  onToggleSelecting: () => void;
+  onSelect: () => void;
 }) {
   const scheme = useScheme();
-  const muted = tokens.color.muted[scheme];
+  const muted = EVA_THEME[scheme].mutedForeground;
   const [filterOpen, setFilterOpen] = useState(false);
   // A new pick ticks; the sheet closes, as the web menu does.
   const pick = (changed: boolean, apply: () => void) => {
@@ -93,13 +91,7 @@ export function InboxHeaderActions({
       {unreadCount > 0 ? (
         <HeaderPill icon={IconChecks} label="Mark all as read" outline color={muted} onPress={onMarkAllRead} />
       ) : null}
-      <HeaderPill
-        icon={IconChecklist}
-        label={selecting ? "Cancel selection" : "Select notifications"}
-        outline={false}
-        color={selecting ? tokens.color.foreground[scheme] : muted}
-        onPress={onToggleSelecting}
-      />
+      <HeaderPill icon={IconChecklist} label="Select notifications" outline={false} color={muted} onPress={onSelect} />
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Filter notifications: ${FILTER_LABELS[filter]}, grouped by ${GROUP_LABELS[group]}`}

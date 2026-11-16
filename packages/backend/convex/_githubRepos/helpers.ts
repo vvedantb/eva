@@ -3,7 +3,10 @@ import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { githubRepoFields } from "../validators";
 import { hasRepoAccess } from "../functions";
-import { pickSandboxRepoId } from "./sandboxRepoPick";
+import {
+  pickDefaultVisibleAppRepo,
+  pickSandboxRepoId,
+} from "./sandboxRepoPick";
 
 /** Frontend path prefix for a githubRepos row (monorepo apps use `name/app`). */
 export { repoBasePath } from "@eva/shared";
@@ -57,6 +60,24 @@ export async function hasCodebaseRepoAccess(
     if (await hasRepoAccess(db, siblingId, userId)) return true;
   }
   return false;
+}
+
+/**
+ * The repo row a web path names: `/owner/name` is the root (or the default
+ * visible app), `/owner/name/app` is that monorepo app. No access check.
+ */
+export async function findRepoByPath(
+  db: GenericDatabaseReader<DataModel>,
+  path: { owner: string; name: string; appName?: string },
+): Promise<Doc<"githubRepos"> | null> {
+  const candidates = await findReposByOwnerAndName(db, path);
+  const repo = path.appName
+    ? candidates.find(
+        (r) => r.rootDirectory?.split("/").pop() === path.appName,
+      )
+    : (candidates.find((r) => !r.rootDirectory && r.hidden !== true) ??
+      pickDefaultVisibleAppRepo(candidates));
+  return repo && repo.hidden !== true ? repo : null;
 }
 
 /**

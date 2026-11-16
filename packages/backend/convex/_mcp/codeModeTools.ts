@@ -9,7 +9,6 @@
  */
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
 import { defineTool, type EvaTool } from "../mcp/registry";
 import {
   DEFAULT_EXECUTE_LIMITS,
@@ -29,6 +28,14 @@ function summarize(description: string): string {
   return (first ?? description).trim();
 }
 
+/**
+ * A tool's input as JSON Schema, for `search_tools`. zod's own converter; a
+ * type JSON Schema cannot express (a custom check) becomes `{}`, not an error.
+ */
+export function toolInputJsonSchema(shape: z.ZodRawShape) {
+  return z.toJSONSchema(z.object(shape), { unrepresentable: "any" });
+}
+
 function searchTools(tools: readonly EvaTool[], query: string) {
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
   return tools
@@ -40,7 +47,7 @@ function searchTools(tools: readonly EvaTool[], query: string) {
       name: tool.name,
       mutating: tool.mutating,
       description: summarize(tool.description),
-      inputSchema: zodToJsonSchema(z.object(tool.inputShape)),
+      inputSchema: toolInputJsonSchema(tool.inputShape),
     }));
 }
 

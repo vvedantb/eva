@@ -1,6 +1,6 @@
 "use client";
 
-// useLayoutEffect: tracks the iframe's box so the sketch surface covers it.
+// useLayoutEffect: redraws the strokes when they or the iframe box change.
 // useEffect: Escape / ⌘Z keys while the sketch is open.
 import {
   useEffect,
@@ -31,40 +31,7 @@ import {
   nextSketchPoint,
   type SketchStroke,
 } from "../_utils/previewSketch";
-
-interface Box {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-}
-
-/** Keeps the iframe's viewport box in state while it moves or resizes. */
-function useIframeBox(iframe: HTMLIFrameElement | null): Box | null {
-  const [box, setBox] = useState<Box | null>(null);
-  useLayoutEffect(() => {
-    if (!iframe) return;
-    function measure() {
-      if (!iframe) return;
-      const rect = iframe.getBoundingClientRect();
-      setBox({
-        left: rect.left,
-        top: rect.top,
-        width: rect.width,
-        height: rect.height,
-      });
-    }
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(iframe);
-    window.addEventListener("resize", measure);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, [iframe]);
-  return box;
-}
+import { useIframeBox } from "./useIframeBox";
 
 /**
  * A pen surface over the preview. "Attach" lays the ink over a screenshot of

@@ -58,6 +58,20 @@ describe("assistantReplyContent", () => {
       }),
     ).toBe("Error: sandbox died");
   });
+
+  test("names a full disk and how to fix it, keeping the raw error", () => {
+    const error =
+      "Agent SDK daemon failed: ENOSPC: no space left on device, write";
+    const content = assistantReplyContent({
+      success: false,
+      result: null,
+      error,
+    });
+    expect(content.startsWith("Error: Sandbox disk is full. Free space")).toBe(
+      true,
+    );
+    expect(content.endsWith(error)).toBe(true);
+  });
 });
 
 describe("formatDelayedPublishFailureError", () => {

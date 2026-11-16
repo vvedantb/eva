@@ -3,6 +3,8 @@ import { internalQuery } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { buildTaskBranchName } from "../_git/branchNames";
+import { findLivePullRequestOnBranch } from "../_pullRequests/store";
+import { taskStatusValidator } from "../_validators/enums";
 import {
   buildTraitsExecutionPayload,
   reasoningLevelValidator,
@@ -301,6 +303,7 @@ export const getTaskPrCreationData = internalQuery({
     rootDirectory: v.string(),
     projectId: v.optional(v.id("projects")),
     isQuickTask: v.boolean(),
+    taskStatus: taskStatusValidator,
     latestRunId: v.union(v.id("agentRuns"), v.null()),
     existingPrUrl: v.union(v.string(), v.null()),
     changeRequests: v.array(v.string()),
@@ -325,14 +328,21 @@ export const getTaskPrCreationData = internalQuery({
         (b.startedAt ?? b._creationTime) - (a.startedAt ?? a._creationTime),
     );
     const latestRun = sortedRuns[0] ?? null;
-    const existingPrUrl = sortedRuns.find((r) => r.prUrl)?.prUrl ?? null;
+    const branchName = buildTaskBranchName(args.taskId);
+    // Only a live PR blocks a new one: after a merge or close, new commits on
+    // the branch need a fresh PR.
+    const livePr = await findLivePullRequestOnBranch(
+      ctx.db,
+      repo._id,
+      branchName,
+    );
 
     return {
       repoId: repo._id,
       installationId: repo.installationId,
       repoOwner: repo.owner,
       repoName: repo.name,
-      branchName: buildTaskBranchName(args.taskId),
+      branchName,
       baseBranch: await resolveTaskWorkflowBaseBranchForTask(
         ctx.db,
         task,
@@ -343,8 +353,9 @@ export const getTaskPrCreationData = internalQuery({
       rootDirectory: repo.rootDirectory ?? "",
       projectId: task.projectId,
       isQuickTask: task.projectId === undefined,
+      taskStatus: task.status,
       latestRunId: latestRun ? latestRun._id : null,
-      existingPrUrl,
+      existingPrUrl: livePr?.prUrl ?? null,
       changeRequests,
     };
   },

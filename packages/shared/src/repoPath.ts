@@ -29,3 +29,53 @@ export function entityHref(
   const section = `${repoBasePath(repo)}/${ENTITY_SECTION[kind]}`;
   return numId === undefined ? section : `${section}/${numId}`;
 }
+
+/** Repo sections whose `<numId>` pages have a hover card in chat. */
+const LINKABLE_SECTIONS = ["sessions", "quick-tasks", "projects", "docs"] as const;
+export type EvaLinkSection = (typeof LINKABLE_SECTIONS)[number];
+
+function linkableSection(segment: string | undefined): EvaLinkSection | null {
+  return LINKABLE_SECTIONS.find((section) => section === segment) ?? null;
+}
+
+/** An in-app link to one session, quick task, project or doc. */
+export interface EvaEntityLink {
+  owner: string;
+  name: string;
+  appName?: string;
+  section: EvaLinkSection;
+  numId: number;
+}
+
+/**
+ * Reads `/owner/name[/app]/<section>/<numId>[/…]`, as a path or as a full URL
+ * on `appOrigin` (links to another Eva deployment are not this app's data).
+ * Null for every other link.
+ */
+export function parseEvaEntityLink(
+  href: string,
+  appOrigin: string,
+): EvaEntityLink | null {
+  let pathname: string;
+  if (href.startsWith("/") && !href.startsWith("//")) {
+    pathname = href.split(/[?#]/)[0] ?? "";
+  } else if (URL.canParse(href) && new URL(href).origin === appOrigin) {
+    pathname = new URL(href).pathname;
+  } else {
+    return null;
+  }
+  const [owner, name, third, fourth, fifth] = pathname.split("/").slice(1);
+  if (!owner || !name) return null;
+  const direct = linkableSection(third);
+  const nested = direct === null ? linkableSection(fourth) : null;
+  const section = direct ?? nested;
+  const numText = direct !== null ? fourth : fifth;
+  if (section === null || !numText || !/^\d+$/.test(numText)) return null;
+  return {
+    owner,
+    name,
+    ...(nested !== null && third ? { appName: third } : {}),
+    section,
+    numId: Number(numText),
+  };
+}

@@ -1,7 +1,9 @@
-import { collectChangedFiles } from "@eva/shared";
+import { api } from "@eva/backend";
+import { collectChangedFiles, stripErrorPrefix } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { parseActivityLog, type ActivityLogStep } from "@eva/shared/activityTrace";
 import {
+  IconAlertTriangle,
   IconAnchor,
   IconBook2,
   IconBrain,
@@ -49,15 +51,20 @@ import {
   type ActivityRow,
   type ActivitySegment,
   type AgentTraceStatus,
+  Shimmer,
 } from "@vvedantb/native-ui/ai";
 import { Markdown } from "@vvedantb/native-ui/markdown";
-import { Spinner, Text } from "@vvedantb/native-ui/primitives";
-import { tokens } from "@vvedantb/native-ui/theme";
-import { useState, type ComponentType, type ReactNode } from "react";
+import { Button, Spinner, Text } from "@vvedantb/native-ui/primitives";
+import { withAlpha } from "@vvedantb/native-ui/theme";
+import { useQuery } from "convex/react";
+import type { ResolvedMediaEntry } from "@eva/shared";
+import { useDeferredValue, useState, type ComponentType, type ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { copyText } from "@/ui/copyText";
 import { textColor, useScheme } from "@/ui/theme";
+import { ChatUiPanelTabs } from "./cards/ChatUiPanelTabs";
 import { ChangedFilesCard } from "./ChangedFilesCard";
+import { AgentMedia } from "./media/AgentMedia";
 import { StepDetail } from "./StepDetail";
 
 /** Same icon per step type as the web trace (`activityStepConfig` in @vvedantb/ui). `status` draws a spinner. */
@@ -138,7 +145,7 @@ function TodoChecklist({ step }: { step: ActivityLogStep }) {
             ) : todo.status === "in_progress" ? (
               <Spinner size="sm" decorative />
             ) : (
-              <IconCircle size={14} color={tokens.color.muted[scheme]} />
+              <IconCircle size={14} color={EVA_THEME[scheme].mutedForeground} />
             )}
           </View>
           {/* Web `leading-snug` (1.375). */}
@@ -350,12 +357,30 @@ function SegmentList({ segments, steps, messageId, live }: { segments: ActivityS
 }
 
 /**
+ * The web `ActivityStreamingHeader`: before the turn has a step to show (the
+ * folded layout hides thinking and reply text), the spinner and the live
+ * step's label, or "Working..." until the first activity arrives.
+ */
+function LiveStatus({ steps }: { steps: ActivityLogStep[] }) {
+  const work = steps.filter((step) => step.type !== "response");
+  const current = work.find((step) => step.status === "active") ?? work[0];
+  return (
+    <View className="flex-row items-center gap-2">
+      <Spinner size="sm" decorative />
+      <Shimmer duration={2.5}>{current?.label ?? "Working..."}</Shimmer>
+    </View>
+  );
+}
+
+/**
  * An agent reply: its trace as the web's folded `ActivityTasks` (reasoning as
  * prose, each run of tool steps behind a summary line, to-dos and notices on
  * their own lines), all behind "Worked for …" once the turn finished, then
  * the reply as markdown (native-ui `/markdown`, the web `markdown.css` scale),
  * then the files the turn changed (the web `ChangedFilesCard`) once it has
- * text or has finished.
+ * text or has finished, then the screenshots and recordings the agent posted
+ * (the web `AgentMedia`). With `tabPanels` (the turn's agent-composed cards)
+ * the reply is behind a "Text" tab and the cards in front ("UI"), as the web.
  */
 export function AssistantMessage({
   messageId,
@@ -364,6 +389,10 @@ export function AssistantMessage({
   duration,
   isLatestAssistantTurn,
   onOpenDiff,
+  media,
+  tabPanels,
+  live = false,
+  failure,
 }: {
   /** For loading a trimmed step's full detail. */
   messageId: string;
@@ -375,6 +404,14 @@ export function AssistantMessage({
   isLatestAssistantTurn: boolean;
   /** Opens the diff screen at a changed file. Without it (simple view, as the web) there is no card. */
   onOpenDiff?: (path: string | undefined) => void;
+  /** The agent's captures on this reply (`message.media`). */
+  media?: ResolvedMediaEntry[];
+  /** The turn's cards, when they take the prose's slot behind tabs (the web `panelTabs`). */
+  tabPanels?: ReactNode;
+  /** The turn is still running (`LiveAssistantMessage`): until it has a step to show, the live status stands in. */
+  live?: boolean;
+  /** A failed turn (`turnErrorTitle`): the notice takes the prose's place, with Retry when there is a prompt to re-send. */
+  failure?: { title: string; onRetry?: () => void };
 }) {
   const steps = parseActivityLog(activityLog);
   const segments = foldedActivitySegments(steps);
@@ -382,21 +419,86 @@ export function AssistantMessage({
   const settled = content !== "" || duration !== undefined;
   const changedFiles = onOpenDiff && settled ? collectChangedFiles(steps) : [];
   const trace = <SegmentList segments={segments} steps={steps} messageId={messageId} live={duration === undefined} />;
+  const prose = (
+    <Markdown onCopyCode={copyText} onCopyTable={copyText}>
+      {content}
+    </Markdown>
+  );
   return (
     <>
-      {segments.length === 0 ? null : duration !== undefined ? (
+      {segments.length === 0 ? (
+        live ? (
+          <AgentTrace>
+            <LiveStatus steps={steps} />
+          </AgentTrace>
+        ) : null
+      ) : duration !== undefined ? (
         <AgentTraceFold duration={duration}>{trace}</AgentTraceFold>
       ) : (
         <AgentTrace>{trace}</AgentTrace>
       )}
-      {content.trim() !== "" ? (
-        <Markdown onCopyCode={copyText} onCopyTable={copyText}>
-          {content}
-        </Markdown>
+      {failure ? (
+        <TurnErrorNotice title={failure.title} detail={stripErrorPrefix(content)} onRetry={failure.onRetry} />
+      ) : content.trim() !== "" ? (
+        tabPanels ? (
+          <ChatUiPanelTabs panel={tabPanels} text={prose} />
+        ) : (
+          prose
+        )
       ) : null}
       {onOpenDiff ? (
-        <ChangedFilesCard files={changedFiles} isLatestAssistantTurn={isLatestAssistantTurn} onOpenDiff={onOpenDiff} />
+        <ChangedFilesCard messageId={messageId} files={changedFiles} isLatestAssistantTurn={isLatestAssistantTurn} onOpenDiff={onOpenDiff} />
       ) : null}
+      {media ? <AgentMedia entries={media} /> : null}
     </>
+  );
+}
+
+/**
+ * The reply of the turn that is running, drawn from the chat's streaming row
+ * (`api.streaming.get`) as the web `ChatBody` streaming bubble: the live
+ * timeline, then the streamed text. Only this row reads the stream, so a token
+ * re-renders it and not the transcript. The activity is deferred, as the web:
+ * the text the user reads commits first, and the timeline (a large JSON
+ * payload) re-renders at transition priority. No changed-files card until the
+ * turn settles, as the web.
+ */
+export function LiveAssistantMessage({ streamingEntityId, messageId }: { streamingEntityId: string; messageId: string }) {
+  const streaming = useQuery(api.streaming.get, { entityId: streamingEntityId });
+  const activity = useDeferredValue(streaming?.currentActivity);
+  return (
+    <AssistantMessage messageId={messageId} content={streaming?.currentContent ?? ""} activityLog={activity} isLatestAssistantTurn={false} live />
+  );
+}
+
+/**
+ * The web `TurnErrorNotice`: a turn that failed, as a failure rather than a
+ * reply. A destructive 10% panel with the warning icon, the title ("This turn
+ * failed", "Claude usage limit reached"), the provider's own text under it,
+ * and Retry when the prompt can be re-sent.
+ */
+function TurnErrorNotice({ title, detail, onRetry }: { title: string; detail: string; onRetry?: () => void }) {
+  const theme = EVA_THEME[useScheme()];
+  return (
+    <View accessibilityRole="alert" className="flex-row items-start gap-2 rounded-xl px-3 py-2.5" style={{ backgroundColor: withAlpha(theme.destructive, 0.1) }}>
+      <View className="pt-0.5">
+        <IconAlertTriangle size={16} color={theme.destructive} />
+      </View>
+      <View className="min-w-0 flex-1 gap-0.5">
+        <Text className="font-instrument-sans-medium text-sm" style={{ color: theme.foreground, fontWeight: "500" }}>
+          {title}
+        </Text>
+        {detail ? (
+          <Text className="font-instrument-sans text-xs" style={{ color: theme.mutedForeground }}>
+            {detail}
+          </Text>
+        ) : null}
+      </View>
+      {onRetry ? (
+        <Button size="sm" variant="outline" fullWidth={false} onPress={onRetry}>
+          Retry
+        </Button>
+      ) : null}
+    </View>
   );
 }
