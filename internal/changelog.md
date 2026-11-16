@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: search across teams and repos
+
+Date: 2026-11-16
+
+WHY: The web's ⌘K spotlight finds any session, task, project, doc, pull request or page; the phone had no search, so finding older work meant scrolling lists or opening the web.
+
+Architectural: the result groups, their order and labels moved from the web's `spotlightGroups.ts` to `@eva/shared/spotlight` (the web keeps its icons), and `repoForHref` joins `@eva/shared/appHref`: the repo whose base path a link starts with, as `spotlight.search` hits carry a link and no repo id. The phone has `app/search` (a magnifier in the Sessions tab header): a field, Recent before you type (on the device), then the grouped results; a result opens through `openAppLink`, so a session, task, project, doc or pull request opens its phone screen, a section page its tab, and the rest the web.
+
 ## Phone: diff a turn, or restore to before it
 
 Date: 2026-11-16
