@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: see and stop a chat's background agents
+
+Date: 2026-11-16
+
+WHY: When the agent sent subagents off to run in the background, the web showed them in a chip with Stop, but the phone showed nothing, so a runaway subagent could only be stopped from the web.
+
+Architectural: the visibility rule, the row text and the stop confirm's copy moved to `@eva/shared/backgroundAgents` (the web chip and `useStopBackgroundAgent` read them; `backgroundAgentVisibility.ts` removed). The phone's `src/chat/BackgroundAgentsChip.tsx` reads the chat's `sessionChats.get` doc and sits on the composer bar (a new `status` slot on `ComposerFooter`): "Agents N" opens a sheet of the agents with Stop, behind the web confirm (`sessionWorkflow.requestStopBackgroundAgent`). Not on the phone: View (the subagent's own thread).
+
 ## Phone: the agent's proposed plan shows as a card in the chat
 
 Date: 2026-11-16
