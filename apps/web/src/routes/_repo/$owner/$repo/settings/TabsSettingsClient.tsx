@@ -105,7 +105,6 @@ export function TabsSettingsClient() {
     <SettingsPage title="Tabs">
       <SettingsSection
         title="Add a tab"
-        description="Expose a sandbox service as a session tab."
         footer={
           <Button
             size="sm"
@@ -118,7 +117,7 @@ export function TabsSettingsClient() {
         }
       >
         <div className="grid gap-5 sm:grid-cols-[1fr_10rem_6rem]">
-          <SettingsField label="Name" description="Becomes the URL slug.">
+          <SettingsField label="Name">
             <Input
               value={name}
               onChange={(e) => {
@@ -188,7 +187,6 @@ export function TabsSettingsClient() {
           <SettingsEmptyState
             icon={IconLayoutNavbar}
             title="No custom tabs yet"
-            description="Add one above to open a sandbox service in its own tab."
           />
         )}
       </SettingsSection>

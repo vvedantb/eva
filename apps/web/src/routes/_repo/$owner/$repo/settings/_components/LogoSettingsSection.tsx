@@ -51,17 +51,10 @@ export function LogoSettingsSection({ repoId }: { repoId: Id<"githubRepos"> }) {
   return (
     <SettingsSection
       title="Identity"
-      description="Name and logo in the sidebar for this app."
     >
       <div className="grid gap-5">
         <SettingsField
           label="Display name"
-          description={
-            <>
-              Leave empty for{" "}
-              <span className="font-medium">{fallbackName}</span>.
-            </>
-          }
         >
           <Input
             key={`label-${repoId}`}
