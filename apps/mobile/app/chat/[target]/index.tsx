@@ -21,6 +21,7 @@ import {
   turnErrorTitle,
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
+import { turnCheckpoint } from "@eva/shared/turnCheckpoint";
 import { chatTypingRoom } from "@eva/shared/typingPresence";
 import { isUsageLimitFailure } from "@eva/shared/usageLimitRecovery";
 import { messageLinkHref } from "@eva/shared/messageLink";
@@ -71,6 +72,7 @@ import { UsageButton } from "@/chat/UsageSheet";
 import { useProposedPlans } from "@/chat/ProposedPlanCard";
 import { BackgroundAgentsChip } from "@/chat/BackgroundAgentsChip";
 import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
+import { TurnChangesChip } from "@/chat/TurnChangesChip";
 import { UsageLimitRecoveryCard } from "@/chat/UsageLimitRecovery";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { MessageFooter, type Sentiment } from "@/chat/MessageFooter";
@@ -237,6 +239,22 @@ export default function ChatScreen() {
     rate({ messageId, sentiment }).catch(() => toast.error("Couldn't save your rating"));
   };
 
+  // A session reply that changed code: its Changes chip (Diff this turn, Restore), as the web's
+  // turn checkpoint actions, which simple view hides.
+  const session = chat.session;
+  const changesFor = (message: ChatMessage) => {
+    const checkpoint = session && !simpleView ? turnCheckpoint(message) : null;
+    return checkpoint && session ? (
+      <TurnChangesChip
+        checkpoint={checkpoint}
+        messageId={message._id}
+        sessionId={session.id}
+        repoId={chat.repoId}
+        target={target}
+        sandboxRunning={chat.sandboxActive}
+      />
+    ) : null;
+  };
   const openWebChat = () => void Linking.openURL(webUrl(chat.webPath));
   // A panel button sends its text as a message, as the web: withheld on a closed
   // chat and on one whose sandbox is asleep, which disables the buttons.
@@ -357,6 +375,7 @@ export default function ChatScreen() {
                 cards={cards.byMessageId.get(message._id)}
                 outputs={outputs.byMessageId.get(message._id)}
                 after={planAfter(message._id)}
+                changes={changesFor(message)}
                 onPanelReply={panelReply}
                 // Only a failed turn gets one, so the rest keep their props (the web `onRetryTurn`).
                 onRetryTurn={message.errorType !== undefined ? retryFor(message._id) : undefined}
@@ -595,6 +614,7 @@ function ChatMessageRow({
   onRetryTurn,
   onOpenWebChat,
   after,
+  changes,
 }: {
   message: ChatMessage;
   dayStart: boolean;
@@ -623,6 +643,8 @@ function ChatMessageRow({
   onOpenWebChat: () => void;
   /** Under the whole message, as the web `afterMessage`: a proposed plan's card. */
   after?: ReactNode;
+  /** A reply that changed code: its Changes chip, over the footer. */
+  changes?: ReactNode;
 }) {
   const isUser = message.role === "user";
   // A failed turn's title ("This turn failed", "Claude usage limit reached"), or null for a reply.
@@ -684,6 +706,7 @@ function ChatMessageRow({
                   {isUser && cardList ? <View className="mt-1 w-full">{cardList}</View> : null}
                   {outputList}
                   {!isUser && cardList && !tabbed ? <View className="mt-2">{cardList}</View> : null}
+                  {changes ? <View className="mt-1 px-1">{changes}</View> : null}
                   {message.content.trim() !== "" ? (
                     <MessageFooter
                       className={fromTeammate ? TEAMMATE_FOOTER_INSET : undefined}

@@ -37,6 +37,7 @@
     "./safeUrl": "./src/safeUrl.ts",
     "./storageUpload": "./src/storageUpload.ts",
     "./taskDetail": "./src/taskDetail.ts",
+    "./turnCheckpoint": "./src/turnCheckpoint.ts",
     "./typingPresence": "./src/typingPresence.ts",
     "./uiTaskPrompt": "./src/uiTaskPrompt.ts",
     "./usageLimitRecovery": "./src/usageLimitRecovery.ts",
