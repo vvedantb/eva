@@ -133,7 +133,7 @@ export default function ChatScreen() {
   const send = useMutation(api.chats.send);
   const simpleView = useSimpleView();
   // The web leaves a session's page once it is archived; the phone goes back (to Sessions after a deep link).
-  const sessionActions = useSessionActions({ onArchived: () => goBackOrReplace(router, "/sessions") });
+  const sessionActions = useSessionActions({ onArchived: () => goBackOrReplace(router, "/sessions"), sessionId: chat?.session?.id });
 
   // The oldest unfinished reply owns the chat's streaming row, as the web (turns run in order).
   const liveReplyId = findStreamingTargetMessage(messages ?? [])?._id;

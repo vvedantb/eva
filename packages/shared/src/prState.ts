@@ -48,3 +48,17 @@ export function prStateTone(state: PrState | undefined): PrStateTone {
       return "muted";
   }
 }
+
+/**
+ * A chat's PRs as its "…" menu lists them: open and draft first. The sort is
+ * stable, so `pullRequests.listForOwner`'s order (primary, then newest) holds
+ * inside each half.
+ */
+export function orderPrsLiveFirst<T extends { state: PrState }>(prs: readonly T[]): T[] {
+  return [...prs].sort((a, b) => Number(isLivePrState(b.state)) - Number(isLivePrState(a.state)));
+}
+
+/** The menu entry that holds a chat's PRs when it has more than one. */
+export function pullRequestsMenuLabel(count: number): string {
+  return `Pull requests (${count})`;
+}

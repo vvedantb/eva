@@ -1,5 +1,5 @@
 import { api, type Id } from "@eva/backend";
-import { prNumberFromGithubUrl, sessionMenuActions, type PrState, type SessionMenuAction } from "@eva/shared";
+import { sessionMenuActions, type PrState, type SessionMenuAction } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
   IconArchive,
@@ -29,11 +29,11 @@ import {
 import { toast } from "@vvedantb/native-ui/toast";
 import { useAction, useMutation } from "convex/react";
 import * as Clipboard from "expo-clipboard";
-import { useRouter } from "expo-router";
 import { Fragment, useRef, useState, type ComponentType } from "react";
-import { Linking, Text, type TextInput } from "react-native";
+import { Text, type TextInput } from "react-native";
 import { useSimpleView } from "@/chat/ComposerFooter";
 import { WEB_URL } from "@/config";
+import { prRowLabel, useOpenPr, useOwnerPullRequests, usePullRequestsSheet } from "@/reviews/PullRequestsSheet";
 import { MenuDivider, MenuSheet } from "@/ui/MenuSheet";
 import { useScheme } from "@/ui/theme";
 
@@ -95,7 +95,14 @@ export const SESSION_ACTION_ITEMS: Record<
  * dialogs, so render it once. Writes are the web mutations; Archive is
  * `mobile.archiveSession`, the web stop-then-archive in one call.
  */
-export function useSessionActions({ onArchived }: { onArchived?: () => void } = {}) {
+export function useSessionActions({
+  onArchived,
+  sessionId,
+}: {
+  onArchived?: () => void;
+  /** The open chat's session, so its header menu knows how many PRs it has. */
+  sessionId?: Id<"sessions">;
+} = {}) {
   const updateSession = useMutation(api.sessions.update);
   const archiveSession = useMutation(api.chats.archive);
   const unarchiveSession = useMutation(api.sessions.unarchive);
@@ -113,16 +120,27 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
   const [reviewTarget, setReviewTarget] = useState<SessionActionTarget | null>(null);
   const createSessionPr = useAction(api.github.createSessionPr);
   const commitAndPush = useAction(api.sandbox.commitAndPushSandbox);
-  const router = useRouter();
+  // The PRs of the session whose menu is open (a row's sheet, else the open chat's header):
+  // two or more turn "Open PR" into "Pull requests (N)", which opens the list sheet.
+  const prOwnerSessionId = sheetTarget?.sessionId ?? sessionId;
+  const ownerPrs = useOwnerPullRequests(prOwnerSessionId ? { kind: "session", sessionId: prOwnerSessionId } : undefined);
+  const prSheet = usePullRequestsSheet();
+  const openPr = useOpenPr();
+  const prsOf = (target: SessionActionTarget) => (target.sessionId === prOwnerSessionId ? ownerPrs : []);
   // The Rename field, focused once its dialog is on screen (`onShow`): focus is imperative.
   const renameInput = useRef<TextInput>(null);
 
   /** An action's label and icon; Commit & push reads "Save to GitHub" in simple view, as the web. */
-  const itemFor = (action: SessionMenuAction) =>
-    action === "commitPush" && simpleView ? { ...SESSION_ACTION_ITEMS.commitPush, label: "Save to GitHub" } : SESSION_ACTION_ITEMS[action];
+  const itemFor = (action: SessionMenuAction) => {
+    if (action === "commitPush" && simpleView) return { ...SESSION_ACTION_ITEMS.commitPush, label: "Save to GitHub" };
+    if (action === "openPr") return { ...SESSION_ACTION_ITEMS.openPr, label: prRowLabel(ownerPrs, SESSION_ACTION_ITEMS.openPr.label) };
+    return SESSION_ACTION_ITEMS[action];
+  };
 
   /** The actions for one session, in the web order and groups (`sessionMenuActions`). */
-  const actionsFor = (target: SessionActionTarget) => sessionMenuActions({ ...target, simpleView });
+  // A session whose PR predates `prUrl` (a linked or stacked one) still gets its PR row, as the web.
+  const actionsFor = (target: SessionActionTarget) =>
+    sessionMenuActions({ ...target, prUrl: target.prUrl ?? prsOf(target)[0]?.prUrl, simpleView });
 
   const openGroupRename = (group: SessionGroupTarget) => {
     // A blank name clears it, so the group shows its oldest session's title again.
@@ -161,14 +179,13 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
         }
         return;
       case "openPr": {
-        if (!target.prUrl) return;
-        // The phone's PR screen when the URL names a PR in a known repo, else the browser.
-        const prNumber = prNumberFromGithubUrl(target.prUrl);
-        if (prNumber !== undefined && target.repoId) {
-          router.push({ pathname: "/review/[repoId]/[prNumber]", params: { repoId: target.repoId, prNumber: String(prNumber) } });
-        } else {
-          void Linking.openURL(target.prUrl);
+        const prs = prsOf(target);
+        if (prs.length > 1) {
+          prSheet.openFor({ kind: "session", sessionId: target.sessionId });
+          return;
         }
+        const prUrl = target.prUrl ?? prs[0]?.prUrl;
+        if (prUrl) openPr(prUrl, target.repoId ?? prs[0]?.repoId);
         return;
       }
       case "sendForReview":
@@ -237,6 +254,7 @@ export function useSessionActions({ onArchived }: { onArchived?: () => void } = 
 
   const dialogs = (
     <>
+      {prSheet.sheet}
       {/* Up to eight rows: they scroll in a short window, under the title. */}
       <MenuSheet
         open={sheetTarget !== null}

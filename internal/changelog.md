@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: a chat with several PRs lists them all in its "…" menu
+
+Date: 2026-11-16
+
+WHY: The phone menus of a session, quick task or project showed one "Open PR" or "View PR" row, so a chat's other PRs (stacked or linked ones) could not be reached from the phone.
+
+Architectural: with two or more PRs (`pullRequests.listForOwner`) the row reads "Pull requests (N)" and opens a bottom sheet (`src/reviews/PullRequestsSheet.tsx`): one row per PR, open and draft first, and a page per PR with the web `PrActionsSubmenus` actions (Open PR on the phone's PR screen, View on GitHub, Copy link, Stack a new session, Close without merging). One PR keeps the direct row. `orderPrsLiveFirst` and `pullRequestsMenuLabel` moved to `@eva/shared` (`prState.ts`) and the web menu reads them; the close confirm is one phone `PrCloseDialog`, also used by the PR screen; `useOpenPr` replaces the session menu's and the task and project pages' own copies.
+
 ## Automations Hub: "New" in the header, one `+` in the sidebar
 
 Date: 2026-11-16
