@@ -170,9 +170,9 @@ function PullRequestCardBody({ pr }: { pr: GithubPrLink }) {
           <PrDiffStat
             additions={data.additions}
             deletions={data.deletions}
-            className="rounded-md bg-muted/60 px-1.5 py-0.5"
+            className="rounded-control bg-muted/60 px-1.5 py-0.5"
           />
-          <span className="rounded-md bg-muted/60 px-1.5 py-0.5">
+          <span className="rounded-control bg-muted/60 px-1.5 py-0.5">
             {data.changedFiles === 1
               ? "1 file"
               : `${data.changedFiles.toLocaleString()} files`}
