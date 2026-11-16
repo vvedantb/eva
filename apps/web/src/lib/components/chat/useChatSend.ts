@@ -9,7 +9,7 @@ import type {
   TranscriptMessage,
   TranscriptParentId,
 } from "@/lib/hooks/useChatTranscript";
-import { resolveCredentialSourceLabel } from "@/lib/utils/credentialSourceLabel";
+import { resolveCredentialSourceLabel } from "@eva/shared/usageLimitRecovery";
 import { appendReviewCommentsToPrompt } from "@/lib/reviewComments";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
 import { catchMutationError } from "@/lib/utils/mutationToast";
@@ -162,7 +162,7 @@ export function useChatSend({
     // re-edit, so the restore has to use the pre-append text.
     const draftContent = options?.draftContent ?? content;
     // Hoisted out of the `try`: React Compiler bails on the whole file when it
-    // meets expression-level control flow inside one (eva/no-value-block-in-try).
+    // meets expression-level control flow inside one (vvedantb/no-value-block-in-try).
     const mode = isExecuting || queuesSends ? "queue" : "start";
     const input = {
       message: appendReviewCommentsToPrompt(content, sentComments),

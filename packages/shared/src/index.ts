@@ -5,6 +5,12 @@
 export { getUserInitials } from "./components/getUserInitials";
 export { FALLBACK_GIT_BASE_BRANCH } from "./gitDefaults";
 export {
+  isThemeMode,
+  themeAppearance,
+  type ThemeAppearance,
+  type ThemeMode,
+} from "./themeMode";
+export {
   isProjectPreviewPhase,
   PROJECT_PREVIEW_PHASES,
 } from "./projectPreview";
@@ -128,6 +134,10 @@ export {
 export { MESSAGE_LINK_PARAM, messageLinkHref } from "./messageLink";
 export { buildPrecedingUserTurns } from "./precedingUserTurns";
 export {
+  chatStreamingEntityId,
+  findStreamingTargetMessage,
+} from "./chatStreaming";
+export {
   firstNameByUserId,
   firstNameFromUser,
   isOtherUserChatMessage,
@@ -136,13 +146,15 @@ export {
 } from "./teammateMessages";
 export {
   isLivePrState,
+  orderPrsLiveFirst,
   prStateLabel,
   prStateTone,
+  pullRequestsMenuLabel,
   type LivePrState,
   type PrState,
   type PrStateTone,
 } from "./prState";
-export { sessionMenuActions, type SessionMenuAction } from "./sessionMenu";
+export { canSendSessionForReview, sessionMenuActions, type SessionMenuAction } from "./sessionMenu";
 export {
   draftCountAfterRemove,
   draftsAfterRemove,
@@ -190,7 +202,14 @@ export {
   type QuickTaskSortField,
   type QuickTaskTimeRange,
 } from "./quickTaskFilters";
-export { ENTITY_SECTION, entityHref, repoBasePath } from "./repoPath";
+export {
+  ENTITY_SECTION,
+  entityHref,
+  parseEvaEntityLink,
+  repoBasePath,
+  type EvaEntityLink,
+  type EvaLinkSection,
+} from "./repoPath";
 export {
   PRIORITY_LABELS,
   PRIORITY_ORDER,
@@ -255,6 +274,7 @@ export {
   headerBlocker,
   mergeBlocker,
   mergeButtonLabel,
+  parseGithubPrLink,
   prNumberFromGithubUrl,
   prReviewers,
   revertSessionRequest,
@@ -265,6 +285,7 @@ export {
   stackVerdict,
   verdictSuccessTitle,
   type CheckCounts,
+  type GithubPrLink,
   type MergeMethod,
   type PrBlocker,
   type PrCheck,
@@ -295,6 +316,21 @@ export {
 } from "./prTimeline";
 export { SANDBOX_CHAT_COPY, sandboxComposerState } from "./sandboxComposer";
 export {
+  QUEUE_PANEL_LABEL,
+  moveQueuedId,
+  orderQueuedRows,
+  queuePanelLabel,
+  queuedMessagePreview,
+} from "./queuedMessages";
+export {
+  parseReviewCommentSegments,
+  stripReviewCommentBlocks,
+  type ReviewComment,
+  type ReviewCommentAnchor,
+  type ReviewCommentMessageSegment,
+  type ReviewCommentSide,
+} from "./reviewCommentBlocks";
+export {
   ACTIVE_PROJECT_PHASES,
   BUILDABLE_PROJECT_PHASES,
   PROJECT_LIST_DEFAULTS,
@@ -304,7 +340,12 @@ export {
   clearedProjectFilter,
   clearedProjectFilters,
   filterAndSortProjects,
+  currentInterviewQuestion,
+  formatInterviewAnswer,
   interviewTurnText,
+  isInterviewTransitionContent,
+  isSpecContent,
+  parseInterviewQuestion,
   isProjectPlanning,
   newProjectSubmitBlocker,
   parseProjectSpec,
@@ -324,3 +365,56 @@ export {
   type SectionableProjectTask,
 } from "./projectMeta";
 export { MAINTENANCE_ERROR, isMaintenanceError } from "./maintenance";
+export {
+  APP_SORT_ORDERS,
+  SESSION_SORT_ORDERS,
+  linkedSessionGroups,
+  perRepoQueryCache,
+  sessionActivityAt,
+  sessionListEntries,
+  sortAppsForSidebar,
+  sortSessionsForSidebar,
+  type AppSortOrder,
+  type LinkedSessionGroup,
+  type SessionListEntry,
+  type SessionSortOrder,
+} from "./sessionList";
+export {
+  OLDER_TRANSCRIPT_FIRST_PAGE,
+  OLDER_TRANSCRIPT_PAGED_STEPS,
+  TRANSCRIPT_TAIL_MESSAGES,
+  olderTranscriptArgs,
+  transcriptLiveArgs,
+  transcriptTailArgs,
+} from "./chatTranscript";
+export { placeChatUiPanels, type PanelPlacement, type PlaceablePanel, type PlacementMessage } from "./chatUiPanelPlacement";
+export {
+  attachmentFileKind,
+  filenameExtension,
+  isImageContentType,
+  labelForAttachment,
+  messageAttachments,
+  normalizeContentType,
+  splitAgentMedia,
+  type AttachmentFileKind,
+  type ResolvedMediaEntry,
+} from "./attachmentLabels";
+export { ECHO_HISTORY_LIMIT, decideDraftPull, rememberOwnSave, type DraftPullDecision } from "./chatDraftPull";
+export {
+  MID_TURN_SLEEP_HINT,
+  sandboxDisplayStatus,
+  SLEEP_EVA_LABEL,
+  WAKE_EVA_LABEL,
+  WAKE_EVA_RETRY_LABEL,
+  type SandboxDisplayStatus,
+  type SandboxStatus,
+} from "./sandboxStatus";
+export { stripErrorPrefix, turnErrorTitle } from "./turnError";
+export {
+  PREVIEW_SANDBOX_ALLOWED_STATUSES,
+  projectCanCreatePr,
+  projectCanResolveConflicts,
+  taskCanCreatePr,
+  taskCanResolveConflicts,
+  taskCanStartSandbox,
+} from "./ownedSandboxRules";

@@ -1,6 +1,6 @@
 "use client";
 
-import { lazy, Suspense, useState } from "react";
+import { useState } from "react";
 import { useMutation } from "convex/react";
 import {
   Button,
@@ -25,77 +25,32 @@ import { TaskActivityComposer } from "./TaskActivityComposer";
 import { CommentThread } from "./CommentThread";
 import {
   buildRepliesByParentId,
+  buildTaskTimeline,
   DELETED_COMMENT_PLACEHOLDER,
-  getTopLevelComments,
-} from "../_utils/commentThread";
+  type TaskTimelineItem,
+} from "@eva/shared/taskDetail";
 
-const RunTimelineItem = lazy(() =>
-  import("./RunTimelineItem").then((m) => ({ default: m.RunTimelineItem })),
-);
-
-type Runs = FunctionReturnType<typeof api.agentRuns.listByTask>;
 type Comments = FunctionReturnType<typeof api.taskComments.listByTask>;
-type Comment = NonNullable<Comments>[number];
-type Streaming = FunctionReturnType<typeof api.streaming.get>;
 type TaskActivity = FunctionReturnType<typeof api.taskActivity.listByTask>;
-type TaskActivityEvent = NonNullable<TaskActivity>[number];
 type Users = FunctionReturnType<typeof api.users.listAll>;
 type User = NonNullable<Users>[number];
-
-type ActivityItem =
-  | {
-      kind: "created";
-      timestamp: number;
-    }
-  | {
-      kind: "run";
-      timestamp: number;
-      run: NonNullable<Runs>[number];
-    }
-  | {
-      kind: "taskActivity";
-      timestamp: number;
-      activity: TaskActivityEvent;
-    }
-  | {
-      kind: "comment";
-      timestamp: number;
-      comment: Comment;
-    };
 
 export function ActivityTimeline({
   taskId,
   createdAt,
   creatorUser,
-  runs,
-  activityInChatRunId,
   comments,
   taskActivity,
   users,
-  streaming,
-  activeRunElapsed,
-  isStopping,
-  onStopConfirm,
   isProjectTask,
 }: {
   taskId: Id<"agentTasks">;
   createdAt: number | undefined;
   creatorUser: User | undefined;
   isProjectTask: boolean;
-  runs: Runs | undefined;
-  /**
-   * The run whose live activity belongs to the sandbox chat instead of this
-   * timeline. Its row still renders (status, timing, Stop) with the activity
-   * steps and log left out.
-   */
-  activityInChatRunId?: Id<"agentRuns">;
   comments: Comments | undefined;
   taskActivity: TaskActivity | undefined;
   users: Users | undefined;
-  streaming: Streaming | undefined;
-  activeRunElapsed: number;
-  isStopping: boolean;
-  onStopConfirm: () => void;
 }) {
   const [deletingCommentId, setDeletingCommentId] =
     useState<Id<"taskComments"> | null>(null);
@@ -135,76 +90,15 @@ export function ActivityTimeline({
   };
 
   const userComments = comments?.filter((c) => c.authorId) ?? [];
-  const topLevelComments = getTopLevelComments(userComments);
   const repliesByParentId = buildRepliesByParentId(userComments);
+  // Comments and task updates only: agent runs live in the sandbox chat.
+  const segments = buildTaskTimeline({
+    createdAt,
+    activity: taskActivity,
+    comments: userComments,
+  });
 
-  // Link each run to the change-request comment that actually triggered it,
-  // recorded on the run as `triggeringCommentId`. Runs without one (initial
-  // task runs, Resolve Conflicts, legacy runs) intentionally have no comment.
-  const commentById = new Map(topLevelComments.map((c) => [c._id, c]));
-  const runCommentMap = new Map<string, (typeof topLevelComments)[number]>();
-  for (const run of runs ?? []) {
-    if (!run.triggeringCommentId) continue;
-    const comment = commentById.get(run.triggeringCommentId);
-    if (comment) runCommentMap.set(run._id, comment);
-  }
-
-  const commentsShownWithRuns = new Set(
-    [...runCommentMap.values()].map((comment) => comment._id),
-  );
-
-  const sortedRunsDesc = [...(runs ?? [])].sort(
-    (a, b) =>
-      (b.startedAt ?? b._creationTime) - (a.startedAt ?? a._creationTime),
-  );
-
-  const activityTimeline: ActivityItem[] = [
-    ...(createdAt !== undefined
-      ? [{ kind: "created" as const, timestamp: createdAt }]
-      : []),
-    ...sortedRunsDesc.map((run) => ({
-      kind: "run" as const,
-      timestamp: run.startedAt ?? run._creationTime,
-      run,
-    })),
-    ...(taskActivity ?? []).map((activity) => ({
-      kind: "taskActivity" as const,
-      timestamp: activity.createdAt,
-      activity,
-    })),
-    ...topLevelComments.flatMap((comment) =>
-      commentsShownWithRuns.has(comment._id)
-        ? []
-        : [
-            {
-              kind: "comment" as const,
-              timestamp: comment.createdAt,
-              comment,
-            },
-          ],
-    ),
-  ].sort((a, b) => a.timestamp - b.timestamp);
-
-  // Comments sit in cards off the rail; contiguous non-comment events share a line.
-  type TimelineSegment =
-    | { kind: "rail"; items: ActivityItem[] }
-    | { kind: "comment"; item: Extract<ActivityItem, { kind: "comment" }> };
-
-  const segments: TimelineSegment[] = [];
-  for (const item of activityTimeline) {
-    if (item.kind === "comment") {
-      segments.push({ kind: "comment", item });
-      continue;
-    }
-    const last = segments[segments.length - 1];
-    if (last?.kind === "rail") {
-      last.items.push(item);
-    } else {
-      segments.push({ kind: "rail", items: [item] });
-    }
-  }
-
-  const renderTimelineItem = (item: ActivityItem) => {
+  const renderTimelineItem = (item: TaskTimelineItem) => {
     if (item.kind === "created") {
       return (
         <CreatedTimelineItem
@@ -224,36 +118,13 @@ export function ActivityTimeline({
         />
       );
     }
-    if (item.kind === "comment") {
-      return null;
-    }
-    const run = item.run;
-    const isActiveRun = run.status === "running" || run.status === "queued";
-    const runComment = runCommentMap.get(run._id);
-    return (
-      <Suspense key={run._id} fallback={<Spinner size="sm" />}>
-        <RunTimelineItem
-          run={run}
-          isActiveRun={isActiveRun}
-          activityInChat={run._id === activityInChatRunId}
-          streaming={streaming}
-          activeRunElapsed={activeRunElapsed}
-          isStopping={isStopping}
-          onStopConfirm={onStopConfirm}
-          runComment={runComment}
-          runCommentReplies={
-            runComment ? (repliesByParentId.get(runComment._id) ?? []) : []
-          }
-          users={users}
-        />
-      </Suspense>
-    );
+    return null;
   };
 
   return (
     <div className="flex flex-col">
       <div className="flex flex-col gap-4 px-4 py-4 md:px-6">
-        {activityTimeline.length === 0 ? (
+        {segments.length === 0 ? (
           <ConversationEmptyState title="No activity yet" />
         ) : (
           segments.map((segment, segmentIndex) => {
@@ -287,11 +158,9 @@ export function ActivityTimeline({
               <ListEnter
                 key={`rail-${segment.items
                   .map((item) =>
-                    item.kind === "run"
-                      ? item.run._id
-                      : item.kind === "taskActivity"
-                        ? item.activity._id
-                        : "created",
+                    item.kind === "taskActivity"
+                      ? item.activity._id
+                      : "created",
                   )
                   .join("-")}`}
                 index={segmentIndex}

@@ -17,7 +17,7 @@ import type { SandboxChatBinding } from "./sandboxChatBinding";
 /** The owner-specific parts of an owned session's chat binding. */
 export type OwnedChatBindingCommon = Pick<
   SandboxChatBinding,
-  "accounts" | "pickerAccounts" | "resolveAccountId" | "isOwner" | "firstRun"
+  "accounts" | "resolveAccountId" | "firstRun"
 >;
 
 /**

@@ -26,6 +26,7 @@ import {
   type PreviewMiniPlayerSource,
 } from "@/lib/components/sandbox/previewMiniPlayerStore";
 import type { AnnotationSubmit } from "@/lib/components/sandbox/annotationSend";
+import { PreviewActionBar } from "./_components/PreviewActionBar";
 import { PreviewAnnotationLayer } from "./_components/PreviewAnnotationLayer";
 import { PreviewSketchLayer } from "./_components/PreviewSketchLayer";
 import { usePendingPreviewSnapshots } from "@/lib/contexts/PendingPreviewSnapshotsContext";
@@ -312,12 +313,24 @@ export function WebPreviewPanel({
         onToggleDevice={handleToggleDevice}
         contain={contain}
         onToggleContain={handleToggleContain}
-        annotationMode={annotationMode}
-        onAnnotationModeChange={(active) => {
-          setAnnotationMode(active);
-          if (active) setSketchMode(false);
-        }}
-        showAnnotationToggle={Boolean(onAnnotationSubmit)}
+        popOut={popOut}
+      />
+      <PreviewToolCallExecutor
+        parentId={toolCallParentId}
+        iframeElement={iframeElement}
+      />
+      <PreviewActionBar
+        iframeElement={iframeElement}
+        // Sketch brings its own toolbar to the same spot, with Close.
+        hidden={showPlaceholder || sketchMode}
+        selectElement={
+          onAnnotationSubmit
+            ? {
+                active: annotationMode,
+                onToggle: () => setAnnotationMode(!annotationMode),
+              }
+            : undefined
+        }
         sketch={
           canSketch
             ? {
@@ -330,11 +343,6 @@ export function WebPreviewPanel({
               }
             : undefined
         }
-        popOut={popOut}
-      />
-      <PreviewToolCallExecutor
-        parentId={toolCallParentId}
-        iframeElement={iframeElement}
       />
       {!showPlaceholder && viewport.mode !== "fill" ? (
         <PreviewDeviceToolbar

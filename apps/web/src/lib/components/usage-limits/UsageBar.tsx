@@ -1,5 +1,6 @@
 import { cn } from "@eva/ui";
-import { USAGE_TONE_FILL_CLASS, type UsageTone } from "./_utils";
+import { type UsageTone } from "@eva/shared/usageLimits";
+import { USAGE_TONE_FILL_CLASS } from "./toneClasses";
 
 interface UsageBarProps {
   /** Percentage of the window consumed, 0-100. */

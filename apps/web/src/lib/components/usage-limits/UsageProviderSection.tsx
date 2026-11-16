@@ -4,7 +4,7 @@ import {
   reportedWindows,
   snapshotOf,
   type UsageAccountEntry,
-} from "./_utils";
+} from "@eva/shared/usageLimits";
 import { UsageWindowRow } from "./UsageWindowRow";
 import { ListEnter } from "@vvedantb/ui";
 

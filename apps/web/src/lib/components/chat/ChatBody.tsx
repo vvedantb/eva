@@ -1,18 +1,20 @@
 import {
+  ChatDayDivider,
   ChatJumpRail,
+  ChatLastTurn,
   Conversation,
   ConversationContent,
   ConversationScrollButton,
   buildChatJumpRailTicks,
   tokenTransition,
 } from "@vvedantb/ui";
+import { findNewMessageIds } from "@eva/shared/chatReadState";
+import { GenerativeUiPanel } from "@vvedantb/ui/generative-ui";
 import {
   ChatEmptyState,
   ChatTranscriptLoading,
 } from "@/lib/components/chat/_components/ChatTranscriptStates";
 import { AnimatePresence, m } from "motion/react";
-import { ChatLastTurn } from "@/lib/components/chat/ChatLastTurn";
-import { ChatDayDivider } from "@/lib/components/chat/_components/ChatDayDivider";
 import { ChatNewDivider } from "@/lib/components/chat/_components/ChatNewDivider";
 import { ChatNewMessagesPill } from "@/lib/components/chat/_components/ChatNewMessagesPill";
 import { ChatBottomPin } from "@/lib/components/chat/_components/ChatBottomPin";
@@ -44,6 +46,7 @@ import {
   collectForkPrefix,
   forkThreadTitle,
   formatForkPrompt,
+  placeChatUiPanels,
   SANDBOX_CHAT_COPY,
 } from "@eva/shared";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
@@ -65,10 +68,9 @@ import { ChatQuestionDock } from "@/lib/components/chat/ChatQuestionDock";
 import { useChangedFilesExpansion } from "@/lib/components/chat/useChangedFilesExpansion";
 import { useAgentReplyChime } from "@/lib/components/chat/useAgentReplyChime";
 import { useChatReadState } from "@/lib/components/chat/useChatReadState";
-import { ChatUiPanel } from "@/lib/components/chat/generativeUi/ChatUiPanel";
 import { ChatHtmlFrame } from "@/lib/components/chat/generativeHtml/ChatHtmlFrame";
 import { EnvVarRequestCard } from "@/lib/components/chat/_components/EnvVarRequestCard";
-import { placeChatUiPanels } from "@/lib/components/chat/generativeUi/chatUiPanelPlacement";
+import { SessionProposalCard } from "@/lib/components/chat/_components/SessionProposalCard";
 import { ChatArtifactCard } from "@/lib/components/artifacts/ChatArtifactCard";
 import { AgentFeedbackCard } from "@/lib/components/chat/feedback/AgentFeedbackCard";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";
@@ -93,7 +95,6 @@ import type { ChatDraftSeed } from "@/lib/components/chat/useChatDraftSeed";
 import {
   buildMessageHistory,
   buildPrecedingUserTurns,
-  findNewMessageIds,
   type ChatParentId,
   findHandoffBoundaryIds,
   findLastUserMessageIndex,
@@ -153,7 +154,8 @@ interface InlineCard {
   card:
     | { kind: "panel"; spec: string }
     | { kind: "html"; render: Doc<"chatHtmlRenders"> }
-    | { kind: "envVarRequest"; request: Doc<"envVarRequests"> };
+    | { kind: "envVarRequest"; request: Doc<"envVarRequests"> }
+    | { kind: "sessionProposal"; proposal: Doc<"sessionProposals"> };
 }
 
 interface ChatBodyProps {
@@ -806,8 +808,9 @@ function ChatBodyInner({
     api.envVarRequests.listByParent,
     chatParentId ? { parentId: chatParentId } : "skip",
   );
-  const visibleMessageIds = new Set(
-    displayMessages.map((message) => message._id),
+  const sessionProposals = useQuery(
+    api.sessionProposals.listByParent,
+    chatParentId ? { parentId: chatParentId } : "skip",
   );
   const panelPlacement = placeChatUiPanels(
     [
@@ -835,41 +838,54 @@ function ChatBodyInner({
           card: { kind: "envVarRequest", request },
         }),
       ),
+      ...(sessionProposals ?? []).map(
+        (proposal): InlineCard => ({
+          _id: proposal._id,
+          messageId: proposal.messageId,
+          createdAt: proposal.createdAt,
+          card: { kind: "sessionProposal", proposal },
+        }),
+      ),
     ],
-    visibleMessageIds,
+    displayMessages,
+    hasOlderHistory,
   );
 
-  // Artifacts saved in this chat (`create_artifact`). Placed by the same rule
-  // as the cards above, but kept apart: an artifact sits with the turn's
-  // output and never trades places with its prose.
+  // Artifacts saved in this chat (`create_artifact`) and the agent's
+  // `submit_feedback` reports. Placed by the same rule as the cards above, but
+  // kept apart: they sit with the turn's output and never trade places with
+  // its prose behind a tab.
   const chatArtifacts = useQuery(
     api.artifacts.listForChat,
     chatParentId ? { parentId: chatParentId } : "skip",
   );
-  const artifactPlacement = placeChatUiPanels(
-    chatArtifacts ?? [],
-    visibleMessageIds,
-  );
-  // Thumbs on turns and the agent's `submit_feedback` reports. The agent's
-  // cards share the artifacts slot: both sit with the turn's output and never
-  // trade places with its prose behind a tab.
+  // Thumbs on turns and the agent's reports.
   const chatFeedback = useQuery(
     api.feedback.listForChat,
     chatParentId ? { parentId: chatParentId } : "skip",
   );
   const feedback = groupChatFeedback(chatFeedback ?? [], currentUserId);
+  const turnOutputPlacement = placeChatUiPanels(
+    [
+      ...(chatArtifacts ?? []).map((artifact) => ({
+        _id: artifact._id,
+        messageId: artifact.messageId,
+        createdAt: artifact.createdAt,
+        node: <ChatArtifactCard key={artifact._id} artifact={artifact} />,
+      })),
+      ...feedback.agentReports.map((report) => ({
+        _id: report._id,
+        messageId: report.messageId,
+        createdAt: report.createdAt,
+        node: <AgentFeedbackCard key={report._id} feedback={report} />,
+      })),
+    ],
+    displayMessages,
+    hasOlderHistory,
+  );
   const renderTurnOutput = (messageId: string) => {
-    const artifacts = artifactPlacement.byMessageId.get(messageId) ?? [];
-    const reports = feedback.agentByMessageId.get(messageId) ?? [];
-    if (artifacts.length === 0 && reports.length === 0) return undefined;
-    return [
-      ...artifacts.map((artifact) => (
-        <ChatArtifactCard key={artifact._id} artifact={artifact} />
-      )),
-      ...reports.map((report) => (
-        <AgentFeedbackCard key={report._id} feedback={report} />
-      )),
-    ];
+    const outputs = turnOutputPlacement.byMessageId.get(messageId);
+    return outputs ? outputs.map((output) => output.node) : undefined;
   };
 
   const otherUserIds = otherUserIdsInChat(displayMessages, currentUserId);
@@ -913,10 +929,11 @@ function ChatBodyInner({
           switch (card.kind) {
             case "panel":
               return (
-                <ChatUiPanel
+                <GenerativeUiPanel
                   key={_id}
                   spec={card.spec}
                   onReply={handlePanelReply}
+                  data-testid="chat-ui-panel"
                 />
               );
             case "html":
@@ -926,6 +943,15 @@ function ChatBodyInner({
                 <EnvVarRequestCard
                   key={_id}
                   request={card.request}
+                  onReply={handlePanelReply}
+                />
+              );
+            case "sessionProposal":
+              return (
+                <SessionProposalCard
+                  key={_id}
+                  proposal={card.proposal}
+                  basePath={repo?.basePath}
                   onReply={handlePanelReply}
                 />
               );
@@ -1113,9 +1139,7 @@ function ChatBodyInner({
           )}
           {displayMessages.length > 0 ? transcriptTail : null}
           {renderChatUiPanels(panelPlacement.trailing)}
-          {artifactPlacement.trailing.map((artifact) => (
-            <ChatArtifactCard key={artifact._id} artifact={artifact} />
-          ))}
+          {turnOutputPlacement.trailing.map((output) => output.node)}
         </ConversationContent>
         {newBoundaryId ? (
           <ChatNewMessagesPill

@@ -1,9 +1,8 @@
-﻿"use client";
+"use client";
 
 import type { ReactNode } from "react";
 import { m, type Variants } from "motion/react";
 import { cn } from "@eva/ui";
-import { LANDING_HERO } from "./landingContent";
 import { motionEase } from "@vvedantb/ui";
 
 /**
@@ -121,25 +120,6 @@ export function LandingSectionHeading({
         {intro}
       </p>
     </div>
-  );
-}
-
-/**
- * The hero headline, shared by both landing pages. The second half fades from
- * the foreground towards the muted tone, so the line reads as one statement
- * with a stressed ending rather than two flat lines.
- */
-export function LandingHeadline({ className }: { className?: string }) {
-  return (
-    <h1
-      className={cn(
-        "landing-display text-balance text-5xl font-semibold leading-[0.98] text-foreground sm:text-6xl lg:text-7xl",
-        className,
-      )}
-    >
-      {LANDING_HERO.headlineLead}{" "}
-      <span className="landing-headline-tail">{LANDING_HERO.headlineTail}</span>
-    </h1>
   );
 }
 

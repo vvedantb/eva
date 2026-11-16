@@ -25,6 +25,7 @@ export const insert = internalMutation({
         "Local database failed to start — dev server launched anyway. Pages that need the database may error.",
       timestamp: Date.now(),
       isSystemAlert: true,
+      alertTone: "warning",
       errorDetail: args.error.slice(0, 4000),
     });
     return null;

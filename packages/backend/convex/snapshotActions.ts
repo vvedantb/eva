@@ -10,11 +10,8 @@ import {
   tryResolveSandboxCredentials,
 } from "./envVarResolver";
 import {
-  buildConfigFileDownloadCommands,
-  filterDownloadableConfigFiles,
   execHandle,
   getSandboxHandle,
-  type SandboxConfigFile,
 } from "./_sandbox_runtime/helpers";
 import {
   createSandboxAndPrepareRepo,
@@ -32,9 +29,11 @@ import {
   renderEvaEnvFile,
 } from "./_sandbox/vercelEnvFile";
 import {
+  buildConvexBackendWatchdogLines,
   buildConvexBackgroundScriptBody,
   buildConvexPostSeedPushLines,
   isConvexBackendCommand,
+  STOP_CONVEX_BACKEND_WATCHDOG_LINE,
   CONVEX_FUNCTIONS_READY_ATTEMPTS,
   CONVEX_FUNCTIONS_READY_LOG_LINE,
   CONVEX_LOCAL_BACKEND_HEALTH_URL,
@@ -147,18 +146,6 @@ function shouldCaptureSupabaseState(commands: string[]): boolean {
       lower.includes("seed:sql")
     );
   });
-}
-
-/**
- * Startup cmds that must run after background daemons.
- * Only a pure filesystem move (the ENTIRE command is one `mv` of a
- * sandbox-config file into the repo, nothing chained) can run before daemons.
- * Chained commands (e.g. `mv …data.sql … && pnpm seed:sql && rm …`) must stay
- * post-daemon: the chained work needs daemon-started services (Postgres,
- * `convex dev`'s CONVEX_DEPLOYMENT bootstrap for `npx convex env/import`).
- */
-function startupCommandNeedsDaemon(command: string): boolean {
-  return !/^\s*mv\s+\S*sandbox-config\/\S+\s+\S+\s*$/.test(command);
 }
 
 function seededRuntimeStateCaptureLines(
@@ -317,7 +304,7 @@ export const launchSeedRun = internalAction({
     // rpm/git-clone must skip (not fail) when the artifact is present.
     lines.push(
       'echo "SEEDRUN-STAGE:toolchain"',
-      "sudo mkdir -p /home/eva/sandbox-config /home/eva/.eva-snapshot-state && sudo chmod -R 777 /home/eva",
+      "sudo mkdir -p /home/eva/.eva-snapshot-state && sudo chmod -R 777 /home/eva",
       // gcc/make: agentation-mcp → better-sqlite3 node-gyp rebuild. A fresh
       // sandbox has none of these on any base image; without them the global
       // npm install dies with `gyp ERR! not found: make`.
@@ -390,28 +377,6 @@ export const launchSeedRun = internalAction({
       'grep -qF "/home/eva/.local/bin" /vercel/sandbox/.eva-env.sh 2>/dev/null || echo \'export PATH="/home/eva/.local/bin:/usr/local/bin:$PATH"\' >> /vercel/sandbox/.eva-env.sh',
     );
 
-    // Config files (data.sql, backup zips) are NOT baked into a fresh Vercel
-    // sandbox the way they are into the Daytona Image — download them here so
-    // the update stage below can copy them into /tmp/repo before install.
-    const configFiles: SandboxConfigFile[] = await ctx.runQuery(
-      internal.sandboxConfigFiles.getConfigFilesForSnapshot,
-      { repoId: args.repoId },
-    );
-    const downloadableFiles = filterDownloadableConfigFiles(configFiles);
-    if (downloadableFiles.length > 0) {
-      lines.push('echo "SEEDRUN-STAGE:config-files"');
-      downloadableFiles.forEach((file, i) => {
-        const commands = buildConfigFileDownloadCommands(
-          file,
-          "/home/eva/sandbox-config",
-        );
-        commands.forEach((command) => {
-          lines.push(
-            `( ${command} ) || { echo "SEEDRUN-FAILED:config-${i}"; exit 1; }`,
-          );
-        });
-      });
-    }
     // Swap before install/build/daemons: the seed run is the single most
     // memory-hungry stretch a sandbox ever sees (dep install, then a full
     // Convex import validated against every restored doc). Same script as the
@@ -428,9 +393,6 @@ export const launchSeedRun = internalAction({
       `( git checkout -f ${args.branch} 2>/dev/null || git checkout -fb ${args.branch} origin/${args.branch} ) && git reset --hard origin/${args.branch} || { echo "SEEDRUN-FAILED:git-reset"; exit 1; }`,
     );
     lines.push(
-      // Mirror config files into the repo tree (staged outside the repo so
-      // they survive git clean).
-      "cp -a /home/eva/sandbox-config/. /tmp/repo/ 2>/dev/null || true",
       'echo "SEEDRUN-STAGE:install"',
       // Node: lockfile at repo root picks the manager. pnpm stays fatal (existing
       // repos); yarn/npm warn and continue so polyglot / legacy roots can still
@@ -466,25 +428,6 @@ export const launchSeedRun = internalAction({
     args.buildCommands.forEach((command, i) => {
       lines.push(
         `( ${command} ) || { echo "SEEDRUN-FAILED:build-${i}"; exit 1; }`,
-      );
-    });
-    // Split startup around daemons: pure sandbox-config file moves run before
-    // daemons so the files are in place when `convex dev` boots; everything
-    // else (env set, imports, readiness waits) runs after the daemons start.
-    const startup = startupCommands ?? [];
-    const preDaemonStartup: string[] = [];
-    const postDaemonStartup: string[] = [];
-    for (const command of startup) {
-      if (startupCommandNeedsDaemon(command)) {
-        postDaemonStartup.push(command);
-      } else {
-        preDaemonStartup.push(command);
-      }
-    }
-    lines.push('echo "SEEDRUN-STAGE:startup-pre-daemon"');
-    preDaemonStartup.forEach((command, i) => {
-      lines.push(
-        `( ${command} ) || { echo "SEEDRUN-FAILED:startup-pre-${i}"; exit 1; }`,
       );
     });
     // ---- daemons: launch each background command detached (b64 per command
@@ -544,9 +487,13 @@ export const launchSeedRun = internalAction({
         `grep -q "${CONVEX_FUNCTIONS_READY_LOG_LINE}" /tmp/bg-${i}.log 2>/dev/null && echo "convex-ready-${i}: functions pushed; safe to import" || echo "convex-ready-${i}: backend up, functions not pushed yet — seed commands run next"`,
       );
     });
+    // From here on a dead backend fails the seed at once instead of hanging it
+    // until the workflow timeout — see buildConvexBackendWatchdogLines.
+    const runsConvex = (backgroundCommands ?? []).some(isConvexBackendCommand);
+    if (runsConvex) lines.push(...buildConvexBackendWatchdogLines());
     // ---- seed (post-daemon) ----
     lines.push('echo "SEEDRUN-STAGE:startup-post-daemon"');
-    postDaemonStartup.forEach((command, i) => {
+    (startupCommands ?? []).forEach((command, i) => {
       lines.push(
         `( ${command} ) || { echo "SEEDRUN-FAILED:startup-post-${i}"; exit 1; }`,
       );
@@ -561,7 +508,7 @@ export const launchSeedRun = internalAction({
     });
     // Functions land on the local backend only now, once the seeds have set the
     // env vars its auth config needs — see buildConvexPostSeedPushLines.
-    if ((backgroundCommands ?? []).some(isConvexBackendCommand)) {
+    if (runsConvex) {
       lines.push(...buildConvexPostSeedPushLines("/tmp/repo"));
     }
     lines.push(...seededRuntimeStateCaptureLines(requireSupabaseDump));
@@ -571,6 +518,8 @@ export const launchSeedRun = internalAction({
     lines.push(
       `printf %s ${computeStartupFingerprint(startupCommands ?? [])} > ${STARTUP_MARKER_PATH}`,
     );
+    // Stop commands shut the backend down on purpose.
+    if (runsConvex) lines.push(STOP_CONVEX_BACKEND_WATCHDOG_LINE);
     (stopCommands ?? []).forEach((command, i) => {
       lines.push(
         `( ${command} ) || { echo "SEEDRUN-FAILED:stop-${i}"; exit 1; }`,
@@ -657,7 +606,11 @@ export const fetchSeedDiagnostics = internalAction({
           "df -h / 2>&1; du -xsh /swapfile /tmp/repo/node_modules ~/.local/share/pnpm ~/.cache ~/.convex 2>/dev/null || true",
           'echo "== 3210 listening? =="',
           "curl -s -o /dev/null -w 'backend http:%{http_code}\\n' http://127.0.0.1:3210 2>&1 || echo '3210 unreachable'",
-          'echo "== seedrun.log (tail) =="; tail -c 4000 /tmp/seedrun.log 2>/dev/null',
+          // A process killed for memory leaves no line in its own log.
+          'echo "== memory =="',
+          "free -m 2>&1; sudo dmesg 2>/dev/null | grep -iE 'out of memory|killed process' | tail -n 10",
+          // 4 KB held only the last few retry lines of a wedged `convex dev`.
+          'echo "== seedrun.log (tail) =="; tail -c 16000 /tmp/seedrun.log 2>/dev/null',
           'for f in /tmp/bg-*.log; do echo; echo "== $f =="; tail -c 3000 "$f" 2>/dev/null; done',
           "true",
         ].join("; "),

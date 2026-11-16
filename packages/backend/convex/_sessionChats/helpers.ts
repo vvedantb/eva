@@ -265,12 +265,13 @@ type LegacyChatRowTable =
   | "queuedMessages"
   | "chatUiPanels"
   | "chatHtmlRenders"
-  | "envVarRequests";
+  | "envVarRequests"
+  | "sessionProposals";
 
 /**
  * Repoints one bounded page of a session's pre-chat rows onto a chat: the
  * transcript, the queue and the inline cards (UI panels, HTML renders, env
- * var requests). Once those are empty it links the chat owner's pre-chat
+ * var requests, session proposals). Once those are empty it links the chat owner's pre-chat
  * composer draft. Returns true once no legacy row is left. Moved rows leave
  * the `parentId = from` range, so every call starts from the front and a
  * rerun after a failure resumes where the last commit stopped. A session's
@@ -323,6 +324,14 @@ export async function moveLegacyTranscriptPage(
       repointPage(
         ctx.db
           .query("envVarRequests")
+          .withIndex("by_parent", (q) => q.eq("parentId", from)),
+        left,
+        moveParent,
+      ),
+    (left: number) =>
+      repointPage(
+        ctx.db
+          .query("sessionProposals")
           .withIndex("by_parent", (q) => q.eq("parentId", from)),
         left,
         moveParent,

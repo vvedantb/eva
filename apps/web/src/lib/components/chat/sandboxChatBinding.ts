@@ -53,15 +53,14 @@ export interface SandboxChatBinding {
   onTraitsChange: (partial: Partial<StoredModelTraits>) => void;
   /** The sticky account; null = Team. */
   providerAccountId: Id<"userProviderAccounts"> | null;
-  /** The viewer's own accounts (usage-limit recovery reads these). */
+  /**
+   * The owner's accounts: the chat runs on the owner's credentials whoever
+   * sends, so any viewer picks from these (as in a session chat).
+   */
   accounts: ReadonlyArray<ModelAccount>;
-  /** What the picker lists; may add a read-only owner row for a teammate. */
-  pickerAccounts: ReadonlyArray<ModelAccount>;
   resolveAccountId: (
     id: string | null,
   ) => Id<"userProviderAccounts"> | undefined;
-  /** Only the owner can change the account (chat is owner-sticky). */
-  isOwner: boolean;
   persistAccount: (id: Id<"userProviderAccounts"> | null) => Promise<unknown>;
   prewarm: () => Promise<unknown>;
   ports: SandboxTurnPorts;

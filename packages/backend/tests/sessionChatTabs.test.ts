@@ -1,13 +1,12 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 
 /**
- * Closing a parallel chat and opening another must read "Chat 2" again (not
+ * Deleting a parallel chat and opening another must read "Chat 2" again (not
  * "Chat 3"), while `number` stays unique so old `?chat=N` links never point at
- * the new tab. A link to a closed chat opens Main: a closed chat has no tab
- * and no composer.
+ * the new tab. A link to a deleted chat opens Main, and its messages go.
  */
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -43,20 +42,27 @@ async function fixture() {
     });
     return { sessionId, mainChatId };
   });
-  return { asUser: t.withIdentity({ subject: CLERK_ID }), ...ids };
+  return { t, asUser: t.withIdentity({ subject: CLERK_ID }), ...ids };
 }
 
 describe("session chat tabs", () => {
+  // `remove` schedules the purge: fake timers hold it until a test drains it.
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
   test(
     "a new chat reuses the lowest free label but never a used number",
     async () => {
       const f = await fixture();
-      const first = await f.asUser.mutation(api._sessionChats.mutations.create, {
-        sessionId: f.sessionId,
-      });
+      const first = await f.asUser.mutation(
+        api._sessionChats.mutations.create,
+        {
+          sessionId: f.sessionId,
+        },
+      );
       expect(first).toMatchObject({ title: "Chat 2", number: 2 });
 
-      await f.asUser.mutation(api._sessionChats.mutations.archive, {
+      await f.asUser.mutation(api._sessionChats.mutations.remove, {
         chatId: first._id,
       });
       const reopened = await f.asUser.mutation(
@@ -74,7 +80,7 @@ describe("session chat tabs", () => {
   );
 
   test(
-    "a link to a closed chat opens Main; an open chat link opens that chat",
+    "a link to a deleted chat opens Main; an open chat link opens that chat",
     async () => {
       const f = await fixture();
       const side = await f.asUser.mutation(api._sessionChats.mutations.create, {
@@ -87,14 +93,36 @@ describe("session chat tabs", () => {
       );
       expect(open?._id).toBe(side._id);
 
-      await f.asUser.mutation(api._sessionChats.mutations.archive, {
+      await f.t.run(async (ctx) => {
+        await ctx.db.insert("messages", {
+          role: "user",
+          content: "hello",
+          timestamp: 0,
+          parentId: side._id,
+        });
+      });
+      await f.asUser.mutation(api._sessionChats.mutations.remove, {
         chatId: side._id,
       });
+      await f.t.finishAllScheduledFunctions(vi.runAllTimers);
+      const remaining = await f.t.run(async (ctx) =>
+        ctx.db
+          .query("messages")
+          .withIndex("by_parent", (q) => q.eq("parentId", side._id))
+          .collect(),
+      );
+      expect(remaining).toHaveLength(0);
       const closed = await f.asUser.query(
         api._sessionChats.queries.resolveForSession,
         { sessionId: f.sessionId, number: side.number },
       );
       expect(closed?._id).toBe(f.mainChatId);
+
+      await expect(
+        f.asUser.mutation(api._sessionChats.mutations.remove, {
+          chatId: f.mainChatId,
+        }),
+      ).rejects.toThrow("Main chat");
     },
     TIMEOUT_MS,
   );

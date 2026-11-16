@@ -332,12 +332,7 @@ export const viewModeParser = parseAsStringLiteral(viewModes)
   .withDefault("desktop")
   .withOptions(tabOptions);
 
-const snapshotSettingsTabs = [
-  "configuration",
-  "status",
-  "builds",
-  "config-files",
-] as const;
+const snapshotSettingsTabs = ["configuration", "status", "builds"] as const;
 export type SnapshotSettingsTab = (typeof snapshotSettingsTabs)[number];
 
 export function isSnapshotSettingsTab(s: string): s is SnapshotSettingsTab {

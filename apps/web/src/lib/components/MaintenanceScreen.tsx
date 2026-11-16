@@ -16,7 +16,7 @@ export function MaintenanceGate({ children }: { children: React.ReactNode }) {
 export function MaintenanceScreen() {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md rounded-lg bg-card p-6 text-center">
+      <div className="ui-surface w-full max-w-md p-6 text-center">
         <h1 className="text-balance text-lg font-semibold text-foreground">
           Eva is down for maintenance
         </h1>

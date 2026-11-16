@@ -2,12 +2,16 @@ import { defineConfig } from "vitest/config";
 import path from "path";
 
 export default defineConfig({
-  // @vvedantb/ui ships .tsx source; without a tsconfig of its own it would
-  // compile with the classic runtime and throw `React is not defined`.
+  // The app's .tsx tests: without it esbuild would use the classic runtime and
+  // throw `React is not defined`.
   esbuild: { jsx: "automatic" },
   test: {
     environment: "node",
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    // @vvedantb/ui ships compiled .js that imports its own CSS (sonner, katex).
+    // Inlined, Vite handles that CSS and `dedupe` below applies; external, Node
+    // would load it and fail on `.css`.
+    server: { deps: { inline: ["@vvedantb/ui"] } },
   },
   resolve: {
     alias: {

@@ -196,7 +196,8 @@
       (function () {
         // Stale HTML after a deploy requests hashed /assets/* that 404.
         // The entry module never runs, so this listener (not main.tsx) reloads.
-        // Key/param must match staleDeployReload.ts.
+        // Key/param must match the @vvedantb/ui stale-deploy helpers and
+        // STALE_DEPLOY_RELOAD_PARAM in src/lib/utils/staleDeployReloadParam.ts.
         var KEY = "deployment-reload-ts";
         var PARAM = "_eva_reload";
         var COOLDOWN_MS = 10000;

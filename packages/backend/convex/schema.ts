@@ -67,6 +67,7 @@ import {
   chatHtmlRenderFields,
   chatHtmlRenderBodyFields,
   envVarRequestFields,
+  sessionProposalFields,
   previewToolCallFields,
   proposedPlanFields,
   agentUsageLimitFields,
@@ -76,7 +77,6 @@ import {
   notificationFields,
   repoEnvVarFields,
   repoSnapshotFields,
-  sandboxConfigFileFields,
   teamMemberFields,
   teamEnvVarFields,
   presentationStatusValidator,
@@ -290,6 +290,10 @@ const schema = defineSchema({
   envVarRequests: defineTable(envVarRequestFields).index("by_parent", [
     "parentId",
   ]),
+  // "Start this in a new session" cards the agent posts (`propose_session`).
+  sessionProposals: defineTable(sessionProposalFields).index("by_parent", [
+    "parentId",
+  ]),
   // Agent → live-preview WebMCP tool calls relayed through the user's open Eva
   // tab. Short-lived: cleared when the entity's sandbox stops.
   previewToolCalls: defineTable(previewToolCallFields).index(
@@ -336,6 +340,8 @@ const schema = defineSchema({
   // second check-then-launch window and boot duplicate daemons; only the
   // lease claimant launches, the rest no-op. Short TTL so a crashed launcher
   // never blocks the next boot for long. One row per entity, upserted.
+  // Also holds the per-sandbox launch lock (`sandbox:<id>` keys, see
+  // `withSandboxLaunchLock`): launches share fixed /tmp runner files.
   daemonLaunchLeases: defineTable({
     entityId: v.string(),
     expiresAt: v.number(),
@@ -441,7 +447,6 @@ const schema = defineSchema({
     .index("by_repo_snapshot", ["repoSnapshotId"])
     .index("by_repo_snapshot_and_status", ["repoSnapshotId", "status"])
     .index("by_status", ["status"]),
-  sandboxConfigFiles: defineTable(sandboxConfigFileFields).index("by_repo", ["repoId"]),
   teams: defineTable(teamFields).index("by_created_by", ["createdBy"]),
   teamMembers: defineTable(teamMemberFields)
     .index("by_team", ["teamId"])
@@ -531,25 +536,9 @@ const schema = defineSchema({
     ["repoId", "entityType"],
   ),
 
-  // Unused after Clerk MCP OAuth. Kept until a drain migration removes them.
-  mcpAuthCodes: defineTable({
-    code: v.string(),
-    clerkUserId: v.string(),
-    codeChallenge: v.string(),
-    codeChallengeMethod: v.string(),
-    redirectUri: v.string(),
-    clientId: v.string(),
-    expiresAt: v.number(),
-  }).index("by_code", ["code"]),
-
-  // Unused after Clerk MCP OAuth. Kept until a drain migration removes them.
-  mcpClientRegistrations: defineTable({
-    clientId: v.string(),
-    clientSecret: v.optional(v.string()),
-    redirectUris: v.array(v.string()),
-    registeredAt: v.number(),
-  }).index("by_clientId", ["clientId"]),
-
+  // Legacy MCP OAuth tables removed after the drain migrations emptied them.
+  // schema-narrowing-ok: drainMcpAuthCodes
+  // schema-narrowing-ok: drainMcpClientRegistrations
   // MCP bearer token-cache table removed after the drain migration emptied it.
   // schema-narrowing-ok: drainMcpTokenCache
 

@@ -17,9 +17,9 @@ import {
 import { api, type Id } from "@eva/backend";
 import { repoDisplayLabel, repoTileSlot, type SessionMenuAction } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { tokens, withAlpha } from "@vvedantb/native-ui/theme";
+import { withAlpha } from "@vvedantb/native-ui/theme";
 import { useQuery } from "convex/react";
-import { Fragment, type ComponentType } from "react";
+import { Fragment, type ComponentType, type ReactNode } from "react";
 import { Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SESSION_ACTION_ITEMS } from "@/sessions/useSessionActions";
@@ -38,7 +38,7 @@ type MenuEntry = {
 
 /**
  * The chat header, as the web chat bar: the repo logo (else its initial) and name, then the
- * chat title ("S Storefront / Add dark mode…"), and a ⋯ menu. The tile
+ * chat title ("S Storefront / Add dark mode…"), the usage button, and a ⋯ menu. The tile
  * takes the repo's web colour (`repoTileSlot`, the `--cat-*` ramp) once the
  * repo loads, grey until then. A back button
  * leads, as phones expect; the web's drawer has no back. In a session the
@@ -56,6 +56,8 @@ export function ChatHeader({
   onCopyLink,
   onStop,
   sessionMenu,
+  usage,
+  sandbox,
 }: {
   /** The chat's repo (the web `githubRepos.get`), for the tile colour. */
   repoId: Id<"githubRepos">;
@@ -67,18 +69,27 @@ export function ChatHeader({
   /** Set while the agent works: Stop in the menu. */
   onStop?: () => void;
   /** Session chats: these session actions (`useSessionActions`) in their web groups. */
-  sessionMenu?: { groups: SessionMenuAction[][]; onSelect: (action: SessionMenuAction) => void };
+  sessionMenu?: {
+    groups: SessionMenuAction[][];
+    onSelect: (action: SessionMenuAction) => void;
+    /** Each action's label and icon (`useSessionActions().itemFor`). */
+    itemFor: (action: SessionMenuAction) => { label: string; icon: ComponentType<IconProps>; warning?: boolean };
+  };
+  /** Before the ⋯ menu: the usage button (`UsageButton`), as the web header's context ring and plan chip. */
+  usage?: ReactNode;
+  /** Before the usage button: a session's wake / sleep control (`SandboxControl`), as the web session header. */
+  sandbox?: ReactNode;
 }) {
   const scheme = useScheme();
   const insets = useSafeAreaInsets();
-  const muted = tokens.color.muted[scheme];
-  const foreground = tokens.color.foreground[scheme];
+  const muted = EVA_THEME[scheme].mutedForeground;
+  const foreground = EVA_THEME[scheme].foreground;
   const repo = useQuery(api.githubRepos.get, { id: repoId });
   const logoUrl = useQuery(api.githubRepos.getLogoUrl, { repoId });
   // The web seed (`SessionSwitcher`): owner, name and display label.
   const tileColor = repo ? EVA_THEME[scheme][`cat${repoTileSlot(`${repo.owner}/${repo.name}/${repoDisplayLabel(repo)}`)}`] : undefined;
   const sessionItems = (actions: SessionMenuAction[]): MenuEntry[] =>
-    actions.map((action) => ({ ...SESSION_ACTION_ITEMS[action], onSelect: () => sessionMenu?.onSelect(action) }));
+    actions.map((action) => ({ ...(sessionMenu ? sessionMenu.itemFor(action) : SESSION_ACTION_ITEMS[action]), onSelect: () => sessionMenu?.onSelect(action) }));
   const [sessionMain = [], ...sessionRest] = sessionMenu?.groups ?? [];
   // The web More menu's groups: Rename and Regenerate title; then its Copy
   // submenu (title, link, branch name) laid flat with Open PR and Open on web;
@@ -110,7 +121,7 @@ export function ChatHeader({
           fallback={
             <View
               className="h-4 w-4 items-center justify-center rounded"
-              style={{ backgroundColor: tileColor ? withAlpha(tileColor, 0.12) : tokens.color.surfaceSecondary[scheme] }}
+              style={{ backgroundColor: tileColor ? withAlpha(tileColor, 0.12) : EVA_THEME[scheme].muted }}
             >
               <Text className="font-instrument-sans-semibold" style={{ fontSize: 9, color: tileColor ?? muted, fontWeight: "600" }}>
                 {repoLabel.charAt(0).toUpperCase()}
@@ -129,6 +140,8 @@ export function ChatHeader({
           {displayTitle(title)}
         </Text>
       </View>
+      {sandbox}
+      {usage}
       <DropdownMenu>
         <DropdownMenuTrigger accessibilityLabel="Chat options" hitSlop={4} className="h-11 w-11 items-center justify-center rounded-full active:opacity-70" style={{ backgroundColor: EVA_THEME[scheme].secondary }}>
           <IconDots size={18} color={foreground} />

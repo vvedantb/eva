@@ -51,17 +51,10 @@ export function useTaskChatBinding(
   const taskSession = useTaskSession(taskId, task);
   const firstRun = useTaskFirstRunChatTurn(taskId, task);
   const accounts = useTaskOwnerProviderAccounts(taskId);
-  const currentUserId = useQuery(api.auth.me);
-  const isOwner =
-    currentUserId !== undefined &&
-    task?.createdBy !== undefined &&
-    currentUserId === task.createdBy;
   const common = {
     firstRun,
     accounts: accounts.options,
-    pickerAccounts: accounts.options,
     resolveAccountId: accounts.resolveId,
-    isOwner,
   };
   const { repo } = useRepo();
   // The first run is its own workflow, not a chat turn, so Stop has to reach

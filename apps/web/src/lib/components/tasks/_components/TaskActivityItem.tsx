@@ -2,80 +2,15 @@
 
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
-import { PRIORITY_LABELS, TASK_STATUS_LABELS } from "@eva/shared";
+import {
+  describeTaskActivity,
+  type TaskActivityEvent,
+} from "@eva/shared/taskDetail";
 import { UserInitials } from "@eva/shared/user-initials";
 import { IconArrowRight } from "@tabler/icons-react";
 import { RelativeDateTime } from "@vvedantb/ui";
 
-type TaskActivityEvent = NonNullable<
-  FunctionReturnType<typeof api.taskActivity.listByTask>
->[number];
-
 type User = NonNullable<FunctionReturnType<typeof api.users.listAll>>[number];
-
-// Activity values are stored as plain strings; look them up by string key.
-const STATUS_LABEL_BY_VALUE = new Map<string, string>(
-  Object.entries(TASK_STATUS_LABELS),
-);
-const PRIORITY_LABEL_BY_VALUE = new Map<string, string>(
-  Object.entries(PRIORITY_LABELS),
-);
-
-function formatFieldLabel(field: TaskActivityEvent["field"]): string {
-  switch (field) {
-    case "status":
-      return "status";
-    case "assignee":
-      return "assignee";
-    case "project":
-      return "project";
-    case "priority":
-      return "priority";
-    case "title":
-      return "title";
-    case "description":
-      return "description";
-    case "tags":
-      return "tags";
-    case "model":
-      return "model";
-    case "baseBranch":
-      return "base branch";
-    case "pr":
-      return "PR";
-  }
-}
-
-function formatValue(
-  field: TaskActivityEvent["field"],
-  value: string | undefined,
-  users: User[] | undefined,
-): string {
-  if (!value) return "none";
-  switch (field) {
-    case "status":
-      return STATUS_LABEL_BY_VALUE.get(value) ?? value;
-    case "priority":
-      return PRIORITY_LABEL_BY_VALUE.get(value) ?? value;
-    case "assignee": {
-      const user = users?.find((u) => u._id === value);
-      return user?.fullName?.trim() || "Unknown";
-    }
-    case "description":
-      return value.length > 50 ? `${value.slice(0, 47)}...` : value;
-    default:
-      return value;
-  }
-}
-
-function getUserName(
-  userId: string | undefined,
-  users: User[] | undefined,
-): string {
-  if (!userId) return "System";
-  const user = users?.find((u) => u._id === userId);
-  return user?.fullName?.trim() || "Someone";
-}
 
 export function TaskActivityItem({
   event,
@@ -86,8 +21,8 @@ export function TaskActivityItem({
 }) {
   // PR merge/close is a GitHub-driven event, not a field edit, so it reads as a
   // sentence rather than an "X → Y" change and has no actor avatar.
-  if (event.field === "pr") {
-    const merged = event.newValue === "merged";
+  const description = describeTaskActivity(event, users);
+  if (description.kind === "pr") {
     return (
       <div className="flex items-center gap-2 py-1.5 text-xs text-muted-foreground">
         <span className="relative z-10 flex size-4 shrink-0 items-center justify-center bg-background">
@@ -95,11 +30,11 @@ export function TaskActivityItem({
         </span>
         <span className="min-w-0 flex-1 truncate">
           <span className="font-medium text-foreground">GitHub</span>
-          {merged
+          {description.merged
             ? " merged the PR — task moved to "
             : " closed the PR — task moved to "}
           <span className="font-medium text-foreground/80">
-            {merged ? "Done" : "Cancelled"}
+            {description.movedTo}
           </span>
           <span className="text-muted-foreground/50" aria-hidden>
             {" "}
@@ -114,15 +49,7 @@ export function TaskActivityItem({
     );
   }
 
-  const actor = event.userId
-    ? users?.find((u) => u._id === event.userId)
-    : undefined;
-  const actorName = getUserName(event.userId, users);
-  const fieldLabel = formatFieldLabel(event.field);
-  const oldFormatted = formatValue(event.field, event.oldValue, users);
-  const newFormatted = formatValue(event.field, event.newValue, users);
-
-  const showValues = event.field !== "description";
+  const { actor, actorName, fieldLabel, values } = description;
 
   return (
     <div className="flex items-center gap-2 py-1.5 text-xs text-muted-foreground">
@@ -145,21 +72,21 @@ export function TaskActivityItem({
         </span>
         {" changed "}
         <span className="font-medium">{fieldLabel}</span>
-        {showValues && (
+        {values && (
           <>
             {" from "}
             <span
               data-pii={event.field === "assignee" || undefined}
               className="font-medium text-foreground/80"
             >
-              {oldFormatted}
+              {values.from}
             </span>
             <IconArrowRight size={10} className="inline mx-0.5 align-middle" />
             <span
               data-pii={event.field === "assignee" || undefined}
               className="font-medium text-foreground/80"
             >
-              {newFormatted}
+              {values.to}
             </span>
           </>
         )}

@@ -17,13 +17,14 @@ import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import dayjs from "dayjs";
-import { useState, type ReactNode } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { useState } from "react";
+import { ScrollView, Text, View } from "react-native";
 import { FooterSheet } from "@/chat/ComposerFooter";
 import { phaseAppearance } from "@/projects/phaseAppearance";
 import { ProjectProgress } from "@/projects/ProjectProgress";
 import { PriorityIcon } from "@/quickTasks/PriorityIcon";
 import { userLabel } from "@/quickTasks/QuickTaskListOptions";
+import { FieldGroup, FieldRow } from "@/ui/FieldRows";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { useScheme } from "@/ui/theme";
 
@@ -192,60 +193,5 @@ export function ProjectOverview({ project, repo, users }: { project: Project; re
         ))}
       </FooterSheet>
     </ScrollView>
-  );
-}
-
-/** The web `FieldsSection`: a 14 medium muted title over its rows. */
-function FieldGroup({ title, children }: { title: string; children: ReactNode }) {
-  const muted = EVA_THEME[useScheme()].mutedForeground;
-  return (
-    <View className="mt-6 gap-0.5">
-      <Text accessibilityRole="header" className="font-instrument-sans-medium px-2 pb-1 text-sm" style={{ color: muted, fontWeight: "500" }}>
-        {title}
-      </Text>
-      {children}
-    </View>
-  );
-}
-
-/** One field: its 16 icon and 14 value, 48 high. With `onPress` it is a button that opens the field's sheet. */
-function FieldRow({
-  label,
-  icon,
-  value,
-  color,
-  onPress,
-}: {
-  label: string;
-  icon?: ReactNode;
-  value: string;
-  color?: string;
-  onPress?: () => void;
-}) {
-  const theme = EVA_THEME[useScheme()];
-  const content = (
-    <>
-      {icon}
-      <Text numberOfLines={1} className="font-instrument-sans min-w-0 flex-1 text-sm" style={{ color: color ?? theme.foreground }}>
-        {value}
-      </Text>
-    </>
-  );
-  if (!onPress) {
-    return (
-      <View accessible accessibilityLabel={`${label}: ${value}`} className="min-h-12 flex-row items-center gap-1.5 rounded-lg px-2">
-        {content}
-      </View>
-    );
-  }
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${label}: ${value}`}
-      onPress={onPress}
-      className="min-h-12 flex-row items-center gap-1.5 rounded-lg px-2 active:opacity-70"
-    >
-      {content}
-    </Pressable>
   );
 }

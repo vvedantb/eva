@@ -18,6 +18,7 @@ import { timeAgo } from "@/ui/format";
 import { MenuSheet } from "@/ui/MenuSheet";
 import { RepoSection } from "@/ui/RepoPicker";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
+import { LIST_WINDOW } from "@/ui/listWindow";
 
 type CommentDraft = FunctionReturnType<typeof api.drafts.listForRepo>[number];
 type TaskDraft = FunctionReturnType<typeof api.agentTasks.listDrafts>[number];
@@ -71,6 +72,7 @@ function DraftList({ repoId }: { repoId: Id<"githubRepos"> }) {
   return (
     <>
       <FlatList
+        {...LIST_WINDOW}
         data={drafts}
         keyExtractor={(draft) => `${draft.source}-${draft.row._id}`}
         ItemSeparatorComponent={CardGap}
