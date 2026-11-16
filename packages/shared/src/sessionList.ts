@@ -26,6 +26,45 @@ export function sessionActivityAt(session: {
  * Orders a repo's sessions for any sidebar list. Every sidebar surface (global
  * list, chrome tabs, session switcher, the phone list) sorts through it.
  */
+/** The Sessions list options (the web sidebar's options menu), web and phone. */
+export const APP_SORT_LABELS: Record<AppSortOrder, string> = {
+  updated_at: "Last user message",
+  created_at: "Created at",
+  manual: "Manual",
+};
+
+export const SESSION_SORT_LABELS: Record<SessionSortOrder, string> = {
+  updated_at: "Last user message",
+  created_at: "Created at",
+};
+
+/** Rows each section shows before "Show more" ("Visible threads"). */
+export const MIN_SESSION_PREVIEW_COUNT = 2;
+export const MAX_SESSION_PREVIEW_COUNT = 10;
+export const DEFAULT_SESSION_PREVIEW_COUNT = 3;
+
+export function clampSessionPreviewCount(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_SESSION_PREVIEW_COUNT;
+  return Math.min(MAX_SESSION_PREVIEW_COUNT, Math.max(MIN_SESSION_PREVIEW_COUNT, Math.round(value)));
+}
+
+/** The user who started a session; older rows have no `createdBy`. */
+function sessionStartedBy<T extends string>(session: { userId: T; createdBy?: T }): T {
+  return session.createdBy ?? session.userId;
+}
+
+/**
+ * Keeps only sessions `userId` started ("Only my sessions"). Stays
+ * `undefined` (loading) while the rows or the current user are still loading.
+ */
+export function filterSessionsStartedBy<T extends { userId: string; createdBy?: string }>(
+  sessions: T[] | undefined,
+  userId: string | undefined,
+): T[] | undefined {
+  if (sessions === undefined || userId === undefined) return undefined;
+  return sessions.filter((session) => sessionStartedBy(session) === userId);
+}
+
 export function sortSessionsForSidebar<
   T extends { updatedAt?: number; _creationTime: number },
 >(sessions: readonly T[], order: SessionSortOrder): T[] {
