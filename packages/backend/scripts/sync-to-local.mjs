@@ -450,7 +450,9 @@ function splitComponents(zip, outDir, mode) {
     }
     if (res.status !== 0) {
       // python ran and the script itself failed; its traceback is on stderr.
-      return fail(`The split script failed under ${python} (exit ${res.status}).`);
+      return fail(
+        `The split script failed under ${python} (exit ${res.status}).`,
+      );
     }
     const lines = (res.stdout ?? "").split(/\r?\n/);
     const components = lines
@@ -469,7 +471,9 @@ function splitComponents(zip, outDir, mode) {
     // go green.
     for (const line of lines.filter((l) => l.startsWith("SETTLED\t"))) {
       const [, table, count] = line.split("\t");
-      console.log(`  settled ${count} live ${table} row(s) (see settle() above)`);
+      console.log(
+        `  settled ${count} live ${table} row(s) (see settle() above)`,
+      );
     }
     const summary = lines.find((line) => line.startsWith("SUMMARY\t"));
     if (summary === undefined) {

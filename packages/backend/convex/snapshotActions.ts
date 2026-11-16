@@ -9,10 +9,7 @@ import {
   resolveSeedOnlyEnvVars,
   tryResolveSandboxCredentials,
 } from "./envVarResolver";
-import {
-  execHandle,
-  getSandboxHandle,
-} from "./_sandbox_runtime/helpers";
+import { execHandle, getSandboxHandle } from "./_sandbox_runtime/helpers";
 import {
   createSandboxAndPrepareRepo,
   SESSION_LIFECYCLE,
@@ -775,9 +772,9 @@ export const deleteSeedPrepSandbox = internalAction({
     } catch (e) {
       // Best-effort: log but do not fail the build if delete fails.
       console.error(
-        `[snapshot] deleteSeedPrepSandbox: failed to delete ${args.sandboxId}: ${
-          errorMessage(e)
-        }`,
+        `[snapshot] deleteSeedPrepSandbox: failed to delete ${args.sandboxId}: ${errorMessage(
+          e,
+        )}`,
       );
     }
     return null;
@@ -901,9 +898,9 @@ export const stopAllRepoSandboxes = internalAction({
           deleted++;
         } catch (err) {
           console.warn(
-            `[snapshot] stopAllRepoSandboxes: failed to delete ${meta.name}: ${
-              errorMessage(err)
-            }`,
+            `[snapshot] stopAllRepoSandboxes: failed to delete ${meta.name}: ${errorMessage(
+              err,
+            )}`,
           );
         }
       }
@@ -912,9 +909,9 @@ export const stopAllRepoSandboxes = internalAction({
       );
     } catch (e) {
       console.error(
-        `[snapshot] stopAllRepoSandboxes: best-effort sweep failed: ${
-          errorMessage(e)
-        }`,
+        `[snapshot] stopAllRepoSandboxes: best-effort sweep failed: ${errorMessage(
+          e,
+        )}`,
       );
     }
     return null;
@@ -944,9 +941,9 @@ export const deleteSeededSnapshot = internalAction({
       );
     } catch (e) {
       console.error(
-        `[snapshot] deleteSeededSnapshot: failed to delete ${args.snapshotName}: ${
-          errorMessage(e)
-        }`,
+        `[snapshot] deleteSeededSnapshot: failed to delete ${args.snapshotName}: ${errorMessage(
+          e,
+        )}`,
       );
     }
     return null;
@@ -1048,9 +1045,9 @@ export const purgeUnreferencedVercelSnapshots = internalAction({
         deletedCount += 1;
       } catch (error) {
         console.warn(
-          `[snapshot] purgeUnreferencedVercelSnapshots: failed ${meta.id}: ${
-            errorMessage(error)
-          }`,
+          `[snapshot] purgeUnreferencedVercelSnapshots: failed ${meta.id}: ${errorMessage(
+            error,
+          )}`,
         );
       }
     }
@@ -1142,9 +1139,9 @@ export const purgeUnreferencedVercelSnapshotsAll = internalAction({
       }
     } catch (err) {
       console.warn(
-        `[purgeUnreferencedVercelSnapshotsAll] skip repo=${repoId}: ${
-          errorMessage(err)
-        }`,
+        `[purgeUnreferencedVercelSnapshotsAll] skip repo=${repoId}: ${errorMessage(
+          err,
+        )}`,
       );
     }
 
