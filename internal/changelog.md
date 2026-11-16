@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: sort and filter the Sessions list
+
+Date: 2026-11-16
+
+WHY: The web Sessions sidebar can sort projects and threads, show only your own sessions and choose how many show per project; the phone list had one fixed order and three rows.
+
+Architectural: the option labels, the visible-threads limits and clamp, and `filterSessionsStartedBy` moved from the web's `sessionsSidebarSettings.ts` to `@eva/shared` (`sessionList.ts`); the web re-exports them. The phone's `src/sessions/SessionListOptions.tsx` keeps the options on the device and adds a header button on the Sessions section with a sheet (Sort projects, Sort threads, Only my sessions, Visible threads); the list applies them through `sessionListEntries`, `useSessionGroups` and the "Show more" row.
+
 ## Phone: search across teams and repos
 
 Date: 2026-11-16

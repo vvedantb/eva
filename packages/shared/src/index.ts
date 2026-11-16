@@ -366,7 +366,14 @@ export {
 } from "./projectMeta";
 export { MAINTENANCE_ERROR, isMaintenanceError } from "./maintenance";
 export {
+  APP_SORT_LABELS,
   APP_SORT_ORDERS,
+  clampSessionPreviewCount,
+  DEFAULT_SESSION_PREVIEW_COUNT,
+  filterSessionsStartedBy,
+  MAX_SESSION_PREVIEW_COUNT,
+  MIN_SESSION_PREVIEW_COUNT,
+  SESSION_SORT_LABELS,
   SESSION_SORT_ORDERS,
   linkedSessionGroups,
   perRepoQueryCache,
