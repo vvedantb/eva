@@ -1,35 +1,15 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useMutation } from "convex/react";
 import usePresence from "@convex-dev/presence/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
+import {
+  createTypingSignal,
+  typingUsersFrom,
+  type TypingUser,
+} from "@eva/shared/typingPresence";
 
-// How long after the last keystroke we consider the user to have stopped
-// typing. Resets on every keystroke, so it acts as a trailing-edge debounce
-// for the "stopped typing" broadcast.
-const TYPING_TIMEOUT_MS = 3000;
-
-// Shape of the per-user data we attach to the presence room. Mirrors the
-// cursor data channel in useLiveCursors — the presence component lets each
-// member carry an arbitrary `data` object.
-interface TypingData {
-  isTyping: boolean;
-  firstName: string;
-}
-
-function isTypingData(data: object): data is TypingData {
-  return (
-    "isTyping" in data &&
-    "firstName" in data &&
-    typeof data.isTyping === "boolean" &&
-    typeof data.firstName === "string"
-  );
-}
-
-export interface TypingUser {
-  userId: string;
-  firstName: string;
-}
+export type { TypingUser };
 
 export interface TypingPresence {
   /** Other teammates currently typing in this room (never includes self). */
@@ -57,49 +37,25 @@ export function useTypingPresence(
   // is distinct from *typing*; the indicator filters on data.isTyping.
   const presenceState = usePresence(api.presence, roomId, userId ?? "");
   const updateTyping = useMutation(api.presence.updateTyping);
-  const isTypingRef = useRef(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function stopTyping() {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    if (isTypingRef.current) {
-      isTypingRef.current = false;
-      updateTyping({ roomId, isTyping: false }).catch(console.error);
-    }
-  }
+  // One typing flag per composer: "typing" on the first keystroke, "stopped"
+  // after a quiet spell, on send, or when the room changes.
+  const [signal] = useState(() =>
+    createTypingSignal((room, isTyping) => {
+      updateTyping({ roomId: room, isTyping }).catch(console.error);
+    }),
+  );
 
   function onActivity() {
     if (!userId) return;
-    // Send "typing: true" only on the rising edge — while the user keeps
-    // typing, no further mutations are sent.
-    if (!isTypingRef.current) {
-      isTypingRef.current = true;
-      updateTyping({ roomId, isTyping: true }).catch(console.error);
-    }
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(stopTyping, TYPING_TIMEOUT_MS);
+    signal.activity(roomId);
   }
 
   // Clear the flag when leaving the conversation (unmount or room change).
-  useEffect(() => stopTyping, [stopTyping]);
+  // `roomId` on purpose: a new room stops the old one's flag.
+  useEffect(() => signal.stop, [signal, roomId]);
 
-  const typingUsers = (() => {
-    if (!presenceState) return [];
-    const users: TypingUser[] = [];
-    for (const member of presenceState) {
-      if (member.userId === userId) continue;
-      if (!member.online) continue;
-      const data = member.data;
-      if (typeof data !== "object" || data === null) continue;
-      if (!isTypingData(data)) continue;
-      if (!data.isTyping) continue;
-      users.push({ userId: member.userId, firstName: data.firstName });
-    }
-    return users;
-  })();
+  const typingUsers = typingUsersFrom(presenceState, userId);
+  const stopTyping = signal.stop;
 
   return { typingUsers, onActivity, stopTyping };
 }

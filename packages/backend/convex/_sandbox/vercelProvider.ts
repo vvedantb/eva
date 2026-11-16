@@ -53,6 +53,7 @@ import {
 import { driveCacheSetupScript, driveCacheTeardownScript } from "./driveCache";
 import { FFMPEG_INSTALL_SCRIPT } from "./ffmpegInstall";
 import { snapshotPruneScript } from "./snapshotPrune";
+import { foreignSandboxDeployment } from "./tags";
 import { EVA_ENV_SOURCE_CMD } from "./vercelEnvFile";
 import { SANDBOX_REGION, sandboxPlacement } from "./vercelRegion";
 import {
@@ -1281,7 +1282,7 @@ class VercelSandboxClient implements SandboxClient {
   /**
    * Regions the create's snapshot lives in, for {@link sandboxPlacement}.
    * A fork restores from the source sandbox's current snapshot, so it follows
-   * that one — a source made before the move to cdg1 only forks in iad1.
+   * that one — a source made while sandboxes ran in cdg1 only forks in cdg1.
    * `undefined` when there is no snapshot to follow or the lookup failed.
    */
   private async snapshotRegions(
@@ -1414,6 +1415,14 @@ class VercelSandboxClient implements SandboxClient {
       name: sandboxId,
       resume: false,
     });
+    // Every stop / exec / delete starts from this lookup, so one check here
+    // keeps a deployment off another deployment's VMs. 404 classifies as
+    // sandbox-gone: the caller drops its mirrored row instead of retrying.
+    const owner = foreignSandboxDeployment(sandbox.tags);
+    if (owner !== null) {
+      const detail = `sandbox ${sandboxId} belongs to Convex deployment ${owner}`;
+      throw new SandboxProviderError(detail, { httpStatus: 404, detail });
+    }
     return new VercelSandboxHandle(sandbox, this.creds);
   }
 

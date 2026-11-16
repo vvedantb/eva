@@ -5,7 +5,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useAction, useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { sandboxStartupEntityId } from "@eva/shared";
+import { sandboxStartupEntityId, taskCanStartSandbox } from "@eva/shared";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
@@ -41,12 +41,6 @@ export type UseTaskDetailRouting =
   | { mode: "quick-sandbox"; quick: QuickTaskSandboxRouting }
   | { mode: "project-detail"; project: ProjectTaskDetailRouting };
 
-const PREVIEW_SANDBOX_ALLOWED_STATUSES = [
-  "code_review",
-  "business_review",
-  "done",
-];
-
 type TaskDetailTask = FunctionReturnType<typeof api.agentTasks.get> | undefined;
 
 /** Detail tab: URL-owned when routed, local state otherwise. */
@@ -74,16 +68,13 @@ export function useTaskDetailTab(routing: UseTaskDetailRouting | undefined) {
   return { activeTab, setActiveTab };
 }
 
-/** Agent run start / stop / resolve-conflicts and PR creation. */
+/** Agent run start / resolve-conflicts and PR creation. */
 export function useTaskExecutionControls(taskId: Id<"agentTasks">) {
   const startExecution = useMutation(api.agentTasks.startExecution);
-  const stopChatTurn = useMutation(api.sessions.stopChatTurn);
   const createTaskPrAction = useAction(api.taskWorkflowActions.createTaskPr);
 
   const [isCreatingPr, setIsCreatingPr] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
-  const [isStopping, setIsStopping] = useState(false);
-  const [showStopConfirm, setShowStopConfirm] = useState(false);
   const [showResolveConfirm, setShowResolveConfirm] = useState(false);
   const [executionError, setExecutionError] = useState<string | null>(null);
 
@@ -111,17 +102,6 @@ export function useTaskExecutionControls(taskId: Id<"agentTasks">) {
     setIsStarting(false);
   };
 
-  const handleStopExecution = async () => {
-    setIsStopping(true);
-    try {
-      await stopChatTurn({ target: { taskId } });
-    } catch (err) {
-      console.error("Failed to stop execution:", err);
-      toast.error("Could not stop the run. Try again.");
-    }
-    setIsStopping(false);
-  };
-
   const handleCreatePr = async () => {
     setIsCreatingPr(true);
     try {
@@ -135,15 +115,11 @@ export function useTaskExecutionControls(taskId: Id<"agentTasks">) {
   return {
     executionError,
     setExecutionError,
-    showStopConfirm,
-    setShowStopConfirm,
     showResolveConfirm,
     setShowResolveConfirm,
     isStarting,
-    isStopping,
     isCreatingPr,
     handleStartExecution,
-    handleStopExecution,
     handleResolveConflicts,
     handleCreatePr,
   };
@@ -159,10 +135,7 @@ function deriveSandboxFlags(
   sandbox: OwnedSandboxFields,
   hasRuns: boolean,
 ) {
-  const canStartSandbox =
-    task?.status !== undefined &&
-    (PREVIEW_SANDBOX_ALLOWED_STATUSES.includes(task.status) ||
-      (task.status === "todo" && hasRuns));
+  const canStartSandbox = taskCanStartSandbox(task?.status, hasRuns);
 
   const isSandboxActive = sandbox.status === "active";
   const isSandboxStartingFromStatus = sandbox.status === "starting";
@@ -246,8 +219,7 @@ export function useTaskSandboxControls({
   );
   const { sandbox } = taskSession;
   // Every action targets the session; a running sandbox implies it exists,
-  // so `ensure` only reads it there. Stop names the task and never creates
-  // the session.
+  // so `ensure` only reads it there.
   const onSession =
     (action: (args: { sessionId: Id<"sessions"> }) => Promise<null>) =>
     async () => {

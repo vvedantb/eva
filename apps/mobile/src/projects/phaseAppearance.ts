@@ -35,7 +35,7 @@ export function phaseAppearance(phase: ProjectPhase, scheme: Scheme) {
     // Web: `text-muted-foreground`, stripe `bg-muted-foreground/50`.
     draft: { text: theme.mutedForeground, bar: withAlpha(theme.mutedForeground, 0.5) },
     // Web: `text-blue-600 dark:text-blue-400`, stripe `bg-blue-500`.
-    finalized: { text: scheme === "dark" ? "#60a5fa" : "#2563eb", bar: "#3b82f6" },
+    finalized: { text: scheme !== "light" ? "#60a5fa" : "#2563eb", bar: "#3b82f6" },
     in_progress: { text: theme.statusProgress, bar: theme.statusProgressBar },
     business_review: { text: theme.statusBusinessReview, bar: theme.statusBusinessReviewBar },
     code_review: { text: theme.statusCodeReview, bar: theme.statusCodeReviewBar },

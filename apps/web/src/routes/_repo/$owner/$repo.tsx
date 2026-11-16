@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { SetupBanner } from "@/lib/components/SetupBanner";
 import { SessionChromeTabsBar } from "@/lib/components/sidebar/session-tabs/SessionChromeTabsBar";
 import { useChromeSessionTabsActive } from "@/lib/components/sidebar/session-tabs/useChromeSessionTabs";
-import { useSidebarContentOffset } from "@/lib/components/sidebar/useSidebarContentOffset";
+import { SHELL_VIEWPORT_ROUTE_CLASS } from "@/lib/components/sidebar/shellLayout";
 import { RepoProvider, RepoGate } from "@/lib/contexts/RepoContext";
 import { LiveCursors } from "@/lib/components/LiveCursors";
 import { IS_EMBEDDED } from "@/lib/embed/embedded";
@@ -16,16 +16,15 @@ export const Route = createFileRoute("/_repo/$owner/$repo")({
 function MainContent({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const chromeSessionTabs = useChromeSessionTabsActive(pathname);
-  const contentOffset = useSidebarContentOffset();
 
   return (
     <div
       className={cn(
-        // `h-dvh`, not `h-screen`: with `overflow-hidden` on the shell, a `100vh`
+        // `dvh`, not `vh`: with `overflow-hidden` on the shell, a `100vh`
         // height on iOS pushes the bottom of every repo page under the browser
         // chrome with no way to scroll to it.
-        "relative flex h-dvh flex-col overflow-hidden",
-        contentOffset,
+        "relative flex flex-col",
+        SHELL_VIEWPORT_ROUTE_CLASS,
       )}
     >
       <div className="relative flex h-full flex-col overflow-hidden bg-background">

@@ -30,7 +30,7 @@ export function prStatusAppearance(
 ): { label: string; text: string; fill: string; icon: ComponentType<IconProps> } {
   const theme = EVA_THEME[scheme];
   if (status === "merged") {
-    const text = scheme === "dark" ? VIOLET[300] : VIOLET[700];
+    const text = scheme !== "light" ? VIOLET[300] : VIOLET[700];
     return { label: "Merged", text, fill: withAlpha(VIOLET[500], 0.1), icon: IconGitMerge };
   }
   if (status === "closed") {
@@ -39,7 +39,7 @@ export function prStatusAppearance(
   if (draft) {
     return { label: "Draft", text: theme.mutedForeground, fill: withAlpha(theme.muted, 0.6), icon: IconGitPullRequestDraft };
   }
-  const text = scheme === "dark" ? EMERALD[300] : EMERALD[700];
+  const text = scheme !== "light" ? EMERALD[300] : EMERALD[700];
   return { label: "Open", text, fill: withAlpha(EMERALD[500], 0.1), icon: IconGitPullRequest };
 }
 
@@ -50,7 +50,7 @@ export function prListIconColour(pr: { state: "open" | "closed"; draft: boolean 
 
 /** The colour of each tone: the web `text-emerald-600` (dark 400), `text-destructive` and muted. */
 export function toneColour(tone: StatusTone, scheme: Scheme): string {
-  if (tone === "success") return scheme === "dark" ? EMERALD[400] : EMERALD[600];
+  if (tone === "success") return scheme !== "light" ? EMERALD[400] : EMERALD[600];
   if (tone === "failure") return EVA_THEME[scheme].destructive;
   return EVA_THEME[scheme].mutedForeground;
 }

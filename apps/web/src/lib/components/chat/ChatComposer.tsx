@@ -3,6 +3,7 @@ import {
   toast,
   usePromptInputController,
 } from "@vvedantb/ui";
+import { chatTypingRoom } from "@eva/shared/typingPresence";
 import type {
   ModelAccount,
   ModelOption,
@@ -32,10 +33,8 @@ import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { usePeopleMentionItems } from "@/lib/hooks/usePeopleMentionItems";
 import { useDataMentionItems } from "@/lib/hooks/useDataMentionItems";
-import {
-  mergeMentionItems,
-  tokenizedToEditable,
-} from "@/lib/components/mentions";
+import { mergeMentionItems } from "@/lib/components/mentions";
+import { queuedMessagePreview } from "@eva/shared";
 import { useRef, useState, type ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import {
@@ -47,7 +46,6 @@ import {
   type StoredModelTraits,
 } from "@eva/backend";
 import { MessageMentionText } from "@/lib/components/chat/MessageMentionText";
-import { stripReviewCommentBlocks } from "@/lib/reviewComments";
 import { type MentionTextareaHandle } from "@/lib/components/chat/MentionTextarea";
 import { useSkillSlashItems } from "@/lib/hooks/useSkillSlashItems";
 import { QueuedMessagesPanel } from "@/lib/components/QueuedMessagesPanel";
@@ -300,22 +298,14 @@ export function ChatComposer({
       </div>
     );
 
-  const renderQueuedContent = (content: string) => {
-    const stripped = stripReviewCommentBlocks(content);
-    const display = tokenizedToEditable(stripped.text).displayText;
-    const suffix =
-      stripped.reviewCommentCount > 0
-        ? ` · ${stripped.reviewCommentCount} review comment${stripped.reviewCommentCount === 1 ? "" : "s"}`
-        : "";
-    return (
-      <MessageMentionText
-        as="span"
-        text={`${display}${suffix}`}
-        repo={repo}
-        className="text-xs leading-4 text-foreground/90"
-      />
-    );
-  };
+  const renderQueuedContent = (content: string) => (
+    <MessageMentionText
+      as="span"
+      text={queuedMessagePreview(content)}
+      repo={repo}
+      className="text-xs leading-4 text-foreground/90"
+    />
+  );
 
   const dockPanels = (
     <>
@@ -409,7 +399,7 @@ export function ChatComposer({
       ) : (
         <PromptInputProvider initialInput={seed?.initialDisplay}>
           <ChatTypingLayer
-            roomId={`typing:chat:${conversationId}`}
+            roomId={chatTypingRoom(conversationId)}
             userId={currentUserId}
           />
           <ChatTypeToFocus mentionRef={mentionRef} />

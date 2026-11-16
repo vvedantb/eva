@@ -5,6 +5,16 @@ import {
   IconMarkdown,
   type Icon,
 } from "@tabler/icons-react";
+import {
+  attachmentFileKind,
+  filenameExtension,
+  isImageContentType,
+  labelForAttachment,
+  normalizeContentType,
+  type AttachmentFileKind,
+} from "@eva/shared";
+
+export { isImageContentType, labelForAttachment };
 
 /**
  * Shared rules and labelling for user-attached files, used by the chat
@@ -50,65 +60,20 @@ export function chatAttachmentErrorMessage(err: {
   }
 }
 
-function filenameExtension(name: string): string {
-  const lower = name.toLowerCase();
-  const dot = lower.lastIndexOf(".");
-  if (dot < 0) return "";
-  return lower.slice(dot);
-}
-
-function normalizeContentType(contentType: string | null | undefined): string {
-  return (contentType ?? "").split(";")[0]?.trim().toLowerCase() ?? "";
-}
-
-export function isImageContentType(
-  contentType: string | null | undefined,
-): boolean {
-  return normalizeContentType(contentType).startsWith("image/");
-}
-
 /** Icon for a non-image attachment, keyed by MIME type or extension. */
 export function iconForAttachment(
   filename: string | undefined,
   contentType: string | null | undefined,
 ): Icon {
-  const type = normalizeContentType(contentType);
-  const ext = filenameExtension(filename ?? "");
-
-  if (
-    type === "text/markdown" ||
-    type === "text/x-markdown" ||
-    ext === ".md" ||
-    ext === ".markdown"
-  ) {
-    return IconMarkdown;
-  }
-  if (type === "text/html" || ext === ".html" || ext === ".htm") {
-    return IconHtml;
-  }
-  if (type === "text/plain" || ext === ".txt") {
-    return IconFileTypeTxt;
-  }
-  return IconFile;
+  return ATTACHMENT_ICONS[attachmentFileKind(filename, contentType)];
 }
 
-/**
- * Display name for an attachment. Stored attachments are only an array of
- * storage ids, so once uploaded the original filename is gone and the content
- * type provides the fallback label.
- */
-export function labelForAttachment(
-  filename: string | undefined,
-  contentType: string | null | undefined,
-): string {
-  if (filename?.trim()) return filename.trim();
-  const type = normalizeContentType(contentType);
-  if (type === "text/html") return "design.html";
-  if (type === "text/markdown") return "spec.md";
-  if (type === "text/plain") return "notes.txt";
-  if (type.startsWith("image/")) return "Image";
-  return "Attachment";
-}
+const ATTACHMENT_ICONS: Record<AttachmentFileKind, Icon> = {
+  markdown: IconMarkdown,
+  html: IconHtml,
+  text: IconFileTypeTxt,
+  file: IconFile,
+};
 
 function isSessionTextAttachment(file: AttachmentFileMeta): boolean {
   const type = normalizeContentType(file.mediaType);

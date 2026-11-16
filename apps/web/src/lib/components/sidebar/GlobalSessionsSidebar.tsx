@@ -3,6 +3,7 @@
 import { useQueries } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
+import { perRepoQueryCache, sessionListEntries } from "@eva/shared";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import {
@@ -13,17 +14,11 @@ import {
 import { AnimatePresence, m } from "motion/react";
 import { GlobalSessionGroup } from "@/lib/components/sidebar/_components/GlobalSessionGroup";
 import { LinkedSessionGroupSection } from "@/lib/components/sidebar/_components/LinkedSessionGroupSection";
-import {
-  linkedSessionGroups,
-  type LinkedSessionGroup,
-} from "@/lib/components/sidebar/_utils/linkedSessionGroups";
 import { SessionsListModeTabs } from "@/lib/components/sidebar/_components/SessionsListModeTabs";
 import type { SessionListMode } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
 import {
   filterSessionsStartedBy,
   LINKED_SESSION_GROUPS_OPEN_KEY,
-  sessionActivityAt,
-  sortAppsForSidebar,
   SESSIONS_APP_GROUPS_OPEN_KEY,
 } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
 import { useSessionsSidebarSettings } from "@/lib/components/sidebar/useSessionsSidebarSettings";
@@ -42,16 +37,6 @@ import {
 type SessionListItem = FunctionReturnType<typeof api.sessions.list>[number];
 type RepoRow = FunctionReturnType<typeof api.githubRepos.list>[number];
 
-/** One top-level sidebar section: a linked-session group or an app. */
-type SidebarEntry =
-  | {
-      kind: "group";
-      _id: string;
-      _creationTime: number;
-      group: LinkedSessionGroup<SessionListItem, RepoRow>;
-    }
-  | { kind: "repo"; _id: string; _creationTime: number; repo: RepoRow };
-
 interface GlobalSessionsSidebarProps {
   pathname: string;
   onNavigate?: () => void;
@@ -62,39 +47,11 @@ const SESSION_LIST_QUERIES = {
   archived: api.sessions.listArchived,
 } satisfies Record<SessionListMode, unknown>;
 
-type SessionListQueries = Record<
-  string,
-  {
-    query: (typeof SESSION_LIST_QUERIES)[SessionListMode];
-    args: { repoId: RepoRow["_id"] };
-  }
->;
-
-const sessionListQueryCache = new Map<string, SessionListQueries>();
-
-/**
- * One list query per repo for the mode. `useQueries` resubscribes, and sets
- * state in render, whenever its argument changes identity. A render-local memo
- * did not hold across React's render-phase retry and looped ("Too many
- * re-renders"), so the maps are cached here by their value.
- */
-function sessionListQueries(
-  mode: SessionListMode,
-  repos: RepoRow[] | undefined,
-): SessionListQueries {
-  const ids = (repos ?? []).map((repo) => repo._id);
-  const key = `${mode}:${ids.join(",")}`;
-  const cached = sessionListQueryCache.get(key);
-  if (cached) return cached;
-  const queries: SessionListQueries = Object.fromEntries(
-    ids.map((repoId) => [
-      repoId,
-      { query: SESSION_LIST_QUERIES[mode], args: { repoId } },
-    ]),
-  );
-  sessionListQueryCache.set(key, queries);
-  return queries;
-}
+/** One list query per repo for the mode, cached so `useQueries` keeps its subscriptions. */
+const sessionListQueries = perRepoQueryCache<
+  (typeof SESSION_LIST_QUERIES)[SessionListMode],
+  RepoRow["_id"]
+>();
 
 /**
  * One app's rows out of the `useQueries` map. A failed query is reported as an
@@ -138,7 +95,13 @@ export function GlobalSessionsSidebar({
 
   // The only watch on the lists: the rows are handed to each group as a prop.
   // The list mode picks active or archived rows, so linked groups form in both.
-  const sessionsByRepoId = useQueries(sessionListQueries(listMode, repos));
+  const sessionsByRepoId = useQueries(
+    sessionListQueries(
+      SESSION_LIST_QUERIES[listMode],
+      listMode,
+      (repos ?? []).map((repo) => repo._id),
+    ),
+  );
   const currentUserId = useQuery(api.auth.me, settings.onlyMine ? {} : "skip");
   // "Only my sessions" drops a teammate's rows before any group sees them.
   const visibleSessions = (repoId: RepoRow["_id"]) => {
@@ -148,63 +111,16 @@ export function GlobalSessionsSidebar({
       : rows;
   };
 
-  // Linked sessions (one agent spun up another) leave their repo lists for a
-  // cross-repo group of their own, in both list modes.
-  const linkedGroups =
-    repos === undefined
-      ? []
-      : linkedSessionGroups(
-          repos.map((repo) => ({
-            repo,
-            sessions: visibleSessions(repo._id) ?? [],
-          })),
-        );
-  const linkedSessionIds = new Set<string>(
-    linkedGroups.flatMap((group) =>
-      group.members.map((member) => member.session._id),
-    ),
-  );
-  const repoSessions = (repoId: RepoRow["_id"]) =>
-    visibleSessions(repoId)?.filter(
-      (session) => !linkedSessionIds.has(session._id),
-    );
-
-  // "Sort projects" orders groups and repos as one list. Each sorts by the
-  // rows it shows, so a repo does not rise on a linked session it gave away.
-  const latestActivityById = new Map<string, number>();
-  for (const group of linkedGroups) {
-    latestActivityById.set(group.groupId, group.latestAt);
-  }
-  for (const repo of repos ?? []) {
-    let latest = 0;
-    for (const session of repoSessions(repo._id) ?? []) {
-      latest = Math.max(latest, sessionActivityAt(session));
-    }
-    if (latest > 0) latestActivityById.set(repo._id, latest);
-  }
-  // Groups go first, so "Manual" (which keeps input order) pins them on top.
-  const orderedEntries: SidebarEntry[] | undefined =
+  // Linked groups and apps as one ordered list (`sessionListEntries`).
+  const orderedEntries =
     repos === undefined
       ? undefined
-      : sortAppsForSidebar(
-          [
-            ...linkedGroups.map(
-              (group): SidebarEntry => ({
-                kind: "group",
-                _id: group.groupId,
-                _creationTime: group.createdAt,
-                group,
-              }),
-            ),
-            ...repos.map((repo): SidebarEntry => ({
-              kind: "repo",
-              _id: repo._id,
-              _creationTime: repo._creationTime,
-              repo,
-            })),
-          ],
+      : sessionListEntries(
+          repos.map((repo) => ({
+            repo,
+            sessions: visibleSessions(repo._id),
+          })),
           settings.appSortOrder,
-          latestActivityById,
         );
   const onRenameRequest = (session: SessionListItem) => {
     setSessionToRename({ session });
@@ -279,7 +195,7 @@ export function GlobalSessionsSidebar({
                         key={entry._id}
                         repo={entry.repo}
                         pathname={pathname}
-                        sessions={repoSessions(entry.repo._id)}
+                        sessions={entry.sessions}
                         open={isGroupOpen(entry.repo)}
                         onOpenChange={(open) => {
                           setGroupOpen(entry.repo._id, open);

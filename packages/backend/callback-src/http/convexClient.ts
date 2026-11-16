@@ -18,6 +18,7 @@ import {
   noteHeartbeatResponse,
   type TurnLeaseIdentity,
 } from "../runtime/turnLease.js";
+import { appendVmMemory } from "../runtime/vmMemory.js";
 
 function appendTurnLease(
   body: URLSearchParams,
@@ -211,6 +212,7 @@ async function callStreamingHeartbeatTouchOnce(
     body.set("hmac", STREAMING_HMAC);
     body.set("touchOnly", "1");
     appendTurnLease(body, identity);
+    appendVmMemory(body);
     const response = await postSignedForm(
       CONVEX_SITE_URL + "/api/streaming/heartbeat",
       body,
@@ -246,6 +248,7 @@ async function callStreamingHeartbeatOnce(
     body.set("currentActivity", currentActivity);
     body.set("currentContent", currentContent || "");
     appendTurnLease(body, identity);
+    appendVmMemory(body);
     if (pendingQuestion) {
       body.set("pendingQuestion", pendingQuestion);
     }

@@ -1,14 +1,12 @@
 "use client";
 
-import { useActivityElapsedSeconds } from "@vvedantb/ui";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
-import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
+import { FALLBACK_GIT_BASE_BRANCH, taskCanCreatePr } from "@eva/shared";
 import { taskPrUrl } from "@/lib/githubPr";
-import { canEditTaskText } from "./_components/task-detail-constants";
-import { taskRunStreamingEntityId } from "./firstRunChatTurn";
+import { canEditTaskText } from "@eva/shared/taskDetail";
 import { useTaskSession } from "./useTaskSession";
 import type { OwnedSandboxFields } from "@/lib/components/sandbox/useOwnedSession";
 import {
@@ -65,15 +63,6 @@ function useTaskDetailQueries(taskId: Id<"agentTasks">) {
   );
   const hasRuns = (runs?.length ?? 0) > 0;
   const isProjectTask = task?.projectId !== undefined;
-  const activeRun = runs?.find((run) => run.status === "running");
-  const activeRunElapsed = useActivityElapsedSeconds(
-    activeRun?.startedAt,
-    Boolean(activeRun),
-  );
-  const streaming = useQuery(
-    api.streaming.get,
-    activeRun ? { entityId: taskRunStreamingEntityId(activeRun._id) } : "skip",
-  );
   const users = useQuery(api.users.listAll);
   const projects = useQuery(
     api.projects.list,
@@ -97,9 +86,6 @@ function useTaskDetailQueries(taskId: Id<"agentTasks">) {
     hasActiveRun,
     hasRuns,
     isProjectTask,
-    activeRun,
-    activeRunElapsed,
-    streaming,
     users,
     projects,
     comments,
@@ -130,7 +116,11 @@ function deriveRunSummary({
     latestPrUrl,
     latestPrError: runs?.find((r) => r.prError)?.prError,
     latestDeployment: runs?.find((r) => r.deploymentStatus),
-    canCreatePr: !latestPrUrl && (runs?.length ?? 0) > 0 && !hasActiveRun,
+    canCreatePr: taskCanCreatePr({
+      latestPrUrl,
+      runCount: runs?.length ?? 0,
+      hasActiveRun,
+    }),
     showTabsColumn: status !== "todo" || hasTabContent,
     creatorUser: task?.createdBy
       ? users?.find((u) => u._id === task.createdBy)
@@ -161,7 +151,6 @@ export function useTaskDetail(
     ...tab,
     ...execution,
     ...sandbox,
-    isActivityBusy: data.hasActiveRun,
     layoutGridClass: "grid-cols-1 md:grid-cols-[1fr_1fr_200px]",
     modalWidthClass: "max-w-[calc(100vw-2rem)] md:max-w-6xl",
   };

@@ -6,7 +6,8 @@
  * Eva's web theme (apps/web/src/globals.css, via @eva/shared/evaTheme) as
  * `h s% l%` channels for NativeWind; the native-ui preset reads these keys.
  * JS colours come from the same values through native-ui `configureTheme`
- * (src/ui/evaTheme.ts). Keep in step with globals.css.
+ * (src/ui/evaTheme.ts). Keep in step with globals.css. Neutral (the web
+ * `.dark.neutral`) is set at run time over `.dark` (`NEUTRAL_CLASS_VARS`).
  */
 @layer base {
   :root {

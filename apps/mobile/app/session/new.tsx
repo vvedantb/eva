@@ -9,28 +9,34 @@ import {
   type StoredModelTraits,
 } from "@eva/backend";
 import { carriedAccountForProvider, defaultAccountForProvider, toPickerAccounts } from "@eva/shared";
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared/gitDefaults";
 import { useUser } from "@clerk/clerk-expo";
 import { IconBrandGithub, IconChevronDown, IconStack2 } from "@tabler/icons-react-native";
 import { PromptInput } from "@vvedantb/native-ui/ai";
 import { RouterStackPageHeader } from "@vvedantb/native-ui/expo-router";
-import { CenteredSpinner, EmptyState } from "@vvedantb/native-ui/primitives";
-import { tokens, withAlpha } from "@vvedantb/native-ui/theme";
+import { CenteredSpinner, EmptyState, KeyboardAvoidingView } from "@vvedantb/native-ui/primitives";
+import { withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { z } from "zod";
 import { AttachButton } from "@/chat/AttachButton";
 import { BaseBranchChip } from "@/chat/BranchChips";
-import { ComposerFooter, ComposerHeader } from "@/chat/ComposerFooter";
+import { ComposerFooter, composerHeader } from "@/chat/ComposerFooter";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { ModelChip } from "@/chat/ModelChip";
 import { useAttachments } from "@/chat/useAttachments";
 import { useMentionComposer } from "@/chat/useMentionComposer";
+import { jsonParser, persistedStore } from "@/storage/persistedStore";
 import { RepoLogo } from "@/ui/RepoLogo";
-import { repoName, RepoSheet } from "@/ui/RepoPicker";
+import { rememberRepo, repoName, RepoSheet, useLastRepoId } from "@/ui/RepoPicker";
 import { useScheme } from "@/ui/theme";
+
+/** The new-session prompt draft per repo (tokenized), kept on the device. */
+const newSessionDrafts = persistedStore<string | null>("newSessionDraft", null, jsonParser(z.string()));
 
 /**
  * A new session, as the web sessions landing (`NewSessionComposer`): "Sam,
@@ -51,7 +57,7 @@ export default function NewSessionScreen() {
   const scheme = useScheme();
   const { user } = useUser();
   const repos = useQuery(api.githubRepos.list, {});
-  const startSession = useMutation(api.mobile.startSession);
+  const startSession = useMutation(api.chats.start);
   const attachments = useAttachments();
   const [picked, setPicked] = useState<Id<"githubRepos"> | null>(null);
   const [pickingRepo, setPickingRepo] = useState(false);
@@ -66,10 +72,11 @@ export default function NewSessionScreen() {
   // the model's provider (else Team), a pick holds; null is Team.
   const [pickedAccount, setPickedAccount] = useState<Id<"userProviderAccounts"> | null | undefined>(undefined);
   const accounts = toPickerAccounts(useQuery(api.userProviderAccounts.listSelectable, {}) ?? []);
-  const repo = repos?.find((candidate) => candidate._id === (picked ?? repoParam)) ?? repos?.[0];
+  const lastRepoId = useLastRepoId();
+  const repo = repos?.find((candidate) => candidate._id === (picked ?? repoParam ?? lastRepoId)) ?? repos?.[0];
   const firstName = user?.firstName?.trim();
-  const foreground = tokens.color.foreground[scheme];
-  const muted = tokens.color.muted[scheme];
+  const foreground = EVA_THEME[scheme].foreground;
+  const muted = EVA_THEME[scheme].mutedForeground;
 
   const model = pickedModel ?? normalizeAIModel(repo?.defaultModel);
   const traits: StoredModelTraits = { ...(repo ? storedTraitsFromRepoDefaults(repo) : {}), ...pickedTraits };
@@ -84,7 +91,18 @@ export default function NewSessionScreen() {
       : (stack?.base ?? repo?.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH);
   // Picking another branch abandons the stack: the session's PR would no longer sit on that pull request.
   const stackOnPrNumber = stack !== null && baseBranch === stack.base ? stack.prNumber : undefined;
-  const composer = useMentionComposer(repo?._id, getAIModelProvider(model));
+  // The prompt draft is kept per repo on the device, as the web's `new-session-composer`;
+  // model and traits start from the repo defaults each visit, as on the web.
+  const savedDraft = newSessionDrafts.useValue(repo?._id ?? "");
+  const composer = useMentionComposer(repo?._id, getAIModelProvider(model), (tokenized) => {
+    if (repo) newSessionDrafts.set(repo._id, tokenized);
+  });
+  // A repo's saved draft goes into the composer when the repo changes, or when it finishes loading into an empty one.
+  const [shownDraft, setShownDraft] = useState<{ repoId: string; loaded: boolean } | null>(null);
+  if (repo && (shownDraft?.repoId !== repo._id || (!shownDraft.loaded && savedDraft !== null && composer.text === ""))) {
+    setShownDraft({ repoId: repo._id, loaded: savedDraft !== null });
+    composer.load(savedDraft ?? "");
+  }
   const providerAccountId = pickedAccount === undefined ? defaultAccountForProvider(accounts, getAIModelProvider(model)) : pickedAccount;
 
   const handleSend = async (prompt: string) => {
@@ -126,7 +144,11 @@ export default function NewSessionScreen() {
         // As the new quick task screen.
         <EmptyState icon={IconBrandGithub} title="No repos" description="Connect a repo on the web. It shows up here." />
       ) : (
-        // The web landing at 390: `p-4` in a column 10 short of the right edge.
+        // The kit's keyboard view: the column shrinks to the space above the
+        // keyboard, so the centred composer moves up with it. The composer's own
+        // lift measures it within the column and so never sees the keyboard.
+        <KeyboardAvoidingView style={{ flex: 1 }}>
+        {/* The web landing at 390: `p-4` in a column 10 short of the right edge. */}
         <View className="flex-1 justify-center gap-3 pl-4 pr-[26px]">
           {/* Web: text-xl semibold tracking-tight, centred, the repo picker inline (logo or GitHub mark, name underlined at 30%). */}
           <View className="flex-row flex-wrap items-center justify-center gap-x-2 gap-y-1">
@@ -160,7 +182,10 @@ export default function NewSessionScreen() {
               </Text>
               <IconChevronDown size={16} color={foreground} />
             </Pressable>
-            <RepoSheet open={pickingRepo} onOpenChange={setPickingRepo} repos={repos} value={repo} onChange={setPicked} />
+            <RepoSheet open={pickingRepo} onOpenChange={setPickingRepo} repos={repos} value={repo} onChange={(repoId) => {
+                setPicked(repoId);
+                rememberRepo(repoId);
+              }} />
             <Text className="font-instrument-sans-semibold text-xl" style={{ color: foreground, fontWeight: "600", letterSpacing: -0.5 }}>
               ?
             </Text>
@@ -178,7 +203,7 @@ export default function NewSessionScreen() {
             leading={
               <AttachButton onPress={() => void attachments.pick()} />
             }
-            header={<ComposerHeader attachments={attachments} composer={composer} />}
+            header={composerHeader(attachments, composer)}
             footer={
               repo ? (
                 <ComposerFooter
@@ -220,6 +245,7 @@ export default function NewSessionScreen() {
             }
           />
         </View>
+        </KeyboardAvoidingView>
       )}
     </View>
   );

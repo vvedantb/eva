@@ -1,18 +1,22 @@
 import { api } from "@eva/backend";
-import { TASK_STATUS_LABELS, projectTaskSections, type DisplayTaskStatus } from "@eva/shared";
+import { TASK_STATUS_LABELS, projectTaskSections } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconPlus } from "@tabler/icons-react-native";
 import { SkeletonList, SkeletonRow } from "@vvedantb/native-ui/primitives";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useRouter } from "expo-router";
-import { useState } from "react";
 import { Pressable, SectionList, View } from "react-native";
 import { QuickTaskRow } from "@/quickTasks/QuickTaskRow";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
+import { persistedIdSet } from "@/storage/persistedStore";
 import { useQuickTaskActions } from "@/quickTasks/useQuickTaskActions";
 import { CardGap, FoldFooter, FoldHeader } from "@/ui/FoldHeader";
 import { useScheme } from "@/ui/theme";
+import { LIST_WINDOW } from "@/ui/listWindow";
+
+/** A project's task status groups folded away from their default, kept on the device. */
+const toggledProjectTaskStatuses = persistedIdSet("projectTaskStatusesToggled");
 
 type Project = NonNullable<FunctionReturnType<typeof api.projects.get>>;
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
@@ -41,7 +45,7 @@ export function ProjectTasks({ project, repo, users }: { project: Project; repo:
   const projects = useQuery(api.projects.list, { repoId: repo._id });
   const actions = useQuickTaskActions({ repo, users, projects });
   // Sections the user folded or unfolded, against each one's `defaultOpen`.
-  const [toggled, setToggled] = useState<ReadonlySet<DisplayTaskStatus>>(new Set());
+  const [toggled, toggle] = toggledProjectTaskStatuses.useSet("all");
 
   if (tasks === undefined) {
     return (
@@ -60,16 +64,11 @@ export function ProjectTasks({ project, repo, users }: { project: Project; repo:
   const openNewTask = () =>
     router.push({ pathname: "/quick-task/new", params: { repoId: repo._id, projectId: project._id } });
   const errors = new Set<string>(errorTaskIds ?? []);
-  const toggle = (status: DisplayTaskStatus) => {
-    const next = new Set(toggled);
-    if (next.has(status)) next.delete(status);
-    else next.add(status);
-    setToggled(next);
-  };
 
   return (
     <>
       <SectionList
+        {...LIST_WINDOW}
         sections={projectTaskSections(tasks).map((section) => {
           const open = section.defaultOpen !== toggled.has(section.status);
           return { status: section.status, count: section.tasks.length, open, data: open ? section.tasks : [] };

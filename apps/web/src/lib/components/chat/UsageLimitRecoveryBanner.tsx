@@ -1,25 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import {
-  api,
-  getAIModelProvider,
-  parseUsageLimitResetTime,
-  type Id,
-} from "@eva/backend";
+import { api, getAIModelProvider, type Id } from "@eva/backend";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { getProviderLabel, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { catchMutationError } from "@/lib/utils/mutationToast";
-import { resolveCredentialSourceLabel } from "@/lib/utils/credentialSourceLabel";
-import { formatResetDistanceMs } from "@/lib/components/usage-limits/_utils";
-import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
 import {
-  usageLimitResetClock,
-  usageLimitResetText,
+  isUsageLimitFailure,
+  resolveCredentialSourceLabel,
+  USAGE_LIMIT_RETRY_FAILED,
+  USAGE_LIMIT_RETRY_HINT,
+  USAGE_LIMIT_WAKE_HINT,
+  usageLimitNoAccountCopy,
+  usageLimitRecoverySubtitle,
+  usageLimitHeadroom,
+  usageLimitRecoveryTitle,
   usageLimitRetryCandidates,
-} from "./usageLimitBanner";
+} from "@eva/shared/usageLimitRecovery";
+import { useQuantizedNow } from "@/lib/hooks/useQuantizedNow";
 import { UsageLimitAccountOption } from "./UsageLimitAccountOption";
 import type { SandboxChatSurface } from "./sandboxChatSurface";
 import { useRetryLastTurnWithAccount } from "./useRetryLastTurnWithAccount";
@@ -61,10 +61,7 @@ export function UsageLimitRecoveryBanner({
   // never hit a limit does not subscribe to usage readings it will not show.
   const showsCard =
     recovery !== undefined &&
-    newest !== undefined &&
-    newest.role === "assistant" &&
-    newest.isSystemAlert !== true &&
-    newest.errorType === "rate_limit" &&
+    isUsageLimitFailure(newest) &&
     // Until the entity lands we do not know which account to exclude, and
     // offering a switch to the account already in use is worse than waiting.
     currentAccountId !== undefined;
@@ -102,17 +99,8 @@ export function UsageLimitRecoveryBanner({
       currentAccountId,
       accounts,
     );
-    const ownerLabel =
-      currentLabel === "Team" ? "The team" : `${currentLabel}'s`;
-    const resetAt = parseUsageLimitResetTime(newest.content);
-    const resetText = usageLimitResetText(newest.content);
-    const resetClock = usageLimitResetClock(newest.content);
-    const subtitle =
-      resetAt !== null && resetAt > now && resetClock !== undefined
-        ? `Resets in ${formatResetDistanceMs(resetAt - now)} (${resetClock})`
-        : resetText === undefined
-          ? "Waiting for the window to reset will also work."
-          : `${resetText.charAt(0).toUpperCase()}${resetText.slice(1)}`;
+    const title = usageLimitRecoveryTitle(currentLabel, providerLabel);
+    const subtitle = usageLimitRecoverySubtitle(newest.content, now);
 
     const entryFor = (accountId: Id<"userProviderAccounts"> | null) =>
       entries?.find(
@@ -129,7 +117,7 @@ export function UsageLimitRecoveryBanner({
         onSwitchAccount(candidate.accountId).then(() =>
           retryLastTurn(candidate.accountId),
         ),
-        "Couldn't retry on that account",
+        USAGE_LIMIT_RETRY_FAILED,
         "chat-usage-limit-retry",
       )
         .then(() => setInFlightKey(null))
@@ -152,31 +140,31 @@ export function UsageLimitRecoveryBanner({
           />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium">
-              {ownerLabel} {providerLabel} account is out of usage
+              {title}
             </p>
             <p className="text-xs text-muted-foreground">{subtitle}</p>
           </div>
           {candidates.length > 0 ? (
             <span className="hidden max-w-56 shrink-0 text-right text-xs text-muted-foreground sm:block">
-              Retry on another account — same model and reasoning
+              {USAGE_LIMIT_RETRY_HINT}
             </span>
           ) : null}
         </div>
         {candidates.length === 0 ? (
           <p className="text-xs text-muted-foreground">
-            No other {providerLabel} account is shared with you. Ask a teammate
-            to share theirs in Settings → Accounts, or wait for the reset.
+            {usageLimitNoAccountCopy(providerLabel)}
           </p>
         ) : (
           <div className="flex flex-col gap-1">
             {candidates.map((candidate) => (
               <UsageLimitAccountOption
                 key={candidate.key}
-                name={candidate.name}
+                headroom={usageLimitHeadroom(
+                  candidate,
+                  entryFor(candidate.accountId),
+                  now,
+                )}
                 isTeam={candidate.isTeam}
-                isOwn={candidate.isOwn}
-                entry={entryFor(candidate.accountId)}
-                now={now}
                 disabled={
                   !isSandboxActive ||
                   surface.isExecuting ||
@@ -188,7 +176,7 @@ export function UsageLimitRecoveryBanner({
             ))}
             {isSandboxActive ? null : (
               <p className="px-3 pt-0.5 text-xs text-muted-foreground">
-                Wake the sandbox to retry.
+                {USAGE_LIMIT_WAKE_HINT}
               </p>
             )}
           </div>

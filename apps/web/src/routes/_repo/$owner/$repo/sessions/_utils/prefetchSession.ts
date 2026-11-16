@@ -1,4 +1,5 @@
 import { api } from "@eva/backend";
+import { chatStreamingEntityId } from "@eva/shared";
 import { convex } from "@/lib/convex";
 import {
   transcriptLiveArgs,
@@ -41,7 +42,7 @@ export async function prefetchSession(params: {
   });
   if (!chat) return;
   prewarm(api.queuedMessages.listByParent, { parentId: chat._id });
-  prewarm(api.streaming.get, { entityId: chat._id });
+  prewarm(api.streaming.get, { entityId: chatStreamingEntityId(chat._id) });
   // Tail first, then the live list anchored on it, in the order
   // `useChatTranscript` asks for them.
   const tailArgs = transcriptTailArgs(chat._id);

@@ -7,6 +7,8 @@
 @import "@vvedantb/ui/tokens/css/utilities.css";
 @import "@vvedantb/ui/tokens/css/border-beam.css";
 @import "@vvedantb/ui/tokens/css/marquee.css";
+@import "@vvedantb/ui/tokens/css/scroll-fade.css";
+@import "@vvedantb/ui/tokens/css/scrollbar.css";
 /* The `text-*` scale: each tier has its own line height and tracking. */
 @import "@vvedantb/ui/tokens/css/type-scale.css";
 /* vvedantb components read their colour names (`surface-*`, `field-*`,
@@ -313,36 +315,12 @@
   transform-origin: 50% 70%;
 }
 
-@utility scrollbar {
-  /* Matches global base scrollbar chrome; class kept for scroll-fade pairing.
-     Do not put overscroll-behavior here: Chrome treats every overflow:auto
-     element as a scroll container even when it has no overflow, so contain on
-     this utility created wheel dead-zones — nested panes and horizontal boards
-     (overflow-y-hidden) swallowed vertical wheel while the ancestor scrollbar
-     still dragged fine. Opt in per pane with overscroll-y-contain /
-     overscroll-contain instead. */
-  scrollbar-width: thin;
-  scrollbar-color: rgb(var(--muted-foreground) / 0.35) transparent;
-  &:hover {
-    scrollbar-color: rgb(var(--muted-foreground) / 0.55) transparent;
-  }
-  &::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  &::-webkit-scrollbar-thumb {
-    background: rgb(var(--muted-foreground) / 0.32);
-    border: 2px solid transparent;
-    border-radius: 999px;
-    background-clip: padding-box;
-  }
-  &::-webkit-scrollbar-thumb:hover {
-    background: rgb(var(--muted-foreground) / 0.52);
-    background-clip: padding-box;
-  }
+/* `scrollbar` comes from @vvedantb/ui/tokens/css/scrollbar.css. The base is
+   set on each theme scope because --muted-foreground is an rgb triplet here. */
+:root,
+.dark,
+.dark.neutral {
+  --scrollbar-base: rgb(var(--muted-foreground));
 }
 
 @utility scrollbar-thin {
@@ -384,67 +362,6 @@
   html {
     /* Reserve scrollbar space so appearing/disappearing overflow does not shift layout. */
     scrollbar-gutter: stable;
-  }
-
-  /*
- * Mask stops for `.scroll-fade` / `.scroll-fade-x` (defined in @layer
- * utilities). Custom properties only interpolate once registered, so these
- * cannot be plain `--vars`. Each is driven by its own range of the element's
- * scroll timeline: the leading fade grows in over the first 1.5rem of scroll,
- * the trailing fade shrinks out over the last 1.5rem. Content flush against an
- * edge therefore never fades — only content that continues past it does.
- */
-  @property --scroll-fade-top {
-    syntax: "<length>";
-    inherits: false;
-    initial-value: 0px;
-  }
-  @property --scroll-fade-bottom {
-    syntax: "<length>";
-    inherits: false;
-    initial-value: 0px;
-  }
-  @property --scroll-fade-left {
-    syntax: "<length>";
-    inherits: false;
-    initial-value: 0px;
-  }
-  @property --scroll-fade-right {
-    syntax: "<length>";
-    inherits: false;
-    initial-value: 0px;
-  }
-  @keyframes scroll-fade-top {
-    from {
-      --scroll-fade-top: 0px;
-    }
-    to {
-      --scroll-fade-top: 1.5rem;
-    }
-  }
-  @keyframes scroll-fade-bottom {
-    from {
-      --scroll-fade-bottom: 1.5rem;
-    }
-    to {
-      --scroll-fade-bottom: 0px;
-    }
-  }
-  @keyframes scroll-fade-left {
-    from {
-      --scroll-fade-left: 0px;
-    }
-    to {
-      --scroll-fade-left: 1.5rem;
-    }
-  }
-  @keyframes scroll-fade-right {
-    from {
-      --scroll-fade-right: 1.5rem;
-    }
-    to {
-      --scroll-fade-right: 0px;
-    }
   }
 }
 
@@ -1056,68 +973,6 @@
       opacity: 1;
       transform: scale(1.15);
     }
-  }
-}
-
-/* ───────────────────────────────────────────────────────────────────
- * Scroll edge fade — pair with `.scrollbar` on an inline scroll area so
- * its content does not hard-cut at the boundary. The mask stops are the
- * registered properties declared near the top of this file, each driven
- * by its own range of the element's scroll timeline, so an edge only
- * fades while there is more content past it.
- *
- * Duration must be a non-zero time (`1ms`, stretched across the range by
- * the timeline). The shorthand's initial duration is `0s`, which pins
- * both animations at their end keyframes — a fade on every edge even
- * when the list is flush with the top or bottom.
- *
- * `.scroll-fade` is the vertical (block) axis; `.scroll-fade-x` is the
- * horizontal (inline) axis — same recipe, used by the quick-task / project
- * kanban column row.
- *
- * Gated on scroll-driven animation support: without it the fade could not
- * follow the scroll position, and a permanently faded edge dims content
- * that is already fully visible — worse than the hard cut. Unsupported
- * browsers therefore get no mask at all.
- *
- * Do not use on page-level scroll, on a text input (it dims the caret), on
- * a container with a `sticky` child (the pinned child sits inside the
- * fade), or on an element that already sets `animation` (the shorthand
- * here would replace it — Radix menu content is the usual case).
- * ─────────────────────────────────────────────────────────────────── */
-@supports (animation-timeline: scroll()) {
-  .scroll-fade {
-    mask-image: linear-gradient(
-      to bottom,
-      transparent 0,
-      #000 var(--scroll-fade-top),
-      #000 calc(100% - var(--scroll-fade-bottom)),
-      transparent 100%
-    );
-    animation:
-      scroll-fade-top 1ms linear both,
-      scroll-fade-bottom 1ms linear both;
-    animation-timeline: scroll(self y), scroll(self y);
-    animation-range:
-      0px 1.5rem,
-      calc(100% - 1.5rem) 100%;
-  }
-
-  .scroll-fade-x {
-    mask-image: linear-gradient(
-      to right,
-      transparent 0,
-      #000 var(--scroll-fade-left),
-      #000 calc(100% - var(--scroll-fade-right)),
-      transparent 100%
-    );
-    animation:
-      scroll-fade-left 1ms linear both,
-      scroll-fade-right 1ms linear both;
-    animation-timeline: scroll(self x), scroll(self x);
-    animation-range:
-      0px 1.5rem,
-      calc(100% - 1.5rem) 100%;
   }
 }
 

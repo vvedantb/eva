@@ -1,6 +1,6 @@
+import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconDots, IconRefresh, IconSpaceOff } from "@tabler/icons-react-native";
 import { HeaderIconButton, SheetRow, Spinner } from "@vvedantb/native-ui/primitives";
-import { tokens } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useState } from "react";
 import { MenuSheet } from "@/ui/MenuSheet";
@@ -31,7 +31,7 @@ export function DiffOptions({ pr, refreshing, onRefresh }: { pr: PrRef; refreshi
   return (
     <>
       <HeaderIconButton label={refreshing ? "Refreshing diff" : "More diff options"} onPress={() => setOpen(true)}>
-        {refreshing ? <Spinner size="sm" decorative /> : <IconDots size={18} color={tokens.color.foreground[scheme]} />}
+        {refreshing ? <Spinner size="sm" decorative /> : <IconDots size={18} color={EVA_THEME[scheme].foreground} />}
       </HeaderIconButton>
       <MenuSheet open={open} onOpenChange={setOpen} title="Diff options">
         <SheetRow icon={IconSpaceOff} title="Hide whitespace changes" active={ignoreWhitespace} multiple onPress={toggleWhitespace} />

@@ -3,12 +3,14 @@
 import { useLocation, useMatches } from "@tanstack/react-router";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import { useUser } from "@clerk/clerk-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { m, AnimatePresence } from "motion/react";
 import { api } from "@eva/backend";
-import { cn } from "@eva/ui";
-import { tokenTransition, springTransition, useMediaQuery } from "@vvedantb/ui";
+import {
+  AppShell,
+  Sidebar as ShellSidebar,
+  useMediaQuery,
+} from "@vvedantb/ui";
 import { RepoRail } from "@/lib/components/sidebar/RepoRail";
 import { SidebarMobileHeader } from "@/lib/components/sidebar/_components/SidebarMobileHeader";
 import { SidebarPanel } from "@/lib/components/sidebar/_components/SidebarPanel";
@@ -20,7 +22,7 @@ import {
   getSidebarScrollKey,
   parseSidebarRepoRoute,
 } from "@/lib/components/sidebar/sidebarPanelState";
-import { useMobileSidebarDrawer } from "@/lib/components/sidebar/useMobileSidebarDrawer";
+import { SIDEBAR_RESIZE } from "@/lib/components/sidebar/shellLayout";
 import { useSidebarRepoData } from "@/lib/components/sidebar/useSidebarRepoData";
 import { useChromeSessionTabsActive } from "@/lib/components/sidebar/session-tabs/useChromeSessionTabs";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
@@ -29,7 +31,12 @@ import { usePageTitle } from "@/lib/contexts/PageTitleContext";
 import { usePersistedScrollParent } from "@/lib/hooks/usePersistedScrollParent";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
-export function Sidebar() {
+/**
+ * The app shell: the package `AppShell` and `Sidebar` parts own the rail width,
+ * the panel layout, the resize handle and the mobile drawer. Eva supplies the
+ * rail tiles, the panel content and the mobile header content.
+ */
+export function Sidebar({ children }: { children: ReactNode }) {
   const { pathname } = useLocation();
   const { user } = useUser();
   const {
@@ -40,10 +47,6 @@ export function Sidebar() {
     mobileOpen,
     setMobileOpen,
     setSessionsNavMode,
-    sidebarWidth,
-    setSidebarWidth,
-    previewSidebarWidth,
-    commitSidebarWidth,
   } = useSidebar();
   const { pageTitle } = usePageTitle();
   // Entity pages (a session, a project, a pull request) title themselves with
@@ -59,10 +62,16 @@ export function Sidebar() {
       ),
   });
   const mobileHeaderTitle = pageTitle || routeTitle;
-  const isDesktop = useMediaQuery("(min-width: 1024px)");
+  // The package shell uses the `md` breakpoint.
+  const isDesktop = useMediaQuery("(min-width: 768px)");
 
-  const { closeMobileSidebar, handleMobileDrawerDragEnd, closeOnEscape } =
-    useMobileSidebarDrawer({ pathname, isDesktop, mobileOpen, setMobileOpen });
+  const closeMobileSidebar = () => setMobileOpen(false);
+  // A route change closes the drawer (the package leaves this to the app).
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname);
+    if (mobileOpen) setMobileOpen(false);
+  }
 
   useShortcut("toggleSidebar", (e) => {
     e.preventDefault();
@@ -123,87 +132,60 @@ export function Sidebar() {
   const panelKey = getSidebarPanelKey(flags, contextSidebarMode);
 
   return (
-    <>
-      <SidebarMobileHeader
-        title={mobileHeaderTitle}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-        setMobileOpen={setMobileOpen}
-        onKeyDown={closeOnEscape}
-      />
-
-      <AnimatePresence initial={false}>
-        {mobileOpen && (
-          <m.button
-            type="button"
-            aria-label="Close navigation"
-            className="fixed inset-0 z-40 bg-background/62 lg:hidden"
-            onClick={closeMobileSidebar}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={tokenTransition.base}
-          />
-        )}
-      </AnimatePresence>
-
-      <m.aside
-        // Off-screen below `lg` when closed: `inert` keeps its links out of the
-        // tab order and the accessibility tree instead of leaving a focusable
-        // drawer parked outside the viewport.
-        inert={!isDesktop && !mobileOpen}
-        onKeyDown={closeOnEscape}
-        className={cn(
-          "fixed inset-y-0 left-0 z-50 flex pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] lg:py-0",
-          // Global pages are rail-only except Sessions (grouped cross-repo list).
-          // Collapsed = hide the secondary panel entirely (rail only on lg+).
-          showSidePanel
-            ? cn(
-                "w-[min(20rem,calc(100vw-1.5rem))]",
-                collapsed ? "lg:w-16" : "lg:w-(--eva-sidebar-width,20rem)",
-              )
-            : "w-16",
-        )}
-        initial={false}
-        animate={{ x: isDesktop || mobileOpen ? 0 : "-100%" }}
-        transition={springTransition}
-        drag={!isDesktop && mobileOpen ? "x" : false}
-        dragDirectionLock
-        dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={{ left: 0.45, right: 0.08 }}
-        onDragEnd={handleMobileDrawerDragEnd}
+    <AppShell.Root
+      scroll="document"
+      resizable={SIDEBAR_RESIZE}
+      // Collapsed, or a route with no side panel: the content sits next to the rail.
+      panelHidden={collapsed || !showSidePanel}
+      className="bg-app-shell"
+    >
+      <AppShell.SkipLink />
+      <ShellSidebar.Root
+        isDesktop={isDesktop}
+        mobileOpen={mobileOpen}
+        onMobileOpenChange={setMobileOpen}
+        collapsed={collapsed}
+        // Global pages are rail only, except Sessions (grouped cross-repo list).
+        panelHidden={!showSidePanel}
       >
-        <RepoRail
-          repos={repos ?? []}
-          currentOwner={owner}
-          currentName={repoName}
-          currentAppName={appName}
-          pathname={pathname}
-          onNavigate={closeMobileSidebar}
-          userName={user?.fullName || user?.firstName || "User"}
-          showSearch={isRepoRoute}
+        <SidebarMobileHeader
+          title={mobileHeaderTitle}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
-        {showSidePanel ? (
-          <SidebarPanel
-            panelKey={panelKey}
-            flags={flags}
-            contextSidebarMode={contextSidebarMode}
-            setContextSidebarMode={setContextSidebarMode}
+        <ShellSidebar.Backdrop />
+        <ShellSidebar.Aside>
+          <RepoRail
+            repos={repos ?? []}
+            currentOwner={owner}
+            currentName={repoName}
+            currentAppName={appName}
             pathname={pathname}
-            route={route}
-            repo={repo}
-            repoLogoUrl={repoLogoUrl}
-            teamBackgroundUrl={teamBackgroundUrl}
-            scrollRef={sidebarScrollRef}
             onNavigate={closeMobileSidebar}
-            collapsed={collapsed}
-            sidebarWidth={sidebarWidth}
-            previewSidebarWidth={previewSidebarWidth}
-            commitSidebarWidth={commitSidebarWidth}
-            setSidebarWidth={setSidebarWidth}
+            userName={user?.fullName || user?.firstName || "User"}
+            showSearch={isRepoRoute}
           />
-        ) : null}
-      </m.aside>
-    </>
+          {showSidePanel ? (
+            <SidebarPanel
+              panelKey={panelKey}
+              flags={flags}
+              contextSidebarMode={contextSidebarMode}
+              setContextSidebarMode={setContextSidebarMode}
+              pathname={pathname}
+              route={route}
+              repo={repo}
+              repoLogoUrl={repoLogoUrl}
+              teamBackgroundUrl={teamBackgroundUrl}
+              scrollRef={sidebarScrollRef}
+              onNavigate={closeMobileSidebar}
+            />
+          ) : null}
+          <ShellSidebar.ResizeHandle />
+        </ShellSidebar.Aside>
+      </ShellSidebar.Root>
+      <AppShell.Main>
+        <AppShell.Content>{children}</AppShell.Content>
+      </AppShell.Main>
+    </AppShell.Root>
   );
 }

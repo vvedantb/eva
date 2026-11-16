@@ -115,6 +115,23 @@ export const setSandboxIdlePauseSettings = authMutation({
   },
 });
 
+/**
+ * Switches the idle and leak sweeps off. `scripts/sync-prod-to-dev.mjs` runs
+ * it after each import: the mirrored row carries prod's `on`, and dev's sweeps
+ * would then act on a stale copy of prod's sessions.
+ */
+export const switchOffInternal = internalMutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const existing = await ctx.db.query("appSettings").first();
+    if (existing) {
+      await ctx.db.patch(existing._id, { sandboxIdlePauseMode: "off" });
+    }
+    return null;
+  },
+});
+
 /** Same cap per repo and kind as the rail's awake-sandbox counts. */
 const AWAKE_PER_REPO_LIMIT = 64;
 
