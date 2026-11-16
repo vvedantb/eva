@@ -1,5 +1,13 @@
 # Changelog
 
+## CI: the daemon kill test no longer fails at random under load
+
+Date: 2026-11-16
+
+WHY: `killEntityDaemonTreeContract` failed about 1 run in 7 under CPU load (it failed CI on two phone PRs that touched no backend code): the kill command waits for the daemon only, and the test checked the daemon's child at the same instant, before that child had gone.
+
+Architectural: the test now waits up to 1s (the gap before the relaunch) for the child to go, and counts a zombie as gone, since a zombie has closed the flock fd. The kill command is unchanged. Under load: 2 of 15 runs failed before, 0 of 30 after; with the child-kill removed from the command, the test still fails.
+
 ## Settings: no explanatory sub-text under titles
 
 Date: 2026-11-16
