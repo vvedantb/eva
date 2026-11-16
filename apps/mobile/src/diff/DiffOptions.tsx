@@ -5,7 +5,7 @@ import { toast } from "@vvedantb/native-ui/toast";
 import { useState } from "react";
 import { MenuSheet } from "@/ui/MenuSheet";
 import { useScheme } from "@/ui/theme";
-import { useIgnoreWhitespace, usePendingLineComments, type PrRef } from "./prDiffStore";
+import { useIgnoreWhitespace, usePendingLineComments, type DiffRef } from "./prDiffStore";
 
 /**
  * The web Code toolbar's ⋯ menu, as a sheet from a header button: Hide
@@ -14,7 +14,7 @@ import { useIgnoreWhitespace, usePendingLineComments, type PrRef } from "./prDif
  * nothing to act on at phone width: the diff is one unified column, one file
  * at a time.
  */
-export function DiffOptions({ pr, refreshing, onRefresh }: { pr: PrRef; refreshing: boolean; onRefresh: () => void }) {
+export function DiffOptions({ pr, refreshing, onRefresh }: { pr: DiffRef; refreshing: boolean; onRefresh: () => void }) {
   const scheme = useScheme();
   const [open, setOpen] = useState(false);
   const [ignoreWhitespace, setIgnoreWhitespace] = useIgnoreWhitespace();

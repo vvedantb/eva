@@ -35,7 +35,7 @@ import { BackHandler, Linking, Pressable, ScrollView, View, type TextInput } fro
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MenuSheet } from "@/ui/MenuSheet";
 import { textColor, useScheme } from "@/ui/theme";
-import { usePendingLineComments, useViewedFiles, type PrDiffState, type PrRef } from "./prDiffStore";
+import { usePendingLineComments, useViewedFiles, type DiffRef, type PrDiffState } from "./prDiffStore";
 
 type ReadyDiff = Extract<PrDiffState, { status: "ready" }>;
 
@@ -127,7 +127,7 @@ export function PrFileDiff({
   onPathChange,
   commentable,
 }: {
-  pr: PrRef;
+  pr: DiffRef;
   diff: ReadyDiff;
   /** The file to show. One the PR does not touch (or none) opens the first, as the web list starts there. */
   path: string | undefined;

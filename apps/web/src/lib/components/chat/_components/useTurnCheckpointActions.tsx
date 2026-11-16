@@ -8,6 +8,15 @@ import { toast, ConfirmDialog } from "@vvedantb/ui";
 import { IconArrowBackUp, IconGitCompare } from "@tabler/icons-react";
 import type { ChatMessageActionItem } from "@/lib/components/chat/ChatMessageActions";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
+import {
+  DIFF_TURN_LABEL,
+  restoreTurnLabel,
+  TURN_RESTORE_BLOCKED_REASON,
+  TURN_RESTORE_COPY,
+  TURN_RESTORE_FAILED,
+  turnCheckpoint,
+  turnRestoredLabel,
+} from "@eva/shared/turnCheckpoint";
 import { TurnDiffDialog } from "./TurnDiffDialog";
 
 /** Session-side context a message row needs to diff or restore a turn. */
@@ -19,14 +28,6 @@ export interface TurnCheckpointContext {
 type RevertStatus = FunctionReturnType<
   typeof api.sandbox.revertSessionToTurn
 >["status"];
-
-/** Why a restore did not happen, in the user's terms. */
-const BLOCKED_REASON: Record<Exclude<RevertStatus, "restored">, string> = {
-  not_running: "Start the sandbox first",
-  turn_open: "Wait for the current turn to finish",
-  dirty_worktree: "Commit or discard local changes first",
-  sha_missing: "Checkpoint commit not found",
-};
 
 type RevertAction = ReturnType<
   typeof useAction<typeof api.sandbox.revertSessionToTurn>
@@ -45,16 +46,15 @@ async function runRevert(
   try {
     const result = await revert({ sessionId, messageId });
     if (result.status === "restored") {
-      const label = result.pushed
-        ? "Workspace restored"
-        : "Workspace restored — push pending";
-      mutationSuccess(label, "turn-restore");
+      mutationSuccess(turnRestoredLabel(result.pushed), "turn-restore");
     } else {
-      toast.message(BLOCKED_REASON[result.status], { id: "turn-restore" });
+      toast.message(TURN_RESTORE_BLOCKED_REASON[result.status], {
+        id: "turn-restore",
+      });
     }
     return result.status;
   } catch {
-    mutationError("Couldn't restore the workspace", "turn-restore");
+    mutationError(TURN_RESTORE_FAILED, "turn-restore");
     return null;
   }
 }
@@ -87,16 +87,11 @@ export function useTurnCheckpointActions({
   const [restoring, setRestoring] = useState(false);
   const revert = useAction(api.sandbox.revertSessionToTurn);
 
-  const { beforeSha, afterSha } = message;
-  if (
-    context === undefined ||
-    message.role !== "assistant" ||
-    beforeSha === undefined ||
-    afterSha === undefined ||
-    beforeSha === afterSha
-  ) {
+  const checkpoint = turnCheckpoint(message);
+  if (context === undefined || checkpoint === null) {
     return { items: [], dialogs: null };
   }
+  const { beforeSha, afterSha } = checkpoint;
 
   const handleRestore = async () => {
     setRestoring(true);
@@ -109,7 +104,7 @@ export function useTurnCheckpointActions({
   const items: ChatMessageActionItem[] = [
     {
       key: "turn-diff",
-      label: "Diff this turn",
+      label: DIFF_TURN_LABEL,
       icon: <IconGitCompare />,
       onClick: () => {
         setDialogsMounted(true);
@@ -118,9 +113,7 @@ export function useTurnCheckpointActions({
     },
     {
       key: "turn-restore",
-      label: sandboxRunning
-        ? "Restore to before this turn"
-        : "Restore to before this turn (start the sandbox first)",
+      label: restoreTurnLabel(sandboxRunning),
       icon: <IconArrowBackUp />,
       onClick: () => {
         setDialogsMounted(true);
@@ -146,15 +139,14 @@ export function useTurnCheckpointActions({
         size="md"
         open={restoreOpen}
         onOpenChange={setRestoreOpen}
-        title="Restore to before this turn?"
-        description="The workspace goes back to how it was before this turn, as a new commit on the session branch."
+        title={TURN_RESTORE_COPY.title}
+        description={TURN_RESTORE_COPY.description}
         body={
           <p className="text-sm text-muted-foreground">
-            Later turns stay in history and the pull request shows the restore.
-            Restore again on a later turn to undo it.
+            {TURN_RESTORE_COPY.body}
           </p>
         }
-        confirmLabel="Restore"
+        confirmLabel={TURN_RESTORE_COPY.confirmLabel}
         variant="destructive"
         onConfirm={() => {
           void handleRestore();

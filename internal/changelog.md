@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: diff a turn, or restore to before it
+
+Date: 2026-11-16
+
+WHY: On the web a session reply that changed code offers "Diff this turn" and "Restore to before this turn" (its checkpoints); the phone had neither, so undoing a bad turn needed the web.
+
+Architectural: the restore copy, the blocked-restore reasons, the labels and `turnCheckpoint` (the reply's before/after commits, or null) moved to `@eva/shared/turnCheckpoint`; the web hook and dialog read them. The phone puts a "Changes" chip under such a reply (`src/chat/TurnChangesChip.tsx`; the footer row is full on a phone): a sheet with Diff this turn, which opens a new turn diff screen (`app/chat/[target]/turn-diff.tsx`: the files, then one file, read only), and Restore, behind the web confirm (`sandbox.revertSessionToTurn`). The phone diff store and views now take a `DiffRef` (a pull request or two commits; commits read `github.getCompareDiff`), so the turn diff reuses the PR Code tab's list and file view.
+
 ## Phone: see and stop a chat's background agents
 
 Date: 2026-11-16
