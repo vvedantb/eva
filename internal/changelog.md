@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: automations, with their runs, Run now and an On switch
+
+Date: 2026-11-16
+
+WHY: Automations and their reports lived only on the web, so checking last night's run or starting one meant opening the web.
+
+Architectural: the trigger and schedule wording (`automationTriggerOf`, `describeTrigger`, `describeCron` and the UTC-local cron shift) moved from the web's `trigger.ts` and `CronScheduleCard.tsx` to `@eva/shared/automations`, with `cronstrue` as a shared peer and a phone dependency (the version the web already uses; no lockfile version changes). The phone's Projects tab gets an Automations section (`src/automations/AutomationsSection.tsx`, the web sidebar group for the chosen repo), and `app/automation/[automationId].tsx` shows when it runs, an On switch (`automations.update`), Run now (`automations.runNow`), the prompt and the last 50 runs, each opening its report, error and pull request, marking it read (`acknowledgeRun`) and, while running, offering Stop (`cancelRun`).
+
 ## Phone: read, reply to and resolve a doc's comments
 
 Date: 2026-11-16

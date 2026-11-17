@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./activityTrace": "./src/activityTrace.ts",
+    "./automations": "./src/automations.ts",
     "./backgroundAgents": "./src/backgroundAgents.ts",
     "./artifactBridge": "./src/artifactBridge.ts",
     "./agentTurnLimits": "./src/agentTurnLimits.ts",
@@ -53,6 +54,7 @@
     "@vvedantb/ui": ">=0.18.0",
     "convex": ">=1.0.0",
     "convex-helpers": "0.1.114",
+    "cronstrue": ">=3.0.0",
     "dayjs": ">=1.0.0",
     "facehash": ">=0.0.7",
     "react": ">=19.0.0",
@@ -63,6 +65,7 @@
     "@json-render/react": "0.21.0",
     "@types/react": "^19.0.0",
     "@vvedantb/ui": "0.50.2",
+    "cronstrue": "^3.13.0",
     "tailwind-merge": "^2.6.1",
     "zod": "4.6.7"
   }
