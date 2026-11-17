@@ -395,13 +395,15 @@ const SPLIT_PY = [
   "    table, _, file = name.partition('/')",
   "    if file != 'documents.jsonl' or table not in ('sessions', 'turns', 'agentRuns', 'agentTasks', 'projects'):",
   "        return data",
+  // Split on b'\n' only: str.splitlines() also breaks on U+2028/U+2029, which
+  // JSON leaves raw inside strings, and cut a document in half.
   "    out = []",
-  "    for line in data.decode('utf-8').splitlines():",
+  "    for line in data.split(b'\\n'):",
   "        if not line.strip():",
   "            continue",
   "        doc = json.loads(line)",
-  "        out.append(json.dumps(doc, ensure_ascii=False) if settle(table, doc) else line)",
-  "    return ('\\n'.join(out) + '\\n').encode('utf-8')",
+  "        out.append(json.dumps(doc, ensure_ascii=False).encode('utf-8') if settle(table, doc) else line)",
+  "    return b'\\n'.join(out) + b'\\n'",
   "root_tmp = src + '.root'",
   "buckets = {}",
   "stats = {'component': 0, 'storage': 0, 'root': 0}",
@@ -443,8 +445,12 @@ function splitComponents(zip, outDir, mode) {
       shell: isWindows,
       encoding: "utf8",
     });
-    if (res.error || res.status !== 0) {
+    if (res.error) {
       continue;
+    }
+    if (res.status !== 0) {
+      // The traceback is already on stderr; do not blame a missing python.
+      fail(`The snapshot split script failed (${python} exit ${res.status}).`);
     }
     const lines = (res.stdout ?? "").split(/\r?\n/);
     const components = lines
