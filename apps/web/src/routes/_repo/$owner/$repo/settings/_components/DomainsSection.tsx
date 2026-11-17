@@ -39,7 +39,6 @@ export function DomainsSection({
   return (
     <SettingsField
       label="Domains"
-      description="Hostnames for this app. The Chrome extension picks this repo when you visit them."
     >
       <div className="space-y-2">
         {domains.length > 0 ? (

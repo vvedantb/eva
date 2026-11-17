@@ -50,3 +50,8 @@ FOLLOW ALL OF THESE RULES
 - Backend changes must keep the newest published APK working (CI: `scripts/check-apk-compat.sh`); keep old names or args until it updates.
 
 Fight entropy. Leave the codebase better than you found it.
+
+## UI copy
+- Subtext is the exception, not the default. Most sections, cards and rows show a title only.
+- Add a description only when the user needs it to act and the title, value or badge does not already say it (a price, a limit, a warning).
+- Never repeat the title, the value, a badge or a nearby row. Say each thing once, in plain words.

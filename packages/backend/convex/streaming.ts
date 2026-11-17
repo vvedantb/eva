@@ -23,8 +23,9 @@ import { findDocWithAccess } from "./_docs/access";
 
 /**
  * Finalize an in-flight assistant message after the user hits stop.
- * Keeps whatever streamed text / tool timeline exists; deletes the bubble when
- * nothing was produced (avoids leaving "Execution cancelled by user.").
+ * Keeps whatever streamed text / tool timeline exists and marks the row
+ * `stopped`, so the chat labels it; deletes the bubble when nothing was
+ * produced (avoids leaving "Execution cancelled by user.").
  */
 export async function finalizeCancelledAssistantMessage(
   ctx: MutationCtx,
@@ -43,6 +44,7 @@ export async function finalizeCancelledAssistantMessage(
       ? { activityLog: outcome.activityLog }
       : {}),
     finishedAt: Date.now(),
+    stopped: true,
   });
 }
 

@@ -1,5 +1,95 @@
 # Changelog
 
+## Phone: a message's actions open on press and hold
+
+Date: 2026-11-17
+
+WHY: Every message carried a row of six buttons (copy, link, fork, thumbs), which doubled the chat's height on a phone and made long chats noisy.
+
+Architectural: `MessageFooter` keeps only the model mark and the time; the actions move to `src/chat/MessageHoldMenu.tsx`, one sheet for the chat screen that a press and hold on a message opens (with a haptic; the message shrinks a little while held; screen readers get it as an action): the reply's thumbs, Copy text, Copy link, Fork from here, Retry on a failed turn, and Diff this turn and Restore on a reply that changed code. The Changes chip stays; its rows and restore confirm are now `TurnChangesRows` and `useTurnRestore`, shared by both.
+
+## Phone: automations, with their runs, Run now and an On switch
+
+Date: 2026-11-16
+
+WHY: Automations and their reports lived only on the web, so checking last night's run or starting one meant opening the web.
+
+Architectural: the trigger and schedule wording (`automationTriggerOf`, `describeTrigger`, `describeCron` and the UTC-local cron shift) moved from the web's `trigger.ts` and `CronScheduleCard.tsx` to `@eva/shared/automations`, with `cronstrue` as a shared peer and a phone dependency (the version the web already uses; no lockfile version changes). The phone's Projects tab gets an Automations section (`src/automations/AutomationsSection.tsx`, the web sidebar group for the chosen repo), and `app/automation/[automationId].tsx` shows when it runs, an On switch (`automations.update`), Run now (`automations.runNow`), the prompt and the last 50 runs, each opening its report, error and pull request, marking it read (`acknowledgeRun`) and, while running, offering Stop (`cancelRun`).
+
+## Phone: read, reply to and resolve a doc's comments
+
+Date: 2026-11-16
+
+WHY: Teammates and Eva comment on docs on the web, but the phone showed no comments, so a question on a PRD could not be answered from the phone.
+
+Architectural: the thread split (open, resolved, replies by parent) and the failure toasts moved to `@eva/shared/docComments`; the web panel and thread read them. The phone doc screen gets a Comments button with the open count (`src/docs/DocCommentsButton.tsx`), which opens `app/doc/comments.tsx`: Open and Resolved threads with the quoted text, "For Eva", the comments and replies, Resolve or Reopen, and Reply (`docComments.create` with `parentId`). A new thread starts from a text selection, which stays on the web.
+
+## Phone: sort and filter the Sessions list
+
+Date: 2026-11-16
+
+WHY: The web Sessions sidebar can sort projects and threads, show only your own sessions and choose how many show per project; the phone list had one fixed order and three rows.
+
+Architectural: the option labels, the visible-threads limits and clamp, and `filterSessionsStartedBy` moved from the web's `sessionsSidebarSettings.ts` to `@eva/shared` (`sessionList.ts`); the web re-exports them. The phone's `src/sessions/SessionListOptions.tsx` keeps the options on the device and adds a header button on the Sessions section with a sheet (Sort projects, Sort threads, Only my sessions, Visible threads); the list applies them through `sessionListEntries`, `useSessionGroups` and the "Show more" row.
+
+## Phone: search across teams and repos
+
+Date: 2026-11-16
+
+WHY: The web's ⌘K spotlight finds any session, task, project, doc, pull request or page; the phone had no search, so finding older work meant scrolling lists or opening the web.
+
+Architectural: the result groups, their order and labels moved from the web's `spotlightGroups.ts` to `@eva/shared/spotlight` (the web keeps its icons), and `repoForHref` joins `@eva/shared/appHref`: the repo whose base path a link starts with, as `spotlight.search` hits carry a link and no repo id. The phone has `app/search` (a magnifier in the Sessions tab header): a field, Recent before you type (on the device), then the grouped results; a result opens through `openAppLink`, so a session, task, project, doc or pull request opens its phone screen, a section page its tab, and the rest the web.
+
+## Phone: diff a turn, or restore to before it
+
+Date: 2026-11-16
+
+WHY: On the web a session reply that changed code offers "Diff this turn" and "Restore to before this turn" (its checkpoints); the phone had neither, so undoing a bad turn needed the web.
+
+Architectural: the restore copy, the blocked-restore reasons, the labels and `turnCheckpoint` (the reply's before/after commits, or null) moved to `@eva/shared/turnCheckpoint`; the web hook and dialog read them. The phone puts a "Changes" chip under such a reply (`src/chat/TurnChangesChip.tsx`; the footer row is full on a phone): a sheet with Diff this turn, which opens a new turn diff screen (`app/chat/[target]/turn-diff.tsx`: the files, then one file, read only), and Restore, behind the web confirm (`sandbox.revertSessionToTurn`). The phone diff store and views now take a `DiffRef` (a pull request or two commits; commits read `github.getCompareDiff`), so the turn diff reuses the PR Code tab's list and file view.
+
+## Phone: see and stop a chat's background agents
+
+Date: 2026-11-16
+
+WHY: When the agent sent subagents off to run in the background, the web showed them in a chip with Stop, but the phone showed nothing, so a runaway subagent could only be stopped from the web.
+
+Architectural: the visibility rule, the row text and the stop confirm's copy moved to `@eva/shared/backgroundAgents` (the web chip and `useStopBackgroundAgent` read them; `backgroundAgentVisibility.ts` removed). The phone's `src/chat/BackgroundAgentsChip.tsx` reads the chat's `sessionChats.get` doc and sits on the composer bar (a new `status` slot on `ComposerFooter`): "Agents N" opens a sheet of the agents with Stop, behind the web confirm (`sessionWorkflow.requestStopBackgroundAgent`). Not on the phone: View (the subagent's own thread).
+
+## UI copy rule in CLAUDE.md — 2026-11-16
+
+### Changes
+
+- `CLAUDE.md` has a new `## UI copy` section: subtext is the exception, not the default
+
+### Why
+
+Sections and rows had helper text that repeated the title or value. The rule is shared across the apps through `@vvedantb/config`.
+
+## Phone: the agent's proposed plan shows as a card in the chat
+
+Date: 2026-11-16
+
+WHY: A plan the agent proposed in a session chat showed on the web as a card with Implement, but the phone showed nothing, so a plan could only be read and acted on from the web.
+
+Architectural: the web `proposedPlanLogic.ts` and `planExport.ts` moved to `@eva/shared/proposedPlan` (the web card, Plan tab and tests read it; `toSorted` and `.at` dropped for Hermes). The phone's `src/chat/ProposedPlanCard.tsx` has `useProposedPlans` (`proposedPlans.listBySession`) and the card, which the chat screen puts under the message that proposed the plan (a new `after` slot on `ChatMessageRow`, the web `afterMessage`): badge, title, Copy, a folded preview with Expand plan, Save as Document (`docs.createFromSession`, then the doc screen), Implement (`chats.send` with the web prompt, then `proposedPlans.markImplemented`) and Implement in new session (`chats.start` on the chat's model and account, `sessions.updatePlanContent`, `markImplemented`). Not on the phone: Edit and Download.
+
+## CI: the daemon kill test no longer fails at random under load
+
+Date: 2026-11-16
+
+WHY: `killEntityDaemonTreeContract` failed about 1 run in 7 under CPU load (it failed CI on two phone PRs that touched no backend code): the kill command waits for the daemon only, and the test checked the daemon's child at the same instant, before that child had gone.
+
+Architectural: the test now waits up to 1s (the gap before the relaunch) for the child to go, and counts a zombie as gone, since a zombie has closed the flock fd. The kill command is unchanged. Under load: 2 of 15 runs failed before, 0 of 30 after; with the child-kill removed from the command, the test still fails.
+
+## Settings: no explanatory sub-text under titles
+
+Date: 2026-11-16
+
+WHY: Every settings section, toggle and field had a line of explanation under its title. It was too much text to read.
+
+Architectural: static `description` props are removed from `SettingsSection`, `SettingsToggleRow` and `SettingsField` across global and repo settings. Kept: live data (counts, sandbox status, time zone, daily stop time, shortcut keys), input format hints (cron, Grok webhook URL, Tabler icon name), "never injected" secret warnings, instructional empty states and experimental flag descriptions. `isMonorepoCodebase` and the `listSiblingApps` query in `ConfigClient` are gone, because only the removed "Applies to every app" hint used them.
+
 ## Phone: a chat with several PRs lists them all in its "…" menu
 
 Date: 2026-11-16

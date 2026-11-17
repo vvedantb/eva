@@ -14,16 +14,17 @@ import type { BackgroundAgentEntry } from "@eva/backend";
 import { IconRobot } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import { use, useState } from "react";
-import { isVisibleBackgroundAgent } from "./backgroundAgentVisibility";
+import {
+  backgroundAgentStatusLine,
+  backgroundAgentTitle,
+  backgroundAgentsLabel,
+  isVisibleBackgroundAgent,
+} from "@eva/shared/backgroundAgents";
 import { COMPOSER_CHIP_CLASS } from "./composerChip";
 import type { RequestAgentStop } from "./useStopBackgroundAgent";
 import { AgentStopButton } from "@/lib/components/sandbox/AgentsPanel";
 
 type BackgroundAgent = BackgroundAgentEntry;
-
-function formatStatus(status: string): string {
-  return status.replaceAll("_", " ");
-}
 
 export function BackgroundAgentsChip({
   backgroundAgents,
@@ -62,7 +63,7 @@ export function BackgroundAgentsChip({
             <PopoverTrigger asChild>
               <button
                 type="button"
-                aria-label={`${runningAgents.length} background ${runningAgents.length === 1 ? "agent" : "agents"}`}
+                aria-label={`Background: ${backgroundAgentsLabel(runningAgents.length)}`}
                 className={COMPOSER_CHIP_CLASS}
               >
                 <IconRobot className="size-3.5 shrink-0 text-muted-foreground" />
@@ -87,11 +88,10 @@ export function BackgroundAgentsChip({
                       <IconRobot className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                       <div className="min-w-0 grow">
                         <p className="truncate text-sm font-medium text-foreground">
-                          {agent.description?.trim() || "Background agent"}
+                          {backgroundAgentTitle(agent)}
                         </p>
                         <p className="text-xs capitalize text-muted-foreground">
-                          {formatStatus(agent.status)}
-                          {agent.backgrounded ? " · backgrounded" : ""}
+                          {backgroundAgentStatusLine(agent)}
                         </p>
                       </div>
                       {openSubagent ? (

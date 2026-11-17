@@ -85,15 +85,16 @@ export function SandboxStatusClient() {
     );
   }
 
-  const dailyStop = autoStop.enabled
-    ? ` Daily auto-stop also stops all of them at ${autoStop.time} (${autoStop.timeZone}).`
-    : "";
 
   return (
     <SettingsPage title="Sandbox status">
       <SettingsSection
         title={`Awake sandboxes (${data.sandboxes.length})`}
-        description={`Sandboxes that run now, who kept each awake last, and when idle pause stops it.${dailyStop}`}
+        description={
+          autoStop.enabled
+            ? `Daily stop at ${autoStop.time} (${autoStop.timeZone})`
+            : undefined
+        }
         bodyVariant="list"
       >
         {data.sandboxes.length === 0 ? (
