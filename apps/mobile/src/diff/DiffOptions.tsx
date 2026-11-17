@@ -1,9 +1,8 @@
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconDots, IconRefresh, IconSpaceOff } from "@tabler/icons-react-native";
-import { HeaderIconButton, SheetRow, Spinner } from "@vvedantb/native-ui/primitives";
+import { HeaderIconButton, SheetRow, Spinner, MenuSheet } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useState } from "react";
-import { MenuSheet } from "@/ui/MenuSheet";
 import { useScheme } from "@/ui/theme";
 import { useIgnoreWhitespace, usePendingLineComments, type DiffRef } from "./prDiffStore";
 

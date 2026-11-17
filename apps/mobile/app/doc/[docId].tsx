@@ -4,7 +4,7 @@ import { IconCopy, IconDots, IconExternalLink, IconFileText } from "@tabler/icon
 import { goBackOrReplace } from "@vvedantb/native-ui/expo-router";
 import { StackPageHeader } from "@vvedantb/native-ui/layout";
 import { Markdown } from "@vvedantb/native-ui/markdown";
-import { CenteredSpinner, EmptyState, SheetRow } from "@vvedantb/native-ui/primitives";
+import { CenteredSpinner, EmptyState, SheetRow, MenuSheet } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useQuery } from "convex/react";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
@@ -13,7 +13,6 @@ import { Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DocCommentsButton } from "@/docs/DocCommentsButton";
 import { displayTitle, timeAgo } from "@/ui/format";
-import { MenuSheet } from "@/ui/MenuSheet";
 import { copyText } from "@/ui/copyText";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 

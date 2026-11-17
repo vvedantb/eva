@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: hold a message for an iMessage-style menu; menus come from the kit
+
+Date: 2026-11-17
+
+WHY: The hold menu on chat messages and task comments was a bottom sheet; the user wanted iMessage's, with the message lifted in place, the reactions above it and the actions below it. The phone's menu sheet and reaction row were also Eva-only copies that other apps could use.
+
+Architectural: `@vvedantb/native-ui` 0.25 adds `MessageContextMenu` and `Message`'s `menu` prop, `MenuSheet`, `SubmenuRow`, `MenuDivider` and `ReactionRow` (packages #277, #278). The phone's `src/ui/MenuSheet.tsx` is removed and its 19 users import the kit's. Chat rows pass `menu` to the kit `Message` (`useMessageMenu` in `src/chat/MessageHoldMenu.tsx`: thumbs in the pill; Copy text, Copy link, Fork, Retry, Diff this turn and Restore in the card). Task comments and the task description use the same menu through `ReactableMenu` (`measureHeld` reads where the held item is), with the quick emoji and "More reactions" in the pill.
+
 ## Phone: a message's actions open on press and hold
 
 Date: 2026-11-17
