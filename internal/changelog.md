@@ -1,5 +1,13 @@
 # Changelog
 
+## Sandboxes get an allowlist of env vars, not prod's secrets
+
+Date: 2026-11-17
+
+WHY: The Eva seed copied every prod env var into each sandbox. Sandboxes then sent real email (`EMAIL_ENV=production`), held the prod GitHub app key, and rejected the dev Clerk sign-in.
+
+Architectural: `packages/backend/scripts/sandboxEnv.mjs` lists every env var a sandbox gets, each with one rule: copy from prod, take the sandbox's own Eva env var of the same name (test keys), a fixed value, or a fresh generated secret or key pair. `sync-to-local.mjs --sandbox-env` sets those, removes every other var on the local backend, and reports prod vars that are not in the list and sandbox vars Eva does not provide. `.eva/config.json` seeds with `--sandbox-env`. `generate-sandbox-jwt-keys.mjs` now shares `createSandboxJwtKeys` with the list.
+
 ## Web: archive a linked session group
 
 Date: 2026-11-17

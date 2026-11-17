@@ -22,8 +22,7 @@
       "snapshot": {
         "build": [],
         "seed": [
-          "cd packages/backend && CONVEX_SOURCE_DEPLOY_KEY=\"$CONVEX_SOURCE_DEPLOY_KEY\" node scripts/sync-to-local.mjs --include-env --out /tmp/eva-staging-backup.zip",
-          "cd packages/backend && npx convex env set CLERK_JWT_ISSUER_DOMAIN https://powerful-hedgehog-79.clerk.accounts.dev"
+          "cd packages/backend && CONVEX_SOURCE_DEPLOY_KEY=\"$CONVEX_SOURCE_DEPLOY_KEY\" node scripts/sync-to-local.mjs --sandbox-env --out /tmp/eva-staging-backup.zip"
         ]
       }
     }
