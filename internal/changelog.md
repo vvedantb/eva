@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: archive a linked session group
+
+Date: 2026-11-17
+
+WHY: Clearing out a finished group meant archiving each of its sessions one by one.
+
+Architectural: new `sessions.archiveGroup` archives every active, standalone member the user can reach (same 50 cap as `listGroup`). `chats.archive` and the group archive now share `stopAndArchiveSession` in `_sessions/mutations.ts`. `SessionGroupArchiveDialog` confirms with the server's active count and is opened from the sidebar group's right-click menu (active list only) and the session header's linked chip.
+
 ## Phone: a message's actions open on press and hold
 
 Date: 2026-11-17
