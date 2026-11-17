@@ -203,7 +203,7 @@ export const stop = authMutation({
           await cancelTaskRun(ctx, task);
           return null;
         }
-        await cancelChatExecution(ctx, entity.context);
+        await cancelChatExecution(ctx, entity.context, { holdQueue: true });
         return null;
       }
       case "task":
@@ -215,7 +215,9 @@ export const stop = authMutation({
           return null;
         }
         const found = await findOwnerChat(ctx.db, entity);
-        if (found) await cancelChatExecution(ctx, found);
+        if (found) {
+          await cancelChatExecution(ctx, found, { holdQueue: true });
+        }
         return null;
       }
     }

@@ -409,6 +409,9 @@ export const chatDaemonEntityFields = {
   // `steer: "requested"`. Kept on the entity so the 50ms claim poll reads the
   // queue only while a steer is waiting (see `_chat/steer.ts`).
   steerRequestedAt: v.optional(v.number()),
+  // When the user last pressed Stop. Messages queued before it stay queued
+  // until the user presses Steer (see `nextRunnableQueuedMessage`).
+  queueHeldAt: v.optional(v.number()),
   // Same level-triggered flag as sessionDaemonStates.usageRefreshRequestedAt,
   // for project and task chat daemons.
   usageRefreshRequestedAt: v.optional(v.number()),

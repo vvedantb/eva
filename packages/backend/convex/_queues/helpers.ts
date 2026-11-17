@@ -130,6 +130,8 @@ type ChatQueueConfig<TId extends ChatQueueId, TEntity, TPrepared> = {
   backgroundAgents: (entity: TEntity) => BackgroundAgentEntry[] | undefined;
   /** The daemon-minted continuation turn, if one is open. */
   syntheticTurnMessageId: (entity: TEntity) => Id<"messages"> | undefined;
+  /** When the user last pressed Stop (see `nextRunnableQueuedMessage`). */
+  queueHeldAt: (entity: TEntity) => number | undefined;
   streamingEntityId: (id: TId) => string;
   /**
    * Provider the entity was created on, the legacy fallback for handoff
@@ -338,23 +340,29 @@ export async function usageLimitHoldFor(
 }
 
 /**
- * The queued message to run next. While the chat's after-turn question is
- * open, only a message queued after the question appeared may run: it is the
- * user's answer. Messages queued during the turn wait behind it, so they never
- * run past the question and hide its card. Null when nothing may run yet.
+ * The queued message to run next. Two holds keep older messages waiting; only
+ * a message queued after the newer hold may run:
+ * - an open after-turn question: the later message is the user's answer, and
+ *   messages queued during the turn must not run past the question and hide
+ *   its card.
+ * - a Stop (`queueHeldAt`): Stop means stop, so what was queued before it
+ *   waits for Steer instead of starting the moment the turn ends.
+ * Null when nothing may run yet.
  */
 async function nextRunnableQueuedMessage(
   ctx: MutationCtx,
   id: ChatQueueId,
+  queueHeldAt: number | undefined,
 ): Promise<Doc<"queuedMessages"> | null> {
   const queue = ctx.db
     .query("queuedMessages")
     .withIndex("by_parent_and_order", (q) => q.eq("parentId", id))
     .order("asc");
   const askedAt = (await findOpenChatQuestion(ctx.db, id))?.finishedAt;
-  if (askedAt === undefined) return await queue.first();
+  const heldBefore = Math.max(askedAt ?? 0, queueHeldAt ?? 0);
+  if (heldBefore === 0) return await queue.first();
   for await (const message of queue) {
-    if (message.createdAt > askedAt) return message;
+    if (message.createdAt > heldBefore) return message;
   }
   return null;
 }
@@ -419,7 +427,11 @@ async function startNextQueuedChatMessage<
     );
   }
 
-  const nextMessage = await nextRunnableQueuedMessage(ctx, id);
+  const nextMessage = await nextRunnableQueuedMessage(
+    ctx,
+    id,
+    config.queueHeldAt(entity),
+  );
   if (!nextMessage) {
     await notifyWatchingOrchestrator("completed");
     return false;
@@ -588,6 +600,7 @@ const sessionChatQueueConfig: ChatQueueConfig<
   wakeSandbox: (ctx, { session }) => requestSessionSandboxStart(ctx, session),
   backgroundAgents: ({ chat }) => chat.backgroundAgents,
   syntheticTurnMessageId: ({ chat }) => chat.syntheticTurnMessageId,
+  queueHeldAt: ({ chat }) => chat.queueHeldAt,
   streamingEntityId: (id) => sessionChatStreamingEntityId(id),
   fallbackProvider: ({ chat }) => chat.provider,
   stickyTraits: ({ chat }) => chat,
