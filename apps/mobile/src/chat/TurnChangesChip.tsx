@@ -19,23 +19,12 @@ import { Pressable, Text } from "react-native";
 import { MenuSheet } from "@/ui/MenuSheet";
 import { useScheme } from "@/ui/theme";
 
-/**
- * The web turn checkpoint actions (`useTurnCheckpointActions`, in a reply's
- * hover and right-click menus) behind one chip under a session reply that
- * changed code (chose a chip: the reply's footer row is full on a phone). A
- * tap opens a sheet: Diff this turn (the turn diff screen) and Restore to
- * before this turn, which needs a running sandbox and asks first, with the
- * web copy (`sandbox.revertSessionToTurn`: a new commit, nothing rewritten).
- * A restore the server refuses says why ("Start the sandbox first", ...).
- */
-export function TurnChangesChip({
-  checkpoint,
-  messageId,
-  sessionId,
-  repoId,
-  target,
-  sandboxRunning,
-}: {
+// The web turn checkpoint actions (`useTurnCheckpointActions`): Diff this
+// turn and Restore to before this turn, for a session reply that changed code,
+// from its Changes chip and from the message's hold menu.
+
+/** What the turn actions act on: the reply, its session, its repo and its checkpoints. */
+export type TurnChangesTarget = {
   checkpoint: TurnCheckpoint;
   messageId: string;
   sessionId: Id<"sessions">;
@@ -43,15 +32,20 @@ export function TurnChangesChip({
   /** The chat's route target, so the diff screen's Back returns here. */
   target: string;
   sandboxRunning: boolean;
-}) {
-  const theme = EVA_THEME[useScheme()];
-  const router = useRouter();
-  const revert = useAction(api.sandbox.revertSessionToTurn);
-  const [open, setOpen] = useState(false);
-  const [confirming, setConfirming] = useState(false);
+};
 
+/**
+ * The restore confirm, with the web copy (`sandbox.revertSessionToTurn`: a
+ * new commit, nothing rewritten). `request` opens it for one reply; a restore
+ * the server refuses says why ("Start the sandbox first", ...). Render
+ * `dialog` once.
+ */
+export function useTurnRestore() {
+  const revert = useAction(api.sandbox.revertSessionToTurn);
+  const [pending, setPending] = useState<{ sessionId: Id<"sessions">; messageId: string } | null>(null);
   const restore = () => {
-    revert({ sessionId, messageId }).then(
+    if (!pending) return;
+    revert(pending).then(
       (result) => {
         if (result.status === "restored") toast.success(turnRestoredLabel(result.pushed), { id: "turn-restore" });
         else toast.info(TURN_RESTORE_BLOCKED_REASON[result.status], { id: "turn-restore" });
@@ -59,6 +53,63 @@ export function TurnChangesChip({
       () => toast.error(TURN_RESTORE_FAILED, { id: "turn-restore" }),
     );
   };
+  const dialog = (
+    <ConfirmDialog
+      open={pending !== null}
+      onOpenChange={(open) => {
+        if (!open) setPending(null);
+      }}
+      title={TURN_RESTORE_COPY.title}
+      description={`${TURN_RESTORE_COPY.description} ${TURN_RESTORE_COPY.body}`}
+      confirmLabel={TURN_RESTORE_COPY.confirmLabel}
+      variant="destructive"
+      onConfirm={restore}
+    />
+  );
+  return { request: (target: { sessionId: Id<"sessions">; messageId: string }) => setPending(target), dialog };
+}
+
+/**
+ * The web turn checkpoint actions as sheet rows: Diff this turn (the turn
+ * diff screen) and Restore to before this turn, which needs a running
+ * sandbox. `close` shuts the sheet first; `onRestore` opens the confirm.
+ */
+export function TurnChangesRows({ turn, close, onRestore }: { turn: TurnChangesTarget; close: () => void; onRestore: () => void }) {
+  const router = useRouter();
+  return (
+    <>
+      <SheetRow
+        icon={IconGitCompare}
+        title={DIFF_TURN_LABEL}
+        onPress={() => {
+          close();
+          router.push({
+            pathname: "/chat/[target]/turn-diff",
+            params: { target: turn.target, repoId: turn.repoId, base: turn.checkpoint.beforeSha, head: turn.checkpoint.afterSha },
+          });
+        }}
+      />
+      <SheetRow
+        icon={IconArrowBackUp}
+        title={restoreTurnLabel(turn.sandboxRunning)}
+        disabled={!turn.sandboxRunning}
+        onPress={() => {
+          close();
+          onRestore();
+        }}
+      />
+    </>
+  );
+}
+
+/**
+ * A session reply that changed code: one chip under it (user choice; the hold
+ * menu has the same rows), opening a sheet with Diff this turn and Restore.
+ */
+export function TurnChangesChip({ turn }: { turn: TurnChangesTarget }) {
+  const theme = EVA_THEME[useScheme()];
+  const [open, setOpen] = useState(false);
+  const restore = useTurnRestore();
 
   return (
     <>
@@ -78,36 +129,9 @@ export function TurnChangesChip({
         </Text>
       </Pressable>
       <MenuSheet open={open} onOpenChange={setOpen} title="Changes in this turn">
-        <SheetRow
-          icon={IconGitCompare}
-          title={DIFF_TURN_LABEL}
-          onPress={() => {
-            setOpen(false);
-            router.push({
-              pathname: "/chat/[target]/turn-diff",
-              params: { target, repoId, base: checkpoint.beforeSha, head: checkpoint.afterSha },
-            });
-          }}
-        />
-        <SheetRow
-          icon={IconArrowBackUp}
-          title={restoreTurnLabel(sandboxRunning)}
-          disabled={!sandboxRunning}
-          onPress={() => {
-            setOpen(false);
-            setConfirming(true);
-          }}
-        />
+        <TurnChangesRows turn={turn} close={() => setOpen(false)} onRestore={() => restore.request(turn)} />
       </MenuSheet>
-      <ConfirmDialog
-        open={confirming}
-        onOpenChange={setConfirming}
-        title={TURN_RESTORE_COPY.title}
-        description={`${TURN_RESTORE_COPY.description} ${TURN_RESTORE_COPY.body}`}
-        confirmLabel={TURN_RESTORE_COPY.confirmLabel}
-        variant="destructive"
-        onConfirm={restore}
-      />
+      {restore.dialog}
     </>
   );
 }
