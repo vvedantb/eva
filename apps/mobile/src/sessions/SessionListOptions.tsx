@@ -12,12 +12,11 @@ import {
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconAdjustmentsHorizontal, IconList, IconMinus, IconPlus, IconSortDescending, IconUser } from "@tabler/icons-react-native";
-import { SheetRow } from "@vvedantb/native-ui/primitives";
+import { SheetRow, MenuDivider, MenuSheet, SubmenuRow } from "@vvedantb/native-ui/primitives";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { z } from "zod";
 import { jsonParser, persistedStore } from "@/storage/persistedStore";
-import { MenuDivider, MenuSheet, SubmenuRow } from "@/ui/MenuSheet";
 import { useScheme } from "@/ui/theme";
 
 /** The web Sessions sidebar options the phone list keeps (not its List/Folder layout: the phone has one). */

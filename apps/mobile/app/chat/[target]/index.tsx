@@ -36,6 +36,7 @@ import {
   ConversationScrollButton,
   Message,
   MessageContent,
+  type MessageMenu,
   PromptInput,
   PromptInputButton,
   Shimmer,
@@ -50,7 +51,7 @@ import type { FunctionReturnType } from "convex/server";
 import * as Clipboard from "expo-clipboard";
 import { useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
 import { useState, type ComponentProps, type ReactNode } from "react";
-import { Linking, Pressable, View } from "react-native";
+import { Linking, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AttachButton } from "@/chat/AttachButton";
 import { formatDuration } from "@eva/shared/duration";
@@ -72,8 +73,7 @@ import { UsageButton } from "@/chat/UsageSheet";
 import { useProposedPlans } from "@/chat/ProposedPlanCard";
 import { BackgroundAgentsChip } from "@/chat/BackgroundAgentsChip";
 import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
-import { impactHaptic } from "@vvedantb/native-ui/haptics";
-import { MessageHoldMenu, type HeldMessage } from "@/chat/MessageHoldMenu";
+import { useMessageMenu } from "@/chat/MessageHoldMenu";
 import { TurnChangesChip, useTurnRestore, type TurnChangesTarget } from "@/chat/TurnChangesChip";
 import { UsageLimitRecoveryCard } from "@/chat/UsageLimitRecovery";
 import { MentionMenu } from "@/chat/MentionMenu";
@@ -158,9 +158,9 @@ export default function ChatScreen() {
   const planAfter = useProposedPlans(chat);
   // Rows seen on screen, so an agent page mounts its WebView only once its row shows.
   const [seenRows] = useState(createSeenRows);
-  // The message whose hold menu is open, and the restore confirm its Restore opens.
-  const [held, setHeld] = useState<string | null>(null);
+  // The restore confirm a held reply's Restore opens, and the hold menus (the kit `Message` `menu`).
   const restore = useTurnRestore();
+  const messageMenu = useMessageMenu(restore.request);
 
   if (chat === undefined || chat === null) {
     return (
@@ -270,21 +270,22 @@ export default function ChatScreen() {
       );
     };
   };
-  // The message footer's actions, behind a press and hold (user choice): one menu for the screen.
-  const heldMessage = held === null ? undefined : visible.find((message) => message._id === held);
-  const heldMenu: HeldMessage | null = heldMessage
-    ? {
-        text: heldMessage.content,
-        link: webUrl(messageLinkHref(chat.webPath, heldMessage._id)),
-        rating:
-          heldMessage.role === "assistant"
-            ? { sentiment: mine.get(heldMessage._id)?.sentiment, onRate: (next) => rateReply(heldMessage._id, next) }
-            : undefined,
-        onFork: forkFrom ? () => forkFrom(heldMessage._id) : undefined,
-        onRetry: heldMessage.errorType !== undefined ? retryFor(heldMessage._id) : undefined,
-        turn: turnFor(heldMessage),
-      }
-    : null;
+  // The message footer's actions, behind a press and hold (user choice): built when a message is held.
+  const menuFor = (messageId: string) => {
+    const message = visible.find((entry) => entry._id === messageId);
+    if (!message) return { actions: [] };
+    return messageMenu({
+      text: message.content,
+      link: webUrl(messageLinkHref(chat.webPath, message._id)),
+      rating:
+        message.role === "assistant"
+          ? { sentiment: mine.get(message._id)?.sentiment, onRate: (next) => rateReply(message._id, next) }
+          : undefined,
+      onFork: forkFrom ? () => forkFrom(message._id) : undefined,
+      onRetry: message.errorType !== undefined ? retryFor(message._id) : undefined,
+      turn: turnFor(message),
+    });
+  };
   const panelReply =
     chat.canReply && chat.sandboxActive
       ? (message: string) => {
@@ -385,7 +386,7 @@ export default function ChatScreen() {
                 isLatestReply={message._id === latestReplyId}
                 turn={message.role === "assistant" ? precedingUserTurns.get(message._id) : undefined}
                 onOpenDiff={openDiff}
-                onHold={setHeld}
+                menuFor={menuFor}
                 cards={cards.byMessageId.get(message._id)}
                 outputs={outputs.byMessageId.get(message._id)}
                 after={planAfter(message._id)}
@@ -399,7 +400,6 @@ export default function ChatScreen() {
           }}
         />
       </SeenRowsContext.Provider>
-        <MessageHoldMenu message={heldMenu} onClose={() => setHeld(null)} onRestore={restore.request} />
         {restore.dialog}
         {/* The composer or the question card: the scroll button rides 16 above it, as the web's `bottom-4` over the dock. */}
         {/* Solid: the keyboard lifts the dock over the transcript, which must not show through it. */}
@@ -609,9 +609,6 @@ type ChatMessage = FunctionReturnType<typeof api.messages.listByParent>[number] 
  * the React Compiler keeps an unchanged message's output when the inverted
  * list draws a new batch or the screen re-renders.
  */
-/** A held message shrinks a little, the press feedback before its menu opens. */
-const HELD_STYLE = { transform: [{ scale: 0.98 }], opacity: 0.9 };
-
 function ChatMessageRow({
   message,
   dayStart,
@@ -623,7 +620,7 @@ function ChatMessageRow({
   isLatestReply,
   turn,
   onOpenDiff,
-  onHold,
+  menuFor,
   cards,
   outputs,
   onPanelReply,
@@ -646,8 +643,8 @@ function ChatMessageRow({
   onRetryTurn?: () => void;
   turn: ComponentProps<typeof MessageFooter>["turn"];
   onOpenDiff: ComponentProps<typeof AssistantMessage>["onOpenDiff"];
-  /** A press and hold on the message opens its menu (copy, link, fork, thumbs, retry, the turn's changes). */
-  onHold: (messageId: string) => void;
+  /** A press and hold on the message opens its menu (thumbs, copy, link, fork, retry, the turn's changes). */
+  menuFor: (messageId: string) => MessageMenu;
   /** The agent's cards placed under this message (`render_ui`, `render_html`). */
   cards: readonly InlineCard[] | undefined;
   /** The artifacts and reports placed under this message. */
@@ -684,23 +681,14 @@ function ChatMessageRow({
               <View className={`gap-3 ${THREAD_INSET}`}>
                 {dayStart ? <DayDivider timestamp={message.timestamp} /> : null}
                 {newStart ? <NewDivider /> : null}
-                {/* The hold target (user choice, as iMessage): the message shrinks a little while held,
-                    then a haptic and its menu; screen readers get the menu as an action. */}
-                <Pressable
-                  onLongPress={() => {
-                    impactHaptic("medium");
-                    onHold(message._id);
-                  }}
-                  delayLongPress={350}
-                  accessibilityActions={[{ name: "longpress", label: "Message actions" }]}
-                  onAccessibilityAction={() => onHold(message._id)}
-                  style={({ pressed }) => (pressed ? HELD_STYLE : undefined)}
-                >
                 {/* Web: parts `gap-0.5`; a reply is full width, a user message at most 95%. */}
+                {/* A press and hold opens the message's menu (user choice, as iMessage): the kit `Message`
+                    lifts it over the chat, with the thumbs above it and the actions below it. */}
                 <Message
                   from={message.role}
                   className={message.role === "user" ? "gap-0.5" : "max-w-full gap-0.5"}
                   style={fromTeammate ? TEAMMATE_SIDE : undefined}
+                  menu={() => menuFor(message._id)}
                 >
                   {senderName ? <TeammateName name={senderName} /> : null}
                   {fromTeammate ? (
@@ -742,7 +730,6 @@ function ChatMessageRow({
                     />
                   ) : null}
                 </Message>
-                </Pressable>
                 {after}
               </View>
   );

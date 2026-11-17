@@ -18,23 +18,18 @@ import {
   IconTrash,
   IconUserPlus,
 } from "@tabler/icons-react-native";
-import { ReplyQuoteChip } from "@vvedantb/native-ui/ai";
-import {
-  Button,
-  ConfirmDialog,
-  SheetRow,
-} from "@vvedantb/native-ui/primitives";
+import { MessageContextMenu, ReplyQuoteChip, type MessageMenuRect, type MessageSheetAction } from "@vvedantb/native-ui/ai";
+import { Button, ConfirmDialog, SheetRow, type ReactionRowItem } from "@vvedantb/native-ui/primitives";
 import { SearchInput } from "@vvedantb/native-ui/search-input";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import * as Clipboard from "expo-clipboard";
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { FooterSheet } from "@/chat/ComposerFooter";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
-import { MenuDivider, MenuSheet } from "@/ui/MenuSheet";
 import { useScheme } from "@/ui/theme";
 
 type User = FunctionReturnType<typeof api.users.listAll>[number];
@@ -69,55 +64,6 @@ export function CommentModeChip({
       accessibilityLabel="Editing your comment"
       dismissLabel="Cancel edit"
     />
-  );
-}
-
-/** The web quick reactions as one row of 44 targets; yours are tinted, and a tap toggles one. */
-function QuickReactionRow({
-  groups,
-  onToggle,
-  onMore,
-}: {
-  groups: ReactionGroup[];
-  onToggle: (emoji: string) => void;
-  onMore?: () => void;
-}) {
-  const theme = EVA_THEME[useScheme()];
-  const mine = new Set(
-    groups.filter((group) => group.reactedByMe).map((group) => group.emoji),
-  );
-  return (
-    <View className="flex-row justify-between px-2 pb-2">
-      {QUICK_REACTIONS.map((emoji) => (
-        <Pressable
-          key={emoji}
-          accessibilityRole="button"
-          accessibilityLabel={`${mine.has(emoji) ? "Remove" : "Add"} ${emoji} reaction`}
-          accessibilityState={{ selected: mine.has(emoji) }}
-          onPress={() => onToggle(emoji)}
-          className="size-11 items-center justify-center rounded-full active:opacity-70"
-          style={{
-            backgroundColor: mine.has(emoji)
-              ? withAlpha(theme.primary, 0.12)
-              : theme.secondary,
-          }}
-        >
-          <Text style={{ fontSize: 20 }}>{emoji}</Text>
-        </Pressable>
-      ))}
-      {onMore ? (
-        // The web picker's trigger icon: every other emoji, by search.
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="More reactions"
-          onPress={onMore}
-          className="size-11 items-center justify-center rounded-full active:opacity-70"
-          style={{ backgroundColor: theme.secondary }}
-        >
-          <IconMoodSmile size={20} color={theme.mutedForeground} />
-        </Pressable>
-      ) : null}
-    </View>
   );
 }
 
@@ -259,16 +205,26 @@ export function EmojiPickerSheet({
   );
 }
 
+/** Where a held comment or description is on screen (`measureInWindow`), for the hold menu. */
+export type HeldRect = MessageMenuRect;
+
+/** Reads where a held view is on screen (`measureInWindow`), for the hold menu. Call it from a handler. */
+export function measureHeld(view: View | null, then: (rect: HeldRect) => void) {
+  view?.measureInWindow((x, y, width, height) => then({ x, y, width, height }));
+}
+
 /**
- * The web comment actions on the phone, from a comment's "…" or a long press:
- * the quick reactions, Reply, then Edit, Copy text and, for your own comment,
- * Delete (`onDelete` asks first: `DeleteCommentDialog`). The description gets
- * the reactions, Edit and Copy text.
+ * The web comment actions on the phone, from a comment's "…" or a long press,
+ * as the chat's hold menu (iMessage, the kit `MessageContextMenu`): the held
+ * comment stays in place, the quick reactions and "More reactions" in a pill
+ * above it, and Reply, Edit, Copy text and, for your own comment, Delete
+ * (`onDelete` asks first: `DeleteCommentDialog`) in a card below it. The
+ * description gets the reactions, Edit and Copy text.
  */
 export function ReactableMenu({
-  open,
-  onOpenChange,
-  title,
+  anchor,
+  preview,
+  onClose,
   groups,
   onToggleReaction,
   onMoreReactions,
@@ -277,9 +233,11 @@ export function ReactableMenu({
   copyText,
   onDelete,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: string;
+  /** Where the held item is; the menu is shut while it is null. */
+  anchor: HeldRect | null;
+  /** The held item, drawn again over the chat. */
+  preview: ReactNode;
+  onClose: () => void;
   groups: ReactionGroup[];
   onToggleReaction: (emoji: string) => void;
   /** Opens `EmojiPickerSheet`; the caller renders it, since this menu closes first. */
@@ -289,59 +247,45 @@ export function ReactableMenu({
   copyText?: string;
   onDelete?: () => void;
 }) {
-  const act = (action: () => void) => {
-    onOpenChange(false);
-    action();
-  };
+  const theme = EVA_THEME[useScheme()];
+  const mine = new Set(groups.filter((group) => group.reactedByMe).map((group) => group.emoji));
+  const actions: MessageSheetAction[] = [];
+  if (onReply) actions.push({ key: "reply", label: "Reply", icon: IconArrowBackUp, onPress: onReply });
+  if (onEdit) actions.push({ key: "edit", label: "Edit", icon: IconPencil, onPress: onEdit });
+  if (copyText !== undefined) {
+    actions.push({ key: "copy", label: "Copy text", icon: IconClipboard, onPress: () => void Clipboard.setStringAsync(copyText) });
+  }
+  if (onDelete) actions.push({ key: "delete", label: "Delete", icon: IconTrash, destructive: true, onPress: onDelete });
+  const items: ReactionRowItem[] = QUICK_REACTIONS.map((emoji) => ({
+    key: emoji,
+    label: `${mine.has(emoji) ? "Remove" : "Add"} ${emoji} reaction`,
+    selected: mine.has(emoji),
+    render: () => <Text style={{ fontSize: 22 }}>{emoji}</Text>,
+  }));
+  // The web picker's trigger icon, last in the pill: every other emoji, by search.
+  if (onMoreReactions) {
+    items.push({ key: MORE_REACTIONS, label: "More reactions", render: () => <IconMoodSmile size={22} color={theme.mutedForeground} /> });
+  }
   return (
-    <>
-      <MenuSheet open={open} onOpenChange={onOpenChange} title={title}>
-        <QuickReactionRow
-          groups={groups}
-          onToggle={(emoji) => act(() => onToggleReaction(emoji))}
-          onMore={onMoreReactions ? () => act(onMoreReactions) : undefined}
-        />
-        {onReply || onEdit || copyText !== undefined ? <MenuDivider /> : null}
-        {onReply ? (
-          <SheetRow
-            icon={IconArrowBackUp}
-            title="Reply"
-            onPress={() => act(onReply)}
-          />
-        ) : null}
-        {onEdit ? (
-          <SheetRow
-            icon={IconPencil}
-            title="Edit"
-            onPress={() => act(onEdit)}
-          />
-        ) : null}
-        {copyText !== undefined ? (
-          <SheetRow
-            icon={IconClipboard}
-            title="Copy text"
-            onPress={() =>
-              act(() => {
-                void Clipboard.setStringAsync(copyText);
-              })
-            }
-          />
-        ) : null}
-        {onDelete ? (
-          <>
-            <MenuDivider />
-            <SheetRow
-              icon={IconTrash}
-              title="Delete"
-              danger
-              onPress={() => act(onDelete)}
-            />
-          </>
-        ) : null}
-      </MenuSheet>
-    </>
+    <MessageContextMenu
+      open={anchor !== null}
+      onClose={onClose}
+      anchor={anchor}
+      align="start"
+      preview={preview}
+      menu={{
+        reactions: {
+          items,
+          onPress: (key) => (key === MORE_REACTIONS ? onMoreReactions?.() : onToggleReaction(key)),
+        },
+        actions,
+      }}
+    />
   );
 }
+
+/** The pill's "More reactions" key: no emoji uses it. */
+const MORE_REACTIONS = "more";
 
 /** The web delete dialog for a comment. */
 export function DeleteCommentDialog({
