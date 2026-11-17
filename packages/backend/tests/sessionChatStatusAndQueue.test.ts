@@ -126,7 +126,7 @@ describe("session chat status and queue", () => {
         });
         const context = await loadSessionChat(ctx.db, f.chatId);
         if (!context) throw new Error("fixture: chat missing");
-        await cancelChatExecution(ctx, context);
+        await cancelChatExecution(ctx, context, { holdQueue: true });
         await sessionChatAdapter.interrupt(ctx, context);
         const jobs = await ctx.db.system.query("_scheduled_functions").collect();
         return jobs.map((job) => job.name);
