@@ -1394,6 +1394,9 @@ export const messageFields = {
   // amber. Unset alerts with `errorDetail` render as errors.
   alertTone: v.optional(v.literal("warning")),
   errorDetail: v.optional(v.string()),
+  // Assistant rows: the turn was stopped before it finished (Stop, a stall,
+  // a sandbox stop). Lets the chat say so instead of showing a bare bubble.
+  stopped: v.optional(v.literal(true)),
   // Assistant rows: why the turn failed, when the client needs to react to the
   // class of failure (the usage-limit recovery banner). Only "rate_limit" is
   // stamped today; unclassified failures leave it unset.
