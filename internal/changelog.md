@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: a message's actions open on press and hold
+
+Date: 2026-11-17
+
+WHY: Every message carried a row of six buttons (copy, link, fork, thumbs), which doubled the chat's height on a phone and made long chats noisy.
+
+Architectural: `MessageFooter` keeps only the model mark and the time; the actions move to `src/chat/MessageHoldMenu.tsx`, one sheet for the chat screen that a press and hold on a message opens (with a haptic; the message shrinks a little while held; screen readers get it as an action): the reply's thumbs, Copy text, Copy link, Fork from here, Retry on a failed turn, and Diff this turn and Restore on a reply that changed code. The Changes chip stays; its rows and restore confirm are now `TurnChangesRows` and `useTurnRestore`, shared by both.
+
 ## Phone: automations, with their runs, Run now and an On switch
 
 Date: 2026-11-16
