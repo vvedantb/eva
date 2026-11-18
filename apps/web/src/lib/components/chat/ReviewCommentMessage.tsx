@@ -4,7 +4,7 @@ import { cn } from "@eva/ui";
 import {
   parseCitationSegments,
   type CitationMessageSegment,
-} from "@/lib/components/chat/assistantCitation";
+} from "@eva/shared/assistantCitation";
 import { usePendingCitations } from "@/lib/contexts/PendingCitationsContext";
 import {
   MarkdownMentionText,

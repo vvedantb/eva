@@ -28,6 +28,7 @@ import { turnCheckpoint } from "@eva/shared/turnCheckpoint";
 import { chatTypingRoom } from "@eva/shared/typingPresence";
 import { isUsageLimitFailure } from "@eva/shared/usageLimitRecovery";
 import { messageLinkHref } from "@eva/shared/messageLink";
+import { appendCitationsToPrompt } from "@eva/shared/assistantCitation";
 import { formatQuestionAnswers, type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { IconChevronDown, IconMessageCircle, IconPlayerStop } from "@tabler/icons-react-native";
 import {
@@ -87,6 +88,7 @@ import { UsageLimitRecoveryCard } from "@/chat/UsageLimitRecovery";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { MessageFooter, type Sentiment } from "@/chat/MessageFooter";
 import { PasteImageChip } from "@/chat/PasteImageChip";
+import { type Quotes, useQuotes } from "@/chat/Quotes";
 import { useAttachments } from "@/chat/useAttachments";
 import { type Chat, useChatModelPick } from "@/chat/useChatModelPick";
 import { TypingIndicator } from "@/chat/TypingIndicator";
@@ -174,6 +176,8 @@ export default function ChatScreen() {
   // The restore confirm a held reply's Restore opens, and the hold menus (the kit `Message` `menu`).
   const restore = useTurnRestore();
   const messageMenu = useMessageMenu(restore.request);
+  // Quotes from replies ("Select text", then "Quote"), waiting for the next send.
+  const quotes = useQuotes();
 
   if (chat === undefined || chat === null) {
     return (
@@ -320,6 +324,11 @@ export default function ChatScreen() {
       onFork: forkFrom ? () => forkFrom(message._id) : undefined,
       onRetry: message.errorType !== undefined ? retryFor(message._id) : undefined,
       turn: turnFor(message),
+      // Eva's replies only, as the web cites them (`<cited_assistant>`); the composer must be there to take it.
+      onSelectText:
+        message.role === "assistant" && chat.canReply && message.content.trim() !== ""
+          ? () => quotes.select(message._id, message.content)
+          : undefined,
     });
   };
   const panelReply =
@@ -442,6 +451,7 @@ export default function ChatScreen() {
         />
       </SeenRowsContext.Provider>
         {restore.dialog}
+        {quotes.sheet}
         {/* The composer or the question card: the scroll button rides 16 above it, as the web's `bottom-4` over the dock. */}
         {/* Solid: the keyboard lifts the dock over the transcript, which must not show through it. */}
         <ConversationDock style={{ backgroundColor: EVA_THEME[scheme].background }}>
@@ -475,6 +485,7 @@ export default function ChatScreen() {
               </>
             }
             usageLimitFailure={isUsageLimitFailure(newestMessage) ? newestMessage.content : undefined}
+            quotes={quotes}
           />
           ) : null}
         </ConversationDock>
@@ -508,6 +519,7 @@ function ChatDock({
   banners,
   panels,
   usageLimitFailure,
+  quotes,
 }: {
   target: string;
   chat: Chat;
@@ -529,6 +541,8 @@ function ChatDock({
   panels: ReactNode;
   /** The newest reply's text while it is a usage-limit failure: the retry card shows above the composer. */
   usageLimitFailure: string | undefined;
+  /** Quotes from replies: chips over the field, sent after the prompt. */
+  quotes: Pick<Quotes, "items" | "remove" | "drop">;
 }) {
   const scheme = useScheme();
   const insets = useSafeAreaInsets();
@@ -588,9 +602,12 @@ function ChatDock({
     const attachmentStorageIds = attachments.storageIds;
     attachments.clear();
     typing.stopTyping();
-    send({ target: chat.target, message: composer.tokenize(text), attachmentStorageIds }).catch(() => {
-      toast.error("Couldn't send your message");
-    });
+    // The quotes go after the prompt, as the web, and leave only once the send lands, so a retry keeps them.
+    const sentQuotes = quotes.items;
+    send({ target: chat.target, message: appendCitationsToPrompt(composer.tokenize(text), sentQuotes), attachmentStorageIds }).then(
+      () => quotes.drop(sentQuotes),
+      () => toast.error("Couldn't send your message"),
+    );
   };
 
   // The web dock: p-3 around the card, in place of the composer, and the thread's 10 more on the right.
@@ -653,9 +670,9 @@ function ChatDock({
         placeholder={placeholder}
         onPasteImages={attachments.pasteFiles}
         leading={
-          <AttachButton onPress={() => void attachments.pick()} />
+          <AttachButton attachments={attachments} />
         }
-        header={composerHeader(attachments, composer)}
+        header={composerHeader(attachments, composer, quotes)}
         // The web stop beside send: red (`variant="destructive"`), the outline stop icon.
         toolbar={working ? <PromptInputButton variant="destructive" icon={IconPlayerStop} label="Stop generating" onPress={onStop} /> : null}
         footer={
