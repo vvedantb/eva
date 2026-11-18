@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: holding an older message no longer throws the chat to its end
+
+Date: 2026-11-18
+
+WHY: On Android, a hold on an older message moved the chat to the newest message, which closed the menu; closing the menu did it again.
+
+Architectural: `@vvedantb/native-ui` 0.25.2 (packages #279). The hold menu's `Modal` window takes the focus as it opens and as it closes, and `KeyboardChatScrollView` scrolled the list to its end on each keyboard event. `Conversation` now has an `overlay` state, and `ConversationList` passes `freeze` from the hold until the close settles. Pressed hold menu rows now show the sheet's pressed fill. No Eva code changes.
+
 ## Phone: hold a message for an iMessage-style menu; menus come from the kit
 
 Date: 2026-11-17
