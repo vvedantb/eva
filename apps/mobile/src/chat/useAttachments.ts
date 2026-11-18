@@ -108,12 +108,13 @@ export function useAttachments() {
     const result = await DocumentPicker.getDocumentAsync({ type: "*/*", multiple: true, copyToCacheDirectory: true });
     if (result.canceled) return;
     const picked = result.assets.map((asset) => {
-      const declared = asset.mimeType === "application/octet-stream" ? undefined : asset.mimeType;
+      // Only a type the backend names a file by; any other (`application/octet-stream`, Android's `text/x-markdown`) comes from the extension.
+      const declared = asset.mimeType !== undefined && UPLOAD_TYPES.test(asset.mimeType) ? asset.mimeType : undefined;
       return { asset, filename: asset.name, mediaType: contentTypeForUpload({ mediaType: declared, filename: asset.name }, ""), size: asset.size };
     });
     for (const { asset, mediaType, filename } of admit(picked)) {
       // In the web build the picker hands over the browser's file; on a phone, a copy in the cache.
-      const bytes = asset.file ? asset.file.arrayBuffer() : new File(asset.uri).base64();
+      const bytes = asset.file ? asset.file.arrayBuffer() : new File(asset.uri).arrayBuffer();
       add({ id: asset.uri, url: asset.uri, mediaType, filename }, bytes);
     }
   };
@@ -150,6 +151,9 @@ export function useAttachments() {
     storageIds: items.flatMap((item) => (item.storageId ? [item.storageId] : [])),
   };
 }
+
+/** The declared types the backend keeps (`attachmentExtensionForMimeType`): JPEG, PNG, GIF, WebP and SVG images, HTML, Markdown, plain text. */
+const UPLOAD_TYPES = /^(image\/(jpeg|png|gif|webp|svg\+xml)|text\/(html|markdown|plain))$/;
 
 /** The bytes of a base64 string (the picker's `base64`). */
 function base64Bytes(base64: string): ArrayBuffer {

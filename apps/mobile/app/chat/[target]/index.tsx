@@ -324,9 +324,10 @@ export default function ChatScreen() {
       onFork: forkFrom ? () => forkFrom(message._id) : undefined,
       onRetry: message.errorType !== undefined ? retryFor(message._id) : undefined,
       turn: turnFor(message),
-      // Eva's replies only, as the web cites them (`<cited_assistant>`); the composer must be there to take it.
+      // Eva's replies only, as the web cites them (`<cited_assistant>`); the composer must be there to take it,
+      // so not while a question card stands in its place.
       onSelectText:
-        message.role === "assistant" && chat.canReply && message.content.trim() !== ""
+        message.role === "assistant" && chat.canReply && !pending && !savedQuestion && message.content.trim() !== ""
           ? () => quotes.select(message._id, message.content)
           : undefined,
     });
