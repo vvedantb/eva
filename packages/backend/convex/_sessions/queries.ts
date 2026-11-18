@@ -484,7 +484,7 @@ export const get = authQuery({
 
 /**
  * The task or project behind an owner, when `userId` may reach it; null
- * otherwise. The access check for `getOwned` and `ensureOwned`.
+ * otherwise. The access check for `getOwnedWithSeed` and `ensureOwned`.
  */
 export async function loadOwnerEntityWithAccess(
   db: DatabaseReader,
@@ -500,7 +500,7 @@ export async function loadOwnerEntityWithAccess(
   return allowed ? entity : null;
 }
 
-/** What `getOwned` / `ensureOwned` return: the session and the owner's chat. */
+/** What `getOwnedWithSeed` / `ensureOwned` return: the session and the owner's chat. */
 export const ownerChatRefValidator = v.object({
   sessionId: v.id("sessions"),
   chatId: v.id("sessionChats"),
@@ -556,18 +556,6 @@ export const getOwnedWithSeed = authQuery({
       chatSeed: await chatSeedSettings(ctx.db, read.entity),
     };
   },
-});
-
-/**
- * @deprecated `getOwnedWithSeed`'s `session`, in the shape installed APKs read
- * (0.1.96 and older: the project screen and owned sandbox actions). Remove
- * once no supported APK calls it.
- */
-export const getOwned = authQuery({
-  args: { owner: ownedSessionOwnerValidator },
-  returns: v.union(ownedSessionRefValidator, v.null()),
-  handler: async (ctx, args) =>
-    (await readOwned(ctx.db, ctx.userId, args.owner))?.session ?? null,
 });
 
 /** Resolves a session by per-repo numeric id (URL segment). */

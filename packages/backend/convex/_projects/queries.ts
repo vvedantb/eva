@@ -37,7 +37,6 @@ async function buildProjectWithDetails(
   const details = await getProjectDetails(db, project._id);
   return {
     ...project,
-    activeWorkflowId: project.interview?.workflowId,
     conversationHistory: details?.conversationHistory ?? [],
     ...(details?.generatedSpec !== undefined
       ? { generatedSpec: details.generatedSpec }
