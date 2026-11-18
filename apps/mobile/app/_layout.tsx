@@ -14,6 +14,7 @@ import {
 import { AuthProviders } from "@vvedantb/native-ui/auth";
 import { GestureHandlerProvider } from "@vvedantb/native-ui/gesture-handler";
 import { KeyboardControllerProvider } from "@vvedantb/native-ui/keyboard-controller";
+import { WindowLayerHost } from "@vvedantb/native-ui/primitives";
 import { PasteInputProvider } from "@vvedantb/native-ui/paste-input";
 import { NativeUiProvider } from "@vvedantb/native-ui/theme";
 import { Toaster } from "@vvedantb/native-ui/toast";
@@ -175,7 +176,11 @@ export default function RootLayout() {
                             drops their state, so Back landed on the Inbox, not the tab it came from.
                             A push deeper (a chat, a review, a new session) runs the platform's own
                             transition (`useStackScreenOptions`). */}
-                        <Stack screenOptions={stackOptions} />
+                        {/* The hold menu and the image viewer draw over the screens here, in the app's window:
+                            a Modal's own window moved the focus, and the chat jumped to its newest message. */}
+                        <WindowLayerHost>
+                          <Stack screenOptions={stackOptions} />
+                        </WindowLayerHost>
                       </ClerkGate>
                     </MaintenanceGate>
                     <UpdateDialog />
