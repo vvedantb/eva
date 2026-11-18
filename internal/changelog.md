@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: holding a message or opening an image no longer throws the chat to its end
+
+Date: 2026-11-18
+
+WHY: On Android, opening an image over a scrolled-up chat (and, now and then, closing the hold menu) moved the chat to its newest message.
+
+Architectural: `@vvedantb/native-ui` 0.28.0 (packages #289) draws `MessageContextMenu` and `ImageViewer` in the app's window through `WindowLayerHost`, which wraps the root `Stack`. A React Native `Modal` is a window of its own on Android and moved the focus as it opened and closed; `react-native-keyboard-controller`'s chat list scrolled to its end on each. A layer never moves the focus. The kit's `chatHold` and `chatImage` Android scenarios reproduced both jumps and pass with the layer. Layers close on Android back and hide the app from screen readers while shown.
+
 ## Phone chat parity: system rows, stopped turns, answered questions, holds and states
 
 Date: 2026-11-18
