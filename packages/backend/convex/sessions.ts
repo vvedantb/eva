@@ -22,6 +22,7 @@ export {
   addMessage,
   update,
   archive,
+  archiveGroup,
   unarchive,
   updatePlanContent,
   ensureOwned,

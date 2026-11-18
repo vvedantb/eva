@@ -40,6 +40,14 @@ WHY: The hold menu on chat messages and task comments was a bottom sheet; the us
 
 Architectural: `@vvedantb/native-ui` 0.25 adds `MessageContextMenu` and `Message`'s `menu` prop, `MenuSheet`, `SubmenuRow`, `MenuDivider` and `ReactionRow` (packages #277, #278). The phone's `src/ui/MenuSheet.tsx` is removed and its 19 users import the kit's. Chat rows pass `menu` to the kit `Message` (`useMessageMenu` in `src/chat/MessageHoldMenu.tsx`: thumbs in the pill; Copy text, Copy link, Fork, Retry, Diff this turn and Restore in the card). Task comments and the task description use the same menu through `ReactableMenu` (`measureHeld` reads where the held item is), with the quick emoji and "More reactions" in the pill.
 
+## Web: archive a linked session group
+
+Date: 2026-11-17
+
+WHY: Clearing out a finished group meant archiving each of its sessions one by one.
+
+Architectural: new `sessions.archiveGroup` archives every active, standalone member the user can reach (same 50 cap as `listGroup`). `chats.archive` and the group archive now share `stopAndArchiveSession` in `_sessions/mutations.ts`. `SessionGroupArchiveDialog` confirms with the server's active count and is opened from the sidebar group's right-click menu (active list only) and the session header's linked chip.
+
 ## Phone: a message's actions open on press and hold
 
 Date: 2026-11-17
