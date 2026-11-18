@@ -28,6 +28,7 @@ import { BaseBranchChip } from "@/chat/BranchChips";
 import { ComposerFooter, composerHeader } from "@/chat/ComposerFooter";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { ModelChip } from "@/chat/ModelChip";
+import { PasteImageChip } from "@/chat/PasteImageChip";
 import { useAttachments } from "@/chat/useAttachments";
 import { useMentionComposer } from "@/chat/useMentionComposer";
 import { jsonParser, persistedStore } from "@/storage/persistedStore";
@@ -190,6 +191,7 @@ export default function NewSessionScreen() {
               ?
             </Text>
           </View>
+          <PasteImageChip onPaste={() => void attachments.paste()} />
           <PromptInput
             layout="inline"
             shape="pill"

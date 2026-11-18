@@ -78,6 +78,7 @@ import { TurnChangesChip, useTurnRestore, type TurnChangesTarget } from "@/chat/
 import { UsageLimitRecoveryCard } from "@/chat/UsageLimitRecovery";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { MessageFooter, type Sentiment } from "@/chat/MessageFooter";
+import { PasteImageChip } from "@/chat/PasteImageChip";
 import { useAttachments } from "@/chat/useAttachments";
 import { type Chat, useChatModelPick } from "@/chat/useChatModelPick";
 import { TypingIndicator } from "@/chat/TypingIndicator";
@@ -550,6 +551,7 @@ function ChatDock({
       <View className="pl-3">
         <TypingIndicator users={typing.typingUsers} />
       </View>
+      <PasteImageChip onPaste={() => void attachments.paste()} />
       <PromptInput
         layout="inline"
         shape="pill"
