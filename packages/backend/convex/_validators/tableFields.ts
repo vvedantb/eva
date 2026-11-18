@@ -309,7 +309,7 @@ export const chatReadParentIdValidator = v.union(
 export const turnEntityIdValidator = v.union(
   v.id("sessionChats"),
   v.id("sessions"),
-  v.id("projects"),
+  // Project-keyed turns moved to the session. schema-narrowing-ok: migrateProjectInterviewState
   v.id("agentRuns"),
   v.id("automationRuns"),
   v.id("docs"),
@@ -1208,23 +1208,12 @@ export const projectFields = {
   members: v.optional(v.array(v.id("users"))),
   projectStartDate: v.optional(v.number()),
   projectEndDate: v.optional(v.number()),
-  /**
-   * Legacy interview fields, folded into `interview` by
-   * `dataMigrations:migrateProjectInterviewState`. Nothing writes them; the
-   * interview state reads them only until the migration has run.
-   */
-  activeWorkflowId: v.optional(v.string()),
-  interviewSandboxClaim: v.optional(
-    v.object({
-      sessionStartAttempt: v.number(),
-      sandboxId: v.optional(v.string()),
-    }),
-  ),
   /** The project build lifecycle; absent = idle. Written only by `_projects/buildState.ts`. */
   build: v.optional(projectBuildValidator),
   /** The interview / spec agent lifecycle; absent = idle. Written only by `_projects/interviewState.ts`. */
   interview: v.optional(projectInterviewValidator),
   // Legacy build fields removed. schema-narrowing-ok: migrateProjectBuildState
+  // Legacy interview fields removed. schema-narrowing-ok: migrateProjectInterviewState
   lastBuildError: v.optional(v.string()),
   branchVersion: v.optional(v.number()),
   // Set when chat or other queue helpers touch the project. Mirrors

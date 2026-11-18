@@ -5,8 +5,7 @@ import type { projectInterviewValidator } from "../_validators/tableFields";
 import { findOwnedSession, sessionOwnerProjectId } from "../_sessions/owner";
 
 /**
- * A project's interview or spec workflow (`projects.interview`), one field
- * instead of two (`activeWorkflowId` + `interviewSandboxClaim`):
+ * A project's interview or spec workflow (`projects.interview`):
  *
  *   idle ──start──▶ started ──claim──▶ claimed ──prepare──▶ prepared
  *   started ──prepare──▶ started (the session was already `active`: the VM is the session's)
@@ -22,35 +21,13 @@ import { findOwnedSession, sessionOwnerProjectId } from "../_sessions/owner";
  */
 export type ProjectInterview = Infer<typeof projectInterviewValidator>;
 
-export type ProjectInterviewSource = Pick<
-  Doc<"projects">,
-  "interview" | "activeWorkflowId" | "interviewSandboxClaim"
->;
-
-/**
- * The legacy fields as an interview state, until
- * `dataMigrations:migrateProjectInterviewState` has run. A claim without a
- * workflow (the old save cleared the workflow before the release) is idle:
- * the release still stops the VM it holds.
- */
-export function legacyProjectInterview(
-  project: ProjectInterviewSource,
-): ProjectInterview | undefined {
-  const workflowId = project.activeWorkflowId;
-  if (workflowId === undefined) return undefined;
-  const claim = project.interviewSandboxClaim;
-  if (claim === undefined) return { state: "started", workflowId };
-  const { sessionStartAttempt, sandboxId } = claim;
-  return sandboxId === undefined
-    ? { state: "claimed", workflowId, sessionStartAttempt }
-    : { state: "prepared", workflowId, sessionStartAttempt, sandboxId };
-}
+export type ProjectInterviewSource = Pick<Doc<"projects">, "interview">;
 
 /** The project's interview state; `undefined` is idle. */
 export function projectInterviewState(
   project: ProjectInterviewSource,
 ): ProjectInterview | undefined {
-  return project.interview ?? legacyProjectInterview(project);
+  return project.interview;
 }
 
 /** The running interview or spec workflow, if one holds the project. */
@@ -144,8 +121,6 @@ async function applyProjectInterviewEvent(
   if (result.ok) {
     await ctx.db.patch(projectId, {
       interview: result.next,
-      activeWorkflowId: undefined,
-      interviewSandboxClaim: undefined,
     });
   }
   return { ...result, previous };
