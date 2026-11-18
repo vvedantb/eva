@@ -15,11 +15,19 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { useState } from "react";
-import type { ActivityStep } from "@vvedantb/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
+import {
+  COMPOSER_TASK_NOW,
+  COMPOSER_TASKS_DISMISS_LABEL,
+  COMPOSER_TASKS_TITLE,
+  composerTaskProgress,
+  composerTaskSteps,
+  composerTasksLabel,
+  keyedComposerTaskSteps,
+  type ComposerTaskStep,
+} from "@eva/shared/composerTasks";
 
-/** One row of the agent's task list: the activity trace's todo item as is. */
-export type ComposerTaskStep = NonNullable<ActivityStep["todos"]>[number];
+export type { ComposerTaskStep };
 type TaskStatus = ComposerTaskStep["status"];
 
 /** Every status's look in one place; a new status fails the type check here. */
@@ -48,7 +56,7 @@ const TASK_STATUS_STYLE: Record<
     text: "text-foreground/90",
     Icon: IconPointFilled,
     iconSize: "size-3",
-    trailing: "now",
+    trailing: COMPOSER_TASK_NOW,
   },
   pending: {
     segment: "bg-muted-foreground/25",
@@ -64,38 +72,7 @@ const TASK_STATUS_STYLE: Record<
 export function composerTaskStepsFromActivity(
   activity: string | undefined,
 ): readonly ComposerTaskStep[] {
-  return (
-    parseActivitySteps(activity)?.find((step) => step.type === "todos")
-      ?.todos ?? []
-  );
-}
-
-/** Step names repeat across a task list, so keys need an occurrence suffix. */
-function keyedTaskSteps(steps: readonly ComposerTaskStep[]) {
-  const occurrences = new Map<string, number>();
-  return steps.map((step) => {
-    const occurrence = occurrences.get(step.content) ?? 0;
-    occurrences.set(step.content, occurrence + 1);
-    return { key: `${step.content}:${occurrence}`, step };
-  });
-}
-
-/** Headline step: the first in progress, else the last completed, else the first. */
-function deriveProgress(
-  first: ComposerTaskStep,
-  steps: readonly ComposerTaskStep[],
-) {
-  const completed = steps.filter((step) => step.status === "completed");
-  const current =
-    steps.find((step) => step.status === "in_progress") ??
-    completed.at(-1) ??
-    first;
-  return {
-    step: current.content,
-    completedSteps: completed.length,
-    totalSteps: steps.length,
-    allDone: completed.length === steps.length,
-  };
+  return composerTaskSteps(parseActivitySteps(activity));
 }
 
 function TaskSegments({
@@ -112,7 +89,7 @@ function TaskSegments({
       aria-hidden
       className={cn("flex shrink-0 items-center gap-0.5", className)}
     >
-      {keyedTaskSteps(steps).map(({ key, step }) => (
+      {keyedComposerTaskSteps(steps).map(({ key, step }) => (
         <span
           key={key}
           className={cn(
@@ -160,14 +137,11 @@ export function ComposerTasksPanel({ steps, turnId }: ComposerTasksPanelProps) {
   const [expanded, setExpanded] = useState(false);
   const [dismissedTurnId, setDismissedTurnId] = useState<string | null>(null);
 
-  const [first] = steps;
   const progress =
-    turnId !== undefined && first && dismissedTurnId !== turnId
-      ? deriveProgress(first, steps)
+    turnId !== undefined && dismissedTurnId !== turnId
+      ? composerTaskProgress(steps)
       : null;
-  const label = progress
-    ? `Tasks: ${progress.completedSteps} of ${progress.totalSteps} complete. Current task: ${progress.step}`
-    : "Tasks";
+  const label = progress ? composerTasksLabel(progress) : COMPOSER_TASKS_TITLE;
 
   return (
     <AnimatePresence initial={false}>
@@ -196,7 +170,7 @@ export function ComposerTasksPanel({ steps, turnId }: ComposerTasksPanelProps) {
                 >
                   <IconListCheck aria-hidden className="size-3.5 shrink-0" />
                   <span className="shrink-0 font-medium text-foreground">
-                    Tasks
+                    {COMPOSER_TASKS_TITLE}
                   </span>
                   {expanded ? null : (
                     <span className="min-w-0 flex-1 truncate text-foreground/80">
@@ -220,7 +194,7 @@ export function ComposerTasksPanel({ steps, turnId }: ComposerTasksPanelProps) {
               <Button
                 size="icon-xs"
                 variant="ghost"
-                aria-label="Dismiss tasks for this turn"
+                aria-label={COMPOSER_TASKS_DISMISS_LABEL}
                 className="shrink-0"
                 onClick={() => setDismissedTurnId(turnId)}
                 onPointerDown={(event) => event.preventDefault()}
@@ -230,7 +204,7 @@ export function ComposerTasksPanel({ steps, turnId }: ComposerTasksPanelProps) {
             </div>
             <CollapsibleContent>
               <div className="space-y-px px-3 pb-3" role="list">
-                {keyedTaskSteps(steps).map(({ key, step }) => (
+                {keyedComposerTaskSteps(steps).map(({ key, step }) => (
                   <TaskStepRow key={key} step={step} />
                 ))}
               </div>

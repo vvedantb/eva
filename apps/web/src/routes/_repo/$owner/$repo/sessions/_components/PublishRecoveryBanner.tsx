@@ -1,7 +1,18 @@
 "use client";
 
 import { useState, type MouseEventHandler } from "react";
-import { api, publishErrorNeedsForcePush, type Id } from "@eva/backend";
+import { api, type Id } from "@eva/backend";
+import {
+  forcePushConfirmTitle,
+  forcePushOfferKey,
+  linkedForcePushTargets,
+  linkedRepoForcePushLabel,
+  linkedRepoRecoveryText,
+  needsPublishRecovery,
+  publishRecoveryMessage,
+  PUBLISH_RECOVERY_COPY,
+  type ForcePushTarget,
+} from "@eva/shared/publishRecovery";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import {
@@ -20,32 +31,12 @@ import {
 import { AnimatePresence, m } from "motion/react";
 import { IconAlertTriangle, IconUpload } from "@tabler/icons-react";
 import { catchMutationError } from "@/lib/utils/mutationToast";
-import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
 import type { TranscriptMessage } from "@/lib/hooks/useChatTranscript";
 
 interface PublishRecoveryBannerProps {
   sessionId: Id<"sessions">;
   messages: TranscriptMessage[];
   isSandboxActive: boolean;
-}
-
-/** Which checkout a confirmed force-push rewrites. */
-interface ForcePushTarget {
-  /** Absent for the primary repo, which is what the session branch means. */
-  sessionRepoId?: Id<"sessionRepos">;
-  /** Repo label for the confirm dialog; absent for the primary. */
-  label?: string;
-}
-
-/**
- * Identity of one force-push offer. Scoped to the refusal message so a new
- * refusal re-offers every repo instead of showing a stale "requested" state.
- */
-function forcePushOfferKey(
-  messageId: Id<"messages">,
-  target: ForcePushTarget,
-): string {
-  return `${messageId}:${target.sessionRepoId ?? "primary"}`;
 }
 
 /**
@@ -67,9 +58,7 @@ function LinkedRepoRecoveryRow({
   return (
     <div className="mb-2 flex flex-wrap items-center gap-2 rounded-surface bg-muted/30 px-3 py-1.5">
       <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-        {requested
-          ? `Force-push requested for ${label}.`
-          : `${label} has its own published branch.`}
+        {linkedRepoRecoveryText(label, requested)}
       </span>
       {!requested ? (
         <Button
@@ -78,11 +67,11 @@ function LinkedRepoRecoveryRow({
           variant="ghost"
           className="h-7 shrink-0 gap-1 px-2 text-xs"
           disabled={!isSandboxActive}
-          title={skipConfirmTitle(`Force-push ${label}`)}
+          title={skipConfirmTitle(linkedRepoForcePushLabel(label))}
           onClick={onRequest}
         >
           <IconUpload className="size-3.5" />
-          Force-push {label}
+          {linkedRepoForcePushLabel(label)}
           <ConfirmSkipHint />
         </Button>
       ) : null}
@@ -115,32 +104,13 @@ export function PublishRecoveryBanner({
   const newest = messages.length > 0 ? messages[messages.length - 1] : null;
   // Not an early return: the banner animates out, so it has to stay mounted
   // inside AnimatePresence for one more frame after the refusal is superseded.
-  const visible =
-    newest !== null &&
-    newest.isSystemAlert === true &&
-    typeof newest.errorDetail === "string" &&
-    publishErrorNeedsForcePush(newest.errorDetail);
+  const visible = needsPublishRecovery(newest);
   const newestId = newest?._id;
   const isRequested = (target: ForcePushTarget) =>
     newestId !== undefined &&
     requestedOffers.includes(forcePushOfferKey(newestId, target));
   const requested = visible && isRequested({});
-  // Only linked clones that were published have a remote branch to rewrite.
-  const linkedTargets =
-    repos === undefined || repos.length <= 1
-      ? []
-      : repos.flatMap((repo) =>
-          repo.kind === "linked" &&
-          repo.sessionRepoId !== undefined &&
-          repo.prUrl !== undefined
-            ? [
-                {
-                  sessionRepoId: repo.sessionRepoId,
-                  label: repoDisplayLabel(repo),
-                },
-              ]
-            : [],
-        );
+  const linkedTargets = linkedForcePushTargets(repos);
 
   const handleConfirm = (target: ForcePushTarget) => {
     setConfirmTarget(null);
@@ -158,7 +128,7 @@ export function PublishRecoveryBanner({
           ? { sessionRepoId: target.sessionRepoId }
           : {}),
       }),
-      "Couldn't start the force-push",
+      PUBLISH_RECOVERY_COPY.failed,
       "session-force-push",
     ).catch(() =>
       setRequestedOffers((keys) => keys.filter((entry) => entry !== key)),
@@ -192,14 +162,10 @@ export function PublishRecoveryBanner({
                 variant="destructive"
                 className="shrink-0 rounded-md px-1.5 py-0 text-3xs font-semibold tracking-wide uppercase"
               >
-                Publish blocked
+                {PUBLISH_RECOVERY_COPY.badge}
               </Badge>
               <span className="min-w-0 flex-1 text-sm text-muted-foreground">
-                {requested
-                  ? "Force-push requested — the result will appear in the chat."
-                  : isSandboxActive
-                    ? "The branch history was rewritten. Updating GitHub needs a force-push."
-                    : "The branch history was rewritten. Wake the sandbox, then force-push to update GitHub."}
+                {publishRecoveryMessage(requested, isSandboxActive)}
               </span>
               {!requested ? (
                 <Button
@@ -208,11 +174,11 @@ export function PublishRecoveryBanner({
                   variant="destructive"
                   className="h-7 shrink-0 gap-1 px-2 text-xs"
                   disabled={!isSandboxActive}
-                  title={skipConfirmTitle("Force-push branch")}
+                  title={skipConfirmTitle(PUBLISH_RECOVERY_COPY.button)}
                   onClick={(event) => requestForcePush({}, event)}
                 >
                   <IconUpload className="size-3.5" />
-                  Force-push branch
+                  {PUBLISH_RECOVERY_COPY.button}
                   <ConfirmSkipHint />
                 </Button>
               ) : null}
@@ -239,16 +205,11 @@ export function PublishRecoveryBanner({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <IconAlertTriangle size={16} className="text-destructive" />
-              {confirmTarget?.label
-                ? `Force-push ${confirmTarget.label} branch to GitHub?`
-                : "Force-push branch to GitHub?"}
+              {forcePushConfirmTitle(confirmTarget?.label)}
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            This replaces the branch on GitHub (and the PR&apos;s commits) with
-            the sandbox&apos;s local history. Commits that exist only on GitHub
-            for this branch will be discarded. If the branch was rebased onto a
-            different base, retarget the PR afterwards.
+            {PUBLISH_RECOVERY_COPY.confirmBody}
           </p>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setConfirmTarget(null)}>
@@ -260,7 +221,7 @@ export function PublishRecoveryBanner({
                 if (confirmTarget !== null) handleConfirm(confirmTarget);
               }}
             >
-              Force-push
+              {PUBLISH_RECOVERY_COPY.confirm}
             </Button>
           </DialogFooter>
         </DialogContent>
