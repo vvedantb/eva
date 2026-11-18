@@ -398,7 +398,7 @@ Bee's still in progress, but what do we think — would you use Bee?
   // Annual CDM deck
   // ---------------------------------------------------------------------------
   "a01-title": `Open on the span, not the product: an empty repository in January became how we build software.
-Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the shape: the origin, who uses it, how the platform is built, the craft behind it and the people, then the year ahead and the framework map on slide 42.
+Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the shape: the origin, who uses it, how the platform is built, the craft behind it and the people, then the year ahead and the framework map on slide 43.
 Figures: the window is 11 January to 16 September 2026.
 Next: it starts on a single evening in January.`,
 
@@ -433,6 +433,16 @@ Next: what that looks like for the person using it.`,
 → Step 1: the flow line runs and lights each stage. The whole loop happens in a browser tab: no install, no ticket, no handover.
 → Step 2: the four ways to ask, as names only. A session is a running conversation; a quick task is one job start to finish; a project is several jobs in order; an automation is a job that runs itself. The choice is about the size of the job, not the type of user.
 Detail: the cards are headings only, so describe each stage. You describe it in plain English in a chat. Eva builds it in its own cloud workspace, with a live preview you can click through. You try it, ask for changes, then it goes live. The preview matters most to non-technical colleagues: it is the first point they can judge the work themselves.
+Next: and alongside Eva, the product it was built for kept moving.`,
+
+  "annual-e02-carepulse": `Eva was built to serve CarePulse, and CarePulse kept shipping all year, most of it raised and built through Eva.
+→ Step 1: December to February. Notes on the AQP list, including Sussex; eProcurement evaluation and the moderation view, with a run of fixes for evaluators; and the sandbox setup so the team could work in the cloud.
+→ Step 2: March to May. Mobilisation status on the provider homepage; CQC notifications filtered to AQP homes only and soft-deleted on dismiss; and a tidy-up of the resource centre.
+→ Step 3: June to August. The domiciliary care quality dashboards, with tabs, an admin page for responses, a location breakdown and metric exports; SUPA archives for nursing homes and domiciliary care; and the referral portal dashboard and filters.
+→ Step 4: September to November, the busiest stretch. The provider homepage redesign; the central contact overview, one page that brings the homepage and overview together; the SUPA tracker; the Jev PID checker on the care package finder and the referral portal; and comments on the nursing home quality dashboard, mirroring the domiciliary care side.
+Detail: each item is a change on CarePulse's main branch. The point for the assessor is that the tooling on the surrounding slides was in service of this work, not instead of it.
+Figures: carepulse-ts main branch, December 2025 to November 2026, checked 16 November 2026.
+Framework: delivers large well-defined tasks; understands the business; business and user empathy.
 Next: behind that loop sits the first platform decision: never depend on one supplier.`,
 
   "a09-design": `Technical design happened on paper first, and replacing the engine every workspace runs on is the proof.
@@ -503,7 +513,7 @@ Figures: Bee from 26 September, 85 releases to 13 November 2026; Redline and flo
 Framework: a skill beyond coding; improves the process; contributes to common code and standards.
 Next: how all of this maps to the framework.`,
   "a15-framework": `This is the map an assessor reads: the framework's three sections, Technical, Impact and Collaboration, each evidenced by a slide already shown.
-→ Step 1: the ticks land, column by column. Technical: design and trade-offs, slide 20, with 18, 23 and 31; debugging, slides 21 and 22; a skill beyond coding, slide 26, measurement, and slides 33 to 34, Jev. Impact: breaking down large problems, slide 20; improving the process, slides 27 to 29, 39 and 41, Redline and the shared packages; identifying work, slides 25 and 40; business and user empathy, slides 34 to 36. Collaboration: communicating clearly, the Friday sessions and this deck; getting buy-in, slides 9 to 10, where the team took Eva up; mentoring and onboarding, slide 32.
+→ Step 1: the ticks land, column by column. Technical: design and trade-offs, slide 21, with 19, 24 and 32; debugging, slides 22 and 23; a skill beyond coding, slide 27, measurement, and slides 34 to 35, Jev. Impact: breaking down large problems, slide 21; improving the process, slides 28 to 30, 40 and 42, Redline and the shared packages; identifying work, slides 26 and 41; business and user empathy, slides 13 and 35 to 37. Collaboration: communicating clearly, the Friday sessions and this deck; getting buy-in, slides 9 to 10, where the team took Eva up; mentoring and onboarding, slide 33.
 → Step 2: the thin evidence. Volunteer the gaps before they are asked for. Giving and seeking feedback, and pairing on reviews, happen but are not written down; page scores are not routine though the harness exists; and there has been no work alongside a designer or user researcher.
 Next: one last fact about how this deck was made.`,
 
@@ -532,7 +542,7 @@ Figures: documents with comments, suggestions and version history 10 June 2026; 
 Next: the last chapter, where the product was made safe to depend on.`,
 
   "annual-b06-q3": `The last quarter was about dependability: the same product, made to survive being relied on.
-→ Step 1: July, almost all of it the sandbox cutover. The engine every workspace runs on was replaced, and slide 20 takes that apart phase by phase.
+→ Step 1: July, almost all of it the sandbox cutover. The engine every workspace runs on was replaced, and slide 21 takes that apart phase by phase.
 → Step 2: August. Durable turns, so a long run survives an interruption instead of stalling; security work; and the design system the interface now sits on.
 → Step 3: September. Multi-repo sessions, so one conversation can span several codebases, and decision models for classifying work at scale.
 Detail: nothing here adds a new thing to do; it makes the existing things safe to depend on.
@@ -544,7 +554,7 @@ Next: the same quarter, seen from inside one session.`,
 → Step 1: the guards land and the rail draws. Checks moved into shared helpers, so a new surface inherits the boundary.
 → Step 2: the two counts fall. Production dependency warnings went from 2 critical and 48 high to 0 critical and 2 high.
 → Step 3: the closing line. The boundary was exercised against real production data, not only against tests.
-Detail: slide 17 designed security into a new interface; this hardens the old ones. The audit found ownership checked unevenly across codebases, sessions, tasks, teams, workspaces, snapshots and integrations. Sign-in was hardened too: explicit consent, stronger proof-key exchange, registered return addresses, client-bound refresh tokens.
+Detail: slide 18 designed security into a new interface; this hardens the old ones. The audit found ownership checked unevenly across codebases, sessions, tasks, teams, workspaces, snapshots and integrations. Sign-in was hardened too: explicit consent, stronger proof-key exchange, registered return addresses, client-bound refresh tokens.
 Figures: 2 critical and 48 high down to 0 critical and 2 high. Audit 8 August 2026; verified against production data 19 August 2026.
 Framework: identifies work to do; understands trade-offs.
 Next: all of this rests on measurement, the skill built most this year outside programming.`,
@@ -634,7 +644,7 @@ Next: letting other tools in is only safe if the locks are designed in.`,
   "annual-c06-mcp-security": `Opening Eva to other tools is only safe if who is asking is enforced, not assumed, so the locks were designed in.
 → Step 1: the three lifetimes drain. A sign-in code lasts five minutes, a working pass one hour, and a renewal thirty days.
 → Step 2: the two gates close. Every request is scoped to one person, and that scope is checked twice: at the interface and again at the data layer.
-Detail: sign-in uses the standard flow with proof-key exchange, so an intercepted code is useless without the matching secret. Two independent secrets, one for the passes and one for the data layer, mean one leak does not compromise the other. Every request re-checks the user still exists; secret comparisons are constant-time; errors give nothing away; endpoints are rate limited. Slide 25 audits what came before.
+Detail: sign-in uses the standard flow with proof-key exchange, so an intercepted code is useless without the matching secret. Two independent secrets, one for the passes and one for the data layer, mean one leak does not compromise the other. Every request re-checks the user still exists; secret comparisons are constant-time; errors give nothing away; endpoints are rate limited. Slide 26 audits what came before.
 Figures: authorisation code 5 minutes, access token 1 hour, refresh token 30 days. Security model documented in the repository.
 Next: the workspaces themselves: first how fast they start, then how they stay cheap.`,
 

@@ -1,4 +1,5 @@
 import type { DeckSlide } from "./types";
+import { AnnualCarePulse } from "./annual/e02-carepulse";
 import { AnnualBeyond } from "./annual/e01-beyond";
 import { Slide05SimpleMode } from "./05-simple-mode";
 import { Slide07Sandbox } from "./07-sandbox";
@@ -119,6 +120,12 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     steps: 3,
   },
   { id: "a07-how", title: "How it works", Component: AnnualHow, steps: 2 },
+  {
+    id: "annual-e02-carepulse",
+    title: "CarePulse this year",
+    Component: AnnualCarePulse,
+    steps: 4,
+  },
   // ── Act three: the platform. How it is built, secured and paid for ──
   {
     id: "annual-c01-providers",
