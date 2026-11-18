@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@vvedantb/ui";
+import { sessionCountLabel } from "@eva/shared";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 
 interface SessionGroupArchiveDialogProps {
@@ -23,11 +24,6 @@ interface SessionGroupArchiveDialogProps {
   label: string;
   /** After a successful archive, e.g. to leave a session that is now gone. */
   onArchived?: () => void;
-}
-
-/** "1 session", "3 sessions". */
-function sessionCount(count: number): string {
-  return `${count} ${count === 1 ? "session" : "sessions"}`;
 }
 
 /**
@@ -56,7 +52,7 @@ export function SessionGroupArchiveDialog({
     try {
       const { archived } = await archiveGroup({ sessionId });
       mutationSuccess(
-        `${sessionCount(archived)} archived`,
+        `${sessionCountLabel(archived)} archived`,
         "session-group-archive",
       );
       onOpenChange(false);
@@ -77,7 +73,7 @@ export function SessionGroupArchiveDialog({
           This will archive{" "}
           {activeCount === undefined
             ? "every session"
-            : sessionCount(activeCount)}{" "}
+            : sessionCountLabel(activeCount)}{" "}
           in <span className="font-medium text-foreground">{label}</span>. Their
           sandboxes stop, and open or draft PRs close. You can unarchive each
           session later.

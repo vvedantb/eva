@@ -154,7 +154,7 @@ export {
   type PrState,
   type PrStateTone,
 } from "./prState";
-export { canSendSessionForReview, sessionMenuActions, type SessionMenuAction } from "./sessionMenu";
+export { canSendSessionForReview, sessionCountLabel, sessionMenuActions, type SessionMenuAction } from "./sessionMenu";
 export {
   draftCountAfterRemove,
   draftsAfterRemove,
