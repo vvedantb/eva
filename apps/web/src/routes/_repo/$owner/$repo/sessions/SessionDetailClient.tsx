@@ -402,6 +402,7 @@ export function SessionDetailClient({
             rightMinWidthPx={300}
             rightCollapsedSizePx={sandboxRailWidthPx}
             storageKey="sandbox-collapsed"
+            collapsedStorageKey={`sandbox-collapsed:${sessionId}`}
             expandRightSignal={expandRightSignal}
             hotkeyEnabled={isRouteActive}
             mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
