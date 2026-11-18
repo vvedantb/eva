@@ -100,11 +100,6 @@ export function ShortcutsSettingsClient() {
         <SettingsSection
           key={section.group}
           title={section.group}
-          description={
-            index === 0
-              ? "Click a combo, then press the keys you want."
-              : undefined
-          }
           bodyVariant="list"
           action={
             index === 0 ? (
@@ -144,7 +139,6 @@ export function ShortcutsSettingsClient() {
 
       <SettingsSection
         title="Editing keys"
-        description="Handled by whatever is focused, so they cannot be rebound."
         bodyVariant="list"
       >
         {EDITING_KEYS.map((entry) => (

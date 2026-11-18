@@ -21,13 +21,15 @@ import { withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Pressable, Text, View, type TextStyle } from "react-native";
 import { UserMessageText } from "@/chat/MentionChip";
 import {
   DeleteCommentDialog,
   EmojiPickerSheet,
   ReactableMenu,
+  measureHeld,
+  type HeldRect,
 } from "@/quickTasks/TaskDiscussion";
 import { TimeAgo } from "@/ui/TimeAgo";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
@@ -103,7 +105,9 @@ export function TaskActivity({
   onDelete: (id: Id<"taskComments">) => void;
 }) {
   const theme = EVA_THEME[useScheme()];
-  const [menuFor, setMenuFor] = useState<TaskComment | null>(null);
+  // The held comment and where it is on screen, for the hold menu.
+  const [held, setHeld] = useState<{ comment: TaskComment; anchor: HeldRect } | null>(null);
+  const menuFor = held?.comment ?? null;
   const [deleting, setDeleting] = useState<TaskComment | null>(null);
   // "More reactions" outlives the menu it opens from, so it lives here.
   const [pickingFor, setPickingFor] = useState<TaskComment | null>(null);
@@ -128,7 +132,9 @@ export function TaskActivity({
           comment={comment}
           users={users}
           onMenu={
-            isCommentDeleted(comment) ? undefined : () => setMenuFor(comment)
+            isCommentDeleted(comment)
+              ? undefined
+              : (anchor) => setHeld({ comment, anchor })
           }
         />
         {reaction.groups.length > 0 ? (
@@ -159,13 +165,16 @@ export function TaskActivity({
   const ownComment = menuFor !== null && menuFor.authorId === currentUserId;
   return (
     <View className="gap-3">
-      {menuFor && menuReactions ? (
+      {held && menuFor && menuReactions ? (
         <ReactableMenu
-          open
-          onOpenChange={(open) => {
-            if (!open) setMenuFor(null);
-          }}
-          title="Comment"
+          anchor={held.anchor}
+          onClose={() => setHeld(null)}
+          // The held comment, drawn again on the card colour: the measured box is the comment, not its padded card.
+          preview={
+            <View style={{ backgroundColor: theme.card }}>
+              <CommentBody comment={menuFor} users={users} onMenu={undefined} />
+            </View>
+          }
           groups={menuReactions.groups}
           onToggleReaction={menuReactions.toggle}
           onMoreReactions={() => setPickingFor(menuFor)}
@@ -320,13 +329,19 @@ function CommentBody({
 }: {
   comment: TaskComment;
   users: User[] | undefined;
-  onMenu: (() => void) | undefined;
+  /** Opens the comment's hold menu at where the comment is on screen. */
+  onMenu: ((anchor: HeldRect) => void) | undefined;
 }) {
   const theme = EVA_THEME[useScheme()];
   const author = users?.find((user) => user._id === comment.authorId);
   const deleted = isCommentDeleted(comment);
+  // Measured at the hold (imperative), so the menu draws the comment where it is.
+  const box = useRef<View>(null);
+  const openMenu = () => {
+    if (onMenu) measureHeld(box.current, onMenu);
+  };
   return (
-    <Pressable onLongPress={onMenu} disabled={!onMenu} className="gap-1.5">
+    <Pressable ref={box} onLongPress={openMenu} disabled={!onMenu} className="gap-1.5">
       <View className="flex-row items-center gap-2">
         {author ? <InitialsAvatar user={author} size={20} /> : null}
         <Text
@@ -345,7 +360,7 @@ function CommentBody({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Comment actions"
-            onPress={onMenu}
+            onPress={openMenu}
             hitSlop={6}
             className="-my-2 size-8 items-center justify-center rounded-lg active:opacity-70"
           >

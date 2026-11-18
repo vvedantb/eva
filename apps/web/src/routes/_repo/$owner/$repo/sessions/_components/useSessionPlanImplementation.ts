@@ -10,8 +10,8 @@ import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import {
   buildPlanImplementationPrompt,
   buildPlanImplementationThreadTitle,
-} from "./planExport";
-import type { ProposedPlanRow } from "./proposedPlanLogic";
+} from "@eva/shared/proposedPlan";
+import type { ProposedPlanRow } from "@eva/shared/proposedPlan";
 import type { ChatTurnSendOptions } from "@/lib/components/chat/useChatSend";
 
 export function useSessionPlanImplementation({

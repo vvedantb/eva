@@ -64,6 +64,20 @@ const activityLogStepSchema = z.object({
   durationMs: z.number().optional(),
   /** The transcript copy dropped `output`/`edits`; fetch the full log (`messages.activityLogById`) to show them. */
   hasHiddenDetail: z.boolean().optional(),
+  /** An AskUserQuestion step's prompt: the questions and the options shown. */
+  questions: z
+    .array(
+      z.object({
+        question: z.string(),
+        header: z.string().optional(),
+        multiSelect: z.boolean().optional(),
+        options: z.array(z.object({ label: z.string(), description: z.string().optional() })),
+      }),
+    )
+    .optional()
+    .catch(undefined),
+  /** The answers to `questions`, keyed by question text; absent when the answer came as the next message. */
+  answers: z.record(z.string(), z.string()).optional().catch(undefined),
 });
 
 export type ActivityLogStep = z.infer<typeof activityLogStepSchema>;

@@ -60,3 +60,8 @@ export function canSendSessionForReview(session: { branchName?: string; prState?
   if (!session.branchName) return false;
   return session.prState === undefined || session.prState === "draft";
 }
+
+/** "1 session", "3 sessions": the group archive's count, on the web and the phone. */
+export function sessionCountLabel(count: number): string {
+  return `${count} ${count === 1 ? "session" : "sessions"}`;
+}

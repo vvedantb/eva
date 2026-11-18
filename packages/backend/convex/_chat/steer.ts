@@ -69,7 +69,8 @@ async function loadSteerTarget(
       hasActiveTurn: (await openTurnWorkflowId(ctx, chatId)) !== undefined,
       isBusy: chat.syntheticTurnMessageId !== undefined,
       runningModel: chat.lastModel,
-      interrupt: () => cancelChatExecution(ctx, context),
+      interrupt: () =>
+        cancelChatExecution(ctx, context, { holdQueue: false }),
     };
   }
   return null;
@@ -99,6 +100,9 @@ export async function steerQueuedMessage(
   if (message.steer !== undefined) return null;
   const target = await loadSteerTarget(ctx, message.parentId);
   if (!target) return null;
+  // Steer is the user taking the queue back after a Stop: release the hold,
+  // or this message (queued before the Stop) could not start.
+  await ctx.db.patch(target.entityId, { queueHeldAt: undefined });
   await moveToFront(ctx, message);
   const delivery = decideSteerDelivery({
     hasActiveTurn: target.hasActiveTurn,

@@ -21,6 +21,7 @@ import {
   SheetRow,
   SheetTitle,
   Textarea,
+  MenuSheet,
 } from "@vvedantb/native-ui/primitives";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import { impactHaptic } from "@vvedantb/native-ui/haptics";
@@ -32,7 +33,6 @@ import { useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View, type TextInput } from "react-native";
 import { ModelIcon } from "@/chat/MessageFooter";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
-import { MenuSheet } from "@/ui/MenuSheet";
 import { useScheme } from "@/ui/theme";
 
 type QueuedRow = FunctionReturnType<typeof api.queuedMessages.listByParent>[number];

@@ -1,56 +1,11 @@
 import { useId } from "react";
-import cronstrue from "cronstrue";
+import {
+  describeCron,
+  localCronToUtc,
+  utcCronToLocal,
+} from "@eva/shared/automations";
 import { CronExpressionParser } from "cron-parser";
 import { Input, SettingsField, SettingsSection } from "@vvedantb/ui";
-
-function getOffsetMinutes(): number {
-  return -new Date().getTimezoneOffset();
-}
-
-function offsetCronHour(expression: string, offsetMin: number): string | null {
-  const parts = expression.trim().split(/\s+/);
-  if (parts.length < 5) return null;
-  const [min, hour, ...rest] = parts;
-  const minNum = parseInt(min);
-  const hourNum = parseInt(hour);
-  if (
-    isNaN(minNum) ||
-    isNaN(hourNum) ||
-    min !== String(minNum) ||
-    hour !== String(hourNum)
-  )
-    return null;
-  const total = hourNum * 60 + minNum + offsetMin;
-  const newHour = ((Math.floor(total / 60) % 24) + 24) % 24;
-  const newMin = ((total % 60) + 60) % 60;
-  return [String(newMin), String(newHour), ...rest].join(" ");
-}
-
-function localCronToUtc(localExpr: string): string {
-  const result = offsetCronHour(localExpr, -getOffsetMinutes());
-  return result ?? localExpr;
-}
-
-function utcCronToLocal(utcExpr: string): string {
-  const result = offsetCronHour(utcExpr, getOffsetMinutes());
-  return result ?? utcExpr;
-}
-
-function describeCron(
-  utcExpression: string,
-): { valid: true; text: string } | { valid: false; partial: boolean } {
-  const parts = utcExpression.trim().split(/\s+/);
-  if (parts.length < 5) return { valid: false, partial: true };
-  try {
-    const localExpr = utcCronToLocal(utcExpression);
-    return {
-      valid: true,
-      text: cronstrue.toString(localExpr, { use24HourTimeFormat: false }),
-    };
-  } catch {
-    return { valid: false, partial: false };
-  }
-}
 
 function nextCronDate(utcExpression: string): string | null {
   try {

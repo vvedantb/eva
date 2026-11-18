@@ -55,7 +55,7 @@ import {
 import { toast, useRequestConfirm } from "@vvedantb/ui";
 import { getSessionReadOnlyMessage } from "./_utils/sessionReadOnly";
 import { ProposedPlanCard } from "./_components/ProposedPlanCard";
-import { proposedPlanForMessage } from "./_components/proposedPlanLogic";
+import { proposedPlanForMessage } from "@eva/shared/proposedPlan";
 import { useSessionPlanImplementation } from "./_components/useSessionPlanImplementation";
 import { useSessionPlanDocument } from "./_components/useSessionPlanDocument";
 
