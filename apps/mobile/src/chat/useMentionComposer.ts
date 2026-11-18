@@ -130,6 +130,19 @@ export function useMentionComposer(
     edit({ ...draft, text, inserted, dismissed: false });
   };
 
+  /** Adds `/label` after the draft as a pick, as the web `insertSkill` (a skill suggestion chip). */
+  const insertSkill = (item: MentionItem) => {
+    const token = `/${item.label}`;
+    const needsSpace = draft.text.length > 0 && !/\s$/.test(draft.text);
+    edit({
+      ...draft,
+      text: `${draft.text}${needsSpace ? " " : ""}${token} `,
+      inserted: { startIndex: draft.text.length + (needsSpace ? 1 : 0), token },
+      dismissed: false,
+      skillMap: new Map(draft.skillMap).set(item.label, item.id),
+    });
+  };
+
   /** Closes the picker until the next edit, as the web Escape (`closeTrigger`). */
   const dismiss = () => setDraft({ ...draft, dismissed: true });
 
@@ -190,6 +203,9 @@ export function useMentionComposer(
     pick,
     dismiss,
     restore,
+    /** The `/` skills this chat offers, for the skill suggestion chips. */
+    skills,
+    insertSkill,
     load,
     /** The wire text for a send: each `@Label` / `/Label` picked becomes its token. */
     tokenize: (text: string) => tokenizeMentionText(text, draft),

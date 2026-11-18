@@ -10,7 +10,7 @@ import type {
   TranscriptParentId,
 } from "@/lib/hooks/useChatTranscript";
 import { resolveCredentialSourceLabel } from "@eva/shared/usageLimitRecovery";
-import { appendReviewCommentsToPrompt } from "@/lib/reviewComments";
+import { appendReviewCommentsToPrompt } from "@eva/shared";
 import { usePendingReviewComments } from "@/lib/contexts/PendingReviewCommentsContext";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 import { readableSendError } from "./chatBodyUtils";

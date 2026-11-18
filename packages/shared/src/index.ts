@@ -252,6 +252,7 @@ export {
   lineCommentTarget,
   lineRangeCommentTarget,
   summarizeDiffSize,
+  reviewCommentExcerpt,
   unifiedDiffLines,
   type DiffFileEntry,
   type DiffFileKind,
@@ -323,6 +324,7 @@ export {
   queuedMessagePreview,
 } from "./queuedMessages";
 export {
+  appendReviewCommentsToPrompt,
   parseReviewCommentSegments,
   stripReviewCommentBlocks,
   type ReviewComment,

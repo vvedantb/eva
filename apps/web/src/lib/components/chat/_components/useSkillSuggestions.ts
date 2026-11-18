@@ -7,7 +7,7 @@ import {
   shouldSuggestFor,
   SUGGEST_IDLE_MS,
   type SkillSuggestionResponse,
-} from "@/lib/components/chat/_components/skillSuggestionsPick";
+} from "@eva/shared/skillSuggestions";
 import { useIdleCallback } from "@vvedantb/ui";
 
 /**

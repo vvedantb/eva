@@ -6,7 +6,7 @@ import {
   SUGGEST_MAX_CHIPS,
   SUGGEST_MIN_NEEDS_SKILL,
   SUGGEST_MIN_PROBABILITY,
-} from "@/lib/components/chat/_components/skillSuggestionsPick";
+} from "@eva/shared/skillSuggestions";
 
 const skillItems: SlashItem[] = [
   { id: "system:review", label: "review", description: "Review the diff" },

@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone chat composer: background processes, review comments and skill suggestions
+
+Date: 2026-11-18
+
+WHY: The web session composer lists and stops the agent's background shell processes, sends diff comments with the next prompt, and suggests skills for the draft. The phone had none of the three.
+
+Architectural: `BackgroundProcessesChip` sits after the agents chip on the composer bar (`backgroundProcesses.listRunning`, `sandbox.killBackgroundProcess`, a 15 s `reconcileBackgroundProcesses` while it shows). The chat's diff is now commentable; its comments share `usePendingLineComments` with the review screen (as the web sandbox shares them between Review and chat), show as chips in the composer header, and go out as `<review_comment>` blocks (`appendReviewCommentsToPrompt`, moved to `@eva/shared` with the new `reviewCommentExcerpt`). `useSkillSuggestions` asks `skillSuggestions.suggest` after 700 ms idle; its chips join "Paste image" in one kit suggestion row (`ComposerSuggestions`) on the chat and new-session screens. The pick rules (`skillSuggestions`) and the elapsed format (`formatDurationMs`) are shared with the web.
+
 ## Old-APK shims removed: `sessions.getOwned` and project `activeWorkflowId`
 
 Date: 2026-11-18

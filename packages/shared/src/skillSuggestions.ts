@@ -1,4 +1,7 @@
-import type { SlashItem } from "@/lib/components/mentions";
+import type { MentionItem } from "./mentionComposer";
+
+// Eva's skill suggestion chips over the composer (both apps): when a draft is
+// worth asking `skillSuggestions.suggest` about, and which answers to show.
 
 /** How long the draft must sit still before Eva asks Jev about it. */
 export const SUGGEST_IDLE_MS = 700;
@@ -22,7 +25,8 @@ export interface SkillSuggestionResponse {
 export function shouldSuggestFor(text: string): boolean {
   const trimmed = text.trim();
   if (trimmed.length < SUGGEST_MIN_CHARS) return false;
-  const lastWord = trimmed.split(/\s+/).at(-1) ?? "";
+  const words = trimmed.split(/\s+/);
+  const lastWord = words[words.length - 1] ?? "";
   return !lastWord.startsWith("/") && !lastWord.startsWith("@");
 }
 
@@ -34,14 +38,14 @@ export function pickSkillSuggestions(
   response: SkillSuggestionResponse | null,
   ctx: {
     text: string;
-    skillItems: ReadonlyArray<SlashItem>;
+    skillItems: ReadonlyArray<MentionItem>;
     dismissed: ReadonlySet<string>;
   },
-): SlashItem[] {
+): MentionItem[] {
   if (response === null) return [];
   if (response.needsSkill < SUGGEST_MIN_NEEDS_SKILL) return [];
   const lowerText = ctx.text.toLowerCase();
-  const picked: SlashItem[] = [];
+  const picked: MentionItem[] = [];
   for (const suggestion of response.suggestions) {
     if (picked.length >= SUGGEST_MAX_CHIPS) break;
     if (suggestion.probability < SUGGEST_MIN_PROBABILITY) continue;

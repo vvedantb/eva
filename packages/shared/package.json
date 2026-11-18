@@ -42,6 +42,7 @@
     "./redactSecrets": "./src/redactSecrets.ts",
     "./resultEvent": "./src/resultEvent.ts",
     "./safeUrl": "./src/safeUrl.ts",
+    "./skillSuggestions": "./src/skillSuggestions.ts",
     "./storageUpload": "./src/storageUpload.ts",
     "./taskDetail": "./src/taskDetail.ts",
     "./turnCheckpoint": "./src/turnCheckpoint.ts",

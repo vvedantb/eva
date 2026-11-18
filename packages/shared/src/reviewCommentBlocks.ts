@@ -1,8 +1,9 @@
 import { z } from "zod";
 
 // The `<review_comment>` blocks a diff review appends to a prompt
-// (`appendReviewCommentsToPrompt` on the web), read back out of a message:
-// both apps show a queued or sent prompt without them.
+// (`appendReviewCommentsToPrompt`), and read back out of a message: both apps
+// send pending diff comments this way and show a queued or sent prompt
+// without them.
 
 export type ReviewCommentSide = "LEFT" | "RIGHT";
 
@@ -195,4 +196,50 @@ export function stripReviewCommentBlocks(value: string): {
     text: stripped.replace(/\n{3,}/g, "\n\n").trim(),
     reviewCommentCount,
   };
+}
+
+function escapeReviewCommentAttribute(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function formatReviewCommentFence(language: string, contents: string): string {
+  const longestBacktickRun = Math.max(
+    0,
+    ...Array.from(contents.matchAll(/`+/g), (match) => match[0].length),
+  );
+  const fence = "`".repeat(Math.max(3, longestBacktickRun + 1));
+  return [`${fence}${language}`, contents.trimEnd(), fence].join("\n");
+}
+
+function formatReviewComment(comment: ReviewComment): string {
+  return [
+    [
+      "<review_comment",
+      ` filePath="${escapeReviewCommentAttribute(comment.filePath)}"`,
+      ` lines="${escapeReviewCommentAttribute(comment.rangeLabel)}"`,
+      ` startIndex="${comment.startIndex}"`,
+      ` endIndex="${comment.endIndex}"`,
+      ">",
+    ].join(""),
+    comment.text.trim(),
+    formatReviewCommentFence("diff", comment.diff),
+    "</review_comment>",
+  ].join("\n");
+}
+
+/** The prompt with each pending diff comment appended as a `<review_comment>` block. */
+export function appendReviewCommentsToPrompt(
+  prompt: string,
+  comments: ReadonlyArray<ReviewComment>,
+): string {
+  const blocks = comments.map(formatReviewComment);
+  if (blocks.length === 0) return prompt;
+  const trimmedPrompt = prompt.trim();
+  return trimmedPrompt.length > 0
+    ? `${trimmedPrompt}\n\n${blocks.join("\n\n")}`
+    : blocks.join("\n\n");
 }

@@ -255,6 +255,43 @@ export function lineRangeCommentTarget(
   };
 }
 
+/**
+ * What a `<review_comment>` block (`appendReviewCommentsToPrompt`) carries
+ * for the rows `from` to `to` of one file's `unifiedDiffLines`, either order:
+ * their indexes among the file's lines without the hunk headers (as the web
+ * diff counts them), and the excerpt as a small hunk with its `@@` header.
+ * Null when the range touches a hunk header.
+ */
+export function reviewCommentExcerpt(
+  rows: readonly UnifiedDiffLine[],
+  from: number,
+  to: number,
+): { startIndex: number; endIndex: number; diff: string } | null {
+  const first = Math.min(from, to);
+  const span = rows.slice(first, Math.max(from, to) + 1);
+  const lines = span.flatMap((row) => (row.kind === "hunk" ? [] : [row]));
+  if (lines.length === 0 || lines.length !== span.length) return null;
+  const startIndex = rows
+    .slice(0, first)
+    .filter((row) => row.kind !== "hunk").length;
+  const range = (side: "oldLine" | "newLine") => {
+    const numbered = lines.flatMap((line) => {
+      const number = line[side];
+      return number === null ? [] : [number];
+    });
+    return `${numbered[0] ?? 0},${numbered.length}`;
+  };
+  const marker = { added: "+", removed: "-", context: " " };
+  return {
+    startIndex,
+    endIndex: startIndex + lines.length - 1,
+    diff: [
+      `@@ -${range("oldLine")} +${range("newLine")} @@`,
+      ...lines.map((line) => `${marker[line.kind]}${line.text}`),
+    ].join("\n"),
+  };
+}
+
 /** What a changed file is, for splitting a PR's size the way t3code does. */
 export type DiffFileKind = "code" | "tests" | "mocks" | "generated";
 
