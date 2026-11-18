@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: paste an image into the composer
+
+Date: 2026-11-18
+
+WHY: The web composer takes a pasted image; on the phone, a screenshot had to be saved to the gallery first and then picked.
+
+Architectural: React Native's `TextInput` takes no pasted image, so a "Paste image" chip (the kit `Suggestion`, user choice) shows over the chat and new-session composers while the clipboard holds one. `src/chat/clipboardImage.ts` is an external store over `expo-clipboard`: `hasImageAsync` reads only the clip's MIME types (no Android "pasted" notice), rechecked on clipboard changes (native only; the web module throws on `addClipboardListener`) and when the app comes back. A tap reads the image as PNG (`getImageAsync`) and `useAttachments().paste` uploads it like a picked photo. The kit 0.25.3 fix makes the chip round with its fill.
+
 ## Typecheck runs on tsrs, oxc's Rust port of TypeScript 7
 
 Date: 2026-11-18
