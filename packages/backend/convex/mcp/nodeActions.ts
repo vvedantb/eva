@@ -1078,10 +1078,9 @@ export const orchestratorGetAgentState = internalAction({
     // (none before it first chatted). The streaming row is that chat's too.
     // Same rule as list_agents / stop_sandbox: the open turn is "is executing",
     // daemon `/loop` continuations included.
-    const owned =
-      kind === "session"
-        ? null
-        : await readOwnedChatAsUser(clerkUserId, kind, id);
+    const ownedRead =
+      kind === "session" ? null : await readOwnedChatAsUser(clerkUserId, kind, id);
+    const owned = ownedRead?.session;
     const [sessionChats, isExecuting, pullRequests] = await Promise.all([
       kind === "session"
         ? loadSessionChatsAsUser(clerkUserId, id)
@@ -1165,7 +1164,7 @@ export const orchestratorGetAgentState = internalAction({
         numId: project.numId,
         title: project.title,
         status: project.phase,
-        model: ownChat?.lastModel ?? project.model,
+        model: ownChat?.lastModel ?? ownedRead?.chatSeed.model,
         updatedAt: project.updatedAt ?? project._creationTime,
         deploymentUrl: undefined,
         deploymentStatus: undefined,
@@ -1179,7 +1178,7 @@ export const orchestratorGetAgentState = internalAction({
       numId: task.numId,
       title: task.title,
       status: task.status,
-      model: ownChat?.lastModel ?? task.model,
+      model: ownChat?.lastModel ?? ownedRead?.chatSeed.model,
       updatedAt: task.updatedAt,
       deploymentUrl: undefined,
       deploymentStatus: undefined,
@@ -1307,10 +1306,16 @@ const ownedSessionRefSchema = z.object({
   chatId: z.string(),
 });
 
-/** `sessions:getOwned`: the chat is absent while a project task has not chatted. */
+/**
+ * `sessions:getOwned`: `session` is null before the session exists, its chat
+ * absent while a project task has not chatted. `chatSeed` is what the chat
+ * starts on (`chatSeedSettings`).
+ */
 const ownedSessionReadSchema = z.object({
-  sessionId: z.string(),
-  chatId: z.string().optional(),
+  session: z
+    .object({ sessionId: z.string(), chatId: z.string().optional() })
+    .nullable(),
+  chatSeed: z.object({ model: z.string() }),
 });
 
 function ownerArg(
@@ -1339,7 +1344,7 @@ async function ensureOwnedChatAsUser(
   );
 }
 
-/** `ensureOwnedChatAsUser` without creating it: null before first use. */
+/** `ensureOwnedChatAsUser` without creating it; null when the owner is not visible. */
 async function readOwnedChatAsUser(
   clerkUserId: string,
   kind: "task" | "project",
@@ -1509,39 +1514,25 @@ export const orchestratorStopAgent = internalAction({
       );
       return { buildRunning: false };
     }
-    // A project's session goes quiet (every chat of it); a task's own chat
-    // does. A project's running build is its own workflow and is reported
-    // back rather than cancelled (cancel_project_build owns that).
-    const owned = await readOwnedChatAsUser(clerkUserId, kind, id);
-    if (owned && kind === "project") {
-      await runAsUser(
-        "mutation",
-        clerkUserId,
-        "_sessions/execution:cancelSessionExecution",
-        { sessionId: owned.sessionId },
-      );
-    } else if (owned?.chatId !== undefined) {
-      await runAsUser(
-        "mutation",
-        clerkUserId,
-        "_sessions/execution:cancelExecution",
-        { chatId: owned.chatId },
-      );
+    // The app's chat Stop (`sessions.stopChatTurn`): a task's run and chat,
+    // a project's own chat. A project's running build is its own workflow and
+    // is reported back rather than cancelled (cancel_project_build owns that).
+    if (kind === "task") {
+      await runAsUser("mutation", clerkUserId, "sessions:stopChatTurn", {
+        target: { taskId: id },
+      });
+      return { buildRunning: false };
     }
-    if (kind === "project") {
-      const project = projectDocSchema.parse(
-        await readChatDocAsUser(clerkUserId, "project", id),
-      );
-      return { buildRunning: projectDocBuildRunning(project) };
+    const owned = (await readOwnedChatAsUser(clerkUserId, kind, id))?.session;
+    if (owned?.chatId !== undefined) {
+      await runAsUser("mutation", clerkUserId, "sessions:stopChatTurn", {
+        target: { chatId: owned.chatId },
+      });
     }
-    // A task's run is its own workflow slot: stop it too (a no-op when idle).
-    await runAsUser(
-      "mutation",
-      clerkUserId,
-      "_taskWorkflow/publicMutations:cancelExecution",
-      { taskId: id },
+    const project = projectDocSchema.parse(
+      await readChatDocAsUser(clerkUserId, "project", id),
     );
-    return { buildRunning: false };
+    return { buildRunning: projectDocBuildRunning(project) };
   },
 });
 
@@ -1586,39 +1577,26 @@ export const mcpStopEntitySandbox = internalAction({
     sandboxStatus: v.string(),
     stopRequested: v.boolean(),
   }),
-  handler: async (ctx, { clerkUserId, kind, id: entityId }) => {
+  handler: async (_ctx, { clerkUserId, kind, id: entityId }) => {
     // A task's or project's sandbox is its session's. Stopping never creates
     // one: no session means no sandbox. Reading the owner as the user is the
     // access check, so it comes first.
     let id = entityId;
     if (kind !== "session") {
       await readChatDocAsUser(clerkUserId, kind, entityId);
-      const owned = await readOwnedChatAsUser(clerkUserId, kind, entityId);
+      const owned = (await readOwnedChatAsUser(clerkUserId, kind, entityId))
+        ?.session;
       if (!owned) return { sandboxStatus: "closed", stopRequested: false };
       id = owned.sessionId;
     }
-    // Reading the session as the user is the access check, so it comes first —
-    // the turn lookup below runs on an id the caller has already proven.
-    const sandboxStatus = await readSessionSandboxStatus(clerkUserId, id);
-
-    // Tearing the VM down mid-turn kills the turn. Stopping and cancelling are
-    // separate decisions, so this refuses rather than deciding for the caller.
-    const isExecuting = await ctx.runQuery(
-      internal.mcp.queries.entityIsExecuting,
-      { kind: "session", id },
-    );
-    if (isExecuting) {
-      throw new Error(
-        `This ${kind} has a turn in flight. Wait for it to finish and stop again, or cancel it first with stop_agent.`,
-      );
-    }
-
-    if (sandboxStatus === "closed") {
+    if ((await readSessionSandboxStatus(clerkUserId, id)) === "closed") {
       return { sandboxStatus: "closed", stopRequested: false };
     }
 
-    await runAsUser("mutation", clerkUserId, "sessions:stopSandbox", {
-      sessionId: id,
+    // The app's sandbox Stop: refused while an agent works in the sandbox
+    // (a turn, run, build or interview). Stop it first with stop_agent.
+    await runAsUser("mutation", clerkUserId, "sessions:stopWorkSandbox", {
+      target: { sessionId: id },
     });
 
     // Teardown finalizes in a scheduled action, so poll for the settled state

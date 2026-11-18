@@ -25,7 +25,7 @@ import {
 } from "./_projects/interviewState";
 import { closeOpenTurn } from "./_chat/turnStore";
 import type { TerminalTurnState } from "./_chat/turnLease";
-import { findProjectSession } from "./_sessions/owner";
+import { findOwnedSession } from "./_sessions/owner";
 import { abandonTaskRunSandbox } from "./_sessions/sandbox";
 import {
   sessionChatAdapter,
@@ -310,7 +310,7 @@ export async function stopProjectInterview(
       error: turn.error,
     });
   }
-  const session = await findProjectSession(ctx.db, projectId);
+  const session = await findOwnedSession(ctx.db, { kind: "project", projectId });
   if (session && previous.state !== "started") {
     await abandonTaskRunSandbox(ctx, session._id, previous);
   }

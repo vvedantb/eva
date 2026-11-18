@@ -7,7 +7,7 @@ import {
   type MutationCtx,
 } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { findProjectSession } from "./_sessions/owner";
+import { findOwnedSession } from "./_sessions/owner";
 import { abandonTaskRunSandbox } from "./_sessions/sandbox";
 import { internal } from "./_generated/api";
 import { workflow, cancelTrackedWorkflow } from "./workflowManager";
@@ -34,10 +34,9 @@ import {
   scheduleProjectBuild,
 } from "./_projects/buildState";
 import {
-  ensureOwnedSession,
+  ensureWorkSession,
   ownedSessionBusy,
   syncProjectSession,
-  projectSessionOwner,
 } from "./_sessions/ownedSession";
 
 /** Why a build did not start: the project chat holds the sandbox. */
@@ -59,7 +58,7 @@ async function claimProjectSessionForBuild(
   ctx: MutationCtx,
   project: Doc<"projects">,
 ): Promise<void> {
-  await ensureOwnedSession(ctx, { kind: "project", project });
+  await ensureWorkSession(ctx, { kind: "project", project });
 }
 
 // --- Workflow ---
@@ -250,7 +249,12 @@ export const startBuild = authMutation({
       throw new Error("Project already has an active build");
     }
     // One agent per sandbox: a build waits for the project chat's reply.
-    if (await ownedSessionBusy(ctx.db, projectSessionOwner(project._id))) {
+    if (
+      await ownedSessionBusy(ctx.db, {
+        kind: "project",
+        projectId: project._id,
+      })
+    ) {
       throw new Error(PROJECT_CHAT_BUSY_ERROR);
     }
 
@@ -306,7 +310,12 @@ export const executeScheduledBuild = internalMutation({
     // stop): try again shortly instead of dropping the schedule (`startBuild`
     // refuses a busy session). After `CHAT_BUSY_GIVE_UP_MS` the schedule gives up and
     // says why on the project.
-    if (await ownedSessionBusy(ctx.db, projectSessionOwner(project._id))) {
+    if (
+      await ownedSessionBusy(ctx.db, {
+        kind: "project",
+        projectId: project._id,
+      })
+    ) {
       const now = Date.now();
       const firstDue = args.firstScheduledAt ?? args.scheduledAt ?? now;
       if (now - firstDue >= CHAT_BUSY_GIVE_UP_MS) {
@@ -400,7 +409,10 @@ async function cancelRunningBuild(
 ): Promise<void> {
   await cancelTrackedWorkflow(ctx, buildWorkflowId);
 
-  const projectSession = await findProjectSession(ctx.db, projectId);
+  const projectSession = await findOwnedSession(ctx.db, {
+    kind: "project",
+    projectId,
+  });
 
   const tasks = await ctx.db
     .query("agentTasks")

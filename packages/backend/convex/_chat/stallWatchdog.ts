@@ -105,7 +105,7 @@ export async function finalizeStaleChatTurn<TId extends ChatId, TEntity>(
 
   // A stale heartbeat usually means the agent process is dead, but a merely
   // wedged one must not keep mutating the sandbox after the turn moves on to
-  // its next one — interrupt it the same way cancelExecution does. When the
+  // its next one — interrupt it the same way cancelChatExecution does. When the
   // sandbox itself has stopped there is nothing to interrupt, and killing it
   // would exec on the stopped VM — which lazily RESUMES it on Vercel (see
   // prewarmNeverResurrects contract) — so skip the interrupt entirely.

@@ -14,7 +14,7 @@ import { recordPullRequest } from "./_pullRequests/store";
 import { recordRunPullRequest } from "./_taskWorkflow/helpers";
 import { pruneSettledBackgroundAgents } from "./_sessions/backgroundAgents";
 import type { BackgroundAgentEntry } from "./_validators/tableFields";
-import { findProjectSession } from "./_sessions/owner";
+import { findOwnedSession } from "./_sessions/owner";
 import { projectInterviewState } from "./_projects/interviewState";
 
 /**
@@ -372,7 +372,10 @@ export const pruneBackgroundAgents = dataMigrations.runner([
 export const migrateProjectInterviewState = dataMigrations.define({
   table: "projects",
   migrateOne: async (ctx, project) => {
-    const session = await findProjectSession(ctx.db, project._id);
+    const session = await findOwnedSession(ctx.db, {
+      kind: "project",
+      projectId: project._id,
+    });
     if (session) {
       const turns = await ctx.db
         .query("turns")

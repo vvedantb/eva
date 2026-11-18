@@ -2,7 +2,7 @@ import type { Infer } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import type { projectInterviewValidator } from "../_validators/tableFields";
-import { findProjectSession, sessionOwnerProjectId } from "../_sessions/owner";
+import { findOwnedSession, sessionOwnerProjectId } from "../_sessions/owner";
 
 /**
  * A project's interview or spec workflow (`projects.interview`), one field
@@ -226,7 +226,7 @@ export async function interviewTurnEntityIds(
   db: DatabaseReader,
   projectId: Id<"projects">,
 ): Promise<Array<Id<"sessions"> | Id<"projects">>> {
-  const session = await findProjectSession(db, projectId);
+  const session = await findOwnedSession(db, { kind: "project", projectId });
   return session ? [session._id, projectId] : [projectId];
 }
 

@@ -10,9 +10,8 @@ import {
   type ProjectInterviewSource,
 } from "../_projects/interviewState";
 import {
-  findProjectSession,
   findProjectTaskChat,
-  findTaskWorkSession,
+  findWorkSession,
   sessionOwnerProjectId,
   type OwnerChat,
   type OwnerEntity,
@@ -29,14 +28,11 @@ import {
  * Main chat, a project task's own chat in its project's session), or null
  * until something needed it (`ensureOwnerChat`).
  */
-export async function findOwnerChat(
+export async function findWorkChat(
   db: DatabaseReader,
   entity: OwnerEntity,
 ): Promise<OwnerChat | null> {
-  const session =
-    entity.kind === "task"
-      ? await findTaskWorkSession(db, entity.task)
-      : await findProjectSession(db, entity.project._id);
+  const session = await findWorkSession(db, entity);
   if (!session) return null;
   const chat =
     entity.kind === "task" && entity.task.projectId !== undefined
