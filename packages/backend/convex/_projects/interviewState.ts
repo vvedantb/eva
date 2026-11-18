@@ -5,8 +5,7 @@ import type { projectInterviewValidator } from "../_validators/tableFields";
 import { findOwnedSession, sessionOwnerProjectId } from "../_sessions/owner";
 
 /**
- * A project's interview or spec workflow (`projects.interview`), one field
- * instead of two (`activeWorkflowId` + `interviewSandboxClaim`):
+ * A project's interview or spec workflow (`projects.interview`):
  *
  *   idle ──start──▶ started ──claim──▶ claimed ──prepare──▶ prepared
  *   started ──prepare──▶ started (the session was already `active`: the VM is the session's)
@@ -22,35 +21,13 @@ import { findOwnedSession, sessionOwnerProjectId } from "../_sessions/owner";
  */
 export type ProjectInterview = Infer<typeof projectInterviewValidator>;
 
-export type ProjectInterviewSource = Pick<
-  Doc<"projects">,
-  "interview" | "activeWorkflowId" | "interviewSandboxClaim"
->;
-
-/**
- * The legacy fields as an interview state, until
- * `dataMigrations:migrateProjectInterviewState` has run. A claim without a
- * workflow (the old save cleared the workflow before the release) is idle:
- * the release still stops the VM it holds.
- */
-export function legacyProjectInterview(
-  project: ProjectInterviewSource,
-): ProjectInterview | undefined {
-  const workflowId = project.activeWorkflowId;
-  if (workflowId === undefined) return undefined;
-  const claim = project.interviewSandboxClaim;
-  if (claim === undefined) return { state: "started", workflowId };
-  const { sessionStartAttempt, sandboxId } = claim;
-  return sandboxId === undefined
-    ? { state: "claimed", workflowId, sessionStartAttempt }
-    : { state: "prepared", workflowId, sessionStartAttempt, sandboxId };
-}
+export type ProjectInterviewSource = Pick<Doc<"projects">, "interview">;
 
 /** The project's interview state; `undefined` is idle. */
 export function projectInterviewState(
   project: ProjectInterviewSource,
 ): ProjectInterview | undefined {
-  return project.interview ?? legacyProjectInterview(project);
+  return project.interview;
 }
 
 /** The running interview or spec workflow, if one holds the project. */
@@ -144,8 +121,6 @@ async function applyProjectInterviewEvent(
   if (result.ok) {
     await ctx.db.patch(projectId, {
       interview: result.next,
-      activeWorkflowId: undefined,
-      interviewSandboxClaim: undefined,
     });
   }
   return { ...result, previous };
@@ -220,24 +195,20 @@ export async function finishProjectInterview(
 /**
  * Where an interview's agent turn is filed: under the project's session
  * (`entityId` and `sessionId`, lane `interview`), so the session's open-turn
- * reads see it. A turn opened before that change is keyed by the project.
+ * reads see it. Null before the project has a session.
  */
-export async function interviewTurnEntityIds(
+export async function interviewTurnSessionId(
   db: DatabaseReader,
   projectId: Id<"projects">,
-): Promise<Array<Id<"sessions"> | Id<"projects">>> {
-  const session = await findOwnedSession(db, { kind: "project", projectId });
-  return session ? [session._id, projectId] : [projectId];
+): Promise<Id<"sessions"> | null> {
+  return (await findOwnedSession(db, { kind: "project", projectId }))?._id ?? null;
 }
 
-/** The project an interview turn belongs to (`interviewTurnEntityIds` in reverse). */
+/** The project an interview turn belongs to (`interviewTurnSessionId` in reverse). */
 export async function interviewTurnProjectId(
   db: DatabaseReader,
-  entityId: Id<"sessions"> | Id<"projects">,
+  sessionId: Id<"sessions">,
 ): Promise<Id<"projects"> | undefined> {
-  const projectId = db.normalizeId("projects", entityId);
-  if (projectId) return projectId;
-  const sessionId = db.normalizeId("sessions", entityId);
-  const session = sessionId ? await db.get(sessionId) : null;
+  const session = await db.get(sessionId);
   return session ? sessionOwnerProjectId(session) : undefined;
 }

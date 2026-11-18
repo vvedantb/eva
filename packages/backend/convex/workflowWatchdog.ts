@@ -20,7 +20,7 @@ import {
 } from "./_projects/buildState";
 import {
   finishProjectInterview,
-  interviewTurnEntityIds,
+  interviewTurnSessionId,
   markProjectInterviewStarted,
 } from "./_projects/interviewState";
 import { closeOpenTurn } from "./_chat/turnStore";
@@ -304,8 +304,9 @@ export async function stopProjectInterview(
   if (!finished.ok || previous === undefined) return;
 
   await cancelStaleWorkflow(ctx, previous.workflowId, [String(projectId)]);
-  for (const entityId of await interviewTurnEntityIds(ctx.db, projectId)) {
-    await closeOpenTurn(ctx, entityId, turn.state, {
+  const turnSessionId = await interviewTurnSessionId(ctx.db, projectId);
+  if (turnSessionId !== null) {
+    await closeOpenTurn(ctx, turnSessionId, turn.state, {
       lane: "interview",
       error: turn.error,
     });

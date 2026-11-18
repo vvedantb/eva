@@ -12,10 +12,7 @@ export {
 export { backfillDeploymentUrlScheme } from "./_migrations/deploymentUrl";
 export { migrateRepoSkillsToGithubMetadata } from "./_migrations/repoSkills";
 export { backfillLogProjectIds } from "./_migrations/logProjectIds";
-export {
-  projectEntityTurnsLeft,
-  repairStuckProjectInterview,
-} from "./_migrations/projectInterview";
+export { repairStuckProjectInterview } from "./_migrations/projectInterview";
 export {
   migrateProjectPhases,
   repairStuckProjectPhases,

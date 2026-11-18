@@ -32,7 +32,7 @@ import {
 } from "./_projects/helpers";
 import {
   finishProjectInterview,
-  interviewTurnEntityIds,
+  interviewTurnSessionId,
   isProjectInterviewing,
   projectInterviewWorkflowId,
   recordProjectInterviewSandbox,
@@ -222,7 +222,7 @@ export const projectInterviewWorkflow = workflow.define({
  * own lane: the session's open-turn reads (busy gates, idle pause, sidebar)
  * see it like a run's turn, while chat turns (lane unset) stay apart.
  * Completion, stop and the stall reconciler find it by lane
- * (`interviewTurnEntityIds`).
+ * (`interviewTurnSessionId`).
  */
 function interviewTurnOwner(target: InterviewTarget): {
   entityId: Id<"sessions">;
@@ -543,21 +543,17 @@ export const handleCompletion = authMutation({
     const workflowId = project ? projectInterviewWorkflowId(project) : undefined;
     if (!project || workflowId === undefined) return null;
     await getProjectWithAccess(ctx.db, args.projectId, ctx.userId);
-    let settled = false;
-    for (const entityId of await interviewTurnEntityIds(
-      ctx.db,
-      args.projectId,
-    )) {
-      settled = await settleAgentTurnCompletion(ctx, {
+    const entityId = await interviewTurnSessionId(ctx.db, args.projectId);
+    const settled =
+      entityId !== null &&
+      (await settleAgentTurnCompletion(ctx, {
         entityId,
         lane: "interview",
         turnId: args.turnId,
         leaseGeneration: args.leaseGeneration,
         success: args.success,
         error: args.error,
-      });
-      if (settled) break;
-    }
+      }));
     if (!settled) return null;
 
     await sendCompletionEvent(ctx, projectInterviewCompleteEvent, workflowId, {
