@@ -180,7 +180,7 @@ export default function ChatScreen() {
   const { mineByMessageId: mine, agentReports } = groupChatFeedback(feedbackRows ?? [], me ?? undefined);
   const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder);
   // The agent's proposed plans, each under the message that proposed it (session chats only, as the web).
-  const planAfter = useProposedPlans(chat);
+  const planAfter = useProposedPlans(chat, sessionRow?.planContent);
   // Rows seen on screen, so an agent page mounts its WebView only once its row shows.
   const [seenRows] = useState(createSeenRows);
   // The restore confirm a held reply's Restore opens, and the hold menus (the kit `Message` `menu`).

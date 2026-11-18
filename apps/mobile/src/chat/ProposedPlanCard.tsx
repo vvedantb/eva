@@ -48,10 +48,13 @@ const FOLD_LINES = 20;
  * Implement in new session starts one on this chat's model and account with
  * the plan as its plan, as the web; Save as Document saves the session's
  * plan as a doc and opens it; Edit saves the edited plan as the session's
- * plan (`sessions.updatePlanContent`), as the web. A closed chat shows the
- * card without actions.
+ * plan (`sessions.updatePlanContent`), as the web. The web shows that saved
+ * plan in its Plan tab; the phone has none, so once the session's plan
+ * (`planContent`) matches no card, the newest card shows it, and its Copy,
+ * Download, Edit and Implement use it. A closed chat shows the card without
+ * actions.
  */
-export function useProposedPlans(chat: Chat | null | undefined): (messageId: string) => ReactNode {
+export function useProposedPlans(chat: Chat | null | undefined, planContent: string | undefined): (messageId: string) => ReactNode {
   const router = useRouter();
   const sessionId = chat?.session?.id;
   const plans = useQuery(api.proposedPlans.listBySession, sessionId ? { sessionId } : "skip");
@@ -66,9 +69,14 @@ export function useProposedPlans(chat: Chat | null | undefined): (messageId: str
 
   if (!chat || !sessionId || !plans || plans.length === 0) return () => null;
   const canAct = chat.canReply;
+  // An edit saved from a card: the session's plan, when it is no card's own text (as the web `matchingProposedPlan` finds none).
+  const saved = planContent?.trim() ?? "";
+  const edited = saved !== "" && !plans.some((plan) => plan.planMarkdown.trim() === saved) ? planContent : undefined;
+  const newest = plans.reduce((latest, plan) => (plan.createdAt > latest.createdAt ? plan : latest));
+  const markdownOf = (plan: ProposedPlanRow) => (edited !== undefined && plan._id === newest._id ? edited : plan.planMarkdown);
 
   const implement = (plan: ProposedPlanRow) => {
-    send({ target: chat.target, message: buildPlanImplementationPrompt(plan.planMarkdown) })
+    send({ target: chat.target, message: buildPlanImplementationPrompt(markdownOf(plan)) })
       .then(() => markImplemented({ planId: plan._id }))
       .catch(() => toast.error("Couldn't send your message"));
   };
@@ -76,13 +84,13 @@ export function useProposedPlans(chat: Chat | null | undefined): (messageId: str
   const implementInNewSession = (plan: ProposedPlanRow) => {
     start({
       repoId: chat.repoId,
-      prompt: buildPlanImplementationPrompt(plan.planMarkdown),
-      title: buildPlanImplementationThreadTitle(plan.planMarkdown),
+      prompt: buildPlanImplementationPrompt(markdownOf(plan)),
+      title: buildPlanImplementationThreadTitle(markdownOf(plan)),
       model: normalizeAIModel(chat.model),
       providerAccountId: chat.providerAccountId ?? null,
     })
       .then(async ({ sessionId: next }) => {
-        await updatePlanContent({ id: next, planContent: plan.planMarkdown });
+        await updatePlanContent({ id: next, planContent: markdownOf(plan) });
         await markImplemented({ planId: plan._id, implementationSessionId: next });
         router.push({ pathname: "/chat/[target]", params: { target: next } });
       })
@@ -118,7 +126,7 @@ export function useProposedPlans(chat: Chat | null | undefined): (messageId: str
     return (
       <ProposedPlanCard
         key={plan._id}
-        planMarkdown={plan.planMarkdown}
+        planMarkdown={markdownOf(plan)}
         implemented={implemented}
         onImplement={canAct && !implemented ? () => implement(plan) : undefined}
         onImplementInNewSession={canAct && !implemented ? () => implementInNewSession(plan) : undefined}
