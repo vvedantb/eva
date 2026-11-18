@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useMutation } from "convex/react";
+import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
@@ -14,12 +15,14 @@ import {
   DropdownMenuTrigger,
 } from "@vvedantb/ui";
 import {
+  IconArchive,
   IconCheck,
   IconLink,
   IconLinkOff,
   IconPencil,
 } from "@tabler/icons-react";
 import { DynamicLink } from "@/lib/components/DynamicLink";
+import { SessionGroupArchiveDialog } from "@/lib/components/sidebar/_components/SessionGroupArchiveDialog";
 import { SessionGroupRenameDialog } from "@/lib/components/sidebar/_components/SessionGroupRenameDialog";
 import { sessionHrefForRow } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
@@ -32,13 +35,15 @@ interface SessionGroupBadgeProps {
 /**
  * Header chip for a session in a linked-session group (one agent spun up
  * another): the member count, and a menu that jumps to any member in any
- * repo, renames the group, or takes this session out. Renders nothing for an
+ * repo, renames or archives the group, or takes this session out. Renders nothing for an
  * unlinked session.
  */
 export function SessionGroupBadge({ sessionId }: SessionGroupBadgeProps) {
   const group = useQuery(api.sessions.listGroup, { id: sessionId });
   const removeFromGroup = useMutation(api.sessions.removeFromGroup);
+  const navigate = useNavigate();
   const [isRenameOpen, setIsRenameOpen] = useState(false);
+  const [isArchiveOpen, setIsArchiveOpen] = useState(false);
 
   if (!group) return null;
 
@@ -101,6 +106,13 @@ export function SessionGroupBadge({ sessionId }: SessionGroupBadgeProps) {
             <IconLinkOff size={16} />
             Remove from group
           </DropdownMenuItem>
+          <DropdownMenuItem
+            className="text-warning"
+            onSelect={() => setIsArchiveOpen(true)}
+          >
+            <IconArchive size={16} />
+            Archive group
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <SessionGroupRenameDialog
@@ -108,6 +120,14 @@ export function SessionGroupBadge({ sessionId }: SessionGroupBadgeProps) {
         onOpenChange={setIsRenameOpen}
         sessionId={sessionId}
         name={group.name}
+      />
+      <SessionGroupArchiveDialog
+        open={isArchiveOpen}
+        onOpenChange={setIsArchiveOpen}
+        sessionId={sessionId}
+        label={group.name ?? "Linked sessions"}
+        // This session was in the group, so it is archived now.
+        onArchived={() => void navigate({ to: "/sessions" })}
       />
     </>
   );

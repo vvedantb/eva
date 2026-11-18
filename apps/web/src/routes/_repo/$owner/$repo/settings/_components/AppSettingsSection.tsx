@@ -13,12 +13,10 @@ type UpdateRepoConfig = (args: {
 
 export function AppSettingsSection({
   repoId,
-  appLabel,
   repo,
   updateConfig,
 }: {
   repoId: Id<"githubRepos">;
-  appLabel: string;
   repo: {
     rootDirectory?: string;
     deploymentProjectName?: string;
@@ -29,18 +27,11 @@ export function AppSettingsSection({
   return (
     <SettingsSection
       title="This app"
-      description={
-        <>
-          Only for{" "}
-          <span className="font-medium text-foreground">{appLabel}</span>.
-        </>
-      }
     >
       <div className="grid gap-5">
         {isAppRepo(repo) ? (
           <SettingsField
             label="Deployment project"
-            description="Vercel or Netlify project name. Matches the right preview in monorepos."
           >
             <Input
               className="h-9"

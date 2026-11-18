@@ -113,14 +113,6 @@ export function SnapshotStatusTab({
       </SettingsSection>
       <SettingsSection
         title="Images"
-        description={
-          <>
-            Base snapshot with toolchain, <code>pnpm install</code>, and your
-            build commands. Eva captures a running sandbox as{" "}
-            <code>snap_*</code>. This is what sandboxes boot from unless a
-            seeded snapshot exists.
-          </>
-        }
       >
         <div>
           <h4 className="text-xs font-medium text-foreground">Base Image</h4>

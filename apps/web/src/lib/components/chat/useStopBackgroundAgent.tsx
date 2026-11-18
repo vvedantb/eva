@@ -5,6 +5,10 @@ import { useMutation } from "convex/react";
 import { ConfirmDialog } from "@vvedantb/ui";
 import { api } from "@eva/backend";
 import { catchMutationError } from "@/lib/utils/mutationToast";
+import {
+  BACKGROUND_AGENT_STOP_FAILED,
+  backgroundAgentStopCopy,
+} from "@eva/shared/backgroundAgents";
 import type { ChatEntityRef } from "./sandboxChatSurface";
 
 /** Asks to stop one background agent; the confirm dialog does the rest. */
@@ -42,7 +46,7 @@ export function useStopBackgroundAgent(entity: ChatEntityRef | undefined): {
     try {
       await catchMutationError(
         request,
-        "Couldn't stop background agent",
+        BACKGROUND_AGENT_STOP_FAILED,
         "chat-bg-agent-stop",
       );
     } catch {
@@ -54,6 +58,7 @@ export function useStopBackgroundAgent(entity: ChatEntityRef | undefined): {
     setTarget(null);
   };
 
+  const copy = backgroundAgentStopCopy(target?.title);
   const stopDialog = (
     <ConfirmDialog
       size="md"
@@ -62,9 +67,9 @@ export function useStopBackgroundAgent(entity: ChatEntityRef | undefined): {
       onOpenChange={(open) => {
         if (!open) setTarget(null);
       }}
-      title="Stop this background agent?"
-      description={`${target?.title ? `"${target.title}"` : "The agent"} stops before it finishes. This cannot be undone.`}
-      confirmLabel="Stop agent"
+      title={copy.title}
+      description={copy.description}
+      confirmLabel={copy.confirmLabel}
       variant="destructive"
       pending={isStopping}
       onConfirm={() => {

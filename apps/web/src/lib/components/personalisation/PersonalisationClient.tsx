@@ -93,7 +93,6 @@ export function PersonalisationClient() {
     <SettingsPage title="Personalisation">
       <SettingsSection
         title="Role preset"
-        description="How Eva talks to you. Does not change what code it edits."
       >
         <div className="space-y-3">
           <RolePresetPicker
@@ -129,7 +128,6 @@ export function PersonalisationClient() {
 
       <SettingsSection
         title="Custom instructions"
-        description="Extra guidance included in every session."
         footer={
           <>
             {isDirty ? (

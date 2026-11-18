@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { internal } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import {
@@ -338,6 +338,57 @@ describe("a quiet drain", () => {
       const session = await t.run((ctx) => ctx.db.get(sessionId));
       expect(session?.status).toBe("starting");
       expect(await scheduledResumes(t)).toHaveLength(0);
+    },
+    TIMEOUT_MS,
+  );
+});
+
+describe("a Stop", () => {
+  // Keeps the scheduled sandbox start from firing after the test finishes.
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test(
+    "holds what was queued before it until the user presses Steer",
+    async () => {
+      const { t, sessionId, chatId } = await fixture({
+        sandboxStatus: "closed",
+        queuedModel: "claude:sonnet",
+        hitLimit: false,
+      });
+      const stoppedAt = Date.now() + 1;
+      await t.run((ctx) => ctx.db.patch(chatId, { queueHeldAt: stoppedAt }));
+
+      await t.mutation(internal._queues.helpers.drainQueueQuietly, {
+        parentId: chatId,
+      });
+
+      // Held: the sandbox is not even woken for it.
+      expect(await queueLength(t, chatId)).toBe(1);
+      let session = await t.run((ctx) => ctx.db.get(sessionId));
+      expect(session?.status).toBe("closed");
+
+      const queuedId = await t.run(async (ctx) => {
+        const row = await ctx.db
+          .query("queuedMessages")
+          .withIndex("by_parent_and_order", (q) => q.eq("parentId", chatId))
+          .first();
+        return row?._id;
+      });
+      if (queuedId === undefined) throw new Error("queued message missing");
+      await t
+        .withIdentity({ subject: "clerk|runner" })
+        .mutation(api.queuedMessages.steer, { id: queuedId });
+
+      // Released: the drain goes on to wake the sandbox so it can send.
+      const chat = await t.run((ctx) => ctx.db.get(chatId));
+      expect(chat?.queueHeldAt).toBeUndefined();
+      session = await t.run((ctx) => ctx.db.get(sessionId));
+      expect(session?.status).toBe("starting");
     },
     TIMEOUT_MS,
   );

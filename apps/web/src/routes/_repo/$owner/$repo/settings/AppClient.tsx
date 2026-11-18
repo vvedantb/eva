@@ -47,7 +47,6 @@ export function AppClient() {
 
       <SettingsSection
         title="Instructions"
-        description="Added to every quick task and session for this app."
       >
         <Textarea
           key={`system-prompt-${repoId}`}

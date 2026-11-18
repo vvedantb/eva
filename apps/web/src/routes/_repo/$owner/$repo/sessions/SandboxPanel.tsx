@@ -20,7 +20,7 @@ import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel"
 import { ProposedPlanCard } from "./_components/ProposedPlanCard";
 import { useSessionPlanImplementation } from "./_components/useSessionPlanImplementation";
 import { useSessionPlanDocument } from "./_components/useSessionPlanDocument";
-import type { ProposedPlanRow } from "./_components/proposedPlanLogic";
+import type { ProposedPlanRow } from "@eva/shared/proposedPlan";
 import { DesignVariationsPanel } from "./_components/DesignVariationsPanel";
 import {
   SessionArtifactsPanel,

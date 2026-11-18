@@ -18,7 +18,7 @@ import {
   IconPlayerPlay,
   IconPlayerStop,
 } from "@tabler/icons-react-native";
-import { ConfirmDialog, SheetRow } from "@vvedantb/native-ui/primitives";
+import { ConfirmDialog, SheetRow, MenuDivider } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useAction, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -26,7 +26,6 @@ import { useState } from "react";
 import { useSimpleView } from "@/chat/ComposerFooter";
 import { useSessionSandbox } from "@/chat/SandboxControl";
 import { useOwnerPrRow } from "@/reviews/PullRequestsSheet";
-import { MenuDivider } from "@/ui/MenuSheet";
 
 type Owner =
   | { kind: "task"; taskId: Id<"agentTasks"> }

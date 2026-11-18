@@ -18,6 +18,19 @@ import type { JsonValue } from "../_jev/jsonValue";
 export const MCP_CLAUDE_MODELS = ["opus", "sonnet", "haiku", "fable"] as const;
 export type McpClaudeModel = (typeof MCP_CLAUDE_MODELS)[number];
 
+/**
+ * Which AI account runs a turn: the caller's own, a teammate's shared one, or
+ * Team. One definition so every tool that starts a turn names it the same way.
+ */
+export function mcpAccountArg(whenOmitted: string) {
+  return z
+    .string()
+    .optional()
+    .describe(
+      `Which AI account runs the turn: the account owner's first name (e.g. "Sam" for a teammate's shared account), an account id, or "team". ${whenOmitted} An unknown name fails with the list of accounts you can use.`,
+    );
+}
+
 export interface McpCredentials {
   clerkUserId: string;
   scopedRepoId?: string;
