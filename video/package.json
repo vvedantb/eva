@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "remotion studio",
     "render": "remotion render QuickTasksDemo out/quick-tasks-demo.mp4",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsrs --noEmit --fast -p tsconfig.json"
   },
   "keywords": [],
   "author": "",
@@ -23,5 +23,8 @@
     "react-dom": "^19.2.7",
     "remotion": "^4.0.477",
     "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "tsrs": "7.1.0-beta.tsrs2"
   }
 }
