@@ -1,5 +1,13 @@
 # Changelog
 
+## MCP: send messages and start sessions on a teammate's shared account
+
+Date: 2026-11-18
+
+WHY: `send_chat_message` and `create_session` could not pick a provider account. A send ran on Team and reset the chat's account; a new session always used the caller's own account, so a teammate's shared account was out of reach.
+
+Architectural: both tools take `account` (owner's first name, account id, or "team"; `mcpAccountArg` in `mcp/toolShared.ts`). `mcp.queries.resolveMcpProviderAccount` resolves it against `listSelectableAccountsFor` (the web picker's pool: own accounts plus teammates' shared ones), filtered to the model's provider; an unknown or ambiguous name returns the usable choices. An omitted `account` on a send keeps the chat's current account, as the composer does. `buildChatMessageCalls` forwards the id to `addMessage`, `startExecute` and `enqueueMessage`, which still check usability.
+
 ## Phone: archive a linked session group
 
 Date: 2026-11-18
