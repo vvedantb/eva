@@ -197,12 +197,14 @@ function createSurfaceSelector(
  * project's (`useTaskSession`).
  */
 export function useTaskSandboxControls({
+  taskId,
   task,
   taskSession,
   hasRuns,
   routing,
   setExecutionError,
 }: {
+  taskId: Id<"agentTasks">;
   task: TaskDetailTask;
   taskSession: TaskSession;
   hasRuns: boolean;
@@ -210,7 +212,7 @@ export function useTaskSandboxControls({
   setExecutionError: (message: string | null) => void;
 }) {
   const startSessionSandbox = useMutation(api.sessions.startSandbox);
-  const stopSessionSandbox = useMutation(api.sessions.stopSandbox);
+  const stopWorkSandbox = useMutation(api.sessions.stopWorkSandbox);
   const runSessionDevServer = useMutation(api.sessions.runDevServer);
   const runSessionBackgroundCommands = useMutation(
     api.sessions.runBackgroundCommands,
@@ -225,7 +227,7 @@ export function useTaskSandboxControls({
       return await action({ sessionId });
     };
   const startSandbox = onSession(startSessionSandbox);
-  const stopSandbox = onSession(stopSessionSandbox);
+  const stopSandbox = () => stopWorkSandbox({ target: { taskId } });
   const runDevServerMutation = onSession(runSessionDevServer);
   const runBackgroundCommandsMutation = onSession(runSessionBackgroundCommands);
 

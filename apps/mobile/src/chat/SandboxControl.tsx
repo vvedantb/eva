@@ -26,14 +26,18 @@ import { useScheme } from "@/ui/theme";
 export function useSessionSandbox(sessionId: Id<"sessions"> | undefined) {
   const session = useQuery(api.sessions.get, sessionId ? { id: sessionId } : "skip");
   const start = useMutation(api.sessions.startSandbox);
-  const stop = useMutation(api.sessions.stopSandbox);
+  // The shared Stop (`stopWorkSandbox`): refused while an agent, run, build
+  // or interview holds the session, as on the web.
+  const stop = useMutation(api.sessions.stopWorkSandbox);
   const [pending, setPending] = useState<"start" | "stop" | null>(null);
   const display = session ? sandboxDisplayStatus(session) : undefined;
   const run = async (action: "start" | "stop") => {
     if (!sessionId) return;
     setPending(action);
     try {
-      await (action === "start" ? start({ sessionId }) : stop({ sessionId }));
+      await (action === "start"
+        ? start({ sessionId })
+        : stop({ target: { sessionId } }));
     } catch {
       toast.error(action === "start" ? "Couldn't start sandbox" : "Couldn't stop sandbox");
     }

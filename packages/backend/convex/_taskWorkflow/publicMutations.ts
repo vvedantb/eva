@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { cancelTrackedWorkflow, toWorkflowId } from "../workflowManager";
-import { authMutation, getActiveTaskRun, hasTaskAccess } from "../functions";
+import { authMutation, getActiveTaskRun } from "../functions";
 import {
   advanceTurn,
   closeOpenTurn,
@@ -172,25 +172,9 @@ export const handleCompletion = authMutation({
   },
 });
 
-/** Cancels the active workflow and run for a task, resetting it to todo status. */
-export const cancelExecution = authMutation({
-  args: { taskId: v.id("agentTasks") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task) throw new Error("Task not found");
-    if (!(await hasTaskAccess(ctx.db, task, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
-    await cancelTaskRun(ctx, task);
-    return null;
-  },
-});
-
 /**
- * Stops a task's agent run (a quick task's first run). Shared by
- * `cancelExecution` and the mobile app (`mobile.stopTurn`); the caller checks
- * access.
+ * Stops a task's agent run, resetting an `in_progress` task to todo. Reached
+ * through the one chat Stop (`_sessions/stop.ts`); the caller checks access.
  */
 export async function cancelTaskRun(
   ctx: MutationCtx,

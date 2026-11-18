@@ -2,7 +2,6 @@
 
 import type { FunctionReturnType } from "convex/server";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { useMutation } from "convex/react";
 import { api, type Id } from "@eva/backend";
 import {
   SandboxChatPanel,
@@ -50,16 +49,14 @@ export function useTaskChatBinding(
     accounts: accounts.options,
     resolveAccountId: accounts.resolveId,
   };
-  // The first run is its own workflow, not a chat turn, so Stop has to reach
-  // the task workflow while it owns the bubble.
-  const cancelFirstRun = useMutation(api.taskWorkflow.cancelExecution);
   return useOwnedChatBinding({
     ownedSession: taskSession,
     ownerLabel: "task",
     title: task?.title,
     common,
-    cancelOther: () =>
-      firstRun.isInProgress ? cancelFirstRun({ taskId }) : undefined,
+    // The first run is its own workflow, not a chat turn: Stop names the task
+    // so it reaches the run, even before the chat exists.
+    stopTarget: { taskId },
   });
 }
 
