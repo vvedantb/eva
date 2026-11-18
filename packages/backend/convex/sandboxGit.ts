@@ -4,7 +4,7 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { authMutation, hasRepoAccess } from "./functions";
 import { sandboxGitSyncValidator } from "./_validators/shapes";
-import { findProjectSession, findTaskWorkSession } from "./_sessions/owner";
+import { findOwnedSession, findWorkSession } from "./_sessions/owner";
 
 /** Git's own ref-name ceiling is well under this; the cap is just a guard. */
 const BRANCH_MAX_CHARS = 255;
@@ -39,9 +39,12 @@ async function resolveSandboxOwner(
   }
   if (target.kind === "task") {
     const task = await ctx.db.get(target.taskId);
-    return task ? await findTaskWorkSession(ctx.db, task) : null;
+    return task ? await findWorkSession(ctx.db, task) : null;
   }
-  return await findProjectSession(ctx.db, target.projectId);
+  return await findOwnedSession(ctx.db, {
+    kind: "project",
+    projectId: target.projectId,
+  });
 }
 
 function syncEquals(

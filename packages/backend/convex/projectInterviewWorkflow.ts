@@ -15,7 +15,7 @@ import {
 } from "./validators";
 import { trackProjectWorkflow } from "./workflowWatchdog";
 import { prepareSandboxSteps } from "./_sandbox_runtime/prepareSandboxSteps";
-import { ensureOwnedSession } from "./_sessions/ownedSession";
+import { ensureWorkSession } from "./_sessions/ownedSession";
 import { resolveSessionBaseBranch } from "./_sessions/baseBranch";
 import { buildSessionBranchName } from "./_git/branchNames";
 import { PROJECT_INTERVIEW_SYSTEM_PROMPT, SPEC_SYSTEM_PROMPT } from "./prompts";
@@ -221,7 +221,7 @@ const interviewSessionValidator = v.object({
 type InterviewTarget = Infer<typeof interviewSessionValidator>;
 
 /**
- * The project's session (created on first need, `ensureOwnedSession`) and
+ * The project's session (created on first need, `ensureWorkSession`) and
  * what an interview or spec agent needs to run on its sandbox: its branch
  * and the repo. The sandbox itself is claimed like a task run's.
  */
@@ -233,7 +233,7 @@ export const ensureInterviewSession = internalMutation({
     if (!project) throw new Error("Project not found");
     const repo = await ctx.db.get(project.repoId);
     if (!repo) throw new Error("Repository not found");
-    const { session } = await ensureOwnedSession(ctx, {
+    const { session } = await ensureWorkSession(ctx, {
       kind: "project",
       project,
     });

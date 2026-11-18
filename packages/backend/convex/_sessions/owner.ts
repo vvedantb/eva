@@ -54,54 +54,39 @@ export function standaloneOnly(
   return q.eq(q.field("owner.kind"), "standalone");
 }
 
-/** The owner value for a quick task's session. */
-export function taskSessionOwner(taskId: Id<"agentTasks">): OwnedSessionOwner {
-  return { kind: "task", taskId };
-}
+/** A task: it works on a session it may not own (a project task). */
+type WorkTask = Pick<Doc<"agentTasks">, "_id" | "projectId">;
 
-/** The owner value for a project's session. */
-export function projectSessionOwner(
-  projectId: Id<"projects">,
-): OwnedSessionOwner {
-  return { kind: "project", projectId };
+/** Anything that works on an owned session: a task, or a loaded owner. */
+export type WorkTarget = WorkTask | OwnerEntity;
+
+/**
+ * The one rule for which session something works on (runs, chat, sandbox):
+ * a project and all its tasks share the project's session; a quick task
+ * owns its own.
+ */
+export function workSessionOwner(target: WorkTarget): OwnedSessionOwner {
+  if ("kind" in target) {
+    return target.kind === "task"
+      ? workSessionOwner(target.task)
+      : { kind: "project", projectId: target.project._id };
+  }
+  return target.projectId !== undefined
+    ? { kind: "project", projectId: target.projectId }
+    : { kind: "task", taskId: target._id };
 }
 
 /**
- * Whether a task owns a session of its own: quick tasks only. A project task
- * works on its project's session (`taskWorkSessionOwner`).
+ * The session a task or owner works on (`workSessionOwner`), or null before
+ * anything needed it (the owner then still keeps its sandbox fields on its
+ * own row). Every reader of a task's session asks here; a bare project id
+ * reads `findOwnedSession` directly.
  */
-export function taskUsesOwnedSession(
-  task: Pick<Doc<"agentTasks">, "projectId">,
-): boolean {
-  return task.projectId === undefined;
-}
-
-/**
- * The session a task works on (runs, chat, sandbox): its own for a quick
- * task, its project's for a project task.
- */
-export function taskWorkSessionOwner(
-  task: Pick<Doc<"agentTasks">, "_id" | "projectId">,
-): OwnedSessionOwner {
-  return task.projectId !== undefined
-    ? projectSessionOwner(task.projectId)
-    : taskSessionOwner(task._id);
-}
-
-/** The task's own session, or null before anything needed one. */
-export async function findTaskSession(
+export async function findWorkSession(
   db: DatabaseReader,
-  taskId: Id<"agentTasks">,
+  target: WorkTarget,
 ): Promise<Doc<"sessions"> | null> {
-  return await findOwnedSession(db, taskSessionOwner(taskId));
-}
-
-/** The project's session, or null before anything needed one. */
-export async function findProjectSession(
-  db: DatabaseReader,
-  projectId: Id<"projects">,
-): Promise<Doc<"sessions"> | null> {
-  return await findOwnedSession(db, projectSessionOwner(projectId));
+  return await findOwnedSession(db, workSessionOwner(target));
 }
 
 /**
@@ -116,31 +101,6 @@ export async function findProjectTaskChat(
     .query("sessionChats")
     .withIndex("by_task", (q) => q.eq("taskId", taskId))
     .first();
-}
-
-/**
- * A quick task's own session, or null (a project task, or a quick task not
- * yet on a session). For what only a task's own session holds; a task's
- * sandbox is read through `findTaskWorkSession`.
- */
-export async function findQuickTaskSession(
-  db: DatabaseReader,
-  task: Pick<Doc<"agentTasks">, "_id" | "projectId">,
-): Promise<Doc<"sessions"> | null> {
-  return taskUsesOwnedSession(task) ? await findTaskSession(db, task._id) : null;
-}
-
-/**
- * Where a task's sandbox and chat live: its own session (a quick task) or its
- * project's (a project task), or null before that session exists (the task
- * or project then still keeps them on its own row). Every reader of a task's
- * sandbox asks here first.
- */
-export async function findTaskWorkSession(
-  db: DatabaseReader,
-  task: Pick<Doc<"agentTasks">, "_id" | "projectId">,
-): Promise<Doc<"sessions"> | null> {
-  return await findOwnedSession(db, taskWorkSessionOwner(task));
 }
 
 /**
@@ -160,10 +120,12 @@ export async function findEntitySession(
   if (kind === "task") {
     const taskId = db.normalizeId("agentTasks", id);
     const task = taskId ? await db.get(taskId) : null;
-    return task ? await findTaskWorkSession(db, task) : null;
+    return task ? await findWorkSession(db, task) : null;
   }
   const projectId = db.normalizeId("projects", id);
-  return projectId ? await findProjectSession(db, projectId) : null;
+  return projectId
+    ? await findOwnedSession(db, { kind: "project", projectId })
+    : null;
 }
 
 /** The task a session belongs to, or undefined for any other owner. */
@@ -208,7 +170,8 @@ export function assertStandaloneSession(
 }
 
 /**
- * The one session a task or project owns, or null when it has none yet.
+ * The one session a task or project owns, or null when it has none yet. A
+ * raw lookup by owner: what a task or project works on is `findWorkSession`.
  * Throws when two sessions claim the same owner: that is a bug upstream.
  */
 export async function findOwnedSession(
