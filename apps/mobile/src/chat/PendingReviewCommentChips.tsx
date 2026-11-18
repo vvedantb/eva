@@ -45,7 +45,7 @@ export function PendingReviewCommentChips({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`Remove comment on ${label}`}
-          hitSlop={{ top: 6, bottom: 6, right: 6 }}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           onPress={() => onRemove(comment.id)}
           className="h-full w-8 items-center justify-center active:opacity-70"
         >

@@ -134,7 +134,8 @@ export function ComposerFooter({
           {leading}
         </View>
       ) : null}
-      {status ? <View className="shrink-0 flex-row items-center gap-0.5">{status}</View> : null}
+      {/* Shrinks on a narrow phone, so the chips' labels give way and their counts stay. */}
+      {status ? <View className="min-w-0 shrink flex-row items-center gap-0.5">{status}</View> : null}
       {stash ? <View className="shrink-0">{stash}</View> : null}
       {modelChip ? <View className="ml-auto min-w-0 shrink">{modelChip}</View> : null}
     </View>

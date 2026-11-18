@@ -12,13 +12,18 @@ import { useState } from "react";
 /** A trailing-edge debounce: each call cancels the waiting one; `run` fires once the caller is quiet for `ms`. */
 function idleTimer(ms: number) {
   let timer: ReturnType<typeof setTimeout> | null = null;
-  return (run: () => void) => {
+  const cancel = () => {
     if (timer !== null) clearTimeout(timer);
+    timer = null;
+  };
+  const schedule = (run: () => void) => {
+    cancel();
     timer = setTimeout(() => {
       timer = null;
       run();
     }, ms);
   };
+  return { schedule, cancel };
 }
 
 /**
@@ -30,12 +35,16 @@ function idleTimer(ms: number) {
  */
 export function useSkillSuggestions(skills: readonly MentionItem[], text: string) {
   const suggest = useAction(api.skillSuggestions.suggest);
-  const [schedule] = useState(() => idleTimer(SUGGEST_IDLE_MS));
+  const [{ schedule, cancel }] = useState(() => idleTimer(SUGGEST_IDLE_MS));
   const [evaluated, setEvaluated] = useState<{ forText: string; response: SkillSuggestionResponse } | null>(null);
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
 
   const noteDraft = (next: string) => {
-    if (skills.length === 0 || !shouldSuggestFor(next)) return;
+    // A draft that no longer asks (sent, cleared, too short) drops the waiting call: it would cost an evaluation for nothing.
+    if (skills.length === 0 || !shouldSuggestFor(next)) {
+      cancel();
+      return;
+    }
     schedule(() => {
       suggest({
         text: next,
