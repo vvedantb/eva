@@ -147,7 +147,7 @@ function ProjectDock({ project }: { project: Project }) {
   const insets = useSafeAreaInsets();
   const theme = EVA_THEME[useScheme()];
   // The project chats in its session's Main chat; no chat yet, nothing unread.
-  const owned = useQuery(api.sessions.getOwned, { owner: { kind: "project", projectId: project._id } });
+  const owned = useQuery(api.sessions.getOwnedWithSeed, { owner: { kind: "project", projectId: project._id } });
   const chatId = owned?.session?.chatId;
   const unread = useQuery(api.chatReads.isUnread, chatId ? { parentId: chatId } : "skip")?.hasUnread === true;
   const startBuild = useMutation(api.buildWorkflow.startBuild);
