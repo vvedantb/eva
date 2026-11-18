@@ -1,5 +1,13 @@
 # Changelog
 
+## Typecheck runs on tsrs, oxc's Rust port of TypeScript 7
+
+Date: 2026-11-18
+
+WHY: `tsrs` checks the same programs 2.4–3.5x faster than `tsc-rs` here (web 9.1 s → 2.7 s, backend 6.2 s → 2.0 s, mobile 7.0 s → 2.0 s) with the same diagnostics.
+
+Architectural: one root devDependency, `tsrs` 7.1.0-beta.tsrs2, replaces the three per-package `tsc-rs` 0.1.0 pins; every `typecheck` script runs `tsrs --noEmit --fast -p <tsconfig>` (`--fast` adapts checker counts and adds caches; options such as `strict` are unchanged). `video/` (its own npm project) moves from `tsc` too. `pnpm-workspace.yaml` exempts `tsrs` and `@tsrs/*` from the 7-day release soak until 2026-11-23.
+
 ## Phone typecheck runs on tsc-rs, as web and backend do
 
 Date: 2026-11-18
