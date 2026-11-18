@@ -2,8 +2,6 @@
 
 Read this when doing frontend / design work in `apps/web`.
 
-Skeleton loading states: see `docs/skullet.md` (use `LoadingSkeleton`, not `skullet/react`).
-
 ## Surfaces (tone-based)
 
 Surface tokens map 1:1 to the HeroUI palette: `--background` (page canvas) → `--card`/`--popover` (surface, elevated) → `--muted` (surface-secondary) → `--secondary` (default). Accent (`--primary`/`--accent`/`--ring`/`--chart-1`/sidebar accent), `--radius`, and `--font-*` are user-defined via theme settings — never hardcode them.
