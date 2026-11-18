@@ -28,6 +28,7 @@ import { turnCheckpoint } from "@eva/shared/turnCheckpoint";
 import { chatTypingRoom } from "@eva/shared/typingPresence";
 import { isUsageLimitFailure } from "@eva/shared/usageLimitRecovery";
 import { messageLinkHref } from "@eva/shared/messageLink";
+import { appendCitationsToPrompt } from "@eva/shared/assistantCitation";
 import { formatQuestionAnswers, type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { IconChevronDown, IconMessageCircle, IconPlayerStop } from "@tabler/icons-react-native";
 import {
@@ -76,6 +77,9 @@ import { UsageButton } from "@/chat/UsageSheet";
 import { useProposedPlans } from "@/chat/ProposedPlanCard";
 import { BackgroundAgentsChip } from "@/chat/BackgroundAgentsChip";
 import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
+import { ComposerTasksPanel } from "@/chat/ComposerTasksPanel";
+import { GoalBanner } from "@/chat/GoalBanner";
+import { PublishRecoveryBanner } from "@/chat/PublishRecoveryBanner";
 import { SystemAlertRow } from "@/chat/SystemAlertRow";
 import { useNow } from "@/ui/clock";
 import { useMessageMenu } from "@/chat/MessageHoldMenu";
@@ -84,6 +88,7 @@ import { UsageLimitRecoveryCard } from "@/chat/UsageLimitRecovery";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { MessageFooter, type Sentiment } from "@/chat/MessageFooter";
 import { PasteImageChip } from "@/chat/PasteImageChip";
+import { type Quotes, useQuotes } from "@/chat/Quotes";
 import { useAttachments } from "@/chat/useAttachments";
 import { type Chat, useChatModelPick } from "@/chat/useChatModelPick";
 import { TypingIndicator } from "@/chat/TypingIndicator";
@@ -171,6 +176,8 @@ export default function ChatScreen() {
   // The restore confirm a held reply's Restore opens, and the hold menus (the kit `Message` `menu`).
   const restore = useTurnRestore();
   const messageMenu = useMessageMenu(restore.request);
+  // Quotes from replies ("Select text", then "Quote"), waiting for the next send.
+  const quotes = useQuotes();
 
   if (chat === undefined || chat === null) {
     return (
@@ -317,6 +324,12 @@ export default function ChatScreen() {
       onFork: forkFrom ? () => forkFrom(message._id) : undefined,
       onRetry: message.errorType !== undefined ? retryFor(message._id) : undefined,
       turn: turnFor(message),
+      // Eva's replies only, as the web cites them (`<cited_assistant>`); the composer must be there to take it,
+      // so not while a question card stands in its place.
+      onSelectText:
+        message.role === "assistant" && chat.canReply && !pending && !savedQuestion && message.content.trim() !== ""
+          ? () => quotes.select(message._id, message.content)
+          : undefined,
     });
   };
   const panelReply =
@@ -439,6 +452,7 @@ export default function ChatScreen() {
         />
       </SeenRowsContext.Provider>
         {restore.dialog}
+        {quotes.sheet}
         {/* The composer or the question card: the scroll button rides 16 above it, as the web's `bottom-4` over the dock. */}
         {/* Solid: the keyboard lifts the dock over the transcript, which must not show through it. */}
         <ConversationDock style={{ backgroundColor: EVA_THEME[scheme].background }}>
@@ -456,8 +470,23 @@ export default function ChatScreen() {
             messagesNewestFirst={newestFirst}
             closedReason={closedReason}
             onStop={handleStop}
-            queue={<QueuedMessagesPanel parentId={parentId} isExecuting={working} isSandboxActive={chat.sandboxActive} />}
+            banners={
+              <>
+                {/* Not gated by simple view, as the web: the user set this goal and can clear it. */}
+                <GoalBanner chatId={chat.session?.chatId ?? chat.task?.sessionChatId ?? chat.project?.sessionChatId} target={chat.target} />
+                {chat.session && chat.canReply ? (
+                  <PublishRecoveryBanner sessionId={chat.session.id} newest={newestMessage} isSandboxActive={chat.sandboxActive} />
+                ) : null}
+              </>
+            }
+            panels={
+              <>
+                <ComposerTasksPanel streamingEntityId={streamingEntityId} turnId={liveReplyId} />
+                <QueuedMessagesPanel parentId={parentId} isExecuting={working} isSandboxActive={chat.sandboxActive} />
+              </>
+            }
             usageLimitFailure={isUsageLimitFailure(newestMessage) ? newestMessage.content : undefined}
+            quotes={quotes}
           />
           ) : null}
         </ConversationDock>
@@ -473,8 +502,8 @@ export default function ChatScreen() {
  * closed". It owns the draft, the attachments and the model pick, so a
  * keystroke redraws the dock only, not the transcript above it. It stays
  * mounted while the chat is open, so a draft outlives a question card. The
- * queue panel sits on the composer, as the web; the screen builds it, so a
- * keystroke here does not redraw it either.
+ * banners and the tasks and queue panels sit on the composer, as the web; the
+ * screen builds them, so a keystroke here does not redraw them either.
  */
 function ChatDock({
   target,
@@ -488,8 +517,10 @@ function ChatDock({
   messagesNewestFirst,
   closedReason,
   onStop,
-  queue,
+  banners,
+  panels,
   usageLimitFailure,
+  quotes,
 }: {
   target: string;
   chat: Chat;
@@ -505,10 +536,14 @@ function ChatDock({
   /** A closed session's reason (`getSessionReadOnlyMessage`), in place of "This chat is closed." */
   closedReason: string | undefined;
   onStop: () => void;
-  /** The queued messages, above the composer only (not over a question card), as the web. */
-  queue: ReactNode;
+  /** The `/goal` and publish recovery banners, above the usage-limit card, as the web `SandboxChatPreInput`. */
+  banners: ReactNode;
+  /** The live tasks, then the queued messages, flush on the composer only (not over a question card), as the web dock. */
+  panels: ReactNode;
   /** The newest reply's text while it is a usage-limit failure: the retry card shows above the composer. */
   usageLimitFailure: string | undefined;
+  /** Quotes from replies: chips over the field, sent after the prompt. */
+  quotes: Pick<Quotes, "items" | "remove" | "drop">;
 }) {
   const scheme = useScheme();
   const insets = useSafeAreaInsets();
@@ -568,9 +603,12 @@ function ChatDock({
     const attachmentStorageIds = attachments.storageIds;
     attachments.clear();
     typing.stopTyping();
-    send({ target: chat.target, message: composer.tokenize(text), attachmentStorageIds }).catch(() => {
-      toast.error("Couldn't send your message");
-    });
+    // The quotes go after the prompt, as the web, and leave only once the send lands, so a retry keeps them.
+    const sentQuotes = quotes.items;
+    send({ target: chat.target, message: appendCitationsToPrompt(composer.tokenize(text), sentQuotes), attachmentStorageIds }).then(
+      () => quotes.drop(sentQuotes),
+      () => toast.error("Couldn't send your message"),
+    );
   };
 
   // The web dock: p-3 around the card, in place of the composer, and the thread's 10 more on the right.
@@ -608,6 +646,7 @@ function ChatDock({
     // thread. Send stays ready during a turn (a send queues behind it) and Stop sits beside
     // it, as `stopMode="alongside"`.
     <View className="pr-2.5">
+      {banners}
       {usageLimitFailure !== undefined && modelPick.pick?.account && modelPick.switchAccount ? (
         <UsageLimitRecoveryCard
           chat={chat}
@@ -617,7 +656,7 @@ function ChatDock({
           working={working}
         />
       ) : null}
-      {queue}
+      {panels}
       <View className="pl-3">
         <TypingIndicator users={typing.typingUsers} />
       </View>
@@ -632,9 +671,9 @@ function ChatDock({
         placeholder={placeholder}
         onPasteImages={attachments.pasteFiles}
         leading={
-          <AttachButton onPress={() => void attachments.pick()} />
+          <AttachButton attachments={attachments} />
         }
-        header={composerHeader(attachments, composer)}
+        header={composerHeader(attachments, composer, quotes)}
         // The web stop beside send: red (`variant="destructive"`), the outline stop icon.
         toolbar={working ? <PromptInputButton variant="destructive" icon={IconPlayerStop} label="Stop generating" onPress={onStop} /> : null}
         footer={

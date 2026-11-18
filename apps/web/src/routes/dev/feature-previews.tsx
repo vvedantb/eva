@@ -5,7 +5,7 @@ import { ActivityTasks, Button, WebPreview } from "@vvedantb/ui";
 import type { ActivityStep } from "@vvedantb/ui";
 import { IconFileText, IconGitFork } from "@tabler/icons-react";
 import { AssistantCiteToolbar } from "@/lib/components/chat/AssistantCiteToolbar";
-import { DEMO_ASSISTANT_CITATION } from "@/lib/components/chat/assistantCitation";
+import { DEMO_ASSISTANT_CITATION } from "@eva/shared/assistantCitation";
 import { PendingCitationChips } from "@/lib/components/chat/PendingCitationChips";
 import { PendingSnapshotChips } from "@/lib/components/chat/PendingSnapshotChips";
 import { PendingWebMcpChips } from "@/lib/components/chat/PendingWebMcpChips";

@@ -3,6 +3,7 @@ import { DIFF_TURN_LABEL, restoreTurnLabel } from "@eva/shared/turnCheckpoint";
 import {
   IconArrowBackUp,
   IconClipboard,
+  IconCursorText,
   IconGitCompare,
   IconGitFork,
   IconLink,
@@ -32,12 +33,15 @@ export type HeldMessage = {
   onRetry?: () => void;
   /** A session reply that changed code: Diff this turn and Restore. */
   turn?: TurnChangesTarget;
+  /** An Eva reply: opens it as selectable text, to quote a part of it. */
+  onSelectText?: () => void;
 };
 
 /**
  * The message footer's actions behind a press and hold, as iMessage (user
  * choice): the kit `Message` `menu`, with the reply's thumbs in the pill
- * above the message and, in the card below it, Copy text, Copy link, Fork
+ * above the message and, in the card below it, Copy text, Select text on a
+ * reply (to quote a part of it, the web's selection "Cite"), Copy link, Fork
  * from here, Retry on a failed turn, and Diff this turn and Restore on a reply
  * that changed code (Restore dimmed while the sandbox sleeps). `onRestore`
  * opens the restore confirm (`useTurnRestore`).
@@ -56,11 +60,12 @@ export function useMessageMenu(onRestore: (turn: TurnChangesTarget) => void): (m
   ];
 
   return (message) => {
-    const { rating, onFork, onRetry, turn } = message;
+    const { rating, onFork, onRetry, turn, onSelectText } = message;
     const actions: MessageSheetAction[] = [
       { key: "copy", label: "Copy text", icon: IconClipboard, onPress: () => copy(message.text, "Copied") },
-      { key: "link", label: "Copy link", icon: IconLink, onPress: () => copy(message.link, "Link copied") },
     ];
+    if (onSelectText) actions.push({ key: "select", label: "Select text", icon: IconCursorText, onPress: onSelectText });
+    actions.push({ key: "link", label: "Copy link", icon: IconLink, onPress: () => copy(message.link, "Link copied") });
     if (onFork) actions.push({ key: "fork", label: "Fork from here", icon: IconGitFork, onPress: onFork });
     if (onRetry) actions.push({ key: "retry", label: "Retry", icon: IconRefresh, onPress: onRetry });
     if (turn) {

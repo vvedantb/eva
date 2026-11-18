@@ -49,6 +49,7 @@ import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
 import { buildSessionBranchName } from "../_git/branchNames";
 import { errorMessage } from "@vvedantb/server";
 import { sessionOwnerProjectId, sessionOwnerTaskId } from "./owner";
+import { recordProjectInterviewClaim } from "../_projects/interviewState";
 import {
   isProjectPreviewAllowed,
   projectPreviewNotAllowedError,
@@ -342,7 +343,8 @@ export const runBackgroundCommands = authMutation({
 });
 
 /**
- * Shared stop path for the user Stop button and PR-terminal webhook auto-stop.
+ * Shared stop path for the Stop button (`stopWorkSandbox`), archive and the
+ * PR-terminal webhook auto-stop.
  * Marks the session `"stopping"` then schedules provider teardown.
  */
 export async function requestSessionSandboxStop(
@@ -439,6 +441,10 @@ export async function requestSessionSandboxStop(
   });
 }
 
+/**
+ * Archive teardown: stops the sandbox even mid-turn. The Stop button is
+ * `stopWorkSandbox` (`_sessions/stop.ts`), which refuses while an agent works.
+ */
 export const stopSandbox = authMutation({
   args: { sessionId: v.id("sessions") },
   returns: v.null(),
@@ -490,8 +496,10 @@ export const claimSandboxForTaskRun = internalMutation({
     sessionId: v.id("sessions"),
     /** A task run's claim. */
     runId: v.optional(v.id("agentRuns")),
-    /** A project interview's claim (`projects.interviewSandboxClaim`). */
-    projectId: v.optional(v.id("projects")),
+    /** A project interview's claim (`projects.interview`, `_projects/interviewState.ts`). */
+    interview: v.optional(
+      v.object({ projectId: v.id("projects"), workflowId: v.string() }),
+    ),
   },
   returns: v.union(taskRunClaimValidator, v.null()),
   handler: async (ctx, args) => {
@@ -517,10 +525,13 @@ export const claimSandboxForTaskRun = internalMutation({
     if (args.runId !== undefined) {
       await ctx.db.patch(args.runId, { sessionStartAttempt: attempt });
     }
-    if (args.projectId !== undefined) {
-      await ctx.db.patch(args.projectId, {
-        interviewSandboxClaim: { sessionStartAttempt: attempt },
-      });
+    if (args.interview !== undefined) {
+      await recordProjectInterviewClaim(
+        ctx,
+        args.interview.projectId,
+        args.interview.workflowId,
+        attempt,
+      );
     }
     await scheduleStuckStartExpiry(ctx, args.sessionId, attempt);
     return { sandboxId: session.sandboxId, attempt, wasActive: false };

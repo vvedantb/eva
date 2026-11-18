@@ -12,8 +12,8 @@ import { toast } from "@vvedantb/ui";
 
 /**
  * A project's sandbox: its session's (`useOwnedSession`), which the project
- * chat, builds and tasks share. Start, Stop and background commands act on
- * that session, creating it on first need.
+ * chat, builds and tasks share. Start and background commands act on that
+ * session, creating it on first need; Stop never creates it.
  */
 export function useProjectSandbox(
   projectId: Id<"projects">,
@@ -22,7 +22,7 @@ export function useProjectSandbox(
   const projectSession = useOwnedSession({ kind: "project", projectId });
   const { sandbox } = projectSession;
   const startSessionSandbox = useMutation(api.sessions.startSandbox);
-  const stopSessionSandbox = useMutation(api.sessions.stopSandbox);
+  const stopWorkSandbox = useMutation(api.sessions.stopWorkSandbox);
   const runSessionBackgroundCommands = useMutation(
     api.sessions.runBackgroundCommands,
   );
@@ -62,7 +62,7 @@ export function useProjectSandbox(
   const handleStopSandbox = () =>
     lifecycle.run("stop", async () => {
       try {
-        await onSession(stopSessionSandbox);
+        await stopWorkSandbox({ target: { projectId } });
       } catch (err) {
         console.error("Failed to stop project sandbox:", err);
         toast.error("Could not stop the sandbox. Try again.");

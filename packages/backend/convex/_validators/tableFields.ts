@@ -309,7 +309,7 @@ export const chatReadParentIdValidator = v.union(
 export const turnEntityIdValidator = v.union(
   v.id("sessionChats"),
   v.id("sessions"),
-  v.id("projects"),
+  // Project-keyed turns moved to the session. schema-narrowing-ok: migrateProjectInterviewState
   v.id("agentRuns"),
   v.id("automationRuns"),
   v.id("docs"),
@@ -400,7 +400,7 @@ export const chatDaemonEntityFields = {
   // Written only when the goal changes (set, check, met, cleared).
   goal: v.optional(agentGoalValidator),
   pendingTaskStops: v.optional(v.array(v.string())),
-  // Interrupt-cancel signal for a warm Claude daemon: cancelExecution sets this
+  // Interrupt-cancel signal for a warm Claude daemon: cancelChatExecution sets this
   // instead of killing the sandbox process; claimPendingTurn drains it
   // unconditionally (even mid-turn, with no pendingTurn) so the daemon's poll
   // loop notices and aborts its in-flight SDK query.
@@ -1165,6 +1165,29 @@ export const projectBuildValidator = v.union(
   }),
 );
 
+/**
+ * A project interview or spec workflow, from start to sandbox release
+ * (`_projects/interviewState.ts`). `sessionStartAttempt` is the session start
+ * the interview claimed (`closed` → `starting`): a cancel before the attach
+ * fails exactly that start (`abandonTaskRunSandbox`), as
+ * `agentRuns.sessionStartAttempt` does for runs. `sandboxId` is the VM it
+ * prepared on that claim, recorded before the attach so none goes unrecorded.
+ */
+export const projectInterviewValidator = v.union(
+  v.object({ state: v.literal("started"), workflowId: v.string() }),
+  v.object({
+    state: v.literal("claimed"),
+    workflowId: v.string(),
+    sessionStartAttempt: v.number(),
+  }),
+  v.object({
+    state: v.literal("prepared"),
+    workflowId: v.string(),
+    sessionStartAttempt: v.number(),
+    sandboxId: v.string(),
+  }),
+);
+
 export const projectFields = {
   ...entityNumIdFields,
   repoId: v.id("githubRepos"),
@@ -1185,22 +1208,12 @@ export const projectFields = {
   members: v.optional(v.array(v.id("users"))),
   projectStartDate: v.optional(v.number()),
   projectEndDate: v.optional(v.number()),
-  activeWorkflowId: v.optional(v.string()),
-  /**
-   * The interview / spec agent's claim on the project session's sandbox,
-   * from claim to release: the start attempt it owns and, once prepared, its
-   * VM. A cancel before the attach fails exactly that start and stops the VM
-   * (`abandonTaskRunSandbox`), as `agentRuns.sessionStartAttempt` does for runs.
-   */
-  interviewSandboxClaim: v.optional(
-    v.object({
-      sessionStartAttempt: v.number(),
-      sandboxId: v.optional(v.string()),
-    }),
-  ),
   /** The project build lifecycle; absent = idle. Written only by `_projects/buildState.ts`. */
   build: v.optional(projectBuildValidator),
+  /** The interview / spec agent lifecycle; absent = idle. Written only by `_projects/interviewState.ts`. */
+  interview: v.optional(projectInterviewValidator),
   // Legacy build fields removed. schema-narrowing-ok: migrateProjectBuildState
+  // Legacy interview fields removed. schema-narrowing-ok: migrateProjectInterviewState
   lastBuildError: v.optional(v.string()),
   branchVersion: v.optional(v.number()),
   // Set when chat or other queue helpers touch the project. Mirrors

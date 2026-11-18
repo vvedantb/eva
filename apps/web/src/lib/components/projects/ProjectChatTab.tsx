@@ -42,7 +42,8 @@ export interface ConversationMessage {
 interface ProjectChatTabProps {
   projectId: Id<"projects">;
   projectPhase: ProjectPhase;
-  activeWorkflowId?: string;
+  /** An interview or spec workflow holds the project (`projects.interview`). */
+  interviewRunning: boolean;
   initialMessages: ConversationMessage[];
   streamingActivity?: string;
   rawInput: string;
@@ -53,7 +54,7 @@ interface ProjectChatTabProps {
 export function ProjectChatTab({
   projectId,
   projectPhase,
-  activeWorkflowId,
+  interviewRunning,
   initialMessages,
   streamingActivity,
   rawInput,
@@ -68,14 +69,14 @@ export function ProjectChatTab({
   const startProjectSpec = useMutation(api.projectInterviewWorkflow.startSpec);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   // True only while a start mutation is in flight. Once it resolves, the
-  // server's `activeWorkflowId` owns the "running" state.
+  // server's `interview` state owns the "running" state.
   const [isStarting, setIsStarting] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const { request: requestConfirm } = useRequestConfirm();
   const [isClearing, setIsClearing] = useState(false);
   // The legacy `ready` row that already chained the spec. The effect below
   // re-runs on every parent callback change; without this it started the
-  // spec again for the same row until `activeWorkflowId` arrived.
+  // spec again for the same row until the `interview` state arrived.
   const specRequestedForRef = useRef<number | null>(null);
 
   const isLocked =
@@ -83,8 +84,7 @@ export function ProjectChatTab({
     projectPhase === "business_review" ||
     projectPhase === "code_review" ||
     projectPhase === "completed";
-  const hasActiveWorkflow = activeWorkflowId !== undefined;
-  const isLoading = isStarting || hasActiveWorkflow;
+  const isLoading = isStarting || interviewRunning;
   const hasStarted = initialMessages.length > 0 || isLoading;
 
   const questionCount = initialMessages.filter((m) => {
@@ -123,7 +123,7 @@ export function ProjectChatTab({
       isInterviewTransitionContent(lastMessage.content) &&
       projectPhase === "draft" &&
       !hasSpecMessage &&
-      !hasActiveWorkflow &&
+      !interviewRunning &&
       specRequestedForRef.current !== initialMessages.length
     ) {
       // Legacy rows that still have {"ready":true} before spec was chained server-side.
@@ -146,7 +146,7 @@ export function ProjectChatTab({
     startProjectSpec,
     projectPhase,
     hasSpecMessage,
-    hasActiveWorkflow,
+    interviewRunning,
   ]);
   /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
 

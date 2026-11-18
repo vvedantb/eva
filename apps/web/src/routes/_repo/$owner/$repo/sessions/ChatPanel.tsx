@@ -268,7 +268,7 @@ export function ChatPanel({
     isUsageLimitHeld: queueGate.isUsageLimitHeld,
   });
   const turnPorts = useSessionTurnPorts(chatId, accounts);
-  const cancelExecution = useMutation(api.sessionWorkflow.cancelExecution);
+  const stopChatTurn = useMutation(api.sessions.stopChatTurn);
   const { handleSend, handleCancel, hasPendingReviewComments } = useChatSend({
     ports: turnPorts,
     settings: {
@@ -277,7 +277,7 @@ export function ChatPanel({
       executionTraits,
       providerAccountId: resolveAccountId(providerAccountId),
     },
-    cancel: () => cancelExecution({ chatId }),
+    cancel: () => stopChatTurn({ target: { chatId } }),
     draftTarget,
     isExecuting,
     queuesSends: composer.queuesSends,

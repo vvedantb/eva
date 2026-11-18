@@ -1,5 +1,50 @@
 # Changelog
 
+## Phone: attach files, and quote part of a reply
+
+Date: 2026-11-18
+
+WHY: The web composer's + attaches files (HTML, Markdown, text) as well as images, and a text selection in a reply can be cited into the next prompt. The phone's + only picked photos, and it had no way to quote.
+
+Architectural: the phone's + (`AttachButton`, chat and new session) opens a kit `DropdownMenu` with the web's "Attach files" and "Add photos". Files come from `expo-document-picker` (new native module) and go through `useAttachments`, which now applies the web's checks (5 files, 10 MB, images and text files, same toasts). Those rules (`isAllowedAttachmentFile`, `contentTypeForUpload`, `chatAttachmentErrorMessage`, the limits) move from the web's `attachmentMeta.ts` to `@eva/shared`. A long press on a reply gains "Select text": a sheet shows the reply in a field that selects but does not edit, and "Quote" adds a chip over the composer (`src/chat/Quotes.tsx`). A send appends the quotes as `<cited_assistant>` blocks; a sent message draws them as quote cards. `assistantCitation.ts` moves from the web to `@eva/shared/assistantCitation` for both apps.
+
+## Phone: live tasks, /goal and publish recovery above the composer
+
+Date: 2026-11-18
+
+WHY: the phone chat lacked three web rows above the composer: the running turn's to-do list, Claude's `/goal` with Clear, and the one-tap force-push after a rewritten branch blocks publishing.
+
+Architectural: `@eva/shared/composerTasks`, `agentGoal` and `publishRecovery` now hold the logic and copy; the web panels read them. Phone `ComposerTasksPanel` (reads `streaming.get`), `GoalBanner` (`sessionChats.get`, Clear sends `/goal clear`) and `PublishRecoveryBanner` (session chats that can reply; `sessions.listRepos`, `sessions.forcePushBranch`) are built by the chat screen and handed to `ChatDock` as `banners` and `panels`.
+
+## Project interview fields and project-keyed turns removed
+
+Date: 2026-11-18
+
+WHY: `migrateProjectInterviewState` ran in prod and the gate reported 0 (no project-keyed turns, no project on the legacy fields). Keeping the old fields and the project branch of the turn owner kept two ways to file one interview.
+
+Architectural: `projects.activeWorkflowId` and `projects.interviewSandboxClaim` leave the schema, and `projects` leaves `turnEntityIdValidator`. Interview turns resolve only through the project session (`interviewTurnSessionId`); the project fallback in `laneOwner`, `turnOwnerId` and the completion and stop paths is gone, with the migration and its gate query. `projects.get` still returns `activeWorkflowId`, derived from `interview`, because installed APKs (0.1.96) read it as "interview running"; remove it once no supported APK does. The phone's project plan now reads `interview`, like the web, so its running state works again.
+
+## Project interviews have one explicit state; their turns sit on the project session
+
+Date: 2026-11-12
+
+WHY: Two fields described one interview lifecycle: `projects.activeWorkflowId` and `projects.interviewSandboxClaim`. The save step cleared the workflow before the release step stopped the VM. A build or the chained spec could claim the session in that gap, and the release then stopped their VM. The stale and stall teardowns left the claim behind, so the claimed start never failed and the prepared VM never stopped.
+
+Architectural: The new `projects.interview` (`started` | `claimed` | `prepared`; absent = idle) is written only by `_projects/interviewState.ts`, through a pure transition table fenced by `workflowId`. `releaseInterview` ends the interview, releases the VM and chains the spec in one mutation. Every stop uses `stopProjectInterview`. Interview turns now open with `entityId` and `sessionId` set to the project session (lane `interview`), so the session's open-turn reads see them. The legacy fields stay optional and nothing writes them. Run `dataMigrations:migrateProjectInterviewState`. Before the narrowing PR, `migrations:projectEntityTurnsLeft` must report 0.
+## One Stop for web, mobile and MCP
+
+Date: 2026-11-12
+
+WHY: Stop did different things per surface. Mobile left a project task's run going. MCP `stop_agent` on a project stopped every task chat too. Only MCP refused a sandbox Stop mid-turn on the server; web Stop during a build killed the build's VM, and a task or project sandbox Stop could create a session.
+
+Architectural: `_sessions/stop.ts` holds the two Stops. `sessions.stopChatTurn({ chatId } | { taskId })` cancels the chat's turn and its task's run, never a build or interview. `sessions.stopWorkSandbox({ sessionId } | { taskId } | { projectId })` refuses while a turn, run, build or interview holds the session, and never creates one. `sessionWorkflow.cancelExecution` and `taskWorkflow.cancelExecution` are gone; `sessions.stopSandbox` stays for archive teardown only.
+## One owner-to-session lookup
+
+Date: 2026-11-12
+
+WHY: The rule "a project and its tasks share the project's session; a quick task owns its own" was spread over about ten helpers and inline copies. A caller could pick the wrong one.
+
+Architectural: `_sessions/owner.ts` holds the rule (`workSessionOwner`) and the read path (`findWorkSession`, over the raw `findOwnedSession`). `ownerState.findWorkChat` resolves the chat. `ownedSession.ensureWorkSession` is the one create path; a project task always gets its project's session. Removed: `taskSessionOwner`, `projectSessionOwner`, `taskUsesOwnedSession`, `taskWorkSessionOwner`, `findTaskSession`, `findProjectSession`, `findQuickTaskSession`, `findTaskWorkSession`, `findOwnerChat`, `ensureOwnedSession`, `ensureTaskWorkSession`, and the `ownedSession.ts` re-exports. Behaviour is unchanged.
 ## MCP: send messages and start sessions on a teammate's shared account
 
 Date: 2026-11-18

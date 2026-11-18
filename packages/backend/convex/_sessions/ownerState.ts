@@ -1,11 +1,17 @@
 import type { Doc } from "../_generated/dataModel";
 import type { DatabaseReader } from "../_generated/server";
 import { findMainChat } from "../_sessionChats/helpers";
-import { isProjectBuilding } from "../_projects/buildState";
 import {
-  findProjectSession,
+  isProjectBuilding,
+  type ProjectBuildSource,
+} from "../_projects/buildState";
+import {
+  isProjectInterviewing,
+  type ProjectInterviewSource,
+} from "../_projects/interviewState";
+import {
   findProjectTaskChat,
-  findTaskWorkSession,
+  findWorkSession,
   sessionOwnerProjectId,
   type OwnerChat,
   type OwnerEntity,
@@ -22,14 +28,11 @@ import {
  * Main chat, a project task's own chat in its project's session), or null
  * until something needed it (`ensureOwnerChat`).
  */
-export async function findOwnerChat(
+export async function findWorkChat(
   db: DatabaseReader,
   entity: OwnerEntity,
 ): Promise<OwnerChat | null> {
-  const session =
-    entity.kind === "task"
-      ? await findTaskWorkSession(db, entity.task)
-      : await findProjectSession(db, entity.project._id);
+  const session = await findWorkSession(db, entity);
   if (!session) return null;
   const chat =
     entity.kind === "task" && entity.task.projectId !== undefined
@@ -41,13 +44,15 @@ export async function findOwnerChat(
 /**
  * Whether a project's own work holds its session's sandbox outside any chat
  * turn: a build (all its tasks, gaps between them included) or the interview
- * / spec workflow. The one source the busy gates and the idle pause read for
- * that hold; runs and chats hold it through their open turns.
+ * / spec workflow (from its claim to its release; its agent turn alone is
+ * filed under the session and counts as an open turn). The one source the
+ * busy gates and the idle pause read for that hold; runs and chats hold it
+ * through their open turns.
  */
 export function projectHoldsSession(
-  project: Pick<Doc<"projects">, "build" | "activeWorkflowId">,
+  project: ProjectBuildSource & ProjectInterviewSource,
 ): boolean {
-  return isProjectBuilding(project) || project.activeWorkflowId !== undefined;
+  return isProjectBuilding(project) || isProjectInterviewing(project);
 }
 
 /** `projectHoldsSession` for a session's owner; false for other owners. */

@@ -26,7 +26,4 @@ export {
   getTaskPrCreationData,
 } from "./_taskWorkflow/queries";
 
-export {
-  handleCompletion,
-  cancelExecution,
-} from "./_taskWorkflow/publicMutations";
+export { handleCompletion } from "./_taskWorkflow/publicMutations";

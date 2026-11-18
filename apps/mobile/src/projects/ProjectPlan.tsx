@@ -36,14 +36,14 @@ export function ProjectPlan({ project }: { project: Project }) {
   const updateProject = useMutation(api.projects.update);
   const startInterview = useMutation(api.projectInterviewWorkflow.startInterview);
   const startDevelopment = useMutation(api.projects.startDevelopment);
-  // Only while a start is in flight; once it lands, the server's `activeWorkflowId` says "running".
+  // Only while a start is in flight; once it lands, the server's `interview` says "running" (as the web).
   const [starting, setStarting] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
   const [accepting, setAccepting] = useState(false);
 
   const history = project.conversationHistory;
-  const running = starting || project.activeWorkflowId !== undefined;
+  const running = starting || project.interview !== undefined;
   // As the web: back in Draft, the stored spec waits for the next run.
   const spec = project.phase !== "draft" && project.generatedSpec ? parseProjectSpec(project.generatedSpec) : null;
   const question = spec ? null : currentInterviewQuestion(history, running);
