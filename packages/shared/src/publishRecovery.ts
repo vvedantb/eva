@@ -80,7 +80,7 @@ export const PUBLISH_RECOVERY_COPY = {
   confirm: "Force-push",
   confirmBody:
     "This replaces the branch on GitHub (and the PR's commits) with the sandbox's local history. Commits that exist only on GitHub for this branch will be discarded. If the branch was rebased onto a different base, retarget the PR afterwards.",
-} as const;
+};
 
 /** The banner's line under the badge. */
 export function publishRecoveryMessage(
