@@ -4,15 +4,15 @@ import { IconCopy, IconDots, IconExternalLink, IconFileText } from "@tabler/icon
 import { goBackOrReplace } from "@vvedantb/native-ui/expo-router";
 import { StackPageHeader } from "@vvedantb/native-ui/layout";
 import { Markdown } from "@vvedantb/native-ui/markdown";
-import { CenteredSpinner, EmptyState, SheetRow } from "@vvedantb/native-ui/primitives";
+import { CenteredSpinner, EmptyState, SheetRow, MenuSheet } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useQuery } from "convex/react";
 import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import { useState, type ReactNode } from "react";
 import { Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { DocCommentsButton } from "@/docs/DocCommentsButton";
 import { displayTitle, timeAgo } from "@/ui/format";
-import { MenuSheet } from "@/ui/MenuSheet";
 import { copyText } from "@/ui/copyText";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 
@@ -23,7 +23,8 @@ import { useScheme, XS_TRACKING } from "@/ui/theme";
  * web toolbar, then the Markdown tab's content as read-only Markdown. A PR
  * recap opens in Reviews, as the web redirects it. Not here from the web:
  * editing (title, body, the Editing / Suggesting / Viewing modes), the HTML
- * tab, comments, suggestions, version and interview history, Interview Me,
+ * tab, starting a comment thread (the Comments button reads, replies and
+ * resolves), suggestions, version and interview history, Interview Me,
  * Generate Tests, presence and the "Processing PRD..." progress.
  */
 export default function DocScreen() {
@@ -60,7 +61,15 @@ export default function DocScreen() {
 
   const testsPrUrl = doc.testGenStatus === "completed" ? doc.testPrUrl : undefined;
   return (
-    <Screen onBack={leave} headerRight={<DocOptions content={doc.content} testsPrUrl={testsPrUrl} />}>
+    <Screen
+      onBack={leave}
+      headerRight={
+        <View className="flex-row items-center">
+          <DocCommentsButton docId={doc._id} repoId={repo._id} />
+          <DocOptions content={doc.content} testsPrUrl={testsPrUrl} />
+        </View>
+      }
+    >
       <ScrollView className="flex-1" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 24 }}>
         {/* The web toolbar: the `text-lg` semibold title, then its age (`RelativeDateTime`). */}
         <View className="flex-row items-start gap-3">

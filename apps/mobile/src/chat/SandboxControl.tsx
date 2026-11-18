@@ -43,6 +43,8 @@ export function useSessionSandbox(sessionId: Id<"sessions"> | undefined) {
     loaded: session !== undefined && session !== null,
     isActive: display === "active",
     isToggling: pending !== null || display === "starting" || display === "stopping",
+    /** Going to sleep: the empty chat says so, as the web. */
+    isStopping: pending === "stop" || display === "stopping",
     startError: display === "error" ? (session?.sandboxError ?? undefined) : undefined,
     toggle: (action: "start" | "stop") => void run(action),
   };

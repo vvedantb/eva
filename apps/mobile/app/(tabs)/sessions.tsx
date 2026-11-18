@@ -1,7 +1,7 @@
 import { api, type Id } from "@eva/backend";
-import { perRepoQueryCache, sessionListEntries } from "@eva/shared";
+import { filterSessionsStartedBy, perRepoQueryCache, sessionListEntries } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconPlus, IconTerminal2 } from "@tabler/icons-react-native";
+import { IconPlus, IconSearch, IconTerminal2 } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
 import { PageHeader } from "@vvedantb/native-ui/layout";
 import {
@@ -33,6 +33,7 @@ import {
   type SessionListItem,
   type SessionRow,
 } from "@/sessions/SessionGroup";
+import { SessionListOptionsButton, useSessionListSettings } from "@/sessions/SessionListOptions";
 import { SESSION_ACTION_ITEMS, useSessionActions } from "@/sessions/useSessionActions";
 import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { TabScreen } from "@/ui/TabScreen";
@@ -89,18 +90,32 @@ export default function SessionsScreen() {
       <PageHeader
         title={section.label}
         action={
-          section.id === "reviews" ? undefined : (
-            // The web "New session" button: a 40 ghost square, radius 8, muted 14 plus.
+          <View className="flex-row items-center">
+            {/* Search (the web ⌘K spotlight), in every section. */}
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={isQuickTasks ? "New quick task" : "New session"}
-              onPress={isQuickTasks ? openNewQuickTask : () => router.push("/session/new")}
+              accessibilityLabel="Search"
+              onPress={() => router.push("/search")}
               hitSlop={2}
               className="h-10 w-10 items-center justify-center rounded-lg active:opacity-70"
             >
-              <IconPlus size={14} color={muted} />
+              <IconSearch size={16} color={muted} />
             </Pressable>
-          )
+            {/* The web Sessions sidebar's options (sort, only mine, visible threads), on Sessions only. */}
+            {section.id === "sessions" ? <SessionListOptionsButton /> : null}
+            {section.id === "reviews" ? null : (
+              // The web "New session" button: a 40 ghost square, radius 8, muted 14 plus.
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={isQuickTasks ? "New quick task" : "New session"}
+                onPress={isQuickTasks ? openNewQuickTask : () => router.push("/session/new")}
+                hitSlop={2}
+                className="h-10 w-10 items-center justify-center rounded-lg active:opacity-70"
+              >
+                <IconPlus size={14} color={muted} />
+              </Pressable>
+            )}
+          </View>
         }
       />
       <View className="px-4 pb-2">
@@ -161,6 +176,9 @@ function SessionsSection() {
   const openRowMenu = (row: SessionRow) => sessionActions.openSheet(sessionActionTarget(row));
   const runSwipe = (row: SessionRow) => sessionActions.run(swipeKind, sessionActionTarget(row));
   const repos = useQuery(api.githubRepos.list, {});
+  const [settings] = useSessionListSettings();
+  // "Only my sessions" drops a teammate's rows before any group sees them, as the web.
+  const me = useQuery(api.auth.me, settings.onlyMine ? {} : "skip");
   const results = useQueries(
     sessionListQueries(
       SESSION_LIST_QUERIES[tab],
@@ -170,17 +188,18 @@ function SessionsSection() {
   );
   // Loading until every repo's list answers. A failed list (an `Error`) leaves
   // its repo out rather than holding the whole tab on the skeleton.
+  const visibleSessions = (rows: SessionListItem[] | undefined) =>
+    settings.onlyMine ? filterSessionsStartedBy(rows, me ?? undefined) : rows;
   const entries =
-    repos === undefined || repos.some((repo) => results[repo._id] === undefined)
+    repos === undefined || repos.some((repo) => results[repo._id] === undefined) || (settings.onlyMine && me === undefined)
       ? undefined
       : sessionListEntries(
-          repos.map((repo) => ({ repo, sessions: listedSessions(results[repo._id]) })),
-          // The web default "Sort projects": by the newest row each section shows.
-          "updated_at",
+          repos.map((repo) => ({ repo, sessions: visibleSessions(listedSessions(results[repo._id])) })),
+          settings.appSortOrder,
         );
   const largerText = useLargerText();
   const insets = useSafeAreaInsets();
-  const { sections, toggleOpen, toggleExpanded } = useSessionGroups(entries);
+  const { sections, toggleOpen, toggleExpanded } = useSessionGroups(entries, settings);
 
   return (
     <>
@@ -235,6 +254,8 @@ function SessionsSection() {
                           sessionId: entry.group.members[0].session._id,
                           name: entry.group.name,
                           label: entry.group.label,
+                          // The web offers Archive group from the active list only.
+                          archivable: tab === "active",
                         })
                     : undefined
                 }

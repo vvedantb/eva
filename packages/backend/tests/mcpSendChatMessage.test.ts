@@ -14,7 +14,6 @@ import { z } from "zod";
 
 const modules = import.meta.glob("../convex/**/*.ts");
 
-
 const PR_URL = "https://github.com/vvedantb/eva/pull/664";
 const TASK_PR_URL = "https://github.com/vvedantb/eva/pull/665";
 const PROJECT_PR_URL = "https://github.com/vvedantb/eva/pull/666";
@@ -393,6 +392,7 @@ describe("what a send does to the chat", () => {
       message: "keep going",
       delivery: resolveAgentDelivery({ isBusy: false, storedModel: "opus" }),
       sentViaOrchestrator: false,
+      providerAccountId: "acct1",
     });
 
     expect(calls.map((call) => call.fn)).toEqual([
@@ -405,11 +405,13 @@ describe("what a send does to the chat", () => {
       content: "keep going",
       model: "claude:opus",
       sentViaOrchestrator: false,
+      providerAccountId: "acct1",
     });
     expect(calls[1]?.args).toEqual({
       chatId: "c1",
       message: "keep going",
       model: "claude:opus",
+      providerAccountId: "acct1",
     });
   });
 
@@ -419,6 +421,7 @@ describe("what a send does to the chat", () => {
       message: "and this next",
       delivery: resolveAgentDelivery({ isBusy: true }),
       sentViaOrchestrator: true,
+      providerAccountId: null,
     });
 
     expect(calls).toHaveLength(1);
@@ -438,6 +441,7 @@ describe("what a send does to the chat", () => {
         message: "hi",
         delivery: resolveAgentDelivery({ isBusy }),
         sentViaOrchestrator: false,
+        providerAccountId: null,
       }),
     );
     for (const call of everyCall) {

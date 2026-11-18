@@ -156,14 +156,27 @@ export function buildChatMessageCalls(input: {
   delivery: AgentDelivery;
   /** Stamps the "via MCP" chat badge. True for every MCP send. */
   sentViaOrchestrator: boolean;
+  /** The account the turn runs on; null is Team, as the composer sends it. */
+  providerAccountId: string | null;
 }): SessionMessageCall[] {
   const { chatId, message, delivery, sentViaOrchestrator } = input;
+  // Omitting the account is how the turn mutations spell Team.
+  const account: Record<string, string> = {};
+  if (input.providerAccountId !== null) {
+    account.providerAccountId = input.providerAccountId;
+  }
 
   if (delivery.action === "queue") {
     return [
       {
         fn: SESSION_CHAT_MUTATIONS.enqueueMessage,
-        args: { chatId, message, model: delivery.model, sentViaOrchestrator },
+        args: {
+          chatId,
+          message,
+          model: delivery.model,
+          sentViaOrchestrator,
+          ...account,
+        },
       },
     ];
   }
@@ -177,11 +190,12 @@ export function buildChatMessageCalls(input: {
         content: message,
         model: delivery.model,
         sentViaOrchestrator,
+        ...account,
       },
     },
     {
       fn: SESSION_CHAT_MUTATIONS.startExecute,
-      args: { chatId, message, model: delivery.model },
+      args: { chatId, message, model: delivery.model, ...account },
     },
   ];
 }

@@ -1,5 +1,5 @@
 import { api, type Id } from "@eva/backend";
-import { sessionMenuActions, type PrState, type SessionMenuAction } from "@eva/shared";
+import { sessionCountLabel, sessionMenuActions, type PrState, type SessionMenuAction } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
   IconArchive,
@@ -25,16 +25,17 @@ import {
   DialogTitle,
   Input,
   SheetRow,
+  MenuDivider,
+  MenuSheet,
 } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
-import { useAction, useMutation } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import * as Clipboard from "expo-clipboard";
 import { Fragment, useRef, useState, type ComponentType } from "react";
 import { Text, type TextInput } from "react-native";
 import { useSimpleView } from "@/chat/ComposerFooter";
 import { WEB_URL } from "@/config";
 import { prRowLabel, useOpenPr, useOwnerPullRequests, usePullRequestsSheet } from "@/reviews/PullRequestsSheet";
-import { MenuDivider, MenuSheet } from "@/ui/MenuSheet";
 import { useScheme } from "@/ui/theme";
 
 /** The session a menu acts on: a Sessions row or the open chat's session. */
@@ -56,7 +57,7 @@ export type SessionActionTarget = {
   inGroup?: boolean;
 };
 
-/** A linked-session group, for its Rename group menu. */
+/** A linked-session group, for its header menu (Rename group, and Archive group in the active list). */
 export type SessionGroupTarget = {
   /** Any member: `sessions.renameGroup` finds the group from it (the web passes the oldest). */
   sessionId: Id<"sessions">;
@@ -64,6 +65,8 @@ export type SessionGroupTarget = {
   name?: string;
   /** What the list shows: the name, or the oldest member's title. */
   label: string;
+  /** In the active list: the menu offers Archive group, as the web sidebar's. */
+  archivable?: boolean;
 };
 
 /** What the Rename dialog renames: a session's title or a group's name. */
@@ -113,6 +116,12 @@ export function useSessionActions({
   const scheme = useScheme();
   const [sheetTarget, setSheetTarget] = useState<SessionActionTarget | null>(null);
   const [groupSheetTarget, setGroupSheetTarget] = useState<SessionGroupTarget | null>(null);
+  // The web `SessionGroupArchiveDialog`: archives every active member, counted by the server while it is open
+  // (the list may hide members, "Only mine"; the archive reaches them all).
+  const [archiveGroupTarget, setArchiveGroupTarget] = useState<SessionGroupTarget | null>(null);
+  const archiveGroupMembers = useMutation(api.sessions.archiveGroup);
+  const groupToArchive = useQuery(api.sessions.listGroup, archiveGroupTarget ? { id: archiveGroupTarget.sessionId } : "skip");
+  const activeInGroup = groupToArchive?.members.filter((member) => !member.archived).length;
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [isRenaming, setIsRenaming] = useState(false);
@@ -303,7 +312,45 @@ export function useSessionActions({
             if (groupSheetTarget) openGroupRename(groupSheetTarget);
           }}
         />
+        {groupSheetTarget?.archivable ? (
+          <SheetRow
+            icon={IconArchive}
+            title="Archive group"
+            danger
+            onPress={() => {
+              setGroupSheetTarget(null);
+              setArchiveGroupTarget(groupSheetTarget);
+            }}
+          />
+        ) : null}
       </MenuSheet>
+      <ConfirmDialog
+        open={archiveGroupTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setArchiveGroupTarget(null);
+        }}
+        title="Archive group"
+        description={
+          <>
+            This will archive {activeInGroup === undefined ? "every session" : sessionCountLabel(activeInGroup)} in{" "}
+            <Text className="font-instrument-sans-medium" style={{ fontWeight: "500", color: EVA_THEME[scheme].foreground }}>
+              {archiveGroupTarget?.label}
+            </Text>
+            . Their sandboxes stop, and open or draft PRs close. You can unarchive each session later.
+          </>
+        }
+        confirmLabel="Archive all"
+        variant="destructive"
+        confirmDisabled={activeInGroup === 0}
+        onConfirm={() => {
+          const target = archiveGroupTarget;
+          if (!target) return;
+          archiveGroupMembers({ sessionId: target.sessionId }).then(
+            ({ archived }) => toast.success(`${sessionCountLabel(archived)} archived`, { id: "session-group-archive" }),
+            () => toast.error("Couldn't archive group", { id: "session-group-archive" }),
+          );
+        }}
+      />
       {/* The web "Rename session" and "Rename group" dialogs; the kit draws them as a bottom sheet at phone size. */}
       <Dialog
         open={renameTarget !== null}
@@ -383,7 +430,7 @@ export function useSessionActions({
   return {
     /** Opens the row menu sheet for one session (the web right-click menu). */
     openSheet: setSheetTarget,
-    /** Opens a linked group's header menu (the web right-click on the group). */
+    /** Opens a linked group's header menu (the web right-click on the group): Rename group, and Archive group when `archivable`. */
     openGroupSheet: setGroupSheetTarget,
     actionsFor,
     /** An action's label and icon, as the menus draw it. */

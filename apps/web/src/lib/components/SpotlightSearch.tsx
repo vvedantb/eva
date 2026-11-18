@@ -1,5 +1,6 @@
 "use client";
 
+import { SPOTLIGHT_PLACEHOLDER } from "@eva/shared/spotlight";
 import { useDeferredValue, useState } from "react";
 import {
   Command,
@@ -109,7 +110,7 @@ export function SpotlightSearch() {
         >
           <CommandInput
             autoFocus
-            placeholder="Search across your teams and repos…"
+            placeholder={SPOTLIGHT_PLACEHOLDER}
             value={search}
             onValueChange={setSearch}
           />

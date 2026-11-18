@@ -4,7 +4,7 @@ import { Badge, Checkbox, ListDivider, SkeletonList, SkeletonRow, Text } from "@
 import { FlatList, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PendingCommentCount, PrDiffGate, TruncatedNote } from "@/diff/PrFileDiff";
-import { usePendingLineComments, useViewedFiles, type PrDiffState, type PrRef } from "@/diff/prDiffStore";
+import { usePendingLineComments, useViewedFiles, type DiffRef, type PrDiffState } from "@/diff/prDiffStore";
 import { textColor, useScheme } from "@/ui/theme";
 
 /** The web `FileStatusChip`: a lifecycle chip, none for an ordinary modified file. */
@@ -22,7 +22,7 @@ const STATUS_CHIP: Record<DiffFileStatus, { label: string; variant: "success" | 
  * screen, so Back returns here. The diff options sit in the tab row, as the
  * web puts Code's controls there.
  */
-export function ReviewCode({ pr, state, onOpenFile }: { pr: PrRef; state: PrDiffState; onOpenFile: (path: string) => void }) {
+export function ReviewCode({ pr, state, onOpenFile }: { pr: DiffRef; state: PrDiffState; onOpenFile: (path: string) => void }) {
   const insets = useSafeAreaInsets();
   return (
     <PrDiffGate
@@ -50,7 +50,7 @@ export function ReviewCode({ pr, state, onOpenFile }: { pr: PrRef; state: PrDiff
   );
 }
 
-function FileRow({ pr, entry, onOpen }: { pr: PrRef; entry: DiffFileEntry; onOpen: () => void }) {
+function FileRow({ pr, entry, onOpen }: { pr: DiffRef; entry: DiffFileEntry; onOpen: () => void }) {
   const scheme = useScheme();
   const muted = textColor(scheme, "muted");
   const { isViewed, setViewed } = useViewedFiles(pr);
