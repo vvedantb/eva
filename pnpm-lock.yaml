@@ -405,6 +405,9 @@ importers:
       tailwindcss:
         specifier: ^3.4.19
         version: 3.4.19(tsx@4.21.0)(yaml@2.9.0)
+      tsc-rs:
+        specifier: 0.1.0
+        version: 0.1.0
       typescript:
         specifier: ^5.9.0
         version: 5.9.3

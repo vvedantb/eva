@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone typecheck runs on tsc-rs, as web and backend do
+
+Date: 2026-11-18
+
+WHY: The phone was the last package on plain `tsc` (about 42 s); `tsc-rs` checks it in about 7 s.
+
+Architectural: `apps/mobile` `typecheck` is `tsc-rs -p tsconfig.json` (0.1.0, the version web and backend pin). `tsc-rs` checks side-effect imports, so `nativewind-env.d.ts` declares `*.css` for `app/_layout.tsx`'s `import "../global.css"`.
+
 ## Phone: holding an older message no longer throws the chat to its end
 
 Date: 2026-11-18
