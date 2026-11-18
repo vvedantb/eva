@@ -150,7 +150,7 @@ async function idsOfTurns(
 /** True while one named chat entity has a turn open. */
 export async function hasOpenChatTurn(
   db: DatabaseReader,
-  entityId: Doc<"turns">["entityId"] | Id<"agentTasks">,
+  entityId: Doc<"turns">["entityId"] | Id<"agentTasks"> | Id<"projects">,
 ): Promise<boolean> {
   // A quick task or a project chats (and runs) through its session: those
   // turns count too. A project task chats in its own chat of the project's
@@ -178,8 +178,9 @@ export async function hasOpenChatTurn(
       .first();
     if (chatTurn !== null) return true;
   }
-  // A task owns no turn of its own: its chat and runs are covered above.
-  const turnEntityId = taskId ? null : turnOwnerId(db, entityId);
+  // A task or project owns no turn of its own: its session's turns are
+  // covered above.
+  const turnEntityId = taskId || projectId ? null : turnOwnerId(db, entityId);
   if (turnEntityId === null) return false;
   const turn = await db
     .query("turns")
@@ -198,7 +199,6 @@ function turnOwnerId(
   return (
     db.normalizeId("sessionChats", id) ??
     db.normalizeId("sessions", id) ??
-    db.normalizeId("projects", id) ??
     db.normalizeId("agentRuns", id) ??
     db.normalizeId("automationRuns", id) ??
     db.normalizeId("docs", id) ??
@@ -209,7 +209,7 @@ function turnOwnerId(
 /** The open-turn set for one entity, in the shape the projections take. */
 export async function openChatEntityIdsFor(
   db: DatabaseReader,
-  entityId: Doc<"turns">["entityId"] | Id<"agentTasks">,
+  entityId: Doc<"turns">["entityId"] | Id<"agentTasks"> | Id<"projects">,
 ): Promise<ReadonlySet<string>> {
   return new Set(
     (await hasOpenChatTurn(db, entityId)) ? [String(entityId)] : [],

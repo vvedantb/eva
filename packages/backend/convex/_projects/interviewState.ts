@@ -195,24 +195,20 @@ export async function finishProjectInterview(
 /**
  * Where an interview's agent turn is filed: under the project's session
  * (`entityId` and `sessionId`, lane `interview`), so the session's open-turn
- * reads see it. A turn opened before that change is keyed by the project.
+ * reads see it. Null before the project has a session.
  */
-export async function interviewTurnEntityIds(
+export async function interviewTurnSessionId(
   db: DatabaseReader,
   projectId: Id<"projects">,
-): Promise<Array<Id<"sessions"> | Id<"projects">>> {
-  const session = await findOwnedSession(db, { kind: "project", projectId });
-  return session ? [session._id, projectId] : [projectId];
+): Promise<Id<"sessions"> | null> {
+  return (await findOwnedSession(db, { kind: "project", projectId }))?._id ?? null;
 }
 
-/** The project an interview turn belongs to (`interviewTurnEntityIds` in reverse). */
+/** The project an interview turn belongs to (`interviewTurnSessionId` in reverse). */
 export async function interviewTurnProjectId(
   db: DatabaseReader,
-  entityId: Id<"sessions"> | Id<"projects">,
+  sessionId: Id<"sessions">,
 ): Promise<Id<"projects"> | undefined> {
-  const projectId = db.normalizeId("projects", entityId);
-  if (projectId) return projectId;
-  const sessionId = db.normalizeId("sessions", entityId);
-  const session = sessionId ? await db.get(sessionId) : null;
+  const session = await db.get(sessionId);
   return session ? sessionOwnerProjectId(session) : undefined;
 }
