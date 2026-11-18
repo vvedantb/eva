@@ -36,7 +36,11 @@ import {
   type BulkAction,
 } from "./_components/QuickTasksBulkBar";
 import { QuickTasksBulkModals } from "./_components/QuickTasksBulkModals";
-import { useFilteredQuickTasks, useQuickTaskFilters } from "./_utils";
+import {
+  useFilteredQuickTasks,
+  useQuickTaskFilters,
+  useQuickTaskTodoDrafts,
+} from "./_utils";
 import { useAgentTaskByNumId } from "@/lib/useResolveByNumId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import {
@@ -120,8 +124,10 @@ export function QuickTasksClient() {
   })();
 
   const quickTasks = useFilteredQuickTasks(tasks);
-  const hasAnyTasks = (tasks ?? []).length > 0;
-  const hasQuickTasks = quickTasks.length > 0;
+  // The user's drafts sit in To Do, so they alone keep the board on screen.
+  const todoDrafts = useQuickTaskTodoDrafts(repo._id);
+  const hasAnyTasks = (tasks ?? []).length > 0 || (drafts ?? []).length > 0;
+  const hasQuickTasks = quickTasks.length > 0 || todoDrafts.length > 0;
 
   const taskIdSet = (() => {
     const set = new Set<string>();

@@ -39,19 +39,18 @@ import {
   IconSortDescending,
   IconX,
 } from "@tabler/icons-react";
+import { columnConfig } from "@/lib/components/projects/ProjectPhaseBadge";
 import {
-  PROJECT_PHASES,
-  phaseConfig,
-  type ProjectPhase,
-} from "@/lib/components/projects/ProjectPhaseBadge";
-import {
+  PROJECT_COLUMNS,
   PROJECT_SORT_FIELDS,
   PROJECT_SORT_FIELD_LABELS,
   clearedProjectFilter,
   clearedProjectFilters,
   filterAndSortProjects,
+  projectColumn,
   projectFilterChips,
   toggleHiddenProjectPhase,
+  type ProjectColumn,
 } from "@eva/shared";
 import { ProjectsTimeline } from "@/lib/components/projects/ProjectsTimeline";
 import { ProjectsListView } from "@/lib/components/projects/ProjectsListView";
@@ -91,11 +90,11 @@ export function ProjectsClient() {
     setParams,
   ] = useProjectFilters();
   const searchQuery = q;
-  // Derive the visible set from the persisted blocklist so new phases show by
-  // default and "all visible" is independent of how many phases exist.
-  const hiddenPhaseSet = new Set<ProjectPhase>(hiddenPhases);
-  const visiblePhases = new Set<ProjectPhase>(
-    PROJECT_PHASES.filter((p) => !hiddenPhaseSet.has(p)),
+  // Derive the visible set from the persisted blocklist so new columns show
+  // by default and "all visible" is independent of how many columns exist.
+  const hiddenPhaseSet = new Set<ProjectColumn>(hiddenPhases);
+  const visiblePhases = new Set<ProjectColumn>(
+    PROJECT_COLUMNS.filter((c) => !hiddenPhaseSet.has(c)),
   );
   const selection = useProjectsSelection(
     (projects ?? []).map((project) => project._id),
@@ -116,23 +115,22 @@ export function ProjectsClient() {
     sortDir,
   });
 
-  const projectsByPhaseInitial: Record<ProjectPhase, typeof filteredSorted> = {
-    draft: [],
-    finalized: [],
+  const projectsByPhaseInitial: Record<ProjectColumn, typeof filteredSorted> = {
+    todo: [],
     in_progress: [],
     business_review: [],
     code_review: [],
     completed: [],
     cancelled: [],
   };
-  const projectsByPhase = PROJECT_PHASES.reduce((acc, phase) => {
-    acc[phase] = filteredSorted.filter((p) => p.phase === phase);
+  const projectsByPhase = PROJECT_COLUMNS.reduce((acc, column) => {
+    acc[column] = filteredSorted.filter((p) => projectColumn(p.phase) === column);
     return acc;
   }, projectsByPhaseInitial);
 
-  const handlePhaseToggle = (phase: ProjectPhase) => {
+  const handlePhaseToggle = (column: ProjectColumn) => {
     setParams({
-      hiddenPhases: toggleHiddenProjectPhase(hiddenPhases, phase, PROJECT_PHASES),
+      hiddenPhases: toggleHiddenProjectPhase(hiddenPhases, column, PROJECT_COLUMNS),
     });
   };
 
@@ -145,7 +143,7 @@ export function ProjectsClient() {
 
   const activeFilterLabels = projectFilterChips(
     { q, hiddenPhases, sortField, sortDir },
-    PROJECT_PHASES,
+    PROJECT_COLUMNS,
   );
 
   const clearFilter = (key: string) => {
@@ -251,13 +249,13 @@ export function ProjectsClient() {
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <IconFilter size={16} className="mr-2" />
-                {visiblePhases.size === PROJECT_PHASES.length
+                {visiblePhases.size === PROJECT_COLUMNS.length
                   ? "All Phases"
                   : `${visiblePhases.size} Phases`}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
-                {PROJECT_PHASES.map((p) => {
-                  const cfg = phaseConfig[p];
+                {PROJECT_COLUMNS.map((p) => {
+                  const cfg = columnConfig[p];
                   return (
                     <DropdownMenuCheckboxItem
                       key={p}

@@ -35,6 +35,8 @@ interface KanbanColumnProps {
   id: string;
   config: ColumnConfig;
   count: number;
+  /** Shows the empty label; defaults to `count === 0`. */
+  isEmpty?: boolean;
   children: ReactNode;
   droppable?: boolean;
   headerExtra?: ReactNode;
@@ -47,6 +49,7 @@ export function KanbanColumn({
   id,
   config,
   count,
+  isEmpty = count === 0,
   children,
   droppable = true,
   headerExtra,
@@ -87,7 +90,7 @@ export function KanbanColumn({
         ref={ref}
         className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain p-1.5 pt-0 scrollbar scroll-fade md:p-1.5 md:pt-0"
       >
-        {count === 0 ? (
+        {isEmpty ? (
           <div className="flex flex-1 items-center justify-center py-6 text-xs text-muted-foreground/50">
             {emptyLabel}
           </div>

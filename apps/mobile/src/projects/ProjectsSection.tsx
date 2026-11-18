@@ -1,12 +1,14 @@
-import { PROJECT_PHASES, api } from "@eva/backend";
+import { api } from "@eva/backend";
 import {
+  PROJECT_COLUMNS,
+  PROJECT_COLUMN_LABELS,
   PROJECT_LIST_DEFAULTS,
-  PROJECT_PHASE_LABELS,
   PROJECT_SORT_FIELDS,
   PROJECT_SORT_FIELD_LABELS,
   clearedProjectFilter,
   clearedProjectFilters,
   filterAndSortProjects,
+  projectColumn,
   projectFilterChips,
   toggleHiddenProjectPhase,
   type ProjectListFilters,
@@ -23,7 +25,7 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, SectionList, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { phaseAppearance } from "@/projects/phaseAppearance";
+import { columnAppearance } from "@/projects/phaseAppearance";
 import { ProjectRow } from "@/projects/ProjectRow";
 import { useProjectActions } from "@/projects/useProjectActions";
 import { CardGap, FoldFooter, FoldHeader } from "@/ui/FoldHeader";
@@ -33,7 +35,7 @@ import { RepoPicker, useRepoParam } from "@/ui/RepoPicker";
 import { useScheme } from "@/ui/theme";
 import { LIST_WINDOW } from "@/ui/listWindow";
 
-/** The phase groups folded away from their default (open with projects), kept on the device. */
+/** The column groups (To Do, In Progress…) folded away from their default (open with projects), kept on the device. */
 const toggledProjectPhases = persistedIdSet("projectPhasesToggled");
 
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
@@ -55,7 +57,8 @@ export function useProjectRepo() {
  * The web Projects list view at phone width, for one repo: the repo picker,
  * the toolbar (search and the Options sheet: sort and phases, the web
  * `ProjectsClient` toolbar) and its "Filtered by" chips, then a collapsible
- * section per shown phase (icon, label, count) in workflow order, each with
+ * section per shown column (icon, label, count) in workflow order: Draft
+ * and Finalised share To Do, told apart by the card badge, each with
  * its project cards or "No projects". Sections with projects start open, as
  * the web. A long press on a card opens the web project menu as a sheet
  * (`useProjectActions`). A `SectionList`, as a repo's projects have no cap.
@@ -86,7 +89,7 @@ function ProjectList({ repo }: { repo: Repo }) {
   const progress = useQuery(api.projects.listTaskProgress, { repoId: repo._id });
   const users = useQuery(api.users.listAll, {});
   const [filters, setFilters] = useState<ProjectListFilters>(PROJECT_LIST_DEFAULTS);
-  // Phases the user folded or unfolded: as the web, a phase starts open when it has projects.
+  // Columns the user folded or unfolded: as the web, a column starts open when it has projects.
   const [toggled, toggle] = toggledProjectPhases.useSet("all");
   const actions = useProjectActions({ repo, users });
   const largerText = useLargerText();
@@ -116,7 +119,7 @@ function ProjectList({ repo }: { repo: Repo }) {
     );
   }
 
-  const chips = projectFilterChips(filters, PROJECT_PHASES);
+  const chips = projectFilterChips(filters, PROJECT_COLUMNS);
   return (
     <View className="flex-1">
       <ProjectsToolbar filters={filters} onChange={changeFilters} />
@@ -144,25 +147,25 @@ function ProjectList({ repo }: { repo: Repo }) {
       ) : (
         <SectionList
           {...LIST_WINDOW}
-          sections={PROJECT_PHASES.filter((phase) => !filters.hiddenPhases.includes(phase)).map((phase) => {
-            const rows = shown.filter((project) => project.phase === phase);
-            const open = (rows.length > 0) !== toggled.has(phase);
-            return { phase, count: rows.length, open, data: open ? rows : [] };
+          sections={PROJECT_COLUMNS.filter((column) => !filters.hiddenPhases.includes(column)).map((column) => {
+            const rows = shown.filter((project) => projectColumn(project.phase) === column);
+            const open = (rows.length > 0) !== toggled.has(column);
+            return { column, count: rows.length, open, data: open ? rows : [] };
           })}
           keyExtractor={(project) => project._id}
           keyboardShouldPersistTaps="handled"
           stickySectionHeadersEnabled={false}
           renderSectionHeader={({ section }) => {
-            const { icon, text } = phaseAppearance(section.phase, scheme);
+            const { icon, text } = columnAppearance(section.column, scheme);
             return (
               <FoldHeader
                 icon={icon}
                 color={text}
-                label={PROJECT_PHASE_LABELS[section.phase]}
+                label={PROJECT_COLUMN_LABELS[section.column]}
                 count={section.count}
                 noun="project"
                 open={section.open}
-                onToggle={() => toggle(section.phase)}
+                onToggle={() => toggle(section.column)}
               />
             );
           }}
@@ -226,10 +229,10 @@ function ProjectsToolbar({
     onChange(patch);
     setPage(null);
   };
-  const visibleCount = PROJECT_PHASES.length - filters.hiddenPhases.length;
-  const phasesLabel = visibleCount === PROJECT_PHASES.length ? "All Phases" : `${visibleCount} Phases`;
+  const visibleCount = PROJECT_COLUMNS.length - filters.hiddenPhases.length;
+  const phasesLabel = visibleCount === PROJECT_COLUMNS.length ? "All Phases" : `${visibleCount} Phases`;
   const sortLabel = `Sort: ${PROJECT_SORT_FIELD_LABELS[filters.sortField]} ${filters.sortDir === "asc" ? "↑" : "↓"}`;
-  const hasActiveFilters = projectFilterChips(filters, PROJECT_PHASES).length > 0;
+  const hasActiveFilters = projectFilterChips(filters, PROJECT_COLUMNS).length > 0;
   const titles: Record<Page, string> = { root: "Options", sort: sortLabel, phases: phasesLabel };
 
   const body = (() => {
@@ -266,16 +269,16 @@ function ProjectsToolbar({
           </>
         );
       case "phases":
-        return PROJECT_PHASES.map((phase) => {
-          const { icon: Icon, text } = phaseAppearance(phase, scheme);
+        return PROJECT_COLUMNS.map((column) => {
+          const { icon: Icon, text } = columnAppearance(column, scheme);
           return (
             <SheetRow
-              key={phase}
+              key={column}
               leading={<Icon size={20} color={text} />}
-              title={PROJECT_PHASE_LABELS[phase]}
-              active={!filters.hiddenPhases.includes(phase)}
+              title={PROJECT_COLUMN_LABELS[column]}
+              active={!filters.hiddenPhases.includes(column)}
               multiple
-              onPress={() => onChange({ hiddenPhases: toggleHiddenProjectPhase(filters.hiddenPhases, phase, PROJECT_PHASES) })}
+              onPress={() => onChange({ hiddenPhases: toggleHiddenProjectPhase(filters.hiddenPhases, column, PROJECT_COLUMNS) })}
             />
           );
         });

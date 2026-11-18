@@ -26,7 +26,11 @@ import {
 } from "@vvedantb/ui";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { type ProjectPhase } from "@/lib/components/projects/ProjectPhaseBadge";
+import { projectPlanningPhase } from "@eva/shared";
+import {
+  phaseConfig,
+  type ProjectPhase,
+} from "@/lib/components/projects/ProjectPhaseBadge";
 import { ProjectCardMenuItems } from "./_components/ProjectCardMenuItems";
 import { useProjectMenu } from "./_components/useProjectMenu";
 import {
@@ -120,6 +124,9 @@ export function ProjectCard({
     ),
   ];
   const previewText = description ?? rawInput;
+  // Draft and finalized share the To Do column; this badge tells them apart.
+  const planningPhase = projectPlanningPhase(phase);
+  const PlanningIcon = planningPhase ? phaseConfig[planningPhase].icon : null;
 
   const MAX_AVATARS = 3;
   const allAvatarIds = memberIds.length > 0 ? memberIds : [userId];
@@ -224,6 +231,18 @@ export function ProjectCard({
       </div>
 
       <div className="flex flex-wrap items-center gap-1">
+        {planningPhase && PlanningIcon ? (
+          <Badge
+            className={cn(
+              "gap-0.5 border-transparent px-1.5 py-0 text-3xs font-medium leading-4",
+              phaseConfig[planningPhase].bg,
+              phaseConfig[planningPhase].text,
+            )}
+          >
+            <PlanningIcon className="size-2.5 shrink-0" />
+            {phaseConfig[planningPhase].label}
+          </Badge>
+        ) : null}
         <Tooltip>
           <TooltipTrigger asChild>
             <Badge

@@ -16,7 +16,11 @@ import { Button, Spinner, toast, ConfirmSkipHint, skipConfirmTitle, useRequestCo
 import { IconPlayerPlay } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
-import { useQuickTaskFilters } from "@/routes/_repo/$owner/$repo/quick-tasks/_utils";
+import {
+  useQuickTaskFilters,
+  useQuickTaskTodoDrafts,
+} from "@/routes/_repo/$owner/$repo/quick-tasks/_utils";
+import { QuickTaskDraftRow } from "./QuickTaskDraftRow";
 import type { DisplayTaskStatus } from "@/lib/components/tasks/TaskStatusBadge";
 
 type Task = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
@@ -65,6 +69,7 @@ export function QuickTasksKanbanBoard({
   });
   const startExecution = useMutation(api.agentTasks.startExecution);
   const [{ statuses }] = useQuickTaskFilters();
+  const todoDrafts = useQuickTaskTodoDrafts(repoId);
   const visibleStatuses = new Set<DisplayTaskStatus>(statuses);
   const [isRunningAll, setIsRunningAll] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -107,7 +112,7 @@ export function QuickTasksKanbanBoard({
     }
   }
 
-  if (tasks.length === 0) {
+  if (tasks.length === 0 && todoDrafts.length === 0) {
     return null;
   }
 
@@ -146,6 +151,19 @@ export function QuickTasksKanbanBoard({
         visibleStatuses={visibleStatuses}
         onStatusChange={handleStatusChange}
         fillHeight
+        columnLead={(status) =>
+          status === "todo"
+            ? todoDrafts.map((draft) => (
+                <div key={draft._id} className="pb-1.5">
+                  <QuickTaskDraftRow
+                    id={draft._id}
+                    title={draft.title}
+                    description={draft.description}
+                  />
+                </div>
+              ))
+            : []
+        }
         columnExtra={(status) =>
           status === "todo" && todoTasks.length > 0 ? (
             <Button

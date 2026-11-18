@@ -12,6 +12,7 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { FlatList, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { quickTaskDraftRoute } from "@/quickTasks/DraftsMenu";
 import { META_TEXT } from "@/quickTasks/QuickTaskRow";
 import { CardGap } from "@/ui/FoldHeader";
 import { timeAgo } from "@/ui/format";
@@ -155,7 +156,7 @@ function useOpenDraft(repoId: Id<"githubRepos">) {
   const router = useRouter();
   return (draft: Draft) => {
     if (draft.source === "task") {
-      router.push({ pathname: "/quick-task/new", params: { repoId, draftId: draft.row._id } });
+      router.push(quickTaskDraftRoute({ _id: draft.row._id, repoId }));
       return;
     }
     const { kind, taskId, sessionId } = draft.row;

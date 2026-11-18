@@ -47,6 +47,8 @@ interface KanbanBoardProps<T extends BaseTask> {
   renderOverlay: (item: T) => ReactNode;
   fillHeight?: boolean;
   columnExtra?: (status: TaskStatus) => ReactNode;
+  /** Keyed rows above a column's cards that are not cards: no drag, no count. */
+  columnLead?: (status: TaskStatus) => ReactNode[];
 }
 
 const COLUMNS: KanbanColumnDef[] = KANBAN_STATUSES.map((status) => ({
@@ -62,6 +64,7 @@ export function KanbanBoard<T extends BaseTask>({
   renderOverlay,
   fillHeight = false,
   columnExtra,
+  columnLead,
 }: KanbanBoardProps<T>) {
   const [activeItem, setActiveItem] = useState<T | null>(null);
   const [activeOverlayWidth, setActiveOverlayWidth] = useState<number | null>(
@@ -195,6 +198,7 @@ export function KanbanBoard<T extends BaseTask>({
                         items={itemsByStatus.get(status) ?? []}
                         count={countByStatus[status] ?? 0}
                         headerExtra={columnExtra?.(status)}
+                        lead={columnLead?.(status) ?? []}
                         renderCard={renderCard}
                       />
                     </m.div>,
@@ -213,12 +217,14 @@ function VirtualKanbanColumn<T extends BaseTask>({
   items,
   count,
   headerExtra,
+  lead,
   renderCard,
 }: {
   status: TaskStatus;
   items: T[];
   count: number;
   headerExtra?: ReactNode;
+  lead: ReactNode[];
   renderCard: (item: T) => ReactNode;
 }) {
   const { owner, name } = useRepo();
@@ -233,9 +239,11 @@ function VirtualKanbanColumn<T extends BaseTask>({
       id={status}
       config={statusConfig[status]}
       count={count}
+      isEmpty={count === 0 && lead.length === 0}
       headerExtra={headerExtra}
       scrollRef={scrollRef}
     >
+      {lead}
       <SortableContext items={itemIds}>
         {scrollParent && (
           <Virtuoso
