@@ -254,6 +254,8 @@ function SessionsSection() {
                           sessionId: entry.group.members[0].session._id,
                           name: entry.group.name,
                           label: entry.group.label,
+                          // The web offers Archive group from the active list only.
+                          archivable: tab === "active",
                         })
                     : undefined
                 }

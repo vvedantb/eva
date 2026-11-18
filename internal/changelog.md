@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: archive a linked session group
+
+Date: 2026-11-18
+
+WHY: The web archives a whole linked group from its menu (#1370); on the phone each session had to be archived one by one.
+
+Architectural: the group header's menu (a long press in the Sessions tab) gains "Archive group" in the active list only, as the web sidebar; a confirm with the web copy counts the active members from `sessions.listGroup` and calls `sessions.archiveGroup`. `sessionCountLabel` ("1 session", "3 sessions") moves to `@eva/shared` for both dialogs.
+
 ## Phone: holding a message or opening an image no longer throws the chat to its end
 
 Date: 2026-11-18
