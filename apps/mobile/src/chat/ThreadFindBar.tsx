@@ -12,8 +12,8 @@ import {
 import { IconChevronDown, IconChevronUp, IconX, type IconProps } from "@tabler/icons-react-native";
 import { useConversation } from "@vvedantb/native-ui/ai";
 import { SearchInput } from "@vvedantb/native-ui/search-input";
-import { useState, type ComponentType } from "react";
-import { Pressable, Text, View } from "react-native";
+import { useEffect, useState, type ComponentType } from "react";
+import { BackHandler, Pressable, Text, View } from "react-native";
 import { useReducedMotion } from "react-native-reanimated";
 import { useScheme } from "@/ui/theme";
 
@@ -51,6 +51,15 @@ export function ThreadFindBar({
   const matchCount = matches.length;
   const safeIndex = matchCount === 0 ? -1 : Math.min(Math.max(activeIndex, 0), matchCount - 1);
   const hasQuery = normalizeFindQuery(query).length > 0;
+  // Android back closes the bar before it leaves the chat, as it closes a sheet first. An effect:
+  // the hardware back button is a subscription outside React.
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      onClose();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [onClose]);
 
   /** Marks the match at `index` and brings its message into view. */
   const jumpTo = (list: readonly ThreadFindMatch[], index: number) => {

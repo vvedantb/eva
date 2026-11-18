@@ -189,8 +189,10 @@ export default function ChatScreen() {
   // Quotes from replies ("Select text", then "Quote"), waiting for the next send.
   const quotes = useQuotes();
   // "Find in chat" (the web `ThreadFindBar`): the bar under the header while open, and the message of its active match.
-  const [findOpen, setFindOpen] = useState(false);
-  const [findActiveId, setFindActiveId] = useState<string | null>(null);
+  // Kept per chat: a tab switch to another chat of the session (the same screen) closes it.
+  const [find, setFind] = useState<{ target: string; activeId: string | null } | null>(null);
+  const findOpen = find !== null && find.target === target;
+  const findActiveId = findOpen ? find.activeId : null;
   // The web header's Summarise Session: once the sandbox is awake and the chat has a message.
   const summary = useSessionSummary({
     sessionId: chat?.session?.id,
@@ -355,7 +357,7 @@ export default function ChatScreen() {
   const findDocuments = collectThreadFindDocuments(
     visible.map((message) => ({ id: message._id, text: tokenizedToDisplayText(message.content), skip: message.isSystemAlert === true })),
   );
-  const leadingMenu: MenuEntry[] = [{ label: "Find in chat", icon: IconSearch, onSelect: () => setFindOpen(true) }];
+  const leadingMenu: MenuEntry[] = [{ label: "Find in chat", icon: IconSearch, onSelect: () => setFind({ target, activeId: null }) }];
   if (summary.menuItem) leadingMenu.push(summary.menuItem);
   const panelReply =
     chat.canReply && chat.sandboxActive
@@ -399,11 +401,8 @@ export default function ChatScreen() {
           <ThreadFindBar
             documents={findDocuments}
             rowIndex={(messageId) => newestFirst.findIndex((message) => message._id === messageId)}
-            onActiveChange={setFindActiveId}
-            onClose={() => {
-              setFindOpen(false);
-              setFindActiveId(null);
-            }}
+            onActiveChange={(activeId) => setFind({ target, activeId })}
+            onClose={() => setFind(null)}
           />
         ) : null}
         <SeenRowsContext.Provider value={seenRows}>

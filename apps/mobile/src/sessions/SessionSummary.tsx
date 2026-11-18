@@ -83,8 +83,8 @@ export function SessionSummaryBlock({ sessionId, summary }: { sessionId: Id<"ses
           <LiveActivityStatus activityLog={activity} />
         ) : (
           <View className="gap-1 pl-1">
-            {items.map((item) => (
-              <View key={item} className="flex-row gap-2">
+            {items.map((item, index) => (
+              <View key={`${index}-${item}`} className="flex-row gap-2">
                 <Text className="font-instrument-sans text-sm" style={{ color: theme.mutedForeground }}>
                   •
                 </Text>
