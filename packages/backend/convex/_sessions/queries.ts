@@ -21,17 +21,18 @@ import {
 } from "../_chat/turnProjection";
 import { unreadLookupForRepo } from "../chatReads";
 import {
-  findProjectSession,
-  findTaskWorkSession,
+  findWorkSession,
   isStandaloneSession,
   ownedSessionOwnerValidator,
   type OwnedSessionOwner,
 } from "./owner";
 import {
-  findOwnerChat,
+  chatSeedSettings,
+  chatSeedValidator,
   loadOwnerEntity,
   type OwnerEntity,
 } from "./ownedSession";
+import { findWorkChat } from "./ownerState";
 
 /** The primary repo a linked-in session actually belongs to. */
 const linkedFromValidator = v.object({
@@ -483,7 +484,7 @@ export const get = authQuery({
 
 /**
  * The task or project behind an owner, when `userId` may reach it; null
- * otherwise. The access check for `getOwned` and `ensureOwned`.
+ * otherwise. The access check for `getOwnedWithSeed` and `ensureOwned`.
  */
 export async function loadOwnerEntityWithAccess(
   db: DatabaseReader,
@@ -499,42 +500,61 @@ export async function loadOwnerEntityWithAccess(
   return allowed ? entity : null;
 }
 
-/** What `getOwned` / `ensureOwned` return: the session and the owner's chat. */
+/** What `getOwnedWithSeed` / `ensureOwned` return: the session and the owner's chat. */
 export const ownerChatRefValidator = v.object({
   sessionId: v.id("sessions"),
   chatId: v.id("sessionChats"),
 });
 
+/** The owner's work session and its chat, or null when the owner is gone or not visible. */
+async function readOwned(
+  db: DatabaseReader,
+  userId: Id<"users">,
+  owner: OwnedSessionOwner,
+) {
+  const entity = await loadOwnerEntityWithAccess(db, owner, userId);
+  if (!entity) return null;
+  const [session, found] = await Promise.all([
+    findWorkSession(db, entity),
+    findWorkChat(db, entity),
+  ]);
+  return {
+    entity,
+    session: session ? { sessionId: session._id, chatId: found?.chat._id } : null,
+  };
+}
+
+const ownedSessionRefValidator = v.object({
+  sessionId: v.id("sessions"),
+  chatId: v.optional(v.id("sessionChats")),
+});
+
 /**
  * The session a task or project works on (its sandbox) and the chat it talks
  * in (a quick task's or project's Main chat, a project task's own chat in the
- * project's session), for the owner's chat and sandbox panels. Null until
- * the session exists; `chatId` absent while a project task has not chatted
- * yet (its project's session may already run). `ensureOwned` creates both.
+ * project's session), for the owner's chat and sandbox panels. `session` is
+ * null until the session exists; `chatId` absent while a project task has
+ * not chatted yet (its project's session may already run). `ensureOwned`
+ * creates both. `chatSeed` is what the chat starts on (`chatSeedSettings`):
+ * clients show it until the chat has its own picks. Null when the owner is
+ * gone or not visible.
  */
-export const getOwned = authQuery({
+export const getOwnedWithSeed = authQuery({
   args: { owner: ownedSessionOwnerValidator },
   returns: v.union(
     v.object({
-      sessionId: v.id("sessions"),
-      chatId: v.optional(v.id("sessionChats")),
+      session: v.union(ownedSessionRefValidator, v.null()),
+      chatSeed: chatSeedValidator,
     }),
     v.null(),
   ),
   handler: async (ctx, args) => {
-    const entity = await loadOwnerEntityWithAccess(
-      ctx.db,
-      args.owner,
-      ctx.userId,
-    );
-    if (!entity) return null;
-    const session =
-      entity.kind === "task"
-        ? await findTaskWorkSession(ctx.db, entity.task)
-        : await findProjectSession(ctx.db, entity.project._id);
-    if (!session) return null;
-    const found = await findOwnerChat(ctx.db, entity);
-    return { sessionId: session._id, chatId: found?.chat._id };
+    const read = await readOwned(ctx.db, ctx.userId, args.owner);
+    if (!read) return null;
+    return {
+      session: read.session,
+      chatSeed: await chatSeedSettings(ctx.db, read.entity),
+    };
   },
 });
 

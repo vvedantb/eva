@@ -16,9 +16,12 @@ import {
   messageAttachments,
   type ResolvedMediaEntry,
   otherUserIdsInChat,
+  appendReviewCommentsToPrompt,
+  prNumberFromGithubUrl,
   SANDBOX_CHAT_COPY,
   sandboxComposerState,
   type SessionMenuAction,
+  tokenizedToDisplayText,
   toRepoRelativePath,
   turnErrorTitle,
   visibleChatMessages,
@@ -28,8 +31,10 @@ import { turnCheckpoint } from "@eva/shared/turnCheckpoint";
 import { chatTypingRoom } from "@eva/shared/typingPresence";
 import { isUsageLimitFailure } from "@eva/shared/usageLimitRecovery";
 import { messageLinkHref } from "@eva/shared/messageLink";
+import { appendCitationsToPrompt } from "@eva/shared/assistantCitation";
 import { formatQuestionAnswers, type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
-import { IconChevronDown, IconMessageCircle, IconPlayerStop } from "@tabler/icons-react-native";
+import { collectThreadFindDocuments } from "@eva/shared/threadFind";
+import { IconChevronDown, IconMessageCircle, IconPlayerStop, IconSearch } from "@tabler/icons-react-native";
 import {
   ChoiceQuestion,
   Conversation,
@@ -47,7 +52,7 @@ import {
 import { providerLabel } from "@vvedantb/native-ui/brand";
 import { goBackOrReplace, RouterStackPageHeader } from "@vvedantb/native-ui/expo-router";
 import { CenteredSpinner, EmptyState, Spinner, Text } from "@vvedantb/native-ui/primitives";
-import { tokens } from "@vvedantb/native-ui/theme";
+import { withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -69,13 +74,17 @@ import { createSeenRows, SeenRowsContext } from "@/chat/cards/seenRows";
 import { SandboxBranchChip } from "@/chat/BranchChips";
 import { ComposerFooter, composerHeader, useSimpleView } from "@/chat/ComposerFooter";
 import { ModelChip } from "@/chat/ModelChip";
-import { ChatHeader } from "@/chat/ChatHeader";
+import { ChatHeader, type MenuEntry } from "@/chat/ChatHeader";
+import { ThreadFindBar } from "@/chat/ThreadFindBar";
 import { SessionChatTabs } from "@/chat/SessionChatTabs";
 import { SandboxControl, SandboxErrorBanner, useSessionSandbox } from "@/chat/SandboxControl";
 import { UsageButton } from "@/chat/UsageSheet";
 import { useProposedPlans } from "@/chat/ProposedPlanCard";
 import { BackgroundAgentsChip } from "@/chat/BackgroundAgentsChip";
 import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
+import { ComposerTasksPanel } from "@/chat/ComposerTasksPanel";
+import { GoalBanner } from "@/chat/GoalBanner";
+import { PublishRecoveryBanner } from "@/chat/PublishRecoveryBanner";
 import { SystemAlertRow } from "@/chat/SystemAlertRow";
 import { useNow } from "@/ui/clock";
 import { useMessageMenu } from "@/chat/MessageHoldMenu";
@@ -83,7 +92,12 @@ import { TurnChangesChip, useTurnRestore, type TurnChangesTarget } from "@/chat/
 import { UsageLimitRecoveryCard } from "@/chat/UsageLimitRecovery";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { MessageFooter, type Sentiment } from "@/chat/MessageFooter";
-import { PasteImageChip } from "@/chat/PasteImageChip";
+import { type Quotes, useQuotes } from "@/chat/Quotes";
+import { ComposerSuggestions } from "@/chat/ComposerSuggestions";
+import { PendingReviewCommentChips } from "@/chat/PendingReviewCommentChips";
+import { BackgroundProcessesChip } from "@/chat/BackgroundProcessesChip";
+import { useSkillSuggestions } from "@/chat/useSkillSuggestions";
+import { toReviewComment, usePendingLineComments } from "@/diff/prDiffStore";
 import { useAttachments } from "@/chat/useAttachments";
 import { type Chat, useChatModelPick } from "@/chat/useChatModelPick";
 import { TypingIndicator } from "@/chat/TypingIndicator";
@@ -92,6 +106,7 @@ import { useTypingPresence } from "@/chat/useTypingPresence";
 import { useMentionComposer } from "@/chat/useMentionComposer";
 import { WEB_URL } from "@/config";
 import { useSessionActions } from "@/sessions/useSessionActions";
+import { SessionSummaryBlock, useSessionSummary } from "@/sessions/SessionSummary";
 import { textColor, useScheme } from "@/ui/theme";
 import { useChatTranscript } from "@/chat/useChatTranscript";
 
@@ -165,12 +180,25 @@ export default function ChatScreen() {
   const { mineByMessageId: mine, agentReports } = groupChatFeedback(feedbackRows ?? [], me ?? undefined);
   const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder);
   // The agent's proposed plans, each under the message that proposed it (session chats only, as the web).
-  const planAfter = useProposedPlans(chat);
+  const planAfter = useProposedPlans(chat, sessionRow?.planContent);
   // Rows seen on screen, so an agent page mounts its WebView only once its row shows.
   const [seenRows] = useState(createSeenRows);
   // The restore confirm a held reply's Restore opens, and the hold menus (the kit `Message` `menu`).
   const restore = useTurnRestore();
   const messageMenu = useMessageMenu(restore.request);
+  // Quotes from replies ("Select text", then "Quote"), waiting for the next send.
+  const quotes = useQuotes();
+  // "Find in chat" (the web `ThreadFindBar`): the bar under the header while open, and the message of its active match.
+  // Kept per chat: a tab switch to another chat of the session (the same screen) closes it.
+  const [find, setFind] = useState<{ target: string; activeId: string | null } | null>(null);
+  const findOpen = find !== null && find.target === target;
+  const findActiveId = findOpen ? find.activeId : null;
+  // The web header's Summarise Session: once the sandbox is awake and the chat has a message.
+  const summary = useSessionSummary({
+    sessionId: chat?.session?.id,
+    hasSummary: (sessionRow?.summary?.length ?? 0) > 0,
+    canSummarise: sandbox.isActive && (messages?.length ?? 0) > 0,
+  });
 
   if (chat === undefined || chat === null) {
     return (
@@ -317,8 +345,20 @@ export default function ChatScreen() {
       onFork: forkFrom ? () => forkFrom(message._id) : undefined,
       onRetry: message.errorType !== undefined ? retryFor(message._id) : undefined,
       turn: turnFor(message),
+      // Eva's replies only, as the web cites them (`<cited_assistant>`); the composer must be there to take it,
+      // so not while a question card stands in its place.
+      onSelectText:
+        message.role === "assistant" && chat.canReply && !pending && !savedQuestion && message.content.trim() !== ""
+          ? () => quotes.select(message._id, message.content)
+          : undefined,
     });
   };
+  // What Find searches, as the web: each message's text as it reads (mention tokens as names), no system rows.
+  const findDocuments = collectThreadFindDocuments(
+    visible.map((message) => ({ id: message._id, text: tokenizedToDisplayText(message.content), skip: message.isSystemAlert === true })),
+  );
+  const leadingMenu: MenuEntry[] = [{ label: "Find in chat", icon: IconSearch, onSelect: () => setFind({ target, activeId: null }) }];
+  if (summary.menuItem) leadingMenu.push(summary.menuItem);
   const panelReply =
     chat.canReply && chat.sandboxActive
       ? (message: string) => {
@@ -336,6 +376,7 @@ export default function ChatScreen() {
         onOpenWeb={openWebChat}
         onCopyLink={() => void Clipboard.setStringAsync(webUrl(chat.webPath))}
         onStop={working ? handleStop : undefined}
+        leadingItems={leadingMenu}
         usage={<UsageButton chat={chat} />}
         sandbox={<SandboxControl sandbox={sandbox} working={working} />}
         sessionMenu={
@@ -352,8 +393,18 @@ export default function ChatScreen() {
       />
       <SandboxErrorBanner sandbox={sandbox} />
       {chat.session ? <SessionChatTabs sessionId={chat.session.id} activeChatId={chat.session.chatId} archived={chat.session.archived} /> : null}
+      {chat.session ? <SessionSummaryBlock sessionId={chat.session.id} summary={sessionRow?.summary} /> : null}
       {sessionActions.dialogs}
+      {summary.dialog}
       <Conversation>
+        {findOpen ? (
+          <ThreadFindBar
+            documents={findDocuments}
+            rowIndex={(messageId) => newestFirst.findIndex((message) => message._id === messageId)}
+            onActiveChange={(activeId) => setFind({ target, activeId })}
+            onClose={() => setFind(null)}
+          />
+        ) : null}
         <SeenRowsContext.Provider value={seenRows}>
         <ConversationList
           inverted
@@ -417,6 +468,7 @@ export default function ChatScreen() {
                 message={message}
                 dayStart={dayStarts.has(message._id)}
                 newStart={message._id === newBoundaryId}
+                findActive={message._id === findActiveId}
                 fromTeammate={fromTeammate}
                 senderName={fromTeammate && message.userId ? teammateNames.get(message.userId) : undefined}
                 teammate={fromTeammate && message.userId ? teammateById.get(message.userId) : undefined}
@@ -439,6 +491,7 @@ export default function ChatScreen() {
         />
       </SeenRowsContext.Provider>
         {restore.dialog}
+        {quotes.sheet}
         {/* The composer or the question card: the scroll button rides 16 above it, as the web's `bottom-4` over the dock. */}
         {/* Solid: the keyboard lifts the dock over the transcript, which must not show through it. */}
         <ConversationDock style={{ backgroundColor: EVA_THEME[scheme].background }}>
@@ -456,8 +509,23 @@ export default function ChatScreen() {
             messagesNewestFirst={newestFirst}
             closedReason={closedReason}
             onStop={handleStop}
-            queue={<QueuedMessagesPanel parentId={parentId} isExecuting={working} isSandboxActive={chat.sandboxActive} />}
+            banners={
+              <>
+                {/* Not gated by simple view, as the web: the user set this goal and can clear it. */}
+                <GoalBanner chatId={chat.session?.chatId ?? chat.task?.sessionChatId ?? chat.project?.sessionChatId} target={chat.target} />
+                {chat.session && chat.canReply ? (
+                  <PublishRecoveryBanner sessionId={chat.session.id} newest={newestMessage} isSandboxActive={chat.sandboxActive} />
+                ) : null}
+              </>
+            }
+            panels={
+              <>
+                <ComposerTasksPanel streamingEntityId={streamingEntityId} turnId={liveReplyId} />
+                <QueuedMessagesPanel parentId={parentId} isExecuting={working} isSandboxActive={chat.sandboxActive} />
+              </>
+            }
             usageLimitFailure={isUsageLimitFailure(newestMessage) ? newestMessage.content : undefined}
+            quotes={quotes}
           />
           ) : null}
         </ConversationDock>
@@ -473,8 +541,8 @@ export default function ChatScreen() {
  * closed". It owns the draft, the attachments and the model pick, so a
  * keystroke redraws the dock only, not the transcript above it. It stays
  * mounted while the chat is open, so a draft outlives a question card. The
- * queue panel sits on the composer, as the web; the screen builds it, so a
- * keystroke here does not redraw it either.
+ * banners and the tasks and queue panels sit on the composer, as the web; the
+ * screen builds them, so a keystroke here does not redraw them either.
  */
 function ChatDock({
   target,
@@ -488,8 +556,10 @@ function ChatDock({
   messagesNewestFirst,
   closedReason,
   onStop,
-  queue,
+  banners,
+  panels,
   usageLimitFailure,
+  quotes,
 }: {
   target: string;
   chat: Chat;
@@ -505,10 +575,14 @@ function ChatDock({
   /** A closed session's reason (`getSessionReadOnlyMessage`), in place of "This chat is closed." */
   closedReason: string | undefined;
   onStop: () => void;
-  /** The queued messages, above the composer only (not over a question card), as the web. */
-  queue: ReactNode;
+  /** The `/goal` and publish recovery banners, above the usage-limit card, as the web `SandboxChatPreInput`. */
+  banners: ReactNode;
+  /** The live tasks, then the queued messages, flush on the composer only (not over a question card), as the web dock. */
+  panels: ReactNode;
   /** The newest reply's text while it is a usage-limit failure: the retry card shows above the composer. */
   usageLimitFailure: string | undefined;
+  /** Quotes from replies: chips over the field, sent after the prompt. */
+  quotes: Pick<Quotes, "items" | "remove" | "drop">;
 }) {
   const scheme = useScheme();
   const insets = useSafeAreaInsets();
@@ -530,7 +604,12 @@ function ChatDock({
     if (tokenized) typing.onActivity();
   });
   draft.pull(composer);
+  const suggestions = useSkillSuggestions(composer.skills, composer.text);
   const modelPick = useChatModelPick(target, chat, me);
+  const router = useRouter();
+  // The diff comments drafted on this chat's pull request: chips on the composer, sent with the next prompt.
+  const prNumber = chat.prUrl === undefined ? undefined : prNumberFromGithubUrl(chat.prUrl);
+  const review = usePendingLineComments(chat.repoId === undefined || prNumber === undefined ? null : { repoId: chat.repoId, prNumber });
 
   // The web composer's placeholder: asleep, a send wakes Eva up; mid-turn, a follow-up; held by a usage
   // limit, sends queue until just after the reset (the server holds them on the same model and account).
@@ -566,11 +645,24 @@ function ChatDock({
       return;
     }
     const attachmentStorageIds = attachments.storageIds;
+    // As the web: the comments go as `<review_comment>` blocks and leave the chips once the send lands.
+    const sentComments = review.comments;
     attachments.clear();
     typing.stopTyping();
-    send({ target: chat.target, message: composer.tokenize(text), attachmentStorageIds }).catch(() => {
-      toast.error("Couldn't send your message");
-    });
+    // The quotes, then the review comments, go after the prompt, as the web
+    // (`ChatBody`, then `useChatSend`); each leaves only once the send lands, so a retry keeps them.
+    const sentQuotes = quotes.items;
+    send({
+      target: chat.target,
+      message: appendReviewCommentsToPrompt(appendCitationsToPrompt(composer.tokenize(text), sentQuotes), sentComments.map(toReviewComment)),
+      attachmentStorageIds,
+    }).then(
+      () => {
+        quotes.drop(sentQuotes);
+        for (const comment of sentComments) review.remove(comment.id);
+      },
+      () => toast.error("Couldn't send your message"),
+    );
   };
 
   // The web dock: p-3 around the card, in place of the composer, and the thread's 10 more on the right.
@@ -608,6 +700,7 @@ function ChatDock({
     // thread. Send stays ready during a turn (a send queues behind it) and Stop sits beside
     // it, as `stopMode="alongside"`.
     <View className="pr-2.5">
+      {banners}
       {usageLimitFailure !== undefined && modelPick.pick?.account && modelPick.switchAccount ? (
         <UsageLimitRecoveryCard
           chat={chat}
@@ -617,24 +710,45 @@ function ChatDock({
           working={working}
         />
       ) : null}
-      {queue}
+      {panels}
       <View className="pl-3">
         <TypingIndicator users={typing.typingUsers} />
       </View>
-      <PasteImageChip onPaste={() => void attachments.paste()} />
+      <ComposerSuggestions
+        onPaste={() => void attachments.paste()}
+        skills={suggestions.chips}
+        onPickSkill={(item) => {
+          composer.insertSkill(item);
+          suggestions.dismiss(item.id);
+        }}
+      />
       <PromptInput
         layout="inline"
         shape="pill"
         value={composer.text}
-        onChangeText={composer.setText}
+        onChangeText={(next) => {
+          composer.setText(next);
+          suggestions.noteDraft(next);
+        }}
         onSubmit={handleSend}
         menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} onDismiss={composer.dismiss} /> : null}
         placeholder={placeholder}
         onPasteImages={attachments.pasteFiles}
         leading={
-          <AttachButton onPress={() => void attachments.pick()} />
+          <AttachButton attachments={attachments} />
         }
-        header={composerHeader(attachments, composer)}
+        header={composerHeader(
+          attachments,
+          composer,
+          quotes,
+          review.comments.length > 0 ? (
+            <PendingReviewCommentChips
+              comments={review.comments}
+              onOpen={(file) => router.push({ pathname: "/chat/[target]/diff", params: { target, file } })}
+              onRemove={review.remove}
+            />
+          ) : null,
+        )}
         // The web stop beside send: red (`variant="destructive"`), the outline stop icon.
         toolbar={working ? <PromptInputButton variant="destructive" icon={IconPlayerStop} label="Stop generating" onPress={onStop} /> : null}
         footer={
@@ -648,10 +762,13 @@ function ChatDock({
               ) : undefined
             }
             status={
-              <BackgroundAgentsChip
-                chatId={chat.session?.chatId ?? chat.task?.sessionChatId ?? chat.project?.sessionChatId}
-                readOnly={!chat.canReply}
-              />
+              <>
+                <BackgroundAgentsChip
+                  chatId={chat.session?.chatId ?? chat.task?.sessionChatId ?? chat.project?.sessionChatId}
+                  readOnly={!chat.canReply}
+                />
+                <BackgroundProcessesChip sessionId={chat.session?.id} />
+              </>
             }
             model={modelPick.pick ? <ModelChip repoId={chat.repoId} {...modelPick.pick} /> : undefined}
           />
@@ -686,6 +803,7 @@ function ChatMessageRow({
   message,
   dayStart,
   newStart,
+  findActive,
   fromTeammate,
   senderName,
   teammate,
@@ -706,6 +824,8 @@ function ChatMessageRow({
   dayStart: boolean;
   /** The first reply you had not seen: the "NEW" divider goes above it. */
   newStart: boolean;
+  /** The message of Find's active match: a tinted band marks it. */
+  findActive: boolean;
   fromTeammate: boolean;
   senderName: string | undefined;
   teammate: ComponentProps<typeof TeammateBubble>["sender"];
@@ -730,6 +850,9 @@ function ChatMessageRow({
   /** A reply that changed code: its Changes chip, over the footer. */
   changes?: ReactNode;
 }) {
+  const scheme = useScheme();
+  // Find's active match: the message on a primary tint, as the web paints its active match.
+  const findBand = findActive ? { backgroundColor: withAlpha(EVA_THEME[scheme].primary, 0.1) } : undefined;
   // A system row (a handoff, a refusal): the web divider, with its detail behind a link.
   if (message.isSystemAlert === true) {
     return (
@@ -761,7 +884,7 @@ function ChatMessageRow({
     </>
   );
   return (
-              <View className={`gap-3 ${THREAD_INSET}`}>
+              <View className={`gap-3 ${THREAD_INSET}`} style={findBand}>
                 {dayStart ? <DayDivider timestamp={message.timestamp} /> : null}
                 {newStart ? <NewDivider /> : null}
                 {/* Web: parts `gap-0.5`; a reply is full width, a user message at most 95%. */}

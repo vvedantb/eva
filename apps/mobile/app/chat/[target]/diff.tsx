@@ -15,9 +15,11 @@ import { usePrDiff } from "@/diff/prDiffStore";
  * (`github.getPrDiff`, what is pushed to GitHub, so a sleeping sandbox does
  * not matter), opened at the file a "Changed files" row named, or the first
  * file, drawn by `PrFileDiff` as the review Code tab draws it, Viewed ticks
- * included. Line comments stay on the review screen, whose composer posts
- * them. The header's ⋯ has the diff options. Before a PR is open, the web
- * "No pull request yet" state.
+ * included. A tap on a line drafts a review comment, as the web sandbox
+ * diff: it waits as a chip on the chat composer and goes with the next
+ * prompt (or with a review from the review screen, which shares them). The
+ * header's ⋯ has the diff options. Before a PR is open, the web "No pull
+ * request yet" state.
  */
 export default function DiffScreen() {
   const { target, file } = useLocalSearchParams<{ target: string; file?: string }>();
@@ -58,7 +60,7 @@ export default function DiffScreen() {
       />
       <PrDiffGate state={state}>
         {(diff) => (
-          <PrFileDiff pr={pr} diff={diff} path={file} onPathChange={(path) => router.setParams({ file: path })} commentable={false} />
+          <PrFileDiff pr={pr} diff={diff} path={file} onPathChange={(path) => router.setParams({ file: path })} commentable />
         )}
       </PrDiffGate>
     </View>

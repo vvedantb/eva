@@ -6,7 +6,7 @@ import {
   formatCitationBlock,
   parseCitationSegments,
   ASSISTANT_CITATION_MAX_CHARS,
-} from "./assistantCitation";
+} from "@eva/shared/assistantCitation";
 
 describe("assistant citations", () => {
   test("rejects empty and oversized quotes", () => {

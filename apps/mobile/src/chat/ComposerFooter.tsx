@@ -10,6 +10,7 @@ import type { FunctionReturnType } from "convex/server";
 import { useState, type ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { ComposerMentionChips } from "@/chat/MentionChip";
+import { QuoteChips, type Quotes } from "@/chat/Quotes";
 import type { useAttachments } from "@/chat/useAttachments";
 import type { useMentionComposer } from "@/chat/useMentionComposer";
 import { fromNow } from "@/ui/format";
@@ -18,11 +19,6 @@ import { useScheme } from "@/ui/theme";
 type StashEntry = FunctionReturnType<typeof api.promptStash.listForRepo>[number];
 type Composer = ReturnType<typeof useMentionComposer>;
 type ComposerAttachments = ReturnType<typeof useAttachments>;
-
-/**
- * Above the field: the picked images, then the `@` / `/` picks as chips
- * (`ComposerMentionChips`). Nothing to show: no row.
- */
 
 /**
  * The web footer's `bg-muted/70`, mixed over the page background into one
@@ -39,14 +35,23 @@ function mutedFooterFill(theme: { muted: string; background: string }): string {
 }
 
 /**
- * The composer's `header`: the attachments and the mention chips, or
- * `undefined` when there are none. `PromptInput` pads a header row for any
- * header it gets, so an empty one must not be passed at all.
+ * The composer's `header`: the quotes (a chat only), the pending review
+ * comments (`reviewChips`, null when there are none), the attachments and the
+ * `@` / `/` picks as chips (`ComposerMentionChips`), or `undefined` when there
+ * is nothing. `PromptInput` pads a header row for any header it gets, so an
+ * empty one must not be passed at all.
  */
-export function composerHeader(attachments: ComposerAttachments, composer: Composer): ReactNode {
-  if (attachments.items.length === 0 && composer.picks.length === 0) return undefined;
+export function composerHeader(
+  attachments: ComposerAttachments,
+  composer: Composer,
+  quotes?: Pick<Quotes, "items" | "remove">,
+  reviewChips: ReactNode = null,
+): ReactNode {
+  if (reviewChips === null && attachments.items.length === 0 && composer.picks.length === 0 && (quotes?.items.length ?? 0) === 0) return undefined;
   return (
     <>
+      {quotes ? <QuoteChips quotes={quotes} /> : null}
+      {reviewChips}
       {attachments.items.length > 0 ? (
         <Attachments>
           {attachments.items.map((item) => (
@@ -92,7 +97,7 @@ export function ComposerFooter({
   model,
 }: {
   leading?: ReactNode;
-  /** Chips for work running beside the chat (the background agents), after the leading control. */
+  /** Chips for work running beside the chat (background agents, then processes), after the leading control. */
   status?: ReactNode;
   /** The repo the stash is saved against (the web stash is per user and repo). */
   repoId: Id<"githubRepos"> | undefined;
@@ -129,7 +134,8 @@ export function ComposerFooter({
           {leading}
         </View>
       ) : null}
-      {status ? <View className="shrink-0">{status}</View> : null}
+      {/* Shrinks on a narrow phone, so the chips' labels give way and their counts stay. */}
+      {status ? <View className="min-w-0 shrink flex-row items-center gap-0.5">{status}</View> : null}
       {stash ? <View className="shrink-0">{stash}</View> : null}
       {modelChip ? <View className="ml-auto min-w-0 shrink">{modelChip}</View> : null}
     </View>

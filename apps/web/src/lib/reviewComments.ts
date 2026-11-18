@@ -16,51 +16,6 @@ interface DiffReviewLine {
   readonly content: string;
 }
 
-function escapeReviewCommentAttribute(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-function formatReviewCommentFence(language: string, contents: string): string {
-  const longestBacktickRun = Math.max(
-    0,
-    ...Array.from(contents.matchAll(/`+/g), (match) => match[0].length),
-  );
-  const fence = "`".repeat(Math.max(3, longestBacktickRun + 1));
-  return [`${fence}${language}`, contents.trimEnd(), fence].join("\n");
-}
-
-function formatReviewComment(comment: ReviewComment): string {
-  return [
-    [
-      "<review_comment",
-      ` filePath="${escapeReviewCommentAttribute(comment.filePath)}"`,
-      ` lines="${escapeReviewCommentAttribute(comment.rangeLabel)}"`,
-      ` startIndex="${comment.startIndex}"`,
-      ` endIndex="${comment.endIndex}"`,
-      ">",
-    ].join(""),
-    comment.text.trim(),
-    formatReviewCommentFence("diff", comment.diff),
-    "</review_comment>",
-  ].join("\n");
-}
-
-export function appendReviewCommentsToPrompt(
-  prompt: string,
-  comments: ReadonlyArray<ReviewComment>,
-): string {
-  const blocks = comments.map(formatReviewComment);
-  if (blocks.length === 0) return prompt;
-  const trimmedPrompt = prompt.trim();
-  return trimmedPrompt.length > 0
-    ? `${trimmedPrompt}\n\n${blocks.join("\n\n")}`
-    : blocks.join("\n\n");
-}
-
 function stripTrailingNewline(value: string): string {
   return value.endsWith("\n") ? value.slice(0, -1) : value;
 }

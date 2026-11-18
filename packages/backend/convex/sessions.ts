@@ -7,7 +7,7 @@ export {
   getForkLinks,
   listGroup,
   countActive,
-  getOwned,
+  getOwnedWithSeed,
 } from "./_sessions/queries";
 
 export {
@@ -46,6 +46,8 @@ export {
   sandboxError,
   sandboxStartupWarning,
 } from "./_sessions/sandbox";
+
+export { stopChatTurn, stopWorkSandbox } from "./_sessions/stop";
 
 export {
   addToGroup,

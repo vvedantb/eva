@@ -101,7 +101,7 @@ describe("task status during a run", () => {
       const f = await taskWithRun("code_review");
       await f.t
         .withIdentity({ subject: "clerk|ada" })
-        .mutation(api.taskWorkflow.cancelExecution, { taskId: f.taskId });
+        .mutation(api.sessions.stopChatTurn, { target: { taskId: f.taskId } });
       const task = await f.readTask();
       expect(task?.status).toBe("code_review");
       expect(task?.run).toBeUndefined();
@@ -117,7 +117,7 @@ describe("task status during a run", () => {
       const f = await taskWithRun("in_progress");
       await f.t
         .withIdentity({ subject: "clerk|ada" })
-        .mutation(api.taskWorkflow.cancelExecution, { taskId: f.taskId });
+        .mutation(api.sessions.stopChatTurn, { target: { taskId: f.taskId } });
       expect((await f.readTask())?.status).toBe("todo");
     },
     TIMEOUT_MS,

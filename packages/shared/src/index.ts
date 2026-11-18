@@ -252,6 +252,7 @@ export {
   lineCommentTarget,
   lineRangeCommentTarget,
   summarizeDiffSize,
+  reviewCommentExcerpt,
   unifiedDiffLines,
   type DiffFileEntry,
   type DiffFileKind,
@@ -323,6 +324,7 @@ export {
   queuedMessagePreview,
 } from "./queuedMessages";
 export {
+  appendReviewCommentsToPrompt,
   parseReviewCommentSegments,
   stripReviewCommentBlocks,
   type ReviewComment,
@@ -397,6 +399,12 @@ export {
 export { placeChatUiPanels, type PanelPlacement, type PlaceablePanel, type PlacementMessage } from "./chatUiPanelPlacement";
 export {
   attachmentFileKind,
+  chatAttachmentErrorMessage,
+  contentTypeForUpload,
+  isAllowedAttachmentFile,
+  MAX_CHAT_ATTACHMENT_BYTES,
+  MAX_CHAT_ATTACHMENTS,
+  type AttachmentFileMeta,
   filenameExtension,
   isImageContentType,
   labelForAttachment,

@@ -1,10 +1,13 @@
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
+import { isProjectInterviewing } from "../_projects/interviewState";
+import { stopProjectInterview } from "../workflowWatchdog";
 
 /**
- * Clears a project interview stuck after sandbox or agent failure. The
- * interview's sandbox is the project session's: stop it there.
+ * Clears a project interview stuck after sandbox or agent failure: drops the
+ * failed or empty assistant row, then stops the interview
+ * (`stopProjectInterview`), which releases the project session's sandbox.
  */
 export const repairStuckProjectInterview = internalMutation({
   args: { projectId: v.id("projects") },
@@ -41,8 +44,11 @@ export const repairStuckProjectInterview = internalMutation({
 
     await clearStreamingActivity(ctx, String(args.projectId));
 
-    const clearedWorkflow = project.activeWorkflowId !== undefined;
-    await ctx.db.patch(args.projectId, { activeWorkflowId: undefined });
+    const clearedWorkflow = isProjectInterviewing(project);
+    await stopProjectInterview(ctx, args.projectId, undefined, {
+      state: "cancelled",
+      error: "Interview repaired",
+    });
 
     return { clearedWorkflow, removedEmptyAssistant };
   },

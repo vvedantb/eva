@@ -1,4 +1,3 @@
-import { isTaskRunning } from "./_agentTasks/runState";
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import {
@@ -7,15 +6,13 @@ import {
   getSessionWithAccess,
   hasRepoAccess,
 } from "./functions";
-import { hasOpenChatTurn } from "./_chat/turnProjection";
-import { assertStandaloneSession, sessionOwnerTaskId } from "./_sessions/owner";
+import { assertStandaloneSession } from "./_sessions/owner";
+import { stopChat, stopTask } from "./_sessions/stop";
 import type { SessionChatContext } from "./_sessionChats/helpers";
-import { ensureOwnerChat, findOwnerChat } from "./_sessions/ownedSession";
+import { ensureOwnerChat } from "./_sessions/ownedSession";
+import { findWorkChat } from "./_sessions/ownerState";
 import { mobileChatValidator, resolveMobileChat } from "./_mobile/chatTarget";
-import {
-  cancelChatExecution,
-  sendSessionChatMessage,
-} from "./_sessions/execution";
+import { sendSessionChatMessage } from "./_sessions/execution";
 import {
   createSession,
   stopAndArchiveSession,
@@ -25,7 +22,6 @@ import {
   setSessionChatModel,
   setSessionChatTraits,
 } from "./_sessionChats/mutations";
-import { cancelTaskRun } from "./_taskWorkflow/publicMutations";
 import {
   aiModelValidator,
   launchTraitsFromStored,
@@ -182,41 +178,26 @@ export const setModel = authMutation({
   },
 });
 
-/** The Stop button: cancels the chat's running turn and starts its queue. */
+/**
+ * The Stop button: the web chat Stop (`sessions.stopChatTurn`) for a mobile
+ * target. Stops the chat's turn and its task's run, then starts its queue.
+ */
 export const stop = authMutation({
   args: { target: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
     const { entity } = await resolveWritableChat(ctx, args.target);
     switch (entity.kind) {
-      case "session": {
-        // A quick task's run owns its chat while it runs (the web Stop calls
-        // `taskWorkflow.cancelExecution` for it).
-        const ownerTaskId = sessionOwnerTaskId(entity.context.session);
-        const task = ownerTaskId ? await ctx.db.get(ownerTaskId) : null;
-        if (
-          task &&
-          isTaskRunning(task) &&
-          !(await hasOpenChatTurn(ctx.db, entity.context.chat._id))
-        ) {
-          await cancelTaskRun(ctx, task);
-          return null;
-        }
-        await cancelChatExecution(ctx, entity.context, { holdQueue: true });
+      case "session":
+        await stopChat(ctx, entity.context);
         return null;
-      }
       case "task":
+        await stopTask(ctx, entity.task);
+        return null;
       case "project": {
-        // No session chat yet: only a quick task's run can be running (the
-        // web Stop calls `taskWorkflow.cancelExecution` for it).
-        if (entity.kind === "task" && isTaskRunning(entity.task)) {
-          await cancelTaskRun(ctx, entity.task);
-          return null;
-        }
-        const found = await findOwnerChat(ctx.db, entity);
-        if (found) {
-          await cancelChatExecution(ctx, found, { holdQueue: true });
-        }
+        // No session chat yet: nothing runs, and stopping never creates one.
+        const found = await findWorkChat(ctx.db, entity);
+        if (found) await stopChat(ctx, found);
         return null;
       }
     }

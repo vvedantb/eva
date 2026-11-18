@@ -1,4 +1,11 @@
-import { lineCommentTarget, lineRangeCommentTarget, unifiedDiffLines, type DiffFileEntry } from "@eva/shared";
+import {
+  lineCommentTarget,
+  lineRangeCommentTarget,
+  reviewCommentExcerpt,
+  unifiedDiffLines,
+  type DiffFileEntry,
+  type UnifiedDiffLine,
+} from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
   IconAlertTriangle,
@@ -173,7 +180,7 @@ export function PrFileDiff({
     const target = targets[row];
     return target ? fileComments.filter((comment) => comment.line === target.line && comment.side === target.side) : [];
   };
-  const commentTarget = commentRange === null ? null : lineRangeCommentTarget(lines, commentRange.from, commentRange.to);
+  const commentTarget = commentRange === null ? null : lineTargetAt(lines, commentRange.from, commentRange.to);
   const selection = rangeAnchor !== null ? { from: rangeAnchor, to: rangeAnchor } : commentRange;
   const marked = new Set(
     targets.flatMap((_, row) =>
@@ -388,7 +395,14 @@ function FileMenu({
   );
 }
 
-type LineTarget = NonNullable<ReturnType<typeof lineRangeCommentTarget>>;
+/** Where a comment on rows `from` to `to` anchors on GitHub, and its excerpt for a chat prompt. */
+function lineTargetAt(lines: readonly UnifiedDiffLine[], from: number, to: number) {
+  const anchor = lineRangeCommentTarget(lines, from, to);
+  const excerpt = reviewCommentExcerpt(lines, from, to);
+  return anchor === null || excerpt === null ? null : { ...anchor, ...excerpt };
+}
+
+type LineTarget = NonNullable<ReturnType<typeof lineTargetAt>>;
 
 /**
  * The web review comment box (`DiffCommentDraftBox`, with the last line's

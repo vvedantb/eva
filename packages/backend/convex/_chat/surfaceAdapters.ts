@@ -64,7 +64,7 @@ export type ChatSurfaceAdapter<TId extends ChatEntityId, TEntity> = {
   syntheticTurnMessageId: (entity: TEntity) => Id<"messages"> | undefined;
   sandboxId: (entity: TEntity) => string | undefined;
   repoId: (entity: TEntity) => Id<"githubRepos"> | undefined;
-  /** Interrupts a still-alive agent process the way cancelExecution does. */
+  /** Interrupts a still-alive agent process the way cancelChatExecution does. */
   interrupt: (ctx: MutationCtx, entity: TEntity) => Promise<void>;
   /** Clears the active workflow + synthetic turn, and closes the sandbox status field if `sandboxStopped`. */
   release: (
@@ -232,7 +232,8 @@ export type AgentTurnOwner =
   | { kind: "doc"; id: Id<"docs"> }
   | { kind: "evaluation"; id: Id<"evaluationReports"> }
   | { kind: "summary"; id: Id<"sessions"> }
-  | { kind: "interview"; id: Id<"projects"> };
+  /** Filed under the project's session. */
+  | { kind: "interview"; id: Id<"sessions"> };
 
 /** One handler per kind of turn owner. */
 export type TurnAdapterVisitor<R> = {
@@ -249,7 +250,7 @@ function laneOwner(
     const id = db.normalizeId("sessions", entityId);
     return id ? { kind: "summary", id } : null;
   }
-  const id = db.normalizeId("projects", entityId);
+  const id = db.normalizeId("sessions", entityId);
   return id ? { kind: "interview", id } : null;
 }
 
