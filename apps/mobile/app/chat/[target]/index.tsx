@@ -25,7 +25,7 @@ import { turnCheckpoint } from "@eva/shared/turnCheckpoint";
 import { chatTypingRoom } from "@eva/shared/typingPresence";
 import { isUsageLimitFailure } from "@eva/shared/usageLimitRecovery";
 import { messageLinkHref } from "@eva/shared/messageLink";
-import { type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
+import { formatQuestionAnswers, type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { IconChevronDown, IconMessageCircle, IconPlayerStop } from "@tabler/icons-react-native";
 import {
   ChoiceQuestion,
@@ -185,6 +185,11 @@ export default function ChatScreen() {
   // The user turn before each reply holds the model it ran on (the footer mark), as the web.
   const precedingUserTurns = buildPrecedingUserTurns(messages ?? []);
   const questions = pending ? parsePendingQuestion(pending.payload) : null;
+  // A question the agent saved on its last reply, as the web: it stays after the turn (and the sandbox)
+  // stops, and its answer goes as a chat message, which wakes the sandbox.
+  const savedRaw = visible[visible.length - 1]?.pendingQuestion;
+  const savedQuestions = parsePendingQuestion(savedRaw);
+  const savedQuestion = savedRaw && savedQuestions ? { raw: savedRaw, questions: savedQuestions } : null;
   const teammateNames = firstNameByUserId(teammates ?? []);
   const teammateById = new Map((teammates ?? []).map((user) => [user._id, user]));
   const latestReplyId = visible.findLast((message) => message.role === "assistant")?._id;
@@ -415,6 +420,7 @@ export default function ChatScreen() {
             simpleView={simpleView}
             pending={pending}
             questions={questions}
+            savedQuestion={savedQuestion}
             onStop={handleStop}
             queue={<QueuedMessagesPanel parentId={parentId} isExecuting={working} isSandboxActive={chat.sandboxActive} />}
             usageLimitFailure={isUsageLimitFailure(newestMessage) ? newestMessage.content : undefined}
@@ -444,6 +450,7 @@ function ChatDock({
   simpleView,
   pending,
   questions,
+  savedQuestion,
   onStop,
   queue,
   usageLimitFailure,
@@ -455,6 +462,8 @@ function ChatDock({
   simpleView: boolean;
   pending: PendingQuestion | null | undefined;
   questions: ParsedQuestion[] | null;
+  /** The last reply's saved question (`messages.pendingQuestion`), when no blocking one is open. */
+  savedQuestion: { raw: string; questions: ParsedQuestion[] } | null;
   onStop: () => void;
   /** The queued messages, above the composer only (not over a question card), as the web. */
   queue: ReactNode;
@@ -465,6 +474,8 @@ function ChatDock({
   const insets = useSafeAreaInsets();
   const send = useMutation(api.chats.send);
   const answer = useMutation(api.pendingQuestions.answer);
+  // The saved question just answered: its card hides before the answer's message arrives.
+  const [answeredSaved, setAnsweredSaved] = useState<string | null>(null);
   const attachments = useAttachments();
   // The `/` list follows the chat's model provider, as the web composer.
   // The draft is kept on the server, as the web composer: it survives closing the app and follows you between devices.
@@ -515,24 +526,36 @@ function ChatDock({
     });
   };
 
-  return pending && questions ? (
-    // The web dock: p-3 around the card, in place of the composer, and the thread's 10 more on the right.
-    // Over the bottom inset, as the composer: the dock rises with the keyboard (its "Other..." field) less that inset.
+  // The web dock: p-3 around the card, in place of the composer, and the thread's 10 more on the right.
+  // Over the bottom inset, as the composer: the dock rises with the keyboard (its "Other..." field) less that inset.
+  const questionDock = (key: string, asked: ParsedQuestion[], onSubmit: (answers: Record<string, string>) => Promise<void>) => (
     <View className="p-3 pr-[22px]" style={{ paddingBottom: insets.bottom + 12 }}>
-      <ChoiceQuestion
-        key={pending.toolUseId}
-        questions={questions}
-        buttonWeight="semibold"
-        onSubmit={async (answers) => {
-          if (!chat.parentId) return;
-          try {
-            await answer({ entityId: chat.parentId, toolUseId: pending.toolUseId, answer: JSON.stringify(answers) });
-          } catch {
-            toast.error("Couldn't submit answer");
-          }
-        }}
-      />
+      <ChoiceQuestion key={key} questions={asked} buttonWeight="semibold" onSubmit={onSubmit} />
     </View>
+  );
+  // A blocking question wins: it holds the turn open and its answer resumes the run.
+  const saved = !pending && savedQuestion && savedQuestion.raw !== answeredSaved && chat.canReply ? savedQuestion : null;
+
+  return pending && questions ? (
+    questionDock(pending.toolUseId, questions, async (answers) => {
+      if (!chat.parentId) return;
+      try {
+        await answer({ entityId: chat.parentId, toolUseId: pending.toolUseId, answer: JSON.stringify(answers) });
+      } catch {
+        toast.error("Couldn't submit answer");
+      }
+    })
+  ) : saved ? (
+    questionDock(saved.raw, saved.questions, async (answers) => {
+      // Hidden at once, as the web, until the reply moves on.
+      setAnsweredSaved(saved.raw);
+      try {
+        await send({ target: chat.target, message: formatQuestionAnswers(saved.questions, answers), attachmentStorageIds: [] });
+      } catch {
+        setAnsweredSaved(null);
+        toast.error("Couldn't send your answer");
+      }
+    })
   ) : chat.canReply ? (
     // Eva's web pill composer, the + on the muted fill, 10 more in on the right as the
     // thread. Send stays ready during a turn (a send queues behind it) and Stop sits beside

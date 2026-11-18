@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: the agent's question stays after the sandbox stops; the hold menu pops in
+
+Date: 2026-11-18
+
+WHY: A question the agent saved on its reply vanished from the phone once the turn (and the sandbox) stopped; the web kept it. The hold menu and the paste chip appeared with no motion.
+
+Architectural: the chat screen reads the last reply's `pendingQuestion` (as the web `ChatBody`) and docks it in the composer's place when no blocking question is open; its answer is sent as a chat message (which wakes the sandbox) in the web's text, now one shared helper (`formatQuestionAnswers` in `@eva/shared/pendingQuestion`, used by the web `MultipleChoiceQuestion` too). `@vvedantb/native-ui` 0.26.1 (packages #285): `MessageContextMenu`'s pill and card grow 0.96→1 and the held message lifts to 1.02 in 150 ms. `PasteImageChip` fades in (`FadeIn` 150 ms). Reduce Motion skips both.
+
 ## Phone: paste an image straight into the text box
 
 Date: 2026-11-18
