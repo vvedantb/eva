@@ -3,6 +3,7 @@ import type { AttachmentData } from "@vvedantb/native-ui/ai";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation } from "convex/react";
 import { fetch as expoFetch } from "expo/fetch";
+import { File } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
 import { parseStorageId } from "@eva/shared/storageUpload";
@@ -11,8 +12,8 @@ import { takeClipboardImage } from "@/chat/clipboardImage";
 type Pending = AttachmentData & { storageId?: Id<"_storage"> };
 
 /**
- * Composer attachments, as the web composer's + button and paste: pick images
- * or paste the clipboard's, upload each to Convex storage
+ * Composer attachments, as the web composer's + button and paste: pick images,
+ * paste them into the field, or take the clipboard's from the chip; upload each to Convex storage
  * (`messages.generateUploadUrl`), and hand the storage ids to the send.
  * Uploads start on pick, so Send waits only for the last one.
  */
@@ -36,9 +37,11 @@ export function useAttachments() {
   };
 
   // Shows the chip at once and uploads in the background.
-  const add = (item: AttachmentData, base64: string | null | undefined) => {
+  const add = (item: AttachmentData, base64: Promise<string> | string | null | undefined) => {
     setItems((current) => [...current, item]);
-    const uploaded = base64 ? upload(base64, item.mediaType ?? "image/jpeg") : Promise.reject(new Error("No image data"));
+    const uploaded = Promise.resolve(base64).then((data) =>
+      data ? upload(data, item.mediaType ?? "image/jpeg") : Promise.reject(new Error("No image data")),
+    );
     uploaded
       .then((storageId) => {
         setItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, storageId } : entry)));
@@ -79,10 +82,18 @@ export function useAttachments() {
     );
   };
 
+  /** Images pasted into the field (`PromptInput` `onPasteImages`): files in the app's cache. */
+  const pasteFiles = (uris: string[]) => {
+    for (const uri of uris) {
+      add({ id: uri, url: uri, mediaType: imageType(uri), filename: "Pasted image" }, new File(uri).base64());
+    }
+  };
+
   return {
     items,
     pick,
     paste,
+    pasteFiles,
     remove: (id: string) => setItems((current) => current.filter((item) => item.id !== id)),
     clear: () => setItems([]),
     uploading: items.some((item) => item.storageId === undefined),
@@ -97,4 +108,10 @@ function base64Bytes(base64: string): ArrayBuffer {
   const bytes = new Uint8Array(buffer);
   for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
   return buffer;
+}
+
+/** An image's MIME type from its file name; JPEG when it has no known extension. */
+function imageType(uri: string): string {
+  const extension = uri.split("?")[0]?.split(".").pop()?.toLowerCase();
+  return extension === "png" ? "image/png" : extension === "gif" ? "image/gif" : extension === "webp" ? "image/webp" : "image/jpeg";
 }

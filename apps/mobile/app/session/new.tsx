@@ -202,6 +202,7 @@ export default function NewSessionScreen() {
             menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} onDismiss={composer.dismiss} /> : null}
             onSubmit={(prompt) => void handleSend(prompt)}
             placeholder="Ask Eva anything..."
+            onPasteImages={attachments.pasteFiles}
             leading={
               <AttachButton onPress={() => void attachments.pick()} />
             }
