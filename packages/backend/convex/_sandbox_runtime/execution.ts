@@ -2268,13 +2268,18 @@ export const launchAgentTurn = internalAction({
     ...launchArgs,
     turnEntityId: turnEntityIdValidator,
     turnLane: v.optional(turnLaneValidator),
+    turnSessionId: v.optional(v.id("sessions")),
     workflowId: v.string(),
   },
   returns: v.null(),
-  handler: async (ctx, { turnEntityId, turnLane, workflowId, ...launch }) => {
+  handler: async (
+    ctx,
+    { turnEntityId, turnLane, turnSessionId, workflowId, ...launch },
+  ) => {
     const lease = await ctx.runMutation(internal.turns.openAgentTurnLease, {
       entityId: turnEntityId,
       lane: turnLane,
+      sessionId: turnSessionId,
       streamingEntityId: launch.streamingEntityId ?? launch.entityId,
       model: launch.model,
       sandboxId: launch.sandboxId,
