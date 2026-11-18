@@ -7,7 +7,6 @@ export {
   getForkLinks,
   listGroup,
   countActive,
-  getOwned,
   getOwnedWithSeed,
 } from "./_sessions/queries";
 

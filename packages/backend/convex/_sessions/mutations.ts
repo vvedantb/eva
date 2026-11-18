@@ -507,9 +507,9 @@ export const archive = authMutation({
 });
 
 /**
- * A task's or project's session and the chat it talks in (`getOwned`),
+ * A task's or project's session and the chat it talks in (`getOwnedWithSeed`),
  * created on first use. The owner's chat and sandbox panels call this before
- * their first send or Start when `getOwned` is still null.
+ * their first send or Start when `getOwnedWithSeed` is still null.
  */
 export const ensureOwned = authMutation({
   args: { owner: ownedSessionOwnerValidator },

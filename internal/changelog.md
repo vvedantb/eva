@@ -1,5 +1,13 @@
 # Changelog
 
+## Old-APK shims removed: `sessions.getOwned` and project `activeWorkflowId`
+
+Date: 2026-11-18
+
+WHY: Both existed only for APK 0.1.96. The app built after #1391 reads `sessions.getOwnedWithSeed` and `projects.interview`, so once that APK is published the shims have no caller.
+
+Architectural: `sessions.getOwned` and the derived `activeWorkflowId` on `projects.get` / `getByNumId` are removed. `check-apk-compat.sh` passes only against an APK built after #1391.
+
 ## Project interview fields and project-keyed turns removed
 
 Date: 2026-11-18

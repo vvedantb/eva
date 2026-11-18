@@ -22,7 +22,7 @@ export const sessionOwnerValidator = v.union(
 
 export type SessionOwner = Infer<typeof sessionOwnerValidator>;
 
-/** A task or project owner, as an argument (`sessions.getOwned` / `ensureOwned`). */
+/** A task or project owner, as an argument (`sessions.getOwnedWithSeed` / `ensureOwned`). */
 export const ownedSessionOwnerValidator = v.union(
   v.object({ kind: v.literal("task"), taskId: v.id("agentTasks") }),
   v.object({ kind: v.literal("project"), projectId: v.id("projects") }),
