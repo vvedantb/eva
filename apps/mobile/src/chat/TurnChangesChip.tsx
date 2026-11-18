@@ -10,13 +10,12 @@ import {
   type TurnCheckpoint,
 } from "@eva/shared/turnCheckpoint";
 import { IconArrowBackUp, IconGitCompare } from "@tabler/icons-react-native";
-import { ConfirmDialog, SheetRow } from "@vvedantb/native-ui/primitives";
+import { ConfirmDialog, SheetRow, MenuSheet } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useAction } from "convex/react";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, Text } from "react-native";
-import { MenuSheet } from "@/ui/MenuSheet";
 import { useScheme } from "@/ui/theme";
 
 // The web turn checkpoint actions (`useTurnCheckpointActions`): Diff this

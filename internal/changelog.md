@@ -1,5 +1,45 @@
 # Changelog
 
+## Phone: paste an image into the composer
+
+Date: 2026-11-18
+
+WHY: The web composer takes a pasted image; on the phone, a screenshot had to be saved to the gallery first and then picked.
+
+Architectural: React Native's `TextInput` takes no pasted image, so a "Paste image" chip (the kit `Suggestion`, user choice) shows over the chat and new-session composers while the clipboard holds one. `src/chat/clipboardImage.ts` is an external store over `expo-clipboard`: `hasImageAsync` reads only the clip's MIME types (no Android "pasted" notice), rechecked on clipboard changes (native only; the web module throws on `addClipboardListener`) and when the app comes back. A tap reads the image as PNG (`getImageAsync`) and `useAttachments().paste` uploads it like a picked photo. The kit 0.25.3 fix makes the chip round with its fill.
+
+## Typecheck runs on tsrs, oxc's Rust port of TypeScript 7
+
+Date: 2026-11-18
+
+WHY: `tsrs` checks the same programs 2.4–3.5x faster than `tsc-rs` here (web 9.1 s → 2.7 s, backend 6.2 s → 2.0 s, mobile 7.0 s → 2.0 s) with the same diagnostics.
+
+Architectural: one root devDependency, `tsrs` 7.1.0-beta.tsrs2, replaces the three per-package `tsc-rs` 0.1.0 pins; every `typecheck` script runs `tsrs --noEmit --fast -p <tsconfig>` (`--fast` adapts checker counts and adds caches; options such as `strict` are unchanged). `video/` (its own npm project) moves from `tsc` too. `pnpm-workspace.yaml` exempts `tsrs` and `@tsrs/*` from the 7-day release soak until 2026-11-23.
+
+## Phone typecheck runs on tsc-rs, as web and backend do
+
+Date: 2026-11-18
+
+WHY: The phone was the last package on plain `tsc` (about 42 s); `tsc-rs` checks it in about 7 s.
+
+Architectural: `apps/mobile` `typecheck` is `tsc-rs -p tsconfig.json` (0.1.0, the version web and backend pin). `tsc-rs` checks side-effect imports, so `nativewind-env.d.ts` declares `*.css` for `app/_layout.tsx`'s `import "../global.css"`.
+
+## Phone: holding an older message no longer throws the chat to its end
+
+Date: 2026-11-18
+
+WHY: On Android, a hold on an older message moved the chat to the newest message, which closed the menu; closing the menu did it again.
+
+Architectural: `@vvedantb/native-ui` 0.25.2 (packages #279). The hold menu's `Modal` window takes the focus as it opens and as it closes, and `KeyboardChatScrollView` scrolled the list to its end on each keyboard event. `Conversation` now has an `overlay` state, and `ConversationList` passes `freeze` from the hold until the close settles. Pressed hold menu rows now show the sheet's pressed fill. No Eva code changes.
+
+## Phone: hold a message for an iMessage-style menu; menus come from the kit
+
+Date: 2026-11-17
+
+WHY: The hold menu on chat messages and task comments was a bottom sheet; the user wanted iMessage's, with the message lifted in place, the reactions above it and the actions below it. The phone's menu sheet and reaction row were also Eva-only copies that other apps could use.
+
+Architectural: `@vvedantb/native-ui` 0.25 adds `MessageContextMenu` and `Message`'s `menu` prop, `MenuSheet`, `SubmenuRow`, `MenuDivider` and `ReactionRow` (packages #277, #278). The phone's `src/ui/MenuSheet.tsx` is removed and its 19 users import the kit's. Chat rows pass `menu` to the kit `Message` (`useMessageMenu` in `src/chat/MessageHoldMenu.tsx`: thumbs in the pill; Copy text, Copy link, Fork, Retry, Diff this turn and Restore in the card). Task comments and the task description use the same menu through `ReactableMenu` (`measureHeld` reads where the held item is), with the quick emoji and "More reactions" in the pill.
+
 ## Sandboxes get an allowlist of env vars, not prod's secrets
 
 Date: 2026-11-17

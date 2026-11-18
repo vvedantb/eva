@@ -11,7 +11,7 @@ import {
   IconTrash,
   IconUserPlus,
 } from "@tabler/icons-react-native";
-import { ConfirmDialog, SheetRow } from "@vvedantb/native-ui/primitives";
+import { ConfirmDialog, SheetRow, MenuDivider, MenuSheet, SubmenuRow } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -19,7 +19,6 @@ import * as Clipboard from "expo-clipboard";
 import { useState, type ReactNode } from "react";
 import { Text, type TextStyle } from "react-native";
 import { WEB_URL } from "@/config";
-import { MenuDivider, MenuSheet, SubmenuRow } from "@/ui/MenuSheet";
 import { TaskStatusRows } from "@/quickTasks/OptionChips";
 import { userLabel } from "@/quickTasks/QuickTaskListOptions";
 import { statusAppearance } from "@/quickTasks/statusAppearance";

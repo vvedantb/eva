@@ -404,7 +404,9 @@ const SPLIT_PY = [
   "    if file != 'documents.jsonl' or table not in ('sessions', 'turns', 'agentRuns', 'agentTasks', 'projects'):",
   "        return data",
   "    out = []",
-  "    for line in data.decode('utf-8').splitlines():",
+  // Split on '\n' only: splitlines() also breaks on U+2028, U+0085 and other
+  // separators that JSON keeps raw inside strings, which cuts a row in half.
+  "    for line in data.decode('utf-8').split('\\n'):",
   "        if not line.strip():",
   "            continue",
   "        doc = json.loads(line)",
@@ -451,8 +453,14 @@ function splitComponents(zip, outDir, mode) {
       shell: isWindows,
       encoding: "utf8",
     });
-    if (res.error || res.status !== 0) {
+    if (res.error) {
       continue;
+    }
+    if (res.status !== 0) {
+      // python ran and the script itself failed; its traceback is on stderr.
+      return fail(
+        `The split script failed under ${python} (exit ${res.status}).`,
+      );
     }
     const lines = (res.stdout ?? "").split(/\r?\n/);
     const components = lines

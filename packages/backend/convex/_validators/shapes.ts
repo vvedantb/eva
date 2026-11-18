@@ -313,6 +313,7 @@ export const experimentalFlagKeyValidator = v.union(
   v.literal("scopeCheck"),
   v.literal("manualSideBranchPublish"),
   v.literal("prWatch"),
+  v.literal("draftReadiness"),
 );
 
 /**
@@ -345,6 +346,7 @@ export const experimentalFlagsFields = {
   scopeCheck: v.optional(v.boolean()),
   manualSideBranchPublish: v.optional(v.boolean()),
   prWatch: v.optional(v.boolean()),
+  draftReadiness: v.optional(v.boolean()),
 };
 
 export const experimentalFlagsValidator = v.object(experimentalFlagsFields);
@@ -368,6 +370,7 @@ export const resolvedExperimentalFlagsValidator = v.object({
   scopeCheck: v.boolean(),
   manualSideBranchPublish: v.boolean(),
   prWatch: v.boolean(),
+  draftReadiness: v.boolean(),
 });
 
 /**
