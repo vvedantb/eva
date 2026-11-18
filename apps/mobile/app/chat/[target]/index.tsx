@@ -16,6 +16,8 @@ import {
   messageAttachments,
   type ResolvedMediaEntry,
   otherUserIdsInChat,
+  appendReviewCommentsToPrompt,
+  prNumberFromGithubUrl,
   SANDBOX_CHAT_COPY,
   sandboxComposerState,
   type SessionMenuAction,
@@ -48,7 +50,6 @@ import {
 import { providerLabel } from "@vvedantb/native-ui/brand";
 import { goBackOrReplace, RouterStackPageHeader } from "@vvedantb/native-ui/expo-router";
 import { CenteredSpinner, EmptyState, Spinner, Text } from "@vvedantb/native-ui/primitives";
-import { tokens } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -87,8 +88,12 @@ import { TurnChangesChip, useTurnRestore, type TurnChangesTarget } from "@/chat/
 import { UsageLimitRecoveryCard } from "@/chat/UsageLimitRecovery";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { MessageFooter, type Sentiment } from "@/chat/MessageFooter";
-import { PasteImageChip } from "@/chat/PasteImageChip";
 import { type Quotes, useQuotes } from "@/chat/Quotes";
+import { ComposerSuggestions } from "@/chat/ComposerSuggestions";
+import { PendingReviewCommentChips } from "@/chat/PendingReviewCommentChips";
+import { BackgroundProcessesChip } from "@/chat/BackgroundProcessesChip";
+import { useSkillSuggestions } from "@/chat/useSkillSuggestions";
+import { toReviewComment, usePendingLineComments } from "@/diff/prDiffStore";
 import { useAttachments } from "@/chat/useAttachments";
 import { type Chat, useChatModelPick } from "@/chat/useChatModelPick";
 import { TypingIndicator } from "@/chat/TypingIndicator";
@@ -565,7 +570,12 @@ function ChatDock({
     if (tokenized) typing.onActivity();
   });
   draft.pull(composer);
+  const suggestions = useSkillSuggestions(composer.skills, composer.text);
   const modelPick = useChatModelPick(target, chat, me);
+  const router = useRouter();
+  // The diff comments drafted on this chat's pull request: chips on the composer, sent with the next prompt.
+  const prNumber = chat.prUrl === undefined ? undefined : prNumberFromGithubUrl(chat.prUrl);
+  const review = usePendingLineComments(chat.repoId === undefined || prNumber === undefined ? null : { repoId: chat.repoId, prNumber });
 
   // The web composer's placeholder: asleep, a send wakes Eva up; mid-turn, a follow-up; held by a usage
   // limit, sends queue until just after the reset (the server holds them on the same model and account).
@@ -601,12 +611,22 @@ function ChatDock({
       return;
     }
     const attachmentStorageIds = attachments.storageIds;
+    // As the web: the comments go as `<review_comment>` blocks and leave the chips once the send lands.
+    const sentComments = review.comments;
     attachments.clear();
     typing.stopTyping();
-    // The quotes go after the prompt, as the web, and leave only once the send lands, so a retry keeps them.
+    // The quotes, then the review comments, go after the prompt, as the web
+    // (`ChatBody`, then `useChatSend`); each leaves only once the send lands, so a retry keeps them.
     const sentQuotes = quotes.items;
-    send({ target: chat.target, message: appendCitationsToPrompt(composer.tokenize(text), sentQuotes), attachmentStorageIds }).then(
-      () => quotes.drop(sentQuotes),
+    send({
+      target: chat.target,
+      message: appendReviewCommentsToPrompt(appendCitationsToPrompt(composer.tokenize(text), sentQuotes), sentComments.map(toReviewComment)),
+      attachmentStorageIds,
+    }).then(
+      () => {
+        quotes.drop(sentQuotes);
+        for (const comment of sentComments) review.remove(comment.id);
+      },
       () => toast.error("Couldn't send your message"),
     );
   };
@@ -660,12 +680,22 @@ function ChatDock({
       <View className="pl-3">
         <TypingIndicator users={typing.typingUsers} />
       </View>
-      <PasteImageChip onPaste={() => void attachments.paste()} />
+      <ComposerSuggestions
+        onPaste={() => void attachments.paste()}
+        skills={suggestions.chips}
+        onPickSkill={(item) => {
+          composer.insertSkill(item);
+          suggestions.dismiss(item.id);
+        }}
+      />
       <PromptInput
         layout="inline"
         shape="pill"
         value={composer.text}
-        onChangeText={composer.setText}
+        onChangeText={(next) => {
+          composer.setText(next);
+          suggestions.noteDraft(next);
+        }}
         onSubmit={handleSend}
         menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} onDismiss={composer.dismiss} /> : null}
         placeholder={placeholder}
@@ -673,7 +703,18 @@ function ChatDock({
         leading={
           <AttachButton attachments={attachments} />
         }
-        header={composerHeader(attachments, composer, quotes)}
+        header={composerHeader(
+          attachments,
+          composer,
+          quotes,
+          review.comments.length > 0 ? (
+            <PendingReviewCommentChips
+              comments={review.comments}
+              onOpen={(file) => router.push({ pathname: "/chat/[target]/diff", params: { target, file } })}
+              onRemove={review.remove}
+            />
+          ) : null,
+        )}
         // The web stop beside send: red (`variant="destructive"`), the outline stop icon.
         toolbar={working ? <PromptInputButton variant="destructive" icon={IconPlayerStop} label="Stop generating" onPress={onStop} /> : null}
         footer={
@@ -687,10 +728,13 @@ function ChatDock({
               ) : undefined
             }
             status={
-              <BackgroundAgentsChip
-                chatId={chat.session?.chatId ?? chat.task?.sessionChatId ?? chat.project?.sessionChatId}
-                readOnly={!chat.canReply}
-              />
+              <>
+                <BackgroundAgentsChip
+                  chatId={chat.session?.chatId ?? chat.task?.sessionChatId ?? chat.project?.sessionChatId}
+                  readOnly={!chat.canReply}
+                />
+                <BackgroundProcessesChip sessionId={chat.session?.id} />
+              </>
             }
             model={modelPick.pick ? <ModelChip repoId={chat.repoId} {...modelPick.pick} /> : undefined}
           />

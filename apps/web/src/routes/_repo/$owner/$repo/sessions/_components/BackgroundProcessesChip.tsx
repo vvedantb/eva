@@ -17,17 +17,9 @@ import {
 import { AnimatePresence, m } from "motion/react";
 import { IconPlayerStop, IconTerminal2 } from "@tabler/icons-react";
 import { api } from "@eva/backend";
+import { formatDurationMs } from "@eva/shared/duration";
 import type { Id } from "@eva/backend";
 import { COMPOSER_CHIP_CLASS } from "@/lib/components/chat/composerChip";
-
-function formatElapsed(startedAt: number, now: number): string {
-  const sec = Math.max(0, Math.floor((now - startedAt) / 1000));
-  if (sec < 60) return `${sec}s`;
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m ${sec % 60}s`;
-  const hours = Math.floor(min / 60);
-  return `${hours}h ${min % 60}m`;
-}
 
 /**
  * Chip beside the background agents chip that counts the agent-spawned
@@ -173,7 +165,7 @@ export function BackgroundProcessesChip({
                           {row.command}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {formatElapsed(row.startedAt, now)}
+                          {formatDurationMs(Math.max(0, now - row.startedAt))}
                         </p>
                       </div>
                       <Button

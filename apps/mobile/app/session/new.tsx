@@ -28,7 +28,8 @@ import { BaseBranchChip } from "@/chat/BranchChips";
 import { ComposerFooter, composerHeader } from "@/chat/ComposerFooter";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { ModelChip } from "@/chat/ModelChip";
-import { PasteImageChip } from "@/chat/PasteImageChip";
+import { ComposerSuggestions } from "@/chat/ComposerSuggestions";
+import { useSkillSuggestions } from "@/chat/useSkillSuggestions";
 import { useAttachments } from "@/chat/useAttachments";
 import { useMentionComposer } from "@/chat/useMentionComposer";
 import { jsonParser, persistedStore } from "@/storage/persistedStore";
@@ -98,6 +99,7 @@ export default function NewSessionScreen() {
   const composer = useMentionComposer(repo?._id, getAIModelProvider(model), (tokenized) => {
     if (repo) newSessionDrafts.set(repo._id, tokenized);
   });
+  const suggestions = useSkillSuggestions(composer.skills, composer.text);
   // A repo's saved draft goes into the composer when the repo changes, or when it finishes loading into an empty one.
   const [shownDraft, setShownDraft] = useState<{ repoId: string; loaded: boolean } | null>(null);
   if (repo && (shownDraft?.repoId !== repo._id || (!shownDraft.loaded && savedDraft !== null && composer.text === ""))) {
@@ -191,14 +193,24 @@ export default function NewSessionScreen() {
               ?
             </Text>
           </View>
-          <PasteImageChip onPaste={() => void attachments.paste()} />
+          <ComposerSuggestions
+            onPaste={() => void attachments.paste()}
+            skills={suggestions.chips}
+            onPickSkill={(item) => {
+              composer.insertSkill(item);
+              suggestions.dismiss(item.id);
+            }}
+          />
           <PromptInput
             layout="inline"
             shape="pill"
             disabled={!repo || sending}
             status={sending ? "submitted" : "ready"}
             value={composer.text}
-            onChangeText={composer.setText}
+            onChangeText={(next) => {
+              composer.setText(next);
+              suggestions.noteDraft(next);
+            }}
             menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} onDismiss={composer.dismiss} /> : null}
             onSubmit={(prompt) => void handleSend(prompt)}
             placeholder="Ask Eva anything..."
