@@ -8,7 +8,7 @@ import type { SessionChatSource } from "@/lib/components/chat/sandboxChatTurn";
 
 /** A task or project that runs on an owned session. */
 export type OwnedSessionOwner = FunctionArgs<
-  typeof api.sessions.getOwned
+  typeof api.sessions.getOwnedWithSeed
 >["owner"];
 
 type SandboxGitTarget = FunctionArgs<
@@ -43,7 +43,7 @@ export interface OwnedSandboxFields {
  * render).
  */
 export function useOwnedSession(owner: OwnedSessionOwner) {
-  const read = useQuery(api.sessions.getOwned, { owner });
+  const read = useQuery(api.sessions.getOwnedWithSeed, { owner });
   const owned = read === undefined ? undefined : (read?.session ?? null);
   const session = useQuery(
     api.sessions.get,

@@ -1307,7 +1307,7 @@ const ownedSessionRefSchema = z.object({
 });
 
 /**
- * `sessions:getOwned`: `session` is null before the session exists, its chat
+ * `sessions:getOwnedWithSeed`: `session` is null before the session exists, its chat
  * absent while a project task has not chatted. `chatSeed` is what the chat
  * starts on (`chatSeedSettings`).
  */
@@ -1351,7 +1351,7 @@ async function readOwnedChatAsUser(
   id: string,
 ): Promise<z.infer<typeof ownedSessionReadSchema> | null> {
   return ownedSessionReadSchema.nullable().parse(
-    await runAsUser("query", clerkUserId, "sessions:getOwned", {
+    await runAsUser("query", clerkUserId, "sessions:getOwnedWithSeed", {
       owner: ownerArg(kind, id),
     }),
   );

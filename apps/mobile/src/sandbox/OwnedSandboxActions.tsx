@@ -40,7 +40,7 @@ type Task = NonNullable<FunctionReturnType<typeof api.agentTasks.get>>;
  * work it has not pushed (Commit & push, `sandbox.commitAndPushSandbox`).
  */
 function useOwnedSandbox(owner: Owner | null) {
-  const owned = useQuery(api.sessions.getOwned, owner ? { owner } : "skip")
+  const owned = useQuery(api.sessions.getOwnedWithSeed, owner ? { owner } : "skip")
     ?.session;
   const session = useQuery(
     api.sessions.get,
