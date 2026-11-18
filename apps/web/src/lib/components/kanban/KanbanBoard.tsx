@@ -47,7 +47,7 @@ interface KanbanBoardProps<T extends BaseTask> {
   renderOverlay: (item: T) => ReactNode;
   fillHeight?: boolean;
   columnExtra?: (status: TaskStatus) => ReactNode;
-  /** Keyed rows above a column's cards that are not cards: no drag, no count. */
+  /** Keyed rows above a column's cards that are not cards (no drag); counted in the header. */
   columnLead?: (status: TaskStatus) => ReactNode[];
 }
 
@@ -238,8 +238,7 @@ function VirtualKanbanColumn<T extends BaseTask>({
     <KanbanColumn
       id={status}
       config={statusConfig[status]}
-      count={count}
-      isEmpty={count === 0 && lead.length === 0}
+      count={count + lead.length}
       headerExtra={headerExtra}
       scrollRef={scrollRef}
     >

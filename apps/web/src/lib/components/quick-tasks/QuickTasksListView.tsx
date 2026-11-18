@@ -250,7 +250,7 @@ export function QuickTasksListView({
                             {cfg.label}
                           </span>
                           <span className="text-xs text-muted-foreground/60 tabular-nums">
-                            {items.length}
+                            {items.length + drafts.length}
                           </span>
                         </button>
                       </CollapsibleTrigger>
