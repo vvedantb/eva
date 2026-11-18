@@ -21,7 +21,6 @@ import { resolveProjectBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { unreadLookupForList } from "../chatReads";
 import { awaitingAnswerEntityIdsForRepo } from "../_chat/turnProjection";
 import { isProjectBuilding } from "./buildState";
-import { projectInterviewState } from "./interviewState";
 import {
   liveOwnedSessionStatuses,
   projectSandboxStatus,
@@ -38,8 +37,7 @@ async function buildProjectWithDetails(
   const details = await getProjectDetails(db, project._id);
   return {
     ...project,
-    // Legacy rows read through the state module until the migration runs.
-    interview: projectInterviewState(project),
+    activeWorkflowId: project.interview?.workflowId,
     conversationHistory: details?.conversationHistory ?? [],
     ...(details?.generatedSpec !== undefined
       ? { generatedSpec: details.generatedSpec }
