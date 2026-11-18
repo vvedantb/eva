@@ -7,6 +7,14 @@ Date: 2026-11-18
 WHY: Both existed only for APK 0.1.96. The app built after #1391 reads `sessions.getOwnedWithSeed` and `projects.interview`, so once that APK is published the shims have no caller.
 
 Architectural: `sessions.getOwned` and the derived `activeWorkflowId` on `projects.get` / `getByNumId` are removed. `check-apk-compat.sh` passes only against an APK built after #1391.
+## Phone: attach files, and quote part of a reply
+
+Date: 2026-11-18
+
+WHY: The web composer's + attaches files (HTML, Markdown, text) as well as images, and a text selection in a reply can be cited into the next prompt. The phone's + only picked photos, and it had no way to quote.
+
+Architectural: the phone's + (`AttachButton`, chat and new session) opens a kit `DropdownMenu` with the web's "Attach files" and "Add photos". Files come from `expo-document-picker` (new native module) and go through `useAttachments`, which now applies the web's checks (5 files, 10 MB, images and text files, same toasts). Those rules (`isAllowedAttachmentFile`, `contentTypeForUpload`, `chatAttachmentErrorMessage`, the limits) move from the web's `attachmentMeta.ts` to `@eva/shared`. A long press on a reply gains "Select text": a sheet shows the reply in a field that selects but does not edit, and "Quote" adds a chip over the composer (`src/chat/Quotes.tsx`). A send appends the quotes as `<cited_assistant>` blocks; a sent message draws them as quote cards. `assistantCitation.ts` moves from the web to `@eva/shared/assistantCitation` for both apps.
+
 ## Phone: live tasks, /goal and publish recovery above the composer
 
 Date: 2026-11-18

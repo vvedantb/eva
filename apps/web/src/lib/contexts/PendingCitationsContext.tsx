@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, type ReactNode } from "react";
-import type { AssistantCitation } from "@/lib/components/chat/assistantCitation";
+import type { AssistantCitation } from "@eva/shared/assistantCitation";
 
 interface PendingCitationsValue {
   readonly items: ReadonlyArray<AssistantCitation>;
