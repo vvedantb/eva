@@ -25,6 +25,8 @@ import {
   DialogTitle,
   Input,
   SheetRow,
+  MenuDivider,
+  MenuSheet,
 } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useAction, useMutation } from "convex/react";
@@ -34,7 +36,6 @@ import { Text, type TextInput } from "react-native";
 import { useSimpleView } from "@/chat/ComposerFooter";
 import { WEB_URL } from "@/config";
 import { prRowLabel, useOpenPr, useOwnerPullRequests, usePullRequestsSheet } from "@/reviews/PullRequestsSheet";
-import { MenuDivider, MenuSheet } from "@/ui/MenuSheet";
 import { useScheme } from "@/ui/theme";
 
 /** The session a menu acts on: a Sessions row or the open chat's session. */

@@ -11,7 +11,7 @@ import {
   type IconProps,
 } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
-import { ConfirmDialog, EmptyState, ListDivider, SheetRow, SkeletonList, SkeletonRow } from "@vvedantb/native-ui/primitives";
+import { ConfirmDialog, EmptyState, ListDivider, SheetRow, SkeletonList, SkeletonRow, MenuDivider, MenuSheet } from "@vvedantb/native-ui/primitives";
 import { useLargerText } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
@@ -22,7 +22,6 @@ import { FlatList, Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { META_TEXT } from "@/quickTasks/QuickTaskRow";
 import { displayTitle, timeAgo } from "@/ui/format";
-import { MenuDivider, MenuSheet } from "@/ui/MenuSheet";
 import { RepoSection } from "@/ui/RepoPicker";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 import { LIST_WINDOW } from "@/ui/listWindow";

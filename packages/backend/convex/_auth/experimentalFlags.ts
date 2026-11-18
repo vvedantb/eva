@@ -35,5 +35,6 @@ export function resolveExperimentalFlags(
     scopeCheck: flags?.scopeCheck ?? false,
     manualSideBranchPublish: flags?.manualSideBranchPublish ?? false,
     prWatch: flags?.prWatch ?? false,
+    draftReadiness: flags?.draftReadiness ?? false,
   };
 }

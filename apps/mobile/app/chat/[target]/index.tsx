@@ -1,4 +1,4 @@
-import { api, getAIModelProvider, normalizeAIModel, type Id } from "@eva/backend";
+import { api, findUsageLimitHold, getAIModelProvider, isHeldByUsageLimit, normalizeAIModel, type Id } from "@eva/backend";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import { findNewMessageIds, useChatReadState } from "@eva/shared/chatReadState";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
@@ -9,8 +9,10 @@ import {
   findStreamingTargetMessage,
   firstNameByUserId,
   forkThreadTitle,
+  getSessionReadOnlyMessage,
   formatForkPrompt,
   isOtherUserChatMessage,
+  MAX_PARALLEL_CHATS,
   messageAttachments,
   type ResolvedMediaEntry,
   otherUserIdsInChat,
@@ -19,12 +21,14 @@ import {
   type SessionMenuAction,
   toRepoRelativePath,
   turnErrorTitle,
+  visibleChatMessages,
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
+import { turnCheckpoint } from "@eva/shared/turnCheckpoint";
 import { chatTypingRoom } from "@eva/shared/typingPresence";
 import { isUsageLimitFailure } from "@eva/shared/usageLimitRecovery";
 import { messageLinkHref } from "@eva/shared/messageLink";
-import { type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
+import { formatQuestionAnswers, type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { IconChevronDown, IconMessageCircle, IconPlayerStop } from "@tabler/icons-react-native";
 import {
   ChoiceQuestion,
@@ -35,6 +39,7 @@ import {
   ConversationScrollButton,
   Message,
   MessageContent,
+  type MessageMenu,
   PromptInput,
   PromptInputButton,
   Shimmer,
@@ -68,10 +73,17 @@ import { ChatHeader } from "@/chat/ChatHeader";
 import { SessionChatTabs } from "@/chat/SessionChatTabs";
 import { SandboxControl, SandboxErrorBanner, useSessionSandbox } from "@/chat/SandboxControl";
 import { UsageButton } from "@/chat/UsageSheet";
+import { useProposedPlans } from "@/chat/ProposedPlanCard";
+import { BackgroundAgentsChip } from "@/chat/BackgroundAgentsChip";
 import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
+import { SystemAlertRow } from "@/chat/SystemAlertRow";
+import { useNow } from "@/ui/clock";
+import { useMessageMenu } from "@/chat/MessageHoldMenu";
+import { TurnChangesChip, useTurnRestore, type TurnChangesTarget } from "@/chat/TurnChangesChip";
 import { UsageLimitRecoveryCard } from "@/chat/UsageLimitRecovery";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { MessageFooter, type Sentiment } from "@/chat/MessageFooter";
+import { PasteImageChip } from "@/chat/PasteImageChip";
 import { useAttachments } from "@/chat/useAttachments";
 import { type Chat, useChatModelPick } from "@/chat/useChatModelPick";
 import { TypingIndicator } from "@/chat/TypingIndicator";
@@ -123,6 +135,9 @@ export default function ChatScreen() {
   const { newSinceAt } = useChatReadState({ parentId, active: focused && appActive });
   // A session chat's sandbox: the header wakes or sleeps it, and a failed wake shows under the header.
   const sandbox = useSessionSandbox(chat?.session?.id);
+  // The session's running chats and this chat's queue: a send parked while every run slot is taken.
+  const runningChats = useQuery(api.turns.listSessionChatStatuses, chat?.session ? { sessionId: chat.session.id } : "skip");
+  const queued = useQuery(api.queuedMessages.listByParent, parentId ? { parentId } : "skip");
   const me = useQuery(api.auth.me, {});
   // A teammate's turn shows their avatar and first name, from the same lookup as the web `ChatBody`.
   const teammateIds = otherUserIdsInChat(messages ?? [], me ?? undefined);
@@ -138,18 +153,24 @@ export default function ChatScreen() {
   // The oldest unfinished reply owns the chat's streaming row, as the web (turns run in order).
   const liveReplyId = findStreamingTargetMessage(messages ?? [])?._id;
   // A user message with only attachments still shows, as the web; so does a reply with only captures.
-  const visible = (messages ?? []).filter(
-    (message) =>
-      message.isSystemAlert !== true &&
-      (message.content.trim() !== "" ||
-        (message.role === "assistant" && (message.activityLog || (message.media?.length ?? 0) > 0)) ||
+  // System rows draw as the web: never the sandbox start and stop rows, none at all in simple view.
+  const visible = visibleChatMessages(messages ?? [], simpleView).filter((message) =>
+    message.isSystemAlert === true
+      ? message.content.trim() !== ""
+      : message.content.trim() !== "" ||
+        (message.role === "assistant" && (message.activityLog || (message.media?.length ?? 0) > 0 || message.stopped === true)) ||
         (message.role === "user" && messageAttachments(message).length > 0) ||
-        message._id === liveReplyId),
+        message._id === liveReplyId,
   );
   const { mineByMessageId: mine, agentReports } = groupChatFeedback(feedbackRows ?? [], me ?? undefined);
   const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder);
+  // The agent's proposed plans, each under the message that proposed it (session chats only, as the web).
+  const planAfter = useProposedPlans(chat);
   // Rows seen on screen, so an agent page mounts its WebView only once its row shows.
   const [seenRows] = useState(createSeenRows);
+  // The restore confirm a held reply's Restore opens, and the hold menus (the kit `Message` `menu`).
+  const restore = useTurnRestore();
+  const messageMenu = useMessageMenu(restore.request);
 
   if (chat === undefined || chat === null) {
     return (
@@ -165,6 +186,24 @@ export default function ChatScreen() {
   }
 
   const working = turn !== undefined && turn !== null;
+  // Queued here while the session's run slots are all taken: the server parked the send (the web `isWaitingForSlot`).
+  const runningCount = runningChats?.length ?? 0;
+  const waitingForSlot = !working && (queued?.length ?? 0) > 0 && runningCount >= MAX_PARALLEL_CHATS;
+  // The web empty state follows the sandbox: awake, waking, going to sleep, or asleep (a send wakes it).
+  const sandboxAwake = chat.session ? sandbox.isActive : chat.sandboxActive;
+  const emptyTitle = sandboxAwake
+    ? "No messages yet. Start the conversation!"
+    : sandbox.isStopping
+      ? SANDBOX_CHAT_COPY.stoppingTitle
+      : sandbox.isToggling
+        ? SANDBOX_CHAT_COPY.startingTitle
+        : SANDBOX_CHAT_COPY.asleepTitle;
+  // Waking or sleeping is the whole story; awake, the web line teaches desktop drop, so the phone keeps the title.
+  const emptyDescription = sandboxAwake || sandbox.isToggling ? "" : SANDBOX_CHAT_COPY.asleepDescription;
+  // Why a closed session takes no message: its PR merged or closed, or it was archived (the web banner).
+  const closedReason = chat.session
+    ? getSessionReadOnlyMessage({ isArchived: chat.session.archived, prState: sessionRow?.prState })
+    : undefined;
   const streamingEntityId = parentId ? chatStreamingEntityId(parentId) : undefined;
   const dayStarts = findDayBoundaryIds(visible);
   const newBoundaryId = findNewMessageIds(visible, newSinceAt, me ?? undefined)[0];
@@ -173,6 +212,11 @@ export default function ChatScreen() {
   // The user turn before each reply holds the model it ran on (the footer mark), as the web.
   const precedingUserTurns = buildPrecedingUserTurns(messages ?? []);
   const questions = pending ? parsePendingQuestion(pending.payload) : null;
+  // A question the agent saved on its last reply, as the web: it stays after the turn (and the sandbox)
+  // stops, and its answer goes as a chat message, which wakes the sandbox.
+  const savedRaw = visible[visible.length - 1]?.pendingQuestion;
+  const savedQuestions = parsePendingQuestion(savedRaw);
+  const savedQuestion = savedRaw && savedQuestions ? { raw: savedRaw, questions: savedQuestions } : null;
   const teammateNames = firstNameByUserId(teammates ?? []);
   const teammateById = new Map((teammates ?? []).map((user) => [user._id, user]));
   const latestReplyId = visible.findLast((message) => message.role === "assistant")?._id;
@@ -233,6 +277,19 @@ export default function ChatScreen() {
     rate({ messageId, sentiment }).catch(() => toast.error("Couldn't save your rating"));
   };
 
+  // A session reply that changed code: its Changes chip (Diff this turn, Restore), as the web's
+  // turn checkpoint actions, which simple view hides.
+  const session = chat.session;
+  const turnFor = (message: ChatMessage): TurnChangesTarget | undefined => {
+    const checkpoint = session && !simpleView ? turnCheckpoint(message) : null;
+    return checkpoint && session
+      ? { checkpoint, messageId: message._id, sessionId: session.id, repoId: chat.repoId, target, sandboxRunning: chat.sandboxActive }
+      : undefined;
+  };
+  const changesFor = (message: ChatMessage) => {
+    const turn = turnFor(message);
+    return turn ? <TurnChangesChip turn={turn} /> : null;
+  };
   const openWebChat = () => void Linking.openURL(webUrl(chat.webPath));
   // A panel button sends its text as a message, as the web: withheld on a closed
   // chat and on one whose sandbox is asleep, which disables the buttons.
@@ -245,6 +302,22 @@ export default function ChatScreen() {
         toast.error("Couldn't send your message"),
       );
     };
+  };
+  // The message footer's actions, behind a press and hold (user choice): built when a message is held.
+  const menuFor = (messageId: string) => {
+    const message = visible.find((entry) => entry._id === messageId);
+    if (!message) return { actions: [] };
+    return messageMenu({
+      text: message.content,
+      link: webUrl(messageLinkHref(chat.webPath, message._id)),
+      rating:
+        message.role === "assistant"
+          ? { sentiment: mine.get(message._id)?.sentiment, onRate: (next) => rateReply(message._id, next) }
+          : undefined,
+      onFork: forkFrom ? () => forkFrom(message._id) : undefined,
+      onRetry: message.errorType !== undefined ? retryFor(message._id) : undefined,
+      turn: turnFor(message),
+    });
   };
   const panelReply =
     chat.canReply && chat.sandboxActive
@@ -305,7 +378,7 @@ export default function ChatScreen() {
             messages === undefined ? (
               <CenteredSpinner label="Loading messages" />
             ) : messages.length === 0 ? (
-              <ConversationEmptyState icon={IconMessageCircle} title="No messages yet" />
+              <ConversationEmptyState icon={IconMessageCircle} title={emptyTitle} description={emptyDescription} />
             ) : null
           }
           ListHeaderComponent={
@@ -315,6 +388,11 @@ export default function ChatScreen() {
               {working && questions === null && liveReplyId === undefined ? (
                 <View className={`pt-3 ${THREAD_INSET}`}>
                   <Shimmer>Working…</Shimmer>
+                </View>
+              ) : null}
+              {waitingForSlot ? (
+                <View className={`pt-3 ${THREAD_INSET}`}>
+                  <Shimmer>{`Waiting for a free slot — ${runningCount} of ${MAX_PARALLEL_CHATS} chats in this session are running.`}</Shimmer>
                 </View>
               ) : null}
               {/* Cards and outputs with no row at or before them sit after the last message, as the web. */}
@@ -344,14 +422,13 @@ export default function ChatScreen() {
                 teammate={fromTeammate && message.userId ? teammateById.get(message.userId) : undefined}
                 live={message._id === liveReplyId ? streamingEntityId : undefined}
                 isLatestReply={message._id === latestReplyId}
-                link={webUrl(messageLinkHref(chat.webPath, message._id))}
                 turn={message.role === "assistant" ? precedingUserTurns.get(message._id) : undefined}
-                sentiment={mine.get(message._id)?.sentiment}
                 onOpenDiff={openDiff}
-                onFork={forkFrom}
-                onRate={rateReply}
+                menuFor={menuFor}
                 cards={cards.byMessageId.get(message._id)}
                 outputs={outputs.byMessageId.get(message._id)}
+                after={planAfter(message._id)}
+                changes={changesFor(message)}
                 onPanelReply={panelReply}
                 // Only a failed turn gets one, so the rest keep their props (the web `onRetryTurn`).
                 onRetryTurn={message.errorType !== undefined ? retryFor(message._id) : undefined}
@@ -361,6 +438,7 @@ export default function ChatScreen() {
           }}
         />
       </SeenRowsContext.Provider>
+        {restore.dialog}
         {/* The composer or the question card: the scroll button rides 16 above it, as the web's `bottom-4` over the dock. */}
         {/* Solid: the keyboard lifts the dock over the transcript, which must not show through it. */}
         <ConversationDock style={{ backgroundColor: EVA_THEME[scheme].background }}>
@@ -374,6 +452,9 @@ export default function ChatScreen() {
             simpleView={simpleView}
             pending={pending}
             questions={questions}
+            savedQuestion={savedQuestion}
+            messagesNewestFirst={newestFirst}
+            closedReason={closedReason}
             onStop={handleStop}
             queue={<QueuedMessagesPanel parentId={parentId} isExecuting={working} isSandboxActive={chat.sandboxActive} />}
             usageLimitFailure={isUsageLimitFailure(newestMessage) ? newestMessage.content : undefined}
@@ -403,6 +484,9 @@ function ChatDock({
   simpleView,
   pending,
   questions,
+  savedQuestion,
+  messagesNewestFirst,
+  closedReason,
   onStop,
   queue,
   usageLimitFailure,
@@ -414,6 +498,12 @@ function ChatDock({
   simpleView: boolean;
   pending: PendingQuestion | null | undefined;
   questions: ParsedQuestion[] | null;
+  /** The last reply's saved question (`messages.pendingQuestion`), when no blocking one is open. */
+  savedQuestion: { raw: string; questions: ParsedQuestion[] } | null;
+  /** The transcript, newest first: a usage limit the newest turn hit holds sends until the reset. */
+  messagesNewestFirst: ChatMessage[];
+  /** A closed session's reason (`getSessionReadOnlyMessage`), in place of "This chat is closed." */
+  closedReason: string | undefined;
   onStop: () => void;
   /** The queued messages, above the composer only (not over a question card), as the web. */
   queue: ReactNode;
@@ -424,6 +514,8 @@ function ChatDock({
   const insets = useSafeAreaInsets();
   const send = useMutation(api.chats.send);
   const answer = useMutation(api.pendingQuestions.answer);
+  // The saved question just answered: its card hides before the answer's message arrives.
+  const [answeredSaved, setAnsweredSaved] = useState<string | null>(null);
   const attachments = useAttachments();
   // The `/` list follows the chat's model provider, as the web composer.
   // The draft is kept on the server, as the web composer: it survives closing the app and follows you between devices.
@@ -440,15 +532,22 @@ function ChatDock({
   draft.pull(composer);
   const modelPick = useChatModelPick(target, chat, me);
 
-  // The web composer's placeholder: asleep, a send wakes Eva up; mid-turn, a follow-up.
-  // The phone has no usage-limit hold yet (the web's needs a ticking clock), so that line never shows.
+  // The web composer's placeholder: asleep, a send wakes Eva up; mid-turn, a follow-up; held by a usage
+  // limit, sends queue until just after the reset (the server holds them on the same model and account).
+  // The clock ticks once a minute, here only, so the hold lifts at the reset without redrawing the chat.
+  const now = useNow(60_000);
+  const usageLimitHeld = isHeldByUsageLimit(
+    findUsageLimitHold(messagesNewestFirst, now),
+    normalizeAIModel(chat.model),
+    chat.providerAccountId ?? null,
+  );
   // Awake, the web's "Ask Eva anything... / for skills · @ to mention" would wrap the one-row pill
   // (a native field cannot ellipsise its placeholder), so the phone keeps the first part.
   const composerState = sandboxComposerState({
     isSandboxActive: chat.sandboxActive,
     isSwitchingAccount: modelPick.switching,
     isExecuting: working,
-    isUsageLimitHeld: false,
+    isUsageLimitHeld: usageLimitHeld,
   });
   const placeholder = working
     ? "Add a follow-up..."
@@ -474,24 +573,36 @@ function ChatDock({
     });
   };
 
-  return pending && questions ? (
-    // The web dock: p-3 around the card, in place of the composer, and the thread's 10 more on the right.
-    // Over the bottom inset, as the composer: the dock rises with the keyboard (its "Other..." field) less that inset.
+  // The web dock: p-3 around the card, in place of the composer, and the thread's 10 more on the right.
+  // Over the bottom inset, as the composer: the dock rises with the keyboard (its "Other..." field) less that inset.
+  const questionDock = (key: string, asked: ParsedQuestion[], onSubmit: (answers: Record<string, string>) => Promise<void>) => (
     <View className="p-3 pr-[22px]" style={{ paddingBottom: insets.bottom + 12 }}>
-      <ChoiceQuestion
-        key={pending.toolUseId}
-        questions={questions}
-        buttonWeight="semibold"
-        onSubmit={async (answers) => {
-          if (!chat.parentId) return;
-          try {
-            await answer({ entityId: chat.parentId, toolUseId: pending.toolUseId, answer: JSON.stringify(answers) });
-          } catch {
-            toast.error("Couldn't submit answer");
-          }
-        }}
-      />
+      <ChoiceQuestion key={key} questions={asked} buttonWeight="semibold" onSubmit={onSubmit} />
     </View>
+  );
+  // A blocking question wins: it holds the turn open and its answer resumes the run.
+  const saved = !pending && savedQuestion && savedQuestion.raw !== answeredSaved && chat.canReply ? savedQuestion : null;
+
+  return pending && questions ? (
+    questionDock(pending.toolUseId, questions, async (answers) => {
+      if (!chat.parentId) return;
+      try {
+        await answer({ entityId: chat.parentId, toolUseId: pending.toolUseId, answer: JSON.stringify(answers) });
+      } catch {
+        toast.error("Couldn't submit answer");
+      }
+    })
+  ) : saved ? (
+    questionDock(saved.raw, saved.questions, async (answers) => {
+      // Hidden at once, as the web, until the reply moves on.
+      setAnsweredSaved(saved.raw);
+      try {
+        await send({ target: chat.target, message: formatQuestionAnswers(saved.questions, answers), attachmentStorageIds: [] });
+      } catch {
+        setAnsweredSaved(null);
+        toast.error("Couldn't send your answer");
+      }
+    })
   ) : chat.canReply ? (
     // Eva's web pill composer, the + on the muted fill, 10 more in on the right as the
     // thread. Send stays ready during a turn (a send queues behind it) and Stop sits beside
@@ -510,6 +621,7 @@ function ChatDock({
       <View className="pl-3">
         <TypingIndicator users={typing.typingUsers} />
       </View>
+      <PasteImageChip onPaste={() => void attachments.paste()} />
       <PromptInput
         layout="inline"
         shape="pill"
@@ -518,6 +630,7 @@ function ChatDock({
         onSubmit={handleSend}
         menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} onDismiss={composer.dismiss} /> : null}
         placeholder={placeholder}
+        onPasteImages={attachments.pasteFiles}
         leading={
           <AttachButton onPress={() => void attachments.pick()} />
         }
@@ -534,6 +647,12 @@ function ChatDock({
                 <SandboxBranchChip branch={chat.sandboxBranch} intendedBranch={chat.intendedBranch} />
               ) : undefined
             }
+            status={
+              <BackgroundAgentsChip
+                chatId={chat.session?.chatId ?? chat.task?.sessionChatId ?? chat.project?.sessionChatId}
+                readOnly={!chat.canReply}
+              />
+            }
             model={modelPick.pick ? <ModelChip repoId={chat.repoId} {...modelPick.pick} /> : undefined}
           />
         }
@@ -541,7 +660,7 @@ function ChatDock({
     </View>
   ) : (
     <Text variant="muted" className="px-4 pb-8 pt-3 text-center" style={textColor(scheme, "muted")}>
-      This chat is closed.
+      {closedReason ?? "This chat is closed."}
     </Text>
   );
 }
@@ -572,17 +691,16 @@ function ChatMessageRow({
   teammate,
   live,
   isLatestReply,
-  link,
   turn,
-  sentiment,
   onOpenDiff,
-  onFork,
-  onRate,
+  menuFor,
   cards,
   outputs,
   onPanelReply,
   onRetryTurn,
   onOpenWebChat,
+  after,
+  changes,
 }: {
   message: ChatMessage;
   dayStart: boolean;
@@ -594,14 +712,12 @@ function ChatMessageRow({
   /** The streaming row's entity id while this is the live reply. */
   live: string | undefined;
   isLatestReply: boolean;
-  link: string;
   /** Re-sends the prompt a failed turn answered; set only on a failed turn that can be retried. */
   onRetryTurn?: () => void;
   turn: ComponentProps<typeof MessageFooter>["turn"];
-  sentiment: Sentiment | undefined;
   onOpenDiff: ComponentProps<typeof AssistantMessage>["onOpenDiff"];
-  onFork: ((messageId: string) => void) | undefined;
-  onRate: (messageId: ChatMessage["_id"], sentiment: Sentiment | null) => void;
+  /** A press and hold on the message opens its menu (thumbs, copy, link, fork, retry, the turn's changes). */
+  menuFor: (messageId: string) => MessageMenu;
   /** The agent's cards placed under this message (`render_ui`, `render_html`). */
   cards: readonly InlineCard[] | undefined;
   /** The artifacts and reports placed under this message. */
@@ -609,7 +725,21 @@ function ChatMessageRow({
   /** Sends a panel button's text; undefined disables the buttons. */
   onPanelReply: ((message: string) => void) | undefined;
   onOpenWebChat: () => void;
+  /** Under the whole message, as the web `afterMessage`: a proposed plan's card. */
+  after?: ReactNode;
+  /** A reply that changed code: its Changes chip, over the footer. */
+  changes?: ReactNode;
 }) {
+  // A system row (a handoff, a refusal): the web divider, with its detail behind a link.
+  if (message.isSystemAlert === true) {
+    return (
+      <View className={`gap-3 ${THREAD_INSET}`}>
+        {dayStart ? <DayDivider timestamp={message.timestamp} /> : null}
+        {newStart ? <NewDivider /> : null}
+        <SystemAlertRow content={message.content} errorDetail={message.errorDetail} alertTone={message.alertTone} timestamp={message.timestamp} />
+      </View>
+    );
+  }
   const isUser = message.role === "user";
   // A failed turn's title ("This turn failed", "Claude usage limit reached"), or null for a reply.
   const failure = isUser
@@ -635,10 +765,13 @@ function ChatMessageRow({
                 {dayStart ? <DayDivider timestamp={message.timestamp} /> : null}
                 {newStart ? <NewDivider /> : null}
                 {/* Web: parts `gap-0.5`; a reply is full width, a user message at most 95%. */}
+                {/* A press and hold opens the message's menu (user choice, as iMessage): the kit `Message`
+                    lifts it over the chat, with the thumbs above it and the actions below it. */}
                 <Message
                   from={message.role}
                   className={message.role === "user" ? "gap-0.5" : "max-w-full gap-0.5"}
                   style={fromTeammate ? TEAMMATE_SIDE : undefined}
+                  menu={() => menuFor(message._id)}
                 >
                   {senderName ? <TeammateName name={senderName} /> : null}
                   {fromTeammate ? (
@@ -662,6 +795,7 @@ function ChatMessageRow({
                           media={message.media}
                           tabPanels={tabbed ? cardList : undefined}
                           failure={failure ? { title: failure, onRetry: onRetryTurn } : undefined}
+                          stopped={message.stopped === true}
                         />
                       )}
                     </MessageContent>
@@ -670,26 +804,17 @@ function ChatMessageRow({
                   {isUser && cardList ? <View className="mt-1 w-full">{cardList}</View> : null}
                   {outputList}
                   {!isUser && cardList && !tabbed ? <View className="mt-2">{cardList}</View> : null}
+                  {changes ? <View className="mt-1 px-1">{changes}</View> : null}
                   {message.content.trim() !== "" ? (
                     <MessageFooter
                       className={fromTeammate ? TEAMMATE_FOOTER_INSET : undefined}
-                      text={message.content}
                       at={message.timestamp}
                       finishedAt={message.role === "assistant" ? message.finishedAt : undefined}
-                      link={link}
-                      onFork={onFork ? () => onFork(message._id) : undefined}
                       turn={turn}
-                      rating={
-                        message.role === "assistant"
-                          ? {
-                              sentiment,
-                              onRate: (next) => onRate(message._id, next),
-                            }
-                          : undefined
-                      }
                     />
                   ) : null}
                 </Message>
+                {after}
               </View>
   );
 }

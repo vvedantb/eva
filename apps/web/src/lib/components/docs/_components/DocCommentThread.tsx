@@ -1,5 +1,6 @@
 "use client";
 
+import { DOC_COMMENT_ERRORS } from "@eva/shared/docComments";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
@@ -75,7 +76,7 @@ export function DocCommentThread({
           content: replyContent.trim(),
           parentId: root._id,
         }),
-        "Couldn't post reply",
+        DOC_COMMENT_ERRORS.reply,
         "doc-comment-reply",
       );
       setReplyContent("");
@@ -147,7 +148,7 @@ export function DocCommentThread({
             onClick={() => {
               catchMutationError(
                 setResolved({ id: root._id, resolved: true }),
-                "Couldn't resolve comment",
+                DOC_COMMENT_ERRORS.resolve,
                 "doc-comment-resolve",
               );
             }}
@@ -163,7 +164,7 @@ export function DocCommentThread({
             onClick={() => {
               catchMutationError(
                 setResolved({ id: root._id, resolved: false }),
-                "Couldn't reopen comment",
+                DOC_COMMENT_ERRORS.reopen,
                 "doc-comment-reopen",
               );
             }}

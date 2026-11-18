@@ -1,7 +1,7 @@
 import { api, type Id, type PrOwnerRef } from "@eva/backend";
 import { isLivePrState, orderPrsLiveFirst, prNumberFromGithubUrl, pullRequestsMenuLabel } from "@eva/shared";
 import { IconExternalLink, IconGitPullRequest, IconGitPullRequestClosed, IconLink, IconStack2 } from "@tabler/icons-react-native";
-import { SheetRow } from "@vvedantb/native-ui/primitives";
+import { SheetRow, MenuDivider, MenuSheet, SubmenuRow } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -12,7 +12,6 @@ import { Linking } from "react-native";
 import { useSimpleView } from "@/chat/ComposerFooter";
 import { PrCloseDialog, type PrCloseTarget } from "@/reviews/PrCloseDialog";
 import { prStatusAppearance } from "@/reviews/prAppearance";
-import { MenuDivider, MenuSheet, SubmenuRow } from "@/ui/MenuSheet";
 import { useScheme } from "@/ui/theme";
 
 type OwnerPr = FunctionReturnType<typeof api.pullRequests.listForOwner>[number];

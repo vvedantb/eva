@@ -10,6 +10,7 @@ import {
   type PrState,
   type PrStateTone,
   type SessionListEntry,
+  type SessionSortOrder,
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconChevronDown, IconDots, IconGitPullRequest, IconLink, IconPlus } from "@tabler/icons-react-native";
@@ -53,9 +54,6 @@ export function sessionActionTarget({ session, repo, inGroup }: SessionRow): Ses
   };
 }
 
-/** Rows before "Show more": the web sidebar's default `sessionPreviewCount`. */
-const PREVIEW_LIMIT = 3;
-
 /** The web `text-2xs` (11 / 16, 0.01em). */
 const TEXT_2XS = { fontSize: 11, lineHeight: 16, letterSpacing: 0.11 };
 
@@ -80,10 +78,10 @@ export type SessionGroupSection = {
   expanded: boolean;
 };
 
-/** A section's rows, in the web sidebar's default order ("Last user message"). */
-function entryRows(entry: SessionEntry): SessionRow[] {
+/** A section's rows, in the chosen "Sort threads" order (a linked group by activity, as the web). */
+function entryRows(entry: SessionEntry, order: SessionSortOrder): SessionRow[] {
   if (entry.kind === "repo") {
-    return sortSessionsForSidebar(entry.sessions ?? [], "updated_at").map((session) => ({
+    return sortSessionsForSidebar(entry.sessions ?? [], order).map((session) => ({
       session,
       repo: entry.repo,
       inGroup: false,
@@ -100,15 +98,18 @@ function entryRows(entry: SessionEntry): SessionRow[] {
  * (`sessionListEntries`: linked groups and apps sorted together by their
  * newest row), with the web fold state: linked groups start open, as on the
  * web, and so do apps (the web opens only the URL's app; this tab has none),
- * with three rows, and "Show more" shows the rest. An app with no rows in
+ * with "Visible threads" rows (three by default), and "Show more" shows the rest. An app with no rows in
  * this list mode is left out (the web draws its empty copy in the group).
  */
-export function useSessionGroups(entries: SessionEntry[] | undefined) {
+export function useSessionGroups(
+  entries: SessionEntry[] | undefined,
+  { sessionSortOrder, sessionPreviewCount }: { sessionSortOrder: SessionSortOrder; sessionPreviewCount: number },
+) {
   // Kept on the device, as the web's `sessions-app-groups-open` and `linked-session-groups-open`.
   const [closed, toggleClosed] = closedSessionGroups.useSet("all");
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const sections: SessionGroupSection[] = (entries ?? []).flatMap((entry) => {
-    const rows = entryRows(entry);
+    const rows = entryRows(entry, sessionSortOrder);
     if (rows.length === 0) return [];
     const open = !closed.has(entry._id);
     const isExpanded = expanded.has(entry._id);
@@ -118,7 +119,7 @@ export function useSessionGroups(entries: SessionEntry[] | undefined) {
         entry,
         label: entry.kind === "repo" ? repoDisplayLabel(entry.repo) : entry.group.label,
         rows,
-        data: open ? (isExpanded ? rows : rows.slice(0, PREVIEW_LIMIT)) : [],
+        data: open ? (isExpanded ? rows : rows.slice(0, sessionPreviewCount)) : [],
         open,
         expanded: isExpanded,
       },
@@ -259,7 +260,7 @@ export function SessionGroupHeader({
 }
 
 /**
- * Under an open group's rows: the web `SessionListShowMore` past three rows
+ * Under an open group's rows: the web `SessionListShowMore` past "Visible threads" rows
  * (medium muted, a 12 dots icon in the 18 status slot), a 44 high row, then
  * the group's `pb-1`. The label is `text-sm` (the web `text-xs`), as the
  * header. A folded group has neither.
@@ -270,7 +271,8 @@ export function SessionGroupFooter({ section, onToggleExpanded }: { section: Ses
   const hiddenCount = section.rows.length - section.data.length;
   return (
     <View className="pb-1">
-      {section.rows.length > PREVIEW_LIMIT ? (
+      {/* Past "Visible threads" rows: rows are hidden, or were and Show less folds them again. */}
+      {section.expanded || hiddenCount > 0 ? (
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ expanded: section.expanded }}

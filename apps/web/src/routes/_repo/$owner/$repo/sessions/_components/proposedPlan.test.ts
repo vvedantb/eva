@@ -1,13 +1,11 @@
 import { describe, expect, test } from "vitest";
 import {
   buildPlanImplementationPrompt,
-  proposedPlanTitle,
-} from "./planExport";
-import {
   findLatestProposedPlan,
   hasActionableProposedPlan,
+  proposedPlanTitle,
   type ProposedPlanRow,
-} from "./proposedPlanLogic";
+} from "@eva/shared/proposedPlan";
 import type { Id } from "@eva/backend";
 import { z } from "zod";
 

@@ -87,6 +87,12 @@ const FLAG_GROUPS: FlagGroup[] = [
         description:
           "Suggest your next message when Eva finishes a turn. Press Tab to put it in the composer. It never sends on its own.",
       },
+      {
+        key: "draftReadiness",
+        title: "Draft check",
+        description:
+          "Check a new chat's first message or a quick task's description while you type. A banner names what is missing, like where the change goes.",
+      },
     ],
   },
   {

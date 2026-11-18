@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAction } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import { api } from "@eva/backend";
 import type { DraftReadiness } from "./readinessHints";
 import { useIdleCallback } from "@vvedantb/ui";
@@ -30,6 +30,9 @@ export function useDraftReadiness(): {
   dismiss: () => void;
   reset: () => void;
 } {
+  // Behind the `draftReadiness` experimental flag: off means no Jev call and no banner.
+  const enabled =
+    useQuery(api.auth.getExperimentalFlags)?.draftReadiness ?? false;
   const assess = useAction(api.draftReadiness.assess);
   const [state, setState] = useState<DraftReadinessState | null>(null);
   const [dismissedFor, setDismissedFor] = useState<string | null>(null);
@@ -47,11 +50,13 @@ export function useDraftReadiness(): {
 
   return {
     resultFor: (description) => {
-      if (state === null || state.forText !== description) return null;
+      if (!enabled || state === null || state.forText !== description)
+        return null;
       if (dismissedFor === description) return null;
       return state.result;
     },
     noteChange: (description, title = "") => {
+      if (!enabled) return;
       const trimmed = description.trim();
       if (trimmed.length < READINESS_MIN_CHARS) return;
       // Mid-mention or mid-skill: the editor is about to rewrite the text.

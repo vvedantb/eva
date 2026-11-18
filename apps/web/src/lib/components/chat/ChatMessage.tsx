@@ -47,7 +47,11 @@ import { SystemAlertMessage } from "@/lib/components/SystemAlertMessage";
 import { UserMessageAttachments } from "@/lib/components/chat/imageAttachments";
 import { ChangedFilesCard } from "@/lib/components/chat/ChangedFilesCard";
 import { EvaIcon } from "@/lib/components/EvaIcon";
-import { IconGitFork, IconLink } from "@tabler/icons-react";
+import {
+  IconGitFork,
+  IconLink,
+  IconPlayerStop,
+} from "@tabler/icons-react";
 import { copyMessageLink } from "@/lib/components/chat/messageLink";
 import { UserMessageAvatar } from "@/lib/components/UserMessageAvatar";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
@@ -851,6 +855,14 @@ function AssistantTurnOutcome({
           ) : (
             turnProse
           )}
+          {/* A stopped turn can hold no text at all; without this it reads as
+              an empty reply rather than a turn that was cut short. */}
+          {message.stopped ? (
+            <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+              <IconPlayerStop size={12} />
+              Stopped
+            </p>
+          ) : null}
         </m.div>
       )}
     </AnimatePresence>

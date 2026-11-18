@@ -20,6 +20,7 @@ import {
 } from "@tabler/icons-react";
 import {
   buildStructuredAnswer,
+  formatQuestionAnswers,
   type ParsedQuestion,
 } from "@eva/shared/pendingQuestion";
 
@@ -111,17 +112,6 @@ export function MultipleChoiceQuestion({
     ? (customAnswers[currentStep] ?? "").trim().length > 0
     : (answers[currentStep] ?? []).length > 0;
 
-  const formatAnswer = () => {
-    return resolvedQuestions
-      .map((rq, idx) => {
-        const answer = otherActive[idx]
-          ? (customAnswers[idx] ?? "").trim()
-          : (answers[idx] ?? []).join(", ");
-        return `Q: ${rq.question}\nA: ${answer}`;
-      })
-      .join("\n\n");
-  };
-
   // Structured answer keyed by question text; shape shared with mobile.
   const buildAnswer = () =>
     buildStructuredAnswer(resolvedQuestions, (_, idx) =>
@@ -129,6 +119,10 @@ export function MultipleChoiceQuestion({
         ? [(customAnswers[idx] ?? "").trim()]
         : (answers[idx] ?? []),
     );
+
+  // The chat message for a saved question: the same text on the phone.
+  const formatAnswer = () =>
+    formatQuestionAnswers(resolvedQuestions, buildAnswer());
 
   const handleNext = () => {
     if (!currentHasAnswer || isLoading) return;

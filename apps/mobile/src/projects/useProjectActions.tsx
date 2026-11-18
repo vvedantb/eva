@@ -2,7 +2,7 @@ import { PROJECT_PHASES, api, type Id } from "@eva/backend";
 import { PROJECT_PHASE_LABELS, entityHref, type ProjectPhase } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconClipboard, IconCopy, IconGitBranch, IconLink, IconTrash, IconUserPlus } from "@tabler/icons-react-native";
-import { ConfirmDialog, SheetRow } from "@vvedantb/native-ui/primitives";
+import { ConfirmDialog, SheetRow, MenuDivider, MenuSheet, SubmenuRow } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -12,7 +12,6 @@ import { Text } from "react-native";
 import { WEB_URL } from "@/config";
 import { phaseAppearance } from "@/projects/phaseAppearance";
 import { userLabel } from "@/quickTasks/QuickTaskListOptions";
-import { MenuDivider, MenuSheet, SubmenuRow } from "@/ui/MenuSheet";
 import { useScheme } from "@/ui/theme";
 
 type User = FunctionReturnType<typeof api.users.listAll>[number];

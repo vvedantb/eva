@@ -17,11 +17,10 @@ import {
   sendSessionChatMessage,
 } from "./_sessions/execution";
 import {
-  archiveSessionDoc,
   createSession,
+  stopAndArchiveSession,
   type AuthMutationCtx,
 } from "./_sessions/mutations";
-import { requestSessionSandboxStop } from "./_sessions/sandbox";
 import {
   setSessionChatModel,
   setSessionChatTraits,
@@ -203,7 +202,7 @@ export const stop = authMutation({
           await cancelTaskRun(ctx, task);
           return null;
         }
-        await cancelChatExecution(ctx, entity.context);
+        await cancelChatExecution(ctx, entity.context, { holdQueue: true });
         return null;
       }
       case "task":
@@ -215,7 +214,9 @@ export const stop = authMutation({
           return null;
         }
         const found = await findOwnerChat(ctx.db, entity);
-        if (found) await cancelChatExecution(ctx, found);
+        if (found) {
+          await cancelChatExecution(ctx, found, { holdQueue: true });
+        }
         return null;
       }
     }
@@ -279,12 +280,7 @@ export const archive = authMutation({
       ctx.userId,
     );
     assertStandaloneSession(session, "be archived on its own");
-    if (session.sandboxId) await requestSessionSandboxStop(ctx, session._id);
-    // Re-read: the stop moves the status, and the archive patches from this doc.
-    await archiveSessionDoc(
-      ctx,
-      await getSessionWithAccess(ctx.db, args.sessionId, ctx.userId),
-    );
+    await stopAndArchiveSession(ctx, session);
     return null;
   },
 });
