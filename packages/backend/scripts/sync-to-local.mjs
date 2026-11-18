@@ -471,7 +471,9 @@ function splitComponents(zip, outDir, mode) {
     // go green.
     for (const line of lines.filter((l) => l.startsWith("SETTLED\t"))) {
       const [, table, count] = line.split("\t");
-      console.log(`  settled ${count} live ${table} row(s) (see settle() above)`);
+      console.log(
+        `  settled ${count} live ${table} row(s) (see settle() above)`,
+      );
     }
     const summary = lines.find((line) => line.startsWith("SUMMARY\t"));
     if (summary === undefined) {
