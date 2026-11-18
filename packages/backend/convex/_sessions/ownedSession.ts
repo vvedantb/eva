@@ -190,7 +190,7 @@ export type ChatSeed = typeof chatSeedValidator.type;
 
 /**
  * The model, traits and provider account an owner's new chat starts on: the
- * one rule. `ensureOwnerChat` writes it into the chat it creates; `getOwned`
+ * one rule. `ensureOwnerChat` writes it into the chat it creates; `getOwnedWithSeed`
  * and the mobile chat target return it, so clients show it before the chat
  * exists (and for a chat with no sticky `lastModel`). From then on the chat
  * keeps its own sticky picks, apart from the owner's run settings.
