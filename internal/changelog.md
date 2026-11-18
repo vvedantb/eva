@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone chat parity: system rows, stopped turns, answered questions, holds and states
+
+Date: 2026-11-18
+
+WHY: The phone chat hid what the web shows: handoff and refusal rows, a stopped turn's marker, the record of an answered question, the composer's usage-limit hold, why a session is read-only, and the sandbox's state in an empty chat.
+
+Architectural: `visibleChatMessages`, `isSandboxLifecycleAlert`, `collectQuestionSteps` and `getSessionReadOnlyMessage` move to `@eva/shared` (`chatRows.ts`; the web re-exports them), so both apps draw the same rows. The phone draws system rows with `SystemAlertRow` (the web `SystemAlertMessage`: hairlines, tone icon, time, detail dialog), a "Stopped" line under a stopped turn, and the kit `ActivityQuestionCard` (0.27.0, packages #286) for answered questions; `activityTrace` keeps a question step's `questions` and `answers`. The composer reads the usage-limit hold (`findUsageLimitHold`, a one-minute clock in the composer only); a closed session names its reason; the empty chat follows the sandbox (`SANDBOX_CHAT_COPY`), and a send parked while every run slot is taken says "Waiting for a free slot".
+
 ## Phone: the agent's question stays after the sandbox stops; the hold menu pops in
 
 Date: 2026-11-18

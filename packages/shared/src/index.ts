@@ -425,3 +425,9 @@ export {
   taskCanResolveConflicts,
   taskCanStartSandbox,
 } from "./ownedSandboxRules";
+export {
+  collectQuestionSteps,
+  getSessionReadOnlyMessage,
+  isSandboxLifecycleAlert,
+  visibleChatMessages,
+} from "./chatRows";
