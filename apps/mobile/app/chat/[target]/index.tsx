@@ -1,4 +1,4 @@
-import { api, getAIModelProvider, normalizeAIModel, type Id } from "@eva/backend";
+import { api, findUsageLimitHold, getAIModelProvider, isHeldByUsageLimit, normalizeAIModel, type Id } from "@eva/backend";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import { findNewMessageIds, useChatReadState } from "@eva/shared/chatReadState";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
@@ -9,8 +9,10 @@ import {
   findStreamingTargetMessage,
   firstNameByUserId,
   forkThreadTitle,
+  getSessionReadOnlyMessage,
   formatForkPrompt,
   isOtherUserChatMessage,
+  MAX_PARALLEL_CHATS,
   messageAttachments,
   type ResolvedMediaEntry,
   otherUserIdsInChat,
@@ -19,6 +21,7 @@ import {
   type SessionMenuAction,
   toRepoRelativePath,
   turnErrorTitle,
+  visibleChatMessages,
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { turnCheckpoint } from "@eva/shared/turnCheckpoint";
@@ -73,6 +76,8 @@ import { UsageButton } from "@/chat/UsageSheet";
 import { useProposedPlans } from "@/chat/ProposedPlanCard";
 import { BackgroundAgentsChip } from "@/chat/BackgroundAgentsChip";
 import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
+import { SystemAlertRow } from "@/chat/SystemAlertRow";
+import { useNow } from "@/ui/clock";
 import { useMessageMenu } from "@/chat/MessageHoldMenu";
 import { TurnChangesChip, useTurnRestore, type TurnChangesTarget } from "@/chat/TurnChangesChip";
 import { UsageLimitRecoveryCard } from "@/chat/UsageLimitRecovery";
@@ -130,6 +135,9 @@ export default function ChatScreen() {
   const { newSinceAt } = useChatReadState({ parentId, active: focused && appActive });
   // A session chat's sandbox: the header wakes or sleeps it, and a failed wake shows under the header.
   const sandbox = useSessionSandbox(chat?.session?.id);
+  // The session's running chats and this chat's queue: a send parked while every run slot is taken.
+  const runningChats = useQuery(api.turns.listSessionChatStatuses, chat?.session ? { sessionId: chat.session.id } : "skip");
+  const queued = useQuery(api.queuedMessages.listByParent, parentId ? { parentId } : "skip");
   const me = useQuery(api.auth.me, {});
   // A teammate's turn shows their avatar and first name, from the same lookup as the web `ChatBody`.
   const teammateIds = otherUserIdsInChat(messages ?? [], me ?? undefined);
@@ -145,13 +153,14 @@ export default function ChatScreen() {
   // The oldest unfinished reply owns the chat's streaming row, as the web (turns run in order).
   const liveReplyId = findStreamingTargetMessage(messages ?? [])?._id;
   // A user message with only attachments still shows, as the web; so does a reply with only captures.
-  const visible = (messages ?? []).filter(
-    (message) =>
-      message.isSystemAlert !== true &&
-      (message.content.trim() !== "" ||
-        (message.role === "assistant" && (message.activityLog || (message.media?.length ?? 0) > 0)) ||
+  // System rows draw as the web: never the sandbox start and stop rows, none at all in simple view.
+  const visible = visibleChatMessages(messages ?? [], simpleView).filter((message) =>
+    message.isSystemAlert === true
+      ? message.content.trim() !== ""
+      : message.content.trim() !== "" ||
+        (message.role === "assistant" && (message.activityLog || (message.media?.length ?? 0) > 0 || message.stopped === true)) ||
         (message.role === "user" && messageAttachments(message).length > 0) ||
-        message._id === liveReplyId),
+        message._id === liveReplyId,
   );
   const { mineByMessageId: mine, agentReports } = groupChatFeedback(feedbackRows ?? [], me ?? undefined);
   const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder);
@@ -177,6 +186,24 @@ export default function ChatScreen() {
   }
 
   const working = turn !== undefined && turn !== null;
+  // Queued here while the session's run slots are all taken: the server parked the send (the web `isWaitingForSlot`).
+  const runningCount = runningChats?.length ?? 0;
+  const waitingForSlot = !working && (queued?.length ?? 0) > 0 && runningCount >= MAX_PARALLEL_CHATS;
+  // The web empty state follows the sandbox: awake, waking, going to sleep, or asleep (a send wakes it).
+  const sandboxAwake = chat.session ? sandbox.isActive : chat.sandboxActive;
+  const emptyTitle = sandboxAwake
+    ? "No messages yet. Start the conversation!"
+    : sandbox.isStopping
+      ? SANDBOX_CHAT_COPY.stoppingTitle
+      : sandbox.isToggling
+        ? SANDBOX_CHAT_COPY.startingTitle
+        : SANDBOX_CHAT_COPY.asleepTitle;
+  // Waking or sleeping is the whole story; awake, the web line teaches desktop drop, so the phone keeps the title.
+  const emptyDescription = sandboxAwake || sandbox.isToggling ? "" : SANDBOX_CHAT_COPY.asleepDescription;
+  // Why a closed session takes no message: its PR merged or closed, or it was archived (the web banner).
+  const closedReason = chat.session
+    ? getSessionReadOnlyMessage({ isArchived: chat.session.archived, prState: sessionRow?.prState })
+    : undefined;
   const streamingEntityId = parentId ? chatStreamingEntityId(parentId) : undefined;
   const dayStarts = findDayBoundaryIds(visible);
   const newBoundaryId = findNewMessageIds(visible, newSinceAt, me ?? undefined)[0];
@@ -351,7 +378,7 @@ export default function ChatScreen() {
             messages === undefined ? (
               <CenteredSpinner label="Loading messages" />
             ) : messages.length === 0 ? (
-              <ConversationEmptyState icon={IconMessageCircle} title="No messages yet" />
+              <ConversationEmptyState icon={IconMessageCircle} title={emptyTitle} description={emptyDescription} />
             ) : null
           }
           ListHeaderComponent={
@@ -361,6 +388,11 @@ export default function ChatScreen() {
               {working && questions === null && liveReplyId === undefined ? (
                 <View className={`pt-3 ${THREAD_INSET}`}>
                   <Shimmer>Working…</Shimmer>
+                </View>
+              ) : null}
+              {waitingForSlot ? (
+                <View className={`pt-3 ${THREAD_INSET}`}>
+                  <Shimmer>{`Waiting for a free slot — ${runningCount} of ${MAX_PARALLEL_CHATS} chats in this session are running.`}</Shimmer>
                 </View>
               ) : null}
               {/* Cards and outputs with no row at or before them sit after the last message, as the web. */}
@@ -421,6 +453,8 @@ export default function ChatScreen() {
             pending={pending}
             questions={questions}
             savedQuestion={savedQuestion}
+            messagesNewestFirst={newestFirst}
+            closedReason={closedReason}
             onStop={handleStop}
             queue={<QueuedMessagesPanel parentId={parentId} isExecuting={working} isSandboxActive={chat.sandboxActive} />}
             usageLimitFailure={isUsageLimitFailure(newestMessage) ? newestMessage.content : undefined}
@@ -451,6 +485,8 @@ function ChatDock({
   pending,
   questions,
   savedQuestion,
+  messagesNewestFirst,
+  closedReason,
   onStop,
   queue,
   usageLimitFailure,
@@ -464,6 +500,10 @@ function ChatDock({
   questions: ParsedQuestion[] | null;
   /** The last reply's saved question (`messages.pendingQuestion`), when no blocking one is open. */
   savedQuestion: { raw: string; questions: ParsedQuestion[] } | null;
+  /** The transcript, newest first: a usage limit the newest turn hit holds sends until the reset. */
+  messagesNewestFirst: ChatMessage[];
+  /** A closed session's reason (`getSessionReadOnlyMessage`), in place of "This chat is closed." */
+  closedReason: string | undefined;
   onStop: () => void;
   /** The queued messages, above the composer only (not over a question card), as the web. */
   queue: ReactNode;
@@ -492,15 +532,22 @@ function ChatDock({
   draft.pull(composer);
   const modelPick = useChatModelPick(target, chat, me);
 
-  // The web composer's placeholder: asleep, a send wakes Eva up; mid-turn, a follow-up.
-  // The phone has no usage-limit hold yet (the web's needs a ticking clock), so that line never shows.
+  // The web composer's placeholder: asleep, a send wakes Eva up; mid-turn, a follow-up; held by a usage
+  // limit, sends queue until just after the reset (the server holds them on the same model and account).
+  // The clock ticks once a minute, here only, so the hold lifts at the reset without redrawing the chat.
+  const now = useNow(60_000);
+  const usageLimitHeld = isHeldByUsageLimit(
+    findUsageLimitHold(messagesNewestFirst, now),
+    normalizeAIModel(chat.model),
+    chat.providerAccountId ?? null,
+  );
   // Awake, the web's "Ask Eva anything... / for skills · @ to mention" would wrap the one-row pill
   // (a native field cannot ellipsise its placeholder), so the phone keeps the first part.
   const composerState = sandboxComposerState({
     isSandboxActive: chat.sandboxActive,
     isSwitchingAccount: modelPick.switching,
     isExecuting: working,
-    isUsageLimitHeld: false,
+    isUsageLimitHeld: usageLimitHeld,
   });
   const placeholder = working
     ? "Add a follow-up..."
@@ -613,7 +660,7 @@ function ChatDock({
     </View>
   ) : (
     <Text variant="muted" className="px-4 pb-8 pt-3 text-center" style={textColor(scheme, "muted")}>
-      This chat is closed.
+      {closedReason ?? "This chat is closed."}
     </Text>
   );
 }
@@ -683,6 +730,16 @@ function ChatMessageRow({
   /** A reply that changed code: its Changes chip, over the footer. */
   changes?: ReactNode;
 }) {
+  // A system row (a handoff, a refusal): the web divider, with its detail behind a link.
+  if (message.isSystemAlert === true) {
+    return (
+      <View className={`gap-3 ${THREAD_INSET}`}>
+        {dayStart ? <DayDivider timestamp={message.timestamp} /> : null}
+        {newStart ? <NewDivider /> : null}
+        <SystemAlertRow content={message.content} errorDetail={message.errorDetail} alertTone={message.alertTone} timestamp={message.timestamp} />
+      </View>
+    );
+  }
   const isUser = message.role === "user";
   // A failed turn's title ("This turn failed", "Claude usage limit reached"), or null for a reply.
   const failure = isUser
@@ -738,6 +795,7 @@ function ChatMessageRow({
                           media={message.media}
                           tabPanels={tabbed ? cardList : undefined}
                           failure={failure ? { title: failure, onRetry: onRetryTurn } : undefined}
+                          stopped={message.stopped === true}
                         />
                       )}
                     </MessageContent>
