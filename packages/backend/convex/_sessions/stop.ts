@@ -18,11 +18,10 @@ import { cancelTaskRun } from "../_taskWorkflow/publicMutations";
 import { cancelChatExecution } from "./execution";
 import {
   chatOwner,
-  findProjectSession,
-  findTaskWorkSession,
+  findWorkSession,
   sessionOwnerTaskId,
 } from "./owner";
-import { findOwnerChat, ownerHoldsSession } from "./ownerState";
+import { findWorkChat, ownerHoldsSession } from "./ownerState";
 import { requestSessionSandboxStop } from "./sandbox";
 
 /**
@@ -72,7 +71,7 @@ export async function stopTask(
   await stopOwnerTurn(
     ctx,
     task,
-    await findOwnerChat(ctx.db, { kind: "task", task }),
+    await findWorkChat(ctx.db, { kind: "task", task }),
   );
 }
 
@@ -140,15 +139,18 @@ export const stopWorkSandbox = authMutation({
       "sessionId" in target
         ? await getSessionWithAccess(ctx.db, target.sessionId, ctx.userId)
         : "taskId" in target
-          ? await findTaskWorkSession(
+          ? await findWorkSession(
               ctx.db,
               await getTaskWithAccess(ctx.db, target.taskId, ctx.userId),
             )
-          : await findProjectSession(
-              ctx.db,
-              (await getProjectWithAccess(ctx.db, target.projectId, ctx.userId))
-                ._id,
-            );
+          : await findWorkSession(ctx.db, {
+              kind: "project",
+              project: await getProjectWithAccess(
+                ctx.db,
+                target.projectId,
+                ctx.userId,
+              ),
+            });
     if (!session) return null;
     if (await sessionIsHeld(ctx.db, session)) throw new Error(SANDBOX_HELD_ERROR);
     await requestSessionSandboxStop(ctx, session._id);

@@ -9,7 +9,8 @@ import {
 import { assertStandaloneSession } from "./_sessions/owner";
 import { stopChat, stopTask } from "./_sessions/stop";
 import type { SessionChatContext } from "./_sessionChats/helpers";
-import { ensureOwnerChat, findOwnerChat } from "./_sessions/ownedSession";
+import { ensureOwnerChat } from "./_sessions/ownedSession";
+import { findWorkChat } from "./_sessions/ownerState";
 import { mobileChatValidator, resolveMobileChat } from "./_mobile/chatTarget";
 import { sendSessionChatMessage } from "./_sessions/execution";
 import {
@@ -195,7 +196,7 @@ export const stop = authMutation({
         return null;
       case "project": {
         // No session chat yet: nothing runs, and stopping never creates one.
-        const found = await findOwnerChat(ctx.db, entity);
+        const found = await findWorkChat(ctx.db, entity);
         if (found) await stopChat(ctx, found);
         return null;
       }

@@ -116,7 +116,7 @@ type Fixture = Awaited<ReturnType<typeof fixture>>;
 
 /** The session chat a quick task or a project chats in. */
 async function ownedChatId(asUser: Fixture["asUser"], owner: FunctionArgs<typeof api.sessions.getOwned>["owner"]) {
-  const owned = await asUser.query(api.sessions.getOwned, { owner });
+  const owned = (await asUser.query(api.sessions.getOwned, { owner }))?.session;
   if (!owned) throw new Error("The owner has no session");
   return owned.chatId;
 }

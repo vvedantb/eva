@@ -7,6 +7,13 @@ Date: 2026-11-12
 WHY: Stop did different things per surface. Mobile left a project task's run going. MCP `stop_agent` on a project stopped every task chat too. Only MCP refused a sandbox Stop mid-turn on the server; web Stop during a build killed the build's VM, and a task or project sandbox Stop could create a session.
 
 Architectural: `_sessions/stop.ts` holds the two Stops. `sessions.stopChatTurn({ chatId } | { taskId })` cancels the chat's turn and its task's run, never a build or interview. `sessions.stopWorkSandbox({ sessionId } | { taskId } | { projectId })` refuses while a turn, run, build or interview holds the session, and never creates one. `sessionWorkflow.cancelExecution` and `taskWorkflow.cancelExecution` are gone; `sessions.stopSandbox` stays for archive teardown only.
+## One owner-to-session lookup
+
+Date: 2026-11-12
+
+WHY: The rule "a project and its tasks share the project's session; a quick task owns its own" was spread over about ten helpers and inline copies. A caller could pick the wrong one.
+
+Architectural: `_sessions/owner.ts` holds the rule (`workSessionOwner`) and the read path (`findWorkSession`, over the raw `findOwnedSession`). `ownerState.findWorkChat` resolves the chat. `ownedSession.ensureWorkSession` is the one create path; a project task always gets its project's session. Removed: `taskSessionOwner`, `projectSessionOwner`, `taskUsesOwnedSession`, `taskWorkSessionOwner`, `findTaskSession`, `findProjectSession`, `findQuickTaskSession`, `findTaskWorkSession`, `findOwnerChat`, `ensureOwnedSession`, `ensureTaskWorkSession`, and the `ownedSession.ts` re-exports. Behaviour is unchanged.
 ## MCP: send messages and start sessions on a teammate's shared account
 
 Date: 2026-11-18
