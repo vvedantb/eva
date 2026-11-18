@@ -374,6 +374,11 @@ function LiveStatus({ steps }: { steps: ActivityLogStep[] }) {
   );
 }
 
+/** The live status line on its own, for a stream that is not a reply (the session summary while it writes). */
+export function LiveActivityStatus({ activityLog }: { activityLog: string | undefined }) {
+  return <LiveStatus steps={parseActivityLog(activityLog)} />;
+}
+
 /**
  * An agent reply: its trace as the web's folded `ActivityTasks` (reasoning as
  * prose, each run of tool steps behind a summary line, to-dos and notices on
