@@ -10,7 +10,8 @@ import {
 import { hasOpenChatTurn } from "./_chat/turnProjection";
 import { assertStandaloneSession, sessionOwnerTaskId } from "./_sessions/owner";
 import type { SessionChatContext } from "./_sessionChats/helpers";
-import { ensureOwnerChat, findOwnerChat } from "./_sessions/ownedSession";
+import { ensureOwnerChat } from "./_sessions/ownedSession";
+import { findWorkChat } from "./_sessions/ownerState";
 import { mobileChatValidator, resolveMobileChat } from "./_mobile/chatTarget";
 import {
   cancelChatExecution,
@@ -213,7 +214,7 @@ export const stop = authMutation({
           await cancelTaskRun(ctx, entity.task);
           return null;
         }
-        const found = await findOwnerChat(ctx.db, entity);
+        const found = await findWorkChat(ctx.db, entity);
         if (found) {
           await cancelChatExecution(ctx, found, { holdQueue: true });
         }

@@ -21,17 +21,13 @@ import {
 } from "../_chat/turnProjection";
 import { unreadLookupForRepo } from "../chatReads";
 import {
-  findProjectSession,
-  findTaskWorkSession,
+  findWorkSession,
   isStandaloneSession,
   ownedSessionOwnerValidator,
   type OwnedSessionOwner,
 } from "./owner";
-import {
-  findOwnerChat,
-  loadOwnerEntity,
-  type OwnerEntity,
-} from "./ownedSession";
+import { loadOwnerEntity, type OwnerEntity } from "./ownedSession";
+import { findWorkChat } from "./ownerState";
 
 /** The primary repo a linked-in session actually belongs to. */
 const linkedFromValidator = v.object({
@@ -528,12 +524,9 @@ export const getOwned = authQuery({
       ctx.userId,
     );
     if (!entity) return null;
-    const session =
-      entity.kind === "task"
-        ? await findTaskWorkSession(ctx.db, entity.task)
-        : await findProjectSession(ctx.db, entity.project._id);
+    const session = await findWorkSession(ctx.db, entity);
     if (!session) return null;
-    const found = await findOwnerChat(ctx.db, entity);
+    const found = await findWorkChat(ctx.db, entity);
     return { sessionId: session._id, chatId: found?.chat._id };
   },
 });
