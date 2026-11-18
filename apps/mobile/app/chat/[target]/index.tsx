@@ -560,6 +560,7 @@ function ChatDock({
         onSubmit={handleSend}
         menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} onDismiss={composer.dismiss} /> : null}
         placeholder={placeholder}
+        onPasteImages={attachments.pasteFiles}
         leading={
           <AttachButton onPress={() => void attachments.pick()} />
         }

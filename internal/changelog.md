@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: paste an image straight into the text box
+
+Date: 2026-11-18
+
+WHY: The "Paste image" chip needed a copied image; long-press Paste and the keyboard's image insert (Gboard's clipboard) still did nothing, as React Native's `TextInput` takes no image.
+
+Architectural: `@vvedantb/native-ui` 0.26.0 adds `PromptInput` `onPasteImages` and the `/paste-input` entry (`PasteInputProvider`, packages #284) on `expo-paste-input` (native: `OnReceiveContentListener` on Android). The root layout wraps the app in `PasteInputProvider`; both composers pass `useAttachments().pasteFiles`, which reads each pasted cache file with `expo-file-system` `File.base64()` and uploads it as a picked photo. Needs the new APK (native module). The chip stays.
+
 ## Phone: paste an image into the composer
 
 Date: 2026-11-18
