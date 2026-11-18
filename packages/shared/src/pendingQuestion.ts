@@ -53,3 +53,18 @@ export function buildStructuredAnswer(
   });
   return result;
 }
+
+/**
+ * A question the agent saved on its reply (not a blocking one), answered as a
+ * chat message, as the web dock sends it: `Q: <question>` and `A: <answer>`
+ * per question, in order, a blank line apart. `answers` is
+ * `buildStructuredAnswer`'s shape.
+ */
+export function formatQuestionAnswers(
+  questions: ReadonlyArray<ParsedQuestion>,
+  answers: Readonly<Record<string, string>>,
+): string {
+  return questions
+    .map((question) => `Q: ${question.question}\nA: ${answers[question.question] ?? ""}`)
+    .join("\n\n");
+}

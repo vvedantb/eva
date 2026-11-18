@@ -1,5 +1,6 @@
 "use client";
 
+import { TURN_DIFF_TITLE, turnDiffRange } from "@eva/shared/turnCheckpoint";
 import { useQuery } from "@tanstack/react-query";
 import { useAction } from "convex/react";
 import { api, type Id } from "@eva/backend";
@@ -36,9 +37,9 @@ export function TurnDiffDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl">
         <DialogHeader className="pr-8">
-          <DialogTitle className="text-base">Changes in this turn</DialogTitle>
+          <DialogTitle className="text-base">{TURN_DIFF_TITLE}</DialogTitle>
           <DialogDescription className="font-mono text-xs">
-            {beforeSha.slice(0, 7)}...{afterSha.slice(0, 7)}
+            {turnDiffRange({ beforeSha, afterSha })}
           </DialogDescription>
         </DialogHeader>
         {/* Mounted only while open, so an unopened row never fetches. */}

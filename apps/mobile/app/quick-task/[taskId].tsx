@@ -82,6 +82,8 @@ import {
   EmojiPickerSheet,
   ReactableMenu,
   TaskSubscribers,
+  measureHeld,
+  type HeldRect,
   useCommentMutations,
   type CommentMode,
 } from "@/quickTasks/TaskDiscussion";
@@ -581,7 +583,9 @@ function TaskDescription({
     getAIModelProvider(normalizeAIModel(model)),
   );
   const [editing, setEditing] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+  // Where the held description is on screen, while its hold menu is open.
+  const [menuAnchor, setMenuAnchor] = useState<HeldRect | null>(null);
+  const box = useRef<View>(null);
   const [pickingEmoji, setPickingEmoji] = useState(false);
   const text = description?.trim() ?? "";
   if (editing) {
@@ -646,7 +650,8 @@ function TaskDescription({
         }
         accessibilityHint="Long press to react"
         onPress={editable ? startEditing : undefined}
-        onLongPress={() => setMenuOpen(true)}
+        ref={box}
+        onLongPress={() => measureHeld(box.current, setMenuAnchor)}
         className="rounded-lg active:opacity-70"
       >
         {body}
@@ -655,9 +660,10 @@ function TaskDescription({
         <ReactionChips groups={reactions.groups} onToggle={reactions.toggle} />
       ) : null}
       <ReactableMenu
-        open={menuOpen}
-        onOpenChange={setMenuOpen}
-        title="Description"
+        anchor={menuAnchor}
+        onClose={() => setMenuAnchor(null)}
+        // The description, drawn again over the page.
+        preview={<View style={{ backgroundColor: theme.background }}>{body}</View>}
         groups={reactions.groups}
         onToggleReaction={reactions.toggle}
         onMoreReactions={() => setPickingEmoji(true)}

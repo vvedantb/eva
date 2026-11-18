@@ -12,7 +12,6 @@ type ModelFieldState = Pick<
 
 export function ConfigModelField({
   label,
-  description,
   disabled,
   state,
   traits,
@@ -20,7 +19,6 @@ export function ConfigModelField({
   onTraitsChange,
 }: {
   label: string;
-  description: string;
   disabled?: boolean;
   state: ModelFieldState;
   traits: StoredModelTraits;
@@ -28,7 +26,7 @@ export function ConfigModelField({
   onTraitsChange: (partial: StoredModelTraits) => void;
 }) {
   return (
-    <SettingsField label={label} description={description}>
+    <SettingsField label={label}>
       <ModelSelectWithTraits
         value={state.model}
         options={state.options}

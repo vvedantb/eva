@@ -198,7 +198,6 @@ function SyncSettingsRoute() {
         <>
           <SettingsSection
             title="Repositories"
-            description="Disabled repos are skipped during sync. New repos default to enabled."
           />
           {owners.map((owner, index) => (
             <ListEnter key={owner} index={index} fast staggerMax={8}>

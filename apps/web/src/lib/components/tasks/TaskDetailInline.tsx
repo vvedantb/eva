@@ -311,7 +311,10 @@ export function TaskDetailInline({
     }) => ReactNode,
   ) => (
     <ResizablePanelLayout
+      // Remount per task: the open flag is read once at mount.
+      key={taskId}
       storageKey="task-sandbox-panel"
+      collapsedStorageKey={`task-sandbox-panel:${taskId}`}
       leftDefaultSize="40%"
       leftMinWidthPx={350}
       rightMinWidthPx={300}

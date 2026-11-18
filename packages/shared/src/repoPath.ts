@@ -1,6 +1,6 @@
 import type { ChatEntityKind } from "@eva/backend";
 
-type RepoPathFields = { owner: string; name: string; rootDirectory?: string };
+export type RepoPathFields = { owner: string; name: string; rootDirectory?: string };
 
 /** Web path prefix for a githubRepos row (a monorepo app adds its folder name: `/owner/name/app`). */
 export function repoBasePath(repo: RepoPathFields): string {

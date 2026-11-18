@@ -68,7 +68,6 @@ export function McpConfigClient() {
     <SettingsPage title="MCP Config">
       <SettingsSection
         title="Root prompt"
-        description="Shared instructions injected into MCP context."
         action={
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -134,7 +133,6 @@ export function McpConfigClient() {
 
       <SettingsSection
         title="Repo MCP servers (.eva/mcp.json)"
-        description="Extra MCP servers for agents, synced from the repo's default branch. Edit the file to change them."
         bodyVariant="list"
       >
         {repoMcpServers.length > 0 ? (

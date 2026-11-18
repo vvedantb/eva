@@ -4,28 +4,12 @@ name: Release Android APK
 # tagged eva-apk-<versionName>. V Store does not list Eva: its catalog sync
 # reads mobile-apk-* tags only, so tag_prefix stays eva-apk-. See
 # apps/mobile/RELEASE.md.
+#
+# This file is manual dispatch only. Push releases on main now run from ci.yml:
+# the CI run gates on the same paths and the same feat / [release] decision,
+# then calls the shared workflow as its own release job, so a merge no longer
+# starts a separate empty run here.
 on:
-  push:
-    branches: [main]
-    # Files that reach the APK. Metro bundles @eva/shared and the runtime
-    # exports of @eva/backend (packages/backend/index.ts re-exports from
-    # convex/), so both stay in the filter. Keep it equal to that closure.
-    paths:
-      - "apps/mobile/**"
-      - "!apps/mobile/**/*.md"
-      - "!apps/mobile/.env.example"
-      - "packages/shared/**"
-      - "!packages/shared/**/*.test.ts"
-      - "packages/backend/package.json"
-      - "packages/backend/index.ts"
-      - "packages/backend/convex/**"
-      - "!packages/backend/convex/**/*.test.ts"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "pnpm-workspace.yaml"
-      - "patches/**"
-      - "scripts/build-android-release.sh"
-      - "scripts/check-clerk-native-api.sh"
   workflow_dispatch:
     inputs:
       version:

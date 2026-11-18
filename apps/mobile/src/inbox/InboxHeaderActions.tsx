@@ -2,10 +2,9 @@ import { EVA_THEME } from "@eva/shared/evaTheme";
 import type { InboxGroup } from "@eva/shared/notificationGroups";
 import { IconChecklist, IconChecks, IconChevronDown, IconFilter, type IconProps } from "@tabler/icons-react-native";
 import { selectionHaptic } from "@vvedantb/native-ui/haptics";
-import { SectionLabel, Sheet, SheetBody, SheetContent, SheetRow } from "@vvedantb/native-ui/primitives";
+import { SectionLabel, Sheet, SheetBody, SheetContent, SheetRow, MenuDivider } from "@vvedantb/native-ui/primitives";
 import { useState, type ComponentType } from "react";
 import { Pressable, Text, View } from "react-native";
-import { MenuDivider } from "@/ui/MenuSheet";
 import { useScheme } from "@/ui/theme";
 
 export type InboxFilter = "all" | "unread" | "archived";
