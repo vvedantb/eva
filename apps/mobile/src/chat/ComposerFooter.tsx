@@ -10,6 +10,7 @@ import type { FunctionReturnType } from "convex/server";
 import { useState, type ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { ComposerMentionChips } from "@/chat/MentionChip";
+import { QuoteChips, type Quotes } from "@/chat/Quotes";
 import type { useAttachments } from "@/chat/useAttachments";
 import type { useMentionComposer } from "@/chat/useMentionComposer";
 import { fromNow } from "@/ui/format";
@@ -39,14 +40,15 @@ function mutedFooterFill(theme: { muted: string; background: string }): string {
 }
 
 /**
- * The composer's `header`: the attachments and the mention chips, or
- * `undefined` when there are none. `PromptInput` pads a header row for any
- * header it gets, so an empty one must not be passed at all.
+ * The composer's `header`: the quotes (a chat only), the attachments and the
+ * mention chips, or `undefined` when there are none. `PromptInput` pads a
+ * header row for any header it gets, so an empty one must not be passed at all.
  */
-export function composerHeader(attachments: ComposerAttachments, composer: Composer): ReactNode {
-  if (attachments.items.length === 0 && composer.picks.length === 0) return undefined;
+export function composerHeader(attachments: ComposerAttachments, composer: Composer, quotes?: Pick<Quotes, "items" | "remove">): ReactNode {
+  if (attachments.items.length === 0 && composer.picks.length === 0 && (quotes?.items.length ?? 0) === 0) return undefined;
   return (
     <>
+      {quotes ? <QuoteChips quotes={quotes} /> : null}
       {attachments.items.length > 0 ? (
         <Attachments>
           {attachments.items.map((item) => (

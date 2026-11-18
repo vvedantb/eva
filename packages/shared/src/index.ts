@@ -397,6 +397,12 @@ export {
 export { placeChatUiPanels, type PanelPlacement, type PlaceablePanel, type PlacementMessage } from "./chatUiPanelPlacement";
 export {
   attachmentFileKind,
+  chatAttachmentErrorMessage,
+  contentTypeForUpload,
+  isAllowedAttachmentFile,
+  MAX_CHAT_ATTACHMENT_BYTES,
+  MAX_CHAT_ATTACHMENTS,
+  type AttachmentFileMeta,
   filenameExtension,
   isImageContentType,
   labelForAttachment,

@@ -204,7 +204,7 @@ export default function NewSessionScreen() {
             placeholder="Ask Eva anything..."
             onPasteImages={attachments.pasteFiles}
             leading={
-              <AttachButton onPress={() => void attachments.pick()} />
+              <AttachButton attachments={attachments} />
             }
             header={composerHeader(attachments, composer)}
             footer={
