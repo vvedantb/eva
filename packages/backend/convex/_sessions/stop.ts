@@ -51,7 +51,7 @@ async function stopOwnerTurn(
   chat: SessionChatContext | null,
 ): Promise<void> {
   if (task && isTaskRunning(task)) await cancelTaskRun(ctx, task);
-  if (chat) await cancelChatExecution(ctx, chat);
+  if (chat) await cancelChatExecution(ctx, chat, { holdQueue: true });
 }
 
 /** Stops one chat and the task it speaks for (a quick or project task's). */

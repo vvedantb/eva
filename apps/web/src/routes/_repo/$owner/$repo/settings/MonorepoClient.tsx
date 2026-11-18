@@ -136,7 +136,6 @@ export function MonorepoClient() {
       {connectedApps.length > 0 && (
         <SettingsSection
           title="Connected apps"
-          description="Hide apps without removing them."
           // Rows own their padding so the row divider spans the full width.
           bodyVariant="list"
         >
@@ -194,15 +193,6 @@ export function MonorepoClient() {
 
       <SettingsSection
         title="Detected apps"
-        description={
-          <>
-            Found in{" "}
-            <span className="font-medium text-foreground">
-              {repo.owner}/{repo.name}
-            </span>
-            . Add one as a separate codebase.
-          </>
-        }
         bodyVariant="list"
       >
         {loading ? (
@@ -294,7 +284,6 @@ export function MonorepoClient() {
 
       <SettingsSection
         title="Custom root directory"
-        description="Add an app by path."
       >
         <form
           onSubmit={(e) => {

@@ -3,6 +3,8 @@
 // `/<owner>/<name>[/<app>]/<section>/<number>…`, as `repoBasePath` and
 // `entityHref` build them; a query or `#comment-…` anchor is ignored.
 
+import { repoBasePath, type RepoPathFields } from "./repoPath";
+
 export type AppLinkTarget =
   | { kind: "task"; numId: number }
   | { kind: "project"; numId: number }
@@ -39,4 +41,24 @@ export function parseAppHref(href: string): AppLinkTarget | null {
     return { kind, numId: Number(first) };
   }
   return null;
+}
+
+/**
+ * The repo a web link sits in: the one whose base path (`repoBasePath`) the
+ * link starts with, the longest when an app folder and its repo both match.
+ * Undefined for a link outside every repo (Home, Inbox, a team).
+ */
+export function repoForHref<R extends RepoPathFields>(repos: readonly R[], href: string): R | undefined {
+  const path = href.split(/[?#]/)[0] ?? "";
+  let best: R | undefined;
+  let bestLength = -1;
+  for (const repo of repos) {
+    const base = repoBasePath(repo);
+    const inside = path === base || path.startsWith(`${base}/`);
+    if (inside && base.length > bestLength) {
+      best = repo;
+      bestLength = base.length;
+    }
+  }
+  return best;
 }

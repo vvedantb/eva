@@ -12,12 +12,21 @@ name: CI
 
 on:
   pull_request:
+    # The three default types plus ready_for_review, so CI also runs when a
+    # draft is marked ready. That run replaces the Grok wake-up run that used
+    # to fire on the same event, so the grok-wake job below lives here now.
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
 
+# Pull requests cancel their own in-progress run. Main runs must not: a push now
+# carries the Android release, so a newer push must not cancel a release mid-build,
+# and a shared group would also let a newer pending run replace an older pending one.
+# So pull requests share a per-branch group and cancel; pushes use github.run_id,
+# which is unique per run, so no main run ever cancels or queues behind another.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -55,3 +64,167 @@ jobs:
         # Blocks a Convex schema field/table/union member being removed while
         # live rows may still hold it. See docs/eva-convex.md > Migrations.
         node scripts/check-schema-narrowing.mjs
+
+  # Push releases run from here, after check, so a release waits for lint and tests to pass.
+  # This job is the path gate: no release runner starts unless the merge could be a release
+  # and touches a file that reaches the APK. The feat / [release] message test here is a
+  # deliberate superset (GitHub contains is case-insensitive); the shared workflow makes the
+  # exact feat / [release] decision. On a pull request this whole gate is skipped.
+  release-paths:
+    name: release paths
+    needs: check
+    if: >-
+      github.event_name == 'push' &&
+      (contains(github.event.head_commit.message, 'feat') ||
+       contains(github.event.head_commit.message, '[release]'))
+    runs-on: boat
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - id: diff
+        shell: bash
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          # Pathspecs: files that reach the APK. Metro bundles @eva/shared and the
+          # runtime exports of @eva/backend (packages/backend/index.ts re-exports from
+          # convex/), so both stay in the filter. Keep it equal to that closure. Docs,
+          # the mobile .env.example, shared tests, convex tests, web and .github/**
+          # (this file too) do not release.
+          #
+          # These are the release-android.yml push paths, translated one for one into git
+          # pathspecs: a positive x/** becomes ':(glob)x/**', a plain file ':(glob)file'
+          # (root-anchored, like GitHub), and a negative !y into ':(exclude,glob)y'.
+          pathspecs=(
+            ':(glob)apps/mobile/**'
+            ':(exclude,glob)apps/mobile/**/*.md'
+            ':(exclude,glob)apps/mobile/.env.example'
+            ':(glob)packages/shared/**'
+            ':(exclude,glob)packages/shared/**/*.test.ts'
+            ':(glob)packages/backend/package.json'
+            ':(glob)packages/backend/index.ts'
+            ':(glob)packages/backend/convex/**'
+            ':(exclude,glob)packages/backend/convex/**/*.test.ts'
+            ':(glob)package.json'
+            ':(glob)pnpm-lock.yaml'
+            ':(glob)pnpm-workspace.yaml'
+            ':(glob)patches/**'
+            ':(glob)scripts/build-android-release.sh'
+            ':(glob)scripts/check-clerk-native-api.sh'
+          )
+
+          # A forced push can set BEFORE to a commit we do not have, and a brand new branch
+          # sets it to all-zeros. We cannot diff against it, so release and let the shared
+          # workflow make the final call.
+          if ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            echo "BEFORE $BEFORE is not a commit we have; treating as a release path change."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          files="$(git diff --name-only "$BEFORE" "$AFTER" -- "${pathspecs[@]}")"
+          if [ -n "$files" ]; then
+            echo "Release paths changed:"
+            echo "$files"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No release paths changed."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # The Android release itself. It calls the shared workflow exactly as the old
+  # release-android.yml push trigger did. The shared workflow's first step makes the exact
+  # feat / [release] decision from the push commit message, so a message that passed the
+  # superset gate above but is not really a release still skips cleanly before checkout.
+  release:
+    needs: release-paths
+    if: needs.release-paths.outputs.changed == 'true'
+    permissions:
+      contents: write
+    concurrency:
+      group: release-android
+      cancel-in-progress: false
+    uses: vvedantb/packages/.github/workflows/release-android-apk.yml@main
+    with:
+      app_name: eva
+      release_title: Eva
+      apk_basename: eva
+      package_id: com.projectvdotuk.eva
+      # Not V Store: its catalog sync reads mobile-apk-* tags.
+      tag_prefix: eva-apk-
+      mark_as_latest: false
+      # A boat.dev runner. It has no Android SDK: the shared workflow installs
+      # the command line tools and sdk_packages when it finds none.
+      runs_on: boat-large
+      upload_dry_run_artifact: true # artifact eva-android-dry-run
+      pre_setup_command: |
+        df -h /
+        sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost /opt/hostedtoolcache/CodeQL /usr/local/lib/node_modules /usr/share/swift /usr/local/share/powershell /usr/local/share/chromium || true
+        sudo docker image prune --all --force || true
+        df -h /
+      # Public build-time values, from repository variables (Settings,
+      # Secrets and variables, Actions, Variables). They match the web app's
+      # VITE_CLERK_PUBLISHABLE_KEY and VITE_CONVEX_URL on Vercel.
+      build_env: |
+        EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ vars.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+        EXPO_PUBLIC_CONVEX_URL=${{ vars.EXPO_PUBLIC_CONVEX_URL }}
+        EXPO_PUBLIC_WEB_URL=${{ vars.EXPO_PUBLIC_WEB_URL }}
+        EAS_PROJECT_ID=${{ vars.EAS_PROJECT_ID }}
+      # Fail early and clearly: apps/mobile/src/config.ts has no defaults, and
+      # Clerk must have the Native API on.
+      pre_build_command: |
+        missing=0
+        for name in EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY EXPO_PUBLIC_CONVEX_URL EXPO_PUBLIC_WEB_URL; do
+          if [ -z "${!name:-}" ]; then
+            echo "::error::Repository variable $name is empty. Set it under Settings, Secrets and variables, Actions, Variables (see apps/mobile/RELEASE.md)."
+            missing=1
+          fi
+        done
+        [ "$missing" -eq 0 ] || exit 1
+        # The APK is blank on launch if Clerk's Native API is off for this key.
+        bash scripts/check-clerk-native-api.sh
+    secrets: inherit
+
+  # Wake the Grok automerge bot. This used to be a separate workflow
+  # (grok-automerge-ready.yml) that started its own run on every pull_request
+  # synchronize / ready_for_review. It lives here now so no second run starts.
+  # No `needs`: it must not wait for check. It fires only on ready_for_review
+  # (a draft marked ready) and synchronize (push / rebase), the same two events
+  # as before, so opened and reopened send no webhook. A failed webhook must
+  # not turn the CI run red, so the curl step is continue-on-error and a
+  # failure prints a ::warning:: annotation.
+  grok-wake:
+    if: >-
+      github.event_name == 'pull_request' &&
+      (github.event.action == 'ready_for_review' || github.event.action == 'synchronize') &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Send webhook to Grok automerge bot
+        continue-on-error: true
+        run: |
+          echo "Sending ${{ github.event.action }} webhook for PR #${{ github.event.pull_request.number }}..."
+          if curl -f -X POST "${{ secrets.GROK_BOT_WEBHOOK_URL }}" \
+            -H "Authorization: Bearer ${{ secrets.GROK_BOT_WEBHOOK_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "event": "${{ github.event.action }}",
+              "repo": "${{ github.repository }}",
+              "pr": ${{ github.event.pull_request.number }},
+              "title": ${{ toJSON(github.event.pull_request.title) }},
+              "html_url": "${{ github.event.pull_request.html_url }}",
+              "draft": ${{ github.event.pull_request.draft }}
+            }'; then
+            echo "Webhook sent successfully."
+          else
+            echo "::warning::Grok automerge webhook failed for PR #${{ github.event.pull_request.number }} (${{ github.event.action }}). The CI run is not failed by this."
+          fi

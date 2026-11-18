@@ -43,38 +43,21 @@ type UpdateRepoConfig = (args: {
 
 export function RepositorySettingsSection({
   repoId,
-  owner,
-  name,
   repo,
-  isMonorepo,
   updateConfig,
 }: {
   repoId: Id<"githubRepos">;
-  owner: string;
-  name: string;
   repo: RepoConfigFields;
-  isMonorepo: boolean;
   updateConfig: UpdateRepoConfig;
 }) {
   const defaultModels = useAvailableAiModels(repoId, repo.defaultModel);
 
-  const monorepoHint = isMonorepo ? (
-    <>
-      Applies to every app in{" "}
-      <span className="font-medium text-foreground">
-        {owner}/{name}
-      </span>
-      .
-    </>
-  ) : undefined;
-
   return (
     <>
-      <SettingsSection title="Defaults" description={monorepoHint}>
+      <SettingsSection title="Defaults">
         <div className="grid gap-5">
           <SettingsField
             label="Base branch"
-            description="Used when creating quick tasks. Falls back to main."
           >
             <BranchSelect
               value={repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH}
@@ -88,7 +71,6 @@ export function RepositorySettingsSection({
 
           <ConfigModelField
             label="Default model"
-            description="Provider, model, and traits for new tasks and sessions."
             state={defaultModels}
             traits={storedTraitsFromRepoDefaults(repo)}
             onValueChange={(nextModel) => {
@@ -120,12 +102,10 @@ export function RepositorySettingsSection({
 
       <SettingsSection
         title="Sandboxes"
-        description={monorepoHint}
         bodyVariant="list"
       >
         <SettingsToggleRow
           title="Usable by other sandboxes"
-          description="Sandboxes for other repositories you can access in Eva may clone and push to this repository. Turn off to keep it private to its own sandboxes."
           action={
             <Switch
               checked={repo.sandboxReadExcluded !== true}
@@ -138,7 +118,6 @@ export function RepositorySettingsSection({
         />
         <SettingsToggleRow
           title="Agent memory"
-          description="Agents read and update notes in .eva/memory/ so lessons carry across sessions. Notes are committed with each PR."
           action={
             <Switch
               checked={repo.agentMemoryEnabled === true}

@@ -409,6 +409,9 @@ export const chatDaemonEntityFields = {
   // `steer: "requested"`. Kept on the entity so the 50ms claim poll reads the
   // queue only while a steer is waiting (see `_chat/steer.ts`).
   steerRequestedAt: v.optional(v.number()),
+  // When the user last pressed Stop. Messages queued before it stay queued
+  // until the user presses Steer (see `nextRunnableQueuedMessage`).
+  queueHeldAt: v.optional(v.number()),
   // Same level-triggered flag as sessionDaemonStates.usageRefreshRequestedAt,
   // for project and task chat daemons.
   usageRefreshRequestedAt: v.optional(v.number()),
@@ -1394,6 +1397,9 @@ export const messageFields = {
   // amber. Unset alerts with `errorDetail` render as errors.
   alertTone: v.optional(v.literal("warning")),
   errorDetail: v.optional(v.string()),
+  // Assistant rows: the turn was stopped before it finished (Stop, a stall,
+  // a sandbox stop). Lets the chat say so instead of showing a bare bubble.
+  stopped: v.optional(v.literal(true)),
   // Assistant rows: why the turn failed, when the client needs to react to the
   // class of failure (the usage-limit recovery banner). Only "rate_limit" is
   // stamped today; unclassified failures leave it unset.

@@ -143,7 +143,6 @@ export function SkillsClient() {
 
       <SettingsSection
         title="Eva skills"
-        description="Built-in skills Eva maintains. Installing one makes it available to this repo's agents without committing anything to your codebase — the agent fetches the instructions from Eva when it runs the skill."
         bodyVariant="list"
       >
         <div className="divide-y divide-border/50">
@@ -184,13 +183,6 @@ export function SkillsClient() {
 
       <SettingsSection
         title="Repo skills"
-        description={
-          <>
-            Synced from <code>.agents/skills</code> and{" "}
-            <code>.claude/skills</code> on the base branch. Claude-only skills
-            are labelled in the <code>/</code> picker.
-          </>
-        }
         bodyVariant="list"
       >
         {skills.length > 0 ? (

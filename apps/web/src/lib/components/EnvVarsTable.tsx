@@ -577,7 +577,6 @@ export function EnvVarsTable({
           </SettingsSection>
           <SettingsSection
             title="Connections"
-            description="Shared API keys used when nobody has signed in via Settings → Connections."
           >
             <EnvVarProviderSlots
               entries={connectorSlots}
@@ -623,7 +622,6 @@ export function EnvVarsTable({
           {/* The table owns the card's full width, so the body carries no padding. */}
           <SettingsSection
             title="Sandbox variables"
-            description="Anything not covered by a known slot above."
             action={freeformActions}
             bodyVariant="list"
           >
@@ -651,7 +649,6 @@ export function EnvVarsTable({
               <SettingsEmptyState
                 icon={IconKey}
                 title="No sandbox variables"
-                description="Add one to inject it into every sandbox for this scope."
               />
             )}
           </SettingsSection>
@@ -693,7 +690,6 @@ export function EnvVarsTable({
                 <SettingsEmptyState
                   icon={IconCamera}
                   title="No seed variables"
-                  description="Add secrets that only snapshot seed commands need, such as a staging deploy key."
                 />
               )}
             </SettingsSection>

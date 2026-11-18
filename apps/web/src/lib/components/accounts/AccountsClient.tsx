@@ -82,7 +82,6 @@ export function AccountsClient() {
     <SettingsPage title="Accounts">
       <SettingsSection
         title="Your accounts"
-        description="Your credentials are used before team credentials when you pick a model."
         action={
           <Button size="sm" onClick={openCreate}>
             <IconPlus size={16} className="mr-1.5" />
@@ -100,7 +99,6 @@ export function AccountsClient() {
           <SettingsEmptyState
             icon={IconKey}
             title="No accounts yet"
-            description="Add one to run agents on your own credentials instead of the team's."
           />
         ) : (
           <div className="divide-y divide-border/50">

@@ -335,8 +335,7 @@ export const getContext = internalAction({
     const user = await ctx.runQuery(internal.auth.getUserByClerkId, {
       clerkId: clerkUserId,
     });
-    const userId =
-      user?._id ?? (await ensureUserExists(clerkUserId));
+    const userId = user?._id ?? (await ensureUserExists(clerkUserId));
     return { userId };
   },
 });
@@ -1081,7 +1080,9 @@ export const orchestratorGetAgentState = internalAction({
     // Same rule as list_agents / stop_sandbox: the open turn is "is executing",
     // daemon `/loop` continuations included.
     const owned =
-      kind === "session" ? null : await readOwnedChatAsUser(clerkUserId, kind, id);
+      kind === "session"
+        ? null
+        : await readOwnedChatAsUser(clerkUserId, kind, id);
     const [sessionChats, isExecuting, pullRequests] = await Promise.all([
       kind === "session"
         ? loadSessionChatsAsUser(clerkUserId, id)
@@ -1345,13 +1346,11 @@ async function readOwnedChatAsUser(
   kind: "task" | "project",
   id: string,
 ): Promise<z.infer<typeof ownedSessionReadSchema> | null> {
-  return ownedSessionReadSchema
-    .nullable()
-    .parse(
-      await runAsUser("query", clerkUserId, "sessions:getOwned", {
-        owner: ownerArg(kind, id),
-      }),
-    );
+  return ownedSessionReadSchema.nullable().parse(
+    await runAsUser("query", clerkUserId, "sessions:getOwned", {
+      owner: ownerArg(kind, id),
+    }),
+  );
 }
 
 /**
@@ -1385,6 +1384,11 @@ export const orchestratorSendMessage = internalAction({
      * for a composer-typed turn.
      */
     sentViaOrchestrator: v.boolean(),
+    /**
+     * Account pick: an id, its owner's first name, or "team". Absent keeps
+     * the chat's current account (see `resolveMcpProviderAccount`).
+     */
+    account: v.optional(v.string()),
   },
   returns: v.object({
     delivered: v.union(v.literal("started"), v.literal("queued")),
@@ -1404,6 +1408,7 @@ export const orchestratorSendMessage = internalAction({
       excludeChatId,
       aveThreadId,
       sentViaOrchestrator,
+      account,
     },
   ) => {
     // A task or project chats in a chat of its session, so its message is
@@ -1456,11 +1461,20 @@ export const orchestratorSendMessage = internalAction({
       model,
       isExecuting,
     );
+    const resolvedAccount = await ctx.runQuery(
+      internal.mcp.queries.resolveMcpProviderAccount,
+      {
+        account,
+        scope: { kind: "chat", chatId: targetId, model: agentDelivery.model },
+      },
+    );
+    if (!resolvedAccount.ok) throw new Error(resolvedAccount.error);
     for (const call of buildChatMessageCalls({
       chatId: targetId,
       message,
       delivery: agentDelivery,
       sentViaOrchestrator,
+      providerAccountId: resolvedAccount.providerAccountId,
     })) {
       await runAsUser("mutation", clerkUserId, call.fn, call.args);
     }
@@ -1675,6 +1689,8 @@ export const orchestratorCreateSession = internalAction({
     installDependencies: v.optional(v.boolean()),
     /** Calling session; the new session joins its linked-session group. */
     fromSessionId: v.optional(v.string()),
+    /** Resolved by `resolveMcpProviderAccount`; null = Team, absent = own default. */
+    providerAccountId: v.optional(v.union(v.string(), v.null())),
   },
   returns: v.object({
     sessionId: v.string(),
@@ -1694,6 +1710,7 @@ export const orchestratorCreateSession = internalAction({
       repoGroupId,
       installDependencies,
       fromSessionId,
+      providerAccountId,
     },
   ) => {
     // No model: `_sessions/mutations:create` resolves `repo.defaultModel`.
@@ -1714,6 +1731,9 @@ export const orchestratorCreateSession = internalAction({
       createArgs.installDependencies = installDependencies;
     }
     if (fromSessionId) createArgs.fromSessionId = fromSessionId;
+    if (providerAccountId !== undefined) {
+      createArgs.providerAccountId = providerAccountId;
+    }
 
     const created = createdSessionSchema.parse(
       await runAsUser(

@@ -8,7 +8,19 @@ import { jsonParser, keyedStore, persistedStore } from "@/storage/persistedStore
 /** One pull request, as every Code read and setting below is keyed. */
 export type PrRef = { repoId: Id<"githubRepos">; prNumber: number };
 
-const prKey = ({ repoId, prNumber }: PrRef) => `${repoId}.${prNumber}`;
+/** The changes between two commits, as a chat turn's checkpoints (`beforeSha...afterSha`). */
+export type CompareRef = {
+  repoId: Id<"githubRepos">;
+  base: string;
+  head: string;
+  /** `https://github.com/<owner>/<name>`, for the per-file "View file" link (the compare read names none). */
+  repoUrl: string;
+};
+
+/** What a diff screen shows: a pull request, or two commits. Its reads and settings are keyed by it. */
+export type DiffRef = PrRef | CompareRef;
+
+const prKey = (ref: DiffRef) => ("prNumber" in ref ? `${ref.repoId}.${ref.prNumber}` : `${ref.repoId}.${ref.base}...${ref.head}`);
 
 // ── The diff ────────────────────────────────────────────────────────────────
 
@@ -40,8 +52,9 @@ const DIFF_FRESH_MS = 2 * 60_000;
  * same pull request shares the result. `reload` reads past the server cache
  * (the web "Refresh diff") and keeps the diff on screen meanwhile.
  */
-export function usePrDiff(pr: PrRef | null): { state: PrDiffState; reload: () => void } {
+export function usePrDiff(pr: DiffRef | null): { state: PrDiffState; reload: () => void } {
   const getPrDiff = useAction(api.github.getPrDiff);
+  const getCompareDiff = useAction(api.github.getCompareDiff);
   const key = pr === null ? null : prKey(pr);
   const entry = diffs.useValue(key ?? "");
   const ignoreWhitespace = useIgnoreWhitespace()[0];
@@ -51,7 +64,16 @@ export function usePrDiff(pr: PrRef | null): { state: PrDiffState; reload: () =>
     const previous = diffs.get(key)?.state;
     const shown = previous?.status === "ready" ? previous : null;
     diffs.set(key, { state: shown === null ? { status: "loading" } : { ...shown, refreshing: true }, loadedAt: Date.now() });
-    getPrDiff({ ...pr, force }).then(
+    // Two commits read `github.getCompareDiff`, which names no repo URL or head: the ref carries them,
+    // for the per-file "View file" link. A commit GitHub does not have yet (a push pending) is an error.
+    const read =
+      "prNumber" in pr
+        ? getPrDiff({ ...pr, force })
+        : getCompareDiff({ repoId: pr.repoId, baseSha: pr.base, headSha: pr.head, force }).then((compare) => {
+            if (compare.unavailable) throw new Error("Commit not on GitHub yet");
+            return { ...compare, repoUrl: pr.repoUrl, headSha: pr.head };
+          });
+    read.then(
       (payload) =>
         diffs.set(key, {
           state: {
@@ -113,7 +135,7 @@ const viewedStore = persistedStore<readonly string[]>("prDiffViewed", [], jsonPa
  * pull request. The web keeps them in the browser, not the backend, so the
  * phone keeps its own on the device; the chat diff and the Code tab share them.
  */
-export function useViewedFiles(pr: PrRef): {
+export function useViewedFiles(pr: DiffRef): {
   isViewed: (path: string) => boolean;
   setViewed: (path: string, viewed: boolean) => void;
   count: number;
@@ -160,7 +182,7 @@ let nextCommentId = 0;
  * cleared then. In memory only, as on the web, but shared by the file
  * screens and the composer, so they last until the app closes.
  */
-export function usePendingLineComments(pr: PrRef): {
+export function usePendingLineComments(pr: DiffRef): {
   comments: readonly PendingLineComment[];
   add: (comment: Omit<PendingLineComment, "id">) => void;
   remove: (id: string) => void;

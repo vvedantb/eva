@@ -27,7 +27,8 @@ import { schedulePrTitleSync } from "../_github/prTitleSync";
 import { DEFAULT_SESSION_TITLE } from "./helpers";
 import { ensureSessionGroup } from "./groups";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
-import { archiveSession, unarchiveSession } from "./archive";
+import { archiveSession, isSessionArchived, unarchiveSession } from "./archive";
+import { requestSessionSandboxStop } from "./sandbox";
 import {
   closeLivePullRequests,
   findPrimaryPullRequest,
@@ -44,6 +45,7 @@ import { touchUserActivity } from "../_sandbox/activity";
 import { assertComposerMessageRole } from "../_messages/publicRole";
 import {
   assertStandaloneSession,
+  isStandaloneSession,
   ownedSessionOwnerValidator,
   STANDALONE_SESSION_OWNER,
 } from "./owner";
@@ -441,6 +443,53 @@ export async function archiveSessionDoc(
   await ctx.db.patch(session._id, { status: "closed" });
   await archiveSession(ctx, session);
 }
+
+/**
+ * The user-facing archive (`chats.archive`, `archiveGroup`): stops the
+ * sandbox when one is up, then `archiveSessionDoc`. The caller has already
+ * checked access and that the session is standalone.
+ */
+export async function stopAndArchiveSession(
+  ctx: MutationCtx,
+  session: Doc<"sessions">,
+): Promise<void> {
+  if (session.sandboxId) await requestSessionSandboxStop(ctx, session._id);
+  // Re-read: the stop moves the status, and the archive patches from this doc.
+  const fresh = await ctx.db.get(session._id);
+  if (fresh) await archiveSessionDoc(ctx, fresh);
+}
+
+/**
+ * Archives every active member of the session's linked-session group that
+ * the user can reach. Members stay in the group, so each one can be
+ * unarchived on its own later.
+ */
+export const archiveGroup = authMutation({
+  args: { sessionId: v.id("sessions") },
+  returns: v.object({ archived: v.number() }),
+  handler: async (ctx, args) => {
+    const session = await getSessionWithAccess(
+      ctx.db,
+      args.sessionId,
+      ctx.userId,
+    );
+    if (!session.sessionGroupId) throw new Error("Session is not in a group");
+    const groupId = session.sessionGroupId;
+    // Same cap as `listGroup`, so the dialog's count matches what archives.
+    const members = await ctx.db
+      .query("sessions")
+      .withIndex("by_session_group", (q) => q.eq("sessionGroupId", groupId))
+      .take(50);
+    let archived = 0;
+    for (const member of members) {
+      if (isSessionArchived(member) || !isStandaloneSession(member)) continue;
+      if (!(await hasRepoAccess(ctx.db, member.repoId, ctx.userId))) continue;
+      await stopAndArchiveSession(ctx, member);
+      archived++;
+    }
+    return { archived };
+  },
+});
 
 /** Archives a session so it no longer appears in the active list.
  * Also archives the sandbox (moves to cold storage for cost savings).

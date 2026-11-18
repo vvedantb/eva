@@ -683,14 +683,19 @@ export async function sendSessionChatMessage(
 }
 
 /**
- * Cancels one chat's active turn and starts its queued messages. For a
- * daemon-backed turn, sets `cancelRequestedAt` so the warm provider process
- * interrupts its own in-flight turn on its next `claimPendingTurn` poll.
- * One-shot providers retain the process-kill path.
+ * Cancels one chat's active turn, then drains the queue. For a daemon-backed
+ * turn, sets `cancelRequestedAt` so the warm provider process interrupts its
+ * own in-flight turn on its next `claimPendingTurn` poll. One-shot providers
+ * retain the process-kill path.
+ *
+ * `holdQueue`: a Stop holds what is already queued (`queueHeldAt`), so Stop
+ * never starts the next message by itself. A steer that interrupts passes
+ * false: its message must start the next turn.
  */
 export async function cancelChatExecution(
   ctx: MutationCtx,
   context: SessionChatContext,
+  { holdQueue }: { holdQueue: boolean },
 ): Promise<void> {
   const { chat, session } = context;
   const cancelled = await cancelChatTurn(ctx, {
@@ -714,11 +719,14 @@ export async function cancelChatExecution(
   });
   if (!cancelled) return;
 
+  const now = Date.now();
   const chatPatch: {
     pendingTurn?: undefined;
     syntheticTurnMessageId?: undefined;
+    queueHeldAt?: number;
     updatedAt: number;
-  } = { updatedAt: Date.now() };
+  } = { updatedAt: now };
+  if (holdQueue) chatPatch.queueHeldAt = now;
   if (cancelled.clearsPendingTurn) chatPatch.pendingTurn = undefined;
   if (cancelled.cancelOwnsCurrentTurn) {
     chatPatch.syntheticTurnMessageId = undefined;
@@ -737,7 +745,7 @@ export const cancelSessionExecution = authMutation({
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
     for (const chat of await listLiveSessionChats(ctx.db, session._id)) {
-      await cancelChatExecution(ctx, { chat, session });
+      await cancelChatExecution(ctx, { chat, session }, { holdQueue: true });
     }
     return null;
   },
