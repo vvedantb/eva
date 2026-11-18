@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: find in chat, session summary, edit and download a proposed plan
+
+Date: 2026-11-18
+
+WHY: The web finds text in a thread, summarises a session and edits or downloads a proposed plan; the phone had none of these.
+
+Architectural: the chat ⋯ menu gains "Find in chat", which opens a find bar under the header (the web count, up and down, Return for next). The matching moves to `@eva/shared/threadFind` (the web re-exports it); each match scrolls the inverted list to its message with the kit's new `ConversationList` `scrollToIndex` (`@vvedantb/native-ui` 0.29.0, packages #291), which reaches rows not drawn yet, and a primary tint marks the message. Session chats gain the web "Summarise Session" / "Regenerate Summary" item (awake sandbox and a message needed) with its confirm, and the folded "Session summary" block above the chat, open with the live step while it writes. The plan card gains Download (the web `.md` file through the share sheet, `expo-sharing`) and Edit (a sheet that saves with `sessions.updatePlanContent`, as the web). Kit 0.29.0 also draws sheets, dialogs and dropdown menus in the app's window (packages #290), so opening or closing one over a scrolled-up chat no longer throws it to its newest message on Android.
+
 ## Phone chat composer: background processes, review comments and skill suggestions
 
 Date: 2026-11-18

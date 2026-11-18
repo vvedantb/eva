@@ -21,6 +21,7 @@ import {
   SANDBOX_CHAT_COPY,
   sandboxComposerState,
   type SessionMenuAction,
+  tokenizedToDisplayText,
   toRepoRelativePath,
   turnErrorTitle,
   visibleChatMessages,
@@ -32,7 +33,8 @@ import { isUsageLimitFailure } from "@eva/shared/usageLimitRecovery";
 import { messageLinkHref } from "@eva/shared/messageLink";
 import { appendCitationsToPrompt } from "@eva/shared/assistantCitation";
 import { formatQuestionAnswers, type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
-import { IconChevronDown, IconMessageCircle, IconPlayerStop } from "@tabler/icons-react-native";
+import { collectThreadFindDocuments } from "@eva/shared/threadFind";
+import { IconChevronDown, IconMessageCircle, IconPlayerStop, IconSearch } from "@tabler/icons-react-native";
 import {
   ChoiceQuestion,
   Conversation,
@@ -50,6 +52,7 @@ import {
 import { providerLabel } from "@vvedantb/native-ui/brand";
 import { goBackOrReplace, RouterStackPageHeader } from "@vvedantb/native-ui/expo-router";
 import { CenteredSpinner, EmptyState, Spinner, Text } from "@vvedantb/native-ui/primitives";
+import { withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useConvex, useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -71,7 +74,8 @@ import { createSeenRows, SeenRowsContext } from "@/chat/cards/seenRows";
 import { SandboxBranchChip } from "@/chat/BranchChips";
 import { ComposerFooter, composerHeader, useSimpleView } from "@/chat/ComposerFooter";
 import { ModelChip } from "@/chat/ModelChip";
-import { ChatHeader } from "@/chat/ChatHeader";
+import { ChatHeader, type MenuEntry } from "@/chat/ChatHeader";
+import { ThreadFindBar } from "@/chat/ThreadFindBar";
 import { SessionChatTabs } from "@/chat/SessionChatTabs";
 import { SandboxControl, SandboxErrorBanner, useSessionSandbox } from "@/chat/SandboxControl";
 import { UsageButton } from "@/chat/UsageSheet";
@@ -102,6 +106,7 @@ import { useTypingPresence } from "@/chat/useTypingPresence";
 import { useMentionComposer } from "@/chat/useMentionComposer";
 import { WEB_URL } from "@/config";
 import { useSessionActions } from "@/sessions/useSessionActions";
+import { SessionSummaryBlock, useSessionSummary } from "@/sessions/SessionSummary";
 import { textColor, useScheme } from "@/ui/theme";
 import { useChatTranscript } from "@/chat/useChatTranscript";
 
@@ -183,6 +188,15 @@ export default function ChatScreen() {
   const messageMenu = useMessageMenu(restore.request);
   // Quotes from replies ("Select text", then "Quote"), waiting for the next send.
   const quotes = useQuotes();
+  // "Find in chat" (the web `ThreadFindBar`): the bar under the header while open, and the message of its active match.
+  const [findOpen, setFindOpen] = useState(false);
+  const [findActiveId, setFindActiveId] = useState<string | null>(null);
+  // The web header's Summarise Session: once the sandbox is awake and the chat has a message.
+  const summary = useSessionSummary({
+    sessionId: chat?.session?.id,
+    hasSummary: (sessionRow?.summary?.length ?? 0) > 0,
+    canSummarise: sandbox.isActive && (messages?.length ?? 0) > 0,
+  });
 
   if (chat === undefined || chat === null) {
     return (
@@ -337,6 +351,12 @@ export default function ChatScreen() {
           : undefined,
     });
   };
+  // What Find searches, as the web: each message's text as it reads (mention tokens as names), no system rows.
+  const findDocuments = collectThreadFindDocuments(
+    visible.map((message) => ({ id: message._id, text: tokenizedToDisplayText(message.content), skip: message.isSystemAlert === true })),
+  );
+  const leadingMenu: MenuEntry[] = [{ label: "Find in chat", icon: IconSearch, onSelect: () => setFindOpen(true) }];
+  if (summary.menuItem) leadingMenu.push(summary.menuItem);
   const panelReply =
     chat.canReply && chat.sandboxActive
       ? (message: string) => {
@@ -354,6 +374,7 @@ export default function ChatScreen() {
         onOpenWeb={openWebChat}
         onCopyLink={() => void Clipboard.setStringAsync(webUrl(chat.webPath))}
         onStop={working ? handleStop : undefined}
+        leadingItems={leadingMenu}
         usage={<UsageButton chat={chat} />}
         sandbox={<SandboxControl sandbox={sandbox} working={working} />}
         sessionMenu={
@@ -370,8 +391,21 @@ export default function ChatScreen() {
       />
       <SandboxErrorBanner sandbox={sandbox} />
       {chat.session ? <SessionChatTabs sessionId={chat.session.id} activeChatId={chat.session.chatId} archived={chat.session.archived} /> : null}
+      {chat.session ? <SessionSummaryBlock sessionId={chat.session.id} summary={sessionRow?.summary} /> : null}
       {sessionActions.dialogs}
+      {summary.dialog}
       <Conversation>
+        {findOpen ? (
+          <ThreadFindBar
+            documents={findDocuments}
+            rowIndex={(messageId) => newestFirst.findIndex((message) => message._id === messageId)}
+            onActiveChange={setFindActiveId}
+            onClose={() => {
+              setFindOpen(false);
+              setFindActiveId(null);
+            }}
+          />
+        ) : null}
         <SeenRowsContext.Provider value={seenRows}>
         <ConversationList
           inverted
@@ -435,6 +469,7 @@ export default function ChatScreen() {
                 message={message}
                 dayStart={dayStarts.has(message._id)}
                 newStart={message._id === newBoundaryId}
+                findActive={message._id === findActiveId}
                 fromTeammate={fromTeammate}
                 senderName={fromTeammate && message.userId ? teammateNames.get(message.userId) : undefined}
                 teammate={fromTeammate && message.userId ? teammateById.get(message.userId) : undefined}
@@ -769,6 +804,7 @@ function ChatMessageRow({
   message,
   dayStart,
   newStart,
+  findActive,
   fromTeammate,
   senderName,
   teammate,
@@ -789,6 +825,8 @@ function ChatMessageRow({
   dayStart: boolean;
   /** The first reply you had not seen: the "NEW" divider goes above it. */
   newStart: boolean;
+  /** The message of Find's active match: a tinted band marks it. */
+  findActive: boolean;
   fromTeammate: boolean;
   senderName: string | undefined;
   teammate: ComponentProps<typeof TeammateBubble>["sender"];
@@ -813,6 +851,9 @@ function ChatMessageRow({
   /** A reply that changed code: its Changes chip, over the footer. */
   changes?: ReactNode;
 }) {
+  const scheme = useScheme();
+  // Find's active match: the message on a primary tint, as the web paints its active match.
+  const findBand = findActive ? { backgroundColor: withAlpha(EVA_THEME[scheme].primary, 0.1) } : undefined;
   // A system row (a handoff, a refusal): the web divider, with its detail behind a link.
   if (message.isSystemAlert === true) {
     return (
@@ -844,7 +885,7 @@ function ChatMessageRow({
     </>
   );
   return (
-              <View className={`gap-3 ${THREAD_INSET}`}>
+              <View className={`gap-3 ${THREAD_INSET}`} style={findBand}>
                 {dayStart ? <DayDivider timestamp={message.timestamp} /> : null}
                 {newStart ? <NewDivider /> : null}
                 {/* Web: parts `gap-0.5`; a reply is full width, a user message at most 95%. */}

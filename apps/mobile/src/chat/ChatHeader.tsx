@@ -27,12 +27,16 @@ import { RepoLogo } from "@/ui/RepoLogo";
 import { displayTitle } from "@/ui/format";
 import { useScheme } from "@/ui/theme";
 
+/** No leading group: the default, one array for every render. */
+const NO_ITEMS: MenuEntry[] = [];
+
 /** One ⋯ menu item: the `DropdownMenuItem` label, icon and tone. */
-type MenuEntry = {
+export type MenuEntry = {
   label: string;
   icon: ComponentType<IconProps>;
   warning?: boolean;
   destructive?: boolean;
+  disabled?: boolean;
   onSelect: () => void;
 };
 
@@ -56,6 +60,7 @@ export function ChatHeader({
   onCopyLink,
   onStop,
   sessionMenu,
+  leadingItems = NO_ITEMS,
   usage,
   sandbox,
 }: {
@@ -75,6 +80,8 @@ export function ChatHeader({
     /** Each action's label and icon (`useSessionActions().itemFor`). */
     itemFor: (action: SessionMenuAction) => { label: string; icon: ComponentType<IconProps>; warning?: boolean };
   };
+  /** The menu's first group: Find in chat, and a session's Summarise Session (the web header menu's first item). */
+  leadingItems?: MenuEntry[];
   /** Before the ⋯ menu: the usage button (`UsageButton`), as the web header's context ring and plan chip. */
   usage?: ReactNode;
   /** Before the usage button: a session's wake / sleep control (`SandboxControl`), as the web session header. */
@@ -91,12 +98,13 @@ export function ChatHeader({
   const sessionItems = (actions: SessionMenuAction[]): MenuEntry[] =>
     actions.map((action) => ({ ...(sessionMenu ? sessionMenu.itemFor(action) : SESSION_ACTION_ITEMS[action]), onSelect: () => sessionMenu?.onSelect(action) }));
   const [sessionMain = [], ...sessionRest] = sessionMenu?.groups ?? [];
-  // The web More menu's groups: Rename and Regenerate title; then its Copy
+  // The web More menu's groups: Find in chat and Summarise Session first; then Rename and Regenerate title; then its Copy
   // submenu (title, link, branch name) laid flat with Open PR and Open on web;
   // then Archive / Unarchive alone; then Stop, the destructive item, last.
   // Empty groups drop out, so no divider stands alone.
   const isEdit = (action: SessionMenuAction) => action === "rename" || action === "regenerateTitle";
   const menuGroups: MenuEntry[][] = [
+    leadingItems,
     sessionItems(sessionMain.filter(isEdit)),
     [
       ...sessionItems(sessionMain.filter((action) => action === "copyTitle")),
@@ -156,6 +164,7 @@ export function ChatHeader({
                   icon={item.icon}
                   warning={item.warning}
                   destructive={item.destructive}
+                  disabled={item.disabled}
                   onSelect={item.onSelect}
                 >
                   {item.label}
