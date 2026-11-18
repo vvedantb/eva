@@ -527,12 +527,18 @@ describe("a stale session chat turn torn down by the backstop", () => {
         ),
         turnAdapterForEntity(
           ctx.db,
+          { entityId: f.sessionId, lane: "interview" },
+          visit,
+        ),
+        turnAdapterForEntity(
+          ctx.db,
           { entityId: projectId, lane: "interview" },
           visit,
         ),
       ];
     });
-    // A task or project id is no chat: their chats are session chats.
+    // A task or project id is no chat: their chats are session chats. An
+    // interview turn lives on the project's session, never on the project.
     expect(kinds).toEqual([
       "sessionChat",
       null,
@@ -541,6 +547,7 @@ describe("a stale session chat turn torn down by the backstop", () => {
       null,
       "summary",
       "interview",
+      null,
     ]);
   });
 });

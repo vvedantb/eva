@@ -1,5 +1,13 @@
 # Changelog
 
+## Project interview fields and project-keyed turns removed
+
+Date: 2026-11-18
+
+WHY: `migrateProjectInterviewState` ran in prod and the gate reported 0 (no project-keyed turns, no project on the legacy fields). Keeping the old fields and the project branch of the turn owner kept two ways to file one interview.
+
+Architectural: `projects.activeWorkflowId` and `projects.interviewSandboxClaim` leave the schema, and `projects` leaves `turnEntityIdValidator`. Interview turns resolve only through the project session (`interviewTurnSessionId`); the project fallback in `laneOwner`, `turnOwnerId` and the completion and stop paths is gone, with the migration and its gate query. `projects.get` still returns `activeWorkflowId`, derived from `interview`, because installed APKs (0.1.96) read it as "interview running"; remove it once no supported APK does. The phone's project plan now reads `interview`, like the web, so its running state works again.
+
 ## Project interviews have one explicit state; their turns sit on the project session
 
 Date: 2026-11-12
