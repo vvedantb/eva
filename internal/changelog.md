@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone: live tasks, /goal and publish recovery above the composer
+
+Date: 2026-11-18
+
+WHY: the phone chat lacked three web rows above the composer: the running turn's to-do list, Claude's `/goal` with Clear, and the one-tap force-push after a rewritten branch blocks publishing.
+
+Architectural: `@eva/shared/composerTasks`, `agentGoal` and `publishRecovery` now hold the logic and copy; the web panels read them. Phone `ComposerTasksPanel` (reads `streaming.get`), `GoalBanner` (`sessionChats.get`, Clear sends `/goal clear`) and `PublishRecoveryBanner` (session chats that can reply; `sessions.listRepos`, `sessions.forcePushBranch`) are built by the chat screen and handed to `ChatDock` as `banners` and `panels`.
+
 ## Project interview fields and project-keyed turns removed
 
 Date: 2026-11-18

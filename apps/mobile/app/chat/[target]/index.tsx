@@ -76,6 +76,9 @@ import { UsageButton } from "@/chat/UsageSheet";
 import { useProposedPlans } from "@/chat/ProposedPlanCard";
 import { BackgroundAgentsChip } from "@/chat/BackgroundAgentsChip";
 import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
+import { ComposerTasksPanel } from "@/chat/ComposerTasksPanel";
+import { GoalBanner } from "@/chat/GoalBanner";
+import { PublishRecoveryBanner } from "@/chat/PublishRecoveryBanner";
 import { SystemAlertRow } from "@/chat/SystemAlertRow";
 import { useNow } from "@/ui/clock";
 import { useMessageMenu } from "@/chat/MessageHoldMenu";
@@ -456,7 +459,21 @@ export default function ChatScreen() {
             messagesNewestFirst={newestFirst}
             closedReason={closedReason}
             onStop={handleStop}
-            queue={<QueuedMessagesPanel parentId={parentId} isExecuting={working} isSandboxActive={chat.sandboxActive} />}
+            banners={
+              <>
+                {/* Not gated by simple view, as the web: the user set this goal and can clear it. */}
+                <GoalBanner chatId={chat.session?.chatId ?? chat.task?.sessionChatId ?? chat.project?.sessionChatId} target={chat.target} />
+                {chat.session && chat.canReply ? (
+                  <PublishRecoveryBanner sessionId={chat.session.id} newest={newestMessage} isSandboxActive={chat.sandboxActive} />
+                ) : null}
+              </>
+            }
+            panels={
+              <>
+                <ComposerTasksPanel streamingEntityId={streamingEntityId} turnId={liveReplyId} />
+                <QueuedMessagesPanel parentId={parentId} isExecuting={working} isSandboxActive={chat.sandboxActive} />
+              </>
+            }
             usageLimitFailure={isUsageLimitFailure(newestMessage) ? newestMessage.content : undefined}
           />
           ) : null}
@@ -473,8 +490,8 @@ export default function ChatScreen() {
  * closed". It owns the draft, the attachments and the model pick, so a
  * keystroke redraws the dock only, not the transcript above it. It stays
  * mounted while the chat is open, so a draft outlives a question card. The
- * queue panel sits on the composer, as the web; the screen builds it, so a
- * keystroke here does not redraw it either.
+ * banners and the tasks and queue panels sit on the composer, as the web; the
+ * screen builds them, so a keystroke here does not redraw them either.
  */
 function ChatDock({
   target,
@@ -488,7 +505,8 @@ function ChatDock({
   messagesNewestFirst,
   closedReason,
   onStop,
-  queue,
+  banners,
+  panels,
   usageLimitFailure,
 }: {
   target: string;
@@ -505,8 +523,10 @@ function ChatDock({
   /** A closed session's reason (`getSessionReadOnlyMessage`), in place of "This chat is closed." */
   closedReason: string | undefined;
   onStop: () => void;
-  /** The queued messages, above the composer only (not over a question card), as the web. */
-  queue: ReactNode;
+  /** The `/goal` and publish recovery banners, above the usage-limit card, as the web `SandboxChatPreInput`. */
+  banners: ReactNode;
+  /** The live tasks, then the queued messages, flush on the composer only (not over a question card), as the web dock. */
+  panels: ReactNode;
   /** The newest reply's text while it is a usage-limit failure: the retry card shows above the composer. */
   usageLimitFailure: string | undefined;
 }) {
@@ -608,6 +628,7 @@ function ChatDock({
     // thread. Send stays ready during a turn (a send queues behind it) and Stop sits beside
     // it, as `stopMode="alongside"`.
     <View className="pr-2.5">
+      {banners}
       {usageLimitFailure !== undefined && modelPick.pick?.account && modelPick.switchAccount ? (
         <UsageLimitRecoveryCard
           chat={chat}
@@ -617,7 +638,7 @@ function ChatDock({
           working={working}
         />
       ) : null}
-      {queue}
+      {panels}
       <View className="pl-3">
         <TypingIndicator users={typing.typingUsers} />
       </View>
