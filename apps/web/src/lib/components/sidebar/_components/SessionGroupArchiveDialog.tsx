@@ -25,6 +25,11 @@ interface SessionGroupArchiveDialogProps {
   onArchived?: () => void;
 }
 
+/** "1 session", "3 sessions". */
+function sessionCount(count: number): string {
+  return `${count} ${count === 1 ? "session" : "sessions"}`;
+}
+
 /**
  * Confirm dialog that archives every active session in a linked-session
  * group, shared by the sidebar group and the session header chip.
@@ -51,7 +56,7 @@ export function SessionGroupArchiveDialog({
     try {
       const { archived } = await archiveGroup({ sessionId });
       mutationSuccess(
-        `${archived} ${archived === 1 ? "session" : "sessions"} archived`,
+        `${sessionCount(archived)} archived`,
         "session-group-archive",
       );
       onOpenChange(false);
@@ -72,7 +77,7 @@ export function SessionGroupArchiveDialog({
           This will archive{" "}
           {activeCount === undefined
             ? "every session"
-            : `${activeCount} ${activeCount === 1 ? "session" : "sessions"}`}{" "}
+            : sessionCount(activeCount)}{" "}
           in <span className="font-medium text-foreground">{label}</span>. Their
           sandboxes stop, and open or draft PRs close. You can unarchive each
           session later.
