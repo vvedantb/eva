@@ -8,6 +8,7 @@ export {
   listGroup,
   countActive,
   getOwned,
+  getOwnedWithSeed,
 } from "./_sessions/queries";
 
 export {
