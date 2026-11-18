@@ -1,7 +1,7 @@
 import { taskScheduledAt, type api } from "@eva/backend";
 import { TASK_STATUS_LABELS, firstNameFromUser, formatEntityNumLabel, type DisplayTaskStatus } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconClock, IconFileText, IconTag, type IconProps } from "@tabler/icons-react-native";
+import { IconClock, IconFileText, IconPencil, IconTag, type IconProps } from "@tabler/icons-react-native";
 import { Checkbox, SurfaceRow } from "@vvedantb/native-ui/primitives";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import type { FunctionReturnType } from "convex/server";
@@ -54,8 +54,7 @@ export function MetaPill({ icon: Icon, label }: { icon: ComponentType<IconProps>
 /**
  * One of the user's quick-task drafts, at the top of To Do in the task
  * card's shell: the To Do stripe, the title, then the "Draft" badge and the
- * age. A tap opens the new-task screen with the draft loaded, as a Drafts
- * card. No menu, no select mode and no Run All: a draft is not a task yet.
+ * age. A tap opens the new-task screen with the draft loaded. No menu, no select mode and no Run All: a draft is not a task yet.
  */
 export function QuickTaskDraftRow({ draft }: { draft: QuickTaskDraft }) {
   const router = useRouter();
@@ -100,6 +99,7 @@ export function QuickTaskRow({
   hasError,
   creator,
   projectNumId,
+  hasDraftComment,
   onLongPress,
   selection,
 }: {
@@ -109,6 +109,8 @@ export function QuickTaskRow({
   creator: User | undefined;
   /** In a project's task list: the number reads "#project/task", as the web card. */
   projectNumId?: number;
+  /** The user has an unsent comment on this task (`drafts.listMarks`): a "Draft comment" pill by the age. */
+  hasDraftComment: boolean;
   onLongPress: () => void;
   /** In select mode: a tap or long press ticks the row, and a checkbox leads it, as the inbox. */
   selection?: { checked: boolean; onToggle: () => void };
@@ -138,6 +140,7 @@ export function QuickTaskRow({
     showError ? "Latest run failed" : undefined,
     task.isAwaitingAnswer ? "Eva asked you a question" : showWorking ? "Eva is replying" : showSandbox ? sandbox.label : undefined,
     showUnread ? "Unread" : undefined,
+    hasDraftComment ? "Draft comment" : undefined,
     scheduled,
   ]
     .filter(Boolean)
@@ -237,9 +240,12 @@ export function QuickTaskRow({
             </>
           ) : null}
         </View>
-        <Text className="font-instrument-sans" style={{ ...META_TEXT, color: withAlpha(muted, 0.7), fontVariant: ["tabular-nums"] }}>
-          {timeAgo(task.createdAt)}
-        </Text>
+        <View className="shrink-0 flex-row items-center gap-1.5">
+          {hasDraftComment ? <MetaPill icon={IconPencil} label="Draft comment" /> : null}
+          <Text className="font-instrument-sans" style={{ ...META_TEXT, color: withAlpha(muted, 0.7), fontVariant: ["tabular-nums"] }}>
+            {timeAgo(task.createdAt)}
+          </Text>
+        </View>
       </View>
     </SurfaceRow>
   );

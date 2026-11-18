@@ -102,6 +102,7 @@ function QuickTaskList({ repo }: { repo: Repo }) {
     api.agentRuns.getTaskIdsWithLatestRunError,
     tasks ? { repoId: repo._id, taskIds: tasks.map((task) => task._id) } : "skip",
   );
+  const draftMarks = useQuery(api.drafts.listMarks, { repoId: repo._id });
   const users = useQuery(api.users.listAll, {});
   const projects = useQuery(api.projects.list, { repoId: repo._id });
   const currentUserId = useQuery(api.auth.me, {});
@@ -159,6 +160,7 @@ function QuickTaskList({ repo }: { repo: Repo }) {
   const allTags = [...new Set([...TASK_TAGS, ...tasks.flatMap((task) => task.tags ?? [])])].sort();
   const sections = groupByTaskStatus(shown).filter((section) => filters.statuses.includes(section.status));
   const errors = new Set<string>(errorTaskIds ?? []);
+  const draftTaskIds = new Set<string>(draftMarks?.taskIds ?? []);
   const todoCount = shown.filter((task) => task.status === "todo").length;
   const plan = runAllPlan(shown, currentUserId);
   const runAll = async () => {
@@ -242,6 +244,7 @@ function QuickTaskList({ repo }: { repo: Repo }) {
                 task={task}
                 status={section.status}
                 hasError={errors.has(task._id)}
+                hasDraftComment={draftTaskIds.has(task._id)}
                 creator={users?.find((user) => user._id === task.createdBy)}
                 onLongPress={() => actions.openSheet(task)}
                 selection={selecting ? { checked: selected.has(task._id), onToggle: () => toggleSelected(task._id) } : undefined}

@@ -42,6 +42,7 @@ export function ProjectTasks({ project, repo, users }: { project: Project; repo:
     api.agentRuns.getTaskIdsWithLatestRunError,
     tasks ? { repoId: repo._id, taskIds: tasks.map((task) => task._id) } : "skip",
   );
+  const draftMarks = useQuery(api.drafts.listMarks, { repoId: repo._id });
   const projects = useQuery(api.projects.list, { repoId: repo._id });
   const actions = useQuickTaskActions({ repo, users, projects });
   // Sections the user folded or unfolded, against each one's `defaultOpen`.
@@ -64,6 +65,7 @@ export function ProjectTasks({ project, repo, users }: { project: Project; repo:
   const openNewTask = () =>
     router.push({ pathname: "/quick-task/new", params: { repoId: repo._id, projectId: project._id } });
   const errors = new Set<string>(errorTaskIds ?? []);
+  const draftTaskIds = new Set<string>(draftMarks?.taskIds ?? []);
 
   return (
     <>
@@ -108,6 +110,7 @@ export function ProjectTasks({ project, repo, users }: { project: Project; repo:
             task={task}
             status={section.status}
             hasError={errors.has(task._id)}
+            hasDraftComment={draftTaskIds.has(task._id)}
             creator={users?.find((user) => user._id === task.createdBy)}
             projectNumId={project.numId}
             onLongPress={() => actions.openSheet(task)}

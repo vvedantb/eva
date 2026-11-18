@@ -62,7 +62,6 @@ import { Route as RepoOwnerRepoAutomationsIndexRouteImport } from './routes/_rep
 import { Route as RepoOwnerRepoAutomationsNumIdRouteRouteImport } from './routes/_repo/$owner/$repo/automations/$numId/route'
 import { Route as RepoOwnerRepoDocsIndexRouteImport } from './routes/_repo/$owner/$repo/docs/index'
 import { Route as RepoOwnerRepoDocsNumIdRouteRouteImport } from './routes/_repo/$owner/$repo/docs/$numId/route'
-import { Route as RepoOwnerRepoDraftsIndexRouteImport } from './routes/_repo/$owner/$repo/drafts/index'
 import { Route as RepoOwnerRepoProjectsIndexRouteImport } from './routes/_repo/$owner/$repo/projects/index'
 import { Route as RepoOwnerRepoProjectsNumIdRouteRouteImport } from './routes/_repo/$owner/$repo/projects/$numId/route'
 import { Route as RepoOwnerRepoQuickTasksIndexRouteImport } from './routes/_repo/$owner/$repo/quick-tasks/index'
@@ -427,12 +426,6 @@ const RepoOwnerRepoDocsNumIdRouteRoute =
   RepoOwnerRepoDocsNumIdRouteRouteImport.update({
     id: '/docs/$numId',
     path: '/docs/$numId',
-    getParentRoute: () => RepoOwnerRepoRoute,
-  } as any)
-const RepoOwnerRepoDraftsIndexRoute =
-  RepoOwnerRepoDraftsIndexRouteImport.update({
-    id: '/drafts/',
-    path: '/drafts/',
     getParentRoute: () => RepoOwnerRepoRoute,
   } as any)
 const RepoOwnerRepoProjectsIndexRoute =
@@ -1029,7 +1022,6 @@ export interface FileRoutesByFullPath {
   '/$owner/$repo/settings/theme': typeof RepoOwnerRepoSettingsThemeRoute
   '/$owner/$repo/automations/': typeof RepoOwnerRepoAutomationsIndexRoute
   '/$owner/$repo/docs/': typeof RepoOwnerRepoDocsIndexRoute
-  '/$owner/$repo/drafts/': typeof RepoOwnerRepoDraftsIndexRoute
   '/$owner/$repo/projects/': typeof RepoOwnerRepoProjectsIndexRoute
   '/$owner/$repo/quick-tasks/': typeof RepoOwnerRepoQuickTasksIndexRoute
   '/$owner/$repo/reviews/': typeof RepoOwnerRepoReviewsIndexRoute
@@ -1154,7 +1146,6 @@ export interface FileRoutesByTo {
   '/$owner/$repo/settings/theme': typeof RepoOwnerRepoSettingsThemeRoute
   '/$owner/$repo/automations': typeof RepoOwnerRepoAutomationsIndexRoute
   '/$owner/$repo/docs': typeof RepoOwnerRepoDocsIndexRoute
-  '/$owner/$repo/drafts': typeof RepoOwnerRepoDraftsIndexRoute
   '/$owner/$repo/projects': typeof RepoOwnerRepoProjectsIndexRoute
   '/$owner/$repo/quick-tasks': typeof RepoOwnerRepoQuickTasksIndexRoute
   '/$owner/$repo/reviews': typeof RepoOwnerRepoReviewsIndexRoute
@@ -1289,7 +1280,6 @@ export interface FileRoutesById {
   '/_repo/$owner/$repo/settings/theme': typeof RepoOwnerRepoSettingsThemeRoute
   '/_repo/$owner/$repo/automations/': typeof RepoOwnerRepoAutomationsIndexRoute
   '/_repo/$owner/$repo/docs/': typeof RepoOwnerRepoDocsIndexRoute
-  '/_repo/$owner/$repo/drafts/': typeof RepoOwnerRepoDraftsIndexRoute
   '/_repo/$owner/$repo/projects/': typeof RepoOwnerRepoProjectsIndexRoute
   '/_repo/$owner/$repo/quick-tasks/': typeof RepoOwnerRepoQuickTasksIndexRoute
   '/_repo/$owner/$repo/reviews/': typeof RepoOwnerRepoReviewsIndexRoute
@@ -1432,7 +1422,6 @@ export interface FileRouteTypes {
     | '/$owner/$repo/settings/theme'
     | '/$owner/$repo/automations/'
     | '/$owner/$repo/docs/'
-    | '/$owner/$repo/drafts/'
     | '/$owner/$repo/projects/'
     | '/$owner/$repo/quick-tasks/'
     | '/$owner/$repo/reviews/'
@@ -1557,7 +1546,6 @@ export interface FileRouteTypes {
     | '/$owner/$repo/settings/theme'
     | '/$owner/$repo/automations'
     | '/$owner/$repo/docs'
-    | '/$owner/$repo/drafts'
     | '/$owner/$repo/projects'
     | '/$owner/$repo/quick-tasks'
     | '/$owner/$repo/reviews'
@@ -1691,7 +1679,6 @@ export interface FileRouteTypes {
     | '/_repo/$owner/$repo/settings/theme'
     | '/_repo/$owner/$repo/automations/'
     | '/_repo/$owner/$repo/docs/'
-    | '/_repo/$owner/$repo/drafts/'
     | '/_repo/$owner/$repo/projects/'
     | '/_repo/$owner/$repo/quick-tasks/'
     | '/_repo/$owner/$repo/reviews/'
@@ -2150,13 +2137,6 @@ declare module '@tanstack/react-router' {
       path: '/docs/$numId'
       fullPath: '/$owner/$repo/docs/$numId'
       preLoaderRoute: typeof RepoOwnerRepoDocsNumIdRouteRouteImport
-      parentRoute: typeof RepoOwnerRepoRoute
-    }
-    '/_repo/$owner/$repo/drafts/': {
-      id: '/_repo/$owner/$repo/drafts/'
-      path: '/drafts'
-      fullPath: '/$owner/$repo/drafts/'
-      preLoaderRoute: typeof RepoOwnerRepoDraftsIndexRouteImport
       parentRoute: typeof RepoOwnerRepoRoute
     }
     '/_repo/$owner/$repo/projects/': {
@@ -3387,7 +3367,6 @@ interface RepoOwnerRepoRouteChildren {
   RepoOwnerRepoProjectsNumIdRouteRoute: typeof RepoOwnerRepoProjectsNumIdRouteRouteWithChildren
   RepoOwnerRepoTestingArenaNumIdRouteRoute: typeof RepoOwnerRepoTestingArenaNumIdRouteRouteWithChildren
   RepoOwnerRepoDocsIndexRoute: typeof RepoOwnerRepoDocsIndexRoute
-  RepoOwnerRepoDraftsIndexRoute: typeof RepoOwnerRepoDraftsIndexRoute
   RepoOwnerRepoProjectsIndexRoute: typeof RepoOwnerRepoProjectsIndexRoute
   RepoOwnerRepoTestingArenaIndexRoute: typeof RepoOwnerRepoTestingArenaIndexRoute
 }
@@ -3411,7 +3390,6 @@ const RepoOwnerRepoRouteChildren: RepoOwnerRepoRouteChildren = {
   RepoOwnerRepoTestingArenaNumIdRouteRoute:
     RepoOwnerRepoTestingArenaNumIdRouteRouteWithChildren,
   RepoOwnerRepoDocsIndexRoute: RepoOwnerRepoDocsIndexRoute,
-  RepoOwnerRepoDraftsIndexRoute: RepoOwnerRepoDraftsIndexRoute,
   RepoOwnerRepoProjectsIndexRoute: RepoOwnerRepoProjectsIndexRoute,
   RepoOwnerRepoTestingArenaIndexRoute: RepoOwnerRepoTestingArenaIndexRoute,
 }

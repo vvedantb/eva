@@ -12,7 +12,11 @@ import {
   MarqueeOnHover,
   UnreadDot,
 } from "@vvedantb/ui";
-import { IconGitFork, IconGitPullRequest } from "@tabler/icons-react";
+import {
+  IconGitFork,
+  IconGitPullRequest,
+  IconPencil,
+} from "@tabler/icons-react";
 import { prStateLabel, type PrState } from "@eva/shared";
 import { prStateIconClass } from "@/lib/components/prStateIconClass";
 import {
@@ -59,6 +63,8 @@ interface SidebarSessionItemProps {
   isAwaitingAnswer?: boolean;
   /** A finished reply the user has not seen; the trailing dot. A turn in flight hides it. */
   hasUnread?: boolean;
+  /** The user has an unsent message in this session; a pencil in the unread slot. */
+  hasDraft?: boolean;
   isSelected: boolean;
   onNavigate?: () => void;
   prUrl?: string;
@@ -202,6 +208,7 @@ export function SidebarSessionItem({
   isExecuting = false,
   isAwaitingAnswer = false,
   hasUnread = false,
+  hasDraft = false,
   isSelected,
   onNavigate,
   prUrl,
@@ -237,7 +244,19 @@ export function SidebarSessionItem({
     isExecuting ||
     showsSandboxStatusDot(displayStatus, simpleView);
   // Executing wins: the leading "Working" grid says more than the dot would.
-  const unreadDot = <UnreadDot show={hasUnread && !isExecuting} />;
+  // One trailing mark: unread wins over the unsent-message pencil.
+  const showUnread = hasUnread && !isExecuting;
+  const trailingMark =
+    hasDraft && !showUnread ? (
+      <IconPencil
+        size={12}
+        className="shrink-0 text-muted-foreground"
+        title="Unsent message"
+        aria-label="Unsent message"
+      />
+    ) : (
+      <UnreadDot show={showUnread} />
+    );
   const statusLeading = showLeading ? (
     <SessionStatusLeading
       label={statusLabel}
@@ -271,7 +290,7 @@ export function SidebarSessionItem({
             <TitleRegeneratingHint show={isRegeneratingTitle} />
             <ForkedGlyph show={isFork} />
             <LinkedRepoCountBadge count={linkedRepoCount} />
-            {unreadDot}
+            {trailingMark}
           </div>
           <div
             className={cn(
@@ -309,7 +328,7 @@ export function SidebarSessionItem({
             at={activityAt}
             className="shrink-0 text-2xs text-muted-foreground"
           />
-          {unreadDot}
+          {trailingMark}
         </div>
       )}
     </DynamicLink>
