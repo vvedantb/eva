@@ -1002,15 +1002,20 @@ html[data-blur-pid] [data-pii] {
  *     hot-reload reliably. Placed after `@tailwind utilities`, so they win
  *     over the list's own bg utility at equal specificity.
  * ─────────────────────────────────────────────────────────────────── */
-.tabs-segmented {
+/* `rail-track` / `rail-track-active`: the same trough and pill on the icon
+ * rails (app rail groups, sandbox tab rail), so they read as one tab control. */
+.tabs-segmented,
+.rail-track {
   background-color: rgb(var(--secondary)); /* light: grey trough */
 }
 /* The sliding pill (`t-tabs-pill`, `bg-card` from the Tabs config): white in
  * light, #474747 in dark, so it shows on the trough as the phone tab bar's. */
-.tabs-segmented .t-tabs-pill {
+.tabs-segmented .t-tabs-pill,
+.rail-track .rail-track-active {
   background-color: rgb(var(--segment-active));
 }
-.dark .tabs-segmented {
+.dark .tabs-segmented,
+.dark .rail-track {
   background-color: rgb(var(--card)); /* dark: card-grey trough */
 }
 

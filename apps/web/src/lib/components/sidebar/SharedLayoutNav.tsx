@@ -36,8 +36,15 @@ function useSharedLayoutNav() {
   return context;
 }
 
-/** Active surface for vertical rail tiles — matches sidebar nav pill. */
-export const railTileActiveClass = "bg-sidebar-accent text-sidebar-primary";
+/**
+ * A group of rail tiles on one shared trough, like the segmented tabs.
+ * `rail-track` (globals.css) owns the trough tone per theme.
+ */
+export const railTrackClass =
+  "rail-track flex flex-col items-center gap-1 rounded-xl p-1";
+
+/** Active rail tile: the segmented-tabs pill on its `railTrackClass` trough. */
+export const railTileActiveClass = "rail-track-active text-sidebar-primary";
 
 const sidebarNavPillClass =
   "pointer-events-none absolute inset-0 rounded-menu-item bg-sidebar-accent";
