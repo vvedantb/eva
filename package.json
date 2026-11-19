@@ -27,7 +27,7 @@
     "sync:prod-to-local": "pnpm --filter @eva/backend run sync:prod-to-local"
   },
   "lint-staged": {
-    "*.{ts,tsx,js,jsx,json,css,md}": "prettier --write",
+    "*.{ts,tsx,js,jsx,json,css,md}": "oxfmt --no-error-on-unmatched-pattern",
     "*.{ts,tsx}": "oxlint -c .oxlintrc.json --no-error-on-unmatched-pattern"
   },
   "pnpm": {
@@ -94,8 +94,8 @@
     "husky": "^9.1.7",
     "knip": "6.27.0",
     "lint-staged": "^16.2.7",
+    "oxfmt": "0.78.0",
     "oxlint": "1.79.0",
-    "prettier": "^3.8.1",
     "tsrs": "7.1.0-beta.tsrs2",
     "typescript": "^5.9.0"
   },
