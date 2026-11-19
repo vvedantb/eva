@@ -1,5 +1,13 @@
 # Changelog
 
+## Design check bans reduced-motion gates
+
+Date: 2026-11-19
+
+WHY: The app has no reduced-motion mode, but a new gate still slipped in (sandbox card) and hid motion for readers with the OS setting.
+
+Architectural: `scripts/design-check.mjs` adds the `reduced-motion` reason: `prefers-reduced-motion` (now also in `.css` files), `useReducedMotion`, and a `reducedMotion` config of "user" or "always". Comment lines are skipped. The vendored stageshow gates (7 CSS media blocks and the bubble `matchMedia`) are gone, so the baseline holds none. CLAUDE.md has a one-line rule.
+
 ## Web sandbox card: motion ignores OS reduced motion
 
 Date: 2026-11-19
