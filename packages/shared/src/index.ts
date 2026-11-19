@@ -161,15 +161,6 @@ export {
   visibleDrafts,
 } from "./draftVisibility";
 export {
-  draftContextTitle,
-  draftKindLabel,
-  draftSnippet,
-  mergeDrafts,
-  type CommentDraftFields,
-  type DraftListItem,
-  type TaskDraftFields,
-} from "./draftList";
-export {
   chatSourceKindLabel,
   chatSourceLabel,
   chatSourceShortLabel,

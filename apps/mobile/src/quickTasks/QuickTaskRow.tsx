@@ -109,7 +109,7 @@ export function QuickTaskRow({
   creator: User | undefined;
   /** In a project's task list: the number reads "#project/task", as the web card. */
   projectNumId?: number;
-  /** The user has an unsent comment on this task (`drafts.listMarks`): a "Draft comment" pill by the age. */
+  /** The user has an unsent comment on this task (`drafts.listMarks`): a "Draft comment" pill after the tags, as the web card. */
   hasDraftComment: boolean;
   onLongPress: () => void;
   /** In select mode: a tap or long press ticks the row, and a checkbox leads it, as the inbox. */
@@ -198,9 +198,9 @@ export function QuickTaskRow({
         </View>
       </View>
 
-      {task.tags && task.tags.length > 0 ? (
+      {(task.tags && task.tags.length > 0) || hasDraftComment ? (
         <View className="flex-row flex-wrap items-center gap-1">
-          {task.tags.slice(0, MAX_TAGS).map((tag) => (
+          {(task.tags ?? []).slice(0, MAX_TAGS).map((tag) => (
             // Web: a `secondary` badge, `px-1.5 font-medium`, a tag icon; 12 text and a 12 icon (web 10).
             <View
               key={tag}
@@ -215,7 +215,7 @@ export function QuickTaskRow({
               </Text>
             </View>
           ))}
-          {task.tags.length > MAX_TAGS ? (
+          {task.tags && task.tags.length > MAX_TAGS ? (
             <Text
               accessibilityLabel={`${task.tags.length - MAX_TAGS} more tags`}
               className="font-instrument-sans-medium"
@@ -224,6 +224,7 @@ export function QuickTaskRow({
               {`+${task.tags.length - MAX_TAGS}`}
             </Text>
           ) : null}
+          {hasDraftComment ? <MetaPill icon={IconPencil} label="Draft comment" /> : null}
         </View>
       ) : null}
 
@@ -240,12 +241,9 @@ export function QuickTaskRow({
             </>
           ) : null}
         </View>
-        <View className="shrink-0 flex-row items-center gap-1.5">
-          {hasDraftComment ? <MetaPill icon={IconPencil} label="Draft comment" /> : null}
-          <Text className="font-instrument-sans" style={{ ...META_TEXT, color: withAlpha(muted, 0.7), fontVariant: ["tabular-nums"] }}>
-            {timeAgo(task.createdAt)}
-          </Text>
-        </View>
+        <Text className="font-instrument-sans" style={{ ...META_TEXT, color: withAlpha(muted, 0.7), fontVariant: ["tabular-nums"] }}>
+          {timeAgo(task.createdAt)}
+        </Text>
       </View>
     </SurfaceRow>
   );
