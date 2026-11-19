@@ -107,7 +107,7 @@ export function SandboxPanelFrame({
       <div
         ref={cardRef}
         className={cn(
-          "min-h-0 min-w-0 flex-1 overflow-hidden bg-card md:my-2 md:mr-1.5 md:rounded-xl",
+          "min-h-0 min-w-0 flex-1 overflow-hidden bg-card md:my-2 md:mr-1.5 md:rounded-surface",
           collapsed && "md:hidden",
         )}
       >
@@ -117,7 +117,7 @@ export function SandboxPanelFrame({
         ref={arrowRef}
         aria-hidden
         className={cn(
-          "sandbox-tab-arrow pointer-events-none absolute top-0 hidden size-4 rounded-[3px] bg-card opacity-0 md:block",
+          "sandbox-tab-arrow pointer-events-none absolute top-0 hidden size-4 rounded-xs bg-card opacity-0 md:block",
           collapsed && "md:hidden",
         )}
       />
