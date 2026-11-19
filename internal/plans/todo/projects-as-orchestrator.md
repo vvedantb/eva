@@ -31,6 +31,9 @@ The business team opens the project and sees what is launched, what is in progre
 | 10 | Old projects are converted in place. | One code path. History is kept. |
 | 11 | Project context reuses Documents, Artifacts and the chat Log. No new store. | They already carry `chatSourceFields`. |
 | 12 | Viewers read everything and can file a feedback task. Contributors can chat and run tasks. | Business team can report without starting agent runs. |
+| 13 | A project has a home repo plus a list of extra repos. Each child task targets exactly **one** repo and opens its PR there. A dependency can cross repos. | Real case: a carepulse-ts project that needs a change in carepulse_v2. Cheap, because each task already has its own session and `agentTasks.repoId`. Amp does the same: its Space agent starts a thread "in the project you named" (Amp docs, "Spaces", read 19 November 2026). |
+| 14 | Hub model with a read-only view. Child tasks never message each other. A task can read sibling status and docs, and can report to the coordinator. The coordinator can message any child task. | Easy to follow, cannot loop. Amp documents the same shape: threads report to the Space, no thread-to-thread chat, files move only when asked (Amp docs, "Spaces" and "Agent to Agent", read 19 November 2026). |
+| 15 | No parallel tool set. Reuse and extend the existing MCP tools; add only the tools listed in step 3. | The fleet tools (`mcp/orchestratorTools.ts`) and task tools already cover most needs. |
 
 ## Scope
 
@@ -46,6 +49,8 @@ The business team opens the project and sees what is launched, what is in progre
 8. Comments on coordinator messages that do not wake the coordinator.
 9. Adopt an existing session into a project (see the risk note in step 8; this is the first item to move to v2 if it is hard).
 10. Conversion of old projects.
+11. Cross-repo projects: one repo for each child task (decision 13).
+12. Hub awareness between the coordinator and child tasks (decision 14).
 
 **v2 and v3:** see `projects-as-orchestrator-v2-v3.md` (outline only; research again when each stage starts).
 
@@ -66,6 +71,9 @@ Paths are under `packages/backend/convex/` unless they show a full path.
 - **Cards in chat.** `ChatBody.tsx` places inline cards by message with `placeChatUiPanels` (`SessionProposalCard`, `ChatArtifactCard`, `GenerativeUiPanel`, and others). Task cards copy this pattern.
 - **Comments.** `messages` has no thread field. Threaded comments exist on tasks (`taskComments.parentId`) and docs (`docComments`).
 - **Mobile** has project screens (`apps/mobile/app/project/[projectId].tsx`, `apps/mobile/src/projects/*`).
+
+- **Fleet tools already exist** in `mcp/orchestratorTools.ts`: `list_agents`, `get_agent_state`, `stop_agent`, `create_session`, `watch_agent`, `unwatch_agent`, and `send_agent_message` (only for Manager Ave). `watch_agent` wakes a Manager Ave thread when an agent finishes; it cannot wake any other chat today. `send_chat_message` is in `mcp/tools.ts:920`.
+- **Repo scope.** `projects.repoId` is required and single. `agentTasks.repoId` is optional and separate. A sandbox MCP token is pinned to one repo; the fleet tools skip that pin and rely on the user's `hasRepoAccess`.
 
 Not verified: the claim that MCP calls from a project chat resolve to the hidden session comes from reading the code, not from a test. Check it in step 2.
 
@@ -130,16 +138,43 @@ This is the core change. Do it alone, with no UI change.
 1. The coordinator is the Main chat of the project-owned session. No other chat can be opened there (already true: `assertStandaloneSession`).
 2. **Read-only.** The coordinator prompt says it must not edit code. Enforce it too: the project session does not own PRs (`ownsPullRequests` is already false) and gets no push credential. Decide in implementation whether `sandboxGitCredentials` can mint a read-only token; if not, block `git push` in the helper for project-owned sessions. Do not rely on the prompt alone.
 3. **Identity.** Make MCP calls from the coordinator resolve to the project (`mcp/entityRef.ts` `withSelfDefault` / `resolveChat`), through `chatOwner`. First confirm the hidden-session behaviour noted above.
-4. **Tools** (extend existing ones; no new parallel set):
-   - `create_tasks_batch`: accept "this project", `dependsOn`, `phaseLabel`. Tasks are created `todo`, not approved.
-   - `update_task`, `delete_task` (existing rule: delete needs the user's yes).
-   - `update_project_summary` (step 5).
-   - No `start` tool: approval is a person's action (decision 7).
+4. **Tools** (decision 15). The full list is below. No `start` tool: approval is a person's action (decision 7).
+
+   | Tool | Caller | Change |
+   |---|---|---|
+   | `create_tasks_batch` | coordinator | **Extend:** accept "this project", `dependsOn`, `phaseLabel`, `repo`. Tasks are created `todo`, not approved. |
+   | `create_task` | coordinator | **Extend:** same new args. |
+   | `update_task`, `delete_task` | coordinator | **Extend:** default to the caller's project. Delete still needs the user's yes. |
+   | `list_agents`, `get_agent_state` | coordinator, child task | **Extend:** a "this project" scope that returns the project's tasks with status, phase, repo, PR state and dependencies. A child task gets the same read-only view (decision 14). |
+   | `stop_agent` | coordinator | **Reuse.** |
+   | `send_chat_message` | coordinator | **Reuse** to message a child task. Scope it: a coordinator can only message tasks of its own project. |
+   | `get_eva_doc`, `list_eva_docs`, `list_artifacts`, `read_chat_log` | coordinator, child task | **Extend:** project roll-up scope (step 6). Read-only for siblings' rows. |
+   | `update_project_summary` | coordinator | **New** (step 5). |
+   | `report_to_coordinator` | child task | **New.** Sends a question, a finding or a blocker to the coordinator chat. It shows as a card on that task's row. It does not stop the task. |
+   | `start_project_build`, `cancel_project_build`, `schedule_project_build` | any | **Keep as wrappers** until the APK check allows removal (step 2.5). |
+   | `update_plan`, `mark_plan_implemented` | — | **No change.** Sessions only. Refuse them in a project chat with a clear error. |
+
+   A child task must not get: `create_tasks_batch` for its project, `send_chat_message` to a sibling, `stop_agent`, or any write to a sibling's rows. Enforce this in the tool registry by `chatOwner`, not in the prompt.
 5. **Prompt context** in `ownerPromptContext`: project title, description, instructions, the summary doc, and a compact task table (number, title, status, phase, PR state, dependencies). Cap the table size; state the cap in code.
-6. **Wake-ups.** The coordinator gets a short synthetic turn when a child task finishes, fails, or its PR merges, so it can update the summary and propose the next batch. Batch these events (one turn for events inside a short window) to limit cost. Reuse the pattern in `internal/plans/todo/session-synthetic-turns.md` if it has landed; otherwise this is the one new mechanism in this plan.
+6. **Wake-ups.** The coordinator gets a short synthetic turn when a child task finishes, fails, reports (`report_to_coordinator`), or its PR merges, so it can update the summary and propose the next batch. Batch these events (one turn for events inside a short window) to limit cost. First check whether the `watch_agent` wake path (today: Manager Ave threads only) can wake a project coordinator; extend it instead of building a second one. Also read `internal/plans/todo/session-synthetic-turns.md`.
 7. Remove `projectInterviewWorkflow`, `projectSpecWorkflow`, `projects.interview`, `planningMode`, `_projects/development.ts`, and the duplicate `projects.addMessage` — after step 9 converts the data.
 
 **Check:** in a new project, ask the coordinator for a feature. It proposes tasks. Nothing runs until approval.
+
+### Step 3b — Cross-repo child tasks (decision 13)
+
+1. Add `projects.extraRepoIds` (list of `githubRepos` ids). `projects.repoId` stays as the home repo: it sets the project's URL, number and place in the sidebar.
+2. A contributor adds or removes extra repos in project settings. A person can add only a repo they have access to. The coordinator cannot add a repo; it asks the user.
+3. `create_task` / `create_tasks_batch` take `repo`. Default = home repo. Refuse a repo that is not on the project's list.
+4. The child task's session, sandbox, snapshot, env vars, start-up commands, branch and PR all come from **its own** repo, exactly like a quick task in that repo. No project value overrides them.
+5. Access: a user sees a child task only with access to that task's repo (`hasTaskAccess`). In the project view, a task in a repo the viewer cannot access shows as a locked row with title hidden. Derived project status still counts it.
+6. Dependencies across repos work with rule 2.4 unchanged: "done" means the PR merged in its own repo. Note the limit in the UI text of the dependency: merged is not deployed. A task that needs the other repo's change **live** must say so; the coordinator then asks a person to confirm the deploy before it approves that task. No deploy detection in v1.
+7. Coordinator sandbox: it clones the home repo only. For another repo it reads through the child task's results, PR diff and docs. Reading extra repos in the coordinator sandbox (the `sessionRepos` linked-repo path) is v2.
+8. Different GitHub App installations: resolve the installation from the task's repo, never from the project. Check `startTaskRun` and the scheduler for any `installationId` passed down from the project (today `buildProjectWorkflow` takes one `installationId` for the whole build).
+9. Project instructions apply to every child task. Repo `systemPrompt` and repo memory come from the task's own repo.
+10. **Not in v1:** one task that edits two repos in one sandbox; adopting a session that has linked repos; session groups in projects.
+
+**Check:** a project in repo A with extra repo B. Task 1 in B, task 2 in A depends on 1. Task 2 starts only after task 1's PR merges in B.
 
 ### Step 4 — Live task cards in the coordinator chat
 
@@ -163,6 +198,14 @@ This is the core change. Do it alone, with no UI change.
 3. A child task's own tabs still show only its rows, plus a link to the project summary.
 4. `projects.instructions` (text): edited in project settings; added to every child task prompt and the coordinator prompt through `ownerPromptContext`.
 5. Child task prompt gets: project title, instructions, the summary doc, its own task text, and the titles of the tasks it depends on with their PR links.
+6. **Awareness (decision 14).**
+   - **Pushed at start:** the items in 5. They are a snapshot from the moment the task starts.
+   - **Pulled on demand:** sibling status, sibling docs and artifacts, the current summary doc (tools in step 3.4). Read-only.
+   - **Up to the coordinator:** `report_to_coordinator`. Use it for a blocker, a question, or a finding other tasks need (for example "the API shape changed"). The coordinator decides what to do: update the summary, message another task, change or add tasks.
+   - **Down from the coordinator:** `send_chat_message` to a child task. If the task is running, the message joins its queue (existing queued-message path). If it is idle or in review, it starts a new turn.
+   - **Never:** task-to-task messages, shared file systems, or one sandbox reaching another sandbox's ports. Code moves between tasks only through git (a merged PR, or a named branch a task fetches). Files move only as docs or artifacts.
+   - **Loop guard:** a report wakes the coordinator through the batched wake-up (step 3.6). The coordinator's message to a task is a normal turn. Cap automatic coordinator turns for each project in an hour (constant; pick the value with the answer to open question 2) and show a "needs you" state when the cap is hit.
+   - **Stale context:** a running task does not see a summary update unless it pulls it or the coordinator messages it. The coordinator prompt must say this.
 
 ### Step 7 — Roles, feedback tasks, quiet comments
 
@@ -210,6 +253,8 @@ Follow `docs/eva-convex.md` (migration, deploy, run on dev then prod, narrow, de
 - **Sandbox start time.** Each child task pays a cold start. Check snapshot reuse for task-owned sessions before step 2 ships.
 
 ## Open questions
+
+Decided on 19 November 2026 and moved into the decisions table: cross-repo tasks (13), awareness model (14), MCP tool approach (15).
 
 1. **Default role.** Is a repo member a contributor in every project by default (same reach as today), or a viewer until someone adds them?
 2. **Coordinator wake-ups.** Wake on every child event (batched), or only when a person opens or messages the project? This sets the idle cost of a project.

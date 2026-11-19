@@ -10,7 +10,7 @@ This file is separate from the v1 plan because the v1 plan moves to `internal/pl
 
 - **Goal with a progress chart.** A project has a stated goal. A chart shows launched, in progress and todo work over time. Reference: the goal and 30-day chart in Amp Spaces (Amp docs, "Spaces", read 19 November 2026).
 - **Message routing check ("Jev").** Before a message wakes the coordinator, a check decides whether it is for the coordinator or for a teammate. v1 has only quiet comments plus an explicit mention.
-- **Multi-repo projects.** A project can hold work in more than one repo. v1 projects are single-repo, and v1 refuses to adopt sessions that are in a group or have linked repos.
+- **Multi-repo, the rest.** v1 already lets each child task target one repo from the project's list. Left for v2: one task that edits several repos in one sandbox; the coordinator reading extra repos in its own sandbox; adopting sessions that are in a group or have linked repos; detecting that a merged change is deployed.
 
 ## v3
 
