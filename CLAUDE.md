@@ -33,6 +33,7 @@ FOLLOW ALL OF THESE RULES
 - Before a PR that touches async code, run `/parallel-awaits` with `--diff origin/main`.
 - Eliminate duplication, centralise your changes so its easier to update them
 - Keep-alive UI hides with React `<Activity>`; use a `hidden` class only where effects must keep running (terminals, on WebGL xterm).
+- Web: no `prefers-reduced-motion` or `useReducedMotion`; only "Disable page animations" turns motion off (design-check enforces).
 - Never put a live `filter: blur()` / beam halo on a spinning BorderBeam — measured GPU floor, already removed.
 - For debugging, use Eva MCP and Convex CLI for prod logs
 

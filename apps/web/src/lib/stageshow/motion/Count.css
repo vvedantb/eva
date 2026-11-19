@@ -59,10 +59,4 @@
   .ss-count[data-snap] .ss-count__strip {
     transition: none;
   }
-
-  @media (prefers-reduced-motion: reduce) {
-    .ss-count__strip {
-      transition: none;
-    }
-  }
 }
