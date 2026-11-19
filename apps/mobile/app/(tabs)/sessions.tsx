@@ -7,6 +7,7 @@ import { PageHeader } from "@vvedantb/native-ui/layout";
 import {
   closeSwipeRows,
   EmptyState,
+  HeaderIconButton,
   ListDivider,
   Pager,
   PillTabs,
@@ -19,7 +20,7 @@ import { useQueries, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, SectionList, View } from "react-native";
+import { SectionList, View } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { QuickTasksSection, useQuickTaskRepo } from "@/quickTasks/QuickTasksSection";
@@ -83,7 +84,7 @@ export default function SessionsScreen() {
   // Where the pages are, shared by the pager and the pill indicator.
   const progress = useSharedValue(index);
   const { openNew: openNewQuickTask } = useQuickTaskRepo();
-  const muted = EVA_THEME[useScheme()].mutedForeground;
+  const foreground = EVA_THEME[useScheme()].foreground;
   const isQuickTasks = section.id === "quick-tasks";
 
   return (
@@ -91,30 +92,20 @@ export default function SessionsScreen() {
       <PageHeader
         title={section.label}
         action={
-          <View className="flex-row items-center">
-            {/* Search (the web ⌘K spotlight), in every section. */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Search"
-              onPress={() => router.push("/search")}
-              hitSlop={2}
-              className="h-10 w-10 items-center justify-center rounded-lg active:opacity-70"
-            >
-              <IconSearch size={16} color={muted} />
-            </Pressable>
+          <View className="flex-row items-center gap-2">
+            {/* Search (the web ⌘K spotlight), in every section. Round header buttons, as Back. */}
+            <HeaderIconButton label="Search" onPress={() => router.push("/search")}>
+              <IconSearch size={18} color={foreground} />
+            </HeaderIconButton>
             {/* The web Sessions sidebar's options (sort, only mine, visible threads), on Sessions only. */}
             {section.id === "sessions" ? <SessionListOptionsButton /> : null}
             {section.id === "reviews" ? null : (
-              // The web "New session" button: a 40 ghost square, radius 8, muted 14 plus.
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={isQuickTasks ? "New quick task" : "New session"}
+              <HeaderIconButton
+                label={isQuickTasks ? "New quick task" : "New session"}
                 onPress={isQuickTasks ? openNewQuickTask : () => router.push("/session/new")}
-                hitSlop={2}
-                className="h-10 w-10 items-center justify-center rounded-lg active:opacity-70"
               >
-                <IconPlus size={14} color={muted} />
-              </Pressable>
+                <IconPlus size={18} color={foreground} />
+              </HeaderIconButton>
             )}
           </View>
         }

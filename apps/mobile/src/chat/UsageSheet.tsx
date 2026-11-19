@@ -108,8 +108,8 @@ export function UsageButton({ chat }: { chat: Chat }) {
         accessibilityHint="Opens context and plan usage"
         onPress={() => void openSheet()}
         hitSlop={4}
+        // Flat on the header rail (`HeaderRail`), as the web trough's buttons.
         className="h-11 flex-row items-center gap-1.5 rounded-full px-3 active:opacity-70"
-        style={{ backgroundColor: theme.secondary }}
       >
         <Text className="font-instrument-sans-medium" style={{ ...META, color, fontWeight: "500", fontVariant: ["tabular-nums"] }}>
           {label}

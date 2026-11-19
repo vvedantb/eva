@@ -89,15 +89,13 @@ export function SandboxControl({ sandbox, working }: { sandbox: SessionSandbox; 
       }}
       hitSlop={4}
       className="h-11 w-11 items-center justify-center rounded-full active:opacity-70"
-      style={{
-        backgroundColor: sandbox.isActive ? theme.destructive : theme.secondary,
-        opacity: blockedMidTurn ? 0.45 : 1,
-      }}
+      // Flat on the header rail, as the web (#1410): no red fill; a red stop awake, a green play asleep.
+      style={{ opacity: blockedMidTurn ? 0.45 : 1 }}
     >
       {sandbox.isToggling ? (
         <Spinner size="sm" />
       ) : sandbox.isActive ? (
-        <IconPlayerStop size={16} color={theme.destructiveForeground} />
+        <IconPlayerStop size={16} color={theme.destructive} />
       ) : (
         <IconPlayerPlay size={16} color={theme.success} />
       )}

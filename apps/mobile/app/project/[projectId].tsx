@@ -1,7 +1,7 @@
 import { api, isProjectBuilding, projectScheduledBuildAt } from "@eva/backend";
 import { BUILDABLE_PROJECT_PHASES, isProjectPlanning } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconCalendarClock, IconDots, IconHammer, IconLayoutKanban, IconMessage, IconPlayerStop } from "@tabler/icons-react-native";
+import { IconCalendarClock, IconHammer, IconLayoutKanban, IconMessage, IconPlayerStop } from "@tabler/icons-react-native";
 import { goBackOrReplace } from "@vvedantb/native-ui/expo-router";
 import { StackPageHeader } from "@vvedantb/native-ui/layout";
 import { Button, CenteredSpinner, ConfirmDialog, EmptyState } from "@vvedantb/native-ui/primitives";
@@ -21,6 +21,7 @@ import { useProjectActions } from "@/projects/useProjectActions";
 import { useProjectGitActions } from "@/sandbox/OwnedSandboxActions";
 import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { useScheme } from "@/ui/theme";
+import { HeaderMoreButton } from "@/ui/HeaderRail";
 
 type Tab = "overview" | "work";
 
@@ -80,7 +81,7 @@ export default function ProjectScreen() {
       headerRight={
         // The web header "…" (`ProjectDetailHeaderActions`), shown outside planning as the web.
         planning ? undefined : (
-          <MoreButton onPress={() => actions.openSheet(project)} />
+          <HeaderMoreButton label="More" onPress={() => actions.openSheet(project)} />
         )
       }
     >
@@ -118,21 +119,6 @@ function Screen({ title, onBack, headerRight, children }: { title: string; onBac
       <StackPageHeader title={title} onBack={onBack} headerRight={headerRight} />
       {children}
     </View>
-  );
-}
-
-/** The header "…": a 44 ghost square with the muted dots, as the list "+". */
-function MoreButton({ onPress }: { onPress: () => void }) {
-  const muted = EVA_THEME[useScheme()].mutedForeground;
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="More"
-      onPress={onPress}
-      className="h-11 w-11 items-center justify-center rounded-lg active:opacity-70"
-    >
-      <IconDots size={16} color={muted} />
-    </Pressable>
   );
 }
 
