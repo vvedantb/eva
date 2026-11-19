@@ -30,10 +30,14 @@ The business team opens the project and sees what is launched, what is in progre
 | 9 | At most **3** child tasks run at the same time in one project. Hard-coded constant in v1. | 5 parallel agents cost about 5 times one agent (Cursor docs, cited in the eesel.ai review of 11 September 2026). |
 | 10 | Old projects are converted in place. | One code path. History is kept. |
 | 11 | Project context reuses Documents, Artifacts and the chat Log. No new store. | They already carry `chatSourceFields`. |
-| 12 | Viewers read everything and can file a feedback task. Contributors can chat and run tasks. | Business team can report without starting agent runs. |
+| 12 | Roles come from the user's existing Eva role (`users.role`: `dev`, `designer`, `business`). **Devs are Contributors. Everyone else is a Viewer.** No role setting for each project. Viewers read everything and can file a feedback task. Contributors can chat and run tasks. | The user asked for the simplest rule. Business team can report without starting agent runs. |
 | 13 | A project has a home repo plus a list of extra repos. Each child task targets exactly **one** repo and opens its PR there. A dependency can cross repos. | Real case: a carepulse-ts project that needs a change in carepulse_v2. Cheap, because each task already has its own session and `agentTasks.repoId`. Amp does the same: its Space agent starts a thread "in the project you named" (Amp docs, "Spaces", read 19 November 2026). |
 | 14 | Hub model with a read-only view. Child tasks never message each other. A task can read sibling status and docs, and can report to the coordinator. The coordinator can message any child task. | Easy to follow, cannot loop. Amp documents the same shape: threads report to the Space, no thread-to-thread chat, files move only when asked (Amp docs, "Spaces" and "Agent to Agent", read 19 November 2026). |
 | 15 | No parallel tool set. Reuse and extend the existing MCP tools; add only the tools listed in step 3. | The fleet tools (`mcp/orchestratorTools.ts`) and task tools already cover most needs. |
+| 16 | The coordinator wakes by itself only when it has a job: a child's ask (at once), a failed task, the end of an approved batch. Not for each finished task or merged PR. Cap: 10 automatic turns an hour for each project. | Starting the next task is plain code (the scheduler) and needs no agent turn. Keeps the idle cost of a project low. Amp's docs do not say when a Space agent wakes. |
+| 17 | The coordinator may retry a failed task once, with a note on what went wrong. A second failure shows "needs you". | Unblocks work while people are away, with a hard limit on spend. Amp's docs do not cover retries. |
+| 18 | A Contributor can chat directly in a child task. This does not wake the coordinator. | Same as a quick task today. Amp allows the same (open a thread beside the Space chat). |
+| 19 | A project has no archive and no close action. It shows **done** when every task is launched or cancelled, and it opens again when a task is added. | Status is derived (see Target model), so this needs no stored state. |
 
 ## Scope
 
@@ -124,7 +128,8 @@ This is the core change. Do it alone, with no UI change.
 1. Replace `buildProjectWorkflow` with a small scheduler mutation, `scheduleReadyTasks(projectId)`:
    - ready = status `todo`, approved (see 3), and every `taskDependencies.dependsOnId` task is `done`;
    - start ready tasks in `taskNumber` order until `MAX_PARALLEL_PROJECT_TASKS = 3` are `in_progress`;
-   - a failed task is flagged and does not stop the others (422's decision).
+   - a failed task is flagged and does not stop the others (422's decision). Tasks that depend on it wait;
+   - retry (decision 17): add `agentTasks.coordinatorRetries` (number). The coordinator may restart a failed task while the count is 0; the restart sets it to 1. A second failure shows "needs you". A person's restart does not use the count. A retry is a new turn in the same task session, on the same branch.
 2. Call it from three events only: batch approval, a task status change, a child PR merge (webhook). It is idempotent: a second call with the same state starts nothing.
 3. Approval: add `agentTasks.approvedAt` (optional number). `approveProjectTasks(projectId, taskIds)` sets it. Tasks a person creates by hand are approved at creation.
 4. A dependency is "done" when the task is `done` **and its PR is merged**, so the next task starts from a main that has the change.
@@ -156,7 +161,12 @@ This is the core change. Do it alone, with no UI change.
 
    A child task must not get: `create_tasks_batch` for its project, `send_chat_message` to a sibling, `stop_agent`, or any write to a sibling's rows. Enforce this in the tool registry by `chatOwner`, not in the prompt.
 5. **Prompt context** in `ownerPromptContext`: project title, description, instructions, the summary doc, and a compact task table (number, title, status, phase, PR state, dependencies). Cap the table size; state the cap in code.
-6. **Wake-ups.** The coordinator gets a short synthetic turn when a child task finishes, fails, reports (`report_to_coordinator`), or its PR merges, so it can update the summary and propose the next batch. Batch these events (one turn for events inside a short window) to limit cost. First check whether the `watch_agent` wake path (today: Manager Ave threads only) can wake a project coordinator; extend it instead of building a second one. Also read `internal/plans/todo/session-synthetic-turns.md`.
+6. **Wake-ups (decision 16).** The coordinator gets a short synthetic turn only for these events:
+   - a child's **ask**: at once;
+   - a child task **failed**: batched (one turn for events inside a short window);
+   - **end of an approved batch** (every task in it is launched, cancelled, or failed twice): one turn to update the summary and propose the next batch.
+
+   It does **not** wake for each finished task, each merged PR, a child's plain report, a person's message in a child task, or a new feedback task. It reads all of those at its next turn, from the task table and the open reports. Cap: `MAX_COORDINATOR_AUTO_TURNS_PER_HOUR = 10` for each project; when the cap is hit, the project shows "needs you" and waits for a person. A person's message never counts against the cap. The summary doc can therefore be stale between wake-ups; the counts shown above it come from live data (step 5.4). First check whether the `watch_agent` wake path (today: Manager Ave threads only) can wake a project coordinator; extend it instead of building a second one. Also read `internal/plans/todo/session-synthetic-turns.md`.
 7. Remove `projectInterviewWorkflow`, `projectSpecWorkflow`, `projects.interview`, `planningMode`, `_projects/development.ts`, and the duplicate `projects.addMessage` — after step 9 converts the data.
 
 **Check:** in a new project, ask the coordinator for a feature. It proposes tasks. Nothing runs until approval.
@@ -218,9 +228,14 @@ This is the core change. Do it alone, with no UI change.
 
 ### Step 7 — Roles, feedback tasks, quiet comments
 
-1. **Roles.** Replace `projects.members` (ids) with `{userId, role: "viewer" | "contributor"}`. The project lead and repo/team owners are contributors. Drop `codeReviewer` if nothing reads it for behaviour; keep `projectLead` as the owner.
-2. Enforce in one place: `getProjectWithAccess` returns the role; mutations that chat, approve, run, cancel or edit settings require `contributor`. Child task chats inherit the project role.
-3. **Open point for implementation:** today anyone with repo access can open a project. Keep that as the default role = `contributor` for repo members, and let the project list explicit viewers; or default = `viewer`. Ask the user before building (see open questions).
+1. **Roles (decision 12).** No new table and no setting for each project. The project role is derived: `users.role === "dev"` → Contributor; any other value → Viewer. Repo access is still required first.
+2. Enforce in one place: `getProjectWithAccess` returns the role; mutations that chat with the coordinator or a child task, approve, run, cancel, retry or edit project settings require Contributor. Child tasks inherit the rule.
+3. **Edge cases.**
+   - `users.role` is optional. A user with no role set is a Contributor, so nobody who works today is locked out. (My choice; confirm with the user before building.)
+   - `users.isAdmin` and team owners are Contributors whatever their role.
+   - A designer or business user who must drive a coordinator needs their Eva role changed. No exception for one project in v1.
+   - `projects.members`, `projectLead` and `codeReviewer` stay display data. Remove `members` and `codeReviewer` in step 9 if nothing reads them for behaviour.
+   - The rule applies to projects only. Sessions and quick tasks keep today's access.
 4. **Feedback task.** A viewer can call `createFeedbackTask(projectId, text, attachments)`. It creates a normal task: `todo`, not approved, `origin: "feedback"`. It shows in the coordinator's task table at its next turn. No new entity (422).
 5. **Quiet comments.** New table `messageComments {messageId, parentId?, userId, text}` — or generalise `taskComments`/`docComments` into one comments table if their shapes match; check first and prefer one table. Comments do not start a coordinator turn. A comment that mentions the coordinator sends the thread to it as a normal message. Viewers can comment.
 
@@ -263,11 +278,7 @@ Follow `docs/eva-convex.md` (migration, deploy, run on dev then prod, narrow, de
 
 ## Open questions
 
-Decided on 19 November 2026 and moved into the decisions table: cross-repo tasks (13), awareness model (14), MCP tool approach (15).
+All earlier questions are decided (19 November 2026) and are in the decisions table: cross-repo tasks (13), awareness (14), MCP tools (15), wake-ups (16), failures (17), child task chat (18), project end (19), roles (12).
 
-1. **Default role.** Is a repo member a contributor in every project by default (same reach as today), or a viewer until someone adds them?
-2. **Coordinator wake-ups.** Wake on every child event (batched), or only when a person opens or messages the project? This sets the idle cost of a project.
-3. **Failed task.** May the coordinator retry a failed task once by itself, or does every failure wait for a person?
-4. **Child task chat.** Can a contributor chat directly in a child task (as in a quick task today), or only through the coordinator? This plan assumes yes, directly.
-5. **Project end.** Does a project close when all tasks are launched, or stay open for maintenance until a person archives it?
-6. **Task card look.** Row layout, status wording and the "needs you" marker need a visual choice from the user in step 4.
+1. **No role set.** Confirm that a user with no Eva role is a Contributor (step 7.3).
+2. **Task card look.** Row layout, status wording and the "needs you" marker need a visual choice from the user. Ask at the start of step 4.
