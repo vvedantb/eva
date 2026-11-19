@@ -24,6 +24,20 @@ const POP_OUT_ID = "dock-pop-out";
    width slide, so the panel never shows at full size while it leaves. */
 const HOLD_MS = 400;
 
+/**
+ * Fired on the panel as a dock motion starts. Overlays painted over the
+ * panel from elsewhere (the preview iframe host) cannot follow its
+ * transform, so they step aside for `ms`.
+ */
+export const DOCK_MOTION_EVENT = "dockmotion";
+export class DockMotionEvent extends Event {
+  readonly ms: number;
+  constructor(ms: number) {
+    super(DOCK_MOTION_EVENT, { bubbles: true });
+    this.ms = ms;
+  }
+}
+
 /** The "Disable page animations" setting. No `prefers-reduced-motion`
     gate: the web app does not support it (docs/eva-ui.md). */
 function motionOff(): boolean {
@@ -63,6 +77,7 @@ export function dockPopIn(
   releaseDocked(panel);
   releaseDocked(after);
   if (!aimAt(panel, tile, edge)) return;
+  panel.dispatchEvent(new DockMotionEvent(POP_IN_MS));
   panel.animate(
     [
       { transform: `scale(${DOCKED_SCALE})`, opacity: 0 },
@@ -84,6 +99,7 @@ export function dockNudge(
   edge: DockEdge,
 ) {
   if (!aimAt(panel, tile, edge)) return;
+  panel.dispatchEvent(new DockMotionEvent(SWITCH_MS));
   panel.animate(
     [
       { transform: "scale(0.965)", opacity: 0.4 },
@@ -115,6 +131,7 @@ export function dockPopOut(
     .getAnimations()
     .some((a) => a.id === POP_OUT_ID && a.playState === "running");
   if (closing) return;
+  panel.dispatchEvent(new DockMotionEvent(POP_OUT_MS + HOLD_MS));
   first?.animate([{ opacity: 1 }, { opacity: 0 }], {
     id: POP_OUT_ID,
     duration: POP_OUT_MS / 3,
