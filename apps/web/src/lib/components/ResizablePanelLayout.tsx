@@ -36,6 +36,7 @@ import {
 } from "@/lib/hooks/usePersistentPanelSize";
 import { motionEase, useMediaQuery } from "@vvedantb/ui";
 import { popOutSandboxCard } from "@/lib/components/sandbox/sandboxCardMotion";
+import { slideNextResize } from "@/lib/dockMotion";
 
 interface PanelContext {
   rightPanelCollapsed: boolean;
@@ -120,6 +121,7 @@ export function ResizablePanelLayout({
   "use no memo";
   const rightPanelRef = usePanelRef();
   const rightPanelElementRef = useRef<HTMLDivElement>(null);
+  const groupElementRef = useRef<HTMLDivElement>(null);
   const [savedCollapsed, setSavedCollapsed] = useLocalStorage(
     collapsedStorageKey,
     defaultRightCollapsed,
@@ -197,6 +199,7 @@ export function ResizablePanelLayout({
       ? isCollapsedPanelSize(size, rightCollapsedSizePx, railMinSizePx)
       : desktopCollapsed;
     if (collapsed) {
+      slideNextResize(groupElementRef.current, "open");
       panel.resize(
         usableExpandedPanelSize(
           lastExpandedSize.current,
@@ -209,7 +212,10 @@ export function ResizablePanelLayout({
     }
     // A sandbox card shrinks back into its rail tab first; other right
     // panels have no card, so they collapse at once.
-    popOutSandboxCard(rightPanelElementRef.current, () => panel.collapse());
+    popOutSandboxCard(rightPanelElementRef.current, () => {
+      slideNextResize(groupElementRef.current, "close");
+      panel.collapse();
+    });
   }, [
     defaultRightSize,
     isMobile,
@@ -237,6 +243,7 @@ export function ResizablePanelLayout({
       setMobileShowsRight(true);
       return;
     }
+    slideNextResize(groupElementRef.current, "open");
     rightPanelRef.current?.resize(
       usableExpandedPanelSize(
         lastExpandedSize.current,
@@ -380,6 +387,7 @@ export function ResizablePanelLayout({
     <Group
       orientation="horizontal"
       className="h-full"
+      elementRef={groupElementRef}
       onLayoutChanged={handleLayoutChanged}
     >
       <Panel
