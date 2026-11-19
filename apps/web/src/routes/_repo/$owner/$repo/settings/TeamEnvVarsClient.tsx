@@ -84,13 +84,14 @@ export function TeamEnvVarsClient() {
         vars={teamEnvVars}
         scope="team"
         description="Team variables inherited by every codebase. Use known slots for shared agent credentials."
-        onUpsert={async (key, value, sandboxExclude) => {
+        onUpsert={async (key, value, sandboxExclude, seedOnly) => {
           if (!repo.teamId) return;
           await upsertTeamVar({
             teamId: repo.teamId,
             key,
             value,
             sandboxExclude,
+            seedOnly,
           });
         }}
         onReveal={async (key) => {
@@ -101,12 +102,13 @@ export function TeamEnvVarsClient() {
           if (!repo.teamId) return;
           await removeTeamVar({ teamId: repo.teamId, key });
         }}
-        onToggleSandboxExclude={async (key, sandboxExclude) => {
+        onToggleSandboxExclude={async (key, sandboxExclude, seedOnly) => {
           if (!repo.teamId) return;
           await toggleSandboxExclude({
             teamId: repo.teamId,
             key,
             sandboxExclude,
+            seedOnly,
           });
         }}
       />

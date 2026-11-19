@@ -2,7 +2,7 @@
 
 import { ActionCache } from "@convex-dev/action-cache";
 import { v } from "convex/values";
-import { components, internal } from "./_generated/api";
+import { api, components, internal } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
 import { readBoolean, readScore } from "./_jev/answers";
 import { evaluateDecision } from "./_jev/client";
@@ -110,6 +110,9 @@ export const assess = action({
   }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
+    // Flag off: a perfect score, the same "no banner" answer as a failure.
+    const flags = await ctx.runQuery(api.auth.getExperimentalFlags, {});
+    if (!flags.draftReadiness) return { score: 1, missing: [] };
     return await readinessCache.fetch(ctx, {
       title: args.title.slice(0, MAX_TITLE_CHARS),
       description: args.description.slice(0, MAX_DESCRIPTION_CHARS),

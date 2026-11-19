@@ -1,10 +1,11 @@
 import { z } from "zod";
+import { FINDING_SEVERITIES, type FindingSeverity } from "../_validators/enums";
 
 export interface ParsedFinding {
   id: string;
   title: string;
   description: string;
-  severity: "low" | "medium" | "high" | "critical";
+  severity: FindingSeverity;
   filePaths?: string[];
   suggestedFix?: string;
 }
@@ -15,7 +16,7 @@ export interface ParsedFinding {
 const findingItemSchema = z.object({
   title: z.string(),
   description: z.string(),
-  severity: z.enum(["low", "medium", "high", "critical"]),
+  severity: z.enum(FINDING_SEVERITIES),
   filePaths: z.array(z.string()).optional().catch(undefined),
   suggestedFix: z.string().optional().catch(undefined),
 });

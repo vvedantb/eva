@@ -3,8 +3,8 @@
 /**
  * Asks TypeSafe Jev whether a finished turn's diff went beyond what the user
  * asked for, and whether the reply owned up to it: one requested/necessary/kind
- * call per hunk, one whole-diff headline question, and one mention question per
- * flagged hunk.
+ * call per hunk, one whole-diff headline question, one mention question per
+ * flagged hunk, and one call over the turn's screenshots.
  *
  * The mention pass is the point. An unrequested change the reply names is a
  * decision the reader can review; an unnamed one reaches production unseen,
@@ -21,9 +21,11 @@
 
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalAction } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import { internalAction, type ActionCtx } from "./_generated/server";
 import { readBoolean, readChoice } from "./_jev/answers";
 import { evaluateDecision } from "./_jev/client";
+import { loadImages } from "./_jev/images";
 import type { EvaluateInputRaw } from "./_jev/schema";
 import {
   CHANGE_KIND_QUESTION,
@@ -47,6 +49,7 @@ import {
   summariseScopeCheck,
   type JudgedHunk,
 } from "./_scopeCheck/verdict";
+import { buildVisualQuestions, screenshotName } from "./_scopeCheck/visual";
 
 /** Gateway usage tag; attributes the spend to this feature. */
 const JEV_TAG = "eva-scope-check";
@@ -70,6 +73,58 @@ async function inBatches<Item, Result>(
     }
   }
   return out;
+}
+
+/**
+ * One Jev call over the turn's screenshots: do they show what was asked, and
+ * which flagged hunks show in them. Any failure means no screenshot pass —
+ * the verdict is still written from the diff alone.
+ */
+async function judgeScreenshots(
+  ctx: ActionCtx,
+  messageId: Id<"messages">,
+  prompt: string,
+  flagged: readonly JudgedHunk[],
+): Promise<{
+  visible: Map<string, number>;
+  screenshots?: { checked: number; showsRequest?: number };
+}> {
+  const visible = new Map<string, number>();
+  const storageIds = await ctx.runQuery(
+    internal._scopeCheck.queries.getTurnScreenshots,
+    { messageId },
+  );
+  if (storageIds.length === 0) return { visible };
+  const { images } = await loadImages(
+    ctx.storage,
+    storageIds.map((storageId, index) => ({
+      name: screenshotName(index),
+      storageId,
+    })),
+  );
+  if (images.length === 0) return { visible };
+
+  const { questions, hunkByQuestion } = buildVisualQuestions(
+    images.map((image) => image.name),
+    flagged,
+  );
+  const outcome = await evaluateDecision(
+    { state: { prompt }, questions },
+    { tag: JEV_TAG, images },
+  );
+  if (!outcome.ok) return { visible };
+  for (const [questionId, key] of hunkByQuestion) {
+    const probability = readBoolean(outcome, questionId);
+    if (probability !== null) visible.set(key, probability);
+  }
+  const showsRequest = readBoolean(outcome, "shows_request");
+  return {
+    visible,
+    screenshots: {
+      checked: images.length,
+      ...(showsRequest === null ? {} : { showsRequest }),
+    },
+  };
 }
 
 /** Tries before giving up on GitHub catching up with the pushed sha. */
@@ -198,14 +253,27 @@ export const evaluateTurn = internalAction({
         {
           state: { prompt, diff: overallDiff.text },
           questions: OVERALL_QUESTION,
+          longContext: overallDiff.longContext,
         },
         { tag: JEV_TAG },
+      );
+
+      // Last, so the sandbox's media upload has had the whole run to land.
+      const visual = await judgeScreenshots(
+        ctx,
+        args.messageId,
+        prompt,
+        selectFlagged(judged),
       );
 
       const scopeCheck = summariseScopeCheck({
         unrequestedProbability: readBoolean(overall, "unrequested"),
         judged,
         mentioned,
+        visible: visual.visible,
+        ...(visual.screenshots === undefined
+          ? {}
+          : { screenshots: visual.screenshots }),
         totalHunks: hunks.length,
         diffTruncated: diff.truncated || overallDiff.clipped,
         evaluatedAt: Date.now(),

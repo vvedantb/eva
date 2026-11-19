@@ -10,10 +10,7 @@ import {
   deriveSubagents,
   subagentTone,
 } from "@/lib/components/sandbox/agentActivity";
-import {
-  isAssistantTurnInProgress,
-  type ChatBodyMessage,
-} from "./chatBodyUtils";
+import type { ChatBodyMessage } from "./chatBodyUtils";
 import type { SandboxChatSurface } from "./sandboxChatSurface";
 import { useStopBackgroundAgent } from "./useStopBackgroundAgent";
 import {
@@ -50,7 +47,7 @@ export function SubagentThreadLayer({
 }) {
   const [subagentId, setSubagentId] = useQueryState("subagent", subagentParser);
   const simpleView = useSimpleView();
-  const requestStop = useStopBackgroundAgent(surface.entity);
+  const { requestStop, stopDialog } = useStopBackgroundAgent(surface.entity);
 
   // Only the messages that mention this agent are parsed — a plain substring
   // test on the id keeps a long transcript from being parsed on every tick.
@@ -58,10 +55,8 @@ export function SubagentThreadLayer({
   let liveActivity: string | undefined;
   if (subagentId) {
     // Streaming payloads can outlive their turn; only read one while it runs.
-    if (
-      isAssistantTurnInProgress(messages) &&
-      streamingActivity?.includes(subagentId)
-    ) {
+    // The surface's `isExecuting` is the same turn rule the composer uses.
+    if (surface.isExecuting && streamingActivity?.includes(subagentId)) {
       liveActivity = streamingActivity;
     }
     // The live payload already holds the running turn's steps; reading that
@@ -126,6 +121,7 @@ export function SubagentThreadLayer({
             onOpenFile={onOpenFile}
           />
         ) : null}
+        {stopDialog}
       </div>
     </OpenSubagentContext>
   );

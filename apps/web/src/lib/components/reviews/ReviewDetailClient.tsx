@@ -7,7 +7,7 @@ import { api } from "@eva/backend";
 import { Spinner } from "@vvedantb/ui";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { PendingReviewCommentsProvider } from "@/lib/contexts/PendingReviewCommentsContext";
-import { githubPrUrl } from "@/lib/githubPr";
+import { githubPrUrl } from "@eva/shared";
 import { prErrorMessage, prHeaderQuery } from "@/lib/prReviewQueries";
 import { REVIEW_DEFAULT_TAB, isReviewTab } from "@/lib/search-params";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";

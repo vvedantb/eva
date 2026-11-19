@@ -39,7 +39,7 @@ import { RecapTourBody } from "@/lib/components/sandbox/_components/RecapTourBod
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { storedRunTraits, toRunTraitArgs } from "@/lib/utils/runTraits";
+import { storedRunTraits, toRunTraitArgs } from "@eva/shared";
 
 type RecapDoc = FunctionReturnType<typeof api.docs.getRecapByPrUrl>;
 
@@ -177,6 +177,7 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
       className="flex h-full min-h-0 flex-col"
     >
       <TabsBar
+        className="border-b-0"
         actions={
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             {shortSha ? <span className="font-mono">{shortSha}</span> : null}

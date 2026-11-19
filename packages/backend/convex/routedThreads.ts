@@ -8,19 +8,22 @@ import {
   hasTeamAccess,
 } from "./functions";
 import { createNotification } from "./notifications";
+import { entityHref } from "@eva/shared";
 import { isEntityDeleted } from "./numId";
+import { isSessionArchived } from "./_sessions/archive";
 import {
   drainSessionChatQueues,
-  startNextQueuedProjectChatMessage,
-  startNextQueuedTaskChatMessage,
 } from "./_queues/helpers";
 import { ensureMainChat, findMainChat } from "./_sessionChats/helpers";
+import { ensureOwnerChat, loadOwnerEntity } from "./_sessions/ownedSession";
+import { findWorkChat } from "./_sessions/ownerState";
 import { listDirectoryForTeam, teamHasOtherMembers } from "./workProfiles";
 import {
   DEFAULT_AI_MODEL,
   roleUserValidator,
   routedSourceKindValidator,
   routedThreadStatusValidator,
+  type RoleUser,
 } from "./validators";
 import type { Infer } from "convex/values";
 
@@ -133,11 +136,20 @@ async function latestUserRequest(
   ctx: QueryCtx,
   sourceId: string,
 ): Promise<string | undefined> {
+  // A task's or project's chat is its session's (none before it chatted).
   const sessionId = ctx.db.normalizeId("sessions", sourceId);
+  const taskId = ctx.db.normalizeId("agentTasks", sourceId);
+  const projectId = ctx.db.normalizeId("projects", sourceId);
+  const owner = taskId
+    ? await loadOwnerEntity(ctx.db, { kind: "task", taskId })
+    : projectId
+      ? await loadOwnerEntity(ctx.db, { kind: "project", projectId })
+      : null;
   const parentId = sessionId
     ? (await findMainChat(ctx.db, sessionId))?._id
-    : ctx.db.normalizeId("agentTasks", sourceId) ??
-    ctx.db.normalizeId("projects", sourceId);
+    : owner
+      ? (await findWorkChat(ctx.db, owner))?.chat._id
+      : undefined;
   if (!parentId) return undefined;
   const rows = await ctx.db
     .query("messages")
@@ -162,26 +174,13 @@ function displayName(user: {
   return user.fullName || user.firstName || user.email || "Teammate";
 }
 
-function repoHref(
-  owner: string,
-  name: string,
-  rootDirectory?: string,
-): string {
-  if (!rootDirectory) return `/${owner}/${name}`;
-  const appName = rootDirectory.split("/").pop();
-  return `/${owner}/${name}/${appName}`;
-}
-
 function sourceHref(
   repo: { owner: string; name: string; rootDirectory?: string },
   kind: SourceKind,
   numId: number | undefined,
 ): string | undefined {
   if (numId === undefined) return undefined;
-  const base = repoHref(repo.owner, repo.name, repo.rootDirectory);
-  if (kind === "session") return `${base}/sessions/${numId}`;
-  if (kind === "task") return `${base}/quick-tasks/${numId}`;
-  return `${base}/projects/${numId}`;
+  return entityHref(kind, repo, numId);
 }
 
 /**
@@ -227,7 +226,7 @@ async function loadSource(
       ownerUserId: session.userId,
       lastModel: session.lastModel,
       deleted: isEntityDeleted(session),
-      archived: session.archived === true,
+      archived: isSessionArchived(session),
     };
   }
   if (sourceKind === "task") {
@@ -277,23 +276,23 @@ async function enrichThread(
   thread: Doc<"routedThreads">,
   viewerUserId: Id<"users">,
 ) {
-  const rows = await threadParticipants(ctx, thread._id);
-  const participants = [];
-  let needsMyReply = false;
-  for (const row of rows) {
-    const user = await ctx.db.get(row.userId);
-    participants.push({
-      userId: row.userId,
-      name: displayName(user),
-      needsReply: row.needsReply,
-    });
-    if (row.userId === viewerUserId && row.needsReply) needsMyReply = true;
-  }
+  const [rows, repo, source] = await Promise.all([
+    threadParticipants(ctx, thread._id),
+    ctx.db.get(thread.repoId),
+    loadSource(ctx, thread.sourceKind, thread.sourceId),
+  ]);
+  const users = await Promise.all(rows.map((row) => ctx.db.get(row.userId)));
+  const participants = rows.map((row, i) => ({
+    userId: row.userId,
+    name: displayName(users[i]),
+    needsReply: row.needsReply,
+  }));
+  const needsMyReply = rows.some(
+    (row) => row.userId === viewerUserId && row.needsReply,
+  );
   // Stable order for the UI — row order is insertion order, which shuffles as
   // people are added to an existing thread.
   participants.sort((a, b) => a.name.localeCompare(b.name));
-  const repo = await ctx.db.get(thread.repoId);
-  const source = await loadSource(ctx, thread.sourceKind, thread.sourceId);
   return {
     _id: thread._id,
     teamId: thread.teamId,
@@ -377,27 +376,44 @@ function notifyEntityArgs(
 }
 
 /**
- * Where a source's transcript and queue live. A session's rows hang off its
- * Main chat (sessions hold several chats); tasks and projects key on their own
- * id. Undefined when the session is gone.
+ * Where a source's transcript and queue live: a session's Main chat, or the
+ * chat a task or project talks in (`ensureOwnerChat`, created on first need).
+ * Undefined when the source is gone.
  */
 async function transcriptParent(
   ctx: MutationCtx,
   source: SourceRecord,
 ): Promise<
   | {
-      parentId: Id<"sessionChats"> | Id<"agentTasks"> | Id<"projects">;
+      sessionId: Id<"sessions">;
+      parentId: Id<"sessionChats">;
       model: Doc<"sessions">["lastModel"];
     }
   | undefined
 > {
-  if (source.ref.kind !== "session") {
-    return { parentId: source.ref.id, model: source.lastModel };
+  if (source.ref.kind === "session") {
+    const session = await ctx.db.get(source.ref.id);
+    if (!session) return undefined;
+    const chat = await ensureMainChat(ctx, session);
+    return {
+      sessionId: session._id,
+      parentId: chat._id,
+      model: chat.lastModel ?? source.lastModel,
+    };
   }
-  const session = await ctx.db.get(source.ref.id);
-  if (!session) return undefined;
-  const chat = await ensureMainChat(ctx, session);
-  return { parentId: chat._id, model: chat.lastModel ?? source.lastModel };
+  const entity = await loadOwnerEntity(
+    ctx.db,
+    source.ref.kind === "task"
+      ? { kind: "task", taskId: source.ref.id }
+      : { kind: "project", projectId: source.ref.id },
+  );
+  if (!entity) return undefined;
+  const { session, chat } = await ensureOwnerChat(ctx, entity);
+  return {
+    sessionId: session._id,
+    parentId: chat._id,
+    model: chat.lastModel ?? source.lastModel,
+  };
 }
 
 async function insertSystemAlert(
@@ -436,19 +452,13 @@ async function enqueueSourceWake(
     userId,
     model: parent.model ?? DEFAULT_AI_MODEL,
   });
-  if (source.ref.kind === "session") {
-    await drainSessionChatQueues(ctx, source.ref.id);
-  } else if (source.ref.kind === "task") {
-    await startNextQueuedTaskChatMessage(ctx, source.ref.id);
-  } else {
-    await startNextQueuedProjectChatMessage(ctx, source.ref.id);
-  }
+  await drainSessionChatQueues(ctx, parent.sessionId);
 }
 
 type DirectoryMember = {
   userId: Id<"users">;
   name: string;
-  role: "business" | "dev" | "designer" | null;
+  role: RoleUser | null;
 };
 
 /**
@@ -461,7 +471,7 @@ async function resolveParticipants(
     teamId: Id<"teams">;
     actorUserId: Id<"users">;
     userIds?: Id<"users">[];
-    role?: "business" | "dev" | "designer";
+    role?: RoleUser;
   },
 ): Promise<
   | { ok: true; users: DirectoryMember[] }
@@ -573,14 +583,17 @@ export const listWaitingForMe = authQuery({
       )
       .order("desc")
       .take(50);
-    const out = [];
-    for (const row of rows) {
-      const thread = await ctx.db.get(row.threadId);
-      if (!thread || !OPEN_STATUSES.has(thread.status)) continue;
-      if (!(await hasTeamAccess(ctx.db, thread.teamId, ctx.userId))) continue;
-      out.push(await enrichThread(ctx, thread, ctx.userId));
-    }
-    return out;
+    const threads = await Promise.all(
+      rows.map(async (row) => {
+        const thread = await ctx.db.get(row.threadId);
+        if (!thread || !OPEN_STATUSES.has(thread.status)) return [];
+        if (!(await hasTeamAccess(ctx.db, thread.teamId, ctx.userId))) {
+          return [];
+        }
+        return [await enrichThread(ctx, thread, ctx.userId)];
+      }),
+    );
+    return threads.flat();
   },
 });
 
@@ -603,12 +616,11 @@ export const listBySource = authQuery({
       )
       .collect();
     rows.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
-    const out = [];
-    for (const row of rows) {
-      if (!OPEN_STATUSES.has(row.status)) continue;
-      out.push(await enrichThread(ctx, row, ctx.userId));
-    }
-    return out;
+    return await Promise.all(
+      rows
+        .filter((row) => OPEN_STATUSES.has(row.status))
+        .map((row) => enrichThread(ctx, row, ctx.userId)),
+    );
   },
 });
 
@@ -635,10 +647,20 @@ export const listMessages = authQuery({
       .withIndex("by_thread_and_created", (q) => q.eq("threadId", args.threadId))
       .order("asc")
       .take(200);
+    const authorIds = [
+      ...new Set(
+        rows.flatMap((row) => (row.authorUserId ? [row.authorUserId] : [])),
+      ),
+    ];
+    const authorDocs = await Promise.all(authorIds.map((id) => ctx.db.get(id)));
+    const authors = new Map<Id<"users">, Doc<"users"> | null>();
+    authorIds.forEach((id, i) => {
+      authors.set(id, authorDocs[i]);
+    });
     const out = [];
     for (const row of rows) {
       const author = row.authorUserId
-        ? await ctx.db.get(row.authorUserId)
+        ? (authors.get(row.authorUserId) ?? null)
         : null;
       out.push({
         _id: row._id,
@@ -665,13 +687,21 @@ export const countWaitingForMe = authQuery({
         q.eq("userId", ctx.userId).eq("needsReply", true),
       )
       .collect();
-    let count = 0;
-    for (const row of rows) {
-      const thread = await ctx.db.get(row.threadId);
-      if (!thread || !OPEN_STATUSES.has(thread.status)) continue;
-      if (await hasTeamAccess(ctx.db, thread.teamId, ctx.userId)) count += 1;
-    }
-    return count;
+    const threads = await Promise.all(
+      rows.map((row) => ctx.db.get(row.threadId)),
+    );
+    const openThreads = threads.filter(
+      (thread): thread is Doc<"routedThreads"> =>
+        thread !== null && OPEN_STATUSES.has(thread.status),
+    );
+    // Team access once per team, not once per thread.
+    const teamIds = [...new Set(openThreads.map((thread) => thread.teamId))];
+    const access = await Promise.all(
+      teamIds.map((teamId) => hasTeamAccess(ctx.db, teamId, ctx.userId)),
+    );
+    const accessibleTeams = new Set(teamIds.filter((_, i) => access[i]));
+    return openThreads.filter((thread) => accessibleTeams.has(thread.teamId))
+      .length;
   },
 });
 
@@ -817,7 +847,7 @@ async function askCore(
     question: string;
     context: string;
     topicKey: string;
-    role?: "business" | "dev" | "designer";
+    role?: RoleUser;
     assigneeUserIds?: Id<"users">[];
   },
 ): Promise<Infer<typeof askResult>> {

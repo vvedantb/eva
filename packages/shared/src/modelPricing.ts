@@ -21,7 +21,7 @@ export interface ModelPricing {
 
 const ANTHROPIC_PRICING_URL =
   "https://platform.claude.com/docs/en/about-claude/pricing";
-const ANTHROPIC_PRICING_AS_OF = "2026-10-01";
+const ANTHROPIC_PRICING_AS_OF = "2026-11-09";
 
 function anthropicRow(
   inputPerMillion: number,
@@ -47,6 +47,8 @@ function anthropicRow(
  * `resolveModelPricing`). Retired models are omitted.
  */
 export const CLAUDE_PRICING_PER_MILLION: Record<string, ModelPricing> = {
+  "claude-fable-5-2": anthropicRow(8, 0.2, 10, 40),
+  "claude-mythos-5-2": anthropicRow(8, 0.2, 10, 40),
   "claude-fable-5-1": anthropicRow(10, 0.25, 12.5, 50),
   "claude-mythos-5-1": anthropicRow(10, 0.25, 12.5, 50),
   "claude-fable-5": anthropicRow(10, 1, 12.5, 50),

@@ -12,6 +12,8 @@ import {
   LoadingState,
 } from "@vvedantb/ui";
 import { IconGitPullRequest, IconX } from "@tabler/icons-react";
+import type { PrState } from "@eva/shared";
+import { prStateIconClass } from "@/lib/components/prStateIconClass";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import {
   SANDBOX_STATUS_STYLES,
@@ -44,7 +46,7 @@ interface ChromeTabSession {
   branchName?: string;
   baseBranch?: string;
   prUrl?: string;
-  prState?: "draft" | "open" | "merged" | "closed";
+  prState?: PrState;
   sandboxId?: string;
 }
 
@@ -61,22 +63,6 @@ export interface SessionChromeTabProps {
   /** Dismisses the tab locally — the session keeps running. */
   onClose: () => void;
   onForkNavigate: (pathSegment: string) => void;
-}
-
-function prStateIconColor(
-  state: "draft" | "open" | "merged" | "closed" | undefined,
-): string {
-  switch (state) {
-    case "open":
-      return "text-success";
-    case "merged":
-      return "text-status-code-review";
-    case "closed":
-      return "text-destructive";
-    case "draft":
-    default:
-      return "text-muted-foreground";
-  }
 }
 
 /**
@@ -223,7 +209,7 @@ export function SessionChromeTab({
                     size={14}
                     className={cn(
                       "shrink-0 [@container(max-width:11rem)]:hidden",
-                      prStateIconColor(session.prState),
+                      prStateIconClass(session.prState),
                     )}
                   />
                 ) : null}
@@ -262,6 +248,8 @@ export function SessionChromeTab({
         </ContextMenuTrigger>
         <ContextMenuContent onClick={(e) => e.stopPropagation()}>
           <SessionMenuItems
+            variant="context"
+            showOpenInNewTab
             session={session}
             href={href}
             isRegeneratingTitle={isRegeneratingTitle}

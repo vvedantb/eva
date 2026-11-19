@@ -7,9 +7,10 @@ import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
+import { EVA_BRANCH_PREFIX } from "./_git/branchNames";
 import { authMutation, hasRepoAccess } from "./functions";
 import {
-  turnCheckpointArgs,
+  completionCallbackArgs,
   turnLeaseFenceArgs,
   workflowCompleteValidator,
 } from "./validators";
@@ -465,18 +466,15 @@ export const saveWorkflowFailure = internalMutation({
 export const handleCompletion = authMutation({
   args: {
     reportId: v.id("evaluationReports"),
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    rawResultEvent: v.optional(v.string()),
-    ...turnCheckpointArgs,
+    ...completionCallbackArgs,
     ...turnLeaseFenceArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const report = await ctx.db.get(args.reportId);
     if (!report || !report.activeWorkflowId) return null;
+    if (!(await hasRepoAccess(ctx.db, report.repoId, ctx.userId)))
+      throw new Error("Not authorized");
     if (
       !(await settleAgentTurnCompletion(ctx, {
         entityId: args.reportId,
@@ -619,18 +617,15 @@ export const saveFixError = internalMutation({
 export const handleFixCompletion = authMutation({
   args: {
     reportId: v.id("evaluationReports"),
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    rawResultEvent: v.optional(v.string()),
-    ...turnCheckpointArgs,
+    ...completionCallbackArgs,
     ...turnLeaseFenceArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const report = await ctx.db.get(args.reportId);
     if (!report || !report.activeWorkflowId) return null;
+    if (!(await hasRepoAccess(ctx.db, report.repoId, ctx.userId)))
+      throw new Error("Not authorized");
     if (
       !(await settleAgentTurnCompletion(ctx, {
         entityId: args.reportId,
@@ -760,7 +755,7 @@ export const startFix = authMutation({
 
     // Retries need a unique branch — the previous push is not forced, so reusing
     // the name would fail if the prior attempt already pushed.
-    const base = `eva/eval-fix-${String(args.reportId).slice(-8)}`;
+    const base = `${EVA_BRANCH_PREFIX}eval-fix-${String(args.reportId).slice(-8)}`;
     const fixBranchName = report.fixBranchName
       ? `${base}-r${Date.now().toString(36)}`
       : base;

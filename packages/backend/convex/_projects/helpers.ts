@@ -5,6 +5,7 @@ import type {
   GenericDatabaseWriter,
 } from "convex/server";
 import { projectFields, conversationMessageValidator } from "../validators";
+import { sessionStatusValidator } from "../_validators/enums";
 import type { DataModel, Id, Doc } from "../_generated/dataModel";
 
 type ConversationMessage = Doc<"projectDetails">["conversationHistory"][number];
@@ -18,6 +19,12 @@ export const projectWithDetailsValidator = v.object({
   ...projectFields,
   generatedSpec: v.optional(v.string()),
   conversationHistory: v.array(conversationMessageValidator),
+  /**
+   * @deprecated `interview?.workflowId`, for installed APKs (0.1.96 and older
+   * read it as "interview running"). Derived, not stored. Remove once no
+   * supported APK reads it.
+   */
+  activeWorkflowId: v.optional(v.string()),
 });
 
 const {
@@ -33,10 +40,15 @@ export const projectPlanningModeValidator = v.union(
   v.literal("tasks_only"),
 );
 
-/** List rows always include a resolved planning mode (stored or inferred). */
+/**
+ * List rows always include a resolved planning mode (stored or inferred) and
+ * the project session's sandbox status.
+ */
 export const projectListItemValidator = v.object({
   ...projectSummaryFields,
   planningMode: projectPlanningModeValidator,
+  /** The project session's sandbox status (`projectSandboxStatus`). */
+  sandboxStatus: v.optional(sessionStatusValidator),
   /** Unread project chat reply for this user (`chatReads.ts`). */
   hasUnread: v.boolean(),
   /** The project chat is paused on a blocking question for the user. */

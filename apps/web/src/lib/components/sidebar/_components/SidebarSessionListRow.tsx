@@ -1,19 +1,11 @@
 "use client";
 
 import { useMutation } from "convex/react";
-import { useQuery } from "convex-helpers/react/cache/hooks";
-import { useQueryState } from "nuqs";
 import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import { SidebarSessionRow } from "@/lib/components/sidebar/SidebarSessionRow";
-import { SidebarChatRow } from "@/lib/components/sidebar/SidebarChatRow";
-import {
-  selectedChatNumber,
-  sessionHrefForRow,
-  sessionRowMatchesPath,
-} from "@/lib/components/sidebar/_utils/repoSessionPaths";
+import { sessionRowMatchesPath } from "@/lib/components/sidebar/_utils/repoSessionPaths";
 import type { SessionListMode } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
-import { chatParser } from "@/lib/search-params";
 import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 import type { RepoWithLogo } from "@/lib/utils/repoGrouping";
 
@@ -33,9 +25,9 @@ interface SidebarSessionListRowProps {
 }
 
 /**
- * One session in a global Sessions sidebar list: the row (Main) and, in the
- * active list, its parallel chats under it. Shared by repo groups and
- * linked-session groups so both list a session the same way.
+ * One session in a global Sessions sidebar list. Shared by repo groups and
+ * linked-session groups so both list a session the same way. Parallel chats
+ * live only as tabs inside the session, never as sidebar rows.
  */
 export function SidebarSessionListRow({
   session,
@@ -48,19 +40,9 @@ export function SidebarSessionListRow({
   onArchiveRequest,
   inGroup = false,
 }: SidebarSessionListRowProps) {
-  const [chatParam] = useQueryState("chat", chatParser);
-  const activeChatNumber = selectedChatNumber(chatParam);
   const unarchiveSession = useMutation(api.sessions.unarchive);
   const removeFromGroup = useMutation(api.sessions.removeFromGroup);
   const isSessionOpen = sessionRowMatchesPath(repo, session, pathname);
-  // Parallel chats beyond Main. Per-repo queries, keyed by the session's own
-  // repo: rows of one repo share a single cached subscription.
-  const chatArgs = listMode === "active" ? { repoId: session.repoId } : "skip";
-  const repoChats = useQuery(api.sessionChats.listExtraForRepo, chatArgs);
-  const runningChatIds = useQuery(
-    api.turns.listRunningChatIdsForRepo,
-    chatArgs,
-  );
   const groupProps = inGroup
     ? {
         app: repo,
@@ -96,38 +78,17 @@ export function SidebarSessionListRow({
     );
   }
 
-  const sessionChats = (repoChats ?? []).filter(
-    (chat) => chat.sessionId === session._id,
-  );
   return (
-    <div>
-      <SidebarSessionRow
-        session={session}
-        // The session row is Main; a chat row takes the highlight while its
-        // tab is the one open.
-        isSelected={isSessionOpen && activeChatNumber === 1}
-        repo={repo}
-        onNavigate={onNavigate}
-        onRename={async () => {}}
-        onRenameRequest={(s) => onRenameRequest(s, repo)}
-        onArchiveRequest={(s) => onArchiveRequest(s, repo)}
-        onForkNavigate={onForkNavigate}
-        {...groupProps}
-      />
-      {sessionChats.length > 0 ? (
-        <div className="mt-0.5 space-y-0.5">
-          {sessionChats.map((chat) => (
-            <SidebarChatRow
-              key={chat._id}
-              chat={chat}
-              sessionHref={sessionHrefForRow(repo, session)}
-              isSelected={isSessionOpen && activeChatNumber === chat.number}
-              isRunning={runningChatIds?.includes(chat._id) === true}
-              onNavigate={onNavigate}
-            />
-          ))}
-        </div>
-      ) : null}
-    </div>
+    <SidebarSessionRow
+      session={session}
+      isSelected={isSessionOpen}
+      repo={repo}
+      onNavigate={onNavigate}
+      onRename={async () => {}}
+      onRenameRequest={(s) => onRenameRequest(s, repo)}
+      onArchiveRequest={(s) => onArchiveRequest(s, repo)}
+      onForkNavigate={onForkNavigate}
+      {...groupProps}
+    />
   );
 }

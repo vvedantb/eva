@@ -26,7 +26,7 @@ no longer gate a kill; they survive only as the durations quoted in
 | `CLAUDE_NO_OUTPUT_TIMEOUT_MS`             | 60000   | SDK-runner silence watchdog base (×5 in every runner).     |
 | `CLAUDE_FIRST_EVENT_TIMEOUT_MS`           | 90000   | Quoted in the no-first-event failure message.              |
 | `CLAUDE_FIRST_ASSISTANT_EVENT_TIMEOUT_MS` | 120000  | Quoted in the no-assistant-event failure message.          |
-| `CLAUDE_MAX_TOTAL_RUNTIME_MS`             | 5400000 | Absolute callback runtime cap (~90 min).                   |
+| `CLAUDE_MAX_TOTAL_RUNTIME_MS`             | 3 h     | Turn cap; default `TURN_MAX_RUNTIME_MS` in `@eva/shared`.  |
 
 Watchdog interval: `NO_OUTPUT_CHECK_INTERVAL_MS` = 5000 (fixed in `config.ts`).
 
@@ -67,9 +67,9 @@ Quick tasks and automations use **both** the sandbox callback (this script) and,
 
 | Layer                        | Owner                       | Quick-task values                   | Purpose                          |
 | ---------------------------- | --------------------------- | ----------------------------------- | -------------------------------- |
-| Callback `MAX_TOTAL_RUNTIME` | sandbox script              | 90m (`CLAUDE_MAX_TOTAL_RUNTIME_MS`) | Hard turn lifetime cap           |
+| Callback `MAX_TOTAL_RUNTIME` | sandbox script              | 3h (`TURN_MAX_RUNTIME_MS`)          | Hard turn lifetime cap           |
 | Daytona sandbox autostop     | Daytona                     | 90m (ephemeral + session)           | Sandbox inactivity stop          |
 | Convex `checkStaleRuns`      | `_taskWorkflow/watchdog.ts` | 5m probe / 25m unverified kill      | Heartbeat staleness (tasks only) |
-| `handleStaleRun`             | workflow                    | 2h                                  | Absolute backstop (tasks only)   |
+| `handleStaleRun`             | workflow                    | 3.5h (`TURN_BACKSTOP_MS`)           | Absolute backstop (tasks only)   |
 
 Automations rely on callback timeouts only — no task watchdog.

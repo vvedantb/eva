@@ -7,12 +7,7 @@ export {
   closeRunTurn,
   appendRunLog,
   saveSandboxId,
-  saveTaskSandboxId,
-  markTaskSandboxStopped,
-  clearTaskSandbox,
   scheduleDeploymentTracking,
-  updateProjectSandbox,
-  finalizeRunStreamingPhase,
   completeRun,
   recordManualTaskPr,
 } from "./_taskWorkflow/runLifecycle";
@@ -31,8 +26,4 @@ export {
   getTaskPrCreationData,
 } from "./_taskWorkflow/queries";
 
-export {
-  handleCompletion,
-  cancelExecution,
-  triggerExecution,
-} from "./_taskWorkflow/publicMutations";
+export { handleCompletion } from "./_taskWorkflow/publicMutations";

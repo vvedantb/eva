@@ -1,16 +1,18 @@
 import { v } from "convex/values";
-import type { Doc, Id } from "../_generated/dataModel";
+import type { Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import {
+  OPEN_TASK_STATUSES,
   taskStatusValidator,
   aiModelValidator,
   priorityValidator,
-  reasoningLevelValidator,
 } from "../validators";
 import { createNotification } from "../notifications";
 import { ensureSubscribed, notifySubscribers } from "../taskSubscribers";
 import {
   authMutation,
+  getProjectWithAccess,
+  getRepoWithAccess,
   hasRepoAccess,
   hasTaskAccess,
   softDeleteAgentTask,
@@ -26,13 +28,22 @@ import { buildProjectBranchName } from "../_projects/helpers";
 import { resolveNewTaskBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { logTaskActivity } from "../taskActivity";
-import { schedulePrTitleSync } from "../_github/prTitleSync";
 import {
   assertProviderAccountUsableBy,
-  reconcileProviderAccountForModel,
   resolveDefaultProviderAccountId,
 } from "../_userProviderAccounts/defaults";
 import { createTaskRunSummary, moveTaskRunSummary } from "./runSummary";
+import { cancelTaskRunSchedule } from "./runState";
+import {
+  detachOwnedSession,
+  isTerminalTaskStatus,
+  mirrorOwnerIntoSession,
+  retireOwnedSession,
+  reviveOwnedSession,
+  syncOwnedSessionWithTaskStatus,
+  taskMoveDetachesSession,
+} from "../_sessions/ownedSession";
+import { findOwnedSession, workSessionOwner } from "../_sessions/owner";
 import {
   applyPrLifecycleTransition,
   findPrimaryPullRequest,
@@ -41,20 +52,12 @@ import {
   selectPrLifecycleTransition,
 } from "../_github/prLifecycleActions";
 import {
-  composerTraitFields,
-  hasComposerTraitUpdate,
-} from "../_shared/composerTraits";
-
-/** Highest taskNumber among a project's tasks, or 0 if none are numbered. */
-function maxTaskNumberOf(tasks: Doc<"agentTasks">[]): number {
-  let max = 0;
-  for (const t of tasks) {
-    if (t.taskNumber !== undefined && t.taskNumber > max) {
-      max = t.taskNumber;
-    }
-  }
-  return max;
-}
+  buildTaskUpdates,
+  logTaskUpdateActivity,
+  maxTaskNumberOf,
+  notifyTaskAssignee,
+  updateTaskArgs,
+} from "./updateTask";
 
 // Status transitions that notify subscribers. Mid-run automated transitions
 // (todo/in_progress) are intentionally excluded; those patch status directly
@@ -68,224 +71,35 @@ const STATUS_CHANGE_NOTIFY: ReadonlySet<string> = new Set([
 
 /** Updates editable fields on an agent task and notifies on assignment changes. */
 export const update = authMutation({
-  args: {
-    id: v.id("agentTasks"),
-    title: v.optional(v.string()),
-    description: v.optional(v.string()),
-    repoId: v.optional(v.id("githubRepos")),
-    projectId: v.optional(v.union(v.id("projects"), v.null())),
-    tags: v.optional(v.array(v.string())),
-    taskNumber: v.optional(v.number()),
-    assignedTo: v.optional(v.union(v.id("users"), v.null())),
-    model: v.optional(aiModelValidator),
-    // null = clear to team credentials. undefined = no change.
-    providerAccountId: v.optional(
-      v.union(v.id("userProviderAccounts"), v.null()),
-    ),
-    ...runTraitFields,
-    baseBranch: v.optional(v.string()),
-    priority: v.optional(v.union(priorityValidator, v.null())),
-  },
+  args: updateTaskArgs,
   returns: v.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
-    const updates: Record<string, unknown> = { updatedAt: Date.now() };
-    if (args.title !== undefined) updates.title = args.title;
-    if (args.description !== undefined) updates.description = args.description;
-    if (args.repoId !== undefined) updates.repoId = args.repoId;
-    if (args.projectId !== undefined) {
-      const newProjectId = args.projectId ?? undefined;
-      updates.projectId = newProjectId;
-      // Position the task at the end when moving it into a different project
-      // by computing taskNumber as max(existing) + 1. Mirrors createQuickTask
-      // and assignToProject.
-      if (newProjectId && newProjectId !== task.projectId) {
-        const existingTasks = await ctx.db
-          .query("agentTasks")
-          .withIndex("by_project", (q) => q.eq("projectId", newProjectId))
-          .collect();
-        updates.taskNumber = maxTaskNumberOf(existingTasks) + 1;
-      }
+    // Moving a task needs access to where it lands, not only where it is.
+    if (args.repoId !== undefined && args.repoId !== task.repoId) {
+      await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
     }
-    if (args.tags !== undefined) updates.tags = normalizeTaskTags(args.tags);
-    if (args.taskNumber !== undefined) updates.taskNumber = args.taskNumber;
-    if (args.assignedTo !== undefined)
-      updates.assignedTo = args.assignedTo ?? undefined;
-    if (args.model !== undefined) updates.model = args.model;
-    // Only the task owner may set a personal account; must be their own.
-    let nextProviderAccountId = task.providerAccountId;
-    if (args.providerAccountId !== undefined) {
-      if (ctx.userId !== task.createdBy) {
-        throw new Error("Only the task owner can change the provider account");
-      }
-      nextProviderAccountId = await assertProviderAccountUsableBy(
-        ctx.db,
-        args.providerAccountId,
-        task.createdBy,
-      );
-      updates.providerAccountId = nextProviderAccountId;
+    if (args.projectId && args.projectId !== task.projectId) {
+      await getProjectWithAccess(ctx.db, args.projectId, ctx.userId);
     }
-    // Owner changes model alone → keep matching personal account or re-default.
-    // When providerAccountId is also in this update (picker chose Team/personal
-    // with the model), the explicit account wins — do not reconcile over it.
-    if (
-      args.model !== undefined &&
-      args.providerAccountId === undefined &&
-      ctx.userId === task.createdBy
-    ) {
-      nextProviderAccountId = await reconcileProviderAccountForModel(
-        ctx.db,
-        task.createdBy,
-        args.model,
-        nextProviderAccountId,
-      );
-      updates.providerAccountId = nextProviderAccountId;
+    const updates = await buildTaskUpdates(ctx, task, args);
+    // A quick task moved into a project works on the project's session from
+    // now on (`workSessionOwner`): its own session detaches.
+    if (taskMoveDetachesSession(task, args)) {
+      await detachOwnedSession(ctx, task._id);
     }
-    if (args.reasoningLevel !== undefined)
-      updates.reasoningLevel = args.reasoningLevel;
-    if (args.thinkingEnabled !== undefined)
-      updates.thinkingEnabled = args.thinkingEnabled;
-    if (args.use1mContext !== undefined)
-      updates.use1mContext = args.use1mContext;
-    if (args.fastMode !== undefined) updates.fastMode = args.fastMode;
-    if (args.baseBranch !== undefined) updates.baseBranch = args.baseBranch;
-    if (args.priority !== undefined)
-      updates.priority = args.priority ?? undefined;
     await ctx.db.patch(args.id, updates);
+    await mirrorOwnerIntoSession(ctx, {
+      kind: "task",
+      task: { ...task, ...updates },
+    });
     if (args.repoId !== undefined && args.repoId !== task.repoId) {
       await moveTaskRunSummary(ctx, args.id, args.repoId);
     }
-
-    if (args.title !== undefined && args.title !== task.title) {
-      await logTaskActivity(
-        ctx,
-        args.id,
-        ctx.userId,
-        "title",
-        task.title,
-        args.title,
-      );
-      // A project task's PR carries the project's title, not the task's.
-      const primaryPr = task.projectId
-        ? null
-        : await findPrimaryPullRequest(ctx.db, {
-            kind: "task",
-            taskId: args.id,
-          });
-      if (primaryPr) {
-        await schedulePrTitleSync(ctx, {
-          repoId: primaryPr.repoId,
-          prUrl: primaryPr.prUrl,
-          title: args.title,
-        });
-      }
-    }
-    if (
-      args.description !== undefined &&
-      args.description !== task.description
-    ) {
-      await logTaskActivity(
-        ctx,
-        args.id,
-        ctx.userId,
-        "description",
-        task.description ?? undefined,
-        args.description,
-      );
-    }
-    if (
-      args.assignedTo !== undefined &&
-      (args.assignedTo ?? undefined) !== task.assignedTo
-    ) {
-      await logTaskActivity(
-        ctx,
-        args.id,
-        ctx.userId,
-        "assignee",
-        task.assignedTo,
-        args.assignedTo ?? undefined,
-      );
-    }
-    if (
-      args.projectId !== undefined &&
-      (args.projectId ?? undefined) !== task.projectId
-    ) {
-      await logTaskActivity(
-        ctx,
-        args.id,
-        ctx.userId,
-        "project",
-        task.projectId,
-        args.projectId ?? undefined,
-      );
-    }
-    if (
-      args.priority !== undefined &&
-      (args.priority ?? undefined) !== task.priority
-    ) {
-      await logTaskActivity(
-        ctx,
-        args.id,
-        ctx.userId,
-        "priority",
-        task.priority,
-        args.priority ?? undefined,
-      );
-    }
-    if (args.tags !== undefined) {
-      const oldTags = (task.tags ?? []).join(", ");
-      const normalized = normalizeTaskTags(args.tags) ?? [];
-      const newTags = normalized.join(", ");
-      if (oldTags !== newTags) {
-        await logTaskActivity(
-          ctx,
-          args.id,
-          ctx.userId,
-          "tags",
-          oldTags || undefined,
-          newTags || undefined,
-        );
-      }
-    }
-    if (args.model !== undefined && args.model !== task.model) {
-      await logTaskActivity(
-        ctx,
-        args.id,
-        ctx.userId,
-        "model",
-        task.model,
-        args.model,
-      );
-    }
-    if (args.baseBranch !== undefined && args.baseBranch !== task.baseBranch) {
-      await logTaskActivity(
-        ctx,
-        args.id,
-        ctx.userId,
-        "baseBranch",
-        task.baseBranch,
-        args.baseBranch,
-      );
-    }
-
-    if (args.assignedTo !== undefined && args.assignedTo !== task.assignedTo) {
-      if (args.assignedTo) {
-        await ensureSubscribed(ctx, args.id, args.assignedTo);
-      }
-      if (args.assignedTo && args.assignedTo !== ctx.userId) {
-        await createNotification(ctx, {
-          userId: args.assignedTo,
-          type: "task_assigned",
-          title: `Assigned: "${task.title}"`,
-          repoId: task.repoId,
-          projectId: task.projectId,
-          taskId: args.id,
-          message: buildTaskNotificationMessage(task, "assigned"),
-        });
-      }
-    }
+    await logTaskUpdateActivity(ctx, task, args);
+    await notifyTaskAssignee(ctx, task, args);
     return null;
   },
 });
@@ -301,13 +115,7 @@ export const updateStatus = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
-    const workStatuses = [
-      "todo",
-      "in_progress",
-      "code_review",
-      "business_review",
-    ];
-    if (workStatuses.includes(args.status)) {
+    if (OPEN_TASK_STATUSES.some((status) => status === args.status)) {
       const dependencies = await ctx.db
         .query("taskDependencies")
         .withIndex("by_task", (q) => q.eq("taskId", args.id))
@@ -321,23 +129,12 @@ export const updateStatus = authMutation({
         }
       }
     }
-    const clearSchedule =
-      args.status !== "todo" && task.scheduledFunctionId !== undefined;
-    if (clearSchedule && task.scheduledFunctionId) {
-      try {
-        await ctx.scheduler.cancel(task.scheduledFunctionId);
-      } catch {
-        // may have already fired
-      }
-    }
+    // Only a todo task runs from a schedule, so leaving todo drops it.
+    if (args.status !== "todo") await cancelTaskRunSchedule(ctx, args.id);
     const previousStatus = task.status;
     await ctx.db.patch(args.id, {
       status: args.status,
       updatedAt: Date.now(),
-      ...(clearSchedule && {
-        scheduledAt: undefined,
-        scheduledFunctionId: undefined,
-      }),
     });
 
     if (previousStatus !== args.status) {
@@ -350,6 +147,12 @@ export const updateStatus = authMutation({
         args.status,
       );
     }
+    await syncOwnedSessionWithTaskStatus(
+      ctx,
+      task,
+      previousStatus,
+      args.status,
+    );
 
     // Sync the GitHub PR state for quick tasks. Project tasks share one PR
     // across many tasks, so individual task status changes don't map cleanly
@@ -402,15 +205,23 @@ export const updateStatus = authMutation({
       // place. The run stops the sandbox on its way out, so the action resumes
       // it for the model call and stops it again unless the reviewer already
       // has it open.
-      if (enteringCodeReview && prUrl && repo && task.sandboxId) {
+      // Only a quick task: its sandbox lives on its own session.
+      const workOwner = workSessionOwner(task);
+      const session =
+        workOwner.kind === "task"
+          ? await findOwnedSession(ctx.db, workOwner)
+          : null;
+      const sandboxId = session?.sandboxId;
+      const sandboxActive = session?.status === "active";
+      if (enteringCodeReview && prUrl && repo && sandboxId) {
         await ctx.scheduler.runAfter(0, internal.github.generatePrDescription, {
           installationId: repo.installationId,
           repoOwner: repo.owner,
           repoName: repo.name,
           prUrl,
-          sandboxId: task.sandboxId,
+          sandboxId,
           repoId: task.repoId,
-          restoreStoppedSandbox: task.reviewTaskSandboxStatus !== "active",
+          restoreStoppedSandbox: !sandboxActive,
         });
       }
     }
@@ -476,6 +287,7 @@ export const remove = authMutation({
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
     await softDeleteAgentTask(ctx, args.id);
+    await retireOwnedSession(ctx, { kind: "task", taskId: args.id });
     return null;
   },
 });
@@ -486,7 +298,8 @@ export const remove = authMutation({
  *
  * Only the row returns. `softDeleteAgentTask` also cancels the task's scheduled
  * run, drops its run summary and queues its sandbox for deletion; none of those
- * can be undone, so a restored task comes back without them.
+ * can be undone, so a restored task comes back without them. A quick task's
+ * session is the exception: the delete only archived it, so it comes back.
  */
 export const restore = authMutation({
   args: { id: v.id("agentTasks") },
@@ -500,6 +313,11 @@ export const restore = authMutation({
       deletedAt: undefined,
       updatedAt: Date.now(),
     });
+    // The delete retired the task's session; a live task gets it back. A
+    // done/cancelled task stays retired with its status.
+    if (!isTerminalTaskStatus(task.status)) {
+      await reviveOwnedSession(ctx, { kind: "task", taskId: task._id });
+    }
     return null;
   },
 });
@@ -530,6 +348,9 @@ export const createQuickTask = authMutation({
     const repo = await ctx.db.get(args.repoId);
     if (!repo) throw new Error("Repo not found");
     const now = Date.now();
+    const project = args.projectId
+      ? await getProjectWithAccess(ctx.db, args.projectId, ctx.userId)
+      : null;
     let taskNumber: number | undefined;
     if (args.projectId) {
       const existingTasks = await ctx.db
@@ -538,7 +359,6 @@ export const createQuickTask = authMutation({
         .collect();
       taskNumber = maxTaskNumberOf(existingTasks) + 1;
     }
-    const project = args.projectId ? await ctx.db.get(args.projectId) : null;
     const numId = await allocateNumId(ctx.db, args.repoId, "agentTasks");
     const model = args.model ?? repo.defaultModel;
     const providerAccountId =
@@ -676,8 +496,12 @@ export const assignToProject = authMutation({
     for (const taskId of args.taskIds) {
       if (existingProjectTaskIds.has(taskId)) continue;
       const task = await ctx.db.get(taskId);
-      if (!task) throw new Error(`Task ${taskId} not found`);
+      if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
+        throw new Error(`Task ${taskId} not found`);
       assigned++;
+      if (taskMoveDetachesSession(task, { projectId: args.projectId })) {
+        await detachOwnedSession(ctx, taskId);
+      }
       await ctx.db.patch(taskId, {
         projectId: args.projectId,
         taskNumber: maxTaskNumber + assigned,
@@ -805,7 +629,13 @@ export const reorderProjectTasks = authMutation({
     const existingNumbers: number[] = [];
     for (const taskId of args.taskIds) {
       const task = await ctx.db.get(taskId);
-      existingNumbers.push(task?.taskNumber ?? 0);
+      if (
+        !task ||
+        task.projectId !== args.projectId ||
+        !(await hasTaskAccess(ctx.db, task, ctx.userId))
+      )
+        throw new Error("Task not found");
+      existingNumbers.push(task.taskNumber ?? 0);
     }
     const sortedNumbers = [...existingNumbers].sort((a, b) => a - b);
     for (let i = 0; i < args.taskIds.length; i++) {
@@ -833,42 +663,22 @@ export const deleteCascade = authMutation({
         .withIndex("by_dependency", (q) => q.eq("dependsOnId", taskId))
         .collect();
       for (const dep of dependents) {
-        if (!tasksToDelete.includes(dep.taskId)) {
-          tasksToDelete.push(dep.taskId);
-          await collectDependents(dep.taskId);
-        }
+        if (tasksToDelete.includes(dep.taskId)) continue;
+        // A dependent the caller cannot see (another tenant's task, or a
+        // teammate's draft) is left alone, and so is its own subtree.
+        const dependent = await ctx.db.get(dep.taskId);
+        if (!dependent || !(await hasTaskAccess(ctx.db, dependent, ctx.userId)))
+          continue;
+        tasksToDelete.push(dep.taskId);
+        await collectDependents(dep.taskId);
       }
     };
     await collectDependents(args.id);
     for (const taskId of tasksToDelete) {
       await softDeleteAgentTask(ctx, taskId);
+      await retireOwnedSession(ctx, { kind: "task", taskId });
     }
     return null;
   },
 });
 
-/**
- * Sticky sandbox-chat traits (effort / thinking / 1M). No `updatedAt` bump.
- * Only provided fields are patched.
- */
-export const setTraits = authMutation({
-  args: {
-    id: v.id("agentTasks"),
-    reasoningLevel: v.optional(reasoningLevelValidator),
-    thinkingEnabled: v.optional(v.boolean()),
-    use1mContext: v.optional(v.boolean()),
-    fastMode: v.optional(v.boolean()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.id);
-    if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) {
-      throw new Error("Task not found");
-    }
-    if (!hasComposerTraitUpdate(args)) {
-      return null;
-    }
-    await ctx.db.patch(args.id, composerTraitFields(args));
-    return null;
-  },
-});

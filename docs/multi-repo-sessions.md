@@ -193,4 +193,4 @@ Fresh sandboxes otherwise clone and install every linked repo. A saved group get
 | Composer / header / files UI | `apps/web/src/routes/_repo/$owner/$repo/sessions/_components/CodebasesPicker.tsx`, `SessionRepoBadges.tsx`, `../FilesPanel.tsx` |
 | Manual harness test | `callback-src/tests/linkedReposHarness.manual.md` |
 
-Tests: `packages/backend/tests/` — `workspaceLayout`, `linkedRepos`, `linkedReposEnv`, `linkedReposPrompt`, `gitCredentialsPath`, `prArchiveRule`, `repoGroupFingerprint`, `repoGroupsValidate`, `turnCheckpointCompletionContract`; `callback-src/tests/` — `linkedReposConfig`, `turnCheckpoint`; `apps/web` — `changedFilesPresentation`.
+Tests: `packages/backend/tests/` — `workspaceLayout`, `linkedRepos`, `linkedReposEnv`, `linkedReposPrompt`, `gitCredentialsPath`, `prArchiveRule`, `repoGroupFingerprint`, `repoGroupsValidate`; `callback-src/tests/` — `linkedReposConfig`, `turnCheckpoint`; `apps/web` — `changedFilesPresentation`.

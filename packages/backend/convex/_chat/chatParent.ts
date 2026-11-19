@@ -1,22 +1,11 @@
-import { v } from "convex/values";
 import type { DatabaseReader } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { findMainChat } from "../_sessionChats/helpers";
+import type { ChatEntityKind } from "../_validators/enums";
+import { findOwnedSession, findWorkSession } from "../_sessions/owner";
+import { findWorkChat } from "../_sessions/ownerState";
 
-/** The chat surface a sandbox MCP token names. */
-export const chatEntityKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
-
-type ChatEntityKind = typeof chatEntityKindValidator.type;
-
-type ChatParentId =
-  | Id<"sessionChats">
-  | Id<"sessions">
-  | Id<"agentTasks">
-  | Id<"projects">;
+type ChatParentId = Id<"sessionChats"> | Id<"sessions">;
 
 /**
  * Narrows a bare turn owner id to a chat entity. Null for runs, docs,
@@ -28,9 +17,7 @@ export function chatParentIdOf(
 ): ChatParentId | null {
   return (
     db.normalizeId("sessionChats", entityId) ??
-    db.normalizeId("sessions", entityId) ??
-    db.normalizeId("agentTasks", entityId) ??
-    db.normalizeId("projects", entityId)
+    db.normalizeId("sessions", entityId)
   );
 }
 
@@ -52,8 +39,23 @@ export async function resolveChatParent(
     const mainChat = await findMainChat(db, sessionId);
     return mainChat?._id ?? null;
   }
-  if (entityKind === "task") return db.normalizeId("agentTasks", entityId);
-  return db.normalizeId("projects", entityId);
+  if (entityKind === "task") {
+    const taskId = db.normalizeId("agentTasks", entityId);
+    const task = taskId ? await db.get(taskId) : null;
+    if (!task) return null;
+    // The chat the task talks in (`findWorkChat`), once it has one; else the
+    // Main chat of the session it works on: a project task that has not
+    // chatted yet lands on its project's. A run's cards land there too.
+    const taskChat = await findWorkChat(db, { kind: "task", task });
+    if (taskChat) return taskChat.chat._id;
+    const session = await findWorkSession(db, task);
+    return session ? ((await findMainChat(db, session._id))?._id ?? null) : null;
+  }
+  const projectId = db.normalizeId("projects", entityId);
+  if (!projectId) return null;
+  // A project's chat is its session's Main chat.
+  const session = await findOwnedSession(db, { kind: "project", projectId });
+  return session ? ((await findMainChat(db, session._id))?._id ?? null) : null;
 }
 
 /**

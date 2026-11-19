@@ -7,7 +7,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { useNavigate } from "@tanstack/react-router";
-import { parseSpec } from "@/lib/utils/parseSpec";
+import { parseProjectSpec } from "@eva/shared";
 import {
   IconRocket,
   IconMessageQuestion,
@@ -43,14 +43,7 @@ export function ProjectPlanTab({
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
 
-  const parsedSpec = (() => {
-    if (!generatedSpec) return null;
-    try {
-      return parseSpec(generatedSpec);
-    } catch {
-      return null;
-    }
-  })();
+  const parsedSpec = generatedSpec ? parseProjectSpec(generatedSpec) : null;
 
   const isLocked =
     projectPhase === "in_progress" ||

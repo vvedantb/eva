@@ -10,9 +10,9 @@
     "dev:personal": "cross-env CONVEX_DEPLOYMENT=dev:elegant-snail-639 convex dev",
     "dev:evalucom": "cross-env CONVEX_DEPLOYMENT=dev:good-mule-506 convex dev",
     "dev:all": "concurrently -n personal,evalucom -c blue,green \"pnpm dev:personal\" \"pnpm dev:evalucom\"",
-    "typecheck": "tsc-rs --noEmit -p convex/tsconfig.json",
-    "typecheck:callback": "tsc-rs --noEmit -p callback-src/tsconfig.json",
-    "typecheck:annotation": "tsc-rs --noEmit -p preview-annotation-src/tsconfig.json",
+    "typecheck": "tsrs --noEmit --fast -p convex/tsconfig.json",
+    "typecheck:callback": "tsrs --noEmit --fast -p callback-src/tsconfig.json",
+    "typecheck:annotation": "tsrs --noEmit --fast -p preview-annotation-src/tsconfig.json",
     "build:callback": "node scripts/build-callback-script.mjs",
     "build:annotation": "node scripts/build-annotation-script.mjs",
     "sync:prod-to-dev": "node scripts/sync-prod-to-dev.mjs",
@@ -26,7 +26,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@ai-sdk/gateway": "^4.0.85",
+    "@ai-sdk/gateway": "^4.0.132",
     "@anthropic-ai/claude-agent-sdk": "0.3.282",
     "@clerk/backend": "^2.33.3",
     "@convex-dev/action-cache": "^0.3.1",
@@ -50,8 +50,8 @@
     "@tiptap/pm": "^3.20.1",
     "@tiptap/starter-kit": "^3.20.1",
     "@vercel/sandbox": "^3.8.0",
-    "@vvedantb/server": "^0.10.0",
-    "ai": "^7.0.105",
+    "@vvedantb/server": "0.17.0",
+    "ai": "^7.0.159",
     "convex": "^1.40.0",
     "convex-helpers": "0.1.114",
     "jose": "^6.0.11",
@@ -59,9 +59,9 @@
     "octokit": "^5.0.5",
     "pg": "^8.21.0",
     "quickjs-emscripten-core": "^0.32.0",
+    "sharp": "^0.35.5",
     "shell-quote": "^1.9.0",
-    "zod": "^3.24.0",
-    "zod-to-json-schema": "^3.25.2"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.18.5",
@@ -71,7 +71,6 @@
     "cross-env": "^7.0.3",
     "esbuild": "^0.25.0",
     "html2canvas": "^1.4.1",
-    "tsc-rs": "0.1.0",
     "typescript": "7.0.1-rc",
     "vitest": "^3.2.4"
   }

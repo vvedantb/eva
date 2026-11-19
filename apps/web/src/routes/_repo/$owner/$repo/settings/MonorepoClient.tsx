@@ -40,7 +40,7 @@ type DetectedApp = FunctionReturnType<
 export function MonorepoClient() {
   const { repo } = useRepo();
   const detectApps = useAction(api.github.detectMonorepoApps);
-  const createRepo = useMutation(api.githubRepos.create);
+  const connectRepo = useAction(api.github.connectRepo);
   const toggleHidden = useMutation(
     api.githubRepos.toggleHidden,
   ).withOptimisticUpdate((localStore, args) => {
@@ -93,11 +93,10 @@ export function MonorepoClient() {
     setAddingPath(path);
     try {
       await withMutationToast(
-        createRepo({
+        connectRepo({
           owner: repo.owner,
           name: repo.name,
           installationId: repo.installationId,
-          githubId: repo.githubId,
           rootDirectory: path,
           teamId: repo.teamId,
         }),
@@ -137,7 +136,6 @@ export function MonorepoClient() {
       {connectedApps.length > 0 && (
         <SettingsSection
           title="Connected apps"
-          description="Hide apps without removing them."
           // Rows own their padding so the row divider spans the full width.
           bodyVariant="list"
         >
@@ -195,15 +193,6 @@ export function MonorepoClient() {
 
       <SettingsSection
         title="Detected apps"
-        description={
-          <>
-            Found in{" "}
-            <span className="font-medium text-foreground">
-              {repo.owner}/{repo.name}
-            </span>
-            . Add one as a separate codebase.
-          </>
-        }
         bodyVariant="list"
       >
         {loading ? (
@@ -295,7 +284,6 @@ export function MonorepoClient() {
 
       <SettingsSection
         title="Custom root directory"
-        description="Add an app by path."
       >
         <form
           onSubmit={(e) => {

@@ -1,3 +1,4 @@
+import { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
 import { asRecord } from "@/lib/utils/looseRecord";
 
 /** A value that JSON.stringify is guaranteed to handle: no cycles, no BigInt. */
@@ -216,12 +217,12 @@ export function parseWebMcpInbound(data: object): WebMcpInbound | null {
   if (!("requestId" in data) || typeof data.requestId !== "string") {
     return null;
   }
-  if (data.type === "eva-preview-webmcp-tools") {
+  if (data.type === PREVIEW_FRAME_MESSAGE.webMcpTools) {
     const discovery = parseDiscovery(data);
     if (!discovery) return null;
     return { type: "tools", requestId: data.requestId, discovery };
   }
-  if (data.type === "eva-preview-webmcp-result") {
+  if (data.type === PREVIEW_FRAME_MESSAGE.webMcpResult) {
     if (!("name" in data) || typeof data.name !== "string") return null;
     return {
       type: "result",
@@ -230,7 +231,7 @@ export function parseWebMcpInbound(data: object): WebMcpInbound | null {
       result: "result" in data ? data.result : null,
     };
   }
-  if (data.type === "eva-preview-webmcp-error") {
+  if (data.type === PREVIEW_FRAME_MESSAGE.webMcpError) {
     if (!("message" in data) || typeof data.message !== "string") return null;
     return { type: "error", requestId: data.requestId, message: data.message };
   }
@@ -247,9 +248,9 @@ export type WebMcpRequest =
     };
 
 type WebMcpRequestMessage =
-  | { type: "eva-preview-webmcp-list"; requestId: string }
+  | { type: typeof PREVIEW_FRAME_MESSAGE.webMcpList; requestId: string }
   | {
-      type: "eva-preview-webmcp-invoke";
+      type: typeof PREVIEW_FRAME_MESSAGE.webMcpInvoke;
       requestId: string;
       name: string;
       arguments: Readonly<Record<string, unknown>>;
@@ -283,10 +284,10 @@ function toRequestMessage(
   requestId: string,
 ): WebMcpRequestMessage {
   if (request.type === "list") {
-    return { type: "eva-preview-webmcp-list", requestId };
+    return { type: PREVIEW_FRAME_MESSAGE.webMcpList, requestId };
   }
   return {
-    type: "eva-preview-webmcp-invoke",
+    type: PREVIEW_FRAME_MESSAGE.webMcpInvoke,
     requestId,
     name: request.name,
     arguments: request.arguments,

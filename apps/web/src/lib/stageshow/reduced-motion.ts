@@ -1,18 +1,13 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext } from 'react'
 
-// Static stages settle motion parts too, even without an OS preference.
+// Static stages settle motion parts too.
 export const StillContext = createContext(false)
 
-/** Whether the viewer asked for reduced motion. A stage shows its still; parts skip their tweens. */
-export function useReducedMotion() {
-  const still = useContext(StillContext)
-  const [reduced, setReduced] = useState(false)
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
-    const update = () => setReduced(mq.matches)
-    update()
-    mq.addEventListener('change', update)
-    return () => mq.removeEventListener('change', update)
-  }, [])
-  return still || reduced
+/**
+ * Whether the enclosing stage is static. A stage shows its still; parts skip
+ * their tweens. Eva does not gate on `prefers-reduced-motion` (see the note
+ * in globals.css), so the vendored OS-preference check is removed.
+ */
+export function useStill() {
+  return useContext(StillContext)
 }

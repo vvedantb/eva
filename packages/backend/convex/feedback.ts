@@ -7,11 +7,8 @@ import {
   feedbackSentimentValidator,
   messageFields,
 } from "./validators";
-import {
-  chatEntityKindValidator,
-  latestChatMessageId,
-  resolveChatParent,
-} from "./_chat/chatParent";
+import { latestChatMessageId, resolveChatParent } from "./_chat/chatParent";
+import { chatEntityKindValidator } from "./_validators/enums";
 import {
   callerCanSeeChatSource,
   chatSourceArgFromFields,

@@ -1,8 +1,6 @@
 import { expect, test } from "vitest";
 import { buildReadableReposBlock } from "../convex/prompts";
 import { buildEditPrompt } from "../convex/_sessions/prompts";
-import { buildAgentTaskChatPrompt } from "../convex/_agentTasks/chatPrompt";
-import { buildProjectChatPrompt } from "../convex/_projects/chatPrompt";
 import { buildImplementationPrompt } from "../convex/_taskWorkflow/prompts";
 
 const HEADING = "## Other repositories you may use";
@@ -31,18 +29,15 @@ test("buildReadableReposBlock lists every repo and clones the first one", () => 
 function sessionPrompt(
   readableRepos: Array<{ owner: string; name: string }>,
 ): string {
-  return buildEditPrompt(
-    { owner: "vvedantb", name: "eva", baseBranch: "main" },
-    "eva/session-1",
-    "",
-    "continue",
-    "",
-    "",
-    "Repo system prompt text",
-    undefined,
-    [],
+  return buildEditPrompt({
+    repo: { owner: "vvedantb", name: "eva", baseBranch: "main" },
+    branchName: "eva/session-1",
+    message: "continue",
+    rootDirectory: "",
+    customInstructionsBlock: "",
+    systemPrompt: "Repo system prompt text",
     readableRepos,
-  );
+  });
 }
 
 test("buildEditPrompt appends the block after the system prompt", () => {
@@ -56,48 +51,6 @@ test("buildEditPrompt appends the block after the system prompt", () => {
 
 test("buildEditPrompt omits the block when nothing is readable", () => {
   expect(sessionPrompt([])).not.toContain(HEADING);
-});
-
-test("buildAgentTaskChatPrompt passes readable repos through", () => {
-  const prompt = buildAgentTaskChatPrompt({
-    repoOwner: "vvedantb",
-    repoName: "eva",
-    branchName: "eva/task-1",
-    title: "Add dark mode",
-    description: undefined,
-    tags: undefined,
-    taskNumber: 1,
-    status: "in_progress",
-    message: "continue",
-    rootDirectory: "",
-    customInstructionsBlock: "",
-    systemPrompt: undefined,
-    devPort: undefined,
-    readableRepos: TWO_REPOS,
-  });
-
-  expect(prompt).toContain(HEADING);
-  expect(prompt).toContain("evalucom/carepulse");
-});
-
-test("buildProjectChatPrompt passes readable repos through", () => {
-  const prompt = buildProjectChatPrompt({
-    repoOwner: "vvedantb",
-    repoName: "eva",
-    branchName: "eva/project-1",
-    title: "Billing revamp",
-    description: undefined,
-    generatedSpec: undefined,
-    message: "continue",
-    rootDirectory: "",
-    customInstructionsBlock: "",
-    systemPrompt: undefined,
-    devPort: undefined,
-    readableRepos: TWO_REPOS,
-  });
-
-  expect(prompt).toContain(HEADING);
-  expect(prompt).toContain("evalucom/carepulse");
 });
 
 test("buildImplementationPrompt appends the block after the system prompt", () => {

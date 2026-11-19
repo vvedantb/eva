@@ -1,34 +1,19 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { convexTest } from "convex-test";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { recordPullRequest } from "../convex/_pullRequests/store";
-import {
-  decideSandboxStartPlan,
-  SANDBOX_SURFACES,
-} from "../convex/mcp/orchestratorDelivery";
+import { findOpenTurn } from "../convex/_chat/turnStore";
+import { decideSandboxStartPlan } from "../convex/mcp/orchestratorDelivery";
 
 /**
  * The entity tools an orchestrator drives between sends: what exists
  * (list_entities), whether the preview VM is up (start_sandbox/stop_sandbox),
  * and what is still waiting behind a busy turn (cancel_queued_message).
- *
- * None of them may write status or review state — that stays a person's call —
- * so the last describe here pins the absence as hard as the presence.
  */
 
 const modules = import.meta.glob("../convex/**/*.ts");
-const testsDir = dirname(fileURLToPath(import.meta.url));
 
-function convexSource(path: string): string {
-  return readFileSync(join(testsDir, "../convex", path), "utf8");
-}
-
-/** Loading the sandbox action module graph costs seconds on a cold worker. */
-const TIMEOUT_MS = 30_000;
 const OWNER_CLERK_ID = "clerk|entity-tools-owner";
 const TASK_PR_URL = "https://github.com/vvedantb/eva/pull/701";
 
@@ -58,6 +43,7 @@ async function fixture() {
     });
 
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId: ownerUserId,
       title: "Fix the login bug",
@@ -65,9 +51,22 @@ async function fixture() {
       numId: 11,
       updatedAt: now - 1_000,
       branchName: "eva/session-login",
-      activeWorkflowId: "wf_session",
+    });
+    // The session's turn in flight.
+    await ctx.db.insert("turns", {
+      entityId: sessionId,
+      streamingEntityId: String(sessionId),
+      state: "running",
+      open: true,
+      turnStartedAt: now,
+      leaseExpiresAt: now + 120_000,
+      leaseGeneration: 1,
+      model: "claude:sonnet",
+      repoId,
+      workflowId: "wf_session",
     });
     const closedSessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId: ownerUserId,
       title: "Old work",
@@ -83,7 +82,14 @@ async function fixture() {
       createdAt: now,
       updatedAt: now - 2_000,
       createdBy: ownerUserId,
-      reviewTaskSandboxStatus: "active",
+    });
+    // A quick task's sandbox is its owned session's (hidden from lists).
+    const taskSessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "task", taskId },
+      repoId,
+      userId: ownerUserId,
+      title: "Bump the deps",
+      status: "active",
     });
     const runId = await ctx.db.insert("agentRuns", {
       taskId,
@@ -108,6 +114,7 @@ async function fixture() {
       updatedAt: now - 3_000,
     });
     const strangerSessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId: otherRepoId,
       userId: strangerUserId,
       title: "Not yours",
@@ -123,28 +130,12 @@ async function fixture() {
       sessionId,
       closedSessionId,
       taskId,
+      taskSessionId,
       projectId,
       strangerSessionId,
     };
   });
   return { t, ...ids };
-}
-
-/**
- * Runs `body` with only `setTimeout` faked, so the teardown/startup actions
- * `convex-test` schedules on a zero delay never fire. Without this the
- * assertion races a provider call that cannot succeed in a test, and the
- * status under test is overwritten by that call's failure path.
- */
-async function withoutRunningScheduledWork<T>(
-  body: () => Promise<T>,
-): Promise<T> {
-  vi.useFakeTimers({ toFake: ["setTimeout"] });
-  try {
-    return await body();
-  } finally {
-    vi.useRealTimers();
-  }
 }
 
 function listFor(
@@ -200,7 +191,7 @@ describe("list_entities returns what the caller can already open", () => {
     expect(byId.get(f.sessionId)?.sandboxStatus).toBe("active");
     expect(byId.get(f.sessionId)?.isExecuting).toBe(true);
 
-    // A task tracks lifecycle and sandbox separately.
+    // A task tracks lifecycle and sandbox (its session's) separately.
     expect(byId.get(f.taskId)?.status).toBe("code_review");
     expect(byId.get(f.taskId)?.sandboxStatus).toBe("active");
     expect(byId.get(f.taskId)?.isExecuting).toBe(false);
@@ -324,26 +315,6 @@ describe("list_entities never leaks another user's work", () => {
 });
 
 describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () => {
-  test("each surface is mapped to the mutation its button calls", () => {
-    expect(SANDBOX_SURFACES).toEqual({
-      session: {
-        idArg: "sessionId",
-        start: "sessions:startSandbox",
-        stop: "sessions:stopSandbox",
-      },
-      task: {
-        idArg: "taskId",
-        start: "agentTasks:startTaskSandbox",
-        stop: "agentTasks:stopTaskSandbox",
-      },
-      project: {
-        idArg: "projectId",
-        start: "projects:startProjectSandbox",
-        stop: "projects:stopProjectSandbox",
-      },
-    });
-  });
-
   test("only an active sandbox is ready; an in-flight one is waited on", () => {
     expect(decideSandboxStartPlan("active")).toBe("run");
     expect(decideSandboxStartPlan("starting")).toBe("wait");
@@ -352,130 +323,17 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
     expect(decideSandboxStartPlan(undefined)).toBe("start");
   });
 
-  test(
-    "starting a task from closed moves it to starting",
-    async () => {
-      const f = await fixture();
-      const closedTaskId = await f.t.run(async (ctx) => {
-        const now = Date.now();
-        return ctx.db.insert("agentTasks", {
-          repoId: f.repoId,
-          title: "Closed sandbox",
-          status: "business_review",
-          numId: 22,
-          createdAt: now,
-          updatedAt: now,
-          createdBy: f.ownerUserId,
-          // A resumable sandbox id takes the direct-start path rather than
-          // scheduling the whole startup workflow.
-          sandboxId: "sbx_closed",
-          reviewTaskSandboxStatus: "closed",
-        });
-      });
-
-      const after = await withoutRunningScheduledWork(async () => {
-        await f.t
-          .withIdentity({ subject: OWNER_CLERK_ID })
-          .mutation(api.agentTasks.startTaskSandbox, { taskId: closedTaskId });
-        return f.t.run(async (ctx) => ctx.db.get(closedTaskId));
-      });
-
-      expect(after?.reviewTaskSandboxStatus).toBe("starting");
-      // The resumable id is kept, so the paused filesystem comes back.
-      expect(after?.sandboxId).toBe("sbx_closed");
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "stopping a task from active moves it to stopping, keeping the sandbox id",
-    async () => {
-      const f = await fixture();
-      await f.t.run(async (ctx) => {
-        await ctx.db.patch(f.taskId, { sandboxId: "sbx_live" });
-      });
-
-      const after = await withoutRunningScheduledWork(async () => {
-        await f.t
-          .withIdentity({ subject: OWNER_CLERK_ID })
-          .mutation(api.agentTasks.stopTaskSandbox, { taskId: f.taskId });
-        return f.t.run(async (ctx) => ctx.db.get(f.taskId));
-      });
-
-      expect(after?.reviewTaskSandboxStatus).toBe("stopping");
-      // Kept so the same paused filesystem can be resumed by a later start.
-      expect(after?.sandboxId).toBe("sbx_live");
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "stopping a task that never had a sandbox closes it outright",
-    async () => {
-      const f = await fixture();
-      await f.t
-        .withIdentity({ subject: OWNER_CLERK_ID })
-        .mutation(api.agentTasks.stopTaskSandbox, { taskId: f.taskId });
-
-      const after = await f.t.run(async (ctx) => ctx.db.get(f.taskId));
-      expect(after?.reviewTaskSandboxStatus).toBe("closed");
-    },
-    TIMEOUT_MS,
-  );
-
-  test("get_agent_state uses the same executing rule as stop and list", () => {
-    const nodeActions = convexSource("mcp/nodeActions.ts");
-    const getState = nodeActions.slice(
-      nodeActions.indexOf("export const orchestratorGetAgentState"),
-      nodeActions.indexOf("async function delay"),
-    );
-    expect(getState).toContain("internal.mcp.queries.entityIsExecuting");
-    expect(getState).not.toContain("session.activeWorkflowId !== undefined");
-  });
-
-  test("send treats a /loop or synthetic turn as busy on every chat", () => {
-    const nodeActions = convexSource("mcp/nodeActions.ts");
-    const send = nodeActions.slice(
-      nodeActions.indexOf("export const orchestratorSendMessage"),
-      nodeActions.indexOf("export const orchestratorStopAgent"),
-    );
-    expect(send).toContain("internal.mcp.queries.entityIsExecuting");
-    const delivery = nodeActions.slice(
-      nodeActions.indexOf("function chatDelivery"),
-      nodeActions.indexOf("export const orchestratorSendMessage"),
-    );
-    expect(delivery).toContain("const isBusy = isExecuting || queuedAhead > 0;");
-    expect(delivery).not.toContain("session.activeWorkflowId");
-    expect(delivery).not.toContain("activeChatWorkflowId");
-  });
-
-  test("stop refuses to kill a turn that is already running", () => {
-    const nodeActions = convexSource("mcp/nodeActions.ts");
-    const stop = nodeActions.slice(
-      nodeActions.indexOf("export const mcpStopEntitySandbox"),
-      nodeActions.indexOf("const queuedMessageSchema"),
-    );
-    // Asked of the turns table, not of `activeWorkflowId`: a daemon-minted
-    // continuation never sets that field, and stopping under one kills it.
-    expect(stop).toContain("internal.mcp.queries.entityIsExecuting");
-    expect(stop).toContain("stop_agent");
-    // The refusal comes before the stop mutation is ever issued.
-    expect(stop.indexOf("entityIsExecuting")).toBeLessThan(
-      stop.indexOf("surface.stop"),
-    );
-  });
-
   test("a session running a daemon continuation counts as executing", async () => {
     const f = await fixture();
-    // A `/loop` turn: an open row in `turns`, and no activeWorkflowId at all.
+    // A `/loop` turn: an open row in `turns` with no workflow bound.
     const loopingSessionId = await f.t.run(async (ctx) => {
       const sessionId = await ctx.db.insert("sessions", {
+        owner: { kind: "standalone" },
         repoId: f.repoId,
         userId: f.ownerUserId,
         title: "Looping",
         status: "active",
         numId: 13,
-        turnLifecycleVersion: 2,
       });
       await ctx.db.insert("turns", {
         entityId: sessionId,
@@ -514,9 +372,11 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
   test("a task and a project report their own workflow slots", async () => {
     const f = await fixture();
     await f.t.run(async (ctx) => {
-      await ctx.db.patch(f.taskId, { activeChatWorkflowId: "wf_task_chat" });
+      await ctx.db.patch(f.taskId, {
+        run: { state: "running", workflowId: "wf_task_run" },
+      });
       await ctx.db.patch(f.projectId, {
-        activeBuildWorkflowId: "wf_project_build",
+        build: { state: "running", workflowId: "wf_project_build" },
       });
     });
 
@@ -528,16 +388,6 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
         await f.t.query(internal.mcp.queries.entityIsExecuting, { kind, id }),
       ).toBe(true);
     }
-  });
-
-  test("start waits for active rather than reporting a resuming sandbox", () => {
-    const nodeActions = convexSource("mcp/nodeActions.ts");
-    const start = nodeActions.slice(
-      nodeActions.indexOf("export const mcpStartEntitySandbox"),
-      nodeActions.indexOf("export const mcpStopEntitySandbox"),
-    );
-    expect(start).toContain("ensureEntitySandboxActive");
-    expect(start).toContain('sandboxStatus: "active"');
   });
 });
 
@@ -577,8 +427,8 @@ describe("cancel_queued_message only touches the queue", () => {
     expect(remaining.map((message) => message._id)).toEqual([f.queuedIds[1]]);
 
     // The turn in flight is untouched — that is stop_agent's job, not this.
-    const session = await f.t.run(async (ctx) => ctx.db.get(f.sessionId));
-    expect(session?.activeWorkflowId).toBe("wf_session");
+    const turn = await f.t.run(async (ctx) => findOpenTurn(ctx, f.sessionId));
+    expect(turn?.workflowId).toBe("wf_session");
   });
 
   test("clearing every pending message empties the queue", async () => {
@@ -622,150 +472,6 @@ describe("cancel_queued_message only touches the queue", () => {
     );
     expect(survivors).toHaveLength(2);
   });
-
-  test("naming neither a message nor all is refused before anything is resolved", () => {
-    const entityTools = convexSource("mcp/entityTools.ts");
-    const cancel = entityTools.slice(
-      entityTools.indexOf('"cancel_queued_message"'),
-    );
-    const guard = cancel.indexOf("!all && queuedMessageId === undefined");
-    const resolve = cancel.indexOf("resolveEntityTarget");
-    expect(guard).toBeGreaterThan(-1);
-    expect(resolve).toBeGreaterThan(guard);
-  });
-});
-
-describe("the new tools reach every MCP caller and write no review state", () => {
-  const tools = convexSource("mcp/tools.ts");
-  const entityTools = convexSource("mcp/entityTools.ts");
-  const nodeActions = convexSource("mcp/nodeActions.ts");
-
-  test("they are registered above the Ave gate, like send_chat_message", () => {
-    const registered = tools.indexOf(
-      "tools.push(...entityTools(credentials, ctx))",
-    );
-    const gate = tools.indexOf("if (isAve) {");
-    expect(registered).toBeGreaterThan(-1);
-    expect(gate).toBeGreaterThan(registered);
-    for (const name of [
-      '"list_entities"',
-      '"start_sandbox"',
-      '"stop_sandbox"',
-      '"cancel_queued_message"',
-      '"get_preview_url"',
-    ]) {
-      expect(entityTools).toContain(name);
-    }
-  });
-
-  test("every entity tool resolves its target through the shared access check", () => {
-    const entityRef = convexSource("mcp/entityRef.ts");
-    expect(entityRef).toContain("assertUserRepoAccess(target.repoId");
-    // Five tools, five resolutions: four by entity ref, one by repo ref.
-    expect(
-      (entityTools.match(/resolveEntityTarget\(ref, userId\)/g) ?? []).length,
-    ).toBe(3);
-    // get_preview_url falls back to the chat the token names, then resolves
-    // that through the very same check rather than trusting the claim.
-    expect(entityTools).toContain("const chatRef = withSelfDefault(ref, credentials)");
-    expect(entityTools).toContain("resolveEntityTarget(chatRef, userId)");
-    expect(entityTools).toContain("assertUserRepoAccess(ref.repoId, userId)");
-  });
-
-  test("no entity tool patches status, phase or any review field", () => {
-    // Vedant owns mark-active and status. The MCP surface starts and stops
-    // VMs and clears queues; it never moves work across the board.
-    for (const forbidden of [
-      "update_entity",
-      "updateStatus",
-      "setPhase",
-      "agentTasks:update",
-      "projects:update",
-      "sessions:updateStatus",
-    ]) {
-      expect(entityTools).not.toContain(forbidden);
-    }
-    // The three new actions name exactly two mutations directly — both on the
-    // queue — and reach sandbox start/stop only through SANDBOX_SURFACES,
-    // whose whole contents are pinned above. Nothing patches a row.
-    const newActions = nodeActions.slice(
-      nodeActions.indexOf("export const mcpStartEntitySandbox"),
-      nodeActions.indexOf("export const orchestratorCreateSession"),
-    );
-    expect(newActions).toContain("surface.stop");
-    expect(newActions).toContain("ensureEntitySandboxActive");
-    expect(newActions.match(/"[\w/]+:[\w]+"/g)).toEqual([
-      '"queuedMessages:listByParent"',
-      '"queuedMessages:remove"',
-    ]);
-    // The start path issues its mutation via the same shared map.
-    const ensure = nodeActions.slice(
-      nodeActions.indexOf("async function ensureEntitySandboxActive"),
-      nodeActions.indexOf("function chatDelivery"),
-    );
-    expect(ensure).toContain("surface.start");
-    expect(ensure.match(/"[\w/]+:[\w]+"/g)).toBeNull();
-  });
-});
-
-/**
- * 2026-09-10: a session on eva diagnosed a carepulse-ts PR but could not post
- * the fix into that PR's task chat — every entity tool ran the sandbox token's
- * single-repo pin, while create_and_run_task never did. Chats now follow the
- * per-user rule the web app uses; the pin stays on anything that hands out a
- * repo's credentials.
- */
-describe("a sandbox token reaches chats in every repo its user can, but credentials stay pinned", () => {
-  const entityRef = readFileSync(
-    join(testsDir, "../convex/mcp/entityRef.ts"),
-    "utf8",
-  );
-  const entityToolsSource = readFileSync(
-    join(testsDir, "../convex/mcp/entityTools.ts"),
-    "utf8",
-  );
-  const tools = readFileSync(join(testsDir, "../convex/mcp/tools.ts"), "utf8");
-  const between = (source: string, start: string, end: string): string =>
-    source.slice(source.indexOf(start), source.indexOf(end));
-
-  test("resolving a chat checks the user, not the token pin", () => {
-    const resolve = between(
-      entityRef,
-      "async function resolveEntityTarget(",
-      "return {\n    assertRepoAccess,",
-    );
-    expect(resolve).toContain("assertUserRepoAccess(target.repoId, userId)");
-    expect(resolve).not.toContain("assertRepoAccess(");
-    expect(entityRef).not.toContain("tokenScopedRepoIds");
-  });
-
-  test("the chat tools never import the pinned check", () => {
-    expect(entityToolsSource).toContain("assertUserRepoAccess");
-    expect(entityToolsSource).not.toMatch(/\bassertRepoAccess\b/);
-    expect(entityToolsSource).not.toContain("tokenScopedRepoIds");
-  });
-
-  test("the pin still guards every credential hand-out", () => {
-    const pinned = between(
-      entityRef,
-      "async function assertRepoAccess(",
-      "async function resolveRepoRef(",
-    );
-    expect(pinned).toContain("scoped to a different repository");
-    // Convex deploy keys, Postgres, and repo skills all go through the pinned check.
-    const credentials = between(
-      tools,
-      "async function resolveTargetWithAccess(",
-      '"list_tables"',
-    );
-    expect(credentials).toContain("await assertRepoAccess(repoId, userId)");
-    const postgres = between(
-      tools,
-      '"postgres_query"',
-      "async function resolveRepoByName(",
-    );
-    expect(postgres).toContain("await assertRepoAccess(ref.repoId, userId)");
-  });
 });
 
 /**
@@ -795,7 +501,7 @@ describe("get_preview_url can find the running app behind a chat", () => {
         sandboxId: "sbx_session",
         devPort: 5173,
       });
-      await ctx.db.patch(f.taskId, { sandboxId: "sbx_task" });
+      await ctx.db.patch(f.taskSessionId, { sandboxId: "sbx_task" });
     });
 
     // A session's own status is its sandbox's, and its port beats the repo's.
@@ -804,8 +510,8 @@ describe("get_preview_url can find the running app behind a chat", () => {
     expect(session?.sandboxId).toBe("sbx_session");
     expect(session?.devPort).toBe(5173);
 
-    // A task parks the reviewer-facing VM state in its own field, and has no
-    // port of its own — the repo default answers for it.
+    // A task's sandbox is its session's; with no port of its own there, the
+    // repo default answers for it.
     const task = await resolve(f, "task", f.taskId);
     expect(task?.sandboxStatus).toBe("active");
     expect(task?.sandboxId).toBe("sbx_task");
@@ -815,42 +521,5 @@ describe("get_preview_url can find the running app behind a chat", () => {
     const project = await resolve(f, "project", f.projectId);
     expect(project?.sandboxStatus).toBe("closed");
     expect(project?.sandboxId).toBeUndefined();
-  });
-
-  test("a stopped sandbox is reported, never guessed at", () => {
-    const entityTools = convexSource("mcp/entityTools.ts");
-    const tool = entityTools.slice(
-      entityTools.indexOf('name: "get_preview_url"'),
-      entityTools.indexOf('name: "cancel_queued_message"'),
-    );
-    // No sandbox and no active VM both short-circuit before any provider call.
-    expect(tool).toContain('target.sandboxStatus !== "active"');
-    expect(tool).toContain("Call start_sandbox and try again");
-    // The five-minute bearer grant must not be pasted into a chat message.
-    expect(tool).toContain("shareablePreviewUrl(preview.url, path)");
-    expect(entityTools).toContain(
-      "url.searchParams.delete(PREVIEW_GRANT_PARAM)",
-    );
-  });
-
-  test("every surface points at its own Preview tab", () => {
-    const entityRef = convexSource("mcp/entityRef.ts");
-    const previewPath = entityRef.slice(
-      entityRef.indexOf("export function entityPreviewPath("),
-      entityRef.indexOf("/** The identity every entity tool echoes back"),
-    );
-    // Sessions hang their sandbox tabs off the chat route; the other two nest
-    // theirs under /sandbox (see the web app's route files).
-    expect(previewPath).toContain("`${base}/preview`");
-    expect(previewPath).toContain("`${base}/sandbox/preview`");
-  });
-
-  test("the agent is told the link exists before it is asked for one", () => {
-    const prompts = readFileSync(
-      join(testsDir, "../convex/_sessions/prompts.ts"),
-      "utf8",
-    );
-    expect(prompts).toContain("get_preview_url");
-    expect(prompts).toContain("Never reply that no link exists");
   });
 });

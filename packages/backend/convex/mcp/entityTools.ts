@@ -21,12 +21,9 @@ import {
   type McpCredentials,
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
-import { getEvaBaseUrl } from "../_taskWorkflow/urls";
+import { getEvaBaseUrl } from "../_env/webAppUrl";
 import { PREVIEW_GRANT_PARAM } from "../previewGrantConfig";
-import { previewWakePath } from "@eva/shared";
-
-/** Port the Preview pane falls back to when nothing recorded a dev port. */
-const DEFAULT_PREVIEW_PORT = 3000;
+import { DEFAULT_PREVIEW_PORT, previewWakePath } from "@eva/shared";
 
 /**
  * Turns a live preview URL into one that is safe to hand a person: the grant
@@ -240,7 +237,7 @@ Already-active sandboxes are left alone. Each surface has its own gate: a quick 
       name: "stop_sandbox",
       description: `Tear down the preview sandbox for a session, quick task or project — the same Stop button the Eva UI has. Call this when you are finished with a chat you woke up, so the VM does not keep running after send_chat_message.
 
-If a turn is in flight this is REJECTED rather than killing that turn: wait for it to finish and stop again, or cancel it deliberately with stop_agent first. An already-stopped sandbox is a no-op. The reply reports the settled state, which is "stopping" if teardown is still finishing.`,
+If an agent is working in the sandbox (a turn in flight, a task run, a project build or interview) this is REJECTED rather than killing that work: wait for it to finish and stop again, or cancel it deliberately first (stop_agent, cancel_project_build). An already-stopped sandbox is a no-op. The reply reports the settled state, which is "stopping" if teardown is still finishing.`,
       mutating: true,
       input: entityRefArgs,
       handler: async (ref) => {
@@ -286,16 +283,14 @@ The returned "previewUrl" opens the app and requires an Eva login — it is for 
           ),
       },
       handler: async ({ path, ...ref }) => {
-        const { userId } = await mcpGetContext(ctx, clerkUserId);
+        const [{ userId }, idlePause] = await Promise.all([
+          mcpGetContext(ctx, clerkUserId),
+          ctx.runQuery(internal.sandboxIdlePause.getSettingsInternal, {}),
+        ]);
         const chatRef = withSelfDefault(ref, credentials);
         const resolved = await resolveEntityTarget(chatRef, userId);
         if ("content" in resolved) return resolved;
         const { target } = resolved;
-
-        const idlePause = await ctx.runQuery(
-          internal.sandboxIdlePause.getSettingsInternal,
-          {},
-        );
         const wakeUrl = wakePreviewUrl(target, idlePause.mode, path);
         const summary = {
           ...entitySummary(target),

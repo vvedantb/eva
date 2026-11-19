@@ -11,8 +11,24 @@
  * without the helper, so the injected copy dies with a ReferenceError before
  * installing a single listener.
  *
- * Runs in the previewed app's page, cross-origin from Eva. No imports.
+ * Runs in the previewed app's page, cross-origin from Eva. No runtime
+ * imports: the one import below is type-only and erased, so the message
+ * names stay inline literals that the shared protocol type checks.
  */
+
+import type { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
+
+type Msg = typeof PREVIEW_FRAME_MESSAGE;
+
+/** Message names Eva sends into the page. */
+type InboundType = Msg[
+  | "annotateMode"
+  | "annotateFreeze"
+  | "annotateClear"
+  | "screenshotCapture"
+  | "snapshotCapture"
+  | "webMcpList"
+  | "webMcpInvoke"];
 
 interface EvaAnnotationContext {
   tagName: string;
@@ -338,9 +354,14 @@ function evaPreviewAnnotationScript(): void {
     return typeof raw === "string" && raw ? originOf(raw) : "";
   }
 
-  /** Eva's origin, or "" when unknown (ungated proxy with no Eva URL). */
+  /**
+   * Eva's origin, or "" when unknown (ungated proxy with no Eva URL, and a
+   * browser without `ancestorOrigins` or a referrer). Unknown means silent:
+   * the bridge never posts to "*" and never trusts a message of any origin.
+   */
   const parentOrigin =
     injectedParentOrigin() ||
+    originOf(window.location.ancestorOrigins?.item(0) ?? "") ||
     (document.referrer ? originOf(document.referrer) : "");
 
   let modeActive = false;
@@ -351,9 +372,9 @@ function evaPreviewAnnotationScript(): void {
 
   function post(
     payload:
-      | { type: "eva-preview-annotate-ready" }
+      | { type: Msg["annotateReady"] }
       | {
-          type: "eva-preview-annotate-selected";
+          type: Msg["annotateSelected"];
           context: EvaAnnotationContext;
           rect: {
             top: number;
@@ -363,7 +384,7 @@ function evaPreviewAnnotationScript(): void {
           };
         }
       | {
-          type: "eva-preview-annotate-rect";
+          type: Msg["annotateRect"];
           rect: {
             top: number;
             left: number;
@@ -371,51 +392,51 @@ function evaPreviewAnnotationScript(): void {
             height: number;
           } | null;
         }
-      | { type: "eva-preview-annotate-dismissed" }
-      | { type: "eva-preview-annotate-frozen"; frozen: boolean }
+      | { type: Msg["annotateDismissed"] }
+      | { type: Msg["annotateFrozen"]; frozen: boolean }
       | {
-          type: "eva-preview-screenshot";
+          type: Msg["screenshot"];
           requestId: string;
           dataUrl: string;
         }
       | {
-          type: "eva-preview-screenshot-error";
+          type: Msg["screenshotError"];
           requestId: string;
           message: string;
         }
       | {
-          type: "eva-preview-snapshot";
+          type: Msg["snapshot"];
           requestId: string;
           snapshot: EvaPreviewSnapshot;
         }
       | {
-          type: "eva-preview-snapshot-error";
+          type: Msg["snapshotError"];
           requestId: string;
           message: string;
         }
       | {
-          type: "eva-preview-webmcp-tools";
+          type: Msg["webMcpTools"];
           requestId: string;
           origin: string;
           implementation: string;
           tools: EvaWebMcpTool[];
         }
       | {
-          type: "eva-preview-webmcp-result";
+          type: Msg["webMcpResult"];
           requestId: string;
           name: string;
           result: unknown;
         }
       | {
-          type: "eva-preview-webmcp-error";
+          type: Msg["webMcpError"];
           requestId: string;
           message: string;
         },
   ): void {
     // Payloads carry page text, console output and failing request URLs, so
-    // they go to Eva's exact origin. "*" only survives where no origin is known
-    // at all, which is the ungated legacy proxy.
-    window.parent.postMessage(payload, parentOrigin || "*");
+    // they go to Eva's exact origin, never "*".
+    if (!parentOrigin) return;
+    window.parent.postMessage(payload, parentOrigin);
   }
 
   function ensureOverlay(): void {
@@ -1540,24 +1561,24 @@ function evaPreviewAnnotationScript(): void {
   }
 
   window.addEventListener("message", (event) => {
-    if (parentOrigin && event.origin !== parentOrigin) return;
+    if (!parentOrigin || event.origin !== parentOrigin) return;
     const data = event.data;
     if (!data || typeof data !== "object") return;
     const type = Reflect.get(data, "type");
-    if (type === "eva-preview-annotate-mode") {
+    if (type === ("eva-preview-annotate-mode" satisfies InboundType)) {
       const active = Reflect.get(data, "active") === true;
       setMode(active);
       return;
     }
-    if (type === "eva-preview-annotate-freeze") {
+    if (type === ("eva-preview-annotate-freeze" satisfies InboundType)) {
       setFrozen(Reflect.get(data, "active") === true);
       return;
     }
-    if (type === "eva-preview-annotate-clear") {
+    if (type === ("eva-preview-annotate-clear" satisfies InboundType)) {
       clearAll();
       return;
     }
-    if (type === "eva-preview-screenshot-capture") {
+    if (type === ("eva-preview-screenshot-capture" satisfies InboundType)) {
       const requestId = Reflect.get(data, "requestId");
       if (typeof requestId !== "string") return;
       void captureViewport()
@@ -1576,7 +1597,7 @@ function evaPreviewAnnotationScript(): void {
         });
       return;
     }
-    if (type === "eva-preview-snapshot-capture") {
+    if (type === ("eva-preview-snapshot-capture" satisfies InboundType)) {
       const requestId = Reflect.get(data, "requestId");
       if (typeof requestId !== "string") return;
       try {
@@ -1597,7 +1618,7 @@ function evaPreviewAnnotationScript(): void {
       }
       return;
     }
-    if (type === "eva-preview-webmcp-list") {
+    if (type === ("eva-preview-webmcp-list" satisfies InboundType)) {
       const requestId = Reflect.get(data, "requestId");
       if (typeof requestId !== "string") return;
       void collectWebMcp()
@@ -1622,7 +1643,7 @@ function evaPreviewAnnotationScript(): void {
         });
       return;
     }
-    if (type === "eva-preview-webmcp-invoke") {
+    if (type === ("eva-preview-webmcp-invoke" satisfies InboundType)) {
       const requestId = Reflect.get(data, "requestId");
       const name = normalizeToolName(Reflect.get(data, "name"));
       if (typeof requestId !== "string" || !name) return;

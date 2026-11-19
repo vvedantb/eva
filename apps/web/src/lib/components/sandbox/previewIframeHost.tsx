@@ -581,7 +581,7 @@ export function PreviewAnchor({
   const armKey =
     miniPlayer === undefined
       ? "idle"
-      : `${miniPlayer.sessionId}:${miniPlayer.sandboxId}:${miniPlayer.returnTo}:${miniPlayer.title}`;
+      : `${miniPlayer.owner.kind}:${miniPlayer.sandboxId}:${miniPlayer.returnTo}:${miniPlayer.title}`;
 
   return (
     <div

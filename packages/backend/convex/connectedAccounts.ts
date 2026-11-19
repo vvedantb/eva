@@ -1,8 +1,9 @@
-import { bytesToBase64Url, randomToken } from "@vvedantb/server";
+import { bytesToBase64Url, randomToken, requiredEnv } from "@vvedantb/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { findTeamEnvVarDoc } from "./_envVars/documentStore";
 import { authAction, authMutation, authQuery } from "./functions";
 import {
   connectorActorValidator,
@@ -18,8 +19,8 @@ import {
   readOAuthClient,
   type ConnectorProvider,
 } from "./_connectors/providers";
+import { OAUTH_STATE_TTL_MS } from "./_connectors/tokens";
 
-const STATE_TTL_MS = 10 * 60 * 1000;
 const STATE_PATH_PREFIX = "/settings";
 
 const statusValidator = v.object({
@@ -62,10 +63,7 @@ async function envFallbackForUser(
     .collect();
   const keys = CONNECTOR_ENV_KEYS[provider];
   for (const membership of memberships) {
-    const doc = await ctx.db
-      .query("teamEnvVars")
-      .withIndex("by_team", (q) => q.eq("teamId", membership.teamId))
-      .first();
+    const doc = await findTeamEnvVarDoc(ctx.db, membership.teamId);
     const hit = doc?.vars.find((entry) => keys.includes(entry.key));
     if (!hit) continue;
     const team = await ctx.db.get(membership.teamId);
@@ -122,8 +120,7 @@ export const startOAuth = authMutation({
   returns: v.string(),
   handler: async (ctx, args) => {
     const { clientId } = readOAuthClient(args.provider);
-    const siteUrl = process.env.CONVEX_SITE_URL;
-    if (!siteUrl) throw new Error("CONVEX_SITE_URL is not set");
+    const siteUrl = requiredEnv("CONVEX_SITE_URL");
     const actor = args.actor ?? "user";
     const { verifier, challenge } = await createPkce();
     const nonce = crypto.randomUUID();
@@ -134,7 +131,7 @@ export const startOAuth = authMutation({
       actor,
       returnPath: safeReturnPath(args.returnPath),
       codeVerifier: verifier,
-      expiresAt: Date.now() + STATE_TTL_MS,
+      expiresAt: Date.now() + OAUTH_STATE_TTL_MS,
     });
     const redirectUri = `${siteUrl.replace(/\/$/, "")}/api/connectors/oauth/callback`;
     const params = new URLSearchParams({

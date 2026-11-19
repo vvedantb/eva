@@ -14,7 +14,8 @@ import type { ProjectPhase } from "@/lib/components/projects/ProjectPhaseBadge";
 interface ProjectTabsProps {
   projectId: Id<"projects">;
   projectPhase: ProjectPhase;
-  activeWorkflowId?: string;
+  /** An interview or spec workflow holds the project (`projects.interview`). */
+  interviewRunning: boolean;
   rawInput: string;
   generatedSpec: string | undefined;
   conversationHistory: ConversationMessage[];
@@ -27,7 +28,7 @@ interface ProjectTabsProps {
 export function ProjectTabs({
   projectId,
   projectPhase,
-  activeWorkflowId,
+  interviewRunning,
   rawInput,
   generatedSpec,
   conversationHistory,
@@ -36,7 +37,6 @@ export function ProjectTabs({
   basePath,
   repoId,
 }: ProjectTabsProps) {
-  const [pendingSpec, setPendingSpec] = useState<string | null>(null);
   /** Which of the two panes is on screen below `md`. Inert at `md`+. */
   const [mobilePane, setMobilePane] = useState<"left" | "right">("right");
   const updateProject = useUpdateProject(projectId);
@@ -46,14 +46,9 @@ export function ProjectTabs({
     api.projectInterviewWorkflow.startInterview,
   );
 
-  const handleSpecGenerated = (spec: string) => {
-    setPendingSpec(spec);
-  };
-
   const handleClear = async () => {
     await clearMessagesDb({ id: projectId });
     await updateProject({ id: projectId, phase: "draft" });
-    setPendingSpec(null);
   };
 
   const handleRejectSpec = async (reason: string) => {
@@ -66,23 +61,21 @@ export function ProjectTabs({
       previousAnswers: [], // Session persistence provides context
       rejectionReason: reason,
     });
-
-    setPendingSpec(null);
   };
 
-  const specToShow =
-    projectPhase !== "draft" ? (pendingSpec ?? generatedSpec) : undefined;
+  // Back to `draft` (Clear / Reject) hides the stored spec until the next
+  // spec run overwrites it and moves the phase on.
+  const specToShow = projectPhase !== "draft" ? generatedSpec : undefined;
 
   if (!specToShow) {
     return (
       <ProjectChatTab
         projectId={projectId}
         projectPhase={projectPhase}
-        activeWorkflowId={activeWorkflowId}
+        interviewRunning={interviewRunning}
         initialMessages={conversationHistory}
         streamingActivity={streamingActivity ?? sandboxStartupActivity}
         rawInput={rawInput}
-        onSpecGenerated={handleSpecGenerated}
         onClear={handleClear}
         repoId={repoId}
       />
@@ -111,11 +104,10 @@ export function ProjectTabs({
         <ProjectChatTab
           projectId={projectId}
           projectPhase={projectPhase}
-          activeWorkflowId={activeWorkflowId}
+          interviewRunning={interviewRunning}
           initialMessages={conversationHistory}
           streamingActivity={streamingActivity ?? sandboxStartupActivity}
           rawInput={rawInput}
-          onSpecGenerated={handleSpecGenerated}
           onClear={handleClear}
           repoId={repoId}
         />

@@ -1,5 +1,6 @@
 "use client";
 
+import { taskReplyTypingRoom } from "@eva/shared/typingPresence";
 import { useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
@@ -66,7 +67,7 @@ function CommentReplyComposerForm({
   );
 
   const { typingUsers, onActivity, stopTyping } = useTypingPresence(
-    `typing:task-comment:${parentId}`,
+    taskReplyTypingRoom(parentId),
     currentUserId,
   );
 

@@ -25,12 +25,17 @@ export const FLAG_THRESHOLD = 0.5;
 /** Below this, the reply did not tell the user about the change. */
 export const MENTION_THRESHOLD = 0.5;
 /**
- * Whole-diff state budget. Well under Jev's 200k-character schema cap: the
- * gateway answered a 41k-character state (16.7k input tokens) but returned 503
- * on a 77k one, repeatably, so the schema limit is not the real ceiling. A
- * headline question that 503s costs the chip its own number.
+ * Largest whole diff Jev takes at its default context. The gateway answered a
+ * 41k-character state (16.7k input tokens) but failed a 77k one, repeatably:
+ * Jev's default limit is about 32k tokens.
  */
-export const MAX_OVERALL_DIFF_CHARS = 30_000;
+export const STANDARD_DIFF_CHARS = 30_000;
+/**
+ * Whole-diff budget with `longContext` on (262k tokens). Kept well under that
+ * ceiling because TypeSafe reports long contexts make answers less reliable;
+ * this still covers every turn that is not a mass rename or a vendored bundle.
+ */
+export const MAX_OVERALL_DIFF_CHARS = 180_000;
 /** Jev needs the ask, not the essay; long prompts are asks plus context. */
 export const MAX_PROMPT_CHARS = 8_000;
 
@@ -132,6 +137,8 @@ export function clipPrompt(prompt: string): string {
 export function buildOverallDiff(hunks: readonly DiffHunk[]): {
   text: string;
   clipped: boolean;
+  /** Past {@link STANDARD_DIFF_CHARS}: the headline call must ask for long context. */
+  longContext: boolean;
 } {
   const lines: string[] = [];
   let currentFile: string | null = null;
@@ -142,7 +149,11 @@ export function buildOverallDiff(hunks: readonly DiffHunk[]): {
     }
     lines.push(hunk.header, hunk.body);
   }
-  return clipToLineBoundary(lines.join("\n"), MAX_OVERALL_DIFF_CHARS);
+  const clipped = clipToLineBoundary(lines.join("\n"), MAX_OVERALL_DIFF_CHARS);
+  return {
+    ...clipped,
+    longContext: clipped.text.length > STANDARD_DIFF_CHARS,
+  };
 }
 
 /**
@@ -160,8 +171,13 @@ export function summariseScopeCheck(args: {
   evaluatedAt: number;
   /** P(the reply mentioned it) per {@link hunkKey}; absent when that call failed. */
   mentioned?: ReadonlyMap<string, number>;
+  /** P(the change shows in a screenshot) per {@link hunkKey}. */
+  visible?: ReadonlyMap<string, number>;
+  /** The screenshot pass, when the turn posted screenshots Jev could read. */
+  screenshots?: ScopeCheck["screenshots"];
 }): ScopeCheck {
   const mentioned = args.mentioned ?? new Map<string, number>();
+  const visible = args.visible ?? new Map<string, number>();
   const flagged = selectFlagged(args.judged).map((hunk) => {
     const row: ScopeCheck["flagged"][number] = {
       file: hunk.file,
@@ -176,6 +192,8 @@ export function summariseScopeCheck(args: {
     // said nothing" would otherwise read identically on the chip.
     const mention = mentioned.get(hunkKey(hunk));
     if (mention !== undefined) row.mentioned = mention;
+    const seen = visible.get(hunkKey(hunk));
+    if (seen !== undefined) row.visible = seen;
     return row;
   });
 
@@ -191,5 +209,8 @@ export function summariseScopeCheck(args: {
     flagged,
     partial: args.diffTruncated || args.totalHunks > args.judged.length,
     evaluatedAt: args.evaluatedAt,
+    ...(args.screenshots === undefined
+      ? {}
+      : { screenshots: args.screenshots }),
   };
 }

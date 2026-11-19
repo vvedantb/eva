@@ -2,7 +2,7 @@ import { toolErrorResult, toolJsonResult } from "@vvedantb/server";
 import { z } from "zod";
 import type { ActionCtx } from "../_generated/server";
 import type { JsonValue } from "../_jev/jsonValue";
-import { AI_MODEL_OPTIONS } from "../validators";
+import { AI_MODEL_OPTIONS, RUN_STATUSES } from "../validators";
 import { repoBasePath } from "../_githubRepos/helpers";
 import { entityAccess, repoRefArgs } from "./entityRef";
 import {
@@ -47,13 +47,14 @@ const automationSchema = z.object({
   actionsEnabled: z.boolean().optional(),
   shared: z.boolean().optional(),
   sendEmail: z.boolean().optional(),
+  emailAutoSend: z.boolean().optional(),
   systemKey: z.string().optional(),
 });
 type Automation = z.infer<typeof automationSchema>;
 
 const runSchema = z.object({
   _id: z.string(),
-  status: z.enum(["queued", "running", "success", "error", "cancelled"]),
+  status: z.enum(RUN_STATUSES),
   startedAt: z.number(),
   finishedAt: z.number().optional(),
   resultSummary: z.string().optional(),
@@ -107,7 +108,7 @@ const MODEL_ALIASES: Record<string, string> = {
   opus: "claude:opus",
   sonnet: "claude:sonnet",
   haiku: "claude:haiku",
-  fable: "claude:claude-fable-5-1",
+  fable: "claude:claude-fable-5-2",
 };
 const MODEL_IDS: string[] = AI_MODEL_OPTIONS.map((option) => option.id);
 
@@ -162,7 +163,13 @@ const settingsArgs = {
     .boolean()
     .optional()
     .describe(
-      "true emails each successful run's summary to every user with email notifications on.",
+      "true emails each successful run's summary to the repo team's members with email notifications on. Each email waits as a draft for review unless emailAutoSend is true.",
+    ),
+  emailAutoSend: z
+    .boolean()
+    .optional()
+    .describe(
+      "true sends the email straight away with no review. false (the default) keeps it as a draft on the run until a person sends it.",
     ),
 };
 
@@ -175,6 +182,7 @@ interface UpdateFields {
   readOnly?: boolean;
   actionsEnabled?: boolean;
   sendEmail?: boolean;
+  emailAutoSend?: boolean;
 }
 
 /** The checks automations:update would only hit on enable, or the UI enforces. */
@@ -204,6 +212,8 @@ function buildUpdateArgs(
   else if (fields.actionsEnabled !== undefined)
     args.actionsEnabled = fields.actionsEnabled;
   if (fields.sendEmail !== undefined) args.sendEmail = fields.sendEmail;
+  if (fields.emailAutoSend !== undefined)
+    args.emailAutoSend = fields.emailAutoSend;
   return args;
 }
 
@@ -334,6 +344,7 @@ A shared monorepo automation appears once, under the first app that surfaces it.
                 actionsEnabled: automation.actionsEnabled === true,
                 shared: automation.shared === true,
                 sendEmail: automation.sendEmail === true,
+                emailAutoSend: automation.emailAutoSend === true,
                 systemKey: automation.systemKey ?? null,
                 lastRun: lastRun
                   ? {
@@ -488,7 +499,7 @@ New automations start disabled unless you pass enabled: true, and use the repo's
       name: "update_automation",
       description: `Change an existing automation: prompt, schedule, model, mode, email, or enable/disable it. Only the fields you pass change. ${TIMEZONE_NOTE}
 
-System automations (listed with a "systemKey") only accept cronSchedule, model, enabled and sendEmail; title, description, readOnly and actionsEnabled are managed by Eva and are rejected. Replies with the automation's schedule and enabled state after the change.`,
+System automations (listed with a "systemKey") only accept cronSchedule, model, enabled, sendEmail and emailAutoSend; title, description, readOnly and actionsEnabled are managed by Eva and are rejected. Replies with the automation's schedule and enabled state after the change.`,
       mutating: true,
       input: {
         automationId: automationIdArg,

@@ -1,3 +1,4 @@
+"use no memo"
 import { Children, cloneElement, createContext, isValidElement, useContext, useEffect, useLayoutEffect, useRef, type CSSProperties, type ReactElement, type ReactNode } from 'react'
 import { useLook } from './looks'
 import { Roll } from './motion/Roll'

@@ -1,3 +1,6 @@
+You are the owner and long-term maintainer of this codebase, and its design is up to you.
+Always believe in yourself! Keep going, you got this!
+
 FOLLOW ALL OF THESE RULES
 
 ## Git / ship
@@ -26,7 +29,10 @@ FOLLOW ALL OF THESE RULES
 - Never call a component as a function in render; name hook-calling helpers `use*` (the compiler memoises capitalised calls and skips them).
 - Do not run dev / lint / build unless the user asks.
 - After medium+ changes: no banned types; `tsc` where relevant; `/changelog` (or `internal/changelog.md`).
+- Tests: default is no new test; a test must call real code and fail when behaviour breaks; never regex source files.
+- Before a PR that touches async code, run `/parallel-awaits` with `--diff origin/main`.
 - Eliminate duplication, centralise your changes so its easier to update them
+- Keep-alive UI hides with React `<Activity>`; use a `hidden` class only where effects must keep running (terminals, on WebGL xterm).
 - Never put a live `filter: blur()` / beam halo on a spinning BorderBeam — measured GPU floor, already removed.
 - For debugging, use Eva MCP and Convex CLI for prod logs
 
@@ -42,5 +48,14 @@ FOLLOW ALL OF THESE RULES
 - This repo is a platform for managing other codebases and running them remotely (sandbox app ≠ this codebase).
 - Sandbox provider is Vercel; Daytona is legacy. Sandboxes: IPv4 only (no IPv6).
 - Chat is one surface: sessions, quick tasks and projects share `ChatBody`/`SandboxChatPreInput`; ship chat changes to all three panels and workflow modules.
+- One backend for web and phone: no client-only Convex functions (CI: `scripts/check-shared-backend.mjs` needs a reason for any).
+- Logic both apps need lives in `@eva/shared`; `apps/web` and `apps/mobile` hold only UI and platform code.
+- Every web or mobile change ships to the other app too; put the shared logic in `@eva/shared` so the apps never drift.
+- Backend changes must keep the newest published APK working (CI: `scripts/check-apk-compat.sh`); keep old names or args until it updates.
 
 Fight entropy. Leave the codebase better than you found it.
+
+## UI copy
+- Subtext is the exception, not the default. Most sections, cards and rows show a title only.
+- Add a description only when the user needs it to act and the title, value or badge does not already say it (a price, a limit, a warning).
+- Never repeat the title, the value, a badge or a nearby row. Say each thing once, in plain words.

@@ -1,20 +1,15 @@
 import { v } from "convex/values";
-import { startTaskRunWorkflow } from "./startRun";
 import { internal } from "../_generated/api";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { cancelTrackedWorkflow, toWorkflowId } from "../workflowManager";
-import { authMutation, hasTaskAccess } from "../functions";
+import { authMutation, getActiveTaskRun } from "../functions";
 import {
   advanceTurn,
   closeOpenTurn,
   resolveCompletionTurn,
 } from "../_chat/turnStore";
 import { TURN_FINALIZING_LEASE_MS } from "../_chat/turnLease";
-import {
-  aiModelValidator,
-  turnCheckpointArgs,
-  turnLeaseFenceArgs,
-} from "../validators";
+import { turnCheckpointArgs, turnLeaseFenceArgs } from "../validators";
 import { taskCompleteEvent } from "./events";
 import {
   clearStreamingActivity,
@@ -23,8 +18,12 @@ import {
   sendCompletionEvent,
 } from "./helpers";
 import { scheduleTaskOrchestratorNotify } from "../orchestratorShared";
+import { finishTaskRun, taskRunWorkflowId } from "../_agentTasks/runState";
 import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
+import { errorMessage } from "@vvedantb/server";
+import { findWorkSession } from "../_sessions/owner";
+import { abandonTaskRunSandbox } from "../_sessions/sandbox";
 
 /** Retrieves the active workflow ID for a task, or null if none exists. */
 async function getActiveWorkflowId(
@@ -32,8 +31,8 @@ async function getActiveWorkflowId(
   taskId: Id<"agentTasks">,
 ): Promise<WorkflowId | null> {
   const task = await ctx.db.get(taskId);
-  if (!task?.activeWorkflowId) return null;
-  return toWorkflowId(task.activeWorkflowId);
+  const workflowId = task ? taskRunWorkflowId(task) : undefined;
+  return workflowId === undefined ? null : toWorkflowId(workflowId);
 }
 
 /** Returns the most recently started running task run for a task, or null if none remain. */
@@ -151,7 +150,7 @@ export const handleCompletion = authMutation({
       await ctx.db.patch(latestRunningRun._id, {
         finalizingAt: undefined,
       });
-      const detail = error instanceof Error ? error.message : String(error);
+      const detail = errorMessage(error);
       console.error(
         `[taskWorkflow] handleCompletion: workflow.sendEvent failed after finalizing; run=${String(args.runId)} task=${String(args.taskId)}: ${detail}`,
       );
@@ -173,106 +172,55 @@ export const handleCompletion = authMutation({
   },
 });
 
-/** Cancels the active workflow and run for a task, resetting it to todo status. */
-export const cancelExecution = authMutation({
-  args: { taskId: v.id("agentTasks") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task) throw new Error("Task not found");
-    if (!(await hasTaskAccess(ctx.db, task, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+/**
+ * Stops a task's agent run, resetting an `in_progress` task to todo. Reached
+ * through the one chat Stop (`_sessions/stop.ts`); the caller checks access.
+ */
+export async function cancelTaskRun(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+): Promise<void> {
+  await cancelTrackedWorkflow(ctx, taskRunWorkflowId(task));
 
-    await cancelTrackedWorkflow(ctx, task.activeWorkflowId);
+  const run = await getActiveTaskRun(ctx.db, task._id);
 
-    const run = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-      .filter((q) =>
-        q.or(
-          q.eq(q.field("status"), "queued"),
-          q.eq(q.field("status"), "running"),
-        ),
-      )
-      .first();
+  if (run) {
+    await closeOpenTurn(ctx, run._id, "cancelled");
+    await ctx.db.patch(run._id, {
+      status: "cancelled",
+      finalizingAt: undefined,
+      finishedAt: Date.now(),
+    });
+    await clearStreamingActivity(ctx, getTaskRunStreamingEntityId(run._id));
+    // The cancelled status is written here, not through finalizeRunStatus, so
+    // this is the one terminal transition that hook cannot see.
+    await scheduleTaskOrchestratorNotify(ctx, task._id, "cancelled");
 
-    if (run) {
-      await closeOpenTurn(ctx, run._id, "cancelled");
-      await ctx.db.patch(run._id, {
-        status: "cancelled",
-        finalizingAt: undefined,
-        finishedAt: Date.now(),
+    // workflow.cancel() aborts execution before the workflow's own sandbox
+    // cleanup step runs, so we stop the execution sandbox here.
+    // A run borrowed its session's sandbox (a project task's: the project's):
+    // fail the start it claimed (or finish the VM it attached) through the
+    // session lifecycle. A project's VM stays up for its chat and builds.
+    const session = await findWorkSession(ctx.db, task);
+    if (session) {
+      await abandonTaskRunSandbox(ctx, session._id, run, {
+        keepActive: task.projectId !== undefined,
       });
-      await clearStreamingActivity(ctx, getTaskRunStreamingEntityId(run._id));
-      // The cancelled status is written here, not through finalizeRunStatus, so
-      // this is the one terminal transition that hook cannot see.
-      await scheduleTaskOrchestratorNotify(ctx, args.taskId, "cancelled");
-
-      // workflow.cancel() aborts execution before the workflow's own sandbox
-      // cleanup step runs, so we stop the execution sandbox here.
-      if (run.sandboxId && run.repoId) {
-        await ctx.scheduler.runAfter(0, internal.sandbox.stopSandbox, {
-          sandboxId: run.sandboxId,
-          repoId: run.repoId,
-        });
-      }
+    } else if (run.sandboxId && run.repoId) {
+      await ctx.scheduler.runAfter(0, internal.sandbox.stopSandbox, {
+        sandboxId: run.sandboxId,
+        repoId: run.repoId,
+      });
     }
+  }
 
-    await clearStreamingActivity(ctx, String(args.taskId));
+  await clearStreamingActivity(ctx, String(task._id));
 
-    await ctx.db.patch(args.taskId, {
-      status: "todo",
-      activeWorkflowId: undefined,
-      updatedAt: Date.now(),
-    });
+  await ctx.db.patch(task._id, {
+    // Same rule as run completion: only the run's own `in_progress` resets.
+    ...(task.status === "in_progress" ? { status: "todo" as const } : {}),
+    updatedAt: Date.now(),
+  });
+  await finishTaskRun(ctx, task._id, undefined);
+}
 
-    return null;
-  },
-});
-
-/** Starts a new task execution workflow for a queued run. */
-export const triggerExecution = authMutation({
-  args: {
-    runId: v.id("agentRuns"),
-    taskId: v.id("agentTasks"),
-    repoId: v.id("githubRepos"),
-    projectId: v.optional(v.id("projects")),
-    branchName: v.optional(v.string()),
-    baseBranch: v.optional(v.string()),
-    isFirstTaskOnBranch: v.boolean(),
-    model: v.optional(aiModelValidator),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task) throw new Error("Task not found");
-
-    const run = await ctx.db.get(args.runId);
-    if (!run || run.taskId !== args.taskId) {
-      throw new Error("Run not found");
-    }
-
-    if (task.activeWorkflowId || run.status !== "queued") {
-      return null;
-    }
-
-    const repo = await ctx.db.get(args.repoId);
-    if (!repo) throw new Error("Repository not found");
-
-    await startTaskRunWorkflow(ctx, {
-      runId: args.runId,
-      taskId: args.taskId,
-      repoId: args.repoId,
-      installationId: repo.installationId,
-      projectId: args.projectId,
-      branchName: args.branchName,
-      baseBranch: args.baseBranch,
-      isFirstTaskOnBranch: args.isFirstTaskOnBranch,
-      model: args.model,
-      userId: ctx.userId,
-    });
-
-    return null;
-  },
-});

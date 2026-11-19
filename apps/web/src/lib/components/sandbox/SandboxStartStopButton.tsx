@@ -6,6 +6,7 @@ import { IconPlayerPlay, IconPlayerStop } from "@tabler/icons-react";
 import { api, type Id } from "@eva/backend";
 import { useQuery } from "convex/react";
 import { UsageLimitsIndicator } from "@/lib/components/usage-limits";
+import { CHAT_HEADER_ACTIONS_CLASS } from "@/lib/components/ChatPageWrapper";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   SleepControlTooltip,
@@ -67,7 +68,10 @@ export function SandboxStartStopButton({
     <SleepControlTooltip blocked={blockedMidTurn} label={label}>
       <Button
         size={size === "sm" ? "icon-sm" : "icon"}
-        variant={isActive ? "destructive" : "secondary"}
+        // Secondary in both states, the action carried by the icon colour
+        // (red stop, green play): on a chat header track buttons are flat,
+        // and a destructive fill would leave a white icon on the trough.
+        variant="secondary"
         onClick={() => {
           if (blockedMidTurn) return;
           onToggle(isActive ? "stop" : "start");
@@ -75,9 +79,8 @@ export function SandboxStartStopButton({
         disabled={isToggling}
         aria-disabled={blockedMidTurn || undefined}
         className={cn(
-          isActive ? undefined : "text-success",
-          blockedMidTurn &&
-            "cursor-not-allowed opacity-45 hover:bg-destructive",
+          isActive ? "text-destructive" : "text-success",
+          blockedMidTurn && "cursor-not-allowed opacity-45",
         )}
         aria-label={label}
       >
@@ -115,13 +118,15 @@ export function SandboxChatHeaderActions({
   usageAccountLabel: string;
 }) {
   return (
-    <div className="flex shrink-0 items-center justify-end gap-1 px-2 py-1">
-      <UsageLimitsIndicator
-        repoId={repoId}
-        model={model}
-        providerAccountId={providerAccountId}
-        accountLabel={usageAccountLabel}
-      />
+    <div className="flex shrink-0 justify-end px-2 py-1">
+      <div className={CHAT_HEADER_ACTIONS_CLASS}>
+        <UsageLimitsIndicator
+          repoId={repoId}
+          model={model}
+          providerAccountId={providerAccountId}
+          accountLabel={usageAccountLabel}
+        />
+      </div>
     </div>
   );
 }

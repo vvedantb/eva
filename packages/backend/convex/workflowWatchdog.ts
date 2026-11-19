@@ -3,7 +3,10 @@ import { type MutationCtx, internalMutation } from "./_generated/server";
 import { type WorkflowId } from "@convex-dev/workflow";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
-import { cancelTrackedWorkflow } from "./workflowManager";
+import {
+  cancelTrackedWorkflow,
+  isTrackedWorkflowRunning,
+} from "./workflowManager";
 import { RUN_TIMEOUT_MS } from "./_taskWorkflow/staleness";
 import { scheduleArenaCheckCompletion } from "./_arena/browserRun";
 import {
@@ -12,13 +15,20 @@ import {
 } from "./_projects/helpers";
 import { recomputeProjectPhase } from "./functions";
 import {
-  PROJECT_CHAT_STREAM_PREFIX,
-  TASK_CHAT_STREAM_PREFIX,
-  projectChatAdapter,
+  finishProjectBuild,
+  markProjectBuildStarted,
+} from "./_projects/buildState";
+import {
+  finishProjectInterview,
+  interviewTurnSessionId,
+  markProjectInterviewStarted,
+} from "./_projects/interviewState";
+import { closeOpenTurn } from "./_chat/turnStore";
+import type { TerminalTurnState } from "./_chat/turnLease";
+import { findOwnedSession } from "./_sessions/owner";
+import { abandonTaskRunSandbox } from "./_sessions/sandbox";
+import {
   sessionChatAdapter,
-  taskChatAdapter,
-  trackAgentTaskChatWorkflow,
-  trackProjectChatWorkflow,
   trackSessionChatWorkflow,
   trackSessionWorkflow,
   type ChatAlert,
@@ -31,20 +41,10 @@ import { buildStaleDocPatch } from "./_prRecapWorkflow/staleDoc";
 import { sessionSummaryStreamingEntityId } from "./_chat/agentStreamIds";
 import { ensureMainChat } from "./_sessionChats/helpers";
 
-// Re-exported so existing importers (agentTaskChatWorkflow.ts,
-// projectChatWorkflow.ts, _queues/helpers.ts, and others — see
-// chatSurfaceUnificationContract.test.ts) keep resolving these names from
-// "./workflowWatchdog" unchanged; the implementations now live in
+// Re-exported so importers keep resolving these names from
+// "./workflowWatchdog"; the implementations live in
 // _chat/surfaceAdapters.ts and _taskWorkflow/staleness.ts.
-export {
-  PROJECT_CHAT_STREAM_PREFIX,
-  TASK_CHAT_STREAM_PREFIX,
-  RUN_TIMEOUT_MS,
-  trackAgentTaskChatWorkflow,
-  trackProjectChatWorkflow,
-  trackSessionChatWorkflow,
-  trackSessionWorkflow,
-};
+export { RUN_TIMEOUT_MS, trackSessionChatWorkflow, trackSessionWorkflow };
 
 /** Records a workflow as the active workflow for a doc and schedules a stale handler. */
 export async function trackDocWorkflow(
@@ -62,15 +62,18 @@ export async function trackDocWorkflow(
   );
 }
 
-/** Records a workflow as the active workflow for a project and schedules a stale handler. */
-export async function trackProjectWorkflow(
+/**
+ * Records an interview or spec workflow as the project's interview
+ * (`markProjectInterviewStarted`) and schedules a stale handler.
+ */
+export async function trackProjectInterviewWorkflow(
   ctx: MutationCtx,
   projectId: Id<"projects">,
   workflowId: WorkflowId,
   timeoutMs: number = RUN_TIMEOUT_MS,
 ): Promise<void> {
   const id = String(workflowId);
-  await ctx.db.patch(projectId, { activeWorkflowId: id });
+  await markProjectInterviewStarted(ctx, projectId, id);
   await ctx.scheduler.runAfter(
     timeoutMs,
     internal.workflowWatchdog.handleStaleProject,
@@ -110,10 +113,10 @@ export async function trackProjectBuildWorkflow(
   timeoutMs: number = RUN_TIMEOUT_MS,
 ): Promise<void> {
   const id = String(workflowId);
-  await ctx.db.patch(projectId, {
-    activeBuildWorkflowId: id,
-    ...(options.clearLastBuildError ? { lastBuildError: undefined } : {}),
-  });
+  await markProjectBuildStarted(ctx, projectId, id);
+  if (options.clearLastBuildError) {
+    await ctx.db.patch(projectId, { lastBuildError: undefined });
+  }
   await recomputeProjectPhase(ctx, projectId);
   await ctx.scheduler.runAfter(
     timeoutMs,
@@ -142,8 +145,8 @@ export const handleStaleSession = internalMutation({
 
 /**
  * Tears down a session-level workflow (the summary — chat turns live on their
- * chat) the 2-hour backstop or the lease reconciler gave up on. No-op once
- * the session tracks another workflow. The alert lands in the Main chat.
+ * chat) the `TURN_BACKSTOP_MS` backstop or the lease reconciler gave up on.
+ * No-op once that workflow has ended. The alert lands in the Main chat.
  */
 export async function tearDownStaleSessionWorkflow(
   ctx: MutationCtx,
@@ -152,7 +155,7 @@ export async function tearDownStaleSessionWorkflow(
   alert: ChatAlert,
 ): Promise<void> {
   const session = await ctx.db.get(sessionId);
-  if (!session || session.activeWorkflowId !== workflowId) return;
+  if (!session || !(await isTrackedWorkflowRunning(ctx, workflowId))) return;
   await cancelStaleWorkflow(ctx, workflowId, [
     sessionSummaryStreamingEntityId(sessionId),
   ]);
@@ -165,10 +168,7 @@ export async function tearDownStaleSessionWorkflow(
     isSystemAlert: true,
     ...(alert.detail !== undefined ? { errorDetail: alert.detail } : {}),
   });
-  await ctx.db.patch(sessionId, {
-    activeWorkflowId: undefined,
-    updatedAt: Date.now(),
-  });
+  await ctx.db.patch(sessionId, { updatedAt: Date.now() });
 }
 
 /** Cancels a stale session chat workflow and starts the next queued message. */
@@ -182,7 +182,8 @@ export const handleStaleSessionChat = internalMutation({
     const context = await sessionChatAdapter.getEntity(ctx, args.chatId);
     if (
       !context ||
-      sessionChatAdapter.activeWorkflowId(context) !== args.workflowId
+      (await sessionChatAdapter.activeWorkflowId(context, ctx)) !==
+        args.workflowId
     ) {
       return null;
     }
@@ -276,92 +277,54 @@ export const handleStaleProject = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await tearDownStaleProjectWorkflow(ctx, args.projectId, args.workflowId);
+    await stopProjectInterview(ctx, args.projectId, args.workflowId, {
+      state: "error",
+      error: "Project interview timed out",
+    });
     return null;
   },
 });
 
-/** Cancels a stale project interview or spec workflow and marks the last message failed. */
-export async function tearDownStaleProjectWorkflow(
+/**
+ * Stops a project's interview or spec workflow (stale, stalled, or its
+ * project closed). With a `workflowId`, a newer interview is left alone.
+ * The one teardown for every stop: the state goes idle, the workflow is
+ * cancelled, its agent turn closes with `turn`, the session start it claimed
+ * fails or the VM it prepared stops (`abandonTaskRunSandbox`; a VM the
+ * session already had stays), and an empty assistant bubble reads failed.
+ */
+export async function stopProjectInterview(
   ctx: MutationCtx,
   projectId: Id<"projects">,
-  workflowId: string,
+  workflowId: string | undefined,
+  turn: { state: TerminalTurnState; error: string },
 ): Promise<void> {
-  const project = await ctx.db.get(projectId);
-  if (!project || project.activeWorkflowId !== workflowId) return;
+  const finished = await finishProjectInterview(ctx, projectId, workflowId);
+  const previous = finished.previous;
+  if (!finished.ok || previous === undefined) return;
 
-  await cancelStaleWorkflow(ctx, workflowId, [String(projectId)]);
-
-  const conversation = await getProjectConversation(ctx.db, projectId);
-  const messages = [...conversation];
-  const last = messages[messages.length - 1];
-  if (last && last.role === "assistant" && !last.content) {
-    last.content = JSON.stringify({ error: true });
+  await cancelStaleWorkflow(ctx, previous.workflowId, [String(projectId)]);
+  const turnSessionId = await interviewTurnSessionId(ctx.db, projectId);
+  if (turnSessionId !== null) {
+    await closeOpenTurn(ctx, turnSessionId, turn.state, {
+      lane: "interview",
+      error: turn.error,
+    });
+  }
+  const session = await findOwnedSession(ctx.db, { kind: "project", projectId });
+  if (session && previous.state !== "started") {
+    await abandonTaskRunSandbox(ctx, session._id, previous);
   }
 
-  await setProjectConversation(ctx.db, projectId, messages);
-  await ctx.db.patch(projectId, {
-    activeWorkflowId: undefined,
-    lastSandboxActivity: Date.now(),
-  });
+  const conversation = await getProjectConversation(ctx.db, projectId);
+  const last = conversation.at(-1);
+  if (last && last.role === "assistant" && !last.content) {
+    await setProjectConversation(ctx.db, projectId, [
+      ...conversation.slice(0, -1),
+      { ...last, content: JSON.stringify({ error: true }) },
+    ]);
+  }
 }
-
-/** Cancels a stale project chat workflow via the 2-hour workflow-timeout backstop. */
-export const handleStaleProjectChat = internalMutation({
-  args: {
-    projectId: v.id("projects"),
-    workflowId: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const project = await projectChatAdapter.getEntity(ctx, args.projectId);
-    if (
-      !project ||
-      projectChatAdapter.activeWorkflowId(project) !== args.workflowId
-    )
-      return null;
-
-    await finalizeStaleChatTurn(
-      ctx,
-      projectChatAdapter,
-      args.projectId,
-      project,
-      args.workflowId,
-      projectChatAdapter.alerts.timeout,
-    );
-
-    return null;
-  },
-});
-
-
-
-/** Cancels a stale task chat workflow via the 2-hour workflow-timeout backstop. */
-export const handleStaleAgentTaskChat = internalMutation({
-  args: {
-    taskId: v.id("agentTasks"),
-    workflowId: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const task = await taskChatAdapter.getEntity(ctx, args.taskId);
-    if (!task || taskChatAdapter.activeWorkflowId(task) !== args.workflowId)
-      return null;
-
-    await finalizeStaleChatTurn(
-      ctx,
-      taskChatAdapter,
-      args.taskId,
-      task,
-      args.workflowId,
-      taskChatAdapter.alerts.timeout,
-    );
-
-    return null;
-  },
-});
-
-
 
 /** Cancels a stale build workflow and clears the active build reference. */
 export const handleStaleBuild = internalMutation({
@@ -371,15 +334,14 @@ export const handleStaleBuild = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project || project.activeBuildWorkflowId !== args.workflowId)
-      return null;
+    const finished = await finishProjectBuild(
+      ctx,
+      args.projectId,
+      args.workflowId,
+    );
+    if (!finished.ok) return null;
 
     await cancelTrackedWorkflow(ctx, args.workflowId);
-
-    await ctx.db.patch(args.projectId, {
-      activeBuildWorkflowId: undefined,
-    });
     await recomputeProjectPhase(ctx, args.projectId);
 
     return null;

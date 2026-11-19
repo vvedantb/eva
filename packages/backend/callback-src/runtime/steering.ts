@@ -1,6 +1,7 @@
 import { unwrapConvexMutationPayload } from "../http/convexClient.js";
 import { pushSteerStep } from "../parse/canonical.js";
 import type { JsonValue } from "../types.js";
+import { isJsonObject } from "../utils.js";
 
 /**
  * Daemon half of steering (server half: `convex/_chat/steer.ts`). A claim
@@ -20,7 +21,7 @@ export function readSteers(result: JsonValue): SteerHandoff[] {
   if (!Array.isArray(field)) return [];
   const steers: SteerHandoff[] = [];
   for (const item of field) {
-    if (item === null || typeof item !== "object" || Array.isArray(item)) {
+    if (!isJsonObject(item)) {
       continue;
     }
     const { id, text } = item;

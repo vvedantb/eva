@@ -12,7 +12,13 @@ import {
   MarqueeOnHover,
   UnreadDot,
 } from "@vvedantb/ui";
-import { IconGitFork, IconGitPullRequest } from "@tabler/icons-react";
+import {
+  IconGitFork,
+  IconGitPullRequest,
+  IconPencil,
+} from "@tabler/icons-react";
+import { prStateLabel, type PrState } from "@eva/shared";
+import { prStateIconClass } from "@/lib/components/prStateIconClass";
 import {
   SANDBOX_STATUS_STYLES,
   sandboxDisplayStatus,
@@ -38,38 +44,6 @@ import {
 /** Identity of a session's actual primary repo, for a row linked in from it. */
 type SessionLinkedFrom = RepoPathParts;
 
-function prStateLabel(
-  state: "draft" | "open" | "merged" | "closed" | undefined,
-): string {
-  switch (state) {
-    case "open":
-      return "Open";
-    case "merged":
-      return "Merged";
-    case "closed":
-      return "Closed";
-    case "draft":
-      return "Draft";
-    default:
-      return "PR";
-  }
-}
-
-function prStateIconColor(
-  state: "draft" | "open" | "merged" | "closed" | undefined,
-): string {
-  switch (state) {
-    case "open":
-      return "text-success";
-    case "merged":
-      return "text-status-code-review";
-    case "closed":
-      return "text-destructive";
-    case "draft":
-    default:
-      return "text-muted-foreground";
-  }
-}
 
 interface SidebarSessionItemProps {
   href: string;
@@ -89,10 +63,12 @@ interface SidebarSessionItemProps {
   isAwaitingAnswer?: boolean;
   /** A finished reply the user has not seen; the trailing dot. A turn in flight hides it. */
   hasUnread?: boolean;
+  /** The user has an unsent message in this session; a pencil in the unread slot. */
+  hasDraft?: boolean;
   isSelected: boolean;
   onNavigate?: () => void;
   prUrl?: string;
-  prState?: "draft" | "open" | "merged" | "closed";
+  prState?: PrState;
   /** Branch chosen at session creation, shown in the hover card. */
   baseBranch?: string;
   /** Multi-repo session: how many repos are cloned alongside the primary. */
@@ -152,14 +128,14 @@ function SessionPrIcon({
   prState,
 }: {
   prUrl?: string;
-  prState?: "draft" | "open" | "merged" | "closed";
+  prState?: PrState;
 }) {
   const simpleView = useSimpleView();
   if (simpleView || !prUrl) return null;
   return (
     <IconGitPullRequest
       size={12}
-      className={cn("shrink-0", prStateIconColor(prState))}
+      className={cn("shrink-0", prStateIconClass(prState))}
       title={`PR: ${prStateLabel(prState)}`}
     />
   );
@@ -232,6 +208,7 @@ export function SidebarSessionItem({
   isExecuting = false,
   isAwaitingAnswer = false,
   hasUnread = false,
+  hasDraft = false,
   isSelected,
   onNavigate,
   prUrl,
@@ -267,7 +244,19 @@ export function SidebarSessionItem({
     isExecuting ||
     showsSandboxStatusDot(displayStatus, simpleView);
   // Executing wins: the leading "Working" grid says more than the dot would.
-  const unreadDot = <UnreadDot show={hasUnread && !isExecuting} />;
+  // One trailing mark: unread wins over the unsent-message pencil.
+  const showUnread = hasUnread && !isExecuting;
+  const trailingMark =
+    hasDraft && !showUnread ? (
+      <IconPencil
+        size={12}
+        className="shrink-0 text-muted-foreground"
+        title="Unsent message"
+        aria-label="Unsent message"
+      />
+    ) : (
+      <UnreadDot show={showUnread} />
+    );
   const statusLeading = showLeading ? (
     <SessionStatusLeading
       label={statusLabel}
@@ -301,7 +290,7 @@ export function SidebarSessionItem({
             <TitleRegeneratingHint show={isRegeneratingTitle} />
             <ForkedGlyph show={isFork} />
             <LinkedRepoCountBadge count={linkedRepoCount} />
-            {unreadDot}
+            {trailingMark}
           </div>
           <div
             className={cn(
@@ -339,7 +328,7 @@ export function SidebarSessionItem({
             at={activityAt}
             className="shrink-0 text-2xs text-muted-foreground"
           />
-          {unreadDot}
+          {trailingMark}
         </div>
       )}
     </DynamicLink>

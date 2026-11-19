@@ -19,8 +19,10 @@ const ENTRY_LIMIT = 50;
 /**
  * The changelog automation, found by title across every repo — there is exactly
  * one, and which repo owns it is an implementation detail of how it was set up.
+ * `automations.create`/`update` reserve the title; on an older duplicate the
+ * first row (oldest, by creation order) wins.
  */
-async function findChangelogAutomation(
+export async function findChangelogAutomation(
   db: GenericDatabaseReader<DataModel>,
 ): Promise<Doc<"automations"> | null> {
   const allAutomations = await db.query("automations").collect();

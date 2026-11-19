@@ -1,15 +1,25 @@
 import { v } from "convex/values";
-import { startTaskRunWorkflow } from "./startRun";
+import { startTaskRun, taskWorkSessionBusy } from "./startRun";
 import { internalMutation } from "../_generated/server";
-import { internal } from "../_generated/api";
-import { hasActiveRun, isFirstTaskOnBranch } from "../functions";
-import { isDaytonaNetworkIssue, buildQuickTaskRetryDelayMs } from "./recovery";
-import { buildProjectBranchName } from "../_projects/helpers";
+import {
+  getActiveTaskRun,
+  hasActiveRun,
+  isFirstTaskOnBranch,
+} from "../functions";
+import {
+  buildQuickTaskRetryDelayMs,
+  isDaytonaNetworkIssue,
+  isRetryableWatchdogExit,
+  TASK_CHAT_BUSY_ERROR,
+  TASK_CHAT_BUSY_RETRY_MS,
+} from "./recovery";
+import { resolveProjectBranchName } from "../_git/branchNames";
 import { resolveTaskWorkflowBaseBranchForTask } from "./resolveBaseBranch";
-import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
-import { normalizeAIModel } from "../validators";
-import { setTaskLastRunStartedAt } from "../_agentTasks/runSummary";
-import { startNextQueuedTaskChatMessage } from "../_queues/helpers";
+import {
+  finishTaskRun,
+  fireTaskRunSchedule,
+  scheduleTaskRun,
+} from "../_agentTasks/runState";
 
 /** Schedules an automatic retry for a failed quick task if the failure looks transient. */
 export const maybeScheduleQuickTaskRetry = internalMutation({
@@ -30,11 +40,14 @@ export const maybeScheduleQuickTaskRetry = internalMutation({
     if (run.exitReason === "auto_retry_scheduled") return null;
 
     const errorMessage = args.error ?? run.error ?? "";
+    // A run held back by a busy task chat (its session's sandbox was mid
+    // start/stop at claim time) waits, like a scheduled run, then retries.
+    const chatBusy = errorMessage === TASK_CHAT_BUSY_ERROR;
     const retryableFailure =
-      errorMessage.length > 0 && isDaytonaNetworkIssue(errorMessage);
+      chatBusy ||
+      isRetryableWatchdogExit(run.exitReason) ||
+      (errorMessage.length > 0 && isDaytonaNetworkIssue(errorMessage));
     if (!retryableFailure) return null;
-
-    if (task.scheduledFunctionId) return null;
 
     const runs = await ctx.db
       .query("agentRuns")
@@ -60,19 +73,16 @@ export const maybeScheduleQuickTaskRetry = internalMutation({
     );
     if (hasOtherActiveRun) return null;
 
-    const delayMs = args.delayMs ?? buildQuickTaskRetryDelayMs();
-    const scheduledAt = Date.now() + delayMs;
-    const functionId = await ctx.scheduler.runAfter(
-      delayMs,
-      internal.taskWorkflow.executeScheduledTask,
-      { taskId: args.taskId, scheduledAt },
+    const delayMs = chatBusy
+      ? TASK_CHAT_BUSY_RETRY_MS
+      : (args.delayMs ?? buildQuickTaskRetryDelayMs());
+    const retry = await scheduleTaskRun(
+      ctx,
+      args.taskId,
+      "scheduleRetry",
+      Date.now() + delayMs,
     );
-
-    await ctx.db.patch(args.taskId, {
-      scheduledAt,
-      scheduledFunctionId: functionId,
-      updatedAt: Date.now(),
-    });
+    if (!retry.ok) return null;
 
     const existingError = run.error ?? "Run failed";
     await ctx.db.patch(args.runId, {
@@ -94,40 +104,28 @@ export const executeScheduledTask = internalMutation({
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
     if (!task) return null;
-    const now = Date.now();
 
-    const clearSchedule: {
-      scheduledAt: undefined;
-      scheduledFunctionId: undefined;
-    } = {
-      scheduledAt: undefined,
-      scheduledFunctionId: undefined,
-    };
+    // Consumes the schedule. A stale job (replaced, cancelled, not due) stops here.
+    const fired = await fireTaskRunSchedule(ctx, args.taskId, args.scheduledAt);
+    if (!fired.ok) return null;
 
-    if (task.scheduledAt === undefined) return null;
-    if (task.scheduledAt > now) return null;
-    if (
-      args.scheduledAt !== undefined &&
-      task.scheduledAt !== args.scheduledAt
-    ) {
-      return null;
-    }
-
-    if (task.status !== "todo" || !task.repoId || !task.createdBy) {
-      await ctx.db.patch(args.taskId, clearSchedule);
-      return null;
-    }
-
-    if (await hasActiveRun(ctx.db, args.taskId)) {
-      await ctx.db.patch(args.taskId, clearSchedule);
+    if (task.status !== "todo" || !task.repoId || !task.createdBy) return null;
+    if (await hasActiveRun(ctx.db, args.taskId)) return null;
+    // The task's (or its project's) chat is mid-reply on the shared sandbox:
+    // try again shortly instead of failing the schedule (`startTaskRun`
+    // refuses a busy chat).
+    if (await taskWorkSessionBusy(ctx.db, task)) {
+      await scheduleTaskRun(
+        ctx,
+        args.taskId,
+        "scheduleRetry",
+        Date.now() + TASK_CHAT_BUSY_RETRY_MS,
+      );
       return null;
     }
 
     const repo = await ctx.db.get(task.repoId);
-    if (!repo) {
-      await ctx.db.patch(args.taskId, clearSchedule);
-      return null;
-    }
+    if (!repo) return null;
 
     const firstOnBranch = await isFirstTaskOnBranch(
       ctx.db,
@@ -135,38 +133,12 @@ export const executeScheduledTask = internalMutation({
       task.projectId,
     );
 
-    const runId = await ctx.db.insert("agentRuns", {
-      taskId: args.taskId,
-      status: "queued",
-      logs: [],
-      startedAt: now,
-      // Carry through any parked change-request comment so a re-run started via
-      // the scheduler is still labelled "made changes" on the timeline.
-      triggeringCommentId: task.pendingChangeRequestCommentId,
-      credentialSourceLabel: await resolveCredentialSourceLabel(
-        ctx.db,
-        task.providerAccountId,
-        task.createdBy,
-      ),
-      model: normalizeAIModel(task.model),
-    });
-    await setTaskLastRunStartedAt(ctx, args.taskId, task.repoId, now);
-
-    await ctx.db.patch(args.taskId, {
-      ...clearSchedule,
-      status: "in_progress",
-      updatedAt: now,
-      pendingChangeRequestCommentId: undefined,
-    });
-
-    let branchName: string | undefined;
-    if (task.projectId) {
-      const project = await ctx.db.get(task.projectId);
-      branchName = project
-        ? (project.branchName ??
-          buildProjectBranchName(task.projectId, project.branchVersion))
-        : buildProjectBranchName(task.projectId);
-    }
+    const branchName = task.projectId
+      ? resolveProjectBranchName(
+          task.projectId,
+          await ctx.db.get(task.projectId),
+        )
+      : undefined;
 
     const baseBranch = await resolveTaskWorkflowBaseBranchForTask(
       ctx.db,
@@ -174,51 +146,40 @@ export const executeScheduledTask = internalMutation({
       repo,
     );
 
-    await startTaskRunWorkflow(ctx, {
-      runId,
-      taskId: args.taskId,
-      repoId: task.repoId,
-      installationId: repo.installationId,
-      projectId: task.projectId,
-      branchName,
+    const runId = await startTaskRun(ctx, {
+      task,
+      repo,
+      userId: task.createdBy,
       baseBranch,
       isFirstTaskOnBranch: firstOnBranch,
-      model: task.model,
-      providerAccountId: task.providerAccountId,
-      credentialOwnerUserId: task.createdBy,
-      userId: task.createdBy,
+      branchName,
+      projectId: task.projectId,
+      // Carry through any parked change-request comment so a re-run started via
+      // the scheduler is still labelled "made changes" on the timeline.
+      triggeringCommentId: task.pendingChangeRequestCommentId,
+      clearPendingChangeRequest: true,
+      rollbackStatus: "todo",
     });
 
     return runId;
   },
 });
 
-/** Clears the active workflow ID from a task if no runs are still queued or running. */
+/** Ends the task's run state if no runs are still queued or running. */
 export const clearActiveWorkflow = internalMutation({
-  args: { taskId: v.id("agentTasks") },
+  // `runId` is optional: workflows started before it existed omit it.
+  args: { taskId: v.id("agentTasks"), runId: v.optional(v.id("agentRuns")) },
   returns: v.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
     if (!task) return null;
 
-    const activeRun = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-      .filter((q) =>
-        q.or(
-          q.eq(q.field("status"), "queued"),
-          q.eq(q.field("status"), "running"),
-        ),
-      )
-      .first();
+    const activeRun = await getActiveTaskRun(ctx.db, args.taskId);
 
     if (!activeRun) {
-      await ctx.db.patch(args.taskId, { activeWorkflowId: undefined });
-      // The run is the only thing the task chat queue waits on while a task is
-      // running, and nothing else drains it at this point — a follow-up typed
-      // during the run would sit there forever. The drain re-checks the task
-      // itself, so a chat turn already in flight keeps the queue where it is.
-      await startNextQueuedTaskChatMessage(ctx, args.taskId);
+      // The session chat queue behind the run drains when the run's turn
+      // closes (`closeTurn`).
+      await finishTaskRun(ctx, args.taskId, args.runId);
     }
 
     return null;

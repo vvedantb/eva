@@ -9,7 +9,7 @@ import { IconTrash } from "@tabler/icons-react";
 import {
   RESERVED_APP_TAB_SLUGS,
   slugifyAppTabName,
-} from "@/lib/utils/appTabSlug";
+} from "@eva/shared/appTabSlug";
 import { TablerIconByName } from "@/lib/components/TablerIconByName";
 import {
   catchMutationError,

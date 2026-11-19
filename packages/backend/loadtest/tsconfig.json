@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "types": ["node"],
+    "tsBuildInfoFile": "../node_modules/.cache/tsgo/loadtest.tsbuildinfo"
+  },
+  "include": ["./**/*.ts"]
+}

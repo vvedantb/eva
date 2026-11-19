@@ -21,6 +21,7 @@ import {
 } from "@vvedantb/ui";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
+import { newProjectSubmitBlocker } from "@eva/shared";
 import type { Id } from "@eva/backend";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useBaseBranchState } from "@/lib/hooks/useBaseBranchState";
@@ -45,22 +46,6 @@ const MarkdownEditor = lazy(() =>
     default: m.MarkdownEditor,
   })),
 );
-
-function getSubmitDisabledReason(
-  isLoading: boolean,
-  title: string,
-  description: string,
-): string | undefined {
-  if (isLoading) return "Creating project…";
-  const missingTitle = !title.trim();
-  const missingDescription = !description.trim();
-  if (missingTitle && missingDescription) {
-    return "Enter a project title and description";
-  }
-  if (missingTitle) return "Enter a project title";
-  if (missingDescription) return "Enter a description";
-  return undefined;
-}
 
 interface NewProjectModalProps {
   isOpen: boolean;
@@ -111,7 +96,7 @@ export function NewProjectModal({
   };
 
   const canSubmit = !isLoading && !!title.trim() && !!description.trim();
-  const submitDisabledReason = getSubmitDisabledReason(
+  const submitDisabledReason = newProjectSubmitBlocker(
     isLoading,
     title,
     description,

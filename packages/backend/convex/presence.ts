@@ -1,5 +1,6 @@
 import { components } from "./_generated/api";
 import { v } from "convex/values";
+import { DEFAULT_ACCENT_COLOR } from "./validators";
 import { mutation, type QueryCtx } from "./_generated/server";
 import { Presence } from "@convex-dev/presence";
 import { authQuery, authMutation } from "./functions";
@@ -27,6 +28,21 @@ export async function firstPresentUserInRoom(
 
 /** Must match ClientProvider's usePresence room — the only heartbeat that owns lastSeenAt. */
 const LAST_SEEN_ROOM_ID = "platform";
+
+/**
+ * True for an app-internal path: starts with one `/`, no backslash, no control
+ * characters. FollowOverlay navigates a follower's client to this value.
+ * TODO: replace with `@eva/shared/safeUrl.isInternalAppHref` once PR #1153 lands.
+ */
+function isAppInternalPath(path: string): boolean {
+  if (!path.startsWith("/") || path.startsWith("//")) return false;
+  if (path.includes("\\")) return false;
+  for (let i = 0; i < path.length; i++) {
+    const code = path.charCodeAt(i);
+    if (code < 0x20 || code === 0x7f) return false;
+  }
+  return true;
+}
 
 /** Sends a presence heartbeat for the current user in a room, updating lastSeenAt periodically. */
 export const heartbeat = authMutation({
@@ -67,6 +83,7 @@ export const updatePath = authMutation({
   args: { path: v.string() },
   returns: v.null(),
   handler: async (ctx, { path }) => {
+    if (!isAppInternalPath(path)) throw new Error("Invalid path");
     const row = await getUserPresenceRow(ctx.db, ctx.userId);
     if (row?.lastSeenPath !== path) {
       await upsertUserPresence(ctx.db, ctx.userId, { lastSeenPath: path });
@@ -109,7 +126,7 @@ export const updateCursor = authMutation({
       x,
       y,
       firstName: user.firstName ?? user.fullName ?? "User",
-      accentColor: user.customTheme?.accentColor ?? "zinc",
+      accentColor: user.customTheme?.accentColor ?? DEFAULT_ACCENT_COLOR,
       updatedAt: Date.now(),
     });
   },

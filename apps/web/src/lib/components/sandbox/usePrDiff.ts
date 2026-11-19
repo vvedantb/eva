@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAction } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { prNumberFromGithubUrl } from "@/lib/githubPr";
+import { prNumberFromGithubUrl } from "@eva/shared";
 import {
   prDiffQuery,
   toPrDiffData,

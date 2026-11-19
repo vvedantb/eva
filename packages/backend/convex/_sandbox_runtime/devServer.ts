@@ -10,7 +10,9 @@ import {
 } from "./helpers";
 import { writeSandboxFile } from "./sandboxFiles";
 import { ensureSwapFile } from "./swap";
-import { EVA_ENV_FILE } from "../_sandbox/vercelEnvFile";
+import { EVA_ENV_SOURCE_CMD } from "../_sandbox/vercelEnvFile";
+import { buildFreePortLines } from "./httpReadyProbe";
+import { errorMessage } from "@vvedantb/server";
 
 const SUPABASE_DUMP_PATH =
   "/home/eva/.eva-snapshot-state/supabase-db-web.pg_dump.sql.gz";
@@ -230,7 +232,7 @@ export async function restoreSeededRuntimeState(
     await restoreSeededSupabaseDump(sandbox);
     return undefined;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorMessage(error);
     console.warn(
       `[sandbox] restoreSeededRuntimeState: supabase dump restore failed on ${sandbox.id}; continuing so the dev server still launches: ${message}`,
     );
@@ -328,7 +330,7 @@ export async function launchDevServerInBackground(
   const script = [
     "#!/usr/bin/env bash",
     "set -euo pipefail",
-    `[ -f ${EVA_ENV_FILE} ] && . ${EVA_ENV_FILE}`,
+    EVA_ENV_SOURCE_CMD,
     `WORKSPACE_DIR=${workspaceDirShell()}`,
     'cd "$WORKSPACE_DIR"',
     'export INIT_CWD="$WORKSPACE_DIR"',
@@ -339,9 +341,7 @@ export async function launchDevServerInBackground(
     "    exit 0",
     "  fi",
     "fi",
-    `if command -v fuser >/dev/null 2>&1; then fuser -k ${port}/tcp >/dev/null 2>&1 || true`,
-    `elif command -v lsof >/dev/null 2>&1; then for p in $(lsof -ti :${port} 2>/dev/null || true); do kill "$p" 2>/dev/null || true; done`,
-    "fi",
+    ...buildFreePortLines(port),
     'echo $$ > "$LOCK"',
     "trap 'rm -f \"$LOCK\"' EXIT",
     // Cap the dev server's V8 heap: one leaky Next dev compile at ~5.5GB RSS

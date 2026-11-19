@@ -1,5 +1,5 @@
 import { cn } from "@eva/ui";
-import { formatEntityNumLabel } from "@/lib/numId";
+import { formatEntityNumLabel } from "@eva/shared";
 
 export function EntityNumLabel({
   numId,

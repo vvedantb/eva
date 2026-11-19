@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { isRetryableGitNetworkError } from "../convex/_sandbox_runtime/git";
+import {
+  isRetryableGitNetworkError,
+  isRetryableSessionStepError,
+  isTransientTransportError,
+} from "../convex/_sandbox_runtime/git";
 
 /**
  * Session 300 (7 Oct 2026): GitHub answered a push with a 500 and the whole
@@ -34,5 +38,19 @@ describe("retryable git network errors", () => {
     ["missing remote ref", "fatal: couldn't find remote ref eva/x"],
   ])("does not retry %s", (_label, message) => {
     expect(isRetryableGitNetworkError(message)).toBe(false);
+  });
+
+  test("session checkout and install also retry a bare network failure", () => {
+    const message =
+      "fatal: unable to access 'https://github.com/evalucom/eva.git/': Failed to connect to github.com port 443: Network is unreachable";
+    expect(isRetryableSessionStepError(message)).toBe(true);
+    expect(isRetryableGitNetworkError(message)).toBe(false);
+  });
+
+  test("sandbox setup never recreates the VM for a permanent auth failure", () => {
+    const message =
+      "fatal: Authentication failed for 'https://github.com/evalucom/eva.git/'";
+    expect(isRetryableGitNetworkError(message)).toBe(true);
+    expect(isTransientTransportError(message)).toBe(false);
   });
 });

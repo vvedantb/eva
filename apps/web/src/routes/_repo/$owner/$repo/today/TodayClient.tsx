@@ -4,6 +4,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api, DAILY_STANDUP_KEY } from "@eva/backend";
 import { cn } from "@eva/ui";
+import { standupEntryHeading, standupEntryTime } from "@eva/shared";
 import {
   CenteredSpinner,
   tokenTransition,
@@ -34,14 +35,6 @@ const standupProseClass =
   "[&_h1]:mt-4 [&_h2]:mt-4 [&_h3]:mt-4 [&_h4]:mt-4 " +
   "[&_h1]:mb-1.5 [&_h2]:mb-1.5 [&_h3]:mb-1.5 [&_h4]:mb-1.5 " +
   "[&_ul]:my-0 [&_li]:my-0.5 [&_p]:my-1.5";
-
-/** "Today" / "Yesterday" for the two freshest entries, dates beyond that. */
-function entryHeading(publishedAt: number): string {
-  const published = dayjs(publishedAt);
-  if (published.isSame(dayjs(), "day")) return "Today";
-  if (published.isSame(dayjs().subtract(1, "day"), "day")) return "Yesterday";
-  return published.format("dddd, MMM D, YYYY");
-}
 
 /**
  * Every published run of this app's "Daily standup" system automation as a
@@ -120,13 +113,13 @@ export function TodayClient() {
               <article className="rounded-surface bg-card">
                 <header className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
                   <h2 className="text-sm font-semibold">
-                    {entryHeading(entry.publishedAt)}
+                    {standupEntryHeading(entry.publishedAt)}
                   </h2>
                   <time
                     dateTime={dayjs(entry.publishedAt).toISOString()}
                     className="shrink-0 text-2xs tabular-nums text-muted-foreground"
                   >
-                    {dayjs(entry.publishedAt).format("MMM D, HH:mm")}
+                    {standupEntryTime(entry.publishedAt)}
                   </time>
                 </header>
                 <div className="px-4 py-3">

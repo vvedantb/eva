@@ -22,10 +22,10 @@ import {
 
 /**
  * Pulling plan-usage readings on demand, rather than waiting for the next turn
- * to report one. The card's refresh button calls this; everything else about
+ * to report one. The card calls this each time it opens; everything else about
  * the feature still arrives from the sandbox.
  *
- * One button, every credential: `refreshAll` fans out over exactly the
+ * One call, every credential: `refreshAll` fans out over exactly the
  * credentials the card lists (its own accounts, teammates' shared ones, and the
  * shared team token) and probes them in parallel. Per-credential, because a
  * reading measures one plan — and one dead credential must not cost the others

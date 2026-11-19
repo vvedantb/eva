@@ -1,10 +1,11 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import { api, type Doc, type Id, type SandboxOwner } from "@eva/backend";
 import { cn } from "@eva/ui";
-import { previewWakePath } from "@eva/shared";
-import { slugifyAppTabName } from "@/lib/utils/appTabSlug";
+import { DESKTOP_PORT, EDITOR_PORT, previewWakePath } from "@eva/shared";
+import { slugifyAppTabName } from "@eva/shared/appTabSlug";
 import { isSandboxVmTab } from "@/lib/search-params";
 import { SandboxPresenceBeacon } from "./SandboxPresenceBeacon";
 import { SandboxAutoWake } from "./SandboxAutoWake";
@@ -22,6 +23,8 @@ import { KeepAlivePane } from "./KeepAlivePane";
 import { sandboxOwnerParentId } from "./PreviewToolCallExecutor";
 import type { SandboxPanesApi } from "./useSandboxPanes";
 import type { SandboxPreviewApi } from "./useSandboxPreview";
+import type { PreviewMiniPlayerSource } from "./previewMiniPlayerStore";
+import type { AnnotationSubmit } from "./annotationSend";
 import {
   isSimpleViewHiddenSandboxTab,
   useSimpleView,
@@ -59,36 +62,81 @@ interface SandboxPaneSlotsProps {
   /** Preview empty state Start button when sandbox is stopped. */
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
-  /** Session-only: preview select-element → chat submit. */
-  onAnnotationSubmit?: (display: string, full: string) => Promise<void>;
-  /** Session-only: the visible preview may float into the mini-player. */
-  miniPlayer?: { sessionId: Id<"sessions">; returnTo: string; title: string };
+  /*
+   * Preview tools every surface must wire (session, quick task, project).
+   * Required on purpose: an optional prop here let one surface silently lose
+   * menu items. Add a new preview tool as a required prop too.
+   */
+  /** Preview select-element → owner chat submit. */
+  onAnnotationSubmit: AnnotationSubmit;
+  /**
+   * The visible preview may float into the mini-player. `undefined` only
+   * while this pane is not on screen (collapsed rail, cached sibling).
+   */
+  miniPlayer: Omit<PreviewMiniPlayerSource, "sandboxId"> | undefined;
   /**
    * Multi-repo sessions: the dev-server port of each checked-out repo, offered
    * beside the Preview port input. Omitted for a single-repo surface.
    */
   previewPortOptions?: readonly PreviewPortOption[];
-  /** Session sticky Preview path from Convex. */
-  stickyPreviewPath?: string;
-  onStickyPreviewPathChange?: (path: string) => void;
   /**
-   * Session sticky console history: seed + debounced persist of last ~500 lines.
-   * Only wired for the Preview Console pane.
+   * The owner's sticky view state (`sandboxPanes.getViewState`); `undefined`
+   * while it loads. Owns each preview pane's path and the console tail.
    */
-  stickyTerminalHistoryTail?: string;
-  onStickyTerminalHistoryTailChange?: (tail: string) => void;
+  viewState: SandboxViewState | undefined;
   /**
-   * Whether this host is the one on screen. Sessions keep up to five shells
+   * Whether this host is the one on screen. Sessions keep up to three shells
    * mounted and every host may collapse its rail; only a visible host may hold the
    * idle-pause presence beacon or auto-wake. Defaults to true.
    */
   presenceEnabled?: boolean;
+  /**
+   * False while this host sits hidden in the session cache. Iframe tabs
+   * (Editor, Browser, custom tabs) unmount then to free their browser
+   * processes; they reload when the session is shown again. Defaults to true.
+   */
+  onScreen?: boolean;
   /**
    * The sandbox is closed and the host would allow a Start: no last-start
    * error, not read-only, no run or build owning it. Combined
    * here with the setting and recent input on a visible tab to auto-wake.
    */
   autoWakeEligible?: boolean;
+}
+
+export type SandboxViewState = FunctionReturnType<
+  typeof api.sandboxPanes.getViewState
+>;
+
+/**
+ * One preview pane's sticky path: the main pane (no `paneId`) reads the
+ * owner's `previewPath`, an extra pane its own entry. `undefined` while the
+ * view state loads, so the iframe waits instead of loading the wrong path.
+ */
+function previewPanePath(
+  viewState: SandboxViewState | undefined,
+  paneId: string | undefined,
+): string | undefined {
+  if (viewState === undefined) return undefined;
+  const path =
+    paneId === undefined
+      ? viewState?.previewPath
+      : viewState?.previewPanePaths?.find((entry) => entry.paneId === paneId)
+          ?.path;
+  return path ?? "/";
+}
+
+/** Optimistic copy of `sandboxPanes.setPreviewPath` for the local cache. */
+function withPreviewPanePath(
+  viewState: NonNullable<SandboxViewState>,
+  paneId: string | undefined,
+  path: string,
+): NonNullable<SandboxViewState> {
+  if (paneId === undefined) return { ...viewState, previewPath: path };
+  const others = (viewState.previewPanePaths ?? []).filter(
+    (entry) => entry.paneId !== paneId,
+  );
+  return { ...viewState, previewPanePaths: [...others, { paneId, path }] };
 }
 
 /**
@@ -116,11 +164,9 @@ export function SandboxPaneSlots({
   onAnnotationSubmit,
   miniPlayer,
   previewPortOptions,
-  stickyPreviewPath,
-  onStickyPreviewPathChange,
-  stickyTerminalHistoryTail,
-  onStickyTerminalHistoryTailChange,
+  viewState,
   presenceEnabled = true,
+  onScreen = true,
   autoWakeEligible,
 }: SandboxPaneSlotsProps) {
   const simpleView = useSimpleView();
@@ -138,6 +184,22 @@ export function SandboxPaneSlots({
   const currentUserId = useQuery(api.auth.me);
   const idlePause = useQuery(api.sandboxIdlePause.getSandboxIdlePauseSettings);
   const engaged = useUserEngaged();
+  const setPreviewPath = useMutation(
+    api.sandboxPanes.setPreviewPath,
+  ).withOptimisticUpdate((localStore, args) => {
+    const current = localStore.getQuery(api.sandboxPanes.getViewState, {
+      owner: args.owner,
+    });
+    if (!current) return;
+    localStore.setQuery(
+      api.sandboxPanes.getViewState,
+      { owner: args.owner },
+      withPreviewPanePath(current, args.paneId, args.path),
+    );
+  });
+  const setTerminalHistoryTail = useMutation(
+    api.sandboxPanes.setTerminalHistoryTail,
+  );
   const beaconActive =
     presenceEnabled &&
     engaged &&
@@ -182,7 +244,7 @@ export function SandboxPaneSlots({
             Preparing preview...
           </div>
         ) : null}
-        {previewIds.map((id) => (
+        {previewIds.map((id, index) => (
           <div
             key={id}
             className={cn(
@@ -211,8 +273,15 @@ export function SandboxPaneSlots({
                 preview.effectivePort,
               ].join(":")}
               toolCallParentId={sandboxOwnerParentId(owner)}
-              stickyPath={stickyPreviewPath}
-              onStickyPathChange={onStickyPreviewPathChange}
+              path={previewPanePath(viewState, index === 0 ? undefined : id)}
+              onPathChange={(path) => {
+                void setPreviewPath({
+                  owner,
+                  path,
+                  // The first pane is the main pane: no paneId.
+                  ...(index === 0 ? {} : { paneId: id }),
+                });
+              }}
               onStartSandbox={onStartSandbox}
               isSandboxStarting={isSandboxStarting}
               onAnnotationSubmit={onAnnotationSubmit}
@@ -276,10 +345,14 @@ export function SandboxPaneSlots({
                       isForeground={resolvedTab === "preview" && visible}
                       runDevCommandOnConnect={runConsoleDevCommandOnConnect}
                       devCommand={devCommand}
-                      stickyHistoryTail={stickyTerminalHistoryTail}
-                      onStickyHistoryTailChange={
-                        onStickyTerminalHistoryTailChange
+                      stickyHistoryTail={
+                        viewState === undefined
+                          ? undefined
+                          : (viewState?.terminalHistoryTail ?? "")
                       }
+                      onStickyHistoryTailChange={(tail) => {
+                        void setTerminalHistoryTail({ owner, tail });
+                      }}
                     />
                   </div>
                 ) : null
@@ -288,20 +361,25 @@ export function SandboxPaneSlots({
           )}
         </SandboxPaneBoundary>
       </div>
-      <KeepAlivePane active={resolvedTab === "editor"} className="h-full">
+      <KeepAlivePane
+        active={resolvedTab === "editor"}
+        discard={!onScreen}
+        className="h-full"
+      >
         <SandboxPaneBoundary label="Editor">
           <EditorPanel
             cacheKey={cacheKey}
             sandboxId={sandboxId}
             isActive={isActive}
             repoId={repoId}
-            externalHref={wakeHrefForPath?.("/", 8080)}
+            externalHref={wakeHrefForPath?.("/", EDITOR_PORT)}
             wake={wake}
           />
         </SandboxPaneBoundary>
       </KeepAlivePane>
       <KeepAlivePane
         active={resolvedTab === "browser" || resolvedTab === "computer"}
+        discard={!onScreen}
         className="h-full"
       >
         <SandboxPaneBoundary
@@ -315,7 +393,7 @@ export function SandboxPaneSlots({
             surface={resolvedTab === "browser" ? "browser" : "desktop"}
             agentBrowsingAt={agentBrowsingAt}
             onReleaseLock={onReleaseBrowserLock}
-            externalHref={wakeHrefForPath?.("/", 6080)}
+            externalHref={wakeHrefForPath?.("/", DESKTOP_PORT)}
             wake={wake}
           />
         </SandboxPaneBoundary>
@@ -338,6 +416,7 @@ export function SandboxPaneSlots({
               <KeepAlivePane
                 key={tab._id}
                 active={resolvedTab === slug}
+                discard={!onScreen}
                 className="h-full"
               >
                 <SandboxPaneBoundary label={tab.name}>

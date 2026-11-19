@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
-import { useReducedMotion } from '../reduced-motion'
+import { useStill } from '../reduced-motion'
 import './Roll.css'
 
 /**
@@ -16,7 +16,7 @@ export function Roll({ delay = 0, children, ...rest }: Parameters<typeof RollNow
    * after the row that caused it has landed, not on the same frame. */
   delay?: number
 }) {
-  const reduced = useReducedMotion()
+  const reduced = useStill()
   const [held, setHeld] = useState(children)
   useEffect(() => {
     if (!delay || reduced) return setHeld(children)
@@ -47,7 +47,7 @@ function RollNow({
   className?: string
   style?: CSSProperties
 }) {
-  const reduced = useReducedMotion()
+  const reduced = useStill()
   const [view, setView] = useState({ text: children, head: 0, tail: 0, old: '', key: 0, numeric: true })
   const mid = useRef<HTMLSpanElement>(null)
   const root = useRef<HTMLSpanElement>(null)

@@ -1,9 +1,14 @@
+import { convexTest } from "convex-test";
 import { describe, expect, it } from "vitest";
+import schema from "../convex/schema";
 import {
   buildHandoffContextBlock,
   detectModelHandoffFromMessages,
+  readHandoffHistory,
   type HandoffMessage,
 } from "../convex/_shared/modelHandoff";
+
+const modules = import.meta.glob("../convex/**/*.ts");
 
 describe("model handoff context", () => {
   it("does not hand off between models from the same provider", () => {
@@ -211,5 +216,50 @@ describe("model handoff context", () => {
         "claude",
       ),
     ).toEqual({ kind: "none" });
+  });
+});
+
+describe("readHandoffHistory", () => {
+  // Prod: a Main chat of 163 rows (~8.8 MB) failed every dequeue with
+  // "Too many bytes read", because one send read the whole tail twice.
+  it("stops at the byte budget on a chat of large rows", async () => {
+    const t = convexTest(schema, modules);
+    const window = await t.run(async (ctx) => {
+      const userId = await ctx.db.insert("users", { clerkId: "clerk|big" });
+      const repoId = await ctx.db.insert("githubRepos", {
+        owner: "vvedantb",
+        name: "eva",
+        installationId: 1,
+        connectedBy: userId,
+      });
+      const sessionId = await ctx.db.insert("sessions", {
+        owner: { kind: "standalone" },
+        repoId,
+        userId,
+        title: "Long chat",
+        status: "active",
+      });
+      const chatId = await ctx.db.insert("sessionChats", {
+        sessionId,
+        repoId,
+        userId,
+        title: "Main",
+        number: 1,
+        isMain: true,
+      });
+      // 8 rows of ~600 KB: ~4.8 MB, more than twice the 2 MB budget.
+      for (let index = 0; index < 8; index += 1) {
+        await ctx.db.insert("messages", {
+          parentId: chatId,
+          role: index % 2 === 0 ? "user" : "assistant",
+          content: `row ${index} ${"x".repeat(600_000)}`,
+          timestamp: index,
+        });
+      }
+      return await readHandoffHistory(ctx, chatId);
+    });
+
+    expect(window.length).toBeLessThan(8);
+    expect(window.at(-1)?.content.startsWith("row 7 ")).toBe(true);
   });
 });

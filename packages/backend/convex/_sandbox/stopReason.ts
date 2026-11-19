@@ -7,13 +7,26 @@ import { sandboxPausedAlertText, SANDBOX_STOPPED_ALERT } from "@eva/shared";
  * an idle pause reads differently from a manual Stop. Absent = manual/other.
  */
 export const stopReasonValidator = v.optional(
-  v.object({
-    kind: v.literal("idle"),
-    idleMinutes: v.number(),
-  }),
+  v.union(
+    v.object({
+      kind: v.literal("idle"),
+      idleMinutes: v.number(),
+    }),
+    /** The quick task, not a person, stopped its session (run end, retire). */
+    v.object({ kind: v.literal("task") }),
+  ),
 );
 
 export type StopReason = Infer<typeof stopReasonValidator>;
+
+/**
+ * Whether the settled stop posts a chat divider. A task run's own stop does
+ * not: the run already reads as one finished turn, and the old task sandbox
+ * stopped silently after every run.
+ */
+export function stopPostsDivider(reason: StopReason): boolean {
+  return reason?.kind !== "task";
+}
 
 /** Chat-divider text for a settled stop. */
 export function stopAlertText(reason: StopReason): string {

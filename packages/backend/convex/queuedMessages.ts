@@ -1,4 +1,5 @@
 import { v, type Infer } from "convex/values";
+import { reclaimQueuedAttachments } from "./_queues/attachments";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
 import { aiModelValidator, queuedMessageFields } from "./validators";
 import { drainChatQueueQuietly } from "./_queues/helpers";
@@ -133,9 +134,7 @@ export const remove = authMutation({
     }
 
     await ctx.db.delete(args.id);
-    for (const storageId of queuedMessage.attachmentStorageIds ?? []) {
-      await ctx.storage.delete(storageId);
-    }
+    await reclaimQueuedAttachments(ctx, queuedMessage);
     await ctx.db.patch(queuedMessage.parentId, { updatedAt: Date.now() });
     return null;
   },

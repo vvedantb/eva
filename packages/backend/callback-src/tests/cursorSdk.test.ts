@@ -543,6 +543,11 @@ test("cursorSdkToolToStep falls back heuristically for unknown names", () => {
   });
   expect(fetch.type).toBe("web_fetch");
 
+  // "webSearch" also contains "search"; it must not read as a code search.
+  const search = cursorSdkToolToStep("webSearch", { query: "convex docs" });
+  expect(search.type).toBe("web_search");
+  expect(search.label).toBe("Searching web...");
+
   const mystery = cursorSdkToolToStep("recordScreen", {});
   expect(mystery.type).toBe("tool");
   expect(mystery.label).toBe("Using recordScreen...");

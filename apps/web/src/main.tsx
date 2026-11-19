@@ -13,85 +13,43 @@ import { convex } from "./lib/convex";
 import { DeploymentErrorFallback } from "./lib/components/DeploymentErrorFallback";
 import { RouteNotFound } from "./lib/components/RouteNotFound";
 import { EvaUiProvider } from "@eva/ui";
-import { isChunkLoadError } from "./lib/utils/isChunkLoadError";
 import {
   claimStaleDeployReload,
+  installStaleDeployReload,
+  isChunkLoadError,
   reloadForStaleDeploy,
-  stripStaleDeployReloadParam,
-} from "./lib/utils/staleDeployReload";
+} from "@vvedantb/ui/client";
+import { STALE_DEPLOY_RELOAD_PARAM } from "./lib/utils/staleDeployReloadParam";
 import { readSignedInHint } from "./lib/authHint";
 import { migrateLegacyStorageKeys } from "./lib/migrateLegacyStorageKeys";
 import { InnerApp } from "./InnerApp";
 import "./fonts";
 import "./globals.css";
 
-stripStaleDeployReloadParam();
-
 // Moves persisted sandbox UI state off the legacy `conductor:` key prefix. Must
 // run before React mounts so the hooks reading these keys see migrated values on
 // first render. Remove once the legacy prefix is safely extinct.
 migrateLegacyStorageKeys();
 
-/**
- * Handles stale deployment detection: closes the Convex WebSocket to prevent
- * a cascade of "Not authenticated" server errors, then reloads the page.
- *
- * Claim before preventDefault. Vite's preload helper resolves the failed
- * `import()` to `undefined` when `vite:preloadError` is canceled — React.lazy
- * then crashes with `Cannot read properties of undefined (reading 'default')`.
- * Preventing only after we win the cooldown keeps a refused claim from
- * swallowing the rejection (and matches the index.html listener, which never
- * cancels the event).
- */
-function handleStaleDeployment(event: Event) {
-  if (!claimStaleDeployReload()) return;
-  event.preventDefault();
+/** Close the Convex WebSocket before a reload to stop a cascade of "Not
+ * authenticated" server errors. Errors are swallowed: the socket may already
+ * be closing, and a failed teardown must still reload. */
+function closeConvexBeforeReload() {
   try {
     convex.close();
   } catch {
     // WebSocket may already be closed
   }
-  reloadForStaleDeploy();
 }
 
-function isFailedHashedModule(target: EventTarget | null): boolean {
-  if (
-    !(target instanceof HTMLScriptElement) &&
-    !(target instanceof HTMLLinkElement)
-  ) {
-    return false;
-  }
-  if (target instanceof HTMLScriptElement && target.type !== "module") {
-    return false;
-  }
-  if (target instanceof HTMLLinkElement && target.rel !== "modulepreload") {
-    return false;
-  }
-  const url = target instanceof HTMLScriptElement ? target.src : target.href;
-  return url.includes("/assets/");
-}
-
-// After a new Vercel deployment, cached HTML may reference old chunk hashes that no longer exist.
-// Reload the page so the browser fetches the new HTML with correct asset references.
-window.addEventListener("vite:preloadError", handleStaleDeployment);
-
-// Catch chunk loading failures that bypass Vite's preload detection
-// (e.g. dynamic imports triggered by route navigation or lazy components).
-// Resource-load errors (wrong MIME / 404 on <script type="module">) do not
-// bubble, so the listener must run in the capture phase.
-window.addEventListener(
-  "error",
-  (event) => {
-    if (isChunkLoadError(event.error) || isFailedHashedModule(event.target)) {
-      handleStaleDeployment(event);
-    }
-  },
-  true,
-);
-window.addEventListener("unhandledrejection", (event) => {
-  if (isChunkLoadError(event.reason)) {
-    handleStaleDeployment(event);
-  }
+// After a new Vercel deployment, cached HTML may reference old chunk hashes that
+// no longer exist. The shared helper registers the `vite:preloadError`,
+// capture-phase `error`, and `unhandledrejection` listeners, strips the
+// cache-bust param on boot, and reloads once per cooldown. `_eva_reload` keeps
+// the param eva's deployed HTML (index.html) already strips.
+installStaleDeployReload({
+  reloadParam: STALE_DEPLOY_RELOAD_PARAM,
+  onBeforeReload: closeConvexBeforeReload,
 });
 
 const router = createRouter({
@@ -170,9 +128,12 @@ const hadSession = readSignedInHint();
 // so start fetching now — it downloads in parallel with Clerk's handshake.
 if (hadSession) {
   void import("@/lib/components/AppShellChrome").catch((error: Error) => {
-    if (isChunkLoadError(error)) {
-      handleStaleDeployment(new Event("error"));
-    }
+    // This rejection is caught, so it never reaches the `unhandledrejection`
+    // listener; reload here with the same claim, teardown and param.
+    if (!isChunkLoadError(error)) return;
+    if (!claimStaleDeployReload()) return;
+    closeConvexBeforeReload();
+    reloadForStaleDeploy({ reloadParam: STALE_DEPLOY_RELOAD_PARAM });
   });
 }
 

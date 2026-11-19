@@ -1,3 +1,4 @@
+import { ATTEMPT_MAX_RUNTIME_ERROR_FRAGMENT } from "@eva/shared/agentTurnLimits";
 import {
   CODEX_PRICING_PER_MILLION,
   COMPLETION_MUTATION,
@@ -35,9 +36,15 @@ import type {
   ProviderAttemptResult,
   ResultEvent,
 } from "../types.js";
-import { attemptElapsedMs, readResponseJson, tryParseJson } from "../utils.js";
+import {
+  attemptElapsedMs,
+  readResponseJson,
+  tryParseJsonObject,
+} from "../utils.js";
+import { redactSecrets } from "@eva/shared/redactSecrets";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -45,14 +52,6 @@ import {
   writeFileSync,
 } from "fs";
 import { createHash } from "crypto";
-
-function parseJsonObject(line: string): JsonObject | null {
-  const parsed = tryParseJson(line);
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return null;
-  }
-  return parsed;
-}
 
 /** Idempotent done-file writer. */
 export function writeDoneFile(
@@ -126,6 +125,30 @@ export function buildClaudeShapedResult(args: {
   });
 }
 
+/** One codex turn's usage as the Claude-shaped `result` event the server reads. */
+export function buildCodexResultEvent(usage: {
+  inputTokens: number;
+  cachedInputTokens: number;
+  cacheWriteInputTokens: number;
+  outputTokens: number;
+}): string {
+  return buildClaudeShapedResult({
+    provider: "codex",
+    totalCostUsd: computeCodexCostUsd(
+      normalizedCodexModel,
+      usage.inputTokens,
+      usage.cachedInputTokens,
+      usage.outputTokens,
+    ),
+    durationMs: attemptElapsedMs(),
+    inputTokens: Math.max(0, usage.inputTokens - usage.cachedInputTokens),
+    outputTokens: usage.outputTokens,
+    cacheReadInputTokens: usage.cachedInputTokens,
+    cacheCreationInputTokens: usage.cacheWriteInputTokens,
+    model: normalizedCodexModel,
+  });
+}
+
 type SyntheticResult = {
   sawResult: boolean;
   resultText: string;
@@ -171,7 +194,7 @@ function readSyntheticResult(output: string): SyntheticResult {
     const clean = line.trim();
     if (!clean) continue;
     try {
-      const parsed = parseJsonObject(clean);
+      const parsed = tryParseJsonObject(clean);
       if (!parsed) continue;
       if (parsed.type === "result") {
         found.sawResult = true;
@@ -275,7 +298,7 @@ export function extractResultEvent(output: string): ResultEvent | null {
       const clean = line.trim();
       if (!clean) continue;
       try {
-        const parsed = parseJsonObject(clean);
+        const parsed = tryParseJsonObject(clean);
         if (!parsed) continue;
         if (
           parsed.type === "item.completed" &&
@@ -313,24 +336,14 @@ export function extractResultEvent(output: string): ResultEvent | null {
       }
     }
     if (!finalText) return null;
-    const nonCachedInput = Math.max(0, lastInputTokens - lastCachedInputTokens);
     return {
       result: finalText,
       isError: false,
-      rawResultEvent: buildClaudeShapedResult({
-        provider: "codex",
-        totalCostUsd: computeCodexCostUsd(
-          normalizedCodexModel,
-          lastInputTokens,
-          lastCachedInputTokens,
-          lastOutputTokens,
-        ),
-        durationMs: attemptElapsedMs(),
-        inputTokens: nonCachedInput,
+      rawResultEvent: buildCodexResultEvent({
+        inputTokens: lastInputTokens,
+        cachedInputTokens: lastCachedInputTokens,
+        cacheWriteInputTokens: lastCacheWriteInputTokens,
         outputTokens: lastOutputTokens,
-        cacheReadInputTokens: lastCachedInputTokens,
-        cacheCreationInputTokens: lastCacheWriteInputTokens,
-        model: normalizedCodexModel,
       }),
     };
   }
@@ -340,7 +353,7 @@ export function extractResultEvent(output: string): ResultEvent | null {
     const clean = line.trim();
     if (!clean) continue;
     try {
-      const parsed = parseJsonObject(clean);
+      const parsed = tryParseJsonObject(clean);
       if (!parsed) continue;
       if (parsed.type === "result") {
         const r = parsed.result ?? "";
@@ -388,7 +401,9 @@ export function buildErrorMessage(
   if (timedOutForMaxRuntime) {
     return (
       agentName +
-      " terminated after max runtime of " +
+      " " +
+      ATTEMPT_MAX_RUNTIME_ERROR_FRAGMENT +
+      " " +
       MAX_TOTAL_RUNTIME_MS +
       "ms"
     );
@@ -528,8 +543,12 @@ export function buildTurnCompletionPayload(params: {
   error: string | null;
   activityLog: string | null;
   resultEvent?: ResultEvent | null;
+  /** For callers that build the usage event themselves (codex app-server). */
+  rawResultEvent?: string;
   entityFieldFallback?: string;
 }): JsonObject {
+  const rawResultEvent =
+    params.resultEvent?.rawResultEvent ?? params.rawResultEvent;
   return buildEntityMutationArgs(
     ENTITY_ID_FIELD ?? params.entityFieldFallback,
     ENTITY_ID,
@@ -539,9 +558,7 @@ export function buildTurnCompletionPayload(params: {
       error: params.error,
       activityLog: params.activityLog,
       ...(RUN_ID ? { runId: RUN_ID } : {}),
-      ...(params.resultEvent?.rawResultEvent
-        ? { rawResultEvent: params.resultEvent.rawResultEvent }
-        : {}),
+      ...(rawResultEvent ? { rawResultEvent } : {}),
       ...(S.pendingQuestionData
         ? { pendingQuestion: S.pendingQuestionData }
         : {}),
@@ -566,13 +583,7 @@ export async function postClaimedTurnFailureCompletion(params: {
     ...(RUN_ID ? { runId: RUN_ID } : {}),
   });
   appendClaimedTurnCompletion(completionArgs);
-  appendTurnCheckpoint(completionArgs);
-  releaseTurnLeaseForCompletion();
-  await callConvexWithRetry(
-    "mutation",
-    COMPLETION_MUTATION ?? "",
-    completionArgs,
-  );
+  await sendTurnCompletion(COMPLETION_MUTATION ?? "", completionArgs);
 }
 
 export function appendDiagnosticTail(message: string): string {
@@ -635,11 +646,12 @@ async function uploadMediaFile(
 
 /**
  * Which chat message a harvest attaches to: an exact one for a synthetic turn,
- * otherwise the parent's latest. Named rather than inline so the signatures
- * below stay on one line — the deliverable-contract tests read these function
- * bodies as text.
+ * otherwise the reply of `turnId`. The server falls back to the parent's latest
+ * message only when neither resolves. The latest alone is wrong: completion
+ * drains the queue, so a follow-up turn can open during the upload and take
+ * this turn's media.
  */
-type MediaTarget = { messageId?: string };
+type MediaTarget = { messageId?: string; turnId?: string };
 
 /** Attaches uploaded media to the chat message the turn just wrote. */
 async function attachChatMediaIfAny(
@@ -652,6 +664,7 @@ async function attachChatMediaIfAny(
     mediaStorageIds: uploaded.map((item) => item.storageId),
   };
   if (target.messageId) mediaArgs.messageId = target.messageId;
+  if (target.turnId) mediaArgs.turnId = target.turnId;
   await callConvexWithRetry("action", "screenshots:attachMedia", mediaArgs, 3);
 }
 
@@ -677,6 +690,36 @@ async function attachRunMediaIfAny(
   );
 }
 
+/** Completion fields that carry agent/CLI text into chat and Convex logs. */
+const REDACTED_COMPLETION_FIELDS: readonly string[] = [
+  "result",
+  "error",
+  "rawResultEvent",
+];
+
+/**
+ * The one send sequence for every turn-closing mutation. The payload must
+ * already carry the lease. Redacts token shapes from the text fields here so
+ * no completion path can skip it.
+ */
+export async function sendTurnCompletion(
+  mutation: string,
+  args: JsonObject,
+): Promise<void> {
+  for (const field of REDACTED_COMPLETION_FIELDS) {
+    const value = args[field];
+    if (typeof value === "string") args[field] = redactSecrets(value);
+  }
+  // Every caller runs persistTurnWork() before this, so the checkpoint's
+  // afterSha is the pushed turn-end tip.
+  appendTurnCheckpoint(args);
+  // Stop heartbeating under the lease before the server closes the turn, or a
+  // later heartbeat (e.g. during the chat media upload) comes back `closed`
+  // and reads as a takeover (session 225).
+  releaseTurnLeaseForCompletion();
+  await callConvexWithRetry("mutation", mutation, args);
+}
+
 /**
  * Sends the completion mutation and attaches sandbox media around it.
  *
@@ -689,26 +732,23 @@ async function attachRunMediaIfAny(
 export async function deliverCompletionWithMedia(
   completionArgs: JsonObject,
 ): Promise<void> {
-  // Every success path runs persistTurnWork() before this, so the checkpoint's
-  // afterSha is the pushed turn-end tip.
-  appendTurnCheckpoint(completionArgs);
-  // The payload already carries the lease; stop heartbeating under it before
-  // the server closes the turn, or the media upload window below emits
-  // heartbeats that come back `closed` and read as a takeover (session 225).
-  releaseTurnLeaseForCompletion();
+  // The run harvest runs while the lease is still held: the server has not
+  // closed the turn yet, so its heartbeats stay valid during the upload.
   if (RUN_ID) await uploadAndAttachSandboxMedia({});
-  await callConvexWithRetry(
-    "mutation",
-    COMPLETION_MUTATION ?? "",
-    completionArgs,
-  );
-  if (!RUN_ID) await uploadAndAttachSandboxMedia({});
+  // Every caller fences the payload with its turn lease before this point.
+  const { turnId } = completionArgs;
+  await sendTurnCompletion(COMPLETION_MUTATION ?? "", completionArgs);
+  if (!RUN_ID) {
+    await uploadAndAttachSandboxMedia(
+      typeof turnId === "string" ? { turnId } : {},
+    );
+  }
 }
 
 /**
  * Scans sandbox `recordings/` then `screenshots/` under the repo root and the
  * app rootDirectory, uploads all captured media (videos first, in capture
- * order), and attaches it to the last chat message — or, for a task run, to the
+ * order), and attaches it to the turn's chat reply — or, for a task run, to the
  * run doc that the chat renders its first turn from.
  * Shared by the one-shot callback and the Claude sdk-daemon finalize path —
  * daemon turns previously skipped this, so chat never showed agent
@@ -722,6 +762,24 @@ export async function deliverCompletionWithMedia(
  * Prefer calling via `deliverCompletionWithMedia` so the message exists before
  * attachMedia patches it.
  */
+/**
+ * Path of a harvest entry that is safe to upload, else null. The agent (or a
+ * prompt injection) controls these folders, so a symlinked folder, a symlink
+ * or a hard link could otherwise post a secret file (git credentials, env)
+ * to chat. Only plain single-link files directly in a real folder pass.
+ */
+function harvestableFile(dir: string, file: string): string | null {
+  if (file === "." || file === ".." || file.includes("/")) return null;
+  try {
+    if (!lstatSync(dir).isDirectory()) return null;
+    const fp = dir + "/" + file;
+    const st = lstatSync(fp);
+    return st.isFile() && st.nlink === 1 ? fp : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Moves a posted deliverable into `<dir>/.posted/`. Same-name files
  * overwrite, so a re-posted capture keeps only its latest copy. The `.posted`
@@ -758,7 +816,8 @@ export async function uploadAndAttachSandboxMedia(
     if (!existsSync(recDir)) continue;
     for (const file of readdirSync(recDir)) {
       if (!/\.(webm|mp4|mov|avi)$/i.test(file)) continue;
-      const fp = recDir + "/" + file;
+      const fp = harvestableFile(recDir, file);
+      if (!fp) continue;
       const mimeType = file.endsWith(".mp4") ? "video/mp4" : "video/webm";
       try {
         if (!isDuplicate(fp)) {
@@ -783,7 +842,8 @@ export async function uploadAndAttachSandboxMedia(
     if (!existsSync(ssDir)) continue;
     for (const file of readdirSync(ssDir)) {
       if (!/\.(png|jpg|jpeg|gif|webp)$/i.test(file)) continue;
-      const fp = ssDir + "/" + file;
+      const fp = harvestableFile(ssDir, file);
+      if (!fp) continue;
       const ext = file.split(".").pop()?.toLowerCase() ?? "png";
       const mimeType = mimeMap[ext] || "image/png";
       try {

@@ -19,7 +19,7 @@ import { IconBell, IconBellOff, IconUserPlus } from "@tabler/icons-react";
 import { getUserInitials } from "@eva/shared";
 import { UserInitials } from "@eva/shared/user-initials";
 import { Facehash } from "facehash";
-import { getUserDisplayName } from "./task-detail-constants";
+import { getUserDisplayName } from "@eva/shared/taskDetail";
 
 type Users = FunctionReturnType<typeof api.users.listAll>;
 

@@ -1,4 +1,4 @@
-import { TRUSTED_ASSOCIATIONS } from "./events";
+import { describeAlert, TRUSTED_ASSOCIATIONS, type RepoEvent } from "./events";
 
 /**
  * Chat and task copy for event-triggered automations. Pure, so the exact text
@@ -218,5 +218,15 @@ export function buildIssueTaskDescription(params: {
       body.trim() || "(The issue has no description.)",
       instructions,
     ].join("\n\n"),
+  );
+}
+
+/** The quick task an alert opens: the alert as data, then the preset's steps. */
+export function buildAlertTaskDescription(params: {
+  event: Extract<RepoEvent, { kind: "production_alert" }>;
+  instructions: string;
+}): string {
+  return capLength(
+    [describeAlert(params.event), params.instructions].join("\n\n"),
   );
 }

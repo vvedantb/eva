@@ -18,7 +18,21 @@ function agentLoginPlugin(): Plugin {
     configureServer(server) {
       env = loadEnv("development", server.config.root, "");
 
-      server.middlewares.use("/api/auth/agent-login", async (_req, res) => {
+      server.middlewares.use("/api/auth/agent-login", async (req, res) => {
+        // Mints a sign-in token for the agent user: never serve it to another
+        // machine when the dev server listens on the LAN (`--host`). Traffic
+        // through the in-sandbox preview proxy arrives from loopback.
+        const remote = req.socket.remoteAddress;
+        if (
+          remote !== "127.0.0.1" &&
+          remote !== "::1" &&
+          remote !== "::ffff:127.0.0.1"
+        ) {
+          res.writeHead(403, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Forbidden" }));
+          return;
+        }
+
         const secretKey = env.CLERK_SECRET_KEY;
         const agentUserId = env.AGENT_CLERK_USER_ID;
 
@@ -73,9 +87,9 @@ function agentLoginPlugin(): Plugin {
   };
 }
 
-/** Everything in node_modules except @vvedantb/ui (also under pnpm's `.pnpm` store), plus vendored code. */
+/** All of node_modules (@vvedantb/ui ships React Compiler output in `dist`), plus vendored code. */
 const COMPILER_EXCLUDE = [
-  /\/node_modules\/(?!\.pnpm\/@vvedantb\+ui@|@vvedantb\/ui\/)/,
+  /\/node_modules\//,
   // Vendored Stageshow kit: written for plain React (refs read in render,
   // hand-tuned effects), so the compiler must not rewrite it.
   /\/src\/lib\/stageshow\//,
@@ -100,8 +114,8 @@ export default defineConfig({
     // memoization. `compiler: true` runs oxc-transform-react (Rust) in-process —
     // no Babel pass. Bailouts surface as build warnings; `pnpm compiler:check`
     // is the gate that fails on a new one.
-    // @vvedantb/ui ships TSX source and holds what used to be @eva/ui, so it
-    // is compiled like app code; the plugin skips node_modules by default.
+    // @vvedantb/ui ships already compiled (its `dist`), so node_modules is
+    // excluded whole: compiling it again would only add work.
     react({ compiler: true, exclude: COMPILER_EXCLUDE }),
     // Nothing imports the icon barrel anymore: static imports are rewritten to
     // deep paths here, and icon-by-name resolution reads raw path data from
@@ -119,9 +133,9 @@ export default defineConfig({
         brotliSize: true,
       }),
   ].filter(Boolean),
-  // Served as source in dev (not pre-bundled) so the React Compiler sees it.
-  // Its own dependencies are still pre-bundled: several ship CommonJS, which
-  // the browser cannot import from unbundled source.
+  // @vvedantb/ui is served unbundled in dev (it imports CSS files). Its own
+  // dependencies are still pre-bundled: several ship CommonJS, which the
+  // browser cannot import from unbundled source.
   optimizeDeps: {
     exclude: ["@vvedantb/ui"],
     include: [
@@ -162,6 +176,7 @@ export default defineConfig({
       "@vvedantb/ui > cmdk",
       "@vvedantb/ui > dayjs",
       "@vvedantb/ui > dayjs/plugin/relativeTime",
+      "@vvedantb/ui > dayjs/plugin/relativeTime.js",
       "@vvedantb/ui > embla-carousel-react",
       "@vvedantb/ui > media-chrome/react",
       "@vvedantb/ui > motion/react",

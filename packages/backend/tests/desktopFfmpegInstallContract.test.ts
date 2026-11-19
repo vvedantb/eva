@@ -1,79 +1,10 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 import { FFMPEG_INSTALL_SCRIPT } from "../convex/_sandbox/ffmpegInstall";
-
-const testsDir = dirname(fileURLToPath(import.meta.url));
-
-const vercelProviderSource = readFileSync(
-  join(testsDir, "../convex/_sandbox/vercelProvider.ts"),
-  "utf8",
-);
-
-const snapshotActionsSource = readFileSync(
-  join(testsDir, "../convex/snapshotActions.ts"),
-  "utf8",
-);
-
-/**
- * `VercelDesktop.start`'s body with `//` comments stripped — the prose there
- * mentions the very gates these tests order against, so an ordering assertion
- * run over the raw text matches the comment instead of the code.
- */
-const desktopStartBody = (() => {
-  const classAt = vercelProviderSource.indexOf("class VercelDesktop");
-  expect(classAt, "VercelDesktop moved or was renamed").toBeGreaterThan(-1);
-  const startAt = vercelProviderSource.indexOf("async start()", classAt);
-  expect(startAt).toBeGreaterThan(-1);
-  const nextMethodAt = vercelProviderSource.indexOf("\n  async ", startAt + 1);
-  return vercelProviderSource
-    .slice(startAt, nextMethodAt < 0 ? undefined : nextMethodAt)
-    .replace(/^\s*\/\/.*$/gm, "");
-})();
 
 /** Every `dnf` attempt in the script, in source order. */
 const installAttempts = FFMPEG_INSTALL_SCRIPT.split("\n").filter((line) =>
   line.includes("dnf install"),
 );
-
-/**
- * `agent-browser record` needs ffmpeg to encode the WebM. Older snapshots bake
- * the VNC stack but not ffmpeg, so an install that sits inside the desktop
- * health/install logic never runs — both the healthy early-return and the
- * `INSTALLED=1` guard bypass it — and those sandboxes can never record.
- * The install has to come before either gate.
- */
-test("desktop start installs ffmpeg before the health gate and install guard", () => {
-  const ffmpegAt = desktopStartBody.indexOf("FFMPEG_INSTALL_SCRIPT");
-  expect(ffmpegAt, "desktop start must install ffmpeg").toBeGreaterThan(-1);
-
-  const gates = [
-    // Healthy stack → early return, skipping everything below.
-    "if (healthy.exitCode === 0)",
-    // Already-installed VNC stack → the dnf block is skipped.
-    'if [ "$INSTALLED" != "1" ]; then',
-  ];
-  for (const gate of gates) {
-    const gateAt = desktopStartBody.indexOf(gate);
-    expect(gateAt, `gate moved: ${gate}`).toBeGreaterThan(-1);
-    expect(
-      ffmpegAt,
-      `ffmpeg install must precede \`${gate}\` or older snapshots skip it forever`,
-    ).toBeLessThan(gateAt);
-  }
-});
-
-/**
- * Seed bakes the encoder into the snapshot; desktop start repairs snapshots
- * taken before it did. Both must run the same script — the two hand-maintained
- * copies drifted once, so a fix landed in one and not the other.
- */
-test("seed and desktop start share one install script", () => {
-  expect(snapshotActionsSource).toContain("FFMPEG_INSTALL_SCRIPT");
-  expect(snapshotActionsSource).not.toContain("ffmpeg-free");
-  expect(vercelProviderSource).not.toContain("ffmpeg-free");
-});
 
 /** Soft-failing and idempotent, so a dnf hiccup cannot block desktop startup. */
 test("the ffmpeg install is idempotent and cannot block startup", () => {

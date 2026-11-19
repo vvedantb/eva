@@ -13,7 +13,7 @@ import {
   codexFastMode,
   codexReasoningEffort,
 } from "../config.js";
-import { evaMcpServers, type HttpMcpServers } from "../evaMcp.js";
+import { evaMcpServers, type McpServers } from "../evaMcp.js";
 import { updateThinkingStep } from "../parse/canonical.js";
 import { callbackState as S } from "../runtime/state.js";
 import type { SessionMode } from "../types.js";
@@ -56,8 +56,15 @@ function writeCodexFileIfConfigured(
   writeFileSync(CODEX_RUNTIME_HOME_DIR + "/" + fileName, value);
 }
 
+function tomlInlineTable(record: Record<string, string>): string {
+  const entries = Object.entries(record)
+    .map(([key, value]) => `${JSON.stringify(key)} = ${JSON.stringify(value)}`)
+    .join(", ");
+  return `{ ${entries} }`;
+}
+
 /**
- * Eva's HTTP MCP server as `[mcp_servers.*]` sections.
+ * Eva's MCP servers (HTTP and repo stdio) as `[mcp_servers.*]` sections.
  *
  * Codex only reads MCP config from `CODEX_HOME/config.toml`, and both codex
  * paths point at the same CODEX_HOME (the SDK CLI and the app-server daemon,
@@ -69,19 +76,21 @@ function writeCodexFileIfConfigured(
  * a `bearer_token_env_var`, because the callback deliberately scrubs the
  * transport credentials out of the environment agent tools inherit.
  */
-function codexMcpServerSections(servers: HttpMcpServers): string[] {
+function codexMcpServerSections(servers: McpServers): string[] {
   return Object.entries(servers).flatMap(([name, server]) => {
-    const headers = Object.entries(server.headers)
-      .map(
-        ([header, value]) =>
-          `${JSON.stringify(header)} = ${JSON.stringify(value)}`,
-      )
-      .join(", ");
+    const header = ["", `[mcp_servers.${JSON.stringify(name)}]`];
+    if (server.type === "stdio") {
+      return [
+        ...header,
+        `command = ${JSON.stringify(server.command)}`,
+        `args = [${server.args.map((arg) => JSON.stringify(arg)).join(", ")}]`,
+        `env = ${tomlInlineTable(server.env)}`,
+      ];
+    }
     return [
-      "",
-      `[mcp_servers.${JSON.stringify(name)}]`,
+      ...header,
       `url = ${JSON.stringify(server.url)}`,
-      `http_headers = { ${headers} }`,
+      `http_headers = ${tomlInlineTable(server.headers)}`,
     ];
   });
 }

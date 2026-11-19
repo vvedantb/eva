@@ -18,12 +18,13 @@ import { IconX } from "@tabler/icons-react";
 import { AnimatePresence, m } from "motion/react";
 import { playNotificationBell } from "@/lib/utils/notificationBell";
 import { hrefToNavigateOptions } from "@/lib/utils/repoUrl";
+import { isInternalAppHref } from "@eva/shared/safeUrl";
 import {
   NotificationIcon,
   getNotificationAppearance,
   type Notification,
 } from "@/lib/components/notifications/notification-config";
-import { splitNotificationTitle } from "@/lib/components/notifications/notificationTitleParts";
+import { splitNotificationTitle } from "@eva/shared/notificationTitle";
 import { nextToastExpiryDelay } from "@/lib/components/notifications/toastExpiry";
 import {
   isDesktopNotificationsEnabled,
@@ -85,7 +86,7 @@ export function NotificationToastStream() {
       markAsRead({ id: notification._id }).catch(() => undefined);
     }
     dismissToast(notification._id);
-    if (notification.href) {
+    if (notification.href && isInternalAppHref(notification.href)) {
       // Same treatment as the inbox: the `repo--app` rewrite plus the search
       // split the router needs to see a comment anchor at all.
       navigate(hrefToNavigateOptions(notification.href));

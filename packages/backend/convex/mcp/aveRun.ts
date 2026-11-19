@@ -7,10 +7,11 @@ import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { internalAction, type ActionCtx } from "../_generated/server";
 import { buildModelMessages } from "../_ave/context";
+import { AI_GATEWAY_KEY_MISSING, readAiGatewayKey } from "../_env/aiGateway";
 import {
   classifyGatewayError,
   type GatewayFailure,
-} from "../_ai/gatewayErrors";
+} from "@vvedantb/server/ai";
 import { buildTools } from "./tools";
 import type { EvaTool } from "./registry";
 
@@ -161,6 +162,8 @@ function describeFailure(failure: GatewayFailure): string {
       return `${AVE_MODEL} is not available on AI Gateway: ${failure.message}`;
     case "rate_limit":
       return `AI Gateway rate limit: ${failure.message}. Try again shortly.`;
+    case "quota":
+      return `AI Gateway quota or credit limit reached: ${failure.message}`;
     case "timeout":
       return `The model did not answer in time: ${failure.message}`;
     case "gateway":
@@ -239,8 +242,8 @@ export const run = internalAction({
     });
 
     try {
-      if (!process.env.AI_GATEWAY_API_KEY?.trim()) {
-        throw new Error("AI_GATEWAY_API_KEY is not set on this Convex deployment.");
+      if (!readAiGatewayKey()) {
+        throw new Error(AI_GATEWAY_KEY_MISSING);
       }
       const tools = toAiTools(
         selectAveTools(

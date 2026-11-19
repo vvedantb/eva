@@ -45,15 +45,15 @@ export function TeamEnvVarsTab({ teamId, teamEnvVars }: TeamEnvVarsTabProps) {
     <EnvVarsTable
       vars={teamEnvVars}
       scope="team"
-      onUpsert={async (key, value, sandboxExclude) => {
-        await upsertTeamVar({ teamId, key, value, sandboxExclude });
+      onUpsert={async (key, value, sandboxExclude, seedOnly) => {
+        await upsertTeamVar({ teamId, key, value, sandboxExclude, seedOnly });
       }}
       onReveal={(key) => revealTeamValue({ teamId, key })}
       onRemove={async (key) => {
         await removeTeamVar({ teamId, key });
       }}
-      onToggleSandboxExclude={async (key, sandboxExclude) => {
-        await toggleSandboxExclude({ teamId, key, sandboxExclude });
+      onToggleSandboxExclude={async (key, sandboxExclude, seedOnly) => {
+        await toggleSandboxExclude({ teamId, key, sandboxExclude, seedOnly });
       }}
       description="Team variables inherited by every codebase. Use known slots for shared agent credentials."
     />

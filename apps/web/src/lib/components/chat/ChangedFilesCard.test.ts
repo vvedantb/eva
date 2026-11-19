@@ -1,8 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
-import {
-  openChangedFile,
-  toRepoRelativePath,
-} from "@/lib/components/chat/ChangedFilesCard";
+import { toRepoRelativePath } from "@eva/shared";
+import { openChangedFile } from "@/lib/components/chat/ChangedFilesCard";
 
 describe("openChangedFile", () => {
   test("prefers Review diffs with a repo-relative path", () => {

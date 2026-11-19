@@ -180,11 +180,11 @@ export const listCanonicalReposForSkillSync = internalQuery({
       }
     }
 
-    const ids: Array<(typeof repos)[number]["_id"]> = [];
-    for (const repo of byCodebase.values()) {
-      ids.push(await resolveCanonicalRepoId(ctx.db, repo._id));
-    }
-    return ids;
+    return Promise.all(
+      [...byCodebase.values()].map((repo) =>
+        resolveCanonicalRepoId(ctx.db, repo._id),
+      ),
+    );
   },
 });
 

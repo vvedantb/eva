@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@eva/backend";
-import type { BackgroundAgentEntry, Id, SandboxOwner } from "@eva/backend";
+import type { Id, SandboxOwner } from "@eva/backend";
 import {
   isSessionSandboxTab,
   type SandboxTab,
@@ -26,6 +26,10 @@ import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel"
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { SimpleViewSandboxRedirect } from "@/lib/components/sandbox/SimpleViewSandboxRedirect";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { useSandboxAnnotationSend } from "@/lib/components/chat/sandboxChatBinding";
+import { sandboxChatKeys } from "@/lib/components/chat/sandboxChatTurn";
+import type { OwnedSession } from "@/lib/components/sandbox/useOwnedSession";
+import { useProjectChatBinding } from "./ProjectSandboxChatPanel";
 import {
   SessionArtifactsPanel,
   useSourceArtifacts,
@@ -37,6 +41,8 @@ import {
 
 interface ProjectSandboxPanelProps {
   projectId: Id<"projects">;
+  /** The project's session: its chat feeds the Agents tab and annotations. */
+  projectSession: OwnedSession;
   projectNumId?: number;
   sandboxId: string | undefined;
   isActive: boolean;
@@ -47,8 +53,6 @@ interface ProjectSandboxPanelProps {
   owner: SandboxOwner;
   panes: SandboxPanesApi;
   terminalPanel: TerminalPanelApi;
-  /** Sub-agent lifecycle entries from the project doc (Agents tab). */
-  backgroundAgents?: BackgroundAgentEntry[];
   sandboxTab: TaskRouteSandboxTab;
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
@@ -60,10 +64,13 @@ interface ProjectSandboxPanelProps {
   autoWakeEligible?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
+  /** Mini-player title; Expand returns to this project's Preview tab. */
+  title: string;
 }
 
 export function ProjectSandboxPanel({
   projectId,
+  projectSession,
   projectNumId,
   sandboxId,
   isActive,
@@ -74,39 +81,37 @@ export function ProjectSandboxPanel({
   owner,
   panes,
   terminalPanel,
-  backgroundAgents,
   sandboxTab,
   onStartSandbox,
   isSandboxStarting,
   autoWakeEligible,
   collapsed = false,
   onToggle,
+  title,
 }: ProjectSandboxPanelProps) {
   const simpleView = useSimpleView();
   const navigate = useNavigate();
   const { basePath } = useRepo();
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
-  const projectIdStr = String(projectId);
+  const chatBinding = useProjectChatBinding(projectId, projectSession);
+  const submitAnnotation = useSandboxAnnotationSend(chatBinding);
+  const chatKeys = sandboxChatKeys(chatBinding.entity);
 
   const viewState = useQuery(api.sandboxPanes.getViewState, { owner });
-  const setPreviewPath = useMutation(api.sandboxPanes.setPreviewPath);
-  const setPreviewPort = useMutation(api.sandboxPanes.setPreviewPort);
-  const setTerminalHistoryTail = useMutation(
-    api.sandboxPanes.setTerminalHistoryTail,
-  );
   const releaseBrowserLock = useMutation(api.sandboxPanes.releaseBrowserLock);
 
   const activeTab: SandboxTab = sandboxTab;
 
   // Content-keyed Agents tab, folded from the chat transcript the project's
-  // chat panel already subscribes to (same entity ids).
+  // chat panel already subscribes to (same entity ids). Artifacts stay on the
+  // project: the backend files its session's artifacts under it.
   const artifactSource = { kind: "project" as const, projectId };
   const { artifactCount } = useSourceArtifacts(artifactSource);
   const { documentCount } = useSourceDocuments(artifactSource);
   const { agents, hasAgents, hasRunningAgents } = useSubagentRoster({
-    parentId: projectId,
-    streamingEntityId: `project-chat-${projectIdStr}`,
-    backgroundAgents,
+    parentId: chatKeys.parentId,
+    streamingEntityId: chatKeys.streamingEntityId,
+    backgroundAgents: chatBinding.doc?.backgroundAgents,
     sandboxRunning: isActive,
   });
 
@@ -131,13 +136,11 @@ export function ProjectSandboxPanel({
   };
 
   const preview = useSandboxPreview({
+    owner,
     sandboxId,
     isActive,
     repoId,
     devPort,
-    onPortPersist: (port) => {
-      void setPreviewPort({ owner, port });
-    },
   });
 
   const fileList = useSandboxFileList({ sandboxId, repoId, isActive });
@@ -232,11 +235,11 @@ export function ProjectSandboxPanel({
             }
           >
             <SandboxAgentsPanel
-              entity={{ kind: "project", projectId }}
+              entity={chatBinding.entity}
               agents={agents}
             />
           </div>
-          <ReviewChatTargetProvider value={{ kind: "projectChat", projectId }}>
+          <ReviewChatTargetProvider value={chatKeys.draftTarget ?? null}>
             <SandboxPaneSlots
               activeTab={activeTab}
               panes={panes}
@@ -245,7 +248,7 @@ export function ProjectSandboxPanel({
               sandboxId={sandboxId}
               isActive={isActive}
               repoId={repoId}
-              cacheKey={projectIdStr}
+              cacheKey={String(projectId)}
               devCommand={devCommand}
               prUrl={prUrl}
               agentBrowsingAt={viewState?.agentBrowsingAt}
@@ -255,20 +258,20 @@ export function ProjectSandboxPanel({
               onStartSandbox={onStartSandbox}
               isSandboxStarting={isSandboxStarting}
               autoWakeEligible={autoWakeEligible}
+              onAnnotationSubmit={submitAnnotation}
               // A collapsed rail is not on screen: no presence beacon, no auto-wake.
               presenceEnabled={!collapsed}
-              stickyPreviewPath={viewState?.previewPath}
-              onStickyPreviewPathChange={(path) => {
-                void setPreviewPath({ owner, path });
-              }}
-              stickyTerminalHistoryTail={
-                viewState === undefined
-                  ? undefined
-                  : (viewState?.terminalHistoryTail ?? "")
+              // A collapsed rail keeps its preview parked.
+              miniPlayer={
+                projectPathSegment && !collapsed
+                  ? {
+                      owner,
+                      returnTo: `${basePath}/projects/${projectPathSegment}/sandbox/preview`,
+                      title,
+                    }
+                  : undefined
               }
-              onStickyTerminalHistoryTailChange={(tail) => {
-                void setTerminalHistoryTail({ owner, tail });
-              }}
+              viewState={viewState}
             />
           </ReviewChatTargetProvider>
         </div>

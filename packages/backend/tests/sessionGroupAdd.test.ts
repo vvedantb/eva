@@ -24,6 +24,7 @@ async function fixture() {
     });
     const insertSession = (numId: number) =>
       ctx.db.insert("sessions", {
+        owner: { kind: "standalone" },
         repoId,
         userId,
         title: `Session ${numId}`,

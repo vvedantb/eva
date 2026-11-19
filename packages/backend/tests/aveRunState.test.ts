@@ -37,6 +37,7 @@ async function fixture() {
       connectedBy: ownerUserId,
     });
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId: ownerUserId,
       title: "Fix the login bug",
@@ -406,6 +407,7 @@ describe("wake-ups and watches", () => {
           connectedBy: f.strangerUserId,
         });
         return ctx.db.insert("sessions", {
+          owner: { kind: "standalone" },
           repoId,
           userId: f.strangerUserId,
           title: "Theirs",

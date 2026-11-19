@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FunctionReturnType } from "convex/server";
-import type { Id, api } from "@eva/backend";
+import { isProjectBuilding, type Id, type api } from "@eva/backend";
 import { Virtuoso } from "react-virtuoso";
 import {
   Collapsible,
@@ -10,10 +10,10 @@ import {
   useFirstPaintGate,
 } from "@vvedantb/ui";
 import { IconChevronRight } from "@tabler/icons-react";
+import { PROJECT_COLUMNS, type ProjectColumn } from "@eva/shared";
 import {
+  columnConfig,
   phaseConfig,
-  PROJECT_PHASES,
-  type ProjectPhase,
 } from "@/lib/components/projects/ProjectPhaseBadge";
 import { entityPathSegment } from "@/lib/numId";
 import { ProjectCard } from "@/lib/components/projects/ProjectCard";
@@ -24,8 +24,8 @@ import type { SelectionToggleOptions } from "@/lib/components/quick-tasks/select
 type Project = FunctionReturnType<typeof api.projects.list>[number];
 
 interface ProjectsListViewProps {
-  projectsByPhase: Record<ProjectPhase, Project[]>;
-  visiblePhases: Set<ProjectPhase>;
+  projectsByPhase: Record<ProjectColumn, Project[]>;
+  visiblePhases: Set<ProjectColumn>;
   onDelete: (id: Id<"projects">, title: string) => void;
   isSelecting?: boolean;
   selectedIds?: Set<Id<"projects">>;
@@ -48,14 +48,14 @@ export function ProjectsListView({
     `${owner}/${name}/projects/list`,
   );
   const firstPaint = useFirstPaintGate();
-  const [openSections, setOpenSections] = useState<Set<ProjectPhase>>(() => {
+  const [openSections, setOpenSections] = useState<Set<ProjectColumn>>(() => {
     const nonEmpty = new Set(
-      PROJECT_PHASES.filter((p) => (projectsByPhase[p] ?? []).length > 0),
+      PROJECT_COLUMNS.filter((p) => (projectsByPhase[p] ?? []).length > 0),
     );
-    return nonEmpty.size > 0 ? nonEmpty : new Set(PROJECT_PHASES);
+    return nonEmpty.size > 0 ? nonEmpty : new Set(PROJECT_COLUMNS);
   });
 
-  const toggleSection = (phase: ProjectPhase) => {
+  const toggleSection = (phase: ProjectColumn) => {
     setOpenSections((prev) => {
       const next = new Set(prev);
       if (next.has(phase)) {
@@ -72,9 +72,9 @@ export function ProjectsListView({
       ref={scrollRef}
       className="flex-1 w-full overflow-y-auto scrollbar space-y-1"
     >
-      {PROJECT_PHASES.flatMap((phase) => {
+      {PROJECT_COLUMNS.flatMap((phase) => {
         if (!visiblePhases.has(phase)) return [];
-        const cfg = phaseConfig[phase];
+        const cfg = columnConfig[phase];
         const items = projectsByPhase[phase] ?? [];
         // Shift-click spans this section only — the visible order of the group
         // the click landed in, not the whole flattened list.
@@ -132,17 +132,14 @@ export function ProjectsListView({
                               rawInput={project.rawInput}
                               branchName={project.branchName}
                               numId={project.numId}
-                              repoFullName={`${owner}/${name}`}
                               createdAt={project._creationTime}
-                              accentColor={phaseConfig[phase].bar}
+                              accentColor={phaseConfig[project.phase].bar}
                               members={project.members}
                               projectLead={project.projectLead}
-                              phase={phase}
+                              phase={project.phase}
                               planningMode={project.planningMode}
-                              isBuilding={
-                                project.activeBuildWorkflowId !== undefined
-                              }
-                              sandboxStatus={project.reviewProjectSandboxStatus}
+                              isBuilding={isProjectBuilding(project)}
+                              sandboxStatus={project.sandboxStatus}
                               hasUnread={project.hasUnread}
                               isAwaitingAnswer={project.isAwaitingAnswer}
                               href={

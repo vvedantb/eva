@@ -24,7 +24,6 @@ export {
   acknowledgeRun,
   countUnreadAll,
   getAutomationData,
-  getRunForEmail,
   getRunForTriage,
   setFindingsTriage,
   updateRunStatus,
@@ -32,6 +31,19 @@ export {
   cancelRun,
   handleCompletion,
 } from "./_automations/runs";
+
+export {
+  getAlertWebhook,
+  rotateAlertSecret,
+} from "./_automations/alertWebhook";
+
+export {
+  getRunForEmail,
+  previewRunEmail,
+  updateRunEmail,
+  sendRunEmail,
+  discardRunEmail,
+} from "./_automations/email";
 
 export {
   createTasksFromFindings,

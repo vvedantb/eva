@@ -78,15 +78,16 @@ export const Route = createFileRoute("/dev/ui-gallery")({
 });
 
 /**
- * Applies `?theme=` through the app's own ThemeModeProvider (the `.dark` class
- * on <html>), without persisting it to Convex. The effect re-runs when the
- * Convex theme sync overrides it on load, so the URL always wins.
+ * Pins `?theme=` through the app's own ThemeModeProvider (the `.dark` class
+ * on <html>) as a preview, so it beats the saved theme without persisting it
+ * to Convex. Released when the gallery unmounts.
  */
 function useGalleryTheme(theme: "light" | "dark") {
-  const { theme: current, setTheme } = useThemeMode();
+  const { setPreviewTheme } = useThemeMode();
   useEffect(() => {
-    setTheme(theme);
-  }, [current, theme, setTheme]);
+    setPreviewTheme(theme);
+    return () => setPreviewTheme(null);
+  }, [theme, setPreviewTheme]);
 }
 
 function UiGalleryPage() {

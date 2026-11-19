@@ -1,18 +1,12 @@
 "use client";
 
-import { useMutation, useQueries } from "convex/react";
+import { useQueries } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
+import { perRepoQueryCache, sessionListEntries } from "@eva/shared";
 import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  Input,
   CenteredSpinner,
   tokenTransition,
   useRequestConfirm,
@@ -20,14 +14,11 @@ import {
 import { AnimatePresence, m } from "motion/react";
 import { GlobalSessionGroup } from "@/lib/components/sidebar/_components/GlobalSessionGroup";
 import { LinkedSessionGroupSection } from "@/lib/components/sidebar/_components/LinkedSessionGroupSection";
-import { linkedSessionGroups } from "@/lib/components/sidebar/_utils/linkedSessionGroups";
 import { SessionsListModeTabs } from "@/lib/components/sidebar/_components/SessionsListModeTabs";
 import type { SessionListMode } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
 import {
   filterSessionsStartedBy,
   LINKED_SESSION_GROUPS_OPEN_KEY,
-  sessionActivityAt,
-  sortAppsForSidebar,
   SESSIONS_APP_GROUPS_OPEN_KEY,
 } from "@/lib/components/sidebar/_utils/sessionsSidebarSettings";
 import { useSessionsSidebarSettings } from "@/lib/components/sidebar/useSessionsSidebarSettings";
@@ -36,8 +27,12 @@ import {
   useStoredGroupOpen,
 } from "@/lib/components/sidebar/useSidebarAppGroupOpen";
 import { entityPathSegment } from "@/lib/numId";
-import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 import { useArchiveSession } from "@/lib/components/sidebar/useArchiveSession";
+import {
+  SessionDialogs,
+  type SessionArchiveTarget,
+  type SessionRenameTarget,
+} from "@/lib/components/sidebar/SessionDialogs";
 
 type SessionListItem = FunctionReturnType<typeof api.sessions.list>[number];
 type RepoRow = FunctionReturnType<typeof api.githubRepos.list>[number];
@@ -52,39 +47,11 @@ const SESSION_LIST_QUERIES = {
   archived: api.sessions.listArchived,
 } satisfies Record<SessionListMode, unknown>;
 
-type SessionListQueries = Record<
-  string,
-  {
-    query: (typeof SESSION_LIST_QUERIES)[SessionListMode];
-    args: { repoId: RepoRow["_id"] };
-  }
->;
-
-const sessionListQueryCache = new Map<string, SessionListQueries>();
-
-/**
- * One list query per repo for the mode. `useQueries` resubscribes, and sets
- * state in render, whenever its argument changes identity. A render-local memo
- * did not hold across React's render-phase retry and looped ("Too many
- * re-renders"), so the maps are cached here by their value.
- */
-function sessionListQueries(
-  mode: SessionListMode,
-  repos: RepoRow[] | undefined,
-): SessionListQueries {
-  const ids = (repos ?? []).map((repo) => repo._id);
-  const key = `${mode}:${ids.join(",")}`;
-  const cached = sessionListQueryCache.get(key);
-  if (cached) return cached;
-  const queries: SessionListQueries = Object.fromEntries(
-    ids.map((repoId) => [
-      repoId,
-      { query: SESSION_LIST_QUERIES[mode], args: { repoId } },
-    ]),
-  );
-  sessionListQueryCache.set(key, queries);
-  return queries;
-}
+/** One list query per repo for the mode, cached so `useQueries` keeps its subscriptions. */
+const sessionListQueries = perRepoQueryCache<
+  (typeof SESSION_LIST_QUERIES)[SessionListMode],
+  RepoRow["_id"]
+>();
 
 /**
  * One app's rows out of the `useQueries` map. A failed query is reported as an
@@ -109,7 +76,7 @@ export function GlobalSessionsSidebar({
   // Not persisted: the list opens on Active each time.
   const [listMode, setListMode] = useState<SessionListMode>("active");
   const { request: requestConfirm } = useRequestConfirm();
-  const { archive, isArchiving } = useArchiveSession();
+  const { archive } = useArchiveSession();
   const repos = useQuery(api.githubRepos.list, {});
   const { isGroupOpen, setGroupOpen } = useSidebarAppGroupOpen(pathname, {
     storageKey: SESSIONS_APP_GROUPS_OPEN_KEY,
@@ -120,39 +87,21 @@ export function GlobalSessionsSidebar({
     LINKED_SESSION_GROUPS_OPEN_KEY,
     true,
   );
-  const [sessionToRename, setSessionToRename] = useState<{
-    session: SessionListItem;
-    repo: RepoRow;
-  } | null>(null);
+  const [sessionToRename, setSessionToRename] =
+    useState<SessionRenameTarget | null>(null);
   const [renameValue, setRenameValue] = useState("");
-  const [isRenaming, setIsRenaming] = useState(false);
-  const [sessionToArchive, setSessionToArchive] = useState<{
-    session: SessionListItem;
-    repo: RepoRow;
-    pathSegment: string;
-  } | null>(null);
-  const saveSessionRename = async () => {
-    if (!sessionToRename || !renameValue.trim()) return;
-    setIsRenaming(true);
-    try {
-      await updateSession({
-        id: sessionToRename.session._id,
-        title: renameValue.trim(),
-      });
-      mutationSuccess("Session renamed", "session-rename");
-      setSessionToRename(null);
-    } catch {
-      mutationError("Couldn't rename session", "session-rename");
-      setIsRenaming(false);
-      return;
-    }
-    setIsRenaming(false);
-  };
-  const updateSession = useMutation(api.sessions.update);
+  const [sessionToArchive, setSessionToArchive] =
+    useState<SessionArchiveTarget | null>(null);
 
   // The only watch on the lists: the rows are handed to each group as a prop.
   // The list mode picks active or archived rows, so linked groups form in both.
-  const sessionsByRepoId = useQueries(sessionListQueries(listMode, repos));
+  const sessionsByRepoId = useQueries(
+    sessionListQueries(
+      SESSION_LIST_QUERIES[listMode],
+      listMode,
+      (repos ?? []).map((repo) => repo._id),
+    ),
+  );
   const currentUserId = useQuery(api.auth.me, settings.onlyMine ? {} : "skip");
   // "Only my sessions" drops a teammate's rows before any group sees them.
   const visibleSessions = (repoId: RepoRow["_id"]) => {
@@ -162,40 +111,19 @@ export function GlobalSessionsSidebar({
       : rows;
   };
 
-  const latestActivityByAppId = new Map<string, number>();
-  for (const [repoId, result] of Object.entries(sessionsByRepoId)) {
-    if (result === undefined || result instanceof Error) continue;
-    let latest = 0;
-    for (const session of result) {
-      const at = sessionActivityAt(session);
-      if (at > latest) latest = at;
-    }
-    if (latest > 0) latestActivityByAppId.set(repoId, latest);
-  }
-
-  const orderedRepos =
+  // Linked groups and apps as one ordered list (`sessionListEntries`).
+  const orderedEntries =
     repos === undefined
       ? undefined
-      : sortAppsForSidebar(repos, settings.appSortOrder, latestActivityByAppId);
-
-  // Linked sessions (one agent spun up another) leave their repo lists for a
-  // cross-repo group of their own, in both list modes.
-  const linkedGroups =
-    repos === undefined
-      ? []
-      : linkedSessionGroups(
+      : sessionListEntries(
           repos.map((repo) => ({
             repo,
-            sessions: visibleSessions(repo._id) ?? [],
+            sessions: visibleSessions(repo._id),
           })),
+          settings.appSortOrder,
         );
-  const linkedSessionIds = new Set<string>(
-    linkedGroups.flatMap((group) =>
-      group.members.map((member) => member.session._id),
-    ),
-  );
-  const onRenameRequest = (session: SessionListItem, groupRepo: RepoRow) => {
-    setSessionToRename({ session, repo: groupRepo });
+  const onRenameRequest = (session: SessionListItem) => {
+    setSessionToRename({ session });
     setRenameValue(session.title);
   };
   const onArchiveRequest = (session: SessionListItem, groupRepo: RepoRow) => {
@@ -228,12 +156,12 @@ export function GlobalSessionsSidebar({
               exit={{ opacity: 0 }}
               transition={tokenTransition.fast}
             >
-              {orderedRepos === undefined ? (
+              {orderedEntries === undefined ? (
                 <CenteredSpinner
                   label="Loading sessions"
                   className="min-h-48"
                 />
-              ) : orderedRepos.length === 0 ? (
+              ) : orderedEntries.length === 0 ? (
                 <div className="px-3 py-8 text-center">
                   <p className="text-sm font-medium text-foreground">
                     No apps yet
@@ -244,42 +172,43 @@ export function GlobalSessionsSidebar({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {linkedGroups.map((group) => (
-                    <LinkedSessionGroupSection
-                      key={group.groupId}
-                      group={group}
-                      // Linked groups start open; a toggle is remembered.
-                      open={linkedGroupOpen.storedOpen(group.groupId) ?? true}
-                      onOpenChange={(open) => {
-                        linkedGroupOpen.setGroupOpen(group.groupId, open);
-                      }}
-                      pathname={pathname}
-                      listMode={listMode}
-                      onNavigate={onNavigate}
-                      onRenameRequest={onRenameRequest}
-                      onArchiveRequest={onArchiveRequest}
-                    />
-                  ))}
-                  {orderedRepos.map((repo) => (
-                    <GlobalSessionGroup
-                      key={repo._id}
-                      repo={repo}
-                      pathname={pathname}
-                      sessions={visibleSessions(repo._id)?.filter(
-                        (session) => !linkedSessionIds.has(session._id),
-                      )}
-                      open={isGroupOpen(repo)}
-                      onOpenChange={(open) => {
-                        setGroupOpen(repo._id, open);
-                      }}
-                      onNavigate={onNavigate}
-                      sessionSortOrder={settings.sessionSortOrder}
-                      sessionPreviewCount={settings.sessionPreviewCount}
-                      listMode={listMode}
-                      onRenameRequest={onRenameRequest}
-                      onArchiveRequest={onArchiveRequest}
-                    />
-                  ))}
+                  {orderedEntries.map((entry) =>
+                    entry.kind === "group" ? (
+                      <LinkedSessionGroupSection
+                        key={entry._id}
+                        group={entry.group}
+                        // Linked groups start open; a toggle is remembered.
+                        open={linkedGroupOpen.storedOpen(entry._id) ?? true}
+                        onOpenChange={(open) => {
+                          linkedGroupOpen.setGroupOpen(entry._id, open);
+                        }}
+                        pathname={pathname}
+                        listMode={listMode}
+                        onNavigate={onNavigate}
+                        sessionSortOrder={settings.sessionSortOrder}
+                        sessionPreviewCount={settings.sessionPreviewCount}
+                        onRenameRequest={onRenameRequest}
+                        onArchiveRequest={onArchiveRequest}
+                      />
+                    ) : (
+                      <GlobalSessionGroup
+                        key={entry._id}
+                        repo={entry.repo}
+                        pathname={pathname}
+                        sessions={entry.sessions}
+                        open={isGroupOpen(entry.repo)}
+                        onOpenChange={(open) => {
+                          setGroupOpen(entry.repo._id, open);
+                        }}
+                        onNavigate={onNavigate}
+                        sessionSortOrder={settings.sessionSortOrder}
+                        sessionPreviewCount={settings.sessionPreviewCount}
+                        listMode={listMode}
+                        onRenameRequest={onRenameRequest}
+                        onArchiveRequest={onArchiveRequest}
+                      />
+                    ),
+                  )}
                 </div>
               )}
             </m.div>
@@ -287,87 +216,16 @@ export function GlobalSessionsSidebar({
         </div>
       </div>
 
-      <Dialog
-        open={sessionToRename !== null}
-        onOpenChange={(open) => {
-          if (!open) setSessionToRename(null);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Rename session</DialogTitle>
-          </DialogHeader>
-          <Input
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && renameValue.trim() && sessionToRename) {
-                e.preventDefault();
-                void saveSessionRename();
-              }
-            }}
-            autoFocus
-          />
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => setSessionToRename(null)}
-              disabled={isRenaming}
-            >
-              Cancel
-            </Button>
-            <Button
-              disabled={!renameValue.trim() || isRenaming}
-              onClick={() => void saveSessionRename()}
-            >
-              {isRenaming ? "Saving…" : "Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        open={sessionToArchive !== null}
-        onOpenChange={(open) => {
-          if (!open) setSessionToArchive(null);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Archive Session</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            This will stop the sandbox and remove{" "}
-            <span className="font-medium text-foreground">
-              {sessionToArchive?.session.title}
-            </span>{" "}
-            from the active list. An open or draft PR will be closed, and
-            reopened if you unarchive.
-          </p>
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => setSessionToArchive(null)}
-              disabled={isArchiving}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={isArchiving}
-              onClick={() => {
-                if (!sessionToArchive) return;
-                void archive(sessionToArchive, pathname, () => {
-                  setSessionToArchive(null);
-                  if (onNavigate) onNavigate();
-                });
-              }}
-            >
-              {isArchiving ? "Archiving…" : "Archive"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <SessionDialogs
+        pathname={pathname}
+        renameTarget={sessionToRename}
+        renameValue={renameValue}
+        onRenameValueChange={setRenameValue}
+        onCloseRename={() => setSessionToRename(null)}
+        archiveTarget={sessionToArchive}
+        onCloseArchive={() => setSessionToArchive(null)}
+        onArchived={onNavigate}
+      />
     </>
   );
 }

@@ -4,6 +4,7 @@ import { internalQuery } from "./_generated/server";
 import { authMutation, authQuery, hasRepoAccess } from "./functions";
 import { syncSettingFields } from "./validators";
 import type { Id } from "./_generated/dataModel";
+import { findReposByOwnerAndName } from "./_githubRepos/helpers";
 
 /** Throws unless the user can access at least one app row for the codebase. */
 async function assertCodebaseAccess(
@@ -12,12 +13,7 @@ async function assertCodebaseAccess(
   name: string,
   userId: Id<"users">,
 ): Promise<void> {
-  const repos = await ctx.db
-    .query("githubRepos")
-    .withIndex("by_owner_and_name", (q) =>
-      q.eq("owner", owner).eq("name", name),
-    )
-    .collect();
+  const repos = await findReposByOwnerAndName(ctx.db, { owner, name });
   for (const repo of repos) {
     if (await hasRepoAccess(ctx.db, repo._id, userId)) return;
   }

@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@eva/ui";
 import {
   type ReactNode,
   useCallback,
@@ -47,6 +48,12 @@ interface ResizablePanelLayoutProps {
   leftMinWidthPx: number;
   rightMinWidthPx: number;
   storageKey: string;
+  /**
+   * localStorage key for the open/collapsed flag when it must not follow
+   * `storageKey`. Sandbox layouts pass a per-entity key so opening the panel in
+   * one session does not open it in the next; the dragged width stays shared.
+   */
+  collapsedStorageKey?: string;
   /** Initial collapsed state of the right panel when there is no stored value. Defaults to true. */
   defaultRightCollapsed?: boolean;
   /**
@@ -54,6 +61,12 @@ interface ResizablePanelLayoutProps {
    * detail). Sandbox layouts pass the icon-rail width so the rail stays visible.
    */
   rightCollapsedSizePx?: number;
+  /**
+   * No resting divider line: the sandbox rail reads as tab groups on the
+   * canvas, so the tone step separates the panes. The line and grip still
+   * show on hover and while dragging.
+   */
+  seamlessSeparator?: boolean;
   /**
    * Bump this value to force-expand the right panel (e.g. agent browser lock).
    * Only expands; never collapses.
@@ -94,8 +107,10 @@ export function ResizablePanelLayout({
   leftMinWidthPx,
   rightMinWidthPx,
   storageKey,
+  collapsedStorageKey = storageKey,
   defaultRightCollapsed = true,
   rightCollapsedSizePx = 0,
+  seamlessSeparator = false,
   expandRightSignal,
   collapseRightSignal,
   mobilePaneLabels = DEFAULT_MOBILE_PANE_LABELS,
@@ -104,7 +119,7 @@ export function ResizablePanelLayout({
   "use no memo";
   const rightPanelRef = usePanelRef();
   const [savedCollapsed, setSavedCollapsed] = useLocalStorage(
-    storageKey,
+    collapsedStorageKey,
     defaultRightCollapsed,
   );
   const defaultRightSize = complementaryPercentage(
@@ -125,10 +140,12 @@ export function ResizablePanelLayout({
   // Below `md` only one pane is on screen, so the layout always opens on the
   // left pane (chat / list) regardless of `defaultRightCollapsed` or the stored
   // desktop preference. The switcher is the way back; opening on the right
-  // would trap the user.
-  const [rightCollapsed, setRightCollapsed] = useState(() =>
-    isMobile ? true : savedCollapsed,
-  );
+  // would trap the user. Phone-only: it never touches the desktop state.
+  const [mobileShowsRight, setMobileShowsRight] = useState(false);
+  // Desktop: the panel library owns the layout. This is only its last
+  // measured report (from `onResize`), so render can read it.
+  const [desktopCollapsed, setDesktopCollapsed] = useState(savedCollapsed);
+  const rightCollapsed = isMobile ? !mobileShowsRight : desktopCollapsed;
   // Seeded from storage so expanding after a reload returns to the dragged
   // width instead of the layout default.
   const lastExpandedSize = useRef<string>(savedRightSize);
@@ -152,7 +169,9 @@ export function ResizablePanelLayout({
     useState(collapseRightSignal);
   if (collapseRightSignal !== prevCollapseSignal) {
     setPrevCollapseSignal(collapseRightSignal);
-    if (isMobile && collapseRightSignal !== undefined) setRightCollapsed(true);
+    if (isMobile && collapseRightSignal !== undefined) {
+      setMobileShowsRight(false);
+    }
   }
 
   const railMinSizePx = rightCollapsedSizePx > 0 ? rightMinWidthPx : 0;
@@ -162,7 +181,7 @@ export function ResizablePanelLayout({
     // persisted: which pane you were last looking at on a phone must not
     // overwrite the dragged/collapsed desktop preference under the same key.
     if (isMobile) {
-      setRightCollapsed((prev) => !prev);
+      setMobileShowsRight((prev) => !prev);
       return;
     }
     const panel = rightPanelRef.current;
@@ -174,7 +193,7 @@ export function ResizablePanelLayout({
     const size = panel.getSize();
     const collapsed = isMeasuredPanelSize(size)
       ? isCollapsedPanelSize(size, rightCollapsedSizePx, railMinSizePx)
-      : rightCollapsed;
+      : desktopCollapsed;
     if (collapsed) {
       panel.resize(
         usableExpandedPanelSize(
@@ -191,7 +210,7 @@ export function ResizablePanelLayout({
     defaultRightSize,
     isMobile,
     railMinSizePx,
-    rightCollapsed,
+    desktopCollapsed,
     rightCollapsedSizePx,
     rightPanelRef,
   ]);
@@ -211,7 +230,7 @@ export function ResizablePanelLayout({
   useEffect(() => {
     if (expandRightSignal === undefined || expandRightSignal === 0) return;
     if (isMobile) {
-      setRightCollapsed(false);
+      setMobileShowsRight(true);
       return;
     }
     rightPanelRef.current?.resize(
@@ -269,7 +288,7 @@ export function ResizablePanelLayout({
     if (!collapsed) {
       lastExpandedSize.current = `${size.asPercentage}%`;
     }
-    setRightCollapsed(collapsed);
+    setDesktopCollapsed(collapsed);
     setSavedCollapsed(collapsed);
   };
 
@@ -370,10 +389,20 @@ export function ResizablePanelLayout({
           uses z-20 so a collapsed-rail click hits the toggle instead of
           starting a drag. */}
       <Separator
-        className={`w-px bg-border transition-colors hover:bg-primary/50 data-resize-handle-active:bg-primary data-resize-handle-active:transition-none ${hideSeparator ? "hidden" : ""}`}
+        className={cn(
+          "group/separator w-px transition-colors hover:bg-primary/50 data-resize-handle-active:bg-primary data-resize-handle-active:transition-none",
+          seamlessSeparator ? "bg-transparent" : "bg-border",
+          hideSeparator && "hidden",
+        )}
       >
         <div className="flex items-center justify-center w-3 h-full -mx-1.5 relative z-10">
-          <IconGripVertical className="w-4 h-4 text-muted-foreground/50" />
+          <IconGripVertical
+            className={cn(
+              "w-4 h-4 text-muted-foreground/50",
+              seamlessSeparator &&
+                "opacity-0 transition-opacity group-hover/separator:opacity-100 group-data-resize-handle-active/separator:opacity-100",
+            )}
+          />
         </div>
       </Separator>
       <Panel

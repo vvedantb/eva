@@ -3,47 +3,46 @@ import { v } from "convex/values";
 import type { GenericDatabaseReader, StorageReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import { internalQuery } from "../_generated/server";
-import { authQuery } from "../functions";
+import { authQuery, hasTeamAccess, userCanAccessRepo } from "../functions";
 import {
+  findReposByOwnerAndName,
+  findSiblingRepos,
+  findSiblingsOf,
   gatherAccessibleRepos,
   githubRepoValidator,
   githubRepoWithLogoValidator,
-  pickDefaultVisibleAppRepo,
-  userCanAccessRepo,
+  findRepoByPath,
 } from "./helpers";
 import {
   getAIProviderAvailability,
   PROVIDER_PRIMARY_AUTH_KEY,
 } from "../validators";
 import { filterActiveEntities } from "../numId";
+import { isSessionArchived } from "../_sessions/archive";
+import { isStandaloneSession } from "../_sessions/owner";
 import { listTeammateUserIds } from "../_userProviderAccounts/sharing";
 
-/** How many live sandboxes this app has across quick tasks and projects. */
+/** How many live sandboxes this app's quick tasks and projects hold (their sessions'). */
 async function repoActiveSandboxCount(
   db: GenericDatabaseReader<DataModel>,
   repoId: Id<"githubRepos">,
 ): Promise<number> {
-  // Indexed reads (not full table scans): the index pins both repo and status,
-  // and the take caps a pathological app the way `countActiveSessions` does.
-  const activeProjects = filterActiveEntities(
+  // Indexed read pinning repo and status; the take caps a pathological app
+  // the way `countActiveSessions` does.
+  const activeOwnedSessions = (
     await db
-      .query("projects")
-      .withIndex("by_repo_and_sandbox_status", (q) =>
-        q.eq("repoId", repoId).eq("reviewProjectSandboxStatus", "active"),
+      .query("sessions")
+      .withIndex("by_repo_and_status", (q) =>
+        q.eq("repoId", repoId).eq("status", "active"),
       )
-      .take(64),
-  ).filter((p) => p.sandboxId !== undefined);
-
-  const activeTasks = filterActiveEntities(
-    await db
-      .query("agentTasks")
-      .withIndex("by_repo_and_sandbox_status", (q) =>
-        q.eq("repoId", repoId).eq("reviewTaskSandboxStatus", "active"),
-      )
-      .take(64),
-  ).filter((t) => t.sandboxId !== undefined);
-
-  return activeProjects.length + activeTasks.length;
+      .take(64)
+  ).filter(
+    (s) =>
+      !isStandaloneSession(s) &&
+      s.deletedAt === undefined &&
+      s.sandboxId !== undefined,
+  );
+  return activeOwnedSessions.length;
 }
 
 /** Attaches a resolved `logoUrl` (from `logoStorageId`) to each repo. */
@@ -115,7 +114,9 @@ export const countActiveSessions = authQuery({
             )
             .take(64),
         );
-        return sessions.filter((s) => s.archived !== true).length;
+        return sessions.filter(
+          (s) => isStandaloneSession(s) && !isSessionArchived(s),
+        ).length;
       }),
     );
     return perRepo.reduce((total, n) => total + n, 0);
@@ -129,7 +130,7 @@ export const getLogoUrl = authQuery({
   handler: async (ctx, args) => {
     const repo = await ctx.db.get(args.repoId);
     if (!repo) return null;
-    if (!(await userCanAccessRepo(ctx.db, ctx.userId, repo))) return null;
+    if (!(await userCanAccessRepo(ctx.db, repo, ctx.userId))) return null;
     if (!repo.logoStorageId) return null;
     return await ctx.storage.getUrl(repo.logoStorageId);
   },
@@ -143,7 +144,7 @@ export const get = authQuery({
     const repo = await ctx.db.get(args.id);
     if (!repo) return null;
     if (repo.hidden === true) return null;
-    return (await userCanAccessRepo(ctx.db, ctx.userId, repo)) ? repo : null;
+    return (await userCanAccessRepo(ctx.db, repo, ctx.userId)) ? repo : null;
   },
 });
 
@@ -158,7 +159,7 @@ export const getByIdString = authQuery({
     const repo = await ctx.db.get(id);
     if (!repo) return null;
     if (repo.hidden === true) return null;
-    return (await userCanAccessRepo(ctx.db, ctx.userId, repo)) ? repo : null;
+    return (await userCanAccessRepo(ctx.db, repo, ctx.userId)) ? repo : null;
   },
 });
 
@@ -183,7 +184,7 @@ export const getProviderAvailability = authQuery({
       return unavailable;
     }
 
-    if (!(await userCanAccessRepo(ctx.db, ctx.userId, repo))) {
+    if (!(await userCanAccessRepo(ctx.db, repo, ctx.userId))) {
       return unavailable;
     }
 
@@ -243,26 +244,26 @@ export const getByOwnerAndName = authQuery({
   },
   returns: v.union(githubRepoValidator, v.null()),
   handler: async (ctx, args) => {
-    const candidates = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", args.owner).eq("name", args.name),
-      )
-      .collect();
-
-    let repo = args.appName
-      ? candidates.find(
-          (r) => r.rootDirectory?.split("/").pop() === args.appName,
-        )
-      : candidates.find((r) => !r.rootDirectory && r.hidden !== true);
-
-    if (!repo && !args.appName) {
-      repo = pickDefaultVisibleAppRepo(candidates);
-    }
-
+    const repo = await findRepoByPath(ctx.db, args);
     if (!repo) return null;
-    if (repo.hidden === true) return null;
-    return (await userCanAccessRepo(ctx.db, ctx.userId, repo)) ? repo : null;
+    return (await userCanAccessRepo(ctx.db, repo, ctx.userId)) ? repo : null;
+  },
+});
+
+/**
+ * The first row of a GitHub owner/name the caller can read, or null. Unlike
+ * `getByOwnerAndName` it ignores app rows and visibility: any accessible row
+ * holds the installation that can read the repo's pull requests.
+ */
+export const findAccessibleIdByOwnerAndName = authQuery({
+  args: { owner: v.string(), name: v.string() },
+  returns: v.union(v.id("githubRepos"), v.null()),
+  handler: async (ctx, args) => {
+    const candidates = await findReposByOwnerAndName(ctx.db, args);
+    const access = await Promise.all(
+      candidates.map((repo) => userCanAccessRepo(ctx.db, repo, ctx.userId)),
+    );
+    return candidates.find((_, index) => access[index])?._id ?? null;
   },
 });
 
@@ -286,14 +287,7 @@ export const listByTeam = authQuery({
   args: { teamId: v.id("teams") },
   returns: v.array(githubRepoWithLogoValidator),
   handler: async (ctx, args) => {
-    const membership = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_team_and_user", (q) =>
-        q.eq("teamId", args.teamId).eq("userId", ctx.userId),
-      )
-      .first();
-
-    if (!membership) return [];
+    if (!(await hasTeamAccess(ctx.db, args.teamId, ctx.userId))) return [];
 
     const repos = await ctx.db
       .query("githubRepos")
@@ -307,17 +301,12 @@ export const listByTeam = authQuery({
   },
 });
 
-/** Internal: all repo ids sharing owner/name (monorepo siblings + self). */
-export const listRepoIdsByOwnerAndName = internalQuery({
-  args: { owner: v.string(), name: v.string() },
+/** Internal: sibling repo ids of a repo (same owner/name and team, self included). */
+export const listSiblingRepoIds = internalQuery({
+  args: { repoId: v.id("githubRepos") },
   returns: v.array(v.id("githubRepos")),
   handler: async (ctx, args) => {
-    const siblings = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", args.owner).eq("name", args.name),
-      )
-      .collect();
+    const siblings = await findSiblingRepos(ctx.db, args.repoId);
     return siblings.map((repo) => repo._id);
   },
 });
@@ -353,14 +342,11 @@ export const listSiblingApps = authQuery({
   ),
   handler: async (ctx, args) => {
     const repo = await ctx.db.get(args.repoId);
-    if (!repo) return [];
+    if (!repo || !(await userCanAccessRepo(ctx.db, repo, ctx.userId))) {
+      return [];
+    }
 
-    const siblings = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", repo.owner).eq("name", repo.name),
-      )
-      .collect();
+    const siblings = await findSiblingsOf(ctx.db, repo);
 
     return siblings
       .filter((s) => s._id !== args.repoId && s.rootDirectory)
@@ -386,12 +372,7 @@ export const findParentRepoByOwnerAndName = internalQuery({
   },
   returns: v.union(githubRepoValidator, v.null()),
   handler: async (ctx, args) => {
-    const repos = await ctx.db
-      .query("githubRepos")
-      .withIndex("by_owner_and_name", (q) =>
-        q.eq("owner", args.owner).eq("name", args.name),
-      )
-      .collect();
+    const repos = await findReposByOwnerAndName(ctx.db, args);
     const parent = repos.find((repo) => !repo.rootDirectory);
     return parent ?? repos[0] ?? null;
   },
@@ -413,7 +394,7 @@ export const getAccessibleForAction = authQuery({
   handler: async (ctx, args) => {
     const repo = await ctx.db.get(args.id);
     if (!repo) return null;
-    return (await userCanAccessRepo(ctx.db, ctx.userId, repo)) ? repo : null;
+    return (await userCanAccessRepo(ctx.db, repo, ctx.userId)) ? repo : null;
   },
 });
 
@@ -436,7 +417,7 @@ export const getInstallationAccessState = authQuery({
     if (repos.length === 0) return "unclaimed";
     if (repos.some((repo) => repo.connectedBy === ctx.userId)) return "owner";
     for (const repo of repos) {
-      if (await userCanAccessRepo(ctx.db, ctx.userId, repo)) return "member";
+      if (await userCanAccessRepo(ctx.db, repo, ctx.userId)) return "member";
     }
     return "denied";
   },

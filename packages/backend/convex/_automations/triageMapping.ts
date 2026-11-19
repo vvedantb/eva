@@ -8,6 +8,8 @@
  * a plain string where the call site passes an `Id<"agentTasks">`.
  */
 
+import { FINDING_SEVERITIES, type FindingSeverity } from "../_validators/enums";
+
 /**
  * Score levels handed to Jev, lowest first. Their order defines the mapping
  * back onto {@link FINDING_SEVERITIES}, so the two arrays must stay aligned.
@@ -18,15 +20,6 @@ export const SEVERITY_LEVELS = [
   "high: bug, data or security issue users will hit",
   "critical: data loss, security breach, outage or release blocker",
 ] as const;
-
-export const FINDING_SEVERITIES = [
-  "low",
-  "medium",
-  "high",
-  "critical",
-] as const;
-
-export type FindingSeverity = (typeof FINDING_SEVERITIES)[number];
 
 /** Jev can answer between levels (2.4) or, on a bad day, outside them. */
 export function severityFromScore(score: number): FindingSeverity {

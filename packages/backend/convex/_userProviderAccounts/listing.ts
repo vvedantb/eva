@@ -25,20 +25,34 @@ export async function listAccountsFor(
   userId: Id<"users">,
   isOwn: boolean,
 ) {
-  const displayName =
-    (await resolveUserDisplayFirstName(ctx.db, userId)) ?? "Personal";
-  const rows = await ctx.db
-    .query("userProviderAccounts")
-    .withIndex("by_user", (q) => q.eq("userId", userId))
-    .collect();
+  const [ownName, rows] = await Promise.all([
+    resolveUserDisplayFirstName(ctx.db, userId),
+    ctx.db
+      .query("userProviderAccounts")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect(),
+  ]);
+  const displayName = ownName ?? "Personal";
   // Teammates repeat across rows, so resolve each name once.
+  const usedByIds = [
+    ...new Set(
+      rows.flatMap((row) =>
+        row.lastUsedByUserId && row.lastUsedByUserId !== userId
+          ? [row.lastUsedByUserId]
+          : [],
+      ),
+    ),
+  ];
+  const usedByNames = await Promise.all(
+    usedByIds.map((id) => resolveUserDisplayFirstName(ctx.db, id)),
+  );
   const names = new Map<Id<"users">, string | undefined>();
+  usedByIds.forEach((id, i) => {
+    names.set(id, usedByNames[i]);
+  });
   const items = [];
   for (const row of rows) {
     const usedBy = row.lastUsedByUserId;
-    if (usedBy && usedBy !== userId && !names.has(usedBy)) {
-      names.set(usedBy, await resolveUserDisplayFirstName(ctx.db, usedBy));
-    }
     items.push({
       _id: row._id,
       _creationTime: row._creationTime,
@@ -68,12 +82,14 @@ export async function listSelectableAccountsFor(
   ctx: QueryCtx,
   ownerUserId: Id<"users">,
 ) {
-  const own = await listAccountsFor(ctx, ownerUserId, true);
-  const teammates = await listTeammateUserIds(ctx.db, ownerUserId);
-  const shared = [];
-  for (const teammateId of teammates) {
-    const rows = await listAccountsFor(ctx, teammateId, false);
-    shared.push(...rows.filter((row) => row.shared));
-  }
+  const [own, teammateRows] = await Promise.all([
+    listAccountsFor(ctx, ownerUserId, true),
+    listTeammateUserIds(ctx.db, ownerUserId).then((teammates) =>
+      Promise.all(
+        teammates.map((teammateId) => listAccountsFor(ctx, teammateId, false)),
+      ),
+    ),
+  ]);
+  const shared = teammateRows.flat().filter((row) => row.shared);
   return [...own, ...shared];
 }

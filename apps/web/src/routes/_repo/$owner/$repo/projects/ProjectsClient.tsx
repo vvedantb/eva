@@ -39,12 +39,19 @@ import {
   IconSortDescending,
   IconX,
 } from "@tabler/icons-react";
+import { columnConfig } from "@/lib/components/projects/ProjectPhaseBadge";
 import {
-  PROJECT_PHASES,
-  phaseConfig,
-  type ProjectPhase,
-} from "@/lib/components/projects/ProjectPhaseBadge";
-import { priorityCompare } from "@/lib/components/priority/priorityMeta";
+  PROJECT_COLUMNS,
+  PROJECT_SORT_FIELDS,
+  PROJECT_SORT_FIELD_LABELS,
+  clearedProjectFilter,
+  clearedProjectFilters,
+  filterAndSortProjects,
+  projectColumn,
+  projectFilterChips,
+  toggleHiddenProjectPhase,
+  type ProjectColumn,
+} from "@eva/shared";
 import { ProjectsTimeline } from "@/lib/components/projects/ProjectsTimeline";
 import { ProjectsListView } from "@/lib/components/projects/ProjectsListView";
 import { ProjectsKanbanView } from "./_components/ProjectsKanbanView";
@@ -58,12 +65,7 @@ import { ProjectsChangePhaseDialog } from "./_components/ProjectsChangePhaseDial
 import { useProjectsSelection } from "./_components/useProjectsSelection";
 import { useProjectDelete } from "./_components/useProjectDelete";
 import { ActiveFiltersBar } from "./_components/ActiveFiltersBar";
-import {
-  useProjectFilters,
-  SORT_FIELDS,
-  type ProjectView,
-  type SortField,
-} from "./_utils";
+import { useProjectFilters, type ProjectView } from "./_utils";
 
 const VIEW_OPTIONS: {
   key: ProjectView;
@@ -79,12 +81,6 @@ function isProjectView(value: string): value is ProjectView {
   return value === "kanban" || value === "timeline" || value === "list";
 }
 
-const SORT_FIELD_LABELS: Record<SortField, string> = {
-  created: "Date Created",
-  title: "Title",
-  priority: "Priority",
-};
-
 export function ProjectsClient() {
   const { repo, basePath, owner, name } = useRepo();
   const projects = useQuery(api.projects.list, { repoId: repo._id });
@@ -94,11 +90,11 @@ export function ProjectsClient() {
     setParams,
   ] = useProjectFilters();
   const searchQuery = q;
-  // Derive the visible set from the persisted blocklist so new phases show by
-  // default and "all visible" is independent of how many phases exist.
-  const hiddenPhaseSet = new Set<ProjectPhase>(hiddenPhases);
-  const visiblePhases = new Set<ProjectPhase>(
-    PROJECT_PHASES.filter((p) => !hiddenPhaseSet.has(p)),
+  // Derive the visible set from the persisted blocklist so new columns show
+  // by default and "all visible" is independent of how many columns exist.
+  const hiddenPhaseSet = new Set<ProjectColumn>(hiddenPhases);
+  const visiblePhases = new Set<ProjectColumn>(
+    PROJECT_COLUMNS.filter((c) => !hiddenPhaseSet.has(c)),
   );
   const selection = useProjectsSelection(
     (projects ?? []).map((project) => project._id),
@@ -112,102 +108,47 @@ export function ProjectsClient() {
   const projectDelete = useProjectDelete(repo._id, exitSelectMode);
   const hasProjects = projects !== undefined && projects.length > 0;
 
-  const filteredSorted = (() => {
-    if (!projects) return [];
-    const query = searchQuery.toLowerCase().trim();
-    return projects
-      .filter((p) => {
-        if (!visiblePhases.has(p.phase)) return false;
-        if (!query) return true;
-        return (
-          p.title.toLowerCase().includes(query) ||
-          p.rawInput?.toLowerCase().includes(query) ||
-          p.description?.toLowerCase().includes(query)
-        );
-      })
-      .sort((a, b) => {
-        let comparison = 0;
-        switch (sortField) {
-          case "created":
-            comparison = a._creationTime - b._creationTime;
-            break;
-          case "title":
-            comparison = a.title.localeCompare(b.title);
-            break;
-          case "priority":
-            comparison = priorityCompare(a.priority, b.priority);
-            break;
-        }
-        return sortDir === "asc" ? comparison : -comparison;
-      });
-  })();
+  const filteredSorted = filterAndSortProjects(projects ?? [], {
+    q: searchQuery,
+    hiddenPhases,
+    sortField,
+    sortDir,
+  });
 
-  const projectsByPhaseInitial: Record<ProjectPhase, typeof filteredSorted> = {
-    draft: [],
-    finalized: [],
+  const projectsByPhaseInitial: Record<ProjectColumn, typeof filteredSorted> = {
+    todo: [],
     in_progress: [],
     business_review: [],
     code_review: [],
     completed: [],
     cancelled: [],
   };
-  const projectsByPhase = PROJECT_PHASES.reduce((acc, phase) => {
-    acc[phase] = filteredSorted.filter((p) => p.phase === phase);
+  const projectsByPhase = PROJECT_COLUMNS.reduce((acc, column) => {
+    acc[column] = filteredSorted.filter((p) => projectColumn(p.phase) === column);
     return acc;
   }, projectsByPhaseInitial);
 
-  const handlePhaseToggle = (phase: ProjectPhase) => {
-    const hidden = new Set<ProjectPhase>(hiddenPhases);
-    if (hidden.has(phase)) {
-      hidden.delete(phase);
-    } else {
-      // Keep at least one phase visible.
-      if (visiblePhases.size === 1) return;
-      hidden.add(phase);
-    }
-    setParams({ hiddenPhases: [...hidden] });
+  const handlePhaseToggle = (column: ProjectColumn) => {
+    setParams({
+      hiddenPhases: toggleHiddenProjectPhase(hiddenPhases, column, PROJECT_COLUMNS),
+    });
   };
 
   const hasActiveFilters =
     hiddenPhases.length > 0 || sortField !== "created" || sortDir !== "desc";
 
   const clearAllFilters = () => {
-    setParams({
-      hiddenPhases: [],
-      sortField: "created",
-      sortDir: "desc",
-    });
+    setParams(clearedProjectFilters());
   };
 
-  const activeFilterLabels: Array<{ key: string; label: string }> = [];
-  if (hiddenPhases.length > 0) {
-    activeFilterLabels.push({
-      key: "phases",
-      label: `${visiblePhases.size} Phase${visiblePhases.size !== 1 ? "s" : ""}`,
-    });
-  }
-  if (sortField !== "created") {
-    activeFilterLabels.push({
-      key: "sortField",
-      label: `Sort: ${SORT_FIELD_LABELS[sortField]}`,
-    });
-  }
-  if (sortDir !== "desc") {
-    activeFilterLabels.push({ key: "sortDir", label: "Ascending" });
-  }
+  const activeFilterLabels = projectFilterChips(
+    { q, hiddenPhases, sortField, sortDir },
+    PROJECT_COLUMNS,
+  );
 
   const clearFilter = (key: string) => {
-    switch (key) {
-      case "phases":
-        setParams({ hiddenPhases: [] });
-        break;
-      case "sortField":
-        setParams({ sortField: "created" });
-        break;
-      case "sortDir":
-        setParams({ sortDir: "desc" });
-        break;
-    }
+    const chip = activeFilterLabels.find((filter) => filter.key === key);
+    if (chip) setParams(clearedProjectFilter(chip.key));
   };
 
   const toolbarContent = (
@@ -268,7 +209,7 @@ export function ProjectsClient() {
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <IconSortDescending size={16} className="mr-2" />
-                Sort: {SORT_FIELD_LABELS[sortField]}{" "}
+                Sort: {PROJECT_SORT_FIELD_LABELS[sortField]}{" "}
                 {sortDir === "asc" ? "↑" : "↓"}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
@@ -280,9 +221,9 @@ export function ProjectsClient() {
                     }
                   }}
                 >
-                  {SORT_FIELDS.map((f) => (
+                  {PROJECT_SORT_FIELDS.map((f) => (
                     <DropdownMenuRadioItem key={f} value={f}>
-                      {SORT_FIELD_LABELS[f]}
+                      {PROJECT_SORT_FIELD_LABELS[f]}
                     </DropdownMenuRadioItem>
                   ))}
                 </DropdownMenuRadioGroup>
@@ -308,13 +249,13 @@ export function ProjectsClient() {
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <IconFilter size={16} className="mr-2" />
-                {visiblePhases.size === PROJECT_PHASES.length
+                {visiblePhases.size === PROJECT_COLUMNS.length
                   ? "All Phases"
                   : `${visiblePhases.size} Phases`}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
-                {PROJECT_PHASES.map((p) => {
-                  const cfg = phaseConfig[p];
+                {PROJECT_COLUMNS.map((p) => {
+                  const cfg = columnConfig[p];
                   return (
                     <DropdownMenuCheckboxItem
                       key={p}

@@ -22,6 +22,7 @@ export const REPO_EVENT_LABELS: Record<RepoEventKind, string> = {
   issue_labeled: "an issue gets a label",
   pr_opened: "a PR is opened",
   pr_merged: "a PR is merged",
+  production_alert: "an Axiom monitor alerts",
 };
 
 /** Events a user automation can pick; the PR-routing ones are presets only. */

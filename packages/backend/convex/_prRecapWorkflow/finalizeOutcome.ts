@@ -1,8 +1,10 @@
 import type { WorkflowCtx } from "@convex-dev/workflow";
 import type { Id } from "../_generated/dataModel";
 import type { Infer } from "convex/values";
-import type { aiModelValidator } from "../_validators/aiModels";
-import type { ReasoningLevel } from "../_validators/aiModels";
+import type {
+  aiModelValidator,
+  ReasoningLevel,
+} from "../_validators/aiModels";
 import { internal } from "../_generated/api";
 import type { RecapWalkthroughStep } from "./walkthrough";
 

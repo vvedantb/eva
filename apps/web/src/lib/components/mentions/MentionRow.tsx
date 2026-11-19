@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { UserInitials } from "@eva/shared/user-initials";
 import type { AIProvider, Id } from "@eva/backend";
+import type { MentionKind } from "@eva/shared";
 import {
   BoardIcon,
   ChecklistIcon,
@@ -11,11 +12,8 @@ import {
   TerminalIcon,
 } from "@vvedantb/ui";
 
-/**
- * What a Data `@` entry points at. Mirrors the backend `DataMentionKind` union
- * — a new kind there fails to assign here until it is given an icon below.
- */
-export type MentionKind = "document" | "session" | "project" | "quickTask";
+/** A new `MentionKind` fails the exhaustive switch below until it has an icon. */
+export type { MentionKind };
 
 const KIND_ICON_CLASS = "shrink-0 text-muted-foreground";
 

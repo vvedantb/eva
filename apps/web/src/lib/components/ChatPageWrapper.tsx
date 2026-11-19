@@ -22,6 +22,14 @@ interface ChatPageWrapperProps {
 
 const ARCHIVED_MESSAGE = "This session is archived and read-only";
 
+/**
+ * Chat header actions on one shared trough (`rail-track`), like the rail
+ * groups; buttons on it are flat (globals.css). Session, task and project
+ * chats all use it.
+ */
+export const CHAT_HEADER_ACTIONS_CLASS =
+  "rail-track flex shrink-0 flex-wrap items-center justify-end gap-0.5 rounded-xl p-0.5 empty:hidden";
+
 export function ChatPageWrapper({
   title: _title,
   headerLeft,
@@ -68,9 +76,7 @@ export function ChatPageWrapper({
               <div />
             )}
             {headerRight && (
-              <div className="flex shrink-0 items-center gap-1 sm:gap-2 flex-wrap justify-end">
-                {headerRight}
-              </div>
+              <div className={CHAT_HEADER_ACTIONS_CLASS}>{headerRight}</div>
             )}
           </m.div>
         )}

@@ -1,38 +1,24 @@
-import { getAIModelProvider, type AIProvider } from "@eva/backend";
-import type { ModelAccount } from "@vvedantb/ui";
+import { getAIModelProvider } from "@eva/backend";
+import { carriedAccountForProvider, defaultAccountForProvider } from "@eva/shared";
 
-type SelectableAccount = Pick<ModelAccount, "id" | "provider" | "isOwn">;
+type SelectableAccount = { id: string; provider: string; isOwn: boolean };
 
 /**
- * Creator default: the creator's OWN account matching the model's provider
- * (most recently listed wins — caller should sort by updatedAt desc), else null
- * (Team). Teammates' shared accounts bill their owner, so they are never
- * defaulted to — they have to be picked explicitly.
+ * Creator default for `model` (`defaultAccountForProvider`): the creator's OWN
+ * account for its provider, else null (Team). A missing model is Claude's.
  */
 export function defaultProviderAccountId(
   accounts: ReadonlyArray<SelectableAccount>,
   model: string | null | undefined,
 ): string | null {
-  const provider: AIProvider = getAIModelProvider(model);
-  for (const account of accounts) {
-    if (account.isOwn && account.provider === provider) return account.id;
-  }
-  return null;
+  return defaultAccountForProvider(accounts, getAIModelProvider(model));
 }
 
-/**
- * The account to carry over when the model changes: the current pick when it
- * still matches the new model's provider (an explicit choice survives a model
- * switch), else the creator default.
- */
+/** The account to carry over to `model` (`carriedAccountForProvider`). */
 export function providerAccountIdForModel(
   accounts: ReadonlyArray<SelectableAccount>,
   currentAccountId: string | null,
   model: string | null | undefined,
 ): string | null {
-  const current = accounts.find((account) => account.id === currentAccountId);
-  if (current && current.provider === getAIModelProvider(model)) {
-    return current.id;
-  }
-  return defaultProviderAccountId(accounts, model);
+  return carriedAccountForProvider(accounts, currentAccountId, getAIModelProvider(model));
 }

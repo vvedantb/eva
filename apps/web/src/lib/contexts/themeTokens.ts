@@ -1,58 +1,15 @@
+import { DEFAULT_ACCENT_COLOR, type Doc } from "@eva/backend";
+
 /**
  * Tailwind chromatic accents, the Tailwind grey ramps, and four muted hues of
  * our own (taupe/mauve/mist/olive). `zinc` is the monochrome default — it is
  * the only entry that reads as pure black/white rather than a mid tone.
  */
-export type AccentColor =
-  | "zinc"
-  | "red"
-  | "orange"
-  | "amber"
-  | "yellow"
-  | "lime"
-  | "green"
-  | "emerald"
-  | "teal"
-  | "cyan"
-  | "sky"
-  | "blue"
-  | "indigo"
-  | "violet"
-  | "purple"
-  | "fuchsia"
-  | "pink"
-  | "rose"
-  | "slate"
-  | "gray"
-  | "neutral"
-  | "stone"
-  | "taupe"
-  | "mauve"
-  | "mist"
-  | "olive";
-export type RadiusSize = "none" | "sm" | "md" | "lg" | "xl" | "full";
-export type FontFamily =
-  | "inter"
-  | "roboto"
-  | "poppins"
-  | "dm-sans"
-  | "space-grotesk"
-  | "host-grotesk"
-  | "geist"
-  | "source-serif"
-  | "jakarta"
-  | "outfit"
-  | "nunito"
-  | "ibm-plex"
-  | "figtree";
-export type LetterSpacing = "tighter" | "tight" | "normal" | "wide" | "wider";
-
-export interface CustomTheme {
-  accentColor?: AccentColor;
-  radius?: RadiusSize;
-  fontFamily?: FontFamily;
-  letterSpacing?: LetterSpacing;
-}
+export type CustomTheme = NonNullable<Doc<"users">["customTheme"]>;
+export type AccentColor = NonNullable<CustomTheme["accentColor"]>;
+export type RadiusSize = NonNullable<CustomTheme["radius"]>;
+export type FontFamily = NonNullable<CustomTheme["fontFamily"]>;
+export type LetterSpacing = NonNullable<CustomTheme["letterSpacing"]>;
 
 export interface ResolvedCustomTheme {
   accentColor: AccentColor;
@@ -62,7 +19,7 @@ export interface ResolvedCustomTheme {
 }
 
 const CUSTOM_THEME_DEFAULTS: ResolvedCustomTheme = {
-  accentColor: "zinc",
+  accentColor: DEFAULT_ACCENT_COLOR,
   radius: "xl",
   fontFamily: "inter",
   letterSpacing: "tight",

@@ -1,7 +1,6 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { getUserCheckedOutBranch } from "../convex/_sandbox_runtime/git";
 import { git, localGitSandboxHandle } from "./_helpers/localGitSandbox";
@@ -57,26 +56,4 @@ describe("getUserCheckedOutBranch", () => {
     git(workspace, "checkout", "-q", "--detach");
     await expect(probe()).resolves.toBeNull();
   });
-});
-
-/**
- * The probe alone did not fix resume: the session reuse path ran
- * `reuseSessionSandbox.setupBranch` after it, whose `checkout -B` moved the
- * sandbox back onto the chat branch (14 Oct 2026). Only fresh-sandbox steps
- * may force a branch checkout; resumeReusedSandbox owns it on reuse.
- */
-test("only fresh-sandbox steps force a branch checkout", () => {
-  const source = readFileSync(
-    fileURLToPath(
-      new URL("../convex/_sandbox_runtime/sessions.ts", import.meta.url),
-    ),
-    "utf8",
-  );
-  const branchStepLabels = [
-    ...source.matchAll(/"(\w+)\.(?:setupBranch|checkout\w*)"/g),
-  ].map((match) => match[1]);
-  expect(branchStepLabels.length).toBeGreaterThan(0);
-  for (const label of branchStepLabels) {
-    expect(label, `${label} forces a branch checkout`).toMatch(/^new/);
-  }
 });

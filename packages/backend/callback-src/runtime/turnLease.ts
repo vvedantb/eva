@@ -1,6 +1,6 @@
 import { TURN_ID, TURN_LEASE_GENERATION } from "../config.js";
 import type { JsonObject, JsonValue } from "../types.js";
-import { log } from "../utils.js";
+import { isJsonObject, log } from "../utils.js";
 
 export type TurnLeaseIdentity = {
   turnId: string;
@@ -167,7 +167,7 @@ export function noteHeartbeatResponse(
   } else {
     parsed = response;
   }
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+  if (!isJsonObject(parsed)) {
     return false;
   }
   const responseValue = parsed.value;
@@ -178,7 +178,7 @@ export function noteHeartbeatResponse(
       ? responseValue
       : parsed;
   const lease = payload.lease;
-  if (typeof lease !== "object" || lease === null || Array.isArray(lease)) {
+  if (!isJsonObject(lease)) {
     return false;
   }
   if (lease.status !== "terminal") return false;

@@ -12,16 +12,10 @@ import {
 } from "@/lib/components/routed/status";
 
 function sourceArgs(entity: ChatEntityRef): {
-  sourceKind: "session" | "task" | "project";
+  sourceKind: "session";
   sourceId: string;
 } {
-  if (entity.kind === "session") {
-    return { sourceKind: "session", sourceId: entity.sessionId };
-  }
-  if (entity.kind === "task") {
-    return { sourceKind: "task", sourceId: entity.taskId };
-  }
-  return { sourceKind: "project", sourceId: entity.projectId };
+  return { sourceKind: "session", sourceId: entity.sessionId };
 }
 
 /**

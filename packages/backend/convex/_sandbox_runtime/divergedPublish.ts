@@ -1,3 +1,5 @@
+import { EVA_BRANCH_PREFIX } from "../_git/branchNames";
+
 /**
  * When local and origin/<branch> have both moved, Eva merges the remote tip
  * rather than rebasing (rebasing a merged-in base replays hundreds of
@@ -29,7 +31,7 @@ export function parseGitNameOnlyList(output: string): string[] {
  * rule guards the user-confirmed session force-push (`_sessions/sandbox.ts`).
  */
 export function isEvaOwnedBranch(branchName: string): boolean {
-  return branchName.startsWith("eva/");
+  return branchName.startsWith(EVA_BRANCH_PREFIX);
 }
 
 /**

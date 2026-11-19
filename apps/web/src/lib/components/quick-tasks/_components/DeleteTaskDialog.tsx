@@ -23,6 +23,8 @@ export function useDeleteAgentTask() {
 interface DeleteTaskDialogProps {
   open: boolean;
   onClose: () => void;
+  /** After a successful delete, once the dialog has closed. */
+  onDone?: () => void;
   taskId: Id<"agentTasks">;
   taskTitle: string;
 }
@@ -30,6 +32,7 @@ interface DeleteTaskDialogProps {
 export function DeleteTaskDialog({
   open,
   onClose,
+  onDone,
   taskId,
   taskTitle,
 }: DeleteTaskDialogProps) {
@@ -41,6 +44,7 @@ export function DeleteTaskDialog({
     try {
       await deleteTask({ id: taskId });
       onClose();
+      if (onDone) onDone();
     } catch (err) {
       console.error("Failed to delete task:", err);
       toast.error("Could not delete the task. Try again.");

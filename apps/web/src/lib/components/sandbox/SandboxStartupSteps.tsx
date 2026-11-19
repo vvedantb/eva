@@ -14,7 +14,7 @@ import {
 import type { ActivityStep, AgentTraceStatus } from "@vvedantb/ui";
 import { IconCheck, IconCircle, IconX } from "@tabler/icons-react";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
-import { SANDBOX_CHAT_COPY } from "@/lib/components/chat/chatBodyUtils";
+import { SANDBOX_CHAT_COPY } from "@eva/shared";
 
 /** "Fetching base branch..." → "Fetching base branch": the row icon carries the progress. */
 function stageLabel(label: string): string {

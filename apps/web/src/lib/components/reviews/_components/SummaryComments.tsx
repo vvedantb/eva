@@ -13,7 +13,11 @@ import { IconArrowsSort, IconChevronRight } from "@tabler/icons-react";
 import { PrCommentCard } from "./PrCommentCard";
 import { NOTICE_CLASS, type PrOverview } from "./prOverviewMeta";
 import { PrAvatar } from "./prReviewParts";
-import { buildSummaryComments, type SummaryComment } from "./prSummaryComments";
+import {
+  buildSummaryComments,
+  splitSummaryComments,
+  type SummaryComment,
+} from "@eva/shared";
 import { SummarySection } from "./SummarySection";
 
 /** What a first render carries; the recent remarks are the ones worth arriving for. */
@@ -31,9 +35,7 @@ export function SummaryComments({ overview }: { overview: PrOverview }) {
   );
   const [shown, setShown] = useState(COMMENT_PAGE);
   const all = buildSummaryComments(overview);
-  const ordered = order === "newest" ? [...all].reverse() : all;
-  const people = ordered.filter((comment) => !comment.isBot);
-  const bots = ordered.filter((comment) => comment.isBot);
+  const { people, bots } = splitSummaryComments(all, order);
   const visible = people.slice(0, shown);
   const hidden = people.length - visible.length;
 

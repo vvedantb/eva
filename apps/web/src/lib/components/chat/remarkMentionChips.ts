@@ -1,6 +1,7 @@
 /**
  * Remark plugin that recognises inline mention/skill tokens inside Markdown and
- * marks them so they can be rendered as chips instead of plain links.
+ * marks them so they can be rendered as chips instead of plain links (the
+ * phone, which has no remark, does it on the text: `mentionTokensToChipLinks`).
  *
  * Tokens are authored as `@[Label](convexId)` (doc) and `/[Label](convexId)`
  * (skill). Markdown's own parser already turns the `[Label](convexId)` part into
@@ -11,7 +12,7 @@
  * safe (no external scheme to be stripped by link sanitisation).
  */
 
-const CONVEX_ID = /^[a-z0-9_]{16,40}$/;
+import { CONVEX_ID_PATTERN, mentionChipHref, type MentionChipKind } from "@eva/shared";
 
 interface MdNode {
   type: string;
@@ -19,8 +20,6 @@ interface MdNode {
   value?: string;
   children?: MdNode[];
 }
-
-export const MENTION_HREF_REGEX = /^#mention:(at|slash):([a-z0-9_]{16,40})$/;
 
 function rewriteChildren(node: MdNode): void {
   const children = node.children;
@@ -32,17 +31,17 @@ function rewriteChildren(node: MdNode): void {
     if (
       child.type === "link" &&
       typeof child.url === "string" &&
-      CONVEX_ID.test(child.url)
+      CONVEX_ID_PATTERN.test(child.url)
     ) {
       const prev = i > 0 ? children[i - 1] : undefined;
-      let kind: "at" | "slash" | null = null;
+      let kind: MentionChipKind | null = null;
       if (prev && prev.type === "text" && typeof prev.value === "string") {
         if (prev.value.endsWith("@")) kind = "at";
         else if (prev.value.endsWith("/")) kind = "slash";
       }
       if (kind && prev && typeof prev.value === "string") {
         prev.value = prev.value.slice(0, -1);
-        child.url = `#mention:${kind}:${child.url}`;
+        child.url = mentionChipHref(kind, child.url);
       }
       continue;
     }

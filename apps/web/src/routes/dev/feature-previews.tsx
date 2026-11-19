@@ -5,14 +5,13 @@ import { ActivityTasks, Button, WebPreview } from "@vvedantb/ui";
 import type { ActivityStep } from "@vvedantb/ui";
 import { IconFileText, IconGitFork } from "@tabler/icons-react";
 import { AssistantCiteToolbar } from "@/lib/components/chat/AssistantCiteToolbar";
-import { DEMO_ASSISTANT_CITATION } from "@/lib/components/chat/assistantCitation";
+import { DEMO_ASSISTANT_CITATION } from "@eva/shared/assistantCitation";
 import { PendingCitationChips } from "@/lib/components/chat/PendingCitationChips";
 import { PendingSnapshotChips } from "@/lib/components/chat/PendingSnapshotChips";
 import { PendingWebMcpChips } from "@/lib/components/chat/PendingWebMcpChips";
-import { toSandboxFilePath } from "@/lib/components/chat/ChangedFilesCard";
+import { toSandboxFilePath, type DiffSize } from "@eva/shared";
 import { ContextUsageDisplay } from "@/lib/components/context-usage";
 import { DiffsToolbar } from "@/lib/components/sandbox/DiffsToolbar";
-import type { DiffSize } from "@/lib/components/sandbox/diffFiles";
 import { PreviewSnapshotButton } from "@/lib/components/sandbox/PreviewSnapshotButton";
 import { PreviewWebMcpButton } from "@/lib/components/sandbox/PreviewWebMcpButton";
 import { DEMO_PREVIEW_SNAPSHOT } from "@/lib/components/sandbox/previewSnapshot";
@@ -601,7 +600,6 @@ function PreviewToolsPreview() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [path, setPath] = useState("/billing");
   const [contain, setContain] = useState(false);
-  const [annotationMode, setAnnotationMode] = useState(false);
   const [poppedOut, setPoppedOut] = useState(false);
   // The path input reads repo history, so borrow a real repo's context.
   return (
@@ -633,9 +631,6 @@ function PreviewToolsPreview() {
                 onToggleDevice={() => {}}
                 contain={contain}
                 onToggleContain={() => setContain(!contain)}
-                annotationMode={annotationMode}
-                onAnnotationModeChange={setAnnotationMode}
-                showAnnotationToggle
                 popOut={{
                   active: poppedOut,
                   onToggle: () => setPoppedOut(!poppedOut),

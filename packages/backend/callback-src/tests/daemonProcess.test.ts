@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import {
   DAEMON_CLAIM_POLL_TIMING,
   buildEntityMutationArgs,
@@ -68,6 +68,23 @@ test("buildEntityMutationArgs prefixes the entity field", () => {
   expect(
     buildEntityMutationArgs("taskId", "t1", { model: "claude:sonnet" }),
   ).toEqual({ taskId: "t1", model: "claude:sonnet" });
+});
+
+test("entityMutationArgs prefixes the entity this daemon owns", async () => {
+  // config.ts reads the entity env at import time, so load a fresh module graph.
+  vi.stubEnv("ENTITY_ID_FIELD", "taskId");
+  vi.stubEnv("ENTITY_ID", "t1");
+  vi.resetModules();
+  try {
+    const fresh = await import("../runtime/daemonProcess.js");
+    expect(fresh.entityMutationArgs({ model: "claude:sonnet" })).toEqual({
+      taskId: "t1",
+      model: "claude:sonnet",
+    });
+  } finally {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  }
 });
 
 test("claimDaemonPidfileBoot leaves a live rival untouched", () => {

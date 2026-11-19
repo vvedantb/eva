@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { IconCheck } from "@tabler/icons-react";
-import { m, useReducedMotion } from "motion/react";
+import { m } from "motion/react";
 import { cn } from "@eva/ui";
 import { tokenTransition } from "@vvedantb/ui";
 import type { LandingFeature } from "./landingContent";
@@ -22,8 +22,7 @@ interface ShowcaseState {
  * The demo drives the pace: it calls `onEnd` once its payoff has held, and the
  * showcase moves to the next tab. The underline only shows progress, over the
  * demo's declared `seconds`. Auto-advance stops when the strip scrolls out of
- * view, permanently once the visitor picks a tab (that demo then loops), and
- * never starts under reduced motion, where each demo shows its still.
+ * view, and permanently once the visitor picks a tab (that demo then loops).
  *
  * Each tab carries `group` so the animated sidebar icons play the same hover
  * animation here as they do in the app: the keyframes in
@@ -42,12 +41,10 @@ export function LandingShowcase({
     visible: false,
   });
 
-  const reducedMotion = useReducedMotion();
-
   const active = features[tab.index];
   if (!active) return null;
 
-  const autoRunning = tab.auto && tab.visible && !reducedMotion;
+  const autoRunning = tab.auto && tab.visible;
   const { Demo, seconds } = LANDING_PREVIEWS[active.preview];
 
   // Stable for the stage's sake (a new callback restarts its script), so the

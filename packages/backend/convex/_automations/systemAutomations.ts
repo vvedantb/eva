@@ -1,6 +1,7 @@
 import type { Doc } from "../_generated/dataModel";
 import type { AutomationTrigger } from "../_automationEvents/events";
 import {
+  ALERT_TO_TASK_PROMPT,
   CI_AUTOFIX_PROMPT,
   ISSUE_TO_TASK_PROMPT,
   REVIEW_RESPONDER_PROMPT,
@@ -169,6 +170,18 @@ export const SYSTEM_AUTOMATIONS: ReadonlyArray<SystemAutomationDefinition> = [
     readOnly: false,
     actionsEnabled: false,
     trigger: { kind: "event", event: "issue_labeled" },
+    action: "create_task",
+  },
+  {
+    key: "axiom-alert-to-task",
+    title: "Axiom alerts to tasks",
+    blurb:
+      "When an Axiom monitor alerts, creates a quick task to find and fix the cause. One task per monitor per hour.",
+    description: ALERT_TO_TASK_PROMPT,
+    defaultCronSchedule: "",
+    readOnly: false,
+    actionsEnabled: false,
+    trigger: { kind: "event", event: "production_alert" },
     action: "create_task",
   },
   {

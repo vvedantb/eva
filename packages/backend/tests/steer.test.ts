@@ -74,6 +74,7 @@ async function createRunningChatFixture() {
       connectedBy: userId,
     });
     const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
       userId,
       title: "Steer test",
@@ -86,8 +87,21 @@ async function createRunningChatFixture() {
       title: "Main",
       number: 1,
       isMain: true,
-      activeWorkflowId: "wf-running",
       lastModel: MODEL,
+    });
+    // The running turn: an open turn bound to its workflow.
+    await ctx.db.insert("turns", {
+      entityId: chatId,
+      sessionId,
+      streamingEntityId: String(chatId),
+      state: "running",
+      open: true,
+      turnStartedAt: Date.now(),
+      leaseExpiresAt: Date.now() + 120_000,
+      leaseGeneration: 1,
+      model: MODEL,
+      repoId,
+      workflowId: "wf-running",
     });
     const earlierId = await ctx.db.insert("queuedMessages", {
       parentId: chatId,

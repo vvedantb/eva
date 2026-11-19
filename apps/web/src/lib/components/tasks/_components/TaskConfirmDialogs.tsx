@@ -61,26 +61,6 @@ export function ResolveConfirmDialog({
   );
 }
 
-export function StartupCommandsConfirmDialog({
-  onOpenChange,
-  onConfirm,
-  isLoading,
-  ...props
-}: TaskConfirmDialogProps) {
-  return (
-    <ConfirmDialog
-      {...props}
-      size="md"
-      pending={isLoading}
-      onOpenChange={onOpenChange}
-      onConfirm={closeThen(onOpenChange, onConfirm)}
-      title="Run Startup Commands"
-      description="This will re-run the configured startup commands in the sandbox. Any running dev services will be restarted."
-      confirmLabel="Run Startup Commands"
-    />
-  );
-}
-
 export function RunDevServerConfirmDialog({
   onOpenChange,
   onConfirm,

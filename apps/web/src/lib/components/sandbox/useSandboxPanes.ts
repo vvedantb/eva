@@ -142,24 +142,9 @@ export function useSandboxPanes({
     setPreviewActive(id);
   }, [previewIds.length, setPreviewIds, setPreviewActive]);
 
-  // Reconcile active id if it points at a removed pane (or the console pane,
-  // whose id can linger in localStorage from before this became user-only).
-  /* eslint-disable no-effect/no-event-handler --
-     Same reason: a pane can disappear because another collaborator closed it,
-     or because a stale id survived in localStorage. */
-  useEffect(() => {
-    if (userTermIds.length === 0) return;
-    if (termActive && userTermIds.includes(termActive)) return;
-    setTermActive(userTermIds[0]);
-  }, [userTermIds, termActive, setTermActive]);
-  /* eslint-enable no-effect/no-event-handler */
-
-  useEffect(() => {
-    if (previewIds.length === 0) return;
-    if (previewActive && previewIds.includes(previewActive)) return;
-    setPreviewActive(previewIds[0]);
-  }, [previewIds, previewActive, setPreviewActive]);
-
+  // The stored active id can point at a removed pane (another collaborator
+  // closed it, or the console pane's id lingers from before it became
+  // user-only). Resolve it during render; nothing reads the stored copy raw.
   const resolvedTermActive =
     userTermIds.length > 0
       ? termActive && userTermIds.includes(termActive)
@@ -215,7 +200,7 @@ export function useSandboxPanes({
     } catch {
       return;
     }
-    if (termActive === ptyId) {
+    if (resolvedTermActive === ptyId) {
       const pick = next[removedIdx - 1] ?? next[0] ?? "";
       setTermActive(pick);
     }
@@ -227,7 +212,7 @@ export function useSandboxPanes({
     if (removedIdx < 0) return;
     const next = previewIds.filter((id) => id !== previewId);
     setPreviewIds(next);
-    if (previewActive === previewId) {
+    if (resolvedPreviewActive === previewId) {
       const pick = next[removedIdx - 1] ?? next[0] ?? "";
       setPreviewActive(pick);
     }

@@ -70,5 +70,12 @@ convex(
   `import into ${TARGET_DEPLOYMENT}`,
 );
 
+// The import copied prod's `sandboxIdlePauseMode: "on"` and prod's session
+// rows. Dev's sweeps would stop prod sandboxes from that stale copy.
+convex(
+  ["run", "--deployment", targetName, "sandboxIdlePause:switchOffInternal"],
+  `switch sandbox sweeps off on ${TARGET_DEPLOYMENT}`,
+);
+
 console.log(`\nDone. ${TARGET_DEPLOYMENT} now mirrors prod.`);
 console.log(`Backup kept at ${zipPath}`);

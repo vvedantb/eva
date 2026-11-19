@@ -1,9 +1,10 @@
 import { v, type Infer } from "convex/values";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
-import type { DatabaseReader, MutationCtx } from "../_generated/server";
+import type { MutationCtx } from "../_generated/server";
 import {
   authMutation,
+  getRepoWithAccess,
   getSessionWithAccess,
   hasRepoAccess,
 } from "../functions";
@@ -13,10 +14,10 @@ import {
   getAIModelProvider,
   reasoningLevelValidator,
   roleValidator,
-  sessionStatusValidator,
 } from "../validators";
 import { workflow } from "../workflowManager";
 import { resolveSessionBaseBranch } from "./baseBranch";
+import { scheduleStuckStartExpiry } from "../_sandbox/transitions";
 import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
 import {
   assertProviderAccountUsableBy,
@@ -26,38 +27,34 @@ import { schedulePrTitleSync } from "../_github/prTitleSync";
 import { DEFAULT_SESSION_TITLE } from "./helpers";
 import { ensureSessionGroup } from "./groups";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
-import {
-  cancelSessionSandboxGraceDelete,
-  scheduleSessionSandboxGraceDelete,
-} from "../sandboxCleanup";
+import { archiveSession, isSessionArchived, unarchiveSession } from "./archive";
+import { requestSessionSandboxStop } from "./sandbox";
 import {
   closeLivePullRequests,
   findPrimaryPullRequest,
   reopenArchivedPullRequests,
 } from "../_pullRequests/store";
 import { composerTraitFields } from "../_shared/composerTraits";
+import { buildSessionBranchName } from "../_git/branchNames";
 import {
   assertValidRepoGroupMembers,
   getRepoGroupForSession,
 } from "../repoGroups";
 import { linkedRepoDir } from "../_sandbox_runtime/workspaceLayout";
 import { touchUserActivity } from "../_sandbox/activity";
+import { assertComposerMessageRole } from "../_messages/publicRole";
+import {
+  assertStandaloneSession,
+  isStandaloneSession,
+  ownedSessionOwnerValidator,
+  STANDALONE_SESSION_OWNER,
+} from "./owner";
+import { ensureOwnerChat } from "./ownedSession";
+import { loadOwnerEntityWithAccess, ownerChatRefValidator } from "./queries";
 import {
   ensureMainChat,
-  getSessionChatOrThrow,
+  getSessionChatWithAccess,
 } from "../_sessionChats/helpers";
-
-/** Loads a session by id, throwing if it does not exist. */
-async function getSessionOrThrow(
-  db: DatabaseReader,
-  id: Id<"sessions">,
-): Promise<Doc<"sessions">> {
-  const session = await db.get(id);
-  if (!session) {
-    throw new Error("Session not found");
-  }
-  return session;
-}
 
 const createSessionArgs = v.object({
   repoId: v.id("githubRepos"),
@@ -72,6 +69,8 @@ const createSessionArgs = v.object({
     v.union(v.id("userProviderAccounts"), v.null()),
   ),
   baseBranch: v.optional(v.string()),
+  /** "Stack a new session on this PR": the PR whose head is `baseBranch`. */
+  stackOnPrNumber: v.optional(v.number()),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   /** Set when the orchestrator's `create_session` tool opened this session. */
   sentViaOrchestrator: v.optional(v.boolean()),
@@ -126,11 +125,7 @@ export async function createSession(
   args: CreateSessionArgs,
   fork?: CreateSessionFork,
 ): Promise<{ sessionId: Id<"sessions">; numId: number }> {
-  if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
-    throw new Error("Not authorized");
-  }
-  const repo = await ctx.db.get(args.repoId);
-  if (!repo) throw new Error("Repository not found");
+  const repo = await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
   const title = args.title?.trim() || DEFAULT_SESSION_TITLE;
   const baseBranch = resolveSessionBaseBranch(
     { baseBranch: args.baseBranch },
@@ -150,12 +145,7 @@ export async function createSession(
   const linkedRepoIds = args.linkedRepoIds ?? group?.linkedRepoIds ?? [];
   const linkedRepos: Array<Doc<"githubRepos">> = [];
   for (const linkedRepoId of linkedRepoIds) {
-    if (!(await hasRepoAccess(ctx.db, linkedRepoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
-    const linkedRepo = await ctx.db.get(linkedRepoId);
-    if (!linkedRepo) throw new Error("Repository not found");
-    linkedRepos.push(linkedRepo);
+    linkedRepos.push(await getRepoWithAccess(ctx.db, linkedRepoId, ctx.userId));
   }
   if (linkedRepos.length > 0) {
     assertValidRepoGroupMembers(repo, linkedRepos);
@@ -185,11 +175,18 @@ export async function createSession(
     repoId: args.repoId,
     userId: ctx.userId,
     title,
+    owner: STANDALONE_SESSION_OWNER,
     status: "starting",
+    // The first boot is a start request like any other; see
+    // `_sandbox/transitions.ts`.
+    sandboxStartAttempt: 1,
     createdBy: ctx.userId,
     updatedAt: Date.now(),
     numId,
     baseBranch,
+    ...(args.stackOnPrNumber !== undefined
+      ? { stackOnPrNumber: args.stackOnPrNumber }
+      : {}),
     providerAccountId,
     // The provider the session started on. Informational only — the composer
     // may move the session onto another provider later.
@@ -210,7 +207,7 @@ export async function createSession(
         }
       : {}),
   });
-  const branchName = `eva/session-${sessionId}`;
+  const branchName = buildSessionBranchName(sessionId);
   await ctx.db.patch(sessionId, { branchName });
   const created = await ctx.db.get(sessionId);
   if (!created) throw new Error("Session was not created");
@@ -264,8 +261,10 @@ export async function createSession(
       baseBranch,
       repoId: args.repoId,
       hasLinkedRepos: linkedRepos.length > 0,
+      startAttempt: 1,
     },
   );
+  await scheduleStuckStartExpiry(ctx, sessionId, 1);
 
   const content = args.message?.trim() ?? "";
   if (content) {
@@ -329,7 +328,6 @@ export const addMessage = authMutation({
     chatId: v.id("sessionChats"),
     role: roleValidator,
     content: v.string(),
-    activityLog: v.optional(v.string()),
     clientId: v.optional(v.string()),
     attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
     providerAccountId: v.optional(v.id("userProviderAccounts")),
@@ -340,10 +338,12 @@ export const addMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const { chat, session } = await getSessionChatOrThrow(ctx.db, args.chatId);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    assertComposerMessageRole(args);
+    const { chat, session } = await getSessionChatWithAccess(
+      ctx.db,
+      args.chatId,
+      ctx.userId,
+    );
     const credential =
       args.role === "user"
         ? await resolveMessageCredential(
@@ -357,7 +357,6 @@ export const addMessage = authMutation({
       role: args.role,
       content: args.content,
       timestamp: Date.now(),
-      activityLog: args.activityLog,
       clientId: args.clientId,
       userId: ctx.userId,
       attachmentStorageIds: args.attachmentStorageIds,
@@ -384,20 +383,6 @@ export const addMessage = authMutation({
   },
 });
 
-/** Updates the status of a session. */
-export const updateStatus = authMutation({
-  args: {
-    id: v.id("sessions"),
-    status: sessionStatusValidator,
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
-    await ctx.db.patch(args.id, { status: args.status });
-    return null;
-  },
-});
-
 /** Updates editable fields (title, branch) on a session. */
 export const update = authMutation({
   args: {
@@ -408,6 +393,7 @@ export const update = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await getSessionWithAccess(ctx.db, args.id, ctx.userId);
+    assertStandaloneSession(session, "be renamed");
     const updates: {
       title?: string;
       branchName?: string;
@@ -433,20 +419,6 @@ export const update = authMutation({
   },
 });
 
-/** Updates the summary bullet points on a session. */
-export const updateSummary = authMutation({
-  args: {
-    id: v.id("sessions"),
-    summary: v.array(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
-    await ctx.db.patch(args.id, { summary: args.summary });
-    return null;
-  },
-});
-
 /**
  * Archives a session: sandbox to cold storage, every open/draft PR it holds
  * closed (merged PRs are left alone), row flagged so the active list drops it.
@@ -468,17 +440,56 @@ export async function archiveSessionDoc(
   }
 
   await closeLivePullRequests(ctx, { kind: "session", sessionId: session._id });
-  await ctx.db.patch(session._id, {
-    archived: true,
-    status: "closed",
-    updatedAt: Date.now(),
-  });
-  await scheduleSessionSandboxGraceDelete(ctx, {
-    ...session,
-    archived: true,
-    status: "closed",
-  });
+  await ctx.db.patch(session._id, { status: "closed" });
+  await archiveSession(ctx, session);
 }
+
+/**
+ * The user-facing archive (`chats.archive`, `archiveGroup`): stops the
+ * sandbox when one is up, then `archiveSessionDoc`. The caller has already
+ * checked access and that the session is standalone.
+ */
+export async function stopAndArchiveSession(
+  ctx: MutationCtx,
+  session: Doc<"sessions">,
+): Promise<void> {
+  if (session.sandboxId) await requestSessionSandboxStop(ctx, session._id);
+  // Re-read: the stop moves the status, and the archive patches from this doc.
+  const fresh = await ctx.db.get(session._id);
+  if (fresh) await archiveSessionDoc(ctx, fresh);
+}
+
+/**
+ * Archives every active member of the session's linked-session group that
+ * the user can reach. Members stay in the group, so each one can be
+ * unarchived on its own later.
+ */
+export const archiveGroup = authMutation({
+  args: { sessionId: v.id("sessions") },
+  returns: v.object({ archived: v.number() }),
+  handler: async (ctx, args) => {
+    const session = await getSessionWithAccess(
+      ctx.db,
+      args.sessionId,
+      ctx.userId,
+    );
+    if (!session.sessionGroupId) throw new Error("Session is not in a group");
+    const groupId = session.sessionGroupId;
+    // Same cap as `listGroup`, so the dialog's count matches what archives.
+    const members = await ctx.db
+      .query("sessions")
+      .withIndex("by_session_group", (q) => q.eq("sessionGroupId", groupId))
+      .take(50);
+    let archived = 0;
+    for (const member of members) {
+      if (isSessionArchived(member) || !isStandaloneSession(member)) continue;
+      if (!(await hasRepoAccess(ctx.db, member.repoId, ctx.userId))) continue;
+      await stopAndArchiveSession(ctx, member);
+      archived++;
+    }
+    return { archived };
+  },
+});
 
 /** Archives a session so it no longer appears in the active list.
  * Also archives the sandbox (moves to cold storage for cost savings).
@@ -487,12 +498,31 @@ export const archive = authMutation({
   args: { id: v.id("sessions") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const session = await getSessionWithAccess(ctx.db, args.id, ctx.userId);
+    // A task's session archives with its task (`retireOwnedSession`).
+    assertStandaloneSession(session, "be archived on its own");
     await archiveSessionDoc(ctx, session);
     return null;
+  },
+});
+
+/**
+ * A task's or project's session and the chat it talks in (`getOwnedWithSeed`),
+ * created on first use. The owner's chat and sandbox panels call this before
+ * their first send or Start when `getOwnedWithSeed` is still null.
+ */
+export const ensureOwned = authMutation({
+  args: { owner: ownedSessionOwnerValidator },
+  returns: ownerChatRefValidator,
+  handler: async (ctx, args) => {
+    const entity = await loadOwnerEntityWithAccess(
+      ctx.db,
+      args.owner,
+      ctx.userId,
+    );
+    if (!entity) throw new Error(`${args.owner.kind} not found`);
+    const { session, chat } = await ensureOwnerChat(ctx, entity);
+    return { sessionId: session._id, chatId: chat._id };
   },
 });
 
@@ -502,17 +532,14 @@ export const unarchive = authMutation({
   args: { id: v.id("sessions") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    const session = await getSessionWithAccess(ctx.db, args.id, ctx.userId);
+    assertStandaloneSession(session, "be unarchived on its own");
 
     await reopenArchivedPullRequests(ctx, {
       kind: "session",
       sessionId: args.id,
     });
-    await ctx.db.patch(args.id, { archived: false });
-    await cancelSessionSandboxGraceDelete(ctx, args.id);
+    await unarchiveSession(ctx, args.id, { touch: false });
     return null;
   },
 });
@@ -525,42 +552,11 @@ export const updatePlanContent = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const session = await getSessionOrThrow(ctx.db, args.id);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
+    await getSessionWithAccess(ctx.db, args.id, ctx.userId);
     await ctx.db.patch(args.id, {
       planContent: args.planContent,
       updatedAt: Date.now(),
     });
-    return null;
-  },
-});
-
-/** Updates the content or activity log of the most recent message in a chat. */
-export const updateLastMessage = authMutation({
-  args: {
-    chatId: v.id("sessionChats"),
-    content: v.optional(v.string()),
-    activityLog: v.optional(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const { chat, session } = await getSessionChatOrThrow(ctx.db, args.chatId);
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId))) {
-      throw new Error("Not authorized");
-    }
-    const last = await ctx.db
-      .query("messages")
-      .withIndex("by_parent", (q) => q.eq("parentId", chat._id))
-      .order("desc")
-      .first();
-    if (!last) return null;
-    const patch: { content?: string; activityLog?: string } = {};
-    if (args.content !== undefined) patch.content = args.content;
-    if (args.activityLog !== undefined) patch.activityLog = args.activityLog;
-    await ctx.db.patch(last._id, patch);
-    await ctx.db.patch(chat._id, { updatedAt: Date.now() });
     return null;
   },
 });

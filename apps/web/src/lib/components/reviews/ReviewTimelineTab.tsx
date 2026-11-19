@@ -11,10 +11,7 @@ import {
   TimelineLifecycle,
   TimelineVerdict,
 } from "./_components/TimelineRows";
-import {
-  buildPrTimeline,
-  groupTimelineRows,
-} from "./_components/prTimelineItems";
+import { buildPrTimeline, groupTimelineRows } from "@eva/shared";
 
 /**
  * The Timeline tab, as t3code draws it: one rail down the left, every event a

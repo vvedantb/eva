@@ -21,7 +21,10 @@ import {
  * detach; this store decides.
  */
 
-const sessionId = z.custom<Id<"sessions">>().parse("sess_1");
+const owner = {
+  kind: "session" as const,
+  sessionId: z.custom<Id<"sessions">>().parse("sess_1"),
+};
 
 function target(
   overrides: Partial<PreviewMiniPlayerTarget> = {},
@@ -31,7 +34,7 @@ function target(
     group: "sbx_a:3000",
     src: "https://a-3000.vercel.run/",
     epoch: 1,
-    sessionId,
+    owner,
     sandboxId: "sbx_a",
     returnTo: "/acme/app/sessions/12/preview",
     title: "Fix the header",

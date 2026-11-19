@@ -1,6 +1,11 @@
 import { v } from "convex/values";
-import { authQuery, hasRepoAccess } from "../functions";
+import type { QueryCtx } from "../_generated/server";
+import type { Id } from "../_generated/dataModel";
+import { authQuery, hasRepoAccess, isTaskVisibleTo } from "../functions";
 import { entityVisible } from "../numId";
+import { standaloneOnly } from "../_sessions/owner";
+import { findRepoByPath } from "../_githubRepos/helpers";
+import { OPEN_TASK_STATUSES } from "../validators";
 import {
   DATA_MENTION_BADGE,
   DATA_MENTION_KINDS,
@@ -91,12 +96,14 @@ export const listData = authQuery({
       });
     }
 
-    // Include archived sessions — soft-deleted only are excluded below.
+    // Include archived sessions — soft-deleted only are excluded below. A
+    // task's session is not mentionable: mention the task.
     const sessions = await ctx.db
       .query("sessions")
       .withIndex("by_repo_and_deleted", (q) =>
         q.eq("repoId", args.repoId).eq("deletedAt", undefined),
       )
+      .filter(standaloneOnly)
       .order("desc")
       .take(MENTION_LIST_CAP);
     for (const session of sessions) {
@@ -129,11 +136,8 @@ export const listData = authQuery({
     }
 
     // Open work only — done tasks rarely need @-mention and dominate large repos.
-    const taskStatuses: Array<
-      "todo" | "in_progress" | "code_review" | "business_review"
-    > = ["todo", "in_progress", "code_review", "business_review"];
     const taskArrays = await Promise.all(
-      taskStatuses.map((status) =>
+      OPEN_TASK_STATUSES.map((status) =>
         ctx.db
           .query("agentTasks")
           .withIndex("by_repo_status_and_deleted", (q) =>
@@ -228,7 +232,11 @@ export const getEntity = authQuery({
     if (taskId) {
       const task = await ctx.db.get(taskId);
       const visible = entityVisible(task);
-      if (visible && visible.repoId === args.repoId) {
+      if (
+        visible &&
+        visible.repoId === args.repoId &&
+        isTaskVisibleTo(visible, ctx.userId)
+      ) {
         const description = visible.description?.trim();
         const item: DataMentionItem = {
           kind: "quickTask",
@@ -243,6 +251,80 @@ export const getEntity = authQuery({
     }
 
     return null;
+  },
+});
+
+type EntitySection = "sessions" | "quick-tasks" | "projects" | "docs";
+
+/** The row a section's `<numId>` names inside one repo. */
+function findByNumId(
+  db: QueryCtx["db"],
+  section: EntitySection,
+  repoId: Id<"githubRepos">,
+  numId: number,
+) {
+  switch (section) {
+    case "sessions":
+      return db
+        .query("sessions")
+        .withIndex("by_repo_and_numId", (q) =>
+          q.eq("repoId", repoId).eq("numId", numId),
+        )
+        .first();
+    case "quick-tasks":
+      return db
+        .query("agentTasks")
+        .withIndex("by_repo_and_numId", (q) =>
+          q.eq("repoId", repoId).eq("numId", numId),
+        )
+        .first();
+    case "projects":
+      return db
+        .query("projects")
+        .withIndex("by_repo_and_numId", (q) =>
+          q.eq("repoId", repoId).eq("numId", numId),
+        )
+        .first();
+    case "docs":
+      return db
+        .query("docs")
+        .withIndex("by_repo_and_numId", (q) =>
+          q.eq("repoId", repoId).eq("numId", numId),
+        )
+        .first();
+  }
+}
+
+/**
+ * Resolves an Eva link (`/owner/name[/app]/<section>/<numId>`) to the repo and
+ * entity id the mention hover card reads. Null when the repo or entity does not
+ * exist or the caller cannot read the repo; `getEntity` applies the per-entity
+ * visibility rules after this.
+ */
+export const getEntityByPath = authQuery({
+  args: {
+    owner: v.string(),
+    name: v.string(),
+    appName: v.optional(v.string()),
+    section: v.union(
+      v.literal("sessions"),
+      v.literal("quick-tasks"),
+      v.literal("projects"),
+      v.literal("docs"),
+    ),
+    numId: v.number(),
+  },
+  returns: v.union(
+    v.object({ repoId: v.id("githubRepos"), entityId: v.string() }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const repo = await findRepoByPath(ctx.db, args);
+    if (!repo || !(await hasRepoAccess(ctx.db, repo._id, ctx.userId))) {
+      return null;
+    }
+    const row = await findByNumId(ctx.db, args.section, repo._id, args.numId);
+    return row ? { repoId: repo._id, entityId: row._id } : null;
   },
 });
 

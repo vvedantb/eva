@@ -2,7 +2,8 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
-import { api } from "@eva/backend";
+import { api, taskScheduledAt } from "@eva/backend";
+import { runAllPlan, startAll } from "@eva/shared";
 import type { Id } from "@eva/backend";
 import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
@@ -15,7 +16,11 @@ import { Button, Spinner, toast, ConfirmSkipHint, skipConfirmTitle, useRequestCo
 import { IconPlayerPlay } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
-import { useQuickTaskFilters } from "@/routes/_repo/$owner/$repo/quick-tasks/_utils";
+import {
+  useQuickTaskFilters,
+  useQuickTaskTodoDrafts,
+} from "@/routes/_repo/$owner/$repo/quick-tasks/_utils";
+import { QuickTaskDraftRow } from "./QuickTaskDraftRow";
 import type { DisplayTaskStatus } from "@/lib/components/tasks/TaskStatusBadge";
 
 type Task = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
@@ -64,6 +69,7 @@ export function QuickTasksKanbanBoard({
   });
   const startExecution = useMutation(api.agentTasks.startExecution);
   const [{ statuses }] = useQuickTaskFilters();
+  const todoDrafts = useQuickTaskTodoDrafts(repoId);
   const visibleStatuses = new Set<DisplayTaskStatus>(statuses);
   const [isRunningAll, setIsRunningAll] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -106,7 +112,7 @@ export function QuickTasksKanbanBoard({
     }
   }
 
-  if (tasks.length === 0) {
+  if (tasks.length === 0 && todoDrafts.length === 0) {
     return null;
   }
 
@@ -116,35 +122,24 @@ export function QuickTasksKanbanBoard({
   };
 
   const todoTasks = tasks.filter((t) => t.status === "todo");
-  const ownedTodoTasks = todoTasks.filter((t) => t.createdBy === currentUserId);
-  const skippedCount = todoTasks.length - ownedTodoTasks.length;
+  const { owned: ownedTodoTasks, skippedCount } = runAllPlan(
+    tasks,
+    currentUserId,
+  );
 
   const handleRunAll = async () => {
     if (ownedTodoTasks.length === 0) return;
     setIsRunningAll(true);
-    try {
-      const results = await Promise.all(
-        ownedTodoTasks.map(async (task) => {
-          try {
-            await startExecution({ id: task._id });
-            return true;
-          } catch (err) {
-            console.error(`Failed to start task ${task._id}:`, err);
-            return false;
-          }
-        }),
+    const failedCount = await startAll(ownedTodoTasks, (task) =>
+      startExecution({ id: task._id }),
+    );
+    if (failedCount > 0) {
+      console.error(
+        `Run All started ${ownedTodoTasks.length - failedCount} of ${ownedTodoTasks.length} tasks`,
       );
-      const failedCount = results.filter((started) => !started).length;
-      if (failedCount > 0) {
-        console.error(
-          `Run All started ${ownedTodoTasks.length - failedCount} of ${ownedTodoTasks.length} tasks`,
-        );
-        toast.error(
-          `Could not start ${failedCount} of ${ownedTodoTasks.length} tasks.`,
-        );
-      }
-    } catch (err) {
-      console.error("Failed to run all:", err);
+      toast.error(
+        `Could not start ${failedCount} of ${ownedTodoTasks.length} tasks.`,
+      );
     }
     setIsRunningAll(false);
   };
@@ -156,6 +151,19 @@ export function QuickTasksKanbanBoard({
         visibleStatuses={visibleStatuses}
         onStatusChange={handleStatusChange}
         fillHeight
+        columnLead={(status) =>
+          status === "todo"
+            ? todoDrafts.map((draft) => (
+                <div key={draft._id} className="pb-1.5">
+                  <QuickTaskDraftRow
+                    id={draft._id}
+                    title={draft.title}
+                    description={draft.description}
+                  />
+                </div>
+              ))
+            : []
+        }
         columnExtra={(status) =>
           status === "todo" && todoTasks.length > 0 ? (
             <Button
@@ -198,8 +206,8 @@ export function QuickTasksKanbanBoard({
             }
             hasError={errorTaskIdSet.has(task._id)}
             deploymentStatus={deploymentStatusMap.get(task._id)}
-            sandboxStatus={task.reviewTaskSandboxStatus}
-            scheduledAt={task.scheduledAt}
+            sandboxStatus={task.sandboxStatus}
+            scheduledAt={taskScheduledAt(task)}
             tags={task.tags}
             createdByUser={users?.find((u) => u._id === task.createdBy)}
             createdAt={task.createdAt}
@@ -232,8 +240,6 @@ export function QuickTasksKanbanBoard({
               })
             }
             assignedTo={task.assignedTo}
-            model={task.model}
-            providerAccountId={task.providerAccountId}
             projectId={task.projectId}
             repoId={task.repoId ?? repoId}
             users={users ?? undefined}
@@ -257,8 +263,8 @@ export function QuickTasksKanbanBoard({
             }
             hasError={errorTaskIdSet.has(task._id)}
             deploymentStatus={deploymentStatusMap.get(task._id)}
-            sandboxStatus={task.reviewTaskSandboxStatus}
-            scheduledAt={task.scheduledAt}
+            sandboxStatus={task.sandboxStatus}
+            scheduledAt={taskScheduledAt(task)}
             tags={task.tags}
             createdByUser={users?.find((u) => u._id === task.createdBy)}
             createdAt={task.createdAt}
@@ -269,8 +275,6 @@ export function QuickTasksKanbanBoard({
             isSelecting={isSelecting}
             isSelected={selectedIds.has(task._id)}
             assignedTo={task.assignedTo}
-            model={task.model}
-            providerAccountId={task.providerAccountId}
             projectId={task.projectId}
             repoId={task.repoId ?? repoId}
             users={users ?? undefined}

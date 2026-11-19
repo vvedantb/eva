@@ -13,7 +13,7 @@ import {
 import { IconX } from "@tabler/icons-react";
 import { AveStatePip } from "@/lib/components/ave/AveActiveDot";
 import { AveEyes } from "@/lib/components/ave/AveEyes";
-import { AveQuestionsBadge } from "@/lib/components/ave/AveQuestionsBadge";
+import { AveBadge } from "@/lib/components/ave/AveBadge";
 import { AveMark } from "@/lib/components/ave/AveMark";
 import {
   aveLogoState,
@@ -35,7 +35,7 @@ const GLYPH_LAYER =
  *
  * Desktop only. On a phone the bottom-right corner is where the chat composer's
  * send button, the plan-question action row and row-level actions all live, and
- * a 48px disc floating over them makes them untappable — so below `lg` the
+ * a 48px disc floating over them makes them untappable — so below `md` the
  * summon affordance is `AveHeaderButton` in the mobile header instead.
  */
 export function AveLauncherButton({
@@ -74,7 +74,7 @@ export function AveLauncherButton({
           style={LAUNCHER_POSITION_STYLE}
           className={cn(
             "motion-press fixed z-50",
-            "hidden lg:flex size-12 items-center justify-center rounded-full",
+            "hidden md:flex size-12 items-center justify-center rounded-full",
             "smooth-shadow-ring-lg active:scale-[0.94]",
             "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/40",
             // Touch drags must not scroll the page out from under the pointer.
@@ -172,7 +172,7 @@ function AveLiveFace({ labelId }: { labelId: string }) {
   const { state, clearOneShot } = useAveLogoState();
   return (
     <AveFace state={state} labelId={labelId} onOneShotEnd={clearOneShot}>
-      <AveQuestionsBadge />
+      <AveBadge />
     </AveFace>
   );
 }

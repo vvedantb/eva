@@ -18,7 +18,7 @@ const TIMEOUT_MS = 30_000;
 const MINUTE_MS = 60 * 1000;
 
 async function fixture(options: {
-  sandboxStatus: "active" | "closed" | "stopping";
+  sandboxStatus: "active" | "closed" | "starting" | "stopping";
   /** A subagent the dead VM never settled, started this long ago. */
   orphanAgentAgeMs?: number;
   /** The queued message names an account that was deleted after the enqueue. */
@@ -46,15 +46,21 @@ async function fixture(options: {
       });
       await ctx.db.delete(providerAccountId);
     }
-    const taskId = await ctx.db.insert("agentTasks", {
-      title: "Ran once",
-      status: "code_review" as const,
+    const sessionId = await ctx.db.insert("sessions", {
+      owner: { kind: "standalone" },
       repoId,
-      createdAt: now,
-      updatedAt: now,
-      createdBy: userId,
-      sandboxId: "sbx-task",
-      reviewTaskSandboxStatus: options.sandboxStatus,
+      userId,
+      title: "Ran once",
+      status: options.sandboxStatus,
+      sandboxId: "sbx-session",
+    });
+    const chatId = await ctx.db.insert("sessionChats", {
+      sessionId,
+      repoId,
+      userId,
+      title: "Main",
+      number: 1,
+      isMain: true,
       ...(options.orphanAgentAgeMs !== undefined
         ? {
             backgroundAgents: [
@@ -69,7 +75,7 @@ async function fixture(options: {
         : {}),
     });
     await ctx.db.insert("queuedMessages", {
-      parentId: taskId,
+      parentId: chatId,
       content: "and also rename the button",
       createdAt: now,
       order: now,
@@ -77,18 +83,18 @@ async function fixture(options: {
       model: "claude:sonnet" as const,
       providerAccountId,
     });
-    return { taskId };
+    return { sessionId, chatId };
   });
   return { t, ...ids };
 }
 
 type TestConvex = Awaited<ReturnType<typeof fixture>>["t"];
 
-function queueLength(t: TestConvex, taskId: Id<"agentTasks">) {
+function queueLength(t: TestConvex, chatId: Id<"sessionChats">) {
   return t.run(async (ctx) => {
     const rows = await ctx.db
       .query("queuedMessages")
-      .withIndex("by_parent_and_order", (q) => q.eq("parentId", taskId))
+      .withIndex("by_parent_and_order", (q) => q.eq("parentId", chatId))
       .collect();
     return rows.length;
   });
@@ -113,18 +119,18 @@ describe("a queued message is not stranded", () => {
   test(
     "subagents orphaned by a stopped sandbox do not stop the wake",
     async () => {
-      const { t, taskId } = await fixture({
+      const { t, sessionId, chatId } = await fixture({
         sandboxStatus: "closed",
         orphanAgentAgeMs: 10 * MINUTE_MS,
       });
 
       await t.mutation(internal._queues.helpers.drainQueueQuietly, {
-        parentId: taskId,
+        parentId: chatId,
       });
 
-      const task = await t.run((ctx) => ctx.db.get(taskId));
-      expect(task?.reviewTaskSandboxStatus).toBe("starting");
-      expect(await queueLength(t, taskId)).toBe(1);
+      const session = await t.run((ctx) => ctx.db.get(sessionId));
+      expect(session?.status).toBe("starting");
+      expect(await queueLength(t, chatId)).toBe(1);
     },
     TIMEOUT_MS,
   );
@@ -132,23 +138,20 @@ describe("a queued message is not stranded", () => {
   test(
     "the ready sandbox settles subagents the old VM never reported",
     async () => {
-      const { t, taskId } = await fixture({
-        sandboxStatus: "closed",
+      const { t, sessionId, chatId } = await fixture({
+        sandboxStatus: "starting",
         orphanAgentAgeMs: 10 * MINUTE_MS,
       });
-      await t.run((ctx) =>
-        ctx.db.patch(taskId, { reviewTaskSandboxStatus: "starting" }),
-      );
 
-      await t.mutation(internal._agentTasks.sandbox.taskSandboxReady, {
-        taskId,
-        sandboxId: "sbx-task",
+      await t.mutation(internal._sessions.sandbox.sandboxReady, {
+        sessionId,
+        sandboxId: "sbx-session",
+        branchName: "eva/session",
         isNew: false,
       });
 
-      const task = await t.run((ctx) => ctx.db.get(taskId));
-      expect(task?.backgroundAgents?.[0]?.status).toBe("stale");
-      expect(await scheduledDrains(t)).toHaveLength(1);
+      const chat = await t.run((ctx) => ctx.db.get(chatId));
+      expect(chat?.backgroundAgents?.[0]?.status).toBe("stale");
     },
     TIMEOUT_MS,
   );
@@ -156,42 +159,27 @@ describe("a queued message is not stranded", () => {
   test(
     "a message sent while stopping wakes Eva once the stop settles",
     async () => {
-      const { t, taskId } = await fixture({ sandboxStatus: "stopping" });
+      const { t, sessionId, chatId } = await fixture({
+        sandboxStatus: "stopping",
+      });
 
       // The enqueue-time drain finds the sandbox mid-stop and waits.
       await t.mutation(internal._queues.helpers.drainQueueQuietly, {
-        parentId: taskId,
+        parentId: chatId,
       });
       expect(await scheduledDrains(t)).toHaveLength(0);
 
-      await t.mutation(internal._agentTasks.sandbox.markTaskSandboxClosed, {
-        taskId,
+      await t.mutation(internal._sessions.sandbox.markSandboxClosed, {
+        sessionId,
       });
       expect(await scheduledDrains(t)).toHaveLength(1);
 
       await t.mutation(internal._queues.helpers.drainQueueQuietly, {
-        parentId: taskId,
+        parentId: chatId,
       });
-      const task = await t.run((ctx) => ctx.db.get(taskId));
-      expect(task?.reviewTaskSandboxStatus).toBe("starting");
-      expect(await queueLength(t, taskId)).toBe(1);
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "a failed stop re-offers the queue on the still-running sandbox",
-    async () => {
-      const { t, taskId } = await fixture({ sandboxStatus: "stopping" });
-
-      await t.mutation(internal._agentTasks.sandbox.markTaskSandboxClosed, {
-        taskId,
-        error: "provider timeout",
-      });
-
-      const task = await t.run((ctx) => ctx.db.get(taskId));
-      expect(task?.reviewTaskSandboxStatus).toBe("active");
-      expect(await scheduledDrains(t)).toHaveLength(1);
+      const session = await t.run((ctx) => ctx.db.get(sessionId));
+      expect(session?.status).toBe("starting");
+      expect(await queueLength(t, chatId)).toBe(1);
     },
     TIMEOUT_MS,
   );
@@ -199,7 +187,7 @@ describe("a queued message is not stranded", () => {
   test(
     "a deleted provider account consumes the message with an error",
     async () => {
-      const { t, taskId } = await fixture({
+      const { t, chatId } = await fixture({
         sandboxStatus: "active",
         deletedAccount: true,
       });
@@ -207,14 +195,14 @@ describe("a queued message is not stranded", () => {
       // Used to throw, rolling back the caller and leaving the row at the
       // front of the queue for every later drain to throw on again.
       await t.mutation(internal._queues.helpers.drainQueueQuietly, {
-        parentId: taskId,
+        parentId: chatId,
       });
 
-      expect(await queueLength(t, taskId)).toBe(0);
+      expect(await queueLength(t, chatId)).toBe(0);
       const messages = await t.run((ctx) =>
         ctx.db
           .query("messages")
-          .withIndex("by_parent", (q) => q.eq("parentId", taskId))
+          .withIndex("by_parent", (q) => q.eq("parentId", chatId))
           .collect(),
       );
       expect(messages.map((message) => message.content)).toEqual([

@@ -1,26 +1,24 @@
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
+import { isProjectInterviewing } from "../_projects/interviewState";
+import { stopProjectInterview } from "../workflowWatchdog";
 
-/** Clears a project interview stuck after sandbox or agent failure. */
+/**
+ * Clears a project interview stuck after sandbox or agent failure: drops the
+ * failed or empty assistant row, then stops the interview
+ * (`stopProjectInterview`), which releases the project session's sandbox.
+ */
 export const repairStuckProjectInterview = internalMutation({
-  args: {
-    projectId: v.id("projects"),
-    clearSandboxId: v.optional(v.boolean()),
-  },
+  args: { projectId: v.id("projects") },
   returns: v.object({
     clearedWorkflow: v.boolean(),
     removedEmptyAssistant: v.boolean(),
-    resetSandboxStatus: v.boolean(),
   }),
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
     if (!project) {
-      return {
-        clearedWorkflow: false,
-        removedEmptyAssistant: false,
-        resetSandboxStatus: false,
-      };
+      return { clearedWorkflow: false, removedEmptyAssistant: false };
     }
 
     let removedEmptyAssistant = false;
@@ -45,24 +43,13 @@ export const repairStuckProjectInterview = internalMutation({
     }
 
     await clearStreamingActivity(ctx, String(args.projectId));
-    await clearStreamingActivity(
-      ctx,
-      `project-sandbox-startup-${String(args.projectId)}`,
-    );
 
-    const clearedWorkflow = project.activeWorkflowId !== undefined;
-    const resetSandboxStatus =
-      project.reviewProjectSandboxStatus !== "closed" ||
-      clearedWorkflow ||
-      args.clearSandboxId === true;
-
-    await ctx.db.patch(args.projectId, {
-      activeWorkflowId: undefined,
-      reviewProjectSandboxStatus: "closed",
-      lastSandboxActivity: Date.now(),
-      ...(args.clearSandboxId === true ? { sandboxId: undefined } : {}),
+    const clearedWorkflow = isProjectInterviewing(project);
+    await stopProjectInterview(ctx, args.projectId, undefined, {
+      state: "cancelled",
+      error: "Interview repaired",
     });
 
-    return { clearedWorkflow, removedEmptyAssistant, resetSandboxStatus };
+    return { clearedWorkflow, removedEmptyAssistant };
   },
 });

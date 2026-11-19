@@ -25,6 +25,10 @@ import {
   isSpecContent,
   type ParsedQuestion,
 } from "./projectChatMessage.utils";
+import {
+  catchMutationError,
+  mutationError,
+} from "@/lib/utils/mutationToast";
 
 export interface ConversationMessage {
   role: "user" | "assistant";
@@ -38,11 +42,11 @@ export interface ConversationMessage {
 interface ProjectChatTabProps {
   projectId: Id<"projects">;
   projectPhase: ProjectPhase;
-  activeWorkflowId?: string;
+  /** An interview or spec workflow holds the project (`projects.interview`). */
+  interviewRunning: boolean;
   initialMessages: ConversationMessage[];
   streamingActivity?: string;
   rawInput: string;
-  onSpecGenerated?: (spec: string) => void;
   onClear?: () => void;
   repoId: Id<"githubRepos">;
 }
@@ -50,11 +54,10 @@ interface ProjectChatTabProps {
 export function ProjectChatTab({
   projectId,
   projectPhase,
-  activeWorkflowId,
+  interviewRunning,
   initialMessages,
   streamingActivity,
   rawInput,
-  onSpecGenerated,
   onClear,
   repoId: _repoId,
 }: ProjectChatTabProps) {
@@ -65,19 +68,24 @@ export function ProjectChatTab({
   );
   const startProjectSpec = useMutation(api.projectInterviewWorkflow.startSpec);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  // True only while a start mutation is in flight. Once it resolves, the
+  // server's `interview` state owns the "running" state.
+  const [isStarting, setIsStarting] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const { request: requestConfirm } = useRequestConfirm();
   const [isClearing, setIsClearing] = useState(false);
-  const prevMessagesLengthRef = useRef(initialMessages.length);
+  // The legacy `ready` row that already chained the spec. The effect below
+  // re-runs on every parent callback change; without this it started the
+  // spec again for the same row until the `interview` state arrived.
+  const specRequestedForRef = useRef<number | null>(null);
 
   const isLocked =
     projectPhase === "in_progress" ||
     projectPhase === "business_review" ||
     projectPhase === "code_review" ||
     projectPhase === "completed";
+  const isLoading = isStarting || interviewRunning;
   const hasStarted = initialMessages.length > 0 || isLoading;
-  const hasActiveWorkflow = activeWorkflowId !== undefined;
 
   const questionCount = initialMessages.filter((m) => {
     if (m.role !== "assistant" || !m.content) {
@@ -95,41 +103,50 @@ export function ProjectChatTab({
     (m) => m.role === "assistant" && m.content && isSpecContent(m.content),
   );
 
+  /** Holds `isStarting` for the mutation only; rethrows after the toast. */
+  const runStart = (start: Promise<null>, error: string, id: string) => {
+    setIsStarting(true);
+    return catchMutationError(start, error, id).finally(() =>
+      setIsStarting(false),
+    );
+  };
+
   /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change --
      `initialMessages` is a Convex live query, so the "event" happens on the
-     server: the interview workflow writing a row is what has to clear the
-     pending state and chain the spec mutation. There is no client event to
-     hang this off. */
+     server: the interview workflow writing a row is what has to chain the
+     spec mutation. There is no client event to hang this off. */
   useEffect(() => {
     const lastMessage = initialMessages[initialMessages.length - 1];
-    if (lastMessage?.role === "assistant" && lastMessage.content) {
-      setIsLoading(false);
-      if (isSpecContent(lastMessage.content)) {
-        onSpecGenerated?.(lastMessage.content);
-      } else if (
-        isInterviewTransitionContent(lastMessage.content) &&
-        projectPhase === "draft" &&
-        !hasSpecMessage &&
-        !hasActiveWorkflow
-      ) {
-        // Legacy rows that still have {"ready":true} before spec was chained server-side.
-        setIsLoading(true);
-        void startProjectSpec({
+    if (
+      lastMessage?.role === "assistant" &&
+      lastMessage.content &&
+      isInterviewTransitionContent(lastMessage.content) &&
+      projectPhase === "draft" &&
+      !hasSpecMessage &&
+      !interviewRunning &&
+      specRequestedForRef.current !== initialMessages.length
+    ) {
+      // Legacy rows that still have {"ready":true} before spec was chained server-side.
+      specRequestedForRef.current = initialMessages.length;
+      void runStart(
+        startProjectSpec({
           projectId,
           featureDescription: rawInput,
-        });
-      }
+        }),
+        "Couldn't generate the spec",
+        "project-interview-spec",
+      ).catch(() => {
+        specRequestedForRef.current = null;
+      });
     }
-    prevMessagesLengthRef.current = initialMessages.length;
   }, [
     initialMessages,
-    onSpecGenerated,
     projectId,
     rawInput,
     startProjectSpec,
     projectPhase,
     hasSpecMessage,
-    hasActiveWorkflow,
+    interviewRunning,
   ]);
   /* eslint-enable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change */
 
@@ -138,12 +155,15 @@ export function ProjectChatTab({
   }, [initialMessages]);
 
   const askQuestion = async () => {
-    setIsLoading(true);
-    await startProjectInterview({
-      projectId: projectId,
-      featureDescription: rawInput,
-      previousAnswers: [], // Session persistence provides context
-    });
+    await runStart(
+      startProjectInterview({
+        projectId: projectId,
+        featureDescription: rawInput,
+        previousAnswers: [], // Session persistence provides context
+      }),
+      "Couldn't ask the next question",
+      "project-interview-ask",
+    ).catch(() => undefined);
   };
 
   /* eslint-disable no-effect/no-event-handler, no-effect/no-pass-data-to-parent --
@@ -151,6 +171,8 @@ export function ProjectChatTab({
      closed mid-request) has no user event left to retry from, so the retry has
      to fire when the component remounts. */
   useEffect(() => {
+    // A running workflow will write the question itself; asking again would
+    // only be refused server-side.
     if (isLocked || isLoading) return;
     const hasAssistant = initialMessages.some((m) => m.role === "assistant");
     if (initialMessages.length > 0 && !hasAssistant) {
@@ -164,7 +186,12 @@ export function ProjectChatTab({
   };
 
   const handleAnswer = async (answer: string) => {
-    await addMessageDb({ id: projectId, role: "user", content: answer });
+    try {
+      await addMessageDb({ id: projectId, role: "user", content: answer });
+    } catch {
+      mutationError("Couldn't send your answer", "project-interview-answer");
+      return;
+    }
     await askQuestion();
   };
 
@@ -172,7 +199,6 @@ export function ProjectChatTab({
     setIsClearing(true);
     try {
       await clearMessagesDb({ id: projectId });
-      setIsLoading(false);
       // Called through an if rather than `?.`: React Compiler bails on the
       // whole file when an optional-chaining call sits inside a try/catch.
       if (onClear) onClear();
@@ -202,12 +228,11 @@ export function ProjectChatTab({
   const waitingForResponse =
     initialMessages.length > 0 &&
     initialMessages[initialMessages.length - 1]?.role === "user" &&
-    (isLoading || hasActiveWorkflow);
+    isLoading;
   const canContinueInterview =
     initialMessages.length > 0 &&
     initialMessages[initialMessages.length - 1]?.role === "user" &&
     !isLoading &&
-    !hasActiveWorkflow &&
     !isLocked;
   const showQuestion = currentQuestion && !waitingForResponse;
 

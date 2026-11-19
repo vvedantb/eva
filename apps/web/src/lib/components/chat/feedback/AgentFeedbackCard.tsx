@@ -5,7 +5,7 @@ import { api, type Id } from "@eva/backend";
 import { Button, Surface, toast, tokenTransition } from "@vvedantb/ui";
 import { IconThumbDown, IconThumbUp, IconTrash } from "@tabler/icons-react";
 import { m } from "motion/react";
-import type { FeedbackSentiment } from "./feedbackRows";
+import type { FeedbackSentiment } from "@eva/shared/chatFeedback";
 
 /**
  * Feedback the agent sent in this turn (`submit_feedback`), shown under its

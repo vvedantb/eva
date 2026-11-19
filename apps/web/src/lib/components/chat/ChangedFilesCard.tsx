@@ -7,117 +7,15 @@ import {
   Surface,
   ListEnter,
 } from "@vvedantb/ui";
-import type { ActivityStep } from "@vvedantb/ui";
 import { IconChevronDown, IconFileText } from "@tabler/icons-react";
 import {
   groupChangedFilesByRepo,
   selectChangedFilePreview,
   shouldAutoExpandChangedFiles,
   shouldPreviewChangedFiles,
-} from "@/lib/components/chat/changedFilesPresentation";
-
-export interface ChangedFile {
-  path: string;
-  name: string;
-  dir: string;
-  /**
-   * The linked repo this file belongs to (multi-repo sessions), or `null` for
-   * the primary repo. Derived from the `/tmp/workspace/<name>/…` sandbox
-   * prefix — see `workspaceRepoName`.
-   */
-  repoName: string | null;
-}
-
-const CHANGED_FILE_TYPES = new Set<ActivityStep["type"]>([
-  "edit",
-  "write",
-  "notebook",
-]);
-
-const SANDBOX_REPO_PREFIXES = ["/tmp/repo/", "/workspace/repo/"] as const;
-
-const TMP_REPO_PREFIX = "/tmp/repo/";
-
-/** Multi-repo sessions clone linked repos here; see `workspaceLayout.ts`. */
-const WORKSPACE_PREFIX = "/tmp/workspace/";
-
-function isChangedFileStep(
-  step: ActivityStep,
-): step is ActivityStep & { path: string } {
-  return (
-    CHANGED_FILE_TYPES.has(step.type) &&
-    typeof step.path === "string" &&
-    step.path.length > 0
-  );
-}
-
-function basename(path: string): string {
-  const slashIndex = path.lastIndexOf("/");
-  return slashIndex >= 0 ? path.slice(slashIndex + 1) : path;
-}
-
-function dirname(path: string): string {
-  const slashIndex = path.lastIndexOf("/");
-  return slashIndex >= 0 ? path.slice(0, slashIndex) : "";
-}
-
-/**
- * Repo name a path belongs to when it sits under the multi-repo workspace
- * root (`/tmp/workspace/<name>/…`), or `null` for the primary repo
- * (`/tmp/repo/…`, or legacy `/workspace/repo/…`).
- */
-export function workspaceRepoName(path: string): string | null {
-  if (!path.startsWith(WORKSPACE_PREFIX)) return null;
-  const rest = path.slice(WORKSPACE_PREFIX.length);
-  const slash = rest.indexOf("/");
-  if (slash <= 0) return null;
-  return rest.slice(0, slash);
-}
-
-/**
- * Checkout root a sandbox path belongs to when it is a linked repo
- * (`/tmp/workspace/<name>` — the same value as `sessionRepos.path`), or `null`
- * for the primary repo. Lets a file opened from the chat select the right root
- * in the Files tab instead of listing the primary beside another repo's file.
- */
-export function workspaceRootPath(path: string): string | null {
-  const repoName = workspaceRepoName(path);
-  return repoName === null ? null : `${WORKSPACE_PREFIX}${repoName}`;
-}
-
-function displayDir(dir: string, repoName: string | null): string {
-  if (repoName) {
-    const prefix = `${WORKSPACE_PREFIX}${repoName}/`;
-    return dir.startsWith(prefix) ? dir.slice(prefix.length) : dir;
-  }
-  if (dir.startsWith(TMP_REPO_PREFIX)) {
-    return dir.slice(TMP_REPO_PREFIX.length);
-  }
-  return dir;
-}
-
-/** Strips sandbox absolute prefixes so Diffs tab paths align with git diff keys. */
-export function toRepoRelativePath(path: string): string {
-  for (const prefix of SANDBOX_REPO_PREFIXES) {
-    if (path.startsWith(prefix)) {
-      return path.slice(prefix.length);
-    }
-  }
-  return path;
-}
-
-/**
- * Inverse of `toRepoRelativePath` for Diffs → Files. Repo-relative git paths
- * become the absolute `?file=` the viewer reads; already-absolute paths pass
- * through. `/tmp/repo` is the Eva sandbox root and the prefix Files already
- * understands when the live listing root has not loaded yet.
- */
-export function toSandboxFilePath(path: string): string {
-  const trimmed = path.trim();
-  if (trimmed.length === 0) return trimmed;
-  if (trimmed.startsWith("/")) return trimmed;
-  return `${SANDBOX_REPO_PREFIXES[0]}${trimmed}`;
-}
+  toRepoRelativePath,
+  type ChangedFile,
+} from "@eva/shared";
 
 /**
  * Changed-files rows open the Review diffs tab when that handler exists
@@ -137,28 +35,6 @@ export function openChangedFile(
     return;
   }
   handlers.onOpenFile?.(path);
-}
-
-/** Collects edit/write/notebook paths from a turn's activity, including subagent steps. */
-export function collectChangedFiles(steps: ActivityStep[]): ChangedFile[] {
-  const seen = new Set<string>();
-  const files: ChangedFile[] = [];
-
-  for (const step of steps) {
-    if (!isChangedFileStep(step)) continue;
-    if (seen.has(step.path)) continue;
-    seen.add(step.path);
-    const dir = dirname(step.path);
-    const repoName = workspaceRepoName(step.path);
-    files.push({
-      path: step.path,
-      name: basename(step.path),
-      dir: displayDir(dir, repoName),
-      repoName,
-    });
-  }
-
-  return files;
 }
 
 interface ChangedFilesCardProps {

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { launchAgentStep } from "./_sandbox_runtime/agentLaunchStep";
 import { settleAgentTurnCompletion } from "./_chat/turnStore";
+import { openTurnWorkflowId } from "./_chat/turnProjection";
 import { z } from "zod";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -8,7 +9,7 @@ import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "./workflowManager";
 import { authMutation } from "./functions";
 import {
-  turnCheckpointArgs,
+  completionCallbackArgs,
   turnLeaseFenceArgs,
   workflowCompleteValidator,
 } from "./validators";
@@ -50,8 +51,6 @@ export const summarizeSessionWorkflow = workflow.define({
       repoOwner: sessionData.repoOwner,
       repoName: sessionData.repoName,
       repoId: sessionData.repoId,
-      sessionPersistenceId: args.sessionId,
-      sessionPersistenceKind: "sessions",
       streamingEntityId: sessionSummaryStreamingEntityId(args.sessionId),
       ephemeral: false,
     });
@@ -168,10 +167,7 @@ export const saveResult = internalMutation({
       }
     }
 
-    await ctx.db.patch(args.sessionId, {
-      summary,
-      activeWorkflowId: undefined,
-    });
+    await ctx.db.patch(args.sessionId, { summary });
     return null;
   },
 });
@@ -180,18 +176,20 @@ export const saveResult = internalMutation({
 export const handleCompletion = authMutation({
   args: {
     sessionId: v.id("sessions"),
-    success: v.boolean(),
-    result: v.union(v.string(), v.null()),
-    error: v.union(v.string(), v.null()),
-    activityLog: v.union(v.string(), v.null()),
-    rawResultEvent: v.optional(v.string()),
-    ...turnCheckpointArgs,
+    ...completionCallbackArgs,
     ...turnLeaseFenceArgs,
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const session = await ctx.db.get(args.sessionId);
-    if (!session || !session.activeWorkflowId) return null;
+    if (!session) return null;
+    // Read before the settle below closes the summary turn that holds it.
+    const workflowId = await openTurnWorkflowId(
+      ctx,
+      args.sessionId,
+      "summary",
+    );
+    if (workflowId === undefined) return null;
     if (
       !(await settleAgentTurnCompletion(ctx, {
         entityId: args.sessionId,
@@ -206,17 +204,12 @@ export const handleCompletion = authMutation({
     }
     if (session.userId !== ctx.userId) throw new Error("Not authorized");
 
-    await sendCompletionEvent(
-      ctx,
-      summarizeCompleteEvent,
-      session.activeWorkflowId,
-      {
-        success: args.success,
-        result: args.result,
-        error: args.error,
-        activityLog: args.activityLog,
-      },
-    );
+    await sendCompletionEvent(ctx, summarizeCompleteEvent, workflowId, {
+      success: args.success,
+      result: args.result,
+      error: args.error,
+      activityLog: args.activityLog,
+    });
 
     await recordCompletionLog(ctx, {
       entityType: "summarize",

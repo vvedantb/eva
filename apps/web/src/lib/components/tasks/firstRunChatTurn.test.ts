@@ -13,7 +13,7 @@ import { findStreamingTargetMessage } from "@/lib/components/chat/chatBodyUtils"
 // excluding "Make changes" and Resolve Conflicts runs, which belong to their
 // triggering comment / the timeline.
 //
-// Two surfaces read this one function — TaskSandboxChatPanel renders the run
+// Two surfaces read this one function — the task chat binding renders the run
 // it returns as the opening chat turn, TaskDetailInline hides that same run
 // from the activity timeline — so a disagreement here either duplicates the
 // run on both surfaces or drops it from both.

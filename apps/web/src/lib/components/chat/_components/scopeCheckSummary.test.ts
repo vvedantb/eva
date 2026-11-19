@@ -3,8 +3,11 @@ import {
   formatPercent,
   hunkHeadline,
   hunkLocation,
+  hunkNotes,
   hunkUnrequestedProbability,
   isUnmentioned,
+  scopeCheckCoverage,
+  screenshotsMissRequest,
   scopeCheckLabel,
   scopeCheckTone,
   unmentionedHunks,
@@ -194,5 +197,42 @@ describe("hunkUnrequestedProbability", () => {
       0.9,
     );
     expect(hunkUnrequestedProbability(hunk({ requested: 1 }))).toBe(0);
+  });
+});
+
+describe("screenshot pass", () => {
+  it("adds the visible note after the mention note", () => {
+    expect(hunkNotes(hunk({ mentioned: 0.1, visible: 0.9 }))).toBe(
+      " · not mentioned in the reply · visible in a screenshot",
+    );
+    expect(hunkNotes(hunk({ visible: 0.2 }))).toBe("");
+    expect(hunkNotes(hunk())).toBe("");
+  });
+
+  it("counts the screenshots on the coverage line", () => {
+    expect(scopeCheckCoverage(check())).toBe("4 of 4 changes judged");
+    expect(
+      scopeCheckCoverage(check({ partial: true, screenshots: { checked: 1 } })),
+    ).toBe("4 of 4 changes judged · diff clipped · 1 screenshot checked");
+    expect(scopeCheckCoverage(check({ screenshots: { checked: 3 } }))).toBe(
+      "4 of 4 changes judged · 3 screenshots checked",
+    );
+  });
+
+  it("warns only when Jev answered that the screenshots miss the ask", () => {
+    expect(
+      screenshotsMissRequest(
+        check({ screenshots: { checked: 2, showsRequest: 0.2 } }),
+      ),
+    ).toBe(true);
+    expect(
+      screenshotsMissRequest(
+        check({ screenshots: { checked: 2, showsRequest: 0.8 } }),
+      ),
+    ).toBe(false);
+    expect(screenshotsMissRequest(check({ screenshots: { checked: 2 } }))).toBe(
+      false,
+    );
+    expect(screenshotsMissRequest(check())).toBe(false);
   });
 });

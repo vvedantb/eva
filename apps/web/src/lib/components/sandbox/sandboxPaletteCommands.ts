@@ -15,7 +15,7 @@ import {
   IconWorld,
 } from "@tabler/icons-react";
 import type { SandboxTab } from "@/lib/search-params";
-import { slugifyAppTabName } from "@/lib/utils/appTabSlug";
+import { slugifyAppTabName } from "@eva/shared/appTabSlug";
 import type { ConsoleDockApi } from "./useConsoleDock";
 import type { TerminalPanelApi } from "./SandboxWorkspace";
 import type { SandboxPaletteCommand } from "./SandboxQuickOpenDialogs";

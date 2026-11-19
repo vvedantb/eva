@@ -4,11 +4,15 @@ import { useState } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
-import { api } from "@eva/backend";
+import { api, taskScheduledAt } from "@eva/backend";
+import { runAllPlan, startAll } from "@eva/shared";
 import type { Id } from "@eva/backend";
 import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
-import { useQuickTaskFilters } from "@/routes/_repo/$owner/$repo/quick-tasks/_utils";
+import {
+  useQuickTaskFilters,
+  useQuickTaskTodoDrafts,
+} from "@/routes/_repo/$owner/$repo/quick-tasks/_utils";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { usePersistedScrollParent } from "@/lib/hooks/usePersistedScrollParent";
 import {
@@ -37,6 +41,7 @@ import {
   type DisplayTaskStatus,
 } from "@/lib/components/tasks/TaskStatusBadge";
 import { QuickTaskCard } from "./QuickTaskCard";
+import { QuickTaskDraftRow } from "./QuickTaskDraftRow";
 import type { SelectionToggleOptions } from "./selectionRange";
 import { entityPathSegment } from "@/lib/numId";
 import { RunAllDialog } from "./RunAllDialog";
@@ -119,6 +124,7 @@ export function QuickTasksListView({
   );
 
   const [{ q, statuses }] = useQuickTaskFilters();
+  const todoDrafts = useQuickTaskTodoDrafts(repoId);
   const searchQuery = q;
   const visibleStatuses = new Set(statuses);
 
@@ -145,8 +151,10 @@ export function QuickTasksListView({
   })();
 
   const todoTasks = tasks.filter((t) => t.status === "todo");
-  const ownedTodoTasks = todoTasks.filter((t) => t.createdBy === currentUserId);
-  const skippedCount = todoTasks.length - ownedTodoTasks.length;
+  const { owned: ownedTodoTasks, skippedCount } = runAllPlan(
+    tasks,
+    currentUserId,
+  );
 
   const toggleSection = (status: DisplayTaskStatus) => {
     setOpenSections((prev) => {
@@ -182,29 +190,16 @@ export function QuickTasksListView({
   const handleRunAll = async () => {
     if (ownedTodoTasks.length === 0) return;
     setIsRunningAll(true);
-    try {
-      const results = await Promise.all(
-        ownedTodoTasks.map(async (task) => {
-          try {
-            await startExecution({ id: task._id });
-            return true;
-          } catch (err) {
-            console.error(`Failed to start task ${task._id}:`, err);
-            return false;
-          }
-        }),
+    const failedCount = await startAll(ownedTodoTasks, (task) =>
+      startExecution({ id: task._id }),
+    );
+    if (failedCount > 0) {
+      console.error(
+        `Run All started ${ownedTodoTasks.length - failedCount} of ${ownedTodoTasks.length} tasks`,
       );
-      const failedCount = results.filter((started) => !started).length;
-      if (failedCount > 0) {
-        console.error(
-          `Run All started ${ownedTodoTasks.length - failedCount} of ${ownedTodoTasks.length} tasks`,
-        );
-        toast.error(
-          `Could not start ${failedCount} of ${ownedTodoTasks.length} tasks.`,
-        );
-      }
-    } catch (err) {
-      console.error("Failed to run all:", err);
+      toast.error(
+        `Could not start ${failedCount} of ${ownedTodoTasks.length} tasks.`,
+      );
     }
     setIsRunningAll(false);
   };
@@ -227,6 +222,7 @@ export function QuickTasksListView({
             if (!visibleStatuses.has(status)) return [];
             const cfg = statusConfig[status];
             const items = tasksByStatus[status] ?? [];
+            const drafts = status === "todo" ? todoDrafts : [];
             // Shift-click spans this section only — the visible order of the
             // group the click landed in, not the whole flattened list.
             const sectionIds = items.map((t) => t._id);
@@ -254,7 +250,7 @@ export function QuickTasksListView({
                             {cfg.label}
                           </span>
                           <span className="text-xs text-muted-foreground/60 tabular-nums">
-                            {items.length}
+                            {items.length + drafts.length}
                           </span>
                         </button>
                       </CollapsibleTrigger>
@@ -287,11 +283,23 @@ export function QuickTasksListView({
                     </div>
                   </SortableListHeader>
                   <CollapsibleContent>
-                    {items.length === 0 ? (
+                    {drafts.length > 0 ? (
+                      <div className="flex flex-col gap-1.5 pr-1.5 pb-1.5">
+                        {drafts.map((draft) => (
+                          <QuickTaskDraftRow
+                            key={draft._id}
+                            id={draft._id}
+                            title={draft.title}
+                            description={draft.description}
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+                    {items.length === 0 && drafts.length === 0 ? (
                       <div className="flex items-center justify-center py-4 text-xs text-muted-foreground">
                         No tasks
                       </div>
-                    ) : (
+                    ) : items.length === 0 ? null : (
                       <SortableListItems className="pr-1.5 pb-1.5">
                         {scrollParent && (
                           <Virtuoso
@@ -329,9 +337,9 @@ export function QuickTasksListView({
                                       }
                                       hasError={errorTaskIdSet.has(task._id)}
                                       sandboxStatus={
-                                        task.reviewTaskSandboxStatus
+                                        task.sandboxStatus
                                       }
-                                      scheduledAt={task.scheduledAt}
+                                      scheduledAt={taskScheduledAt(task)}
                                       tags={task.tags}
                                       createdByUser={users?.find(
                                         (u) => u._id === task.createdBy,
@@ -373,8 +381,6 @@ export function QuickTasksListView({
                                         groupedCodebases ?? undefined
                                       }
                                       assignedTo={task.assignedTo}
-                                      model={task.model}
-                                      providerAccountId={task.providerAccountId}
                                       projectId={task.projectId}
                                       repoId={task.repoId ?? repoId}
                                       users={users ?? undefined}

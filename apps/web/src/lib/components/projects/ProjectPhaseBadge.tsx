@@ -4,6 +4,12 @@ import { AnimatePresence, m } from "motion/react";
 import { Badge, tokenTransition } from "@vvedantb/ui";
 import type { Doc } from "@eva/backend";
 import {
+  PROJECT_COLUMN_LABELS,
+  PROJECT_PHASE_LABELS,
+  type ProjectColumn,
+} from "@eva/shared";
+import {
+  IconCircle,
   IconNotes,
   IconCheck,
   IconClock,
@@ -16,100 +22,106 @@ import {
 /** Single source of truth: matches Convex `projects.phase`. */
 export type ProjectPhase = Doc<"projects">["phase"];
 
-export const PROJECT_PHASES: ProjectPhase[] = [
-  "draft",
-  "finalized",
-  "in_progress",
-  "business_review",
-  "code_review",
-  "completed",
-  "cancelled",
-];
+export { PROJECT_PHASES } from "@eva/backend";
 
-/** Phases a user can manually switch to via the status dropdown.
- *  Excludes draft/finalized — those are driven by the planning/interview flow. */
-export const ACTIVE_PROJECT_PHASES: ProjectPhase[] = [
-  "in_progress",
-  "business_review",
-  "code_review",
-  "completed",
-  "cancelled",
-];
+export { ACTIVE_PROJECT_PHASES, BUILDABLE_PROJECT_PHASES } from "@eva/shared";
 
-/** Phases where the autonomous "Build Project" workflow can be started. */
-export const BUILDABLE_PROJECT_PHASES: ProjectPhase[] = [
-  "in_progress",
-  "business_review",
-  "code_review",
-];
+interface PhaseStyle {
+  bg: string;
+  cardBg: string;
+  bar: string;
+  /** CSS colour of `bar`, for the timeline's Gantt status. */
+  barColor: string;
+  text: string;
+  label: string;
+  icon: typeof IconNotes;
+}
 
-export const phaseConfig: Record<
-  ProjectPhase,
-  {
-    bg: string;
-    cardBg: string;
-    bar: string;
-    text: string;
-    label: string;
-    icon: typeof IconNotes;
-  }
-> = {
+export const phaseConfig: Record<ProjectPhase, PhaseStyle> = {
   draft: {
     bg: "bg-secondary",
     cardBg: "bg-secondary/40",
     bar: "bg-muted-foreground/50",
+    barColor: "rgb(var(--muted-foreground) / 0.5)",
     text: "text-muted-foreground",
-    label: "Draft",
+    label: PROJECT_PHASE_LABELS.draft,
     icon: IconNotes,
   },
   finalized: {
     bg: "bg-blue-500/10",
     cardBg: "bg-blue-500/5",
     bar: "bg-blue-500",
+    barColor: "rgb(59 130 246)",
     text: "text-blue-600 dark:text-blue-400",
-    label: "Finalized",
+    label: PROJECT_PHASE_LABELS.finalized,
     icon: IconCheck,
   },
   in_progress: {
     bg: "bg-status-progress-bg",
     cardBg: "bg-status-progress-subtle/40",
     bar: "bg-status-progress-bar",
+    barColor: "rgb(var(--status-progress-bar))",
     text: "text-status-progress",
-    label: "In Progress",
+    label: PROJECT_PHASE_LABELS.in_progress,
     icon: IconClock,
   },
   business_review: {
     bg: "bg-status-business-review-bg",
     cardBg: "bg-status-business-review-subtle/40",
     bar: "bg-status-business-review-bar",
+    barColor: "rgb(var(--status-business-review-bar))",
     text: "text-status-business-review",
-    label: "Business Review",
+    label: PROJECT_PHASE_LABELS.business_review,
     icon: IconClipboardCheck,
   },
   code_review: {
     bg: "bg-status-code-review-bg",
     cardBg: "bg-status-code-review-subtle/40",
     bar: "bg-status-code-review-bar",
+    barColor: "rgb(var(--status-code-review-bar))",
     text: "text-status-code-review",
-    label: "Code Review",
+    label: PROJECT_PHASE_LABELS.code_review,
     icon: IconEye,
   },
   completed: {
     bg: "bg-status-done-bg",
     cardBg: "bg-status-done-subtle/40",
     bar: "bg-status-done-bar",
+    barColor: "rgb(var(--status-done-bar))",
     text: "text-status-done",
-    label: "Merged",
+    label: PROJECT_PHASE_LABELS.completed,
     icon: IconCircleCheck,
   },
   cancelled: {
     bg: "bg-status-cancelled-bg",
     cardBg: "bg-status-cancelled-subtle/40",
     bar: "bg-status-cancelled-bar",
+    barColor: "rgb(var(--status-cancelled-bar))",
     text: "text-status-cancelled",
-    label: "Cancelled",
+    label: PROJECT_PHASE_LABELS.cancelled,
     icon: IconCircleX,
   },
+};
+
+/**
+ * List sections and kanban columns. "To Do" (draft and finalized projects)
+ * matches the quick-task To Do column; the rest are their phase's style.
+ */
+export const columnConfig: Record<ProjectColumn, PhaseStyle> = {
+  todo: {
+    bg: "bg-secondary",
+    cardBg: "bg-secondary/40",
+    bar: "bg-foreground/50",
+    barColor: "rgb(var(--foreground) / 0.5)",
+    text: "text-muted-foreground",
+    label: PROJECT_COLUMN_LABELS.todo,
+    icon: IconCircle,
+  },
+  in_progress: phaseConfig.in_progress,
+  business_review: phaseConfig.business_review,
+  code_review: phaseConfig.code_review,
+  completed: phaseConfig.completed,
+  cancelled: phaseConfig.cancelled,
 };
 
 interface ProjectPhaseBadgeProps {

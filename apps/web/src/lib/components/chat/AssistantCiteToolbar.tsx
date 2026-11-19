@@ -8,7 +8,7 @@ import { IconBookmark, IconQuote } from "@tabler/icons-react";
 import {
   createCitation,
   ASSISTANT_CITATION_MAX_CHARS,
-} from "@/lib/components/chat/assistantCitation";
+} from "@eva/shared/assistantCitation";
 import type { ChatParentId } from "@/lib/components/chat/chatBodyUtils";
 import { messageLinkUrl } from "@/lib/components/chat/messageLink";
 import {

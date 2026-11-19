@@ -5,7 +5,7 @@
 // The stage: the canvas, the script, the cursor, measuring and playback
 export { Stage } from './stage'
 export { useLook } from './looks'
-export { useReducedMotion } from './reduced-motion'
+export { useStill } from './reduced-motion'
 export { inset, box, between, contains } from './measure'
 export type { StageProps, Play, LookTokens } from './stage'
 export type { Act, Script } from './act'

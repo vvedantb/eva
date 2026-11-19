@@ -8,7 +8,7 @@ import type { api, Id } from "@eva/backend";
 import {
   buildDiffFileEntries,
   type DiffFileEntry,
-} from "./components/sandbox/diffFiles";
+} from "@eva/shared";
 
 /**
  * Query definitions for the three pull request review payloads.

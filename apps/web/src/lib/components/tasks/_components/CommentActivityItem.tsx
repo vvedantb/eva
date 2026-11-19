@@ -21,11 +21,10 @@ import {
   RelativeDateTime,
 } from "@vvedantb/ui";
 import { IconDots, IconPencil, IconTrash } from "@tabler/icons-react";
-import { mentionTokensToEditableText } from "@/lib/components/mentions/mentionToken";
+import { mentionTokensToEditableText } from "@eva/shared";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useCommentAnchor } from "@/lib/hooks/useCommentAnchor";
 import { MarkdownMentionText } from "@/lib/components/chat/MarkdownMentionText";
-import { getUserDisplayName } from "./task-detail-constants";
 import {
   CommentMentionInput,
   type CommentMentionInputHandle,
@@ -37,7 +36,8 @@ import {
   DELETED_COMMENT_PLACEHOLDER,
   isCommentDeleted,
   type TaskComment,
-} from "../_utils/commentThread";
+  getUserDisplayName,
+} from "@eva/shared/taskDetail";
 
 type Users = FunctionReturnType<typeof api.users.listAll>;
 

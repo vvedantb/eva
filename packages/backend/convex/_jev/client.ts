@@ -6,17 +6,24 @@
  * {@link evaluateDecision}, so the caps, the timeout, the zero-data-retention
  * flag and the error mapping are defined once.
  *
+ * Built on the AI SDK's `experimental_decide`, which (unlike the deprecated
+ * `experimental_evaluate`) carries image file parts and TypeSafe's
+ * `longContext` option through AI Gateway.
+ *
  * Imports stay confined to the SDK, the leaf modules beside this file and the
- * shared gateway-error leaf (`_ai/gatewayErrors.ts`);
+ * shared gateway-error helpers in `@vvedantb/server/ai`;
  * reaching into `mcp/*` or `functions.ts` would put a `"use node"` chunk in an
  * import cycle, which breaks the Convex prod push.
  */
 
 import {
-  experimental_evaluate as evaluate,
-  Experimental_EvaluationUnsupportedQuestionTypeError,
+  experimental_decide as decide,
+  Experimental_DecisionRefusalError,
+  Experimental_DecisionUnsupportedQuestionTypeError,
+  type Experimental_DecisionState,
+  type Experimental_DecisionStatePart,
 } from "ai";
-import { classifyGatewayError, errorMessageOf } from "../_ai/gatewayErrors";
+import { classifyGatewayError, errorMessageOf } from "@vvedantb/server/ai";
 import {
   EVALUATE_MODEL,
   evaluateInput,
@@ -24,7 +31,9 @@ import {
   type EvaluateInputRaw,
   type EvaluateOutcome,
 } from "./schema";
+import type { LoadedImage } from "./images";
 import { jsonValue } from "./jsonValue";
+import { AI_GATEWAY_KEY_MISSING, readAiGatewayKey } from "../_env/aiGateway";
 
 /** Jev answers in well under a second; anything past this is the gateway stalling. */
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -43,12 +52,15 @@ function failure(
 
 /**
  * Maps SDK and gateway failures onto the three caller-facing error codes. The
- * gateway classification itself is shared (`_ai/gatewayErrors.ts`); only
+ * gateway classification itself is shared (`@vvedantb/server/ai`); only
  * Jev's own codes and copy live here.
  */
 function classifyError(error: unknown): Failure {
-  if (Experimental_EvaluationUnsupportedQuestionTypeError.isInstance(error)) {
+  if (Experimental_DecisionUnsupportedQuestionTypeError.isInstance(error)) {
     return failure("invalid_request", errorMessageOf(error));
+  }
+  if (Experimental_DecisionRefusalError.isInstance(error)) {
+    return failure("provider_error", `Jev declined: ${errorMessageOf(error)}`);
   }
   const gatewayFailure = classifyGatewayError(error);
   const { message, retryable } = gatewayFailure;
@@ -76,6 +88,11 @@ function classifyError(error: unknown): Failure {
         "provider_error",
         `Jev returned a malformed answer set: ${message}`,
         true,
+      );
+    case "quota":
+      return failure(
+        "provider_error",
+        `AI Gateway quota or credit limit reached: ${message}`,
       );
     case "timeout":
       return failure(
@@ -134,20 +151,45 @@ function describeWarning(warning: {
 }
 
 /**
+ * The decide state: plain `state` when it is a string or object with no
+ * images, otherwise the state as one part followed by each image under a text
+ * label carrying its name, so a question can say "`after`" and Jev knows
+ * which picture it means. A JSON array always becomes a part: `decide` reads a
+ * bare array as a list of parts.
+ */
+function buildState(
+  state: EvaluateInputRaw["state"],
+  images: readonly LoadedImage[],
+): Experimental_DecisionState {
+  if (images.length === 0 && !Array.isArray(state)) return state;
+  const parts: Experimental_DecisionStatePart[] = [
+    typeof state === "string"
+      ? { type: "text", text: state }
+      : { type: "json", value: state },
+  ];
+  for (const image of images) {
+    parts.push(
+      { type: "text", text: `Image \`${image.name}\`:` },
+      { type: "file", mediaType: image.mediaType, data: image.data },
+    );
+  }
+  return parts;
+}
+
+/**
  * Asks Jev the caller's typed questions about one piece of state. Errors come
  * back as data rather than throwing, so a background caller can log and move
  * on. `tag` is the gateway usage tag that attributes the spend to a feature.
+ *
+ * `images` are already loaded and resized (`./images.ts`); the input's own
+ * `images` field only names them for the MCP surface and is not read here.
  */
 export async function evaluateDecision(
   input: EvaluateInputRaw,
-  options: { tag: string },
+  options: { tag: string; images?: readonly LoadedImage[] },
 ): Promise<EvaluateOutcome> {
-  const apiKey = process.env.AI_GATEWAY_API_KEY;
-  if (!apiKey || apiKey.trim().length === 0) {
-    return failure(
-      "missing_config",
-      "AI_GATEWAY_API_KEY is not set on this Convex deployment.",
-    );
+  if (!readAiGatewayKey()) {
+    return failure("missing_config", AI_GATEWAY_KEY_MISSING);
   }
 
   const parsed = evaluateInput.safeParse(input);
@@ -159,14 +201,15 @@ export async function evaluateDecision(
   }
 
   try {
-    const result = await evaluate({
+    const result = await decide({
       model: EVALUATE_MODEL,
-      state: parsed.data.state,
+      state: buildState(parsed.data.state, options.images ?? []),
       questions: parsed.data.questions,
       maxRetries: MAX_RETRIES,
       abortSignal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       providerOptions: {
         gateway: { zeroDataRetention: true, tags: [options.tag] },
+        ...(parsed.data.longContext ? { typesafe: { longContext: true } } : {}),
       },
     });
     // Provider metadata is JSON on the wire; parse rather than trust the type.

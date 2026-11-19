@@ -6,82 +6,27 @@ import { mkdirSync as mkdirSync10, unlinkSync as unlinkSync3 } from "fs";
 // callback-src/config.ts
 import { existsSync } from "fs";
 
-// callback-src/evaMcp.ts
-var LINEAR_MCP_DEFAULT_URL = "https://mcp.linear.app/mcp";
-var FIGMA_MCP_DEFAULT_URL = "https://mcp.figma.com/mcp";
-function buildEvaMcpServers({
-  auth,
-  baseUrl
-}) {
-  if (!auth || !baseUrl) return {};
-  return {
-    eva: {
-      type: "http",
-      url: \`\${baseUrl}/mcp\`,
-      headers: { Authorization: \`Bearer \${auth}\` }
-    }
-  };
+// ../shared/src/agentTurnLimits.ts
+var TURN_MAX_RUNTIME_MS = 3 * 60 * 60 * 1e3;
+var TURN_BACKSTOP_MS = TURN_MAX_RUNTIME_MS + 30 * 60 * 1e3;
+var TURN_MAX_RUNTIME_HOURS = TURN_MAX_RUNTIME_MS / 36e5;
+var TURN_BACKSTOP_ERROR = \`Turn exceeded the \${TURN_BACKSTOP_MS / 36e5}-hour limit\`;
+var TURN_MAX_RUNTIME_ERROR = "The assistant exceeded the maximum turn runtime.";
+var ATTEMPT_MAX_RUNTIME_ERROR_FRAGMENT = "terminated after max runtime of";
+var TURN_CONTINUE_DISPLAY = \`Continue: the last turn hit the \${TURN_MAX_RUNTIME_HOURS}-hour limit.\`;
+var TURN_CONTINUE_PROMPT = \`Your last turn reached the \${TURN_MAX_RUNTIME_HOURS}-hour runtime limit and was stopped. Eva committed your work at that point. Check git status and git log, then continue the task from where you stopped. Do not repeat finished steps. If a step is very long (a benchmark or load test), run it in the background and check on it, so one turn does not hit the limit again.\`;
+
+// callback-src/jsonGuards.ts
+function isJsonObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-function takeBearerServer(env, name, authKey, urlKey, fallbackUrl) {
-  const auth = env[authKey];
-  const url = env[urlKey] || (auth ? fallbackUrl : void 0);
-  delete env[authKey];
-  delete env[urlKey];
-  if (!auth || !url) return { servers: {}, handoff: {} };
-  return {
-    servers: {
-      [name]: {
-        type: "http",
-        url,
-        headers: { Authorization: \`Bearer \${auth}\` }
-      }
-    },
-    handoff: {
-      [authKey]: auth,
-      [urlKey]: url
-    }
-  };
+function trimmedString(value) {
+  return typeof value === "string" ? value.trim() || void 0 : void 0;
 }
-function consumeEvaMcpEnvironment(env) {
-  const eva = buildEvaMcpServers({
-    auth: env.EVA_MCP_AUTH,
-    baseUrl: env.EVA_MCP_BASE_URL
-  });
-  const evaAuth = env.EVA_MCP_AUTH;
-  const evaBase = env.EVA_MCP_BASE_URL;
-  delete env.EVA_MCP_AUTH;
-  delete env.EVA_MCP_BASE_URL;
-  const linear = takeBearerServer(
-    env,
-    "linear",
-    "LINEAR_MCP_AUTH",
-    "LINEAR_MCP_URL",
-    LINEAR_MCP_DEFAULT_URL
-  );
-  const figma = takeBearerServer(
-    env,
-    "figma",
-    "FIGMA_MCP_AUTH",
-    "FIGMA_MCP_URL",
-    FIGMA_MCP_DEFAULT_URL
-  );
-  return {
-    servers: { ...eva, ...linear.servers, ...figma.servers },
-    workerHandoffEnv: {
-      ...evaAuth && evaBase ? { EVA_MCP_AUTH: evaAuth, EVA_MCP_BASE_URL: evaBase } : {},
-      ...linear.handoff,
-      ...figma.handoff
-    }
-  };
-}
-var consumed = consumeEvaMcpEnvironment(process.env);
-var evaMcpServers = consumed.servers;
-var evaMcpWorkerHandoffEnv = consumed.workerHandoffEnv;
-var hasEvaMcpConfig = Object.keys(evaMcpServers).length > 0;
 
 // callback-src/linkedRepos.ts
 function isLinkedRepo(value) {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isJsonObject(value)) {
     return false;
   }
   return typeof value.owner === "string" && typeof value.name === "string" && typeof value.path === "string" && typeof value.branchName === "string" && typeof value.baseBranch === "string";
@@ -121,7 +66,7 @@ function resolveAgentCwd(workDir, workspaceRoot, useRoot) {
 
 // ../shared/src/modelPricing.ts
 var ANTHROPIC_PRICING_URL = "https://platform.claude.com/docs/en/about-claude/pricing";
-var ANTHROPIC_PRICING_AS_OF = "2026-10-01";
+var ANTHROPIC_PRICING_AS_OF = "2026-11-09";
 function anthropicRow(inputPerMillion, cacheReadPerMillion, cacheWritePerMillion, outputPerMillion) {
   return {
     inputPerMillion,
@@ -133,6 +78,8 @@ function anthropicRow(inputPerMillion, cacheReadPerMillion, cacheWritePerMillion
   };
 }
 var CLAUDE_PRICING_PER_MILLION = {
+  "claude-fable-5-2": anthropicRow(8, 0.2, 10, 40),
+  "claude-mythos-5-2": anthropicRow(8, 0.2, 10, 40),
   "claude-fable-5-1": anthropicRow(10, 0.25, 12.5, 50),
   "claude-mythos-5-1": anthropicRow(10, 0.25, 12.5, 50),
   "claude-fable-5": anthropicRow(10, 1, 12.5, 50),
@@ -214,6 +161,7 @@ var CURSOR_TURN_WORKER_LEASE_GENERATION = Number.isSafeInteger(
 ) ? parsedCursorWorkerLeaseGeneration : 0;
 var IS_CURSOR_TURN_WORKER = CURSOR_TURN_WORKER_PROMPT_FILE.length > 0;
 var SYSTEM_PROMPT = process.env.SYSTEM_PROMPT || "";
+var PROMPT_FILE = "/tmp/design-prompt.txt";
 var WORK_DIR = existsSync("/tmp/repo") ? "/tmp/repo" : existsSync("/workspace/repo") ? "/workspace/repo" : "/tmp/repo";
 var WORKSPACE_ROOT = process.env.EVA_WORKSPACE_ROOT || null;
 var LINKED_REPOS = parseLinkedReposEnv(process.env.EVA_LINKED_REPOS);
@@ -230,6 +178,7 @@ var AGENT_CWD = resolveAgentCwd(
 var NO_OUTPUT_TIMEOUT_MS = Number(
   process.env.CLAUDE_NO_OUTPUT_TIMEOUT_MS || "60000"
 );
+var NO_MESSAGE_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
 var FIRST_EVENT_TIMEOUT_MS = Number(
   process.env.CLAUDE_FIRST_EVENT_TIMEOUT_MS || "90000"
 );
@@ -241,7 +190,7 @@ var FIRST_ASSISTANT_EVENT_TIMEOUT_MS = Number(
 );
 var NO_OUTPUT_CHECK_INTERVAL_MS = 5e3;
 var MAX_TOTAL_RUNTIME_MS = Number(
-  process.env.CLAUDE_MAX_TOTAL_RUNTIME_MS || "5400000"
+  process.env.CLAUDE_MAX_TOTAL_RUNTIME_MS || String(TURN_MAX_RUNTIME_MS)
 );
 var SCRIPT_STARTED_AT = Date.now();
 var CALLBACK_HTTP_TIMEOUT_MS = Number(
@@ -361,7 +310,6 @@ function buildSettingsJson() {
   return JSON.stringify(settings);
 }
 var settingsJson = buildSettingsJson();
-var hasMcpConfig = hasEvaMcpConfig;
 var claudeModelBase = MODEL.startsWith("claude:") ? MODEL.slice("claude:".length) : MODEL;
 var normalizedClaudeModel = PROVIDER === "claude" && AI_CONTEXT_1M === "1" ? \`\${claudeModelBase}[1m]\` : claudeModelBase;
 var normalizedCodexModel = MODEL.startsWith("codex:") ? MODEL.slice("codex:".length) : MODEL;
@@ -437,34 +385,12 @@ var completedLabels = {
   "Asking a question...": "Asked a question"
 };
 
-// callback-src/providers/claudeSdkDaemon.ts
-import { readdirSync as readdirSync3 } from "fs";
-import { homedir } from "os";
-
-// callback-src/providers/daemonPaths.ts
-var LEGACY_DAEMON_PID = "/tmp/eva-daemon.pid";
-var LEGACY_DAEMON_ENTITY = "/tmp/eva-daemon.entity";
-var LEGACY_DAEMON_OPTS = "/tmp/eva-daemon.opts";
-function resolveDaemonPaths(entityIdField = ENTITY_ID_FIELD, entityId = ENTITY_ID) {
-  const field = entityIdField ?? "sessionId";
-  const id = entityId ?? "";
-  const suffix = \`\${field}-\${id}\`;
-  return {
-    pid: \`/tmp/eva-daemon.\${suffix}.pid\`,
-    entity: \`/tmp/eva-daemon.\${suffix}.entity\`,
-    opts: \`/tmp/eva-daemon.\${suffix}.opts\`
-  };
-}
-function resolveLegacySessionDaemonPaths() {
-  return {
-    pid: LEGACY_DAEMON_PID,
-    entity: LEGACY_DAEMON_ENTITY,
-    opts: LEGACY_DAEMON_OPTS
-  };
-}
+// callback-src/evaMcp.ts
+import { existsSync as existsSync3, readFileSync as readFileSync2 } from "fs";
+import { join } from "path";
 
 // callback-src/utils.ts
-import { spawnSync } from "child_process";
+import { spawnSync as spawnSync2 } from "child_process";
 import {
   cpSync,
   existsSync as existsSync2,
@@ -475,12 +401,54 @@ import {
   writeFileSync
 } from "fs";
 
+// ../shared/src/redactSecrets.ts
+var SECRET_PATTERNS = [
+  [/gh[spour]_[A-Za-z0-9_]+/g, "***"],
+  [/\\bgithub_pat_[A-Za-z0-9_]+/g, "***"],
+  [/\\bsk-[A-Za-z0-9_-]{10,}\\b/g, "***"],
+  [/\\bAKIA[0-9A-Z]{16}\\b/g, "***"],
+  // Length floor keeps prose ("the bearer of bad news") intact in chat text.
+  [/(?<=\\bBearer\\s+)[A-Za-z0-9._~+/=-]{20,}/gi, "***"],
+  [/\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9._-]+/g, "***"],
+  // URL userinfo: \`https://user:secret@host\` keeps the user, drops the secret.
+  // The secret stops at \`/\`, so \`//localhost:5173/@fs/x\` is not userinfo.
+  [/\\/\\/([^/\\s:@]+):[^@\\s/]+@/g, "//\$1:***@"]
+];
+function redactSecrets(text) {
+  let out = text;
+  for (const [pattern, replacement] of SECRET_PATTERNS) {
+    out = out.replace(pattern, replacement);
+  }
+  return out;
+}
+
+// callback-src/runtime/gitExec.ts
+import { spawnSync } from "child_process";
+var GIT_STEP_TIMEOUT_MS = 2e4;
+function git(args, {
+  cwd = WORK_DIR,
+  timeoutMs = GIT_STEP_TIMEOUT_MS
+} = {}) {
+  const result = spawnSync("git", ["-C", cwd, ...args], {
+    encoding: "utf8",
+    timeout: timeoutMs,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }
+  });
+  const stdout = (result.stdout || "").trim();
+  const out = ((result.stdout || "") + (result.stderr || "")).trim();
+  return { ok: result.status === 0, out, stdout };
+}
+function readCurrentBranch(options = {}) {
+  const result = git(["rev-parse", "--abbrev-ref", "HEAD"], options);
+  return result.ok ? result.stdout : "";
+}
+
 // callback-src/parse/questionInput.ts
 function parseQuestionOptions(value) {
   if (!Array.isArray(value)) return [];
   const options = [];
   for (const raw of value) {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    if (!isJsonObject(raw)) continue;
     if (typeof raw.label !== "string" || !raw.label) continue;
     options.push({
       label: raw.label,
@@ -493,7 +461,7 @@ function parseQuestionInput(input) {
   if (!Array.isArray(input.questions)) return void 0;
   const questions = [];
   for (const raw of input.questions) {
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    if (!isJsonObject(raw)) continue;
     if (typeof raw.question !== "string" || !raw.question) continue;
     questions.push({
       question: raw.question,
@@ -506,8 +474,75 @@ function parseQuestionInput(input) {
 }
 
 // callback-src/runtime/state.ts
+function nonEmptyString(value) {
+  return typeof value === "string" && value ? value : void 0;
+}
+function parsePriorOutput(value) {
+  if (!isJsonObject(value) || typeof value.text !== "string") {
+    return void 0;
+  }
+  return {
+    text: value.text,
+    exitCode: typeof value.exitCode === "number" ? value.exitCode : void 0,
+    truncated: value.truncated === true ? true : void 0
+  };
+}
+function parsePriorEdits(values) {
+  const edits = [];
+  for (const edit of values) {
+    if (!isJsonObject(edit)) continue;
+    if (typeof edit.oldText !== "string" || typeof edit.newText !== "string") {
+      continue;
+    }
+    edits.push({ oldText: edit.oldText, newText: edit.newText });
+  }
+  return edits.length > 0 ? edits : void 0;
+}
+function parsePriorFiles(values) {
+  const files = [];
+  for (const file of values) {
+    const trimmed = trimmedString(file);
+    if (trimmed) {
+      files.push(trimmed);
+    }
+  }
+  return files.length > 0 ? files : void 0;
+}
+function parsePriorTodos(values) {
+  const todos = [];
+  for (const item of values) {
+    if (!isJsonObject(item)) continue;
+    if (typeof item.content !== "string" || !item.content) continue;
+    const status = item.status === "in_progress" || item.status === "completed" ? item.status : "pending";
+    todos.push({ content: item.content, status });
+  }
+  return todos.length > 0 ? todos : void 0;
+}
+function parsePriorAnswers(value) {
+  const answers = {};
+  for (const [question, answer] of Object.entries(value)) {
+    if (typeof answer === "string") {
+      answers[question] = answer;
+    }
+  }
+  return Object.keys(answers).length > 0 ? answers : void 0;
+}
+function addPriorStepPayload(step, value) {
+  const output = parsePriorOutput(value.output);
+  if (output) step.output = output;
+  const edits = Array.isArray(value.edits) ? parsePriorEdits(value.edits) : void 0;
+  if (edits) step.edits = edits;
+  const files = Array.isArray(value.files) ? parsePriorFiles(value.files) : void 0;
+  if (files) step.files = files;
+  const todos = Array.isArray(value.todos) ? parsePriorTodos(value.todos) : void 0;
+  if (todos) step.todos = todos;
+  const questions = Array.isArray(value.questions) ? parseQuestionInput({ questions: value.questions }) : void 0;
+  if (questions) step.questions = questions;
+  const answers = isJsonObject(value.answers) ? parsePriorAnswers(value.answers) : void 0;
+  if (answers) step.answers = answers;
+}
 function parsePriorStep(value) {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isJsonObject(value)) {
     return null;
   }
   const label = value.label;
@@ -527,84 +562,21 @@ function parsePriorStep(value) {
     path: typeof path3 === "string" ? path3 : void 0,
     status: "complete"
   };
-  if (typeof value.toolUseId === "string" && value.toolUseId.trim()) {
-    step.toolUseId = value.toolUseId.trim();
-  }
-  if (typeof value.parentToolUseId === "string" && value.parentToolUseId.trim()) {
-    step.parentToolUseId = value.parentToolUseId.trim();
-  }
-  if (typeof value.command === "string" && value.command) {
-    step.command = value.command;
-  }
-  if (typeof value.contentPreview === "string" && value.contentPreview) {
-    step.contentPreview = value.contentPreview;
-  }
+  const toolUseId = trimmedString(value.toolUseId);
+  if (toolUseId) step.toolUseId = toolUseId;
+  const parentToolUseId = trimmedString(value.parentToolUseId);
+  if (parentToolUseId) step.parentToolUseId = parentToolUseId;
+  const command = nonEmptyString(value.command);
+  if (command) step.command = command;
+  const contentPreview = nonEmptyString(value.contentPreview);
+  if (contentPreview) step.contentPreview = contentPreview;
   if (value.isError === true) {
     step.isError = true;
   }
   if (typeof value.durationMs === "number" && Number.isFinite(value.durationMs)) {
     step.durationMs = value.durationMs;
   }
-  if (value.output && typeof value.output === "object" && !Array.isArray(value.output) && typeof value.output.text === "string") {
-    step.output = {
-      text: value.output.text,
-      exitCode: typeof value.output.exitCode === "number" ? value.output.exitCode : void 0,
-      truncated: value.output.truncated === true ? true : void 0
-    };
-  }
-  if (Array.isArray(value.edits)) {
-    const edits = [];
-    for (const edit of value.edits) {
-      if (!edit || typeof edit !== "object" || Array.isArray(edit)) continue;
-      if (typeof edit.oldText !== "string" || typeof edit.newText !== "string") {
-        continue;
-      }
-      edits.push({ oldText: edit.oldText, newText: edit.newText });
-    }
-    if (edits.length > 0) {
-      step.edits = edits;
-    }
-  }
-  if (Array.isArray(value.files)) {
-    const files = [];
-    for (const file of value.files) {
-      if (typeof file === "string" && file.trim()) {
-        files.push(file.trim());
-      }
-    }
-    if (files.length > 0) {
-      step.files = files;
-    }
-  }
-  if (Array.isArray(value.todos)) {
-    const todos = [];
-    for (const item of value.todos) {
-      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
-      if (typeof item.content !== "string" || !item.content) continue;
-      const status = item.status === "in_progress" || item.status === "completed" ? item.status : "pending";
-      todos.push({ content: item.content, status });
-    }
-    if (todos.length > 0) {
-      step.todos = todos;
-    }
-  }
-  if (Array.isArray(value.questions)) {
-    const questions = parseQuestionInput({ questions: value.questions });
-    if (questions) {
-      step.questions = questions;
-    }
-  }
-  if (value.answers && typeof value.answers === "object" && !Array.isArray(value.answers)) {
-    const answers = {};
-    for (const [question, answer] of Object.entries(value.answers)) {
-      if (typeof answer === "string") {
-        answers[question] = answer;
-      }
-    }
-    if (Object.keys(answers).length > 0) {
-      step.answers = answers;
-    }
-  }
+  addPriorStepPayload(step, value);
   return step;
 }
 var callbackState = {
@@ -756,7 +728,7 @@ function narrowJsonValue(value) {
   return obj;
 }
 function log(msg) {
-  const line = "[callback " + (/* @__PURE__ */ new Date()).toISOString() + "] " + msg + "\\n";
+  const line = "[callback " + (/* @__PURE__ */ new Date()).toISOString() + "] " + redactSecrets(msg) + "\\n";
   console.error(line.trim());
   try {
     writeFileSync("/tmp/callback-debug.log", line, { flag: "a" });
@@ -764,7 +736,7 @@ function log(msg) {
   }
 }
 function asJsonObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return isJsonObject(value) ? value : {};
 }
 function tryParseJson(text) {
   try {
@@ -776,6 +748,23 @@ function tryParseJson(text) {
   } catch {
     return null;
   }
+}
+function tryParseJsonObject(text) {
+  const parsed = tryParseJson(text);
+  return isJsonObject(parsed) ? parsed : null;
+}
+function readStringField(obj, keys) {
+  for (const key of keys) {
+    const value = obj[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return "";
+}
+function readTurnPrompt() {
+  return readFileSync(PROMPT_FILE, "utf8");
+}
+function withSystemPrompt(prompt) {
+  return SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + prompt : prompt;
 }
 async function readResponseJson(res) {
   const parsed = await res.json();
@@ -797,7 +786,7 @@ function decodeBase64(value) {
   return Buffer.from(value, "base64").toString("utf8");
 }
 function runTimedBashSync(script, label) {
-  const result = spawnSync("bash", ["-lc", script], {
+  const result = spawnSync2("bash", ["-lc", script], {
     encoding: "utf8",
     env: { ...process.env },
     timeout: CLAUDE_SYNC_TIMEOUT_MS
@@ -814,14 +803,11 @@ function runTimedBashSync(script, label) {
   return true;
 }
 function readGitHeadSha(dir = WORK_DIR) {
-  const result = spawnSync("git", ["-C", dir, "rev-parse", "HEAD"], {
-    encoding: "utf8",
-    timeout: CLAUDE_SYNC_TIMEOUT_MS
+  const result = git(["rev-parse", "HEAD"], {
+    cwd: dir,
+    timeoutMs: CLAUDE_SYNC_TIMEOUT_MS
   });
-  if (result.status !== 0) {
-    return "";
-  }
-  return (result.stdout || "").trim();
+  return result.ok ? result.stdout : "";
 }
 function hasNewTaskCommitSince(baselineHead) {
   if (!baselineHead) {
@@ -831,15 +817,14 @@ function hasNewTaskCommitSince(baselineHead) {
   if (!currentHead || currentHead === baselineHead) {
     return false;
   }
-  const countResult = spawnSync(
-    "git",
-    ["-C", WORK_DIR, "rev-list", "--count", baselineHead + ".." + currentHead],
-    { encoding: "utf8", timeout: CLAUDE_SYNC_TIMEOUT_MS }
+  const countResult = git(
+    ["rev-list", "--count", baselineHead + ".." + currentHead],
+    { timeoutMs: CLAUDE_SYNC_TIMEOUT_MS }
   );
-  if (countResult.status !== 0) {
+  if (!countResult.ok) {
     return true;
   }
-  const count = Number((countResult.stdout || "").trim());
+  const count = Number(countResult.stdout);
   return Number.isFinite(count) && count > 0;
 }
 function copyBaseClaudeConfig() {
@@ -867,9 +852,12 @@ function copyBaseClaudeConfig() {
     "copyBaseClaudeConfig finished in " + String(Date.now() - startedAt) + "ms"
   );
 }
+function isSafeClaudeSessionId(sessionId) {
+  return /^[A-Za-z0-9._-]+\$/.test(sessionId) && !/^\\.+\$/.test(sessionId);
+}
 function logTranscriptStats(sessionId, label) {
-  if (!sessionId) {
-    log(label + ": no session id");
+  if (!isSafeClaudeSessionId(sessionId)) {
+    log(label + ": no valid session id");
     return;
   }
   const transcriptPath = buildClaudeTranscriptPath(
@@ -892,6 +880,9 @@ function logTranscriptStats(sessionId, label) {
   }
 }
 function buildClaudeTranscriptPath(projectDir, sessionId) {
+  if (!isSafeClaudeSessionId(sessionId)) {
+    throw new Error("Invalid Claude session id");
+  }
   return projectDir + "/" + sessionId + ".jsonl";
 }
 function attemptElapsedMs() {
@@ -899,6 +890,211 @@ function attemptElapsedMs() {
 }
 function elapsedAttemptMs() {
   return attemptElapsedMs();
+}
+
+// callback-src/evaMcp.ts
+var LINEAR_MCP_DEFAULT_URL = "https://mcp.linear.app/mcp";
+var FIGMA_MCP_DEFAULT_URL = "https://mcp.figma.com/mcp";
+function buildEvaMcpServers({
+  auth,
+  baseUrl
+}) {
+  if (!auth || !baseUrl) return {};
+  return {
+    eva: {
+      type: "http",
+      url: \`\${baseUrl}/mcp\`,
+      headers: { Authorization: \`Bearer \${auth}\` }
+    }
+  };
+}
+function takeBearerServer(env, name, authKey, urlKey, fallbackUrl) {
+  const auth = env[authKey];
+  const url = env[urlKey] || (auth ? fallbackUrl : void 0);
+  delete env[authKey];
+  delete env[urlKey];
+  if (!auth || !url) return { servers: {}, handoff: {} };
+  return {
+    servers: {
+      [name]: {
+        type: "http",
+        url,
+        headers: { Authorization: \`Bearer \${auth}\` }
+      }
+    },
+    handoff: {
+      [authKey]: auth,
+      [urlKey]: url
+    }
+  };
+}
+function consumeEvaMcpEnvironment(env) {
+  const eva = buildEvaMcpServers({
+    auth: env.EVA_MCP_AUTH,
+    baseUrl: env.EVA_MCP_BASE_URL
+  });
+  const evaAuth = env.EVA_MCP_AUTH;
+  const evaBase = env.EVA_MCP_BASE_URL;
+  delete env.EVA_MCP_AUTH;
+  delete env.EVA_MCP_BASE_URL;
+  const linear = takeBearerServer(
+    env,
+    "linear",
+    "LINEAR_MCP_AUTH",
+    "LINEAR_MCP_URL",
+    LINEAR_MCP_DEFAULT_URL
+  );
+  const figma = takeBearerServer(
+    env,
+    "figma",
+    "FIGMA_MCP_AUTH",
+    "FIGMA_MCP_URL",
+    FIGMA_MCP_DEFAULT_URL
+  );
+  return {
+    servers: { ...eva, ...linear.servers, ...figma.servers },
+    workerHandoffEnv: {
+      ...evaAuth && evaBase ? { EVA_MCP_AUTH: evaAuth, EVA_MCP_BASE_URL: evaBase } : {},
+      ...linear.handoff,
+      ...figma.handoff
+    }
+  };
+}
+var RESERVED_MCP_SERVER_NAMES = /* @__PURE__ */ new Set(["eva", "linear", "figma"]);
+function isJsonObject2(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+var SkipServer = class extends Error {
+};
+function substituteVars(value, env) {
+  return value.replace(/\\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}/g, (_, name) => {
+    const resolved = env[name];
+    if (!resolved) throw new SkipServer("missing env var " + name);
+    return resolved;
+  });
+}
+function stringRecord(value, field, env) {
+  if (value === void 0) return {};
+  if (!isJsonObject2(value)) throw new SkipServer(field + " must be an object");
+  const out = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry !== "string") {
+      throw new SkipServer(field + "." + key + " must be a string");
+    }
+    out[key] = substituteVars(entry, env);
+  }
+  return out;
+}
+function parseRepoMcpServer(raw, env) {
+  if (!isJsonObject2(raw)) throw new SkipServer("entry must be an object");
+  const { type, url, command, args } = raw;
+  const kind = type ?? (command !== void 0 ? "stdio" : url !== void 0 ? "http" : "");
+  if (kind === "http" || kind === "sse") {
+    if (typeof url !== "string") throw new SkipServer("url must be a string");
+    return {
+      type: kind,
+      url: substituteVars(url, env),
+      headers: stringRecord(raw.headers, "headers", env)
+    };
+  }
+  if (kind === "stdio") {
+    if (typeof command !== "string") {
+      throw new SkipServer("command must be a string");
+    }
+    if (args !== void 0 && !Array.isArray(args)) {
+      throw new SkipServer("args must be an array");
+    }
+    return {
+      type: "stdio",
+      command: substituteVars(command, env),
+      args: (args ?? []).map((arg) => {
+        if (typeof arg !== "string") throw new SkipServer("args must be strings");
+        return substituteVars(arg, env);
+      }),
+      env: stringRecord(raw.env, "env", env)
+    };
+  }
+  throw new SkipServer("unsupported type " + JSON.stringify(type));
+}
+function parseRepoMcpConfig(text, env) {
+  const parsed = tryParseJson(text);
+  if (!isJsonObject2(parsed) || !isJsonObject2(parsed.mcpServers)) {
+    return {
+      servers: {},
+      warnings: ["invalid JSON or missing mcpServers object"]
+    };
+  }
+  const servers = {};
+  const warnings = [];
+  for (const [name, raw] of Object.entries(parsed.mcpServers)) {
+    try {
+      servers[name] = parseRepoMcpServer(raw, env);
+    } catch (error) {
+      if (!(error instanceof SkipServer)) throw error;
+      warnings.push("skipped server " + name + ": " + error.message);
+    }
+  }
+  return { servers, warnings };
+}
+function mergeRepoMcpServers(evaServers, repoServers) {
+  const kept = {};
+  const warnings = [];
+  for (const [name, server] of Object.entries(repoServers)) {
+    if (RESERVED_MCP_SERVER_NAMES.has(name)) {
+      warnings.push("skipped server " + name + ": name is reserved for Eva");
+    } else {
+      kept[name] = server;
+    }
+  }
+  return { servers: { ...kept, ...evaServers }, warnings };
+}
+var REPO_MCP_PATH = join(WORK_DIR, ".eva", "mcp.json");
+var hasRepoMcpFile = existsSync3(REPO_MCP_PATH);
+function loadRepoMcpServers(evaServers) {
+  if (!hasRepoMcpFile) return evaServers;
+  let text;
+  try {
+    text = readFileSync2(REPO_MCP_PATH, "utf8");
+  } catch (error) {
+    log(".eva/mcp.json unreadable: " + String(error));
+    return evaServers;
+  }
+  const repo = parseRepoMcpConfig(text, process.env);
+  const merged = mergeRepoMcpServers(evaServers, repo.servers);
+  for (const warning of [...repo.warnings, ...merged.warnings]) {
+    log(".eva/mcp.json: " + warning);
+  }
+  return merged.servers;
+}
+var consumed = consumeEvaMcpEnvironment(process.env);
+var evaMcpServers = loadRepoMcpServers(consumed.servers);
+var evaMcpWorkerHandoffEnv = consumed.workerHandoffEnv;
+var hasEvaMcpConfig = Object.keys(evaMcpServers).length > 0;
+
+// callback-src/providers/claudeSdkDaemon.ts
+import { readdirSync as readdirSync3 } from "fs";
+import { homedir } from "os";
+
+// callback-src/providers/daemonPaths.ts
+var LEGACY_DAEMON_PID = "/tmp/eva-daemon.pid";
+var LEGACY_DAEMON_ENTITY = "/tmp/eva-daemon.entity";
+var LEGACY_DAEMON_OPTS = "/tmp/eva-daemon.opts";
+function resolveDaemonPaths(entityIdField = ENTITY_ID_FIELD, entityId = ENTITY_ID) {
+  const field = entityIdField ?? "sessionId";
+  const id = entityId ?? "";
+  const suffix = \`\${field}-\${id}\`;
+  return {
+    pid: \`/tmp/eva-daemon.\${suffix}.pid\`,
+    entity: \`/tmp/eva-daemon.\${suffix}.entity\`,
+    opts: \`/tmp/eva-daemon.\${suffix}.opts\`
+  };
+}
+function resolveLegacySessionDaemonPaths() {
+  return {
+    pid: LEGACY_DAEMON_PID,
+    entity: LEGACY_DAEMON_ENTITY,
+    opts: LEGACY_DAEMON_OPTS
+  };
 }
 
 // callback-src/runtime/turnLease.ts
@@ -964,13 +1160,13 @@ function noteHeartbeatResponse(response, sentUnder) {
   } else {
     parsed = response;
   }
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+  if (!isJsonObject(parsed)) {
     return false;
   }
   const responseValue = parsed.value;
   const payload = typeof responseValue === "object" && responseValue !== null && !Array.isArray(responseValue) ? responseValue : parsed;
   const lease = payload.lease;
-  if (typeof lease !== "object" || lease === null || Array.isArray(lease)) {
+  if (!isJsonObject(lease)) {
     return false;
   }
   if (lease.status !== "terminal") return false;
@@ -985,6 +1181,43 @@ function noteHeartbeatResponse(response, sentUnder) {
   terminalReason = reason;
   log("turn lease terminal (" + reason + ") turnId=" + String(current?.turnId));
   return true;
+}
+
+// callback-src/runtime/vmMemory.ts
+import { readFileSync as readFileSync3 } from "fs";
+var VM_MEMORY_SAMPLE_INTERVAL_MS = 3e4;
+var lastSampleAt = 0;
+function parseMeminfo(text) {
+  const kb = (key) => {
+    const match = new RegExp(\`^\${key}:\\\\s+(\\\\d+) kB\$\`, "m").exec(text);
+    return match ? Number(match[1]) : null;
+  };
+  const total = kb("MemTotal");
+  const available = kb("MemAvailable");
+  const swapTotal = kb("SwapTotal");
+  const swapFree = kb("SwapFree");
+  if (total === null || available === null || swapTotal === null || swapFree === null) {
+    return null;
+  }
+  return {
+    memTotalMb: Math.round(total / 1024),
+    memAvailableMb: Math.round(available / 1024),
+    swapUsedMb: Math.round((swapTotal - swapFree) / 1024)
+  };
+}
+function appendVmMemory(body, now = Date.now()) {
+  if (now - lastSampleAt < VM_MEMORY_SAMPLE_INTERVAL_MS) return;
+  let sample = null;
+  try {
+    sample = parseMeminfo(readFileSync3("/proc/meminfo", "utf8"));
+  } catch {
+    return;
+  }
+  if (sample === null) return;
+  lastSampleAt = now;
+  body.set("memTotalMb", String(sample.memTotalMb));
+  body.set("memAvailableMb", String(sample.memAvailableMb));
+  body.set("swapUsedMb", String(sample.swapUsedMb));
 }
 
 // callback-src/http/convexClient.ts
@@ -1101,6 +1334,7 @@ async function callStreamingHeartbeatTouchOnce(entityId) {
     body.set("hmac", STREAMING_HMAC);
     body.set("touchOnly", "1");
     appendTurnLease(body, identity);
+    appendVmMemory(body);
     const response2 = await postSignedForm(
       CONVEX_SITE_URL + "/api/streaming/heartbeat",
       body,
@@ -1128,6 +1362,7 @@ async function callStreamingHeartbeatOnce(entityId, currentActivity, currentCont
     body.set("currentActivity", currentActivity);
     body.set("currentContent", currentContent || "");
     appendTurnLease(body, identity);
+    appendVmMemory(body);
     if (pendingQuestion) {
       body.set("pendingQuestion", pendingQuestion);
     }
@@ -1188,6 +1423,8 @@ async function callStreamingHeartbeatTouch(entityId) {
 // callback-src/parse/stepBudget.ts
 var STEP_FIELD_CAPS = {
   command: 600,
+  /** One-line bash \`detail\` on the step row (the full text rides \`command\`). */
+  commandDetail: 300,
   output: 1200,
   editSide: 1e3,
   editsMax: 4,
@@ -1284,7 +1521,7 @@ function capContentPreview(content) {
   return headCap(content, STEP_FIELD_CAPS.contentPreview).text;
 }
 function buildStepOutput(text, exitCode) {
-  const trimmed = text.trim();
+  const trimmed = redactSecrets(text).trim();
   if (!trimmed && exitCode === void 0) {
     return void 0;
   }
@@ -1310,7 +1547,7 @@ function extractClaudeEdits(input) {
   if (Array.isArray(input.edits)) {
     for (const item of input.edits) {
       if (edits.length >= STEP_FIELD_CAPS.editsMax) break;
-      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      if (!isJsonObject(item)) continue;
       const oldText = typeof item.old_string === "string" ? item.old_string : typeof item.oldText === "string" ? item.oldText : typeof item.old_text === "string" ? item.old_text : "";
       const newText = typeof item.new_string === "string" ? item.new_string : typeof item.newText === "string" ? item.newText : typeof item.new_text === "string" ? item.new_text : "";
       if (oldText || newText) {
@@ -1319,15 +1556,6 @@ function extractClaudeEdits(input) {
     }
   }
   return edits.length > 0 ? edits : void 0;
-}
-function readStringField(obj, keys) {
-  for (const key of keys) {
-    const value = obj[key];
-    if (typeof value === "string" && value.trim()) {
-      return value;
-    }
-  }
-  return "";
 }
 function readNumberField(obj, keys) {
   for (const key of keys) {
@@ -1415,7 +1643,7 @@ function extractFilePaths(obj) {
   }
   if (Array.isArray(obj.changes)) {
     for (const change of obj.changes) {
-      if (!change || typeof change !== "object" || Array.isArray(change)) {
+      if (!isJsonObject(change)) {
         continue;
       }
       if (typeof change.path === "string") add(change.path);
@@ -1461,125 +1689,89 @@ function probeOpencodeStateResult(state) {
 }
 
 // callback-src/parse/toolSteps.ts
-function opencodeToolToStep(part) {
-  const tool = typeof part.tool === "string" ? part.tool : "tool";
-  const stateObj = part.state && typeof part.state === "object" && !Array.isArray(part.state) ? part.state : null;
-  const input = stateObj && "input" in stateObj && stateObj.input && typeof stateObj.input === "object" && !Array.isArray(stateObj.input) ? stateObj.input : {};
-  const rawPath = typeof input.filePath === "string" ? input.filePath : typeof input.file_path === "string" ? input.file_path : typeof input.path === "string" ? input.path : "";
-  const path3 = rawPath ? shortenPath(rawPath) : "";
-  const toolUseId = pickToolCallId(part) ?? (typeof part.callID === "string" && part.callID.trim() ? part.callID.trim() : void 0);
-  let step;
+function stringOrUndefined(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function fileStep(type, label, rawPath, extra = {}) {
+  return {
+    type,
+    label,
+    detail: rawPath ? shortenPath(rawPath) : void 0,
+    path: rawPath || void 0,
+    status: "active",
+    ...extra
+  };
+}
+function bashStep(command, label = "Running command...", fallbackDetail) {
+  return {
+    type: "bash",
+    label,
+    detail: command ? command.slice(0, STEP_FIELD_CAPS.commandDetail) : fallbackDetail,
+    command: command ? capCommand(command) : void 0,
+    status: "active"
+  };
+}
+function searchStep(kind, detail) {
+  return kind === "files" ? { type: "search_files", label: "Searching files...", detail, status: "active" } : { type: "search_code", label: "Searching code...", detail, status: "active" };
+}
+function webStep(kind, detail) {
+  return kind === "fetch" ? { type: "web_fetch", label: "Fetching URL...", detail, status: "active" } : { type: "web_search", label: "Searching web...", detail, status: "active" };
+}
+function subtaskStep(detail) {
+  return { type: "subtask", label: "Running agent...", detail, status: "active" };
+}
+function toolStep(label, detail) {
+  return { type: "tool", label, detail, status: "active" };
+}
+function tasksStep() {
+  return toolStep("Updating tasks...");
+}
+function opencodeStepFor(tool, input, rawPath) {
   switch (tool) {
     case "read":
-      step = {
-        type: "read",
-        label: "Reading file...",
-        detail: path3 || void 0,
-        path: rawPath || void 0,
-        status: "active"
-      };
-      break;
+      return fileStep("read", "Reading file...", rawPath);
     case "glob":
-      step = {
-        type: "search_files",
-        label: "Searching files...",
-        detail: typeof input.pattern === "string" ? input.pattern : void 0,
-        status: "active"
-      };
-      break;
+      return searchStep("files", stringOrUndefined(input.pattern));
     case "grep":
-      step = {
-        type: "search_code",
-        label: "Searching code...",
-        detail: typeof input.pattern === "string" ? input.pattern : void 0,
-        status: "active"
-      };
-      break;
+      return searchStep("code", stringOrUndefined(input.pattern));
     case "write": {
-      const content = typeof input.content === "string" ? input.content : void 0;
-      step = {
-        type: "write",
-        label: "Creating file...",
-        detail: path3 || void 0,
-        path: rawPath || void 0,
-        contentPreview: content ? capContentPreview(content) : void 0,
-        status: "active"
-      };
-      break;
+      const content = stringOrUndefined(input.content);
+      return fileStep("write", "Creating file...", rawPath, {
+        contentPreview: content ? capContentPreview(content) : void 0
+      });
     }
     case "edit":
-      step = {
-        type: "edit",
-        label: "Editing file...",
-        detail: path3 || void 0,
-        path: rawPath || void 0,
-        edits: extractClaudeEdits(input),
-        status: "active"
-      };
-      break;
-    case "bash": {
-      const rawCommand = typeof input.command === "string" ? input.command : "";
-      step = {
-        type: "bash",
-        label: "Running command...",
-        detail: rawCommand ? rawCommand.slice(0, 300) : void 0,
-        command: rawCommand ? capCommand(rawCommand) : void 0,
-        status: "active"
-      };
-      break;
-    }
+      return fileStep("edit", "Editing file...", rawPath, {
+        edits: extractClaudeEdits(input)
+      });
+    case "bash":
+      return bashStep(stringOrUndefined(input.command) ?? "");
     case "webfetch":
-      step = {
-        type: "web_fetch",
-        label: "Fetching URL...",
-        detail: typeof input.url === "string" ? input.url : void 0,
-        status: "active"
-      };
-      break;
+      return webStep("fetch", stringOrUndefined(input.url));
     case "websearch":
-      step = {
-        type: "web_search",
-        label: "Searching web...",
-        detail: typeof input.query === "string" ? input.query : void 0,
-        status: "active"
-      };
-      break;
+      return webStep("search", stringOrUndefined(input.query));
     case "task":
-      step = {
-        type: "subtask",
-        label: "Running agent...",
-        detail: typeof input.description === "string" ? input.description : void 0,
-        status: "active"
-      };
-      break;
+      return subtaskStep(stringOrUndefined(input.description));
     case "todowrite":
     case "todoread":
-      step = { type: "tool", label: "Updating tasks...", status: "active" };
-      break;
+      return tasksStep();
     default:
-      step = {
-        type: "tool",
-        label: "Using " + tool + "...",
-        status: "active"
-      };
-      break;
+      return toolStep("Using " + tool + "...");
   }
+}
+function opencodeToolToStep(part) {
+  const tool = typeof part.tool === "string" ? part.tool : "tool";
+  const input = asJsonObject(asJsonObject(part.state).input);
+  const rawPath = stringOrUndefined(input.filePath) ?? stringOrUndefined(input.file_path) ?? stringOrUndefined(input.path) ?? "";
+  const toolUseId = pickToolCallId(part) ?? trimmedString(part.callID);
+  const step = opencodeStepFor(tool, input, rawPath);
   if (toolUseId) {
     step.toolUseId = toolUseId;
   }
   return step;
 }
-function cursorSdkToolToStep(name, args) {
-  const pickString = (keys) => {
-    for (const key of keys) {
-      const value = args[key];
-      if (typeof value === "string" && value.trim()) {
-        return value;
-      }
-    }
-    return "";
-  };
-  const rawPath = pickString([
+function getCursorToolFields(args) {
+  const rawPath = readStringField(args, [
     "path",
     "file_path",
     "filePath",
@@ -1588,328 +1780,202 @@ function cursorSdkToolToStep(name, args) {
     "relativePath",
     "relative_path"
   ]);
-  const path3 = rawPath ? shortenPath(rawPath) : "";
-  const command = pickString(["command", "cmd"]);
-  const query = pickString([
-    "query",
-    "pattern",
-    "url",
-    "glob_pattern",
-    "globPattern"
+  return {
+    args,
+    rawPath,
+    path: rawPath ? shortenPath(rawPath) : "",
+    command: readStringField(args, ["command", "cmd"]),
+    query: readStringField(args, [
+      "query",
+      "pattern",
+      "url",
+      "glob_pattern",
+      "globPattern"
+    ])
+  };
+}
+function cursorShellStep(fields) {
+  return bashStep(fields.command);
+}
+function cursorEditStep(fields) {
+  return fileStep("edit", "Editing file...", fields.rawPath, {
+    edits: extractClaudeEdits(fields.args)
+  });
+}
+function cursorDeleteStep(fields) {
+  return fileStep("edit", "Deleting file...", fields.rawPath);
+}
+function cursorMcpStep(fields) {
+  const server = readStringField(fields.args, [
+    "server",
+    "serverName",
+    "server_name",
+    "toolName",
+    "tool_name"
   ]);
-  switch (name) {
-    case "read":
-      return {
-        type: "read",
-        label: "Reading file...",
-        detail: path3 || void 0,
-        path: rawPath || void 0,
-        status: "active"
-      };
-    case "write": {
-      const fileText = pickString([
+  return toolStep(server ? "Using MCP " + server + "..." : "Using MCP tool...");
+}
+function cursorSearchCodeStep(fields) {
+  return searchStep("code", fields.query || fields.path || void 0);
+}
+var CURSOR_KNOWN_TOOL_STEPS = /* @__PURE__ */ new Map([
+  ["read", (f) => fileStep("read", "Reading file...", f.rawPath)],
+  [
+    "write",
+    (f) => {
+      const fileText = readStringField(f.args, [
         "fileText",
         "file_text",
         "content",
         "contents"
       ]);
-      return {
-        type: "write",
-        label: "Creating file...",
-        detail: path3 || void 0,
-        path: rawPath || void 0,
-        contentPreview: fileText ? capContentPreview(fileText) : void 0,
-        status: "active"
-      };
+      return fileStep("write", "Creating file...", f.rawPath, {
+        contentPreview: fileText ? capContentPreview(fileText) : void 0
+      });
     }
-    case "edit":
-      return {
-        type: "edit",
-        label: "Editing file...",
-        detail: path3 || void 0,
-        path: rawPath || void 0,
-        edits: extractClaudeEdits(args),
-        status: "active"
-      };
-    case "delete":
-      return {
-        type: "edit",
-        label: "Deleting file...",
-        detail: path3 || void 0,
-        path: rawPath || void 0,
-        status: "active"
-      };
-    case "glob":
-      return {
-        type: "search_files",
-        label: "Searching files...",
-        detail: query || path3 || void 0,
-        status: "active"
-      };
-    case "ls":
-      return {
-        type: "search_files",
-        label: "Searching files...",
-        detail: path3 || void 0,
-        status: "active"
-      };
-    case "grep":
-    case "semSearch":
-      return {
-        type: "search_code",
-        label: "Searching code...",
-        detail: query || path3 || void 0,
-        status: "active"
-      };
-    case "shell":
-      return {
-        type: "bash",
-        label: "Running command...",
-        detail: command ? command.slice(0, 300) : void 0,
-        command: command ? capCommand(command) : void 0,
-        status: "active"
-      };
-    case "task":
-      return {
-        type: "subtask",
-        label: "Running agent...",
-        detail: pickString(["description", "prompt"]) || void 0,
-        status: "active"
-      };
-    case "createPlan":
-    case "updateTodos":
-      return { type: "tool", label: "Updating tasks...", status: "active" };
-    case "mcp": {
-      const server = pickString([
-        "server",
-        "serverName",
-        "server_name",
-        "toolName",
-        "tool_name"
-      ]);
-      return {
-        type: "tool",
-        label: server ? "Using MCP " + server + "..." : "Using MCP tool...",
-        status: "active"
-      };
-    }
+  ],
+  ["edit", cursorEditStep],
+  ["delete", cursorDeleteStep],
+  ["glob", (f) => searchStep("files", f.query || f.path || void 0)],
+  ["ls", (f) => searchStep("files", f.path || void 0)],
+  ["grep", cursorSearchCodeStep],
+  ["semSearch", cursorSearchCodeStep],
+  ["shell", cursorShellStep],
+  [
+    "task",
+    (f) => subtaskStep(readStringField(f.args, ["description", "prompt"]) || void 0)
+  ],
+  ["createPlan", tasksStep],
+  ["updateTodos", tasksStep],
+  ["mcp", cursorMcpStep]
+]);
+var CURSOR_HEURISTIC_TOOL_STEPS = [
+  {
+    matches: (tool) => tool.includes("read"),
+    toStep: (f) => fileStep("read", "Reading file...", f.rawPath)
+  },
+  {
+    matches: (tool) => tool.includes("write") || tool.includes("create"),
+    toStep: (f) => fileStep("write", "Creating file...", f.rawPath)
+  },
+  {
+    matches: (tool) => tool.includes("edit") || tool.includes("patch") || tool.includes("apply") || tool.includes("replace"),
+    toStep: cursorEditStep
+  },
+  {
+    matches: (tool) => tool.includes("delete") || tool.includes("remove"),
+    toStep: cursorDeleteStep
+  },
+  {
+    matches: (tool) => tool.includes("glob") || tool.includes("list"),
+    toStep: (f) => searchStep("files", f.query || f.path || void 0)
+  },
+  // Before grep/search: every web-search name also contains "search".
+  {
+    matches: (tool) => tool.includes("websearch") || tool.includes("web_search"),
+    toStep: (f) => webStep("search", f.query || void 0)
+  },
+  {
+    matches: (tool) => tool.includes("grep") || tool.includes("search"),
+    toStep: (f, tool) => searchStep(
+      tool.includes("file") ? "files" : "code",
+      f.query || f.path || void 0
+    )
+  },
+  {
+    matches: (tool) => tool.includes("bash") || tool.includes("shell") || tool.includes("exec") || tool.includes("command") || tool.includes("terminal"),
+    toStep: cursorShellStep
+  },
+  {
+    matches: (tool) => tool.includes("webfetch") || tool.includes("web_fetch") || tool.includes("fetch") && !tool.includes("search"),
+    toStep: (f) => webStep("fetch", f.query || void 0)
+  },
+  {
+    matches: (tool) => tool.includes("todo") || tool.includes("plan"),
+    toStep: tasksStep
+  },
+  {
+    matches: (tool) => tool.includes("mcp"),
+    toStep: cursorMcpStep
+  }
+];
+function cursorSdkToolToStep(name, args) {
+  const fields = getCursorToolFields(args);
+  const known = CURSOR_KNOWN_TOOL_STEPS.get(name);
+  if (known) {
+    return known(fields);
   }
   const tool = name.toLowerCase();
-  if (tool.includes("read")) {
-    return {
-      type: "read",
-      label: "Reading file...",
-      detail: path3 || void 0,
-      path: rawPath || void 0,
-      status: "active"
-    };
+  const rule = CURSOR_HEURISTIC_TOOL_STEPS.find((r) => r.matches(tool));
+  if (rule) {
+    return rule.toStep(fields, tool);
   }
-  if (tool.includes("write") || tool.includes("create")) {
-    return {
-      type: "write",
-      label: "Creating file...",
-      detail: path3 || void 0,
-      path: rawPath || void 0,
-      status: "active"
-    };
-  }
-  if (tool.includes("edit") || tool.includes("patch") || tool.includes("apply") || tool.includes("replace")) {
-    return {
-      type: "edit",
-      label: "Editing file...",
-      detail: path3 || void 0,
-      path: rawPath || void 0,
-      status: "active",
-      edits: extractClaudeEdits(args)
-    };
-  }
-  if (tool.includes("delete") || tool.includes("remove")) {
-    return {
-      type: "edit",
-      label: "Deleting file...",
-      detail: path3 || void 0,
-      path: rawPath || void 0,
-      status: "active"
-    };
-  }
-  if (tool.includes("glob") || tool.includes("list")) {
-    return {
-      type: "search_files",
-      label: "Searching files...",
-      detail: query || path3 || void 0,
-      status: "active"
-    };
-  }
-  if (tool.includes("grep") || tool.includes("search")) {
-    return {
-      type: tool.includes("file") ? "search_files" : "search_code",
-      label: tool.includes("file") ? "Searching files..." : "Searching code...",
-      detail: query || path3 || void 0,
-      status: "active"
-    };
-  }
-  if (tool.includes("bash") || tool.includes("shell") || tool.includes("exec") || tool.includes("command") || tool.includes("terminal")) {
-    return {
-      type: "bash",
-      label: "Running command...",
-      detail: command ? command.slice(0, 300) : void 0,
-      command: command ? capCommand(command) : void 0,
-      status: "active"
-    };
-  }
-  if (tool.includes("webfetch") || tool.includes("web_fetch") || tool.includes("fetch") && !tool.includes("search")) {
-    return {
-      type: "web_fetch",
-      label: "Fetching URL...",
-      detail: query || void 0,
-      status: "active"
-    };
-  }
-  if (tool.includes("websearch") || tool.includes("web_search")) {
-    return {
-      type: "web_search",
-      label: "Searching web...",
-      detail: query || void 0,
-      status: "active"
-    };
-  }
-  if (tool.includes("todo") || tool.includes("plan")) {
-    return { type: "tool", label: "Updating tasks...", status: "active" };
-  }
-  if (tool.includes("mcp")) {
-    const server = pickString([
-      "server",
-      "serverName",
-      "server_name",
-      "toolName",
-      "tool_name"
-    ]);
-    return {
-      type: "tool",
-      label: server ? "Using MCP " + server + "..." : "Using MCP tool...",
-      status: "active"
-    };
-  }
-  return {
-    type: "tool",
-    label: "Using " + (name || "tool") + "...",
-    status: "active"
-  };
+  return toolStep("Using " + (name || "tool") + "...");
 }
 function toolCallToStep(name, input) {
-  const rawPath = typeof input.file_path === "string" ? String(input.file_path) : "";
-  const path3 = rawPath ? shortenPath(rawPath) : "";
+  const rawPath = stringOrUndefined(input.file_path) ?? "";
   switch (name) {
     case "Read":
-      return {
-        type: "read",
-        label: "Reading file...",
-        detail: path3 || void 0,
-        path: rawPath || void 0,
-        status: "active"
-      };
+      return fileStep("read", "Reading file...", rawPath);
     case "Glob":
-      return {
-        type: "search_files",
-        label: "Searching files...",
-        detail: typeof input.pattern === "string" ? String(input.pattern) : void 0,
-        status: "active"
-      };
+      return searchStep("files", stringOrUndefined(input.pattern));
     case "Grep":
-      return {
-        type: "search_code",
-        label: "Searching code...",
-        detail: typeof input.pattern === "string" ? String(input.pattern) : void 0,
-        status: "active"
-      };
+      return searchStep("code", stringOrUndefined(input.pattern));
     case "Write": {
-      const content = typeof input.content === "string" ? input.content : void 0;
-      return {
-        type: "write",
-        label: "Creating file...",
-        detail: path3 || void 0,
-        path: rawPath || void 0,
-        contentPreview: content ? capContentPreview(content) : void 0,
-        status: "active"
-      };
+      const content = stringOrUndefined(input.content);
+      return fileStep("write", "Creating file...", rawPath, {
+        contentPreview: content ? capContentPreview(content) : void 0
+      });
     }
-    case "Edit": {
-      const edits = extractClaudeEdits(input);
-      return {
-        type: "edit",
-        label: "Editing file...",
-        detail: path3 || void 0,
-        path: rawPath || void 0,
-        edits,
-        status: "active"
-      };
-    }
+    case "Edit":
+      return fileStep("edit", "Editing file...", rawPath, {
+        edits: extractClaudeEdits(input)
+      });
     case "Bash":
-    case "bash": {
-      const rawCommand = typeof input.command === "string" ? String(input.command) : "";
-      return {
-        type: "bash",
-        label: input.run_in_background === true ? "Running in background..." : "Running command...",
-        detail: rawCommand ? rawCommand.slice(0, 300) : void 0,
-        command: rawCommand ? capCommand(rawCommand) : void 0,
-        status: "active"
-      };
-    }
+    case "bash":
+      return bashStep(
+        stringOrUndefined(input.command) ?? "",
+        input.run_in_background === true ? "Running in background..." : "Running command..."
+      );
     case "KillShell":
-      return {
-        type: "bash",
-        label: "Stopping background process...",
-        detail: typeof input.shell_id === "string" ? String(input.shell_id) : typeof input.shellId === "string" ? String(input.shellId) : void 0,
-        status: "active"
-      };
+      return bashStep(
+        "",
+        "Stopping background process...",
+        stringOrUndefined(input.shell_id) ?? stringOrUndefined(input.shellId)
+      );
     case "Skill":
-      return {
-        type: "tool",
-        label: "Using Skill...",
-        detail: typeof input.skill === "string" ? String(input.skill) : void 0,
-        status: "active"
-      };
+      return toolStep("Using Skill...", stringOrUndefined(input.skill));
     case "WebFetch":
-      return {
-        type: "web_fetch",
-        label: "Fetching URL...",
-        detail: typeof input.url === "string" ? String(input.url) : void 0,
-        status: "active"
-      };
+      return webStep("fetch", stringOrUndefined(input.url));
     case "WebSearch":
-      return {
-        type: "web_search",
-        label: "Searching web...",
-        detail: typeof input.query === "string" ? String(input.query) : void 0,
-        status: "active"
-      };
-    case "NotebookEdit":
+      return webStep("search", stringOrUndefined(input.query));
+    case "NotebookEdit": {
+      const notebookPath = stringOrUndefined(input.notebook_path);
       return {
         type: "notebook",
         label: "Editing notebook...",
-        detail: typeof input.notebook_path === "string" ? shortenPath(String(input.notebook_path)) : void 0,
-        path: typeof input.notebook_path === "string" ? String(input.notebook_path) : void 0,
+        detail: notebookPath !== void 0 ? shortenPath(notebookPath) : void 0,
+        path: notebookPath,
         status: "active"
       };
+    }
     // Subagent spawn. Named \`Agent\` since claude-code v2.1.63; older CLIs emit
     // \`Task\`. Match both so subagent runs are always recognised (a bare \`Task\`
     // previously fell through to the generic "Using Task..." row).
     case "Agent":
-    case "Task":
+    case "Task": {
+      const prompt = trimmedString(input.prompt);
       return {
-        type: "subtask",
-        label: "Running agent...",
-        detail: typeof input.description === "string" ? String(input.description) : typeof input.subagent_type === "string" ? String(input.subagent_type) : void 0,
-        // The prompt the subagent was spawned with: the opening message of
-        // its child thread view. Trimmed from the chat transcript query like
-        // any other preview, so it costs nothing until a reader opens it.
-        contentPreview: typeof input.prompt === "string" && input.prompt.trim() ? capContentPreview(input.prompt.trim()) : void 0,
-        status: "active"
+        ...subtaskStep(
+          stringOrUndefined(input.description) ?? stringOrUndefined(input.subagent_type)
+        ),
+        contentPreview: prompt ? capContentPreview(prompt) : void 0
       };
+    }
     case "TodoWrite":
-      return { type: "tool", label: "Updating tasks...", status: "active" };
+      return tasksStep();
     case "TodoRead":
-      return { type: "tool", label: "Reading tasks...", status: "active" };
+      return toolStep("Reading tasks...");
     case "AskUserQuestion": {
       const questions = parseQuestionInput(input);
       return {
@@ -1921,35 +1987,14 @@ function toolCallToStep(name, input) {
       };
     }
     default:
-      return {
-        type: "tool",
-        label: "Using " + name + "...",
-        status: "active"
-      };
+      return toolStep("Using " + name + "...");
   }
 }
 function getCodexFieldValue(item, keys) {
-  const sources = [item];
-  if (item.input && typeof item.input === "object" && !Array.isArray(item.input)) {
-    sources.push(item.input);
-  }
-  for (const source of sources) {
-    for (const key of keys) {
-      if (typeof source[key] === "string" && source[key].trim()) {
-        return source[key].trim();
-      }
-    }
-  }
-  return "";
+  return readStringField(item, keys).trim() || readStringField(asJsonObject(item.input), keys).trim();
 }
 function getCodexThreadId(event) {
-  if (typeof event.thread_id === "string" && event.thread_id.trim()) {
-    return event.thread_id.trim();
-  }
-  if (event.thread && typeof event.thread === "object" && !Array.isArray(event.thread) && typeof event.thread.id === "string" && event.thread.id.trim()) {
-    return event.thread.id.trim();
-  }
-  return "";
+  return trimmedString(event.thread_id) ?? trimmedString(asJsonObject(event.thread).id) ?? "";
 }
 function getCodexAgentMessageText(item) {
   if (item.type !== "agent_message" && item.type !== "agentMessage") {
@@ -1963,7 +2008,7 @@ function getCodexAgentMessageText(item) {
   }
   const parts = [];
   for (const block of item.content) {
-    if (!block || typeof block !== "object" || Array.isArray(block)) continue;
+    if (!isJsonObject(block)) continue;
     if (typeof block.text === "string" && block.text) {
       parts.push(block.text);
       continue;
@@ -1974,9 +2019,8 @@ function getCodexAgentMessageText(item) {
   }
   return parts.join("");
 }
-function codexItemToStep(item) {
-  const itemType = item && typeof item.type === "string" && item.type.trim() ? item.type.trim() : "tool";
-  const normalizedType = itemType.toLowerCase();
+function getCodexItemFields(item) {
+  const itemType = trimmedString(item.type) ?? "tool";
   const pathValue = getCodexFieldValue(item, [
     "file_path",
     "path",
@@ -1984,130 +2028,107 @@ function codexItemToStep(item) {
     "target_path",
     "notebook_path"
   ]);
-  const queryValue = getCodexFieldValue(item, ["query", "pattern", "url"]);
-  const commandValue = getCodexFieldValue(item, ["command", "cmd"]);
-  const descriptionValue = getCodexFieldValue(item, [
-    "description",
-    "name",
-    "tool",
-    "skill"
-  ]);
-  const normalizedDescription = descriptionValue.toLowerCase();
-  const pathDetail = pathValue ? shortenPath(String(pathValue)) : "";
-  const itemId = typeof item.id === "string" && item.id.trim() ? item.id.trim() : void 0;
-  const withId = (step) => {
-    if (itemId) step.toolUseId = itemId;
-    return step;
+  return {
+    item,
+    itemType,
+    pathValue,
+    queryValue: getCodexFieldValue(item, ["query", "pattern", "url"]),
+    commandValue: getCodexFieldValue(item, ["command", "cmd"]),
+    descriptionValue: getCodexFieldValue(item, [
+      "description",
+      "name",
+      "tool",
+      "skill"
+    ]),
+    pathDetail: pathValue ? shortenPath(pathValue) : ""
   };
-  if (normalizedType.includes("file_change") || normalizedType === "filechange") {
-    const files = extractFilePaths(item);
-    return withId({
-      type: "edit",
-      label: "Editing file...",
-      detail: files[0] ? shortenPath(files[0]) : pathDetail || void 0,
-      path: files[0] || pathValue || void 0,
-      files: files.length > 0 ? files : void 0,
-      status: "active"
-    });
-  }
-  if (normalizedType === "mcp_tool_call" || normalizedType === "mcptoolcall") {
-    if (normalizedDescription.includes("fetch_file")) {
-      return withId({
-        type: "read",
-        label: "Reading file...",
-        detail: descriptionValue || void 0,
-        status: "active"
-      });
-    }
-    if (normalizedDescription.includes("search") || normalizedDescription.includes("list_repositories") || normalizedDescription.includes("list_mcp_resources")) {
-      return withId({
-        type: "search_code",
-        label: "Searching code...",
-        detail: descriptionValue || void 0,
-        status: "active"
-      });
-    }
-    return withId({
-      type: "tool",
-      label: "Using MCP...",
-      detail: descriptionValue || void 0,
-      status: "active"
-    });
-  }
-  if (normalizedType.includes("web")) {
-    return withId({
-      type: normalizedType.includes("search") ? "web_search" : "web_fetch",
-      label: normalizedType.includes("search") ? "Searching web..." : "Fetching URL...",
-      detail: queryValue || pathDetail || void 0,
-      status: "active"
-    });
-  }
-  if (normalizedType.includes("read")) {
-    return withId({
+}
+function codexFileChangeStep(fields) {
+  const files = extractFilePaths(fields.item);
+  return fileStep("edit", "Editing file...", files[0] || fields.pathValue, {
+    files: files.length > 0 ? files : void 0
+  });
+}
+function codexMcpToolStep(fields) {
+  const { descriptionValue } = fields;
+  const normalizedDescription = descriptionValue.toLowerCase();
+  if (normalizedDescription.includes("fetch_file")) {
+    return {
       type: "read",
       label: "Reading file...",
-      detail: pathDetail || void 0,
-      path: pathValue || void 0,
-      status: "active"
-    });
-  }
-  if (normalizedType.includes("grep") || normalizedType.includes("search")) {
-    return withId({
-      type: normalizedType.includes("file") ? "search_files" : "search_code",
-      label: normalizedType.includes("file") ? "Searching files..." : "Searching code...",
-      detail: queryValue || pathDetail || void 0,
-      status: "active"
-    });
-  }
-  if (normalizedType.includes("glob") || normalizedType.includes("list")) {
-    return withId({
-      type: "search_files",
-      label: "Searching files...",
-      detail: queryValue || pathDetail || void 0,
-      status: "active"
-    });
-  }
-  if (normalizedType.includes("write") || normalizedType.includes("create")) {
-    return withId({
-      type: "write",
-      label: "Creating file...",
-      detail: pathDetail || void 0,
-      path: pathValue || void 0,
-      status: "active"
-    });
-  }
-  if (normalizedType.includes("edit") || normalizedType.includes("patch") || normalizedType.includes("apply")) {
-    return withId({
-      type: "edit",
-      label: "Editing file...",
-      detail: pathDetail || void 0,
-      path: pathValue || void 0,
-      status: "active"
-    });
-  }
-  if (normalizedType.includes("command") || normalizedType.includes("shell") || normalizedType.includes("bash") || normalizedType.includes("exec")) {
-    return withId({
-      type: "bash",
-      label: "Running command...",
-      detail: commandValue || descriptionValue || void 0,
-      command: commandValue ? capCommand(commandValue) : void 0,
-      status: "active"
-    });
-  }
-  if (normalizedType.includes("agent") || normalizedType === "collabtoolcall") {
-    return withId({
-      type: "subtask",
-      label: "Running agent...",
       detail: descriptionValue || void 0,
       status: "active"
-    });
+    };
   }
-  return withId({
-    type: "tool",
-    label: "Using " + itemType + "...",
-    detail: descriptionValue || pathDetail || queryValue || void 0,
-    status: "active"
-  });
+  if (normalizedDescription.includes("search") || normalizedDescription.includes("list_repositories") || normalizedDescription.includes("list_mcp_resources")) {
+    return searchStep("code", descriptionValue || void 0);
+  }
+  return toolStep("Using MCP...", descriptionValue || void 0);
+}
+var CODEX_ITEM_STEPS = [
+  {
+    matches: (type) => type.includes("file_change") || type === "filechange",
+    toStep: codexFileChangeStep
+  },
+  {
+    matches: (type) => type === "mcp_tool_call" || type === "mcptoolcall",
+    toStep: codexMcpToolStep
+  },
+  {
+    matches: (type) => type.includes("web"),
+    toStep: (f, type) => webStep(
+      type.includes("search") ? "search" : "fetch",
+      f.queryValue || f.pathDetail || void 0
+    )
+  },
+  {
+    matches: (type) => type.includes("read"),
+    toStep: (f) => fileStep("read", "Reading file...", f.pathValue)
+  },
+  {
+    matches: (type) => type.includes("grep") || type.includes("search"),
+    toStep: (f, type) => searchStep(
+      type.includes("file") ? "files" : "code",
+      f.queryValue || f.pathDetail || void 0
+    )
+  },
+  {
+    matches: (type) => type.includes("glob") || type.includes("list"),
+    toStep: (f) => searchStep("files", f.queryValue || f.pathDetail || void 0)
+  },
+  {
+    matches: (type) => type.includes("write") || type.includes("create"),
+    toStep: (f) => fileStep("write", "Creating file...", f.pathValue)
+  },
+  {
+    matches: (type) => type.includes("edit") || type.includes("patch") || type.includes("apply"),
+    toStep: (f) => fileStep("edit", "Editing file...", f.pathValue)
+  },
+  {
+    matches: (type) => type.includes("command") || type.includes("shell") || type.includes("bash") || type.includes("exec"),
+    // The row detail is capped like every other provider's bash step.
+    toStep: (f) => bashStep(
+      f.commandValue,
+      "Running command...",
+      f.descriptionValue || void 0
+    )
+  },
+  {
+    matches: (type) => type.includes("agent") || type === "collabtoolcall",
+    toStep: (f) => subtaskStep(f.descriptionValue || void 0)
+  }
+];
+function codexItemToStep(item) {
+  const fields = getCodexItemFields(item);
+  const normalizedType = fields.itemType.toLowerCase();
+  const itemId = trimmedString(item.id);
+  const rule = CODEX_ITEM_STEPS.find((r) => r.matches(normalizedType));
+  const step = rule ? rule.toStep(fields, normalizedType) : toolStep(
+    "Using " + fields.itemType + "...",
+    fields.descriptionValue || fields.pathDetail || fields.queryValue || void 0
+  );
+  if (itemId) step.toolUseId = itemId;
+  return step;
 }
 
 // callback-src/runtime/sandboxMedia.ts
@@ -2164,7 +2185,6 @@ function readTurnLeaseIdentity(result) {
 }
 
 // callback-src/runtime/turnCheckpoint.ts
-import { spawnSync as spawnSync2 } from "child_process";
 var turnStartSha = "";
 var turnStartShas = [];
 function readAllRepoShas() {
@@ -2184,14 +2204,6 @@ function resetTurnCheckpoint() {
   turnStartSha = "";
   turnStartShas = [];
 }
-function currentBranch() {
-  const result = spawnSync2(
-    "git",
-    ["-C", WORK_DIR, "rev-parse", "--abbrev-ref", "HEAD"],
-    { encoding: "utf8", timeout: 2e4 }
-  );
-  return result.status === 0 ? (result.stdout || "").trim() : "";
-}
 var CHECKPOINTED_ENTITY_ID_FIELDS = /* @__PURE__ */ new Set([
   "sessionId",
   "chatId",
@@ -2203,7 +2215,7 @@ function appendTurnCheckpoint(args) {
     return;
   }
   if (RUN_ID || turnStartSha === "") return;
-  if (!currentBranch().startsWith("eva/")) return;
+  if (!readCurrentBranch().startsWith("eva/")) return;
   const afterSha = readGitHeadSha();
   if (afterSha === "") return;
   args.beforeSha = turnStartSha;
@@ -2255,484 +2267,93 @@ function claimedTurnLifecycleStatus() {
 }
 function shouldParkClaimedTurn(input) {
   if (!input.hasActiveRealTurn || input.isCancellationInFlight) return true;
-  if (input.isFinalizing) return true;
   return input.claimedLeaseTurnId !== null && input.claimedLeaseTurnId !== input.currentLeaseTurnId;
+}
+function routeClaimedTurn(input) {
+  const shouldPark = shouldParkClaimedTurn({
+    hasActiveRealTurn: input.hasActiveRealTurn,
+    isCancellationInFlight: input.isCancellationInFlight,
+    currentLeaseTurnId: getCurrentTurnLease()?.turnId ?? null,
+    claimedLeaseTurnId: input.turn.turnLease.turnId
+  });
+  if (!shouldPark) {
+    log(
+      \`\${input.logPrefix}: claim discarded while real turn active (prompt lost; pendingTurn was already cleared)\`
+    );
+    return "discarded";
+  }
+  if (input.park()) return "parked";
+  log(\`\${input.logPrefix}: duplicate claimed turn ignored\`);
+  return "duplicate";
 }
 
 // callback-src/runtime/daemonProcess.ts
-import { readFileSync as readFileSync2, unlinkSync, writeFileSync as writeFileSync2 } from "fs";
-var CALLBACK_FINGERPRINT_PATH = "/tmp/eva-callback-fp";
-var DAEMON_CLAIM_POLL_TIMING = {
-  idleExitMs: 45 * 60 * 1e3,
-  fencePollIntervalMs: 5e3,
-  fastPollIntervalMs: 50,
-  // Mid-turn the claim only drains cancel/stop-task flags (no turn can be
-  // handed over), so 250ms keeps Stop instant while cutting the busiest
-  // phase's claim reads ~5x versus the 50ms handoff cadence.
-  busyPollIntervalMs: 250,
-  idlePollIntervalMs: 1e3,
-  fastPollWindowMs: 3e4
-};
-function selectClaimPollIntervalMs(params) {
-  if (params.busy) return DAEMON_CLAIM_POLL_TIMING.busyPollIntervalMs;
-  const now = params.now ?? Date.now();
-  const recentlyActive = now - params.lastIdleActivityAtMs < DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs;
-  return recentlyActive ? DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs : DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
-}
-function sleep(ms) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-function pidAlive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-function isCallbackRunnerPid(pid) {
-  if (!pidAlive(pid)) return false;
-  try {
-    return readFileSync2(\`/proc/\${pid}/cmdline\`, "utf8").includes(
-      "run-design.mjs"
-    );
-  } catch {
-    return true;
-  }
-}
-function writeOomScoreAdj(target2, score) {
-  if (target2 !== "self" && !target2) return;
-  const path3 = target2 === "self" ? "/proc/self/oom_score_adj" : \`/proc/\${target2}/oom_score_adj\`;
-  try {
-    writeFileSync2(path3, score);
-  } catch {
-  }
-}
-function callbackBundleWentStale(expectedFingerprint) {
-  if (!expectedFingerprint) return false;
-  try {
-    return readFileSync2(CALLBACK_FINGERPRINT_PATH, "utf8").trim() !== expectedFingerprint;
-  } catch {
-    return false;
-  }
-}
-function readPidFromFile(pidPath) {
-  try {
-    return Number(readFileSync2(pidPath, "utf8").trim());
-  } catch {
-    return Number.NaN;
-  }
-}
-function buildEntityMutationArgs(entityIdField, entityId, fields) {
-  return {
-    [entityIdField ?? "sessionId"]: entityId ?? "",
-    ...fields
-  };
-}
-function claimDaemonPidfileBoot(params) {
-  const currentPid = params.currentPid ?? process.pid;
-  const isRival = params.isRival ?? isCallbackRunnerPid;
-  const rivalPid = readPidFromFile(params.paths.pid);
-  if (!Number.isNaN(rivalPid) && rivalPid !== currentPid && isRival(rivalPid)) {
-    return { status: "rival_alive", rivalPid };
-  }
-  writeFileSync2(params.paths.pid, String(currentPid));
-  writeFileSync2(params.paths.entity, params.entityId);
-  writeFileSync2(params.paths.opts, params.optsSig);
-  return { status: "claimed" };
-}
-function cleanOwnedDaemonMarkers(params) {
-  const currentPid = params.currentPid ?? process.pid;
-  if (readPidFromFile(params.paths.pid) !== currentPid) return;
-  const legacy = params.includeLegacySessionPaths ? resolveLegacySessionDaemonPaths() : null;
-  const targets = [
-    params.paths.pid,
-    params.paths.entity,
-    params.paths.opts,
-    ...legacy ? [legacy.pid, legacy.entity, legacy.opts] : []
-  ];
-  for (const path3 of targets) {
-    try {
-      unlinkSync(path3);
-    } catch {
-    }
-  }
-}
-function startDaemonDepositionFence(params) {
-  let deposedLogged = false;
-  const timer = setInterval(() => {
-    const owner = params.readOwnerPid();
-    if (owner === process.pid) {
-      deposedLogged = false;
-      return;
-    }
-    const ownerLabel = Number.isNaN(owner) ? "none" : String(owner);
-    if (params.hasActiveWork()) {
-      if (!deposedLogged) {
-        deposedLogged = true;
-        params.log(
-          \`\${params.logPrefix}: deposed (pidfile owner=\${ownerLabel}) \\u2014 exiting after active turn\`
-        );
-      }
-      return;
-    }
-    params.log(
-      \`\${params.logPrefix}: deposed (pidfile owner=\${ownerLabel}) \\u2014 exiting\`
-    );
-    params.onDeposedIdle();
-  }, params.pollIntervalMs);
-  timer.unref?.();
-  return {
-    stop: () => {
-      clearInterval(timer);
-    }
-  };
-}
+import { readFileSync as readFileSync6, unlinkSync, writeFileSync as writeFileSync7 } from "fs";
 
-// ../shared/src/gitDefaults.ts
-var AUTO_PUBLISH_BRANCH_GIT_CONFIG = "eva.autoPublishBranch";
-var COMMIT_EXCLUDE_PATHSPECS = [
-  ":!*.png",
-  ":!*.jpg",
-  ":!*.jpeg",
-  ":!*.gif",
-  ":!*.webp",
-  ":!*.webm",
-  ":!*.mp4",
-  ":!*.mov",
-  ":!screenshots/",
-  ":!recordings/",
-  ":!plan.md"
-];
-
-// callback-src/runtime/branchWatcher.ts
-import { statSync as statSync2, watch } from "fs";
-
-// callback-src/runtime/gitExec.ts
-import { spawnSync as spawnSync3 } from "child_process";
-var GIT_STEP_TIMEOUT_MS = 2e4;
-function git(args, timeoutMs = GIT_STEP_TIMEOUT_MS) {
-  const result = spawnSync3("git", ["-C", WORK_DIR, ...args], {
-    encoding: "utf8",
-    timeout: timeoutMs,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }
-  });
-  const out = ((result.stdout || "") + (result.stderr || "")).trim();
-  return { ok: result.status === 0, out };
-}
-
-// callback-src/runtime/branchWatcher.ts
-var GIT_TIMEOUT_MS = 5e3;
-var POLL_INTERVAL_MS = 15e3;
-var DEBOUNCE_MS = 300;
-function resolveBranchTarget(field, id) {
-  if (typeof id !== "string" || id.length === 0) return null;
-  if (field === "sessionId") return { kind: "session", sessionId: id };
-  if (field === "chatId") return { kind: "sessionChat", chatId: id };
-  if (field === "taskId") return { kind: "task", taskId: id };
-  if (field === "projectId") return { kind: "project", projectId: id };
-  return null;
-}
-function formatBranch(abbrevRef, shortSha) {
-  const ref = abbrevRef.trim();
-  if (ref.length === 0) return null;
-  if (ref !== "HEAD") return ref;
-  const sha = shortSha.trim();
-  return sha.length > 0 ? sha : null;
-}
-function sameState(a, b) {
-  return a.branch === b.branch && a.sync?.uncommittedFiles === b.sync?.uncommittedFiles && a.sync?.unpushedCommits === b.sync?.unpushedCommits;
-}
-function decideGitStateReport(input) {
-  if (input.current === null) return null;
-  if (input.lastReported !== null && sameState(input.current, input.lastReported)) {
+// callback-src/providers/githubToken.ts
+function tokenFromActionResponse(data) {
+  if (!isJsonObject(data)) {
     return null;
   }
-  return input.current;
-}
-function readCurrentBranch() {
-  const abbrev = git(["rev-parse", "--abbrev-ref", "HEAD"], GIT_TIMEOUT_MS);
-  if (!abbrev.ok) return null;
-  if (abbrev.out.trim() !== "HEAD") return formatBranch(abbrev.out, "");
-  const short = git(["rev-parse", "--short", "HEAD"], GIT_TIMEOUT_MS);
-  return formatBranch(abbrev.out, short.ok ? short.out : "");
-}
-function readGitSync() {
-  const status = git(
-    ["status", "--porcelain", "--", ".", ...COMMIT_EXCLUDE_PATHSPECS],
-    GIT_TIMEOUT_MS
-  );
-  const ahead = git(
-    ["rev-list", "--count", "HEAD", "--not", "--remotes=origin"],
-    GIT_TIMEOUT_MS
-  );
-  const unpushedCommits = Number(ahead.out);
-  if (!status.ok || !ahead.ok || !Number.isSafeInteger(unpushedCommits)) {
+  const value = data.value;
+  if (!isJsonObject(value)) {
     return null;
   }
-  const uncommittedFiles = status.out.length === 0 ? 0 : status.out.split("\\n").length;
-  return { uncommittedFiles, unpushedCommits };
+  return typeof value.token === "string" ? value.token : null;
 }
-function readGitState() {
-  const branch = readCurrentBranch();
-  if (branch === null) return null;
-  return { branch, sync: readGitSync() };
-}
-var target = null;
-var lastReported = null;
-var pollInterval = null;
-var debounceTimer = null;
-var headWatcher = null;
-var checkInFlight = false;
-var recheckQueued = false;
-var started = false;
-async function runCheckLoop() {
-  const activeTarget = target;
-  if (activeTarget === null) return;
-  if (checkInFlight) {
-    recheckQueued = true;
-    return;
-  }
-  checkInFlight = true;
-  recheckQueued = false;
+async function fetchInstallationToken(params) {
   try {
-    let again = true;
-    while (again) {
-      again = false;
-      const state = decideGitStateReport({
-        current: readGitState(),
-        lastReported
-      });
-      if (state !== null) {
-        try {
-          await callConvexWithRetry("mutation", "sandboxGit:reportBranch", {
-            target: activeTarget,
-            branch: state.branch,
-            ...state.sync ? { sync: state.sync } : {}
-          });
-          lastReported = state;
-        } catch (error) {
-          log(
-            "branchWatcher: report failed: " + (error instanceof Error ? error.message : String(error))
-          );
-        }
-      }
-      if (recheckQueued) {
-        recheckQueued = false;
-        again = true;
-      }
-    }
-  } finally {
-    checkInFlight = false;
-  }
-}
-function scheduleCheck() {
-  if (debounceTimer) clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => {
-    debounceTimer = null;
-    void runCheckLoop();
-  }, DEBOUNCE_MS);
-  debounceTimer.unref();
-}
-function watchHeadIn(gitDir) {
-  try {
-    headWatcher = watch(gitDir, (_event, filename) => {
-      if (filename !== "HEAD") return;
-      scheduleCheck();
+    const fetchFn = params.fetchFn ?? fetchWithTimeout;
+    const response = await fetchFn(params.convexUrl + "/api/action", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + params.convexToken
+      },
+      body: JSON.stringify({
+        path: "github:getInstallationTokenAction",
+        args: { repoId: params.repoId },
+        format: "json"
+      })
     });
-    headWatcher.unref();
-  } catch (error) {
-    log(
-      "branchWatcher: fs.watch unavailable, polling only: " + (error instanceof Error ? error.message : String(error))
-    );
-  }
-}
-function requestGitStateCheck() {
-  if (!started) return;
-  scheduleCheck();
-}
-function startBranchWatcher() {
-  if (started) return;
-  started = true;
-  target = resolveBranchTarget(ENTITY_ID_FIELD, ENTITY_ID);
-  if (target === null) {
-    log(
-      "branchWatcher: disabled \\u2014 no reportable entity (field=" + (ENTITY_ID_FIELD ?? "none") + ")"
-    );
-    return;
-  }
-  const gitDir = WORK_DIR + "/.git";
-  let gitDirIsDirectory = false;
-  try {
-    gitDirIsDirectory = statSync2(gitDir).isDirectory();
+    if (!response.ok) return { token: null };
+    const token = tokenFromActionResponse(await readResponseJson(response));
+    return token ? { token } : { token: null };
   } catch {
-    gitDirIsDirectory = false;
-  }
-  if (gitDirIsDirectory) {
-    watchHeadIn(gitDir);
-  } else {
-    log("branchWatcher: " + gitDir + " is not a directory; polling only");
-  }
-  pollInterval = setInterval(() => {
-    void runCheckLoop();
-  }, POLL_INTERVAL_MS);
-  pollInterval.unref();
-  void runCheckLoop();
-}
-
-// callback-src/runtime/turnPersist.ts
-var PUSH_TIMEOUT_MS = 6e4;
-var COMMIT_ADD_ARGS = ["add", "-A", "--", ...COMMIT_EXCLUDE_PATHSPECS];
-function localBranchRewroteOwnHistory(branch, remoteRef) {
-  const remoteTip = git(["rev-parse", "--verify", remoteRef]);
-  const reflog = git(["reflog", "show", "--format=%H", \`refs/heads/\${branch}\`]);
-  if (!remoteTip.ok || !reflog.ok || remoteTip.out.length === 0) return false;
-  return reflog.out.split("\\n").map((line) => line.trim()).includes(remoteTip.out);
-}
-function isMissingRemoteRef(message) {
-  const lower = message.toLowerCase();
-  return lower.includes("couldn't find remote ref") || lower.includes("could not find remote ref");
-}
-function isNonFastForwardPush(message) {
-  const lower = message.toLowerCase();
-  return lower.includes("non-fast-forward") || lower.includes("fetch first") || lower.includes("[rejected]") && lower.includes("failed to push");
-}
-function synchronizeForPush(branch) {
-  const remoteRef = \`refs/remotes/origin/\${branch}\`;
-  const fetch2 = git(
-    [
-      "fetch",
-      "--no-tags",
-      "origin",
-      \`+refs/heads/\${branch}:\${remoteRef}\`
-    ],
-    PUSH_TIMEOUT_MS
-  );
-  if (!fetch2.ok) {
-    if (isMissingRemoteRef(fetch2.out)) {
-      git(["update-ref", "-d", remoteRef]);
-      return { status: "ready", remoteExists: false };
-    }
-    log(\`persistTurnWork: fetch failed: \${fetch2.out.slice(0, 200)}\`);
-    return { status: "failed" };
-  }
-  const divergence = git([
-    "rev-list",
-    "--left-right",
-    "--count",
-    \`\${remoteRef}...refs/heads/\${branch}\`
-  ]);
-  if (!divergence.ok) {
-    log(
-      \`persistTurnWork: divergence check failed: \${divergence.out.slice(0, 200)}\`
-    );
-    return { status: "failed" };
-  }
-  if (/^0\\s+\\d+\$/.test(divergence.out)) {
-    return { status: "ready", remoteExists: true };
-  }
-  if (/^[1-9]\\d*\\s+0\$/.test(divergence.out)) {
-    const fastForward = git(["merge", "--ff-only", remoteRef]);
-    if (fastForward.ok) {
-      return { status: "ready", remoteExists: true };
-    }
-    log(
-      \`persistTurnWork: fast-forward failed: \${fastForward.out.slice(0, 200)}\`
-    );
-    return { status: "failed" };
-  }
-  if (/^[1-9]\\d*\\s+[1-9]\\d*\$/.test(divergence.out)) {
-    if (localBranchRewroteOwnHistory(branch, remoteRef)) {
-      log(
-        \`persistTurnWork: skipped merge \\u2014 local branch rewrote its own history vs origin/\${branch}; left to the workflow publish\`
-      );
-      return { status: "failed" };
-    }
-    const merge = git(["merge", "--no-edit", remoteRef], PUSH_TIMEOUT_MS);
-    if (merge.ok) {
-      return { status: "ready", remoteExists: true };
-    }
-    git(["merge", "--abort"]);
-    log(\`persistTurnWork: merge failed: \${merge.out.slice(0, 200)}\`);
-    return { status: "failed" };
-  }
-  log(\`persistTurnWork: unexpected divergence: \${divergence.out}\`);
-  return { status: "failed" };
-}
-function tipAlreadyPublished(exclusion) {
-  const unpushed = git(["rev-list", "--count", "HEAD", "--not", ...exclusion]);
-  return unpushed.ok && unpushed.out === "0";
-}
-function persistTurnWork() {
-  if (REQUIRE_TASK_COMMIT || RUN_ID) return;
-  try {
-    commitAndPushTurnWork();
-  } finally {
-    requestGitStateCheck();
+    return { token: null };
   }
 }
-function commitAndPushTurnWork() {
-  const startedAt = Date.now();
-  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
-  if (!branch.ok || !branch.out.startsWith("eva/")) {
-    if (branch.ok && branch.out) {
-      log(\`persistTurnWork: skipped \\u2014 branch "\${branch.out}" is not eva-owned\`);
-    }
-    return;
+function applyGithubTokenToEnv(env, token) {
+  env.GITHUB_TOKEN = token;
+  env.GH_TOKEN = token;
+}
+async function ensureGithubToken(params) {
+  const convexUrl = params.convexUrl;
+  const convexToken = params.convexToken;
+  const repoId = params.repoId;
+  if (!convexUrl || !convexToken || !repoId) {
+    return { refreshed: false };
   }
-  const pinned = git(["config", "--get", AUTO_PUBLISH_BRANCH_GIT_CONFIG]);
-  if (pinned.ok && pinned.out.length > 0 && pinned.out !== branch.out) {
-    log(
-      \`persistTurnWork: skipped \\u2014 branch "\${branch.out}" is not the chat branch "\${pinned.out}"\`
-    );
-    return;
-  }
-  const dirty = git(["status", "--porcelain"]);
-  if (dirty.ok && dirty.out.length > 0) {
-    git(COMMIT_ADD_ARGS);
-    const staged = git(["diff", "--cached", "--quiet"]);
-    if (!staged.ok) {
-      const commit = git([
-        "commit",
-        "-m",
-        "task: checkpoint uncommitted work at turn end"
-      ]);
-      log(
-        \`persistTurnWork: auto-commit \${commit.ok ? "created" : "failed: " + commit.out.slice(0, 200)}\`
-      );
-    }
-  }
-  if (tipAlreadyPublished([\`refs/remotes/origin/\${branch.out}\`])) return;
-  const refspec = \`refs/heads/\${branch.out}:refs/heads/\${branch.out}\`;
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    const sync = synchronizeForPush(branch.out);
-    if (sync.status === "failed") return;
-    const exclusion = sync.remoteExists ? [\`refs/remotes/origin/\${branch.out}\`] : ["--remotes=origin"];
-    if (tipAlreadyPublished(exclusion)) return;
-    const push = git(["push", "origin", refspec], PUSH_TIMEOUT_MS);
-    if (push.ok) {
-      log(
-        \`persistTurnWork: push ok branch=\${branch.out} in \${Date.now() - startedAt}ms\`
-      );
-      return;
-    }
-    if (attempt < 2 && isNonFastForwardPush(push.out)) {
-      log(
-        \`persistTurnWork: remote moved during push; refetching branch=\${branch.out}\`
-      );
-      continue;
-    }
-    log(
-      \`persistTurnWork: push failed: \${push.out.slice(0, 200)} branch=\${branch.out} in \${Date.now() - startedAt}ms\`
-    );
-    return;
-  }
+  const result = await fetchInstallationToken({
+    convexUrl,
+    convexToken,
+    repoId,
+    fetchFn: params.fetchFn
+  });
+  if (result.token === null) return { refreshed: false };
+  applyGithubTokenToEnv(params.env ?? process.env, result.token);
+  return { refreshed: true };
+}
+async function refreshDaemonGithubTokenFromEnv() {
+  return ensureGithubToken({
+    convexUrl: CONVEX_URL,
+    convexToken: CONVEX_TOKEN,
+    repoId: REPO_ID
+  });
 }
 
 // callback-src/session/claudeSession.ts
-import { existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync3, writeFileSync as writeFileSync3 } from "fs";
+import { existsSync as existsSync4, mkdirSync as mkdirSync2, readFileSync as readFileSync4, writeFileSync as writeFileSync2 } from "fs";
 function buildClaudeStartupStep() {
   if (callbackState.waitingForFirstAssistantEvent && callbackState.claudeInitAt > 0) {
     const elapsedSeconds = Math.max(
@@ -2756,15 +2377,15 @@ function buildClaudeStartupStep() {
   };
 }
 function readClaudeSessionState() {
-  if (!existsSync3(CLAUDE_LOCAL_STATE_FILE)) {
+  if (!existsSync4(CLAUDE_LOCAL_STATE_FILE)) {
     return null;
   }
-  const parsed = tryParseJson(readFileSync3(CLAUDE_LOCAL_STATE_FILE, "utf8"));
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return null;
-  }
+  const parsed = tryParseJsonObject(
+    readFileSync4(CLAUDE_LOCAL_STATE_FILE, "utf8")
+  );
+  if (!parsed) return null;
   const resumeSessionId = typeof parsed.resumeSessionId === "string" ? parsed.resumeSessionId.trim() : "";
-  if (!resumeSessionId) {
+  if (!isSafeClaudeSessionId(resumeSessionId)) {
     return null;
   }
   return { resumeSessionId };
@@ -2778,7 +2399,7 @@ function writeClaudeSessionState() {
     return;
   }
   mkdirSync2(CLAUDE_RUNTIME_CONFIG_DIR, { recursive: true });
-  writeFileSync3(
+  writeFileSync2(
     CLAUDE_LOCAL_STATE_FILE,
     JSON.stringify(
       {
@@ -2805,7 +2426,7 @@ function collectClaudeTranscriptSessionIds() {
   if (currentSessionId) {
     sessionIds.add(currentSessionId);
   }
-  return Array.from(sessionIds);
+  return Array.from(sessionIds).filter(isSafeClaudeSessionId);
 }
 function hydratePersistedClaudeState() {
   const startedAt = Date.now();
@@ -2840,8 +2461,8 @@ function hydratePersistedClaudeState() {
 function ensureClaudeWorkspaceTrust() {
   const configPath = CLAUDE_RUNTIME_CONFIG_DIR + "/.claude.json";
   mkdirSync2(CLAUDE_RUNTIME_CONFIG_DIR, { recursive: true });
-  const parsed = existsSync3(configPath) ? tryParseJson(readFileSync3(configPath, "utf8")) : null;
-  const config = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? { ...parsed } : {};
+  const parsed = existsSync4(configPath) ? tryParseJsonObject(readFileSync4(configPath, "utf8")) : null;
+  const config = parsed ? { ...parsed } : {};
   const rawProjects = config.projects;
   const projects = rawProjects && typeof rawProjects === "object" && !Array.isArray(rawProjects) ? { ...rawProjects } : {};
   const rawProject = projects[WORK_DIR];
@@ -2849,7 +2470,7 @@ function ensureClaudeWorkspaceTrust() {
   projectEntry.hasTrustDialogAccepted = true;
   projects[WORK_DIR] = projectEntry;
   config.projects = projects;
-  writeFileSync3(configPath, JSON.stringify(config, null, 2));
+  writeFileSync2(configPath, JSON.stringify(config, null, 2));
 }
 function resolveClaudeSessionMode() {
   const configuredSessionId = process.env.CLAUDE_SESSION_ID;
@@ -2858,7 +2479,7 @@ function resolveClaudeSessionMode() {
   }
   const persistedState = readClaudeSessionState();
   if (persistedState) {
-    if (existsSync3(
+    if (existsSync4(
       buildClaudeTranscriptPath(
         CLAUDE_LOCAL_PROJECT_DIR,
         persistedState.resumeSessionId
@@ -2871,7 +2492,7 @@ function resolveClaudeSessionMode() {
     );
     return { mode: "session", sessionId: configuredSessionId };
   }
-  if (existsSync3(
+  if (existsSync4(
     buildClaudeTranscriptPath(CLAUDE_LOCAL_PROJECT_DIR, configuredSessionId)
   )) {
     return { mode: "resume", sessionId: configuredSessionId };
@@ -3070,14 +2691,11 @@ var CLAUDE_WINDOW_LABELS = {
 function readFiniteNumber(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : void 0;
 }
-function readNonEmptyString(value) {
-  return typeof value === "string" && value.trim() ? value.trim() : void 0;
-}
 function readStatus(value) {
   return value === "allowed" || value === "allowed_warning" || value === "rejected" ? value : void 0;
 }
 function readIsoMs(value) {
-  const text = readNonEmptyString(value);
+  const text = trimmedString(value);
   if (!text) return void 0;
   const ms = Date.parse(text);
   return Number.isFinite(ms) ? ms : void 0;
@@ -3120,9 +2738,9 @@ function labelForWindowKey(key) {
 }
 function mergeClaudeRateLimitEvent(event) {
   const info = event.rate_limit_info;
-  if (typeof info !== "object" || info === null || Array.isArray(info)) return;
+  if (!isJsonObject(info)) return;
   const status = readStatus(info.status);
-  const rawKey = readNonEmptyString(info.rateLimitType);
+  const rawKey = trimmedString(info.rateLimitType);
   if (!status && !rawKey) return;
   const snapshot = ensureSnapshot();
   snapshot.completeness = "partial";
@@ -3169,7 +2787,7 @@ function readClaudeUsageWindows(response) {
     limits.seven_day_overage_included
   );
   for (const entry of limits.model_scoped ?? []) {
-    const name = readNonEmptyString(entry.display_name);
+    const name = trimmedString(entry.display_name);
     if (!name) continue;
     pushUsageWindow(windows, "model_scoped:" + name, entry, \`Weekly (\${name})\`);
   }
@@ -3243,7 +2861,7 @@ async function captureClaudeUsage(readUsage, recordAttempt = false) {
       return false;
     }
     const snapshot = { completeness: "complete" };
-    const subscriptionType = readNonEmptyString(payload.subscription_type);
+    const subscriptionType = trimmedString(payload.subscription_type);
     if (subscriptionType) snapshot.subscriptionType = subscriptionType;
     snapshot.windows = readClaudeUsageWindows(payload);
     callbackState.usageLimitSnapshot = snapshot;
@@ -3359,14 +2977,11 @@ async function waitForPendingClaudeUsageReport() {
 // callback-src/parse/sdkTaxonomy.ts
 var loggedUnknownKinds = /* @__PURE__ */ new Set();
 var knownBackgroundTaskIds = /* @__PURE__ */ new Set();
-function readString(value) {
-  return typeof value === "string" && value.trim() ? value.trim() : void 0;
-}
 function readStringArray(value) {
   if (!Array.isArray(value)) return [];
   const out = [];
   for (const item of value) {
-    const s = readString(item);
+    const s = trimmedString(item);
     if (s) out.push(s);
   }
   return out;
@@ -3431,10 +3046,10 @@ function readFileNamesFromPersisted(event) {
   if (!Array.isArray(filesField)) return "";
   const names = [];
   for (const entry of filesField) {
-    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+    if (!isJsonObject(entry)) {
       continue;
     }
-    const filename = readString(entry.filename);
+    const filename = trimmedString(entry.filename);
     if (filename) names.push(filename);
   }
   return names.join(", ");
@@ -3444,10 +3059,10 @@ function readBackgroundTaskIds(event) {
   if (!Array.isArray(tasksField)) return [];
   const ids = [];
   for (const task of tasksField) {
-    if (typeof task !== "object" || task === null || Array.isArray(task)) {
+    if (!isJsonObject(task)) {
       continue;
     }
-    const taskId = readString(task.task_id);
+    const taskId = trimmedString(task.task_id);
     if (taskId) ids.push(taskId);
   }
   return ids;
@@ -3457,11 +3072,11 @@ function readBackgroundTaskDescriptions(event) {
   const descriptions = /* @__PURE__ */ new Map();
   if (!Array.isArray(tasksField)) return descriptions;
   for (const task of tasksField) {
-    if (typeof task !== "object" || task === null || Array.isArray(task)) {
+    if (!isJsonObject(task)) {
       continue;
     }
-    const taskId = readString(task.task_id);
-    const description = readString(task.description);
+    const taskId = trimmedString(task.task_id);
+    const description = trimmedString(task.description);
     if (taskId && description) {
       descriptions.set(taskId, description);
     }
@@ -3486,13 +3101,13 @@ function logUnknownSdkKind(kind) {
   log("unhandled sdk kind: " + kind);
 }
 function parseModelReroute(event) {
-  const subtype = readString(event.subtype);
+  const subtype = trimmedString(event.subtype);
   if (subtype === "model_reroute" || subtype === "model_fallback") {
-    const reason = readString(event.reason) ?? readString(event.message) ?? readString(event.content);
+    const reason = trimmedString(event.reason) ?? trimmedString(event.message) ?? trimmedString(event.content);
     return pushNoticeStep("Model rerouted", reason);
   }
   if (subtype === "informational") {
-    const content = readString(event.content);
+    const content = trimmedString(event.content);
     if (content && (content.toLowerCase().includes("rerouted") || content.toLowerCase().includes("fallback model"))) {
       return pushNoticeStep("Model rerouted", content);
     }
@@ -3516,7 +3131,7 @@ function consumesClaudeSdkTaxonomyMessage(event) {
   return true;
 }
 function parseClaudeSdkTaxonomy(event) {
-  const messageType = readString(event.type);
+  const messageType = trimmedString(event.type);
   if (!messageType) return [];
   if (messageType !== "system" && messageType !== "tool_progress" && messageType !== "tool_use_summary" && messageType !== "auth_status" && messageType !== "rate_limit_event") {
     return [];
@@ -3530,7 +3145,7 @@ function parseClaudeSdkTaxonomy(event) {
   }
   if (messageType === "tool_progress") {
     completeActiveStatusStep();
-    const toolUseId = readString(event.tool_use_id);
+    const toolUseId = trimmedString(event.tool_use_id);
     const elapsed = event.elapsed_time_seconds;
     if (toolUseId && typeof elapsed === "number" && Number.isFinite(elapsed)) {
       const seconds = Math.max(0, Math.floor(elapsed));
@@ -3540,14 +3155,14 @@ function parseClaudeSdkTaxonomy(event) {
   }
   if (messageType === "tool_use_summary") {
     completeActiveStatusStep();
-    const summary = readString(event.summary);
+    const summary = trimmedString(event.summary);
     const ids = readStringArray(event.preceding_tool_use_ids);
     if (summary && ids.length > 0) {
       patchStepsWithSummary(ids, summary);
     }
     return [];
   }
-  const subtype = readString(event.subtype);
+  const subtype = trimmedString(event.subtype);
   if (!subtype) {
     logUnknownSdkKind(\`\${messageType}:?\`);
     return [];
@@ -3583,8 +3198,8 @@ function parseClaudeSdkTaxonomy(event) {
     );
   }
   if (subtype === "hook_started") {
-    const hookId = readString(event.hook_id);
-    const hookName = readString(event.hook_name) ?? "Hook";
+    const hookId = trimmedString(event.hook_id);
+    const hookName = trimmedString(event.hook_name) ?? "Hook";
     if (!hookId) return [];
     return [
       { kind: "mark_last_complete" },
@@ -3601,15 +3216,15 @@ function parseClaudeSdkTaxonomy(event) {
     ];
   }
   if (subtype === "hook_progress") {
-    const hookId = readString(event.hook_id);
-    const output = readString(event.output) ?? readString(event.stdout) ?? readString(event.stderr);
+    const hookId = trimmedString(event.hook_id);
+    const output = trimmedString(event.output) ?? trimmedString(event.stdout) ?? trimmedString(event.stderr);
     if (hookId && output) {
       appendHookDetail(hookId, output);
     }
     return [];
   }
   if (subtype === "hook_response") {
-    const hookId = readString(event.hook_id);
+    const hookId = trimmedString(event.hook_id);
     if (!hookId) return [];
     return [{ kind: "complete_tool", trackingId: hookId }];
   }
@@ -3636,7 +3251,7 @@ function parseClaudeSdkTaxonomy(event) {
   return [];
 }
 function completeStatusOnNonStatusMessage(event) {
-  const messageType = readString(event.type);
+  const messageType = trimmedString(event.type);
   if (messageType === "system" && event.subtype === "status") {
     return;
   }
@@ -3672,7 +3287,7 @@ function extractToolResultText(content) {
       parts.push(item);
       continue;
     }
-    if (item && typeof item === "object" && !Array.isArray(item) && item.type === "text" && typeof item.text === "string") {
+    if (isJsonObject(item) && item.type === "text" && typeof item.text === "string") {
       parts.push(item.text);
     }
   }
@@ -3686,7 +3301,7 @@ function reduceTodoState(name, input) {
     const raw = Array.isArray(input.todos) ? input.todos : [];
     callbackState.todoState.length = 0;
     for (const item of raw) {
-      if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+      if (!isJsonObject(item)) continue;
       const content = typeof item.content === "string" ? item.content : "";
       if (!content) continue;
       callbackState.todoState.push({ content, status: normalizeTodoStatus(item.status) });
@@ -3710,21 +3325,21 @@ function reduceTodoState(name, input) {
 }
 function parseClaudeStreamEvent(event) {
   const events = [];
-  const inner = event.event && typeof event.event === "object" && !Array.isArray(event.event) ? event.event : null;
+  const inner = isJsonObject(event.event) ? event.event : null;
   if (!inner) return events;
   if (inner.type === "message_start") {
     events.push({ kind: "mark_message_start" });
     return events;
   }
   if (inner.type === "content_block_start") {
-    const contentBlock = inner.content_block && typeof inner.content_block === "object" && !Array.isArray(inner.content_block) ? inner.content_block : null;
+    const contentBlock = isJsonObject(inner.content_block) ? inner.content_block : null;
     if (contentBlock && contentBlock.type === "text") {
       events.push({ kind: "mark_text_block_start" });
     }
     return events;
   }
   if (inner.type !== "content_block_delta") return events;
-  const delta = inner.delta && typeof inner.delta === "object" && !Array.isArray(inner.delta) ? inner.delta : null;
+  const delta = isJsonObject(inner.delta) ? inner.delta : null;
   if (!delta) return events;
   if (delta.type === "text_delta" && typeof delta.text === "string") {
     if (delta.text) {
@@ -3739,112 +3354,126 @@ function parseClaudeStreamEvent(event) {
   }
   return events;
 }
+function messageContentBlocks(event) {
+  const content = asJsonObject(event.message).content;
+  if (!Array.isArray(content)) return [];
+  return content.filter(isJsonObject);
+}
+function claudeToolResultEvent(toolUseId, content, isError) {
+  const resultText = content !== void 0 ? extractToolResultText(content) : "";
+  if (toolUseId) {
+    trackClaudeToolResult(toolUseId, resultText, isError);
+  }
+  const result = claudeToolCompleteResult(resultText, isError, toolUseId);
+  return result ? { kind: "complete_tool", trackingId: toolUseId, result } : { kind: "complete_tool", trackingId: toolUseId };
+}
+function parseClaudeUserEvent(event) {
+  const events = [];
+  for (const block of messageContentBlocks(event)) {
+    const toolUseId = trimmedString(block.tool_use_id);
+    if (block.type === "tool_result" && toolUseId) {
+      events.push(
+        claudeToolResultEvent(
+          toolUseId,
+          block.content,
+          block.is_error === true
+        )
+      );
+    }
+  }
+  return events;
+}
+var TODO_TOOL_NAMES = /* @__PURE__ */ new Set(["TodoWrite", "TaskCreate", "TaskUpdate"]);
+var SILENT_TOOL_NAMES = /* @__PURE__ */ new Set([
+  "TodoRead",
+  "TaskGet",
+  "TaskList",
+  "ExitPlanMode"
+]);
+function pushClaudeToolUseEvents(events, block, name, parentToolUseId) {
+  const input = asJsonObject(block.input);
+  if (TODO_TOOL_NAMES.has(name)) {
+    events.push({ kind: "set_todos", todos: reduceTodoState(name, input) });
+    return;
+  }
+  if (SILENT_TOOL_NAMES.has(name)) return;
+  const step = toolCallToStep(name, input);
+  const trackingId = trimmedString(block.id);
+  if (trackingId) {
+    step.toolUseId = trackingId;
+    trackClaudeToolUse(name, input, trackingId);
+  }
+  if (parentToolUseId) step.parentToolUseId = parentToolUseId;
+  events.push(
+    trackingId ? { kind: "push_step", step, trackingId } : { kind: "push_step", step }
+  );
+  if (!BLOCKING_QUESTIONS_ENABLED && name === "AskUserQuestion" && block.input) {
+    events.push({
+      kind: "set_pending_question",
+      data: JSON.stringify(block.input)
+    });
+  }
+}
+function pushClaudeSubagentTextEvent(events, block, parentToolUseId) {
+  if (block.type !== "text" || !("text" in block) || !block.text) return;
+  const output = buildStepOutput(String(block.text));
+  if (!output) return;
+  events.push({
+    kind: "push_subagent_text",
+    step: {
+      type: "response",
+      label: "Agent message",
+      status: "complete",
+      parentToolUseId,
+      output
+    }
+  });
+}
+function pushClaudeAssistantBlockEvents(events, block, parentToolUseId) {
+  if (block.type === "tool_use" && typeof block.name === "string") {
+    pushClaudeToolUseEvents(events, block, block.name, parentToolUseId);
+  } else if (parentToolUseId) {
+    pushClaudeSubagentTextEvent(events, block, parentToolUseId);
+  } else if (block.type === "thinking" && "thinking" in block && block.thinking) {
+    events.push({ kind: "update_reasoning", text: String(block.thinking) });
+  } else if (block.type === "text" && "text" in block && block.text) {
+    if (!callbackState.streamedAssistantTextThisMessage) {
+      events.push({ kind: "append_text", text: String(block.text) });
+    }
+  }
+}
+function parseClaudeAssistantEvent(event) {
+  const events = [];
+  if (callbackState.waitingForFirstAssistantEvent) {
+    events.push({ kind: "mark_first_assistant" });
+  }
+  const blocks = messageContentBlocks(event);
+  const parentToolUseId = trimmedString(event.parent_tool_use_id);
+  for (const block of blocks) {
+    pushClaudeAssistantBlockEvents(events, block, parentToolUseId);
+  }
+  return events;
+}
 function claudeParseLine(event) {
   if (consumesClaudeSdkTaxonomyMessage(event)) {
     return parseClaudeSdkTaxonomy(event);
   }
-  const events = [];
   if (event.type === "stream_event") {
-    if (typeof event.parent_tool_use_id === "string" && event.parent_tool_use_id.trim()) {
-      return events;
-    }
+    if (trimmedString(event.parent_tool_use_id)) return [];
     return parseClaudeStreamEvent(event);
   }
   if (event.type === "tool_result") {
-    const toolUseId = typeof event.tool_use_id === "string" && event.tool_use_id.trim() ? event.tool_use_id.trim() : void 0;
-    const resultText = event.content !== void 0 ? extractToolResultText(event.content) : "";
-    const isError = event.is_error === true;
-    if (toolUseId) {
-      trackClaudeToolResult(toolUseId, resultText, isError);
-    }
-    const result = claudeToolCompleteResult(resultText, isError, toolUseId);
-    events.push(
-      result ? { kind: "complete_tool", trackingId: toolUseId, result } : { kind: "complete_tool", trackingId: toolUseId }
-    );
-    return events;
+    return [
+      claudeToolResultEvent(
+        trimmedString(event.tool_use_id),
+        event.content,
+        event.is_error === true
+      )
+    ];
   }
-  if (event.type === "user") {
-    const message2 = event.message && typeof event.message === "object" && !Array.isArray(event.message) ? event.message : null;
-    const content2 = message2 && Array.isArray(message2.content) ? message2.content : [];
-    for (const block of content2) {
-      if (!block || typeof block !== "object" || Array.isArray(block)) continue;
-      if (block.type === "tool_result" && typeof block.tool_use_id === "string" && block.tool_use_id.trim()) {
-        const toolUseId = block.tool_use_id.trim();
-        const resultText = block.content !== void 0 ? extractToolResultText(block.content) : "";
-        const isError = block.is_error === true;
-        trackClaudeToolResult(toolUseId, resultText, isError);
-        const result = claudeToolCompleteResult(resultText, isError, toolUseId);
-        events.push(
-          result ? { kind: "complete_tool", trackingId: toolUseId, result } : { kind: "complete_tool", trackingId: toolUseId }
-        );
-      }
-    }
-    if (events.length > 0) {
-      return events;
-    }
-  }
-  if (event.type !== "assistant") return events;
-  if (callbackState.waitingForFirstAssistantEvent) {
-    events.push({ kind: "mark_first_assistant" });
-  }
-  const message = event.message && typeof event.message === "object" && !Array.isArray(event.message) ? event.message : null;
-  const content = message && Array.isArray(message.content) ? message.content : [];
-  const parentToolUseId = typeof event.parent_tool_use_id === "string" && event.parent_tool_use_id.trim() ? event.parent_tool_use_id.trim() : void 0;
-  for (const block of content) {
-    if (!block || typeof block !== "object" || Array.isArray(block)) continue;
-    if (block.type === "tool_use" && typeof block.name === "string") {
-      const input = block.input && typeof block.input === "object" && !Array.isArray(block.input) ? block.input : {};
-      if (block.name === "TodoWrite" || block.name === "TaskCreate" || block.name === "TaskUpdate") {
-        events.push({
-          kind: "set_todos",
-          todos: reduceTodoState(block.name, input)
-        });
-        continue;
-      }
-      if (block.name === "TodoRead" || block.name === "TaskGet" || block.name === "TaskList" || block.name === "ExitPlanMode") {
-        continue;
-      }
-      const step = toolCallToStep(block.name, input);
-      const trackingId = typeof block.id === "string" && block.id.trim() ? block.id.trim() : void 0;
-      if (trackingId) {
-        step.toolUseId = trackingId;
-        trackClaudeToolUse(block.name, input, trackingId);
-      }
-      if (parentToolUseId) step.parentToolUseId = parentToolUseId;
-      events.push(
-        trackingId ? { kind: "push_step", step, trackingId } : { kind: "push_step", step }
-      );
-      if (!BLOCKING_QUESTIONS_ENABLED && block.name === "AskUserQuestion" && block.input) {
-        events.push({
-          kind: "set_pending_question",
-          data: JSON.stringify(block.input)
-        });
-      }
-    } else if (parentToolUseId) {
-      if (block.type === "text" && "text" in block && block.text) {
-        const output = buildStepOutput(String(block.text));
-        if (output) {
-          events.push({
-            kind: "push_subagent_text",
-            step: {
-              type: "response",
-              label: "Agent message",
-              status: "complete",
-              parentToolUseId,
-              output
-            }
-          });
-        }
-      }
-    } else if (block.type === "thinking" && "thinking" in block && block.thinking) {
-      events.push({ kind: "update_reasoning", text: String(block.thinking) });
-    } else if (block.type === "text" && "text" in block && block.text) {
-      if (!callbackState.streamedAssistantTextThisMessage) {
-        events.push({ kind: "append_text", text: String(block.text) });
-      }
-    }
-  }
-  return events;
+  if (event.type === "user") return parseClaudeUserEvent(event);
+  if (event.type !== "assistant") return [];
+  return parseClaudeAssistantEvent(event);
 }
 function onStreamLine(parsed) {
   if (parsed.type === "system" && parsed.subtype === "init" && typeof parsed.session_id === "string" && parsed.session_id.trim()) {
@@ -3866,10 +3495,10 @@ function onStreamLine(parsed) {
         "first assistant event after " + String(callbackState.firstAssistantEventAt - callbackState.activeAttemptStartedAt) + "ms"
       );
     }
-    const message = parsed.message && typeof parsed.message === "object" && !Array.isArray(parsed.message) ? parsed.message : null;
+    const message = isJsonObject(parsed.message) ? parsed.message : null;
     const contentBlocks = message && Array.isArray(message.content) ? message.content : [];
     for (const block of contentBlocks) {
-      if (block && typeof block === "object" && !Array.isArray(block) && block.type === "text" && typeof block.text === "string") {
+      if (isJsonObject(block) && block.type === "text" && typeof block.text === "string") {
         if (callbackState.firstTextBlockAt === 0) {
           callbackState.firstTextBlockAt = Date.now();
           log(
@@ -3895,19 +3524,19 @@ var claudeAdapter = {
 };
 
 // callback-src/session/codexSession.ts
-import { mkdirSync as mkdirSync4, writeFileSync as writeFileSync5 } from "fs";
+import { mkdirSync as mkdirSync4, writeFileSync as writeFileSync4 } from "fs";
 
 // callback-src/session/createSessionStore.ts
-import { existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync4, writeFileSync as writeFileSync4 } from "fs";
+import { existsSync as existsSync5, mkdirSync as mkdirSync3, readFileSync as readFileSync5, writeFileSync as writeFileSync3 } from "fs";
 function createSessionStore(config) {
   const readSessionState = () => {
-    const statePath = existsSync4(config.localStateFile) ? config.localStateFile : existsSync4(config.persistStateFile) ? config.persistStateFile : "";
+    const statePath = existsSync5(config.localStateFile) ? config.localStateFile : existsSync5(config.persistStateFile) ? config.persistStateFile : "";
     if (!statePath) {
       return null;
     }
     try {
-      const parsed = JSON.parse(readFileSync4(statePath, "utf8"));
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      const parsed = JSON.parse(readFileSync5(statePath, "utf8"));
+      if (!isJsonObject(parsed)) {
         return null;
       }
       const value = parsed[config.resumeField];
@@ -3935,7 +3564,7 @@ function createSessionStore(config) {
       [config.resumeField]: activeId,
       updatedAt: (/* @__PURE__ */ new Date()).toISOString()
     };
-    writeFileSync4(config.localStateFile, JSON.stringify(payload, null, 2));
+    writeFileSync3(config.localStateFile, JSON.stringify(payload, null, 2));
   };
   const hydratePersistedState = (label) => {
     mkdirSync3(config.runtimeHomeDir, { recursive: true });
@@ -3999,18 +3628,27 @@ function writeCodexFileIfConfigured(fileName, rawValue, encodedValue) {
     return;
   }
   mkdirSync4(CODEX_RUNTIME_HOME_DIR, { recursive: true });
-  writeFileSync5(CODEX_RUNTIME_HOME_DIR + "/" + fileName, value);
+  writeFileSync4(CODEX_RUNTIME_HOME_DIR + "/" + fileName, value);
+}
+function tomlInlineTable(record) {
+  const entries = Object.entries(record).map(([key, value]) => \`\${JSON.stringify(key)} = \${JSON.stringify(value)}\`).join(", ");
+  return \`{ \${entries} }\`;
 }
 function codexMcpServerSections(servers) {
   return Object.entries(servers).flatMap(([name, server]) => {
-    const headers = Object.entries(server.headers).map(
-      ([header, value]) => \`\${JSON.stringify(header)} = \${JSON.stringify(value)}\`
-    ).join(", ");
+    const header = ["", \`[mcp_servers.\${JSON.stringify(name)}]\`];
+    if (server.type === "stdio") {
+      return [
+        ...header,
+        \`command = \${JSON.stringify(server.command)}\`,
+        \`args = [\${server.args.map((arg) => JSON.stringify(arg)).join(", ")}]\`,
+        \`env = \${tomlInlineTable(server.env)}\`
+      ];
+    }
     return [
-      "",
-      \`[mcp_servers.\${JSON.stringify(name)}]\`,
+      ...header,
       \`url = \${JSON.stringify(server.url)}\`,
-      \`http_headers = { \${headers} }\`
+      \`http_headers = \${tomlInlineTable(server.headers)}\`
     ];
   });
 }
@@ -4054,7 +3692,7 @@ function hydratePersistedCodexState() {
     CODEX_AUTH_JSON_BASE64
   );
   mkdirSync4(CODEX_RUNTIME_HOME_DIR, { recursive: true });
-  writeFileSync5(
+  writeFileSync4(
     CODEX_RUNTIME_HOME_DIR + "/config.toml",
     buildCodexRuntimeConfig(CODEX_CONFIG_TOML, CODEX_CONFIG_TOML_BASE64)
   );
@@ -4074,84 +3712,86 @@ function prepareCodexSessionState() {
 }
 
 // callback-src/providers/codex.ts
+var isCodexAgentMessageType = (type) => type === "agent_message" || type === "agentMessage";
+function nonEmptyDelta(event) {
+  return typeof event.delta === "string" && event.delta ? event.delta : void 0;
+}
+function codexStepEvent(item) {
+  const step = codexItemToStep(item);
+  const trackingId = step.type !== "thinking" && typeof item.id === "string" ? item.id : void 0;
+  return trackingId ? { kind: "push_step", step, trackingId } : { kind: "push_step", step };
+}
+function codexToolCompleteEvent(item, failed) {
+  const result = probeCodexItemResult(item, failed);
+  if (typeof item.id === "string") {
+    return result ? { kind: "complete_tool", trackingId: item.id, result } : { kind: "complete_tool", trackingId: item.id };
+  }
+  if (result) return { kind: "complete_tool", result };
+  return { kind: "mark_last_complete" };
+}
+function codexItemEvents(type, item) {
+  const isAgentMessage = isCodexAgentMessageType(item.type);
+  if (type === "item.started" && isAgentMessage) {
+    return [{ kind: "mark_message_start" }];
+  }
+  if (item.type === "reasoning" && type !== "item.failed") {
+    return typeof item.text === "string" && item.text.trim() ? [{ kind: "update_reasoning", text: item.text }] : [];
+  }
+  const isToolItem = typeof item.type === "string" && !isAgentMessage;
+  if (type === "item.started" && isToolItem) {
+    return [codexStepEvent(item)];
+  }
+  if (type === "item.completed" && isAgentMessage) {
+    const messageText = getCodexAgentMessageText(item);
+    return messageText && !callbackState.streamedAssistantTextThisMessage ? [{ kind: "append_text", text: messageText }] : [];
+  }
+  if (type !== "item.updated" && isToolItem) {
+    return [codexToolCompleteEvent(item, type === "item.failed")];
+  }
+  return [];
+}
+var CODEX_ITEM_EVENT_TYPES = /* @__PURE__ */ new Set([
+  "item.started",
+  "item.updated",
+  "item.completed",
+  "item.failed"
+]);
 function codexParseLine(event) {
-  const events = [];
   const threadId = getCodexThreadId(event);
   if (event.type === "thread.started" && threadId) {
-    events.push({ kind: "set_codex_thread", threadId });
-    events.push({
-      kind: "update_thinking",
-      label: "Starting Codex SDK...",
-      detail: "Restoring saved context..."
-    });
-    return events;
+    return [
+      { kind: "set_codex_thread", threadId },
+      {
+        kind: "update_thinking",
+        label: "Starting Codex SDK...",
+        detail: "Restoring saved context..."
+      }
+    ];
   }
   if (event.type === "turn.started") {
-    events.push({
-      kind: "update_thinking",
-      label: "Starting Codex SDK...",
-      detail: "Codex is reasoning..."
-    });
-    return events;
+    return [
+      {
+        kind: "update_thinking",
+        label: "Starting Codex SDK...",
+        detail: "Codex is reasoning..."
+      }
+    ];
   }
-  if (event.type === "item.agent_message.delta" && typeof event.delta === "string" && event.delta) {
-    events.push({ kind: "stream_text_delta", text: event.delta });
-    return events;
+  const delta = nonEmptyDelta(event);
+  if (event.type === "item.agent_message.delta" && delta) {
+    return [{ kind: "stream_text_delta", text: delta }];
   }
-  if (event.type === "item.reasoning.delta" && typeof event.delta === "string" && event.delta) {
-    events.push({ kind: "update_reasoning", text: event.delta });
-    return events;
+  if (event.type === "item.reasoning.delta" && delta) {
+    return [{ kind: "update_reasoning", text: delta }];
   }
-  if (event.type === "item.started" && event.item && typeof event.item === "object" && !Array.isArray(event.item) && (event.item.type === "agent_message" || event.item.type === "agentMessage")) {
-    events.push({ kind: "mark_message_start" });
-    return events;
-  }
-  if ((event.type === "item.started" || event.type === "item.updated" || event.type === "item.completed") && event.item && typeof event.item === "object" && !Array.isArray(event.item) && event.item.type === "reasoning") {
-    if (typeof event.item.text === "string" && event.item.text.trim()) {
-      events.push({ kind: "update_reasoning", text: event.item.text });
-    }
-    return events;
-  }
-  if (event.type === "item.started" && event.item && typeof event.item === "object" && !Array.isArray(event.item) && typeof event.item.type === "string" && event.item.type !== "agent_message" && event.item.type !== "agentMessage") {
-    const step = codexItemToStep(event.item);
-    const trackingId = step.type !== "thinking" && typeof event.item.id === "string" ? event.item.id : void 0;
-    events.push(
-      trackingId ? { kind: "push_step", step, trackingId } : { kind: "push_step", step }
-    );
-    return events;
-  }
-  if (event.type === "item.completed" && event.item && typeof event.item === "object" && !Array.isArray(event.item) && (event.item.type === "agent_message" || event.item.type === "agentMessage")) {
-    const messageText = getCodexAgentMessageText(event.item);
-    if (messageText && !callbackState.streamedAssistantTextThisMessage) {
-      events.push({ kind: "append_text", text: messageText });
-    }
-    return events;
-  }
-  if ((event.type === "item.completed" || event.type === "item.failed") && event.item && typeof event.item === "object" && !Array.isArray(event.item) && typeof event.item.type === "string" && event.item.type !== "agent_message" && event.item.type !== "agentMessage") {
-    const result = probeCodexItemResult(
-      event.item,
-      event.type === "item.failed"
-    );
-    if (typeof event.item.id === "string") {
-      events.push(
-        result ? {
-          kind: "complete_tool",
-          trackingId: event.item.id,
-          result
-        } : { kind: "complete_tool", trackingId: event.item.id }
-      );
-    } else if (result) {
-      events.push({ kind: "complete_tool", result });
-    } else {
-      events.push({ kind: "mark_last_complete" });
-    }
-    return events;
+  const item = event.item;
+  if (typeof event.type === "string" && CODEX_ITEM_EVENT_TYPES.has(event.type) && isJsonObject(item)) {
+    return codexItemEvents(event.type, item);
   }
   if (event.type === "turn.completed") {
-    events.push({ kind: "mark_last_complete" });
-    return events;
+    return [{ kind: "mark_last_complete" }];
   }
-  return events;
+  return [];
 }
 function onStreamLine2(parsed) {
   const threadId = getCodexThreadId(parsed);
@@ -4414,7 +4054,7 @@ var cursorAdapter = {
 };
 
 // callback-src/session/opencodeSession.ts
-import { mkdirSync as mkdirSync5, writeFileSync as writeFileSync6 } from "fs";
+import { mkdirSync as mkdirSync5, writeFileSync as writeFileSync5 } from "fs";
 var store3 = createSessionStore({
   runtimeHomeDir: OPENCODE_RUNTIME_HOME_DIR,
   persistDir: OPENCODE_PERSIST_DIR,
@@ -4446,7 +4086,7 @@ function hydratePersistedOpencodeState() {
   mkdirSync5(OPENCODE_AUTH_DIR, { recursive: true });
   const authJson = OPENCODE_AUTH_JSON || (OPENCODE_AUTH_JSON_BASE64 ? decodeBase64(OPENCODE_AUTH_JSON_BASE64) : "");
   if (authJson) {
-    writeFileSync6(OPENCODE_AUTH_FILE, authJson);
+    writeFileSync5(OPENCODE_AUTH_FILE, authJson);
   } else {
     copyFileIfPresent(
       OPENCODE_PERSIST_AUTH_FILE,
@@ -4798,10 +4438,8 @@ function applyCanonicalEvents(events) {
   return true;
 }
 function parseStreamEvent(line) {
-  const event = tryParseJson(line);
-  if (!event || typeof event !== "object" || Array.isArray(event)) {
-    return false;
-  }
+  const event = tryParseJsonObject(line);
+  if (!event) return false;
   try {
     completeStatusOnNonStatusMessage(event);
     if (consumesClaudeSdkTaxonomyMessage(event)) {
@@ -4834,7 +4472,7 @@ function writeStreamedContent(text, isBlockBoundary) {
 }
 
 // callback-src/runtime/heartbeats.ts
-import { writeFileSync as writeFileSync7 } from "fs";
+import { writeFileSync as writeFileSync6 } from "fs";
 import { freemem, loadavg } from "os";
 
 // callback-src/runtime/eventLoopStall.ts
@@ -4842,6 +4480,338 @@ var EVENT_LOOP_STALL_LOG_MS = 3e4;
 function measureTickStallMs(input) {
   const lateBy = input.now - input.previousTickAt - input.intervalMs;
   return lateBy > input.toleranceMs ? lateBy : 0;
+}
+
+// ../shared/src/gitDefaults.ts
+var AUTO_PUBLISH_BRANCH_GIT_CONFIG = "eva.autoPublishBranch";
+var COMMIT_EXCLUDE_PATHSPECS = [
+  ":!*.png",
+  ":!*.jpg",
+  ":!*.jpeg",
+  ":!*.gif",
+  ":!*.webp",
+  ":!*.webm",
+  ":!*.mp4",
+  ":!*.mov",
+  ":!screenshots/",
+  ":!recordings/",
+  ":!plan.md"
+];
+
+// callback-src/runtime/branchWatcher.ts
+import { statSync as statSync2, watch } from "fs";
+var GIT_TIMEOUT_MS = 5e3;
+var POLL_INTERVAL_MS = 15e3;
+var DEBOUNCE_MS = 300;
+function resolveBranchTarget(field, id) {
+  if (typeof id !== "string" || id.length === 0) return null;
+  if (field === "sessionId") return { kind: "session", sessionId: id };
+  if (field === "chatId") return { kind: "sessionChat", chatId: id };
+  if (field === "taskId") return { kind: "task", taskId: id };
+  if (field === "projectId") return { kind: "project", projectId: id };
+  return null;
+}
+function formatBranch(abbrevRef, shortSha) {
+  const ref = abbrevRef.trim();
+  if (ref.length === 0) return null;
+  if (ref !== "HEAD") return ref;
+  const sha = shortSha.trim();
+  return sha.length > 0 ? sha : null;
+}
+function sameState(a, b) {
+  return a.branch === b.branch && a.sync?.uncommittedFiles === b.sync?.uncommittedFiles && a.sync?.unpushedCommits === b.sync?.unpushedCommits;
+}
+function decideGitStateReport(input) {
+  if (input.current === null) return null;
+  if (input.lastReported !== null && sameState(input.current, input.lastReported)) {
+    return null;
+  }
+  return input.current;
+}
+function readWatchedBranch() {
+  const abbrev = readCurrentBranch({ timeoutMs: GIT_TIMEOUT_MS });
+  if (abbrev !== "HEAD") return formatBranch(abbrev, "");
+  const short = git(["rev-parse", "--short", "HEAD"], {
+    timeoutMs: GIT_TIMEOUT_MS
+  });
+  return formatBranch(abbrev, short.ok ? short.stdout : "");
+}
+function readGitSync() {
+  const status = git(
+    ["status", "--porcelain", "--", ".", ...COMMIT_EXCLUDE_PATHSPECS],
+    { timeoutMs: GIT_TIMEOUT_MS }
+  );
+  const ahead = git(
+    ["rev-list", "--count", "HEAD", "--not", "--remotes=origin"],
+    { timeoutMs: GIT_TIMEOUT_MS }
+  );
+  const unpushedCommits = Number(ahead.stdout);
+  if (!status.ok || !ahead.ok || !Number.isSafeInteger(unpushedCommits)) {
+    return null;
+  }
+  const uncommittedFiles = status.stdout.length === 0 ? 0 : status.stdout.split("\\n").length;
+  return { uncommittedFiles, unpushedCommits };
+}
+function readGitState() {
+  const branch = readWatchedBranch();
+  if (branch === null) return null;
+  return { branch, sync: readGitSync() };
+}
+var target = null;
+var lastReported = null;
+var pollInterval = null;
+var debounceTimer = null;
+var headWatcher = null;
+var checkInFlight = false;
+var recheckQueued = false;
+var started = false;
+async function runCheckLoop() {
+  const activeTarget = target;
+  if (activeTarget === null) return;
+  if (checkInFlight) {
+    recheckQueued = true;
+    return;
+  }
+  checkInFlight = true;
+  recheckQueued = false;
+  try {
+    let again = true;
+    while (again) {
+      again = false;
+      const state = decideGitStateReport({
+        current: readGitState(),
+        lastReported
+      });
+      if (state !== null) {
+        try {
+          await callConvexWithRetry("mutation", "sandboxGit:reportBranch", {
+            target: activeTarget,
+            branch: state.branch,
+            ...state.sync ? { sync: state.sync } : {}
+          });
+          lastReported = state;
+        } catch (error) {
+          log(
+            "branchWatcher: report failed: " + (error instanceof Error ? error.message : String(error))
+          );
+        }
+      }
+      if (recheckQueued) {
+        recheckQueued = false;
+        again = true;
+      }
+    }
+  } finally {
+    checkInFlight = false;
+  }
+}
+function scheduleCheck() {
+  if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    debounceTimer = null;
+    void runCheckLoop();
+  }, DEBOUNCE_MS);
+  debounceTimer.unref();
+}
+function watchHeadIn(gitDir) {
+  try {
+    headWatcher = watch(gitDir, (_event, filename) => {
+      if (filename !== "HEAD") return;
+      scheduleCheck();
+    });
+    headWatcher.unref();
+  } catch (error) {
+    log(
+      "branchWatcher: fs.watch unavailable, polling only: " + (error instanceof Error ? error.message : String(error))
+    );
+  }
+}
+function requestGitStateCheck() {
+  if (!started) return;
+  scheduleCheck();
+}
+function startBranchWatcher() {
+  if (started) return;
+  started = true;
+  target = resolveBranchTarget(ENTITY_ID_FIELD, ENTITY_ID);
+  if (target === null) {
+    log(
+      "branchWatcher: disabled \\u2014 no reportable entity (field=" + (ENTITY_ID_FIELD ?? "none") + ")"
+    );
+    return;
+  }
+  const gitDir = WORK_DIR + "/.git";
+  let gitDirIsDirectory = false;
+  try {
+    gitDirIsDirectory = statSync2(gitDir).isDirectory();
+  } catch {
+    gitDirIsDirectory = false;
+  }
+  if (gitDirIsDirectory) {
+    watchHeadIn(gitDir);
+  } else {
+    log("branchWatcher: " + gitDir + " is not a directory; polling only");
+  }
+  pollInterval = setInterval(() => {
+    void runCheckLoop();
+  }, POLL_INTERVAL_MS);
+  pollInterval.unref();
+  void runCheckLoop();
+}
+
+// callback-src/runtime/turnPersist.ts
+var PUSH_TIMEOUT_MS = 6e4;
+var COMMIT_ADD_ARGS = ["add", "-A", "--", ...COMMIT_EXCLUDE_PATHSPECS];
+function localBranchRewroteOwnHistory(branch, remoteRef) {
+  const remoteTip = git(["rev-parse", "--verify", remoteRef]);
+  const reflog = git(["reflog", "show", "--format=%H", \`refs/heads/\${branch}\`]);
+  if (!remoteTip.ok || !reflog.ok || remoteTip.stdout.length === 0) {
+    return false;
+  }
+  return reflog.stdout.split("\\n").map((line) => line.trim()).includes(remoteTip.stdout);
+}
+function isMissingRemoteRef(message) {
+  const lower = message.toLowerCase();
+  return lower.includes("couldn't find remote ref") || lower.includes("could not find remote ref");
+}
+function isNonFastForwardPush(message) {
+  const lower = message.toLowerCase();
+  return lower.includes("non-fast-forward") || lower.includes("fetch first") || lower.includes("[rejected]") && lower.includes("failed to push");
+}
+function synchronizeForPush(branch) {
+  const remoteRef = \`refs/remotes/origin/\${branch}\`;
+  const fetch2 = git(
+    [
+      "fetch",
+      "--no-tags",
+      "origin",
+      \`+refs/heads/\${branch}:\${remoteRef}\`
+    ],
+    { timeoutMs: PUSH_TIMEOUT_MS }
+  );
+  if (!fetch2.ok) {
+    if (isMissingRemoteRef(fetch2.out)) {
+      git(["update-ref", "-d", remoteRef]);
+      return { status: "ready", remoteExists: false };
+    }
+    log(\`persistTurnWork: fetch failed: \${fetch2.out.slice(0, 200)}\`);
+    return { status: "failed" };
+  }
+  const divergence = git([
+    "rev-list",
+    "--left-right",
+    "--count",
+    \`\${remoteRef}...refs/heads/\${branch}\`
+  ]);
+  if (!divergence.ok) {
+    log(
+      \`persistTurnWork: divergence check failed: \${divergence.out.slice(0, 200)}\`
+    );
+    return { status: "failed" };
+  }
+  if (/^0\\s+\\d+\$/.test(divergence.stdout)) {
+    return { status: "ready", remoteExists: true };
+  }
+  if (/^[1-9]\\d*\\s+0\$/.test(divergence.stdout)) {
+    const fastForward = git(["merge", "--ff-only", remoteRef]);
+    if (fastForward.ok) {
+      return { status: "ready", remoteExists: true };
+    }
+    log(
+      \`persistTurnWork: fast-forward failed: \${fastForward.out.slice(0, 200)}\`
+    );
+    return { status: "failed" };
+  }
+  if (/^[1-9]\\d*\\s+[1-9]\\d*\$/.test(divergence.stdout)) {
+    if (localBranchRewroteOwnHistory(branch, remoteRef)) {
+      log(
+        \`persistTurnWork: skipped merge \\u2014 local branch rewrote its own history vs origin/\${branch}; left to the workflow publish\`
+      );
+      return { status: "failed" };
+    }
+    const merge = git(["merge", "--no-edit", remoteRef], {
+      timeoutMs: PUSH_TIMEOUT_MS
+    });
+    if (merge.ok) {
+      return { status: "ready", remoteExists: true };
+    }
+    git(["merge", "--abort"]);
+    log(\`persistTurnWork: merge failed: \${merge.out.slice(0, 200)}\`);
+    return { status: "failed" };
+  }
+  log(\`persistTurnWork: unexpected divergence: \${divergence.out}\`);
+  return { status: "failed" };
+}
+function tipAlreadyPublished(exclusion) {
+  const unpushed = git(["rev-list", "--count", "HEAD", "--not", ...exclusion]);
+  return unpushed.ok && unpushed.stdout === "0";
+}
+function persistTurnWork() {
+  if (REQUIRE_TASK_COMMIT || RUN_ID) return;
+  try {
+    commitAndPushTurnWork();
+  } finally {
+    requestGitStateCheck();
+  }
+}
+function commitAndPushTurnWork() {
+  const startedAt = Date.now();
+  const branch = readCurrentBranch();
+  if (!branch.startsWith("eva/")) {
+    if (branch) {
+      log(\`persistTurnWork: skipped \\u2014 branch "\${branch}" is not eva-owned\`);
+    }
+    return;
+  }
+  const pinned = git(["config", "--get", AUTO_PUBLISH_BRANCH_GIT_CONFIG]);
+  if (pinned.ok && pinned.stdout.length > 0 && pinned.stdout !== branch) {
+    log(
+      \`persistTurnWork: skipped \\u2014 branch "\${branch}" is not the chat branch "\${pinned.stdout}"\`
+    );
+    return;
+  }
+  const dirty = git(["status", "--porcelain"]);
+  if (dirty.ok && dirty.out.length > 0) {
+    git(COMMIT_ADD_ARGS);
+    const staged = git(["diff", "--cached", "--quiet"]);
+    if (!staged.ok) {
+      const commit = git([
+        "commit",
+        "-m",
+        "task: checkpoint uncommitted work at turn end"
+      ]);
+      log(
+        \`persistTurnWork: auto-commit \${commit.ok ? "created" : "failed: " + commit.out.slice(0, 200)}\`
+      );
+    }
+  }
+  if (tipAlreadyPublished([\`refs/remotes/origin/\${branch}\`])) return;
+  const refspec = \`refs/heads/\${branch}:refs/heads/\${branch}\`;
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const sync = synchronizeForPush(branch);
+    if (sync.status === "failed") return;
+    const exclusion = sync.remoteExists ? [\`refs/remotes/origin/\${branch}\`] : ["--remotes=origin"];
+    if (tipAlreadyPublished(exclusion)) return;
+    const push = git(["push", "origin", refspec], {
+      timeoutMs: PUSH_TIMEOUT_MS
+    });
+    if (push.ok) {
+      log(
+        \`persistTurnWork: push ok branch=\${branch} in \${Date.now() - startedAt}ms\`
+      );
+      return;
+    }
+    if (attempt < 2 && isNonFastForwardPush(push.out)) {
+      log(
+        \`persistTurnWork: remote moved during push; refetching branch=\${branch}\`
+      );
+      continue;
+    }
+    log(
+      \`persistTurnWork: push failed: \${push.out.slice(0, 200)} branch=\${branch} in \${Date.now() - startedAt}ms\`
+    );
+    return;
+  }
 }
 
 // callback-src/runtime/heartbeats.ts
@@ -5105,7 +5075,7 @@ async function runPreflightHeartbeat() {
   try {
     await initialHeartbeat();
     try {
-      writeFileSync7(READY_FILE, String(Date.now()));
+      writeFileSync6(READY_FILE, String(Date.now()));
       log(
         "ready file written after " + String(Date.now() - SCRIPT_STARTED_AT) + "ms"
       );
@@ -5118,23 +5088,190 @@ async function runPreflightHeartbeat() {
   }
 }
 
+// callback-src/runtime/daemonProcess.ts
+var CALLBACK_FINGERPRINT_PATH = "/tmp/eva-callback-fp";
+var DAEMON_CLAIM_POLL_TIMING = {
+  idleExitMs: 45 * 60 * 1e3,
+  fencePollIntervalMs: 5e3,
+  fastPollIntervalMs: 50,
+  // Mid-turn the claim only drains cancel/stop-task flags (no turn can be
+  // handed over), so 250ms keeps Stop instant while cutting the busiest
+  // phase's claim reads ~5x versus the 50ms handoff cadence.
+  busyPollIntervalMs: 250,
+  idlePollIntervalMs: 1e3,
+  fastPollWindowMs: 3e4
+};
+function selectClaimPollIntervalMs(params) {
+  if (params.busy) return DAEMON_CLAIM_POLL_TIMING.busyPollIntervalMs;
+  const now = params.now ?? Date.now();
+  const recentlyActive = now - params.lastIdleActivityAtMs < DAEMON_CLAIM_POLL_TIMING.fastPollWindowMs;
+  return recentlyActive ? DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs : DAEMON_CLAIM_POLL_TIMING.idlePollIntervalMs;
+}
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+function pidAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function isCallbackRunnerPid(pid) {
+  if (!pidAlive(pid)) return false;
+  try {
+    return readFileSync6(\`/proc/\${pid}/cmdline\`, "utf8").includes(
+      "run-design.mjs"
+    );
+  } catch {
+    return true;
+  }
+}
+function writeOomScoreAdj(target2, score) {
+  if (target2 !== "self" && !target2) return;
+  const path3 = target2 === "self" ? "/proc/self/oom_score_adj" : \`/proc/\${target2}/oom_score_adj\`;
+  try {
+    writeFileSync7(path3, score);
+  } catch {
+  }
+}
+function callbackBundleWentStale(expectedFingerprint) {
+  if (!expectedFingerprint) return false;
+  try {
+    return readFileSync6(CALLBACK_FINGERPRINT_PATH, "utf8").trim() !== expectedFingerprint;
+  } catch {
+    return false;
+  }
+}
+function callbackScriptWentStale() {
+  return callbackBundleWentStale(CALLBACK_SCRIPT_FP);
+}
+function readPidFromFile(pidPath) {
+  try {
+    return Number(readFileSync6(pidPath, "utf8").trim());
+  } catch {
+    return Number.NaN;
+  }
+}
+function buildEntityMutationArgs(entityIdField, entityId, fields) {
+  return {
+    [entityIdField ?? "sessionId"]: entityId ?? "",
+    ...fields
+  };
+}
+function entityMutationArgs(fields) {
+  return buildEntityMutationArgs(ENTITY_ID_FIELD, ENTITY_ID, fields);
+}
+function claimDaemonPidfileBoot(params) {
+  const currentPid = params.currentPid ?? process.pid;
+  const isRival = params.isRival ?? isCallbackRunnerPid;
+  const rivalPid = readPidFromFile(params.paths.pid);
+  if (!Number.isNaN(rivalPid) && rivalPid !== currentPid && isRival(rivalPid)) {
+    return { status: "rival_alive", rivalPid };
+  }
+  writeFileSync7(params.paths.pid, String(currentPid));
+  writeFileSync7(params.paths.entity, params.entityId);
+  writeFileSync7(params.paths.opts, params.optsSig);
+  return { status: "claimed" };
+}
+function cleanOwnedDaemonMarkers(params) {
+  const currentPid = params.currentPid ?? process.pid;
+  if (readPidFromFile(params.paths.pid) !== currentPid) return;
+  const legacy = params.includeLegacySessionPaths ? resolveLegacySessionDaemonPaths() : null;
+  const targets = [
+    params.paths.pid,
+    params.paths.entity,
+    params.paths.opts,
+    ...legacy ? [legacy.pid, legacy.entity, legacy.opts] : []
+  ];
+  for (const path3 of targets) {
+    try {
+      unlinkSync(path3);
+    } catch {
+    }
+  }
+}
+function cleanOwnedMarkers(paths2) {
+  cleanOwnedDaemonMarkers({
+    paths: paths2,
+    includeLegacySessionPaths: ENTITY_ID_FIELD === "sessionId"
+  });
+}
+function startDaemonDepositionFence(params) {
+  let deposedLogged = false;
+  const timer = setInterval(() => {
+    const owner = params.readOwnerPid();
+    if (owner === process.pid) {
+      deposedLogged = false;
+      return;
+    }
+    const ownerLabel = Number.isNaN(owner) ? "none" : String(owner);
+    if (params.hasActiveWork()) {
+      if (!deposedLogged) {
+        deposedLogged = true;
+        params.log(
+          \`\${params.logPrefix}: deposed (pidfile owner=\${ownerLabel}) \\u2014 exiting after active turn\`
+        );
+      }
+      return;
+    }
+    params.log(
+      \`\${params.logPrefix}: deposed (pidfile owner=\${ownerLabel}) \\u2014 exiting\`
+    );
+    params.onDeposedIdle();
+  }, params.pollIntervalMs);
+  timer.unref?.();
+  return {
+    stop: () => {
+      clearInterval(timer);
+    }
+  };
+}
+async function bootWarmDaemon(params) {
+  const { paths: paths2, logPrefix } = params;
+  const bootClaim = claimDaemonPidfileBoot({
+    paths: paths2,
+    entityId: ENTITY_ID ?? "",
+    optsSig: DAEMON_OPTS_SIG
+  });
+  if (bootClaim.status === "rival_alive") {
+    log(
+      \`\${logPrefix}: rival daemon pid=\${bootClaim.rivalPid} already owns \${paths2.pid} \\u2014 exiting\`
+    );
+    process.exit(0);
+  }
+  startDaemonDepositionFence({
+    readOwnerPid: () => readPidFromFile(paths2.pid),
+    hasActiveWork: params.hasActiveWork,
+    pollIntervalMs: DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs,
+    log,
+    logPrefix,
+    onDeposedIdle: params.onDeposedIdle
+  });
+  const [preflightOk2] = await Promise.all([
+    runPreflightHeartbeat(),
+    refreshDaemonGithubTokenFromEnv()
+  ]);
+  if (!preflightOk2) {
+    log(\`\${logPrefix}: preflight failed\`);
+    process.exit(1);
+  }
+}
+
 // callback-src/runtime/completion.ts
 import {
-  existsSync as existsSync5,
+  existsSync as existsSync6,
+  lstatSync,
   mkdirSync as mkdirSync6,
-  readFileSync as readFileSync5,
+  readFileSync as readFileSync7,
   readdirSync as readdirSync2,
   renameSync,
   writeFileSync as writeFileSync8
 } from "fs";
 import { createHash } from "crypto";
-function parseJsonObject(line) {
-  const parsed = tryParseJson(line);
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return null;
-  }
-  return parsed;
-}
 function writeDoneFile(status, extras) {
   if (callbackState.doneFileWritten) return;
   callbackState.doneFileWritten = true;
@@ -5181,6 +5318,23 @@ function buildClaudeShapedResult(args) {
     modelUsage: args.model ? { [args.model]: {} } : {}
   });
 }
+function buildCodexResultEvent(usage) {
+  return buildClaudeShapedResult({
+    provider: "codex",
+    totalCostUsd: computeCodexCostUsd(
+      normalizedCodexModel,
+      usage.inputTokens,
+      usage.cachedInputTokens,
+      usage.outputTokens
+    ),
+    durationMs: attemptElapsedMs(),
+    inputTokens: Math.max(0, usage.inputTokens - usage.cachedInputTokens),
+    outputTokens: usage.outputTokens,
+    cacheReadInputTokens: usage.cachedInputTokens,
+    cacheCreationInputTokens: usage.cacheWriteInputTokens,
+    model: normalizedCodexModel
+  });
+}
 function readSyntheticResult(output) {
   const found = {
     sawResult: false,
@@ -5204,7 +5358,7 @@ function readSyntheticResult(output) {
     const clean = line.trim();
     if (!clean) continue;
     try {
-      const parsed = parseJsonObject(clean);
+      const parsed = tryParseJsonObject(clean);
       if (!parsed) continue;
       if (parsed.type === "result") {
         found.sawResult = true;
@@ -5284,7 +5438,7 @@ function extractResultEvent(output) {
       const clean = line.trim();
       if (!clean) continue;
       try {
-        const parsed = parseJsonObject(clean);
+        const parsed = tryParseJsonObject(clean);
         if (!parsed) continue;
         if (parsed.type === "item.completed" && parsed.item && typeof parsed.item === "object" && !Array.isArray(parsed.item) && parsed.item.type === "agent_message") {
           const messageText = getCodexAgentMessageText(parsed.item);
@@ -5310,24 +5464,14 @@ function extractResultEvent(output) {
       }
     }
     if (!finalText2) return null;
-    const nonCachedInput = Math.max(0, lastInputTokens - lastCachedInputTokens);
     return {
       result: finalText2,
       isError: false,
-      rawResultEvent: buildClaudeShapedResult({
-        provider: "codex",
-        totalCostUsd: computeCodexCostUsd(
-          normalizedCodexModel,
-          lastInputTokens,
-          lastCachedInputTokens,
-          lastOutputTokens
-        ),
-        durationMs: attemptElapsedMs(),
-        inputTokens: nonCachedInput,
-        outputTokens: lastOutputTokens,
-        cacheReadInputTokens: lastCachedInputTokens,
-        cacheCreationInputTokens: lastCacheWriteInputTokens,
-        model: normalizedCodexModel
+      rawResultEvent: buildCodexResultEvent({
+        inputTokens: lastInputTokens,
+        cachedInputTokens: lastCachedInputTokens,
+        cacheWriteInputTokens: lastCacheWriteInputTokens,
+        outputTokens: lastOutputTokens
       })
     };
   }
@@ -5336,7 +5480,7 @@ function extractResultEvent(output) {
     const clean = line.trim();
     if (!clean) continue;
     try {
-      const parsed = parseJsonObject(clean);
+      const parsed = tryParseJsonObject(clean);
       if (!parsed) continue;
       if (parsed.type === "result") {
         const r = parsed.result ?? "";
@@ -5360,7 +5504,7 @@ function buildErrorMessage(code, fatalHeartbeatError, toolStallError, timedOutFo
     return agentName + " terminated because the agent process entered zombie state (likely a grandchild held stdio open after the agent exited)";
   }
   if (timedOutForMaxRuntime) {
-    return agentName + " terminated after max runtime of " + MAX_TOTAL_RUNTIME_MS + "ms";
+    return agentName + " " + ATTEMPT_MAX_RUNTIME_ERROR_FRAGMENT + " " + MAX_TOTAL_RUNTIME_MS + "ms";
   }
   if (timedOutForFirstEvent) {
     return agentName + " produced no parseable stream-json events within " + FIRST_EVENT_TIMEOUT_MS + "ms";
@@ -5422,6 +5566,7 @@ async function reconcileStreamingAndPersist() {
   return false;
 }
 function buildTurnCompletionPayload(params) {
+  const rawResultEvent = params.resultEvent?.rawResultEvent ?? params.rawResultEvent;
   return buildEntityMutationArgs(
     ENTITY_ID_FIELD ?? params.entityFieldFallback,
     ENTITY_ID,
@@ -5431,7 +5576,7 @@ function buildTurnCompletionPayload(params) {
       error: params.error,
       activityLog: params.activityLog,
       ...RUN_ID ? { runId: RUN_ID } : {},
-      ...params.resultEvent?.rawResultEvent ? { rawResultEvent: params.resultEvent.rawResultEvent } : {},
+      ...rawResultEvent ? { rawResultEvent } : {},
       ...callbackState.pendingQuestionData ? { pendingQuestion: callbackState.pendingQuestionData } : {}
     }
   );
@@ -5445,13 +5590,7 @@ async function postClaimedTurnFailureCompletion(params) {
     ...RUN_ID ? { runId: RUN_ID } : {}
   });
   appendClaimedTurnCompletion(completionArgs);
-  appendTurnCheckpoint(completionArgs);
-  releaseTurnLeaseForCompletion();
-  await callConvexWithRetry(
-    "mutation",
-    COMPLETION_MUTATION ?? "",
-    completionArgs
-  );
+  await sendTurnCompletion(COMPLETION_MUTATION ?? "", completionArgs);
 }
 function appendDiagnosticTail(message) {
   const details = [];
@@ -5475,7 +5614,7 @@ async function uploadMediaFile(filePath, mimeType) {
   );
   const urlValue = urlRes && typeof urlRes === "object" && !Array.isArray(urlRes) && urlRes.value && typeof urlRes.value === "string" ? urlRes.value : "";
   if (!urlValue) throw new Error("Missing upload URL");
-  const fileData = readFileSync5(filePath);
+  const fileData = readFileSync7(filePath);
   const uploadRes = await fetchWithTimeout(
     urlValue,
     {
@@ -5501,6 +5640,7 @@ async function attachChatMediaIfAny(uploaded, target2) {
     mediaStorageIds: uploaded.map((item) => item.storageId)
   };
   if (target2.messageId) mediaArgs.messageId = target2.messageId;
+  if (target2.turnId) mediaArgs.turnId = target2.turnId;
   await callConvexWithRetry("action", "screenshots:attachMedia", mediaArgs, 3);
 }
 async function attachRunMediaIfAny(uploaded) {
@@ -5515,16 +5655,40 @@ async function attachRunMediaIfAny(uploaded) {
     3
   );
 }
-async function deliverCompletionWithMedia(completionArgs) {
-  appendTurnCheckpoint(completionArgs);
+var REDACTED_COMPLETION_FIELDS = [
+  "result",
+  "error",
+  "rawResultEvent"
+];
+async function sendTurnCompletion(mutation, args) {
+  for (const field of REDACTED_COMPLETION_FIELDS) {
+    const value = args[field];
+    if (typeof value === "string") args[field] = redactSecrets(value);
+  }
+  appendTurnCheckpoint(args);
   releaseTurnLeaseForCompletion();
+  await callConvexWithRetry("mutation", mutation, args);
+}
+async function deliverCompletionWithMedia(completionArgs) {
   if (RUN_ID) await uploadAndAttachSandboxMedia({});
-  await callConvexWithRetry(
-    "mutation",
-    COMPLETION_MUTATION ?? "",
-    completionArgs
-  );
-  if (!RUN_ID) await uploadAndAttachSandboxMedia({});
+  const { turnId } = completionArgs;
+  await sendTurnCompletion(COMPLETION_MUTATION ?? "", completionArgs);
+  if (!RUN_ID) {
+    await uploadAndAttachSandboxMedia(
+      typeof turnId === "string" ? { turnId } : {}
+    );
+  }
+}
+function harvestableFile(dir, file) {
+  if (file === "." || file === ".." || file.includes("/")) return null;
+  try {
+    if (!lstatSync(dir).isDirectory()) return null;
+    const fp = dir + "/" + file;
+    const st = lstatSync(fp);
+    return st.isFile() && st.nlink === 1 ? fp : null;
+  } catch {
+    return null;
+  }
 }
 function archivePostedFile(dir, file) {
   const postedDir = dir + "/.posted";
@@ -5535,17 +5699,18 @@ async function uploadAndAttachSandboxMedia(target2) {
   const uploaded = [];
   const seenDigests = /* @__PURE__ */ new Set();
   const isDuplicate = (filePath) => {
-    const digest = createHash("sha256").update(readFileSync5(filePath)).digest("hex");
+    const digest = createHash("sha256").update(readFileSync7(filePath)).digest("hex");
     if (seenDigests.has(digest)) return true;
     seenDigests.add(digest);
     return false;
   };
   const { recordings, screenshots } = mediaSearchDirs(WORK_DIR, ROOT_DIRECTORY);
   for (const recDir of recordings) {
-    if (!existsSync5(recDir)) continue;
+    if (!existsSync6(recDir)) continue;
     for (const file of readdirSync2(recDir)) {
       if (!/\\.(webm|mp4|mov|avi)\$/i.test(file)) continue;
-      const fp = recDir + "/" + file;
+      const fp = harvestableFile(recDir, file);
+      if (!fp) continue;
       const mimeType = file.endsWith(".mp4") ? "video/mp4" : "video/webm";
       try {
         if (!isDuplicate(fp)) {
@@ -5565,10 +5730,11 @@ async function uploadAndAttachSandboxMedia(target2) {
     webp: "image/webp"
   };
   for (const ssDir of screenshots) {
-    if (!existsSync5(ssDir)) continue;
+    if (!existsSync6(ssDir)) continue;
     for (const file of readdirSync2(ssDir)) {
       if (!/\\.(png|jpg|jpeg|gif|webp)\$/i.test(file)) continue;
-      const fp = ssDir + "/" + file;
+      const fp = harvestableFile(ssDir, file);
+      if (!fp) continue;
       const ext = file.split(".").pop()?.toLowerCase() ?? "png";
       const mimeType = mimeMap[ext] || "image/png";
       try {
@@ -5672,20 +5838,20 @@ function processRealtimeStdoutChunk(text) {
   }
 }
 function handleRealtimeStreamLine(line) {
-  const parsed = tryParseJson(line);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return;
-  }
+  const parsed = tryParseJsonObject(line);
+  if (!parsed) return;
   getProviderAdapter(PROVIDER).onStreamLine(line, parsed);
 }
 
 // callback-src/providers/claudeSdk.ts
 import { execSync } from "child_process";
-import { existsSync as existsSync6, readFileSync as readFileSync6 } from "fs";
+import { existsSync as existsSync7, readFileSync as readFileSync8 } from "fs";
 import { dirname } from "path";
 
 // callback-src/runtime/pendingQuestion.ts
 var POLL_INTERVAL_MS2 = 300;
+var QUESTION_WAIT_MS = 10 * 60 * 1e3;
+var QUESTION_RELEASED_MESSAGE = "The user has not answered yet. Eva keeps this question on screen after your turn and sends their answer as their next message. End your turn now with one short line: do not ask again and do no further work.";
 function readClaimedAnswer(result) {
   const payload = unwrapConvexMutationPayload(result);
   if (!payload) return null;
@@ -5699,18 +5865,22 @@ async function postQuestion(toolUseId, payload) {
     payload
   });
 }
-async function pollForAnswer(toolUseId, signal) {
+async function pollForAnswer(toolUseId, signal, waitMs = QUESTION_WAIT_MS) {
+  const args = { entityId: ENTITY_ID ?? "", toolUseId };
+  const deadline = Date.now() + waitMs;
   while (!signal.aborted) {
+    const timedOut = Date.now() >= deadline;
     const result = await callConvexWithRetry(
       "mutation",
-      "pendingQuestions:claimAnswer",
-      { entityId: ENTITY_ID ?? "", toolUseId }
+      timedOut ? "pendingQuestions:release" : "pendingQuestions:claimAnswer",
+      args
     );
     const answer = readClaimedAnswer(result);
-    if (answer !== null) return answer;
+    if (answer !== null) return { kind: "answered", answer };
+    if (timedOut) return { kind: "released" };
     await sleep(POLL_INTERVAL_MS2);
   }
-  return null;
+  return { kind: "cancelled" };
 }
 function parseAnswers(answerJson) {
   try {
@@ -5737,12 +5907,17 @@ function buildCanUseTool() {
     callbackState.awaitingQuestionAnswer = true;
     log("canUseTool: AskUserQuestion \\u2014 posting question, awaiting user answer");
     try {
-      await postQuestion(toolUseId, JSON.stringify(input));
-      const answerJson = await pollForAnswer(toolUseId, options.signal);
-      if (answerJson === null) {
+      const payload = JSON.stringify(input);
+      await postQuestion(toolUseId, payload);
+      const outcome = await pollForAnswer(toolUseId, options.signal);
+      if (outcome.kind === "cancelled") {
         return { behavior: "deny", message: "The question was cancelled." };
       }
-      const answers = parseAnswers(answerJson);
+      if (outcome.kind === "released") {
+        callbackState.pendingQuestionData = payload;
+        return { behavior: "deny", message: QUESTION_RELEASED_MESSAGE };
+      }
+      const answers = parseAnswers(outcome.answer);
       if (toolUseId) {
         const stringAnswers = {};
         for (const [question, answer] of Object.entries(answers)) {
@@ -5760,6 +5935,27 @@ function buildCanUseTool() {
 }
 
 // callback-src/providers/attemptResult.ts
+function beginSdkAttempt(name, sessionMode, startupStep) {
+  resetAttemptState();
+  callbackState.activeAttemptStartedAt = Date.now();
+  const step = startupStep();
+  updateThinkingStep(step.label, step.detail);
+  log(
+    name + " started (mode=" + sessionMode.mode + ", sessionId=" + (sessionMode.sessionId || "none") + ")"
+  );
+}
+function finishSdkAttempt(p) {
+  const code = p.sawResult && !p.resultIsError && !p.timedOutForMaxRuntime && !p.timedOutForNoOutput ? 0 : 1;
+  log(
+    p.name + " finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawResult=" + p.sawResult + ", resultIsError=" + p.resultIsError + ", timedOutForNoOutput=" + p.timedOutForNoOutput + ", timedOutForMaxRuntime=" + p.timedOutForMaxRuntime + ", outputBytes=" + p.output.length + (p.errorMessage ? ", " + p.errorLabel + "=" + p.errorMessage : "") + ")"
+  );
+  return buildStandardSdkAttemptResult({
+    code,
+    output: p.output,
+    timedOutForNoOutput: p.timedOutForNoOutput,
+    timedOutForMaxRuntime: p.timedOutForMaxRuntime
+  });
+}
 function buildStandardSdkAttemptResult(params) {
   return {
     code: params.code,
@@ -5818,7 +6014,7 @@ var SDK_LOCAL_PREFIX = "/home/eva/.eva-agent-sdk";
 function installedPackageVersion(packageRoot) {
   try {
     const manifest = JSON.parse(
-      readFileSync6(packageRoot + "/package.json", "utf8")
+      readFileSync8(packageRoot + "/package.json", "utf8")
     );
     if (typeof manifest !== "object" || manifest === null || Array.isArray(manifest)) {
       return null;
@@ -5861,11 +6057,7 @@ function resolvePinnedSdkEntry(pin) {
   return localRoot + pin.entryRelPath;
 }
 function sdkMessageJson(serialized) {
-  const parsed = tryParseJson(serialized);
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return null;
-  }
-  return parsed;
+  return tryParseJsonObject(serialized);
 }
 async function loadSdk() {
   const mod = await import(resolvePinnedSdkEntry({
@@ -5898,7 +6090,7 @@ function resolvePinnedCliBinary(cli) {
       "cli version drift: global " + cli.binName + " is " + (globalVersion ?? "unknown") + ", need " + pinned + "; preferring the pinned fallback install"
     );
   }
-  if (cli.fallbackBinPath && existsSync6(cli.fallbackBinPath)) {
+  if (cli.fallbackBinPath && existsSync7(cli.fallbackBinPath)) {
     const fallbackVersion = binPackageVersion(
       cli.fallbackBinPath,
       cli.packageName
@@ -5920,9 +6112,6 @@ function claudeExecutablePath() {
     pinnedVersion: process.env.CLAUDE_CLI_PINNED_VERSION || null,
     fallbackBinPath: process.env.CLAUDE_BIN_PATH || ""
   });
-}
-function readPromptText() {
-  return readFileSync6("/tmp/design-prompt.txt", "utf8");
 }
 function buildSdkOptions(sessionMode) {
   const extraArgs = { settings: settingsJson };
@@ -5997,19 +6186,17 @@ function buildSdkOptionsFromParts(sessionMode, extraArgs, tools = "agent") {
     ...sessionMode.mode === "session" && sessionMode.sessionId ? { sessionId: sessionMode.sessionId } : {},
     ...sessionMode.mode === "resume" && sessionMode.sessionId ? { resume: sessionMode.sessionId } : {},
     extraArgs,
+    // A repo with \`.eva/mcp.json\` gets the merged set from Eva; its own
+    // \`.mcp.json\` would then add duplicates, such as a second \`eva\`. Repos
+    // without one keep loading \`.mcp.json\` as before.
+    ...hasRepoMcpFile ? { strictMcpConfig: true } : {},
     ...Object.keys(evaMcpServers).length > 0 ? { mcpServers: evaMcpServers } : {},
     ...effortOption,
     ...thinkingOption
   };
 }
 async function runClaudeSdkAttempt(sessionMode) {
-  resetAttemptState();
-  callbackState.activeAttemptStartedAt = Date.now();
-  const startupStep = buildClaudeStartupStep();
-  updateThinkingStep(startupStep.label, startupStep.detail);
-  log(
-    "runClaudeSdkAttempt started (mode=" + sessionMode.mode + ", sessionId=" + (sessionMode.sessionId || "none") + ")"
-  );
+  beginSdkAttempt("runClaudeSdkAttempt", sessionMode, buildClaudeStartupStep);
   let attemptOutput = "";
   let lastMessageAt = Date.now();
   let timedOutForNoOutput = false;
@@ -6022,7 +6209,7 @@ async function runClaudeSdkAttempt(sessionMode) {
   const sdk = await loadSdk();
   let effectiveMode = sessionMode;
   let q = sdk.query({
-    prompt: readPromptText(),
+    prompt: readTurnPrompt(),
     options: buildSdkOptions(effectiveMode)
   });
   const interrupt = async () => {
@@ -6084,7 +6271,7 @@ async function runClaudeSdkAttempt(sessionMode) {
         );
         sawZeroWorkTaskNotification = false;
         q = sdk.query({
-          prompt: readPromptText(),
+          prompt: readTurnPrompt(),
           options: buildSdkOptions(effectiveMode)
         });
         await consumeQuery();
@@ -6100,7 +6287,7 @@ async function runClaudeSdkAttempt(sessionMode) {
         resultIsError = false;
         effectiveMode = { mode: "session", sessionId: effectiveMode.sessionId };
         q = sdk.query({
-          prompt: readPromptText(),
+          prompt: readTurnPrompt(),
           options: buildSdkOptions(effectiveMode)
         });
         await consumeQuery();
@@ -6120,15 +6307,15 @@ async function runClaudeSdkAttempt(sessionMode) {
     readUsage: () => readSdkPlanUsage(q),
     error: resultErrorMessage || queryErrorMessage || void 0
   });
-  const code = sawResult && !resultIsError && !timedOutForMaxRuntime && !timedOutForNoOutput ? 0 : 1;
-  log(
-    "runClaudeSdkAttempt finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawResult=" + sawResult + ", resultIsError=" + resultIsError + ", timedOutForNoOutput=" + timedOutForNoOutput + ", timedOutForMaxRuntime=" + timedOutForMaxRuntime + ", outputBytes=" + attemptOutput.length + (queryErrorMessage ? ", queryError=" + queryErrorMessage : "") + ")"
-  );
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
+  return finishSdkAttempt({
+    name: "runClaudeSdkAttempt",
+    sawResult,
+    resultIsError,
     timedOutForNoOutput,
-    timedOutForMaxRuntime
+    timedOutForMaxRuntime,
+    output: attemptOutput,
+    errorLabel: "queryError",
+    errorMessage: queryErrorMessage
   });
 }
 
@@ -6192,7 +6379,7 @@ function readSteers(result) {
   if (!Array.isArray(field)) return [];
   const steers = [];
   for (const item of field) {
-    if (item === null || typeof item !== "object" || Array.isArray(item)) {
+    if (!isJsonObject(item)) {
       continue;
     }
     const { id, text } = item;
@@ -6214,68 +6401,6 @@ async function deliverSteers(steers, inject) {
     if (delivered) pushSteerStep(steer.text);
     pendingAcks.push({ id: steer.id, delivered });
   }
-}
-
-// callback-src/providers/githubToken.ts
-function tokenFromActionResponse(data) {
-  if (typeof data !== "object" || data === null || Array.isArray(data)) {
-    return null;
-  }
-  const value = data.value;
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return null;
-  }
-  return typeof value.token === "string" ? value.token : null;
-}
-async function fetchInstallationToken(params) {
-  try {
-    const fetchFn = params.fetchFn ?? fetchWithTimeout;
-    const response = await fetchFn(params.convexUrl + "/api/action", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: "Bearer " + params.convexToken
-      },
-      body: JSON.stringify({
-        path: "github:getInstallationTokenAction",
-        args: { repoId: params.repoId },
-        format: "json"
-      })
-    });
-    if (!response.ok) return { token: null };
-    const token = tokenFromActionResponse(await readResponseJson(response));
-    return token ? { token } : { token: null };
-  } catch {
-    return { token: null };
-  }
-}
-function applyGithubTokenToEnv(env, token) {
-  env.GITHUB_TOKEN = token;
-  env.GH_TOKEN = token;
-}
-async function ensureGithubToken(params) {
-  const convexUrl = params.convexUrl;
-  const convexToken = params.convexToken;
-  const repoId = params.repoId;
-  if (!convexUrl || !convexToken || !repoId) {
-    return { refreshed: false };
-  }
-  const result = await fetchInstallationToken({
-    convexUrl,
-    convexToken,
-    repoId,
-    fetchFn: params.fetchFn
-  });
-  if (result.token === null) return { refreshed: false };
-  applyGithubTokenToEnv(params.env ?? process.env, result.token);
-  return { refreshed: true };
-}
-async function refreshDaemonGithubTokenFromEnv() {
-  return ensureGithubToken({
-    convexUrl: CONVEX_URL,
-    convexToken: CONVEX_TOKEN,
-    repoId: REPO_ID
-  });
 }
 
 // callback-src/runtime/daemonSupervisor.ts
@@ -6419,14 +6544,14 @@ function isRootFrame(message) {
 }
 function assistantModel(message) {
   const inner = message.message;
-  if (typeof inner !== "object" || inner === null || Array.isArray(inner)) {
+  if (!isJsonObject(inner)) {
     return void 0;
   }
   return typeof inner.model === "string" ? inner.model : void 0;
 }
 function messageContent(message) {
   const inner = message.message;
-  if (typeof inner !== "object" || inner === null || Array.isArray(inner)) {
+  if (!isJsonObject(inner)) {
     return void 0;
   }
   return inner.content;
@@ -6559,15 +6684,9 @@ function trackClaudeGoalFrame(message) {
 }
 
 // callback-src/providers/claudeSdkDaemon.ts
-function readDaemonPidFile() {
-  return readPidFromFile(DAEMON_PID_FILE);
-}
 var daemonPaths = resolveDaemonPaths();
-var DAEMON_PID_FILE = daemonPaths.pid;
 var IDLE_EXIT_MS = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
-var FENCE_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
 var PROMPT_POLL_INTERVAL_MS = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
-var NO_MESSAGE_TIMEOUT_MS = NO_OUTPUT_TIMEOUT_MS * 5;
 var WATCHDOG_TICK_MS = 5e3;
 var CANCEL_SETTLE_TIMEOUT_MS = 3e4;
 var turnActive = false;
@@ -6588,15 +6707,6 @@ var pendingAgentStops = /* @__PURE__ */ new Set();
 var currentAgentRunner = null;
 var usageRefreshInFlight = false;
 var wakeIdlePump = null;
-function entityMutationArgs(fields) {
-  return buildEntityMutationArgs(ENTITY_ID_FIELD, ENTITY_ID, fields);
-}
-function cleanOwnedMarkers() {
-  cleanOwnedDaemonMarkers({
-    paths: daemonPaths,
-    includeLegacySessionPaths: ENTITY_ID_FIELD === "sessionId"
-  });
-}
 function beginWatchedTurn() {
   turnActive = true;
   turnStartedAtMs = Date.now();
@@ -6618,14 +6728,14 @@ async function failTurnAndExit(error) {
     });
   } catch {
   }
-  cleanOwnedMarkers();
+  cleanOwnedMarkers(daemonPaths);
   await stopStreamingLoops();
   process.exit(1);
 }
 async function exitWithoutCompletion(reason) {
   log("daemon: exiting without completion \\u2014 " + reason);
   persistTurnWork();
-  cleanOwnedMarkers();
+  cleanOwnedMarkers(daemonPaths);
   await stopStreamingLoops();
 }
 function startTurnWatchdog() {
@@ -6652,11 +6762,11 @@ function startTurnWatchdog() {
       turnActive = false;
       if (supervisor.currentTurn?.kind === "synthetic") {
         void failSyntheticTurn(
-          "The assistant exceeded the maximum turn runtime."
+          TURN_MAX_RUNTIME_ERROR
         );
       } else {
         void failTurnAndExit(
-          "The assistant exceeded the maximum turn runtime."
+          TURN_MAX_RUNTIME_ERROR
         );
       }
     } else if (now - lastMessageAtMs > NO_MESSAGE_TIMEOUT_MS) {
@@ -6709,9 +6819,6 @@ function createPromptStream() {
   };
   return { push, iterable };
 }
-async function refreshGithubToken() {
-  await refreshDaemonGithubTokenFromEnv();
-}
 function resetTurnState() {
   resetDaemonTurnStreamingState();
   callbackState.awaitingQuestionAnswer = false;
@@ -6755,23 +6862,12 @@ function readSyntheticTurnMessageId(result) {
   const messageId = payload.messageId;
   return typeof messageId === "string" ? messageId : null;
 }
-function readParentToolUseId(message) {
-  const parentField = message.parent_tool_use_id;
-  if (typeof parentField === "string" && parentField.trim()) {
-    return parentField.trim();
-  }
-  return null;
-}
-function readStringField2(message, field) {
-  const value = message[field];
-  return typeof value === "string" && value.trim() ? value.trim() : void 0;
-}
 function recogniseSubagentToolUses(message) {
   if (message.type !== "assistant") {
     return;
   }
   const nested = message.message;
-  if (typeof nested !== "object" || nested === null || Array.isArray(nested)) {
+  if (!isJsonObject(nested)) {
     return;
   }
   const content = nested.content;
@@ -6779,7 +6875,7 @@ function recogniseSubagentToolUses(message) {
     return;
   }
   for (const block of content) {
-    if (typeof block !== "object" || block === null || Array.isArray(block)) {
+    if (!isJsonObject(block)) {
       continue;
     }
     if (block.type !== "tool_use") {
@@ -6796,7 +6892,7 @@ function recogniseSubagentToolUses(message) {
   }
 }
 function shouldDropSubagentMessage(message) {
-  const parentId = readParentToolUseId(message);
+  const parentId = trimmedString(message.parent_tool_use_id) ?? null;
   if (parentId === null) {
     return false;
   }
@@ -6806,7 +6902,7 @@ function shouldMintSyntheticTurn(message) {
   if (message.type === "assistant" || message.type === "stream_event") {
     return true;
   }
-  const parentId = readParentToolUseId(message);
+  const parentId = trimmedString(message.parent_tool_use_id) ?? null;
   if (parentId === null) {
     return false;
   }
@@ -6945,7 +7041,7 @@ async function reportHarnessSkillCatalog(cliVersion, query) {
 function noteHarnessInitMessage(message, query) {
   if (harnessCatalogReportStarted) return;
   if (message.type !== "system" || message.subtype !== "init") return;
-  const cliVersion = readStringField2(message, "claude_code_version");
+  const cliVersion = trimmedString(message.claude_code_version);
   if (!cliVersion) return;
   harnessCatalogReportStarted = true;
   void reportHarnessSkillCatalog(cliVersion, query);
@@ -7003,7 +7099,7 @@ function handleBackgroundTasksChanged(message) {
   }
   const taskIds = [];
   for (const task of tasksField) {
-    if (typeof task !== "object" || task === null || Array.isArray(task)) {
+    if (!isJsonObject(task)) {
       continue;
     }
     const taskIdField = task.task_id;
@@ -7022,15 +7118,15 @@ function handleSystemTaskMessage(message) {
   if (typeof subtype !== "string") {
     return;
   }
-  const toolUseId = readStringField2(message, "tool_use_id");
+  const toolUseId = trimmedString(message.tool_use_id);
   if (subtype === "task_started" && toolUseId) {
-    if (readStringField2(message, "task_type") === "local_bash") {
+    if (trimmedString(message.task_type) === "local_bash") {
       return;
     }
     const entry = {
       toolUseId,
-      taskId: readStringField2(message, "task_id"),
-      description: readStringField2(message, "description"),
+      taskId: trimmedString(message.task_id),
+      description: trimmedString(message.description),
       status: "running",
       startedAt: Date.now()
     };
@@ -7042,7 +7138,7 @@ function handleSystemTaskMessage(message) {
     return;
   }
   if ((subtype === "task_updated" || subtype === "task_notification") && toolUseId) {
-    const status = readStringField2(message, "status");
+    const status = trimmedString(message.status);
     const terminal = status === "completed" || status === "failed" || status === "killed" || status === "stopped" || subtype === "task_notification";
     if (terminal) {
       settleSubagent(toolUseId, status ?? "completed");
@@ -7059,19 +7155,15 @@ async function failSyntheticTurn(error) {
   persistTurnWork();
   try {
     await drainStreamingAndCompleteSteps();
-    const turnLease = getCurrentTurnLease();
     const completionArgs = entityMutationArgs({
       messageId,
       success: false,
       result: null,
       error,
-      activityLog: serializeSteps(callbackState.accumulatedSteps),
-      ...turnLease
+      activityLog: serializeSteps(callbackState.accumulatedSteps)
     });
-    appendTurnCheckpoint(completionArgs);
-    releaseTurnLeaseForCompletion();
-    await callConvexWithRetry(
-      "mutation",
+    appendCurrentTurnLease(completionArgs);
+    await sendTurnCompletion(
       COMPLETE_SYNTHETIC_TURN_MUTATION ?? "",
       completionArgs
     );
@@ -7142,16 +7234,9 @@ async function finalizeSyntheticTurn(output) {
   if (callbackState.pendingQuestionData) {
     completionArgs.pendingQuestion = callbackState.pendingQuestionData;
   }
-  const turnLease = getCurrentTurnLease();
-  if (turnLease) {
-    completionArgs.turnId = turnLease.turnId;
-    completionArgs.leaseGeneration = turnLease.leaseGeneration;
-  }
+  appendCurrentTurnLease(completionArgs);
   persistTurnWork();
-  appendTurnCheckpoint(completionArgs);
-  releaseTurnLeaseForCompletion();
-  await callConvexWithRetry(
-    "mutation",
+  await sendTurnCompletion(
     COMPLETE_SYNTHETIC_TURN_MUTATION ?? "",
     completionArgs
   );
@@ -7196,12 +7281,12 @@ function handleCancelRequested(agentRunner) {
   });
 }
 function canTakeSteer() {
-  return supervisor.phase === "running" && supervisor.currentTurn?.kind === "real";
+  return supervisor.phase === "running" && supervisor.currentTurn?.kind === "real" && !callbackState.awaitingQuestionAnswer;
 }
 function startClaimWatcher(agentRunner) {
   void (async () => {
     while (!supervisor.isStopping) {
-      if (callbackScriptWentStaleOnDisk()) {
+      if (callbackScriptWentStale()) {
         supervisor.noticeRefresh();
       }
       const refreshDecision = supervisor.decideRefresh({
@@ -7261,25 +7346,14 @@ function startClaimWatcher(agentRunner) {
         if (turn !== null) {
           await materializeTurnAttachments(turn);
           lastIdleActivityAtMs = Date.now();
-          const currentTurn = supervisor.currentTurn;
-          const currentLease = getCurrentTurnLease();
-          if (shouldParkClaimedTurn({
-            hasActiveRealTurn: currentTurn?.kind === "real",
+          const routed = routeClaimedTurn({
+            turn,
+            hasActiveRealTurn: supervisor.currentTurn?.kind === "real",
             isCancellationInFlight: supervisor.isCancellationInFlight,
-            isFinalizing: false,
-            currentLeaseTurnId: currentLease?.turnId ?? null,
-            claimedLeaseTurnId: turn.turnLease?.turnId ?? null
-          })) {
-            if (supervisor.parkClaim(turn)) {
-              wakeIdlePump?.();
-            } else {
-              log("daemon: duplicate claimed turn ignored");
-            }
-          } else {
-            log(
-              "daemon: claim discarded while real turn active (prompt lost; pendingTurn was already cleared)"
-            );
-          }
+            park: () => supervisor.parkClaim(turn),
+            logPrefix: "daemon"
+          });
+          if (routed === "parked") wakeIdlePump?.();
         }
       } catch {
       }
@@ -7515,9 +7589,6 @@ function createWarmAgentRunner(sdk, options) {
     setPermissionMode
   };
 }
-function callbackScriptWentStaleOnDisk() {
-  return callbackBundleWentStale(CALLBACK_SCRIPT_FP);
-}
 async function runSdkDaemon() {
   if (!CLAIM_MUTATION) {
     log("daemon: CLAIM_MUTATION env is required in sdk-daemon mode");
@@ -7529,37 +7600,17 @@ async function runSdkDaemon() {
     );
     process.exit(1);
   }
-  const bootClaim = claimDaemonPidfileBoot({
+  await bootWarmDaemon({
     paths: daemonPaths,
-    entityId: ENTITY_ID ?? "",
-    optsSig: DAEMON_OPTS_SIG
-  });
-  if (bootClaim.status === "rival_alive") {
-    log(
-      \`daemon: rival daemon pid=\${bootClaim.rivalPid} already owns \${DAEMON_PID_FILE} \\u2014 exiting\`
-    );
-    process.exit(0);
-  }
-  startDaemonDepositionFence({
-    readOwnerPid: readDaemonPidFile,
-    hasActiveWork: () => supervisor.hasWork,
-    pollIntervalMs: FENCE_POLL_INTERVAL_MS,
-    log,
     logPrefix: "daemon",
+    hasActiveWork: () => supervisor.hasWork,
     onDeposedIdle: () => {
       process.exit(0);
     }
   });
-  const preflightOk2 = await runPreflightHeartbeat();
-  if (!preflightOk2) {
-    log("daemon: preflight failed");
-    process.exit(1);
-  }
   startStreamingLoops();
-  const tokenRefreshed = refreshGithubToken();
-  await new Promise((resolve) => setImmediate(resolve));
   const sessionMode = prepareClaudeSessionState();
-  const [sdk] = await Promise.all([loadSdk(), tokenRefreshed]);
+  const sdk = await loadSdk();
   const options = buildSdkOptions(sessionMode);
   const agentRunner = createWarmAgentRunner(sdk, options);
   currentAgentRunner = agentRunner;
@@ -7576,25 +7627,18 @@ async function runSdkDaemon() {
     log("daemon: query failed \\u2014 " + messageText);
     persistTurnWork();
     try {
-      const completionArgs = {
-        [ENTITY_ID_FIELD ?? "sessionId"]: ENTITY_ID ?? "",
+      const completionArgs = entityMutationArgs({
         success: false,
         result: null,
         error: "Agent SDK daemon failed: " + messageText,
-        activityLog: serializeSteps(callbackState.accumulatedSteps),
-        ...getCurrentTurnLease()
-      };
-      appendTurnCheckpoint(completionArgs);
-      releaseTurnLeaseForCompletion();
-      await callConvexWithRetry(
-        "mutation",
-        COMPLETION_MUTATION ?? "",
-        completionArgs
-      );
+        activityLog: serializeSteps(callbackState.accumulatedSteps)
+      });
+      appendCurrentTurnLease(completionArgs);
+      await sendTurnCompletion(COMPLETION_MUTATION ?? "", completionArgs);
     } catch {
     }
   } finally {
-    cleanOwnedMarkers();
+    cleanOwnedMarkers(daemonPaths);
     await stopStreamingLoops();
   }
   process.exit(0);
@@ -7618,7 +7662,7 @@ async function createOutputSchemaFile(schema) {
     return { cleanup: async () => {
     } };
   }
-  if (!isJsonObject(schema)) {
+  if (!isJsonObject3(schema)) {
     throw new Error("outputSchema must be a plain JSON object");
   }
   const schemaDir = await fs.mkdtemp(path.join(os.tmpdir(), "codex-output-schema-"));
@@ -7637,7 +7681,7 @@ async function createOutputSchemaFile(schema) {
     throw error;
   }
 }
-function isJsonObject(value) {
+function isJsonObject3(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 var Thread = class {
@@ -8134,7 +8178,6 @@ var Codex = class {
 };
 
 // callback-src/providers/codexSdk.ts
-import { readFileSync as readFileSync7 } from "fs";
 var CODEX_CLI_PACKAGE = "@openai/codex";
 function codexExecutablePath() {
   return resolvePinnedCliBinary({
@@ -8143,10 +8186,6 @@ function codexExecutablePath() {
     pinnedVersion: process.env.CODEX_CLI_PINNED_VERSION || null,
     fallbackBinPath: CODEX_BIN_PATH
   });
-}
-function readPromptText2() {
-  const prompt = readFileSync7("/tmp/design-prompt.txt", "utf8");
-  return SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + prompt : prompt;
 }
 function codexEnvironment() {
   const env = {};
@@ -8176,15 +8215,10 @@ function agentMessageDelta(event, priorTextByItem) {
   return current.startsWith(previous) ? current.slice(previous.length) : current;
 }
 async function runCodexSdkAttempt(sessionMode) {
-  resetAttemptState();
-  callbackState.activeAttemptStartedAt = Date.now();
-  updateThinkingStep(
-    "Starting Codex SDK...",
-    sessionMode.mode === "resume" ? "Restoring saved context..." : "Creating Codex thread..."
-  );
-  log(
-    "runCodexSdkAttempt started (mode=" + sessionMode.mode + ", sessionId=" + (sessionMode.sessionId || "none") + ")"
-  );
+  beginSdkAttempt("runCodexSdkAttempt", sessionMode, () => ({
+    label: "Starting Codex SDK...",
+    detail: sessionMode.mode === "resume" ? "Restoring saved context..." : "Creating Codex thread..."
+  }));
   let attemptOutput = "";
   let lastEventAt2 = Date.now();
   let timedOutForNoOutput = false;
@@ -8227,7 +8261,7 @@ async function runCodexSdkAttempt(sessionMode) {
     attemptOutput = trimBufferHead(attemptOutput + line);
   };
   try {
-    const streamed = await thread.runStreamed(readPromptText2(), {
+    const streamed = await thread.runStreamed(withSystemPrompt(readTurnPrompt()), {
       signal: abortController.signal
     });
     for await (const event of streamed.events) {
@@ -8263,15 +8297,15 @@ async function runCodexSdkAttempt(sessionMode) {
   if (attemptErrorMessage) {
     recordSdkAttemptFailure(attemptErrorMessage);
   }
-  const code = sawCompletedTurn && !turnFailed && !attemptErrorMessage && !timedOutForMaxRuntime && !timedOutForNoOutput ? 0 : 1;
-  log(
-    "runCodexSdkAttempt finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawCompletedTurn=" + sawCompletedTurn + ", turnFailed=" + turnFailed + ", timedOutForNoOutput=" + timedOutForNoOutput + ", timedOutForMaxRuntime=" + timedOutForMaxRuntime + ", outputBytes=" + attemptOutput.length + (attemptErrorMessage ? ", error=" + attemptErrorMessage : "") + ")"
-  );
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
+  return finishSdkAttempt({
+    name: "runCodexSdkAttempt",
+    sawResult: sawCompletedTurn,
+    resultIsError: turnFailed || Boolean(attemptErrorMessage),
     timedOutForNoOutput,
-    timedOutForMaxRuntime
+    timedOutForMaxRuntime,
+    output: attemptOutput,
+    errorLabel: "error",
+    errorMessage: attemptErrorMessage
   });
 }
 
@@ -8350,9 +8384,8 @@ var CodexAppServerClient = class {
     this.child.stdin.write(JSON.stringify(message) + "\\n");
   }
   handleLine(line) {
-    const parsed = tryParseJson(line);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
-    const message = parsed;
+    const message = tryParseJsonObject(line);
+    if (!message) return;
     if (typeof message.id === "number" && typeof message.method !== "string") {
       const pending = this.pending.get(message.id);
       if (!pending) return;
@@ -8395,8 +8428,6 @@ var CodexAppServerClient = class {
 // callback-src/providers/codexAppServerDaemon.ts
 var IDLE_EXIT_MS2 = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
 var POLL_INTERVAL_MS3 = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
-var FENCE_POLL_INTERVAL_MS2 = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
-var NO_EVENT_TIMEOUT_MS = 5 * 60 * 1e3;
 var paths = resolveDaemonPaths();
 var supervisor2 = new DaemonSupervisor();
 var activeTurnStartedAt = 0;
@@ -8413,15 +8444,6 @@ function stringField(value, field) {
 }
 function nestedId(value, field) {
   return stringField(asJsonObject(value)[field], "id");
-}
-function entityArgs(fields) {
-  return buildEntityMutationArgs(ENTITY_ID_FIELD, ENTITY_ID, fields);
-}
-function readOwnerPid() {
-  return readPidFromFile(paths.pid);
-}
-function callbackWentStale() {
-  return callbackBundleWentStale(CALLBACK_SCRIPT_FP);
 }
 function resetTurnState2() {
   resetDaemonTurnStreamingState();
@@ -8477,34 +8499,13 @@ async function finalizeTurn2(success, error) {
   const result = finalText || callbackState.currentStreamedContent || callbackState.rawOutput;
   if (await reconcileStreamingAndPersist()) return;
   const usage = computeTurnUsageDelta(turnStartUsage, threadTotalUsage);
-  const completionArgs = {
-    [ENTITY_ID_FIELD ?? "sessionId"]: ENTITY_ID ?? "",
+  const completionArgs = buildTurnCompletionPayload({
     success,
     result,
     error,
     activityLog: serializeFinalSteps(callbackState.accumulatedSteps, result),
-    ...RUN_ID ? { runId: RUN_ID } : {},
-    ...usage ? {
-      rawResultEvent: buildClaudeShapedResult({
-        provider: "codex",
-        totalCostUsd: computeCodexCostUsd(
-          normalizedCodexModel,
-          usage.inputTokens,
-          usage.cachedInputTokens,
-          usage.outputTokens
-        ),
-        durationMs: attemptElapsedMs(),
-        inputTokens: Math.max(
-          0,
-          usage.inputTokens - usage.cachedInputTokens
-        ),
-        outputTokens: usage.outputTokens,
-        cacheReadInputTokens: usage.cachedInputTokens,
-        cacheCreationInputTokens: usage.cacheWriteInputTokens,
-        model: normalizedCodexModel
-      })
-    } : {}
-  };
+    rawResultEvent: usage ? buildCodexResultEvent(usage) : void 0
+  });
   appendClaimedTurnCompletion(completionArgs);
   await deliverCompletionWithMedia(completionArgs);
   finishClaimedTurn();
@@ -8555,9 +8556,6 @@ function processNotification(notification) {
     supervisor2.settleTurn();
   });
 }
-async function refreshGithubToken2() {
-  await refreshDaemonGithubTokenFromEnv();
-}
 async function establishThread(client, sessionMode) {
   if (sessionMode.sessionId) {
     try {
@@ -8590,7 +8588,7 @@ async function startTurn(client, turn) {
   }
   startClaimedTurn(turn);
   await materializeTurnAttachments(turn);
-  const text = SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + turn.prompt : turn.prompt;
+  const text = withSystemPrompt(turn.prompt);
   activeTurnStartedAt = Date.now();
   lastEventAt = activeTurnStartedAt;
   turnStartUsage = threadTotalUsage;
@@ -8617,36 +8615,18 @@ function liveProviderTurnId() {
   if (supervisor2.phase !== "running") return "";
   return supervisor2.currentTurn?.providerTurnId ?? "";
 }
-function cleanMarkers() {
-  cleanOwnedDaemonMarkers({
-    paths,
-    includeLegacySessionPaths: ENTITY_ID_FIELD === "sessionId"
-  });
-}
 async function runCodexAppServerDaemon() {
   if (!CLAIM_MUTATION)
     throw new Error("CLAIM_MUTATION is required for Codex App Server mode");
-  const bootClaim = claimDaemonPidfileBoot({
+  await bootWarmDaemon({
     paths,
-    entityId: ENTITY_ID ?? "",
-    optsSig: DAEMON_OPTS_SIG
-  });
-  if (bootClaim.status === "rival_alive") {
-    log("codex daemon: live rival already owns entity; exiting");
-    process.exit(0);
-  }
-  const fence = setInterval(() => {
-    if (readOwnerPid() !== process.pid && !supervisor2.hasWork) {
+    logPrefix: "codex daemon",
+    hasActiveWork: () => supervisor2.hasWork,
+    onDeposedIdle: () => {
       exitWithError = true;
       supervisor2.stop();
     }
-  }, FENCE_POLL_INTERVAL_MS2);
-  fence.unref?.();
-  const [preflightOk2] = await Promise.all([
-    runPreflightHeartbeat(),
-    refreshGithubToken2()
-  ]);
-  if (!preflightOk2) process.exit(1);
+  });
   startStreamingLoops();
   const client = new CodexAppServerClient();
   try {
@@ -8659,7 +8639,7 @@ async function runCodexAppServerDaemon() {
     emitEvent({ type: "thread.started", thread_id: callbackState.activeCodexThreadId });
     log("codex daemon: app-server ready thread=" + callbackState.activeCodexThreadId);
     while (!supervisor2.isStopping) {
-      if (callbackWentStale()) supervisor2.noticeRefresh();
+      if (callbackScriptWentStale()) supervisor2.noticeRefresh();
       const refreshDecision = supervisor2.decideRefresh({
         watchedTurnActive: supervisor2.currentTurn !== null,
         backgroundAgentCount: 0,
@@ -8684,7 +8664,7 @@ async function runCodexAppServerDaemon() {
         const claimed = await callConvexWithRetry(
           "mutation",
           CLAIM_MUTATION,
-          entityArgs({ model: MODEL, acceptTurn, ...steerArgs })
+          entityMutationArgs({ model: MODEL, acceptTurn, ...steerArgs })
         );
         confirmSteerAcks(steerArgs);
         const providerTurnId = supervisor2.currentTurn?.providerTurnId ?? "";
@@ -8710,22 +8690,13 @@ async function runCodexAppServerDaemon() {
         });
         const claimedTurn = readClaimedTurn(claimed);
         if (claimedTurn) {
-          const currentLease = getCurrentTurnLease();
-          if (shouldParkClaimedTurn({
+          routeClaimedTurn({
+            turn: claimedTurn,
             hasActiveRealTurn: supervisor2.currentTurn !== null,
             isCancellationInFlight: supervisor2.isCancellationInFlight,
-            isFinalizing: false,
-            currentLeaseTurnId: currentLease?.turnId ?? null,
-            claimedLeaseTurnId: claimedTurn.turnLease?.turnId ?? null
-          })) {
-            if (!supervisor2.parkClaim(claimedTurn)) {
-              log("codex daemon: duplicate claimed turn ignored");
-            }
-          } else {
-            log(
-              "codex daemon: claim discarded while real turn active (prompt lost; pendingTurn was already cleared)"
-            );
-          }
+            park: () => supervisor2.parkClaim(claimedTurn),
+            logPrefix: "codex daemon"
+          });
         }
       }
       if (supervisor2.currentTurn === null && supervisor2.pendingClaim !== null) {
@@ -8734,11 +8705,14 @@ async function runCodexAppServerDaemon() {
         await startTurn(client, next);
       }
       const now = Date.now();
+      if (callbackState.inFlightToolUses > 0) {
+        lastEventAt = now;
+      }
       if (supervisor2.currentTurn !== null && now - activeTurnStartedAt > MAX_TOTAL_RUNTIME_MS) {
         await failActiveTurn(
-          "The assistant exceeded the maximum turn runtime."
+          TURN_MAX_RUNTIME_ERROR
         );
-      } else if (supervisor2.currentTurn !== null && now - lastEventAt > NO_EVENT_TIMEOUT_MS) {
+      } else if (supervisor2.currentTurn !== null && now - lastEventAt > NO_MESSAGE_TIMEOUT_MS) {
         await failActiveTurn(
           "The assistant stopped responding. Please try again."
         );
@@ -8753,7 +8727,7 @@ async function runCodexAppServerDaemon() {
     await failActiveTurn("Codex App Server failed: " + message);
   } finally {
     client.stop();
-    cleanMarkers();
+    cleanOwnedMarkers(paths);
     await stopStreamingLoops();
   }
   process.exit(exitWithError ? 1 : 0);
@@ -8761,39 +8735,12 @@ async function runCodexAppServerDaemon() {
 
 // callback-src/providers/cursorSdkDaemon.ts
 import { spawn as spawn3 } from "child_process";
-import { readFileSync as readFileSync9, unlinkSync as unlinkSync2, writeFileSync as writeFileSync11 } from "fs";
-
-// callback-src/providers/callbackRefresh.ts
-function decideCallbackRefresh(state) {
-  if (!state.refreshPending) return { action: "poll" };
-  if (state.watchedTurnActive) {
-    return { action: "defer", blocker: "watched-turn" };
-  }
-  if (state.daemonTurnActive) {
-    return { action: "defer", blocker: "daemon-turn" };
-  }
-  if (state.claimedTurnPending) {
-    return { action: "defer", blocker: "claimed-turn" };
-  }
-  if (state.cancellationInFlight) {
-    return { action: "defer", blocker: "cancellation" };
-  }
-  if (state.backgroundAgentCount > 0) {
-    return { action: "defer", blocker: "background-agent" };
-  }
-  if (state.sdkMessagePending) {
-    return { action: "defer", blocker: "sdk-message" };
-  }
-  if (state.syntheticTurnOpening) {
-    return { action: "defer", blocker: "synthetic-turn-opening" };
-  }
-  return { action: "exit" };
-}
+import { readFileSync as readFileSync10, unlinkSync as unlinkSync2, writeFileSync as writeFileSync11 } from "fs";
 
 // callback-src/providers/cursorSdk.ts
 import {
   mkdirSync as mkdirSync7,
-  readFileSync as readFileSync8,
+  readFileSync as readFileSync9,
   renameSync as renameSync2,
   statSync as statSync4,
   writeFileSync as writeFileSync10
@@ -8938,9 +8885,6 @@ function preloadCursorSdk() {
   } catch {
   }
 }
-function readPromptText3() {
-  return readFileSync8("/tmp/design-prompt.txt", "utf8");
-}
 function cursorModelCatalogJson(models) {
   if (models.length === 0) return null;
   const valid = models.every(
@@ -8968,9 +8912,9 @@ function readCachedCursorModelResolution() {
     const ageMs = Date.now() - statSync4(CURSOR_MODEL_RESOLUTION_CACHE_FILE).mtimeMs;
     if (ageMs > CURSOR_MODEL_RESOLUTION_MAX_AGE_MS) return null;
     const cached = JSON.parse(
-      readFileSync8(CURSOR_MODEL_RESOLUTION_CACHE_FILE, "utf8")
+      readFileSync9(CURSOR_MODEL_RESOLUTION_CACHE_FILE, "utf8")
     );
-    if (!cached || typeof cached !== "object" || Array.isArray(cached)) {
+    if (!isJsonObject(cached)) {
       return null;
     }
     const selection = cached.selection;
@@ -8979,7 +8923,7 @@ function readCachedCursorModelResolution() {
     }
     const params = [];
     for (const param of Array.isArray(selection.params) ? selection.params : []) {
-      if (!param || typeof param !== "object" || Array.isArray(param)) continue;
+      if (!isJsonObject(param)) continue;
       if (typeof param.id !== "string" || typeof param.value !== "string") {
         continue;
       }
@@ -9213,12 +9157,10 @@ function readUsageTokens(value) {
   };
 }
 async function runCursorSdkAttempt(sessionMode, overrides = {}) {
-  resetAttemptState();
-  callbackState.activeAttemptStartedAt = Date.now();
-  const startupActivity = cursorAgentStartupActivity(sessionMode);
-  updateThinkingStep(startupActivity.label, startupActivity.detail);
-  log(
-    "runCursorSdkAttempt started (mode=" + sessionMode.mode + ", sessionId=" + (sessionMode.sessionId || "none") + ")"
+  beginSdkAttempt(
+    "runCursorSdkAttempt",
+    sessionMode,
+    () => cursorAgentStartupActivity(sessionMode)
   );
   let attemptOutput = "";
   let lastMessageAt = Date.now();
@@ -9230,16 +9172,11 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
   let attemptErrorMessage = "";
   let lastStreamUsage = null;
   let activeRun = null;
-  let abortedByCaller = false;
   const cancelRun = () => {
     if (!activeRun) return;
     activeRun.cancel().catch(() => {
     });
   };
-  overrides.onAbortHandle?.(() => {
-    abortedByCaller = true;
-    cancelRun();
-  });
   const sdk = await loadCursorSdk();
   const sqlite = await loadCursorSdkSqlite();
   mkdirSync7(CURSOR_SDK_STORE_DIR, { recursive: true });
@@ -9343,8 +9280,9 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
   } else {
     agent = await createFreshAgent();
   }
-  const promptText = overrides.promptText ?? readPromptText3();
-  const combinedPrompt = SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + promptText : promptText;
+  const combinedPrompt = withSystemPrompt(
+    overrides.promptText ?? readTurnPrompt()
+  );
   const healthTimer = setInterval(() => {
     const now = Date.now();
     if (now - callbackState.activeAttemptStartedAt > MAX_TOTAL_RUNTIME_MS) {
@@ -9392,7 +9330,6 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
       onTimeout: () => activeAgent.close()
     });
     activeRun = run;
-    if (abortedByCaller) cancelRun();
     updateThinkingStep("Waiting for Grok...", "The model is thinking...");
     const messages = run.stream()[Symbol.asyncIterator]();
     let sawVisibleActivity = false;
@@ -9429,8 +9366,7 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
       if (message.type === "usage") {
         lastStreamUsage = readUsageTokens(message.usage) ?? lastStreamUsage;
       }
-      if (timedOutForMaxRuntime || timedOutForNoOutput || abortedByCaller)
-        break;
+      if (timedOutForMaxRuntime || timedOutForNoOutput) break;
     }
     const result = await waitForCursorPhase({
       task: run.wait(),
@@ -9474,7 +9410,7 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
     emitTurnResult(
       await runTurnWithResourceExhaustedRetries({
         runTurn: () => runTurn(activeAgent, agentIsFresh),
-        aborted: () => timedOutForMaxRuntime || timedOutForNoOutput || abortedByCaller,
+        aborted: () => timedOutForMaxRuntime || timedOutForNoOutput,
         onRetry: (retryDelayMs, attempt) => {
           log(
             "runCursorSdkAttempt: resource_exhausted \\u2014 retrying in " + retryDelayMs + "ms (attempt " + (attempt + 1) + " of " + (RESOURCE_EXHAUSTED_RETRY_DELAYS_MS.length + 1) + ")"
@@ -9572,15 +9508,15 @@ async function runCursorSdkAttempt(sessionMode, overrides = {}) {
     } catch {
     }
   }
-  const code = sawResult && !resultIsError && !timedOutForMaxRuntime && !timedOutForNoOutput ? 0 : 1;
-  log(
-    "runCursorSdkAttempt finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawResult=" + sawResult + ", resultIsError=" + resultIsError + ", timedOutForNoOutput=" + timedOutForNoOutput + ", timedOutForMaxRuntime=" + timedOutForMaxRuntime + ", outputBytes=" + attemptOutput.length + (attemptErrorMessage ? ", runError=" + attemptErrorMessage : "") + ")"
-  );
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
+  return finishSdkAttempt({
+    name: "runCursorSdkAttempt",
+    sawResult,
+    resultIsError,
     timedOutForNoOutput,
-    timedOutForMaxRuntime
+    timedOutForMaxRuntime,
+    output: attemptOutput,
+    errorLabel: "runError",
+    errorMessage: attemptErrorMessage
   });
 }
 function cursorAgentStartupActivity(sessionMode) {
@@ -9595,7 +9531,6 @@ function cursorAgentStartupActivity(sessionMode) {
 
 // callback-src/providers/cursorSdkDaemon.ts
 var IDLE_EXIT_MS3 = DAEMON_CLAIM_POLL_TIMING.idleExitMs;
-var FENCE_POLL_INTERVAL_MS3 = DAEMON_CLAIM_POLL_TIMING.fencePollIntervalMs;
 var PROMPT_POLL_INTERVAL_MS2 = DAEMON_CLAIM_POLL_TIMING.fastPollIntervalMs;
 var WATCHDOG_TICK_MS2 = 5e3;
 var TURN_HARD_TIMEOUT_MS = MAX_TOTAL_RUNTIME_MS + 5 * 60 * 1e3;
@@ -9604,14 +9539,10 @@ var CURSOR_TURN_WORKER_FILE_PREFIX = "/tmp/eva-cursor-turn-";
 var CURSOR_TURN_WORKER_HEAP_MB = 8192;
 var CURSOR_TURN_WORKER_OOM_SCORE = "300";
 var daemonPaths2 = resolveDaemonPaths();
-var daemonExiting = false;
-var callbackRefreshPending = false;
+var supervisor3 = new DaemonSupervisor();
 var callbackRefreshDeferralLogged2 = false;
-var pendingClaimedTurn = null;
-var turnActive2 = false;
 var turnStartedAtMs2 = 0;
 var lastIdleActivityAtMs2 = Date.now();
-var cancelInFlight = false;
 var cancelRequestedAtMs = 0;
 var abortActiveTurn = null;
 function cursorTurnWorkerEntryPath() {
@@ -9627,7 +9558,7 @@ function readCursorTurnWorkerClaim() {
   if (!CURSOR_TURN_WORKER_PROMPT_FILE) {
     throw new Error("Cursor turn worker prompt file is missing");
   }
-  const prompt = readFileSync9(CURSOR_TURN_WORKER_PROMPT_FILE, "utf8");
+  const prompt = readFileSync10(CURSOR_TURN_WORKER_PROMPT_FILE, "utf8");
   if (!CURSOR_TURN_WORKER_TURN_ID || CURSOR_TURN_WORKER_LEASE_GENERATION <= 0) {
     throw new Error("Cursor turn worker received an invalid durable lease");
   }
@@ -9695,20 +9626,8 @@ function spawnCursorTurnWorker(turn, promptFile) {
   }
   return child;
 }
-function readDaemonPidFile2() {
-  return readPidFromFile(daemonPaths2.pid);
-}
-function entityMutationArgs2(fields) {
-  return buildEntityMutationArgs(ENTITY_ID_FIELD, ENTITY_ID, fields);
-}
-function callbackScriptWentStaleOnDisk2() {
-  return callbackBundleWentStale(CALLBACK_SCRIPT_FP);
-}
 function resetTurnState3() {
   resetDaemonTurnStreamingState();
-}
-async function refreshGithubToken3() {
-  await refreshDaemonGithubTokenFromEnv();
 }
 function buildTurnCompletion(attempt) {
   return resolveProviderAttemptOutcome(
@@ -9743,49 +9662,38 @@ async function failTurnAndExit2(error) {
     await postClaimedTurnFailureCompletion({ error, activityLog: null });
   } catch {
   }
-  cleanOwnedMarkers2();
+  cleanOwnedMarkers(daemonPaths2);
   await stopStreamingLoops();
   process.exit(1);
-}
-function cleanOwnedMarkers2() {
-  cleanOwnedDaemonMarkers({
-    paths: daemonPaths2,
-    includeLegacySessionPaths: ENTITY_ID_FIELD === "sessionId"
-  });
 }
 function startTurnWatchdog2() {
   const timer = setInterval(() => {
     const now = Date.now();
-    if (cancelInFlight) {
+    if (supervisor3.isCancellationInFlight) {
       if (now - cancelRequestedAtMs > CANCEL_SETTLE_TIMEOUT_MS2) {
         log("cursor daemon: cancelled turn did not settle in time \\u2014 exiting");
-        cleanOwnedMarkers2();
+        cleanOwnedMarkers(daemonPaths2);
         process.exit(1);
       }
       return;
     }
-    if (!turnActive2) return;
+    if (supervisor3.phase !== "running") return;
     if (now - turnStartedAtMs2 > TURN_HARD_TIMEOUT_MS) {
-      turnActive2 = false;
+      supervisor3.beginFinalizing();
       abortActiveTurn?.();
-      void failTurnAndExit2("The assistant exceeded the maximum turn runtime.");
+      void failTurnAndExit2(TURN_MAX_RUNTIME_ERROR);
     }
   }, WATCHDOG_TICK_MS2);
   timer.unref?.();
 }
 function startClaimWatcher2() {
   void (async () => {
-    while (!daemonExiting) {
-      if (callbackScriptWentStaleOnDisk2()) callbackRefreshPending = true;
-      const refreshDecision = decideCallbackRefresh({
-        refreshPending: callbackRefreshPending,
-        watchedTurnActive: turnActive2,
-        daemonTurnActive: false,
-        claimedTurnPending: pendingClaimedTurn !== null,
-        cancellationInFlight: cancelInFlight,
+    while (!supervisor3.isStopping) {
+      if (callbackScriptWentStale()) supervisor3.noticeRefresh();
+      const refreshDecision = supervisor3.decideRefresh({
+        watchedTurnActive: supervisor3.currentTurn !== null,
         backgroundAgentCount: 0,
-        sdkMessagePending: false,
-        syntheticTurnOpening: false
+        sdkMessagePending: false
       });
       if (refreshDecision.action === "defer") {
         if (!callbackRefreshDeferralLogged2) {
@@ -9801,16 +9709,16 @@ function startClaimWatcher2() {
         log(
           "cursor daemon: callback script updated on disk \\u2014 exiting for respawn"
         );
-        daemonExiting = true;
+        supervisor3.stop();
         return;
       }
       try {
         const claimed = await callConvexWithRetry(
           "mutation",
           CLAIM_MUTATION ?? "",
-          entityMutationArgs2({
+          entityMutationArgs({
             model: MODEL,
-            acceptTurn: !turnActive2 && pendingClaimedTurn === null && !cancelInFlight
+            acceptTurn: supervisor3.phase === "idle" && supervisor3.pendingClaim === null
           })
         );
         if (readCancelRequested(claimed)) handleCancelRequested2();
@@ -9818,31 +9726,19 @@ function startClaimWatcher2() {
         if (turn !== null) {
           await materializeTurnAttachments(turn);
           lastIdleActivityAtMs2 = Date.now();
-          const currentLease = getCurrentTurnLease();
-          if (shouldParkClaimedTurn({
-            hasActiveRealTurn: turnActive2,
-            isCancellationInFlight: cancelInFlight,
-            isFinalizing: false,
-            currentLeaseTurnId: currentLease?.turnId ?? null,
-            claimedLeaseTurnId: turn.turnLease?.turnId ?? null
-          })) {
-            if (pendingClaimedTurn === null) {
-              pendingClaimedTurn = turn;
-            } else {
-              log("cursor daemon: duplicate claimed turn ignored");
-            }
-          } else {
-            log(
-              "cursor daemon: claim discarded while real turn active (prompt lost; pendingTurn was already cleared)"
-            );
-          }
+          routeClaimedTurn({
+            turn,
+            hasActiveRealTurn: supervisor3.currentTurn !== null,
+            isCancellationInFlight: supervisor3.isCancellationInFlight,
+            park: () => supervisor3.parkClaim(turn),
+            logPrefix: "cursor daemon"
+          });
         }
       } catch {
       }
-      const busy = turnActive2 || pendingClaimedTurn !== null || cancelInFlight;
       await sleep(
         selectClaimPollIntervalMs({
-          busy,
+          busy: supervisor3.hasWork,
           lastIdleActivityAtMs: lastIdleActivityAtMs2
         })
       );
@@ -9850,20 +9746,16 @@ function startClaimWatcher2() {
   })();
 }
 function handleCancelRequested2() {
-  if (!turnActive2) {
+  if (supervisor3.currentTurn === null) {
     log("cursor daemon: cancelRequested with no active turn \\u2014 ignored");
     return;
   }
-  if (cancelInFlight) return;
-  cancelInFlight = true;
+  if (!supervisor3.beginCancellation()) return;
   cancelRequestedAtMs = Date.now();
   log("cursor daemon: cancel requested \\u2014 cancelling the in-flight run");
   abortActiveTurn?.();
 }
 async function executeClaimedTurn(turn) {
-  turnActive2 = true;
-  turnStartedAtMs2 = Date.now();
-  abortActiveTurn = null;
   log("cursor turn worker: turn started");
   try {
     if (!process.env.CURSOR_API_KEY?.trim()) {
@@ -9873,23 +9765,12 @@ async function executeClaimedTurn(turn) {
     }
     const sessionMode = prepareCursorSessionState();
     const attempt = await runCursorSdkAttempt(sessionMode, {
-      promptText: turn.prompt,
-      onAbortHandle: (abort) => {
-        abortActiveTurn = abort;
-        if (cancelInFlight) abort();
-      }
+      promptText: turn.prompt
     });
-    turnActive2 = false;
-    if (cancelInFlight) {
-      log("cursor daemon: cancelled turn settled \\u2014 no completion posted");
-      return;
-    }
     await finalizeTurn3(attempt);
   } catch (error) {
-    turnActive2 = false;
     const message = error instanceof Error ? error.message : String(error);
     log("cursor daemon: turn failed \\u2014 " + message);
-    if (cancelInFlight) return;
     try {
       await drainStreamingAndCompleteSteps();
       if (await reconcileStreamingAndPersist()) return;
@@ -9903,11 +9784,6 @@ async function executeClaimedTurn(turn) {
       await deliverCompletionWithMedia(completionArgs);
     } catch {
     }
-  } finally {
-    turnActive2 = false;
-    abortActiveTurn = null;
-    cancelInFlight = false;
-    lastIdleActivityAtMs2 = Date.now();
   }
 }
 async function runCursorTurnWorker() {
@@ -9918,7 +9794,7 @@ async function runCursorTurnWorker() {
     preloadCursorSdk();
     const [preflightOk2] = await Promise.all([
       runPreflightHeartbeat(),
-      refreshGithubToken3()
+      refreshDaemonGithubTokenFromEnv()
     ]);
     if (!preflightOk2) {
       throw new Error("Cursor turn worker preflight failed");
@@ -9938,12 +9814,14 @@ async function reportCursorTurnWorkerFailure(outcome) {
 }
 async function runClaimedTurn(turn) {
   const promptFile = CURSOR_TURN_WORKER_FILE_PREFIX + String(process.pid) + "-" + String(Date.now()) + ".txt";
-  writeFileSync11(promptFile, turn.prompt);
-  startClaimedTurn(turn);
-  turnActive2 = true;
+  if (!supervisor3.startTurn({ kind: "worker" })) {
+    throw new Error("cursor daemon: could not enter running state");
+  }
   turnStartedAtMs2 = Date.now();
   log("cursor daemon: starting isolated turn worker");
   try {
+    writeFileSync11(promptFile, turn.prompt);
+    startClaimedTurn(turn);
     const child = spawnCursorTurnWorker(turn, promptFile);
     abortActiveTurn = () => {
       if (child.exitCode === null && child.signalCode === null) {
@@ -9951,11 +9829,11 @@ async function runClaimedTurn(turn) {
       }
     };
     const outcome = await waitForCursorTurnWorker(child);
-    turnActive2 = false;
-    if (cancelInFlight) {
+    if (supervisor3.isCancellationInFlight) {
       log("cursor daemon: cancelled worker settled \\u2014 no completion posted");
       return;
     }
+    supervisor3.beginFinalizing();
     if (outcome.status === "exited" && outcome.code === 0 && outcome.signal === null) {
       log("cursor daemon: isolated turn worker finished");
       return;
@@ -9968,10 +9846,9 @@ async function runClaimedTurn(turn) {
       );
     }
   } finally {
-    turnActive2 = false;
     abortActiveTurn = null;
-    cancelInFlight = false;
     finishClaimedTurn();
+    supervisor3.settleTurn();
     lastIdleActivityAtMs2 = Date.now();
     try {
       unlinkSync2(promptFile);
@@ -9984,43 +9861,23 @@ async function runCursorDaemon() {
     log("cursor daemon: CLAIM_MUTATION env is required in daemon mode");
     process.exit(1);
   }
-  const bootClaim = claimDaemonPidfileBoot({
+  await bootWarmDaemon({
     paths: daemonPaths2,
-    entityId: ENTITY_ID ?? "",
-    optsSig: DAEMON_OPTS_SIG
-  });
-  if (bootClaim.status === "rival_alive") {
-    log(
-      \`cursor daemon: rival daemon pid=\${bootClaim.rivalPid} already owns \${daemonPaths2.pid} \\u2014 exiting\`
-    );
-    process.exit(0);
-  }
-  startDaemonDepositionFence({
-    readOwnerPid: readDaemonPidFile2,
-    hasActiveWork: () => turnActive2,
-    pollIntervalMs: FENCE_POLL_INTERVAL_MS3,
-    log,
     logPrefix: "cursor daemon",
+    hasActiveWork: () => supervisor3.hasWork,
     onDeposedIdle: () => {
       process.exit(0);
     }
   });
-  const preflightOk2 = await runPreflightHeartbeat();
-  if (!preflightOk2) {
-    log("cursor daemon: preflight failed");
-    process.exit(1);
-  }
-  await refreshGithubToken3();
   log(
     "runCursorDaemon started (entityId=" + (ENTITY_ID ?? "none") + ", model=" + MODEL + ")"
   );
   startTurnWatchdog2();
   startClaimWatcher2();
   try {
-    while (!daemonExiting) {
-      if (pendingClaimedTurn !== null) {
-        const turn = pendingClaimedTurn;
-        pendingClaimedTurn = null;
+    while (!supervisor3.isStopping) {
+      const turn = supervisor3.takeClaim();
+      if (turn !== null) {
         await runClaimedTurn(turn);
         continue;
       }
@@ -10031,18 +9888,18 @@ async function runCursorDaemon() {
       await sleep(PROMPT_POLL_INTERVAL_MS2);
     }
   } finally {
-    daemonExiting = true;
-    cleanOwnedMarkers2();
+    supervisor3.stop();
+    cleanOwnedMarkers(daemonPaths2);
   }
   process.exit(0);
 }
 
 // callback-src/runtime/systemSkills.ts
 import {
-  existsSync as existsSync7,
+  existsSync as existsSync8,
   mkdirSync as mkdirSync8,
   readdirSync as readdirSync4,
-  readFileSync as readFileSync10,
+  readFileSync as readFileSync11,
   rmSync,
   writeFileSync as writeFileSync12
 } from "fs";
@@ -10051,16 +9908,15 @@ var SYSTEM_SKILL_MARKER = "<!-- eva:system-skill -->";
 var EXCLUDE_BEGIN = "# >>> eva-system-skills >>>";
 var EXCLUDE_END = "# <<< eva-system-skills <<<";
 var SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}\$/;
+var SKILL_ROOTS = [".agents/skills", ".claude/skills"];
 function parseSystemSkillsFile(raw) {
-  const parsed = tryParseJson(raw);
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return null;
-  }
+  const parsed = tryParseJsonObject(raw);
+  if (!parsed) return null;
   const skills = parsed.skills;
   if (!Array.isArray(skills)) return null;
   const result = [];
   for (const entry of skills) {
-    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+    if (!isJsonObject(entry)) {
       continue;
     }
     const name = entry.name;
@@ -10092,103 +9948,110 @@ function renderExcludeContent(existing, names) {
   if (names.length === 0) return preserved;
   const block = [
     EXCLUDE_BEGIN,
-    ...names.map((name) => \`/.agents/skills/\${name}/\`),
+    ...names.flatMap((name) => SKILL_ROOTS.map((root) => \`/\${root}/\${name}/\`)),
     EXCLUDE_END,
     ""
   ].join("\\n");
   return \`\${preserved}\${block}\`;
 }
-function skillsRoot() {
-  return \`\${WORK_DIR}/.agents/skills\`;
+function skillsRoots() {
+  return SKILL_ROOTS.map((root) => \`\${WORK_DIR}/\${root}\`);
 }
-function isEvaStub(directoryName) {
-  const skillFile = \`\${skillsRoot()}/\${directoryName}/SKILL.md\`;
-  if (!existsSync7(skillFile)) return false;
+function isEvaStub(directory) {
+  const skillFile = \`\${directory}/SKILL.md\`;
+  if (!existsSync8(skillFile)) return false;
   try {
-    return readFileSync10(skillFile, "utf8").includes(SYSTEM_SKILL_MARKER);
+    return readFileSync11(skillFile, "utf8").includes(SYSTEM_SKILL_MARKER);
   } catch {
     return false;
   }
 }
 function writeStub(skill) {
-  const directory = \`\${skillsRoot()}/\${skill.name}\`;
-  if (existsSync7(\`\${directory}/SKILL.md\`) && !isEvaStub(skill.name)) {
+  const directories = skillsRoots().map((root) => \`\${root}/\${skill.name}\`);
+  const userOwned = directories.some(
+    (directory) => existsSync8(\`\${directory}/SKILL.md\`) && !isEvaStub(directory)
+  );
+  if (userOwned) {
     log(\`[system-skills] \${skill.name} exists in the repo \\u2014 leaving it alone\`);
     return false;
   }
-  mkdirSync8(directory, { recursive: true });
-  writeFileSync12(\`\${directory}/SKILL.md\`, skill.stub);
+  for (const directory of directories) {
+    mkdirSync8(directory, { recursive: true });
+    writeFileSync12(\`\${directory}/SKILL.md\`, skill.stub);
+  }
   return true;
 }
 function pruneStaleStubs(keep) {
-  const root = skillsRoot();
-  if (!existsSync7(root)) return;
-  for (const entry of readdirSync4(root, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    if (keep.has(entry.name)) continue;
-    if (!isEvaStub(entry.name)) continue;
-    try {
-      rmSync(\`\${root}/\${entry.name}\`, { recursive: true, force: true });
-      log(\`[system-skills] pruned \${entry.name}\`);
-    } catch (err) {
-      log(\`[system-skills] prune failed for \${entry.name}: \${String(err)}\`);
+  for (const root of skillsRoots()) {
+    if (!existsSync8(root)) continue;
+    for (const entry of readdirSync4(root, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      if (keep.has(entry.name)) continue;
+      const directory = \`\${root}/\${entry.name}\`;
+      if (!isEvaStub(directory)) continue;
+      try {
+        rmSync(directory, { recursive: true, force: true });
+        log(\`[system-skills] pruned \${directory}\`);
+      } catch (err) {
+        log(\`[system-skills] prune failed for \${directory}: \${String(err)}\`);
+      }
     }
   }
 }
 function updateGitExclude(names) {
   const gitDir = \`\${WORK_DIR}/.git\`;
-  if (!existsSync7(gitDir)) return;
+  if (!existsSync8(gitDir)) return;
   const infoDir = \`\${gitDir}/info\`;
   const excludeFile = \`\${infoDir}/exclude\`;
-  const existing = existsSync7(excludeFile) ? readFileSync10(excludeFile, "utf8") : "";
+  const existing = existsSync8(excludeFile) ? readFileSync11(excludeFile, "utf8") : "";
   const next = renderExcludeContent(existing, names);
   if (next === existing) return;
   mkdirSync8(infoDir, { recursive: true });
   writeFileSync12(excludeFile, next);
 }
+function reconcileSystemSkills(skills) {
+  const written = [];
+  for (const skill of skills) {
+    try {
+      if (writeStub(skill)) written.push(skill.name);
+    } catch (err) {
+      log(\`[system-skills] write failed for \${skill.name}: \${String(err)}\`);
+    }
+  }
+  pruneStaleStubs(new Set(written));
+  updateGitExclude(written);
+  log(
+    \`[system-skills] materialized \${written.length}/\${skills.length}\` + (written.length > 0 ? \` (\${written.join(", ")})\` : "")
+  );
+}
 function materializeSystemSkills() {
   try {
-    if (!existsSync7(SYSTEM_SKILLS_STATE_FILE)) return;
-    if (!existsSync7(WORK_DIR)) {
+    if (!existsSync8(SYSTEM_SKILLS_STATE_FILE)) return;
+    if (!existsSync8(WORK_DIR)) {
       log("[system-skills] no checkout yet \\u2014 skipping");
       return;
     }
     const skills = parseSystemSkillsFile(
-      readFileSync10(SYSTEM_SKILLS_STATE_FILE, "utf8")
+      readFileSync11(SYSTEM_SKILLS_STATE_FILE, "utf8")
     );
     if (skills === null) {
       log("[system-skills] state file unreadable \\u2014 skipping");
       return;
     }
-    const written = [];
-    for (const skill of skills) {
-      try {
-        if (writeStub(skill)) written.push(skill.name);
-      } catch (err) {
-        log(\`[system-skills] write failed for \${skill.name}: \${String(err)}\`);
-      }
-    }
-    pruneStaleStubs(new Set(written));
-    updateGitExclude(written);
-    log(
-      \`[system-skills] materialized \${written.length}/\${skills.length}\` + (written.length > 0 ? \` (\${written.join(", ")})\` : "")
-    );
+    reconcileSystemSkills(skills);
   } catch (err) {
     log(\`[system-skills] materialize failed: \${String(err)}\`);
   }
 }
 
-// callback-src/providers/opencodeSdk.ts
-import { readFileSync as readFileSync12 } from "fs";
-
 // callback-src/providers/opencodeServer.ts
 import { spawn as spawn4 } from "child_process";
 import {
   closeSync,
-  existsSync as existsSync8,
+  existsSync as existsSync9,
   mkdirSync as mkdirSync9,
   openSync,
-  readFileSync as readFileSync11,
+  readFileSync as readFileSync12,
   rmSync as rmSync2,
   statSync as statSync5,
   writeFileSync as writeFileSync13
@@ -10205,7 +10068,7 @@ var LOG_TAIL_BYTES = 4e3;
 var opencodeServerBaseUrl = "http://127.0.0.1:" + String(OPENCODE_SERVER_PORT);
 function readOpencodeServerLogTail(maxBytes = LOG_TAIL_BYTES) {
   try {
-    const contents = readFileSync11(SERVER_LOG_FILE, "utf8");
+    const contents = readFileSync12(SERVER_LOG_FILE, "utf8");
     return contents.length > maxBytes ? contents.slice(-maxBytes) : contents;
   } catch {
     return "";
@@ -10223,10 +10086,8 @@ async function probeHealth(timeoutMs = HEALTH_PROBE_TIMEOUT_MS) {
 }
 function readRecordedPid() {
   try {
-    const parsed = tryParseJson(readFileSync11(SERVER_STATE_FILE, "utf8"));
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return 0;
-    }
+    const parsed = tryParseJsonObject(readFileSync12(SERVER_STATE_FILE, "utf8"));
+    if (!parsed) return 0;
     return typeof parsed.pid === "number" && parsed.pid > 0 ? parsed.pid : 0;
   } catch {
     return 0;
@@ -10237,7 +10098,7 @@ function killRecordedServer() {
   if (!pid) return;
   let cmdline = "";
   try {
-    cmdline = readFileSync11("/proc/" + String(pid) + "/cmdline", "utf8");
+    cmdline = readFileSync12("/proc/" + String(pid) + "/cmdline", "utf8");
   } catch {
     return;
   }
@@ -10332,7 +10193,7 @@ async function ensureOpencodeServer() {
       if (await probeHealth(STARTUP_PROBE_TIMEOUT_MS)) {
         return opencodeServerBaseUrl;
       }
-      if (!existsSync8(SERVER_LOCK_DIR)) break;
+      if (!existsSync9(SERVER_LOCK_DIR)) break;
     }
     if (await probeHealth()) return opencodeServerBaseUrl;
     releaseStartupLock();
@@ -10371,9 +10232,6 @@ async function loadOpencodeSdk() {
     entryRelPath: SDK_ENTRY_RELPATH2
   }));
   return mod;
-}
-function readPromptText4() {
-  return readFileSync12("/tmp/design-prompt.txt", "utf8");
 }
 function splitOpencodeModel(raw) {
   const separator = raw.indexOf("/");
@@ -10470,7 +10328,12 @@ async function ensureEvaMcpServers(client, servers = evaMcpServers) {
         const added = await client.mcp.add({
           body: {
             name,
-            config: {
+            config: server.type === "stdio" ? {
+              type: "local",
+              command: [server.command, ...server.args],
+              environment: server.env,
+              enabled: true
+            } : {
               type: "remote",
               url: server.url,
               headers: server.headers,
@@ -10496,15 +10359,10 @@ function requireData(result, what) {
   return result.data;
 }
 async function runOpencodeSdkAttempt(sessionMode) {
-  resetAttemptState();
-  callbackState.activeAttemptStartedAt = Date.now();
-  updateThinkingStep(
-    "Starting Opencode agent...",
-    sessionMode.mode === "resume" ? "Restoring saved context..." : "Creating Opencode session..."
-  );
-  log(
-    "runOpencodeSdkAttempt started (mode=" + sessionMode.mode + ", sessionId=" + (sessionMode.sessionId || "none") + ")"
-  );
+  beginSdkAttempt("runOpencodeSdkAttempt", sessionMode, () => ({
+    label: "Starting Opencode agent...",
+    detail: sessionMode.mode === "resume" ? "Restoring saved context..." : "Creating Opencode session..."
+  }));
   let attemptOutput = "";
   let lastEventAt2 = Date.now();
   let watchdogClock = Date.now();
@@ -10562,8 +10420,7 @@ async function runOpencodeSdkAttempt(sessionMode) {
   } else {
     sessionId = await createFreshSession();
   }
-  const promptText = readPromptText4();
-  const combinedPrompt = SYSTEM_PROMPT ? SYSTEM_PROMPT + "\\n\\n" + promptText : promptText;
+  const combinedPrompt = withSystemPrompt(readTurnPrompt());
   const model = splitOpencodeModel(normalizedOpencodeModel);
   const emitState = createPartEmitState();
   const streamAbort = new AbortController();
@@ -10743,15 +10600,15 @@ async function runOpencodeSdkAttempt(sessionMode) {
     markTerminal();
     streamAbort.abort();
   }
-  const code = sawResult && !resultIsError && !timedOutForMaxRuntime && !timedOutForNoOutput ? 0 : 1;
-  log(
-    "runOpencodeSdkAttempt finished in " + String(Date.now() - callbackState.activeAttemptStartedAt) + "ms (code=" + code + ", sawResult=" + sawResult + ", resultIsError=" + resultIsError + ", timedOutForNoOutput=" + timedOutForNoOutput + ", timedOutForMaxRuntime=" + timedOutForMaxRuntime + ", outputBytes=" + attemptOutput.length + (attemptErrorMessage ? ", turnError=" + attemptErrorMessage : "") + ")"
-  );
-  return buildStandardSdkAttemptResult({
-    code,
-    output: attemptOutput,
+  return finishSdkAttempt({
+    name: "runOpencodeSdkAttempt",
+    sawResult,
+    resultIsError,
     timedOutForNoOutput,
-    timedOutForMaxRuntime
+    timedOutForMaxRuntime,
+    output: attemptOutput,
+    errorLabel: "turnError",
+    errorMessage: attemptErrorMessage
   });
 }
 
@@ -10859,7 +10716,7 @@ await ensureGithubToken({
   repoId: REPO_ID
 });
 log(
-  "entityId=" + ENTITY_ID + " provider=" + PROVIDER + " model=" + MODEL + " tools=" + ALLOWED_TOOLS + " sessionId=" + (process.env.CLAUDE_SESSION_ID || "none") + " mcp=" + (hasMcpConfig ? "yes" : "no")
+  "entityId=" + ENTITY_ID + " provider=" + PROVIDER + " model=" + MODEL + " tools=" + ALLOWED_TOOLS + " sessionId=" + (process.env.CLAUDE_SESSION_ID || "none") + " mcp=" + (hasEvaMcpConfig ? "yes" : "no")
 );
 try {
   beginTurnCheckpoint();
@@ -10982,9 +10839,8 @@ try {
   };
   if (RUN_ID) errorArgs.runId = RUN_ID;
   appendCurrentTurnLease(errorArgs);
-  appendTurnCheckpoint(errorArgs);
   try {
-    await callConvexWithRetry("mutation", COMPLETION_MUTATION ?? "", errorArgs);
+    await sendTurnCompletion(COMPLETION_MUTATION ?? "", errorArgs);
   } catch {
   }
   process.exit(1);

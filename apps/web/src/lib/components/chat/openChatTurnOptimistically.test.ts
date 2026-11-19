@@ -10,7 +10,7 @@ import { openChatTurnOptimistically } from "./useChatTurnOpen";
  * second send in that window queues instead of starting another turn.
  */
 
-const CHAT_ID = z.custom<Id<"agentTasks">>().parse("task_1");
+const CHAT_ID = z.custom<Id<"sessionChats">>().parse("chat_1");
 
 type ChatStatus = FunctionReturnType<typeof api.turns.getChatStatus> | undefined;
 

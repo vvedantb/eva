@@ -15,6 +15,7 @@ import { api } from "@eva/backend";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { RepoSectionBreadcrumb } from "@/lib/components/RepoSectionBreadcrumb";
 import { AgentStopButton } from "@/lib/components/sandbox/AgentsPanel";
+import type { RequestAgentStop } from "@/lib/components/chat/useStopBackgroundAgent";
 import {
   subagentTone,
   type SubagentView,
@@ -80,7 +81,7 @@ export function SubagentThreadView({
   /** The running turn's streaming payload, when it holds this subagent. */
   liveActivity: string | undefined;
   canStop: boolean;
-  onRequestStop: (toolUseId: string) => Promise<void>;
+  onRequestStop: RequestAgentStop;
   onClose: () => void;
   onOpenFile?: (path: string) => void;
 }) {
@@ -118,6 +119,7 @@ export function SubagentThreadView({
         {canStop ? (
           <AgentStopButton
             toolUseId={agent.toolUseId}
+            title={agent.title}
             onRequestStop={onRequestStop}
           />
         ) : null}

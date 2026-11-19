@@ -16,6 +16,7 @@ describe("message media targeting", () => {
         installationId: 1,
       });
       const sessionId = await ctx.db.insert("sessions", {
+        owner: { kind: "standalone" },
         repoId,
         userId,
         title: "Media target test",
@@ -68,12 +69,14 @@ describe("message media targeting", () => {
         installationId: 1,
       });
       const firstSessionId = await ctx.db.insert("sessions", {
+        owner: { kind: "standalone" },
         repoId,
         userId,
         title: "First parent",
         status: "active",
       });
       const secondSessionId = await ctx.db.insert("sessions", {
+        owner: { kind: "standalone" },
         repoId,
         userId,
         title: "Second parent",

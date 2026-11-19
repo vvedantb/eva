@@ -1,14 +1,13 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
 import {
   appendClaimedTurnCompletion,
   claimedTurnLifecycleStatus,
   finishClaimedTurn,
   readClaimedTurn,
+  routeClaimedTurn,
   shouldParkClaimedTurn,
   startClaimedTurn,
+  type ClaimedTurn,
 } from "../providers/claimedTurnLifecycle.js";
 import {
   canSendTurnHeartbeat,
@@ -223,12 +222,11 @@ describe("canSendTurnHeartbeat follows claim ownership", () => {
 });
 
 describe("shouldParkClaimedTurn", () => {
-  test("parks idle, cancel, and finalizing claims", () => {
+  test("parks idle and cancel claims", () => {
     expect(
       shouldParkClaimedTurn({
         hasActiveRealTurn: false,
         isCancellationInFlight: false,
-        isFinalizing: false,
         currentLeaseTurnId: null,
         claimedLeaseTurnId: "turn-2",
       }),
@@ -237,17 +235,7 @@ describe("shouldParkClaimedTurn", () => {
       shouldParkClaimedTurn({
         hasActiveRealTurn: true,
         isCancellationInFlight: true,
-        isFinalizing: false,
         currentLeaseTurnId: "turn-1",
-        claimedLeaseTurnId: "turn-2",
-      }),
-    ).toBe(true);
-    expect(
-      shouldParkClaimedTurn({
-        hasActiveRealTurn: true,
-        isCancellationInFlight: false,
-        isFinalizing: true,
-        currentLeaseTurnId: null,
         claimedLeaseTurnId: "turn-2",
       }),
     ).toBe(true);
@@ -258,7 +246,6 @@ describe("shouldParkClaimedTurn", () => {
       shouldParkClaimedTurn({
         hasActiveRealTurn: true,
         isCancellationInFlight: false,
-        isFinalizing: false,
         currentLeaseTurnId: "turn-1",
         claimedLeaseTurnId: "turn-1",
       }),
@@ -267,7 +254,6 @@ describe("shouldParkClaimedTurn", () => {
       shouldParkClaimedTurn({
         hasActiveRealTurn: true,
         isCancellationInFlight: false,
-        isFinalizing: false,
         currentLeaseTurnId: "turn-1",
         claimedLeaseTurnId: "turn-2",
       }),
@@ -275,29 +261,75 @@ describe("shouldParkClaimedTurn", () => {
   });
 });
 
-describe("persistent providers obey the same lifecycle contract", () => {
-  const providerPaths = [
-    "providers/claudeSdkDaemon.ts",
-    "providers/cursorSdkDaemon.ts",
-    "providers/codexAppServerDaemon.ts",
-  ];
+describe("routeClaimedTurn", () => {
+  const claim = (turnId: string): ClaimedTurn => ({
+    prompt: "Fix it",
+    attachmentUrls: [],
+    interactionMode: "default",
+    turnLease: { turnId, leaseGeneration: 1 },
+  });
+  let parked: ClaimedTurn[] = [];
+  const parkInto = (turn: ClaimedTurn) => (): boolean => {
+    parked.push(turn);
+    return true;
+  };
+  afterEach(() => {
+    parked = [];
+  });
 
-  for (const providerPath of providerPaths) {
-    test(providerPath, () => {
-      const source = readSource(providerPath);
-      expect(source).toContain("readClaimedTurn");
-      expect(source).toContain("startClaimedTurn(turn)");
-      expect(source).toContain("appendClaimedTurnCompletion(completionArgs)");
-      expect(source).toContain("finishClaimedTurn()");
-      expect(source).not.toContain("function readClaimedTurn(");
-      expect(source).not.toContain('beginTurnOwnership("claim"');
-    });
-  }
+  test("parks a claim when no real turn is active", () => {
+    const turn = claim("turn-1");
+    expect(
+      routeClaimedTurn({
+        turn,
+        hasActiveRealTurn: false,
+        isCancellationInFlight: false,
+        park: parkInto(turn),
+        logPrefix: "test daemon",
+      }),
+    ).toBe("parked");
+    expect(parked).toEqual([turn]);
+  });
+
+  test("reports a duplicate when the park slot is taken", () => {
+    expect(
+      routeClaimedTurn({
+        turn: claim("turn-1"),
+        hasActiveRealTurn: false,
+        isCancellationInFlight: false,
+        park: () => false,
+        logPrefix: "test daemon",
+      }),
+    ).toBe("duplicate");
+  });
+
+  test("discards a same-turn restage while that turn runs", () => {
+    startClaimedTurn(claim("turn-1"));
+    const restage = claim("turn-1");
+    expect(
+      routeClaimedTurn({
+        turn: restage,
+        hasActiveRealTurn: true,
+        isCancellationInFlight: false,
+        park: parkInto(restage),
+        logPrefix: "test daemon",
+      }),
+    ).toBe("discarded");
+    expect(parked).toEqual([]);
+  });
+
+  test("parks a follow-up turn while another turn runs", () => {
+    startClaimedTurn(claim("turn-1"));
+    const followUp = claim("turn-2");
+    expect(
+      routeClaimedTurn({
+        turn: followUp,
+        hasActiveRealTurn: true,
+        isCancellationInFlight: false,
+        park: parkInto(followUp),
+        logPrefix: "test daemon",
+      }),
+    ).toBe("parked");
+    expect(parked).toEqual([followUp]);
+  });
 });
-
-function readSource(relativePath: string): string {
-  return readFileSync(
-    join(dirname(fileURLToPath(import.meta.url)), "..", relativePath),
-    "utf8",
-  ).replaceAll("\r\n", "\n");
-}

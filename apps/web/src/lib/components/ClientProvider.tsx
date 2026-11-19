@@ -23,6 +23,7 @@ import {
 } from "@vvedantb/ui";
 import { ThemeProvider } from "../contexts/ThemeContext";
 import { AuthLoadingScreen } from "./AuthLoadingScreen";
+import { MaintenanceGate } from "./MaintenanceScreen";
 import { WelcomeSetupDialog } from "./onboarding/WelcomeSetupDialog";
 import { convex } from "@/lib/convex";
 import { api } from "@eva/backend";
@@ -58,15 +59,27 @@ function PresenceInner({ userId }: { userId: Id<"users"> }) {
   return null;
 }
 
+/**
+ * How long an unused query stays subscribed, and how many may wait. The
+ * library defaults (5 min, 250) kept every full transcript a session switch
+ * left behind live in memory and still receiving updates. 1 min covers a
+ * quick switch back; older sessions reload their tail first.
+ */
+const QUERY_CACHE_EXPIRATION_MS = 60_000;
+const QUERY_CACHE_MAX_IDLE_ENTRIES = 50;
+
 export function ClientProvider({ children }: { children: React.ReactNode }) {
   "use no memo";
   return (
     <ConvexProviderWithClerk client={convex} useAuth={useStableAuth}>
-      <ConvexQueryCacheProvider>
+      <ConvexQueryCacheProvider
+        expiration={QUERY_CACHE_EXPIRATION_MS}
+        maxIdleEntries={QUERY_CACHE_MAX_IDLE_ENTRIES}
+      >
         <EnsureUser />
         <ThemeModeProvider>
           <PageMotionProvider>
-            {children}
+            <MaintenanceGate>{children}</MaintenanceGate>
             <FaviconController />
           </PageMotionProvider>
         </ThemeModeProvider>

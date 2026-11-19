@@ -2,6 +2,7 @@ import { useAction } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { IconCode } from "@tabler/icons-react";
+import { EDITOR_PORT } from "@eva/shared";
 import {
   SandboxIframeService,
   type StartResult,
@@ -50,7 +51,7 @@ export function EditorPanel({
       sandboxId={sandboxId}
       isActive={isActive}
       repoId={repoId}
-      port={8080}
+      port={EDITOR_PORT}
       startAction={startAction}
       stopAction={stopAction}
       maxAttempts={20}

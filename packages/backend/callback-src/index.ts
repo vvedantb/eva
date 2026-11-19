@@ -16,15 +16,14 @@ import {
   RUN_ID,
   SCRIPT_STARTED_AT,
   WORK_DIR,
-  hasMcpConfig,
 } from "./config.js";
+import { hasEvaMcpConfig } from "./evaMcp.js";
 import { runSdkDaemon } from "./providers/claudeSdkDaemon.js";
 import { runCodexAppServerDaemon } from "./providers/codexAppServerDaemon.js";
 import {
   runCursorDaemon,
   runCursorTurnWorker,
 } from "./providers/cursorSdkDaemon.js";
-import { callConvexWithRetry } from "./http/convexClient.js";
 import { ensureGithubToken } from "./providers/githubToken.js";
 import { callbackState as S } from "./runtime/state.js";
 import {
@@ -33,10 +32,7 @@ import {
 } from "./runtime/turnLease.js";
 import { waitForPendingClaudeUsageReport } from "./runtime/usageLimits.js";
 import { persistTurnWork } from "./runtime/turnPersist.js";
-import {
-  appendTurnCheckpoint,
-  beginTurnCheckpoint,
-} from "./runtime/turnCheckpoint.js";
+import { beginTurnCheckpoint } from "./runtime/turnCheckpoint.js";
 import { materializeSystemSkills } from "./runtime/systemSkills.js";
 import { startBranchWatcher } from "./runtime/branchWatcher.js";
 import {
@@ -55,6 +51,7 @@ import {
   providerAttemptTimedOut,
   providerAttemptWasInterrupted,
   resolveProviderAttemptOutcome,
+  sendTurnCompletion,
   writeDoneFile,
 } from "./runtime/completion.js";
 import {
@@ -172,7 +169,7 @@ log(
     " sessionId=" +
     (process.env.CLAUDE_SESSION_ID || "none") +
     " mcp=" +
-    (hasMcpConfig ? "yes" : "no"),
+    (hasEvaMcpConfig ? "yes" : "no"),
 );
 
 try {
@@ -360,9 +357,8 @@ try {
   };
   if (RUN_ID) errorArgs.runId = RUN_ID;
   appendCurrentTurnLease(errorArgs);
-  appendTurnCheckpoint(errorArgs);
   try {
-    await callConvexWithRetry("mutation", COMPLETION_MUTATION ?? "", errorArgs);
+    await sendTurnCompletion(COMPLETION_MUTATION ?? "", errorArgs);
   } catch {
     /* ignore completion error path failures */
   }

@@ -38,26 +38,31 @@ const floatingMotionClass =
  * the cost was the menu lingering *after* a selection, not the open itself, so
  * the fix is a quick outbound path rather than no motion at all.
  *
- * `origin` must be the Radix transform-origin var class for the specific
- * primitive — pass it literally so Tailwind can see it.
+ * `origin` and `maxHeight` must be the Radix transform-origin and
+ * available-height var classes for the specific primitive — pass them literally
+ * so Tailwind can see them.
  */
-function menuContentClass(origin: string): string {
+function menuContentClass(origin: string, maxHeight: string): string {
   return [
-    // Height cap + internal scroll (`dvh`, never `vh`) so a long menu stays on
-    // screen on a phone, and a width cap so `min-w-48` cannot widen the page at
+    // Height cap at the space Radix measured between the trigger and the
+    // viewport edge, with internal scroll, so a long menu (e.g. many PR links)
+    // never runs off screen. A width cap so `min-w-48` cannot widen the page at
     // a 320px viewport.
-    "z-50 min-w-48 overflow-hidden max-sm:max-w-[calc(100vw-2rem)] max-sm:max-h-[85dvh] max-sm:overflow-y-auto bg-popover/95 p-1.5 text-popover-foreground backdrop-blur-md smooth-shadow-ring-lg",
-    "rounded-surface",
+    "z-50 min-w-48 overflow-x-hidden overflow-y-auto scrollbar max-sm:max-w-[calc(100vw-2rem)] bg-popover/95 p-1 text-popover-foreground backdrop-blur-md smooth-shadow-ring-lg",
+    "rounded-menu",
     origin,
+    maxHeight,
     "duration-150 data-[state=closed]:duration-75 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",
   ].join(" ");
 }
 
 const dropdownMenuContentClass = menuContentClass(
   "origin-(--radix-dropdown-menu-content-transform-origin)",
+  "max-h-(--radix-dropdown-menu-content-available-height)",
 );
 const contextMenuContentClass = menuContentClass(
   "origin-(--radix-context-menu-content-transform-origin)",
+  "max-h-(--radix-context-menu-content-available-height)",
 );
 
 /**
@@ -68,15 +73,15 @@ const contextMenuContentClass = menuContentClass(
  */
 const menuRowClasses = {
   subTrigger:
-    "flex cursor-pointer items-center gap-1.5 rounded-menu-item px-2.5 py-2 max-sm:min-h-10 text-sm outline-hidden motion-press active:scale-[0.98] focus:bg-muted data-[state=open]:bg-muted [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
-  item: "relative flex cursor-pointer select-none items-center gap-1.5 rounded-menu-item px-2.5 py-2 max-sm:min-h-10 text-sm outline-hidden motion-press active:scale-[0.98] focus:bg-muted focus:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&>svg]:size-4 [&>svg]:shrink-0",
+    "flex cursor-pointer items-center gap-1.5 rounded-menu-item px-2.5 py-1.5 max-sm:min-h-10 text-sm outline-hidden motion-press active:scale-[0.98] focus:bg-muted data-[state=open]:bg-muted [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  item: "relative flex cursor-pointer select-none items-center gap-1.5 rounded-menu-item px-2.5 py-1.5 max-sm:min-h-10 text-sm outline-hidden motion-press active:scale-[0.98] focus:bg-muted focus:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&>svg]:size-4 [&>svg]:shrink-0",
   checkboxItem:
-    "relative flex cursor-pointer select-none items-center gap-1.5 rounded-menu-item py-2 max-sm:min-h-10 pl-9 pr-2.5 text-sm outline-hidden motion-press active:scale-[0.98] focus:bg-muted focus:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
+    "relative flex cursor-pointer select-none items-center gap-1.5 rounded-menu-item py-1.5 max-sm:min-h-10 pl-9 pr-2.5 text-sm outline-hidden motion-press active:scale-[0.98] focus:bg-muted focus:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
   radioItem:
-    "relative flex cursor-pointer select-none items-center gap-1.5 rounded-menu-item py-2 max-sm:min-h-10 pl-9 pr-2.5 text-sm outline-hidden motion-press active:scale-[0.98] focus:bg-muted focus:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
+    "relative flex cursor-pointer select-none items-center gap-1.5 rounded-menu-item py-1.5 max-sm:min-h-10 pl-9 pr-2.5 text-sm outline-hidden motion-press active:scale-[0.98] focus:bg-muted focus:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
   label:
     "px-2.5 py-1 text-2xs font-medium tracking-[-0.01em] text-muted-foreground",
-  separator: "-mx-1.5 my-1.5 h-px bg-border",
+  separator: "-mx-1 my-1 h-px bg-border",
   shortcut: "ml-auto text-2xs tracking-[0.08em] text-muted-foreground",
 };
 
@@ -177,11 +182,11 @@ export const overlaysConfig = {
       trigger:
         "flex h-10 w-full max-sm:min-w-0 cursor-pointer items-center justify-between whitespace-nowrap border border-input bg-card px-3.5 py-2 text-base sm:text-sm ring-offset-background motion-press active:scale-[0.98] placeholder:text-muted-foreground focus:outline-hidden focus-visible:ring-1 focus-visible:ring-ring/35 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1 rounded-control",
       scrollButton: "flex cursor-pointer items-center justify-center py-1",
-      content: `relative z-50 max-h-96 min-w-48 max-sm:max-h-[85dvh] max-sm:max-w-[calc(100vw-2rem)] overflow-hidden bg-popover/95 text-popover-foreground backdrop-blur-md smooth-shadow-ring-lg origin-(--radix-select-content-transform-origin) rounded-surface ${floatingMotionClass}`,
+      content: `relative z-50 max-h-96 min-w-48 max-sm:max-h-[85dvh] max-sm:max-w-[calc(100vw-2rem)] overflow-hidden bg-popover/95 text-popover-foreground backdrop-blur-md smooth-shadow-ring-lg origin-(--radix-select-content-transform-origin) rounded-menu ${floatingMotionClass}`,
       label:
         "px-2.5 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground",
-      item: "relative flex w-full cursor-pointer select-none items-center py-2 max-sm:min-h-10 pl-2.5 pr-8 text-sm outline-hidden motion-press active:scale-[0.98] focus:bg-muted focus:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50 rounded-lg",
-      separator: "-mx-1.5 my-1.5 h-px bg-border",
+      item: "relative flex w-full cursor-pointer select-none items-center py-1.5 max-sm:min-h-10 pl-2.5 pr-8 text-sm outline-hidden motion-press active:scale-[0.98] focus:bg-muted focus:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50 rounded-menu-item",
+      separator: "-mx-1 my-1 h-px bg-border",
     },
   },
   Command: {
@@ -193,7 +198,7 @@ export const overlaysConfig = {
       }),
     },
     classes: {
-      root: "flex h-full w-full flex-col overflow-hidden border border-border bg-popover/95 text-popover-foreground backdrop-blur-md rounded-surface",
+      root: "flex h-full w-full flex-col overflow-hidden border border-border bg-popover/95 text-popover-foreground backdrop-blur-md rounded-menu",
       dialogContent: "overflow-hidden p-0",
       dialogCommand:
         "**:[[cmdk-group-heading]]:px-3 **:[[cmdk-group-heading]]:font-semibold **:[[cmdk-group-heading]]:uppercase **:[[cmdk-group-heading]]:tracking-[0.08em] **:[[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-1 **:[[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:size-5 **:[[cmdk-input]]:h-12 **:[[cmdk-item]]:px-3 **:[[cmdk-item]]:py-2.5 [&_[cmdk-item]_svg]:size-4",
@@ -209,7 +214,7 @@ export const overlaysConfig = {
       group:
         "overflow-hidden p-1 text-foreground **:[[cmdk-group-heading]]:px-2 **:[[cmdk-group-heading]]:py-1.5 **:[[cmdk-group-heading]]:text-2xs **:[[cmdk-group-heading]]:font-semibold **:[[cmdk-group-heading]]:uppercase **:[[cmdk-group-heading]]:tracking-[0.08em] **:[[cmdk-group-heading]]:text-muted-foreground",
       separator: "-mx-1 h-px bg-border",
-      item: "relative flex cursor-pointer gap-2 select-none items-center px-2.5 py-2 max-sm:min-h-10 text-sm outline-hidden motion-press active:scale-[0.98] data-[disabled=true]:pointer-events-none data-[selected=true]:bg-muted data-[selected=true]:text-foreground data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 rounded-lg",
+      item: "relative flex cursor-pointer gap-2 select-none items-center px-2.5 py-1.5 max-sm:min-h-10 text-sm outline-hidden motion-press active:scale-[0.98] data-[disabled=true]:pointer-events-none data-[selected=true]:bg-muted data-[selected=true]:text-foreground data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 rounded-lg",
       shortcut: "ml-auto text-xs tracking-widest text-muted-foreground",
     },
   },

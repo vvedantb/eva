@@ -1,7 +1,7 @@
 import { internalQuery, type QueryCtx } from "../_generated/server";
 import { v, type Infer } from "convex/values";
 import type { Doc } from "../_generated/dataModel";
-import { prStateValidator } from "../validators";
+import { chatEntityKindValidator, prStateValidator } from "../validators";
 import { mcpPullRequestValidator, toMcpPullRequests } from "./queries";
 import {
   listOwnerPullRequests,
@@ -9,18 +9,17 @@ import {
   taskPrUrl,
   type PrOwnerRef,
 } from "../_pullRequests/store";
-import { slugifyAppTabName } from "../appTabSlug";
+import { slugifyAppTabName } from "@eva/shared/appTabSlug";
 import { previewConsoleSessionName } from "../_pty/consoleSessionName";
+import { sandboxOwnerKey } from "@eva/shared";
+import {
+  findOwnedSession,
+  findWorkSession,
+} from "../_sessions/owner";
 
 // Backs the chat-self MCP tools (chatSelfTools.ts). Internal on purpose: the
 // tool has already resolved the chat through `resolveEntityTarget`, which is
 // where the per-user access check lives, so this only reads what it was named.
-
-const chatKindValidator = v.union(
-  v.literal("session"),
-  v.literal("task"),
-  v.literal("project"),
-);
 
 const chatDetailsValidator = v.object({
   baseBranch: v.optional(v.string()),
@@ -72,7 +71,7 @@ type ChatOwnerFields = Pick<
 /** The per-surface fields; everything else is shared repo config. */
 async function ownerFields(
   ctx: QueryCtx,
-  kind: Infer<typeof chatKindValidator>,
+  kind: Infer<typeof chatEntityKindValidator>,
   id: string,
 ): Promise<ChatOwnerFields | null> {
   if (kind === "session") {
@@ -81,7 +80,7 @@ async function ownerFields(
     if (!session) return null;
     return {
       owner: { kind: "session", sessionId: session._id },
-      ownerKey: `session-${session._id}`,
+      ownerKey: sandboxOwnerKey({ kind: "session", sessionId: session._id }),
       baseBranch: session.baseBranch,
       prUrl: session.prUrl,
       prState: session.prState,
@@ -94,29 +93,39 @@ async function ownerFields(
     const taskId = ctx.db.normalizeId("agentTasks", id);
     const task = taskId ? await ctx.db.get(taskId) : null;
     if (!task) return null;
+    // A task's sandbox (preview port, path, owner key) is its session's (a
+    // project task's: the project's); its PRs stay the task's.
+    const session = await findWorkSession(ctx.db, task);
+    if (!session) return null;
     return {
       owner: { kind: "task", taskId: task._id },
-      ownerKey: `task-${task._id}`,
+      ownerKey: sandboxOwnerKey({ kind: "session", sessionId: session._id }),
       baseBranch: task.baseBranch,
       prUrl: await taskPrUrl(ctx.db, task),
       prState: task.prState,
-      devPort: task.devPort,
-      devCommand: task.devCommand,
-      previewPath: task.previewPath,
+      devPort: session.devPort,
+      devCommand: session.devCommand,
+      previewPath: session.previewPath,
     };
   }
   const projectId = ctx.db.normalizeId("projects", id);
   const project = projectId ? await ctx.db.get(projectId) : null;
   if (!project) return null;
+  // A project's sandbox is its session's; its PRs stay the project's.
+  const session = await findOwnedSession(ctx.db, {
+    kind: "project",
+    projectId: project._id,
+  });
+  if (!session) return null;
   return {
     owner: { kind: "project", projectId: project._id },
-    ownerKey: `project-${project._id}`,
+    ownerKey: sandboxOwnerKey({ kind: "session", sessionId: session._id }),
     baseBranch: project.baseBranch,
     prUrl: project.prUrl,
     prState: project.prState,
-    devPort: project.devPort,
-    devCommand: project.devCommand,
-    previewPath: project.previewPath,
+    devPort: session.devPort,
+    devCommand: session.devCommand,
+    previewPath: session.previewPath,
   };
 }
 
@@ -145,32 +154,32 @@ function linkedRepoRow(
  */
 export const getChatDetails = internalQuery({
   args: {
-    kind: chatKindValidator,
+    kind: chatEntityKindValidator,
     id: v.string(),
     /** The repo `resolveEntityTarget` settled on (a project task's comes from its project). */
     repoId: v.id("githubRepos"),
   },
   returns: v.union(v.null(), chatDetailsValidator),
   handler: async (ctx, { kind, id, repoId }): Promise<ChatDetails | null> => {
-    const fields = await ownerFields(ctx, kind, id);
-    if (!fields) return null;
-    const { owner: prOwner, ...owner } = fields;
-    const prs = await listOwnerPullRequests(ctx.db, prOwner);
-    const repo = await ctx.db.get(repoId);
-    if (!repo) return null;
-
-    const tabs = await ctx.db
-      .query("appTabs")
-      .withIndex("by_repo", (q) => q.eq("repoId", repo._id))
-      .collect();
     const sessionId =
       kind === "session" ? ctx.db.normalizeId("sessions", id) : null;
-    const links = sessionId
-      ? await ctx.db
-          .query("sessionRepos")
-          .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
-          .collect()
-      : [];
+    const [fields, repo, tabs, links] = await Promise.all([
+      ownerFields(ctx, kind, id),
+      ctx.db.get(repoId),
+      ctx.db
+        .query("appTabs")
+        .withIndex("by_repo", (q) => q.eq("repoId", repoId))
+        .collect(),
+      sessionId
+        ? ctx.db
+            .query("sessionRepos")
+            .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+            .collect()
+        : [],
+    ]);
+    if (!fields || !repo) return null;
+    const { owner: prOwner, ...owner } = fields;
+    const prs = await listOwnerPullRequests(ctx.db, prOwner);
 
     return {
       ...owner,

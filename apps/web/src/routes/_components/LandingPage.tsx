@@ -11,9 +11,11 @@ import { LandingMcp } from "./landing/LandingMcp";
 import { LandingNav } from "./landing/LandingNav";
 import { LandingOpenSource } from "./landing/LandingOpenSource";
 import { LandingPillarSection } from "./landing/LandingPillarSection";
+import { LandingPreview } from "./landing/LandingPreview";
 import { LandingSandbox } from "./landing/LandingSandbox";
 import { LandingWorkflow } from "./landing/LandingWorkflow";
 import { LANDING_PILLARS } from "./landing/landingContent";
+import { markLandingRoot } from "./landing/markLandingRoot";
 
 const isDev = import.meta.env.DEV;
 
@@ -47,11 +49,12 @@ export function LandingPage({ agentRedirect }: LandingPageProps) {
   }
 
   return (
-    <div id="top" className="min-h-dvh bg-background">
+    <div id="top" ref={markLandingRoot} className="min-h-dvh bg-background">
       <LandingNav />
 
       <main>
         <LandingHero />
+        <LandingPreview />
         <LandingWorkflow />
 
         {LANDING_PILLARS.map((pillar) => (

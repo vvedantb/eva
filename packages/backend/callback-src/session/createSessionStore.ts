@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { copyFileIfPresent } from "../utils.js";
+import { copyFileIfPresent, isJsonObject } from "../utils.js";
 
 export type SessionStoreConfig = {
   runtimeHomeDir: string;
@@ -28,7 +28,7 @@ export function createSessionStore(config: SessionStoreConfig) {
     }
     try {
       const parsed = JSON.parse(readFileSync(statePath, "utf8"));
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      if (!isJsonObject(parsed)) {
         return null;
       }
       const value = parsed[config.resumeField];

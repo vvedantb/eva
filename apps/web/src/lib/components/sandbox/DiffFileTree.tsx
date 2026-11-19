@@ -26,6 +26,10 @@ interface DiffFileTreeProps {
   quiet?: boolean;
 }
 
+/** Show the surface the tree sits on (the sandbox card, or the page) rather
+ * than painting the page tone over the card. */
+const TREE_SURFACE_VARS = { "--trees-bg-override": "transparent" };
+
 const QUIET_TREE_VARS = {
   "--trees-indent-guide-bg-override": "transparent",
   "--trees-git-lane-width-override": "0px",
@@ -73,6 +77,7 @@ export function DiffFileTree({
       style={{
         ...treeThemeVars,
         ...(quiet ? QUIET_TREE_VARS : {}),
+        ...TREE_SURFACE_VARS,
         colorScheme: resolvedTheme,
       }}
       className="h-full w-full"

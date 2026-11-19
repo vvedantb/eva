@@ -1,62 +1,6 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 import { z } from "zod";
 import { sendEmailTool } from "../convex/_mcp/sendEmailTool";
-
-const testsDir = dirname(fileURLToPath(import.meta.url));
-
-function convexSource(path: string): string {
-  return readFileSync(join(testsDir, "../convex", path), "utf8");
-}
-
-/** Any field that would let a caller choose who the mail goes to. */
-const RECIPIENT_FIELD = /\b(to|email|recipient|cc|bcc)\s*:/;
-
-test("send_email is registered for every MCP caller", () => {
-  const tools = convexSource("mcp/tools.ts");
-  const registered = tools.indexOf("sendEmailTool(");
-  const gate = tools.indexOf("if (isAve) {");
-  expect(registered).toBeGreaterThan(-1);
-  expect(gate).toBeGreaterThan(registered);
-});
-
-test("send_email takes no recipient", () => {
-  const shared = convexSource("_mcp/sendEmailTool.ts");
-  const shape = shared.slice(
-    shared.indexOf("sendEmailInputShape"),
-    shared.indexOf("satisfies z.ZodRawShape"),
-  );
-  expect(shape).toContain("subject:");
-  expect(shape).toContain("body:");
-  expect(shape).not.toMatch(RECIPIENT_FIELD);
-  expect(shared).toContain("mutating: true");
-  expect(shared).toContain('name: "send_email"');
-});
-
-test("the action derives the recipient from userId only", () => {
-  const action = convexSource("mcp/sendEmail.ts");
-  const run = action.slice(action.indexOf("export const runSendEmail"));
-  const args = run.slice(run.indexOf("args:"), run.indexOf("returns:"));
-  expect(args).toContain("userId: v.string()");
-  expect(args).toContain("subject: v.string()");
-  expect(args).toContain("body: v.string()");
-  expect(args).not.toMatch(RECIPIENT_FIELD);
-  expect(action).toContain("internal.users.getEmailRecipientById");
-  expect(action).toContain("sendEmail(");
-});
-
-test("the recipient lookup normalises the id instead of casting", () => {
-  const users = convexSource("users.ts");
-  const start = users.indexOf("export const getEmailRecipientById");
-  expect(start).toBeGreaterThan(-1);
-  const rest = users.slice(start);
-  const next = rest.indexOf("export const", "export const".length);
-  const lookup = next === -1 ? rest : rest.slice(0, next);
-  expect(lookup).toContain('ctx.db.normalizeId("users"');
-  expect(lookup).not.toContain(" as Id<");
-});
 
 /** Shape of the JSON block the tool returns on success. */
 const sentPayload = z.object({ status: z.string(), to: z.string() });

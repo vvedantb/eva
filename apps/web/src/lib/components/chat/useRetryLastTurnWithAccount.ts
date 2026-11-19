@@ -5,33 +5,20 @@ import { api, type Id } from "@eva/backend";
 import type { ChatEntityRef } from "./sandboxChatSurface";
 
 /**
- * Retry of the failed last turn on another provider account, routed to
- * whichever chat owns it. All three mutations are bound up front — hooks cannot
- * be called conditionally, and an unused binding costs nothing. The caller
- * reports failures: the banner wraps the switch and this retry in one
- * `catchMutationError`, so a toast here would be the second one.
+ * Retry of the chat's failed last turn on another provider account. A chat
+ * with no session yet has no turn to retry. The caller reports failures: the
+ * banner wraps the switch and this retry in one `catchMutationError`, so a
+ * toast here would be the second one.
  */
 export function useRetryLastTurnWithAccount(
-  entity: ChatEntityRef,
+  entity: ChatEntityRef | undefined,
 ): (providerAccountId: Id<"userProviderAccounts"> | null) => Promise<null> {
   const retrySessionTurn = useMutation(
     api.sessionWorkflow.retryLastTurnWithAccount,
   );
-  const retryTaskTurn = useMutation(
-    api.agentTaskChatWorkflow.retryLastTurnWithAccount,
-  );
-  const retryProjectTurn = useMutation(
-    api.projectChatWorkflow.retryLastTurnWithAccount,
-  );
 
-  return async (providerAccountId: Id<"userProviderAccounts"> | null) => {
-    return entity.kind === "session"
+  return async (providerAccountId: Id<"userProviderAccounts"> | null) =>
+    entity
       ? await retrySessionTurn({ chatId: entity.chatId, providerAccountId })
-      : entity.kind === "task"
-        ? await retryTaskTurn({ taskId: entity.taskId, providerAccountId })
-        : await retryProjectTurn({
-            projectId: entity.projectId,
-            providerAccountId,
-          });
-  };
+      : null;
 }

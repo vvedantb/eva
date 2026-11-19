@@ -25,6 +25,11 @@ import { Avatar, AvatarFallback } from "@vvedantb/ui";
 import type { BadgeProps } from "@vvedantb/ui";
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
+import {
+  getNotificationAppearance as sharedAppearance,
+  type NotificationIconName,
+  type NotificationTone,
+} from "@eva/shared";
 
 export type Notification = FunctionReturnType<
   typeof api.notifications.list
@@ -38,167 +43,74 @@ export type NotificationAppearance = {
   iconColor: string;
 };
 
-const typeConfig: Record<Notification["type"], NotificationAppearance> = {
-  routine_complete: {
-    icon: IconRepeat,
-    label: "Routine",
-    badgeVariant: "secondary",
-    iconBg: "bg-secondary",
-    iconColor: "text-secondary-foreground",
-  },
-  export_ready: {
-    icon: IconFileExport,
-    label: "Export",
+/** The Tabler component for each shared icon name. */
+const ICONS: Record<NotificationIconName, typeof IconBell> = {
+  Repeat: IconRepeat,
+  FileExport: IconFileExport,
+  Check: IconCheck,
+  UserPlus: IconUserPlus,
+  Progress: IconProgress,
+  Message: IconMessage,
+  Pencil: IconPencil,
+  MessageReply: IconMessageReply,
+  At: IconAt,
+  PlayerPlay: IconPlayerPlay,
+  ExclamationCircle: IconExclamationCircle,
+  AlertTriangle: IconAlertTriangle,
+  InfoCircle: IconInfoCircle,
+  Archive: IconArchive,
+  GitMerge: IconGitMerge,
+  GitPullRequestClosed: IconGitPullRequestClosed,
+  MessageQuestion: IconMessageQuestion,
+};
+
+/** The badge variant, avatar tint and glyph colour of each shared tone. */
+const TONE_CLASSES: Record<
+  NotificationTone,
+  Pick<NotificationAppearance, "badgeVariant" | "iconBg" | "iconColor">
+> = {
+  primary: {
     badgeVariant: "default",
     iconBg: "bg-primary/10",
     iconColor: "text-primary",
   },
-  task_complete: {
-    icon: IconCheck,
-    label: "Task Done",
+  success: {
     badgeVariant: "success",
     iconBg: "bg-success/10",
     iconColor: "text-success",
   },
-  task_assigned: {
-    icon: IconUserPlus,
-    label: "Assigned",
+  warning: {
     badgeVariant: "warning",
     iconBg: "bg-warning/10",
     iconColor: "text-warning",
   },
-  status_changed: {
-    icon: IconProgress,
-    label: "Status",
-    badgeVariant: "secondary",
-    iconBg: "bg-secondary",
-    iconColor: "text-secondary-foreground",
-  },
-  comment_added: {
-    icon: IconMessage,
-    label: "Comment",
-    badgeVariant: "default",
-    iconBg: "bg-primary/10",
-    iconColor: "text-primary",
-  },
-  changes_requested: {
-    icon: IconPencil,
-    label: "Changes",
-    badgeVariant: "warning",
-    iconBg: "bg-warning/10",
-    iconColor: "text-warning",
-  },
-  comment_reply: {
-    icon: IconMessageReply,
-    label: "Reply",
-    badgeVariant: "default",
-    iconBg: "bg-primary/10",
-    iconColor: "text-primary",
-  },
-  mention: {
-    icon: IconAt,
-    label: "Mention",
-    badgeVariant: "default",
-    iconBg: "bg-primary/10",
-    iconColor: "text-primary",
-  },
-  run_completed: {
-    icon: IconPlayerPlay,
-    label: "Run Done",
-    badgeVariant: "success",
-    iconBg: "bg-success/10",
-    iconColor: "text-success",
-  },
-  run_failed: {
-    icon: IconExclamationCircle,
-    label: "Run Failed",
+  destructive: {
     badgeVariant: "destructive",
     iconBg: "bg-destructive/10",
     iconColor: "text-destructive",
   },
-  rate_limit: {
-    icon: IconAlertTriangle,
-    label: "Rate Limit",
-    badgeVariant: "warning",
-    iconBg: "bg-warning/10",
-    iconColor: "text-warning",
-  },
-  system: {
-    icon: IconInfoCircle,
-    label: "System",
-    badgeVariant: "outline",
-    iconBg: "bg-muted",
-    iconColor: "text-muted-foreground",
-  },
-  session_archived: {
-    icon: IconArchive,
-    label: "Archived",
+  secondary: {
     badgeVariant: "secondary",
     iconBg: "bg-secondary",
     iconColor: "text-secondary-foreground",
   },
-  routed_question: {
-    icon: IconMessageQuestion,
-    label: "Question",
-    badgeVariant: "default",
-    iconBg: "bg-primary/10",
-    iconColor: "text-primary",
+  muted: {
+    badgeVariant: "outline",
+    iconBg: "bg-muted",
+    iconColor: "text-muted-foreground",
   },
 };
 
-const sessionPrMergedAppearance: NotificationAppearance = {
-  icon: IconGitMerge,
-  label: "PR Merged",
-  badgeVariant: "success",
-  iconBg: "bg-success/10",
-  iconColor: "text-success",
-};
-
-const sessionPrClosedAppearance: NotificationAppearance = {
-  icon: IconGitPullRequestClosed,
-  label: "PR Closed",
-  badgeVariant: "secondary",
-  iconBg: "bg-secondary",
-  iconColor: "text-secondary-foreground",
-};
-
 /**
- * Session auto-archive inbox items are typed `session_archived`, but the
- * reason is a GitHub PR merge or close. Read that from the stored title and
- * message so the badge says the PR outcome instead of only "Archived".
- * `\bmerged\b` does not match "without merging" on a close.
- */
-function sessionArchivedAppearance(
-  notification: Pick<Notification, "title" | "message">,
-): NotificationAppearance {
-  const haystack =
-    `${notification.title} ${notification.message ?? ""}`.toLowerCase();
-  if (/\bmerged\b/.test(haystack)) return sessionPrMergedAppearance;
-  if (/\bclosed\b/.test(haystack)) return sessionPrClosedAppearance;
-  return typeConfig.session_archived;
-}
-
-/**
- * Older failures were stored as `run_completed` with a "failed" title/message.
- * Map those to the danger appearance until they age out of inboxes.
+ * The type's icon, label and colours. The type map and its title reads (old
+ * failures, PR merge or close) are `@eva/shared/notificationAppearance`, which
+ * the mobile inbox uses too.
  */
 export function getNotificationAppearance(
   notification: Pick<Notification, "type" | "title" | "message">,
 ): NotificationAppearance {
-  if (notification.type === "run_failed") {
-    return typeConfig.run_failed;
-  }
-  if (notification.type === "run_completed") {
-    const haystack =
-      `${notification.title} ${notification.message ?? ""}`.toLowerCase();
-    if (haystack.includes("failed")) {
-      return typeConfig.run_failed;
-    }
-  }
-  if (notification.type === "session_archived") {
-    return sessionArchivedAppearance(notification);
-  }
-  return typeConfig[notification.type];
+  const { icon, label, tone } = sharedAppearance(notification);
+  return { icon: ICONS[icon], label, ...TONE_CLASSES[tone] };
 }
 
 /**

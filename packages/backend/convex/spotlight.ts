@@ -6,6 +6,9 @@ import {
   repoDisplayLabel,
 } from "./_githubRepos/helpers";
 import { filterActiveEntities, isEntityDeleted } from "./numId";
+import { isSessionArchived } from "./_sessions/archive";
+import { standaloneOnly } from "./_sessions/owner";
+import { entityHref } from "@eva/shared";
 import type { Doc } from "./_generated/dataModel";
 import { resolveExperimentalFlags } from "./_auth/experimentalFlags";
 
@@ -178,7 +181,14 @@ export const search = authQuery({
         : DEFAULT_LIMIT;
     const query = normalizeQuery(args.query);
     const hits: SpotlightHit[] = [];
-    const user = await ctx.db.get(ctx.userId);
+    const [user, memberships, repos] = await Promise.all([
+      ctx.db.get(ctx.userId),
+      ctx.db
+        .query("teamMembers")
+        .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
+        .collect(),
+      gatherAccessibleRepos(ctx.db, ctx.userId, false),
+    ]);
     const simpleView = resolveExperimentalFlags(user).simpleView;
 
     for (const page of GLOBAL_PAGES) {
@@ -196,11 +206,6 @@ export const search = authQuery({
         limit,
       );
     }
-
-    const memberships = await ctx.db
-      .query("teamMembers")
-      .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
-      .collect();
 
     const teams = (
       await Promise.all(memberships.map((m) => ctx.db.get(m.teamId)))
@@ -221,7 +226,6 @@ export const search = authQuery({
       );
     }
 
-    const repos = await gatherAccessibleRepos(ctx.db, ctx.userId, false);
     let repoPagesAdded = 0;
 
     for (const repo of repos) {
@@ -274,11 +278,17 @@ export const search = authQuery({
       const teamNameById = new Map(
         teams.map((team) => [String(team._id), team.name]),
       );
-      for (const membership of memberships) {
-        const artifacts = await ctx.db
-          .query("artifacts")
-          .withIndex("by_team", (q) => q.eq("boundTeamId", membership.teamId))
-          .take(PER_REPO_TAKE);
+      const artifactsByTeam = await Promise.all(
+        memberships.map((membership) =>
+          ctx.db
+            .query("artifacts")
+            .withIndex("by_team", (q) =>
+              q.eq("boundTeamId", membership.teamId),
+            )
+            .take(PER_REPO_TAKE),
+        ),
+      );
+      for (const artifacts of artifactsByTeam) {
         for (const artifact of artifacts) {
           if (!matchesQuery(artifact.name, query)) continue;
           pushHit(
@@ -312,6 +322,8 @@ export const search = authQuery({
               ctx.db
                 .query("sessions")
                 .withIndex("by_repo", (q) => q.eq("repoId", repo._id))
+                // A task's session is reached through its task.
+                .filter(standaloneOnly)
                 .take(PER_REPO_TAKE),
               ctx.db
                 .query("agentTasks")
@@ -336,7 +348,7 @@ export const search = authQuery({
                 type: "project",
                 title: project.title,
                 subtitle: label,
-                href: `${base}/projects/${project.numId}`,
+                href: entityHref("project", repo, project.numId),
                 rank: rankMatch(project.title, query) + 20,
               },
               limit,
@@ -344,7 +356,7 @@ export const search = authQuery({
           }
 
           for (const session of filterActiveEntities(sessions)) {
-            if (session.archived === true) continue;
+            if (isSessionArchived(session)) continue;
             pushPrHit(hits, session, { base, label, query, limit });
             if (session.numId === undefined) continue;
             if (!matchesQuery(session.title, query)) continue;
@@ -354,7 +366,7 @@ export const search = authQuery({
                 type: "session",
                 title: session.title,
                 subtitle: label,
-                href: `${base}/sessions/${session.numId}`,
+                href: entityHref("session", repo, session.numId),
                 rank: rankMatch(session.title, query) + 20,
               },
               limit,
@@ -390,7 +402,7 @@ export const search = authQuery({
                 type: "task",
                 title: task.title,
                 subtitle: label,
-                href: `${base}/quick-tasks/${task.numId}`,
+                href: entityHref("task", repo, task.numId),
                 rank: rankMatch(task.title, query) + 20,
               },
               limit,

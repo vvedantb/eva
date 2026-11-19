@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import type { Id } from "@eva/backend";
 import { cn } from "@eva/ui";
 import { Spinner, Button, WebPreview, useMediaQuery } from "@vvedantb/ui";
 import { useSessionStorage } from "usehooks-ts";
@@ -24,7 +23,10 @@ import {
   closePreviewMiniPlayer,
   openPreviewMiniPlayer,
   usePreviewMiniPlayer,
+  type PreviewMiniPlayerSource,
 } from "@/lib/components/sandbox/previewMiniPlayerStore";
+import type { AnnotationSubmit } from "@/lib/components/sandbox/annotationSend";
+import { PreviewActionBar } from "./_components/PreviewActionBar";
 import { PreviewAnnotationLayer } from "./_components/PreviewAnnotationLayer";
 import { PreviewSketchLayer } from "./_components/PreviewSketchLayer";
 import { usePendingPreviewSnapshots } from "@/lib/contexts/PendingPreviewSnapshotsContext";
@@ -63,32 +65,32 @@ interface WebPreviewPanelProps {
   onPortChange: (port: number) => void;
   /** Multi-repo sessions: one dev-server port per checked-out repo. */
   portOptions?: readonly PreviewPortOption[];
+  /**
+   * Per-pane identity: hosted iframe key and sessionStorage prefix for the
+   * device viewport. The path itself lives on Convex (`path`).
+   */
   pathStorageKey: string;
   /** The chat that owns this sandbox: agent page-tool calls are queued on it. */
   toolCallParentId: PreviewToolCallParentId;
   /**
-   * When set (sessions), Preview path is sticky on Convex. `undefined` while
-   * the session query loads — falls back to sessionStorage until then.
+   * This pane's sticky Preview path from Convex. `undefined` while the view
+   * state loads: the iframe waits so it never opens at the wrong path.
    */
-  stickyPath?: string;
-  onStickyPathChange?: (path: string) => void;
+  path: string | undefined;
+  onPathChange: (path: string) => void;
   /** When set (sessions), Preview empty state shows a Wake up Eva button. */
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
   /**
-   * Session-only: submit compact display + rich agent prompt for a preview
-   * annotation. When absent, the select-element toggle is hidden.
+   * Submit compact display + rich agent prompt for a preview annotation into
+   * the owner's chat. When absent, the select-element toggle is hidden.
    */
-  onAnnotationSubmit?: (display: string, full: string) => Promise<void>;
+  onAnnotationSubmit?: AnnotationSubmit;
   /**
-   * Session-only, set while this pane is the visible preview: lets it float
-   * into the mini-player when the user leaves the sessions area or pops it out.
+   * Set while this pane is the visible preview: lets it float into the
+   * mini-player when the user leaves the preview or pops it out.
    */
-  miniPlayer?: {
-    sessionId: Id<"sessions">;
-    returnTo: string;
-    title: string;
-  };
+  miniPlayer?: Omit<PreviewMiniPlayerSource, "sandboxId">;
   /** Idle pause on: Eva wake link for "Open in new tab" (see PreviewNavBar). */
   externalHrefForPath?: (path: string) => string;
 }
@@ -106,8 +108,8 @@ export function WebPreviewPanel({
   portOptions,
   pathStorageKey,
   toolCallParentId,
-  stickyPath,
-  onStickyPathChange,
+  path,
+  onPathChange,
   onStartSandbox,
   isSandboxStarting = false,
   onAnnotationSubmit,
@@ -152,10 +154,6 @@ export function WebPreviewPanel({
     void document.documentElement.requestFullscreen();
     setFullscreenRequested(true);
   };
-  const [localPath, setLocalPath] = useSessionStorage(pathStorageKey, "/", {
-    serializer: (value) => value,
-    deserializer: (value) => normalizePreviewPath(value),
-  });
   const viewportStorageKey = `${pathStorageKey}:viewport`;
   const [viewport, setViewport] = useSessionStorage<PreviewViewport>(
     viewportStorageKey,
@@ -190,35 +188,32 @@ export function WebPreviewPanel({
     contain,
     containSize,
   );
-  const previewPath = normalizePreviewPath(stickyPath ?? localPath);
+  const pathLoaded = path !== undefined;
+  const previewPath = normalizePreviewPath(path ?? "/");
 
   // iframeSrc is recomputed only at remount points (previewInfo change,
-  // storage-key change, or iframeKey bump from a refresh). previewPath is
-  // intentionally NOT part of the key so the src stays stable while the user
-  // navigates inside the iframe — otherwise we'd fight the iframe with
-  // declarative src updates. Render-phase state adjustment, not useMemo.
-  const srcKey = `${previewInfo?.url ?? ""}|${pathStorageKey}|${iframeKey}`;
+  // storage-key change, path first loaded, or iframeKey bump from a refresh).
+  // previewPath is intentionally NOT part of the key so the src stays stable
+  // while the user navigates inside the iframe — otherwise we'd fight the
+  // iframe with declarative src updates. Render-phase state adjustment, not
+  // useMemo.
+  const srcKey = `${previewInfo?.url ?? ""}|${pathStorageKey}|${iframeKey}|${pathLoaded}`;
+  const buildSrc = () =>
+    previewInfo && pathLoaded
+      ? buildUrlWithPath(previewInfo.url, previewPath)
+      : undefined;
   const [srcState, setSrcState] = useState<{
     key: string;
     src: string | undefined;
-  }>(() => ({
-    key: srcKey,
-    src: previewInfo
-      ? buildUrlWithPath(previewInfo.url, previewPath)
-      : undefined,
-  }));
+  }>(() => ({ key: srcKey, src: buildSrc() }));
   let iframeSrc = srcState.src;
   if (srcState.key !== srcKey) {
-    iframeSrc = previewInfo
-      ? buildUrlWithPath(previewInfo.url, previewPath)
-      : undefined;
+    iframeSrc = buildSrc();
     setSrcState({ key: srcKey, src: iframeSrc });
   }
 
-  function handlePathChange(path: string) {
-    const next = normalizePreviewPath(path);
-    setLocalPath(next);
-    onStickyPathChange?.(next);
+  function handlePathChange(next: string) {
+    onPathChange(normalizePreviewPath(next));
   }
 
   if (!isActive || !sandboxId) {
@@ -318,12 +313,24 @@ export function WebPreviewPanel({
         onToggleDevice={handleToggleDevice}
         contain={contain}
         onToggleContain={handleToggleContain}
-        annotationMode={annotationMode}
-        onAnnotationModeChange={(active) => {
-          setAnnotationMode(active);
-          if (active) setSketchMode(false);
-        }}
-        showAnnotationToggle={Boolean(onAnnotationSubmit)}
+        popOut={popOut}
+      />
+      <PreviewToolCallExecutor
+        parentId={toolCallParentId}
+        iframeElement={iframeElement}
+      />
+      <PreviewActionBar
+        iframeElement={iframeElement}
+        // Sketch brings its own toolbar to the same spot, with Close.
+        hidden={showPlaceholder || sketchMode}
+        selectElement={
+          onAnnotationSubmit
+            ? {
+                active: annotationMode,
+                onToggle: () => setAnnotationMode(!annotationMode),
+              }
+            : undefined
+        }
         sketch={
           canSketch
             ? {
@@ -336,11 +343,6 @@ export function WebPreviewPanel({
               }
             : undefined
         }
-        popOut={popOut}
-      />
-      <PreviewToolCallExecutor
-        parentId={toolCallParentId}
-        iframeElement={iframeElement}
       />
       {!showPlaceholder && viewport.mode !== "fill" ? (
         <PreviewDeviceToolbar

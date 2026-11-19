@@ -26,7 +26,7 @@ import {
 } from "@tabler/icons-react";
 import type { DiffView } from "@/lib/search-params";
 import { PrDiffStat } from "@/lib/components/reviews/_components/prReviewParts";
-import { DIFF_FILE_KINDS, type DiffFileKind, type DiffSize } from "./diffFiles";
+import { DIFF_FILE_KINDS, type DiffFileKind, type DiffSize } from "@eva/shared";
 
 const KIND_LABEL: Record<DiffFileKind, string> = {
   code: "Code",
