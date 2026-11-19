@@ -1,5 +1,13 @@
 # Changelog
 
+## Web sidebar panel: dock pop on hide and show
+
+Date: 2026-11-19
+
+WHY: The sandbox card docks into its rail tab; the left panel should hide and show the same way, so both rails share one motion.
+
+Architectural: The motion moves to `lib/dockMotion.ts` (`dockPopIn`, `dockNudge`, `dockPopOut`, with a left or right rail edge); `sandboxCardMotion.ts` is now a thin wrapper. `SidebarContext.setCollapsed`, which the rail tile, the shortcut and search all call, pops the panel out into the `data-sidebar-dock-tile` tile before it collapses, and pops it in on the next frame after it shows. App switches do not move the panel. The aim checks height, not width, because the package's aside slides its width open from 0. The docked frame now holds for 400 ms (past that 280 ms slide) or until the next pop in, so a hiding panel never flashes back at full size.
+
 ## Design check bans reduced-motion gates
 
 Date: 2026-11-19

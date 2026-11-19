@@ -384,6 +384,7 @@ function RepoRailView({
             </Sidebar.RailItem>
           )}
           <Sidebar.RailItem
+            data-sidebar-dock-tile
             label={collapsed ? "Show sidebar" : "Hide sidebar"}
             onClick={() => setCollapsed(!collapsed)}
           >

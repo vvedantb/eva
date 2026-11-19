@@ -2,6 +2,10 @@
 
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { useSessionStorage } from "usehooks-ts";
+import {
+  popInSidebarPanelNextFrame,
+  popOutSidebarPanel,
+} from "@/lib/components/sidebar/sidebarPanelMotion";
 
 const COOKIE_NAME = "sidebar-collapsed";
 const ONE_YEAR = 60 * 60 * 24 * 365;
@@ -44,9 +48,16 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   // navigation closes it (see `Sidebar`), so the only meaningful value is now.
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // Every hide and show (rail tile, shortcut, search) passes here, so the
+  // panel's dock motion lives here too.
   const setCollapsed = (value: boolean) => {
-    setCollapsedState(value);
     writeCookie(value);
+    if (value) {
+      popOutSidebarPanel(() => setCollapsedState(true));
+      return;
+    }
+    setCollapsedState(false);
+    popInSidebarPanelNextFrame();
   };
 
   return (
