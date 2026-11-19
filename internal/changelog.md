@@ -1,5 +1,13 @@
 # Changelog
 
+## Session summary: schema field and turn lane removed
+
+Date: 2026-11-19
+
+WHY: `dataMigrations:retireSessionSummaries` ran on prod, so nothing stores a summary any more.
+
+Architectural: `sessions.summary` and the `"summary"` turn lane leave the schema (`turnLaneValidator` is now only `"interview"`, and `laneOwner` drops its lane argument). The PR body no longer adds a Summary section. The three retire migrations are deleted; the schema-narrowing markers name them from the base revision.
+
 ## Session summary retired; "Recap chat" on every chat
 
 Date: 2026-11-19

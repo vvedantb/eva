@@ -240,14 +240,11 @@ export type TurnAdapterVisitor<R> = {
   agent: (owner: AgentTurnOwner) => R;
 };
 
+/** The one lane, the project interview: filed under the project's session. */
 function laneOwner(
   db: DatabaseReader,
   entityId: string,
-  lane: TurnLane,
 ): AgentTurnOwner | null {
-  // Session summaries were retired; `dataMigrations:retireSessionSummaries`
-  // deletes their turns, then the lane leaves the schema.
-  if (lane !== "interview") return null;
   const id = db.normalizeId("sessions", entityId);
   return id ? { kind: "interview", id } : null;
 }
@@ -278,7 +275,7 @@ export function turnAdapterForEntity<R>(
   visit: TurnAdapterVisitor<R>,
 ): R | null {
   if (turn.lane !== undefined) {
-    const owner = laneOwner(db, turn.entityId, turn.lane);
+    const owner = laneOwner(db, turn.entityId);
     return owner ? visit.agent(owner) : null;
   }
   const chatId = sessionChatAdapter.parseId(db, turn.entityId);

@@ -521,11 +521,6 @@ describe("a stale session chat turn torn down by the backstop", () => {
         ),
         turnAdapterForEntity(
           ctx.db,
-          { entityId: f.sessionId, lane: "summary" },
-          visit,
-        ),
-        turnAdapterForEntity(
-          ctx.db,
           { entityId: f.sessionId, lane: "interview" },
           visit,
         ),
@@ -543,8 +538,6 @@ describe("a stale session chat turn torn down by the backstop", () => {
       null,
       null,
       "run",
-      null,
-      // The retired summary lane resolves to no owner.
       null,
       "interview",
       null,
