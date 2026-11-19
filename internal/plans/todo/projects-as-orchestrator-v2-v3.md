@@ -12,6 +12,9 @@ This file is separate from the v1 plan because the v1 plan moves to `internal/pl
 - **Message routing check ("Jev").** Before a message wakes the coordinator, a check decides whether it is for the coordinator or for a teammate. v1 has only quiet comments plus an explicit mention.
 - **Multi-repo, the rest.** v1 already lets each child task target one repo from the project's list. Left for v2: one task that edits several repos in one sandbox; the coordinator reading extra repos in its own sandbox; adopting sessions that are in a group or have linked repos; detecting that a merged change is deployed.
 
+- **Adopt a session into a project** (moved from v1 on 19 November 2026). Includes "promote a session to a new project" from session 422. Known blockers: `sessions.owner` is written once; the branch name and the PR are tied to the session id; sessions in a group or with linked repos.
+- **Comments that do not wake the coordinator** (moved from v1 on 19 November 2026). Build it together with the message routing check above.
+
 ## v3
 
 - **Queued task starts.** Extra task starts wait in a queue. v1 uses a fixed limit of 3 parallel tasks for each project.

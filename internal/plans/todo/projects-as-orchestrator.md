@@ -38,6 +38,8 @@ The business team opens the project and sees what is launched, what is in progre
 | 17 | The coordinator may retry a failed task once, with a note on what went wrong. A second failure shows "needs you". | Unblocks work while people are away, with a hard limit on spend. Amp's docs do not cover retries. |
 | 18 | A Contributor can chat directly in a child task. This does not wake the coordinator. | Same as a quick task today. Amp allows the same (open a thread beside the Space chat). |
 | 19 | A project has no archive and no close action. It shows **done** when every task is launched or cancelled, and it opens again when a task is added. | Status is derived (see Target model), so this needs no stored state. |
+| 20 | The coordinator and every child task run on the project's one model and account (`projects.model`, `projects.providerAccountId`; the team credential when none is set). A Contributor changes them with the existing model selector. | Simplest. A run never fails because an approver has no account. Amp splits cost by person; we do not. |
+| 21 | Adopting a session into a project, and comments that do not wake the coordinator, move to v2. | The user wants v1 simple. Adoption is not cheap (a session's owner, branch name and PR are tied to the session). With devs-only Contributors, v1 needs one channel for each group: devs chat, Viewers file feedback. |
 
 ## Scope
 
@@ -50,8 +52,8 @@ The business team opens the project and sees what is launched, what is in progre
 5. Docs, artifacts and log rolled up across the project.
 6. Project instructions that go into every child task prompt.
 7. Viewer and Contributor roles. Viewers can file feedback tasks.
-8. Comments on coordinator messages that do not wake the coordinator.
-9. Adopt an existing session into a project (see the risk note in step 8; this is the first item to move to v2 if it is hard).
+8. ~~Comments that do not wake the coordinator~~ — moved to v2 (decision 21).
+9. ~~Adopt an existing session into a project~~ — moved to v2 (decision 21).
 10. Conversion of old projects.
 11. Cross-repo projects: one repo for each child task (decision 13).
 12. Hub awareness between the coordinator and child tasks (decision 14).
@@ -226,29 +228,23 @@ This is the core change. Do it alone, with no UI change.
    - **Loop guard:** a report wakes the coordinator through the batched wake-up (step 3.6). The coordinator's message to a task is a normal turn. Cap automatic coordinator turns for each project in an hour (constant; pick the value with the answer to open question 2) and show a "needs you" state when the cap is hit.
    - **Stale context:** a running task does not see a summary update unless it pulls it or the coordinator messages it. The coordinator prompt must say this.
 
-### Step 7 — Roles, feedback tasks, quiet comments
+### Step 7 — Roles and feedback tasks
 
 1. **Roles (decision 12).** No new table and no setting for each project. The project role is derived: `users.role === "dev"` → Contributor; any other value → Viewer. Repo access is still required first.
 2. Enforce in one place: `getProjectWithAccess` returns the role; mutations that chat with the coordinator or a child task, approve, run, cancel, retry or edit project settings require Contributor. Child tasks inherit the rule.
 3. **Edge cases.**
-   - `users.role` is optional. A user with no role set is a Contributor, so nobody who works today is locked out. (My choice; confirm with the user before building.)
+   - `users.role` is optional. A user with no role set is a Contributor, so nobody who works today is locked out (confirmed by the user, 19 November 2026).
    - `users.isAdmin` and team owners are Contributors whatever their role.
    - A designer or business user who must drive a coordinator needs their Eva role changed. No exception for one project in v1.
    - `projects.members`, `projectLead` and `codeReviewer` stay display data. Remove `members` and `codeReviewer` in step 9 if nothing reads them for behaviour.
    - The rule applies to projects only. Sessions and quick tasks keep today's access.
 4. **Feedback task.** A viewer can call `createFeedbackTask(projectId, text, attachments)`. It creates a normal task: `todo`, not approved, `origin: "feedback"`. It shows in the coordinator's task table at its next turn. No new entity (422).
-5. **Quiet comments.** New table `messageComments {messageId, parentId?, userId, text}` — or generalise `taskComments`/`docComments` into one comments table if their shapes match; check first and prefer one table. Comments do not start a coordinator turn. A comment that mentions the coordinator sends the thread to it as a normal message. Viewers can comment.
+5. Comments on coordinator messages are v2. In v1 a Viewer's only write action in a project is a feedback task.
+6. **Model and account (decision 20).** A child task copies `projects.model` and `projects.providerAccountId` when it **starts**, not when it is created, so a change applies to every task that has not started. A running task keeps its values. A change by a person in a child task's own model selector applies to that task only. If the project's account hits a usage limit, running tasks stop with the existing usage-limit state, the scheduler starts nothing new, and the project shows "needs you"; after a Contributor changes the account, the scheduler continues.
 
-### Step 8 — Adopt a session into a project
+### Step 8 — (moved to v2) Adopt a session into a project
 
-Risk: this is the least certain step. Move it to v2 if the points below do not hold.
-
-1. Adoption creates an `agentTasks` row with `projectId` and re-owns the session: `sessions.owner` from `standalone` to `{kind:"task", taskId}`.
-2. `sessions.owner` is written once today. Check every reader that assumes this (`by_repo_owner_*` indexes, `assertStandaloneSession` callers, `resolvePrOwnerFromBranch`, which parses `eva/session-<id>` branches as a session owner).
-3. Refuse adoption when the session is in a group, has linked repos (`sessionRepos`), or has more than one chat. Those cases are v2 (multi-repo projects).
-4. The session's existing PR becomes the task's PR. Verify the PR row re-owns cleanly.
-5. UI: "Move to project" in the session menu first. Drag and drop only if the sidebar already supports it for sessions.
-6. Promote (422): "new project from this session" = create the project, then adopt.
+Not in v1 (decision 21). See `projects-as-orchestrator-v2-v3.md`. In v1, a person brings earlier work into a project by giving the coordinator the session's PR link or summary.
 
 ### Step 9 — Convert old projects and narrow the schema
 
@@ -266,6 +262,17 @@ Follow `docs/eva-convex.md` (migration, deploy, run on dev then prod, narrow, de
 2. Move this file to `internal/plans/implemented/`.
 3. `/ship`.
 
+## Smaller rules (chosen by the agent; change them if they are wrong)
+
+- **Editing tasks.** The coordinator can change or cancel only tasks that have not started. A change to an approved task's text or repo removes its approval. Tasks the coordinator adds later always need a new approval.
+- **PR closed without a merge.** The task shows "needs you". Tasks that depend on it wait. Nothing restarts by itself.
+- **Review comments on a child PR.** Use the existing task flow ("Make changes" on `taskComments`). The coordinator is not involved.
+- **Cancelled dependency.** A task whose dependency is cancelled does not start. It shows "needs you" until a person or the coordinator removes the dependency or cancels it too.
+- **Dependency cycle.** `create_tasks_batch` refuses a batch that would make a cycle.
+- **Empty project.** A project with no tasks shows as todo, not done.
+- **Deleting a project.** Refuse while a child task runs. Child tasks and their PRs are not deleted with it; they become plain quick tasks. (Confirm before building: deletes need the user's yes.)
+- **Coordinator sandbox.** It starts on the first message and sleeps when idle, like any session. A wake-up starts it again.
+
 ## Risks
 
 - **Merge conflicts and stale bases.** Parallel tasks branch from main at different times. Rule 2.4 (a dependency counts only after its PR merges) covers ordered work. Unordered tasks that touch the same files still conflict; the task rebases itself (decision 5). The coordinator prompt must tell it to split work by files and to add a dependency when two tasks touch the same area.
@@ -278,7 +285,6 @@ Follow `docs/eva-convex.md` (migration, deploy, run on dev then prod, narrow, de
 
 ## Open questions
 
-All earlier questions are decided (19 November 2026) and are in the decisions table: cross-repo tasks (13), awareness (14), MCP tools (15), wake-ups (16), failures (17), child task chat (18), project end (19), roles (12).
+All earlier questions are decided (19 November 2026) and are in the decisions table: cross-repo tasks (13), awareness (14), MCP tools (15), wake-ups (16), failures (17), child task chat (18), project end (19), roles (12), model and account (20), scope cut (21).
 
-1. **No role set.** Confirm that a user with no Eva role is a Contributor (step 7.3).
-2. **Task card look.** Row layout, status wording and the "needs you" marker need a visual choice from the user. Ask at the start of step 4.
+1. **Task card look.** Row layout, status wording and the "needs you" marker need a visual choice from the user. Ask at the start of step 4.
