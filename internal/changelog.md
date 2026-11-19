@@ -7,6 +7,13 @@ Date: 2026-11-19
 WHY: The chat header's usage, sandbox and menu buttons sat loose next to the title; the rails now group buttons on a trough.
 
 Architectural: `CHAT_HEADER_ACTIONS_CLASS` (`ChatPageWrapper`) puts the header actions on a `rail-track` trough for session chats and for the task and project header (`SandboxChatHeaderActions`); it hides itself when empty. A `globals.css` rule makes any button on a `rail-track` flat, so the round secondary start and menu buttons lose their own fill and hover at half the pill.
+## Web: no hairline under tab strips and panel headers; UI guide covers rails
+
+Date: 2026-11-19
+
+WHY: After the rail redesign, the UI guide still told agents to divide the sidebar edge with a hairline, and tab strips kept a line that the rail no longer uses.
+
+Architectural: `docs/eva-ui.md` now says icon rails have no edge, separators or resting split divider, and group buttons on troughs (`Sidebar.RailGroup` + `railGroupThemeClass`, `SANDBOX_RAIL_GROUP_CLASS`); tab strips and panel headers have no bottom hairline. The Plan and Recap viewers and the PR recap panel pass `border-b-0` to the package `TabsBar`; the file viewer header drops its `border-b`.
 
 ## Web rail: segmented-tab groups with a sliding pill
 

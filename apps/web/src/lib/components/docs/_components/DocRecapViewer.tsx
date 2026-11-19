@@ -337,7 +337,7 @@ export function DocRecapViewer({
         className="flex min-h-0 flex-1 flex-col overflow-hidden"
       >
         <TabsBar
-          className="sm:px-4"
+          className="border-b-0 sm:px-4"
           actions={
             <div className="flex items-center gap-1">
               {viewTab === "summary" && (
