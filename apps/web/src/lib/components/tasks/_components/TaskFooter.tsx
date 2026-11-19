@@ -1,5 +1,6 @@
 "use client";
 
+import { CHAT_HEADER_ACTIONS_CLASS } from "@/lib/components/ChatPageWrapper";
 import { useRef } from "react";
 import { taskScheduledAt, type api, type Doc, type Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
@@ -76,7 +77,9 @@ const TASK_FOOTER_LAYOUT = {
     iconSize: 16,
     root: "flex shrink-0 items-center gap-1.5 sm:gap-2",
     row: "flex shrink-0 items-center gap-1.5 sm:gap-2",
-    actions: "flex shrink-0 items-center gap-1.5 sm:gap-2",
+    // The chat header track, as on session and project headers; Run stays
+    // outside it as the filled primary action.
+    actions: CHAT_HEADER_ACTIONS_CLASS,
   },
   footer: {
     buttonSize: "default",
@@ -255,7 +258,7 @@ export function TaskFooter({
             </m.div>
           ) : null}
         </AnimatePresence>
-        {showRunButton && hasSecondaryContent && (
+        {showRunButton && hasSecondaryContent && !isHeader && (
           <div className="h-6 w-px bg-muted-foreground/20" />
         )}
         <div className={layout.actions}>
