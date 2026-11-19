@@ -7,19 +7,17 @@ import { Pressable, View } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
 import { DocsSection } from "@/docs/DocsSection";
 import { AutomationsSection } from "@/automations/AutomationsSection";
-import { DraftsSection } from "@/drafts/DraftsSection";
 import { ProjectsSection, useProjectRepo } from "@/projects/ProjectsSection";
 import { TodaySection, useShowsToday } from "@/today/TodaySection";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme } from "@/ui/theme";
 import { lastTabSection, sectionIndex } from "@/ui/sectionIndex";
 
-type Section = "projects" | "docs" | "drafts" | "automations" | "today";
+type Section = "projects" | "docs" | "automations" | "today";
 
 const SECTIONS: ReadonlyArray<{ id: Section; label: string }> = [
   { id: "projects", label: "Projects" },
   { id: "docs", label: "Documents" },
-  { id: "drafts", label: "Drafts" },
   { id: "automations", label: "Automations" },
   { id: "today", label: "Today" },
 ];
@@ -32,7 +30,7 @@ function visibleSections(showsToday: boolean) {
 /**
  * The Projects tab holds the web's per-repo pages that are not a place to
  * chat: Projects (`ProjectsClient`), Documents (the drawer's Documents
- * panel), Drafts, Automations (the web Automations sidebar) and Today, switched by pills under the title (`?section=`)
+ * panel), Automations (the web Automations sidebar) and Today, switched by pills under the title (`?section=`)
  * or a sideways swipe on the content (`Pager`), as the Sessions tab. All
  * of them share the repo (`?repo=`). Today shows while the repo's Daily
  * standup is on, as the web sidebar, or has history (`useShowsToday`). The
@@ -91,8 +89,6 @@ export default function ProjectsScreen() {
           switch (sections[page]?.id) {
             case "docs":
               return <DocsSection />;
-            case "drafts":
-              return <DraftsSection />;
             case "automations":
               return <AutomationsSection />;
             case "today":

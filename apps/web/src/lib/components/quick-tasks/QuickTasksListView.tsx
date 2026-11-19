@@ -9,7 +9,10 @@ import { runAllPlan, startAll } from "@eva/shared";
 import type { Id } from "@eva/backend";
 import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
-import { useQuickTaskFilters } from "@/routes/_repo/$owner/$repo/quick-tasks/_utils";
+import {
+  useQuickTaskFilters,
+  useQuickTaskTodoDrafts,
+} from "@/routes/_repo/$owner/$repo/quick-tasks/_utils";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { usePersistedScrollParent } from "@/lib/hooks/usePersistedScrollParent";
 import {
@@ -38,6 +41,7 @@ import {
   type DisplayTaskStatus,
 } from "@/lib/components/tasks/TaskStatusBadge";
 import { QuickTaskCard } from "./QuickTaskCard";
+import { QuickTaskDraftRow } from "./QuickTaskDraftRow";
 import type { SelectionToggleOptions } from "./selectionRange";
 import { entityPathSegment } from "@/lib/numId";
 import { RunAllDialog } from "./RunAllDialog";
@@ -120,6 +124,7 @@ export function QuickTasksListView({
   );
 
   const [{ q, statuses }] = useQuickTaskFilters();
+  const todoDrafts = useQuickTaskTodoDrafts(repoId);
   const searchQuery = q;
   const visibleStatuses = new Set(statuses);
 
@@ -217,6 +222,7 @@ export function QuickTasksListView({
             if (!visibleStatuses.has(status)) return [];
             const cfg = statusConfig[status];
             const items = tasksByStatus[status] ?? [];
+            const drafts = status === "todo" ? todoDrafts : [];
             // Shift-click spans this section only — the visible order of the
             // group the click landed in, not the whole flattened list.
             const sectionIds = items.map((t) => t._id);
@@ -244,7 +250,7 @@ export function QuickTasksListView({
                             {cfg.label}
                           </span>
                           <span className="text-xs text-muted-foreground/60 tabular-nums">
-                            {items.length}
+                            {items.length + drafts.length}
                           </span>
                         </button>
                       </CollapsibleTrigger>
@@ -277,11 +283,23 @@ export function QuickTasksListView({
                     </div>
                   </SortableListHeader>
                   <CollapsibleContent>
-                    {items.length === 0 ? (
+                    {drafts.length > 0 ? (
+                      <div className="flex flex-col gap-1.5 pr-1.5 pb-1.5">
+                        {drafts.map((draft) => (
+                          <QuickTaskDraftRow
+                            key={draft._id}
+                            id={draft._id}
+                            title={draft.title}
+                            description={draft.description}
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+                    {items.length === 0 && drafts.length === 0 ? (
                       <div className="flex items-center justify-center py-4 text-xs text-muted-foreground">
                         No tasks
                       </div>
-                    ) : (
+                    ) : items.length === 0 ? null : (
                       <SortableListItems className="pr-1.5 pb-1.5">
                         {scrollParent && (
                           <Virtuoso

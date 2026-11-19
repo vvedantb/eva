@@ -2,7 +2,8 @@
 
 import type { PrState } from "@eva/shared";
 import { m } from "motion/react";
-import type { Id } from "@eva/backend";
+import { api, type Id } from "@eva/backend";
+import { useQuery } from "convex-helpers/react/cache/hooks";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -32,6 +33,7 @@ import { canSendSessionForReview } from "@/routes/_repo/$owner/$repo/sessions/_u
 
 interface SessionItem {
   _id: Id<"sessions">;
+  repoId: Id<"githubRepos">;
   numId?: number;
   _creationTime: number;
   userId: Id<"users">;
@@ -110,6 +112,9 @@ export function SidebarSessionRow<T extends SessionItem>({
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const { request: requestConfirm } = useRequestConfirm();
   const { sendForReview } = useSendSessionForReview(session._id);
+  // One cached subscription per repo, shared by every row of that repo.
+  const draftMarks = useQuery(api.drafts.listMarks, { repoId: session.repoId });
+  const hasDraft = draftMarks?.sessionIds.includes(session._id) ?? false;
 
   return (
     <>
@@ -139,6 +144,7 @@ export function SidebarSessionRow<T extends SessionItem>({
                 isExecuting={session.isExecuting === true}
                 isAwaitingAnswer={session.isAwaitingAnswer === true}
                 hasUnread={session.hasUnread === true}
+                hasDraft={hasDraft}
                 isSelected={isSelected}
                 onNavigate={onNavigate}
                 prUrl={session.prUrl}

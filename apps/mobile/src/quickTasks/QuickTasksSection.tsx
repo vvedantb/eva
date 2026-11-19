@@ -6,8 +6,10 @@ import {
   applyQuickTaskFilters,
   clearedQuickTaskFilters,
   groupByTaskStatus,
+  quickTaskTodoDrafts,
   runAllPlan,
   startAll,
+  visibleDrafts,
   type DisplayTaskStatus,
   type QuickTaskListFilters,
 } from "@eva/shared";
@@ -27,7 +29,8 @@ import { BackHandler, SectionList, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ActiveFiltersBar, QuickTaskToolbar } from "@/quickTasks/QuickTaskListOptions";
 import { QuickTaskBulkBar } from "@/quickTasks/QuickTaskBulk";
-import { QuickTaskRow } from "@/quickTasks/QuickTaskRow";
+import type { QuickTaskDraft } from "@/quickTasks/DraftsMenu";
+import { QuickTaskDraftRow, QuickTaskRow } from "@/quickTasks/QuickTaskRow";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
 import { useQuickTaskActions } from "@/quickTasks/useQuickTaskActions";
 import { CardGap, FoldFooter, FoldHeader } from "@/ui/FoldHeader";
@@ -40,6 +43,9 @@ import { LIST_WINDOW } from "@/ui/listWindow";
 const closedQuickTaskStatuses = persistedIdSet("quickTaskStatusesClosed");
 
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
+type QuickTask = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
+/** A To Do row is a task or one of the user's drafts; every other section holds tasks only. */
+type ListItem = { kind: "draft"; draft: QuickTaskDraft } | { kind: "task"; task: QuickTask };
 
 /** The Quick Tasks repo (`useRepoParam`), and the new-task screen on it. */
 export function useQuickTaskRepo() {
@@ -60,8 +66,10 @@ export function useQuickTaskRepo() {
  * picker, the toolbar (search and the Options sheet: sort and filters, the
  * web `QuickTasksToolbar`) and its "Filtered by" chips, then a collapsible
  * section per shown status (icon, label, count) in workflow order, each with
- * its task rows or "No tasks". To Do carries the web "Run" (Run All) when it
- * has tasks; a long press on a row opens the web row menu as a sheet
+ * its task rows or "No tasks". To Do starts with the user's own drafts
+ * (`QuickTaskDraftRow`, counted in its header): a tap opens the draft in the
+ * new-task screen; drafts take no menu, select or Run All. To Do carries
+ * the web "Run" (Run All) when it has tasks; a long press on a row opens the web row menu as a sheet
  * (`useQuickTaskActions`). It opens as the web does: tasks outside projects,
  * recently updated first (`QUICK_TASK_LIST_DEFAULTS`). A `SectionList`, as a
  * repo's tasks have no cap. "Select" in a row's menu starts the web select
@@ -88,10 +96,13 @@ export function QuickTasksSection() {
 function QuickTaskList({ repo }: { repo: Repo }) {
   const { openNew } = useQuickTaskRepo();
   const tasks = useQuery(api.agentTasks.getAllTasks, { repoId: repo._id });
+  // The user's own drafts (private to them), at the top of To Do.
+  const drafts = useQuery(api.agentTasks.listDrafts, { repoId: repo._id });
   const errorTaskIds = useQuery(
     api.agentRuns.getTaskIdsWithLatestRunError,
     tasks ? { repoId: repo._id, taskIds: tasks.map((task) => task._id) } : "skip",
   );
+  const draftMarks = useQuery(api.drafts.listMarks, { repoId: repo._id });
   const users = useQuery(api.users.listAll, {});
   const projects = useQuery(api.projects.list, { repoId: repo._id });
   const currentUserId = useQuery(api.auth.me, {});
@@ -142,10 +153,14 @@ function QuickTaskList({ repo }: { repo: Repo }) {
   };
   const changeFilters = (patch: Partial<QuickTaskListFilters>) => setFilters({ ...filters, ...patch });
   const shown = applyQuickTaskFilters(tasks, filters);
+  // `remove` is a soft delete: a removed draft stays until the list drops it.
+  const liveDrafts = visibleDrafts(drafts ?? []);
+  const shownDrafts = quickTaskTodoDrafts(liveDrafts, filters);
   // The web tag list: the stock tags and every tag on the repo's tasks. `sort` on a fresh array; Hermes lacks `toSorted`.
   const allTags = [...new Set([...TASK_TAGS, ...tasks.flatMap((task) => task.tags ?? [])])].sort();
   const sections = groupByTaskStatus(shown).filter((section) => filters.statuses.includes(section.status));
   const errors = new Set<string>(errorTaskIds ?? []);
+  const draftTaskIds = new Set<string>(draftMarks?.taskIds ?? []);
   const todoCount = shown.filter((task) => task.status === "todo").length;
   const plan = runAllPlan(shown, currentUserId);
   const runAll = async () => {
@@ -155,7 +170,7 @@ function QuickTaskList({ repo }: { repo: Repo }) {
     setRunningAll(false);
   };
 
-  if (tasks.length === 0) {
+  if (tasks.length === 0 && liveDrafts.length === 0) {
     return (
       <EmptyState
         icon={IconChecklist}
@@ -179,7 +194,7 @@ function QuickTaskList({ repo }: { repo: Repo }) {
     <View className="flex-1">
       <QuickTaskToolbar filters={filters} onChange={changeFilters} projects={projects} users={users} allTags={allTags} />
       <ActiveFiltersBar filters={filters} onChange={changeFilters} projects={projects} users={users} />
-      {shown.length === 0 ? (
+      {shown.length === 0 && shownDrafts.length === 0 ? (
         <EmptyState
           icon={IconChecklist}
           title="No matching quick tasks"
@@ -200,9 +215,13 @@ function QuickTaskList({ repo }: { repo: Repo }) {
           {...LIST_WINDOW}
           sections={sections.map((section) => {
             const open = !closed.has(section.status);
-            return { status: section.status, count: section.tasks.length, open, data: open ? section.tasks : [] };
+            const rows: ListItem[] = [
+              ...(section.status === "todo" ? shownDrafts.map((draft): ListItem => ({ kind: "draft", draft })) : []),
+              ...section.tasks.map((task): ListItem => ({ kind: "task", task })),
+            ];
+            return { status: section.status, count: rows.length, open, data: open ? rows : [] };
           })}
-          keyExtractor={(task) => task._id}
+          keyExtractor={(item) => (item.kind === "draft" ? item.draft._id : item.task._id)}
           keyboardShouldPersistTaps="handled"
           stickySectionHeadersEnabled={false}
           renderSectionHeader={({ section }) => (
@@ -217,16 +236,21 @@ function QuickTaskList({ repo }: { repo: Repo }) {
           )}
           // 8 between cards (web `space-y-1.5`, 6), so each reads as its own target.
           ItemSeparatorComponent={CardGap}
-          renderItem={({ item: task, section }) => (
-            <QuickTaskRow
-              task={task}
-              status={section.status}
-              hasError={errors.has(task._id)}
-              creator={users?.find((user) => user._id === task.createdBy)}
-              onLongPress={() => actions.openSheet(task)}
-              selection={selecting ? { checked: selected.has(task._id), onToggle: () => toggleSelected(task._id) } : undefined}
-            />
-          )}
+          renderItem={({ item, section }) => {
+            if (item.kind === "draft") return <QuickTaskDraftRow draft={item.draft} />;
+            const { task } = item;
+            return (
+              <QuickTaskRow
+                task={task}
+                status={section.status}
+                hasError={errors.has(task._id)}
+                hasDraftComment={draftTaskIds.has(task._id)}
+                creator={users?.find((user) => user._id === task.createdBy)}
+                onLongPress={() => actions.openSheet(task)}
+                selection={selecting ? { checked: selected.has(task._id), onToggle: () => toggleSelected(task._id) } : undefined}
+              />
+            );
+          }}
           renderSectionFooter={({ section }) => <FoldFooter open={section.open} count={section.count} empty="No tasks" />}
           // Web: the list `p-3 pt-0`.
           contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: tabBarReserve(largerText, insets.bottom) }}

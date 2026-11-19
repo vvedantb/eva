@@ -16,6 +16,7 @@ import {
 } from "@vvedantb/native-ui/primitives";
 import { useLargerText } from "@vvedantb/native-ui/theme";
 import { useQueries, useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, SectionList, View } from "react-native";
@@ -149,6 +150,9 @@ const SESSION_LIST_QUERIES = {
 /** One list query per repo for the tab, cached so `useQueries` keeps its subscriptions. */
 const sessionListQueries = perRepoQueryCache<(typeof SESSION_LIST_QUERIES)[SessionTab], Id<"githubRepos">>();
 
+/** One `drafts.listMarks` per repo for the tab, cached as the list queries. */
+const draftMarkQueries = perRepoQueryCache<typeof api.drafts.listMarks, Id<"githubRepos">>();
+
 /**
  * Sessions across every repo the user can access, as the web sessions sidebar
  * at phone width, from the same subscriptions: `githubRepos.list`, then one
@@ -186,6 +190,15 @@ function SessionsSection() {
       (repos ?? []).map((repo) => repo._id),
     ),
   );
+  const draftMarks = useQueries(
+    draftMarkQueries(
+      api.drafts.listMarks,
+      "drafts",
+      (repos ?? []).map((repo) => repo._id),
+    ),
+  );
+  // The sessions with an unsent chat message, across every repo; a repo still loading marks none.
+  const draftSessionIds = new Set<string>(Object.values(draftMarks).flatMap(markedSessionIds));
   // Loading until every repo's list answers. A failed list (an `Error`) leaves
   // its repo out rather than holding the whole tab on the skeleton.
   const visibleSessions = (rows: SessionListItem[] | undefined) =>
@@ -266,7 +279,13 @@ function SessionsSection() {
           ItemSeparatorComponent={ListDivider}
           // Stable handlers and swipe look, so a row whose session did not change keeps its output.
           renderItem={({ item: row }) => (
-            <SessionListRow row={row} onOpenMenu={openRowMenu} swipe={swipe} onSwipe={runSwipe} />
+            <SessionListRow
+              row={row}
+              hasDraft={draftSessionIds.has(row.session._id)}
+              onOpenMenu={openRowMenu}
+              swipe={swipe}
+              onSwipe={runSwipe}
+            />
           )}
           renderSectionFooter={({ section }) => (
             <SessionGroupFooter section={section} onToggleExpanded={() => toggleExpanded(section.key)} />
@@ -287,4 +306,9 @@ function SessionsSection() {
  */
 function listedSessions(result: SessionListItem[] | Error | undefined): SessionListItem[] | undefined {
   return result === undefined || result instanceof Error ? undefined : result;
+}
+
+/** One repo's `drafts.listMarks` session ids out of the `useQueries` map: none while loading or failed. */
+function markedSessionIds(result: FunctionReturnType<typeof api.drafts.listMarks> | Error | undefined): Id<"sessions">[] {
+  return result === undefined || result instanceof Error ? [] : result.sessionIds;
 }

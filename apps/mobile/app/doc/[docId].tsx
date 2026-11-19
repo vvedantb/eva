@@ -93,7 +93,7 @@ export default function DocScreen() {
               {doc.content}
             </Markdown>
           ) : (
-            // The web Drafts card's empty copy.
+            // An empty doc.
             <Text className="font-instrument-sans text-sm italic" style={{ color: theme.mutedForeground }}>
               No content
             </Text>

@@ -80,3 +80,33 @@ export const listForRepo = authQuery({
     return results.sort((a, b) => b.updatedAt - a.updatedAt);
   },
 });
+
+/**
+ * Where the current user has an unsent draft in a repo: the sessions with a
+ * chat draft and the tasks with a comment draft. Rows show a draft mark from
+ * this; it reads only the user's draft index, no surface docs.
+ */
+export const listMarks = authQuery({
+  args: { repoId: v.id("githubRepos") },
+  returns: v.object({
+    sessionIds: v.array(v.id("sessions")),
+    taskIds: v.array(v.id("agentTasks")),
+  }),
+  handler: async (ctx, args) => {
+    const empty = { sessionIds: [], taskIds: [] };
+    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return empty;
+    const rows = await ctx.db
+      .query("drafts")
+      .withIndex("by_user_and_repo", (q) =>
+        q.eq("userId", ctx.userId).eq("repoId", args.repoId),
+      )
+      .collect();
+    const sessionIds = new Set<Id<"sessions">>();
+    const taskIds = new Set<Id<"agentTasks">>();
+    for (const row of rows) {
+      if (row.kind === "sessionChat" && row.sessionId) sessionIds.add(row.sessionId);
+      if (row.kind === "taskComment" && row.taskId) taskIds.add(row.taskId);
+    }
+    return { sessionIds: [...sessionIds], taskIds: [...taskIds] };
+  },
+});

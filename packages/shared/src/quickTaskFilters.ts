@@ -154,6 +154,21 @@ export function applyQuickTaskFilters<T extends FilterableQuickTask>(
   });
 }
 
+/**
+ * The user's quick-task drafts the To Do group shows above its tasks: none
+ * when To Do is filtered out, else the ones every other filter keeps, in the
+ * list's sort order (a draft is filtered as if it were a To Do task).
+ */
+export function quickTaskTodoDrafts<T extends FilterableQuickTask>(
+  drafts: readonly T[],
+  filters: QuickTaskListFilters,
+  now = Date.now(),
+): T[] {
+  if (!filters.statuses.includes("todo")) return [];
+  const asTodo = drafts.map((draft) => ({ ...draft, status: "todo" as const, draft }));
+  return applyQuickTaskFilters(asTodo, filters, now).map((row) => row.draft);
+}
+
 /** A filter that differs from its default: the toolbar shows "Clear all filters". */
 export function hasActiveQuickTaskFilters(filters: QuickTaskListFilters): boolean {
   return activeQuickTaskFilterKeys(filters).length > 0;

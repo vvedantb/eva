@@ -33,7 +33,7 @@ export function rememberRepo(repoId: string) {
 
 /**
  * The repo a per-repo section of a tab shows (Quick Tasks and Reviews in
- * Sessions; Projects, Documents, Drafts and Today in Projects), kept in the
+ * Sessions; Projects, Documents, Automations and Today in Projects), kept in the
  * URL (`?repo=`) as the web keeps it in its path, so a tab's sections stay
  * on one repo. With none in the URL, the repo last picked (`useLastRepoId`),
  * else the first.

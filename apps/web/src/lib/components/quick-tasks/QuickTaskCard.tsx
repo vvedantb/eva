@@ -20,7 +20,8 @@ import {
   MarqueeOnHover,
   UnreadDot,
 } from "@vvedantb/ui";
-import type { Id, api } from "@eva/backend";
+import { api, type Id } from "@eva/backend";
+import { useQuery } from "convex-helpers/react/cache/hooks";
 import type { FunctionReturnType } from "convex/server";
 import { UserInitials } from "@eva/shared/user-initials";
 import {
@@ -29,7 +30,13 @@ import {
   type SandboxStatus,
 } from "@/lib/components/sandbox/sandboxStatusStyles";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
-import { IconClock, IconDots, IconFolder, IconTag } from "@tabler/icons-react";
+import {
+  IconClock,
+  IconDots,
+  IconFolder,
+  IconPencil,
+  IconTag,
+} from "@tabler/icons-react";
 import {
   statusConfig,
   type TaskStatus,
@@ -164,8 +171,17 @@ export function QuickTaskCard({
     projects,
   });
 
+  // One cached subscription per repo, shared by every card on the page.
+  const draftMarks = useQuery(
+    api.drafts.listMarks,
+    repoId ? { repoId } : "skip",
+  );
+  const hasDraftComment = draftMarks?.taskIds.includes(id) ?? false;
+
   const hasMetadata =
-    projectName !== undefined || (tags !== undefined && tags.length > 0);
+    projectName !== undefined ||
+    (tags !== undefined && tags.length > 0) ||
+    hasDraftComment;
 
   const creatorFirstName =
     createdByUser?.firstName ?? createdByUser?.fullName?.split(/\s+/)[0];
@@ -327,6 +343,17 @@ export function QuickTaskCard({
               </span>
             </Badge>
           ))}
+          {hasDraftComment ? (
+            <Badge
+              variant="secondary"
+              className="px-1.5 py-0 text-3xs font-medium leading-4"
+            >
+              <span className="flex min-w-0 items-center gap-0.5">
+                <IconPencil className="size-2.5 shrink-0" />
+                Draft comment
+              </span>
+            </Badge>
+          ) : null}
         </div>
       ) : null}
 

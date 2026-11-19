@@ -1,4 +1,4 @@
-import type { ProjectPhase } from "@eva/shared";
+import type { ProjectColumn, ProjectPhase } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
   IconCheck,
@@ -12,6 +12,7 @@ import {
 } from "@tabler/icons-react-native";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import type { ComponentType } from "react";
+import { statusAppearance } from "@/quickTasks/statusAppearance";
 import type { Scheme } from "@/ui/theme";
 
 /** The web `phaseConfig` icons (`ProjectPhaseBadge.tsx`). */
@@ -43,4 +44,9 @@ export function phaseAppearance(phase: ProjectPhase, scheme: Scheme) {
     cancelled: { text: theme.statusCancelled, bar: theme.statusCancelledBar },
   };
   return { icon: PHASE_ICONS[phase], ...colours[phase] };
+}
+
+/** A list section's icon and colour: To Do as the quick-task To Do, the rest as their phase. */
+export function columnAppearance(column: ProjectColumn, scheme: Scheme) {
+  return column === "todo" ? statusAppearance("todo", scheme) : phaseAppearance(column, scheme);
 }

@@ -3,8 +3,13 @@
 import { AnimatePresence, m } from "motion/react";
 import { Badge, tokenTransition } from "@vvedantb/ui";
 import type { Doc } from "@eva/backend";
-import { PROJECT_PHASE_LABELS } from "@eva/shared";
 import {
+  PROJECT_COLUMN_LABELS,
+  PROJECT_PHASE_LABELS,
+  type ProjectColumn,
+} from "@eva/shared";
+import {
+  IconCircle,
   IconNotes,
   IconCheck,
   IconClock,
@@ -21,19 +26,18 @@ export { PROJECT_PHASES } from "@eva/backend";
 
 export { ACTIVE_PROJECT_PHASES, BUILDABLE_PROJECT_PHASES } from "@eva/shared";
 
-export const phaseConfig: Record<
-  ProjectPhase,
-  {
-    bg: string;
-    cardBg: string;
-    bar: string;
-    /** CSS colour of `bar`, for the timeline's Gantt status. */
-    barColor: string;
-    text: string;
-    label: string;
-    icon: typeof IconNotes;
-  }
-> = {
+interface PhaseStyle {
+  bg: string;
+  cardBg: string;
+  bar: string;
+  /** CSS colour of `bar`, for the timeline's Gantt status. */
+  barColor: string;
+  text: string;
+  label: string;
+  icon: typeof IconNotes;
+}
+
+export const phaseConfig: Record<ProjectPhase, PhaseStyle> = {
   draft: {
     bg: "bg-secondary",
     cardBg: "bg-secondary/40",
@@ -97,6 +101,27 @@ export const phaseConfig: Record<
     label: PROJECT_PHASE_LABELS.cancelled,
     icon: IconCircleX,
   },
+};
+
+/**
+ * List sections and kanban columns. "To Do" (draft and finalized projects)
+ * matches the quick-task To Do column; the rest are their phase's style.
+ */
+export const columnConfig: Record<ProjectColumn, PhaseStyle> = {
+  todo: {
+    bg: "bg-secondary",
+    cardBg: "bg-secondary/40",
+    bar: "bg-foreground/50",
+    barColor: "rgb(var(--foreground) / 0.5)",
+    text: "text-muted-foreground",
+    label: PROJECT_COLUMN_LABELS.todo,
+    icon: IconCircle,
+  },
+  in_progress: phaseConfig.in_progress,
+  business_review: phaseConfig.business_review,
+  code_review: phaseConfig.code_review,
+  completed: phaseConfig.completed,
+  cancelled: phaseConfig.cancelled,
 };
 
 interface ProjectPhaseBadgeProps {
