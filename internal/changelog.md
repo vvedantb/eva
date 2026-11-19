@@ -1,5 +1,13 @@
 # Changelog
 
+## Web preview iframe steps aside during dock motion
+
+Date: 2026-11-19
+
+WHY: The preview iframe glitched when the sandbox card popped in or out. It lives in the root `PreviewIframeHost` overlay, not in the card, so it could not follow the card's scale and lagged the chat-pane width slide by a frame.
+
+Architectural: `dockMotion` fires `DOCK_MOTION_EVENT` on the panel with the motion's length (pop in 380 ms, switch 220 ms, pop out 660 ms with the hold). `previewIframeHost` hides any overlay whose anchor is inside that panel (`opacity-0`, no pointer events), then re-measures it at the end and fades it back over 150 ms. The listener checks the event type and its `ms` field, not `instanceof`, so a hot-reloaded module still matches.
+
 ## Web sandbox split: chat pane slides with the card
 
 Date: 2026-11-19
