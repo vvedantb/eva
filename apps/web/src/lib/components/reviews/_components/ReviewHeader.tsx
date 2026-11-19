@@ -49,7 +49,7 @@ export function ReviewHeader({
   const blocker = headerBlocker(overview);
 
   return (
-    <div className="shrink-0 border-b border-border">
+    <div className="shrink-0">
       <div className="space-y-2 px-4 pt-3">
         <div className="flex min-w-0 items-center gap-3">
           <span

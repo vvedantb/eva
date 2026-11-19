@@ -123,7 +123,7 @@ export function ReviewTabsPanel({
     >
       <div className="relative flex h-full min-h-0 w-full flex-col bg-background">
         {overview === null ? (
-          <div className="shrink-0 border-b border-border">
+          <div className="shrink-0">
             {placeholder === undefined ? null : (
               <div className="px-4 pt-3 pb-2">{placeholder}</div>
             )}
