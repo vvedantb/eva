@@ -1615,6 +1615,23 @@ export const chatReadFields = {
   lastReadAt: v.number(),
 };
 
+// One row per (user, chat): a recap only that user sees (see chatRecaps).
+// "away" covers what happened since they left; "full" is the whole chat, asked
+// for from the chat menu. `text` is unset while the model writes it.
+export const chatRecapKindValidator = v.union(
+  v.literal("away"),
+  v.literal("full"),
+);
+export const chatRecapFields = {
+  userId: v.id("users"),
+  parentId: chatParentIdValidator,
+  kind: chatRecapKindValidator,
+  /** The read time the recap covers activity after. */
+  since: v.number(),
+  createdAt: v.number(),
+  text: v.optional(v.string()),
+};
+
 // Per-sandbox bearer secret the in-sandbox git credential helper presents to
 // /api/git-credentials to receive a freshly minted GitHub App installation
 // token. One row per sandbox; rotated every time the helper is

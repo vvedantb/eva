@@ -41,6 +41,8 @@ type RunDoc = NonNullable<
 interface TaskFooterProps {
   taskId: Id<"agentTasks">;
   task: Doc<"agentTasks"> | undefined;
+  /** The task's chat, once it exists: the header menu's Recap chat. */
+  chatId?: Id<"sessionChats">;
   /** Main run or chat turn: `useTaskAgentActive`. */
   isAgentActive: boolean;
   status: TaskStatus | undefined;
@@ -153,6 +155,7 @@ function TaskFooterError({
 export function TaskFooter({
   taskId,
   task,
+  chatId,
   isAgentActive,
   status,
   hasActiveRun,
@@ -268,6 +271,7 @@ export function TaskFooter({
           {isHeader && task ? (
             <TaskHeaderMenu
               task={task}
+              chatId={chatId}
               buttonSize={buttonSize}
               iconSize={iconSize}
               createPr={{

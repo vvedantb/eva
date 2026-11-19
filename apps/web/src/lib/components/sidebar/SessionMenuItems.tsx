@@ -83,8 +83,8 @@ interface SessionMenuItemsProps {
   onUnarchive?: () => Promise<void>;
   /** Rows in a linked-session group: take the session out of the group. */
   onRemoveFromGroup?: () => void;
-  /** Chat header only: the summary runs in the open chat's sandbox. */
-  summary?: { hasSummary: boolean; disabled: boolean; onRequest: () => void };
+  /** Chat header only: a recap of the open chat (`useRecapChat`). */
+  onRecapRequest?: () => void;
 }
 
 /**
@@ -105,7 +105,7 @@ export function SessionMenuItems({
   onArchiveRequest,
   onUnarchive,
   onRemoveFromGroup,
-  summary,
+  onRecapRequest,
 }: SessionMenuItemsProps) {
   const Item = variant === "context" ? ContextMenuItem : DropdownMenuItem;
   const Separator =
@@ -137,22 +137,13 @@ export function SessionMenuItems({
   const showSendForReview = onSendForReview !== undefined && !simpleView;
   const hasPrGroup = prs.length > 0 || showOpenPr || showSendForReview;
 
-  const summaryLabel = summary?.hasSummary
-    ? "Regenerate Summary"
-    : "Summarise Session";
-
   return (
     <>
-      {summary ? (
+      {onRecapRequest ? (
         <>
-          <Item
-            onSelect={summary.onRequest}
-            disabled={summary.disabled}
-            title={skipConfirmTitle(summaryLabel)}
-          >
+          <Item onSelect={onRecapRequest}>
             <IconSparkles size={iconSize} />
-            {summaryLabel}
-            <ConfirmSkipHint />
+            Recap chat
           </Item>
           <Separator />
         </>

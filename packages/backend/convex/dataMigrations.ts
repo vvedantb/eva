@@ -355,3 +355,28 @@ export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionBackgroundAgents,
 ]);
 
+
+// Session summaries were retired (the away recap and "Recap chat" replace
+// them). Run `dataMigrations:retireSessionSummaries` on prod, then remove
+// `sessions.summary` and the `"summary"` turn lane from the schema.
+
+export const clearSessionSummaries = dataMigrations.define({
+  table: "sessions",
+  migrateOne: async (_ctx, session) => {
+    if (session.summary === undefined) return;
+    return { summary: undefined };
+  },
+});
+
+export const deleteSummaryTurns = dataMigrations.define({
+  table: "turns",
+  migrateOne: async (ctx, turn) => {
+    if (turn.lane === "summary") await ctx.db.delete(turn._id);
+  },
+});
+
+/** `npx convex run --prod dataMigrations:retireSessionSummaries` */
+export const retireSessionSummaries = dataMigrations.runner([
+  internal.dataMigrations.clearSessionSummaries,
+  internal.dataMigrations.deleteSummaryTurns,
+]);

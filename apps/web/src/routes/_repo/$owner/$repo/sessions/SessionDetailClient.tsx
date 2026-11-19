@@ -92,10 +92,6 @@ export function SessionDetailClient({
       ? { entityId: chatStreamingEntityId(chatId) }
       : "skip",
   );
-  const summaryStreaming = useHeldQuery(
-    api.streaming.get,
-    isRouteActive ? { entityId: `summary:${sessionId}` } : "skip",
-  );
   const startupStreaming = useHeldQuery(
     api.streaming.get,
     isRouteActive
@@ -308,14 +304,12 @@ export function SessionDetailClient({
       sandboxBranch={session.sandboxBranch}
       sandboxGitSync={session.sandboxGitSync}
       prState={session.prState}
-      summary={session.summary}
       messages={messages ?? []}
       isLoadingMessages={messages === undefined}
       queuedMessages={queuedMessages ?? []}
       streamingActivity={streaming?.currentActivity}
       streamingContent={streaming?.currentContent}
       streamingPendingQuestion={streaming?.pendingQuestion}
-      summaryStreamingActivity={summaryStreaming?.currentActivity}
       startupStreamingActivity={startupStreaming?.currentActivity}
       isSandboxActive={isSandboxActive}
       isSandboxToggling={isSandboxStarting || isSandboxStopping}

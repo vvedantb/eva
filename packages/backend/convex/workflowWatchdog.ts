@@ -3,10 +3,7 @@ import { type MutationCtx, internalMutation } from "./_generated/server";
 import { type WorkflowId } from "@convex-dev/workflow";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
-import {
-  cancelTrackedWorkflow,
-  isTrackedWorkflowRunning,
-} from "./workflowManager";
+import { cancelTrackedWorkflow } from "./workflowManager";
 import { RUN_TIMEOUT_MS } from "./_taskWorkflow/staleness";
 import { scheduleArenaCheckCompletion } from "./_arena/browserRun";
 import {
@@ -30,21 +27,17 @@ import { abandonTaskRunSandbox } from "./_sessions/sandbox";
 import {
   sessionChatAdapter,
   trackSessionChatWorkflow,
-  trackSessionWorkflow,
-  type ChatAlert,
 } from "./_chat/surfaceAdapters";
 import {
   cancelStaleWorkflow,
   finalizeStaleChatTurn,
 } from "./_chat/stallWatchdog";
 import { buildStaleDocPatch } from "./_prRecapWorkflow/staleDoc";
-import { sessionSummaryStreamingEntityId } from "./_chat/agentStreamIds";
-import { ensureMainChat } from "./_sessionChats/helpers";
 
 // Re-exported so importers keep resolving these names from
 // "./workflowWatchdog"; the implementations live in
 // _chat/surfaceAdapters.ts and _taskWorkflow/staleness.ts.
-export { RUN_TIMEOUT_MS, trackSessionChatWorkflow, trackSessionWorkflow };
+export { RUN_TIMEOUT_MS, trackSessionChatWorkflow };
 
 /** Records a workflow as the active workflow for a doc and schedules a stale handler. */
 export async function trackDocWorkflow(
@@ -123,52 +116,6 @@ export async function trackProjectBuildWorkflow(
     internal.workflowWatchdog.handleStaleBuild,
     { projectId, workflowId: id },
   );
-}
-
-/** Tears down a stale session-level workflow (the summary); chats use `handleStaleSessionChat`. */
-export const handleStaleSession = internalMutation({
-  args: {
-    sessionId: v.id("sessions"),
-    workflowId: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await tearDownStaleSessionWorkflow(
-      ctx,
-      args.sessionId,
-      args.workflowId,
-      sessionChatAdapter.alerts.timeout,
-    );
-    return null;
-  },
-});
-
-/**
- * Tears down a session-level workflow (the summary — chat turns live on their
- * chat) the `TURN_BACKSTOP_MS` backstop or the lease reconciler gave up on.
- * No-op once that workflow has ended. The alert lands in the Main chat.
- */
-export async function tearDownStaleSessionWorkflow(
-  ctx: MutationCtx,
-  sessionId: Id<"sessions">,
-  workflowId: string,
-  alert: ChatAlert,
-): Promise<void> {
-  const session = await ctx.db.get(sessionId);
-  if (!session || !(await isTrackedWorkflowRunning(ctx, workflowId))) return;
-  await cancelStaleWorkflow(ctx, workflowId, [
-    sessionSummaryStreamingEntityId(sessionId),
-  ]);
-  const mainChat = await ensureMainChat(ctx, session);
-  await ctx.db.insert("messages", {
-    parentId: mainChat._id,
-    role: "assistant",
-    content: alert.text,
-    timestamp: Date.now(),
-    isSystemAlert: true,
-    ...(alert.detail !== undefined ? { errorDetail: alert.detail } : {}),
-  });
-  await ctx.db.patch(sessionId, { updatedAt: Date.now() });
 }
 
 /** Cancels a stale session chat workflow and starts the next queued message. */

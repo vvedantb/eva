@@ -23,7 +23,6 @@ interface SessionChatHeaderArgs {
   chatId: Id<"sessionChats">;
   /** Any chat of the session holds a turn — blocks Fork session. */
   isAnyChatExecuting: boolean;
-  hasSummary: boolean;
   messageCount: number;
   isSandboxActive: boolean;
   isSandboxToggling: boolean;
@@ -36,7 +35,6 @@ interface SessionChatHeaderArgs {
   providerAccountId: Id<"userProviderAccounts"> | null | undefined;
   usageAccountLabel: string;
   onSandboxToggle: (action: "start" | "stop") => void;
-  onOpenSummaryModal: () => void;
   onOpenReviewModal: () => void;
 }
 
@@ -50,7 +48,6 @@ export function useSessionChatHeader({
   session,
   chatId,
   isAnyChatExecuting,
-  hasSummary,
   messageCount,
   isSandboxActive,
   isSandboxToggling,
@@ -60,7 +57,6 @@ export function useSessionChatHeader({
   providerAccountId,
   usageAccountLabel,
   onSandboxToggle,
-  onOpenSummaryModal,
   onOpenReviewModal,
 }: SessionChatHeaderArgs) {
   const sessionId = session._id;
@@ -111,9 +107,8 @@ export function useSessionChatHeader({
       <SessionHeaderMenu
         session={session}
         isExecuting={isAnyChatExecuting}
-        hasSummary={hasSummary}
-        canSummarise={isSandboxActive && messageCount > 0}
-        onOpenSummaryModal={onOpenSummaryModal}
+        chatId={chatId}
+        canRecap={messageCount > 0}
         onOpenReviewModal={canSendForReview ? onOpenReviewModal : undefined}
       />
     </>

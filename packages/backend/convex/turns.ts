@@ -13,7 +13,6 @@ import {
   scheduleTurnEndedDrain,
 } from "./_chat/stallWatchdog";
 import {
-  stalledAlert,
   turnAdapterForEntity,
   type AgentTurnOwner,
   type ChatEntityId,
@@ -24,7 +23,6 @@ import {
   tearDownStaleDocWorkflow,
   tearDownStaleEvaluationWorkflow,
   stopProjectInterview,
-  tearDownStaleSessionWorkflow,
 } from "./workflowWatchdog";
 import { interviewTurnProjectId } from "./_projects/interviewState";
 import { tearDownStaleAutomationRun } from "./_automations/runs";
@@ -519,20 +517,6 @@ async function finalizeExpiredAgentTurn(
     case "evaluation":
       if (workflowId !== undefined) {
         await tearDownStaleEvaluationWorkflow(ctx, owner.id, workflowId);
-      }
-      break;
-    case "summary":
-      if (workflowId !== undefined) {
-        await tearDownStaleSessionWorkflow(
-          ctx,
-          owner.id,
-          workflowId,
-          stalledAlert(
-            staleSeconds,
-            turn.state,
-            Math.round(leaseDurationMs / 1000),
-          ),
-        );
       }
       break;
     case "interview": {
