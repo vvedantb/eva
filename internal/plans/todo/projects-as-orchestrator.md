@@ -47,9 +47,7 @@ The business team opens the project and sees what is launched, what is in progre
 9. Adopt an existing session into a project (see the risk note in step 8; this is the first item to move to v2 if it is hard).
 10. Conversion of old projects.
 
-**v2:** goal with a progress chart; a check for who a message is meant for (teammate or coordinator); multi-repo projects and session groups in projects.
-
-**v3:** queued task starts and a parallel limit setting for each project; schedules that the agent sets; separate models for the coordinator and for its tasks; automations as project triggers.
+**v2 and v3:** see `projects-as-orchestrator-v2-v3.md` (outline only; research again when each stage starts).
 
 ## Current state (main at `03eb256a1`, verified 2026-11-19)
 
