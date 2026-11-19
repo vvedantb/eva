@@ -442,21 +442,4 @@
   .ss-thread[data-app="chat"] .ss-bubble-row + .ss-bubble-row {
     margin-top: 0;
   }
-
-  @media (prefers-reduced-motion: reduce) {
-    .ss-bubble,
-    .ss-bubble__text {
-      animation-duration: 0.01s;
-    }
-
-    .ss-bubble__dots i {
-      animation: none;
-      opacity: 0.6;
-    }
-
-    .ss-bubble-row,
-    .ss-bubble {
-      transition-duration: 0.01s;
-    }
-  }
 }
