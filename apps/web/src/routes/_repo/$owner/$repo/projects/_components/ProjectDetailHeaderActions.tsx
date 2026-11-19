@@ -1,3 +1,4 @@
+import { CHAT_HEADER_ACTIONS_CLASS } from "@/lib/components/ChatPageWrapper";
 import { useRef, type ReactNode } from "react";
 import {
   Tooltip,
@@ -105,7 +106,8 @@ export function ProjectDetailHeaderActions({
   } = sandbox;
   const { request: requestConfirm } = useRequestConfirm();
   const flags = getProjectMenuFlags(project, sandbox);
-  const hasCommands = flags.showResolveConflicts || flags.hasSandboxCommandItems;
+  const hasCommands =
+    flags.showResolveConflicts || flags.hasSandboxCommandItems;
   const { basePath } = useRepo();
   const navigate = useNavigate();
   const projectsPath = `${basePath}/projects`;
@@ -130,81 +132,85 @@ export function ProjectDetailHeaderActions({
       {prError && <p className="text-xs text-destructive">{prError}</p>}
       <div className="flex max-sm:flex-wrap items-center max-sm:justify-end gap-1.5 sm:gap-2">
         <PrMergeConfetti owner={{ kind: "project", projectId }} />
-        <ProjectContextUsage repoId={repoId} projectId={projectId} />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="secondary" size="icon-sm" aria-label="More">
-              <IconDots size={16} />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <ProjectCardMenuItems
-              variant="dropdown"
-              {...projectMenu.menuProps}
-              leading={
-                hasCommands || prLinks.hasItems ? (
-                  <>
-                    <ProjectMoreMenuActionItems
-                      flags={flags}
-                      sandbox={sandbox}
-                      requestConfirm={requestConfirm}
-                      isResolvingConflicts={isResolvingConflicts}
-                      onResolveConflicts={onResolveConflicts}
-                      setShowResolveConfirm={setShowResolveConfirm}
-                    />
-                    {hasCommands && prLinks.hasItems ? (
-                      <DropdownMenuSeparator />
-                    ) : null}
-                    {prLinks.items}
-                  </>
-                ) : undefined
-              }
-              planItems={
-                hasPlanContext ? (
-                  <>
-                    <DropdownMenuItem onSelect={() => setShowPlanModal(true)}>
-                      <IconFileText size={14} />
-                      View Plan
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setShowChatModal(true)}>
-                      <IconMessage size={14} />
-                      View Interview History
-                    </DropdownMenuItem>
-                  </>
-                ) : undefined
-              }
-            />
-          </DropdownMenuContent>
-        </DropdownMenu>
-        {/* Siblings of the menu: Radix unmounts menu content on close. */}
-        {projectMenu.dialogs}
-        <ProjectDeleteDialog
-          target={projectDelete.target}
-          onClose={projectDelete.close}
-          onConfirm={projectDelete.confirm}
-          isDeleting={projectDelete.isDeleting}
-        />
-        {/* One control for both directions — see `SandboxStartStopButton`.
+        {/* Secondary controls share the chat header track; Build and Stop
+            Build stay outside it as the page's filled primary action. */}
+        <div className={CHAT_HEADER_ACTIONS_CLASS}>
+          <ProjectContextUsage repoId={repoId} projectId={projectId} />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="secondary" size="icon-sm" aria-label="More">
+                <IconDots size={16} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <ProjectCardMenuItems
+                variant="dropdown"
+                {...projectMenu.menuProps}
+                leading={
+                  hasCommands || prLinks.hasItems ? (
+                    <>
+                      <ProjectMoreMenuActionItems
+                        flags={flags}
+                        sandbox={sandbox}
+                        requestConfirm={requestConfirm}
+                        isResolvingConflicts={isResolvingConflicts}
+                        onResolveConflicts={onResolveConflicts}
+                        setShowResolveConfirm={setShowResolveConfirm}
+                      />
+                      {hasCommands && prLinks.hasItems ? (
+                        <DropdownMenuSeparator />
+                      ) : null}
+                      {prLinks.items}
+                    </>
+                  ) : undefined
+                }
+                planItems={
+                  hasPlanContext ? (
+                    <>
+                      <DropdownMenuItem onSelect={() => setShowPlanModal(true)}>
+                        <IconFileText size={14} />
+                        View Plan
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => setShowChatModal(true)}>
+                        <IconMessage size={14} />
+                        View Interview History
+                      </DropdownMenuItem>
+                    </>
+                  ) : undefined
+                }
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {/* Siblings of the menu: Radix unmounts menu content on close. */}
+          {projectMenu.dialogs}
+          <ProjectDeleteDialog
+            target={projectDelete.target}
+            onClose={projectDelete.close}
+            onConfirm={projectDelete.confirm}
+            isDeleting={projectDelete.isDeleting}
+          />
+          {/* One control for both directions — see `SandboxStartStopButton`.
             Inert while a chat turn is in flight; a running build keeps its
             own confirmed "Stop Build", so it is not gated here. This is the
             only wake/sleep control now, the sandbox chat header carries
             usage alone. */}
-        <SandboxCommitPushButton
-          gitSync={sandbox.sandbox.sandboxGitSync}
-          isSandboxActive={isSandboxActive}
-          target={sandbox.sandbox.gitTarget}
-        />
-        {isSandboxActive || canStartSandbox ? (
-          <SandboxStartStopButton
-            isActive={isSandboxActive}
-            isToggling={isSandboxStarting || isSandboxStopping}
-            onToggle={(action) => {
-              if (action === "start") void handleStartSandbox();
-              else void handleStopSandbox();
-            }}
-            isAssistantResponding={chatTurnOpen === true}
+          <SandboxCommitPushButton
+            gitSync={sandbox.sandbox.sandboxGitSync}
+            isSandboxActive={isSandboxActive}
+            target={sandbox.sandbox.gitTarget}
           />
-        ) : null}
+          {isSandboxActive || canStartSandbox ? (
+            <SandboxStartStopButton
+              isActive={isSandboxActive}
+              isToggling={isSandboxStarting || isSandboxStopping}
+              onToggle={(action) => {
+                if (action === "start") void handleStartSandbox();
+                else void handleStopSandbox();
+              }}
+              isAssistantResponding={chatTurnOpen === true}
+            />
+          ) : null}
+        </div>
         {flags.canBuildProject ? (
           isProjectBuilding(project) ? (
             <Button
@@ -264,10 +270,7 @@ function ProjectMoreMenuActionItems({
     hasSandboxCommandItems,
     showRunBackgroundCommands,
   } = flags;
-  const {
-    handleRunBackgroundCommands,
-    isRunningBackgroundCommands,
-  } = sandbox;
+  const { handleRunBackgroundCommands, isRunningBackgroundCommands } = sandbox;
 
   return (
     <>
