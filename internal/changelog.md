@@ -1,5 +1,13 @@
 # Changelog
 
+## Web sidebar panel: no edge line
+
+Date: 2026-11-19
+
+WHY: The rail and the sandbox panel lost their dividers; the sidebar panel still drew a 1px right edge, the last resting line in the app chrome.
+
+Architectural: `SidebarPanel` drops `border-r border-sidebar-border`; the panel stays on the page tone. `docs/eva-ui.md` now says neither the rail nor the panel has an edge line.
+
 ## Web sandbox panel: content card with an arrow to the active tab
 
 Date: 2026-11-19
