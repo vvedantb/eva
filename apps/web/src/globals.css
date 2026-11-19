@@ -1016,6 +1016,11 @@ html[data-blur-pid] [data-pii] {
 .rail-track > .t-tabs-pill {
   background-color: rgb(var(--segment-active));
 }
+/* Buttons on a trough are flat: the trough is their surface, so their own
+ * resting fill (round secondary buttons in the chat header) is dropped. */
+.rail-track button {
+  background-color: transparent;
+}
 /* Idle rail tiles and buttons hover at half the pill, as the package does
  * with its token; the buttons' own `hover:bg-secondary` matches the light
  * trough and would vanish. */

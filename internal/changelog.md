@@ -1,5 +1,13 @@
 # Changelog
 
+## Web chat header: actions on one track, flat buttons
+
+Date: 2026-11-19
+
+WHY: The chat header's usage, sandbox and menu buttons sat loose next to the title; the rails now group buttons on a trough.
+
+Architectural: `CHAT_HEADER_ACTIONS_CLASS` (`ChatPageWrapper`) puts the header actions on a `rail-track` trough for session chats and for the task and project header (`SandboxChatHeaderActions`); it hides itself when empty. A `globals.css` rule makes any button on a `rail-track` flat, so the round secondary start and menu buttons lose their own fill and hover at half the pill.
+
 ## Web rail: segmented-tab groups with a sliding pill
 
 Date: 2026-11-19
