@@ -9,6 +9,7 @@ import { cn } from "@eva/ui";
 import { IconPencil } from "@tabler/icons-react";
 import {
   AutomationIcon,
+  IconEva,
   InboxArrowIcon,
   SearchIcon,
   SidebarToggleIcon,
@@ -27,7 +28,6 @@ import {
   UnreadCornerBadge,
   Sidebar,
 } from "@vvedantb/ui";
-import { LogoMark } from "@/lib/components/LogoMark";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { RepoLabelDialog } from "@/lib/components/RepoLabelDialog";
 import { RailAppHotkeys } from "@/lib/components/sidebar/RailAppHotkeys";
@@ -209,9 +209,9 @@ function RepoRailView({
             active={homeActive}
           >
             <Link to="/home" onClick={onNavigate}>
-              <span className="flex size-8 items-center justify-center rounded-full bg-white">
-                <LogoMark size={20} className="shrink-0" />
-              </span>
+              {/* The package app glyph at the rail icon size (22): no disc, so
+                  the group's pill shows behind it when Home is active. */}
+              <IconEva size={22} className="shrink-0" />
             </Link>
           </Sidebar.RailItem>
           <Sidebar.RailItem asChild label="Inbox" active={inboxActive}>
