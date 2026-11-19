@@ -6,6 +6,7 @@ import { IconPlayerPlay, IconPlayerStop } from "@tabler/icons-react";
 import { api, type Id } from "@eva/backend";
 import { useQuery } from "convex/react";
 import { UsageLimitsIndicator } from "@/lib/components/usage-limits";
+import { CHAT_HEADER_ACTIONS_CLASS } from "@/lib/components/ChatPageWrapper";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   SleepControlTooltip,
@@ -115,13 +116,15 @@ export function SandboxChatHeaderActions({
   usageAccountLabel: string;
 }) {
   return (
-    <div className="flex shrink-0 items-center justify-end gap-1 px-2 py-1">
-      <UsageLimitsIndicator
-        repoId={repoId}
-        model={model}
-        providerAccountId={providerAccountId}
-        accountLabel={usageAccountLabel}
-      />
+    <div className="flex shrink-0 justify-end px-2 py-1">
+      <div className={CHAT_HEADER_ACTIONS_CLASS}>
+        <UsageLimitsIndicator
+          repoId={repoId}
+          model={model}
+          providerAccountId={providerAccountId}
+          accountLabel={usageAccountLabel}
+        />
+      </div>
     </div>
   );
 }
