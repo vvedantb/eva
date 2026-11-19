@@ -50,17 +50,10 @@ export function RepoTopNav({
     repo ? { repoId: repo._id } : "skip",
   );
 
-  const items: TopNavItem[] = [
-    ...(standupEnabled === true
-      ? [
-          {
-            name: "Today",
-            href: `${repoBasePath}/today`,
-            icon: IconSunrise,
-          } satisfies TopNavItem,
-        ]
-      : []),
-  ];
+  const items: TopNavItem[] =
+    standupEnabled === true
+      ? [{ name: "Today", href: `${repoBasePath}/today`, icon: IconSunrise }]
+      : [];
   if (items.length === 0) return null;
 
   return (
