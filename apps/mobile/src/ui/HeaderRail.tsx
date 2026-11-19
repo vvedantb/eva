@@ -1,6 +1,6 @@
 import { IconDots } from "@tabler/icons-react-native";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { palette } from "@vvedantb/native-ui/theme";
+import { palette, tokens, withAlpha } from "@vvedantb/native-ui/theme";
 import type { ReactNode } from "react";
 import { Pressable, View } from "react-native";
 import { type Scheme, useScheme } from "@/ui/theme";
@@ -12,6 +12,19 @@ import { type Scheme, useScheme } from "@/ui/theme";
  */
 export function segmentTrough(scheme: Scheme): string {
   return scheme === "light" ? palette.default.light : EVA_THEME[scheme].card;
+}
+
+/**
+ * The fill and border of the kit `HeaderIconButton` (Back): the surface with a
+ * 40% white hairline in light, the glass hairline in dark. For a header button
+ * that needs a label, so it matches the round ones beside it.
+ */
+export function headerButtonSurface(scheme: Scheme): { backgroundColor: string; borderColor: string } {
+  const kit = scheme === "light" ? "light" : "dark";
+  return {
+    backgroundColor: tokens.color.surface[kit],
+    borderColor: kit === "dark" ? tokens.color.hairline.dark : withAlpha(tokens.color.white, 0.4),
+  };
 }
 
 /**

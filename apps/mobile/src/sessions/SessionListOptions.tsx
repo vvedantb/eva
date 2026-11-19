@@ -12,7 +12,7 @@ import {
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconAdjustmentsHorizontal, IconList, IconMinus, IconPlus, IconSortDescending, IconUser } from "@tabler/icons-react-native";
-import { SheetRow, MenuDivider, MenuSheet, SubmenuRow } from "@vvedantb/native-ui/primitives";
+import { HeaderIconButton, SheetRow, MenuDivider, MenuSheet, SubmenuRow } from "@vvedantb/native-ui/primitives";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { z } from "zod";
@@ -67,18 +67,15 @@ export function SessionListOptionsButton() {
 
   return (
     <>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Sessions options"
+      <HeaderIconButton
+        label="Sessions options"
         onPress={() => {
           setPage("root");
           setOpen(true);
         }}
-        hitSlop={2}
-        className="h-10 w-10 items-center justify-center rounded-lg active:opacity-70"
       >
-        <IconAdjustmentsHorizontal size={16} color={theme.mutedForeground} />
-      </Pressable>
+        <IconAdjustmentsHorizontal size={18} color={theme.foreground} />
+      </HeaderIconButton>
       <MenuSheet open={open} onOpenChange={setOpen} title={title} onBack={page === "root" ? undefined : () => setPage("root")}>
         {page === "projects" ? (
           APP_SORT_ORDERS.map((order) => (
