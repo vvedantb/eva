@@ -3,9 +3,9 @@
 # over-the-air updates. A backend change that renames or narrows a function
 # the phone calls breaks every phone that has not updated yet (0.1.33 after
 # #1266/#1267). This type-checks the newest published APK's phone and shared
-# code (tag `eva-apk-*`) against this checkout's backend and exits 1 on any
-# error; CI reports that as a warning, not a failure. It runs only when the
-# backend changed against the base branch.
+# code (tag `eva-apk-*`) against this checkout's backend and reports any
+# error as a CI warning, never a failure: old phones may break (CLAUDE.md).
+# It runs only when the backend changed against the base branch.
 #
 #   BASE_REF  the branch to diff against (default origin/main)
 #   APK_TAG   check this release instead of the newest (for example eva-apk-0.1.33)
@@ -41,5 +41,5 @@ if (cd "$WORK/apps/mobile" && npx tsc --noEmit -p . >"$WORK/tsc.log" 2>&1); then
 fi
 echo "check-apk-compat: $TAG (installed on phones) breaks against this backend:" >&2
 grep "error TS" "$WORK/tsc.log" >&2 || cat "$WORK/tsc.log" >&2
-echo "Old phones lose these calls once this backend deploys; CI only warns (see CLAUDE.md)." >&2
-exit 1
+echo "::warning::check-apk-compat: $TAG breaks against this backend; old phones lose these calls once it deploys (see the log)."
+exit 0
