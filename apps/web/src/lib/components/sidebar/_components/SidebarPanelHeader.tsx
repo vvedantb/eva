@@ -51,8 +51,9 @@ export function SidebarPanelHeader({
       className={cn(
         "relative flex items-center overflow-hidden",
         // Repo identity keeps a reserved tall slot so team art
-        // resolving later does not shift the nav list (CLS).
-        isSourceListHeader ? "px-2 pt-3" : "h-24 px-3",
+        // resolving later does not shift the nav list (CLS). 128px: the
+        // inset banner then ends near the rail's first track.
+        isSourceListHeader ? "px-2 pt-3" : "h-32 px-3",
       )}
     >
       {teamBackgroundUrl && !showContextSidebar && !isFlatPanel ? (
