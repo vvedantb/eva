@@ -177,6 +177,7 @@ export function PrRecapPanel({ prUrl, repoId, recapDoc }: PrRecapPanelProps) {
       className="flex h-full min-h-0 flex-col"
     >
       <TabsBar
+        className="border-b-0"
         actions={
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             {shortSha ? <span className="font-mono">{shortSha}</span> : null}

@@ -1,7 +1,7 @@
-import { EVA_THEME } from "@eva/shared/evaTheme";
 import { Tabs, TabsList, TabsTrigger } from "@vvedantb/native-ui/primitives";
 import { useLargerText } from "@vvedantb/native-ui/theme";
 import { Easing, ReduceMotion, useDerivedValue, withTiming } from "react-native-reanimated";
+import { segmentTrough } from "@/ui/HeaderRail";
 import { useScheme } from "@/ui/theme";
 
 /**
@@ -39,7 +39,7 @@ export function SegmentedTabs<Value extends string>({
         size="sm"
         progress={progress}
         className="gap-0 self-stretch p-1"
-        style={scheme === "light" ? undefined : { backgroundColor: EVA_THEME[scheme].card }}
+        style={{ backgroundColor: segmentTrough(scheme) }}
       >
         {options.map((option) => (
           <TabsTrigger key={option.value} value={option.value} className="flex-1" minHeight={largerText ? undefined : 40}>

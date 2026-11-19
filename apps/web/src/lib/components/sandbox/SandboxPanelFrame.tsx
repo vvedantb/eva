@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { cn } from "@eva/ui";
 import { Button } from "@vvedantb/ui";
 import { SandboxPanelToggleButton } from "./SandboxPanelToggleButton";
+import { SANDBOX_RAIL_GROUP_CLASS } from "./sandboxRail";
 
 /**
  * Desktop: tab rail on the right edge of the pane. Collapsed hides the
@@ -45,7 +46,9 @@ export function SandboxEmptyRailFrame({
   return (
     <div className="flex h-full min-h-0 flex-col md:flex-row-reverse">
       <div className="relative z-20 hidden h-full w-11 shrink-0 flex-col items-center pb-1.5 pt-3 md:flex">
-        <SandboxPanelToggleButton collapsed={collapsed} onToggle={onToggle} />
+        <div className={SANDBOX_RAIL_GROUP_CLASS}>
+          <SandboxPanelToggleButton collapsed={collapsed} onToggle={onToggle} />
+        </div>
       </div>
       <div
         className={cn(

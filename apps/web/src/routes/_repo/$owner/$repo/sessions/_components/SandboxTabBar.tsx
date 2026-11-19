@@ -26,6 +26,7 @@ import {
   useSimpleView,
 } from "@/lib/hooks/useSimpleView";
 import { useSandboxRailLabels } from "@/lib/components/sandbox/useSandboxRailLabels";
+import { SANDBOX_RAIL_GROUP_CLASS } from "@/lib/components/sandbox/sandboxRail";
 import { cn } from "@eva/ui";
 import { Tabs, TabsList, useMediaQuery, ListEnter } from "@vvedantb/ui";
 import { SandboxTabTrigger, type SandboxTabLayout } from "./SandboxTabTrigger";
@@ -51,9 +52,17 @@ const LABELLED_TAB_LIST_CLASS = "md:w-full";
 
 /* `justify-start` matters: the primitive centres its list, and centred content
    that overflows spills past *both* edges while `scrollLeft` cannot go
-   negative. Desktop is a column; the same sliding pill marks the active tab. */
+   negative. Desktop is a column; the same sliding pill marks the active tab.
+   `tabs-segmented` puts the tabs on the shared trough, like the app rail
+   groups. `p-0.5` keeps the 32px tabs inside the 44px rail. */
 const TAB_LIST_CLASS =
-  "h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-none border-0 bg-transparent p-0 shadow-none scrollbar-none max-sm:justify-start [&_.t-tabs-pill]:smooth-shadow-ring-xs md:max-w-none md:flex-col md:overflow-x-hidden md:overflow-y-auto";
+  "tabs-segmented h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-xl border-0 p-0.5 shadow-none scrollbar-none max-sm:justify-start md:max-w-none md:flex-col md:overflow-x-hidden md:overflow-y-auto";
+
+/* Desktop: centre the tab group in the rail between the panel toggle and the
+   tools. `-safe` keeps a long list at the top so its first tabs stay
+   reachable. */
+const TABS_ROOT_CLASS =
+  "min-w-0 flex-1 md:flex md:min-h-0 md:w-full md:flex-col md:items-center md:justify-center-safe";
 
 /**
  * Past this many tabs the inactive mobile labels collapse to icon-only (label
@@ -270,7 +279,7 @@ export function SandboxTabBar({
         )}
       >
         {onToggle ? (
-          <div className="hidden md:flex">
+          <div className={cn(SANDBOX_RAIL_GROUP_CLASS, "hidden md:flex")}>
             <SandboxPanelToggleButton
               collapsed={collapsed}
               onToggle={onToggle}
@@ -278,7 +287,7 @@ export function SandboxTabBar({
           </div>
         ) : null}
         <Tabs
-          className="min-w-0 flex-1 md:flex md:min-h-0 md:w-full md:flex-col"
+          className={TABS_ROOT_CLASS}
           value={resolvedTab}
           onValueChange={handleTabChange}
         >

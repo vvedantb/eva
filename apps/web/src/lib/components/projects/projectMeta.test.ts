@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PROJECT_PHASES } from "@eva/backend";
+import type { PROJECT_PHASES } from "@eva/backend";
 import {
   PROJECT_COLUMNS,
   PROJECT_LIST_DEFAULTS,

@@ -4,7 +4,6 @@ import { Link, useLocation } from "@tanstack/react-router";
 import { SettingsIcon, Sidebar } from "@vvedantb/ui";
 import { GLOBAL_SETTINGS_NAV } from "@/lib/components/sidebar/globalSettingsNav";
 import { isGlobalSettingsPath } from "@/lib/components/sidebar/homePaths";
-import { railTileActiveClass } from "@/lib/components/sidebar/SharedLayoutNav";
 
 /** First entry in the global Settings sidebar — rail gear lands here. */
 const SETTINGS_LANDING_HREF = GLOBAL_SETTINGS_NAV[0].href;
@@ -22,12 +21,7 @@ export function RailSettingsMenu({ onNavigate }: { onNavigate?: () => void }) {
       (pathname === "/testing" || pathname.startsWith("/testing/")));
 
   return (
-    <Sidebar.RailItem
-      asChild
-      label="Settings"
-      active={isActive}
-      className={isActive ? railTileActiveClass : undefined}
-    >
+    <Sidebar.RailItem asChild label="Settings" active={isActive}>
       <Link to={SETTINGS_LANDING_HREF} onClick={onNavigate}>
         <SettingsIcon size={22} variant="turn" className="shrink-0" />
       </Link>

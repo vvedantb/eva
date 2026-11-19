@@ -2,6 +2,7 @@ import { IconLetterCase, IconPlus, IconTerminal2 } from "@tabler/icons-react";
 import { cn } from "@eva/ui";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@vvedantb/ui";
 import type { TerminalPanelApi } from "@/lib/components/sandbox/SandboxWorkspace";
+import { SANDBOX_RAIL_GROUP_CLASS } from "@/lib/components/sandbox/sandboxRail";
 
 const SANDBOX_RAIL_ICON_BUTTON_CLASS =
   "motion-press max-sm:hit-target flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground active:scale-[0.96] disabled:pointer-events-none disabled:opacity-40";
@@ -21,7 +22,7 @@ export function SandboxTabBarTools({
   onToggleLabels: () => void;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-1 md:mt-auto md:flex-col">
+    <div className={cn(SANDBOX_RAIL_GROUP_CLASS, "md:mt-auto")}>
       {/* Editor and Computer are first-class tabs on the rail, so `+` is now a
           direct New Preview action rather than a one-item menu. */}
       <Tooltip>

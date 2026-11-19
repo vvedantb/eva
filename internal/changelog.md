@@ -1,5 +1,32 @@
 # Changelog
 
+## Web chat header: actions on one track, flat buttons
+
+Date: 2026-11-19
+
+WHY: The chat header's usage, sandbox and menu buttons sat loose next to the title; the rails now group buttons on a trough.
+
+Architectural: `CHAT_HEADER_ACTIONS_CLASS` (`ChatPageWrapper`) puts the header actions on a `rail-track` trough for session chats and for the task and project header (`SandboxChatHeaderActions`); it hides itself when empty. A `globals.css` rule makes any button on a `rail-track` flat, so the round secondary start and menu buttons lose their own fill and hover at half the pill.
+
+The project header (`ProjectDetailHeaderActions`) and the quick task header (`TaskFooter` header layout) put their secondary controls (usage, menu, commit and push, start and stop) on the same `CHAT_HEADER_ACTIONS_CLASS` track; Build, Stop Build and Run stay outside as filled primary actions, and the task header drops its divider next to Run.
+## Web: no hairline under tab strips and panel headers; UI guide covers rails
+
+Date: 2026-11-19
+
+WHY: After the rail redesign, the UI guide still told agents to divide the sidebar edge with a hairline, and tab strips kept a line that the rail no longer uses.
+
+Architectural: `docs/eva-ui.md` now says icon rails have no edge, separators or resting split divider, and group buttons on troughs (`Sidebar.RailGroup` + `railGroupThemeClass`, `SANDBOX_RAIL_GROUP_CLASS`); tab strips and panel headers have no bottom hairline. The Plan and Recap viewers and the PR recap panel pass `border-b-0` to the package `TabsBar`; the file viewer header drops its `border-b`.
+
+## Web rail: segmented-tab groups with a sliding pill
+
+Date: 2026-11-19
+
+WHY: The app rail and the sandbox tab rail should read like the tab component: a shared trough per group, the active item on a lighter pill, and no border or dividers.
+
+Architectural: the rail moves to `@vvedantb/ui` 0.51.0 (packages #299), which adds `Sidebar.RailGroup`: one trough per group and one pill that slides to the active tile with the tabs motion. `RepoRail` wraps its top, repo and bottom sections in groups, centres the repo group (`justify-center-safe`), and drops the rail border and separators. `railGroupThemeClass` (`rail-track` in `globals.css`) gives the groups eva's segmented-tabs tones, which also fixes the package's compat tokens drawing a darker pill on a lighter trough in dark. The sandbox tab rail puts its tabs on the same `tabs-segmented` trough and centres them. The `@vvedantb/ui` patch moves to 0.51.0 unchanged.
+
+The sandbox rail's collapse toggle and tools (new preview, terminal, labels) sit on their own troughs (`SANDBOX_RAIL_GROUP_CLASS`), and the session, task and project splits drop the resting divider line (`ResizablePanelLayout` `seamlessSeparator`); the line and grip show on hover and while dragging.
+
 ## Phone: find in chat, session summary, edit and download a proposed plan
 
 Date: 2026-11-18

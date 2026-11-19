@@ -6,7 +6,7 @@
     { "name": "anti-slop", "specifier": "@vvedantb/config/oxlint/anti-slop.js" },
     {
       "name": "no-effect",
-      "specifier": "eslint-plugin-react-you-might-not-need-an-effect"
+      "specifier": "@vvedantb/config/oxlint/no-effect.mjs"
     }
   ],
   "categories": {
