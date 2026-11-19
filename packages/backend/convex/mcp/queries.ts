@@ -5,17 +5,21 @@ import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 import { hasRepoAccess } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { isSessionArchived } from "../_sessions/archive";
-import { standaloneOnly } from "../_sessions/owner";
 import {
-  findProjectSession,
-  findTaskWorkSession,
+  findOwnedSession,
+  findWorkSession,
+  standaloneOnly,
+} from "../_sessions/owner";
+import {
   liveTaskSandboxStatuses,
   projectSandboxStatus,
 } from "../_sessions/ownedSession";
+import { listSelectableAccountsFor } from "../_userProviderAccounts/listing";
 import {
   ALL_TASK_STATUSES,
   PROJECT_PHASES,
   SANDBOX_STATUSES,
+  getAIModelProvider,
   prOriginValidator,
   prStateValidator,
 } from "../validators";
@@ -328,9 +332,12 @@ export const resolveChatTargetForUser = internalQuery({
     // on the project's); none before that session exists.
     const ownerSession =
       hit.kind === "task"
-        ? await findTaskWorkSession(ctx.db, hit.doc)
+        ? await findWorkSession(ctx.db, hit.doc)
         : hit.kind === "project"
-          ? await findProjectSession(ctx.db, hit.doc._id)
+          ? await findOwnedSession(ctx.db, {
+              kind: "project",
+              projectId: hit.doc._id,
+            })
           : null;
     const sandboxRow = hit.kind === "session" ? hit.doc : ownerSession;
     return {
@@ -594,11 +601,7 @@ export const listEntitiesForUser = internalQuery({
       repoIds.map(async (repoId) => {
         // Access first: a denied repo reads nothing else.
         if (!(await hasRepoAccess(ctx.db, repoId, userId))) return;
-        const [
-          repo,
-          openChatEntityIds,
-          taskSandboxStatus,
-        ] = await Promise.all([
+        const [repo, openChatEntityIds, taskSandboxStatus] = await Promise.all([
           ctx.db.get(repoId),
           openChatEntityIdsForRepo(ctx.db, repoId),
           liveTaskSandboxStatuses(ctx.db, [repoId]),
@@ -914,5 +917,101 @@ export const sessionLinkedRepos = internalQuery({
         prState: pr?.state,
       };
     });
+  },
+});
+
+/**
+ * Which provider account an MCP send or create runs on, from the caller's
+ * `account` pick: an account id, its owner's first name, or "team". The pool
+ * is the one the web picker shows — the owner's own accounts plus teammates'
+ * shared ones — so MCP can use a shared account just as the composer can.
+ *
+ * - `chat` scope: an existing chat's turn, billed to the session owner. An
+ *   omitted pick keeps the chat's current account, as the composer does.
+ * - `creator` scope: a new session, billed to the caller; the model is the
+ *   repo default the create mutation will use.
+ *
+ * `providerAccountId: null` is Team. The send mutations still re-check usability.
+ */
+export const resolveMcpProviderAccount = internalQuery({
+  args: {
+    account: v.optional(v.string()),
+    scope: v.union(
+      v.object({
+        kind: v.literal("chat"),
+        chatId: v.string(),
+        model: v.string(),
+      }),
+      v.object({
+        kind: v.literal("creator"),
+        userId: v.string(),
+        repoId: v.string(),
+      }),
+    ),
+  },
+  returns: v.union(
+    v.object({
+      ok: v.literal(true),
+      providerAccountId: v.union(v.id("userProviderAccounts"), v.null()),
+    }),
+    v.object({ ok: v.literal(false), error: v.string() }),
+  ),
+  handler: async (
+    ctx,
+    { account, scope },
+  ): Promise<
+    | { ok: true; providerAccountId: Id<"userProviderAccounts"> | null }
+    | { ok: false; error: string }
+  > => {
+    let ownerUserId: Id<"users">;
+    let model: string | undefined;
+    if (scope.kind === "chat") {
+      const chatId = ctx.db.normalizeId("sessionChats", scope.chatId);
+      const chat = chatId ? await ctx.db.get(chatId) : null;
+      const session = chat ? await ctx.db.get(chat.sessionId) : null;
+      if (!chat || !session) return { ok: false, error: "Chat not found." };
+      if (account === undefined) {
+        return { ok: true, providerAccountId: chat.providerAccountId ?? null };
+      }
+      ownerUserId = session.createdBy ?? session.userId;
+      model = scope.model;
+    } else {
+      const repoId = ctx.db.normalizeId("githubRepos", scope.repoId);
+      const userId = ctx.db.normalizeId("users", scope.userId);
+      const repo = repoId ? await ctx.db.get(repoId) : null;
+      if (!repo || !userId) return { ok: false, error: "Repo not found." };
+      if (account === undefined) return { ok: true, providerAccountId: null };
+      ownerUserId = userId;
+      model = repo.defaultModel;
+    }
+
+    const wanted = account.trim().toLowerCase();
+    if (wanted === "team") return { ok: true, providerAccountId: null };
+    const provider = getAIModelProvider(model);
+    const pool = await listSelectableAccountsFor(ctx, ownerUserId);
+    const byId = pool.find((row) => String(row._id) === account.trim());
+    if (byId) return { ok: true, providerAccountId: byId._id };
+    const byName = pool.filter(
+      (row) =>
+        row.provider === provider && row.label.trim().toLowerCase() === wanted,
+    );
+    const [only] = byName;
+    if (byName.length === 1 && only) {
+      return { ok: true, providerAccountId: only._id };
+    }
+    const options = pool
+      .filter((row) => row.provider === provider)
+      .map(
+        (row) =>
+          `"${row.label}" (id ${row._id}${row.isOwn ? ", own" : ", shared"})`,
+      );
+    const choices = [...options, '"team"'].join(", ");
+    return {
+      ok: false,
+      error:
+        byName.length > 1
+          ? `Several ${provider} accounts belong to "${account}". Pass one by id: ${choices}.`
+          : `No ${provider} account "${account}" you can use. Choose one of: ${choices}.`,
+    };
   },
 });

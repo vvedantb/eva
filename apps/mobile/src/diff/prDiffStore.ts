@@ -1,5 +1,5 @@
 import { api, type Id } from "@eva/backend";
-import { applyIgnoreWhitespace, buildDiffFileEntries, type DiffFileEntry } from "@eva/shared";
+import { applyIgnoreWhitespace, buildDiffFileEntries, type DiffFileEntry, type ReviewComment } from "@eva/shared";
 import { useAction } from "convex/react";
 import { useEffect } from "react";
 import { z } from "zod";
@@ -171,24 +171,45 @@ export type PendingLineComment = {
   /** The web range label: `+12`, `-4`, `9` or `+3 to +5`. */
   label: string;
   body: string;
+  /** The range's lines in the file's diff and their excerpt (`reviewCommentExcerpt`), for a chat prompt. */
+  startIndex: number;
+  endIndex: number;
+  diff: string;
 };
+
+/** A pending comment as a chat prompt's `<review_comment>` block takes it (`appendReviewCommentsToPrompt`). */
+export function toReviewComment(comment: PendingLineComment): ReviewComment {
+  return {
+    id: comment.id,
+    filePath: comment.path,
+    startIndex: comment.startIndex,
+    endIndex: comment.endIndex,
+    rangeLabel: comment.label,
+    text: comment.body,
+    diff: comment.diff,
+    anchor: { line: comment.line, side: comment.side, startLine: comment.startLine, startSide: comment.startSide },
+  };
+}
 
 const pendingComments = keyedStore<readonly PendingLineComment[]>([]);
 let nextCommentId = 0;
 
 /**
  * The web `PendingReviewCommentsProvider` for one pull request: line comments
- * drafted on Code, posted with the next review (`github.submitPrReview`) and
- * cleared then. In memory only, as on the web, but shared by the file
- * screens and the composer, so they last until the app closes.
+ * drafted on Code or the chat's diff, posted with the next review
+ * (`github.submitPrReview`) or sent with the chat's next prompt, and cleared
+ * then. In memory only, as on the web, but shared by the file screens and
+ * both composers, as the web sandbox shares them between its Review tab and
+ * its chat, so they last until the app closes.
  */
-export function usePendingLineComments(pr: DiffRef): {
+export function usePendingLineComments(pr: DiffRef | null): {
   comments: readonly PendingLineComment[];
   add: (comment: Omit<PendingLineComment, "id">) => void;
   remove: (id: string) => void;
   clear: () => void;
 } {
-  const key = prKey(pr);
+  // No pull request (a chat before one opens): an empty list nothing writes to.
+  const key = pr === null ? "" : prKey(pr);
   const comments = pendingComments.useValue(key);
   return {
     comments,

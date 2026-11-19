@@ -1,8 +1,10 @@
 import { mentionTokensToChipLinks, parseMentionChipHref, type MentionChipKind } from "@eva/shared";
+import { parseCitationSegments } from "@eva/shared/assistantCitation";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconX } from "@tabler/icons-react-native";
 import { Markdown } from "@vvedantb/native-ui/markdown";
-import { Pressable, Text } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { QuoteCard } from "@/chat/Quotes";
 import type { ComposerPick } from "@/chat/useMentionComposer";
 import { useScheme } from "@/ui/theme";
 
@@ -26,9 +28,31 @@ function chipText(kind: MentionChipKind, label: string): string {
  * `text-sm`, each `@` mention and `/` skill token a chip. The chip sits in the
  * line as a nested `Text` (no-break spaces pad it, as the kit's inline code),
  * so it wraps with the words. The web chip also opens what it names; the
- * phone has no screen for a doc or a skill, so it does not.
+ * phone has no screen for a doc or a skill, so it does not. Quotes cited
+ * from Eva's replies (`<cited_assistant>`) show first, each a card with its
+ * note under it, as the web: a reply quoting what it answers.
  */
 export function UserMessageText({ content }: { content: string }) {
+  const segments = parseCitationSegments(content);
+  if (!segments.some((segment) => segment.kind === "citation")) return <MessageMarkdown content={content} />;
+  const ordered = [...segments.filter((segment) => segment.kind === "citation"), ...segments.filter((segment) => segment.kind === "text")];
+  return (
+    <View className="gap-4">
+      {ordered.map((segment) =>
+        segment.kind === "citation" ? (
+          <View key={segment.id} className="gap-2">
+            <QuoteCard text={segment.text} />
+            {segment.comment ? <MessageMarkdown content={segment.comment} /> : null}
+          </View>
+        ) : segment.text.trim() ? (
+          <MessageMarkdown key={segment.id} content={segment.text} />
+        ) : null,
+      )}
+    </View>
+  );
+}
+
+function MessageMarkdown({ content }: { content: string }) {
   const colors = useChipColors();
   return (
     <Markdown

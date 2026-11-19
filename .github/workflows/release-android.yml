@@ -6,7 +6,7 @@ name: Release Android APK
 # apps/mobile/RELEASE.md.
 #
 # This file is manual dispatch only. Push releases on main now run from ci.yml:
-# the CI run gates on the same paths and the same feat / [release] decision,
+# the CI run gates on the same paths alone (no commit-message gate),
 # then calls the shared workflow as its own release job, so a merge no longer
 # starts a separate empty run here.
 on:

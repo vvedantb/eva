@@ -5,7 +5,7 @@ import type { ActivityStep } from "@vvedantb/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import {
   collectChangedFiles,
-  isSandboxPausedAlert,
+  collectQuestionSteps,
   otherUserIdsInChat,
   stripReviewCommentBlocks,
   turnErrorTitle as sharedTurnErrorTitle,
@@ -97,39 +97,8 @@ export interface ChatHeldFollowUp {
   userId?: Id<"users">;
 }
 
-const SANDBOX_LIFECYCLE_ALERTS = new Set([
-  "Sandbox started",
-  "Sandbox stopped",
-  "Sandbox reconnected",
-]);
-
-export function isSandboxLifecycleAlert(
-  message: Pick<ChatBodyMessage, "isSystemAlert" | "content">,
-): boolean {
-  return (
-    message.isSystemAlert === true &&
-    (SANDBOX_LIFECYCLE_ALERTS.has(message.content) ||
-      // "Sandbox paused after N min idle" carries a number, so it cannot sit
-      // in the exact-match set above.
-      isSandboxPausedAlert(message.content))
-  );
-}
-
-/**
- * Simple view omits all system-alert banners. Sandbox start/stop/reconnect
- * rows are always hidden — they spam the transcript on every VM cycle.
- * Rows stay in Convex; this only affects rendering, empty-state, and
- * last-message targeting. Execution helpers already skip `isSystemAlert`.
- */
-export function visibleChatMessages<
-  M extends Pick<ChatBodyMessage, "isSystemAlert" | "content">,
->(messages: M[], hideSystemAlerts: boolean): M[] {
-  const hidden = (message: M) =>
-    isSandboxLifecycleAlert(message) ||
-    (hideSystemAlerts && message.isSystemAlert === true);
-  if (!messages.some(hidden)) return messages;
-  return messages.filter((message) => !hidden(message));
-}
+// Moved to `@eva/shared` so the phone draws the same rows.
+export { collectQuestionSteps, isSandboxLifecycleAlert, visibleChatMessages } from "@eva/shared";
 
 /** True when the transcript has a teammate bubble that needs a display name. */
 export function chatNeedsOtherUserDirectory(
@@ -137,21 +106,6 @@ export function chatNeedsOtherUserDirectory(
   currentUserId: string | undefined,
 ): boolean {
   return otherUserIdsInChat(messages, currentUserId).length > 0;
-}
-
-/**
- * Answered AskUserQuestion prompts, as a read-only record for the transcript.
- * A still-active question is excluded: the composer dock is showing it live,
- * so a card for it would be the same prompt twice.
- */
-export function collectQuestionSteps(steps: ActivityStep[]): ActivityStep[] {
-  return steps.filter(
-    (step) =>
-      step.type === "question" &&
-      step.status === "complete" &&
-      step.questions !== undefined &&
-      step.questions.length > 0,
-  );
 }
 
 /** Streaming / changed-files / question-record flags for an assistant row. */

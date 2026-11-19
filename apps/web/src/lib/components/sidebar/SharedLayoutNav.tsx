@@ -36,8 +36,11 @@ function useSharedLayoutNav() {
   return context;
 }
 
-/** Active surface for vertical rail tiles — matches sidebar nav pill. */
-export const railTileActiveClass = "bg-sidebar-accent text-sidebar-primary";
+/**
+ * Eva's tones on a package `Sidebar.RailGroup`: `rail-track` (globals.css)
+ * gives the trough and its sliding pill the segmented-tabs colours per theme.
+ */
+export const railGroupThemeClass = "rail-track";
 
 const sidebarNavPillClass =
   "pointer-events-none absolute inset-0 rounded-menu-item bg-sidebar-accent";

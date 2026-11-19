@@ -2,9 +2,9 @@ import {
   CHAT_LOG_ENTRY_KINDS,
   FEEDBACK_AUTHORS,
   FEEDBACK_SENTIMENTS,
-  PROJECT_PHASES,
 } from "@eva/backend";
 import {
+  PROJECT_COLUMNS,
   PROJECT_SORT_FIELDS,
   PR_LIST_STATES,
   QUICK_TASK_FILTER_DEFAULTS,
@@ -84,10 +84,10 @@ export const quickTaskTagsParser = parseAsArrayOf(parseAsString)
 // Projects list filters (shareable "what you're looking at" state). View,
 // timelineRange, and timelineZoom are per-user presentation preferences and
 // stay in localStorage — see projects/_utils.ts.
-// hiddenPhases stores exclusions (blocklist), so the default is empty —
-// reuses the Convex `PROJECT_PHASES`.
+// hiddenPhases stores exclusions (blocklist) of list columns, so the default
+// is empty. Old links naming "draft" / "finalized" drop those values.
 export const hiddenProjectPhasesParser = parseAsArrayOf(
-  parseAsStringLiteral(PROJECT_PHASES),
+  parseAsStringLiteral(PROJECT_COLUMNS),
 )
   .withDefault([])
   .withOptions(searchOptions);

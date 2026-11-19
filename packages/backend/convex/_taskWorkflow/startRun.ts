@@ -11,11 +11,8 @@ import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentia
 import { setTaskLastRunStartedAt } from "../_agentTasks/runSummary";
 import { markTaskRunStarted } from "../_agentTasks/runState";
 import type { taskExecutionWorkflowArgs } from "./workflowDefinition";
-import {
-  ensureTaskWorkSession,
-  ownedSessionBusy,
-  taskWorkSessionOwner,
-} from "../_sessions/ownedSession";
+import { ensureWorkSession, ownedSessionBusy } from "../_sessions/ownedSession";
+import { workSessionOwner } from "../_sessions/owner";
 import { TASK_CHAT_BUSY_ERROR } from "./recovery";
 
 /**
@@ -27,7 +24,7 @@ export async function taskWorkSessionBusy(
   db: MutationCtx["db"],
   task: Pick<Doc<"agentTasks">, "_id" | "projectId">,
 ): Promise<boolean> {
-  return await ownedSessionBusy(db, taskWorkSessionOwner(task));
+  return await ownedSessionBusy(db, workSessionOwner(task));
 }
 
 /**
@@ -95,7 +92,8 @@ export async function startTaskRun(
   // A quick task runs on its own session's sandbox, a project task on its
   // project's. Looked up (or created) here so the run's turn and sandbox
   // writes land on that one session.
-  const ownedSession = (await ensureTaskWorkSession(ctx, task)).session;
+  const ownedSession = (await ensureWorkSession(ctx, { kind: "task", task }))
+    .session;
   try {
     await startTaskRunWorkflow(ctx, {
       runId,

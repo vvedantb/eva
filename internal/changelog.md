@@ -8,6 +8,165 @@ WHY: The Eva seed copied every prod env var into each sandbox. Sandboxes then se
 
 Architectural: `packages/backend/scripts/sandboxEnv.mjs` lists every env var a sandbox gets, each with one rule: copy from prod, take the sandbox's own Eva env var of the same name (test keys), a fixed value, or a fresh generated secret or key pair. `sync-to-local.mjs --sandbox-env` sets those, removes every other var on the local backend, and reports prod vars that are not in the list and sandbox vars Eva does not provide. `.eva/config.json` seeds with `--sandbox-env`. `generate-sandbox-jwt-keys.mjs` now shares `createSandboxJwtKeys` with the list.
 
+## Web sidebar panel: no edge line
+
+Date: 2026-11-19
+
+WHY: The rail and the sandbox panel lost their dividers; the sidebar panel still drew a 1px right edge, the last resting line in the app chrome.
+
+Architectural: `SidebarPanel` drops `border-r border-sidebar-border`; the panel stays on the page tone. `docs/eva-ui.md` now says neither the rail nor the panel has an edge line.
+
+## Web sandbox panel: content card with an arrow to the active tab
+
+Date: 2026-11-19
+
+WHY: The sandbox content ran edge to edge beside the rail; as a card with an arrow at the active tab it reads as part of the rail's segmented groups and shows which tab owns it.
+
+Architectural: `SandboxPanelFrame` (session, task and project panels) gives the content `md:my-2 md:mr-1.5 md:rounded-surface` and renders a `size-4` `bg-card` arrow. `useActiveTabArrow` measures the rail's active tab (scoped to the rail, not tab lists inside the card) and writes the transform to the node; it re-measures on resize, scroll, `data-state` changes and when animations end, snaps the first placement and hides when the tab is outside the card. `.sandbox-tab-arrow` (globals.css) slides with the tabs pill timing. The review panel and the diff file tree no longer paint the page tone, so the card shows through.
+
+## Web chat header: actions on one track, flat buttons
+
+Date: 2026-11-19
+
+WHY: The chat header's usage, sandbox and menu buttons sat loose next to the title; the rails now group buttons on a trough.
+
+Architectural: `CHAT_HEADER_ACTIONS_CLASS` (`ChatPageWrapper`) puts the header actions on a `rail-track` trough for session chats and for the task and project header (`SandboxChatHeaderActions`); it hides itself when empty. A `globals.css` rule makes any button on a `rail-track` flat, so the round secondary start and menu buttons lose their own fill and hover at half the pill.
+
+The project header (`ProjectDetailHeaderActions`) and the quick task header (`TaskFooter` header layout) put their secondary controls (usage, menu, commit and push, start and stop) on the same `CHAT_HEADER_ACTIONS_CLASS` track; Build, Stop Build and Run stay outside as filled primary actions, and the task header drops its divider next to Run.
+## Web: no hairline under tab strips and panel headers; UI guide covers rails
+
+Date: 2026-11-19
+
+WHY: After the rail redesign, the UI guide still told agents to divide the sidebar edge with a hairline, and tab strips kept a line that the rail no longer uses.
+
+Architectural: `docs/eva-ui.md` now says icon rails have no edge, separators or resting split divider, and group buttons on troughs (`Sidebar.RailGroup` + `railGroupThemeClass`, `SANDBOX_RAIL_GROUP_CLASS`); tab strips and panel headers have no bottom hairline. The Plan and Recap viewers and the PR recap panel pass `border-b-0` to the package `TabsBar`; the file viewer header drops its `border-b`.
+
+## Web rail: segmented-tab groups with a sliding pill
+
+Date: 2026-11-19
+
+WHY: The app rail and the sandbox tab rail should read like the tab component: a shared trough per group, the active item on a lighter pill, and no border or dividers.
+
+Architectural: the rail moves to `@vvedantb/ui` 0.51.0 (packages #299), which adds `Sidebar.RailGroup`: one trough per group and one pill that slides to the active tile with the tabs motion. `RepoRail` wraps its top, repo and bottom sections in groups, centres the repo group (`justify-center-safe`), and drops the rail border and separators. `railGroupThemeClass` (`rail-track` in `globals.css`) gives the groups eva's segmented-tabs tones, which also fixes the package's compat tokens drawing a darker pill on a lighter trough in dark. The sandbox tab rail puts its tabs on the same `tabs-segmented` trough and centres them. The `@vvedantb/ui` patch moves to 0.51.0 unchanged.
+
+The sandbox rail's collapse toggle and tools (new preview, terminal, labels) sit on their own troughs (`SANDBOX_RAIL_GROUP_CLASS`), and the session, task and project splits drop the resting divider line (`ResizablePanelLayout` `seamlessSeparator`); the line and grip show on hover and while dragging.
+
+## Phone: find in chat, session summary, edit and download a proposed plan
+
+Date: 2026-11-18
+
+WHY: The web finds text in a thread, summarises a session and edits or downloads a proposed plan; the phone had none of these.
+
+Architectural: the chat ⋯ menu gains "Find in chat", which opens a find bar under the header (the web count, up and down, Return for next). The matching moves to `@eva/shared/threadFind` (the web re-exports it); each match scrolls the inverted list to its message with the kit's new `ConversationList` `scrollToIndex` (`@vvedantb/native-ui` 0.29.0, packages #291), which reaches rows not drawn yet, and a primary tint marks the message. Session chats gain the web "Summarise Session" / "Regenerate Summary" item (awake sandbox and a message needed) with its confirm, and the folded "Session summary" block above the chat, open with the live step while it writes. The plan card gains Download (the web `.md` file through the share sheet, `expo-sharing`) and Edit (a sheet that saves with `sessions.updatePlanContent`, as the web; the phone has no Plan tab, so once the saved plan matches no card, the newest card shows it and its actions use it). Kit 0.29.0 also draws sheets, dialogs and dropdown menus in the app's window (packages #290), so opening or closing one over a scrolled-up chat no longer throws it to its newest message on Android.
+
+## Phone chat composer: background processes, review comments and skill suggestions
+
+Date: 2026-11-18
+
+WHY: The web session composer lists and stops the agent's background shell processes, sends diff comments with the next prompt, and suggests skills for the draft. The phone had none of the three.
+
+Architectural: `BackgroundProcessesChip` sits after the agents chip on the composer bar (`backgroundProcesses.listRunning`, `sandbox.killBackgroundProcess`, a 15 s `reconcileBackgroundProcesses` while it shows). The chat's diff is now commentable; its comments share `usePendingLineComments` with the review screen (as the web sandbox shares them between Review and chat), show as chips in the composer header, and go out as `<review_comment>` blocks (`appendReviewCommentsToPrompt`, moved to `@eva/shared` with the new `reviewCommentExcerpt`). `useSkillSuggestions` asks `skillSuggestions.suggest` after 700 ms idle; its chips join "Paste image" in one kit suggestion row (`ComposerSuggestions`) on the chat and new-session screens. The pick rules (`skillSuggestions`) and the elapsed format (`formatDurationMs`) are shared with the web.
+
+## Old-APK shims removed: `sessions.getOwned` and project `activeWorkflowId`
+
+Date: 2026-11-18
+
+WHY: Both existed only for APK 0.1.96. The app built after #1391 reads `sessions.getOwnedWithSeed` and `projects.interview`, so once that APK is published the shims have no caller.
+
+Architectural: `sessions.getOwned` and the derived `activeWorkflowId` on `projects.get` / `getByNumId` are removed. `check-apk-compat.sh` passes only against an APK built after #1391.
+## Phone: attach files, and quote part of a reply
+
+Date: 2026-11-18
+
+WHY: The web composer's + attaches files (HTML, Markdown, text) as well as images, and a text selection in a reply can be cited into the next prompt. The phone's + only picked photos, and it had no way to quote.
+
+Architectural: the phone's + (`AttachButton`, chat and new session) opens a kit `DropdownMenu` with the web's "Attach files" and "Add photos". Files come from `expo-document-picker` (new native module) and go through `useAttachments`, which now applies the web's checks (5 files, 10 MB, images and text files, same toasts). Those rules (`isAllowedAttachmentFile`, `contentTypeForUpload`, `chatAttachmentErrorMessage`, the limits) move from the web's `attachmentMeta.ts` to `@eva/shared`. A long press on a reply gains "Select text": a sheet shows the reply in a field that selects but does not edit, and "Quote" adds a chip over the composer (`src/chat/Quotes.tsx`). A send appends the quotes as `<cited_assistant>` blocks; a sent message draws them as quote cards. `assistantCitation.ts` moves from the web to `@eva/shared/assistantCitation` for both apps.
+
+## Phone: live tasks, /goal and publish recovery above the composer
+
+Date: 2026-11-18
+
+WHY: the phone chat lacked three web rows above the composer: the running turn's to-do list, Claude's `/goal` with Clear, and the one-tap force-push after a rewritten branch blocks publishing.
+
+Architectural: `@eva/shared/composerTasks`, `agentGoal` and `publishRecovery` now hold the logic and copy; the web panels read them. Phone `ComposerTasksPanel` (reads `streaming.get`), `GoalBanner` (`sessionChats.get`, Clear sends `/goal clear`) and `PublishRecoveryBanner` (session chats that can reply; `sessions.listRepos`, `sessions.forcePushBranch`) are built by the chat screen and handed to `ChatDock` as `banners` and `panels`.
+
+## Project interview fields and project-keyed turns removed
+
+Date: 2026-11-18
+
+WHY: `migrateProjectInterviewState` ran in prod and the gate reported 0 (no project-keyed turns, no project on the legacy fields). Keeping the old fields and the project branch of the turn owner kept two ways to file one interview.
+
+Architectural: `projects.activeWorkflowId` and `projects.interviewSandboxClaim` leave the schema, and `projects` leaves `turnEntityIdValidator`. Interview turns resolve only through the project session (`interviewTurnSessionId`); the project fallback in `laneOwner`, `turnOwnerId` and the completion and stop paths is gone, with the migration and its gate query. `projects.get` still returns `activeWorkflowId`, derived from `interview`, because installed APKs (0.1.96) read it as "interview running"; remove it once no supported APK does. The phone's project plan now reads `interview`, like the web, so its running state works again.
+
+## Project interviews have one explicit state; their turns sit on the project session
+
+Date: 2026-11-12
+
+WHY: Two fields described one interview lifecycle: `projects.activeWorkflowId` and `projects.interviewSandboxClaim`. The save step cleared the workflow before the release step stopped the VM. A build or the chained spec could claim the session in that gap, and the release then stopped their VM. The stale and stall teardowns left the claim behind, so the claimed start never failed and the prepared VM never stopped.
+
+Architectural: The new `projects.interview` (`started` | `claimed` | `prepared`; absent = idle) is written only by `_projects/interviewState.ts`, through a pure transition table fenced by `workflowId`. `releaseInterview` ends the interview, releases the VM and chains the spec in one mutation. Every stop uses `stopProjectInterview`. Interview turns now open with `entityId` and `sessionId` set to the project session (lane `interview`), so the session's open-turn reads see them. The legacy fields stay optional and nothing writes them. Run `dataMigrations:migrateProjectInterviewState`. Before the narrowing PR, `migrations:projectEntityTurnsLeft` must report 0.
+## One Stop for web, mobile and MCP
+
+Date: 2026-11-12
+
+WHY: Stop did different things per surface. Mobile left a project task's run going. MCP `stop_agent` on a project stopped every task chat too. Only MCP refused a sandbox Stop mid-turn on the server; web Stop during a build killed the build's VM, and a task or project sandbox Stop could create a session.
+
+Architectural: `_sessions/stop.ts` holds the two Stops. `sessions.stopChatTurn({ chatId } | { taskId })` cancels the chat's turn and its task's run, never a build or interview. `sessions.stopWorkSandbox({ sessionId } | { taskId } | { projectId })` refuses while a turn, run, build or interview holds the session, and never creates one. `sessionWorkflow.cancelExecution` and `taskWorkflow.cancelExecution` are gone; `sessions.stopSandbox` stays for archive teardown only.
+## One owner-to-session lookup
+
+Date: 2026-11-12
+
+WHY: The rule "a project and its tasks share the project's session; a quick task owns its own" was spread over about ten helpers and inline copies. A caller could pick the wrong one.
+
+Architectural: `_sessions/owner.ts` holds the rule (`workSessionOwner`) and the read path (`findWorkSession`, over the raw `findOwnedSession`). `ownerState.findWorkChat` resolves the chat. `ownedSession.ensureWorkSession` is the one create path; a project task always gets its project's session. Removed: `taskSessionOwner`, `projectSessionOwner`, `taskUsesOwnedSession`, `taskWorkSessionOwner`, `findTaskSession`, `findProjectSession`, `findQuickTaskSession`, `findTaskWorkSession`, `findOwnerChat`, `ensureOwnedSession`, `ensureTaskWorkSession`, and the `ownedSession.ts` re-exports. Behaviour is unchanged.
+## MCP: send messages and start sessions on a teammate's shared account
+
+Date: 2026-11-18
+
+WHY: `send_chat_message` and `create_session` could not pick a provider account. A send ran on Team and reset the chat's account; a new session always used the caller's own account, so a teammate's shared account was out of reach.
+
+Architectural: both tools take `account` (owner's first name, account id, or "team"; `mcpAccountArg` in `mcp/toolShared.ts`). `mcp.queries.resolveMcpProviderAccount` resolves it against `listSelectableAccountsFor` (the web picker's pool: own accounts plus teammates' shared ones), filtered to the model's provider; an unknown or ambiguous name returns the usable choices. An omitted `account` on a send keeps the chat's current account, as the composer does. `buildChatMessageCalls` forwards the id to `addMessage`, `startExecute` and `enqueueMessage`, which still check usability.
+
+## Phone: archive a linked session group
+
+Date: 2026-11-18
+
+WHY: The web archives a whole linked group from its menu (#1370); on the phone each session had to be archived one by one.
+
+Architectural: the group header's menu (a long press in the Sessions tab) gains "Archive group" in the active list only, as the web sidebar; a confirm with the web copy counts the active members from `sessions.listGroup` and calls `sessions.archiveGroup`. `sessionCountLabel` ("1 session", "3 sessions") moves to `@eva/shared` for both dialogs.
+
+## Phone: holding a message or opening an image no longer throws the chat to its end
+
+Date: 2026-11-18
+
+WHY: On Android, opening an image over a scrolled-up chat (and, now and then, closing the hold menu) moved the chat to its newest message.
+
+Architectural: `@vvedantb/native-ui` 0.28.0 (packages #289) draws `MessageContextMenu` and `ImageViewer` in the app's window through `WindowLayerHost`, which wraps the root `Stack`. A React Native `Modal` is a window of its own on Android and moved the focus as it opened and closed; `react-native-keyboard-controller`'s chat list scrolled to its end on each. A layer never moves the focus. The kit's `chatHold` and `chatImage` Android scenarios reproduced both jumps and pass with the layer. Layers close on Android back and hide the app from screen readers while shown.
+
+## Phone chat parity: system rows, stopped turns, answered questions, holds and states
+
+Date: 2026-11-18
+
+WHY: The phone chat hid what the web shows: handoff and refusal rows, a stopped turn's marker, the record of an answered question, the composer's usage-limit hold, why a session is read-only, and the sandbox's state in an empty chat.
+
+Architectural: `visibleChatMessages`, `isSandboxLifecycleAlert`, `collectQuestionSteps` and `getSessionReadOnlyMessage` move to `@eva/shared` (`chatRows.ts`; the web re-exports them), so both apps draw the same rows. The phone draws system rows with `SystemAlertRow` (the web `SystemAlertMessage`: hairlines, tone icon, time, detail dialog), a "Stopped" line under a stopped turn, and the kit `ActivityQuestionCard` (0.27.0, packages #286) for answered questions; `activityTrace` keeps a question step's `questions` and `answers`. The composer reads the usage-limit hold (`findUsageLimitHold`, a one-minute clock in the composer only); a closed session names its reason; the empty chat follows the sandbox (`SANDBOX_CHAT_COPY`), and a send parked while every run slot is taken says "Waiting for a free slot".
+
+## Phone: the agent's question stays after the sandbox stops; the hold menu pops in
+
+Date: 2026-11-18
+
+WHY: A question the agent saved on its reply vanished from the phone once the turn (and the sandbox) stopped; the web kept it. The hold menu and the paste chip appeared with no motion.
+
+Architectural: the chat screen reads the last reply's `pendingQuestion` (as the web `ChatBody`) and docks it in the composer's place when no blocking question is open; its answer is sent as a chat message (which wakes the sandbox) in the web's text, now one shared helper (`formatQuestionAnswers` in `@eva/shared/pendingQuestion`, used by the web `MultipleChoiceQuestion` too). `@vvedantb/native-ui` 0.26.1 (packages #285): `MessageContextMenu`'s pill and card grow 0.96→1 and the held message lifts to 1.02 in 150 ms. `PasteImageChip` fades in (`FadeIn` 150 ms). Reduce Motion skips both.
+
+## Phone: paste an image straight into the text box
+
+Date: 2026-11-18
+
+WHY: The "Paste image" chip needed a copied image; long-press Paste and the keyboard's image insert (Gboard's clipboard) still did nothing, as React Native's `TextInput` takes no image.
+
+Architectural: `@vvedantb/native-ui` 0.26.0 adds `PromptInput` `onPasteImages` and the `/paste-input` entry (`PasteInputProvider`, packages #284) on `expo-paste-input` (native: `OnReceiveContentListener` on Android). The root layout wraps the app in `PasteInputProvider`; both composers pass `useAttachments().pasteFiles`, which reads each pasted cache file with `expo-file-system` `File.base64()` and uploads it as a picked photo. Needs the new APK (native module). The chip stays.
+
 ## Phone: paste an image into the composer
 
 Date: 2026-11-18
@@ -47,6 +206,14 @@ Date: 2026-11-17
 WHY: The hold menu on chat messages and task comments was a bottom sheet; the user wanted iMessage's, with the message lifted in place, the reactions above it and the actions below it. The phone's menu sheet and reaction row were also Eva-only copies that other apps could use.
 
 Architectural: `@vvedantb/native-ui` 0.25 adds `MessageContextMenu` and `Message`'s `menu` prop, `MenuSheet`, `SubmenuRow`, `MenuDivider` and `ReactionRow` (packages #277, #278). The phone's `src/ui/MenuSheet.tsx` is removed and its 19 users import the kit's. Chat rows pass `menu` to the kit `Message` (`useMessageMenu` in `src/chat/MessageHoldMenu.tsx`: thumbs in the pill; Copy text, Copy link, Fork, Retry, Diff this turn and Restore in the card). Task comments and the task description use the same menu through `ReactableMenu` (`measureHeld` reads where the held item is), with the quick emoji and "More reactions" in the pill.
+
+## Web: archive a linked session group
+
+Date: 2026-11-17
+
+WHY: Clearing out a finished group meant archiving each of its sessions one by one.
+
+Architectural: new `sessions.archiveGroup` archives every active, standalone member the user can reach (same 50 cap as `listGroup`). `chats.archive` and the group archive now share `stopAndArchiveSession` in `_sessions/mutations.ts`. `SessionGroupArchiveDialog` confirms with the server's active count and is opened from the sidebar group's right-click menu (active list only) and the session header's linked chip.
 
 ## Phone: a message's actions open on press and hold
 

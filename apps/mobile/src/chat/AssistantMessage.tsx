@@ -1,5 +1,5 @@
 import { api } from "@eva/backend";
-import { collectChangedFiles, stripErrorPrefix } from "@eva/shared";
+import { collectChangedFiles, collectQuestionSteps, stripErrorPrefix } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { parseActivityLog, type ActivityLogStep } from "@eva/shared/activityTrace";
 import {
@@ -18,6 +18,7 @@ import {
   IconListCheck,
   IconMessage,
   IconPencil,
+  IconPlayerStop,
   IconSearch,
   IconSitemap,
   IconSteeringWheel,
@@ -28,6 +29,7 @@ import {
 } from "@tabler/icons-react-native";
 import {
   ACTIVITY_MAX_VISIBLE_BLOCKS,
+  ActivityQuestionCard,
   activityChildRows,
   activityRowKey,
   activitySegmentKey,
@@ -372,6 +374,11 @@ function LiveStatus({ steps }: { steps: ActivityLogStep[] }) {
   );
 }
 
+/** The live status line on its own, for a stream that is not a reply (the session summary while it writes). */
+export function LiveActivityStatus({ activityLog }: { activityLog: string | undefined }) {
+  return <LiveStatus steps={parseActivityLog(activityLog)} />;
+}
+
 /**
  * An agent reply: its trace as the web's folded `ActivityTasks` (reasoning as
  * prose, each run of tool steps behind a summary line, to-dos and notices on
@@ -393,6 +400,7 @@ export function AssistantMessage({
   tabPanels,
   live = false,
   failure,
+  stopped = false,
 }: {
   /** For loading a trimmed step's full detail. */
   messageId: string;
@@ -412,12 +420,16 @@ export function AssistantMessage({
   live?: boolean;
   /** A failed turn (`turnErrorTitle`): the notice takes the prose's place, with Retry when there is a prompt to re-send. */
   failure?: { title: string; onRetry?: () => void };
+  /** The turn was stopped: a "Stopped" line under it, so a stop with no text does not read as an empty reply. */
+  stopped?: boolean;
 }) {
   const steps = parseActivityLog(activityLog);
   const segments = foldedActivitySegments(steps);
   // The web skips a reply still streaming its first text (`getAssistantTurnState`).
   const settled = content !== "" || duration !== undefined;
   const changedFiles = onOpenDiff && settled ? collectChangedFiles(steps) : [];
+  // What the agent asked and what was picked, kept in the reply once answered (the web `AssistantQuestionCards`).
+  const questionSteps = settled ? collectQuestionSteps(steps) : [];
   const trace = <SegmentList segments={segments} steps={steps} messageId={messageId} live={duration === undefined} />;
   const prose = (
     <Markdown onCopyCode={copyText} onCopyTable={copyText}>
@@ -437,6 +449,9 @@ export function AssistantMessage({
       ) : (
         <AgentTrace>{trace}</AgentTrace>
       )}
+      {questionSteps.map((step, index) => (
+        <ActivityQuestionCard key={step.toolUseId ?? index} questions={step.questions ?? []} answers={step.answers} />
+      ))}
       {failure ? (
         <TurnErrorNotice title={failure.title} detail={stripErrorPrefix(content)} onRetry={failure.onRetry} />
       ) : content.trim() !== "" ? (
@@ -446,11 +461,25 @@ export function AssistantMessage({
           prose
         )
       ) : null}
+      {stopped ? <StoppedLine /> : null}
       {onOpenDiff ? (
         <ChangedFilesCard messageId={messageId} files={changedFiles} isLatestAssistantTurn={isLatestAssistantTurn} onOpenDiff={onOpenDiff} />
       ) : null}
       {media ? <AgentMedia entries={media} /> : null}
     </>
+  );
+}
+
+/** The web marker under a stopped turn: a small stop icon and "Stopped", muted. */
+function StoppedLine() {
+  const muted = EVA_THEME[useScheme()].mutedForeground;
+  return (
+    <View accessibilityRole="text" className="mt-1 flex-row items-center gap-1">
+      <IconPlayerStop size={12} color={muted} />
+      <Text className="font-instrument-sans text-xs" style={{ color: muted }}>
+        Stopped
+      </Text>
+    </View>
   );
 }
 

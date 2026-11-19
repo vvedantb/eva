@@ -26,6 +26,77 @@ export function isImageContentType(
   return normalizeContentType(contentType).startsWith("image/");
 }
 
+/**
+ * The rules every composer (web and phone) applies to a user-attached file,
+ * so each rejects the same files with the same wording: images, plus design
+ * and spec text files (Claude Design HTML exports, Markdown and text specs).
+ */
+export const MAX_CHAT_ATTACHMENTS = 5;
+export const MAX_CHAT_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MB
+
+const SESSION_TEXT_EXTENSIONS: readonly string[] = [".html", ".htm", ".md", ".txt"];
+
+/** The subset of file metadata the attachment rules need, from any source. */
+export type AttachmentFileMeta = {
+  mediaType?: string;
+  filename?: string;
+};
+
+export function chatAttachmentErrorMessage(err: {
+  code: "max_files" | "max_file_size" | "accept";
+}): string {
+  switch (err.code) {
+    case "max_files":
+      return `You can attach up to ${MAX_CHAT_ATTACHMENTS} files.`;
+    case "max_file_size":
+      return "Attachments must be 10 MB or smaller.";
+    case "accept":
+      return "Only images, HTML, Markdown, or plain text can be attached.";
+  }
+}
+
+function isSessionTextAttachment(file: AttachmentFileMeta): boolean {
+  const type = normalizeContentType(file.mediaType);
+  if (
+    type === "text/html" ||
+    type === "text/markdown" ||
+    type === "text/plain"
+  ) {
+    return true;
+  }
+  const ext = filenameExtension(file.filename ?? "");
+  return SESSION_TEXT_EXTENSIONS.some((allowed) => allowed === ext);
+}
+
+export function isAllowedAttachmentFile(file: AttachmentFileMeta): boolean {
+  if (isImageContentType(file.mediaType)) return true;
+  return isSessionTextAttachment(file);
+}
+
+/**
+ * Content type to store the blob under. Prefers what the source declared, then
+ * what the blob reports, then the filename extension.
+ */
+export function contentTypeForUpload(
+  file: AttachmentFileMeta,
+  blobType: string,
+): string {
+  const declared = file.mediaType?.trim();
+  if (declared) return declared;
+  if (blobType) return blobType;
+  switch (filenameExtension(file.filename ?? "")) {
+    case ".html":
+    case ".htm":
+      return "text/html";
+    case ".md":
+      return "text/markdown";
+    case ".txt":
+      return "text/plain";
+    default:
+      return "application/octet-stream";
+  }
+}
+
 /** The kind of a non-image attachment, for its icon. */
 export type AttachmentFileKind = "markdown" | "html" | "text" | "file";
 

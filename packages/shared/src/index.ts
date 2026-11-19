@@ -154,21 +154,12 @@ export {
   type PrState,
   type PrStateTone,
 } from "./prState";
-export { canSendSessionForReview, sessionMenuActions, type SessionMenuAction } from "./sessionMenu";
+export { canSendSessionForReview, sessionCountLabel, sessionMenuActions, type SessionMenuAction } from "./sessionMenu";
 export {
   draftCountAfterRemove,
   draftsAfterRemove,
   visibleDrafts,
 } from "./draftVisibility";
-export {
-  draftContextTitle,
-  draftKindLabel,
-  draftSnippet,
-  mergeDrafts,
-  type CommentDraftFields,
-  type DraftListItem,
-  type TaskDraftFields,
-} from "./draftList";
 export {
   chatSourceKindLabel,
   chatSourceLabel,
@@ -187,6 +178,7 @@ export {
   QUICK_TASK_TIME_RANGE_LABELS,
   activeQuickTaskFilterKeys,
   applyQuickTaskFilters,
+  quickTaskTodoDrafts,
   clearedQuickTaskFilter,
   clearedQuickTaskFilters,
   hasActiveQuickTaskFilters,
@@ -252,6 +244,7 @@ export {
   lineCommentTarget,
   lineRangeCommentTarget,
   summarizeDiffSize,
+  reviewCommentExcerpt,
   unifiedDiffLines,
   type DiffFileEntry,
   type DiffFileKind,
@@ -323,6 +316,7 @@ export {
   queuedMessagePreview,
 } from "./queuedMessages";
 export {
+  appendReviewCommentsToPrompt,
   parseReviewCommentSegments,
   stripReviewCommentBlocks,
   type ReviewComment,
@@ -333,6 +327,8 @@ export {
 export {
   ACTIVE_PROJECT_PHASES,
   BUILDABLE_PROJECT_PHASES,
+  PROJECT_COLUMNS,
+  PROJECT_COLUMN_LABELS,
   PROJECT_LIST_DEFAULTS,
   PROJECT_PHASE_LABELS,
   PROJECT_SORT_FIELDS,
@@ -349,11 +345,14 @@ export {
   isProjectPlanning,
   newProjectSubmitBlocker,
   parseProjectSpec,
+  projectColumn,
   projectFilterChips,
+  projectPlanningPhase,
   projectProgressSegments,
   projectTaskSections,
   toggleHiddenProjectPhase,
   type FilterableProject,
+  type ProjectColumn,
   type ProjectFilterKey,
   type ProjectListFilters,
   type ProjectPhase,
@@ -397,6 +396,12 @@ export {
 export { placeChatUiPanels, type PanelPlacement, type PlaceablePanel, type PlacementMessage } from "./chatUiPanelPlacement";
 export {
   attachmentFileKind,
+  chatAttachmentErrorMessage,
+  contentTypeForUpload,
+  isAllowedAttachmentFile,
+  MAX_CHAT_ATTACHMENT_BYTES,
+  MAX_CHAT_ATTACHMENTS,
+  type AttachmentFileMeta,
   filenameExtension,
   isImageContentType,
   labelForAttachment,
@@ -425,3 +430,9 @@ export {
   taskCanResolveConflicts,
   taskCanStartSandbox,
 } from "./ownedSandboxRules";
+export {
+  collectQuestionSteps,
+  getSessionReadOnlyMessage,
+  isSandboxLifecycleAlert,
+  visibleChatMessages,
+} from "./chatRows";

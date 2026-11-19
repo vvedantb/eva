@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { PROJECT_PHASES } from "@eva/backend";
+import type { PROJECT_PHASES } from "@eva/backend";
 import {
+  PROJECT_COLUMNS,
   PROJECT_LIST_DEFAULTS,
   filterAndSortProjects,
   interviewTurnText,
@@ -36,6 +37,12 @@ describe("project meta", () => {
     expect(
       filterAndSortProjects(projects, { ...PROJECT_LIST_DEFAULTS, hiddenPhases: ["cancelled"] }).map((p) => p.title),
     ).toEqual(["Offline drafts", "Billing"]);
+    expect(
+      filterAndSortProjects([...projects, project("Spec ready", "finalized", 4)], {
+        ...PROJECT_LIST_DEFAULTS,
+        hiddenPhases: ["todo"],
+      }).map((p) => p.title),
+    ).toEqual(["Old idea", "Billing"]);
     expect(filterAndSortProjects(projects, { ...PROJECT_LIST_DEFAULTS, q: "NETWORK" }).map((p) => p.title)).toEqual([
       "Offline drafts",
     ]);
@@ -44,14 +51,14 @@ describe("project meta", () => {
     ).toEqual(["Billing", "Offline drafts", "Old idea"]);
   });
 
-  it("keeps the last visible phase and names the active filters", () => {
-    const allButOne = PROJECT_PHASES.filter((phase) => phase !== "draft");
-    expect(toggleHiddenProjectPhase(allButOne, "draft", PROJECT_PHASES)).toEqual(allButOne);
-    expect(toggleHiddenProjectPhase(["draft"], "draft", PROJECT_PHASES)).toEqual([]);
+  it("keeps the last visible column and names the active filters", () => {
+    const allButOne = PROJECT_COLUMNS.filter((column) => column !== "todo");
+    expect(toggleHiddenProjectPhase(allButOne, "todo", PROJECT_COLUMNS)).toEqual(allButOne);
+    expect(toggleHiddenProjectPhase(["todo"], "todo", PROJECT_COLUMNS)).toEqual([]);
     expect(
-      projectFilterChips({ ...PROJECT_LIST_DEFAULTS, hiddenPhases: ["draft"], sortField: "priority", sortDir: "asc" }, PROJECT_PHASES),
+      projectFilterChips({ ...PROJECT_LIST_DEFAULTS, hiddenPhases: ["todo"], sortField: "priority", sortDir: "asc" }, PROJECT_COLUMNS),
     ).toEqual([
-      { key: "phases", label: `${PROJECT_PHASES.length - 1} Phases` },
+      { key: "phases", label: `${PROJECT_COLUMNS.length - 1} Phases` },
       { key: "sortField", label: "Sort: Priority" },
       { key: "sortDir", label: "Ascending" },
     ]);

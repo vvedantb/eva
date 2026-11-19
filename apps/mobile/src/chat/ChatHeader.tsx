@@ -23,22 +23,28 @@ import { Fragment, type ComponentType, type ReactNode } from "react";
 import { Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SESSION_ACTION_ITEMS } from "@/sessions/useSessionActions";
+import { HeaderRail } from "@/ui/HeaderRail";
 import { RepoLogo } from "@/ui/RepoLogo";
 import { displayTitle } from "@/ui/format";
 import { useScheme } from "@/ui/theme";
 
+/** No leading group: the default, one array for every render. */
+const NO_ITEMS: MenuEntry[] = [];
+
 /** One ⋯ menu item: the `DropdownMenuItem` label, icon and tone. */
-type MenuEntry = {
+export type MenuEntry = {
   label: string;
   icon: ComponentType<IconProps>;
   warning?: boolean;
   destructive?: boolean;
+  disabled?: boolean;
   onSelect: () => void;
 };
 
 /**
  * The chat header, as the web chat bar: the repo logo (else its initial) and name, then the
- * chat title ("S Storefront / Add dark mode…"), the usage button, and a ⋯ menu. The tile
+ * chat title ("S Storefront / Add dark mode…"), then the wake / sleep control, the usage
+ * button and a ⋯ menu on one trough (`HeaderRail`, the web `CHAT_HEADER_ACTIONS_CLASS`). The tile
  * takes the repo's web colour (`repoTileSlot`, the `--cat-*` ramp) once the
  * repo loads, grey until then. A back button
  * leads, as phones expect; the web's drawer has no back. In a session the
@@ -56,6 +62,7 @@ export function ChatHeader({
   onCopyLink,
   onStop,
   sessionMenu,
+  leadingItems = NO_ITEMS,
   usage,
   sandbox,
 }: {
@@ -75,6 +82,8 @@ export function ChatHeader({
     /** Each action's label and icon (`useSessionActions().itemFor`). */
     itemFor: (action: SessionMenuAction) => { label: string; icon: ComponentType<IconProps>; warning?: boolean };
   };
+  /** The menu's first group: Find in chat, and a session's Summarise Session (the web header menu's first item). */
+  leadingItems?: MenuEntry[];
   /** Before the ⋯ menu: the usage button (`UsageButton`), as the web header's context ring and plan chip. */
   usage?: ReactNode;
   /** Before the usage button: a session's wake / sleep control (`SandboxControl`), as the web session header. */
@@ -91,12 +100,13 @@ export function ChatHeader({
   const sessionItems = (actions: SessionMenuAction[]): MenuEntry[] =>
     actions.map((action) => ({ ...(sessionMenu ? sessionMenu.itemFor(action) : SESSION_ACTION_ITEMS[action]), onSelect: () => sessionMenu?.onSelect(action) }));
   const [sessionMain = [], ...sessionRest] = sessionMenu?.groups ?? [];
-  // The web More menu's groups: Rename and Regenerate title; then its Copy
+  // The web More menu's groups: Find in chat and Summarise Session first; then Rename and Regenerate title; then its Copy
   // submenu (title, link, branch name) laid flat with Open PR and Open on web;
   // then Archive / Unarchive alone; then Stop, the destructive item, last.
   // Empty groups drop out, so no divider stands alone.
   const isEdit = (action: SessionMenuAction) => action === "rename" || action === "regenerateTitle";
   const menuGroups: MenuEntry[][] = [
+    leadingItems,
     sessionItems(sessionMain.filter(isEdit)),
     [
       ...sessionItems(sessionMain.filter((action) => action === "copyTitle")),
@@ -140,31 +150,35 @@ export function ChatHeader({
           {displayTitle(title)}
         </Text>
       </View>
-      {sandbox}
-      {usage}
-      <DropdownMenu>
-        <DropdownMenuTrigger accessibilityLabel="Chat options" hitSlop={4} className="h-11 w-11 items-center justify-center rounded-full active:opacity-70" style={{ backgroundColor: EVA_THEME[scheme].secondary }}>
-          <IconDots size={18} color={foreground} />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {menuGroups.map((group, index) => (
-            <Fragment key={group.map((item) => item.label).join()}>
-              {index > 0 ? <DropdownMenuSeparator /> : null}
-              {group.map((item) => (
-                <DropdownMenuItem
-                  key={item.label}
-                  icon={item.icon}
-                  warning={item.warning}
-                  destructive={item.destructive}
-                  onSelect={item.onSelect}
-                >
-                  {item.label}
-                </DropdownMenuItem>
-              ))}
-            </Fragment>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <HeaderRail>
+        {sandbox}
+        {usage}
+        <DropdownMenu>
+          {/* Flat on the rail, as the web trough's buttons: the trough is their surface. */}
+          <DropdownMenuTrigger accessibilityLabel="Chat options" hitSlop={4} className="h-11 w-11 items-center justify-center rounded-full active:opacity-70">
+            <IconDots size={18} color={foreground} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {menuGroups.map((group, index) => (
+              <Fragment key={group.map((item) => item.label).join()}>
+                {index > 0 ? <DropdownMenuSeparator /> : null}
+                {group.map((item) => (
+                  <DropdownMenuItem
+                    key={item.label}
+                    icon={item.icon}
+                    warning={item.warning}
+                    destructive={item.destructive}
+                    disabled={item.disabled}
+                    onSelect={item.onSelect}
+                  >
+                    {item.label}
+                  </DropdownMenuItem>
+                ))}
+              </Fragment>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </HeaderRail>
     </View>
   );
 }

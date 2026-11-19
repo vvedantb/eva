@@ -19,6 +19,12 @@ export const projectWithDetailsValidator = v.object({
   ...projectFields,
   generatedSpec: v.optional(v.string()),
   conversationHistory: v.array(conversationMessageValidator),
+  /**
+   * @deprecated `interview?.workflowId`, for installed APKs (0.1.96 and older
+   * read it as "interview running"). Derived, not stored. Remove once no
+   * supported APK reads it.
+   */
+  activeWorkflowId: v.optional(v.string()),
 });
 
 const {

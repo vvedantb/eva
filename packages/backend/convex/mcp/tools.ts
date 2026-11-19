@@ -36,6 +36,7 @@ import {
   mcpGetContext,
   mcpListUserRepos,
   MCP_CLAUDE_MODELS,
+  mcpAccountArg,
   type McpCredentials,
   type RepoInfo,
 } from "./toolShared";
@@ -940,8 +941,11 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
           .describe(
             'Claude model for this turn ("opus", "sonnet", "haiku", or "fable"). Omit to reuse the model that chat last ran on.',
           ),
+        account: mcpAccountArg(
+          "Omit to keep the account that chat runs on now.",
+        ),
       },
-      handler: async ({ message, model, chat, ...ref }) => {
+      handler: async ({ message, model, chat, account, ...ref }) => {
         if (message.trim().length === 0) {
           return toolErrorResult("message cannot be empty.");
         }
@@ -976,6 +980,7 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
             id: target.targetId,
             message,
             model,
+            account,
             ...(target.kind === "session" && chat !== undefined
               ? { chat }
               : {}),

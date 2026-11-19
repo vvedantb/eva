@@ -93,6 +93,12 @@ const FLAG_GROUPS: FlagGroup[] = [
         description:
           "Check a new chat's first message or a quick task's description while you type. A banner names what is missing, like where the change goes.",
       },
+      {
+        key: "skillSuggestions",
+        title: "Skill suggestions",
+        description:
+          "Suggest a / skill that fits your message while you type. Chips appear above the composer; tap one to add it.",
+      },
     ],
   },
   {

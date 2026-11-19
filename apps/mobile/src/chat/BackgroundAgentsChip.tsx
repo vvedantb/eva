@@ -61,7 +61,7 @@ export function BackgroundAgentsChip({ chatId, readOnly }: { chatId: Id<"session
       <PromptInputChip
         icon={<IconRobot size={PROMPT_INPUT_CHIP.iconSize} color={color} />}
         // As the Stash chip: a label that gives way when squeezed, and a count that stays.
-        label="Agents"
+        label={agents.length === 1 ? "Agent" : "Agents"}
         count={agents.length}
         chevron={false}
         {...FOOTER_CHIP}

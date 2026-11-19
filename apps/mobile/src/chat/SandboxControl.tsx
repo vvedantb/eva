@@ -26,14 +26,18 @@ import { useScheme } from "@/ui/theme";
 export function useSessionSandbox(sessionId: Id<"sessions"> | undefined) {
   const session = useQuery(api.sessions.get, sessionId ? { id: sessionId } : "skip");
   const start = useMutation(api.sessions.startSandbox);
-  const stop = useMutation(api.sessions.stopSandbox);
+  // The shared Stop (`stopWorkSandbox`): refused while an agent, run, build
+  // or interview holds the session, as on the web.
+  const stop = useMutation(api.sessions.stopWorkSandbox);
   const [pending, setPending] = useState<"start" | "stop" | null>(null);
   const display = session ? sandboxDisplayStatus(session) : undefined;
   const run = async (action: "start" | "stop") => {
     if (!sessionId) return;
     setPending(action);
     try {
-      await (action === "start" ? start({ sessionId }) : stop({ sessionId }));
+      await (action === "start"
+        ? start({ sessionId })
+        : stop({ target: { sessionId } }));
     } catch {
       toast.error(action === "start" ? "Couldn't start sandbox" : "Couldn't stop sandbox");
     }
@@ -43,6 +47,8 @@ export function useSessionSandbox(sessionId: Id<"sessions"> | undefined) {
     loaded: session !== undefined && session !== null,
     isActive: display === "active",
     isToggling: pending !== null || display === "starting" || display === "stopping",
+    /** Going to sleep: the empty chat says so, as the web. */
+    isStopping: pending === "stop" || display === "stopping",
     startError: display === "error" ? (session?.sandboxError ?? undefined) : undefined,
     toggle: (action: "start" | "stop") => void run(action),
   };
@@ -83,15 +89,13 @@ export function SandboxControl({ sandbox, working }: { sandbox: SessionSandbox; 
       }}
       hitSlop={4}
       className="h-11 w-11 items-center justify-center rounded-full active:opacity-70"
-      style={{
-        backgroundColor: sandbox.isActive ? theme.destructive : theme.secondary,
-        opacity: blockedMidTurn ? 0.45 : 1,
-      }}
+      // Flat on the header rail, as the web (#1410): no red fill; a red stop awake, a green play asleep.
+      style={{ opacity: blockedMidTurn ? 0.45 : 1 }}
     >
       {sandbox.isToggling ? (
         <Spinner size="sm" />
       ) : sandbox.isActive ? (
-        <IconPlayerStop size={16} color={theme.destructiveForeground} />
+        <IconPlayerStop size={16} color={theme.destructive} />
       ) : (
         <IconPlayerPlay size={16} color={theme.success} />
       )}

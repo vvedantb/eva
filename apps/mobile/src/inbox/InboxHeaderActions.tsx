@@ -1,10 +1,12 @@
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import type { InboxGroup } from "@eva/shared/notificationGroups";
-import { IconChecklist, IconChecks, IconChevronDown, IconFilter, type IconProps } from "@tabler/icons-react-native";
+import { IconChecklist, IconChecks, IconChevronDown, IconFilter } from "@tabler/icons-react-native";
 import { selectionHaptic } from "@vvedantb/native-ui/haptics";
-import { SectionLabel, Sheet, SheetBody, SheetContent, SheetRow, MenuDivider } from "@vvedantb/native-ui/primitives";
-import { useState, type ComponentType } from "react";
+import { HeaderIconButton, SectionLabel, Sheet, SheetBody, SheetContent, SheetRow, MenuDivider } from "@vvedantb/native-ui/primitives";
+import { useLargerText } from "@vvedantb/native-ui/theme";
+import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
+import { headerButtonSurface } from "@/ui/HeaderRail";
 import { useScheme } from "@/ui/theme";
 
 export type InboxFilter = "all" | "unread" | "archived";
@@ -15,43 +17,6 @@ const GROUPS: readonly InboxGroup[] = ["day", "repo", "type", "urgency"];
 /** The web `InboxFilterMenu` labels. */
 const FILTER_LABELS: Record<InboxFilter, string> = { all: "All", unread: "Unread", archived: "Archived" };
 const GROUP_LABELS: Record<InboxGroup, string> = { day: "Day", repo: "Repo", type: "Type", urgency: "Urgency" };
-
-/**
- * A web `Button size="sm"` in the inbox header, icon only at phone width: a
- * 32-high pill (the web `sm`), `outline` (1px border, no fill) or `ghost` (neither), inside
- * a whole 44 target. The web `h-7` (28) pills 6 apart needed slop that
- * reached the neighbour; these targets sit side by side and need none.
- */
-function HeaderPill({
-  icon: Icon,
-  label,
-  outline,
-  color,
-  onPress,
-}: {
-  icon: ComponentType<IconProps>;
-  label: string;
-  outline: boolean;
-  color: string;
-  onPress: () => void;
-}) {
-  const scheme = useScheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      className="h-11 min-w-11 items-center justify-center active:opacity-70"
-    >
-      <View
-        className="h-8 items-center justify-center rounded-full px-3"
-        style={outline ? { borderWidth: 1, borderColor: EVA_THEME[scheme].border } : undefined}
-      >
-        <Icon size={16} color={color} />
-      </View>
-    </Pressable>
-  );
-}
 
 /**
  * The web inbox header actions at phone width: Mark all as read (only while
@@ -77,7 +42,8 @@ export function InboxHeaderActions({
   onSelect: () => void;
 }) {
   const scheme = useScheme();
-  const muted = EVA_THEME[scheme].mutedForeground;
+  const foreground = EVA_THEME[scheme].foreground;
+  const largerText = useLargerText();
   const [filterOpen, setFilterOpen] = useState(false);
   // A new pick ticks; the sheet closes, as the web menu does.
   const pick = (changed: boolean, apply: () => void) => {
@@ -86,24 +52,31 @@ export function InboxHeaderActions({
     setFilterOpen(false);
   };
   return (
-    <View className="flex-row items-center">
+    // Round header buttons, as Back; the filter keeps its label on a pill of the same surface.
+    <View className="flex-row items-center gap-2">
       {unreadCount > 0 ? (
-        <HeaderPill icon={IconChecks} label="Mark all as read" outline color={muted} onPress={onMarkAllRead} />
+        <HeaderIconButton label="Mark all as read" onPress={onMarkAllRead}>
+          <IconChecks size={18} color={foreground} />
+        </HeaderIconButton>
       ) : null}
-      <HeaderPill icon={IconChecklist} label="Select notifications" outline={false} color={muted} onPress={onSelect} />
+      <HeaderIconButton label="Select notifications" onPress={onSelect}>
+        <IconChecklist size={18} color={foreground} />
+      </HeaderIconButton>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Filter notifications: ${FILTER_LABELS[filter]}, grouped by ${GROUP_LABELS[group]}`}
         accessibilityState={{ expanded: filterOpen }}
         onPress={() => setFilterOpen(true)}
-        className="h-11 flex-row items-center gap-1.5 rounded-full px-2 active:opacity-70"
+        hitSlop={8}
+        className={`${largerText ? "h-14" : "h-12"} flex-row items-center gap-1.5 rounded-full border px-3 active:opacity-70`}
+        style={headerButtonSurface(scheme)}
       >
-        <IconFilter size={16} color={muted} />
+        <IconFilter size={18} color={foreground} />
         {/* The web button label is `text-xs` semibold with -0.01em tracking; 14 here, the phone floor for tappable text. */}
-        <Text className="font-instrument-sans-semibold text-sm" style={{ color: muted, fontWeight: "600", letterSpacing: -0.14 }}>
+        <Text className="font-instrument-sans-semibold text-sm" style={{ color: foreground, fontWeight: "600", letterSpacing: -0.14 }}>
           {FILTER_LABELS[filter]}
         </Text>
-        <IconChevronDown size={16} color={muted} />
+        <IconChevronDown size={16} color={foreground} />
       </Pressable>
       <Sheet open={filterOpen} onOpenChange={setFilterOpen}>
         <SheetContent className="gap-3 px-3">

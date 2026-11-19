@@ -123,11 +123,15 @@ export function ProjectDetailSandboxContent({
 
   const layout = (rightPanel: (ctx: SandboxPanelContext) => ReactNode) => (
     <ResizablePanelLayout
+      // Remount per project: the open flag is read once at mount.
+      key={projectId}
       storageKey="project-sandbox-panel"
+      collapsedStorageKey={`project-sandbox-panel:${projectId}`}
       leftDefaultSize="40%"
       leftMinWidthPx={350}
       rightMinWidthPx={300}
       rightCollapsedSizePx={sandboxRailWidthPx}
+      seamlessSeparator
       defaultRightCollapsed={false}
       expandRightSignal={expandRightSignal}
       mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}

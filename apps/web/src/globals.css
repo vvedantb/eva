@@ -1002,15 +1002,41 @@ html[data-blur-pid] [data-pii] {
  *     hot-reload reliably. Placed after `@tailwind utilities`, so they win
  *     over the list's own bg utility at equal specificity.
  * ─────────────────────────────────────────────────────────────────── */
-.tabs-segmented {
+/* `rail-track` (on each package `Sidebar.RailGroup`, via
+ * `railGroupThemeClass`): the same trough and sliding pill as these tabs. The
+ * package reads `bg-default` / `bg-segment`, which eva's compat maps to
+ * secondary / card — in dark that is a darker pill on a lighter trough. */
+.tabs-segmented,
+.rail-track {
   background-color: rgb(var(--secondary)); /* light: grey trough */
 }
 /* The sliding pill (`t-tabs-pill`, `bg-card` from the Tabs config): white in
  * light, #474747 in dark, so it shows on the trough as the phone tab bar's. */
-.tabs-segmented .t-tabs-pill {
+.tabs-segmented .t-tabs-pill,
+.rail-track > .t-tabs-pill {
   background-color: rgb(var(--segment-active));
 }
-.dark .tabs-segmented {
+/* Buttons on a trough are flat: the trough is their surface, so their own
+ * resting fill (round secondary buttons in the chat header) is dropped. */
+.rail-track button {
+  background-color: transparent;
+}
+/* Idle rail tiles and buttons hover at half the pill, as the package does
+ * with its token; the buttons' own `hover:bg-secondary` matches the light
+ * trough and would vanish. */
+.rail-track :is([data-rail-tile], button):not([data-active]):not(:disabled):hover {
+  background-color: rgb(var(--segment-active) / 0.5);
+}
+/* The sandbox card's arrow to the active rail tab: slides with the tab pill's
+ * timing; page motion off snaps it, as the pill. */
+.sandbox-tab-arrow {
+  transition: transform var(--tabs-dur) var(--tabs-ease);
+}
+html[data-page-motion="off"] .sandbox-tab-arrow {
+  transition-duration: 0s;
+}
+.dark .tabs-segmented,
+.dark .rail-track {
   background-color: rgb(var(--card)); /* dark: card-grey trough */
 }
 

@@ -15,11 +15,8 @@ import {
   drainSessionChatQueues,
 } from "./_queues/helpers";
 import { ensureMainChat, findMainChat } from "./_sessionChats/helpers";
-import {
-  ensureOwnerChat,
-  findOwnerChat,
-  loadOwnerEntity,
-} from "./_sessions/ownedSession";
+import { ensureOwnerChat, loadOwnerEntity } from "./_sessions/ownedSession";
+import { findWorkChat } from "./_sessions/ownerState";
 import { listDirectoryForTeam, teamHasOtherMembers } from "./workProfiles";
 import {
   DEFAULT_AI_MODEL,
@@ -151,7 +148,7 @@ async function latestUserRequest(
   const parentId = sessionId
     ? (await findMainChat(ctx.db, sessionId))?._id
     : owner
-      ? (await findOwnerChat(ctx.db, owner))?.chat._id
+      ? (await findWorkChat(ctx.db, owner))?.chat._id
       : undefined;
   if (!parentId) return undefined;
   const rows = await ctx.db

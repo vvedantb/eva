@@ -1,3 +1,6 @@
+You are the owner and long-term maintainer of this codebase, and its design is up to you.
+Always believe in yourself! Keep going, you got this!
+
 FOLLOW ALL OF THESE RULES
 
 ## Git / ship
@@ -47,6 +50,7 @@ FOLLOW ALL OF THESE RULES
 - Chat is one surface: sessions, quick tasks and projects share `ChatBody`/`SandboxChatPreInput`; ship chat changes to all three panels and workflow modules.
 - One backend for web and phone: no client-only Convex functions (CI: `scripts/check-shared-backend.mjs` needs a reason for any).
 - Logic both apps need lives in `@eva/shared`; `apps/web` and `apps/mobile` hold only UI and platform code.
+- Every web or mobile change ships to the other app too; put the shared logic in `@eva/shared` so the apps never drift.
 - Backend changes must keep the newest published APK working (CI: `scripts/check-apk-compat.sh`); keep old names or args until it updates.
 
 Fight entropy. Leave the codebase better than you found it.

@@ -1,25 +1,23 @@
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconPlus } from "@tabler/icons-react-native";
 import { PageHeader } from "@vvedantb/native-ui/layout";
-import { Pager, PillTabs } from "@vvedantb/native-ui/primitives";
+import { HeaderIconButton, Pager, PillTabs } from "@vvedantb/native-ui/primitives";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
 import { DocsSection } from "@/docs/DocsSection";
 import { AutomationsSection } from "@/automations/AutomationsSection";
-import { DraftsSection } from "@/drafts/DraftsSection";
 import { ProjectsSection, useProjectRepo } from "@/projects/ProjectsSection";
 import { TodaySection, useShowsToday } from "@/today/TodaySection";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme } from "@/ui/theme";
 import { lastTabSection, sectionIndex } from "@/ui/sectionIndex";
 
-type Section = "projects" | "docs" | "drafts" | "automations" | "today";
+type Section = "projects" | "docs" | "automations" | "today";
 
 const SECTIONS: ReadonlyArray<{ id: Section; label: string }> = [
   { id: "projects", label: "Projects" },
   { id: "docs", label: "Documents" },
-  { id: "drafts", label: "Drafts" },
   { id: "automations", label: "Automations" },
   { id: "today", label: "Today" },
 ];
@@ -32,7 +30,7 @@ function visibleSections(showsToday: boolean) {
 /**
  * The Projects tab holds the web's per-repo pages that are not a place to
  * chat: Projects (`ProjectsClient`), Documents (the drawer's Documents
- * panel), Drafts, Automations (the web Automations sidebar) and Today, switched by pills under the title (`?section=`)
+ * panel), Automations (the web Automations sidebar) and Today, switched by pills under the title (`?section=`)
  * or a sideways swipe on the content (`Pager`), as the Sessions tab. All
  * of them share the repo (`?repo=`). Today shows while the repo's Daily
  * standup is on, as the web sidebar, or has history (`useShowsToday`). The
@@ -54,23 +52,17 @@ export default function ProjectsScreen() {
   const section = sections[index] ?? { id: "projects", label: "Projects" };
   // Where the pages are, shared by the pager and the pill indicator.
   const progress = useSharedValue(index);
-  const muted = EVA_THEME[useScheme()].mutedForeground;
+  const foreground = EVA_THEME[useScheme()].foreground;
   return (
     <TabScreen>
       <PageHeader
         title={section.label}
         action={
           section.id === "projects" ? (
-            // As the Sessions "+": a 40 ghost square, radius 8, muted 14 plus.
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="New project"
-              onPress={openNew}
-              hitSlop={2}
-              className="h-10 w-10 items-center justify-center rounded-lg active:opacity-70"
-            >
-              <IconPlus size={14} color={muted} />
-            </Pressable>
+            // As the Sessions "+": a round header button, as Back.
+            <HeaderIconButton label="New project" onPress={openNew}>
+              <IconPlus size={18} color={foreground} />
+            </HeaderIconButton>
           ) : undefined
         }
       />
@@ -91,8 +83,6 @@ export default function ProjectsScreen() {
           switch (sections[page]?.id) {
             case "docs":
               return <DocsSection />;
-            case "drafts":
-              return <DraftsSection />;
             case "automations":
               return <AutomationsSection />;
             case "today":

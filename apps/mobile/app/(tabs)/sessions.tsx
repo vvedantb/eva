@@ -7,6 +7,7 @@ import { PageHeader } from "@vvedantb/native-ui/layout";
 import {
   closeSwipeRows,
   EmptyState,
+  HeaderIconButton,
   ListDivider,
   Pager,
   PillTabs,
@@ -16,9 +17,10 @@ import {
 } from "@vvedantb/native-ui/primitives";
 import { useLargerText } from "@vvedantb/native-ui/theme";
 import { useQueries, useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, SectionList, View } from "react-native";
+import { SectionList, View } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { QuickTasksSection, useQuickTaskRepo } from "@/quickTasks/QuickTasksSection";
@@ -82,7 +84,7 @@ export default function SessionsScreen() {
   // Where the pages are, shared by the pager and the pill indicator.
   const progress = useSharedValue(index);
   const { openNew: openNewQuickTask } = useQuickTaskRepo();
-  const muted = EVA_THEME[useScheme()].mutedForeground;
+  const foreground = EVA_THEME[useScheme()].foreground;
   const isQuickTasks = section.id === "quick-tasks";
 
   return (
@@ -90,30 +92,20 @@ export default function SessionsScreen() {
       <PageHeader
         title={section.label}
         action={
-          <View className="flex-row items-center">
-            {/* Search (the web ⌘K spotlight), in every section. */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Search"
-              onPress={() => router.push("/search")}
-              hitSlop={2}
-              className="h-10 w-10 items-center justify-center rounded-lg active:opacity-70"
-            >
-              <IconSearch size={16} color={muted} />
-            </Pressable>
+          <View className="flex-row items-center gap-2">
+            {/* Search (the web ⌘K spotlight), in every section. Round header buttons, as Back. */}
+            <HeaderIconButton label="Search" onPress={() => router.push("/search")}>
+              <IconSearch size={18} color={foreground} />
+            </HeaderIconButton>
             {/* The web Sessions sidebar's options (sort, only mine, visible threads), on Sessions only. */}
             {section.id === "sessions" ? <SessionListOptionsButton /> : null}
             {section.id === "reviews" ? null : (
-              // The web "New session" button: a 40 ghost square, radius 8, muted 14 plus.
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={isQuickTasks ? "New quick task" : "New session"}
+              <HeaderIconButton
+                label={isQuickTasks ? "New quick task" : "New session"}
                 onPress={isQuickTasks ? openNewQuickTask : () => router.push("/session/new")}
-                hitSlop={2}
-                className="h-10 w-10 items-center justify-center rounded-lg active:opacity-70"
               >
-                <IconPlus size={14} color={muted} />
-              </Pressable>
+                <IconPlus size={18} color={foreground} />
+              </HeaderIconButton>
             )}
           </View>
         }
@@ -148,6 +140,9 @@ const SESSION_LIST_QUERIES = {
 
 /** One list query per repo for the tab, cached so `useQueries` keeps its subscriptions. */
 const sessionListQueries = perRepoQueryCache<(typeof SESSION_LIST_QUERIES)[SessionTab], Id<"githubRepos">>();
+
+/** One `drafts.listMarks` per repo for the tab, cached as the list queries. */
+const draftMarkQueries = perRepoQueryCache<typeof api.drafts.listMarks, Id<"githubRepos">>();
 
 /**
  * Sessions across every repo the user can access, as the web sessions sidebar
@@ -186,6 +181,15 @@ function SessionsSection() {
       (repos ?? []).map((repo) => repo._id),
     ),
   );
+  const draftMarks = useQueries(
+    draftMarkQueries(
+      api.drafts.listMarks,
+      "drafts",
+      (repos ?? []).map((repo) => repo._id),
+    ),
+  );
+  // The sessions with an unsent chat message, across every repo; a repo still loading marks none.
+  const draftSessionIds = new Set<string>(Object.values(draftMarks).flatMap(markedSessionIds));
   // Loading until every repo's list answers. A failed list (an `Error`) leaves
   // its repo out rather than holding the whole tab on the skeleton.
   const visibleSessions = (rows: SessionListItem[] | undefined) =>
@@ -254,6 +258,8 @@ function SessionsSection() {
                           sessionId: entry.group.members[0].session._id,
                           name: entry.group.name,
                           label: entry.group.label,
+                          // The web offers Archive group from the active list only.
+                          archivable: tab === "active",
                         })
                     : undefined
                 }
@@ -264,7 +270,13 @@ function SessionsSection() {
           ItemSeparatorComponent={ListDivider}
           // Stable handlers and swipe look, so a row whose session did not change keeps its output.
           renderItem={({ item: row }) => (
-            <SessionListRow row={row} onOpenMenu={openRowMenu} swipe={swipe} onSwipe={runSwipe} />
+            <SessionListRow
+              row={row}
+              hasDraft={draftSessionIds.has(row.session._id)}
+              onOpenMenu={openRowMenu}
+              swipe={swipe}
+              onSwipe={runSwipe}
+            />
           )}
           renderSectionFooter={({ section }) => (
             <SessionGroupFooter section={section} onToggleExpanded={() => toggleExpanded(section.key)} />
@@ -285,4 +297,9 @@ function SessionsSection() {
  */
 function listedSessions(result: SessionListItem[] | Error | undefined): SessionListItem[] | undefined {
   return result === undefined || result instanceof Error ? undefined : result;
+}
+
+/** One repo's `drafts.listMarks` session ids out of the `useQueries` map: none while loading or failed. */
+function markedSessionIds(result: FunctionReturnType<typeof api.drafts.listMarks> | Error | undefined): Id<"sessions">[] {
+  return result === undefined || result instanceof Error ? [] : result.sessionIds;
 }

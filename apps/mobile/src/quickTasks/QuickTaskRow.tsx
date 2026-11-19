@@ -1,14 +1,16 @@
 import { taskScheduledAt, type api } from "@eva/backend";
 import { TASK_STATUS_LABELS, firstNameFromUser, formatEntityNumLabel, type DisplayTaskStatus } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconClock, IconTag } from "@tabler/icons-react-native";
+import { IconClock, IconFileText, IconPencil, IconTag, type IconProps } from "@tabler/icons-react-native";
 import { Checkbox, SurfaceRow } from "@vvedantb/native-ui/primitives";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import type { FunctionReturnType } from "convex/server";
 import dayjs from "dayjs";
 import { useRouter } from "expo-router";
+import type { ComponentType } from "react";
 import { Text, View } from "react-native";
 import { useSimpleView } from "@/chat/ComposerFooter";
+import { quickTaskDraftRoute, type QuickTaskDraft } from "@/quickTasks/DraftsMenu";
 import { PriorityIcon } from "@/quickTasks/PriorityIcon";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
 import { displayTitle, timeAgo } from "@/ui/format";
@@ -33,6 +35,54 @@ export const SANDBOX_DOT = {
   closed: { color: undefined, label: "Asleep" },
 };
 
+/** A card's meta badge: the web `Badge variant="secondary"` with a 12 icon (planning mode, Draft, Finalised). */
+export function MetaPill({ icon: Icon, label }: { icon: ComponentType<IconProps>; label: string }) {
+  const theme = EVA_THEME[useScheme()];
+  return (
+    <View
+      className="flex-row items-center gap-1 self-start rounded-full border px-2 py-0.5"
+      style={{ backgroundColor: theme.secondary, borderColor: theme.border }}
+    >
+      <Icon size={12} color={theme.secondaryForeground} />
+      <Text className="font-instrument-sans-medium" style={{ ...META_TEXT, fontWeight: "500", color: theme.secondaryForeground }}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+/**
+ * One of the user's quick-task drafts, at the top of To Do in the task
+ * card's shell: the To Do stripe, the title, then the "Draft" badge and the
+ * age. A tap opens the new-task screen with the draft loaded. No menu, no select mode and no Run All: a draft is not a task yet.
+ */
+export function QuickTaskDraftRow({ draft }: { draft: QuickTaskDraft }) {
+  const router = useRouter();
+  const scheme = useScheme();
+  const theme = EVA_THEME[scheme];
+  const muted = theme.mutedForeground;
+  return (
+    <SurfaceRow
+      accessibilityLabel={displayTitle(draft.title)}
+      accessibilityHint="Draft"
+      accentColor={statusAppearance("todo", scheme).bar}
+      backgroundColor={theme.card}
+      className="min-h-[72px] gap-1.5 px-3 py-3 pl-3.5"
+      onPress={() => router.push(quickTaskDraftRoute(draft))}
+    >
+      <Text numberOfLines={1} className="font-instrument-sans-medium text-sm" style={{ fontWeight: "500", color: theme.foreground }}>
+        {displayTitle(draft.title)}
+      </Text>
+      <View className="mt-0.5 flex-row items-center justify-between gap-2 pt-0.5">
+        <MetaPill icon={IconFileText} label="Draft" />
+        <Text className="font-instrument-sans" style={{ ...META_TEXT, color: withAlpha(muted, 0.7), fontVariant: ["tabular-nums"] }}>
+          {timeAgo(draft.updatedAt)}
+        </Text>
+      </View>
+    </SurfaceRow>
+  );
+}
+
 /**
  * One quick task, as the web `QuickTaskCard` at phone width: a card with the
  * status stripe (red with a tinted border when the latest run failed), then
@@ -49,6 +99,7 @@ export function QuickTaskRow({
   hasError,
   creator,
   projectNumId,
+  hasDraftComment,
   onLongPress,
   selection,
 }: {
@@ -58,6 +109,8 @@ export function QuickTaskRow({
   creator: User | undefined;
   /** In a project's task list: the number reads "#project/task", as the web card. */
   projectNumId?: number;
+  /** The user has an unsent comment on this task (`drafts.listMarks`): a "Draft comment" pill after the tags, as the web card. */
+  hasDraftComment: boolean;
   onLongPress: () => void;
   /** In select mode: a tap or long press ticks the row, and a checkbox leads it, as the inbox. */
   selection?: { checked: boolean; onToggle: () => void };
@@ -87,6 +140,7 @@ export function QuickTaskRow({
     showError ? "Latest run failed" : undefined,
     task.isAwaitingAnswer ? "Eva asked you a question" : showWorking ? "Eva is replying" : showSandbox ? sandbox.label : undefined,
     showUnread ? "Unread" : undefined,
+    hasDraftComment ? "Draft comment" : undefined,
     scheduled,
   ]
     .filter(Boolean)
@@ -144,9 +198,9 @@ export function QuickTaskRow({
         </View>
       </View>
 
-      {task.tags && task.tags.length > 0 ? (
+      {(task.tags && task.tags.length > 0) || hasDraftComment ? (
         <View className="flex-row flex-wrap items-center gap-1">
-          {task.tags.slice(0, MAX_TAGS).map((tag) => (
+          {(task.tags ?? []).slice(0, MAX_TAGS).map((tag) => (
             // Web: a `secondary` badge, `px-1.5 font-medium`, a tag icon; 12 text and a 12 icon (web 10).
             <View
               key={tag}
@@ -161,7 +215,7 @@ export function QuickTaskRow({
               </Text>
             </View>
           ))}
-          {task.tags.length > MAX_TAGS ? (
+          {task.tags && task.tags.length > MAX_TAGS ? (
             <Text
               accessibilityLabel={`${task.tags.length - MAX_TAGS} more tags`}
               className="font-instrument-sans-medium"
@@ -170,6 +224,7 @@ export function QuickTaskRow({
               {`+${task.tags.length - MAX_TAGS}`}
             </Text>
           ) : null}
+          {hasDraftComment ? <MetaPill icon={IconPencil} label="Draft comment" /> : null}
         </View>
       ) : null}
 

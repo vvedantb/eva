@@ -1,7 +1,7 @@
 import { api, isProjectBuilding, projectScheduledBuildAt } from "@eva/backend";
 import { BUILDABLE_PROJECT_PHASES, isProjectPlanning } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconCalendarClock, IconDots, IconHammer, IconLayoutKanban, IconMessage, IconPlayerStop } from "@tabler/icons-react-native";
+import { IconCalendarClock, IconHammer, IconLayoutKanban, IconMessage, IconPlayerStop } from "@tabler/icons-react-native";
 import { goBackOrReplace } from "@vvedantb/native-ui/expo-router";
 import { StackPageHeader } from "@vvedantb/native-ui/layout";
 import { Button, CenteredSpinner, ConfirmDialog, EmptyState } from "@vvedantb/native-ui/primitives";
@@ -21,6 +21,7 @@ import { useProjectActions } from "@/projects/useProjectActions";
 import { useProjectGitActions } from "@/sandbox/OwnedSandboxActions";
 import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { useScheme } from "@/ui/theme";
+import { HeaderMoreButton } from "@/ui/HeaderRail";
 
 type Tab = "overview" | "work";
 
@@ -80,7 +81,7 @@ export default function ProjectScreen() {
       headerRight={
         // The web header "…" (`ProjectDetailHeaderActions`), shown outside planning as the web.
         planning ? undefined : (
-          <MoreButton onPress={() => actions.openSheet(project)} />
+          <HeaderMoreButton label="More" onPress={() => actions.openSheet(project)} />
         )
       }
     >
@@ -121,21 +122,6 @@ function Screen({ title, onBack, headerRight, children }: { title: string; onBac
   );
 }
 
-/** The header "…": a 44 ghost square with the muted dots, as the list "+". */
-function MoreButton({ onPress }: { onPress: () => void }) {
-  const muted = EVA_THEME[useScheme()].mutedForeground;
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="More"
-      onPress={onPress}
-      className="h-11 w-11 items-center justify-center rounded-lg active:opacity-70"
-    >
-      <IconDots size={16} color={muted} />
-    </Pressable>
-  );
-}
-
 type Project = NonNullable<FunctionReturnType<typeof api.projects.get>>;
 
 /**
@@ -147,8 +133,8 @@ function ProjectDock({ project }: { project: Project }) {
   const insets = useSafeAreaInsets();
   const theme = EVA_THEME[useScheme()];
   // The project chats in its session's Main chat; no chat yet, nothing unread.
-  const owned = useQuery(api.sessions.getOwned, { owner: { kind: "project", projectId: project._id } });
-  const chatId = owned?.chatId;
+  const owned = useQuery(api.sessions.getOwnedWithSeed, { owner: { kind: "project", projectId: project._id } });
+  const chatId = owned?.session?.chatId;
   const unread = useQuery(api.chatReads.isUnread, chatId ? { parentId: chatId } : "skip")?.hasUnread === true;
   const startBuild = useMutation(api.buildWorkflow.startBuild);
   // The web split Build button's schedule half (`ScheduleBuildPopover`).

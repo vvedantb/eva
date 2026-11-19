@@ -50,7 +50,7 @@ import {
   SANDBOX_CHAT_COPY,
 } from "@eva/shared";
 import { tokenizedToDisplayText } from "@/lib/components/mentions";
-import { appendCitationsToPrompt } from "@/lib/components/chat/assistantCitation";
+import { appendCitationsToPrompt } from "@eva/shared/assistantCitation";
 import { appendSnapshotsToPrompt } from "@/lib/components/sandbox/previewSnapshot";
 import { appendWebMcpToPrompt } from "@/lib/components/sandbox/previewWebMcp";
 import {

@@ -10,6 +10,7 @@ import {
   repoRefLabel,
   resolveAveThreadId,
   MCP_CLAUDE_MODELS,
+  mcpAccountArg,
   type McpCredentials,
   type RepoInfo,
 } from "./toolShared";
@@ -268,6 +269,9 @@ export function fleetTools(
           .describe(
             "Whether linked repos install dependencies on clone. Defaults to true.",
           ),
+        account: mcpAccountArg(
+          "Omit to use your own account for the repo's default model.",
+        ),
       },
       handler: async ({
         repoName,
@@ -278,6 +282,7 @@ export function fleetTools(
         linkedRepos,
         group,
         installDependencies,
+        account,
       }) => {
         const { userId } = await mcpGetContext(ctx, clerkUserId);
         const repos = await mcpListUserRepos(ctx, userId);
@@ -334,6 +339,16 @@ export function fleetTools(
           repoGroupId = String(found._id);
         }
 
+        let providerAccountId: string | null | undefined;
+        if (account !== undefined) {
+          const resolved = await ctx.runQuery(
+            internal.mcp.queries.resolveMcpProviderAccount,
+            { account, scope: { kind: "creator", userId, repoId: repo.id } },
+          );
+          if (!resolved.ok) return toolErrorResult(resolved.error);
+          providerAccountId = resolved.providerAccountId;
+        }
+
         const created = await ctx.runAction(
           internal.mcp.nodeActions.orchestratorCreateSession,
           {
@@ -346,6 +361,7 @@ export function fleetTools(
             linkedRepoIds,
             repoGroupId,
             installDependencies,
+            providerAccountId,
             // A session's agent links what it spins up, so the UI can group them.
             ...(credentials.entityKind === "session" && entityId
               ? { fromSessionId: entityId }
