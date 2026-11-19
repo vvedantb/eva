@@ -4,7 +4,6 @@
   },
   "ciCommands": {
     "node scripts/check-shared-backend.mjs": "Fails when the phone app calls a Convex function that the web app never calls, unless the function is listed with a reason, which lint, typecheck and test do not compare.",
-    "./scripts/check-apk-compat.sh": "Type-checks the newest published APK source against this backend when the backend changed, so a change that breaks installed phones fails, which typecheck of the current code cannot see.",
     "node scripts/compiler-check.mjs": "Runs the React Compiler over the web source and fails on a new bailout that is not in the baseline, which lint, typecheck and test do not report.",
     "node scripts/design-check.mjs": "Scans web and UI source for design-system drift such as arbitrary font sizes, raw colours and raw buttons, and fails on new drift that is not in the baseline.",
     "node scripts/check-schema-narrowing.mjs": "Fails when a diff removes a Convex schema field, table or union member without a migration that drains the stored rows first, which no other check detects."

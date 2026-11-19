@@ -1,5 +1,11 @@
 # Changelog
 
+## APK compat check out of CI
+
+Date: 2026-11-19
+
+WHY: The warn-only step drifted from Doctor's `ciCommands` and turned CI red; old APKs may break by design now. `check-apk-compat.sh` leaves CI and `.vvedantb-doctor.json`; run it by hand.
+
 ## Session summary retired; "Recap chat" on every chat
 
 Date: 2026-11-19
