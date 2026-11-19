@@ -68,7 +68,10 @@ export function SandboxStartStopButton({
     <SleepControlTooltip blocked={blockedMidTurn} label={label}>
       <Button
         size={size === "sm" ? "icon-sm" : "icon"}
-        variant={isActive ? "destructive" : "secondary"}
+        // Secondary in both states, the action carried by the icon colour
+        // (red stop, green play): on a chat header track buttons are flat,
+        // and a destructive fill would leave a white icon on the trough.
+        variant="secondary"
         onClick={() => {
           if (blockedMidTurn) return;
           onToggle(isActive ? "stop" : "start");
@@ -76,9 +79,8 @@ export function SandboxStartStopButton({
         disabled={isToggling}
         aria-disabled={blockedMidTurn || undefined}
         className={cn(
-          isActive ? undefined : "text-success",
-          blockedMidTurn &&
-            "cursor-not-allowed opacity-45 hover:bg-destructive",
+          isActive ? "text-destructive" : "text-success",
+          blockedMidTurn && "cursor-not-allowed opacity-45",
         )}
         aria-label={label}
       >
