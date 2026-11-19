@@ -57,9 +57,10 @@ Groups of controls sit on a **track**: the segmented-tabs trough (`--secondary` 
 
 **Sandbox rail and card**
 
-- The sandbox rail groups the collapse toggle and the tools on `SANDBOX_RAIL_GROUP_CLASS` tracks and the tabs on a `tabs-segmented` list, centred in the rail.
+- The sandbox rail puts the tools on a `SANDBOX_RAIL_GROUP_CLASS` track and the tabs on a `tabs-segmented` list, centred in the rail. There is no collapse button: pressing the active tab shows or hides the card (Ctrl+Alt+B too). Empty rails (no sandbox yet) keep `SandboxPanelToggleButton`.
 - The sandbox split has no resting divider (`ResizablePanelLayout` `seamlessSeparator`; the line and grip show on hover and drag).
-- The content is a `bg-card` card (`md:my-2 md:mr-1.5 md:rounded-surface`) with an arrow at the active rail tab (`SandboxPanelFrame`, `.sandbox-tab-arrow`). Panels inside stay transparent so the card shows through — no `bg-background` on a panel root.
+- The content is a `bg-card` card (`md:my-2 md:mr-1.5 md:rounded-surface`) with an arrow at the active rail tab (`SandboxPanelFrame`, `.sandbox-tab-arrow`). Panels inside stay transparent so the card shows through — no `bg-background` on a panel root. The arrow renders before the positioned card, so the card covers its inner half.
+- The card moves like a macOS dock window (`sandboxCardMotion.ts`): it grows out of the active tab on open, shrinks back into it on close, and settles on a tab switch. Page motion off or reduced motion skips all three.
 - Desktop only: the phone tab strip keeps its own layout.
 
 **Radius**
