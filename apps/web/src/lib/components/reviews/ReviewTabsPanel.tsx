@@ -121,7 +121,7 @@ export function ReviewTabsPanel({
       poolOptions={DIFF_POOL_OPTIONS}
       highlighterOptions={DIFF_HIGHLIGHTER_OPTIONS}
     >
-      <div className="relative flex h-full min-h-0 w-full flex-col bg-background">
+      <div className="relative flex h-full min-h-0 w-full flex-col">
         {overview === null ? (
           <div className="shrink-0">
             {placeholder === undefined ? null : (

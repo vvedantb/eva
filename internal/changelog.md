@@ -1,5 +1,13 @@
 # Changelog
 
+## Web sandbox panel: content card with an arrow to the active tab
+
+Date: 2026-11-19
+
+WHY: The sandbox content ran edge to edge beside the rail; as a card with an arrow at the active tab it reads as part of the rail's segmented groups and shows which tab owns it.
+
+Architectural: `SandboxPanelFrame` (session, task and project panels) gives the content `md:my-2 md:mr-1.5 md:rounded-xl` and renders a `size-4` `bg-card` arrow. `useActiveTabArrow` measures the rail's active tab (scoped to the rail, not tab lists inside the card) and writes the transform to the node; it re-measures on resize, scroll, `data-state` changes and when animations end, snaps the first placement and hides when the tab is outside the card. `.sandbox-tab-arrow` (globals.css) slides with the tabs pill timing. The review panel and the diff file tree no longer paint the page tone, so the card shows through.
+
 ## Web chat header: actions on one track, flat buttons
 
 Date: 2026-11-19

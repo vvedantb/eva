@@ -1027,6 +1027,14 @@ html[data-blur-pid] [data-pii] {
 .rail-track :is([data-rail-tile], button):not([data-active]):not(:disabled):hover {
   background-color: rgb(var(--segment-active) / 0.5);
 }
+/* The sandbox card's arrow to the active rail tab: slides with the tab pill's
+ * timing; page motion off snaps it, as the pill. */
+.sandbox-tab-arrow {
+  transition: transform var(--tabs-dur) var(--tabs-ease);
+}
+html[data-page-motion="off"] .sandbox-tab-arrow {
+  transition-duration: 0s;
+}
 .dark .tabs-segmented,
 .dark .rail-track {
   background-color: rgb(var(--card)); /* dark: card-grey trough */
