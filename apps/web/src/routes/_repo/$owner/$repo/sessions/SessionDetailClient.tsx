@@ -402,6 +402,7 @@ export function SessionDetailClient({
             leftMinWidthPx={350}
             rightMinWidthPx={300}
             rightCollapsedSizePx={sandboxRailWidthPx}
+            seamlessSeparator
             storageKey="sandbox-collapsed"
             collapsedStorageKey={`sandbox-collapsed:${sessionId}`}
             expandRightSignal={expandRightSignal}
