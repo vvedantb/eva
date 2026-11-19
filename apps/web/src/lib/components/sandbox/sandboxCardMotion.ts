@@ -27,12 +27,10 @@ const SETTLE_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
 const DOCK_EASE = "cubic-bezier(0.5, 0, 0.75, 0)";
 const POP_OUT_ID = "sandbox-card-pop-out";
 
-/** Page motion off (Convex setting) or the OS asks for reduced motion. */
+/** The "Disable page animations" setting. No `prefers-reduced-motion`
+    gate: the app does not support it (docs/eva-ui.md). */
 function motionOff(): boolean {
-  return (
-    document.documentElement.dataset.pageMotion === "off" ||
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
+  return document.documentElement.dataset.pageMotion === "off";
 }
 
 /** Points the card's transform origin at the active tab's centre. */

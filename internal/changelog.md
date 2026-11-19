@@ -1,5 +1,13 @@
 # Changelog
 
+## Web sandbox card: motion ignores OS reduced motion
+
+Date: 2026-11-19
+
+WHY: The dock motion checked `prefers-reduced-motion`, which the app does not support, so readers with that OS setting saw no motion.
+
+Architectural: `sandboxCardMotion.motionOff` reads only `html[data-page-motion=off]`.
+
 ## Web sandbox card: dock pop in and out, active tab toggles it
 
 Date: 2026-11-19
