@@ -26,7 +26,6 @@ import {
   IconChecklist,
   IconCalendarClock,
   IconClock,
-  IconDots,
   IconFolder,
   IconMessage,
   IconPlayerPlay,
@@ -93,6 +92,7 @@ import { FieldGroup, FieldRow } from "@/ui/FieldRows";
 import { displayTitle } from "@/ui/format";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { useScheme } from "@/ui/theme";
+import { HeaderMoreButton } from "@/ui/HeaderRail";
 
 type QuickTask = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
@@ -216,7 +216,7 @@ function TaskOverview({
       <StackPageHeader
         title={formatEntityNumLabel({ numId: task.numId }) ?? "Task"}
         onBack={onLeave}
-        headerRight={<MoreButton onPress={() => actions.openSheet(task)} />}
+        headerRight={<HeaderMoreButton label="Task actions" onPress={() => actions.openSheet(task)} />}
       />
       {/* The focused field (the comment box, the description or the title) scrolls into view 16 above the keyboard. */}
       <KeyboardAwareScrollView
@@ -819,21 +819,6 @@ function CommentComposer({
         accessibilityLabel={COMMENT_PLACEHOLDER[mode.kind].replace("...", "")}
       />
     </View>
-  );
-}
-
-/** The header "…": a 44 ghost square with the muted dots, as on the project page. */
-function MoreButton({ onPress }: { onPress: () => void }) {
-  const muted = EVA_THEME[useScheme()].mutedForeground;
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Task actions"
-      onPress={onPress}
-      className="h-11 w-11 items-center justify-center rounded-lg active:opacity-70"
-    >
-      <IconDots size={16} color={muted} />
-    </Pressable>
   );
 }
 
