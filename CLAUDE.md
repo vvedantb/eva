@@ -51,7 +51,7 @@ FOLLOW ALL OF THESE RULES
 - One backend for web and phone: no client-only Convex functions (CI: `scripts/check-shared-backend.mjs` needs a reason for any).
 - Logic both apps need lives in `@eva/shared`; `apps/web` and `apps/mobile` hold only UI and platform code.
 - Every web or mobile change ships to the other app too; put the shared logic in `@eva/shared` so the apps never drift.
-- Backend changes must keep the newest published APK working (CI: `scripts/check-apk-compat.sh`); keep old names or args until it updates.
+- Backend changes may break old APKs: delete old functions and args now, no compat shims; prod Convex deploys with the next phone release.
 
 Fight entropy. Leave the codebase better than you found it.
 

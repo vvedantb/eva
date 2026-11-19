@@ -1615,12 +1615,17 @@ export const chatReadFields = {
   lastReadAt: v.number(),
 };
 
-// One row per (user, chat): the "Since you've been gone" recap written when
-// the user came back after a long absence (see chatRecaps). Per user, so only
-// that user sees it. `text` is unset while the model writes it.
+// One row per (user, chat): a recap only that user sees (see chatRecaps).
+// "away" covers what happened since they left; "full" is the whole chat, asked
+// for from the chat menu. `text` is unset while the model writes it.
+export const chatRecapKindValidator = v.union(
+  v.literal("away"),
+  v.literal("full"),
+);
 export const chatRecapFields = {
   userId: v.id("users"),
   parentId: chatParentIdValidator,
+  kind: chatRecapKindValidator,
   /** The read time the recap covers activity after. */
   since: v.number(),
   createdAt: v.number(),

@@ -512,6 +512,7 @@ export function TaskDetailInline({
         variant="header"
         taskId={taskId}
         task={task}
+        chatId={chatId}
         isAgentActive={isAgentActive}
         status={status}
         hasActiveRun={hasActiveRun}

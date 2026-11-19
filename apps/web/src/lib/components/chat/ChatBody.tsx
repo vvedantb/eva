@@ -253,8 +253,6 @@ interface ChatBodyProps {
     options?: ChatSendOptions,
   ) => Promise<void>;
   onCancel: () => Promise<void>;
-  /** Optional slot inserted above the conversation (session summary accordion). */
-  preConversationContent?: React.ReactNode;
   /** Optional slot inserted between the queued messages panel and the input (session PRD plan view). */
   preInputContent?: React.ReactNode;
   /** Status chips (background agents, processes) on the skill suggestions' row. */
@@ -357,7 +355,6 @@ function ChatBodyInner({
   modelPicker,
   onSend,
   onCancel,
-  preConversationContent,
   preInputContent,
   composerChips,
   transcriptTail,
@@ -638,6 +635,7 @@ function ChatBodyInner({
   const recapCard =
     recap && repo && displayMessages.length > 0 ? (
       <ChatRecapCard
+        kind={recap.kind}
         text={recap.text}
         repo={repo}
         onDismiss={dismissRecap}
@@ -1065,7 +1063,6 @@ function ChatBodyInner({
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col" data-chat-pane="">
-      {preConversationContent}
       <ThreadFindBar
         documents={findDocuments}
         onQueryChange={revealFirstFindMatch}

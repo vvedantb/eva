@@ -3,17 +3,20 @@ import { IconX } from "@tabler/icons-react";
 import { m } from "motion/react";
 import { MarkdownMentionText } from "@/lib/components/chat/MarkdownMentionText";
 import type { ChatRepo } from "@/lib/components/chat/chatBodyUtils";
+import { RECAP_TITLE } from "@eva/shared/chatReadState";
 
 /**
- * "Since you've been gone": the recap of what happened while the user was
- * away (`useChatRecap`), under the newest message. Only this user sees it.
- * Task chats in a project recap are mention chips.
+ * The user's recap of this chat (`useChatRecap`), under the newest message:
+ * "Since you've been gone" after an absence, "Recap" from Recap chat. Only
+ * this user sees it. Task chats in a project recap are mention chips.
  */
 export function ChatRecapCard({
+  kind,
   text,
   repo,
   onDismiss,
 }: {
+  kind: "away" | "full";
   /** Undefined while the model writes it. */
   text: string | undefined;
   repo: ChatRepo;
@@ -21,14 +24,14 @@ export function ChatRecapCard({
 }) {
   return (
     <m.section
-      aria-label="Since you've been gone"
+      aria-label={RECAP_TITLE[kind]}
       className="flex flex-col gap-2 rounded-surface bg-muted p-3"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={tokenTransition.fast}
     >
       <div className="flex items-center gap-2">
-        <h3 className="flex-1 text-sm font-medium">Since you&apos;ve been gone</h3>
+        <h3 className="flex-1 text-sm font-medium">{RECAP_TITLE[kind]}</h3>
         <span className="text-xs text-muted-foreground">
           Visible only to you
         </span>

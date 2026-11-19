@@ -1,3 +1,4 @@
+import { RECAP_TITLE } from "@eva/shared/chatReadState";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconX } from "@tabler/icons-react-native";
 import { Shimmer } from "@vvedantb/native-ui/ai";
@@ -6,18 +7,18 @@ import { MessageMarkdown } from "@/chat/MentionChip";
 import { useScheme } from "@/ui/theme";
 
 /**
- * The web `ChatRecapCard`: "Since you've been gone", the recap of what
- * happened while the user was away (`useChatRecap`), under the newest
- * message. Only this user sees it. The goal banner's surface: `bg-muted`,
+ * The web `ChatRecapCard`: the user's recap of this chat (`useChatRecap`),
+ * under the newest message: "Since you've been gone" after an absence,
+ * "Recap" from Recap chat. Only this user sees it. The goal banner's surface: `bg-muted`,
  * radius 16. The × has a 44 point target.
  */
-export function RecapCard({ text, onDismiss }: { text: string | undefined; onDismiss: () => void }) {
+export function RecapCard({ kind, text, onDismiss }: { kind: "away" | "full"; text: string | undefined; onDismiss: () => void }) {
   const theme = EVA_THEME[useScheme()];
   return (
     <View className="gap-2 rounded-2xl p-3" style={{ backgroundColor: theme.muted }}>
       <View className="flex-row items-center gap-2">
         <Text className="flex-1 font-instrument-sans-medium text-sm" style={{ fontWeight: "500", color: theme.foreground }}>
-          Since you&apos;ve been gone
+          {RECAP_TITLE[kind]}
         </Text>
         <Text className="font-instrument-sans text-xs" style={{ color: theme.mutedForeground }}>
           Visible only to you

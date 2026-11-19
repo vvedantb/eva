@@ -34,7 +34,7 @@ import { messageLinkHref } from "@eva/shared/messageLink";
 import { appendCitationsToPrompt } from "@eva/shared/assistantCitation";
 import { formatQuestionAnswers, type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { collectThreadFindDocuments } from "@eva/shared/threadFind";
-import { IconChevronDown, IconMessageCircle, IconPlayerStop, IconSearch } from "@tabler/icons-react-native";
+import { IconChevronDown, IconMessageCircle, IconPlayerStop, IconSearch, IconSparkles } from "@tabler/icons-react-native";
 import {
   ChoiceQuestion,
   Conversation,
@@ -107,7 +107,6 @@ import { useTypingPresence } from "@/chat/useTypingPresence";
 import { useMentionComposer } from "@/chat/useMentionComposer";
 import { WEB_URL } from "@/config";
 import { useSessionActions } from "@/sessions/useSessionActions";
-import { SessionSummaryBlock, useSessionSummary } from "@/sessions/SessionSummary";
 import { textColor, useScheme } from "@/ui/theme";
 import { useChatTranscript } from "@/chat/useChatTranscript";
 
@@ -201,12 +200,7 @@ export default function ChatScreen() {
   const [find, setFind] = useState<{ target: string; activeId: string | null } | null>(null);
   const findOpen = find !== null && find.target === target;
   const findActiveId = findOpen ? find.activeId : null;
-  // The web header's Summarise Session: once the sandbox is awake and the chat has a message.
-  const summary = useSessionSummary({
-    sessionId: chat?.session?.id,
-    hasSummary: (sessionRow?.summary?.length ?? 0) > 0,
-    canSummarise: sandbox.isActive && (messages?.length ?? 0) > 0,
-  });
+  const requestRecap = useMutation(api.chatRecaps.requestFull);
 
   if (chat === undefined || chat === null) {
     return (
@@ -366,7 +360,16 @@ export default function ChatScreen() {
     visible.map((message) => ({ id: message._id, text: tokenizedToDisplayText(message.content), skip: message.isSystemAlert === true })),
   );
   const leadingMenu: MenuEntry[] = [{ label: "Find in chat", icon: IconSearch, onSelect: () => setFind({ target, activeId: null }) }];
-  if (summary.menuItem) leadingMenu.push(summary.menuItem);
+  // The web "Recap chat": a recap of the whole chat, as the "Recap" card under the newest message.
+  if (parentId && visible.length > 0) {
+    leadingMenu.push({
+      label: "Recap chat",
+      icon: IconSparkles,
+      onSelect: () => {
+        requestRecap({ parentId }).catch(() => toast.error("Couldn't recap this chat"));
+      },
+    });
+  }
   const panelReply =
     chat.canReply && chat.sandboxActive
       ? (message: string) => {
@@ -401,9 +404,7 @@ export default function ChatScreen() {
       />
       <SandboxErrorBanner sandbox={sandbox} />
       {chat.session ? <SessionChatTabs sessionId={chat.session.id} activeChatId={chat.session.chatId} archived={chat.session.archived} /> : null}
-      {chat.session ? <SessionSummaryBlock sessionId={chat.session.id} summary={sessionRow?.summary} /> : null}
       {sessionActions.dialogs}
-      {summary.dialog}
       <Conversation>
         {findOpen ? (
           <ThreadFindBar
@@ -445,7 +446,7 @@ export default function ChatScreen() {
             <>
               {recap && visible.length > 0 ? (
                 <View className={`pt-3 ${THREAD_INSET}`}>
-                  <RecapCard text={recap.text} onDismiss={dismissRecap} />
+                  <RecapCard kind={recap.kind} text={recap.text} onDismiss={dismissRecap} />
                 </View>
               ) : null}
               {/* The live reply shows its own status; this covers a turn whose reply is not written yet. */}

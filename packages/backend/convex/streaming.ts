@@ -11,7 +11,6 @@ import { cancelledMessageOutcome } from "./_chat/cancelledMessage";
 import {
   AUTOMATION_RUN_STREAM_PREFIX,
   PR_RECAP_STREAM_PREFIX,
-  SESSION_SUMMARY_STREAM_PREFIX,
   TASK_RUN_STREAM_PREFIX,
 } from "./_chat/agentStreamIds";
 import {
@@ -171,13 +170,6 @@ function parseStreamOwner(
   if (recap !== null) {
     const docId = db.normalizeId("docs", recap);
     return docId ? { kind: "doc", docId } : null;
-  }
-  const summary = after(SESSION_SUMMARY_STREAM_PREFIX);
-  if (summary !== null) {
-    const sessionId = db.normalizeId("sessions", summary);
-    return sessionId
-      ? { kind: "sandboxOwner", owner: { kind: "session", sessionId } }
-      : null;
   }
 
   const chatId = db.normalizeId("sessionChats", entityId);

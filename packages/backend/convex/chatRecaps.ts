@@ -8,7 +8,11 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import { assertMessageParentAccess, authMutation, authQuery } from "./functions";
-import { chatParentIdValidator, type ChatParentId } from "./validators";
+import {
+  chatParentIdValidator,
+  chatRecapKindValidator,
+  type ChatParentId,
+} from "./validators";
 import {
   chatSourceArgFromFields,
   chatSourceFieldsForEntityId,
@@ -16,10 +20,13 @@ import {
 } from "./_chatSource/helpers";
 
 /**
- * "Since you've been gone": a short recap of a chat, written for one user
- * when they come back to it after `RECAP_AWAY_MS` and a turn finished while
- * they were away. `chatReads.markRead` starts it (it alone knows the read
- * time before it moves); `textGen.generateChatRecap` writes the text. A
+ * A short recap of a chat, written for one user. Two kinds:
+ * - "away" ("Since you've been gone"): when they come back after
+ *   `RECAP_AWAY_MS` and a turn finished while they were away.
+ *   `chatReads.markRead` starts it (it alone knows the read time before it
+ *   moves).
+ * - "full" ("Recap"): the whole chat, from the chat menu (`requestFull`).
+ * `textGen.generateChatRecap` writes the text. A
  * project's Main chat covers every chat in the project's session, and names
  * its task chats as chips. One row per (user, chat); a new absence replaces
  * it, Dismiss deletes it.
@@ -37,6 +44,7 @@ const DIGEST_BUDGET = 16_000;
 
 const recapRowValidator = v.object({
   _id: v.id("chatRecaps"),
+  kind: chatRecapKindValidator,
   since: v.number(),
   createdAt: v.number(),
   text: v.optional(v.string()),
@@ -73,18 +81,61 @@ export async function maybeStartRecap(
     input.lastTurnFinishedAt !== undefined &&
     input.lastTurnFinishedAt > input.previousReadAt;
   if (!missedTurn || input.now - input.previousReadAt < RECAP_AWAY_MS) return;
+  await startRecap(ctx, {
+    userId: input.userId,
+    parentId: input.parentId,
+    kind: "away",
+    since: input.previousReadAt,
+    now: input.now,
+  });
+}
+
+/** Replaces the user's recap for this chat with a new one and writes it. */
+async function startRecap(
+  ctx: MutationCtx,
+  input: {
+    userId: Id<"users">;
+    parentId: ChatParentId;
+    kind: Doc<"chatRecaps">["kind"];
+    since: number;
+    now: number;
+  },
+): Promise<void> {
   const existing = await getRecapRow(ctx.db, input.userId, input.parentId);
   if (existing) await ctx.db.delete(existing._id);
   const recapId = await ctx.db.insert("chatRecaps", {
     userId: input.userId,
     parentId: input.parentId,
-    since: input.previousReadAt,
+    kind: input.kind,
+    since: input.since,
     createdAt: input.now,
   });
   await ctx.scheduler.runAfter(0, internal.textGen.generateChatRecap, {
     recapId,
   });
 }
+
+/**
+ * "Recap chat" in the chat menu: a recap of the whole chat. A second click
+ * while one is still being written does nothing.
+ */
+export const requestFull = authMutation({
+  args: { parentId: chatParentIdValidator },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
+    const existing = await getRecapRow(ctx.db, ctx.userId, args.parentId);
+    if (existing?.kind === "full" && existing.text === undefined) return null;
+    await startRecap(ctx, {
+      userId: ctx.userId,
+      parentId: args.parentId,
+      kind: "full",
+      since: 0,
+      now: Date.now(),
+    });
+    return null;
+  },
+});
 
 /** The open chat's recap for the caller, or null. Text unset while it is written. */
 export const forChat = authQuery({
@@ -96,6 +147,7 @@ export const forChat = authQuery({
     if (!row) return null;
     return {
       _id: row._id,
+      kind: row.kind,
       since: row.since,
       createdAt: row.createdAt,
       ...(row.text !== undefined ? { text: row.text } : {}),
@@ -168,6 +220,7 @@ export const recapContext = internalQuery({
   returns: v.union(
     v.null(),
     v.object({
+      kind: chatRecapKindValidator,
       awayMs: v.number(),
       transcript: v.string(),
       log: v.string(),
@@ -218,6 +271,7 @@ export const recapContext = internalQuery({
       .join("\n");
 
     return {
+      kind: recap.kind,
       awayMs: recap.createdAt - recap.since,
       transcript: kept.join("\n\n"),
       log,

@@ -82,9 +82,8 @@ export function findNewMessageIds<TId extends string>(
 }
 
 /**
- * The open chat's "Since you've been gone" recap, web and phone. The server
- * writes it when `markRead` sees the user come back after a long absence
- * (`chatRecaps`). `text` is undefined while the model writes it. The card
+ * The open chat's recap, web and phone (`chatRecaps`): "away" when `markRead`
+ * saw the user come back after a long absence, "full" from "Recap chat". `text` is undefined while the model writes it. The card
  * goes once the user sends a message after it: the recap is about the past,
  * and the chat has moved on. `dismiss` deletes it for good.
  */
@@ -98,7 +97,7 @@ export function useChatRecap({
   active: boolean;
   messages: ReadonlyArray<{ timestamp: number } & ChatUserAttribution>;
   currentUserId: string | undefined;
-}): { recap: { text: string | undefined } | null; dismiss: () => void } {
+}): { recap: { kind: "away" | "full"; text: string | undefined } | null; dismiss: () => void } {
   const row = useQuery(api.chatRecaps.forChat, active && parentId !== undefined ? { parentId } : "skip");
   const dismissRecap = useMutation(api.chatRecaps.dismiss);
   const answered =
@@ -107,9 +106,15 @@ export function useChatRecap({
       (message) =>
         message.role === "user" && message.timestamp > row.createdAt && !isOtherUserChatMessage(message, currentUserId),
     );
-  const recap = row == null || answered ? null : { text: row.text };
+  const recap = row == null || answered ? null : { kind: row.kind, text: row.text };
   const dismiss = () => {
     if (row) void dismissRecap({ recapId: row._id });
   };
   return { recap, dismiss };
 }
+
+/** The recap card's title for each kind. */
+export const RECAP_TITLE: Record<"away" | "full", string> = {
+  away: "Since you've been gone",
+  full: "Recap",
+};

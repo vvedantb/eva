@@ -1,5 +1,13 @@
 # Changelog
 
+## Session summary retired; "Recap chat" on every chat
+
+Date: 2026-11-19
+
+WHY: The summary woke the sandbox and ran an agent to write bullets the away recap and the Log already cover; it existed only on sessions.
+
+Architectural: `summarizeWorkflow.ts`, the web summary accordion and modal, the phone `SessionSummary`, the session-level workflow watchdog (`trackSessionWorkflow`, `handleStaleSession`) and the `summary:` stream prefix are gone. `chatRecaps` rows gain `kind` ("away" | "full"); `chatRecaps.requestFull` starts a whole-chat recap from "Recap chat" in the session, quick task and project "…" menus (web `useRecapChat` + `RecapChatMenuItem`, phone chat menu). Card titles come from `RECAP_TITLE`. `sessions.summary` and the `"summary"` turn lane stay in the schema until `dataMigrations:retireSessionSummaries` runs on prod. `check-apk-compat.sh` now warns in CI instead of failing: old APKs may break, and prod Convex deploys with the next phone release.
+
 ## Chat recap: "Since you've been gone" (web and phone)
 
 Date: 2026-11-19
