@@ -14,6 +14,7 @@ Surface tokens map 1:1 to the HeroUI palette: `--background` (page canvas) → `
 - Layout regions (sidebar panel edge, list/detail dividers) are separated by a hairline `border-border`/`border-sidebar-border`, not tonal contrast.
 - Icon rails are the exception: no rail edge, no rail separators, no resting divider on the sandbox split (`ResizablePanelLayout` `seamlessSeparator`; the line shows on hover and drag). Group rail buttons on a trough instead — `Sidebar.RailGroup` + `railGroupThemeClass` on the app rail, `SANDBOX_RAIL_GROUP_CLASS` / `tabs-segmented` on the sandbox rail. The gap between troughs divides the groups.
 - Tab strips and panel headers have no bottom hairline: whitespace and the tone step to the content separate them.
+- The sandbox panel's content is a rounded `bg-card` card beside the rail, with an arrow on its edge at the active rail tab (`SandboxPanelFrame`). Panels inside it stay transparent so the card shows through.
 - Active/selected items use a surface fill (and `ring-*` when emphasis is needed); avoid relying on a resting hairline.
 - Inputs/selects keep their form-affordance border. Floating overlays use `smooth-shadow-ring-*` (not a separate hairline).
 
