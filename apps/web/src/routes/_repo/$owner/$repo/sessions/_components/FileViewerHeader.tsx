@@ -65,9 +65,8 @@ function CopyButton({ content }: { content: string }) {
 }
 
 /**
- * Breadcrumb path plus a compact icon toolbar for the file viewer. This is a
- * list/detail region divider, so the hairline underneath is the structural
- * kind rather than decoration.
+ * Breadcrumb path plus a compact icon toolbar for the file viewer. No
+ * hairline underneath: panel headers sit on whitespace (docs/eva-ui.md).
  */
 export function FileViewerHeader({
   segments,
@@ -81,7 +80,7 @@ export function FileViewerHeader({
   edit,
 }: FileViewerHeaderProps) {
   return (
-    <div className="flex h-10 shrink-0 items-center gap-1 border-b border-border px-2">
+    <div className="flex h-10 shrink-0 items-center gap-1 px-2">
       {/* `direction: rtl` on the scroller starts it scrolled to the end, so a
           path too long for the header keeps its file name in view instead of
           its first directory. The inner strip flips back to ltr and fills the
