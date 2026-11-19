@@ -10,12 +10,12 @@ The workflow is a thin caller of the shared workflow `vvedantb/packages/.github/
 
 | Event | Result |
 | --- | --- |
-| Push to `main` that changes an APK input, with a `feat:` title or `[release]` in the message | Signed build, published with the next patch version. |
+| Push to `main` that changes an APK input | Signed build, published with the next patch version. |
 | Manual run (`workflow_dispatch`) | The same. Optional `version` input (like `0.1.1`). `dry_run: true` builds and signs, and uploads the APK as the Actions artifact `eva-android-dry-run`. It publishes nothing. |
 
-Other pushes to `main` that touch APK inputs build nothing. The shared workflow default `release_on: feat` skips them. To release a fix, put `[release]` in the pull request title.
+Pushes to `main` that touch no APK input build nothing. The `release paths` job in `ci.yml` checks the push diff against the list below, and the `release` job passes `release_on: always` to the shared workflow. The commit message and the PR title do not matter.
 
-APK inputs (the `paths` filter) are the files Metro bundles: `apps/mobile/**` (not Markdown or `.env.example`), `packages/shared/**`, `packages/backend/index.ts`, `packages/backend/convex/**`, `packages/backend/package.json`, the root `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `patches/**`, `scripts/build-android-release.sh` and `scripts/check-clerk-native-api.sh`. The backend folder is broad because `@eva/backend` re-exports runtime code from `convex/`. Keep the filter equal to the real import closure.
+APK inputs (the `paths` filter) are the files Metro bundles: `apps/mobile/**` (not Markdown or `.env.example`), `packages/shared/**`, `packages/backend/index.ts`, `packages/backend/convex/**`, `packages/backend/package.json`, `pnpm-workspace.yaml`, `patches/**`, `scripts/build-android-release.sh` and `scripts/check-clerk-native-api.sh`. The backend folder is broad because `@eva/backend` re-exports runtime code from `convex/`. The root `package.json` and `pnpm-lock.yaml` are not inputs: they have no per-app part, so a dependency bump anywhere would ship an APK. A mobile dependency change edits `apps/mobile/package.json`. Keep the filter equal to the real import closure.
 
 ## Versions
 

@@ -67,16 +67,13 @@ jobs:
 
   # Push releases run from here, after check, so a release waits for lint and tests to pass.
   # This job is the path gate: no release runner starts unless the merge could be a release
-  # and touches a file that reaches the APK. The feat / [release] message test here is a
-  # deliberate superset (GitHub contains is case-insensitive); the shared workflow makes the
-  # exact feat / [release] decision. On a pull request this whole gate is skipped.
+  # and touches a file that reaches the APK. There is no commit-message gate: a push to
+  # main releases when its diff touches one of the paths below, and only then. On a pull
+  # request this whole gate is skipped.
   release-paths:
     name: release paths
     needs: check
-    if: >-
-      github.event_name == 'push' &&
-      (contains(github.event.head_commit.message, 'feat') ||
-       contains(github.event.head_commit.message, '[release]'))
+    if: github.event_name == 'push'
     runs-on: boat-large
     permissions:
       contents: read
@@ -96,7 +93,9 @@ jobs:
           # runtime exports of @eva/backend (packages/backend/index.ts re-exports from
           # convex/), so both stay in the filter. Keep it equal to that closure. Docs,
           # the mobile .env.example, shared tests, convex tests, web and .github/**
-          # (this file too) do not release.
+          # (this file too) do not release. The root package.json and pnpm-lock.yaml are left out
+          # on purpose: they have no per-app part, so any dependency bump in the repo would ship
+          # an APK. A real mobile dependency change edits apps/mobile/package.json.
           #
           # These are the release-android.yml push paths, translated one for one into git
           # pathspecs: a positive x/** becomes ':(glob)x/**', a plain file ':(glob)file'
@@ -111,8 +110,6 @@ jobs:
             ':(glob)packages/backend/index.ts'
             ':(glob)packages/backend/convex/**'
             ':(exclude,glob)packages/backend/convex/**/*.test.ts'
-            ':(glob)package.json'
-            ':(glob)pnpm-lock.yaml'
             ':(glob)pnpm-workspace.yaml'
             ':(glob)patches/**'
             ':(glob)scripts/build-android-release.sh'
@@ -139,9 +136,8 @@ jobs:
           fi
 
   # The Android release itself. It calls the shared workflow exactly as the old
-  # release-android.yml push trigger did. The shared workflow's first step makes the exact
-  # feat / [release] decision from the push commit message, so a message that passed the
-  # superset gate above but is not really a release still skips cleanly before checkout.
+  # release-android.yml push trigger did. release_on: always makes the shared workflow release
+  # every push that reaches it, so the path gate above is the only gate.
   release:
     needs: release-paths
     if: needs.release-paths.outputs.changed == 'true'
@@ -159,6 +155,7 @@ jobs:
       # Not V Store: its catalog sync reads mobile-apk-* tags.
       tag_prefix: eva-apk-
       mark_as_latest: false
+      release_on: always
       # A boat.dev runner. It has no Android SDK: the shared workflow installs
       # the command line tools and sdk_packages when it finds none.
       runs_on: boat-large
