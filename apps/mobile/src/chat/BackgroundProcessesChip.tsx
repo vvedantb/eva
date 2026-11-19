@@ -71,7 +71,7 @@ export function BackgroundProcessesChip({ sessionId }: { sessionId: Id<"sessions
       <PromptInputChip
         icon={<IconTerminal2 size={PROMPT_INPUT_CHIP.iconSize} color={color} />}
         // As the Agents chip: a label that gives way when squeezed, and a count that stays.
-        label="Processes"
+        label={rows.length === 1 ? "Process" : "Processes"}
         count={rows.length}
         chevron={false}
         {...FOOTER_CHIP}
