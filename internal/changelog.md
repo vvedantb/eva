@@ -1,5 +1,13 @@
 # Changelog
 
+## Web sidebar: repo banner inset with rounded corners
+
+Date: 2026-11-19
+
+WHY: The uploaded repo banner was the last full-bleed, square-cornered piece of the app chrome; everything else sits on rounded tracks or cards.
+
+Architectural: `SidebarPanelHeader` wraps the banner image and its fade in `absolute top-2 right-2 bottom-0 left-1 overflow-hidden rounded-t-surface`. The header content, the panel width and panels without a banner are unchanged. `docs/eva-ui.md` notes the rule.
+
 ## Web sidebar panel: no edge line
 
 Date: 2026-11-19
