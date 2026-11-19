@@ -6,7 +6,7 @@ import {
   SUGGEST_IDLE_MS,
   type SkillSuggestionResponse,
 } from "@eva/shared/skillSuggestions";
-import { useAction } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import { useState } from "react";
 
 /** A trailing-edge debounce: each call cancels the waiting one; `run` fires once the caller is quiet for `ms`. */
@@ -34,6 +34,8 @@ function idleTimer(ms: number) {
  * as soon as the draft moves on, as the web. Call `noteDraft` on each edit.
  */
 export function useSkillSuggestions(skills: readonly MentionItem[], text: string) {
+  // Behind the `skillSuggestions` experimental flag (web Settings → Experimental): off means no Jev call and no chips.
+  const enabled = useQuery(api.auth.getExperimentalFlags, {})?.skillSuggestions === true;
   const suggest = useAction(api.skillSuggestions.suggest);
   const [{ schedule, cancel }] = useState(() => idleTimer(SUGGEST_IDLE_MS));
   const [evaluated, setEvaluated] = useState<{ forText: string; response: SkillSuggestionResponse } | null>(null);
@@ -41,7 +43,7 @@ export function useSkillSuggestions(skills: readonly MentionItem[], text: string
 
   const noteDraft = (next: string) => {
     // A draft that no longer asks (sent, cleared, too short) drops the waiting call: it would cost an evaluation for nothing.
-    if (skills.length === 0 || !shouldSuggestFor(next)) {
+    if (!enabled || skills.length === 0 || !shouldSuggestFor(next)) {
       cancel();
       return;
     }
@@ -58,7 +60,9 @@ export function useSkillSuggestions(skills: readonly MentionItem[], text: string
 
   return {
     noteDraft,
-    chips: pickSkillSuggestions(evaluated?.forText === text ? evaluated.response : null, { text, skillItems: skills, dismissed }),
+    chips: enabled
+      ? pickSkillSuggestions(evaluated?.forText === text ? evaluated.response : null, { text, skillItems: skills, dismissed })
+      : [],
     dismiss: (id: string) => setDismissed((current) => new Set(current).add(id)),
   };
 }

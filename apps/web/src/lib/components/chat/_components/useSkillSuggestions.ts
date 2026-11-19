@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAction } from "convex/react";
+import { useAction, useQuery } from "convex/react";
 import { api } from "@eva/backend";
 import type { SlashItem } from "@/lib/components/mentions";
 import {
@@ -24,6 +24,9 @@ export function useSkillSuggestions(skillItems: ReadonlyArray<SlashItem>): {
   chips: SlashItem[];
   dismiss: (id: string) => void;
 } {
+  // Behind the `skillSuggestions` experimental flag: off means no Jev call and no chips.
+  const enabled =
+    useQuery(api.auth.getExperimentalFlags)?.skillSuggestions ?? false;
   const suggest = useAction(api.skillSuggestions.suggest);
   const [evaluated, setEvaluated] = useState<{
     forText: string;
@@ -50,15 +53,20 @@ export function useSkillSuggestions(skillItems: ReadonlyArray<SlashItem>): {
   });
 
   const noteDraft = (text: string) => {
+    if (!enabled) return;
     setLatestText(text);
     if (!shouldSuggestFor(text)) return;
     schedule(text);
   };
 
-  const chips = pickSkillSuggestions(
-    evaluated && evaluated.forText === latestText ? evaluated.response : null,
-    { text: latestText, skillItems, dismissed },
-  );
+  const chips = enabled
+    ? pickSkillSuggestions(
+        evaluated && evaluated.forText === latestText
+          ? evaluated.response
+          : null,
+        { text: latestText, skillItems, dismissed },
+      )
+    : [];
 
   const dismiss = (id: string) => {
     setDismissed((prev) => new Set(prev).add(id));
