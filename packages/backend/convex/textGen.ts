@@ -456,8 +456,13 @@ ${args.transcript.slice(0, MAX_TRANSCRIPT_INPUT)}`,
   },
 });
 
-/** Recaps are read word by word, so they get a stronger model than titles: nano kept echoing prompt labels. */
-const RECAP_MODEL = "openai/gpt-5-mini";
+/**
+ * Recaps are read word by word, so they get a stronger model than titles:
+ * nano echoed prompt labels. Haiku 5.5 beat GPT-6 Luna on one mock project
+ * (19 November 2026): 4-6 s against 8-12 s, and it named task chats as chips
+ * every run, where Luna never did.
+ */
+const RECAP_MODEL = "anthropic/claude-haiku-5.5";
 
 /** "17 hours", "2 days", "45 minutes": how long the user was away, for the opening line. */
 function formatAway(ms: number): string {
@@ -473,6 +478,44 @@ function keepKnownMentions(text: string, allowedIds: ReadonlyArray<string>): str
   return text.replace(/@\[([^\]]+)\]\(([^)]+)\)/g, (token, label: string, id: string) =>
     allowedIds.includes(id) ? token : label,
   );
+}
+
+/** What `writeRecap` reads: `chatRecaps.recapContext`'s result. */
+interface RecapContext {
+  awayMs: number;
+  transcript: string;
+  log: string;
+  allowedIds: ReadonlyArray<string>;
+}
+
+/** One recap from `model`. Exported for model comparisons; throws on a gateway error. */
+export async function writeRecap(model: string, context: RecapContext): Promise<string> {
+  const away = formatAway(context.awayMs);
+  const chips =
+    context.allowedIds.length > 0
+      ? "\n- When you name a task chat, copy its @[Title](id) token exactly as written in the transcript. Use each token at most once."
+      : "";
+  const result = await generateText({
+    model,
+    prompt: `The user was away from this coding chat for ${away}. Write a short recap of what happened while they were away, so they can pick up in seconds.
+
+Rules:
+- Start with "In the last ${away}," and say the main outcome in one sentence.
+- Then at most two short paragraphs, separated by a blank line: first what was built or decided, then what is waiting on the user (approvals, questions, unpushed work, failures).
+- Write them as normal sentences. Never start a paragraph with a label such as "Built:" or "Waiting on the user:".
+- If nothing is waiting on the user, leave that out; do not say so.
+- Hard limit: 80 words in total. Cut detail before you go over. Plain prose, no headings, no bullet lists, no code or backticks.
+- Write in the third person about the agent ("the agent", or no subject); never copy its "I" sentences.
+- State only facts from the transcript. Do not invent names, numbers or results.${chips}
+
+Log entries from this span:
+${context.log || "(none)"}
+
+Transcript since they left, oldest first:
+${context.transcript || "(no messages)"}`,
+    providerOptions: { ...FLEX_GATEWAY_PROVIDER_OPTIONS },
+  });
+  return keepKnownMentions(stripWrappingQuotes(result.text), context.allowedIds);
 }
 
 /**
@@ -491,31 +534,7 @@ export const generateChatRecap = internalAction({
     let text = "";
     try {
       if (context.transcript || context.log) {
-        const chips =
-          context.allowedIds.length > 0
-            ? "\n- When you name a task chat, copy its @[Title](id) token exactly as written in the transcript. Use each token at most once."
-            : "";
-        const result = await generateText({
-          model: RECAP_MODEL,
-          prompt: `The user was away from this coding chat for ${formatAway(context.awayMs)}. Write a short recap of what happened while they were away, so they can pick up in seconds.
-
-Rules:
-- Start with "In the last ${formatAway(context.awayMs)}," and say the main outcome in one sentence.
-- Then at most two short paragraphs, separated by a blank line: first what was built or decided, then what is waiting on the user (approvals, questions, unpushed work, failures).
-- Write them as normal sentences. Never start a paragraph with a label such as "Built:" or "Waiting on the user:".
-- If nothing is waiting on the user, leave that out; do not say so.
-- Under 90 words in total. Plain prose, no headings, no bullet lists, no code blocks.
-- Write in the third person about the agent ("the agent", or no subject); never copy its "I" sentences.
-- State only facts from the transcript. Do not invent names, numbers or results.${chips}
-
-Log entries from this span:
-${context.log || "(none)"}
-
-Transcript since they left, oldest first:
-${context.transcript || "(no messages)"}`,
-          providerOptions: { ...FLEX_GATEWAY_PROVIDER_OPTIONS },
-        });
-        text = keepKnownMentions(stripWrappingQuotes(result.text), context.allowedIds);
+        text = await writeRecap(RECAP_MODEL, context);
       }
     } catch (error) {
       console.error("[textGen.generateChatRecap]", error);
