@@ -11,10 +11,8 @@ Surface tokens map 1:1 to the HeroUI palette: `--background` (page canvas) → `
 **Borders**
 
 - Cards, surfaces, and content containers are defined by tone (`bg-card` / `bg-muted`) — no decorative hairline. Prefer `<Surface>` / `<Card>` / `ui-surface` over hand-rolled classes.
-- Layout regions (list/detail dividers) are separated by a hairline `border-border`, not tonal contrast. The sidebar panel has no edge line: it shares the page tone and the gap to the content divides them.
-- Icon rails are the exception: no rail edge, no rail separators, no resting divider on the sandbox split (`ResizablePanelLayout` `seamlessSeparator`; the line shows on hover and drag). Group rail buttons on a trough instead — `Sidebar.RailGroup` + `railGroupThemeClass` on the app rail, `SANDBOX_RAIL_GROUP_CLASS` / `tabs-segmented` on the sandbox rail. The gap between troughs divides the groups.
+- Layout regions inside a page (list/detail dividers) are separated by a hairline `border-border`. The app chrome has no resting lines: see "Rails, tracks and the sandbox card".
 - Tab strips and panel headers have no bottom hairline: whitespace and the tone step to the content separate them.
-- The sandbox panel's content is a rounded `bg-card` card beside the rail, with an arrow on its edge at the active rail tab (`SandboxPanelFrame`). Panels inside it stay transparent so the card shows through.
 - Active/selected items use a surface fill (and `ring-*` when emphasis is needed); avoid relying on a resting hairline.
 - Inputs/selects keep their form-affordance border. Floating overlays use `smooth-shadow-ring-*` (not a separate hairline).
 
@@ -25,7 +23,7 @@ Surface tokens map 1:1 to the HeroUI palette: `--background` (page canvas) → `
 
 **Layout & surface colors**
 
-- Sidebar shares the canvas tone (`--sidebar` = `--background`); neither the rail nor the panel has an edge line (see Borders).
+- Sidebar shares the canvas tone (`--sidebar` = `--background`); neither the rail nor the panel has an edge line.
 - Hierarchy comes from: surface tone steps > whitespace > typography weight/size.
 
 **Hover & interaction**
@@ -34,9 +32,38 @@ Surface tokens map 1:1 to the HeroUI palette: `--background` (page canvas) → `
 - Press: respond on pointer-down with `motion-press` + `active:scale-[0.9x]` on controls (buttons, tabs, selects, switches, menu items). Keep color transitions slower than the press transform.
 - Enter/exit along the same path; default UI springs critically damped (`bounce: 0` / high damping). No `prefers-reduced-motion` support — never add `useReducedMotion` gates.
 - Never remount `.beam-halo` or put `filter: blur()` / `drop-shadow()` on a continuously animated beam. The halo was the leftover GPU floor (composer ~3.2→1.0 cores, lock pane ~7.4→2.5).
-  **Spacing**
+
+**Spacing**
 
 - Use whitespace/padding (Gestalt Law of Proximity) to group related elements; reach for borders/dividers only for structural separation (layout regions), not to outline soft surfaces.
+
+## Rails, tracks and the sandbox card
+
+Groups of controls sit on a **track**: the segmented-tabs trough (`--secondary` light, `--card` dark), with the active item on the lighter pill (`--segment-active`). The gap between tracks divides groups, so the chrome has no edge lines, separators or resting dividers.
+
+**App rail**
+
+- `RepoRail` uses `Sidebar.RailGroup` (`@vvedantb/ui`) with `railGroupThemeClass` (`rail-track` in `globals.css`, which also fixes the package's dark-mode pill). Three groups: Home / Inbox / Sessions, the repos (centred with `justify-center-safe`), and the bottom actions.
+- One pill per group slides to the active tile with the tabs motion (`--tabs-dur`, `--tabs-ease`); moving to another group snaps.
+- No rail edge, no `RailSeparator`. The sidebar panel beside it has no edge line either; its own nav highlight stays the grey `bg-sidebar-accent` (a list, not a tab group).
+- Rail icons are 22px. Home uses the package `IconEva`, with no disc, so its pill shows.
+
+**Button tracks**
+
+- Header actions (session, quick task and project) sit on one track: `CHAT_HEADER_ACTIONS_CLASS` (`ChatPageWrapper`); it hides when empty.
+- Buttons on any `rail-track` are flat: no resting fill; hover is half the pill. Carry state with the icon colour — wake is a green play, sleep a red stop — never a filled destructive button on a track.
+- Primary filled actions (Run, Build, Stop Build) stay outside the track.
+
+**Sandbox rail and card**
+
+- The sandbox rail groups the collapse toggle and the tools on `SANDBOX_RAIL_GROUP_CLASS` tracks and the tabs on a `tabs-segmented` list, centred in the rail.
+- The sandbox split has no resting divider (`ResizablePanelLayout` `seamlessSeparator`; the line and grip show on hover and drag).
+- The content is a `bg-card` card (`md:my-2 md:mr-1.5 md:rounded-surface`) with an arrow at the active rail tab (`SandboxPanelFrame`, `.sandbox-tab-arrow`). Panels inside stay transparent so the card shows through — no `bg-background` on a panel root.
+- Desktop only: the phone tab strip keeps its own layout.
+
+**Radius**
+
+- Use the theme radius tokens (`rounded-surface`, `rounded-control`, `rounded-menu-item`, `rounded-full`); `scripts/design-check.mjs` rejects raw `rounded-lg/xl/[…]` in new code.
 
 ## Component structure
 
