@@ -1035,6 +1035,11 @@ html[data-blur-pid] [data-pii] {
 html[data-page-motion="off"] .sandbox-tab-arrow {
   transition-duration: 0s;
 }
+/* A dock pop's neighbour pane slides with it (`slideNextResize`); only set
+ * for that one toggle, so a drag stays instant. */
+[data-dock-slide] > [data-panel] {
+  transition: flex-grow var(--dock-slide-dur) var(--dock-slide-ease);
+}
 .dark .tabs-segmented,
 .dark .rail-track {
   background-color: rgb(var(--card)); /* dark: card-grey trough */

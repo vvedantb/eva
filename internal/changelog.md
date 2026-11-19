@@ -1,5 +1,13 @@
 # Changelog
 
+## Web sandbox split: chat pane slides with the card
+
+Date: 2026-11-19
+
+WHY: The card popped in and out smoothly, but the chat pane beside it jumped to its new width, so the two read as out of step.
+
+Architectural: `dockMotion.slideNextResize` marks the `react-resizable-panels` group (`data-dock-slide`) for one toggle, and globals.css transitions the panels' `flex-grow` with the pop's timing (380 ms open, 260 ms close, out-quint). `ResizablePanelLayout` calls it before the toggle's resize, before the collapse after the pop out, and on the expand signal. A drag never sets it, so it stays 1:1 with the pointer.
+
 ## Web sidebar panel: dock pop on hide and show
 
 Date: 2026-11-19
