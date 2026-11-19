@@ -11,7 +11,7 @@ Surface tokens map 1:1 to the HeroUI palette: `--background` (page canvas) → `
 **Borders**
 
 - Cards, surfaces, and content containers are defined by tone (`bg-card` / `bg-muted`) — no decorative hairline. Prefer `<Surface>` / `<Card>` / `ui-surface` over hand-rolled classes.
-- Layout regions (sidebar panel edge, list/detail dividers) are separated by a hairline `border-border`/`border-sidebar-border`, not tonal contrast.
+- Layout regions (list/detail dividers) are separated by a hairline `border-border`, not tonal contrast. The sidebar panel has no edge line: it shares the page tone and the gap to the content divides them.
 - Icon rails are the exception: no rail edge, no rail separators, no resting divider on the sandbox split (`ResizablePanelLayout` `seamlessSeparator`; the line shows on hover and drag). Group rail buttons on a trough instead — `Sidebar.RailGroup` + `railGroupThemeClass` on the app rail, `SANDBOX_RAIL_GROUP_CLASS` / `tabs-segmented` on the sandbox rail. The gap between troughs divides the groups.
 - Tab strips and panel headers have no bottom hairline: whitespace and the tone step to the content separate them.
 - The sandbox panel's content is a rounded `bg-card` card beside the rail, with an arrow on its edge at the active rail tab (`SandboxPanelFrame`). Panels inside it stay transparent so the card shows through.
@@ -25,7 +25,7 @@ Surface tokens map 1:1 to the HeroUI palette: `--background` (page canvas) → `
 
 **Layout & surface colors**
 
-- Sidebar shares the canvas tone (`--sidebar` = `--background`); the panel is distinguished by the region-divider border, not by being darker. The rail has no border (see Borders).
+- Sidebar shares the canvas tone (`--sidebar` = `--background`); neither the rail nor the panel has an edge line (see Borders).
 - Hierarchy comes from: surface tone steps > whitespace > typography weight/size.
 
 **Hover & interaction**
