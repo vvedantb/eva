@@ -36,5 +36,6 @@ export function resolveExperimentalFlags(
     manualSideBranchPublish: flags?.manualSideBranchPublish ?? false,
     prWatch: flags?.prWatch ?? false,
     draftReadiness: flags?.draftReadiness ?? false,
+    skillSuggestions: flags?.skillSuggestions ?? false,
   };
 }
