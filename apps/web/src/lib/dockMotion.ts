@@ -135,3 +135,27 @@ export function dockPopOut(
     }, HOLD_MS);
   };
 }
+
+/**
+ * Lets the panels in a `react-resizable-panels` group slide to their next
+ * size (`flex-grow` transition, globals.css) instead of jumping, so the
+ * neighbour pane moves in step with a pop. Call it just before the resize.
+ * Only for this one toggle: a drag must stay 1:1 with the pointer.
+ */
+export function slideNextResize(
+  group: HTMLElement | null,
+  direction: "open" | "close",
+) {
+  if (!group || motionOff()) return;
+  const ms = direction === "open" ? POP_IN_MS : POP_OUT_MS;
+  group.style.setProperty("--dock-slide-dur", `${ms}ms`);
+  group.style.setProperty("--dock-slide-ease", SETTLE_EASE);
+  group.dataset.dockSlide = "";
+  window.clearTimeout(Number(group.dataset.dockSlideTimer));
+  group.dataset.dockSlideTimer = String(
+    window.setTimeout(() => {
+      delete group.dataset.dockSlide;
+    }, ms + 50),
+  );
+}
+
