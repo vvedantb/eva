@@ -196,19 +196,7 @@ export const createDraftSessionPr = internalAction({
     if (!repo) return null;
 
     // The reviewer-facing description is generated from the diff after the PR
-    // exists (`generatePrDescription`); the session summary is only included
-    // when the user has already produced one.
-    const sections =
-      session.summary && session.summary.length > 0
-        ? [
-            {
-              heading: "Summary",
-              content: session.summary
-                .map((item: string) => `- ${item}`)
-                .join("\n"),
-            },
-          ]
-        : [];
+    // exists (`generatePrDescription`).
 
     const evaUrl = buildEvaSessionUrl(
       repo.owner,
@@ -222,7 +210,7 @@ export const createDraftSessionPr = internalAction({
     // retrofitted into its body.
     const siblingPrs = await siblingPullRequests(ctx, sessionPrs, undefined);
     const body = appendRelatedPrsSection(
-      buildPrBody(sections, evaUrl),
+      buildPrBody([], evaUrl),
       siblingPrs,
     );
 

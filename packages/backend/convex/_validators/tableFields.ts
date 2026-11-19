@@ -320,10 +320,8 @@ export const turnEntityIdValidator = v.union(
  * A one-shot agent that works on a row which also owns chat turns. The lane
  * keeps its turn apart from the chat's: chat turns leave it unset.
  */
-export const turnLaneValidator = v.union(
-  v.literal("summary"),
-  v.literal("interview"),
-);
+// Session summary turns removed. schema-narrowing-ok: retireSessionSummaries
+export const turnLaneValidator = v.literal("interview");
 
 export type TurnLane = Infer<typeof turnLaneValidator>;
 
@@ -772,7 +770,7 @@ export const sessionFields = {
    * project. Owned by `_sessions/owner.ts`; set at insert, never changed.
    */
   owner: sessionOwnerValidator,
-  summary: v.optional(v.array(v.string())),
+  // `summary` removed. schema-narrowing-ok: retireSessionSummaries
   createdBy: v.optional(v.id("users")),
   planContent: v.optional(v.string()),
   /** Sticky Plan/Build toggle. Absent sessions are Build. */
