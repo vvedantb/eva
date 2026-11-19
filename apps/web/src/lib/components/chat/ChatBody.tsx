@@ -635,6 +635,14 @@ function ChatBodyInner({
     messages: displayMessages,
     currentUserId,
   });
+  const recapCard =
+    recap && repo && displayMessages.length > 0 ? (
+      <ChatRecapCard
+        text={recap.text}
+        repo={repo}
+        onDismiss={dismissRecap}
+      />
+    ) : null;
   // Seen state lives here, not in the divider: the pill is a sibling and needs
   // it. It is keyed by the boundary id, so a new boundary starts unseen.
   const newDivider = useSeenOnce(newBoundaryId);
@@ -1143,16 +1151,14 @@ function ChatBodyInner({
                 {displayMessages
                   .slice(lastUserMessageIndex)
                   .map((message) => renderMessage(message))}
+                {/* Inside the last turn, which pads to the viewport height:
+                    after it, the card would sit a screen below the reply. */}
+                {recapCard}
               </ChatLastTurn>
             </>
           )}
-          {recap && repo && displayMessages.length > 0 ? (
-            <ChatRecapCard
-              text={recap.text}
-              repo={repo}
-              onDismiss={dismissRecap}
-            />
-          ) : null}
+          {/* No last turn (no user message yet): the recap follows the rows. */}
+          {lastUserMessageIndex < 0 ? recapCard : null}
           {displayMessages.length > 0 ? transcriptTail : null}
           {renderChatUiPanels(panelPlacement.trailing)}
           {turnOutputPlacement.trailing.map((output) => output.node)}
