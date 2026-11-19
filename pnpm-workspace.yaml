@@ -4,7 +4,6 @@ packages:
 
 minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
-  - prettier
   # @vvedantb/redline 0.1.1 published 2026-10-05; 7-day soak would block this PR.
   - "@vvedantb/redline"
   # @vvedantb/ui 0.12.0 (owner's package) published 2026-10-20 with the shared nav icons.

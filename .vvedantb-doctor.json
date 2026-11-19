@@ -1,4 +1,7 @@
 {
+  "waivers": {
+    "no-eslint": "eslint-plugin-react-you-might-not-need-an-effect is an ESLint-format plugin that oxlint loads through jsPlugins in .oxlintrc.json; ESLint is not installed and never runs."
+  },
   "ciCommands": {
     "node scripts/check-shared-backend.mjs": "Fails when the phone app calls a Convex function that the web app never calls, unless the function is listed with a reason, which lint, typecheck and test do not compare.",
     "./scripts/check-apk-compat.sh": "Type-checks the newest published APK source against this backend when the backend changed, so a change that breaks installed phones fails, which typecheck of the current code cannot see.",
