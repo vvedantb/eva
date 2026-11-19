@@ -1016,8 +1016,10 @@ html[data-blur-pid] [data-pii] {
 .rail-track > .t-tabs-pill {
   background-color: rgb(var(--segment-active));
 }
-/* Idle rail tiles hover at half the pill, as the package does with its token. */
-.rail-track [data-rail-tile]:not([data-active]):hover {
+/* Idle rail tiles and buttons hover at half the pill, as the package does
+ * with its token; the buttons' own `hover:bg-secondary` matches the light
+ * trough and would vanish. */
+.rail-track :is([data-rail-tile], button):not([data-active]):not(:disabled):hover {
   background-color: rgb(var(--segment-active) / 0.5);
 }
 .dark .tabs-segmented,

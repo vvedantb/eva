@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@eva/ui";
 import {
   type ReactNode,
   useCallback,
@@ -61,6 +62,12 @@ interface ResizablePanelLayoutProps {
    */
   rightCollapsedSizePx?: number;
   /**
+   * No resting divider line: the sandbox rail reads as tab groups on the
+   * canvas, so the tone step separates the panes. The line and grip still
+   * show on hover and while dragging.
+   */
+  seamlessSeparator?: boolean;
+  /**
    * Bump this value to force-expand the right panel (e.g. agent browser lock).
    * Only expands; never collapses.
    */
@@ -103,6 +110,7 @@ export function ResizablePanelLayout({
   collapsedStorageKey = storageKey,
   defaultRightCollapsed = true,
   rightCollapsedSizePx = 0,
+  seamlessSeparator = false,
   expandRightSignal,
   collapseRightSignal,
   mobilePaneLabels = DEFAULT_MOBILE_PANE_LABELS,
@@ -381,10 +389,20 @@ export function ResizablePanelLayout({
           uses z-20 so a collapsed-rail click hits the toggle instead of
           starting a drag. */}
       <Separator
-        className={`w-px bg-border transition-colors hover:bg-primary/50 data-resize-handle-active:bg-primary data-resize-handle-active:transition-none ${hideSeparator ? "hidden" : ""}`}
+        className={cn(
+          "group/separator w-px transition-colors hover:bg-primary/50 data-resize-handle-active:bg-primary data-resize-handle-active:transition-none",
+          seamlessSeparator ? "bg-transparent" : "bg-border",
+          hideSeparator && "hidden",
+        )}
       >
         <div className="flex items-center justify-center w-3 h-full -mx-1.5 relative z-10">
-          <IconGripVertical className="w-4 h-4 text-muted-foreground/50" />
+          <IconGripVertical
+            className={cn(
+              "w-4 h-4 text-muted-foreground/50",
+              seamlessSeparator &&
+                "opacity-0 transition-opacity group-hover/separator:opacity-100 group-data-resize-handle-active/separator:opacity-100",
+            )}
+          />
         </div>
       </Separator>
       <Panel

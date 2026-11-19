@@ -8,6 +8,8 @@ WHY: The app rail and the sandbox tab rail should read like the tab component: a
 
 Architectural: the rail moves to `@vvedantb/ui` 0.51.0 (packages #299), which adds `Sidebar.RailGroup`: one trough per group and one pill that slides to the active tile with the tabs motion. `RepoRail` wraps its top, repo and bottom sections in groups, centres the repo group (`justify-center-safe`), and drops the rail border and separators. `railGroupThemeClass` (`rail-track` in `globals.css`) gives the groups eva's segmented-tabs tones, which also fixes the package's compat tokens drawing a darker pill on a lighter trough in dark. The sandbox tab rail puts its tabs on the same `tabs-segmented` trough and centres them. The `@vvedantb/ui` patch moves to 0.51.0 unchanged.
 
+The sandbox rail's collapse toggle and tools (new preview, terminal, labels) sit on their own troughs (`SANDBOX_RAIL_GROUP_CLASS`), and the session, task and project splits drop the resting divider line (`ResizablePanelLayout` `seamlessSeparator`); the line and grip show on hover and while dragging.
+
 ## Phone: find in chat, session summary, edit and download a proposed plan
 
 Date: 2026-11-18

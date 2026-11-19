@@ -131,6 +131,7 @@ export function ProjectDetailSandboxContent({
       leftMinWidthPx={350}
       rightMinWidthPx={300}
       rightCollapsedSizePx={sandboxRailWidthPx}
+      seamlessSeparator
       defaultRightCollapsed={false}
       expandRightSignal={expandRightSignal}
       mobilePaneLabels={{ left: "Chat", right: "Sandbox" }}
