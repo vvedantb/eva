@@ -73,13 +73,6 @@
         "peerDependencies": {
           "@tiptap/pm": "*"
         }
-      },
-      "eslint-plugin-react-you-might-not-need-an-effect": {
-        "peerDependenciesMeta": {
-          "eslint": {
-            "optional": true
-          }
-        }
       }
     },
     "peerDependencyRules": {
@@ -89,8 +82,7 @@
     }
   },
   "devDependencies": {
-    "@vvedantb/config": "^0.10.0",
-    "eslint-plugin-react-you-might-not-need-an-effect": "1.0.2",
+    "@vvedantb/config": "^0.11.0",
     "husky": "^9.1.7",
     "knip": "6.27.0",
     "lint-staged": "^16.2.7",
