@@ -7,6 +7,8 @@ Date: 2026-11-19
 WHY: The chat header's usage, sandbox and menu buttons sat loose next to the title; the rails now group buttons on a trough.
 
 Architectural: `CHAT_HEADER_ACTIONS_CLASS` (`ChatPageWrapper`) puts the header actions on a `rail-track` trough for session chats and for the task and project header (`SandboxChatHeaderActions`); it hides itself when empty. A `globals.css` rule makes any button on a `rail-track` flat, so the round secondary start and menu buttons lose their own fill and hover at half the pill.
+
+The project header (`ProjectDetailHeaderActions`) and the quick task header (`TaskFooter` header layout) put their secondary controls (usage, menu, commit and push, start and stop) on the same `CHAT_HEADER_ACTIONS_CLASS` track; Build, Stop Build and Run stay outside as filled primary actions, and the task header drops its divider next to Run.
 ## Web: no hairline under tab strips and panel headers; UI guide covers rails
 
 Date: 2026-11-19
