@@ -34,10 +34,7 @@ import { RailAppHotkeys } from "@/lib/components/sidebar/RailAppHotkeys";
 import { RailSettingsMenu } from "@/lib/components/sidebar/RailSettingsMenu";
 import { SidebarUserMenu } from "@/lib/components/sidebar/SidebarUserMenu";
 import { ShortcutKbd } from "@/lib/components/ui/Kbd";
-import {
-  railTileActiveClass,
-  railTrackClass,
-} from "@/lib/components/sidebar/SharedLayoutNav";
+import { railGroupThemeClass } from "@/lib/components/sidebar/SharedLayoutNav";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { useSearch } from "@/lib/contexts/SearchContext";
 import { isHomePath } from "@/lib/components/sidebar/homePaths";
@@ -78,14 +75,9 @@ function isRowActive(
 
 /**
  * Cut-out tone for the solid active rail icons: the active pill's fill
- * (`rail-track-active`), so the cut-out reads as a hole in the icon.
+ * (`.rail-track > .t-tabs-pill`), so the cut-out reads as a hole in the icon.
  */
 const CUTOUT_COLOR = "rgb(var(--segment-active) / 1)";
-
-/** Eva's themed active tone, on top of the package tile. */
-function railActiveTone(active: boolean): string | undefined {
-  return active ? railTileActiveClass : undefined;
-}
 
 /** Green: something is running right now (sessions, sandboxes). */
 const RAIL_BADGE_LIVE_CLASS = cn(CORNER_BADGE_CLASS, "bg-success text-white");
@@ -206,16 +198,15 @@ function RepoRailView({
         section={currentSection}
         onNavigate={onNavigate}
       />
-      {/* Three groups, each on a shared trough like the segmented tabs. The
-          gaps between the troughs divide them, so there are no rules. */}
+      {/* Three package rail groups: a shared trough each, with one pill that
+          slides to the active tile. The gaps divide them, so there are no rules. */}
       <Sidebar.RailHeader>
-        <div className={railTrackClass}>
+        <Sidebar.RailGroup className={railGroupThemeClass}>
           <Sidebar.RailItem
             asChild
             label="Eva home"
             tooltip="Home"
             active={homeActive}
-            className={railActiveTone(homeActive)}
           >
             <Link to="/home" onClick={onNavigate}>
               <span className="flex size-8 items-center justify-center rounded-full bg-white">
@@ -223,12 +214,7 @@ function RepoRailView({
               </span>
             </Link>
           </Sidebar.RailItem>
-          <Sidebar.RailItem
-            asChild
-            label="Inbox"
-            active={inboxActive}
-            className={railActiveTone(inboxActive)}
-          >
+          <Sidebar.RailItem asChild label="Inbox" active={inboxActive}>
             <Link to="/inbox" onClick={onNavigate}>
               <InboxArrowIcon
                 size={22}
@@ -248,7 +234,6 @@ function RepoRailView({
             }
             tooltip={sessionsLabel ? `Sessions (${sessionsLabel})` : "Sessions"}
             active={sessionsActive}
-            className={railActiveTone(sessionsActive)}
           >
             <Link
               to="/sessions"
@@ -271,14 +256,14 @@ function RepoRailView({
           </Sidebar.RailItem>
           {/* Manager Ave used to sit here. It now lives in the floating launcher
             (`AveLauncherProvider`), which owns the orchestrator query too. */}
-        </div>
+        </Sidebar.RailGroup>
       </Sidebar.RailHeader>
       {/* Drawer below `md`: keep a scroll here off the page behind.
           `justify-center-safe` centres the repo group, but a list taller than
           the rail starts at the top so its first tiles stay reachable. */}
       <Sidebar.RailBody className="scrollbar scroll-fade justify-center-safe max-md:overscroll-y-contain">
         {repos.length === 0 ? null : (
-          <div className={railTrackClass}>
+          <Sidebar.RailGroup className={railGroupThemeClass}>
             {repos.map((row, index) => {
               const displayName = repoDisplayLabel(row);
               // Mirrors RailAppHotkeys: only the first nine tiles get a slot.
@@ -318,9 +303,7 @@ function RepoRailView({
                           }
                           active={active}
                           // Idle app logos sit further back than the icon tiles.
-                          className={
-                            active ? railTileActiveClass : "opacity-50"
-                          }
+                          className={active ? undefined : "opacity-50"}
                         >
                           <Link to={railHref(row)} onClick={onNavigate}>
                             <RepoLogo
@@ -365,7 +348,7 @@ function RepoRailView({
                 </ContextMenu>
               );
             })}
-          </div>
+          </Sidebar.RailGroup>
         )}
       </Sidebar.RailBody>
       {renameRepo ? (
@@ -380,13 +363,12 @@ function RepoRailView({
         />
       ) : null}
       <Sidebar.RailFooter>
-        <div className={railTrackClass}>
+        <Sidebar.RailGroup className={railGroupThemeClass}>
           {simpleView ? null : (
             <Sidebar.RailItem
               asChild
               label="Automations"
               active={automationsActive}
-              className={railActiveTone(automationsActive)}
             >
               <Link to="/automations" onClick={onNavigate}>
                 <AutomationIcon
@@ -429,7 +411,7 @@ function RepoRailView({
           </Tooltip>
           <SidebarUserMenu name={userName} showSearch={showSearch} />
           <RailSettingsMenu onNavigate={onNavigate} />
-        </div>
+        </Sidebar.RailGroup>
       </Sidebar.RailFooter>
     </Sidebar.Rail>
   );

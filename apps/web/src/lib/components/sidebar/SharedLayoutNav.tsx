@@ -37,14 +37,10 @@ function useSharedLayoutNav() {
 }
 
 /**
- * A group of rail tiles on one shared trough, like the segmented tabs.
- * `rail-track` (globals.css) owns the trough tone per theme.
+ * Eva's tones on a package `Sidebar.RailGroup`: `rail-track` (globals.css)
+ * gives the trough and its sliding pill the segmented-tabs colours per theme.
  */
-export const railTrackClass =
-  "rail-track flex flex-col items-center gap-1 rounded-xl p-1";
-
-/** Active rail tile: the segmented-tabs pill on its `railTrackClass` trough. */
-export const railTileActiveClass = "rail-track-active text-sidebar-primary";
+export const railGroupThemeClass = "rail-track";
 
 const sidebarNavPillClass =
   "pointer-events-none absolute inset-0 rounded-menu-item bg-sidebar-accent";

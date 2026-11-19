@@ -1002,8 +1002,10 @@ html[data-blur-pid] [data-pii] {
  *     hot-reload reliably. Placed after `@tailwind utilities`, so they win
  *     over the list's own bg utility at equal specificity.
  * ─────────────────────────────────────────────────────────────────── */
-/* `rail-track` / `rail-track-active`: the same trough and pill on the icon
- * rails (app rail groups, sandbox tab rail), so they read as one tab control. */
+/* `rail-track` (on each package `Sidebar.RailGroup`, via
+ * `railGroupThemeClass`): the same trough and sliding pill as these tabs. The
+ * package reads `bg-default` / `bg-segment`, which eva's compat maps to
+ * secondary / card — in dark that is a darker pill on a lighter trough. */
 .tabs-segmented,
 .rail-track {
   background-color: rgb(var(--secondary)); /* light: grey trough */
@@ -1011,8 +1013,12 @@ html[data-blur-pid] [data-pii] {
 /* The sliding pill (`t-tabs-pill`, `bg-card` from the Tabs config): white in
  * light, #474747 in dark, so it shows on the trough as the phone tab bar's. */
 .tabs-segmented .t-tabs-pill,
-.rail-track .rail-track-active {
+.rail-track > .t-tabs-pill {
   background-color: rgb(var(--segment-active));
+}
+/* Idle rail tiles hover at half the pill, as the package does with its token. */
+.rail-track [data-rail-tile]:not([data-active]):hover {
+  background-color: rgb(var(--segment-active) / 0.5);
 }
 .dark .tabs-segmented,
 .dark .rail-track {
