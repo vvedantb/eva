@@ -6,7 +6,7 @@ Date: 2026-11-17
 
 WHY: The Eva seed copied every prod env var into each sandbox. Sandboxes then sent real email (`EMAIL_ENV=production`), held the prod GitHub app key, and rejected the dev Clerk sign-in.
 
-Architectural: `packages/backend/scripts/sandboxEnv.mjs` lists every env var a sandbox gets, each with one rule: copy from prod, take the sandbox's own Eva env var of the same name (test keys), a fixed value, or a fresh generated secret or key pair. `sync-to-local.mjs --sandbox-env` sets those, removes every other var on the local backend, and reports prod vars that are not in the list and sandbox vars Eva does not provide. `.eva/config.json` seeds with `--sandbox-env`. `generate-sandbox-jwt-keys.mjs` now shares `createSandboxJwtKeys` with the list.
+Architectural: `.eva/sandbox-env.json` lists, per Convex app, every env var a sandbox gets, each with one rule: `copy` from the source, `eva` (the sandbox's Eva env var of the same name, for test keys), a fixed `value`, or a `generate`d secret or ES256 key pair. `sync-to-local.mjs --sandbox-env` sets those, removes every other var on the local backend, and reports source vars not in the file and `eva` vars Eva does not provide. The loader, `scripts/sandbox-env.mjs`, and the env block of `sync-to-local.mjs` are shared word for word with carepulse-ts. Name listing now asks for `--names-only` on Convex CLI 1.42+, as carepulse-ts already did. `.eva/config.json` seeds with `--sandbox-env`.
 
 ## Web sidebar panel: no edge line
 

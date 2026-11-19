@@ -41,7 +41,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { resolveSandboxEnv, SANDBOX_ENV } from "./sandboxEnv.mjs";
+import { loadSandboxEnv, resolveSandboxEnv } from "./sandbox-env.mjs";
 
 // Apps this script can sync, as paths relative to the directory above `scripts/`.
 // Cross-repo sharing would need a published package, so this file is a deliberate
@@ -68,8 +68,8 @@ Sync a cloud Convex deployment into the local Convex backend.
   --deploy-key <key>        Same key inline. Falls back to CONVEX_SOURCE_DEPLOY_KEY.
   --include-storage         Also export file storage. Off by default: slow and large.
   --include-env             Copy the source deployment's env vars onto the local one.
-  --sandbox-env             Set only the allowlisted sandbox env vars
-                            (scripts/sandboxEnv.mjs) and remove every other one.
+  --sandbox-env             Set only the vars .eva/sandbox-env.json allows for this
+                            app, and remove every other one (an Eva sandbox).
   --skip-components         Do not import component data at all. Off by default:
                             each component subtree is imported with --component.
   --local-url <url>         Override the target URL (must be loopback).
@@ -571,38 +571,58 @@ runConvex(["import", ...targetFlags, "--replace-all", "--yes", zipPath], {
 // installed (see installComponents).
 //
 // There is no bulk env import: `env set` takes one `<name>` and reads its value
-// from stdin (convex/src/cli/env.ts). `env list` prints `NAME=value` with values
-// raw and unquoted, so a multi-line value — a PEM key — spans lines and cannot be
-// split back out of that dump reliably. Take only the names from it, then read
-// each value with `env get`, whose entire stdout is the value.
+// from stdin (convex/src/cli/env.ts). A multi-line value — a PEM key — cannot be
+// split back out of an `env list` dump reliably, so take only the names, then
+// read each value with `env get`, whose entire stdout is the value.
 // Values move over stdin, so none is written to disk, logged, or put in argv.
+//
+// How to get names depends on the app's locked CLI. From 1.48 a plain
+// `env list` prints bare names when it detects an AI agent (or
+// CONVEX_AGENT_MODE), so ask for `--names-only` explicitly; that flag arrived
+// in 1.42.0. Older CLIs reject it, and they always print `NAME=value`.
 const sourceAuth = {
   env: { CONVEX_DEPLOY_KEY: sourceKey },
   secrets: [sourceKey],
 };
+const targetAuth = { secrets: [target.adminKey] };
 
-function envNames(dump) {
+let namesOnlyFlag;
+function supportsNamesOnly() {
+  if (namesOnlyFlag === undefined) {
+    const cliVersion = runConvex(["--version"], {
+      label: "convex CLI version",
+      capture: true,
+    }).trim();
+    const versionMatch = /(\d+)\.(\d+)\.(\d+)/.exec(cliVersion);
+    if (versionMatch === null) {
+      fail(`Could not read the Convex CLI version from: ${cliVersion}`);
+    }
+    const [major, minor] = versionMatch.slice(1).map(Number);
+    namesOnlyFlag = major > 1 || (major === 1 && minor >= 42);
+  }
+  return namesOnlyFlag;
+}
+
+/** Env var names on a deployment, minus the backend-managed CONVEX_*. */
+function listEnvNames(label, flags, auth) {
+  const namesOnly = supportsNamesOnly();
+  const dump = runConvex(
+    ["env", "list", ...flags, ...(namesOnly ? ["--names-only"] : [])],
+    { label, ...auth, capture: true },
+  );
+  const nameLine = namesOnly
+    ? /^([A-Z_][A-Za-z0-9_]*)$/
+    : /^([A-Z_][A-Za-z0-9_]*)=/;
   return [
     ...new Set(
       dump.split(/\r?\n/).flatMap((line) => {
-        const match = /^([A-Z_][A-Za-z0-9_]*)=/.exec(line);
-        // CONVEX_* are backend-managed and cannot be set.
+        const match = nameLine.exec(namesOnly ? line.trim() : line);
         return match === null || match[1].startsWith("CONVEX_")
           ? []
           : [match[1]];
       }),
     ),
   ];
-}
-
-function listSourceEnv() {
-  return envNames(
-    runConvex(["env", "list"], {
-      label: `env list ${sourceName}`,
-      ...sourceAuth,
-      capture: true,
-    }),
-  );
 }
 
 function readSourceEnv(name) {
@@ -618,13 +638,13 @@ function readSourceEnv(name) {
 function setTargetEnv(name, value) {
   runConvex(["env", "set", ...targetFlags, name], {
     label: `env set ${name} on ${target.name}`,
-    secrets: [target.adminKey],
+    ...targetAuth,
     input: value,
   });
 }
 
 if (values["include-env"]) {
-  const names = listSourceEnv();
+  const names = listEnvNames(`env list ${sourceName}`, [], sourceAuth);
   if (names.length === 0) {
     console.log("\nSource has no environment variables; nothing to copy.");
   } else {
@@ -637,37 +657,41 @@ if (values["include-env"]) {
 }
 
 if (values["sandbox-env"]) {
-  const { values: env, missing } = await resolveSandboxEnv(readSourceEnv);
+  const rules = loadSandboxEnv(appDir);
+  const { values: env, missing } = await resolveSandboxEnv(
+    rules,
+    readSourceEnv,
+  );
   for (const [name, value] of env) setTargetEnv(name, value);
-  // Clear what an older seed copied: a stale prod secret must not survive.
-  const stale = envNames(
-    runConvex(["env", "list", ...targetFlags], {
-      label: `env list ${target.name}`,
-      secrets: [target.adminKey],
-      capture: true,
-    }),
+  // Clear what an older seed copied: a stale source secret must not survive.
+  const stale = listEnvNames(
+    `env list ${target.name}`,
+    targetFlags,
+    targetAuth,
   ).filter((name) => !env.has(name));
   for (const name of stale) {
     runConvex(["env", "remove", ...targetFlags, name], {
       label: `env remove ${name} on ${target.name}`,
-      secrets: [target.adminKey],
+      ...targetAuth,
     });
   }
-  const unlisted = listSourceEnv().filter(
-    (name) => !Object.hasOwn(SANDBOX_ENV, name),
-  );
+  const unlisted = listEnvNames(
+    `env list ${sourceName}`,
+    [],
+    sourceAuth,
+  ).filter((name) => !Object.hasOwn(rules, name));
   console.log(
     `\nSet ${env.size} sandbox env var(s): ${[...env.keys()].join(", ")}`,
   );
   if (stale.length > 0) console.log(`Removed: ${stale.join(", ")}`);
   if (missing.length > 0) {
     console.warn(
-      `\nUNSET — add a test value as an Eva env var, then reseed: ${missing.join(", ")}`,
+      `\nUNSET: add a test value as an Eva env var (Seed only), then reseed: ${missing.join(", ")}`,
     );
   }
   if (unlisted.length > 0) {
     console.warn(
-      `\nNOT COPIED — prod vars missing from scripts/sandboxEnv.mjs: ${unlisted.join(", ")}`,
+      `\nNOT COPIED: source vars missing from .eva/sandbox-env.json: ${unlisted.join(", ")}`,
     );
   }
 }
