@@ -2,7 +2,7 @@
 
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { api, type Doc } from "@eva/backend";
+import { api, type Doc, type Id } from "@eva/backend";
 import {
   Button,
   DropdownMenu,
@@ -11,6 +11,8 @@ import {
   DropdownMenuTrigger,
 } from "@vvedantb/ui";
 import { IconDots } from "@tabler/icons-react";
+import { useRecapChat } from "@/lib/components/chat/useRecapChat";
+import { RecapChatMenuItem } from "@/lib/components/chat/RecapChatMenuItem";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
@@ -24,6 +26,8 @@ import {
 
 interface TaskHeaderMenuProps extends TaskSandboxMenuItemsProps {
   task: Doc<"agentTasks">;
+  /** The task's chat, once it exists: Recap chat recaps it. */
+  chatId: Id<"sessionChats"> | undefined;
   buttonSize: "default" | "sm";
   iconSize: number;
   createPr: { enabled: boolean; isCreating: boolean; onCreate: () => void };
@@ -35,6 +39,7 @@ interface TaskHeaderMenuProps extends TaskSandboxMenuItemsProps {
  */
 export function TaskHeaderMenu({
   task,
+  chatId,
   buttonSize,
   iconSize,
   createPr,
@@ -77,6 +82,7 @@ export function TaskHeaderMenu({
   const { showResolveConflicts, hasSandboxCommandItems } =
     sandboxItems.visibility;
   const hasCommands = showResolveConflicts || hasSandboxCommandItems;
+  const recapChat = useRecapChat(chatId);
 
   return (
     <>
@@ -96,8 +102,16 @@ export function TaskHeaderMenu({
             {...menuProps}
             showRunEva={false}
             leading={
-              hasCommands || createPrItem.hasItems ? (
+              recapChat || hasCommands || createPrItem.hasItems ? (
                 <>
+                  {recapChat ? (
+                    <>
+                      <RecapChatMenuItem onSelect={recapChat} />
+                      {hasCommands || createPrItem.hasItems ? (
+                        <DropdownMenuSeparator />
+                      ) : null}
+                    </>
+                  ) : null}
                   <TaskSandboxMenuItems {...sandboxItems} />
                   {hasCommands && createPrItem.hasItems ? (
                     <DropdownMenuSeparator />

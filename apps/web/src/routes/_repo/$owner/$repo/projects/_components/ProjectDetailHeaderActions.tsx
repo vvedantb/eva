@@ -45,6 +45,8 @@ import { entityPathSegment } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { ProjectCardMenuItems } from "@/lib/components/projects/_components/ProjectCardMenuItems";
 import { useProjectMenu } from "@/lib/components/projects/_components/useProjectMenu";
+import { useRecapChat } from "@/lib/components/chat/useRecapChat";
+import { RecapChatMenuItem } from "@/lib/components/chat/RecapChatMenuItem";
 import { ProjectDeleteDialog } from "./ProjectDeleteDialog";
 import { useProjectDelete } from "./useProjectDelete";
 import {
@@ -62,6 +64,8 @@ interface ProjectDetailHeaderActionsProps {
   project: ProjectDetailProject;
   repoId: Id<"githubRepos">;
   sandbox: ProjectSandboxState;
+  /** The project's main chat, once it exists: Recap chat recaps it. */
+  chatId: Id<"sessionChats"> | undefined;
   chatTurnOpen: boolean | undefined;
   prError: string | null;
   prLinks: { hasItems: boolean; items: ReactNode };
@@ -82,6 +86,7 @@ export function ProjectDetailHeaderActions({
   project,
   repoId,
   sandbox,
+  chatId,
   chatTurnOpen,
   prError,
   prLinks,
@@ -108,6 +113,7 @@ export function ProjectDetailHeaderActions({
   const flags = getProjectMenuFlags(project, sandbox);
   const hasCommands =
     flags.showResolveConflicts || flags.hasSandboxCommandItems;
+  const recapChat = useRecapChat(chatId);
   const { basePath } = useRepo();
   const navigate = useNavigate();
   const projectsPath = `${basePath}/projects`;
@@ -147,8 +153,16 @@ export function ProjectDetailHeaderActions({
                 variant="dropdown"
                 {...projectMenu.menuProps}
                 leading={
-                  hasCommands || prLinks.hasItems ? (
+                  recapChat || hasCommands || prLinks.hasItems ? (
                     <>
+                      {recapChat ? (
+                        <>
+                          <RecapChatMenuItem onSelect={recapChat} />
+                          {hasCommands || prLinks.hasItems ? (
+                            <DropdownMenuSeparator />
+                          ) : null}
+                        </>
+                      ) : null}
                       <ProjectMoreMenuActionItems
                         flags={flags}
                         sandbox={sandbox}

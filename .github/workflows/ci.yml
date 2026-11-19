@@ -54,8 +54,9 @@ jobs:
         # One backend for both apps: fails when the phone calls a Convex
         # function the web never calls, unless it is allowed with a reason.
         node scripts/check-shared-backend.mjs
-        # Installed APKs keep their code: fails when this backend change would
-        # break the newest published APK. Skips when the backend did not change.
+        # Installed APKs keep their code: warns (never fails) when this backend
+        # change would break the newest published APK, so the merge can say
+        # what old phones lose. Skips when the backend did not change.
         ./scripts/check-apk-compat.sh
         # Fails on a new React Compiler bailout that is not in the baseline.
         node scripts/compiler-check.mjs

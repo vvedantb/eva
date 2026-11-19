@@ -33,11 +33,6 @@ import {
 import { BackgroundProcessesChip } from "./_components/BackgroundProcessesChip";
 import { PublishRecoveryBanner } from "./_components/PublishRecoveryBanner";
 import { useSessionChatHeader } from "./_components/SessionChatHeader";
-import { SessionSummaryAccordion } from "./_components/SessionSummaryAccordion";
-import {
-  SessionSummaryModal,
-  useStartSessionSummary,
-} from "./_components/SessionSummaryModal";
 import {
   SessionReviewModal,
   useSendSessionForReview,
@@ -86,7 +81,6 @@ interface ChatPanelProps {
   sandboxBranch?: string;
   sandboxGitSync?: Doc<"sessions">["sandboxGitSync"];
   prState?: PrState;
-  summary?: string[];
   messages: TranscriptMessage[];
   /** The transcript has not loaded: show the loader, not the empty state. */
   isLoadingMessages: boolean;
@@ -94,7 +88,6 @@ interface ChatPanelProps {
   streamingActivity?: string;
   streamingContent?: string;
   streamingPendingQuestion?: string;
-  summaryStreamingActivity?: string;
   startupStreamingActivity?: string;
   isSandboxActive: boolean;
   isSandboxToggling: boolean;
@@ -134,14 +127,12 @@ export function ChatPanel({
   sandboxBranch,
   sandboxGitSync,
   prState,
-  summary,
   messages,
   isLoadingMessages,
   queuedMessages,
   streamingActivity,
   streamingContent,
   streamingPendingQuestion,
-  summaryStreamingActivity,
   startupStreamingActivity,
   isSandboxActive,
   isSandboxToggling,
@@ -168,11 +159,9 @@ export function ChatPanel({
   const navigate = useNavigate();
   const createSession = useMutation(api.sessions.create);
   const simpleView = useSimpleView();
-  const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const { request: requestConfirm } = useRequestConfirm();
   const { sendForReview } = useSendSessionForReview(sessionId);
-  const { startSummary } = useStartSessionSummary(sessionId);
 
   const defaultModel = normalizeAIModel(repo.defaultModel);
   // The picker lists the session owner's accounts, not the viewer's — the turn
@@ -346,7 +335,6 @@ export function ChatPanel({
     );
   };
 
-  const hasSummary = Boolean(summary && summary.length > 0);
   const isStartupStreaming =
     isSandboxToggling && !isSandboxActive && !isSandboxStopping;
 
@@ -384,7 +372,6 @@ export function ChatPanel({
     session,
     chatId,
     isAnyChatExecuting: runningChatIds.size > 0,
-    hasSummary,
     messageCount: messages.length,
     isSandboxActive,
     isSandboxToggling,
@@ -394,13 +381,6 @@ export function ChatPanel({
     providerAccountId: stickyProviderAccountId,
     usageAccountLabel,
     onSandboxToggle,
-    onOpenSummaryModal: () =>
-      requestConfirm(
-        () => setShowSummaryModal(true),
-        () => {
-          void startSummary();
-        },
-      ),
     onOpenReviewModal: () =>
       requestConfirm(
         () => setShowReviewModal(true),
@@ -523,12 +503,6 @@ export function ChatPanel({
           }
           preInputContent={preInputContent}
           composerChips={composerChips}
-          preConversationContent={
-            <SessionSummaryAccordion
-              summary={summary}
-              summaryStreamingActivity={summaryStreamingActivity}
-            />
-          }
           modelPicker={{
             model,
             setModel: queueGate.setModel,
@@ -584,12 +558,6 @@ export function ChatPanel({
           }
         />
       </SubagentThreadLayer>
-      <SessionSummaryModal
-        sessionId={sessionId}
-        hasSummary={hasSummary}
-        open={showSummaryModal}
-        onClose={() => setShowSummaryModal(false)}
-      />
       <SessionReviewModal
         sessionId={sessionId}
         open={showReviewModal}

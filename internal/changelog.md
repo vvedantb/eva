@@ -8,6 +8,30 @@ WHY: The card appeared and vanished with no link to the rail; growing out of the
 
 Architectural: `sandboxCardMotion.ts` holds the Web Animations: `popInSandboxCard`, `nudgeSandboxCard` (both from `useActiveTabArrow`'s observers, after it measures) and `popOutSandboxCard`, which `ResizablePanelLayout.handleToggle` runs before `panel.collapse()` (found through the right panel's `elementRef`). The shortcut and the active tab share that path. `SandboxTabTrigger` reads the reselect on mouse down or Enter/Space, since Radix selects on mouse down; the rail `Tabs` use `activationMode="manual"`, because mouse down plus focus fired two changes before the URL updated and a closed panel opened then closed. The active tab's tooltip says "Hide panel (shortcut)". The arrow renders before the now `relative` card. Empty rails keep `SandboxPanelToggleButton`.
 
+## Session summary: schema field and turn lane removed
+
+Date: 2026-11-19
+
+WHY: `dataMigrations:retireSessionSummaries` ran on prod, so nothing stores a summary any more.
+
+Architectural: `sessions.summary` and the `"summary"` turn lane leave the schema (`turnLaneValidator` is now only `"interview"`, and `laneOwner` drops its lane argument). The PR body no longer adds a Summary section. The three retire migrations are deleted; the schema-narrowing markers name them from the base revision.
+
+## Session summary retired; "Recap chat" on every chat
+
+Date: 2026-11-19
+
+WHY: The summary woke the sandbox and ran an agent to write bullets the away recap and the Log already cover; it existed only on sessions.
+
+Architectural: `summarizeWorkflow.ts`, the web summary accordion and modal, the phone `SessionSummary`, the session-level workflow watchdog (`trackSessionWorkflow`, `handleStaleSession`) and the `summary:` stream prefix are gone. `chatRecaps` rows gain `kind` ("away" | "full"); `chatRecaps.requestFull` starts a whole-chat recap from "Recap chat" in the session, quick task and project "…" menus (web `useRecapChat` + `RecapChatMenuItem`, phone chat menu). Card titles come from `RECAP_TITLE`. `sessions.summary` and the `"summary"` turn lane stay in the schema until `dataMigrations:retireSessionSummaries` runs on prod. `check-apk-compat.sh` now warns in CI instead of failing: old APKs may break, and prod Convex deploys with the next phone release.
+
+## Chat recap: "Since you've been gone" (web and phone)
+
+Date: 2026-11-19
+
+WHY: Coming back to a long-running chat meant scrolling the transcript to learn what happened. Amp's Recap (Spaces and threads) solves this with a short summary only you see; we copy it.
+
+Architectural: `chatReads.markRead` now returns the read time it replaced; when that is 30+ minutes old and a turn finished since, `chatRecaps.maybeStartRecap` writes a per-user `chatRecaps` row and schedules `textGen.generateChatRecap` (flex tier, `RECAP_MODEL` = Claude Haiku 5.5: faster than GPT-6 Luna and the only one that used task chips; nano echoed prompt labels). `recapContext` reads the transcript and Log since the read time (newest 16k characters); a project's Main chat reads every chat in the project session and offers task chats as `@[Title](taskId)` chips, and unknown ids are stripped. `useChatRecap` (`@eva/shared/chatReadState`) feeds `ChatRecapCard` (web `ChatBody`) and `RecapCard` (phone chat screen), inside `ChatLastTurn` under the newest message (after it, the viewport padding pushed it a screen down); × deletes the row, and the card hides once you send a message after it. No backfill: recaps start on the next long absence.
+
 ## Web sidebar: repo banner inset with rounded corners
 
 Date: 2026-11-19

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useMutation } from "convex/react";
-import { api, type Doc } from "@eva/backend";
+import { api, type Doc, type Id } from "@eva/backend";
 import {
   Button,
   DropdownMenu,
@@ -27,30 +27,32 @@ import {
   type SessionRenameTarget,
 } from "@/lib/components/sidebar/SessionDialogs";
 import { useArchiveSession } from "@/lib/components/sidebar/useArchiveSession";
+import { useRecapChat } from "@/lib/components/chat/useRecapChat";
 
 interface SessionHeaderMenuProps {
   session: Doc<"sessions">;
   /** Any chat of the session holds a turn — blocks Fork session. */
   isExecuting: boolean;
-  hasSummary: boolean;
-  canSummarise: boolean;
-  onOpenSummaryModal: () => void;
+  /** The open chat tab: "Recap chat" recaps it. */
+  chatId: Id<"sessionChats">;
+  /** The chat has messages, so a recap has something to say. */
+  canRecap: boolean;
   /** Set when the session can go to review; opens the review dialog. */
   onOpenReviewModal?: () => void;
 }
 
 /**
  * The chat header "…" menu. Same items as the sidebar row's right-click menu
- * (`SessionMenuItems`), plus Summarise Session, which needs the open chat.
+ * (`SessionMenuItems`), plus Recap chat, which needs the open chat.
  */
 export function SessionHeaderMenu({
   session,
   isExecuting,
-  hasSummary,
-  canSummarise,
-  onOpenSummaryModal,
+  chatId,
+  canRecap,
   onOpenReviewModal,
 }: SessionHeaderMenuProps) {
+  const recapChat = useRecapChat(chatId);
   const { repo, basePath } = useRepo();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -81,11 +83,7 @@ export function SessionHeaderMenu({
             session={{ ...session, isExecuting }}
             href={sessionHrefForRow(repo, session)}
             isRegeneratingTitle={isRegeneratingTitle}
-            summary={{
-              hasSummary,
-              disabled: !canSummarise,
-              onRequest: onOpenSummaryModal,
-            }}
+            onRecapRequest={canRecap ? recapChat : undefined}
             onRenameRequest={
               isArchived
                 ? undefined
