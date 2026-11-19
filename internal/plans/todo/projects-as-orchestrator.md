@@ -150,7 +150,7 @@ This is the core change. Do it alone, with no UI change.
    | `send_chat_message` | coordinator | **Reuse** to message a child task. Scope it: a coordinator can only message tasks of its own project. |
    | `get_eva_doc`, `list_eva_docs`, `list_artifacts`, `read_chat_log` | coordinator, child task | **Extend:** project roll-up scope (step 6). Read-only for siblings' rows. |
    | `update_project_summary` | coordinator | **New** (step 5). |
-   | `report_to_coordinator` | child task | **New.** Sends a question, a finding or a blocker to the coordinator chat. It shows as a card on that task's row. It does not stop the task. |
+   | `report_to_coordinator` | child task | **New.** One tool, `kind: "report" \| "ask"`. A report sends a finding or a status note and does not stop the task. An ask sends a question and ends the task's turn (see step 6.6). Both show on that task's row in the coordinator chat. |
    | `start_project_build`, `cancel_project_build`, `schedule_project_build` | any | **Keep as wrappers** until the APK check allows removal (step 2.5). |
    | `update_plan`, `mark_plan_implemented` | — | **No change.** Sessions only. Refuse them in a project chat with a clear error. |
 
@@ -201,7 +201,16 @@ This is the core change. Do it alone, with no UI change.
 6. **Awareness (decision 14).**
    - **Pushed at start:** the items in 5. They are a snapshot from the moment the task starts.
    - **Pulled on demand:** sibling status, sibling docs and artifacts, the current summary doc (tools in step 3.4). Read-only.
-   - **Up to the coordinator:** `report_to_coordinator`. Use it for a blocker, a question, or a finding other tasks need (for example "the API shape changed"). The coordinator decides what to do: update the summary, message another task, change or add tasks.
+   - **Up to the coordinator, report:** `report_to_coordinator` with `kind: "report"`. Use it for a finding other tasks need (for example "the API shape changed") or a status note. The task keeps working. The coordinator decides what to do: update the summary, message another task, change or add tasks.
+   - **Up to the coordinator, ask (decided 19 November 2026):** `kind: "ask"`. Use it for a question or a blocker the task cannot solve.
+     1. The task's turn ends. The task shows **waiting for coordinator**. Its status stays `in_progress` and it keeps its place in the parallel limit of 3, so a waiting task cannot be starved by new starts.
+     2. An ask wakes the coordinator at once; it does not wait for the batched wake-up.
+     3. The coordinator answers with `send_chat_message`, which starts the task's next turn. Or, when it cannot answer, it passes the question to a person: the task card shows **needs you** with the question, and a person's answer in the coordinator chat or in the task chat starts the task again.
+     4. A person can always answer directly in the task chat. The first answer wins; the open ask is then closed, so a late coordinator answer does not start a second turn.
+     5. One open ask for each task. A second ask while one is open is refused.
+     6. No timeout in v1: an unanswered ask stays visible as waiting. The idle sandbox sleeps under the normal rules.
+     7. If the task is stopped or cancelled, its open ask is closed.
+     8. Store asks and reports as rows (`projectTaskReports {projectId, taskId, kind, text, state: open \| answered \| closed, answeredBy?}`), not only as chat messages, so the card state is derived from data.
    - **Down from the coordinator:** `send_chat_message` to a child task. If the task is running, the message joins its queue (existing queued-message path). If it is idle or in review, it starts a new turn.
    - **Never:** task-to-task messages, shared file systems, or one sandbox reaching another sandbox's ports. Code moves between tasks only through git (a merged PR, or a named branch a task fetches). Files move only as docs or artifacts.
    - **Loop guard:** a report wakes the coordinator through the batched wake-up (step 3.6). The coordinator's message to a task is a normal turn. Cap automatic coordinator turns for each project in an hour (constant; pick the value with the answer to open question 2) and show a "needs you" state when the cap is hit.
