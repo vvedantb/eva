@@ -4,6 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { assertMessageParentAccess, authMutation, authQuery } from "./functions";
 import { chatTurnEntityIdValidator } from "./validators";
 import { chatOwnerEntityId } from "./_sessions/owner";
+import { maybeStartRecap } from "./chatRecaps";
 
 type ChatEntityId =
   | Id<"sessionChats">
@@ -176,14 +177,17 @@ export const isUnread = authQuery({
   },
 });
 
-/** Upserts the user's read row for one chat entity, skipping repeat calls past its watermark. */
+/**
+ * Upserts the user's read row for one chat entity, skipping repeat calls past
+ * its watermark. Returns the read time it replaced, if it moved one.
+ */
 async function upsertReadRow(
   ctx: MutationCtx,
   userId: Id<"users">,
   entity: ChatEntity,
-): Promise<void> {
+): Promise<number | undefined> {
   // A task with no repo is never unread (see `hasUnreadFor`); nothing to store.
-  if (entity.repoId === undefined) return;
+  if (entity.repoId === undefined) return undefined;
   const row = await getReadRow(ctx.db, userId, entity._id);
   const lastReadAt = Date.now();
   if (!row) {
@@ -193,11 +197,12 @@ async function upsertReadRow(
       repoId: entity.repoId,
       lastReadAt,
     });
-    return;
+    return undefined;
   }
   // Already past the watermark: skip, so repeat calls on mount do not churn.
-  if (row.lastReadAt >= (entity.lastTurnFinishedAt ?? 0)) return;
+  if (row.lastReadAt >= (entity.lastTurnFinishedAt ?? 0)) return undefined;
   await ctx.db.patch(row._id, { lastReadAt, repoId: entity.repoId });
+  return row.lastReadAt;
 }
 
 export const markRead = authMutation({
@@ -207,7 +212,17 @@ export const markRead = authMutation({
     await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
     const entity = await ctx.db.get(args.parentId);
     if (!entity) return null;
-    await upsertReadRow(ctx, ctx.userId, entity);
+    const previousReadAt = await upsertReadRow(ctx, ctx.userId, entity);
+    // A first open (no read row yet) has no absence to recap.
+    if (previousReadAt !== undefined) {
+      await maybeStartRecap(ctx, {
+        userId: ctx.userId,
+        parentId: args.parentId,
+        previousReadAt,
+        lastTurnFinishedAt: entity.lastTurnFinishedAt,
+        now: Date.now(),
+      });
+    }
     // The sidebar keys a session's unread dot by the session id, so reading
     // one of its chats also reads the session.
     const chatId = ctx.db.normalizeId("sessionChats", args.parentId);

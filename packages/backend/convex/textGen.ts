@@ -455,3 +455,69 @@ ${args.transcript.slice(0, MAX_TRANSCRIPT_INPUT)}`,
     }
   },
 });
+
+/** "17 hours", "2 days", "45 minutes": how long the user was away, for the opening line. */
+function formatAway(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 90) return `${minutes} minutes`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours} hours`;
+  return `${Math.round(hours / 24)} days`;
+}
+
+/** Keeps `@[Title](id)` chips the context offered; any other id becomes plain text. */
+function keepKnownMentions(text: string, allowedIds: ReadonlyArray<string>): string {
+  return text.replace(/@\[([^\]]+)\]\(([^)]+)\)/g, (token, label: string, id: string) =>
+    allowedIds.includes(id) ? token : label,
+  );
+}
+
+/**
+ * Writes the "Since you've been gone" recap a `chatRecaps` row asks for
+ * (started by `chatReads.markRead`). Background work on the flex tier; a
+ * failure drops the row, so the card simply does not show.
+ */
+export const generateChatRecap = internalAction({
+  args: { recapId: v.id("chatRecaps") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const context = await ctx.runQuery(internal.chatRecaps.recapContext, {
+      recapId: args.recapId,
+    });
+    if (!context) return null;
+    let text = "";
+    try {
+      if (context.transcript || context.log) {
+        const chips =
+          context.allowedIds.length > 0
+            ? "\n- When you name a task chat, copy its @[Title](id) token exactly as written in the transcript. Use each token at most once."
+            : "";
+        const result = await generateText({
+          model: TEXT_GEN_MODEL,
+          prompt: `The user was away from this coding chat for ${formatAway(context.awayMs)}. Write a short recap of what happened while they were away, so they can pick up in seconds.
+
+Rules:
+- Start with "In the last ${formatAway(context.awayMs)}," and say the main outcome in one sentence.
+- Then at most two short paragraphs: what was built or decided, and what is waiting on the user (approvals, questions, unpushed work, failures).
+- Under 90 words in total. Plain prose, no headings, no bullet lists, no code blocks.
+- State only facts from the transcript. Do not invent names, numbers or results.${chips}
+
+Log entries from this span:
+${context.log || "(none)"}
+
+Transcript since they left, oldest first:
+${context.transcript || "(no messages)"}`,
+          providerOptions: { ...FLEX_GATEWAY_PROVIDER_OPTIONS },
+        });
+        text = keepKnownMentions(stripWrappingQuotes(result.text), context.allowedIds);
+      }
+    } catch (error) {
+      console.error("[textGen.generateChatRecap]", error);
+    }
+    await ctx.runMutation(internal.chatRecaps.applyRecap, {
+      recapId: args.recapId,
+      text,
+    });
+    return null;
+  },
+});

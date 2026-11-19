@@ -8,7 +8,7 @@ import {
   buildChatJumpRailTicks,
   tokenTransition,
 } from "@vvedantb/ui";
-import { findNewMessageIds } from "@eva/shared/chatReadState";
+import { findNewMessageIds, useChatRecap } from "@eva/shared/chatReadState";
 import { GenerativeUiPanel } from "@vvedantb/ui/generative-ui";
 import {
   ChatEmptyState,
@@ -16,6 +16,7 @@ import {
 } from "@/lib/components/chat/_components/ChatTranscriptStates";
 import { AnimatePresence, m } from "motion/react";
 import { ChatNewDivider } from "@/lib/components/chat/_components/ChatNewDivider";
+import { ChatRecapCard } from "@/lib/components/chat/_components/ChatRecapCard";
 import { ChatNewMessagesPill } from "@/lib/components/chat/_components/ChatNewMessagesPill";
 import { ChatBottomPin } from "@/lib/components/chat/_components/ChatBottomPin";
 import {
@@ -626,6 +627,14 @@ function ChatBodyInner({
     currentUserId,
   );
   const newBoundaryId = newMessageIds[0];
+  // "Since you've been gone": the server writes it when you return after a
+  // long absence; it sits under the newest message, where the chat opens.
+  const { recap, dismiss: dismissRecap } = useChatRecap({
+    parentId: chatParentId,
+    active: isRouteActive,
+    messages: displayMessages,
+    currentUserId,
+  });
   // Seen state lives here, not in the divider: the pill is a sibling and needs
   // it. It is keyed by the boundary id, so a new boundary starts unseen.
   const newDivider = useSeenOnce(newBoundaryId);
@@ -1137,6 +1146,13 @@ function ChatBodyInner({
               </ChatLastTurn>
             </>
           )}
+          {recap && repo && displayMessages.length > 0 ? (
+            <ChatRecapCard
+              text={recap.text}
+              repo={repo}
+              onDismiss={dismissRecap}
+            />
+          ) : null}
           {displayMessages.length > 0 ? transcriptTail : null}
           {renderChatUiPanels(panelPlacement.trailing)}
           {turnOutputPlacement.trailing.map((output) => output.node)}

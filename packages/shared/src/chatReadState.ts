@@ -80,3 +80,36 @@ export function findNewMessageIds<TId extends string>(
     )
     .map((message) => message._id);
 }
+
+/**
+ * The open chat's "Since you've been gone" recap, web and phone. The server
+ * writes it when `markRead` sees the user come back after a long absence
+ * (`chatRecaps`). `text` is undefined while the model writes it. The card
+ * goes once the user sends a message after it: the recap is about the past,
+ * and the chat has moved on. `dismiss` deletes it for good.
+ */
+export function useChatRecap({
+  parentId,
+  active,
+  messages,
+  currentUserId,
+}: {
+  parentId: ChatReadParentId | undefined;
+  active: boolean;
+  messages: ReadonlyArray<{ timestamp: number } & ChatUserAttribution>;
+  currentUserId: string | undefined;
+}): { recap: { text: string | undefined } | null; dismiss: () => void } {
+  const row = useQuery(api.chatRecaps.forChat, active && parentId !== undefined ? { parentId } : "skip");
+  const dismissRecap = useMutation(api.chatRecaps.dismiss);
+  const answered =
+    row != null &&
+    messages.some(
+      (message) =>
+        message.role === "user" && message.timestamp > row.createdAt && !isOtherUserChatMessage(message, currentUserId),
+    );
+  const recap = row == null || answered ? null : { text: row.text };
+  const dismiss = () => {
+    if (row) void dismissRecap({ recapId: row._id });
+  };
+  return { recap, dismiss };
+}

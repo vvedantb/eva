@@ -1,6 +1,6 @@
 import { api, findUsageLimitHold, getAIModelProvider, isHeldByUsageLimit, normalizeAIModel, type Id } from "@eva/backend";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";
-import { findNewMessageIds, useChatReadState } from "@eva/shared/chatReadState";
+import { findNewMessageIds, useChatReadState, useChatRecap } from "@eva/shared/chatReadState";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
 import {
   buildPrecedingUserTurns,
@@ -83,6 +83,7 @@ import { useProposedPlans } from "@/chat/ProposedPlanCard";
 import { BackgroundAgentsChip } from "@/chat/BackgroundAgentsChip";
 import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
 import { ComposerTasksPanel } from "@/chat/ComposerTasksPanel";
+import { RecapCard } from "@/chat/RecapCard";
 import { GoalBanner } from "@/chat/GoalBanner";
 import { PublishRecoveryBanner } from "@/chat/PublishRecoveryBanner";
 import { SystemAlertRow } from "@/chat/SystemAlertRow";
@@ -148,12 +149,19 @@ export default function ChatScreen() {
   const focused = useIsFocused();
   const appActive = useAppActive();
   const { newSinceAt } = useChatReadState({ parentId, active: focused && appActive });
+  const me = useQuery(api.auth.me, {});
+  // "Since you've been gone", as the web: written when you return after a long absence, under the newest message.
+  const { recap, dismiss: dismissRecap } = useChatRecap({
+    parentId,
+    active: focused && appActive,
+    messages: messages ?? [],
+    currentUserId: me ?? undefined,
+  });
   // A session chat's sandbox: the header wakes or sleeps it, and a failed wake shows under the header.
   const sandbox = useSessionSandbox(chat?.session?.id);
   // The session's running chats and this chat's queue: a send parked while every run slot is taken.
   const runningChats = useQuery(api.turns.listSessionChatStatuses, chat?.session ? { sessionId: chat.session.id } : "skip");
   const queued = useQuery(api.queuedMessages.listByParent, parentId ? { parentId } : "skip");
-  const me = useQuery(api.auth.me, {});
   // A teammate's turn shows their avatar and first name, from the same lookup as the web `ChatBody`.
   const teammateIds = otherUserIdsInChat(messages ?? [], me ?? undefined);
   const teammates = useQuery(api.users.getMany, teammateIds.length > 0 ? { ids: teammateIds } : "skip");
@@ -435,6 +443,11 @@ export default function ChatScreen() {
           ListHeaderComponent={
             // Inverted, the header is the bottom, under the newest message.
             <>
+              {recap && visible.length > 0 ? (
+                <View className={`pt-3 ${THREAD_INSET}`}>
+                  <RecapCard text={recap.text} onDismiss={dismissRecap} />
+                </View>
+              ) : null}
               {/* The live reply shows its own status; this covers a turn whose reply is not written yet. */}
               {working && questions === null && liveReplyId === undefined ? (
                 <View className={`pt-3 ${THREAD_INSET}`}>

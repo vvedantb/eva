@@ -416,6 +416,7 @@ import type * as changelog from "../changelog.js";
 import type * as chatHtml from "../chatHtml.js";
 import type * as chatLog from "../chatLog.js";
 import type * as chatReads from "../chatReads.js";
+import type * as chatRecaps from "../chatRecaps.js";
 import type * as chatUi from "../chatUi.js";
 import type * as chats from "../chats.js";
 import type * as composerPredictionContext from "../composerPredictionContext.js";
@@ -1001,6 +1002,7 @@ declare const fullApi: ApiFromModules<{
   chatHtml: typeof chatHtml;
   chatLog: typeof chatLog;
   chatReads: typeof chatReads;
+  chatRecaps: typeof chatRecaps;
   chatUi: typeof chatUi;
   chats: typeof chats;
   composerPredictionContext: typeof composerPredictionContext;
