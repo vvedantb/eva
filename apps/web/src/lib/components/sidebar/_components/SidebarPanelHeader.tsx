@@ -56,9 +56,9 @@ export function SidebarPanelHeader({
       )}
     >
       {teamBackgroundUrl && !showContextSidebar && !isFlatPanel ? (
-        // Inset and rounded like the rail tracks: an even ~8px gap to the
-        // rail (whose track stops 4px short), the top and the panel edge.
-        <div className="absolute top-2 right-2 bottom-0 left-1 overflow-hidden rounded-t-surface">
+        // Inset and rounded like the rail tracks: the top lines up with the
+        // rail's first track (12px); ~8px gap to the rail track and the edge.
+        <div className="absolute top-3 right-2 bottom-0 left-1 overflow-hidden rounded-t-surface">
           <img
             src={teamBackgroundUrl}
             alt=""
