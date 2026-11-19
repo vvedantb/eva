@@ -26,6 +26,7 @@ import {
   useSimpleView,
 } from "@/lib/hooks/useSimpleView";
 import { useSandboxRailLabels } from "@/lib/components/sandbox/useSandboxRailLabels";
+import { SANDBOX_RAIL_GROUP_CLASS } from "@/lib/components/sandbox/sandboxRail";
 import { cn } from "@eva/ui";
 import { Tabs, TabsList, useMediaQuery, ListEnter } from "@vvedantb/ui";
 import { SandboxTabTrigger, type SandboxTabLayout } from "./SandboxTabTrigger";
@@ -278,7 +279,7 @@ export function SandboxTabBar({
         )}
       >
         {onToggle ? (
-          <div className="hidden md:flex">
+          <div className={cn(SANDBOX_RAIL_GROUP_CLASS, "hidden md:flex")}>
             <SandboxPanelToggleButton
               collapsed={collapsed}
               onToggle={onToggle}
