@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { ComponentType, KeyboardEvent, MouseEvent } from "react";
 import { cn } from "@eva/ui";
 import {
   TabsTrigger,
@@ -130,17 +130,32 @@ interface SandboxTabTriggerProps {
   /** Defaults to the icon rail — the shape every surface but the phone uses. */
   layout?: SandboxTabLayout;
   /**
-   * Fired on click when this tab is already selected. Radix skips
-   * `onValueChange` in that case, so a collapsed rail would otherwise ignore
-   * the click that should expand onto the current view.
+   * Fired on a press of this tab while it is already selected (the rail uses
+   * it to show or hide the card). Radix skips `onValueChange` in that case.
    */
   onReselect?: () => void;
+  /** Second tooltip line for the selected tab: what a press does. */
+  reselectHint?: string;
+}
+
+/* Radix selects a tab on mouse down (or Enter / Space key down), so read
+   the state there: by `click` a newly picked tab is already active. Radix
+   ignores a press on the selected tab, so this does not double up with it. */
+function isReselectPress(
+  event: MouseEvent<HTMLButtonElement> | KeyboardEvent<HTMLButtonElement>,
+) {
+  const press =
+    "button" in event
+      ? event.button === 0 && !event.ctrlKey
+      : !event.repeat && (event.key === "Enter" || event.key === " ");
+  return press && event.currentTarget.dataset.state === "active";
 }
 
 export function SandboxTabTrigger({
   tab,
   layout = "icon",
   onReselect,
+  reselectHint,
 }: SandboxTabTriggerProps) {
   const labelHidden = layout === "icon";
   const count =
@@ -150,7 +165,12 @@ export function SandboxTabTrigger({
       value={tab.value}
       aria-label={labelHidden ? tab.label : undefined}
       className={cn(TAB_CLASS, TAB_LAYOUT_CLASS[layout])}
-      onClick={onReselect}
+      onMouseDown={(event) => {
+        if (isReselectPress(event)) onReselect?.();
+      }}
+      onKeyDown={(event) => {
+        if (isReselectPress(event)) onReselect?.();
+      }}
     >
       <TabIcon icon={tab.icon} />
       {layout === "row" ? tab.label : null}
@@ -193,6 +213,9 @@ export function SandboxTabTrigger({
       </TooltipTrigger>
       <TooltipContent side="left" className="text-xs">
         {tab.label}
+        {reselectHint ? (
+          <span className="block opacity-70">{reselectHint}</span>
+        ) : null}
       </TooltipContent>
     </Tooltip>
   );

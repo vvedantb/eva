@@ -1,5 +1,13 @@
 # Changelog
 
+## Web sandbox card: dock pop in and out, active tab toggles it
+
+Date: 2026-11-19
+
+WHY: The card appeared and vanished with no link to the rail; growing out of the tab and shrinking back into it shows where the panel lives. Pressing the active tab now does the collapse button's job, so the button is gone. The arrow painted over content at the card's edge.
+
+Architectural: `sandboxCardMotion.ts` holds the Web Animations: `popInSandboxCard`, `nudgeSandboxCard` (both from `useActiveTabArrow`'s observers, after it measures) and `popOutSandboxCard`, which `ResizablePanelLayout.handleToggle` runs before `panel.collapse()` (found through the right panel's `elementRef`). The shortcut and the active tab share that path. `SandboxTabTrigger` reads the reselect on mouse down or Enter/Space, since Radix selects on mouse down; the rail `Tabs` use `activationMode="manual"`, because mouse down plus focus fired two changes before the URL updated and a closed panel opened then closed. The active tab's tooltip says "Hide panel (shortcut)". The arrow renders before the now `relative` card. Empty rails keep `SandboxPanelToggleButton`.
+
 ## Session summary: schema field and turn lane removed
 
 Date: 2026-11-19
