@@ -7,10 +7,10 @@ import {
   KanbanColumn,
   KANBAN_COLUMN_WIDTH_CLASS,
 } from "@/lib/components/kanban/KanbanColumn";
+import { PROJECT_COLUMNS, type ProjectColumn } from "@eva/shared";
 import {
+  columnConfig,
   phaseConfig,
-  PROJECT_PHASES,
-  type ProjectPhase,
 } from "@/lib/components/projects/ProjectPhaseBadge";
 import { ProjectCard } from "@/lib/components/projects/ProjectCard";
 import type { SelectionToggleOptions } from "@/lib/components/quick-tasks/selectionRange";
@@ -29,8 +29,8 @@ interface ProjectsSelectionProps {
 }
 
 interface ProjectsKanbanViewProps extends ProjectsSelectionProps {
-  projectsByPhase: Record<ProjectPhase, Project[]>;
-  visiblePhases: Set<ProjectPhase>;
+  projectsByPhase: Record<ProjectColumn, Project[]>;
+  visiblePhases: Set<ProjectColumn>;
   owner: string;
   name: string;
   basePath: string;
@@ -50,7 +50,7 @@ export function ProjectsKanbanView({
 }: ProjectsKanbanViewProps) {
   return (
     <AnimatePresence initial={false}>
-      {PROJECT_PHASES.flatMap((phase) =>
+      {PROJECT_COLUMNS.flatMap((phase) =>
         visiblePhases.has(phase)
           ? [
               <m.div
@@ -92,7 +92,7 @@ function VirtualProjectColumn({
   selectedIds,
   onToggleSelect,
 }: ProjectsSelectionProps & {
-  phase: ProjectPhase;
+  phase: ProjectColumn;
   projects: Project[];
   owner: string;
   name: string;
@@ -108,7 +108,7 @@ function VirtualProjectColumn({
   return (
     <KanbanColumn
       id={phase}
-      config={phaseConfig[phase]}
+      config={columnConfig[phase]}
       count={projects.length}
       droppable={false}
       emptyLabel="No projects"
@@ -132,10 +132,10 @@ function VirtualProjectColumn({
                   branchName={project.branchName}
                   numId={project.numId}
                   createdAt={project._creationTime}
-                  accentColor={phaseConfig[phase].bar}
+                  accentColor={phaseConfig[project.phase].bar}
                   members={project.members}
                   projectLead={project.projectLead}
-                  phase={phase}
+                  phase={project.phase}
                   planningMode={project.planningMode}
                   isBuilding={isProjectBuilding(project)}
                   sandboxStatus={project.sandboxStatus}

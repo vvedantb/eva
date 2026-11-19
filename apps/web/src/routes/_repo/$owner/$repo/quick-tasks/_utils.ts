@@ -1,9 +1,11 @@
 import { useLocalStorage } from "usehooks-ts";
 import { useQueryStates } from "nuqs";
 import type { FunctionReturnType } from "convex/server";
-import type { api } from "@eva/backend";
+import { useQuery } from "convex-helpers/react/cache/hooks";
+import { api, type Id } from "@eva/backend";
 import {
   QUICK_TASK_SORT_DEFAULTS,
+  quickTaskTodoDrafts,
   applyQuickTaskFilters,
   groupByTaskStatus,
   type QuickTaskListFilters,
@@ -112,4 +114,15 @@ export function useFilteredQuickTasks(
   const groupByStatus = options?.groupByStatus ?? false;
   const sorted = applyQuickTaskFilters(tasks ?? [], filters);
   return groupByStatus ? groupByStatusOrder(sorted) : sorted;
+}
+
+/**
+ * The current user's quick-task drafts the To Do group shows, under the
+ * list's filters (`quickTaskTodoDrafts`). Shares the drafts query cache
+ * with the page's `?draft=` modal.
+ */
+export function useQuickTaskTodoDrafts(repoId: Id<"githubRepos">) {
+  const [filters] = useQuickTaskFilters();
+  const drafts = useQuery(api.agentTasks.listDrafts, { repoId });
+  return quickTaskTodoDrafts(drafts ?? [], filters);
 }

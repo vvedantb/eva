@@ -1,7 +1,10 @@
 import { useLocalStorage } from "usehooks-ts";
 import { useQueryStates } from "nuqs";
-import type { ProjectSortDir, ProjectSortField } from "@eva/shared";
-import type { ProjectPhase } from "@/lib/components/projects/ProjectPhaseBadge";
+import type {
+  ProjectColumn,
+  ProjectSortDir,
+  ProjectSortField,
+} from "@eva/shared";
 import {
   searchParser,
   sortDirParser,
@@ -20,10 +23,10 @@ type TimelineRange = "quarterly" | "monthly" | "daily";
 interface ProjectFilters {
   q: string;
   view: ProjectView;
-  // Phases the user has hidden (blocklist). Empty = all phases visible.
+  // Columns the user has hidden (blocklist). Empty = all columns visible.
   // Storing exclusions (not the visible allowlist) keeps "no filter" stable
-  // and makes any newly-added phase visible by default.
-  hiddenPhases: ProjectPhase[];
+  // and makes any newly-added column visible by default.
+  hiddenPhases: ProjectColumn[];
   sortField: SortField;
   sortDir: SortDir;
   // Timeline view only: axis granularity + zoom (percent). Other views ignore.

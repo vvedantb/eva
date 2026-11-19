@@ -1,18 +1,12 @@
 "use client";
 
 import { Link } from "@tanstack/react-router";
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { IconSunrise } from "@tabler/icons-react";
 import { cn } from "@eva/ui";
-import {
-  DraftIcon,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@vvedantb/ui";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@vvedantb/ui";
 import { api } from "@eva/backend";
-import { DraftsCountBadge } from "@/lib/components/sidebar/DraftsCountBadge";
 import {
   SharedLayoutNav,
   SharedLayoutNavSurface,
@@ -33,14 +27,14 @@ type TopNavItem = {
   name: string;
   href: string;
   icon: ComponentType<{ size?: number; className?: string }>;
-  badge?: ReactNode;
 };
 
 /**
  * Per-repo workspace shortcuts above the build-pipeline nav. These sit outside
  * the Ship/Test/More groups because they are not pipeline stages: Today is
- * what already happened, Drafts is what you have not started. Inbox lives on
- * the left icon rail instead, being global rather than per-repo.
+ * what already happened. Inbox lives on the left icon rail instead, being
+ * global rather than per-repo. Unsent drafts show as marks on their own rows
+ * (quick tasks in To Do, a pencil on session rows, a pill on task cards).
  */
 export function RepoTopNav({
   repoBasePath,
@@ -66,14 +60,8 @@ export function RepoTopNav({
           } satisfies TopNavItem,
         ]
       : []),
-    {
-      name: "Drafts",
-      href: `${repoBasePath}/drafts`,
-      icon: DraftIcon,
-      badge:
-        !collapsed && repo ? <DraftsCountBadge repoId={repo._id} /> : undefined,
-    },
   ];
+  if (items.length === 0) return null;
 
   return (
     <SharedLayoutNav layoutId="repo-top-nav" className="space-y-1">
@@ -98,7 +86,6 @@ export function RepoTopNav({
                 )}
               />
               {!collapsed && <span className="truncate">{item.name}</span>}
-              {item.badge}
             </Link>
           </SharedLayoutNavSurface>
         );

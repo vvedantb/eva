@@ -13,7 +13,7 @@ import {
   type SessionSortOrder,
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconChevronDown, IconDots, IconGitPullRequest, IconLink, IconPlus } from "@tabler/icons-react-native";
+import { IconChevronDown, IconDots, IconGitPullRequest, IconLink, IconPencil, IconPlus } from "@tabler/icons-react-native";
 import { SwipeableRow, swipeActionsAccessibility, type SwipeAction } from "@vvedantb/native-ui/primitives";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import type { FunctionReturnType } from "convex/server";
@@ -302,11 +302,14 @@ export function SessionGroupFooter({ section, onToggleExpanded }: { section: Ses
  */
 export function SessionListRow({
   row,
+  hasDraft,
   onOpenMenu,
   swipe,
   onSwipe,
 }: {
   row: SessionRow;
+  /** The user has an unsent message in this chat (`drafts.listMarks`): a pencil in the unread dot's place. */
+  hasDraft: boolean;
   /** A long press: the row menu. The same function for every row, so an unchanged row keeps its output. */
   onOpenMenu: (row: SessionRow) => void;
   /** The look of the row menu's Archive (or Unarchive), revealed by a swipe left. */
@@ -352,9 +355,11 @@ export function SessionListRow({
         >
           {displayTitle(session.title)}
         </Text>
-        {/* The web `UnreadDot`: a reply you have not read, while Eva is not working. */}
+        {/* The web `UnreadDot`: a reply you have not read, while Eva is not working. One mark: unread wins over the unsent-message pencil. */}
         {session.hasUnread && !session.isExecuting ? (
           <View accessibilityLabel="Unread" className="size-1.5 rounded-full" style={{ backgroundColor: EVA_THEME[scheme].primary }} />
+        ) : hasDraft ? (
+          <IconPencil size={12} color={muted} accessibilityLabel="Unsent message" />
         ) : null}
         {session.prUrl ? <PrIcon state={session.prState} scheme={scheme} /> : null}
         <Text

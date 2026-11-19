@@ -8,7 +8,7 @@ export type ProjectPhase = Doc<"projects">["phase"];
 /** Each phase's name in badges, list sections and menus. */
 export const PROJECT_PHASE_LABELS: Record<ProjectPhase, string> = {
   draft: "Draft",
-  finalized: "Finalized",
+  finalized: "Finalised",
   in_progress: "In Progress",
   business_review: "Business Review",
   code_review: "Code Review",
@@ -36,6 +36,42 @@ export function isProjectPlanning(phase: ProjectPhase): boolean {
   return phase === "draft" || phase === "finalized";
 }
 
+/**
+ * The list section or kanban column a project shows in. Draft and finalized
+ * share "To Do" (a badge tells them apart), like quick tasks and their drafts.
+ */
+export type ProjectColumn = "todo" | Exclude<ProjectPhase, "draft" | "finalized">;
+
+/** Every column, in workflow order. */
+export const PROJECT_COLUMNS = [
+  "todo",
+  "in_progress",
+  "business_review",
+  "code_review",
+  "completed",
+  "cancelled",
+] as const satisfies readonly ProjectColumn[];
+
+/** Each column's name in list sections, kanban headers and the filter menu. */
+export const PROJECT_COLUMN_LABELS: Record<ProjectColumn, string> = {
+  todo: "To Do",
+  in_progress: PROJECT_PHASE_LABELS.in_progress,
+  business_review: PROJECT_PHASE_LABELS.business_review,
+  code_review: PROJECT_PHASE_LABELS.code_review,
+  completed: PROJECT_PHASE_LABELS.completed,
+  cancelled: PROJECT_PHASE_LABELS.cancelled,
+};
+
+/** The column a project's phase shows in. */
+export function projectColumn(phase: ProjectPhase): ProjectColumn {
+  return phase === "draft" || phase === "finalized" ? "todo" : phase;
+}
+
+/** The planning phase a To Do card shows as a badge ("draft" or "finalized"), else null. */
+export function projectPlanningPhase(phase: ProjectPhase): "draft" | "finalized" | null {
+  return phase === "draft" || phase === "finalized" ? phase : null;
+}
+
 export const PROJECT_SORT_FIELDS = ["created", "title", "priority"] as const;
 export type ProjectSortField = (typeof PROJECT_SORT_FIELDS)[number];
 export type ProjectSortDir = "asc" | "desc";
@@ -46,10 +82,10 @@ export const PROJECT_SORT_FIELD_LABELS: Record<ProjectSortField, string> = {
   priority: "Priority",
 };
 
-/** Search, phase filter and sort of the projects list. `hiddenPhases` is a blocklist, so a new phase shows by default. */
+/** Search, column filter and sort of the projects list. `hiddenPhases` is a blocklist of columns, so a new column shows by default. */
 export interface ProjectListFilters {
   q: string;
-  hiddenPhases: ProjectPhase[];
+  hiddenPhases: ProjectColumn[];
   sortField: ProjectSortField;
   sortDir: ProjectSortDir;
 }
@@ -72,7 +108,7 @@ export interface FilterableProject {
 }
 
 /**
- * The projects the list shows: visible phases only, matching the search in
+ * The projects the list shows: visible columns only, matching the search in
  * the title, raw input or description, then sorted by the sort field.
  */
 export function filterAndSortProjects<T extends FilterableProject>(
@@ -80,10 +116,10 @@ export function filterAndSortProjects<T extends FilterableProject>(
   filters: Pick<ProjectListFilters, "q" | "hiddenPhases" | "sortField" | "sortDir">,
 ): T[] {
   const query = filters.q.toLowerCase().trim();
-  const hidden = new Set<ProjectPhase>(filters.hiddenPhases);
+  const hidden = new Set<ProjectColumn>(filters.hiddenPhases);
   return projects
     .filter((project) => {
-      if (hidden.has(project.phase)) return false;
+      if (hidden.has(projectColumn(project.phase))) return false;
       if (!query) return true;
       return (
         project.title.toLowerCase().includes(query) ||
@@ -103,14 +139,14 @@ export function filterAndSortProjects<T extends FilterableProject>(
 }
 
 /**
- * Shows or hides one phase in the list. The last visible phase stays: the
- * list never hides every phase.
+ * Shows or hides one column in the list. The last visible column stays: the
+ * list never hides every column.
  */
 export function toggleHiddenProjectPhase(
-  hiddenPhases: readonly ProjectPhase[],
-  phase: ProjectPhase,
-  allPhases: readonly ProjectPhase[],
-): ProjectPhase[] {
+  hiddenPhases: readonly ProjectColumn[],
+  phase: ProjectColumn,
+  allPhases: readonly ProjectColumn[],
+): ProjectColumn[] {
   if (hiddenPhases.includes(phase)) return hiddenPhases.filter((hidden) => hidden !== phase);
   const visibleCount = allPhases.filter((candidate) => !hiddenPhases.includes(candidate)).length;
   if (visibleCount <= 1) return [...hiddenPhases];
@@ -122,7 +158,7 @@ export type ProjectFilterKey = "phases" | "sortField" | "sortDir";
 /** The "Filtered by" chips, in order: the phase count, a non-default sort field, ascending. */
 export function projectFilterChips(
   filters: ProjectListFilters,
-  allPhases: readonly ProjectPhase[],
+  allPhases: readonly ProjectColumn[],
 ): Array<{ key: ProjectFilterKey; label: string }> {
   const chips: Array<{ key: ProjectFilterKey; label: string }> = [];
   if (filters.hiddenPhases.length > 0) {

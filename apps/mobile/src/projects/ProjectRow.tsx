@@ -1,5 +1,5 @@
 import { isProjectBuilding, type api, type Id } from "@eva/backend";
-import { formatEntityNumLabel, PROJECT_PHASE_LABELS, type ProjectTaskProgress } from "@eva/shared";
+import { formatEntityNumLabel, PROJECT_PHASE_LABELS, projectPlanningPhase, type ProjectTaskProgress } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconListCheck, IconSparkles } from "@tabler/icons-react-native";
 import { SurfaceRow } from "@vvedantb/native-ui/primitives";
@@ -10,7 +10,7 @@ import { Text, View } from "react-native";
 import { useSimpleView } from "@/chat/ComposerFooter";
 import { phaseAppearance } from "@/projects/phaseAppearance";
 import { ProjectProgress } from "@/projects/ProjectProgress";
-import { META_TEXT, SANDBOX_DOT } from "@/quickTasks/QuickTaskRow";
+import { META_TEXT, MetaPill, SANDBOX_DOT } from "@/quickTasks/QuickTaskRow";
 import { displayTitle } from "@/ui/format";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { AwaitingAnswerMark } from "@/ui/RowStatus";
@@ -35,19 +35,7 @@ const NO_PROGRESS: ProjectTaskProgress = {
 
 /** The planning-mode badge: the web `Badge variant="secondary"` with its sparkles or checklist icon. */
 export function PlanningModeBadge({ mode }: { mode: Project["planningMode"] }) {
-  const theme = EVA_THEME[useScheme()];
-  const Icon = mode === "interview" ? IconSparkles : IconListCheck;
-  return (
-    <View
-      className="flex-row items-center gap-1 self-start rounded-full border px-2 py-0.5"
-      style={{ backgroundColor: theme.secondary, borderColor: theme.border }}
-    >
-      <Icon size={12} color={theme.secondaryForeground} />
-      <Text className="font-instrument-sans-medium" style={{ ...META_TEXT, fontWeight: "500", color: theme.secondaryForeground }}>
-        {mode === "interview" ? "Interview" : "Tasks only"}
-      </Text>
-    </View>
-  );
+  return <MetaPill icon={mode === "interview" ? IconSparkles : IconListCheck} label={mode === "interview" ? "Interview" : "Tasks only"} />;
 }
 
 /**
@@ -55,8 +43,8 @@ export function PlanningModeBadge({ mode }: { mode: Project["planningMode"] }) {
  * card with the phase stripe, then the number and title with the live mark
  * (the question mark, else the sandbox dot) and unread dot; the description
  * (else the raw input, in italics) on two lines; the task progress bar;
- * then the lead and members, and the planning-mode badge where the web
- * kebab sits. Sized for a thumb: a 14
+ * then the lead and members, and the Draft or Finalised badge (a To Do
+ * project) and the planning-mode badge where the web kebab sits. Sized for a thumb: a 14
  * title, 12 secondary text, `py-3`, 8 apart. A tap opens the project; a long
  * press opens the project menu (`onLongPress`), as the web kebab and
  * right-click. The web border beam on a building project is not drawn: the
@@ -79,6 +67,8 @@ export function ProjectRow({
   const muted = theme.mutedForeground;
   const simpleView = useSimpleView();
   const appearance = phaseAppearance(project.phase, scheme);
+  // Draft and finalized share To Do: the badge tells them apart.
+  const planningPhase = projectPlanningPhase(project.phase);
   const numLabel = formatEntityNumLabel({ numId: project.numId });
   const preview = project.description ?? project.rawInput;
   const sandbox = project.sandboxStatus ? SANDBOX_DOT[project.sandboxStatus] : undefined;
@@ -166,7 +156,8 @@ export function ProjectRow({
             </Text>
           ) : null}
           {/* The planning badge ends the footer, where the web kebab sits (the long press is the menu), so a card is a line shorter. */}
-          <View className="ml-auto">
+          <View className="ml-auto flex-row items-center gap-1.5">
+            {planningPhase ? <MetaPill icon={appearance.icon} label={PROJECT_PHASE_LABELS[planningPhase]} /> : null}
             <PlanningModeBadge mode={project.planningMode} />
           </View>
         </View>

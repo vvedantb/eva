@@ -13,6 +13,11 @@ import { useScheme } from "@/ui/theme";
 
 export type QuickTaskDraft = FunctionReturnType<typeof api.agentTasks.listDrafts>[number];
 
+/** The new-task screen with this draft loaded: where a Drafts card and a To Do draft row open. */
+export function quickTaskDraftRoute(draft: Pick<QuickTaskDraft, "_id" | "repoId">) {
+  return { pathname: "/quick-task/new", params: { repoId: draft.repoId, draftId: draft._id } };
+}
+
 /**
  * The web quick-task `DraftsMenu`: "Drafts (N)", shown while the repo has
  * saved drafts, opens "Saved Drafts" as a bottom sheet, newest first. A row
