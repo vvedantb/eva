@@ -43,11 +43,3 @@ minimumReleaseAgeExclude:
   # it runs every typecheck script, 2.4-3.5x faster than tsc-rs here. Drop after 2026-11-23.
   - tsrs
   - "@tsrs/*"
-  # @clerk/expo 4.17.2 replaces the deprecated @clerk/clerk-expo (Core 3); native-ui
-  # 0.32.0 needs peer @clerk/expo >=4.0.0. Clerk ships the whole family several times
-  # a day, so the 7-day soak would block the swap. These are @clerk/expo@4.17.2 and
-  # its clerk sub-deps, pinned to these versions only so later releases still soak.
-  - "@clerk/expo@4.17.2"
-  - "@clerk/react@6.19.2"
-  - "@clerk/clerk-js@6.46.1"
-  - "@clerk/shared@4.48.1"

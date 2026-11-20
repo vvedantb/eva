@@ -15,7 +15,7 @@
     "web:export": "expo export --platform web"
   },
   "dependencies": {
-    "@clerk/expo": "^4.17.2",
+    "@clerk/expo": "^4.16.0",
     "@convex-dev/presence": "^0.3.0",
     "@eva/backend": "workspace:*",
     "@eva/shared": "workspace:*",
