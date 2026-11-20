@@ -8,6 +8,14 @@ WHY: The check read GitHub releases, which works only while this repository is p
 
 Architectural: `UpdateDialog` passes `vStore` (package name and the APK link) to `UpdateChecker` in place of `source`. `@vvedantb/native-ui` goes to 0.34.0. The prompt and its buttons are unchanged.
 
+## Web: menu and popover zoom comes from the package (@vvedantb/ui 0.55.0)
+
+Date: 2026-11-20
+
+WHY: The 40% grow-from-trigger motion for menus and popovers lived only in eva's config; the package default still zoomed from 95%, so other apps did not get it and eva kept its own copy.
+
+Architectural: packages #312 adds `triggerZoomAnimateClass` (fade plus `zoom-*-[0.4]` at `--radix-popper-transform-origin`, open 150 ms, close 100 ms) and uses it for dropdown, context menu and popover defaults. `@eva/ui` `config/overlays.ts` imports it instead of its own `triggerZoomClass` and drops the per-primitive `origin-*` classes. That also fixes the dropdown origin: it read as the menu centre (104px 104.5px), and now it is the trigger corner (208px 0px). `@vvedantb/ui` 0.54.1 → 0.55.0.
+
 ## Web: menus and popovers grow from 40%, like modals
 
 Date: 2026-11-20
