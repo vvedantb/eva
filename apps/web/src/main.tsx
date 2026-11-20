@@ -143,8 +143,10 @@ if (rootElement) {
     <StrictMode>
       <QueryClientProvider client={queryClient}>
         {/* Eva always animates: the animation contract forbids following the
-            OS reduced-motion setting. Signed-in users turn page motion off
-            with the `disablePageMotion` flag (PageMotionProvider). */}
+            OS reduced-motion setting. `reducedMotion` covers the whole
+            @vvedantb/ui package (dialogs, sheets, `motion-reduce:`), not only
+            `m.*`. Signed-in users turn page motion off with the
+            `disablePageMotion` flag (PageMotionProvider). */}
         <MotionProvider reducedMotion="never">
           <EvaUiProvider>
             <ClerkProvider
