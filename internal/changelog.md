@@ -8,6 +8,14 @@ WHY: Compared side by side (80%, 60%, 40%), 40% reads most clearly as growing ou
 
 Architectural: `@eva/ui` `config/overlays.ts` `triggerZoomClass` goes from `zoom-in-[0.8]` / `zoom-out-[0.8]` to `[0.4]`. Timing is unchanged (open 150 ms, close 100 ms).
 
+## Phone update prompt: shared component and Install from V Store
+
+Date: 2026-11-20
+
+WHY: Other apps need the same "Update available" prompt, and the phone app can now also be updated from V Store.
+
+Architectural: The check and the dialog moved to `@vvedantb/native-ui` (`UpdateChecker`). `src/update/UpdateDialog.tsx` only passes Eva's values: the `eva-apk-` releases, the installed version (0.1.0 skips the check), SecureStore under the same `eva.updateDismissed` key, and the same text. `src/update/updateCheck.ts` is gone. New: "Install from V Store" only opens V Store (`vstore://updates`); when V Store is not installed the button is replaced by a notice and Download stays.
+
 ## Web: menus and popovers grow from their trigger
 
 Date: 2026-11-20
