@@ -15,8 +15,9 @@ import type { usageLimitWindowValidator } from "../validators";
  * `readClaudeUsageWindows` reads a `GET /api/oauth/usage` body. The refresh
  * action no longer calls that endpoint (it 403s every setup-token Eva stores),
  * and feeds it a body built from a Messages response's
- * `anthropic-ratelimit-unified-*` headers instead — 5h, weekly-all and Fable,
- * the only windows a `user:inference` token can report. The `/usage` shapes are
+ * `anthropic-ratelimit-unified-*` headers instead — 5h, weekly-all and weekly
+ * overage-included, the only windows a `user:inference` token can report. Per-model
+ * weeklies (Weekly (Fable)) exist only in `/usage`'s `limits[]`. The `/usage` shapes are
  * still parsed here because that is what the payload is, and the endpoint is
  * undocumented enough to have moved its numbers between them twice.
  *
@@ -34,15 +35,17 @@ const CLAUDE_WINDOW_LABELS: Record<string, string> = {
   seven_day_oauth_apps: "Weekly (apps)",
   seven_day_opus: "Weekly (Opus)",
   seven_day_sonnet: "Weekly (Sonnet)",
+  seven_day_overage_included: "Weekly (overage included)",
 };
 
-/** The five fixed windows, in the order they are shown. */
+/** The fixed windows, in the order they are shown. */
 const FIXED_WINDOW_KEYS = [
   "five_hour",
   "seven_day",
   "seven_day_opus",
   "seven_day_sonnet",
   "seven_day_oauth_apps",
+  "seven_day_overage_included",
 ] as const;
 
 const windowSchema = z
@@ -82,6 +85,7 @@ const rateLimitsSchema = z
     seven_day_oauth_apps: windowSchema.nullish(),
     seven_day_opus: windowSchema.nullish(),
     seven_day_sonnet: windowSchema.nullish(),
+    seven_day_overage_included: windowSchema.nullish(),
   })
   .passthrough();
 
@@ -92,6 +96,7 @@ export const claudeUsageBodySchema = z
     seven_day_oauth_apps: windowSchema.nullish(),
     seven_day_opus: windowSchema.nullish(),
     seven_day_sonnet: windowSchema.nullish(),
+    seven_day_overage_included: windowSchema.nullish(),
     // The Agent SDK wraps the same windows under `rate_limits`. The raw
     // `/usage` endpoint usually sends them at the top level; both shapes are
     // accepted so a wrapper change cannot look like "Claude reported nothing".
@@ -157,19 +162,14 @@ function msToIso(ms: number): string {
 }
 
 /**
- * Unified rate-limit claim suffixes on Messages responses.
- *
- * Fable's weekly cap is `7d_oi` (shunt / Claude Code statusline), not a third
- * `7d` header — omitting it is why refresh only ever stored 5h + weekly-all.
+ * Unified rate-limit claim suffixes on Messages responses, as Claude Code maps
+ * them. `7d_oi` is the overage-included weekly, not a per-model window: no
+ * header carries Weekly (Fable), which only `/usage`'s `limits[]` reports.
  */
 const UNIFIED_HEADER_WINDOWS = [
   { key: "five_hour", suffix: "5h" },
   { key: "seven_day", suffix: "7d" },
-  {
-    key: "model_scoped:Fable",
-    suffix: "7d_oi",
-    displayName: "Fable",
-  },
+  { key: "seven_day_overage_included", suffix: "7d_oi" },
 ] as const;
 
 /**
@@ -177,36 +177,26 @@ const UNIFIED_HEADER_WINDOWS = [
  *
  * Setup-tokens (`sk-ant-oat…`, scope `user:inference`) cannot call `/usage`
  * (`user:profile` required, HTTP 403). The same token's inference responses
- * still carry 5h / weekly / Fable utilisation as a 0–1 fraction and a
- * unix-seconds reset.
+ * still carry 5h / weekly / overage-included utilisation as a 0–1 fraction and
+ * a unix-seconds reset.
  */
 export function readUnifiedRateLimitHeaders(
   header: (name: string) => string | undefined,
 ): UsageWindow[] {
   const windows: UsageWindow[] = [];
   for (const spec of UNIFIED_HEADER_WINDOWS) {
-    const utilization = fractionToPercent(
-      header(`anthropic-ratelimit-unified-${spec.suffix}-utilization`),
+    pushWindow(
+      windows,
+      spec.key,
+      CLAUDE_WINDOW_LABELS[spec.key] ?? spec.key,
+      fractionToPercent(
+        header(`anthropic-ratelimit-unified-${spec.suffix}-utilization`),
+      ),
+      unixSecondsToMs(header(`anthropic-ratelimit-unified-${spec.suffix}-reset`)),
     );
-    const resetsAt = unixSecondsToMs(
-      header(`anthropic-ratelimit-unified-${spec.suffix}-reset`),
-    );
-    const label =
-      "displayName" in spec
-        ? `Weekly (${spec.displayName})`
-        : (CLAUDE_WINDOW_LABELS[spec.key] ?? spec.key);
-    pushWindow(windows, spec.key, label, utilization, resetsAt);
   }
   return windows;
 }
-
-/** A `limits[]` entry as the header path writes one, before it is parsed. */
-type UnifiedScopedLimit = {
-  kind: string;
-  percent?: number;
-  resets_at?: number;
-  scope: { model: { display_name: string } };
-};
 
 /** The `/usage` body shape for windows read off inference headers. */
 export function claudeUsageBodyFromUnifiedHeaders(
@@ -215,24 +205,7 @@ export function claudeUsageBodyFromUnifiedHeaders(
   const windows = readUnifiedRateLimitHeaders(header);
   if (windows.length === 0) return null;
   const raw: Record<string, { utilization?: number; resets_at?: string }> = {};
-  const limits: UnifiedScopedLimit[] = [];
   for (const window of windows) {
-    // A model-scoped header goes back through `limits[]` so the one place that
-    // labels per-model weeklies stays `readClaudeUsageWindows`.
-    if (window.key.startsWith("model_scoped:")) {
-      const name = window.key.slice("model_scoped:".length);
-      limits.push({
-        kind: "weekly_scoped",
-        ...(window.utilization === undefined
-          ? {}
-          : { percent: window.utilization }),
-        ...(window.resetsAt === undefined
-          ? {}
-          : { resets_at: window.resetsAt / 1000 }),
-        scope: { model: { display_name: name } },
-      });
-      continue;
-    }
     raw[window.key] = {
       ...(window.utilization === undefined
         ? {}
@@ -242,10 +215,7 @@ export function claudeUsageBodyFromUnifiedHeaders(
         : { resets_at: msToIso(window.resetsAt) }),
     };
   }
-  const parsed = claudeUsageBodySchema.safeParse({
-    ...raw,
-    ...(limits.length === 0 ? {} : { limits }),
-  });
+  const parsed = claudeUsageBodySchema.safeParse(raw);
   if (!parsed.success) return null;
   return parsed.data;
 }

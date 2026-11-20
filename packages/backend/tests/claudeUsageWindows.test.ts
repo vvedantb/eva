@@ -208,9 +208,9 @@ describe("unified inference headers", () => {
     ]);
   });
 
-  test("the 7d_oi claim becomes Weekly (Fable)", () => {
-    // The chip bar picks the weekly window that meters the active model, so a
-    // Fable chat's refresh has to produce a `model_scoped:Fable` key.
+  test("the 7d_oi claim is the overage-included weekly, not Fable", () => {
+    // Claude Code maps `7d_oi` to `seven_day_overage_included`. Labelling it
+    // Fable would show overage spend as the Fable model's weekly headroom.
     const resetsAtMs = Date.UTC(2026, 7, 25, 12, 0, 0);
     const headers: Record<string, string> = {
       "anthropic-ratelimit-unified-5h-utilization": "0.5",
@@ -237,22 +237,22 @@ describe("unified inference headers", () => {
         resetsAt: resetsAtMs,
       },
       {
-        key: "model_scoped:Fable",
-        label: "Weekly (Fable)",
+        key: "seven_day_overage_included",
+        label: "Weekly (overage included)",
         utilization: 12,
         resetsAt: resetsAtMs,
       },
     ]);
   });
 
-  test("the probe sees no weekly beyond all-models and Fable", () => {
+  test("the probe sees no per-model weekly", () => {
     // Which is why a probe reading is stored as a partial merge: replacing the
     // row would drop the Opus/Sonnet weeklies only `/usage` reports.
     expect(
       readUnifiedRateLimitHeaders((name) =>
         name.endsWith("-utilization") ? "0.5" : undefined,
       ).map((window) => window.key),
-    ).toEqual(["five_hour", "seven_day", "model_scoped:Fable"]);
+    ).toEqual(["five_hour", "seven_day", "seven_day_overage_included"]);
   });
 
   test("headers with no unified windows produce no body", () => {
