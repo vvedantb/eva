@@ -31,9 +31,9 @@ const floatingMotionClass =
 
 /**
  * Grow out of the trigger and shrink back into it, as modals do (`modalTransition`):
- * menus, right-click menus and popovers scale from 80% at the Radix transform
- * origin, which is the trigger (or the cursor for a context menu). 80%, not the
- * modals' 40%: these open many times a minute, so the move must stay quick.
+ * menus, right-click menus and popovers scale from 40% at the Radix transform
+ * origin, which is the trigger (or the cursor for a context menu). The same 40%
+ * as modals, so every overlay grows out of what opened it the same way.
  *
  * The exit is deliberately faster than the enter (100ms vs 150ms). An earlier
  * symmetric version made composer menus (traits, model) feel sticky on click:
@@ -41,7 +41,7 @@ const floatingMotionClass =
  * the fix is a quick outbound path rather than no motion at all.
  */
 const triggerZoomClass =
-  "duration-150 data-[state=closed]:duration-100 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-[0.8] data-[state=closed]:zoom-out-[0.8]";
+  "duration-150 data-[state=closed]:duration-100 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-[0.4] data-[state=closed]:zoom-out-[0.4]";
 
 /**
  * Menu panel classes: `triggerZoomClass` plus the menu surface.

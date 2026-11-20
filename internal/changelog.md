@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: menus and popovers grow from 40%, like modals
+
+Date: 2026-11-20
+
+WHY: Compared side by side (80%, 60%, 40%), 40% reads most clearly as growing out of the trigger and matches the modals.
+
+Architectural: `@eva/ui` `config/overlays.ts` `triggerZoomClass` goes from `zoom-in-[0.8]` / `zoom-out-[0.8]` to `[0.4]`. Timing is unchanged (open 150 ms, close 100 ms).
+
 ## Web: menus and popovers grow from their trigger
 
 Date: 2026-11-20
