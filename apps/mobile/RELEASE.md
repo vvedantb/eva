@@ -2,7 +2,7 @@
 
 `.github/workflows/release-android.yml` builds a signed APK with `scripts/build-android-release.sh` and publishes it as a GitHub Release in this repository. The APK is for sideloading only. It is not on Google Play.
 
-**Eva is not in V Store.** The release uses the tag prefix `eva-apk-`. V Store's catalog sync reads `mobile-apk-*` tags only, so it does not see these releases. This repository adds no V Store catalog entry.
+**Eva is in V Store.** The release uses the tag prefix `eva-apk-`, which V Store's catalog entry for Eva names. The app's update check asks V Store for the newest version.
 
 The workflow is a thin caller of the shared workflow `vvedantb/packages/.github/workflows/release-android-apk.yml@main`, as vmem and Velth use. The shared workflow README ("Android APK release workflow") describes every input.
 

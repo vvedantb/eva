@@ -1,5 +1,13 @@
 # Changelog
 
+## Phone update check asks V Store
+
+Date: 2026-11-20
+
+WHY: The check read GitHub releases, which works only while this repository is public. V Store knows the newest release either way.
+
+Architectural: `UpdateDialog` passes `vStore` (package name and the APK link) to `UpdateChecker` in place of `source`. `@vvedantb/native-ui` goes to 0.34.0. The prompt and its buttons are unchanged.
+
 ## Web: menu and popover zoom comes from the package (@vvedantb/ui 0.55.0)
 
 Date: 2026-11-20
