@@ -15,7 +15,7 @@
     "web:export": "expo export --platform web"
   },
   "dependencies": {
-    "@clerk/clerk-expo": "^2.20.2",
+    "@clerk/expo": "^4.17.2",
     "@convex-dev/presence": "^0.3.0",
     "@eva/backend": "workspace:*",
     "@eva/shared": "workspace:*",
@@ -29,7 +29,7 @@
     "@rn-primitives/slot": "^1.5.2",
     "@rn-primitives/switch": "^1.5.2",
     "@tabler/icons-react-native": "^3.49.0",
-    "@vvedantb/native-ui": "0.31.0",
+    "@vvedantb/native-ui": "0.32.0",
     "@vvedantb/server": "0.17.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
