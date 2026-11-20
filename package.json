@@ -62,7 +62,7 @@
     "patchedDependencies": {
       "@convex-dev/presence@0.3.0": "patches/@convex-dev__presence@0.3.0.patch",
       "@vercel/sandbox": "patches/@vercel__sandbox.patch",
-      "@vvedantb/ui@0.52.0": "patches/@vvedantb__ui@0.52.0.patch"
+      "@vvedantb/ui@0.53.0": "patches/@vvedantb__ui@0.53.0.patch"
     },
     "onlyBuiltDependencies": [
       "@swc/core",
