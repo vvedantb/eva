@@ -25,18 +25,26 @@ const TOOLTIP_DELAY_MS = 300;
 const overlayClass =
   "fixed inset-0 z-50 bg-black/80 backdrop-blur-xs data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0";
 
-/** Popover, hover card and select panels slide in from the side they open on. */
+/** Hover card and select panels slide in from the side they open on. */
 const floatingMotionClass =
   "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:data-[side=bottom]:slide-out-to-top-2 data-[state=closed]:data-[side=left]:slide-out-to-right-2 data-[state=closed]:data-[side=right]:slide-out-to-left-2 data-[state=closed]:data-[side=top]:slide-out-to-bottom-2";
 
 /**
- * Scale+fade from the trigger, matching `PopoverContent` — menus and popovers are
- * the same class of non-modal overlay, so they move the same way.
+ * Grow out of the trigger and shrink back into it, as modals do (`modalTransition`):
+ * menus, right-click menus and popovers scale from 80% at the Radix transform
+ * origin, which is the trigger (or the cursor for a context menu). 80%, not the
+ * modals' 40%: these open many times a minute, so the move must stay quick.
  *
- * The exit is deliberately faster than the enter (75ms vs 150ms). An earlier
+ * The exit is deliberately faster than the enter (100ms vs 150ms). An earlier
  * symmetric version made composer menus (traits, model) feel sticky on click:
  * the cost was the menu lingering *after* a selection, not the open itself, so
  * the fix is a quick outbound path rather than no motion at all.
+ */
+const triggerZoomClass =
+  "duration-150 data-[state=closed]:duration-100 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-[0.8] data-[state=closed]:zoom-out-[0.8]";
+
+/**
+ * Menu panel classes: `triggerZoomClass` plus the menu surface.
  *
  * `origin` and `maxHeight` must be the Radix transform-origin and
  * available-height var classes for the specific primitive — pass them literally
@@ -52,7 +60,7 @@ function menuContentClass(origin: string, maxHeight: string): string {
     "rounded-menu",
     origin,
     maxHeight,
-    "duration-150 data-[state=closed]:duration-75 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",
+    triggerZoomClass,
   ].join(" ");
 }
 
@@ -129,7 +137,7 @@ export const overlaysConfig = {
       trigger: "cursor-pointer",
       // Caps its height and scrolls internally so a long popover cannot run
       // off a phone screen; `max-w` keeps `w-72` inside a 320px viewport.
-      content: `z-50 w-72 max-sm:max-w-[calc(100vw-2rem)] max-sm:max-h-[85dvh] max-sm:overflow-y-auto max-sm:scrollbar bg-popover/95 p-4 text-popover-foreground backdrop-blur-md smooth-shadow-ring-lg outline-hidden origin-(--radix-popover-content-transform-origin) rounded-surface ${floatingMotionClass}`,
+      content: `z-50 w-72 max-sm:max-w-[calc(100vw-2rem)] max-sm:max-h-[85dvh] max-sm:overflow-y-auto max-sm:scrollbar bg-popover/95 p-4 text-popover-foreground backdrop-blur-md smooth-shadow-ring-lg outline-hidden origin-(--radix-popover-content-transform-origin) rounded-surface ${triggerZoomClass}`,
     },
   },
   HoverCard: {
