@@ -176,3 +176,30 @@ export function slideNextResize(
   );
 }
 
+/**
+ * For one layout change, `follower` slides its `property` with the timing
+ * of `leader`'s own transition, so a neighbour the leader pushes moves in
+ * step instead of jumping (the main content beside the sidebar's sliding
+ * width). Call it just before the change. Fires `DOCK_MOTION_EVENT` on the
+ * follower, so overlays over it step aside while it moves.
+ */
+export function slideWith(
+  follower: HTMLElement | null,
+  leader: HTMLElement | null,
+  property: string,
+) {
+  if (!follower || !leader || motionOff()) return;
+  const lead = getComputedStyle(leader);
+  const ms = parseFloat(lead.transitionDuration) * 1000;
+  if (!(ms > 0)) return;
+  follower.style.transition = `${property} ${lead.transitionDuration} ${lead.transitionTimingFunction}`;
+  follower.dispatchEvent(new DockMotionEvent(ms));
+  window.clearTimeout(Number(follower.dataset.slideWithTimer));
+  follower.dataset.slideWithTimer = String(
+    window.setTimeout(() => {
+      follower.style.transition = "";
+      delete follower.dataset.slideWithTimer;
+    }, ms + 50),
+  );
+}
+
