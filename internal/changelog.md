@@ -1,5 +1,13 @@
 # Changelog
 
+## Web sidebar: main content slides with the panel
+
+Date: 2026-11-20
+
+WHY: Hiding or showing the sidebar slid the package aside's width, but the main content jumped to its new margin, so the two moved out of step.
+
+Architectural: `dockMotion.slideWith(follower, leader, property)` copies the leader's transition timing onto the follower for one change and fires `DOCK_MOTION_EVENT` on it, so a preview iframe inside steps aside. `sidebarPanelMotion` slides `<main>`'s `margin-left` with the shell aside (280 ms, out-quint, read from the aside) on hide, after the pop out, and on show.
+
 ## Web: @vvedantb/ui 0.52.0, modals grow from their trigger
 
 Date: 2026-11-20
