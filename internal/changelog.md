@@ -6,7 +6,7 @@ Date: 2026-11-20
 
 WHY: A releasing merge ran three boat-large jobs in a row (check, release paths, release), so the APK waited for Check and an extra runner start. The build now starts with Check and only publish waits.
 
-Architectural: `ci.yml` drops `release-paths`; its `release` job (push only, no `needs`) calls the new `release-android-ci.yml`. That workflow runs the path gate on `ubuntu-latest`, then the shared build with `WAIT_FOR_CI_CHECK=1`. After the build, `scripts/build-android-release.sh` polls the Check job of the run and exits non-zero unless it succeeded, so Publish never runs after a failed Check. Manual `release-android.yml` runs do not wait. `@vvedantb/config` 0.11.0 → 0.12.0 (release APKs are arm64-v8a only).
+Architectural: `ci.yml`'s `release` job (push only, no `needs`) calls the shared `release-android-apk.yml@main` directly. Its `pathspecs` input is the path gate (soft skip when no changed file matches), and `wait_for_check_job: Check` makes the shared workflow wait for the Check job before Publish, so a failed Check publishes nothing. There is no local wrapper: `release-android-ci.yml` is deleted and `scripts/build-android-release.sh` has no `WAIT_FOR_CI_CHECK` polling. Manual `release-android.yml` runs do not wait. `@vvedantb/config` 0.11.0 → 0.12.0 (release APKs are arm64-v8a only).
 
 ## Web: rail shell, dock motion and sandbox side panel come from the package (@vvedantb/ui 0.57.0)
 

@@ -97,19 +97,82 @@ jobs:
         node scripts/check-schema-narrowing.mjs
 
   # Push releases. The release build starts at once, in parallel with check, so the APK
-  # is ready when check ends. It does not need check: publish waits for check inside
-  # the build (see release-android-ci.yml and scripts/build-android-release.sh), so a
-  # failed check publishes nothing. The path gate lives in that workflow too, on a cheap
-  # runner. A pull request never runs this job.
+  # is ready when check ends. It does not need check: the shared workflow waits for the
+  # check job before publish (wait_for_check_job), so a failed check publishes nothing.
+  # Its pathspecs input is the path gate: a push that changes none of them skips the
+  # release cleanly. A pull request never runs this job.
   release:
     if: github.event_name == 'push'
     permissions:
-      contents: write
       actions: read
+      contents: write
     concurrency:
       group: release-android
       cancel-in-progress: false
-    uses: ./.github/workflows/release-android-ci.yml
+    uses: vvedantb/packages/.github/workflows/release-android-apk.yml@main
+    with:
+      app_name: eva
+      release_title: Eva
+      apk_basename: eva
+      package_id: com.projectvdotuk.eva
+      # Not V Store: its catalog sync reads mobile-apk-* tags.
+      tag_prefix: eva-apk-
+      mark_as_latest: false
+      release_on: always
+      # The nested check job is named "check / Check". The shared wait matches a
+      # job name equal to this value or ending in " / Check", so "Check" finds it.
+      wait_for_check_job: Check
+      # Files that reach the APK. Metro bundles @eva/shared and the runtime exports
+      # of @eva/backend (packages/backend/index.ts re-exports from convex/), so both
+      # stay in the filter. Keep it equal to that closure. Docs, the mobile
+      # .env.example, shared tests, convex tests, web and .github/** do not release.
+      # The root package.json and pnpm-lock.yaml are left out on purpose: they have
+      # no per-app part, so any dependency bump in the repo would ship an APK. A real
+      # mobile dependency change edits apps/mobile/package.json.
+      pathspecs: |
+        :(glob)apps/mobile/**
+        :(exclude,glob)apps/mobile/**/*.md
+        :(exclude,glob)apps/mobile/.env.example
+        :(glob)packages/shared/**
+        :(exclude,glob)packages/shared/**/*.test.ts
+        :(glob)packages/backend/package.json
+        :(glob)packages/backend/index.ts
+        :(glob)packages/backend/convex/**
+        :(exclude,glob)packages/backend/convex/**/*.test.ts
+        :(glob)pnpm-workspace.yaml
+        :(glob)patches/**
+        :(glob)scripts/build-android-release.sh
+        :(glob)scripts/check-clerk-native-api.sh
+      # A boat.dev runner. It has no Android SDK: the shared workflow installs
+      # the command line tools and sdk_packages when it finds none.
+      runs_on: boat-large
+      upload_dry_run_artifact: true # artifact eva-android-dry-run
+      pre_setup_command: |
+        df -h /
+        sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost /opt/hostedtoolcache/CodeQL /usr/local/lib/node_modules /usr/share/swift /usr/local/share/powershell /usr/local/share/chromium || true
+        sudo docker image prune --all --force || true
+        df -h /
+      # Public build-time values, from repository variables (Settings,
+      # Secrets and variables, Actions, Variables). They match the web app's
+      # VITE_CLERK_PUBLISHABLE_KEY and VITE_CONVEX_URL on Vercel.
+      build_env: |
+        EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ vars.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+        EXPO_PUBLIC_CONVEX_URL=${{ vars.EXPO_PUBLIC_CONVEX_URL }}
+        EXPO_PUBLIC_WEB_URL=${{ vars.EXPO_PUBLIC_WEB_URL }}
+        EAS_PROJECT_ID=${{ vars.EAS_PROJECT_ID }}
+      # Fail early and clearly: apps/mobile/src/config.ts has no defaults, and
+      # Clerk must have the Native API on.
+      pre_build_command: |
+        missing=0
+        for name in EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY EXPO_PUBLIC_CONVEX_URL EXPO_PUBLIC_WEB_URL; do
+          if [ -z "${!name:-}" ]; then
+            echo "::error::Repository variable $name is empty. Set it under Settings, Secrets and variables, Actions, Variables (see apps/mobile/RELEASE.md)."
+            missing=1
+          fi
+        done
+        [ "$missing" -eq 0 ] || exit 1
+        # The APK is blank on launch if Clerk's Native API is off for this key.
+        bash scripts/check-clerk-native-api.sh
     secrets: inherit
 
   # Wake the Grok automerge bot. This used to be a separate workflow
