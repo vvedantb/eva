@@ -43,6 +43,7 @@ jobs:
       # Run the command lines together in the one Check job. Measuring
       # max_parallel on real runs (see the PR body for the run ids compared).
       parallel: true
+      max_parallel: 4
       # Pull requests run only the tests the diff can reach; pushes to main run
       # everything. The workflow exports VV_TEST_SCOPE and VV_TEST_CHANGED to
       # every command; the two vitest commands below append VV_TEST_CHANGED.
