@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: @vvedantb/ui 0.52.0, modals grow from their trigger
+
+Date: 2026-11-20
+
+WHY: Modals should open like the sandbox card does, out of what you pressed; they also replayed their entrance about 300 ms after opening when the content re-rendered.
+
+Architectural: `@vvedantb/ui` 0.51.0 → 0.52.0 (packages #303) in web, the Chrome extension, `@eva/shared` and `@eva/ui`. The package's `modalTransition` aims each Dialog at the press that opened it (within 500 ms) or the focused control, starting at 40% scale; with neither it keeps the centred zoom, and the command palette stays instant. Eva's pnpm patch of the package (icon-only bulk action bar) moves to 0.52.0 unchanged.
+
 ## Web preview iframe steps aside during dock motion
 
 Date: 2026-11-19
