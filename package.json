@@ -81,7 +81,7 @@
     }
   },
   "devDependencies": {
-    "@vvedantb/config": "^0.11.0",
+    "@vvedantb/config": "^0.12.0",
     "husky": "^9.1.7",
     "knip": "6.27.0",
     "lint-staged": "^16.2.7",
