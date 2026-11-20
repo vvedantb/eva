@@ -57,44 +57,7 @@ jobs:
         BASE_REF=origin/${{ github.base_ref || 'main' }}
         SCHEMA_NARROWING_BASE=${{ github.event_name == 'push' && github.event.before || '' }}
       commands: |
-        # tsc only — `convex codegen` must never run in automation because it
-        # uploads to the linked deployment. convex/_generated is checked in, so
-        # `tsc -p convex/tsconfig.json` resolves without it.
-        pnpm typecheck
-        pnpm lint
-        # A test that never runs has no value. Web + backend vitest run through
-        # `pnpm --filter ... exec vitest` so $VV_TEST_CHANGED reaches each vitest
-        # (a single `pnpm test` would not pass the flag through the && chain, and
-        # `run test --` forwards a literal `--` on some platforms). When the
-        # scope is narrowed, VV_TEST_CHANGED is `--changed=origin/<base>` and we
-        # also pass --passWithNoTests so a diff that reaches no test still exits
-        # 0; on a full run both expand to nothing, so zero tests still fails.
-        pnpm --filter @eva/web exec vitest run ${VV_TEST_CHANGED:+--passWithNoTests} $VV_TEST_CHANGED
-        pnpm --filter @eva/backend exec vitest run ${VV_TEST_CHANGED:+--passWithNoTests} $VV_TEST_CHANGED
-        # sourceEncoding scans every git-tracked text file for control bytes. It
-        # imports only node + vitest, so the Vite module graph cannot reach it and
-        # --changed never selects it. Narrowing would hide a bad byte added to any
-        # file, so it runs on every PR as its own command, never with
-        # $VV_TEST_CHANGED. On a full run the backend command above also runs it;
-        # the second run is read-only and harmless.
-        pnpm --filter @eva/backend exec vitest run tests/sourceEncoding.test.ts
-        # The schema-gate node test is not vitest and reads the schema from disk,
-        # so --changed cannot select it; it always runs (fast, one file).
-        pnpm test:schema-narrowing
-        # One backend for both apps: fails when the phone calls a Convex
-        # function the web never calls, unless it is allowed with a reason.
-        node scripts/check-shared-backend.mjs
-        # Installed APKs keep their code: warns (never fails) when this backend
-        # change would break the newest published APK, so the merge can say
-        # what old phones lose. Skips when the backend did not change.
-        ./scripts/check-apk-compat.sh
-        # Fails on a new React Compiler bailout that is not in the baseline.
-        node scripts/compiler-check.mjs
-        # Fails on new Tailwind/JSX design-system drift that is not in the baseline.
-        node scripts/design-check.mjs
-        # Blocks a Convex schema field/table/union member being removed while
-        # live rows may still hold it. See docs/eva-convex.md > Migrations.
-        node scripts/check-schema-narrowing.mjs
+        bash scripts/vitest-probe.sh
 
   # Push releases run from here, after check, so a release waits for lint and tests to pass.
   # This job is the path gate: no release runner starts unless the merge could be a release
