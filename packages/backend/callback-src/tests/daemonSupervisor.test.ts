@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { DaemonSupervisor } from "../runtime/daemonSupervisor.js";
 
 type Claim = { prompt: string };

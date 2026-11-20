@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import {
   AI_MODEL_ALIASES,
   AI_MODEL_OPTIONS,

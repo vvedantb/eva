@@ -2,21 +2,18 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import type * as callbackConfig from "../config.js";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 // WORK_DIR tracks a throwaway dir so the default `cwd` never touches this checkout.
-const workspace = vi.hoisted((): { dir: string } => ({ dir: "" }));
+const workspace: { dir: string } = { dir: "" };
 
-vi.mock("../config.js", async (importOriginal) => {
-  const original = await importOriginal<typeof callbackConfig>();
-  return {
-    ...original,
-    get WORK_DIR() {
-      return workspace.dir;
-    },
-  };
-});
+const originalConfig = { ...(await import("../config.js")) };
+// Bun copies a mocked module's exports once, so re-mock after each change.
+function setWorkspace(dir: string): void {
+  workspace.dir = dir;
+  mock.module("../config.js", () => ({ ...originalConfig, WORK_DIR: dir }));
+}
+setWorkspace("");
 
 const { git, readCurrentBranch } = await import("../runtime/gitExec.js");
 
@@ -42,7 +39,7 @@ function makeTempDir(): string {
 }
 
 beforeEach(() => {
-  workspace.dir = makeTempDir();
+  setWorkspace(makeTempDir());
 });
 
 afterEach(() => {

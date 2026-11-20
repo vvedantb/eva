@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { codeModeTools, toolInputJsonSchema } from "../convex/_mcp/codeModeTools";
 import {

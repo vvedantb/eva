@@ -1,11 +1,12 @@
 import { convexTest } from "convex-test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { DEFAULT_AI_MODEL } from "../convex/validators";
 import { openTurn } from "../convex/_chat/turnStore";
 import { rotateProjectBranch } from "../convex/_sessions/ownedSession";
 import { buildProjectBranchName } from "../convex/_git/branchNames";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * PR 2: a project and its tasks run on the project's one owned session.
@@ -15,7 +16,6 @@ import { buildProjectBranchName } from "../convex/_git/branchNames";
  * rotation moves the session to the new branch and drops its old VM.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|project-sessions";
 

@@ -42,15 +42,26 @@ jobs:
       env: |
         BASE_REF=origin/${{ github.base_ref || 'main' }}
         SCHEMA_NARROWING_BASE=${{ github.event_name == 'push' && github.event.before || '' }}
+        TEST_BASE_REF=${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
+      # Every line below runs at once; the job fails if any line fails.
+      parallel: true
+      install_command: |
+        pnpm install --frozen-lockfile
+        curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4"
+        echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
       commands: |
-        # tsc only — `convex codegen` must never run in automation because it
-        # uploads to the linked deployment. convex/_generated is checked in, so
-        # `tsc -p convex/tsconfig.json` resolves without it.
+        # bun check only. `convex codegen` must never run in automation because
+        # it uploads to the linked deployment. convex/_generated is checked in,
+        # so the convex project resolves without it.
         pnpm typecheck
         pnpm lint
-        # A test that never runs has no value. Web + backend vitest, plus the
-        # node test for the schema gate.
-        pnpm test
+        pnpm build
+        # Pull requests run only the tests their diff can reach; pushes to main
+        # run everything. Each package's arguments are the workspace packages
+        # its tests import.
+        scripts/test-affected.sh apps/web packages/shared packages/backend packages/ui
+        scripts/test-affected.sh packages/backend packages/shared
+        pnpm test:schema-narrowing
         # One backend for both apps: fails when the phone calls a Convex
         # function the web never calls, unless it is allowed with a reason.
         node scripts/check-shared-backend.mjs

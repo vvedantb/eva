@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { bindSupabaseProject, supabaseProjects } from "../convex/mcp/supabase";
 
 test("projects come from SUPABASE_PROJECT_ID (refs or label:ref), then the Supabase URL", () => {

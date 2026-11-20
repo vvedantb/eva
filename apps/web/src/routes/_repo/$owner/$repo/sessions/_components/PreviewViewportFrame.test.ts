@@ -1,5 +1,5 @@
 import { isValidElement, type ReactNode } from "react";
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { PreviewViewportFrame } from "./PreviewViewportFrame";
 
 /**

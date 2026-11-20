@@ -14,10 +14,13 @@
     "ext:build": "pnpm --filter eva-assist-extension build",
     "ext:release": "npx tsx scripts/release-extension.ts",
     "lint": "oxlint -c .oxlintrc.json .",
-    "typecheck": "pnpm --filter @eva/web typecheck && pnpm --filter @eva/backend typecheck && pnpm --filter @eva/backend typecheck:callback && pnpm --filter @eva/backend typecheck:annotation && pnpm --filter @eva/mobile typecheck",
+    "typecheck": "pnpm --parallel --filter @eva/web --filter @eva/backend --filter @eva/mobile typecheck",
+    "build": "pnpm --filter @eva/web build",
+    "ci": "bun run --parallel lint typecheck build test",
     "compiler:check": "node scripts/compiler-check.mjs",
     "design:check": "node scripts/design-check.mjs",
-    "test": "pnpm --filter @eva/web test && pnpm --filter @eva/backend test && pnpm test:schema-narrowing",
+    "test": "pnpm --parallel --filter @eva/web --filter @eva/backend test && pnpm test:schema-narrowing",
+    "test:timings": "pnpm --parallel --filter @eva/web --filter @eva/backend test --update-timings",
     "test:schema-narrowing": "node --test scripts/check-schema-narrowing.test.mjs",
     "check:schema-narrowing": "node scripts/check-schema-narrowing.mjs",
     "deadcode": "knip",
@@ -27,7 +30,7 @@
     "sync:prod-to-local": "pnpm --filter @eva/backend run sync:prod-to-local"
   },
   "lint-staged": {
-    "*.{ts,tsx,js,jsx,json,css,md}": "oxfmt --no-error-on-unmatched-pattern",
+    "*.{ts,tsx,js,jsx,json,css,md}": "bun fmt",
     "*.{ts,tsx}": "oxlint -c .oxlintrc.json --no-error-on-unmatched-pattern"
   },
   "pnpm": {
@@ -85,9 +88,7 @@
     "husky": "^9.1.7",
     "knip": "6.27.0",
     "lint-staged": "^16.2.7",
-    "oxfmt": "0.78.0",
     "oxlint": "1.79.0",
-    "tsrs": "7.1.0-beta.tsrs2",
     "typescript": "^5.9.0"
   },
   "packageManager": "pnpm@10.28.0+sha512.05df71d1421f21399e053fde567cea34d446fa02c76571441bfc1c7956e98e363088982d940465fd34480d4d90a0668bc12362f8aa88000a64e83d0b0e47be48"

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { formatEnvFile } from "../convex/_sandbox_runtime/envFile";
 import {
   branchExistsRemoteCommand,

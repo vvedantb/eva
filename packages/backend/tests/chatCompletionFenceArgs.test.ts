@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import {
@@ -7,13 +7,13 @@ import {
   openTurn,
   settleAgentTurnCompletion,
 } from "../convex/_chat/turnStore";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Runs and one-shot agents run on durable turns: completions carry the lease
  * fence and a stale fence is dropped.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 /** Loading the workflow module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;

@@ -1,8 +1,9 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import type { Doc } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Fix #870 (Fork session). `forkSession` stops a running source so Vercel's
@@ -19,7 +20,6 @@ import schema from "../convex/schema";
  *   settling twice must not restart it twice.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 /** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;

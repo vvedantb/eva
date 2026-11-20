@@ -1,7 +1,7 @@
 import type { api, Id } from "@eva/backend";
 import type { OptimisticLocalStore } from "convex/browser";
 import type { FunctionReturnType } from "convex/server";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { openChatTurnOptimistically } from "./useChatTurnOpen";
 

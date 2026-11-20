@@ -1,10 +1,11 @@
 import { convexTest } from "convex-test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { DEFAULT_AI_MODEL } from "../convex/validators";
 import { openTurn } from "../convex/_chat/turnStore";
 import { abandonTaskRunSandbox } from "../convex/_sessions/sandbox";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * PR 1b: a quick task runs on one owned session. Guards the rules that keep
@@ -13,7 +14,6 @@ import { abandonTaskRunSandbox } from "../convex/_sessions/sandbox";
  * moves the task's sandbox and transcript onto it (and waits on busy tasks).
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|quick-task-sessions";
 

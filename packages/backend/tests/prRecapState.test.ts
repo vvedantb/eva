@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import {
   INCOMPLETE_PR_RECAP_ERROR,
   isIncompleteReadyRecap,

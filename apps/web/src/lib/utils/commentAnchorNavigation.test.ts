@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { COMMENT_ANCHOR_PARAM, withCommentAnchor } from "@eva/backend";
 import { parseCommentAnchorSearchField } from "@/lib/search-params";
 import { hrefToNavigateOptions } from "./repoUrl";

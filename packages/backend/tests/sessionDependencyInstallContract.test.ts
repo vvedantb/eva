@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { dependencyInstallCommand } from "../convex/_sandbox_runtime/git";
 
 /**

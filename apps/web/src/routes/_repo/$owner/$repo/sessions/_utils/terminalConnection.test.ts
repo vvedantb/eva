@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import {
   MAX_RECONNECT_ATTEMPTS,
   RECONNECT_EXHAUSTED_MESSAGE,

@@ -1,7 +1,8 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { computeHasUnread, isOwnChat } from "../convex/chatReads";
 import schema from "../convex/schema";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * The unread rule shared by the three chat list queries and `isUnread`. Only
@@ -9,7 +10,6 @@ import schema from "../convex/schema";
  * opened before (a read row exists). Teammates' chats stay quiet otherwise.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 
 /** Real ids keep the tests cast-free; nothing else touches the database. */

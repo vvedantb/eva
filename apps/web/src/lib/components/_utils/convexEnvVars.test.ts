@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { CONVEX_ENV_VARS } from "./convexEnvVars";
 
 // Regression guard for the Convex URL leak (fix: "Keep Convex URL out of the

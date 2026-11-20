@@ -1,9 +1,10 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { findOpenTurn } from "../convex/_chat/turnStore";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * The composer picks send or queue from its own subscription, so a burst of
@@ -13,7 +14,6 @@ import { findOpenTurn } from "../convex/_chat/turnStore";
  * dequeue inserts its own).
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|send-burst";
 const BURST_MESSAGE = "and also rename the button";

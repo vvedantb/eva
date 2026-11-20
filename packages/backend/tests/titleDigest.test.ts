@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { buildTitleDigest } from "../convex/_sessions/prompts";
 
 function history(

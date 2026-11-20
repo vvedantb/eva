@@ -1,7 +1,7 @@
 import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test, expect } from "vitest";
+import { test, expect } from "bun:test";
 import { createSessionStore } from "../session/createSessionStore.js";
 
 test("createSessionStore reads and writes resume id", () => {

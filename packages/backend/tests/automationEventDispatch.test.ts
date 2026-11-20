@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, jest, test, vi } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { recordPullRequest } from "../convex/_pullRequests/store";
@@ -15,8 +15,8 @@ import {
 } from "../convex/_automationEvents/events";
 import { collectFeedback } from "../convex/_automationEvents/messages";
 import { pickOnePerPreset } from "../convex/_automationEvents/select";
+import { modules } from "./_helpers/convexModules";
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const PR_URL = "https://github.com/acme/eva/pull/7";
 
@@ -452,7 +452,7 @@ describe("alert webhook", () => {
         "queued",
       );
 
-      vi.setSystemTime(Date.now() + ALERT_DEDUPE_WINDOW_MS + 1);
+      jest.setSystemTime(Date.now() + ALERT_DEDUPE_WINDOW_MS + 1);
       expect(await receive(secretHash)).toBe("queued");
       expect(await runsOf(automationId)).toHaveLength(3);
     },

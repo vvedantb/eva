@@ -1,9 +1,11 @@
 import { convexTest } from "convex-test";
 import { exportJWK, generateKeyPair } from "jose";
-import { beforeAll, expect, test, vi } from "vitest";
+import { afterAll, beforeAll, expect, mock, test } from "bun:test";
+import { stubEnv, unstubAllEnvs } from "./_helpers/env";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
-import type * as Helpers from "../convex/_sandbox_runtime/helpers";
+import * as Helpers from "../convex/_sandbox_runtime/helpers";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * `/preview-auth` used to take the redirect origin from the link's `return`
@@ -12,12 +14,12 @@ import type * as Helpers from "../convex/_sandbox_runtime/helpers";
  * own preview origin; only the path comes from the caller.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const SANDBOX_ORIGIN = "https://sb-own-3000.vercel.run";
 
 // The provider lookup is the only fake: the sandbox's real preview origin.
-vi.mock("../convex/_sandbox_runtime/helpers", async (importOriginal) => ({
-  ...(await importOriginal<typeof Helpers>()),
+const actualHelpers = { ...Helpers };
+mock.module("../convex/_sandbox_runtime/helpers", () => ({
+  ...actualHelpers,
   getSandboxHandle: async () => ({
     previewUrl: async (port: number) => ({ url: SANDBOX_ORIGIN, port }),
   }),
@@ -26,8 +28,9 @@ vi.mock("../convex/_sandbox_runtime/helpers", async (importOriginal) => ({
 beforeAll(async () => {
   const { privateKey } = await generateKeyPair("ES256", { extractable: true });
   const jwk = await exportJWK(privateKey);
-  vi.stubEnv("PREVIEW_GRANT_PRIVATE_KEY", JSON.stringify(jwk));
+  stubEnv("PREVIEW_GRANT_PRIVATE_KEY", JSON.stringify(jwk));
 });
+afterAll(unstubAllEnvs);
 
 async function fixture() {
   const t = convexTest(schema, modules);

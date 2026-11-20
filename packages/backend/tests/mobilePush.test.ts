@@ -2,10 +2,11 @@ import { convexTest } from "convex-test";
 import { defineTable } from "convex/server";
 import { v } from "convex/values";
 import { pushTokensFields, pushTokensTable } from "@vvedantb/server";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { createNotification } from "../convex/notifications";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Mobile push (apps/mobile): which events reach the phone, and that the push
@@ -13,7 +14,6 @@ import { createNotification } from "../convex/notifications";
  * actions, so the tests read the scheduler queue instead of calling Expo.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|mobile-push";
 const TOKEN = "ExponentPushToken[test-device]";

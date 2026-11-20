@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { buildEditPrompt } from "../convex/_sessions/prompts";
 
 test("sessions no longer enter plan mode or inject plan.md as an approved plan", () => {

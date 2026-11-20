@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import {
   DEFAULT_SESSIONS_SIDEBAR_SETTINGS,
   DEFAULT_SESSION_PREVIEW_COUNT,

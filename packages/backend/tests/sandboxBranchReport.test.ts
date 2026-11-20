@@ -1,7 +1,8 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * `sandboxGit.reportBranch` is written by the in-sandbox branch watcher every
@@ -18,7 +19,6 @@ import schema from "../convex/schema";
  * break both without failing a type check.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|sandbox-branch";
 const STRANGER_CLERK_ID = "clerk|sandbox-branch-stranger";

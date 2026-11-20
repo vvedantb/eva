@@ -1,8 +1,9 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import schema from "../convex/schema";
 import { resolveMessageCredential } from "../convex/_userProviderAccounts/credentialSource";
 import { findUsageLimitHold } from "../convex/_taskWorkflow/usageLimitReset";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Regression guard for the per-account usage-limit hold. The hold reads the
@@ -12,7 +13,6 @@ import { findUsageLimitHold } from "../convex/_taskWorkflow/usageLimitReset";
  * Team messages send straight into the limit, and the old account's wait.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 /** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { rangeBetween } from "./selectionRange";
 
 const ids = ["a", "b", "c", "d", "e"];

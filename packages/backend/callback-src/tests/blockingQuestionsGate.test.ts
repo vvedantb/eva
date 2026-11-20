@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test } from "bun:test";
+import { freshModules } from "./freshModules";
 
 /**
  * Which surfaces may pause a turn on a question.
@@ -22,7 +23,7 @@ async function gateWith(env: {
   else process.env.ENTITY_ID_FIELD = env.entityIdField;
   if (env.runId === undefined) delete process.env.RUN_ID;
   else process.env.RUN_ID = env.runId;
-  vi.resetModules();
+  freshModules();
   const { BLOCKING_QUESTIONS_ENABLED } = await import("../config.js");
   return BLOCKING_QUESTIONS_ENABLED;
 }
@@ -32,7 +33,7 @@ afterEach(() => {
   else process.env.ENTITY_ID_FIELD = ORIGINAL.entity;
   if (ORIGINAL.run === undefined) delete process.env.RUN_ID;
   else process.env.RUN_ID = ORIGINAL.run;
-  vi.resetModules();
+  freshModules();
 });
 
 describe("BLOCKING_QUESTIONS_ENABLED", () => {

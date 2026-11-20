@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { opencodeParseLine } from "../providers/opencode.js";
 import {
   createPartEmitState,

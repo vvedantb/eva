@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { buildImplementationPrompt } from "../convex/_taskWorkflow/prompts";
 
 test("buildImplementationPrompt uses commitText for edit commits, not reviewer annotations", () => {
