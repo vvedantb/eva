@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "typecheck": "bun check -p tsconfig.json",
+    "typecheck": "tsrs --noEmit --fast -p tsconfig.json",
     "preview": "vite preview",
     "test": "bun test --parallel --timings=test-timings.json",
     "test:watch": "bun test --watch",

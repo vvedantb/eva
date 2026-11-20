@@ -8,7 +8,7 @@
     "start": "expo start",
     "android": "expo run:android",
     "prebuild": "expo prebuild --platform android --clean",
-    "typecheck": "bun check -p tsconfig.json",
+    "typecheck": "tsrs --noEmit --fast -p tsconfig.json",
     "test:babel": "node --test babel.config.test.mjs",
     "test:logging": "node --test src/logging/unhandledRejections.test.mjs",
     "test": "pnpm test:logging && pnpm test:babel",

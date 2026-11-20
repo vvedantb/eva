@@ -50,7 +50,7 @@ jobs:
         curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4"
         echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
       commands: |
-        # bun check only. `convex codegen` must never run in automation because
+        # tsrs only. `convex codegen` must never run in automation because
         # it uploads to the linked deployment. convex/_generated is checked in,
         # so the convex project resolves without it.
         pnpm typecheck
