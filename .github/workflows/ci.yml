@@ -69,6 +69,13 @@ jobs:
         # 0; on a full run both expand to nothing, so zero tests still fails.
         pnpm --filter @eva/web exec vitest run ${VV_TEST_CHANGED:+--passWithNoTests} $VV_TEST_CHANGED
         pnpm --filter @eva/backend exec vitest run ${VV_TEST_CHANGED:+--passWithNoTests} $VV_TEST_CHANGED
+        # sourceEncoding scans every git-tracked text file for control bytes. It
+        # imports only node + vitest, so the Vite module graph cannot reach it and
+        # --changed never selects it. Narrowing would hide a bad byte added to any
+        # file, so it runs on every PR as its own command, never with
+        # $VV_TEST_CHANGED. On a full run the backend command above also runs it;
+        # the second run is read-only and harmless.
+        pnpm --filter @eva/backend exec vitest run tests/sourceEncoding.test.ts
         # The schema-gate node test is not vitest and reads the schema from disk,
         # so --changed cannot select it; it always runs (fast, one file).
         pnpm test:schema-narrowing
