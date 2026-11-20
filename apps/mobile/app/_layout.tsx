@@ -2,8 +2,8 @@ import "../global.css";
 import { installUnhandledRejectionLogging } from "@/logging/unhandledRejections";
 import { loadLastCrash, saveLastCrash } from "@/logging/lastCrash";
 
-import { useAuth } from "@clerk/clerk-expo";
-import { tokenCache } from "@clerk/clerk-expo/token-cache";
+import { useAuth } from "@clerk/expo";
+import { tokenCache } from "@clerk/expo/token-cache";
 import {
   Inter_400Regular,
   Inter_500Medium,
