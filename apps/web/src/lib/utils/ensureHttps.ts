@@ -1,3 +1,4 @@
+// Narrowing demo: comment-only change to show affected_tests (this branch is throwaway).
 /**
  * Upgrades http to https. Anything that is not http(s), or does not parse,
  * becomes `about:blank`: these URLs feed iframe `src` and new-tab links, where
