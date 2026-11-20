@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: menus and popovers grow from their trigger
+
+Date: 2026-11-20
+
+WHY: Modals grow out of what opened them; dropdowns, right-click menus and popovers only scaled from 95%, which barely read as coming from the trigger.
+
+Architectural: `@eva/ui` `config/overlays.ts` adds `triggerZoomClass` (fade plus `zoom-in-[0.8]` / `zoom-out-[0.8]`, open 150 ms, close 100 ms) at the Radix transform origin: the trigger, or the cursor for a context menu. Dropdown and context menus (`menuContentClass`, sub-menus too) and Popover use it; Popover drops its 8px side slide so it moves like the menus. Hover card and Select keep `floatingMotionClass`. 80%, not the modals' 40%, because these open constantly.
+
 ## Web: modals close with the same zoom (@vvedantb/ui 0.54.1)
 
 Date: 2026-11-20
