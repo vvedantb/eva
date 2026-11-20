@@ -39,7 +39,6 @@ import { MaintenanceGate, MaintenanceScreen, useMaintenanceMode } from "@/ui/Mai
 import { StartupFailure } from "@/ui/StartupFailure";
 import { UpdateDialog } from "@/update/UpdateDialog";
 import { LastCrashDialog } from "@/logging/LastCrashDialog";
-import { checkForUpdate } from "@/update/updateCheck";
 import { useStackScreenOptions } from "@/ui/stackOptions";
 import { navigationTheme, useScheme } from "@/ui/theme";
 
@@ -54,9 +53,6 @@ applyEvaTheme();
 // This phone's last appearance mode, applied before the first screen; the
 // account's mode follows once signed in (`AccountThemeSync`).
 void restoreThemeMode();
-
-// A newer APK on GitHub Releases, offered once the app is up (`UpdateDialog`).
-void checkForUpdate();
 
 /**
  * One client for the app's life, outside render (it holds the socket). Its
