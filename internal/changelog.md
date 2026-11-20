@@ -8,6 +8,46 @@ WHY: Other apps need the same "Update available" prompt, and the phone app can n
 
 Architectural: The check and the dialog moved to `@vvedantb/native-ui` (`UpdateChecker`). `src/update/UpdateDialog.tsx` only passes Eva's values: the `eva-apk-` releases, the installed version (0.1.0 skips the check), SecureStore under the same `eva.updateDismissed` key, and the same text. `src/update/updateCheck.ts` is gone. New: "Install from V Store" only opens V Store (`vstore://updates`); when V Store is not installed the button is replaced by a notice and Download stays.
 
+## Web: modals close with the same zoom (@vvedantb/ui 0.54.1)
+
+Date: 2026-11-20
+
+WHY: Modals grew out of their trigger on open but vanished at once on close; the shrink back into the trigger never played.
+
+Architectural: Radix Presence reads the animation in the same commit that sets `data-state="closed"`, but the package keyed its closing styles (and the `t-modal-presence-wait` animation Presence waits on) only on `.is-closing`, which a MutationObserver adds a moment later, so Presence unmounted at once. packages #308 keys them on `[data-state="closed"]` too. `@vvedantb/ui` 0.54.0 → 0.54.1; Eva's `html[data-page-motion="off"]` rule in globals.css covers the new selector.
+
+## Web: @vvedantb/ui 0.54.0, the package patch is gone
+
+Date: 2026-11-20
+
+WHY: Eva carried a pnpm patch of `@vvedantb/ui` (from #1395) that made the bulk action bar icon-only with tooltip labels. It edited the package source and its built JS, so every upgrade had to move it and any upstream change to the file could break it.
+
+Architectural: packages #307 adds `BulkActionBar labels` (`"inline"` default, `"tooltip"`) and the `UiConfig` entry `BulkActionBar: { labels }`. `@eva/ui`'s `controlsConfig` sets `labels: "tooltip"` for every bar (inbox, projects, quick tasks). `patches/@vvedantb__ui@0.53.0.patch` and its `patchedDependencies` entry are deleted; `@vvedantb/ui` 0.53.0 → 0.54.0 in web, the Chrome extension, `@eva/shared` and `@eva/ui`.
+
+## Web: @vvedantb/ui 0.53.0, reduced-motion setting covers the package
+
+Date: 2026-11-20
+
+WHY: Eva passes `MotionProvider reducedMotion="never"`, but the package's own dialogs, sheets and `motion-reduce:` classes still read the OS setting, so OS reduced-motion users lost modal motion against Eva's rule.
+
+Architectural: `@vvedantb/ui` 0.52.0 → 0.53.0 (packages #306). `MotionProvider reducedMotion` now stamps `html[data-reduced-motion]` and provides context; the package's `prefersReducedMotion()`, the Dialog zoom, the `motion-reduce:` variant (`utilities.css`, which Eva imports), `motion.css` and the landing CSS follow it. Eva needs no code change beyond the upgrade. The pnpm patch moves to 0.53.0 unchanged.
+
+## Web sidebar: main content slides with the panel
+
+Date: 2026-11-20
+
+WHY: Hiding or showing the sidebar slid the package aside's width, but the main content jumped to its new margin, so the two moved out of step.
+
+Architectural: `dockMotion.slideWith(follower, leader, property)` copies the leader's transition timing onto the follower for one change and fires `DOCK_MOTION_EVENT` on it, so a preview iframe inside steps aside. `sidebarPanelMotion` slides `<main>`'s `margin-left` with the shell aside (280 ms, out-quint, read from the aside) on hide, after the pop out, and on show.
+
+## Web: @vvedantb/ui 0.52.0, modals grow from their trigger
+
+Date: 2026-11-20
+
+WHY: Modals should open like the sandbox card does, out of what you pressed; they also replayed their entrance about 300 ms after opening when the content re-rendered.
+
+Architectural: `@vvedantb/ui` 0.51.0 → 0.52.0 (packages #303) in web, the Chrome extension, `@eva/shared` and `@eva/ui`. The package's `modalTransition` aims each Dialog at the press that opened it (within 500 ms) or the focused control, starting at 40% scale; with neither it keeps the centred zoom, and the command palette stays instant. Eva's pnpm patch of the package (icon-only bulk action bar) moves to 0.52.0 unchanged.
+
 ## Web preview iframe steps aside during dock motion
 
 Date: 2026-11-19

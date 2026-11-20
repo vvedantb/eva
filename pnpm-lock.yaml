@@ -41,9 +41,6 @@ patchedDependencies:
   '@vercel/sandbox':
     hash: fa921e07e5f53281f9079d36cf2a9fdd25ea4986ee518790819e1bbe70c3a9f1
     path: patches/@vercel__sandbox.patch
-  '@vvedantb/ui@0.51.0':
-    hash: 03e0be940842c5d120166e4698887a5b5f1f2e5c01a161611a9e55166ee01b35
-    path: patches/@vvedantb__ui@0.51.0.patch
 
 importers:
 
@@ -131,8 +128,8 @@ importers:
         specifier: ^3.36.1
         version: 3.41.1(react@19.3.0)
       '@vvedantb/ui':
-        specifier: 0.51.0
-        version: 0.51.0(patch_hash=03e0be940842c5d120166e4698887a5b5f1f2e5c01a161611a9e55166ee01b35)(f1986314328ac65438e64bdb75d5fa5e)
+        specifier: 0.54.1
+        version: 0.54.1(f1986314328ac65438e64bdb75d5fa5e)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -565,8 +562,8 @@ importers:
         specifier: 0.17.0
         version: 0.17.0(@ai-sdk/gateway@4.0.134(zod@4.6.7))(@clerk/backend@2.33.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@jitl/quickjs-singlefile-cjs-release-sync@0.32.0)(@json-render/core@0.21.0(zod@4.6.7))(@modelcontextprotocol/sdk@1.29.0(zod@4.6.7))(ai@7.0.161(zod@4.6.7))(convex-helpers@0.1.114(@standard-schema/spec@1.1.0)(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(hono@4.12.25)(react@19.3.0)(typescript@7.0.1-rc)(zod@4.6.7))(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(quickjs-emscripten-core@0.32.0)(zod@4.6.7)
       '@vvedantb/ui':
-        specifier: 0.51.0
-        version: 0.51.0(patch_hash=03e0be940842c5d120166e4698887a5b5f1f2e5c01a161611a9e55166ee01b35)(48880194676483d70e4fe4e28bdf7903)
+        specifier: 0.54.1
+        version: 0.54.1(48880194676483d70e4fe4e28bdf7903)
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
@@ -895,8 +892,8 @@ importers:
         specifier: 19.3.0
         version: 19.3.0
       '@vvedantb/ui':
-        specifier: 0.51.0
-        version: 0.51.0(patch_hash=03e0be940842c5d120166e4698887a5b5f1f2e5c01a161611a9e55166ee01b35)(5d6fb436ed43c3271780f5aafb4642c6)
+        specifier: 0.54.1
+        version: 0.54.1(5d6fb436ed43c3271780f5aafb4642c6)
       cronstrue:
         specifier: ^3.13.0
         version: 3.14.0
@@ -913,8 +910,8 @@ importers:
         specifier: ^3.33.0
         version: 3.41.1(react@19.3.0)
       '@vvedantb/ui':
-        specifier: 0.51.0
-        version: 0.51.0(patch_hash=03e0be940842c5d120166e4698887a5b5f1f2e5c01a161611a9e55166ee01b35)(5d6fb436ed43c3271780f5aafb4642c6)
+        specifier: 0.54.1
+        version: 0.54.1(5d6fb436ed43c3271780f5aafb4642c6)
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -6756,8 +6753,8 @@ packages:
       zod:
         optional: true
 
-  '@vvedantb/ui@0.51.0':
-    resolution: {integrity: sha512-T58Dxadd4/tpNK61823x4h7prJ0fVmCzsVOYvUtxnMdGsrNsFUBT9oaG7L6RUz4ILIZONxtSqvEP0fDJmu5YZA==}
+  '@vvedantb/ui@0.54.1':
+    resolution: {integrity: sha512-yaEDsqqAB3sO+3X+WZoBDikv0sXQH87CZa8uFFI7DtCjmOJhKiB1/gZLn1ZQsJKKTKh190dK3Vf4jZsvvH0OvQ==}
     peerDependencies:
       '@clerk/clerk-react': 5.61.6
       '@json-render/core': '>=0.21.0'
@@ -18227,7 +18224,7 @@ snapshots:
       quickjs-emscripten-core: 0.32.0
       zod: 4.6.7
 
-  '@vvedantb/ui@0.51.0(patch_hash=03e0be940842c5d120166e4698887a5b5f1f2e5c01a161611a9e55166ee01b35)(48880194676483d70e4fe4e28bdf7903)':
+  '@vvedantb/ui@0.54.1(48880194676483d70e4fe4e28bdf7903)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -18288,7 +18285,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 4.6.7
 
-  '@vvedantb/ui@0.51.0(patch_hash=03e0be940842c5d120166e4698887a5b5f1f2e5c01a161611a9e55166ee01b35)(5d6fb436ed43c3271780f5aafb4642c6)':
+  '@vvedantb/ui@0.54.1(5d6fb436ed43c3271780f5aafb4642c6)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -18348,7 +18345,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 4.6.7
 
-  '@vvedantb/ui@0.51.0(patch_hash=03e0be940842c5d120166e4698887a5b5f1f2e5c01a161611a9e55166ee01b35)(f1986314328ac65438e64bdb75d5fa5e)':
+  '@vvedantb/ui@0.54.1(f1986314328ac65438e64bdb75d5fa5e)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
