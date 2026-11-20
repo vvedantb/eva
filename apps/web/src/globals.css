@@ -853,7 +853,8 @@
   }
 
   html[data-page-motion="off"] .t-modal,
-  html[data-page-motion="off"] .t-modal.is-closing {
+  html[data-page-motion="off"] .t-modal.is-closing,
+  html[data-page-motion="off"] .t-modal[data-state="closed"] {
     transition-duration: 0s !important;
     animation: none !important;
   }
