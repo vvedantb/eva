@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import type { Id } from "@eva/backend";
 import type { Notification } from "@/lib/components/notifications/notification-config";

@@ -1,9 +1,10 @@
 import { convexTest } from "convex-test";
 import prosemirrorSync from "@convex-dev/prosemirror-sync/test";
 import workflow from "@convex-dev/workflow/test";
-import { expect, test, vi } from "vitest";
+import { expect, test, vi } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * A recap run that starts on an existing recap only flips it to pending: the
@@ -12,7 +13,6 @@ import schema from "../convex/schema";
  * instead of a "Generating…" placeholder. The ready write still keeps history.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const PR_URL = "https://github.com/vvedantb/eva/pull/1";
 const STEPS = [{ title: "Core", summary: "The idea.", files: ["a.ts"] }];

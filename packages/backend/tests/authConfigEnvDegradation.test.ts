@@ -1,4 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
+import { stubEnv, unstubAllEnvs } from "./_helpers/env";
+
+/** Both modules read env at import time, so each test evaluates them afresh. */
+function resetAuthModules(): void {
+  delete require.cache[require.resolve("../convex/sandboxAuthConfig")];
+  delete require.cache[require.resolve("../convex/auth.config")];
+}
 
 /**
  * `auth.config.ts` is evaluated during module analysis, so anything it throws
@@ -12,17 +19,17 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
  */
 describe("auth config with no auth env vars", () => {
   beforeEach(() => {
-    vi.resetModules();
+    resetAuthModules();
     vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
   afterEach(() => {
-    vi.unstubAllEnvs();
+    unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
   test("a missing JWKS disables the sandbox provider instead of throwing", async () => {
-    vi.stubEnv("SANDBOX_JWT_JWKS", undefined);
+    stubEnv("SANDBOX_JWT_JWKS", undefined);
     const { SANDBOX_JWT_JWKS_DATA_URI } = await import(
       "../convex/sandboxAuthConfig"
     );
@@ -31,7 +38,7 @@ describe("auth config with no auth env vars", () => {
   });
 
   test("a present JWKS still becomes the data URI the CLI expects", async () => {
-    vi.stubEnv("SANDBOX_JWT_JWKS", '{"keys":[]}');
+    stubEnv("SANDBOX_JWT_JWKS", '{"keys":[]}');
     const { SANDBOX_JWT_JWKS_DATA_URI } = await import(
       "../convex/sandboxAuthConfig"
     );
@@ -41,8 +48,8 @@ describe("auth config with no auth env vars", () => {
   });
 
   test("an unseeded deployment configures no providers at all", async () => {
-    vi.stubEnv("SANDBOX_JWT_JWKS", undefined);
-    vi.stubEnv("CLERK_JWT_ISSUER_DOMAIN", undefined);
+    stubEnv("SANDBOX_JWT_JWKS", undefined);
+    stubEnv("CLERK_JWT_ISSUER_DOMAIN", undefined);
     const { default: config } = await import("../convex/auth.config");
     expect(config.providers).toEqual([]);
   });
@@ -50,8 +57,8 @@ describe("auth config with no auth env vars", () => {
   test("a provider is omitted rather than half-configured", async () => {
     // The CLI rejects a provider whose domain or jwks is undefined, which fails
     // the push just as hard as a throw would.
-    vi.stubEnv("SANDBOX_JWT_JWKS", undefined);
-    vi.stubEnv("CLERK_JWT_ISSUER_DOMAIN", "https://clerk.eva.dev");
+    stubEnv("SANDBOX_JWT_JWKS", undefined);
+    stubEnv("CLERK_JWT_ISSUER_DOMAIN", "https://clerk.eva.dev");
     const { default: config } = await import("../convex/auth.config");
     expect(config.providers).toHaveLength(1);
     for (const provider of config.providers) {
@@ -62,8 +69,8 @@ describe("auth config with no auth env vars", () => {
   });
 
   test("a fully seeded deployment configures both providers", async () => {
-    vi.stubEnv("SANDBOX_JWT_JWKS", '{"keys":[]}');
-    vi.stubEnv("CLERK_JWT_ISSUER_DOMAIN", "https://clerk.eva.dev");
+    stubEnv("SANDBOX_JWT_JWKS", '{"keys":[]}');
+    stubEnv("CLERK_JWT_ISSUER_DOMAIN", "https://clerk.eva.dev");
     const { default: config } = await import("../convex/auth.config");
     expect(config.providers).toHaveLength(2);
     const clerk = config.providers.find((provider) => "domain" in provider);

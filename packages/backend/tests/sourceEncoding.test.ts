@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -33,19 +33,22 @@ const TEXT_EXTENSIONS = [
  * Tabs, newlines and carriage returns are the only control bytes source files
  * legitimately contain.
  */
+/** Every control byte except tab, newline and carriage return. */
+// oxlint-disable-next-line no-control-regex -- this test hunts control bytes.
+const CONTROL_BYTES = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g;
+
 describe("tracked source files are plain text", () => {
   test("no source file contains a control byte", () => {
     const offenders: string[] = [];
     for (const path of trackedTextFiles()) {
-      const bytes = readFileSync(join(repoRoot, path));
-      const found = new Set<number>();
-      for (const byte of bytes) {
-        if (byte === 9 || byte === 10 || byte === 13) continue;
-        if (byte < 32 || byte === 127) found.add(byte);
-      }
+      // latin1 maps each byte to one char, so the regex sees raw bytes.
+      const text = readFileSync(join(repoRoot, path)).toString("latin1");
+      const found = new Set(text.match(CONTROL_BYTES));
       if (found.size > 0) {
         const codes = [...found]
-          .map((byte) => `0x${byte.toString(16).padStart(2, "0")}`)
+          .map(
+            (char) => `0x${char.charCodeAt(0).toString(16).padStart(2, "0")}`,
+          )
           .join(", ");
         offenders.push(`${path}: ${codes}`);
       }

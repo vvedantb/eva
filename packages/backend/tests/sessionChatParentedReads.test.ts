@@ -1,8 +1,9 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { openSessionChatTurn } from "../convex/_chat/turnStore";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Since sessions hold several chats, a session's messages hang off its
@@ -11,7 +12,6 @@ import { openSessionChatTurn } from "../convex/_chat/turnStore";
  * and write through the chat.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|session-chat-reads";
 

@@ -37,7 +37,7 @@ pnpm design:check
 pnpm lint
 ```
 
-5. **Tests** (web + backend vitest, script tests; CI runs the same command):
+5. **Tests** (web + backend `bun test`, script tests; CI runs the same command):
 
 ```bash
 pnpm test

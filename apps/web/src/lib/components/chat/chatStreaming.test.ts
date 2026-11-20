@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import type { Id } from "@eva/backend";
 import { chatStreamingEntityId, findStreamingTargetMessage } from "@eva/shared";
@@ -13,9 +13,9 @@ describe("chatStreamingEntityId", () => {
   test("is the key the web sandbox chat subscribes with", () => {
     const sessionId = z.custom<Id<"sessions">>().parse("session_1");
     const chatId = z.custom<Id<"sessionChats">>().parse("chat_1");
-    expect(chatStreamingEntityId(chatId)).toBe(
+    expect(
       sandboxChatKeys({ kind: "session", sessionId, chatId }).streamingEntityId,
-    );
+    ).toBe(chatStreamingEntityId(chatId));
     expect(chatStreamingEntityId(chatId)).toBe("chat_1");
   });
 });

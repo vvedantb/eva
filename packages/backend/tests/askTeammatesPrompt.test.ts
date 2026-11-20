@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { buildEditPrompt } from "../convex/_sessions/prompts";
 
 function editPrompt(askTeammatesEnabled: boolean | undefined): string {

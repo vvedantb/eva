@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, test, vi } from "vitest";
+import { expect, test } from "bun:test";
+import { freshModules } from "./freshModules";
 import {
   DAEMON_CLAIM_POLL_TIMING,
   buildEntityMutationArgs,
@@ -72,9 +73,13 @@ test("buildEntityMutationArgs prefixes the entity field", () => {
 
 test("entityMutationArgs prefixes the entity this daemon owns", async () => {
   // config.ts reads the entity env at import time, so load a fresh module graph.
-  vi.stubEnv("ENTITY_ID_FIELD", "taskId");
-  vi.stubEnv("ENTITY_ID", "t1");
-  vi.resetModules();
+  const original = {
+    ENTITY_ID_FIELD: process.env.ENTITY_ID_FIELD,
+    ENTITY_ID: process.env.ENTITY_ID,
+  };
+  process.env.ENTITY_ID_FIELD = "taskId";
+  process.env.ENTITY_ID = "t1";
+  freshModules();
   try {
     const fresh = await import("../runtime/daemonProcess.js");
     expect(fresh.entityMutationArgs({ model: "claude:sonnet" })).toEqual({
@@ -82,8 +87,11 @@ test("entityMutationArgs prefixes the entity this daemon owns", async () => {
       model: "claude:sonnet",
     });
   } finally {
-    vi.unstubAllEnvs();
-    vi.resetModules();
+    for (const [key, value] of Object.entries(original)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    freshModules();
   }
 });
 

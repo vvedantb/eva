@@ -1,9 +1,10 @@
 import { convexTest } from "convex-test";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "bun:test";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import type { Id } from "../convex/_generated/dataModel";
 import { ensureMainChat } from "../convex/_sessionChats/helpers";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Chat-scoped rows hang off the sessionChats id since sessions hold several
@@ -12,7 +13,6 @@ import { ensureMainChat } from "../convex/_sessionChats/helpers";
  * deleting a repo must take every chat's rows with it.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|session-chat-legacy-rows";
 

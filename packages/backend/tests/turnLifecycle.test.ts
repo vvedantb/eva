@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import {
   TURN_FINALIZING_LEASE_MS,
   TURN_RUNNING_LEASE_MS,

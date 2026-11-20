@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { buildCodexRuntimeConfig } from "../session/codexSession.js";
 
 test("Codex Fast mode is explicit and defaults to Standard", () => {

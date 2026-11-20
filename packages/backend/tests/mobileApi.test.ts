@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import workflow from "@convex-dev/workflow/test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import type { FunctionArgs } from "convex/server";
@@ -23,6 +23,7 @@ import {
 import { MENTION_TOKEN_REGEX } from "../convex/_mentions/mentionToken";
 import { SKILL_TOKEN_REGEX } from "../convex/_mentions/skillToken";
 import { openTurn } from "../convex/_chat/turnStore";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * The mobile app's writes (apps/mobile): replies in every chat kind, Stop and
@@ -30,7 +31,6 @@ import { openTurn } from "../convex/_chat/turnStore";
  * scheduled sandbox and push actions queued instead of running.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 /** Loading the chat-workflow module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|mobile-api";

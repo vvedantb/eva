@@ -1,4 +1,4 @@
-import { describe, it, beforeEach, expect } from "vitest";
+import { describe, it, beforeEach, expect } from "bun:test";
 import {
   backgroundShellQueueLengthForTests,
   matchBackgroundShellId,

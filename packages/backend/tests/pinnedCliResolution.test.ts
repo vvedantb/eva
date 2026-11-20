@@ -10,7 +10,8 @@ import {
 } from "fs";
 import { tmpdir } from "os";
 import { dirname, join } from "path";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import { stubEnv, unstubAllEnvs } from "./_helpers/env";
 import { resolvePinnedCliBinary } from "../callback-src/providers/claudeSdk.js";
 import { pinnedCliInstallCommand } from "../convex/_sandbox_runtime/launch";
 
@@ -69,7 +70,7 @@ beforeEach(() => {
   chmodSync(join(stubs, "npm"), 0o755);
   // Image copy first on PATH, the user's `claude update` copy behind it, then
   // the stub npm ahead of the real node toolchain.
-  vi.stubEnv(
+  stubEnv(
     "PATH",
     [
       join(imagePrefix(), "bin"),
@@ -83,7 +84,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  vi.unstubAllEnvs();
+  unstubAllEnvs();
   rmSync(root, { recursive: true, force: true });
 });
 

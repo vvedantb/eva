@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import {
   SANDBOX_ENGAGED_WINDOW_MS,
   SANDBOX_ENGAGEMENT_INPUT_EVENTS,

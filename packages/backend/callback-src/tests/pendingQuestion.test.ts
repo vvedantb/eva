@@ -1,12 +1,12 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
-import type * as ConvexClient from "../http/convexClient.js";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
+import { freshModules } from "./freshModules";
 
 // Only the network call is faked; the pure envelope reader
 // (`unwrapConvexMutationPayload`) must stay real so the `{ status, value }`
 // shape below is unwrapped exactly as it is in production.
-vi.mock("../http/convexClient.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof ConvexClient>()),
-  callConvexWithRetry: vi.fn(async (_type: string, path: string) =>
+const realClient = { ...(await import("../http/convexClient.js")) };
+const callConvexWithRetry = mock<typeof realClient.callConvexWithRetry>(
+  async (_type, path) =>
     path === "pendingQuestions:claimAnswer"
       ? {
           status: "success",
@@ -15,7 +15,10 @@ vi.mock("../http/convexClient.js", async (importOriginal) => ({
           },
         }
       : null,
-  ),
+);
+mock.module("../http/convexClient.js", () => ({
+  ...realClient,
+  callConvexWithRetry,
 }));
 
 const originalClaim = process.env.CLAIM_MUTATION;
@@ -32,13 +35,13 @@ afterEach(() => {
   } else {
     process.env.ENTITY_ID_FIELD = originalEntityField;
   }
-  vi.resetModules();
+  freshModules();
 });
 
 describe("buildCanUseTool Agent/Task background policy", () => {
   test("daemon (CLAIM_MUTATION set) allows run_in_background for Agent", async () => {
     process.env.CLAIM_MUTATION = "sessionWorkflow:claimPendingTurn";
-    vi.resetModules();
+    freshModules();
     const { buildCanUseTool } = await import("../runtime/pendingQuestion.js");
     const canUseTool = buildCanUseTool();
     const result = await canUseTool(
@@ -54,7 +57,7 @@ describe("buildCanUseTool Agent/Task background policy", () => {
 
   test("one-shot (no CLAIM_MUTATION) coerces Agent to foreground", async () => {
     delete process.env.CLAIM_MUTATION;
-    vi.resetModules();
+    freshModules();
     const { buildCanUseTool } = await import("../runtime/pendingQuestion.js");
     const canUseTool = buildCanUseTool();
     const result = await canUseTool(
@@ -75,7 +78,7 @@ describe("buildCanUseTool AskUserQuestion answers", () => {
     // Blocking on an answer is session-only behaviour, so the gate needs the
     // session entity field to take that path at all.
     process.env.ENTITY_ID_FIELD = "sessionId";
-    vi.resetModules();
+    freshModules();
     const { buildCanUseTool } = await import("../runtime/pendingQuestion.js");
     const { callbackState } = await import("../runtime/state.js");
     const canUseTool = buildCanUseTool();
@@ -107,11 +110,10 @@ describe("buildCanUseTool AskUserQuestion answers", () => {
  */
 describe("pollForAnswer releases the question after the wait", () => {
   async function pollWith(releaseAnswer: string | null) {
-    vi.resetModules();
-    const client = await import("../http/convexClient.js");
+    freshModules();
     const calls: string[] = [];
     // With no wait left the poll makes exactly one call: the release.
-    vi.mocked(client.callConvexWithRetry).mockImplementationOnce(
+    callConvexWithRetry.mockImplementationOnce(
       async (_type, path) => {
         calls.push(path);
         return {
@@ -147,20 +149,18 @@ describe("pollForAnswer releases the question after the wait", () => {
     // left: without it the turn ends and the card never renders.
     process.env.CLAIM_MUTATION = "sessionWorkflow:claimPendingTurn";
     process.env.ENTITY_ID_FIELD = "sessionId";
-    vi.resetModules();
-    const client = await import("../http/convexClient.js");
+    freshModules();
     const { buildCanUseTool, QUESTION_RELEASED_MESSAGE, QUESTION_WAIT_MS } =
       await import("../runtime/pendingQuestion.js");
     const { callbackState } = await import("../runtime/state.js");
     const realNow = Date.now.bind(Date);
     let skippedMs = 0;
-    const clock = vi
-      .spyOn(Date, "now")
+    const clock = spyOn(Date, "now")
       .mockImplementation(() => realNow() + skippedMs);
     const calls: string[] = [];
     // The first unanswered poll jumps the clock past the wait, so the next
     // poll is the release.
-    vi.mocked(client.callConvexWithRetry).mockImplementation(
+    callConvexWithRetry.mockImplementation(
       async (_type, path) => {
         calls.push(path);
         if (path === "pendingQuestions:claimAnswer") {
@@ -209,7 +209,7 @@ describe("the canUseTool gate grants MCP on every surface", () => {
     } else {
       process.env.ENTITY_ID_FIELD = entityIdField;
     }
-    vi.resetModules();
+    freshModules();
     const { buildCanUseTool } = await import("../runtime/pendingQuestion.js");
     return buildCanUseTool();
   }

@@ -1,9 +1,10 @@
 import { convexTest } from "convex-test";
 import workflow from "@convex-dev/workflow/test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { cancelTrackedWorkflow } from "../convex/workflowManager";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * `authMutation` / `authQuery` only authenticate. Each public function below
@@ -12,7 +13,6 @@ import { cancelTrackedWorkflow } from "../convex/workflowManager";
  * team's doc, project, session or task. A stranger must now be refused.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const OWNER = "clerk|access-owner";
 const STRANGER = "clerk|access-stranger";
