@@ -40,11 +40,9 @@ jobs:
       # The schema gate and the test scope both diff against the merge base, so
       # the checkout needs full history (affected_tests requires fetch_depth: 0).
       fetch_depth: 0
-      # Run every command line at once in the one Check job. max_parallel caps
-      # how many run together; 2 beat all-at-once on this 8-core runner for
-      # vibot (see the PR body for the run ids compared here).
+      # Run the command lines together in the one Check job. Measuring
+      # max_parallel on real runs (see the PR body for the run ids compared).
       parallel: true
-      max_parallel: 2
       # Pull requests run only the tests the diff can reach; pushes to main run
       # everything. The workflow exports VV_TEST_SCOPE and VV_TEST_CHANGED to
       # every command; the two vitest commands below append VV_TEST_CHANGED.

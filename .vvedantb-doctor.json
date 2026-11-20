@@ -3,6 +3,10 @@
     "no-eslint": "eslint-plugin-react-you-might-not-need-an-effect is an ESLint-format plugin that oxlint loads through jsPlugins in .oxlintrc.json; ESLint is not installed and never runs."
   },
   "ciCommands": {
+    "pnpm --filter @eva/web exec vitest run ${VV_TEST_CHANGED:+--passWithNoTests} $VV_TEST_CHANGED": "The web Vitest suite, narrowed to the tests the pull request can reach. affected_tests exports VV_TEST_CHANGED, so a pull request runs only affected tests and a push to main runs all; a plain `pnpm test` cannot pass the flag through its && chain, so each workspace runs through `exec vitest`.",
+    "pnpm --filter @eva/backend exec vitest run ${VV_TEST_CHANGED:+--passWithNoTests} $VV_TEST_CHANGED": "The backend Vitest suite, narrowed the same way. Vitest --changed follows the Vite module graph, import.meta.glob included, so the convex-test suite narrows correctly.",
+    "pnpm --filter @eva/backend exec vitest run tests/sourceEncoding.test.ts": "The source-encoding test scans every git-tracked file for control bytes and imports only node and vitest, so the module graph cannot reach it and --changed never selects it. It runs on every pull request, outside narrowing, so a bad byte in any file is always caught.",
+    "pnpm test:schema-narrowing": "A node --test suite that reads the Convex schema from disk; --changed cannot select it, so it runs on every pull request. It was part of the old `pnpm test` chain, now split out so the two vitest commands can be narrowed.",
     "node scripts/check-shared-backend.mjs": "Fails when the phone app calls a Convex function that the web app never calls, unless the function is listed with a reason, which lint, typecheck and test do not compare.",
     "./scripts/check-apk-compat.sh": "Type-checks the newest published APK source against this backend when the backend changed and warns (never fails) on what installed phones will lose, which typecheck of the current code cannot see.",
     "node scripts/compiler-check.mjs": "Runs the React Compiler over the web source and fails on a new bailout that is not in the baseline, which lint, typecheck and test do not report.",
