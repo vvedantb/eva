@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: rail shell, dock motion and sandbox side panel come from the package (@vvedantb/ui 0.57.0)
+
+Date: 2026-11-20
+
+WHY: Other apps can now use eva's layout with one prop (`AppShell` `variant="rail"`). eva kept its own copies of the dock motion, the sandbox tabs and the button tracks, so the two would drift.
+
+Architectural: `Sidebar.tsx` sets `variant="rail"` on `AppShell.Root`. `SidebarContext` calls the package `popOutShellPanel` / `popInShellPanelNextFrame`; `RepoRail` spreads `shellDockTileProps`. The sandbox pane is `SidePanelTabs.Frame`, its rail `SidePanelTabs.Rail` and `.List`, and each tab `SidePanelTabs.Tab`; `ResizablePanelLayout` closes the card with `popOutSidePanel`. Tool and header groups use `ButtonTrack` / `buttonTrackClass`. eva's tones stay: `rail-track` and `tabs-segmented` in `globals.css` still win over the package tokens, and the arrow transition (`.t-side-panel-arrow`) and dock-slide rules stay there because eva does not import the package CSS. Removed: `lib/dockMotion.ts`, `sidebarPanelMotion.ts`, `sandboxCardMotion.ts`, `sandboxRail.ts`. `@vvedantb/ui` 0.55.0 → 0.57.0 (web, `@eva/ui`, extension; the `@eva/shared` dev pin stays, so no APK release).
+
 ## Phone update check asks V Store
 
 Date: 2026-11-20
