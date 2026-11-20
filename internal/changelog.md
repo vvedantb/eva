@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: @vvedantb/ui 0.54.0, the package patch is gone
+
+Date: 2026-11-20
+
+WHY: Eva carried a pnpm patch of `@vvedantb/ui` (from #1395) that made the bulk action bar icon-only with tooltip labels. It edited the package source and its built JS, so every upgrade had to move it and any upstream change to the file could break it.
+
+Architectural: packages #307 adds `BulkActionBar labels` (`"inline"` default, `"tooltip"`) and the `UiConfig` entry `BulkActionBar: { labels }`. `@eva/ui`'s `controlsConfig` sets `labels: "tooltip"` for every bar (inbox, projects, quick tasks). `patches/@vvedantb__ui@0.53.0.patch` and its `patchedDependencies` entry are deleted; `@vvedantb/ui` 0.53.0 → 0.54.0 in web, the Chrome extension, `@eva/shared` and `@eva/ui`.
+
 ## Web: @vvedantb/ui 0.53.0, reduced-motion setting covers the package
 
 Date: 2026-11-20
