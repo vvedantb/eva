@@ -59,6 +59,8 @@ export const controlsConfig = {
       shape: buttonShape,
     },
   },
+  // Icon-only bulk actions at every width; the label shows in a tooltip.
+  BulkActionBar: { labels: "tooltip" },
   Badge: {
     classes: {
       base: "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold tracking-[0.01em] transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/35 focus-visible:ring-offset-2",
