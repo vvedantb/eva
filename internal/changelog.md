@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: @vvedantb/ui 0.53.0, reduced-motion setting covers the package
+
+Date: 2026-11-20
+
+WHY: Eva passes `MotionProvider reducedMotion="never"`, but the package's own dialogs, sheets and `motion-reduce:` classes still read the OS setting, so OS reduced-motion users lost modal motion against Eva's rule.
+
+Architectural: `@vvedantb/ui` 0.52.0 → 0.53.0 (packages #306). `MotionProvider reducedMotion` now stamps `html[data-reduced-motion]` and provides context; the package's `prefersReducedMotion()`, the Dialog zoom, the `motion-reduce:` variant (`utilities.css`, which Eva imports), `motion.css` and the landing CSS follow it. Eva needs no code change beyond the upgrade. The pnpm patch moves to 0.53.0 unchanged.
+
 ## Web sidebar: main content slides with the panel
 
 Date: 2026-11-20
