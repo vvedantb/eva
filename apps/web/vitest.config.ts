@@ -7,6 +7,11 @@ export default defineConfig({
   esbuild: { jsx: "automatic" },
   test: {
     environment: "node",
+    // Files in one worker share loaded modules, so each module is imported
+    // once per worker instead of once per file. Measured on CI: about 14 s down
+    // to about 5 s with the same 873 tests passing (run 44814978752). A test
+    // that needs fresh module state must reset it itself.
+    isolate: false,
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     // @vvedantb/ui ships compiled .js that imports its own CSS (sonner, katex).
     // Inlined, Vite handles that CSS and `dedupe` below applies; external, Node
