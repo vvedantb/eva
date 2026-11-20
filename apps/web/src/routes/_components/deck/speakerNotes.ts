@@ -398,7 +398,7 @@ Bee's still in progress, but what do we think — would you use Bee?
   // Annual CDM deck
   // ---------------------------------------------------------------------------
   "a01-title": `Open on the span, not the product: an empty repository in January became how we build software.
-Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the shape: the origin, who uses it, how the platform is built, the craft behind it and the people, then the year ahead and the framework map on slide 43.
+Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the shape: the origin, who uses it, how the platform is built, the craft behind it and the people, then the year ahead and the framework map on slide 44.
 Figures: the window is 11 January to 16 September 2026.
 Next: it starts on a single evening in January.`,
 
@@ -513,7 +513,7 @@ Figures: Bee from 26 September, 85 releases to 13 November 2026; Redline and flo
 Framework: a skill beyond coding; improves the process; contributes to common code and standards.
 Next: how all of this maps to the framework.`,
   "a15-framework": `This is the map an assessor reads: the framework's three sections, Technical, Impact and Collaboration, each evidenced by a slide already shown.
-→ Step 1: the ticks land, column by column. Technical: design and trade-offs, slide 21, with 19, 24 and 32; debugging, slides 22 and 23; a skill beyond coding, slide 27, measurement, and slides 34 to 35, Jev. Impact: breaking down large problems, slide 21; improving the process, slides 28 to 30, 40 and 42, Redline and the shared packages; identifying work, slides 26 and 41; business and user empathy, slides 13 and 35 to 37. Collaboration: communicating clearly, the Friday sessions and this deck; getting buy-in, slides 9 to 10, where the team took Eva up; mentoring and onboarding, slide 33.
+→ Step 1: the ticks land, column by column. Technical: design and trade-offs, slide 21, with 19, 24 and 32; debugging, slides 22, 23 and 40; a skill beyond coding, slide 27, measurement, and slides 34 to 35, Jev. Impact: breaking down large problems, slide 21; improving the process, slides 28 to 30, 41 and 43, Redline and the shared packages; identifying work, slides 26 and 42; business and user empathy, slides 13 and 35 to 37. Collaboration: communicating clearly, the Friday sessions and this deck; getting buy-in, slides 9 to 10, where the team took Eva up; mentoring and onboarding, slide 33.
 → Step 2: the thin evidence. Volunteer the gaps before they are asked for. Giving and seeking feedback, and pairing on reviews, happen but are not written down; page scores are not routine though the harness exists; and there has been no work alongside a designer or user researcher.
 Next: one last fact about how this deck was made.`,
 
@@ -599,6 +599,15 @@ Next: many of the right calls came from listening to colleagues.`,
 → Step 2: both sit together and the closing line lands. Read them once, then stop talking.
 Detail: dwell on the first quote, because it is the opposite of the usual conversation. Much of this deck is evidence for it: durable turns, the security boundary, the enforced quality bar. None of those are about the model. Both lines are verbatim from notes written during the year, not composed for this deck.
 Figures: from the project's own written notes.
+Next: one lesson from the last few months: the system includes the packages we depend on.`,
+
+  "annual-e03-patch-packages": `A newer lesson: when a package we depend on is wrong, we no longer work around it. We patch it, the same day.
+→ Step 1: Vercel Sandbox. Any command sent to a stopped sandbox woke it up again, and the package had no way to turn that off. I want sandboxes to start and stop when I say so, not as a side effect of a user's command. So I asked the AI to patch the package: it added a switch to turn auto-resume off, and a way to attach only to a sandbox that is already running.
+→ Step 2: Convex presence. When a heartbeat timed out, the clean-up job tried to cancel itself, Convex refused, and every timeout threw an error that filled the logs. The patch skips the cancel on that path and still deletes the record.
+→ Step 3: the closing line. A dependency is code we can change, not a wall we wait behind.
+Detail: both are pnpm patches kept in the repository, so they are reviewed like any other change and re-applied on every install. Upstream fixes can replace them later; until then the product does not wait.
+Figures: Vercel Sandbox patch 17 October 2026; Convex presence patch 16 June 2026. Repository patches folder.
+Framework: debugs production issues; modifies and improves code and reasons about the improvement.
 Next: part of that system already works: on Eva, marking work ready is the last human step.`,
 
   "annual-d08-durable": `Most reports of the tool being stuck were one structural fault, and it was fixed once rather than patched repeatedly.

@@ -10,14 +10,17 @@ const LABEL = "text-sm font-semibold tracking-[0.14em] text-white/45 uppercase";
 export function ProblemFix({
   problem,
   fix,
+  step = 0,
   className,
 }: {
   problem: string;
   fix: string;
+  /** Build step the line arrives on; the title's own step by default. */
+  step?: number;
   className?: string;
 }) {
   return (
-    <Reveal delay={0.25} className={className}>
+    <Reveal step={step} delay={0.25} className={className}>
       <div className="mt-5 flex items-center gap-4 text-xl text-white/85">
         <span className={LABEL}>Problem</span>
         <span>{problem}</span>

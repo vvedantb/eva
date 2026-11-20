@@ -1,4 +1,5 @@
 import type { DeckSlide } from "./types";
+import { AnnualPatchPackages } from "./annual/e03-patch-packages";
 import { AnnualCarePulse } from "./annual/e02-carepulse";
 import { AnnualBeyond } from "./annual/e01-beyond";
 import { Slide05SimpleMode } from "./05-simple-mode";
@@ -288,6 +289,12 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     title: "Two lessons, one direction",
     Component: AnnualLessons,
     steps: 2,
+  },
+  {
+    id: "annual-e03-patch-packages",
+    title: "Patch the package",
+    Component: AnnualPatchPackages,
+    steps: 3,
   },
   // ── Close: the year ahead, the framework map, the last word ──
   // From the Friday deck: marking work ready is already the last human step on Eva.
