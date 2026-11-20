@@ -1028,16 +1028,18 @@ html[data-blur-pid] [data-pii] {
 .rail-track :is([data-rail-tile], button):not([data-active]):not(:disabled):hover {
   background-color: rgb(var(--segment-active) / 0.5);
 }
-/* The sandbox card's arrow to the active rail tab: slides with the tab pill's
- * timing; page motion off snaps it, as the pill. */
-.sandbox-tab-arrow {
+/* The package side panel's arrow to the active rail tab (`SidePanelTabs.Frame`):
+ * slides with the tab pill's timing; page motion off snaps it, as the pill.
+ * eva does not import the package `tabs.css`, so the rule lives here. */
+.t-side-panel-arrow {
   transition: transform var(--tabs-dur) var(--tabs-ease);
 }
-html[data-page-motion="off"] .sandbox-tab-arrow {
+html[data-page-motion="off"] .t-side-panel-arrow {
   transition-duration: 0s;
 }
-/* A dock pop's neighbour pane slides with it (`slideNextResize`); only set
- * for that one toggle, so a drag stays instant. */
+/* A dock pop's neighbour pane slides with it (package `slideNextResize`);
+ * only set for that one toggle, so a drag stays instant. eva does not import
+ * the package `motion.css`, so the rule lives here. */
 [data-dock-slide] > [data-panel] {
   transition: flex-grow var(--dock-slide-dur) var(--dock-slide-ease);
 }

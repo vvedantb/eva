@@ -27,6 +27,7 @@ import {
   CORNER_BADGE_CLASS,
   UnreadCornerBadge,
   Sidebar,
+  shellDockTileProps,
 } from "@vvedantb/ui";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { RepoLabelDialog } from "@/lib/components/RepoLabelDialog";
@@ -384,7 +385,7 @@ function RepoRailView({
             </Sidebar.RailItem>
           )}
           <Sidebar.RailItem
-            data-sidebar-dock-tile
+            {...shellDockTileProps}
             label={collapsed ? "Show sidebar" : "Hide sidebar"}
             onClick={() => setCollapsed(!collapsed)}
           >

@@ -1,7 +1,8 @@
 "use client";
 
 import { IconArchive } from "@tabler/icons-react";
-import { tokenTransition } from "@vvedantb/ui";
+import { cn } from "@eva/ui";
+import { buttonTrackClass, tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 
 interface ChatPageWrapperProps {
@@ -23,12 +24,14 @@ interface ChatPageWrapperProps {
 const ARCHIVED_MESSAGE = "This session is archived and read-only";
 
 /**
- * Chat header actions on one shared trough (`rail-track`), like the rail
- * groups; buttons on it are flat (globals.css). Session, task and project
- * chats all use it.
+ * Chat header actions on one shared trough: the package `buttonTrackClass`
+ * in eva's `rail-track` tones (globals.css). Session, task and project chats
+ * all use it.
  */
-export const CHAT_HEADER_ACTIONS_CLASS =
-  "rail-track flex shrink-0 flex-wrap items-center justify-end gap-0.5 rounded-xl p-0.5 empty:hidden";
+export const CHAT_HEADER_ACTIONS_CLASS = cn(
+  buttonTrackClass,
+  "rail-track flex-wrap justify-end",
+);
 
 export function ChatPageWrapper({
   title: _title,
