@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: modals close with the same zoom (@vvedantb/ui 0.54.1)
+
+Date: 2026-11-20
+
+WHY: Modals grew out of their trigger on open but vanished at once on close; the shrink back into the trigger never played.
+
+Architectural: Radix Presence reads the animation in the same commit that sets `data-state="closed"`, but the package keyed its closing styles (and the `t-modal-presence-wait` animation Presence waits on) only on `.is-closing`, which a MutationObserver adds a moment later, so Presence unmounted at once. packages #308 keys them on `[data-state="closed"]` too. `@vvedantb/ui` 0.54.0 → 0.54.1; Eva's `html[data-page-motion="off"]` rule in globals.css covers the new selector.
+
 ## Web: @vvedantb/ui 0.54.0, the package patch is gone
 
 Date: 2026-11-20
