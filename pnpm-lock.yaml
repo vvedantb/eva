@@ -252,8 +252,8 @@ importers:
         specifier: ^3.49.0
         version: 3.50.0(react-native-svg@15.15.4(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7)(bufferutil@4.1.0))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3))(react@19.2.3))(react@19.2.3)
       '@vvedantb/native-ui':
-        specifier: 0.32.0
-        version: 0.32.0(9538f48285115d41bad66f4d54a73cc9)
+        specifier: 0.34.0
+        version: 0.34.0(9538f48285115d41bad66f4d54a73cc9)
       '@vvedantb/server':
         specifier: 0.17.0
         version: 0.17.0(@ai-sdk/gateway@4.0.134(zod@4.6.7))(@clerk/backend@2.33.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@jitl/quickjs-singlefile-cjs-release-sync@0.32.0)(@json-render/core@0.21.0(zod@4.6.7))(@modelcontextprotocol/sdk@1.29.0(zod@4.6.7))(ai@7.0.161(zod@4.6.7))(convex-helpers@0.1.114(@standard-schema/spec@1.1.0)(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@clerk/react@6.18.7(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(bufferutil@4.1.0)(react@19.2.3))(hono@4.12.25)(react@19.2.3)(typescript@5.9.3)(zod@4.6.7))(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@clerk/react@6.18.7(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(bufferutil@4.1.0)(react@19.2.3))(quickjs-emscripten-core@0.32.0)(zod@4.6.7)
@@ -6652,10 +6652,10 @@ packages:
       vitest:
         optional: true
 
-  '@vvedantb/native-ui@0.32.0':
-    resolution: {integrity: sha512-Du4inqQl8mZPkzTCTkO/jJmbRr6KGVx9A8yhejo8uXaFCNrGHWOwN7YjKKjtZxLgBrfluWqkS8uDy6O9vnRXXA==}
+  '@vvedantb/native-ui@0.34.0':
+    resolution: {integrity: sha512-KBrlC9Y3sOrpUCojwC6HO70umifghXTBnhEvJuOkIZ5TAFrLSOw+q30Blu0tf4FjcpO3OL0mEnk6QRboyFx7Sw==}
     peerDependencies:
-      '@clerk/expo': '>=4.0.0'
+      '@clerk/expo': '>=4.16.0'
       '@expo/vector-icons': '*'
       '@json-render/core': '>=0.21.0'
       '@json-render/react-native': '>=0.21.0'
@@ -17995,7 +17995,7 @@ snapshots:
       '@expo/config-plugins': 57.0.12(typescript@5.9.3)
       vitest: 3.2.7(@types/debug@4.1.13)(@types/node@24.12.2)(happy-dom@18.0.1)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0)
 
-  '@vvedantb/native-ui@0.32.0(9538f48285115d41bad66f4d54a73cc9)':
+  '@vvedantb/native-ui@0.34.0(9538f48285115d41bad66f4d54a73cc9)':
     dependencies:
       '@expo/vector-icons': 15.1.1(expo-font@57.0.4)(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7)(bufferutil@4.1.0))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3))(react@19.2.3)
       '@rn-primitives/select': 1.5.2(@rn-primitives/portal@1.5.3(@types/react@19.3.0)(react-native-web@0.21.4(encoding@0.1.13)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7)(bufferutil@4.1.0))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3))(react@19.2.3)(use-sync-external-store@1.6.0(react@19.2.3)))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.4(encoding@0.1.13)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7)(bufferutil@4.1.0))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3))(react@19.2.3)
