@@ -1,0 +1,24 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "enabledManagers": ["npm"],
+  "dependencyDashboard": false,
+  "packageRules": [
+    {
+      "matchPackageNames": ["*"],
+      "enabled": false
+    },
+    {
+      "matchPackageNames": [
+        "@vvedantb/ui",
+        "@vvedantb/native-ui",
+        "@vvedantb/server",
+        "@vvedantb/config"
+      ],
+      "enabled": true,
+      "groupName": "shared vvedantb packages",
+      "rangeStrategy": "bump",
+      "separateMajorMinor": false,
+      "separateMinorPatch": false
+    }
+  ]
+}
