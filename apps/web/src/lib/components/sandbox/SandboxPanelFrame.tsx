@@ -4,8 +4,7 @@ import { Button, ButtonTrack, SidePanelTabs } from "@vvedantb/ui";
 import { SandboxPanelToggleButton } from "./SandboxPanelToggleButton";
 
 /**
- * The sandbox pane: the package side panel (`SidePanelTabs.Frame`) in eva's
- * card tone. `tabBar` is the `SandboxTabBar`, a `SidePanelTabs.Rail`. The
+ * The sandbox pane: the package side panel (`SidePanelTabs.Frame`). `tabBar` is the `SandboxTabBar`, a `SidePanelTabs.Rail`. The
  * frame owns the arrow and the card's dock motion; `popOutSidePanel` closes it.
  */
 export function SandboxPanelFrame({
@@ -21,8 +20,6 @@ export function SandboxPanelFrame({
     <SidePanelTabs.Frame
       collapsed={collapsed}
       rail={tabBar}
-      cardClassName="bg-card md:rounded-surface"
-      arrowClassName="bg-card"
     >
       {children}
     </SidePanelTabs.Frame>
@@ -42,7 +39,7 @@ export function SandboxEmptyRailFrame({
   return (
     <div className="flex h-full min-h-0 flex-col md:flex-row-reverse">
       <div className="relative z-20 hidden h-full w-11 shrink-0 flex-col items-center pb-1.5 pt-3 md:flex">
-        <ButtonTrack direction="column" className="rail-track">
+        <ButtonTrack direction="column">
           <SandboxPanelToggleButton collapsed={collapsed} onToggle={onToggle} />
         </ButtonTrack>
       </div>

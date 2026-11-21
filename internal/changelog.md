@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: rail, side panel and mobile header tones come from the package (@vvedantb/ui 0.59.2)
+
+Date: 2026-11-21
+
+WHY: The package now draws eva's trough, pill, side panel card and page-tone mobile header by default. eva's local copies only repeated it.
+
+Architectural: one token remap stays in `globals.css`: `@theme inline { --color-segment: rgb(var(--segment-active)) }`. Compat maps `bg-segment` to `--card`, which in dark and neutral is the trough itself, so without it the pill would vanish. Removed: the `.rail-track` rules, `railGroupThemeClass`, the `rail-track` hooks on `RepoRail`, `ButtonTrack`s and `CHAT_HEADER_ACTIONS_CLASS`, `listClassName="tabs-segmented"` on the sandbox `SidePanelTabs.List`, the `SandboxPanelFrame` card and arrow tones, and `bg-background` on `Sidebar.MobileHeader`. Kept: `.tabs-segmented` (eva's own opt-in look for eva `TabsList`s), `.t-side-panel-arrow` and `[data-dock-slide]`. `@vvedantb/ui` 0.57.0 → ^0.59.2 in web only; Vite dedupes it, so `@eva/ui`'s 0.57.0 pin does not ship a second copy.
+
 ## Android release builds in parallel with Check; @vvedantb/config 0.12.0
 
 Date: 2026-11-20

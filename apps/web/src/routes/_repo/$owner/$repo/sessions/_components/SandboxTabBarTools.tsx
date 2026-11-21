@@ -26,7 +26,7 @@ export function SandboxTabBarTools({
   onToggleLabels: () => void;
 }) {
   return (
-    <ButtonTrack direction="column" className="rail-track md:mt-auto">
+    <ButtonTrack direction="column" className="md:mt-auto">
       {/* Editor and Computer are first-class tabs on the rail, so `+` is now a
           direct New Preview action rather than a one-item menu. */}
       <Tooltip>

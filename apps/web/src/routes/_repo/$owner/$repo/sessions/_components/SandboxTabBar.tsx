@@ -38,8 +38,6 @@ import { SandboxTabTrigger } from "./SandboxTabTrigger";
 import { buildSandboxTabDescriptors } from "./sandboxTabDescriptors";
 import { SandboxTabBarTools } from "./SandboxTabBarTools";
 
-/* The rail is the package `SidePanelTabs.Rail`; `tabs-segmented` puts the
-   tabs on eva's shared trough, like the app rail groups. */
 /**
  * Past this many tabs the inactive mobile labels collapse to icon-only (label
  * moves to a tooltip). Desktop is icon-only until the reader turns labels on.
@@ -262,7 +260,6 @@ export function SandboxTabBar({
           value={resolvedTab}
           onValueChange={handleTabChange}
           labelled={showLabels}
-          listClassName="tabs-segmented"
         >
           {tabDescriptors.map((tab, index) => (
             <ListEnter

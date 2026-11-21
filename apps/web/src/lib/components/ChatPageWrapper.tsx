@@ -24,13 +24,12 @@ interface ChatPageWrapperProps {
 const ARCHIVED_MESSAGE = "This session is archived and read-only";
 
 /**
- * Chat header actions on one shared trough: the package `buttonTrackClass`
- * in eva's `rail-track` tones (globals.css). Session, task and project chats
- * all use it.
+ * Chat header actions on one shared trough: the package `buttonTrackClass`.
+ * Session, task and project chats all use it.
  */
 export const CHAT_HEADER_ACTIONS_CLASS = cn(
   buttonTrackClass,
-  "rail-track flex-wrap justify-end",
+  "flex-wrap justify-end",
 );
 
 export function ChatPageWrapper({

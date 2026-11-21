@@ -16,6 +16,13 @@
  * shadcn `R G B` variables below; it never redefines them. */
 @import "@vvedantb/ui/tokens/css/compat-shadcn-rgb.css";
 
+/* The package's sliding pill and selected fill (`bg-segment`) is eva's
+ * `--segment-active`, shared with the phone tab bar. Compat maps it to
+ * `--card`, which in dark and neutral is the trough itself: no visible pill. */
+@theme inline {
+  --color-segment: rgb(var(--segment-active));
+}
+
 @config '../tailwind.config.js';
 
 /* eva colours the `[!IMPORTANT]` markdown alert with the code-review status hue. */
@@ -990,43 +997,20 @@ html[data-blur-pid] [data-pii] {
 }
 
 /* ───────────────────────────────────────────────────────────────────
- * Segmented tabs — opt in with `tabs-segmented` on a Radix Tabs.List.
- * Renders a recessed neutral trough with a lighter, raised active pill,
- * correct in BOTH light and dark.
- *
- * Why plain CSS here instead of Tailwind `dark:` utilities:
- *  1. The trough and the pill change per mode (the pill is
- *     `--segment-active`, shared with the phone through `@eva/shared`), so
- *     they cannot be one utility.
- *  2. New utility classes added in eva's UI config are not recompiled by the
- *     running dev server without a full restart; these CSS-variable rules
- *     hot-reload reliably. Placed after `@tailwind utilities`, so they win
- *     over the list's own bg utility at equal specificity.
+ * Segmented tabs — opt in with `tabs-segmented` on an eva Tabs.List. The
+ * same trough and pill as the package rail groups, button tracks and side
+ * panel tabs: `--secondary` trough in light, `--card` in dark, and the
+ * `--segment-active` pill. Plain eva tab lists keep the Tabs config look.
+ * Unlayered, so these rules beat the list and pill bg utilities.
  * ─────────────────────────────────────────────────────────────────── */
-/* `rail-track` (on each package `Sidebar.RailGroup`, via
- * `railGroupThemeClass`): the same trough and sliding pill as these tabs. The
- * package reads `bg-default` / `bg-segment`, which eva's compat maps to
- * secondary / card — in dark that is a darker pill on a lighter trough. */
-.tabs-segmented,
-.rail-track {
-  background-color: rgb(var(--secondary)); /* light: grey trough */
+.tabs-segmented {
+  background-color: rgb(var(--secondary));
 }
-/* The sliding pill (`t-tabs-pill`, `bg-card` from the Tabs config): white in
- * light, #474747 in dark, so it shows on the trough as the phone tab bar's. */
-.tabs-segmented .t-tabs-pill,
-.rail-track > .t-tabs-pill {
+.dark .tabs-segmented {
+  background-color: rgb(var(--card));
+}
+.tabs-segmented .t-tabs-pill {
   background-color: rgb(var(--segment-active));
-}
-/* Buttons on a trough are flat: the trough is their surface, so their own
- * resting fill (round secondary buttons in the chat header) is dropped. */
-.rail-track button {
-  background-color: transparent;
-}
-/* Idle rail tiles and buttons hover at half the pill, as the package does
- * with its token; the buttons' own `hover:bg-secondary` matches the light
- * trough and would vanish. */
-.rail-track :is([data-rail-tile], button):not([data-active]):not(:disabled):hover {
-  background-color: rgb(var(--segment-active) / 0.5);
 }
 /* The package side panel's arrow to the active rail tab (`SidePanelTabs.Frame`):
  * slides with the tab pill's timing; page motion off snaps it, as the pill.
@@ -1042,10 +1026,6 @@ html[data-page-motion="off"] .t-side-panel-arrow {
  * the package `motion.css`, so the rule lives here. */
 [data-dock-slide] > [data-panel] {
   transition: flex-grow var(--dock-slide-dur) var(--dock-slide-ease);
-}
-.dark .tabs-segmented,
-.dark .rail-track {
-  background-color: rgb(var(--card)); /* dark: card-grey trough */
 }
 
 /* ───────────────────────────────────────────────────────────────────
