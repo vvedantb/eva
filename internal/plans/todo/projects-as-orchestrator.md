@@ -40,6 +40,7 @@ The business team opens the project and sees what is launched, what is in progre
 | 19 | A project has no archive and no close action. It shows **done** when every task is launched or cancelled, and it opens again when a task is added. | Status is derived (see Target model), so this needs no stored state. |
 | 20 | The coordinator and every child task run on the project's one model and account (`projects.model`, `projects.providerAccountId`; the team credential when none is set). A Contributor changes them with the existing model selector. | Simplest. A run never fails because an approver has no account. Amp splits cost by person; we do not. |
 | 21 | Adopting a session into a project, and comments that do not wake the coordinator, move to v2. | The user wants v1 simple. Adoption is not cheap (a session's owner, branch name and PR are tied to the session). With devs-only Contributors, v1 needs one channel for each group: devs chat, Viewers file feedback. |
+| 22 | The coordinator sandbox is small: **2 vCPU, 4 GB**. It does not run the repo's dev server or background commands, so the coordinator chat has no Preview. Previews live in the child tasks. | It only reads code and plans. Today every sandbox is 8 vCPU / 16 GB (`DEFAULT_VCPUS` in `_sandbox/vercelProvider.ts`; Vercel gives 2 GB for each vCPU). A dev server in 4 GB risks an out-of-memory crash. |
 
 ## Scope
 
@@ -144,6 +145,12 @@ This is the core change. Do it alone, with no UI change.
 
 1. The coordinator is the Main chat of the project-owned session. No other chat can be opened there (already true: `assertStandaloneSession`).
 2. **Read-only.** The coordinator prompt says it must not edit code. Enforce it too: the project session does not own PRs (`ownsPullRequests` is already false) and gets no push credential. Decide in implementation whether `sandboxGitCredentials` can mint a read-only token; if not, block `git push` in the helper for project-owned sessions. Do not rely on the prompt alone.
+2b. **Size (decision 22).**
+   - `_sandbox/vercelProvider.ts` has one global size today (`resources: { vcpus: DEFAULT_VCPUS }`, default 8). Add a size argument to sandbox creation; project-owned sessions pass `COORDINATOR_VCPUS = 2`. Child tasks keep the default.
+   - Skip the repo's dev server start, background commands and seed commands for a project-owned session. Keep the clone and the install only if the coordinator needs them to read code; prefer no install (decide by measuring start time and memory).
+   - Hide the Preview tab and the dev-server controls in the coordinator's right panel on web and phone. Documents, Artifacts, Log and the task list stay.
+   - **Check before building:** that a sandbox restored from a repo snapshot built at 8 vCPU starts at 2 vCPU. If it cannot, the coordinator starts from a plain clone with no snapshot.
+   - If 4 GB proves too small (large repo, out-of-memory in the agent process), raise the constant; do not add a setting in v1.
 3. **Identity.** Make MCP calls from the coordinator resolve to the project (`mcp/entityRef.ts` `withSelfDefault` / `resolveChat`), through `chatOwner`. First confirm the hidden-session behaviour noted above.
 4. **Tools** (decision 15). The full list is below. No `start` tool: approval is a person's action (decision 7).
 
