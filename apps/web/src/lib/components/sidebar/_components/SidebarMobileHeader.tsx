@@ -20,7 +20,8 @@ export function SidebarMobileHeader({
   onToggleTheme,
 }: SidebarMobileHeaderProps) {
   return (
-    <Sidebar.MobileHeader>
+    // The page tone, not the package's white `bg-surface` (fixed in ui 0.59.2).
+    <Sidebar.MobileHeader className="bg-background">
       <Sidebar.MobileMenuButton label="Open navigation" />
       {title ? (
         <Sidebar.MobileTitle>{title}</Sidebar.MobileTitle>
