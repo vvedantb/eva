@@ -562,8 +562,8 @@ importers:
         specifier: 0.17.0
         version: 0.17.0(@ai-sdk/gateway@4.0.134(zod@4.6.7))(@clerk/backend@2.33.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@jitl/quickjs-singlefile-cjs-release-sync@0.32.0)(@json-render/core@0.21.0(zod@4.6.7))(@modelcontextprotocol/sdk@1.29.0(zod@4.6.7))(ai@7.0.161(zod@4.6.7))(convex-helpers@0.1.114(@standard-schema/spec@1.1.0)(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@clerk/react@6.18.7(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(hono@4.12.25)(react@19.3.0)(typescript@7.0.1-rc)(zod@4.6.7))(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@clerk/react@6.18.7(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(quickjs-emscripten-core@0.32.0)(zod@4.6.7)
       '@vvedantb/ui':
-        specifier: ^0.59.2
-        version: 0.59.2(56b3adcde63b003abee464e0296bf9b7)
+        specifier: ^0.60.0
+        version: 0.60.0(56b3adcde63b003abee464e0296bf9b7)
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
@@ -6941,8 +6941,8 @@ packages:
       zod:
         optional: true
 
-  '@vvedantb/ui@0.59.2':
-    resolution: {integrity: sha512-LhFSPB40Mgc4iepD2mTvgRx44rASipq9Tyc6/UBIFCdKcg7LCqRDgEBrjnjw0OHzqJfBK3ErCS/bmZbk7M/KmA==}
+  '@vvedantb/ui@0.60.0':
+    resolution: {integrity: sha512-YuucU5Ek9sqODZgqsoNYkVIUChHG3O9HYz/G/ujPfYq9WuJc8uJILpBzBwZfh+2SBLcu6b/kwESHz0VxlvmoTA==}
     peerDependencies:
       '@clerk/clerk-react': 5.61.6
       '@json-render/core': '>=0.21.0'
@@ -18378,7 +18378,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 4.6.7
 
-  '@vvedantb/ui@0.59.2(56b3adcde63b003abee464e0296bf9b7)':
+  '@vvedantb/ui@0.60.0(56b3adcde63b003abee464e0296bf9b7)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)

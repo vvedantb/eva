@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: Appearance tiles come from the package (@vvedantb/ui 0.60.0)
+
+Date: 2026-11-21
+
+WHY: The package now ships eva's theme tiles as `ThemeModePicker`, so the local copy only repeated it.
+
+Architectural: Theme settings and the onboarding theme step render `<ThemeModePicker value onChange compact? />`; `AppearanceSection.tsx` is deleted. The account menu keeps eva's `toggleTheme`: it resolves `system` to the live appearance before it cycles, and the package's `nextThemeInCycle` does not. `@vvedantb/ui` ^0.59.2 → ^0.60.0 in web only.
+
 ## Web: rail, side panel and mobile header tones come from the package (@vvedantb/ui 0.59.2)
 
 Date: 2026-11-21
