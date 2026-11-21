@@ -43,6 +43,7 @@ Idle pause rule (`_sandbox/idlePolicy.ts`): pause when the agent finished ≥ `s
 | Session unarchived / PR reopened | Cancel grace |
 | Quick task `done` / `cancelled` | Same 48h grace delete |
 | Weekly cron | `sweepDeadSandboxes` backstop |
+| Weekly cron (30 min later) | `purgeOrphanSnapshotsScheduled`: deletes orphan `snap_*`, but keeps any created or restored in the last 7 days. Runs only when `sandboxIdlePauseMode` is `on`. |
 
 `vercelProvider.delete()` deletes the sandbox **and** actively purges listed `snap_*` — Vercel cascade alone is unreliable.
 
@@ -114,7 +115,9 @@ npx convex run sandbox:inspectSnapshotsByIds --prod '{"snapshotIds":["snap_…"]
 1. All seeded / base Image snap ids (`listAllProtectedSnapshotIds`)
 2. `currentSnapshotId` only for sandboxes whose **name is still referenced in Eva** (`listReferencedSandboxIds`)
 
-Ghosts that only appear in Vercel `Sandbox.list` are **not** protected — their snaps are orphans.
+3. `currentSnapshotId` of a sandbox tagged with another Convex deployment (`eva.deployment`)
+
+Other ghosts that only appear in Vercel `Sandbox.list` are **not** protected — their snaps are orphans.
 
 Repos missing `VERCEL_PROJECT_ID` are skipped by the all-projects runner.
 

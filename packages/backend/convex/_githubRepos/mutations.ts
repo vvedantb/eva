@@ -10,7 +10,11 @@ import {
   requireTeamOwner,
 } from "../functions";
 import { normalizePath } from "../repoUtils";
-import { aiModelValidator, reasoningLevelValidator } from "../validators";
+import {
+  aiModelValidator,
+  reasoningLevelValidator,
+  sandboxSizeValidator,
+} from "../validators";
 import {
   findAllSiblingRepoIds,
   findReposByOwnerAndName,
@@ -199,6 +203,7 @@ export const updateConfig = authMutation({
     sessionsVscodeEnabled: v.optional(v.boolean()),
     sandboxReadExcluded: v.optional(v.boolean()),
     agentMemoryEnabled: v.optional(v.boolean()),
+    sandboxSize: v.optional(sandboxSizeValidator),
     deploymentProjectName: v.optional(v.string()),
     domains: v.optional(v.array(v.string())),
     systemPrompt: v.optional(v.string()),
@@ -242,6 +247,11 @@ export const updateConfig = authMutation({
       await ctx.scheduler.runAfter(0, internal._evaConfig.sync.syncEvaConfig, {
         repoId: args.repoId,
       });
+    }
+
+    // Per-app, never siblings: apps of one monorepo need different sizes.
+    if (args.sandboxSize !== undefined) {
+      await ctx.db.patch(args.repoId, { sandboxSize: args.sandboxSize });
     }
 
     if (args.deploymentProjectName !== undefined) {

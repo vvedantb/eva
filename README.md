@@ -169,7 +169,6 @@ npx convex env set VAR value
 - `SENDGRID_API_KEY` — email
 - `EMAIL_ENV` — email routing
 - `EXTENSION_ADMIN_KEY`, `EXTENSION_ID` — Chrome extension updates
-- `SANDBOX_VERCEL_VCPUS` — vCPU count for sandboxes
 - `TASK_PROOF_CAPTURE_ENABLED` — screenshot/video capture
 
 **8. Add sandbox credentials** (Team Settings → Environment Variables)
