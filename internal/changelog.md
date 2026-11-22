@@ -8,6 +8,14 @@ WHY: Stop depending on the public external skills repo before it goes private. `
 
 Architectural: these three skills are edited here and no longer overwritten by a skills update. `README.md`, `AGENTS.md`, `CLAUDE.md` and the `audit` skill say so.
 
+## Web: square corners on Eva rail groups
+
+Date: 2026-11-22
+
+WHY: The rail group trough used the package's theme radius, so corners looked rounded/pill-like. Keep the grey `Sidebar.RailGroup` containers; make corners square.
+
+Architectural: restore the three `Sidebar.RailGroup` wrappers in `RepoRail`; pass `className="rounded-none"` so the package `cn`/`twMerge` overrides `railGroupClass` rounding. Cutout colour back to `--segment-active`. Docs updated.
+
 ## Web: Appearance tiles come from the package (@vvedantb/ui 0.60.0)
 
 Date: 2026-11-21
