@@ -16,24 +16,27 @@ interface Option {
 }
 
 /**
- * Travel-time search on the nursing home referral portal, 12 October 2026
- * (carepulse-ts). The Google cost is the presenter's own estimate, not a quote.
+ * Travel-time search on the nursing home referral portal, shipped 12 October
+ * 2026 (carepulse-ts). Figures are estimates from the Eva session's own sizing,
+ * 2 October 2026, in US dollars: Google driving at $10 per 1,000 elements,
+ * about $685 to $1,330 a month; TfL 500 requests a minute per key; Mapbox free
+ * for the first 100,000 elements a month, against about 73,450 expected.
  */
 const OPTIONS: readonly Option[] = [
   {
     name: "Google APIs",
     verdict: "Ruled out",
-    why: "Thousands of pounds a month in usage",
+    why: "About $685 to $1,330 a month, estimated",
   },
   {
     name: "One TfL API key",
     verdict: "Ruled out",
-    why: "Rate limits when people search at the same time",
+    why: "500 requests a minute, shared by everyone searching",
   },
   {
     name: "Mapbox",
     verdict: "Chosen",
-    why: "The travel-time search that shipped",
+    why: "Driving inside its free tier",
   },
 ];
 
@@ -71,7 +74,7 @@ export function AnnualJudgement() {
 
       <p className="mt-10 text-3xl text-white/85">
         <MaskedText step={4} delay={0.1}>
-          The AI never flagged either problem
+          The AI never raised either problem on its own
         </MaskedText>
       </p>
     </Shell>

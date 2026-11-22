@@ -591,11 +591,12 @@ Framework: business and user empathy; identifies work to do.
 Next: if the system is the hard part, here is where the system goes next.`,
 
   "annual-g06-understanding": `AI has taken away the coding, but it has not taken away the understanding, and it should not.
-→ Step 1: the provider homepage. You'd expect it to be a few prompts, cos it's just a redesign with a few new features like per-contact suspension. But no: I had to keep questioning the AI to understand every part of how it was built, and what I was actually trying to do.
+→ Step 1: the provider homepage. You'd expect it to be a few prompts, cos it's just a redesign with a few new features like per-contract suspension. But no: I had to keep questioning the AI to understand every part of how it was built, and what I was actually trying to do.
 → Step 2: the central contact pages. Same again: I was asking Matt questions the whole way through.
 → Step 3: the Jev PID checker. Now that it exists, the end result could probably be built in one prompt. But the questions, the trade-offs, the decisions along the way, and knowing why we got here, could not.
 → Step 4: the closing line. That understanding is why those pull requests got to a state where I only skimmed the code. Different AIs find different things, Amp and Codex both found issues, and the next step is checks good enough that we don't need to read it at all.
-Detail: the same happened on Eva itself. The chat used to struggle to load and the message list would freeze, so I used Eva sessions to fix Eva: messages now load through separate, paginated queries.
+Detail: the provider homepage session ran from 5 October to 12 November, with around 250 of my messages and about 96 questions, and needed changes in both the Next.js and Django codebases. On the PID checker, one of my questions, "so this entire time you weren't using Jev?", exposed a silent fallback; after the fix Jev was right on 59 of 59 test cases, where the pattern rules missed 22 of 39.
+The same happened on Eva itself. The travel-time session got so long that Eva's chat lagged, so I used Eva sessions to fix Eva: only the last 25 turns render and older ones page in, and the longest freeze on opening a chat fell from 1.4 seconds to 0.16 seconds.
 Framework: understands trade-offs; owns the implementation; communicates and asks for input.
 Next: and the understanding is where the judgement calls come from.`,
 
@@ -609,12 +610,12 @@ Framework: business and user empathy; improves the process.
 Next: opening data to everyone is only safe if the locks are designed in.`,
 
   "annual-g08-judgement": `Another one that looks simple on the surface: travel-time search on the referral portal.
-→ Step 1: Google's APIs. They would have meant thousands of pounds a month in usage.
-→ Step 2: one TfL API key. If several people searched at the same time, users would hit the rate limit.
-→ Step 3: Mapbox, which is what shipped.
-→ Step 4: the closing line. The AI never flagged either problem, at any point. So it's still up to a person to think through these edge cases and make the call.
-Detail: the cost of Google's APIs is my own estimate from their pricing, not a quote.
-Figures: travel-time search shipped on the nursing home referral portal on 12 October 2026 (carepulse-ts).
+→ Step 1: Google's APIs. When I asked, the AI sized it at about 685 to 1,330 dollars a month, and its first recommendation was still to keep Google. I said it seemed quite expensive and pushed for alternatives.
+→ Step 2: one TfL API key. That's 500 requests a minute, shared by everyone, so if several people searched at the same time they'd hit the limit. TfL's own developers told me several keys can be used at once, so we use two, paced.
+→ Step 3: Mapbox for driving, which sits inside its free tier for the volumes we expect.
+→ Step 4: the closing line. The AI never raised either problem on its own. Cost and rate limits only came up because I put them in the brief and kept pushing, so it's still up to a person to think through these edge cases and make the call.
+Detail: the code for Google is kept, and the provider can be swapped. The figures are the session's own estimates in US dollars, sized against real referral volumes, not billing data.
+Figures: Eva session "Time travel search feature", 30 September to 14 October 2026; cost sizing 2 October 2026; Mapbox free for the first 100,000 elements a month against about 73,450 expected; TfL 500 requests a minute per key, capped at 450; shipped 12 October 2026.
 Framework: understands trade-offs; identifies risks and communicates them.
 Next: one tool from that work, used in Eva and in CarePulse.`,
 
