@@ -21,6 +21,15 @@
  * `--card`, which in dark and neutral is the trough itself: no visible pill. */
 @theme inline {
   --color-segment: rgb(var(--segment-active));
+
+  /* Radius scale from `@vvedantb/ui/tokens` `@theme`. Package classes such as
+   * `railGroupClass` use `calc(var(--radius-lg) + 0.25rem)`; an undefined var
+   * makes the radius 0. Eva skips the full `@import "@vvedantb/ui/tokens"`
+   * because it also sets oklch colours and eva uses compat-shadcn-rgb.
+   * `--radius-field` already comes from compat. */
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
 }
 
 @config '../tailwind.config.js';

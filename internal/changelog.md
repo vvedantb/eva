@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: rail groups get their rounded corners back
+
+Date: 2026-11-22
+
+WHY: `@vvedantb/ui` 0.60.0 `railGroupClass` uses `rounded-[calc(var(--radius-lg)+0.25rem)]`. Eva does not import `@vvedantb/ui/tokens`, so `--radius-lg` was undefined, the `calc()` was invalid and the corners were square.
+
+Architectural: `globals.css` now defines `--radius-lg`, `--radius-md` and `--radius-sm` in `@theme inline`, copied from the package tokens. The full tokens import stays skipped because it sets oklch colours that clash with `compat-shadcn-rgb.css`. No className overrides on `RailGroup` or `RepoRail`.
+
 ## Skills: commit, push and ship are vendored in-repo
 
 Date: 2026-11-22
