@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: app rail is flat (no RailGroup troughs)
+
+Date: 2026-11-22
+
+WHY: The rail showed a rounded trough behind its icons. The sibling apps (vmem, vhub, verve) use flat tiles.
+
+Architectural: `RepoRail` drops all three `Sidebar.RailGroup` wrappers. `Sidebar.Rail`, `RailHeader`, `RailBody` and `RailFooter` stay, and each tile keeps its own active fill from the package. `AppShell` keeps `variant="rail"`. `docs/eva-ui.md` "App rail" now describes the flat tiles.
+
 ## Web: Appearance tiles come from the package (@vvedantb/ui 0.60.0)
 
 Date: 2026-11-21
