@@ -396,7 +396,7 @@ Bee's still in progress, but what do we think — would you use Bee?
   // Annual CDM deck
   // ---------------------------------------------------------------------------
   "a01-title": `Open on the year, not one product: most of it is Eva, but it also covers CarePulse, vmem, flowtape, Redline and Bee.
-Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 60.
+Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 61.
 Figures: the window is 11 January to 16 September 2026.
 Next: Eva first, the biggest section.`,
 
@@ -597,19 +597,29 @@ Next: if the system is the hard part, here is where the system goes next.`,
 → Step 4: the closing line. That understanding is why those pull requests got to a state where I only skimmed the code. Different AIs find different things, Amp and Codex both found issues, and the next step is checks good enough that we don't need to read it at all.
 Detail: the same happened on Eva itself. The chat used to struggle to load and the message list would freeze, so I used Eva sessions to fix Eva: messages now load through separate, paginated queries.
 Framework: understands trade-offs; owns the implementation; communicates and asks for input.
-Next: one tool from that work, used in Eva and in CarePulse.`,
+Next: and the understanding is where the judgement calls come from.`,
 
   "annual-g07-live-data": `Eva's connector opened up database access to everyone, so people no longer wait on a developer for data.
 → Step 1: anyone, with Claude. Connect Claude to Eva and you can ask about live data: build your own dashboards, get your own KPIs, and get help with your own work.
-→ Step 2: Matt's dashboard. Matt designed a dashboard with Claude, uploaded it to Eva, and it is now live in CarePulse.
+→ Step 2: Matt's dashboard. Matt designed a dashboard with Claude, uploaded it to Eva, and it is now live in CarePulse as the referral activity page.
 → Step 3: the closing line. Read-only, live, and no developer in the way.
 Detail: access is read-only, through the connector's query tools and a read-only Postgres replica, and every request is scoped to the person asking, which the next slide explains.
 Figures: Claude connector sign-in 19 February 2026; read-only Postgres replica 10 June 2026.
 Framework: business and user empathy; improves the process.
 Next: opening data to everyone is only safe if the locks are designed in.`,
 
+  "annual-g08-judgement": `Another one that looks simple on the surface: travel-time search on the referral portal.
+→ Step 1: Google's APIs. They would have meant thousands of pounds a month in usage.
+→ Step 2: one TfL API key. If several people searched at the same time, users would hit the rate limit.
+→ Step 3: Mapbox, which is what shipped.
+→ Step 4: the closing line. The AI never flagged either problem, at any point. So it's still up to a person to think through these edge cases and make the call.
+Detail: the cost of Google's APIs is my own estimate from their pricing, not a quote.
+Figures: travel-time search shipped on the nursing home referral portal on 12 October 2026 (carepulse-ts).
+Framework: understands trade-offs; identifies risks and communicates them.
+Next: one tool from that work, used in Eva and in CarePulse.`,
+
   "a15-framework": `This is the map an assessor reads: the framework's three sections, Technical, Impact and Collaboration, with the proof for each underneath.
-→ Step 1: the proof lands, column by column. Technical: design and trade-offs, slide 22, with 20, 25 and 33; debugging, slides 23, 24 and 40; beyond coding, coming up with ideas, finding problems to solve, measured performance work (slide 28) and user experience and animation. Impact: breaking down large problems, slide 22; improving the process, Eva running many agents in parallel without conflicts, vmem as a company brain, the Redline and flowtape experiments, work to make CI quicker, a Mantine linter, and the Jev score on every message, which was Zuza's idea; identifying work, slides 27 and 43 to 45; business and user empathy, slides 35 to 37, 47 and 50 to 51. Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and the weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, the decision log being Zuza's idea; getting buy-in, Vercel Sandbox for Eva and Claude usage for Bee; mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
+→ Step 1: the proof lands, column by column. Technical: design and trade-offs, slide 22, with 20, 25 and 33; debugging, slides 23, 24 and 40; beyond coding, coming up with ideas, finding problems to solve, measured performance work (slide 28) and user experience and animation. Impact: breaking down large problems, slide 22; improving the process, Eva running many agents in parallel without conflicts, vmem as a company brain, the Redline and flowtape experiments, work to make CI quicker, a Mantine linter, and the Jev score on every message, which was Zuza's idea; identifying work, slides 27 and 43 to 45; business and user empathy, slides 35 to 37, 47 and 51 to 52. Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and the weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, the decision log being Zuza's idea; getting buy-in, Vercel Sandbox for Eva and Claude usage for Bee; mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
 Next: one last fact about how this deck was made.`,
 
   "annual-b01-day-one": `The data layer the product still runs on was settled on the first day, not migrated to later.

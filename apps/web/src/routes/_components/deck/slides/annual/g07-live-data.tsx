@@ -12,7 +12,8 @@ const LABEL = "text-sm font-semibold tracking-[0.14em] text-white/45 uppercase";
 /**
  * Eva's connector gives Claude read-only access to live data: the remote MCP
  * server with sign-in for Claude connectors (19 February 2026) and the
- * read-only Postgres replica (10 June 2026). Matt's dashboard is the example.
+ * read-only Postgres replica (10 June 2026). Matt's design is the AQP referral
+ * activity page in CarePulse.
  */
 const USES: readonly string[] = [
   "Their own dashboards",
@@ -23,7 +24,7 @@ const USES: readonly string[] = [
 const MATT: readonly string[] = [
   "Designed it with Claude",
   "Uploaded it to Eva",
-  "Live in CarePulse",
+  "Live as the referral activity page",
 ];
 
 export function AnnualLiveData() {

@@ -6,6 +6,7 @@ import { AnnualFeedback } from "./annual/g04-feedback";
 import { AnnualToday } from "./annual/g05-today";
 import { AnnualUnderstanding } from "./annual/g06-understanding";
 import { AnnualLiveData } from "./annual/g07-live-data";
+import { AnnualJudgement } from "./annual/g08-judgement";
 import { AnnualPatchPackages } from "./annual/e03-patch-packages";
 import { AnnualCarePulse } from "./annual/e02-carepulse";
 import {
@@ -367,6 +368,14 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     id: "annual-g06-understanding",
     title: "AI writes the code, not the understanding",
     Component: AnnualUnderstanding,
+    steps: 4,
+    theme: "light",
+    section: "carepulse",
+  },
+  {
+    id: "annual-g08-judgement",
+    title: "The judgement is still ours",
+    Component: AnnualJudgement,
     steps: 4,
     theme: "light",
     section: "carepulse",
