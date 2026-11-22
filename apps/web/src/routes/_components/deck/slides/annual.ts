@@ -55,7 +55,7 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
   // ── Act one: origin. Day one, the shape of the year, three chapters, recap ──
   {
     id: "a01-title",
-    title: "A year of building Eva",
+    title: "Annual CDM",
     Component: AnnualTitle,
     steps: 0,
   },

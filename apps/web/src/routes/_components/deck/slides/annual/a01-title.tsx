@@ -76,9 +76,7 @@ export function AnnualTitle() {
 
         <h1 className="text-8xl leading-[1.02] font-semibold tracking-[-0.025em] text-white">
           <MaskedText delay={0.55} stagger={0.09} duration={1.1}>
-            A year of
-            <br />
-            building <Accent>Eva</Accent>
+            Annual <Accent>CDM</Accent>
           </MaskedText>
         </h1>
       </div>

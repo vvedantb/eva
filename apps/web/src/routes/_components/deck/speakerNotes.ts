@@ -397,7 +397,7 @@ Bee's still in progress, but what do we think — would you use Bee?
   // ---------------------------------------------------------------------------
   // Annual CDM deck
   // ---------------------------------------------------------------------------
-  "a01-title": `Open on the span, not the product: an empty repository in January became how we build software.
+  "a01-title": `Open on the year, not one product: most of it is Eva, but it also covers CarePulse, Bee, Redline and flowtape.
 Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the shape: the origin, who uses it, how the platform is built, the craft behind it and the people, then the year ahead and the framework map on slide 44.
 Figures: the window is 11 January to 16 September 2026.
 Next: it starts on a single evening in January.`,
