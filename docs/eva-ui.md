@@ -43,10 +43,10 @@ Groups of controls sit on a **track**: the segmented-tabs trough (`--secondary` 
 
 **App rail**
 
-- `RepoRail` is flat package tiles (`Sidebar.Rail` with `RailItem`, no `RailGroup` trough), like vmem, vhub and verve. Three zones: Home / Inbox / Sessions, the repos (centred with `justify-center-safe`), and the bottom actions.
-- Each active tile gets its own fill from the package; there is no sliding pill.
+- `RepoRail` uses package `Sidebar.RailGroup` troughs (a grey group container behind each zone) with **square corners** (`className="rounded-none"` on the package group). Three zones: Home / Inbox / Sessions, the repos (centred with `justify-center-safe`), and the bottom actions.
+- A sliding pill marks the active tile inside each group.
 - No rail edge, no `RailSeparator`. The sidebar panel beside it has no edge line either; its own nav highlight stays the grey `bg-sidebar-accent` (a list, not a tab group).
-- Rail icons are 22px. Home uses the package `IconEva`, with no disc, so its active fill shows.
+- Rail icons are 22px. Home uses the package `IconEva`, with no disc, so its pill shows.
 - An uploaded repo banner in the panel header is inset — its top level with the rail's first track (12px), ~8px from the rail track and the panel edge — with `rounded-t-surface` corners, in a 128px header (`h-32`, reserved for every repo so a loading banner does not shift the nav); the panel itself has no fill, margin or radius.
 
 **Button tracks**

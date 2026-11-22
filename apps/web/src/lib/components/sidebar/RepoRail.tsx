@@ -73,12 +73,14 @@ function isRowActive(
   return appName === undefined;
 }
 
+/** Square trough corners: `cn` (twMerge) lets this override the package group radius. */
+const RAIL_GROUP_CLASS = "rounded-none";
+
 /**
- * Cut-out tone for the solid active rail icons: the fill of an ungrouped active tile
- * (package `bg-surface-tertiary`, which compat maps to `--secondary`), so the cut-out
- * reads as a hole in the icon.
+ * Cut-out tone for the solid active rail icons: the active pill's fill
+ * (`bg-segment`, eva's `--segment-active`), so the cut-out reads as a hole in the icon.
  */
-const CUTOUT_COLOR = "rgb(var(--secondary) / 1)";
+const CUTOUT_COLOR = "rgb(var(--segment-active) / 1)";
 
 /** Green: something is running right now (sessions, sandboxes). */
 const RAIL_BADGE_LIVE_CLASS = cn(CORNER_BADGE_CLASS, "bg-success text-white");
@@ -199,150 +201,159 @@ function RepoRailView({
         section={currentSection}
         onNavigate={onNavigate}
       />
-      {/* Flat rail, like vmem, vhub and verve: package tiles with no group
-          trough. Each active tile carries its own fill; the gaps divide the
-          header, repos and footer, so there are no rules. */}
+      {/* Three package rail groups: a shared trough each, with one pill that
+          slides to the active tile. The troughs have square corners (`rounded-none`).
+          The gaps divide them, so there are no rules. */}
       <Sidebar.RailHeader>
-        <Sidebar.RailItem
-          asChild
-          label="Eva home"
-          tooltip="Home"
-          active={homeActive}
-        >
-          <Link to="/home" onClick={onNavigate}>
-            {/* The package app glyph at the rail icon size (22): no disc, so
-                  the tile's active fill shows behind it when Home is active. */}
-            <IconEva size={22} className="shrink-0" />
-          </Link>
-        </Sidebar.RailItem>
-        <Sidebar.RailItem asChild label="Inbox" active={inboxActive}>
-          <Link to="/inbox" onClick={onNavigate}>
-            <InboxArrowIcon
-              size={22}
-              active={inboxActive}
-              cutoutColor={CUTOUT_COLOR}
-              className="shrink-0"
-            />
-            <ErrorBoundary>
-              <InboxUnreadBadge />
-            </ErrorBoundary>
-          </Link>
-        </Sidebar.RailItem>
-        <Sidebar.RailItem
-          asChild
-          label={
-            sessionsLabel ? `Sessions, ${sessionsLabel} active` : "Sessions"
-          }
-          tooltip={sessionsLabel ? `Sessions (${sessionsLabel})` : "Sessions"}
-          active={sessionsActive}
-        >
-          <Link
-            to="/sessions"
-            onClick={() => {
-              setSessionsNavMode("global");
-              onNavigate();
-            }}
+        <Sidebar.RailGroup className={RAIL_GROUP_CLASS}>
+          <Sidebar.RailItem
+            asChild
+            label="Eva home"
+            tooltip="Home"
+            active={homeActive}
           >
-            <TerminalIcon
-              size={22}
-              active={sessionsActive}
-              cutoutColor={CUTOUT_COLOR}
-              className="shrink-0"
-            />
-            <CountPop label={sessionsLabel} className={RAIL_BADGE_LIVE_CLASS} />
-          </Link>
-        </Sidebar.RailItem>
-        {/* Manager Ave used to sit here. It now lives in the floating launcher
+            <Link to="/home" onClick={onNavigate}>
+              {/* The package app glyph at the rail icon size (22): no disc, so
+                  the group's pill shows behind it when Home is active. */}
+              <IconEva size={22} className="shrink-0" />
+            </Link>
+          </Sidebar.RailItem>
+          <Sidebar.RailItem asChild label="Inbox" active={inboxActive}>
+            <Link to="/inbox" onClick={onNavigate}>
+              <InboxArrowIcon
+                size={22}
+                active={inboxActive}
+                cutoutColor={CUTOUT_COLOR}
+                className="shrink-0"
+              />
+              <ErrorBoundary>
+                <InboxUnreadBadge />
+              </ErrorBoundary>
+            </Link>
+          </Sidebar.RailItem>
+          <Sidebar.RailItem
+            asChild
+            label={
+              sessionsLabel ? `Sessions, ${sessionsLabel} active` : "Sessions"
+            }
+            tooltip={sessionsLabel ? `Sessions (${sessionsLabel})` : "Sessions"}
+            active={sessionsActive}
+          >
+            <Link
+              to="/sessions"
+              onClick={() => {
+                setSessionsNavMode("global");
+                onNavigate();
+              }}
+            >
+              <TerminalIcon
+                size={22}
+                active={sessionsActive}
+                cutoutColor={CUTOUT_COLOR}
+                className="shrink-0"
+              />
+              <CountPop
+                label={sessionsLabel}
+                className={RAIL_BADGE_LIVE_CLASS}
+              />
+            </Link>
+          </Sidebar.RailItem>
+          {/* Manager Ave used to sit here. It now lives in the floating launcher
             (`AveLauncherProvider`), which owns the orchestrator query too. */}
+        </Sidebar.RailGroup>
       </Sidebar.RailHeader>
       {/* Drawer below `md`: keep a scroll here off the page behind.
-          `justify-center-safe` centres the repo tiles, but a list taller than
+          `justify-center-safe` centres the repo group, but a list taller than
           the rail starts at the top so its first tiles stay reachable. */}
       <Sidebar.RailBody className="scrollbar scroll-fade justify-center-safe max-md:overscroll-y-contain">
-        {repos.map((row, index) => {
-          const displayName = repoDisplayLabel(row);
-          // Mirrors RailAppHotkeys: only the first nine tiles get a slot.
-          const hotkeySlot = index < 9 ? index + 1 : null;
-          // While the global Sessions destination is highlighted, don't also
-          // light up a repo tile — the rail should show one active target.
-          const active =
-            !sessionsActive &&
-            !automationsActive &&
-            isRowActive(row, currentOwner, currentName, currentAppName);
-          // Simple view hides keycap hints and the GitHub `owner/repo`
-          // identifier; the hotkeys themselves still work.
-          const tooltip = simpleView
-            ? displayName
-            : `${displayName} · ${row.owner}/${row.name}`;
-          const sandboxCount = activeSandboxCounts.get(row._id);
-          const sandboxLabel = countLabel(sandboxCount);
-          const tileColor = repoTileColor(
-            `${row.owner}/${row.name}/${displayName}`,
-          );
+        {repos.length === 0 ? null : (
+          <Sidebar.RailGroup className={RAIL_GROUP_CLASS}>
+            {repos.map((row, index) => {
+              const displayName = repoDisplayLabel(row);
+              // Mirrors RailAppHotkeys: only the first nine tiles get a slot.
+              const hotkeySlot = index < 9 ? index + 1 : null;
+              // While the global Sessions destination is highlighted, don't also
+              // light up a repo tile — the rail should show one active target.
+              const active =
+                !sessionsActive &&
+                !automationsActive &&
+                isRowActive(row, currentOwner, currentName, currentAppName);
+              // Simple view hides keycap hints and the GitHub `owner/repo`
+              // identifier; the hotkeys themselves still work.
+              const tooltip = simpleView
+                ? displayName
+                : `${displayName} · ${row.owner}/${row.name}`;
+              const sandboxCount = activeSandboxCounts.get(row._id);
+              const sandboxLabel = countLabel(sandboxCount);
+              const tileColor = repoTileColor(
+                `${row.owner}/${row.name}/${displayName}`,
+              );
 
-          return (
-            <ContextMenu key={row._id}>
-              {/* Eva's tooltip, not the tile's: it shows the hotkey keycap. */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <ContextMenuTrigger asChild>
-                    <Sidebar.RailItem
-                      asChild
-                      showTooltip={false}
-                      label={
-                        sandboxLabel === null
-                          ? tooltip
-                          : `${tooltip}, ${sandboxLabel} ${
-                              sandboxCount === 1 ? "sandbox" : "sandboxes"
-                            } active`
-                      }
-                      active={active}
-                      // Idle app logos sit further back than the icon tiles.
-                      className={active ? undefined : "opacity-50"}
-                    >
-                      <Link to={railHref(row)} onClick={onNavigate}>
-                        <RepoLogo
-                          logoUrl={row.logoUrl}
-                          size={30}
-                          fallback={
-                            <span
-                              className={cn(
-                                "flex size-[30px] items-center justify-center rounded-md text-sm font-semibold",
-                                tileColor.bg,
-                                tileColor.text,
-                              )}
-                            >
-                              {displayName.charAt(0).toUpperCase()}
-                            </span>
+              return (
+                <ContextMenu key={row._id}>
+                  {/* Eva's tooltip, not the tile's: it shows the hotkey keycap. */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <ContextMenuTrigger asChild>
+                        <Sidebar.RailItem
+                          asChild
+                          showTooltip={false}
+                          label={
+                            sandboxLabel === null
+                              ? tooltip
+                              : `${tooltip}, ${sandboxLabel} ${
+                                  sandboxCount === 1 ? "sandbox" : "sandboxes"
+                                } active`
                           }
-                        />
-                        <CountPop
-                          label={sandboxLabel}
-                          className={RAIL_BADGE_LIVE_CLASS}
-                        />
-                      </Link>
-                    </Sidebar.RailItem>
-                  </ContextMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent
-                  side="right"
-                  className="flex items-center gap-2"
-                >
-                  {tooltip}
-                  {hotkeySlot !== null && !simpleView ? (
-                    <ShortcutKbd id="jumpToApp" slot={hotkeySlot} />
-                  ) : null}
-                </TooltipContent>
-              </Tooltip>
-              <ContextMenuContent onClick={(e) => e.stopPropagation()}>
-                <ContextMenuItem onClick={() => setRenameRepo(row)}>
-                  <IconPencil size={16} />
-                  Rename
-                </ContextMenuItem>
-              </ContextMenuContent>
-            </ContextMenu>
-          );
-        })}
+                          active={active}
+                          // Idle app logos sit further back than the icon tiles.
+                          className={active ? undefined : "opacity-50"}
+                        >
+                          <Link to={railHref(row)} onClick={onNavigate}>
+                            <RepoLogo
+                              logoUrl={row.logoUrl}
+                              size={30}
+                              fallback={
+                                <span
+                                  className={cn(
+                                    "flex size-[30px] items-center justify-center rounded-md text-sm font-semibold",
+                                    tileColor.bg,
+                                    tileColor.text,
+                                  )}
+                                >
+                                  {displayName.charAt(0).toUpperCase()}
+                                </span>
+                              }
+                            />
+                            <CountPop
+                              label={sandboxLabel}
+                              className={RAIL_BADGE_LIVE_CLASS}
+                            />
+                          </Link>
+                        </Sidebar.RailItem>
+                      </ContextMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="right"
+                      className="flex items-center gap-2"
+                    >
+                      {tooltip}
+                      {hotkeySlot !== null && !simpleView ? (
+                        <ShortcutKbd id="jumpToApp" slot={hotkeySlot} />
+                      ) : null}
+                    </TooltipContent>
+                  </Tooltip>
+                  <ContextMenuContent onClick={(e) => e.stopPropagation()}>
+                    <ContextMenuItem onClick={() => setRenameRepo(row)}>
+                      <IconPencil size={16} />
+                      Rename
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
+              );
+            })}
+          </Sidebar.RailGroup>
+        )}
       </Sidebar.RailBody>
       {renameRepo ? (
         <RepoLabelDialog
@@ -356,54 +367,56 @@ function RepoRailView({
         />
       ) : null}
       <Sidebar.RailFooter>
-        {simpleView ? null : (
-          <Sidebar.RailItem
-            asChild
-            label="Automations"
-            active={automationsActive}
-          >
-            <Link to="/automations" onClick={onNavigate}>
-              <AutomationIcon
-                size={22}
-                active={automationsActive}
-                cutoutColor={CUTOUT_COLOR}
-                className="shrink-0"
-              />
-              <ErrorBoundary>
-                <AutomationsUnreadBadge />
-              </ErrorBoundary>
-            </Link>
-          </Sidebar.RailItem>
-        )}
-        <Sidebar.RailItem
-          {...shellDockTileProps}
-          label={collapsed ? "Show sidebar" : "Hide sidebar"}
-          onClick={() => setCollapsed(!collapsed)}
-        >
-          <SidebarToggleIcon
-            size={22}
-            collapsed={collapsed}
-            className="shrink-0"
-          />
-        </Sidebar.RailItem>
-        {/* Eva's tooltip, not the tile's: it shows the shortcut keycap. */}
-        <Tooltip>
-          <TooltipTrigger asChild>
+        <Sidebar.RailGroup className={RAIL_GROUP_CLASS}>
+          {simpleView ? null : (
             <Sidebar.RailItem
-              label="Search"
-              showTooltip={false}
-              onClick={() => openSearch()}
+              asChild
+              label="Automations"
+              active={automationsActive}
             >
-              <SearchIcon size={22} className="shrink-0" />
+              <Link to="/automations" onClick={onNavigate}>
+                <AutomationIcon
+                  size={22}
+                  active={automationsActive}
+                  cutoutColor={CUTOUT_COLOR}
+                  className="shrink-0"
+                />
+                <ErrorBoundary>
+                  <AutomationsUnreadBadge />
+                </ErrorBoundary>
+              </Link>
             </Sidebar.RailItem>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="flex items-center gap-2">
-            Search
-            {simpleView ? null : <ShortcutKbd id="openSearch" />}
-          </TooltipContent>
-        </Tooltip>
-        <SidebarUserMenu name={userName} showSearch={showSearch} />
-        <RailSettingsMenu onNavigate={onNavigate} />
+          )}
+          <Sidebar.RailItem
+            {...shellDockTileProps}
+            label={collapsed ? "Show sidebar" : "Hide sidebar"}
+            onClick={() => setCollapsed(!collapsed)}
+          >
+            <SidebarToggleIcon
+              size={22}
+              collapsed={collapsed}
+              className="shrink-0"
+            />
+          </Sidebar.RailItem>
+          {/* Eva's tooltip, not the tile's: it shows the shortcut keycap. */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Sidebar.RailItem
+                label="Search"
+                showTooltip={false}
+                onClick={() => openSearch()}
+              >
+                <SearchIcon size={22} className="shrink-0" />
+              </Sidebar.RailItem>
+            </TooltipTrigger>
+            <TooltipContent side="right" className="flex items-center gap-2">
+              Search
+              {simpleView ? null : <ShortcutKbd id="openSearch" />}
+            </TooltipContent>
+          </Tooltip>
+          <SidebarUserMenu name={userName} showSearch={showSearch} />
+          <RailSettingsMenu onNavigate={onNavigate} />
+        </Sidebar.RailGroup>
       </Sidebar.RailFooter>
     </Sidebar.Rail>
   );
