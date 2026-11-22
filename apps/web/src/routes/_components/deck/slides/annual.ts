@@ -368,7 +368,7 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     id: "annual-g06-understanding",
     title: "AI writes the code, not the understanding",
     Component: AnnualUnderstanding,
-    steps: 4,
+    steps: 5,
     theme: "light",
     section: "carepulse",
   },

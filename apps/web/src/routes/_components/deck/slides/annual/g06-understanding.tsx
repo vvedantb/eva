@@ -15,17 +15,22 @@ interface Case {
   took: string;
 }
 
-/** Three CarePulse changes from September to November 2026. One per build step. */
+/** Four CarePulse changes from September to November 2026. One per build step. */
 const CASES: readonly Case[] = [
   {
     name: "Provider homepage",
     looked: "A redesign and a few new features",
-    took: "Questioning the AI on every part of how it works",
+    took: "Questioning the AI on how every part works",
   },
   {
     name: "Central contact pages",
     looked: "A new overview page",
     took: "A steady stream of questions to Matt",
+  },
+  {
+    name: "Never events",
+    looked: "One more graph",
+    took: "A backend change, merged first",
   },
   {
     name: "Jev PID checker",
@@ -43,15 +48,15 @@ export function AnnualUnderstanding() {
         </Title>
       </Reveal>
 
-      <div className="mt-10 grid grid-cols-3 gap-4">
+      <div className="mt-10 grid grid-cols-4 gap-4">
         {CASES.map((item, index) => (
           <Reveal key={item.name} step={index + 1}>
-            {/* p-7 inside a 28px outer radius keeps the corners concentric. */}
-            <Card className="flex h-[300px] flex-col rounded-[28px] p-7">
-              <div className="text-2xl font-semibold text-white">
+            {/* p-6 inside a 28px outer radius keeps the corners close to concentric. */}
+            <Card className="flex h-[320px] flex-col rounded-[28px] p-6">
+              <div className="text-xl font-semibold text-white">
                 {item.name}
               </div>
-              <div className="mt-6">
+              <div className="mt-5">
                 <div className={LABEL}>Looked like</div>
                 <div className="mt-2 text-lg leading-snug text-white/55">
                   {item.looked}
@@ -69,7 +74,7 @@ export function AnnualUnderstanding() {
       </div>
 
       <p className="mt-10 text-3xl text-white/85">
-        <MaskedText step={4} delay={0.1}>
+        <MaskedText step={5} delay={0.1}>
           Understanding is what lets us stop reading every line
         </MaskedText>
       </p>
