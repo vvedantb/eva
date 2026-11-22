@@ -41,17 +41,17 @@ export function MoA4CapabilityCard({
         whileHover={{ rotateX: -6, rotateY: 4, z: 24 }}
         transition={springTransition}
       >
-        <Card className="flex h-[86px] flex-col justify-center gap-1.5 px-5 py-3">
+        <Card className="flex flex-col gap-2 px-5 py-3.5">
           <span className="text-base leading-snug font-medium text-white">
             {name}
           </span>
-          <ul className="flex flex-col gap-1">
+          <ul className="flex flex-col gap-1.5">
             {proof.map((line, row) => {
               const at = tick + row * 0.12;
               return (
                 <m.li
                   key={line}
-                  className="flex items-center gap-2 text-[13px] leading-none text-white/60"
+                  className="flex items-start gap-2 text-[13px] leading-tight text-white/60"
                   initial={false}
                   animate={
                     evidenced ? { opacity: 1, x: 0 } : { opacity: 0, x: -6 }
@@ -64,7 +64,7 @@ export function MoA4CapabilityCard({
                 >
                   <m.span
                     aria-hidden
-                    className="flex size-3.5 shrink-0 items-center justify-center rounded-full"
+                    className="mt-px flex size-3.5 shrink-0 items-center justify-center rounded-full"
                     style={{ background: BRAND_GRADIENT }}
                     initial={false}
                     animate={

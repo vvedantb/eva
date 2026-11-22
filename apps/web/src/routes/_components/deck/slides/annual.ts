@@ -396,7 +396,7 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     id: "a15-framework",
     title: "Senior engineer, mapped",
     Component: AnnualFramework,
-    steps: 2,
+    steps: 1,
   },
   {
     id: "15-closing",
