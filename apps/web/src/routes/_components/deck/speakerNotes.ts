@@ -28,7 +28,7 @@ Next: the whole story on one line, before we look at who used it.`,
 Detail: the picker on the right is the real shipped component. Simple Mode is an optional setting, not a separate product; it hides files, consoles, settings and meters and leaves the conversation. Choosing a model went from a long list to one slider. On the slider, cheaper and faster models sit on the left and the strongest on the right; there is nothing to configure.
 Figures: Simple Mode landed 14 August 2026; the slider replaced the list on 24 August 2026.
 Framework: business and user empathy.
-Next: the models kept improving, but the problems stayed the same.`,
+Next: the same idea for checking work: what is done shows as ticks.`,
 
   "friday-b24-abstracted": `In Simple Mode, the only things that matter are what you ask for and what you get back. Everything in between is Eva's job.
 → Step 1: the machinery is tucked away. Which model to use, how hard it should think, its thinking, how much it can hold in memory at once, which connected tools it can reach, and which skills to load: all of it goes inside Eva.
@@ -396,7 +396,7 @@ Bee's still in progress, but what do we think — would you use Bee?
   // Annual CDM deck
   // ---------------------------------------------------------------------------
   "a01-title": `Open on the year, not one product: most of it is Eva, but it also covers CarePulse, vmem, flowtape, Redline and Bee.
-Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 53.
+Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 56.
 Figures: the window is 11 January to 16 September 2026.
 Next: Eva first, the biggest section.`,
 
@@ -441,7 +441,7 @@ Next: behind that loop sits the first platform decision: never depend on one sup
 Detail: each item is a change on CarePulse's main branch. The point for the assessor is that the tooling on the surrounding slides was in service of this work, not instead of it.
 Figures: carepulse-ts main branch, December 2025 to November 2026, checked 16 November 2026.
 Framework: delivers large well-defined tasks; understands the business; business and user empathy.
-Next: one tool from that work, used in Eva and in CarePulse.`,
+Next: behind that work, skills that teach the agent how CarePulse is written.`,
 
   "a09-design": `Technical design happened on paper first, and replacing the engine every workspace runs on is the proof.
 → Step 1: the six phases. A spike, a provider-neutral contract with no consumer, the old provider moved behind it, the new provider, the switch-over, then the old code deleted.
@@ -551,8 +551,30 @@ Figures: Bee releases from 26 September 2026 (GitHub, checked 15 November 2026).
 Framework: identifies problems to solve; communicates clearly; gets buy-in.
 Next: how all of this maps to the framework.`,
 
+  "annual-g02-checks": `The business team should not need to read code to know a piece of work is ready, so the checks show as ticks.
+→ Step 1: proof. Screenshots of the change and a walkthrough video, so anyone can see what changed.
+→ Step 2: audits. Security, code review and code clean-up, each ticked when it has run.
+Detail: this is the same idea as Simple Mode: remove the machinery, keep the answer.
+Framework: business and user empathy.
+Next: the models kept improving, but the problems stayed the same.`,
+
+  "annual-g01-parked": `Not everything built in Eva was kept, and knowing when to park something is a lesson in itself.
+→ Step 1: Testing Arena. It works on two sides: one agent tries to break the interface, and another examines the code for issues. The lesson: it needs heavy AI usage, so it was not feasible at the time. It can be looked at again when there is spare AI usage to run these heavy tests.
+→ Step 2: Documents, one place in Eva for PRDs and docs. The lesson: it needs more work before it pays off.
+→ Step 3: the closing line. Parked is not dropped; the idea waits for the right time.
+Framework: understands trade-offs; identifies work to do.
+Next: part of that system already works: on Eva, marking work ready is the last human step.`,
+
+  "annual-g03-skills": `An agent writes better code when it knows how the team writes code, so I wrote skills for the CarePulse codebase that the agent follows.
+→ Step 1: my skills, one per part of our design: Effect, tables, permissions, filters, RPC and backend calls. Each matches how the codebase is built, so the agent does not invent its own way.
+→ Step 2: design rules. I got Zuza to write a skill for design review, so the agent follows CarePulse's design standards.
+→ Step 3: the closing line. The agent writes code the way the team would.
+Detail: the skills live in the carepulse-ts repository under .agents/skills (for example carepulse-forms, carepulse-data-tables, carepulse-rpc, carepulse-domain-modules, eprocurement-convex and design-rules).
+Framework: contributes to common code and standards; mentors others.
+Next: one tool from that work, used in Eva and in CarePulse.`,
+
   "a15-framework": `This is the map an assessor reads: the framework's three sections, Technical, Impact and Collaboration, with the proof for each underneath.
-→ Step 1: the proof lands, column by column. Technical: design and trade-offs, slide 21, with 19, 24 and 32; debugging, slides 22, 23 and 38; beyond coding, coming up with ideas, finding problems to solve, measured performance work (slide 27) and user experience and animation. Impact: breaking down large problems, slide 21; improving the process, Eva running many agents in parallel without conflicts, vmem as a company brain, the Redline and flowtape experiments, work to make CI quicker, a Mantine linter, and the Jev score on every message, which was Zuza's idea; identifying work, slides 26 and 40; business and user empathy, slides 34 to 35 and 42 to 44. Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and the weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, the decision log being Zuza's idea; getting buy-in, Vercel Sandbox for Eva and Claude usage for Bee; mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
+→ Step 1: the proof lands, column by column. Technical: design and trade-offs, slide 21, with 19, 24 and 32; debugging, slides 22, 23 and 39; beyond coding, coming up with ideas, finding problems to solve, measured performance work (slide 27) and user experience and animation. Impact: breaking down large problems, slide 21; improving the process, Eva running many agents in parallel without conflicts, vmem as a company brain, the Redline and flowtape experiments, work to make CI quicker, a Mantine linter, and the Jev score on every message, which was Zuza's idea; identifying work, slides 26 and 42; business and user empathy, slides 34 to 36, 44 and 46 to 47. Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and the weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, the decision log being Zuza's idea; getting buy-in, Vercel Sandbox for Eva and Claude usage for Bee; mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
 Next: one last fact about how this deck was made.`,
 
   "annual-b01-day-one": `The data layer the product still runs on was settled on the first day, not migrated to later.
@@ -643,7 +665,7 @@ Next: one lesson from the last few months: the system includes the packages we d
 Detail: both are pnpm patches kept in the repository, so they are reviewed like any other change and re-applied on every install. Upstream fixes can replace them later; until then the product does not wait.
 Figures: Vercel Sandbox patch 17 October 2026; Convex presence patch 16 June 2026. Repository patches folder.
 Framework: debugs production issues; modifies and improves code and reasons about the improvement.
-Next: part of that system already works: on Eva, marking work ready is the last human step.`,
+Next: not everything built was kept, and that is a lesson too.`,
 
   "annual-d08-durable": `Most reports of the tool being stuck were one structural fault, and it was fixed once rather than patched repeatedly.
 → Step 1: the same turn runs again, is interrupted at the same point, survives and finishes: the lifecycle is durable and fenced, not held in one process's memory.

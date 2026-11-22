@@ -1,4 +1,7 @@
 import type { DeckSlide } from "./types";
+import { AnnualParked } from "./annual/g01-parked";
+import { AnnualChecks } from "./annual/g02-checks";
+import { AnnualSkills } from "./annual/g03-skills";
 import { AnnualPatchPackages } from "./annual/e03-patch-packages";
 import { AnnualCarePulse } from "./annual/e02-carepulse";
 import {
@@ -272,6 +275,12 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     steps: 1,
   },
   {
+    id: "annual-g02-checks",
+    title: "Ready, at a glance",
+    Component: AnnualChecks,
+    steps: 2,
+  },
+  {
     id: "friday-b18-limits",
     title: "Same problems",
     Component: FridayLimits,
@@ -287,6 +296,12 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     id: "annual-e03-patch-packages",
     title: "Patch the package",
     Component: AnnualPatchPackages,
+    steps: 3,
+  },
+  {
+    id: "annual-g01-parked",
+    title: "Built, then parked",
+    Component: AnnualParked,
     steps: 3,
   },
   {
@@ -315,6 +330,14 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     title: "CarePulse this year",
     Component: AnnualCarePulse,
     steps: 4,
+    theme: "light",
+    section: "carepulse",
+  },
+  {
+    id: "annual-g03-skills",
+    title: "Teaching the agent our codebase",
+    Component: AnnualSkills,
+    steps: 3,
     theme: "light",
     section: "carepulse",
   },
