@@ -39,7 +39,7 @@ Work runs remotely and in parallel. Start several changes at once, review when t
 
 - **Automations** — scheduled agent runs per cron. Report-only or auto-fix modes.
 - **Snapshots** — prebuilt sandbox images with OS, tooling, agent CLIs, dependencies, seeded database.
-- **Skills** — agent skills synced from `.agents/skills` on push and every 6 hours.
+- **Skills** — agent skills synced from `.agents/skills` on push and every 6 hours. The `commit`, `push` and `ship` skills are vendored in-repo under `.agents/skills/` and edited here, not fetched from an external skills repo.
 - **Stats** — PRs shipped, session funnel, activity heatmap, contributor leaderboard.
 - **Inbox** — in-app notifications plus optional daily digest and weekly changelog email.
 - **Teams** — workspaces with members, roles, environment variables, branding.

@@ -1,5 +1,13 @@
 # Changelog
 
+## Skills: commit, push and ship are vendored in-repo
+
+Date: 2026-11-22
+
+WHY: Stop depending on the public external skills repo before it goes private. `commit`, `push` and `ship` now live as local files in `.agents/skills/` and their `skills-lock.json` entries are gone.
+
+Architectural: these three skills are edited here and no longer overwritten by a skills update. `README.md`, `AGENTS.md`, `CLAUDE.md` and the `audit` skill say so.
+
 ## Web: app rail is flat (no RailGroup troughs)
 
 Date: 2026-11-22
