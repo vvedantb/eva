@@ -73,9 +73,6 @@ function isRowActive(
   return appName === undefined;
 }
 
-/** Square trough corners: `cn` (twMerge) lets this override the package group radius. */
-const RAIL_GROUP_CLASS = "rounded-none";
-
 /**
  * Cut-out tone for the solid active rail icons: the active pill's fill
  * (`bg-segment`, eva's `--segment-active`), so the cut-out reads as a hole in the icon.
@@ -202,10 +199,9 @@ function RepoRailView({
         onNavigate={onNavigate}
       />
       {/* Three package rail groups: a shared trough each, with one pill that
-          slides to the active tile. The troughs have square corners (`rounded-none`).
-          The gaps divide them, so there are no rules. */}
+          slides to the active tile. The gaps divide them, so there are no rules. */}
       <Sidebar.RailHeader>
-        <Sidebar.RailGroup className={RAIL_GROUP_CLASS}>
+        <Sidebar.RailGroup>
           <Sidebar.RailItem
             asChild
             label="Eva home"
@@ -267,7 +263,7 @@ function RepoRailView({
           the rail starts at the top so its first tiles stay reachable. */}
       <Sidebar.RailBody className="scrollbar scroll-fade justify-center-safe max-md:overscroll-y-contain">
         {repos.length === 0 ? null : (
-          <Sidebar.RailGroup className={RAIL_GROUP_CLASS}>
+          <Sidebar.RailGroup>
             {repos.map((row, index) => {
               const displayName = repoDisplayLabel(row);
               // Mirrors RailAppHotkeys: only the first nine tiles get a slot.
@@ -367,7 +363,7 @@ function RepoRailView({
         />
       ) : null}
       <Sidebar.RailFooter>
-        <Sidebar.RailGroup className={RAIL_GROUP_CLASS}>
+        <Sidebar.RailGroup>
           {simpleView ? null : (
             <Sidebar.RailItem
               asChild
