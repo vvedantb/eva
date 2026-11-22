@@ -396,7 +396,7 @@ Bee's still in progress, but what do we think — would you use Bee?
   // Annual CDM deck
   // ---------------------------------------------------------------------------
   "a01-title": `Open on the year, not one product: most of it is Eva, but it also covers CarePulse, vmem, flowtape, Redline and Bee.
-Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 58.
+Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 59.
 Figures: the window is 11 January to 16 September 2026.
 Next: Eva first, the biggest section.`,
 
@@ -571,7 +571,7 @@ Next: part of that system already works: on Eva, marking work ready is the last 
 → Step 3: the closing line. The agent writes code the way the team would.
 Detail: the skills live in the carepulse-ts repository under .agents/skills (for example carepulse-forms, carepulse-data-tables, carepulse-rpc, carepulse-domain-modules and eprocurement-convex).
 Framework: contributes to common code and standards; mentors others.
-Next: one tool from that work, used in Eva and in CarePulse.`,
+Next: skills help the agent write the code, but the understanding is still mine.`,
 
   "annual-g04-feedback": `Eva now learns from how people react to it, and because we own the data, we can act on it.
 → Step 1: captured. Eva leaves feedback on its own: when someone is clearly frustrated or clearly happy in a chat, it records that, and anyone can give a thumbs up or down on a reply.
@@ -590,8 +590,17 @@ Figures: the Today page and the daily stand-up automation shipped on 20 August 2
 Framework: business and user empathy; identifies work to do.
 Next: if the system is the hard part, here is where the system goes next.`,
 
+  "annual-g06-understanding": `AI has taken away the coding, but it has not taken away the understanding, and it should not.
+→ Step 1: the provider homepage. You'd expect it to be a few prompts, cos it's just a redesign with a few new features like per-contact suspension. But no: I had to keep questioning the AI to understand every part of how it was built, and what I was actually trying to do.
+→ Step 2: the central contact pages. Same again: I was asking Matt questions the whole way through.
+→ Step 3: the Jev PID checker. Now that it exists, the end result could probably be built in one prompt. But the questions, the trade-offs, the decisions along the way, and knowing why we got here, could not.
+→ Step 4: the closing line. That understanding is why those pull requests got to a state where I only skimmed the code. Different AIs find different things, Amp and Codex both found issues, and the next step is checks good enough that we don't need to read it at all.
+Detail: the same happened on Eva itself. The chat used to struggle to load and the message list would freeze, so I used Eva sessions to fix Eva: messages now load through separate, paginated queries.
+Framework: understands trade-offs; owns the implementation; communicates and asks for input.
+Next: one tool from that work, used in Eva and in CarePulse.`,
+
   "a15-framework": `This is the map an assessor reads: the framework's three sections, Technical, Impact and Collaboration, with the proof for each underneath.
-→ Step 1: the proof lands, column by column. Technical: design and trade-offs, slide 21, with 19, 24 and 32; debugging, slides 22, 23 and 39; beyond coding, coming up with ideas, finding problems to solve, measured performance work (slide 27) and user experience and animation. Impact: breaking down large problems, slide 21; improving the process, Eva running many agents in parallel without conflicts, vmem as a company brain, the Redline and flowtape experiments, work to make CI quicker, a Mantine linter, and the Jev score on every message, which was Zuza's idea; identifying work, slides 26 and 42 to 44; business and user empathy, slides 34 to 36, 46 and 48 to 49. Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and the weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, the decision log being Zuza's idea; getting buy-in, Vercel Sandbox for Eva and Claude usage for Bee; mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
+→ Step 1: the proof lands, column by column. Technical: design and trade-offs, slide 21, with 19, 24 and 32; debugging, slides 22, 23 and 39; beyond coding, coming up with ideas, finding problems to solve, measured performance work (slide 27) and user experience and animation. Impact: breaking down large problems, slide 21; improving the process, Eva running many agents in parallel without conflicts, vmem as a company brain, the Redline and flowtape experiments, work to make CI quicker, a Mantine linter, and the Jev score on every message, which was Zuza's idea; identifying work, slides 26 and 42 to 44; business and user empathy, slides 34 to 36, 46 and 49 to 50. Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and the weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, the decision log being Zuza's idea; getting buy-in, Vercel Sandbox for Eva and Claude usage for Bee; mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
 Next: one last fact about how this deck was made.`,
 
   "annual-b01-day-one": `The data layer the product still runs on was settled on the first day, not migrated to later.
