@@ -9,6 +9,7 @@ import { AnnualLiveData } from "./annual/g07-live-data";
 import { AnnualJudgement } from "./annual/g08-judgement";
 import { AnnualCatching } from "./annual/g09-catching";
 import { AnnualRepos } from "./annual/g10-repos";
+import { AnnualConfigurable } from "./annual/g11-configurable";
 import { AnnualPatchPackages } from "./annual/e03-patch-packages";
 import { AnnualCarePulse } from "./annual/e02-carepulse";
 import {
@@ -297,6 +298,12 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     id: "annual-g02-checks",
     title: "Ready, at a glance",
     Component: AnnualChecks,
+    steps: 2,
+  },
+  {
+    id: "annual-g11-configurable",
+    title: "Simple by default, configurable by choice",
+    Component: AnnualConfigurable,
     steps: 2,
   },
   {

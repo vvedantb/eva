@@ -396,7 +396,7 @@ Bee's still in progress, but what do we think — would you use Bee?
   // Annual CDM deck
   // ---------------------------------------------------------------------------
   "a01-title": `Open on the year, not one product: most of it is Eva, but it also covers CarePulse, vmem, flowtape, Redline and Bee.
-Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 63.
+Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 64.
 Figures: the window is 11 January to 16 September 2026.
 Next: Eva first, the biggest section.`,
 
@@ -556,7 +556,7 @@ Next: how all of this maps to the framework.`,
 → Step 2: audits. Security, code review and code clean-up, each ticked when it has run.
 Detail: this is the same idea as Simple Mode: remove the machinery, keep the answer.
 Framework: business and user empathy.
-Next: the models kept improving, but the problems stayed the same.`,
+Next: simple by default, but configurable for the people who want more.`,
 
   "annual-g01-parked": `Not everything built in Eva was kept, and knowing when to park something is a lesson in itself.
 → Step 1: Testing Arena. It works on two sides: one agent tries to break the interface, and another examines the code for issues. The lesson: it needs heavy AI usage, so it was not feasible at the time. It can be looked at again when there is spare AI usage to run these heavy tests.
@@ -636,8 +636,15 @@ Figures: repositories connected in Eva, checked 22 November 2026.
 Framework: improves the development process; contributes to common standards.
 Next: four of the people behind those numbers, and what they built.`,
 
+  "annual-g11-configurable": `Eva isn't like Amp or Cursor, where the audience is only developers. The business team uses it too, so it had to be simple by default and configurable for those who want more.
+→ Step 1: done for you. To keep the flow as simple as possible, Eva does a lot on its own: one checkbox to record proof, audits that run in the background, pull requests that open themselves and keep their status up to date, titles, tags and PR descriptions written for you, and quick tasks and sessions that close and archive themselves when the work is done.
+→ Step 2: switches for developers. Not everyone wants all of that, so each person can turn things off or on under Experimental settings. A lot of these came from changes Krzys wanted: turning off auto-archiving, choosing whether pull requests open automatically, and Claude-style activity steps. There are 19 switches in all.
+Figures: 19 experimental flags on main, checked 22 November 2026; disable auto-archive 12 October 2026; Claude-style activity 17 October 2026.
+Framework: business and user empathy; considers the opinions of others.
+Next: the models kept improving, but the problems stayed the same.`,
+
   "a15-framework": `This is the map an assessor reads: the framework's three sections, Technical, Impact and Collaboration, with the proof for each underneath.
-→ Step 1: the proof lands, column by column. Technical: design and trade-offs, slide 23, with 21, 26 and 34; debugging, slides 24, 25 and 42; beyond coding, coming up with ideas, finding problems to solve, measured performance work (slide 29) and user experience and animation. Impact: breaking down large problems, slide 23; improving the process, Eva running many agents in parallel without conflicts, vmem as a company brain, the Redline and flowtape experiments, work to make CI quicker, a Mantine linter, and the Jev score on every message, which was Zuza's idea; identifying work, slides 28 and 45 to 47; business and user empathy, slides 36 to 38, 49 and 53 to 54. Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and the weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, the decision log being Zuza's idea; getting buy-in, Vercel Sandbox for Eva and Claude usage for Bee; mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
+→ Step 1: the proof lands, column by column. Technical: design and trade-offs, slide 23, with 21, 26 and 34; debugging, slides 24, 25 and 43; beyond coding, coming up with ideas, finding problems to solve, measured performance work (slide 29) and user experience and animation. Impact: breaking down large problems, slide 23; improving the process, Eva running many agents in parallel without conflicts, vmem as a company brain, the Redline and flowtape experiments, work to make CI quicker, a Mantine linter, and the Jev score on every message, which was Zuza's idea; identifying work, slides 28 and 46 to 48; business and user empathy, slides 36 to 38, 50 and 54 to 55. Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and the weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, the decision log being Zuza's idea; getting buy-in, Vercel Sandbox for Eva and Claude usage for Bee; mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
 Next: one last fact about how this deck was made.`,
 
   "annual-b01-day-one": `The data layer the product still runs on was settled on the first day, not migrated to later.
