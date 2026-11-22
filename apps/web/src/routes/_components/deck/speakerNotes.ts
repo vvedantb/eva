@@ -396,7 +396,7 @@ Bee's still in progress, but what do we think — would you use Bee?
   // Annual CDM deck
   // ---------------------------------------------------------------------------
   "a01-title": `Open on the year, not one product: most of it is Eva, but it also covers CarePulse, vmem, flowtape, Redline and Bee.
-Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 62.
+Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 63.
 Figures: the window is 11 January to 16 September 2026.
 Next: Eva first, the biggest section.`,
 
@@ -418,7 +418,7 @@ Next: those sixteen accounts did not arrive at once, and the timing matters.`,
 → Step 1: July onward lights and the earlier months dim. The step change is July, when work moved to the cloud.
 Detail: from July, monthly sessions roughly tripled and stayed there. June is genuinely zero, not missing data, and the footnote says so. Volunteer the gap, because that is what makes the rest credible.
 Figures: sessions per month in 2026: Jan 13, Feb 11, Mar 31, Apr 28, May 9, Jun 0, Jul 75, Aug 109, Sep 91. To 16 September 2026.
-Next: four of the people behind those numbers, and what they built.`,
+Next: and it is not one codebase: every work repo is on Eva.`,
 
   "a06-impact": `Three things changed, and none of them is typing speed.
 → Step 1: who can ask. A request, a queue and a developer became anyone describing what they need in their own words.
@@ -630,8 +630,14 @@ Figures: CarePulse session 19 October 2026 (Sentry, 24 hours, sampled); Eva test
 Framework: debugs without flailing; makes well-reasoned decisions; improves the process.
 Next: one lesson from the last few months: the system includes the packages we depend on.`,
 
+  "annual-g10-repos": `Eva isn't just used for itself: every codebase we work on is set up in it.
+→ Step 1: the five. Eva itself, CarePulse v3, the current web app, CarePulse v2, the Django backend, eProcurement, and the cost model. So anyone can open a session or a quick task on any of them, with the setup already done.
+Figures: repositories connected in Eva, checked 22 November 2026.
+Framework: improves the development process; contributes to common standards.
+Next: four of the people behind those numbers, and what they built.`,
+
   "a15-framework": `This is the map an assessor reads: the framework's three sections, Technical, Impact and Collaboration, with the proof for each underneath.
-→ Step 1: the proof lands, column by column. Technical: design and trade-offs, slide 22, with 20, 25 and 33; debugging, slides 23, 24 and 41; beyond coding, coming up with ideas, finding problems to solve, measured performance work (slide 28) and user experience and animation. Impact: breaking down large problems, slide 22; improving the process, Eva running many agents in parallel without conflicts, vmem as a company brain, the Redline and flowtape experiments, work to make CI quicker, a Mantine linter, and the Jev score on every message, which was Zuza's idea; identifying work, slides 27 and 44 to 46; business and user empathy, slides 35 to 37, 48 and 52 to 53. Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and the weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, the decision log being Zuza's idea; getting buy-in, Vercel Sandbox for Eva and Claude usage for Bee; mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
+→ Step 1: the proof lands, column by column. Technical: design and trade-offs, slide 23, with 21, 26 and 34; debugging, slides 24, 25 and 42; beyond coding, coming up with ideas, finding problems to solve, measured performance work (slide 29) and user experience and animation. Impact: breaking down large problems, slide 23; improving the process, Eva running many agents in parallel without conflicts, vmem as a company brain, the Redline and flowtape experiments, work to make CI quicker, a Mantine linter, and the Jev score on every message, which was Zuza's idea; identifying work, slides 28 and 45 to 47; business and user empathy, slides 36 to 38, 49 and 53 to 54. Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and the weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, the decision log being Zuza's idea; getting buy-in, Vercel Sandbox for Eva and Claude usage for Bee; mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
 Next: one last fact about how this deck was made.`,
 
   "annual-b01-day-one": `The data layer the product still runs on was settled on the first day, not migrated to later.
@@ -657,7 +663,7 @@ Figures: documents with comments, suggestions and version history 10 June 2026; 
 Next: the last chapter, where the product was made safe to depend on.`,
 
   "annual-b06-q3": `The last quarter was about dependability: the same product, made to survive being relied on.
-→ Step 1: July, almost all of it the sandbox cutover. The engine every workspace runs on was replaced, and slide 22 takes that apart phase by phase.
+→ Step 1: July, almost all of it the sandbox cutover. The engine every workspace runs on was replaced, and slide 23 takes that apart phase by phase.
 → Step 2: August. Durable turns, so a long run survives an interruption instead of stalling; security work; and the design system the interface now sits on.
 → Step 3: September. Multi-repo sessions, so one conversation can span several codebases, and decision models for classifying work at scale.
 Detail: nothing here adds a new thing to do; it makes the existing things safe to depend on.
@@ -667,7 +673,7 @@ Next: the same quarter, seen from inside one session.`,
 → Step 1: the guards land and the rail draws. Checks moved into shared helpers, so a new surface inherits the boundary.
 → Step 2: the two counts fall. Production dependency warnings went from 2 critical and 48 high to 0 critical and 2 high.
 → Step 3: the closing line. The boundary was exercised against real production data, not only against tests.
-Detail: slide 19 designed security into a new interface; this hardens the old ones. The audit found ownership checked unevenly across codebases, sessions, tasks, teams, workspaces, snapshots and integrations. Sign-in was hardened too: explicit consent, stronger proof-key exchange, registered return addresses, client-bound refresh tokens.
+Detail: slide 20 designed security into a new interface; this hardens the old ones. The audit found ownership checked unevenly across codebases, sessions, tasks, teams, workspaces, snapshots and integrations. Sign-in was hardened too: explicit consent, stronger proof-key exchange, registered return addresses, client-bound refresh tokens.
 Figures: 2 critical and 48 high down to 0 critical and 2 high. Audit 8 August 2026; verified against production data 19 August 2026.
 Framework: identifies work to do; understands trade-offs.
 Next: all of this rests on measurement, the skill built most this year outside programming.`,
@@ -766,7 +772,7 @@ Next: the same connector gives everyone live data.`,
   "annual-c06-mcp-security": `Opening Eva to other tools is only safe if who is asking is enforced, not assumed, so the locks were designed in.
 → Step 1: the three lifetimes drain. A sign-in code lasts five minutes, a working pass one hour, and a renewal thirty days.
 → Step 2: the two gates close. Every request is scoped to one person, and that scope is checked twice: at the interface and again at the data layer.
-Detail: sign-in uses the standard flow with proof-key exchange, so an intercepted code is useless without the matching secret. Two independent secrets, one for the passes and one for the data layer, mean one leak does not compromise the other. Every request re-checks the user still exists; secret comparisons are constant-time; errors give nothing away; endpoints are rate limited. Slide 27 audits what came before.
+Detail: sign-in uses the standard flow with proof-key exchange, so an intercepted code is useless without the matching secret. Two independent secrets, one for the passes and one for the data layer, mean one leak does not compromise the other. Every request re-checks the user still exists; secret comparisons are constant-time; errors give nothing away; endpoints are rate limited. Slide 28 audits what came before.
 Figures: authorisation code 5 minutes, access token 1 hour, refresh token 30 days. Security model documented in the repository.
 Next: the workspaces themselves: first how fast they start, then how they stay cheap.`,
 
