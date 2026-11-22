@@ -19,7 +19,8 @@ interface Skill {
  * The agent skills in carepulse-ts (`.agents/skills`), named by what they
  * cover: carepulse-forms (Effect Schema), carepulse-data-tables (tables and
  * URL filters), carepulse-domain-modules (policies), carepulse-rpc and
- * eprocurement-convex (backend calls). design-rules added 19 June 2026.
+ * eprocurement-convex (backend calls). Zuza's design review skill follows
+ * CarePulse's design standards.
  */
 const SKILLS: readonly Skill[] = [
   { name: "Effect" },
@@ -30,7 +31,7 @@ const SKILLS: readonly Skill[] = [
   { name: "Backend calls" },
 ];
 
-const DESIGN: Skill = { name: "Design rules", credit: "Made by Zuza" };
+const DESIGN: Skill = { name: "Design review", credit: "Made by Zuza" };
 
 function SkillCard({
   skill,

@@ -2,6 +2,7 @@ import type { DeckSlide } from "./types";
 import { AnnualParked } from "./annual/g01-parked";
 import { AnnualChecks } from "./annual/g02-checks";
 import { AnnualSkills } from "./annual/g03-skills";
+import { AnnualFeedback } from "./annual/g04-feedback";
 import { AnnualPatchPackages } from "./annual/e03-patch-packages";
 import { AnnualCarePulse } from "./annual/e02-carepulse";
 import {
@@ -308,6 +309,12 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     id: "friday-b19-pipeline",
     title: "Code review to live",
     Component: FridayPipeline,
+    steps: 3,
+  },
+  {
+    id: "annual-g04-feedback",
+    title: "Every chat teaches Eva",
+    Component: AnnualFeedback,
     steps: 3,
   },
   {

@@ -88,7 +88,7 @@ Next: Eva already has the answer to that queue; here is how it works, and the go
 Detail: you saw the short version of this on the auto-merge slide; this is the whole route. Under the hood a GitHub workflow sends the Grok bot a message when a pull request leaves draft or gets a new push. The order matters: backend and migrations go first, so merged code never runs against a database that is not ready. Be clear that CarePulse is a goal, not a date; it needs the model checks and the human sign-off for risky changes from the next slide first. The board, task and page are an illustration, not a recording.
 Figures: Eva auto-merge landed 3 September 2026. 43 CarePulse quick tasks in code review on 11 September 2026. "A few minutes" is the target, not a measured time.
 Framework: improves the process.
-Next: if the system is the hard part, here is where the system goes next.`,
+Next: and every chat on Eva now feeds back into making it better.`,
 
   "12-future": `Three shifts to expect, each already true inside Eva rather than predicted.
 → Step 1: more automations. Routine work runs on a schedule or a trigger, and people set direction rather than tasks.
@@ -396,7 +396,7 @@ Bee's still in progress, but what do we think — would you use Bee?
   // Annual CDM deck
   // ---------------------------------------------------------------------------
   "a01-title": `Open on the year, not one product: most of it is Eva, but it also covers CarePulse, vmem, flowtape, Redline and Bee.
-Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 56.
+Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 57.
 Figures: the window is 11 January to 16 September 2026.
 Next: Eva first, the biggest section.`,
 
@@ -567,14 +567,23 @@ Next: part of that system already works: on Eva, marking work ready is the last 
 
   "annual-g03-skills": `An agent writes better code when it knows how the team writes code, so I wrote skills for the CarePulse codebase that the agent follows.
 → Step 1: my skills, one per part of our design: Effect, tables, permissions, filters, RPC and backend calls. Each matches how the codebase is built, so the agent does not invent its own way.
-→ Step 2: design rules. I got Zuza to write a skill for design review, so the agent follows CarePulse's design standards.
+→ Step 2: design review. I got Zuza to write a skill for design review, so the agent follows CarePulse's design standards.
 → Step 3: the closing line. The agent writes code the way the team would.
-Detail: the skills live in the carepulse-ts repository under .agents/skills (for example carepulse-forms, carepulse-data-tables, carepulse-rpc, carepulse-domain-modules, eprocurement-convex and design-rules).
+Detail: the skills live in the carepulse-ts repository under .agents/skills (for example carepulse-forms, carepulse-data-tables, carepulse-rpc, carepulse-domain-modules and eprocurement-convex).
 Framework: contributes to common code and standards; mentors others.
 Next: one tool from that work, used in Eva and in CarePulse.`,
 
+  "annual-g04-feedback": `Eva now learns from how people react to it, and because we own the data, we can act on it.
+→ Step 1: captured. Eva leaves feedback on its own: when someone is clearly frustrated or clearly happy in a chat, it records that, and anyone can give a thumbs up or down on a reply.
+→ Step 2: reviewed. All of it lands on one Feedback page, so we can see what went wrong, what we need to add, and what to simplify in the codebase.
+→ Step 3: next. Use all of that data to generate new lints, and checks with Jev, so the agent writes code we are happy to just merge.
+Detail: capture and review are live; the lints and Jev checks are the plan, which is why that card says Next.
+Figures: feedback shipped on Eva on 3 November 2026 (thumbs on every turn, the submit_feedback tool and the Feedback page).
+Framework: identifies work to do; improves the development process.
+Next: if the system is the hard part, here is where the system goes next.`,
+
   "a15-framework": `This is the map an assessor reads: the framework's three sections, Technical, Impact and Collaboration, with the proof for each underneath.
-→ Step 1: the proof lands, column by column. Technical: design and trade-offs, slide 21, with 19, 24 and 32; debugging, slides 22, 23 and 39; beyond coding, coming up with ideas, finding problems to solve, measured performance work (slide 27) and user experience and animation. Impact: breaking down large problems, slide 21; improving the process, Eva running many agents in parallel without conflicts, vmem as a company brain, the Redline and flowtape experiments, work to make CI quicker, a Mantine linter, and the Jev score on every message, which was Zuza's idea; identifying work, slides 26 and 42; business and user empathy, slides 34 to 36, 44 and 46 to 47. Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and the weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, the decision log being Zuza's idea; getting buy-in, Vercel Sandbox for Eva and Claude usage for Bee; mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
+→ Step 1: the proof lands, column by column. Technical: design and trade-offs, slide 21, with 19, 24 and 32; debugging, slides 22, 23 and 39; beyond coding, coming up with ideas, finding problems to solve, measured performance work (slide 27) and user experience and animation. Impact: breaking down large problems, slide 21; improving the process, Eva running many agents in parallel without conflicts, vmem as a company brain, the Redline and flowtape experiments, work to make CI quicker, a Mantine linter, and the Jev score on every message, which was Zuza's idea; identifying work, slides 26, 42 and 43; business and user empathy, slides 34 to 36, 45 and 47 to 48. Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and the weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, the decision log being Zuza's idea; getting buy-in, Vercel Sandbox for Eva and Claude usage for Bee; mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
 Next: one last fact about how this deck was made.`,
 
   "annual-b01-day-one": `The data layer the product still runs on was settled on the first day, not migrated to later.
