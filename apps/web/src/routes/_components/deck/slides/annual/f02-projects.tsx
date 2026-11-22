@@ -71,7 +71,7 @@ export function ProjectVmem() {
         changed: [
           "Live and hosted, with a Chrome extension",
           "Jev ranks what it recalls",
-          "My final-year degree project",
+          "Final-year degree project: 80%, alongside full-time work",
         ],
       }}
     />

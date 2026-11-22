@@ -514,7 +514,7 @@ Next: what vmem is.`,
 
   "annual-f01-vmem": `vmem is a memory layer for AI: you tell it something once, and any AI tool can recall it.
 → Step 1: what I built. It saves chats, files and notes in one place; it links the people and projects they mention into a graph; and any AI tool can read it over MCP.
-→ Step 2: what it changed. It is live and hosted, with a Chrome extension; Jev, the judging model from the CarePulse section, ranks what it recalls; and it is my final-year degree project.
+→ Step 2: what it changed. It is live and hosted, with a Chrome extension; Jev, the judging model from the CarePulse section, ranks what it recalls; and it is my final-year degree project, which got 80%. I did that alongside full-time work on Eva, so it took a lot of time management.
 Detail: hosted at vmem.projectv.uk. Built in my own time, alongside Eva.
 Figures: repository from 2 December 2025 (GitHub, checked 22 November 2026).
 Framework: industry awareness; a skill outside the day job; owns the solution end to end.
