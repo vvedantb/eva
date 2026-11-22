@@ -396,7 +396,7 @@ Bee's still in progress, but what do we think — would you use Bee?
   // Annual CDM deck
   // ---------------------------------------------------------------------------
   "a01-title": `Open on the year, not one product: most of it is Eva, but it also covers CarePulse, vmem, flowtape, Redline and Bee.
-Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 59.
+Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 60.
 Figures: the window is 11 January to 16 September 2026.
 Next: Eva first, the biggest section.`,
 
@@ -599,8 +599,17 @@ Detail: the same happened on Eva itself. The chat used to struggle to load and t
 Framework: understands trade-offs; owns the implementation; communicates and asks for input.
 Next: one tool from that work, used in Eva and in CarePulse.`,
 
+  "annual-g07-live-data": `Eva's connector opened up database access to everyone, so people no longer wait on a developer for data.
+→ Step 1: anyone, with Claude. Connect Claude to Eva and you can ask about live data: build your own dashboards, get your own KPIs, and get help with your own work.
+→ Step 2: Matt's dashboard. Matt designed a dashboard with Claude, uploaded it to Eva, and it is now live in CarePulse.
+→ Step 3: the closing line. Read-only, live, and no developer in the way.
+Detail: access is read-only, through the connector's query tools and a read-only Postgres replica, and every request is scoped to the person asking, which the next slide explains.
+Figures: Claude connector sign-in 19 February 2026; read-only Postgres replica 10 June 2026.
+Framework: business and user empathy; improves the process.
+Next: opening data to everyone is only safe if the locks are designed in.`,
+
   "a15-framework": `This is the map an assessor reads: the framework's three sections, Technical, Impact and Collaboration, with the proof for each underneath.
-→ Step 1: the proof lands, column by column. Technical: design and trade-offs, slide 21, with 19, 24 and 32; debugging, slides 22, 23 and 39; beyond coding, coming up with ideas, finding problems to solve, measured performance work (slide 27) and user experience and animation. Impact: breaking down large problems, slide 21; improving the process, Eva running many agents in parallel without conflicts, vmem as a company brain, the Redline and flowtape experiments, work to make CI quicker, a Mantine linter, and the Jev score on every message, which was Zuza's idea; identifying work, slides 26 and 42 to 44; business and user empathy, slides 34 to 36, 46 and 49 to 50. Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and the weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, the decision log being Zuza's idea; getting buy-in, Vercel Sandbox for Eva and Claude usage for Bee; mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
+→ Step 1: the proof lands, column by column. Technical: design and trade-offs, slide 22, with 20, 25 and 33; debugging, slides 23, 24 and 40; beyond coding, coming up with ideas, finding problems to solve, measured performance work (slide 28) and user experience and animation. Impact: breaking down large problems, slide 22; improving the process, Eva running many agents in parallel without conflicts, vmem as a company brain, the Redline and flowtape experiments, work to make CI quicker, a Mantine linter, and the Jev score on every message, which was Zuza's idea; identifying work, slides 27 and 43 to 45; business and user empathy, slides 35 to 37, 47 and 50 to 51. Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and the weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, the decision log being Zuza's idea; getting buy-in, Vercel Sandbox for Eva and Claude usage for Bee; mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
 Next: one last fact about how this deck was made.`,
 
   "annual-b01-day-one": `The data layer the product still runs on was settled on the first day, not migrated to later.
@@ -626,7 +635,7 @@ Figures: documents with comments, suggestions and version history 10 June 2026; 
 Next: the last chapter, where the product was made safe to depend on.`,
 
   "annual-b06-q3": `The last quarter was about dependability: the same product, made to survive being relied on.
-→ Step 1: July, almost all of it the sandbox cutover. The engine every workspace runs on was replaced, and slide 21 takes that apart phase by phase.
+→ Step 1: July, almost all of it the sandbox cutover. The engine every workspace runs on was replaced, and slide 22 takes that apart phase by phase.
 → Step 2: August. Durable turns, so a long run survives an interruption instead of stalling; security work; and the design system the interface now sits on.
 → Step 3: September. Multi-repo sessions, so one conversation can span several codebases, and decision models for classifying work at scale.
 Detail: nothing here adds a new thing to do; it makes the existing things safe to depend on.
@@ -636,7 +645,7 @@ Next: the same quarter, seen from inside one session.`,
 → Step 1: the guards land and the rail draws. Checks moved into shared helpers, so a new surface inherits the boundary.
 → Step 2: the two counts fall. Production dependency warnings went from 2 critical and 48 high to 0 critical and 2 high.
 → Step 3: the closing line. The boundary was exercised against real production data, not only against tests.
-Detail: slide 18 designed security into a new interface; this hardens the old ones. The audit found ownership checked unevenly across codebases, sessions, tasks, teams, workspaces, snapshots and integrations. Sign-in was hardened too: explicit consent, stronger proof-key exchange, registered return addresses, client-bound refresh tokens.
+Detail: slide 19 designed security into a new interface; this hardens the old ones. The audit found ownership checked unevenly across codebases, sessions, tasks, teams, workspaces, snapshots and integrations. Sign-in was hardened too: explicit consent, stronger proof-key exchange, registered return addresses, client-bound refresh tokens.
 Figures: 2 critical and 48 high down to 0 critical and 2 high. Audit 8 August 2026; verified against production data 19 August 2026.
 Framework: identifies work to do; understands trade-offs.
 Next: all of this rests on measurement, the skill built most this year outside programming.`,
@@ -730,12 +739,12 @@ Next: people are not the only ones who use Eva.`,
 → Step 3: the newest ring. Typed judgements, a calibrated score or category applied the same way every time, and interactive panels drawn straight into a chat.
 Detail: this is how one agent supervises others, as Manager Ave does. For a stakeholder, Eva plugs into what the organisation already runs rather than being a closed box.
 Figures: chat into an existing session, task or project 27 August 2026; drive sandboxes 28 August 2026; run code across tools 3 September 2026; typed judgements 17 September 2026; interactive panels in chat 21 September 2026.
-Next: letting other tools in is only safe if the locks are designed in.`,
+Next: the same connector gives everyone live data.`,
 
   "annual-c06-mcp-security": `Opening Eva to other tools is only safe if who is asking is enforced, not assumed, so the locks were designed in.
 → Step 1: the three lifetimes drain. A sign-in code lasts five minutes, a working pass one hour, and a renewal thirty days.
 → Step 2: the two gates close. Every request is scoped to one person, and that scope is checked twice: at the interface and again at the data layer.
-Detail: sign-in uses the standard flow with proof-key exchange, so an intercepted code is useless without the matching secret. Two independent secrets, one for the passes and one for the data layer, mean one leak does not compromise the other. Every request re-checks the user still exists; secret comparisons are constant-time; errors give nothing away; endpoints are rate limited. Slide 26 audits what came before.
+Detail: sign-in uses the standard flow with proof-key exchange, so an intercepted code is useless without the matching secret. Two independent secrets, one for the passes and one for the data layer, mean one leak does not compromise the other. Every request re-checks the user still exists; secret comparisons are constant-time; errors give nothing away; endpoints are rate limited. Slide 27 audits what came before.
 Figures: authorisation code 5 minutes, access token 1 hour, refresh token 30 days. Security model documented in the repository.
 Next: the workspaces themselves: first how fast they start, then how they stay cheap.`,
 

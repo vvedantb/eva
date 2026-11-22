@@ -5,6 +5,7 @@ import { AnnualSkills } from "./annual/g03-skills";
 import { AnnualFeedback } from "./annual/g04-feedback";
 import { AnnualToday } from "./annual/g05-today";
 import { AnnualUnderstanding } from "./annual/g06-understanding";
+import { AnnualLiveData } from "./annual/g07-live-data";
 import { AnnualPatchPackages } from "./annual/e03-patch-packages";
 import { AnnualCarePulse } from "./annual/e02-carepulse";
 import {
@@ -167,6 +168,12 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     id: "annual-c05-mcp",
     title: "Other tools can drive Eva",
     Component: AnnualMcp,
+    steps: 3,
+  },
+  {
+    id: "annual-g07-live-data",
+    title: "Live data for everyone",
+    Component: AnnualLiveData,
     steps: 3,
   },
   {
