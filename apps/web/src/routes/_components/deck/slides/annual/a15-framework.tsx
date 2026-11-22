@@ -25,19 +25,31 @@ const SECTIONS: readonly {
     items: [
       {
         name: "Owns technical design",
-        proof: ["Decided on paper first", "Not tied to one supplier"],
+        proof: [
+          "Sandbox move planned in six phases",
+          "4 providers, 21 models, one picker",
+        ],
       },
       {
         name: "Understands trade-offs",
-        proof: ["Workspaces in under a second", "Knowing what to stop"],
+        proof: [
+          "Workspace start: 40 s to under 1 s",
+          "7 dropped plans kept in writing",
+        ],
       },
       {
         name: "Debugs without flailing",
-        proof: ["The database was fighting itself", "Patch the package"],
+        proof: [
+          "Write clashes: 6.7 a second to 1 a minute",
+          "Patched Vercel Sandbox and Convex",
+        ],
       },
       {
         name: "A skill beyond coding",
-        proof: ["Measure it, do not guess", "Jev"],
+        proof: [
+          "Shimmer cost: 32.6 to 1.9 ms a second",
+          "Jev scores every item, not a sample",
+        ],
       },
     ],
   },
@@ -46,19 +58,31 @@ const SECTIONS: readonly {
     items: [
       {
         name: "Breaks down large problems",
-        proof: ["Decided on paper first", "Finishing what it starts"],
+        proof: [
+          "Sandbox move: spike to switch in 3 weeks",
+          "Stuck turns fixed once, at the cause",
+        ],
       },
       {
         name: "Improves the process",
-        proof: ["The bar is enforced", "Redline and shared packages"],
+        proof: [
+          "Local build: 28 s to 2.6 s",
+          "Redline checks every page by tool",
+        ],
       },
       {
         name: "Identifies work to do",
-        proof: ["One guard on every door", "The bottleneck has moved"],
+        proof: [
+          "Critical warnings 2 to 0, high 48 to 2",
+          "Next: automate the release",
+        ],
       },
       {
         name: "Business and user empathy",
-        proof: ["Simple Mode", "Jev PID checker"],
+        proof: [
+          "Simple Mode: one 5-step model slider",
+          "PID checker for referral brokers",
+        ],
       },
     ],
   },
@@ -67,15 +91,24 @@ const SECTIONS: readonly {
     items: [
       {
         name: "Communicates clearly",
-        proof: ["Friday sessions", "This deck"],
+        proof: [
+          "Plans and decisions written down",
+          "Daily summary rewritten for non-engineers",
+        ],
       },
       {
         name: "Gets buy-in",
-        proof: ["The team took Eva up", "Built by the team"],
+        proof: [
+          "Monthly sessions tripled from July",
+          "5 colleagues raise their own work",
+        ],
       },
       {
         name: "Mentors and onboards",
-        proof: ["Their problems set the agenda", "Bee shared with the company"],
+        proof: [
+          "Team set up in cloud sandboxes",
+          "Repo guides for people and agents",
+        ],
       },
     ],
   },
