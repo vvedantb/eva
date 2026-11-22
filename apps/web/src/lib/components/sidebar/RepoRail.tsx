@@ -77,7 +77,7 @@ function isRowActive(
  * Cut-out tone for the solid active rail icons: the active pill's fill
  * (`bg-segment`, eva's `--segment-active`), so the cut-out reads as a hole in the icon.
  */
-const CUTOUT_COLOR = "rgb(var(--segment-active) / 1)";
+const CUTOUT_COLOR = "var(--segment)";
 
 /** Green: something is running right now (sessions, sandboxes). */
 const RAIL_BADGE_LIVE_CLASS = cn(CORNER_BADGE_CLASS, "bg-success text-white");

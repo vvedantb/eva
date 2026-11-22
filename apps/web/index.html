@@ -11,7 +11,7 @@
     />
     <!-- Light-theme --app-shell; the script below and FaviconController
          retarget this to the active theme. -->
-    <meta name="theme-color" content="#F4F5F6" />
+    <meta name="theme-color" content="#F5F5F5" />
     <meta
       name="description"
       content="Meet Eva, your new AI coworker. Manage tasks, ship code, and track progress in real-time."
@@ -100,7 +100,7 @@
         }
         // Match browser chrome to --app-shell before paint (see SHELL_COLOR
         // in src/lib/utils/evaMark.ts), so mobile does not flash light.
-        var shell = { light: "#F4F5F6", dark: "#020202", neutral: "#222325" };
+        var shell = { light: "#F5F5F5", dark: "#060606", neutral: "#222325" };
         if (shell[appearance]) {
           var themeMeta = document.querySelector('meta[name="theme-color"]');
           if (themeMeta) themeMeta.content = shell[appearance];

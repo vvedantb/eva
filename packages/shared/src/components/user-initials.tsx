@@ -86,7 +86,7 @@ export function UserInitials({
           : "h-1.5 w-1.5";
 
   const avatar = (
-    <div className="relative flex items-center justify-center rounded-full bg-accent">
+    <div className="relative flex items-center justify-center rounded-full bg-accent-soft">
       <Facehash size={iconSizePx} name={initials} enableBlink interactive />
       {!hideLastSeen && user.lastSeenAt && (
         <span
@@ -225,15 +225,15 @@ export function UserProfileHoverCardBody({ userId }: { userId: string }) {
       {/* Ambient aurora header — same --ambient tokens as the app shell */}
       <div
         className="relative h-14"
-        style={{ backgroundColor: "rgb(var(--ambient-1) / 0.08)" }}
+        style={{ backgroundColor: "color-mix(in oklch, var(--ambient-1) 8%, transparent)" }}
       >
         <div
           className="pointer-events-none absolute -right-4 -top-8 size-20 rounded-full blur-2xl"
-          style={{ backgroundColor: "rgb(var(--ambient-1) / 0.3)" }}
+          style={{ backgroundColor: "color-mix(in oklch, var(--ambient-1) 30%, transparent)" }}
         />
         <div
           className="pointer-events-none absolute -bottom-7 -left-6 size-20 rounded-full blur-2xl"
-          style={{ backgroundColor: "rgb(var(--ambient-2) / 0.22)" }}
+          style={{ backgroundColor: "color-mix(in oklch, var(--ambient-2) 22%, transparent)" }}
         />
       </div>
 
@@ -258,7 +258,7 @@ export function UserProfileHoverCardBody({ userId }: { userId: string }) {
           {name}
         </p>
         {roleLabel ? (
-          <span className="mt-1.5 inline-flex items-center rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium leading-4 text-accent-foreground">
+          <span className="mt-1.5 inline-flex items-center rounded-full bg-accent-soft px-2 py-0.5 text-[11px] font-medium leading-4 text-accent-soft-foreground">
             {roleLabel}
           </span>
         ) : null}
