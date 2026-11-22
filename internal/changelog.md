@@ -1,5 +1,18 @@
 # Changelog
 
+## Web: `globals.css` imports `@vvedantb/ui/tokens` with full colours
+
+Date: 2026-11-22
+
+WHY: Eva kept shadcn-style `R G B` channel variables and `compat-shadcn-rgb.css` because the full tokens import sets oklch colours. That forced a hand-copied radius scale (#1458) and a second colour system next to vhub and Verve.
+
+Architectural: Eva now takes light, dark and neutral surfaces, brand, `--segment`, `--danger`, `--success`, `--warning`, `--radius` and the radius utilities from the package. Eva keeps only its own tokens (`--status-*`, `--cat-*`, `--warning-bg`, `--accent-soft`, …) as full `rgb()` values.
+- Tailwind: `bg-primary` is the brand `--accent`; `text-muted-foreground` is `--muted`; `bg-muted` is `--surface-secondary` (`@theme` in `globals.css`). `bg-accent` is now the brand fill, so eva's soft hover fill moved to `bg-accent-soft` / `text-accent-soft-foreground` (`--accent-soft`). `tailwind.config.js` keeps only eva's own colours and uses `color-mix` for opacity.
+- Theme picker: `ACCENT_COLORS` hold `rgb()` values. `applyCustomThemeVars` sets `--accent`, `--accent-foreground`, `--accent-soft` and `--accent-soft-foreground`. Focus, chart-1 and sidebar primary follow `--accent`.
+- Every `rgb(var(--x))` call site now uses `var(--x)` or `color-mix`. The HTML-render frame maps the shadcn names a page reads to the package tokens (`PAGE_TOKEN_SOURCE`).
+- Package `markdown.css` 0.60.0 still reads `rgb(var(--foreground))`; a colour-only shim in `globals.css` overrides it. Delete it when the package ships full colours.
+- Dark and neutral surfaces now match the package (light `--background` #F5F5F5, dark #060606). `SHELL_COLOR`, `index.html` and `manifest.json` follow. The extension config gains an `accent-soft` alias for shared `@eva/ui` classes.
+
 ## Web: rail groups get their rounded corners back
 
 Date: 2026-11-22

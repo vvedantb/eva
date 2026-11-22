@@ -124,7 +124,7 @@ export function SessionTabsArchivedMenu({
                             to={href}
                             className={cn(
                               "cursor-pointer",
-                              isSelected && "bg-accent",
+                              isSelected && "bg-accent-soft",
                             )}
                           >
                             <span className="min-w-0 flex-1 truncate">

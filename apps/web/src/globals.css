@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "@vvedantb/ui/tokens/css/type-scale.css";
+@import "@vvedantb/ui/tokens";
 @import "shadow-plugin";
 @import "@vvedantb/ui/tokens/css/markdown.css";
 @import "@vvedantb/ui/tokens/css/nav-icons.css";
@@ -9,27 +9,14 @@
 @import "@vvedantb/ui/tokens/css/marquee.css";
 @import "@vvedantb/ui/tokens/css/scroll-fade.css";
 @import "@vvedantb/ui/tokens/css/scrollbar.css";
-/* The `text-*` scale: each tier has its own line height and tracking. */
-@import "@vvedantb/ui/tokens/css/type-scale.css";
-/* vvedantb components read their colour names (`surface-*`, `field-*`,
- * `overlay`, `focus-*`, `danger`) from this file. It only maps them onto the
- * shadcn `R G B` variables below; it never redefines them. */
-@import "@vvedantb/ui/tokens/css/compat-shadcn-rgb.css";
 
-/* The package's sliding pill and selected fill (`bg-segment`) is eva's
- * `--segment-active`, shared with the phone tab bar. Compat maps it to
- * `--card`, which in dark and neutral is the trough itself: no visible pill. */
+/* The package `--muted` is grey text, but the 300+ `bg-muted` classes in eva
+ * mean a soft fill, as in shadcn. `bg-muted` and `border-muted` read
+ * `--color-muted`, so it points at the fill; `text-muted` and
+ * `text-muted-foreground` stay on the package's grey text. */
 @theme inline {
-  --color-segment: rgb(var(--segment-active));
-
-  /* Radius scale from `@vvedantb/ui/tokens` `@theme`. Package classes such as
-   * `railGroupClass` use `calc(var(--radius-lg) + 0.25rem)`; an undefined var
-   * makes the radius 0. Eva skips the full `@import "@vvedantb/ui/tokens"`
-   * because it also sets oklch colours and eva uses compat-shadcn-rgb.
-   * `--radius-field` already comes from compat. */
-  --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
+  --color-muted: var(--surface-secondary);
+  --text-color-muted: var(--muted);
 }
 
 @config '../tailwind.config.js';
@@ -37,6 +24,55 @@
 /* eva colours the `[!IMPORTANT]` markdown alert with the code-review status hue. */
 .markdown {
   --markdown-alert-important: var(--status-code-review);
+}
+
+/* `@vvedantb/ui/tokens/css/markdown.css` (0.60.0) still reads the shadcn
+ * channel variables as `rgb(var(--foreground))`, which is invalid with the
+ * full-colour tokens. These rules repeat only its colour declarations, as full
+ * colours. Delete this block once the package reads full colours. */
+@layer components {
+  .markdown :is(h1, h2, h3, h4, h5, h6) {
+    color: var(--foreground);
+  }
+  .markdown h6,
+  .markdown li::marker,
+  .markdown-link-icon,
+  .markdown-inline-code[data-file] svg,
+  .markdown-code-header {
+    color: var(--muted);
+  }
+  .markdown hr {
+    border-top: 1px solid var(--border);
+  }
+  .markdown .task-list-item > input[type="checkbox"] {
+    accent-color: var(--accent);
+  }
+  .markdown blockquote {
+    border-left: 2px solid var(--border);
+    color: var(--muted);
+  }
+  .markdown-alert {
+    background: color-mix(in oklch, var(--alert) 6%, transparent);
+  }
+  .markdown-alert[data-alert="important"] {
+    --alert: var(--markdown-alert-important, var(--accent));
+  }
+  .markdown-alert[data-alert="caution"] {
+    --alert: var(--danger);
+  }
+  .markdown .markdown-alert-title {
+    color: var(--alert);
+  }
+  .markdown-link {
+    color: var(--accent);
+    text-decoration-color: color-mix(in oklch, var(--accent) 30%, transparent);
+  }
+  .markdown-inline-code {
+    background: color-mix(in oklch, var(--foreground) 6%, transparent);
+  }
+  .markdown tbody tr + tr {
+    border-top: 1px solid color-mix(in oklch, var(--border) 70%, transparent);
+  }
 }
 
 /* Streamdown styles its tables, diagrams and controls with Tailwind classes
@@ -146,9 +182,9 @@
 }
 
 /* `rounded-surface`, `rounded-t-surface`, `rounded-b-surface`, `rounded-control`
- * and `rounded-menu-item` come from `@vvedantb/ui/tokens/css/compat-shadcn-rgb.css`. */
+ * and `rounded-menu-item` come from `@vvedantb/ui/tokens`. */
 @utility bg-app-shell {
-  background-color: rgb(var(--app-shell));
+  background-color: var(--app-shell);
 }
 
 /* `motion-press`, `motion-base` and `motion-emphasized` come from
@@ -209,21 +245,21 @@
 }
 
 @utility landing-atmosphere {
-  background-color: rgb(var(--background));
+  background-color: var(--background);
   background-image:
     radial-gradient(
       ellipse 70% 50% at 50% -8%,
-      rgb(var(--primary) / 0.16),
+      color-mix(in oklch, var(--accent) 16%, transparent),
       transparent 62%
     ),
     radial-gradient(
       ellipse 40% 40% at 88% 18%,
-      rgb(var(--chart-2) / 0.08),
+      color-mix(in oklch, var(--chart-2) 8%, transparent),
       transparent 60%
     ),
     radial-gradient(
       ellipse 40% 40% at 10% 30%,
-      rgb(var(--chart-3) / 0.07),
+      color-mix(in oklch, var(--chart-3) 7%, transparent),
       transparent 60%
     );
 
@@ -231,17 +267,17 @@
     background-image:
       radial-gradient(
         ellipse 70% 50% at 50% -8%,
-        rgb(var(--primary) / 0.12),
+        color-mix(in oklch, var(--accent) 12%, transparent),
         transparent 62%
       ),
       radial-gradient(
         ellipse 40% 40% at 88% 18%,
-        rgb(var(--chart-2) / 0.06),
+        color-mix(in oklch, var(--chart-2) 6%, transparent),
         transparent 60%
       ),
       radial-gradient(
         ellipse 40% 40% at 10% 30%,
-        rgb(var(--chart-3) / 0.05),
+        color-mix(in oklch, var(--chart-3) 5%, transparent),
         transparent 60%
       );
   }
@@ -254,8 +290,8 @@
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgb(var(--foreground) / 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(var(--foreground) / 0.06) 1px, transparent 1px);
+    linear-gradient(color-mix(in oklch, var(--foreground) 6%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklch, var(--foreground) 6%, transparent) 1px, transparent 1px);
   background-size: 64px 64px;
   background-position: center top;
   mask-image: radial-gradient(
@@ -269,8 +305,8 @@
 @utility landing-headline-tail {
   background-image: linear-gradient(
     100deg,
-    rgb(var(--foreground)) 10%,
-    rgb(var(--muted-foreground)) 95%
+    var(--foreground) 10%,
+    var(--muted) 95%
   );
   background-clip: text;
   color: transparent;
@@ -282,7 +318,7 @@
   position: absolute;
   background: radial-gradient(
     closest-side,
-    rgb(var(--primary) / 0.22),
+    color-mix(in oklch, var(--accent) 22%, transparent),
     transparent
   );
   filter: blur(40px);
@@ -331,18 +367,8 @@
   transform-origin: 50% 70%;
 }
 
-/* `scrollbar` comes from @vvedantb/ui/tokens/css/scrollbar.css. The base is
-   set on each theme scope because --muted-foreground is an rgb triplet here. */
-:root,
-.dark,
-.dark.neutral {
-  --scrollbar-base: rgb(var(--muted-foreground));
-}
-
-@utility scrollbar-thin {
-  @apply scrollbar;
-}
-
+/* `scrollbar` comes from @vvedantb/ui/tokens/css/scrollbar.css, `scrollbar-thin`
+ * from `@vvedantb/ui/tokens`. `--scrollbar-base` is set on `:root` below. */
 @layer utilities {
   /* transitions-dev — modal / tabs motion tokens
  * (see .agents/skills/transitions-dev/) */
@@ -382,96 +408,65 @@
 }
 
 @layer base {
+  /* Surfaces, text, borders, brand (`--accent`), `--segment`, `--danger`,
+   * `--success`, `--warning`, `--radius` and the light/dark/neutral schemes come
+   * from `@vvedantb/ui/tokens`. Only eva's own tokens live here, as full
+   * colours (never bare `R G B` channels). */
   :root {
-    color-scheme: light;
-    /* Neutral/surface tokens follow the HeroUI palette (oklch→sRGB).
-     * Accent tokens (--primary, --accent, --ring, --chart-1, sidebar
-     * accent/primary) and --radius/--font-* are user-defined via the
-     * theme settings, so they are left untouched here. */
-    --background: 244 245 246;
-    --app-shell: 244 245 246;
-    --foreground: 9 9 11;
-    --card: 255 255 255;
-    /* Active pill of segmented tabs (web) and the phone tab bar. */
-    --segment-active: 255 255 255;
-    --card-foreground: 9 9 11;
-    --popover: 255 255 255;
-    --popover-foreground: 9 9 11;
-    --primary: 9 9 11;
-    --primary-foreground: 250 250 250;
-    --secondary: 234 235 236;
-    --secondary-foreground: 23 25 27;
-    --muted: 239 239 240;
-    /* Darkened from 113 114 116 (4.41:1 on --background, below WCAG AA).
-     * designTokens.test.ts holds the 4.5:1 floor. */
-    --muted-foreground: 100 101 103;
-    --accent: 244 244 245;
-    --accent-foreground: 24 24 27;
-    --destructive: 255 55 60;
-    --destructive-foreground: 252 252 252;
-    --success: 21 201 100;
-    --success-foreground: 22 25 23;
-    --warning: 245 165 35;
-    --warning-foreground: 26 24 21;
-    --border: 221 222 223;
-    --input: 221 222 223;
-    --ring: 9 9 11;
-    --chart-1: 9 9 11;
-    --chart-2: 56 189 248;
-    --chart-3: 129 140 248;
-    --chart-4: 167 139 250;
-    --chart-5: 6 182 212;
+    /* Page canvas behind the shell panels. */
+    --app-shell: var(--background);
+    /* Soft hover/selected fill (`bg-accent-soft`). The theme picker retints it
+     * for a chromatic accent. The package's `--accent` is the brand colour. */
+    --accent-soft: var(--surface-secondary);
+    --accent-soft-foreground: var(--foreground);
+    --chart-1: var(--accent);
+    --scrollbar-base: var(--muted);
+    --chart-2: rgb(56 189 248);
+    --chart-3: rgb(129 140 248);
+    --chart-4: rgb(167 139 250);
+    --chart-5: rgb(6 182 212);
     /* Muted categorical ramp for hash-assigned identity colour (tab groups,
-     * repo tiles, avatars). Not for status — status uses --status-*. */
-    --cat-1: 72 106 168; /* blue */
-    --cat-2: 120 96 170; /* violet */
-    --cat-3: 54 122 118; /* teal */
-    --cat-4: 150 108 42; /* amber */
-    --cat-5: 160 82 100; /* rose */
-    --cat-6: 62 122 84; /* emerald */
-    --cat-7: 56 112 150; /* sky */
-    --cat-8: 162 96 62; /* orange */
-    --warning-bg: 255 247 237;
-    --success-bg: 240 253 244;
-    /* Tinted-chip text. `--warning` / `--destructive` are the brightest point
-     * of their hue, so setting them as text on their own light tint measures
-     * ~2:1 — a colour reserved for fills and icons. These are the darkened
-     * partners that clear WCAG AA on the matching `-bg`; designTokens.test.ts
-     * holds the 4.5:1 floor for both pairs. */
-    --warning-strong: 146 88 6;
-    --destructive-bg: 254 242 242;
-    --destructive-strong: 185 28 28;
-    --status-progress: 161 98 7;
-    --status-progress-bg: 254 240 138;
-    --status-progress-subtle: 255 251 235;
-    --status-progress-bar: 250 204 21;
-    --status-business-review: 194 65 12;
-    --status-business-review-bg: 254 215 170;
-    --status-business-review-subtle: 255 247 237;
-    --status-business-review-bar: 251 146 60;
-    --status-code-review: 126 34 206;
-    --status-code-review-bg: 233 213 255;
-    --status-code-review-subtle: 243 232 255;
-    --status-code-review-bar: 192 132 252;
-    --status-done: 21 128 61;
-    --status-done-bg: 187 247 208;
-    --status-done-subtle: 240 253 244;
-    --status-done-bar: 74 222 128;
-    --status-cancelled: 107 114 128;
-    --status-cancelled-bg: 229 231 235;
-    --status-cancelled-subtle: 249 250 251;
-    --status-cancelled-bar: 156 163 175;
-    --sidebar: 244 245 246;
-    --sidebar-foreground: 24 24 25;
-    --sidebar-primary: 9 9 11;
-    --sidebar-primary-foreground: 250 250 250;
-    --sidebar-accent: 233 234 236;
-    --sidebar-accent-foreground: 24 24 27;
-    --sidebar-border: 221 222 223;
-    --sidebar-ring: 9 9 11;
+     * repo tiles, avatars). Not for status: status uses --status-*. */
+    --cat-1: rgb(72 106 168);
+    --cat-2: rgb(120 96 170);
+    --cat-3: rgb(54 122 118);
+    --cat-4: rgb(150 108 42);
+    --cat-5: rgb(160 82 100);
+    --cat-6: rgb(62 122 84);
+    --cat-7: rgb(56 112 150);
+    --cat-8: rgb(162 96 62);
+    --warning-bg: rgb(255 247 237);
+    --success-bg: rgb(240 253 244);
+    /* Tinted-chip text. `--warning` / `--danger` are the brightest point of
+     * their hue, so as text on their own light tint they measure ~2:1. These
+     * darkened partners clear WCAG AA on the matching `-bg`. */
+    --warning-strong: rgb(146 88 6);
+    --destructive-bg: rgb(254 242 242);
+    --destructive-strong: rgb(185 28 28);
+    --status-progress: rgb(161 98 7);
+    --status-progress-bg: rgb(254 240 138);
+    --status-progress-subtle: rgb(255 251 235);
+    --status-progress-bar: rgb(250 204 21);
+    --status-business-review: rgb(194 65 12);
+    --status-business-review-bg: rgb(254 215 170);
+    --status-business-review-subtle: rgb(255 247 237);
+    --status-business-review-bar: rgb(251 146 60);
+    --status-code-review: rgb(126 34 206);
+    --status-code-review-bg: rgb(233 213 255);
+    --status-code-review-subtle: rgb(243 232 255);
+    --status-code-review-bar: rgb(192 132 252);
+    --status-done: rgb(21 128 61);
+    --status-done-bg: rgb(187 247 208);
+    --status-done-subtle: rgb(240 253 244);
+    --status-done-bar: rgb(74 222 128);
+    --status-cancelled: rgb(107 114 128);
+    --status-cancelled-bg: rgb(229 231 235);
+    --status-cancelled-subtle: rgb(249 250 251);
+    --status-cancelled-bar: rgb(156 163 175);
     --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
     --font-mono: Menlo, monospace;
-    --radius: 1rem;
+    --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+    --font-mono: Menlo, monospace;
     --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
     --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
     --shadow-sm:
@@ -486,11 +481,6 @@
       0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
     --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
     --tracking-normal: -0.006em;
-    --motion-fast: 150ms;
-    --motion-base: 220ms;
-    --motion-slow: 320ms;
-    --motion-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-    --motion-ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
 
     /* What a bare `transition-colors` / `transition-transform` resolves to.
      * Tailwind's own values are 150ms and `cubic-bezier(0.4, 0, 0.2, 1)`, so the
@@ -514,126 +504,39 @@
   }
 
   .dark {
-    color-scheme: dark;
-    /* Flatter near-black ladder: page ≈ pure black, cards one step up,
-     * hierarchy from hairline borders + surface steps (not shadows).
-     * Accent and font/radius stay user-defined. */
-    --background: 2 2 2;
-    --app-shell: 2 2 2;
-    --foreground: 250 250 250;
-    --card: 16 16 16;
-    --card-foreground: 250 250 250;
-    --popover: 16 16 16;
-    --popover-foreground: 250 250 250;
-    --primary: 250 250 250;
-    --primary-foreground: 9 9 11;
-    --secondary: 32 32 32;
-    --secondary-foreground: 252 252 252;
-    --segment-active: 71 71 71;
-    --muted: 26 26 26;
-    --muted-foreground: 159 160 162;
-    --accent: 20 20 20;
-    --accent-foreground: 244 244 245;
-    --destructive: 219 59 62;
-    --destructive-foreground: 252 252 252;
-    --success: 21 201 100;
-    --success-foreground: 22 25 23;
-    --warning: 247 183 80;
-    --warning-foreground: 26 24 21;
-    --border: 36 36 36;
-    --input: 36 36 36;
-    --ring: 250 250 250;
-    --chart-1: 250 250 250;
-    --chart-2: 56 189 248;
-    --chart-3: 129 140 248;
-    --chart-4: 167 139 250;
-    --chart-5: 6 182 212;
-    /* Muted categorical ramp for hash-assigned identity colour (tab groups,
-     * repo tiles, avatars). Not for status — status uses --status-*. */
-    --cat-1: 138 165 214;
-    --cat-2: 170 152 214;
-    --cat-3: 120 176 172;
-    --cat-4: 202 160 96;
-    --cat-5: 210 142 158;
-    --cat-6: 126 178 144;
-    --cat-7: 128 172 200;
-    --cat-8: 212 152 118;
-    --warning-bg: 47 35 20;
-    --success-bg: 18 44 30;
-    --warning-strong: 252 211 77;
-    --destructive-bg: 60 24 26;
-    --destructive-strong: 252 165 165;
-    --status-progress: 250 204 21;
-    --status-progress-bg: 71 50 12;
-    --status-progress-subtle: 44 35 17;
-    --status-progress-bar: 245 158 11;
-    --status-business-review: 251 146 60;
-    --status-business-review-bg: 78 39 14;
-    --status-business-review-subtle: 56 34 21;
-    --status-business-review-bar: 249 115 22;
-    --status-code-review: 192 132 252;
-    --status-code-review-bg: 59 26 89;
-    --status-code-review-subtle: 30 24 44;
-    --status-code-review-bar: 168 85 247;
-    --status-done: 74 222 128;
-    --status-done-bg: 23 58 36;
-    --status-done-subtle: 16 43 28;
-    --status-done-bar: 34 197 94;
-    --status-cancelled: 156 163 175;
-    --status-cancelled-bg: 55 65 81;
-    --status-cancelled-subtle: 31 41 55;
-    --status-cancelled-bar: 107 114 128;
-    --sidebar: 2 2 2;
-    --sidebar-foreground: 251 252 253;
-    --sidebar-primary: 250 250 250;
-    --sidebar-primary-foreground: 9 9 11;
-    --sidebar-accent: 28 28 28;
-    --sidebar-accent-foreground: 244 244 245;
-    --sidebar-border: 36 36 36;
-    --sidebar-ring: 250 250 250;
-    --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
-    --font-mono: Menlo, monospace;
-    --radius: 1rem;
-    --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
-    --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
-    --shadow-sm:
-      0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
-    --shadow:
-      0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
-    --shadow-md:
-      0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 2px 4px -1px hsl(0 0% 0% / 0.1);
-    --shadow-lg:
-      0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 4px 6px -1px hsl(0 0% 0% / 0.1);
-    --shadow-xl:
-      0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
-    --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
-  }
-
-  /* Neutral — soft-dark surfaces only. Applied as `<html class="dark neutral">`.
-   * Status + accent tokens inherit from `.dark` so custom accents still apply. */
-  .dark.neutral {
-    color-scheme: dark;
-    --background: 34 35 37;
-    --app-shell: 34 35 37;
-    --foreground: 250 250 250;
-    --card: 48 49 52;
-    --card-foreground: 250 250 250;
-    --popover: 48 49 52;
-    --popover-foreground: 250 250 250;
-    --secondary: 68 69 72;
-    --secondary-foreground: 252 252 252;
-    --segment-active: 68 69 72;
-    --muted: 58 59 62;
-    --muted-foreground: 159 160 162;
-    --destructive-foreground: 252 252 252;
-    --success-foreground: 22 25 23;
-    --warning-foreground: 26 24 21;
-    --border: 78 79 82;
-    --input: 78 79 82;
-    --sidebar: 34 35 37;
-    --sidebar-foreground: 251 252 253;
-    --sidebar-accent: 58 59 62;
-    --sidebar-border: 78 79 82;
+    --cat-1: rgb(138 165 214);
+    --cat-2: rgb(170 152 214);
+    --cat-3: rgb(120 176 172);
+    --cat-4: rgb(202 160 96);
+    --cat-5: rgb(210 142 158);
+    --cat-6: rgb(126 178 144);
+    --cat-7: rgb(128 172 200);
+    --cat-8: rgb(212 152 118);
+    --warning-bg: rgb(47 35 20);
+    --success-bg: rgb(18 44 30);
+    --warning-strong: rgb(252 211 77);
+    --destructive-bg: rgb(60 24 26);
+    --destructive-strong: rgb(252 165 165);
+    --status-progress: rgb(250 204 21);
+    --status-progress-bg: rgb(71 50 12);
+    --status-progress-subtle: rgb(44 35 17);
+    --status-progress-bar: rgb(245 158 11);
+    --status-business-review: rgb(251 146 60);
+    --status-business-review-bg: rgb(78 39 14);
+    --status-business-review-subtle: rgb(56 34 21);
+    --status-business-review-bar: rgb(249 115 22);
+    --status-code-review: rgb(192 132 252);
+    --status-code-review-bg: rgb(59 26 89);
+    --status-code-review-subtle: rgb(30 24 44);
+    --status-code-review-bar: rgb(168 85 247);
+    --status-done: rgb(74 222 128);
+    --status-done-bg: rgb(23 58 36);
+    --status-done-subtle: rgb(16 43 28);
+    --status-done-bar: rgb(34 197 94);
+    --status-cancelled: rgb(156 163 175);
+    --status-cancelled-bg: rgb(55 65 81);
+    --status-cancelled-subtle: rgb(31 41 55);
+    --status-cancelled-bar: rgb(107 114 128);
   }
   * {
     @apply border-border;
@@ -647,7 +550,7 @@
     letter-spacing: var(--tracking-normal);
     position: relative;
     isolation: isolate;
-    background-color: rgb(var(--background));
+    background-color: var(--background);
   }
   main {
     position: relative;
@@ -689,8 +592,8 @@
     scroll-behavior: smooth;
   }
   ::selection {
-    background: rgb(var(--primary) / 0.22);
-    color: rgb(var(--foreground));
+    background: color-mix(in oklch, var(--accent) 22%, transparent);
+    color: var(--foreground);
   }
 
   /*
@@ -787,10 +690,10 @@
    */
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgb(var(--muted-foreground) / 0.35) transparent;
+    scrollbar-color: color-mix(in oklch, var(--muted) 35%, transparent) transparent;
   }
   *:hover {
-    scrollbar-color: rgb(var(--muted-foreground) / 0.55) transparent;
+    scrollbar-color: color-mix(in oklch, var(--muted) 55%, transparent) transparent;
   }
   *::-webkit-scrollbar {
     width: 8px;
@@ -800,13 +703,13 @@
     background: transparent;
   }
   *::-webkit-scrollbar-thumb {
-    background: rgb(var(--muted-foreground) / 0.32);
+    background: color-mix(in oklch, var(--muted) 32%, transparent);
     border: 2px solid transparent;
     border-radius: 999px;
     background-clip: padding-box;
   }
   *::-webkit-scrollbar-thumb:hover {
-    background: rgb(var(--muted-foreground) / 0.52);
+    background: color-mix(in oklch, var(--muted) 52%, transparent);
     background-clip: padding-box;
   }
 }
@@ -952,12 +855,12 @@
   @keyframes t-anchor-flash {
     0%,
     35% {
-      box-shadow: inset 0 0 0 2px rgb(var(--ring) / 0.9);
-      background-color: rgb(var(--accent) / 0.45);
+      box-shadow: inset 0 0 0 2px color-mix(in oklch, var(--focus) 90%, transparent);
+      background-color: color-mix(in oklch, var(--accent-soft) 45%, transparent);
     }
     100% {
-      box-shadow: inset 0 0 0 2px rgb(var(--ring) / 0);
-      background-color: rgb(var(--accent) / 0);
+      box-shadow: inset 0 0 0 2px color-mix(in oklch, var(--focus) 0%, transparent);
+      background-color: color-mix(in oklch, var(--accent-soft) 0%, transparent);
     }
   }
 }
@@ -1008,18 +911,18 @@ html[data-blur-pid] [data-pii] {
 /* ───────────────────────────────────────────────────────────────────
  * Segmented tabs — opt in with `tabs-segmented` on an eva Tabs.List. The
  * same trough and pill as the package rail groups, button tracks and side
- * panel tabs: `--secondary` trough in light, `--card` in dark, and the
- * `--segment-active` pill. Plain eva tab lists keep the Tabs config look.
+ * panel tabs: `--default` trough in light, `--surface-card` in dark, and the
+ * `--segment` pill. Plain eva tab lists keep the Tabs config look.
  * Unlayered, so these rules beat the list and pill bg utilities.
  * ─────────────────────────────────────────────────────────────────── */
 .tabs-segmented {
-  background-color: rgb(var(--secondary));
+  background-color: var(--default);
 }
 .dark .tabs-segmented {
-  background-color: rgb(var(--card));
+  background-color: var(--surface-card);
 }
 .tabs-segmented .t-tabs-pill {
-  background-color: rgb(var(--segment-active));
+  background-color: var(--segment);
 }
 /* The package side panel's arrow to the active rail tab (`SidePanelTabs.Frame`):
  * slides with the tab pill's timing; page motion off snaps it, as the pill.
@@ -1058,8 +961,8 @@ html[data-page-motion="off"] .t-side-panel-arrow {
 }
 .tabs-line [role="tab"][data-state="active"] {
   background-color: transparent;
-  border-bottom-color: rgb(var(--foreground));
-  color: rgb(var(--foreground));
+  border-bottom-color: var(--foreground);
+  color: var(--foreground);
 }
 
 /* Border beam (<BorderBeam/>): the `.beam-*` rules come from
@@ -1067,21 +970,21 @@ html[data-page-motion="off"] .t-side-panel-arrow {
  * No `.beam-halo`: a live `filter: blur()` on the spinning conic was the
  * leftover GPU floor and is banned (CLAUDE.md / animationContract.test.ts). */
 .beam-root {
-  --beam-color: rgb(var(--foreground) / 0.75);
-  --beam-progress-color: rgb(var(--status-progress-bar) / 0.9);
+  --beam-color: color-mix(in oklch, var(--foreground) 75%, transparent);
+  --beam-progress-color: color-mix(in oklch, var(--status-progress-bar) 90%, transparent);
 }
 
 /* Brand purple→blue, same as the spinners and the session-row Drive grid.
  * Mirrors `EVA_PURPLE` / `EVA_BLUE` in packages/ui `config/foundations.ts`.
  * Full stops, not `--beam-colorful-*`, to keep the softer ends. */
 .beam-colorful {
-  --eva-purple: 139 63 184;
-  --eva-blue: 59 125 216;
+  --eva-purple: rgb(139 63 184);
+  --eva-blue: rgb(59 125 216);
   --beam-stops:
     transparent 0%,
-    rgb(var(--eva-purple) / 0.9) calc(var(--beam-spread) * 0.5),
-    color-mix(in oklab, rgb(var(--eva-purple)), rgb(var(--eva-blue))) var(--beam-spread),
-    rgb(var(--eva-blue) / 0.95) calc(var(--beam-spread) * 1.5),
+    color-mix(in oklch, var(--eva-purple) 90%, transparent) calc(var(--beam-spread) * 0.5),
+    color-mix(in oklab, var(--eva-purple), var(--eva-blue)) var(--beam-spread),
+    color-mix(in oklch, var(--eva-blue) 95%, transparent) calc(var(--beam-spread) * 1.5),
     transparent calc(var(--beam-spread) * 2);
 }
 
@@ -1127,7 +1030,7 @@ html[data-page-motion="off"] .t-side-panel-arrow {
 }
 .shimmer-copy {
   display: block;
-  color: rgb(var(--background));
+  color: var(--background);
   animation: shimmer-band var(--shimmer-duration) linear infinite reverse;
 }
 @keyframes shimmer-band {
@@ -1200,7 +1103,7 @@ html[data-page-hidden] .question-nudge,
     -webkit-backdrop-filter: none !important;
   }
   [class*="bg-popover/95"] {
-    background-color: rgb(var(--popover)) !important;
+    background-color: var(--overlay) !important;
   }
 }
 
@@ -1297,7 +1200,7 @@ html[data-page-hidden] .question-nudge,
 }
 .ave-ripple {
   opacity: 0;
-  box-shadow: 0 0 0 1px rgb(var(--success));
+  box-shadow: 0 0 0 1px var(--success);
   animation: ave-ripple 0.6s ease-out 0.4s infinite;
 }
 
@@ -1309,7 +1212,7 @@ html[data-page-hidden] .question-nudge,
 .ave-halo {
   opacity: 0.3;
   transform: scale(1.1);
-  box-shadow: 0 0 0 1.5px rgb(var(--foreground));
+  box-shadow: 0 0 0 1.5px var(--foreground);
   animation: ave-halo 1.8s ease-out infinite;
 }
 
@@ -1325,7 +1228,7 @@ html[data-page-hidden] .question-nudge,
   animation: ave-squint 1.6s ease-in-out both;
 }
 .ave-happy {
-  stroke: rgb(var(--foreground));
+  stroke: var(--foreground);
   opacity: 0;
   animation: ave-happy 1.6s ease-in-out both;
 }
@@ -1335,7 +1238,7 @@ html[data-page-hidden] .question-nudge,
     ave-fade-out var(--motion-fast) ease-out 2.85s forwards;
 }
 .ave-check-path {
-  stroke: rgb(var(--success-foreground));
+  stroke: var(--success-foreground);
   animation: ave-check-draw 1.6s ease-out both;
 }
 
@@ -1363,7 +1266,7 @@ html[data-page-hidden] .question-nudge,
   animation: ave-pip-pop 0.45s var(--motion-ease-emphasized) 0.1s both;
 }
 .ave-alarm {
-  stroke: rgb(var(--destructive));
+  stroke: var(--danger);
   opacity: 0.45;
   animation: ave-alarm 1.4s ease-out both;
 }
@@ -1546,7 +1449,7 @@ html[data-page-hidden] .ave-face *,
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  box-shadow: 0 0 0 2px rgb(var(--primary));
+  box-shadow: 0 0 0 2px var(--accent);
   opacity: 0;
   animation: ave-unread-pulse 1.2s ease-out 0.3s 3;
 }
@@ -1695,37 +1598,37 @@ html[data-page-hidden] .ave-face *,
  * decorations (data-node-*) from the suggest-changes plugin.
  * ─────────────────────────────────────────────────────────────────── */
 .tiptap ins[data-id] {
-  background-color: rgb(var(--success) / 0.16);
-  color: rgb(var(--success));
+  background-color: color-mix(in oklch, var(--success) 16%, transparent);
+  color: var(--success);
   text-decoration: none;
   border-radius: 2px;
 }
 .tiptap del[data-id] {
-  color: rgb(var(--destructive));
-  background-color: rgb(var(--destructive) / 0.1);
+  color: var(--danger);
+  background-color: color-mix(in oklch, var(--danger) 10%, transparent);
   text-decoration: line-through;
 }
 .tiptap span[data-type="modification"] {
-  background-color: rgb(var(--warning) / 0.16);
+  background-color: color-mix(in oklch, var(--warning) 16%, transparent);
   text-decoration: underline dotted;
 }
 .tiptap [data-node-deletion="true"] {
-  background-color: rgb(var(--destructive) / 0.08);
+  background-color: color-mix(in oklch, var(--danger) 8%, transparent);
 }
 .tiptap [data-node-insertion="true"] {
-  background-color: rgb(var(--success) / 0.08);
+  background-color: color-mix(in oklch, var(--success) 8%, transparent);
 }
 
 /* Anchored-comment highlights. Driven by DocCommentHighlight decorations, not
  * the mark itself, so resolved threads lose their tint without editing the doc.
  * Amber keeps them distinct from the green/red suggestion marks. */
 .doc-comment-highlight {
-  background-color: rgb(var(--warning) / 0.18);
-  border-bottom: 1.5px solid rgb(var(--warning) / 0.55);
+  background-color: color-mix(in oklch, var(--warning) 18%, transparent);
+  border-bottom: 1.5px solid color-mix(in oklch, var(--warning) 55%, transparent);
   cursor: pointer;
 }
 .doc-comment-highlight-active {
-  background-color: rgb(var(--warning) / 0.34);
+  background-color: color-mix(in oklch, var(--warning) 34%, transparent);
 }
 
 /* ───────────────────────────────────────────────────────────────────

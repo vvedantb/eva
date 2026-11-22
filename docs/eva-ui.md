@@ -6,7 +6,9 @@ Skeleton loading states: see `docs/skullet.md` (use `LoadingSkeleton`, not `skul
 
 ## Surfaces (tone-based)
 
-Surface tokens map 1:1 to the HeroUI palette: `--background` (page canvas) → `--card`/`--popover` (surface, elevated) → `--muted` (surface-secondary) → `--secondary` (default). Accent (`--primary`/`--accent`/`--ring`/`--chart-1`/sidebar accent), `--radius`, and `--font-*` are user-defined via theme settings — never hardcode them.
+`globals.css` imports `@vvedantb/ui/tokens`, so the tokens are the package's full colours (oklch or `rgb()`), never bare `R G B` channels. Surfaces: `--background` (page canvas) → `--surface-card`/`--overlay` (surface, elevated) → `--surface-secondary` (fill) → `--default` (secondary fill). `--muted` is grey **text**; `--accent` is the **brand** colour. Eva's own tokens (`--status-*`, `--cat-*`, `--warning-bg`, `--accent-soft`…) sit in `globals.css`. Brand (`--accent`, which `--focus` and `--chart-1` follow), `--accent-soft`, `--radius` and `--font-*` are user-defined via theme settings — never hardcode them.
+
+The shadcn class names still work: `bg-primary` is the brand, `text-muted-foreground` is grey text, `bg-muted` is the soft fill (`--surface-secondary`), `bg-card`, `bg-popover`, `bg-destructive` and `ring-ring` map to the package tokens. `bg-accent` is the **brand** fill, as in the package. For the soft hover or selected fill, use `bg-accent-soft` / `text-accent-soft-foreground` (the theme picker tints it). Write `var(--token)` or `color-mix(in oklch, var(--token) 40%, transparent)` in CSS and inline styles, never `rgb(var(--token))`.
 
 **Borders**
 
@@ -39,7 +41,7 @@ Surface tokens map 1:1 to the HeroUI palette: `--background` (page canvas) → `
 
 ## Rails, tracks and the sandbox card
 
-Groups of controls sit on a **track**: the segmented-tabs trough (`--secondary` light, `--card` dark), with the active item on the lighter pill (`--segment-active`). The gap between tracks divides groups, so the chrome has no edge lines, separators or resting dividers.
+Groups of controls sit on a **track**: the segmented-tabs trough (`--default` light, `--surface-card` dark), with the active item on the lighter pill (`--segment`). The gap between tracks divides groups, so the chrome has no edge lines, separators or resting dividers.
 
 **App rail**
 
