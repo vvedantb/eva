@@ -9,6 +9,9 @@ export const MO_A4_TICK_GAP = 0.07;
 /** The first proof waits for the camera to start straightening. */
 const TICK_LEAD = 0.25;
 
+/** A proof line; `credit` names the colleague whose idea it was. */
+export type CapabilityProof = string | { text: string; credit: string };
+
 /**
  * One capability on the a15 framework board. It rises into the grid on entry;
  * on the evidence step its proof lines arrive underneath, each with its own
@@ -21,7 +24,7 @@ export function MoA4CapabilityCard({
   evidenced,
 }: {
   name: string;
-  proof: readonly string[];
+  proof: readonly CapabilityProof[];
   index: number;
   evidenced: boolean;
 }) {
@@ -46,8 +49,9 @@ export function MoA4CapabilityCard({
             {name}
           </span>
           <ul className="flex flex-col gap-1.5">
-            {proof.map((line, row) => {
+            {proof.map((entry, row) => {
               const at = tick + row * 0.12;
+              const line = typeof entry === "string" ? entry : entry.text;
               return (
                 <m.li
                   key={line}
@@ -80,7 +84,14 @@ export function MoA4CapabilityCard({
                   >
                     <IconCheck size={9} stroke={3.5} className="text-white" />
                   </m.span>
-                  {line}
+                  <span>
+                    {line}
+                    {typeof entry === "string" ? null : (
+                      <span className="ml-2 rounded-full bg-white/[0.08] px-2 py-0.5 text-[11px] text-white/70">
+                        {entry.credit}
+                      </span>
+                    )}
+                  </span>
                 </m.li>
               );
             })}

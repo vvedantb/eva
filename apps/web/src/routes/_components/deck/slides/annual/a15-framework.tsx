@@ -1,4 +1,5 @@
 import { MoA4CapabilityCard } from "../_parts/MoA4CapabilityCard";
+import type { CapabilityProof } from "../_parts/MoA4CapabilityCard";
 import { Camera } from "../../_components/DeckCamera";
 import type { CameraShot } from "../../_components/DeckCamera";
 import {
@@ -16,7 +17,7 @@ import { Sheen } from "../../_components/motion";
  */
 const SECTIONS: readonly {
   heading: string;
-  items: readonly { name: string; proof: readonly string[] }[];
+  items: readonly { name: string; proof: readonly CapabilityProof[] }[];
 }[] = [
   {
     heading: "Technical",
@@ -71,6 +72,7 @@ const SECTIONS: readonly {
           "Redline and flowtape experiments",
           "Work to make CI quicker",
           "A Mantine linter",
+          { text: "Jev score on every message", credit: "Zuza's idea" },
         ],
       },
       {
@@ -97,7 +99,10 @@ const SECTIONS: readonly {
         proof: [
           "Demoed Eva at every dev stand-up, first two quarters",
           "Daily summaries and a weekly changelog for non-engineers",
-          "Plans logged in Eva, specs saved in the codebase",
+          {
+            text: "Plans logged in Eva, specs saved in the codebase",
+            credit: "Zuza's idea",
+          },
         ],
       },
       {
