@@ -10,6 +10,7 @@ import { AnnualJudgement } from "./annual/g08-judgement";
 import { AnnualCatching } from "./annual/g09-catching";
 import { AnnualRepos } from "./annual/g10-repos";
 import { AnnualConfigurable } from "./annual/g11-configurable";
+import { AnnualUnlocked } from "./annual/g12-unlocked";
 import { AnnualPatchPackages } from "./annual/e03-patch-packages";
 import { AnnualCarePulse } from "./annual/e02-carepulse";
 import {
@@ -475,6 +476,12 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     section: "bee",
   },
   // ── Close: the framework map and the last word, back in Eva colours ──
+  {
+    id: "annual-g12-unlocked",
+    title: "What AI unlocked for me",
+    Component: AnnualUnlocked,
+    steps: 3,
+  },
   {
     id: "a15-framework",
     title: "Senior engineer, mapped",

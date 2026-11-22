@@ -396,7 +396,7 @@ Bee's still in progress, but what do we think — would you use Bee?
   // Annual CDM deck
   // ---------------------------------------------------------------------------
   "a01-title": `Open on the year, not one product: most of it is Eva, but it also covers CarePulse, vmem, flowtape, Redline and Bee.
-Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 64.
+Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 65.
 Figures: the window is 11 January to 16 September 2026.
 Next: Eva first, the biggest section.`,
 
@@ -549,7 +549,7 @@ Next: what it does.`,
 → Step 2: what it changed. I presented it to the company in November, and it is still in progress, open to anyone who wants to test it.
 Figures: Bee releases from 26 September 2026 (GitHub, checked 15 November 2026).
 Framework: identifies problems to solve; communicates clearly; gets buy-in.
-Next: how all of this maps to the framework.`,
+Next: before the framework, what all of this has meant for me.`,
 
   "annual-g02-checks": `The business team should not need to read code to know a piece of work is ready, so the checks show as ticks.
 → Step 1: proof. Screenshots of the change and a walkthrough video, so anyone can see what changed.
@@ -642,6 +642,13 @@ Next: four of the people behind those numbers, and what they built.`,
 Figures: 19 experimental flags on main, checked 22 November 2026; disable auto-archive 12 October 2026; Claude-style activity 17 October 2026.
 Framework: business and user empathy; considers the opinions of others.
 Next: the models kept improving, but the problems stayed the same.`,
+
+  "annual-g12-unlocked": `So before the framework, one personal bit. The switch to AI has honestly been amazing for me.
+→ Step 1: before. Pre-AI, I had an ideas list of everything I wanted to build, over 40 things on it. Most of it I had to scrap, cos one person can't build all of that, so I just kept filtering it down.
+→ Step 2: now. I can work on several things at the same time, and keep going wider: Eva, CarePulse, and these four side projects. It's a huge productivity gain. And I've learned a lot of how to stay on top of this from people on X, and from Krzys.
+→ Step 3: the closing line. I enjoy coding, but I think I enjoy product building and solving problems through it even more now, and AI has let me push that side to the max. I still pick which ideas actually ship, that's what the parked slide was about, but the list doesn't have to shrink any more. Hopefully that shows through all of this work.
+Framework: maintains awareness of industry trends and tools; seeks learning from the people around them.
+Next: how all of this maps to the framework.`,
 
   "a15-framework": `This is the map an assessor reads: the framework's three sections, Technical, Impact and Collaboration, with the proof for each underneath.
 → Step 1: the proof lands, column by column. Technical: design and trade-offs, slide 23, with 21, 26 and 34; debugging, slides 24, 25 and 43; beyond coding, coming up with ideas, finding problems to solve, measured performance work (slide 29) and user experience and animation. Impact: breaking down large problems, slide 23; improving the process, Eva running many agents in parallel without conflicts, vmem as a company brain, the Redline and flowtape experiments, work to make CI quicker, a Mantine linter, and the Jev score on every message, which was Zuza's idea; identifying work, slides 28 and 46 to 48; business and user empathy, slides 36 to 38, 50 and 54 to 55. Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and the weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, the decision log being Zuza's idea; getting buy-in, Vercel Sandbox for Eva and Claude usage for Bee; mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
