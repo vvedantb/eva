@@ -7,6 +7,7 @@ import { AnnualToday } from "./annual/g05-today";
 import { AnnualUnderstanding } from "./annual/g06-understanding";
 import { AnnualLiveData } from "./annual/g07-live-data";
 import { AnnualJudgement } from "./annual/g08-judgement";
+import { AnnualCatching } from "./annual/g09-catching";
 import { AnnualPatchPackages } from "./annual/e03-patch-packages";
 import { AnnualCarePulse } from "./annual/e02-carepulse";
 import {
@@ -302,6 +303,12 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     title: "Two lessons, one direction",
     Component: AnnualLessons,
     steps: 2,
+  },
+  {
+    id: "annual-g09-catching",
+    title: "Catching the AI",
+    Component: AnnualCatching,
+    steps: 4,
   },
   {
     id: "annual-e03-patch-packages",

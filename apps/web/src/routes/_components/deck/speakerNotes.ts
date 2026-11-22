@@ -396,7 +396,7 @@ Bee's still in progress, but what do we think — would you use Bee?
   // Annual CDM deck
   // ---------------------------------------------------------------------------
   "a01-title": `Open on the year, not one product: most of it is Eva, but it also covers CarePulse, vmem, flowtape, Redline and Bee.
-Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 61.
+Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 62.
 Figures: the window is 11 January to 16 September 2026.
 Next: Eva first, the biggest section.`,
 
@@ -621,8 +621,17 @@ Figures: Eva session "Time travel search feature", 30 September to 14 October 20
 Framework: understands trade-offs; identifies risks and communicates them.
 Next: one tool from that work, used in Eva and in CarePulse.`,
 
+  "annual-g09-catching": `A lot of my job now is asking the AI the question it didn't ask itself. Here are three, in my own words from the chats.
+→ Step 1: a production database error on CarePulse. The AI wanted to change how connections are shared. I asked if that was really right, cos Prisma's own example does what we already had. It admitted it had no evidence, and the next question found the real cause: about 22 database calls for every page view.
+→ Step 2: our tests on Eva. I asked, honestly, had they ever stopped a regression. Hundreds of test files had never run in CI at all. We deleted the fake ones, 21,708 lines, kept real testing, and the CI check went from 83.6 seconds to 16.6.
+→ Step 3: home care tiers on CarePulse. The AI said no backend change was needed. I asked whether it actually saved in the backend or was just the frontend, and had it tested against staging before I believed it.
+→ Step 4: the closing line. The right question is still the human's job.
+Figures: CarePulse session 19 October 2026 (Sentry, 24 hours, sampled); Eva test audit 9 November 2026, CI timings 20 November 2026; CarePulse home care tiers 19 November 2026. All from the Eva session chats.
+Framework: debugs without flailing; makes well-reasoned decisions; improves the process.
+Next: one lesson from the last few months: the system includes the packages we depend on.`,
+
   "a15-framework": `This is the map an assessor reads: the framework's three sections, Technical, Impact and Collaboration, with the proof for each underneath.
-→ Step 1: the proof lands, column by column. Technical: design and trade-offs, slide 22, with 20, 25 and 33; debugging, slides 23, 24 and 40; beyond coding, coming up with ideas, finding problems to solve, measured performance work (slide 28) and user experience and animation. Impact: breaking down large problems, slide 22; improving the process, Eva running many agents in parallel without conflicts, vmem as a company brain, the Redline and flowtape experiments, work to make CI quicker, a Mantine linter, and the Jev score on every message, which was Zuza's idea; identifying work, slides 27 and 43 to 45; business and user empathy, slides 35 to 37, 47 and 51 to 52. Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and the weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, the decision log being Zuza's idea; getting buy-in, Vercel Sandbox for Eva and Claude usage for Bee; mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
+→ Step 1: the proof lands, column by column. Technical: design and trade-offs, slide 22, with 20, 25 and 33; debugging, slides 23, 24 and 41; beyond coding, coming up with ideas, finding problems to solve, measured performance work (slide 28) and user experience and animation. Impact: breaking down large problems, slide 22; improving the process, Eva running many agents in parallel without conflicts, vmem as a company brain, the Redline and flowtape experiments, work to make CI quicker, a Mantine linter, and the Jev score on every message, which was Zuza's idea; identifying work, slides 27 and 44 to 46; business and user empathy, slides 35 to 37, 48 and 52 to 53. Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and the weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, the decision log being Zuza's idea; getting buy-in, Vercel Sandbox for Eva and Claude usage for Bee; mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
 Next: one last fact about how this deck was made.`,
 
   "annual-b01-day-one": `The data layer the product still runs on was settled on the first day, not migrated to later.
@@ -704,7 +713,7 @@ Next: many of the right calls came from listening to colleagues.`,
 → Step 2: both sit together and the closing line lands. Read them once, then stop talking.
 Detail: dwell on the first quote, because it is the opposite of the usual conversation. Much of this deck is evidence for it: durable turns, the security boundary, the enforced quality bar. None of those are about the model. Both lines are verbatim from notes written during the year, not composed for this deck.
 Figures: from the project's own written notes.
-Next: one lesson from the last few months: the system includes the packages we depend on.`,
+Next: and a lot of the job now is asking the AI the right question.`,
 
   "annual-e03-patch-packages": `A newer lesson: when a package we depend on is wrong, we no longer work around it. We patch it, the same day.
 → Step 1: Vercel Sandbox. Any command sent to a stopped sandbox woke it up again, and the package had no way to turn that off. I want sandboxes to start and stop when I say so, not as a side effect of a user's command. So I asked the AI to patch the package: it added a switch to turn auto-resume off, and a way to attach only to a sandbox that is already running.
