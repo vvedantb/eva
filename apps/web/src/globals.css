@@ -1985,3 +1985,32 @@ html[data-page-hidden] .ave-face *,
   --color-white: #2a1e0c;
   --deck-box: #fffaf0;
 }
+/* A section inside a deck takes its project's colours (`DeckSlide.section`). */
+.deck-section-carepulse {
+  /* CarePulse's own blues, deep enough to read on the light stage. */
+  --deck-brand-a: #0c60b5;
+  --deck-brand-b: #4c9deb;
+  --deck-brand-c: #1373cd;
+}
+.deck-section-vmem {
+  --deck-brand-a: #fafafa;
+  --deck-brand-b: #a1a1aa;
+  --deck-brand-c: #52525b;
+}
+.deck-section-flowtape {
+  --deck-brand-a: #2dd4bf;
+  --deck-brand-b: #0d9488;
+  --deck-brand-c: #115e59;
+}
+.deck-section-redline {
+  /* Redline's own red, from its favicon. */
+  --deck-brand-a: #fb7185;
+  --deck-brand-b: #e11d48;
+  --deck-brand-c: #9f1239;
+}
+.deck-section-bee {
+  /* Bee's honey, on the dark stage. */
+  --deck-brand-a: #ffd75e;
+  --deck-brand-b: #f2a516;
+  --deck-brand-c: #c27406;
+}

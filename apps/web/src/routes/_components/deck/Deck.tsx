@@ -10,7 +10,12 @@ import { DeckAmbient } from "./_components/DeckAmbient";
 import { STAGE_PERSPECTIVE } from "./_components/DeckCamera";
 import { DeckChrome } from "./_components/DeckChrome";
 import { DeckOutline } from "./_components/DeckOutline";
-import { BRAND_CLASS, BRAND_STAGE, DECK_TONES } from "./_components/deckTone";
+import {
+  BRAND_CLASS,
+  BRAND_STAGE,
+  DECK_TONES,
+  SECTION_CLASS,
+} from "./_components/deckTone";
 import type { DeckBrand } from "./_components/deckTone";
 import { DESIGN_H, DESIGN_W, useStageScale } from "./_components/deckStage";
 import {
@@ -238,6 +243,7 @@ export function Deck({
         DECK_TONES[theme].stage,
         BRAND_CLASS[brand],
         BRAND_STAGE[brand],
+        entry.section && SECTION_CLASS[entry.section],
       )}
     >
       <DeckAmbient theme={theme} />

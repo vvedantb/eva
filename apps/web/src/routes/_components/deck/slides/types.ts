@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import type { DeckTheme } from "../_components/DeckPrimitives";
+import type { DeckSection } from "../_components/deckTone";
 
 export interface DeckSlide {
   /** Stable id, mirrors the file name. */
@@ -11,6 +12,8 @@ export interface DeckSlide {
   steps: number;
   /** The surface this slide is painted on. Dark when absent. */
   theme?: DeckTheme;
+  /** The project section this slide belongs to; sets the accent colours. */
+  section?: DeckSection;
   /**
    * Continues an element from the slide before it (a shared `layoutId`). The
    * stage then cross-fades between the two slides instead of flying, so the

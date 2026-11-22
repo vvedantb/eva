@@ -57,3 +57,15 @@ export const BRAND_STAGE: Record<DeckBrand, string> = {
   eva: "",
   bee: "deck-stage-bee",
 };
+
+/** A project section inside a deck. Eva's own slides have none. */
+export type DeckSection = "carepulse" | "vmem" | "flowtape" | "redline" | "bee";
+
+/** Sets the section's `--deck-brand-*` accent pair on the stage. */
+export const SECTION_CLASS: Record<DeckSection, string> = {
+  carepulse: "deck-section-carepulse",
+  vmem: "deck-section-vmem",
+  flowtape: "deck-section-flowtape",
+  redline: "deck-section-redline",
+  bee: "deck-section-bee",
+};

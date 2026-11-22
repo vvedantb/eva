@@ -6,7 +6,12 @@ import type { DeckSlide } from "../slides/types";
 import { getSpeakerNotes } from "../speakerNotes";
 import { DeckStepContext } from "./DeckPrimitives";
 import { DeckThemeScope } from "./DeckThemeScope";
-import { BRAND_CLASS, BRAND_STAGE, DECK_TONES } from "./deckTone";
+import {
+  BRAND_CLASS,
+  BRAND_STAGE,
+  DECK_TONES,
+  SECTION_CLASS,
+} from "./deckTone";
 import type { DeckBrand } from "./deckTone";
 import { DeckAmbient } from "./DeckAmbient";
 import { STAGE_PERSPECTIVE } from "./DeckCamera";
@@ -106,6 +111,7 @@ export function PresenterView({
               DECK_TONES[theme].stage,
               BRAND_CLASS[brand],
               BRAND_STAGE[brand],
+              entry.section && SECTION_CLASS[entry.section],
             )}
           >
             <DeckAmbient theme={theme} />

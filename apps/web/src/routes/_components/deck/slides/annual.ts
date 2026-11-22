@@ -1,7 +1,20 @@
 import type { DeckSlide } from "./types";
 import { AnnualPatchPackages } from "./annual/e03-patch-packages";
 import { AnnualCarePulse } from "./annual/e02-carepulse";
-import { AnnualBeyond } from "./annual/e01-beyond";
+import {
+  SectionBee,
+  SectionCarePulse,
+  SectionEva,
+  SectionFlowtape,
+  SectionRedline,
+  SectionVmem,
+} from "./annual/f01-sections";
+import {
+  ProjectBee,
+  ProjectFlowtape,
+  ProjectRedline,
+  ProjectVmem,
+} from "./annual/f02-projects";
 import { Slide05SimpleMode } from "./05-simple-mode";
 import { Slide07Sandbox } from "./07-sandbox";
 import { FridayPipeline } from "./friday/b19-pipeline";
@@ -46,17 +59,23 @@ import { Slide04Sessions } from "./04-sessions";
 import { FridayReliability } from "./friday/b13-reliability";
 import { FridayLimits } from "./friday/b18-limits";
 /**
- * Annual CDM deck order: Eva's story and the evidence for it. Five acts, then
- * the close: origin, in use, the platform, craft, people, then the year ahead,
- * the framework map and the last word. The index here is the slide number
- * minus one.
+ * Annual CDM deck order, in sections: Eva, CarePulse, then the side projects
+ * (vmem, flowtape, Redline, Bee), each opened by its own slide and painted in
+ * its own colours (`section`). The framework map and the last word close it.
+ * The index here is the slide number minus one.
  */
 export const ANNUAL_SLIDES: DeckSlide[] = [
-  // ── Act one: origin. Day one, the shape of the year, three chapters, recap ──
   {
     id: "a01-title",
     title: "Annual CDM",
     Component: AnnualTitle,
+    steps: 0,
+  },
+  // ── Eva: the main project ──
+  {
+    id: "annual-s01-eva",
+    title: "Eva",
+    Component: SectionEva,
     steps: 0,
   },
   {
@@ -95,7 +114,6 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     Component: AnnualOrigin,
     steps: 3,
   },
-  // ── Act two: in use. Scale, adoption, the team, impact, the loop ──
   {
     id: "a03-numbers",
     title: "What the year has produced",
@@ -121,13 +139,6 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     steps: 3,
   },
   { id: "a07-how", title: "How it works", Component: AnnualHow, steps: 2 },
-  {
-    id: "annual-e02-carepulse",
-    title: "CarePulse this year",
-    Component: AnnualCarePulse,
-    steps: 4,
-  },
-  // ── Act three: the platform. How it is built, secured and paid for ──
   {
     id: "annual-c01-providers",
     title: "Not tied to one supplier",
@@ -158,7 +169,6 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     Component: AnnualMcpSecurity,
     steps: 2,
   },
-  // From the Friday deck: the measured result of the July sandbox move.
   {
     id: "07-sandbox",
     title: "Workspaces in under a second",
@@ -171,7 +181,6 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     Component: AnnualSandboxEconomics,
     steps: 3,
   },
-  // ── Act four: craft. Design, debugging, reliability, security, measurement, standards ──
   {
     id: "a09-design",
     title: "Decided on paper first",
@@ -244,25 +253,11 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     Component: AnnualAbandoned,
     steps: 3,
   },
-  // ── Act five: people. Colleagues, users, lessons ──
   {
     id: "a13-people",
     title: "Their problems set the agenda",
     Component: AnnualPeople,
     steps: 3,
-  },
-  // From the Friday deck: Jev, and what it does for CarePulse.
-  {
-    id: "friday-b20-jev-what",
-    title: "What Jev is",
-    Component: FridayJevWhat,
-    steps: 4,
-  },
-  {
-    id: "friday-b21-jev-carepulse",
-    title: "Jev inside CarePulse",
-    Component: FridayJevCarePulse,
-    steps: 2,
   },
   {
     id: "a14-users",
@@ -270,7 +265,6 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     Component: AnnualUsers,
     steps: 2,
   },
-  // From the Friday deck: the real model slider behind Simple Mode.
   {
     id: "05-simple-mode",
     title: "Simple Mode",
@@ -283,7 +277,6 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     Component: FridayLimits,
     steps: 3,
   },
-
   {
     id: "annual-d07-lessons",
     title: "Two lessons, one direction",
@@ -296,8 +289,6 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     Component: AnnualPatchPackages,
     steps: 3,
   },
-  // ── Close: the year ahead, the framework map, the last word ──
-  // From the Friday deck: marking work ready is already the last human step on Eva.
   {
     id: "friday-b19-pipeline",
     title: "Code review to live",
@@ -310,12 +301,97 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     Component: AnnualAhead,
     steps: 2,
   },
+  // ── CarePulse: the day job, in CarePulse blue on the light stage ──
   {
-    id: "annual-e01-beyond",
-    title: "Beyond Eva",
-    Component: AnnualBeyond,
-    steps: 4,
+    id: "annual-s02-carepulse",
+    title: "CarePulse",
+    Component: SectionCarePulse,
+    steps: 0,
+    theme: "light",
+    section: "carepulse",
   },
+  {
+    id: "annual-e02-carepulse",
+    title: "CarePulse this year",
+    Component: AnnualCarePulse,
+    steps: 4,
+    theme: "light",
+    section: "carepulse",
+  },
+  {
+    id: "friday-b20-jev-what",
+    title: "What Jev is",
+    Component: FridayJevWhat,
+    steps: 4,
+    theme: "light",
+    section: "carepulse",
+  },
+  {
+    id: "friday-b21-jev-carepulse",
+    title: "Jev inside CarePulse",
+    Component: FridayJevCarePulse,
+    steps: 2,
+    theme: "light",
+    section: "carepulse",
+  },
+  // ── Side projects: one opener and one recap each, in their own colours ──
+  {
+    id: "annual-s03-vmem",
+    title: "vmem",
+    Component: SectionVmem,
+    steps: 0,
+    section: "vmem",
+  },
+  {
+    id: "annual-f01-vmem",
+    title: "vmem: one memory for every AI",
+    Component: ProjectVmem,
+    steps: 2,
+    section: "vmem",
+  },
+  {
+    id: "annual-s04-flowtape",
+    title: "flowtape",
+    Component: SectionFlowtape,
+    steps: 0,
+    section: "flowtape",
+  },
+  {
+    id: "annual-f02-flowtape",
+    title: "flowtape: click through, get a test",
+    Component: ProjectFlowtape,
+    steps: 2,
+    section: "flowtape",
+  },
+  {
+    id: "annual-s05-redline",
+    title: "Redline",
+    Component: SectionRedline,
+    steps: 0,
+    section: "redline",
+  },
+  {
+    id: "annual-f03-redline",
+    title: "Redline: every page, before and after",
+    Component: ProjectRedline,
+    steps: 2,
+    section: "redline",
+  },
+  {
+    id: "annual-s06-bee",
+    title: "Bee",
+    Component: SectionBee,
+    steps: 0,
+    section: "bee",
+  },
+  {
+    id: "annual-f04-bee",
+    title: "Bee: answers during the meeting",
+    Component: ProjectBee,
+    steps: 2,
+    section: "bee",
+  },
+  // ── Close: the framework map and the last word, back in Eva colours ──
   {
     id: "a15-framework",
     title: "Senior engineer, mapped",

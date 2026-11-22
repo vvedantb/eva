@@ -152,7 +152,6 @@ Detail: the resting state is two people typing in one paragraph at once. Suggest
 Figures: collaborative editing, anchored comments, suggestion mode and version history all landed 10 June 2026.
 Next: When the work is several jobs, it becomes a project.`,
 
-
   "friday-b06-projects": `When a job is really several jobs, you need to see its shape, and the roadmap shows it.
 → Step 1: the bars fill. Each bar is one job, and how far it has filled is how far along it is, so the whole piece of work reads at a glance.
 → Step 2: the zoom changes and the bars re-scale. Quarter, month or week, whether you are looking at the year or this afternoon.
@@ -166,7 +165,6 @@ Next: With several jobs running, you need one place where the finished ones come
 → Step 3: the closing line. Nobody has to learn three products.
 Detail: the resting state is a quick task: one job, start to finish, no conversation expected. Describe it once and the finished work comes back for review. If asked which to use: start with a quick task and move up only when the job is bigger than one ask.
 Next: Bigger jobs start with writing things down, so documents now live inside Eva.`,
-
 
   "friday-b09-automations": `Some work does not need a person to start it, so it now starts itself overnight.
 → Step 1: the dial sweeps from three to five in the morning and the five routines light up in order. They are ready-made; installing one takes a click, not retyping instructions.
@@ -261,7 +259,7 @@ Next: And it has started to appear in CarePulse too.`,
 Detail: the fields checked are the free-text ones a broker fills in: the unique ID, care needs, equipment, additional care, cultural and language notes, and the reasons for unselected homes or an area search. ICB contact fields are not sent. Abbreviations are spelled out first, the text is not logged or stored, and the check runs 1.5 seconds after typing stops. The 50% line is our own assumption and should be reviewed if brokers report false alarms or misses. Whether production calls Jev depends on the AI Gateway key being set there; without it only the pattern rules run. The example text is invented and identifies no one.
 Figures: merged to main 14 October 2026 (carepulse-ts pull request 2487); first built 6 October 2026. Flag line 50%; at most 120 checks an hour per user.
 Framework: business and user empathy.
-Next: most of those colleagues are not engineers, and that shaped the product.`,
+Next: outside work, four side projects, starting with vmem.`,
 
   "friday-b18-limits": `This is my view, not a measured law: the models keep getting better, yet the problems we wrote about in February are still the ones we write about in September.
 → Step 1: the ladder climbs. Each step is a new model added to Eva, ten from April to September, from Anthropic, OpenAI and xAI.
@@ -397,10 +395,10 @@ Bee's still in progress, but what do we think — would you use Bee?
   // ---------------------------------------------------------------------------
   // Annual CDM deck
   // ---------------------------------------------------------------------------
-  "a01-title": `Open on the year, not one product: most of it is Eva, but it also covers CarePulse, Bee, Redline and flowtape.
-Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the shape: the origin, who uses it, how the platform is built, the craft behind it and the people, then the year ahead and the framework map on slide 44.
+  "a01-title": `Open on the year, not one product: most of it is Eva, but it also covers CarePulse, vmem, flowtape, Redline and Bee.
+Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 53.
 Figures: the window is 11 January to 16 September 2026.
-Next: it starts on a single evening in January.`,
+Next: Eva first, the biggest section.`,
 
   "a02-origin": `The recap: eight months as five moments, so the story is held in one picture.
 → Step 1: first use. The first session on 24 January and the first quick task on 1 February, two weeks from empty to usable.
@@ -433,7 +431,7 @@ Next: what that looks like for the person using it.`,
 → Step 1: the flow line runs and lights each stage. The whole loop happens in a browser tab: no install, no ticket, no handover.
 → Step 2: the four ways to ask, as names only. A session is a running conversation; a quick task is one job start to finish; a project is several jobs in order; an automation is a job that runs itself. The choice is about the size of the job, not the type of user.
 Detail: the cards are headings only, so describe each stage. You describe it in plain English in a chat. Eva builds it in its own cloud workspace, with a live preview you can click through. You try it, ask for changes, then it goes live. The preview matters most to non-technical colleagues: it is the first point they can judge the work themselves.
-Next: and alongside Eva, the product it was built for kept moving.`,
+Next: behind that loop sits the first platform decision: never depend on one supplier.`,
 
   "annual-e02-carepulse": `Eva was built to serve CarePulse, and CarePulse kept shipping all year, most of it raised and built through Eva.
 → Step 1: December to February. Notes on the AQP list, including Sussex; eProcurement evaluation and the moderation view, with a run of fixes for evaluators; and the sandbox setup so the team could work in the cloud.
@@ -443,7 +441,7 @@ Next: and alongside Eva, the product it was built for kept moving.`,
 Detail: each item is a change on CarePulse's main branch. The point for the assessor is that the tooling on the surrounding slides was in service of this work, not instead of it.
 Figures: carepulse-ts main branch, December 2025 to November 2026, checked 16 November 2026.
 Framework: delivers large well-defined tasks; understands the business; business and user empathy.
-Next: behind that loop sits the first platform decision: never depend on one supplier.`,
+Next: one tool from that work, used in Eva and in CarePulse.`,
 
   "a09-design": `Technical design happened on paper first, and replacing the engine every workspace runs on is the proof.
 → Step 1: the six phases. A spike, a provider-neutral contract with no consumer, the old provider moved behind it, the new provider, the switch-over, then the old code deleted.
@@ -486,7 +484,7 @@ Next: why enforcement matters: the size of what it now protects.`,
 Detail: the resting state is the August stall, two hours on Working with a colleague's messages unanswered: a zombie runner holding the spawn lock while the watchdog extended its own deadline. Standards are written for people and agents: repository rules, guides for the interface, data layer and security, ready-made commands, release notes on every change.
 Figures: release notes, August and September 2026.
 Framework: mentors and onboards, through written standards others can work to.
-Next: one tool that came out of that work, used in Eva and in CarePulse.`,
+Next: most of those colleagues are not engineers, and that shaped the product.`,
 
   "a14-users": `Most people opening Eva are not engineers, and almost every decision on this slide follows from that.
 → Step 1: the three chips. Every screen made usable on a phone across two audits; shortcuts made visible and rebindable; and pages saying pick something from the sidebar removed, because on a phone the sidebar is a closed drawer.
@@ -501,19 +499,60 @@ Next: here is the slider those choices produced.`,
 → Step 2: the closing question. How fast can we build it becomes how fast can we decide.
 Detail: Eva now finishes work faster than we can check it in. The three strands are headings only. Automate the release. Guard the irreversible, so people concentrate on data, permissions and anything hard to undo. Software that fits us: tools shaped around how we work rather than the other way round. None of the three is a dated commitment.
 Framework: identifies work to do.
-Next: and outside Eva, four more things built this year.`,
+Next: and alongside Eva, the product it was built for kept moving.`,
 
-  "annual-e01-beyond": `Eva was the main project, but not the only one: four more were built and shipped alongside it, each solving a problem Eva's work exposed.
-→ Step 1: Bee, a desktop app for Windows and Mac that listens in a meeting and surfaces your own notes and short answers in a small bar at the top of the screen.
-→ Step 2: Redline, which builds two versions of an app, screenshots every page at both, and shows which pages changed, which look broken, and the files most likely responsible.
-→ Step 3: flowtape, which records a journey through an app and turns it into a prompt an agent can replay and explore as a test, with passwords and personal details such as NHS numbers hidden before anything is stored.
-→ Step 4: the shared packages, one set of components, server helpers and tooling used across every app; Eva itself moved onto them in October.
-Detail: all four are public: Bee ships as Windows and Mac releases, and Redline, flowtape and the packages are published on npm. Redline is the answer to the page-scores gap on the next slide: checking quality with a tool rather than by eye.
-Figures: Bee from 26 September, 85 releases to 13 November 2026; Redline and flowtape on npm from 5 October 2026; @vvedantb/ui on npm from 5 October 2026. GitHub and npm, checked 15 November 2026.
-Framework: a skill beyond coding; improves the process; contributes to common code and standards.
+  "annual-s01-eva": `The first and biggest section: Eva, the platform the team now builds with.
+Detail: every Eva slide keeps Eva's purple and blue; each later section takes its own project's colours, so the room always knows where it is.
+Next: it starts on a single evening in January.`,
+
+  "annual-s02-carepulse": `The second section: CarePulse, the product Eva was built to serve, on a light stage in CarePulse's own blues.
+Next: what shipped on CarePulse this year, quarter by quarter.`,
+
+  "annual-s03-vmem": `The side projects start here. Say it plainly: all four were built in my own time, alongside Eva, with no company time spent on them.
+Detail: vmem is my BSc final-year project at City St George's, University of London.
+Next: what vmem is.`,
+
+  "annual-f01-vmem": `vmem is a memory layer for AI: you tell it something once, and any AI tool can recall it.
+→ Step 1: what I built. It saves chats, files and notes in one place; it links the people and projects they mention into a graph; and any AI tool can read it over MCP.
+→ Step 2: what it changed. It is live and hosted, with a Chrome extension; Jev, the judging model from the CarePulse section, ranks what it recalls; and it is my final-year degree project.
+Detail: hosted at vmem.projectv.uk. Built in my own time, alongside Eva.
+Figures: repository from 2 December 2025 (GitHub, checked 22 November 2026).
+Framework: industry awareness; a skill outside the day job; owns the solution end to end.
+Next: flowtape.`,
+
+  "annual-s04-flowtape": `Next side project: flowtape.
+Next: what it does.`,
+
+  "annual-f02-flowtape": `flowtape turns a journey you click through into a test an agent can run.
+→ Step 1: what I built. It records a journey through an app, turns it into a prompt an agent can replay and explore, and hides passwords and personal details such as NHS numbers before anything is saved.
+→ Step 2: what it changed. Tests come from clicking, not writing code, and it is published on npm.
+Figures: on npm from 5 October 2026 (npm, checked 15 November 2026).
+Framework: improves the development process; data protection by design.
+Next: Redline.`,
+
+  "annual-s05-redline": `Next side project: Redline.
+Next: what it does.`,
+
+  "annual-f03-redline": `Redline shows what a change did to every page of an app.
+→ Step 1: what I built. It builds the app before and after a change, screenshots every page at both, and points to the files most likely responsible for what changed.
+→ Step 2: what it changed. Visual checks are done by a tool, not by eye; it is used in Eva's own development; and it is published on npm.
+Detail: Redline is the answer to the page-scores gap on the framework slide: checking quality with a tool rather than by eye.
+Figures: on npm from 5 October 2026 (npm, checked 15 November 2026).
+Framework: uses services to check quality levels; improves the development process.
+Next: Bee.`,
+
+  "annual-s06-bee": `The last side project: Bee.
+Next: what it does.`,
+
+  "annual-f04-bee": `Bee answers questions during a meeting, from your own notes and the web.
+→ Step 1: what I built. A desktop app for Windows and Mac that listens in a meeting and finds your own notes and short answers in a small bar at the top of the screen.
+→ Step 2: what it changed. I presented it to the company in November, and it is still in progress, open to anyone who wants to test it.
+Figures: Bee releases from 26 September 2026 (GitHub, checked 15 November 2026).
+Framework: identifies problems to solve; communicates clearly; gets buy-in.
 Next: how all of this maps to the framework.`,
+
   "a15-framework": `This is the map an assessor reads: the framework's three sections, Technical, Impact and Collaboration, each evidenced by a slide already shown.
-→ Step 1: the ticks land, column by column. Technical: design and trade-offs, slide 21, with 19, 24 and 32; debugging, slides 22, 23 and 40; a skill beyond coding, slide 27, measurement, and slides 34 to 35, Jev. Impact: breaking down large problems, slide 21; improving the process, slides 28 to 30, 41 and 43, Redline and the shared packages; identifying work, slides 26 and 42; business and user empathy, slides 13 and 35 to 37. Collaboration: communicating clearly, the Friday sessions and this deck; getting buy-in, slides 9 to 10, where the team took Eva up; mentoring and onboarding, slide 33.
+→ Step 1: the ticks land, column by column. Technical: design and trade-offs, slide 21, with 19, 24 and 32; debugging, slides 22, 23 and 38; a skill beyond coding, slide 27, measurement, and slides 43 to 44, Jev. Impact: breaking down large problems, slide 21; improving the process, slides 28 to 30 and 39, with Redline on slide 50 and the shared packages on slide 29; identifying work, slides 26 and 40, and the side projects, slides 45 to 52; business and user empathy, slides 34 to 35 and 42 to 44. Collaboration: communicating clearly, the Friday sessions and this deck; getting buy-in, slides 10 to 11, where the team took Eva up; mentoring and onboarding, slide 33.
 → Step 2: the thin evidence. Volunteer the gaps before they are asked for. Giving and seeking feedback, and pairing on reviews, happen but are not written down; page scores are not routine though the harness exists; and there has been no work alongside a designer or user researcher.
 Next: one last fact about how this deck was made.`,
 
@@ -531,8 +570,6 @@ Detail: projects and automations came later, but both are built out of quick tas
 Figures: quick tasks appear in the code on 12 January 2026 and sessions on 14 January 2026, within four days of the first commit on 11 January 2026.
 Next: the quarter the tool stopped being single-player.`,
 
-
-
   "annual-b05-q2": `The quietest quarter was not a slow one; it was the quarter the tool stopped being single-player.
 → Step 1: documents. Comments anchored to a passage, suggestion mode and version history, all on the same day.
 → Step 2: the projects roadmap, where several pieces of work in order become one thing a person can see.
@@ -547,8 +584,6 @@ Next: the last chapter, where the product was made safe to depend on.`,
 → Step 3: September. Multi-repo sessions, so one conversation can span several codebases, and decision models for classifying work at scale.
 Detail: nothing here adds a new thing to do; it makes the existing things safe to depend on.
 Next: the same quarter, seen from inside one session.`,
-
-
 
   "annual-d01-security": `Signing in was never the problem; knowing whose data you were seeing once inside was, so everything built was audited.
 → Step 1: the guards land and the rail draws. Checks moved into shared helpers, so a new surface inherits the boundary.
@@ -565,8 +600,9 @@ Next: all of this rests on measurement, the skill built most this year outside p
 Detail: the conventions are written down, not folklore: surfaces separated by tone rather than decorative lines, one shadow system, and motion on shared tokens. Two moves made it possible: Tailwind v4 across the web app and the browser extension on 5 August 2026, and a single icon library on 2 August 2026. The tiles are the library in miniature: four colours, four surface tones and four of the shapes every screen uses.
 Figures: 110 files and 18,197 lines in the shared component library. Measured 23 September 2026.
 Framework: improves the development process.
+Detail: the same components now ship as the shared packages (@vvedantb/ui), one set used across every app; Eva moved onto them in October.
+Figures: @vvedantb/ui on npm from 5 October 2026, checked 15 November 2026.
 Next: a house style only lasts if a machine enforces it.`,
-
 
   "annual-d04-frontend-perf": `Waiting is the tax everyone pays on every change, so three separate waits were measured and cut.
 → Step 1: the local build falls from 28 to 2.6 seconds: the wait between making a change and seeing it.
@@ -627,7 +663,6 @@ Next: when something still goes wrong, you are told within minutes.`,
 Detail: the columns are the shipped catalogue, not a wish list; legacy entries kept only so old sessions still load are excluded. Each provider needs an account behind it, which comes three slides on. A session remembers its last model, so nobody chooses every time.
 Figures: Claude 7, Codex 4, OpenCode 4, Cursor 6, 21 models in all. Repository catalogue at 16 September 2026.
 Next: a choice of supplier is only worth having if you can change your mind mid-job.`,
-
 
   "annual-c03-handoff": `A choice of supplier is worth little if changing your mind means starting again.
 → Step 1: the conversation card lifts off Claude and lands on Cursor, word for word, and a handed-over badge appears on it.
