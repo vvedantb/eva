@@ -11,29 +11,73 @@ import {
 } from "../../_components/DeckPrimitives";
 import { DUR, EASE, Sheen } from "../../_components/motion";
 
-/** The framework's three sections, one column each, read top to bottom. */
-const SECTIONS: readonly { heading: string; items: readonly string[] }[] = [
+/**
+ * The framework's three sections, one column each, read top to bottom. Each
+ * capability carries two reminders of the slides that showed it; the full
+ * mapping, with slide numbers, is in the speaker note.
+ */
+const SECTIONS: readonly {
+  heading: string;
+  items: readonly { name: string; proof: readonly string[] }[];
+}[] = [
   {
     heading: "Technical",
     items: [
-      "Owns technical design",
-      "Understands trade-offs",
-      "Debugs without flailing",
-      "A skill beyond coding",
+      {
+        name: "Owns technical design",
+        proof: ["Decided on paper first", "Not tied to one supplier"],
+      },
+      {
+        name: "Understands trade-offs",
+        proof: ["Workspaces in under a second", "Knowing what to stop"],
+      },
+      {
+        name: "Debugs without flailing",
+        proof: ["The database was fighting itself", "Patch the package"],
+      },
+      {
+        name: "A skill beyond coding",
+        proof: ["Measure it, do not guess", "Jev"],
+      },
     ],
   },
   {
     heading: "Impact",
     items: [
-      "Breaks down large problems",
-      "Improves the process",
-      "Identifies work to do",
-      "Business and user empathy",
+      {
+        name: "Breaks down large problems",
+        proof: ["Decided on paper first", "Finishing what it starts"],
+      },
+      {
+        name: "Improves the process",
+        proof: ["The bar is enforced", "Redline and shared packages"],
+      },
+      {
+        name: "Identifies work to do",
+        proof: ["One guard on every door", "The bottleneck has moved"],
+      },
+      {
+        name: "Business and user empathy",
+        proof: ["Simple Mode", "Jev PID checker"],
+      },
     ],
   },
   {
     heading: "Collaboration",
-    items: ["Communicates clearly", "Gets buy-in", "Mentors and onboards"],
+    items: [
+      {
+        name: "Communicates clearly",
+        proof: ["Friday sessions", "This deck"],
+      },
+      {
+        name: "Gets buy-in",
+        proof: ["The team took Eva up", "Built by the team"],
+      },
+      {
+        name: "Mentors and onboards",
+        proof: ["Their problems set the agenda", "Bee shared with the company"],
+      },
+    ],
   },
 ];
 
@@ -45,8 +89,8 @@ const THIN = [
 
 /**
  * The grid starts as a board seen from slightly above, then straightens as the
- * ticks arrive: all eleven evidenced, read square on. It stays there for the thin
- * evidence and the closing figures.
+ * proof arrives under all eleven, read square on. It stays there for the thin
+ * evidence.
  */
 const FRAMEWORK_SHOTS: readonly CameraShot[] = [
   { rotateX: 7, translateZ: -30 },
@@ -66,7 +110,7 @@ export function AnnualFramework() {
         <Title size="md">Senior engineer, mapped</Title>
       </Reveal>
 
-      <Camera shots={FRAMEWORK_SHOTS} className="mt-10">
+      <Camera shots={FRAMEWORK_SHOTS} className="mt-8">
         {/* One band of light follows the ticks across the board. */}
         <Sheen
           step={1}
@@ -80,10 +124,11 @@ export function AnnualFramework() {
                 <div className="text-xs font-medium tracking-[0.18em] text-white/45 uppercase">
                   {section.heading}
                 </div>
-                {section.items.map((name, row) => (
+                {section.items.map((item, row) => (
                   <MoA4CapabilityCard
-                    key={name}
-                    name={name}
+                    key={item.name}
+                    name={item.name}
+                    proof={item.proof}
                     index={row * SECTIONS.length + column}
                     evidenced={evidenced}
                   />
@@ -96,7 +141,7 @@ export function AnnualFramework() {
 
       {/* Grid, thin evidence and the closing line sit on one 40px rhythm, which
           leaves the closing line clear of the footnote. */}
-      <div className="mt-12">
+      <div className="mt-8">
         <Reveal step={2}>
           <div className="text-xs font-medium tracking-[0.18em] text-white/35 uppercase">
             Thin evidence
