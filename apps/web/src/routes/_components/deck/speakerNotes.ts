@@ -396,7 +396,7 @@ Bee's still in progress, but what do we think — would you use Bee?
   // Annual CDM deck
   // ---------------------------------------------------------------------------
   "a01-title": `Open on the year, not one product: most of it is Eva, but it also covers CarePulse, vmem, flowtape, Redline and Bee.
-Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 57.
+Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 58.
 Figures: the window is 11 January to 16 September 2026.
 Next: Eva first, the biggest section.`,
 
@@ -580,10 +580,18 @@ Next: one tool from that work, used in Eva and in CarePulse.`,
 Detail: capture and review are live; the lints and Jev checks are the plan, which is why that card says Next.
 Figures: feedback shipped on Eva on 3 November 2026 (thumbs on every turn, the submit_feedback tool and the Feedback page).
 Framework: identifies work to do; improves the development process.
+Next: the same data, shown to the business team: the Today page.`,
+
+  "annual-g05-today": `The Today page is where the business team can see what changed, without reading code.
+→ Step 1: today, now. Every day an automation writes a stand-up for each app: what merged into main and what is new in the app.
+→ Step 2: next. We can evolve it to be live, and show the status of each project, so the business team has a better view of where every project is at.
+Detail: the live statuses are an idea, not a commitment, which is why that card says Next.
+Figures: the Today page and the daily stand-up automation shipped on 20 August 2026.
+Framework: business and user empathy; identifies work to do.
 Next: if the system is the hard part, here is where the system goes next.`,
 
   "a15-framework": `This is the map an assessor reads: the framework's three sections, Technical, Impact and Collaboration, with the proof for each underneath.
-→ Step 1: the proof lands, column by column. Technical: design and trade-offs, slide 21, with 19, 24 and 32; debugging, slides 22, 23 and 39; beyond coding, coming up with ideas, finding problems to solve, measured performance work (slide 27) and user experience and animation. Impact: breaking down large problems, slide 21; improving the process, Eva running many agents in parallel without conflicts, vmem as a company brain, the Redline and flowtape experiments, work to make CI quicker, a Mantine linter, and the Jev score on every message, which was Zuza's idea; identifying work, slides 26, 42 and 43; business and user empathy, slides 34 to 36, 45 and 47 to 48. Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and the weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, the decision log being Zuza's idea; getting buy-in, Vercel Sandbox for Eva and Claude usage for Bee; mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
+→ Step 1: the proof lands, column by column. Technical: design and trade-offs, slide 21, with 19, 24 and 32; debugging, slides 22, 23 and 39; beyond coding, coming up with ideas, finding problems to solve, measured performance work (slide 27) and user experience and animation. Impact: breaking down large problems, slide 21; improving the process, Eva running many agents in parallel without conflicts, vmem as a company brain, the Redline and flowtape experiments, work to make CI quicker, a Mantine linter, and the Jev score on every message, which was Zuza's idea; identifying work, slides 26 and 42 to 44; business and user empathy, slides 34 to 36, 46 and 48 to 49. Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and the weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, the decision log being Zuza's idea; getting buy-in, Vercel Sandbox for Eva and Claude usage for Bee; mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
 Next: one last fact about how this deck was made.`,
 
   "annual-b01-day-one": `The data layer the product still runs on was settled on the first day, not migrated to later.

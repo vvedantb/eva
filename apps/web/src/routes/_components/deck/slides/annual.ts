@@ -3,6 +3,7 @@ import { AnnualParked } from "./annual/g01-parked";
 import { AnnualChecks } from "./annual/g02-checks";
 import { AnnualSkills } from "./annual/g03-skills";
 import { AnnualFeedback } from "./annual/g04-feedback";
+import { AnnualToday } from "./annual/g05-today";
 import { AnnualPatchPackages } from "./annual/e03-patch-packages";
 import { AnnualCarePulse } from "./annual/e02-carepulse";
 import {
@@ -316,6 +317,12 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     title: "Every chat teaches Eva",
     Component: AnnualFeedback,
     steps: 3,
+  },
+  {
+    id: "annual-g05-today",
+    title: "The Today page",
+    Component: AnnualToday,
+    steps: 2,
   },
   {
     id: "a08-ahead",
