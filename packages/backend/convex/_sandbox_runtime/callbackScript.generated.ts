@@ -2725,10 +2725,6 @@ function ensureSnapshot() {
   callbackState.usageLimitSnapshot = created;
   return created;
 }
-function normalizeWindowKey(key) {
-  if (key === "seven_day_oi") return "model_scoped:Fable";
-  return key;
-}
 function labelForWindowKey(key) {
   if (CLAUDE_WINDOW_LABELS[key]) return CLAUDE_WINDOW_LABELS[key];
   if (key.startsWith("model_scoped:")) {
@@ -2740,13 +2736,12 @@ function mergeClaudeRateLimitEvent(event) {
   const info = event.rate_limit_info;
   if (!isJsonObject(info)) return;
   const status = readStatus(info.status);
-  const rawKey = trimmedString(info.rateLimitType);
-  if (!status && !rawKey) return;
+  const key = trimmedString(info.rateLimitType);
+  if (!status && !key) return;
   const snapshot = ensureSnapshot();
   snapshot.completeness = "partial";
   if (status) snapshot.status = status;
-  if (!rawKey) return;
-  const key = normalizeWindowKey(rawKey);
+  if (!key) return;
   const resetsAtSeconds = readFiniteNumber(info.resetsAt);
   mergeWindow(
     snapshot,

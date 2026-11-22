@@ -104,19 +104,19 @@ test("mergeClaudeRateLimitEvent merges per window without clobbering the others"
   });
 });
 
-test("mergeClaudeRateLimitEvent maps seven_day_oi to Weekly (Fable)", () => {
+test("mergeClaudeRateLimitEvent labels the overage-included weekly", () => {
   mergeClaudeRateLimitEvent({
     rate_limit_info: {
       status: "allowed",
-      rateLimitType: "seven_day_oi",
+      rateLimitType: "seven_day_overage_included",
       utilization: 12,
       resetsAt: 1_770_000_000,
     },
   });
   expect(S.usageLimitSnapshot?.windows).toEqual([
     {
-      key: "model_scoped:Fable",
-      label: "Weekly (Fable)",
+      key: "seven_day_overage_included",
+      label: "Weekly (overage included)",
       utilization: 12,
       resetsAt: 1_770_000_000_000,
     },

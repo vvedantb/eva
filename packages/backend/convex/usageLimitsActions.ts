@@ -39,8 +39,8 @@ import {
  * while the probe returned two windows on the same token. Trying it first only
  * bought a wasted request and a misleading "rejected" toast.
  *
- * Those headers name the 5h, weekly-all and Fable weekly windows and nothing
- * else, so a reading is stored as a partial merge: replacing the row would wipe
+ * Those headers name the 5h, weekly-all and weekly overage-included windows
+ * and nothing else (no per-model weekly such as Fable), so a reading is stored as a partial merge: replacing the row would wipe
  * the Opus/Sonnet weeklies a real turn captured.
  *
  * The request goes through `https.request` so User-Agent actually leaves the
@@ -298,8 +298,8 @@ type RefreshResult = {
  * turn can be brought up to date without running one.
  *
  * The reading is always a merge, never a replacing snapshot: the probe's headers
- * name 5h, weekly-all and Fable and nothing else, so replacing would delete the
- * Opus/Sonnet weeklies a real turn captured.
+ * name 5h, weekly-all and weekly overage-included and nothing else, so
+ * replacing would delete the per-model weeklies a real turn captured.
  *
  * No status is reported: the probe returns numbers, not a verdict on whether the
  * plan would accept work.

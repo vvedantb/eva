@@ -170,12 +170,6 @@ function ensureSnapshot(): UsageLimitSnapshot {
   return created;
 }
 
-/** Stream events name Fable as `seven_day_oi`; store it like the SDK `/usage` path. */
-function normalizeWindowKey(key: string): string {
-  if (key === "seven_day_oi") return "model_scoped:Fable";
-  return key;
-}
-
 function labelForWindowKey(key: string): string {
   if (CLAUDE_WINDOW_LABELS[key]) return CLAUDE_WINDOW_LABELS[key];
   if (key.startsWith("model_scoped:")) {
@@ -193,13 +187,12 @@ export function mergeClaudeRateLimitEvent(event: JsonObject): void {
   const info = event.rate_limit_info;
   if (!isJsonObject(info)) return;
   const status = readStatus(info.status);
-  const rawKey = trimmedString(info.rateLimitType);
-  if (!status && !rawKey) return;
+  const key = trimmedString(info.rateLimitType);
+  if (!status && !key) return;
   const snapshot = ensureSnapshot();
   snapshot.completeness = "partial";
   if (status) snapshot.status = status;
-  if (!rawKey) return;
-  const key = normalizeWindowKey(rawKey);
+  if (!key) return;
   // The stream event reports `resetsAt` in epoch SECONDS, unlike the `/usage`
   // lookup's ISO strings — normalize both to epoch ms here.
   const resetsAtSeconds = readFiniteNumber(info.resetsAt);
