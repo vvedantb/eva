@@ -2,7 +2,12 @@ import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { createNotification, truncateNotificationText } from "./notifications";
 import { ensureSubscribed, notifySubscribers } from "./taskSubscribers";
-import { authQuery, authMutation, hasTaskAccess } from "./functions";
+import {
+  assertCanDrive,
+  authQuery,
+  authMutation,
+  hasTaskAccess,
+} from "./functions";
 import {
   authorDisplayName,
   teamMentionRecipients,
@@ -68,6 +73,8 @@ export const create = authMutation({
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) {
       throw new Error("Task not found");
     }
+    // "Make changes" queues a run; a plain comment does not.
+    if (args.requestsChanges) await assertCanDrive(ctx.db, task, ctx.userId);
 
     const parent = args.parentId ? await ctx.db.get(args.parentId) : null;
     if (args.parentId && (!parent || parent.taskId !== args.taskId)) {

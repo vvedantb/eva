@@ -3,10 +3,10 @@ import { MAX_PARALLEL_CHATS } from "@eva/shared";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
-import { hasRepoAccess } from "../functions";
+import { assertCanDrive, hasRepoAccess } from "../functions";
 import { getAIModelProvider } from "../validators";
 import { sessionChatFields } from "../_validators/tableFields";
-import { sessionOwnerProjectId } from "../_sessions/owner";
+import { chatOwner, sessionOwnerProjectId } from "../_sessions/owner";
 import { isProjectBuilding } from "../_projects/buildState";
 
 /** Title of the chat every session starts with. */
@@ -49,7 +49,11 @@ export async function getSessionChatOrThrow(
   return context;
 }
 
-/** Loads a chat and its session and verifies access through the repository. */
+/**
+ * Loads a chat and its session for a write (send, stop, rename, model pick):
+ * verifies repo access, and for a project's or a project task's chat that the
+ * user is a project contributor (`assertCanDrive`).
+ */
 export async function getSessionChatWithAccess(
   db: DatabaseReader,
   chatId: Id<"sessionChats">,
@@ -59,6 +63,7 @@ export async function getSessionChatWithAccess(
   if (!(await hasRepoAccess(db, context.session.repoId, userId))) {
     throw new Error("Not authorized");
   }
+  await assertCanDrive(db, chatOwner(context.chat, context.session), userId);
   return context;
 }
 

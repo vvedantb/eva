@@ -22,13 +22,16 @@ import { assertNotInMaintenance } from "./maintenance";
 import type { DataModel, Doc, Id } from "./_generated/dataModel";
 import { scheduleProjectPrSync } from "./_projects/prSync";
 import { isEntityDeleted } from "./numId";
-import {
-  buildTaskBranchName,
-  resolveProjectBranchName,
-} from "./_git/branchNames";
+import { buildTaskBranchName } from "./_git/branchNames";
 import { cancelTaskRunSchedule } from "./_agentTasks/runState";
 import { isProjectBuilding } from "./_projects/buildState";
-import { findOwnedSession, isTerminalProjectPhase } from "./_sessions/owner";
+import {
+  findOwnedSession,
+  isTerminalProjectPhase,
+  type SessionOwner,
+} from "./_sessions/owner";
+import { projectRoleFor } from "@eva/shared/projectRoles";
+import type { ProjectRole } from "./_validators/enums";
 import {
   allPullRequestsTerminal,
   findLivePullRequestOnBranch,
@@ -177,17 +180,46 @@ export async function hasTaskAccess(
   return false;
 }
 
-/** Loads a task and verifies access through its repository or project. */
+/**
+ * A project's live tasks the user may know of (no one else's drafts), each
+ * with whether the user can open it (`hasTaskAccess`: a task in a repo they
+ * cannot access is locked). The caller checks access to the project.
+ */
+export async function listProjectTasksForUser(
+  db: GenericDatabaseReader<DataModel>,
+  projectId: Id<"projects">,
+  userId: Id<"users">,
+): Promise<Array<{ task: Doc<"agentTasks">; canAccess: boolean }>> {
+  const tasks = (
+    await db
+      .query("agentTasks")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect()
+  ).filter((task) => !isEntityDeleted(task) && isTaskVisibleTo(task, userId));
+  return Promise.all(
+    tasks.map(async (task) => ({
+      task,
+      canAccess: await hasTaskAccess(db, task, userId),
+    })),
+  );
+}
+
+/**
+ * Loads a task and verifies access through its repository or project.
+ * `need: "contributor"` also applies the project role rule (`assertCanDrive`).
+ */
 export async function getTaskWithAccess(
   db: GenericDatabaseReader<DataModel>,
   taskId: Id<"agentTasks">,
   userId: Id<"users">,
+  need: ProjectRole = "viewer",
 ): Promise<Doc<"agentTasks">> {
   const task = await db.get(taskId);
   if (!task) throw new Error("Task not found");
   if (!(await hasTaskAccess(db, task, userId))) {
     throw new Error("Not authorized");
   }
+  if (need === "contributor") await assertCanDrive(db, task, userId);
   return task;
 }
 
@@ -284,6 +316,12 @@ export async function recomputeProjectPhase(
   const db = ctx.db;
   const project = await db.get(projectId);
   if (!project) return;
+  // A child task's status moved: the scheduler starts whatever is ready now
+  // (idempotent, so a call with nothing new starts nothing). Scheduled, as
+  // this module stays a leaf.
+  await ctx.scheduler.runAfter(0, internal.buildWorkflow.scheduleReadyTasks, {
+    projectId,
+  });
   if (
     project.phase !== "in_progress" &&
     project.phase !== "business_review" &&
@@ -295,7 +333,14 @@ export async function recomputeProjectPhase(
     return;
   }
 
-  if (isProjectBuilding(project)) {
+  const taskRunning =
+    (await db
+      .query("agentTasks")
+      .withIndex("by_project_and_status", (q) =>
+        q.eq("projectId", projectId).eq("status", "in_progress"),
+      )
+      .first()) !== null;
+  if (isProjectBuilding(project) || taskRunning) {
     if (project.phase !== "in_progress") {
       await applyPhaseTransition(ctx, project, "in_progress");
     }
@@ -347,7 +392,7 @@ export async function recomputeProjectPhase(
   ]);
 
   if (!done && !draft && !cancelled) {
-    // Build-only phase: demote stale in_progress when no active build remains.
+    // Run-only phase: demote stale in_progress when no task runs any more.
     if (project.phase === "in_progress") {
       await applyPhaseTransition(ctx, project, "business_review");
     }
@@ -361,18 +406,88 @@ export async function recomputeProjectPhase(
   }
 }
 
-/** Fetches a project by ID, throwing if not found or the user lacks access. */
+/**
+ * The user's role in a project (`projectRoleFor`): from their Eva role, or
+ * contributor as an admin or an owner of the project repo's team. The caller
+ * checks repo access.
+ */
+export async function getProjectRole(
+  db: GenericDatabaseReader<DataModel>,
+  project: Pick<Doc<"projects">, "repoId">,
+  userId: Id<"users">,
+): Promise<ProjectRole> {
+  const user = await db.get(userId);
+  if (!user) return "viewer";
+  if (projectRoleFor(user, false) === "contributor") return "contributor";
+  const repo = await db.get(project.repoId);
+  const membership =
+    repo?.teamId !== undefined
+      ? await getTeamMembership(db, repo.teamId, userId)
+      : null;
+  return projectRoleFor(user, membership?.role === "owner");
+}
+
+/**
+ * Fetches a project by ID, throwing if not found or the user lacks access.
+ * `need: "contributor"` is the one role check for project writes: chat with
+ * the coordinator or a child task, approve, run, stop, cancel, retry, edit
+ * settings. A viewer only reads and files feedback tasks.
+ */
 export async function getProjectWithAccess(
   db: GenericDatabaseReader<DataModel>,
   projectId: Id<"projects">,
   userId: Id<"users">,
+  need: ProjectRole = "viewer",
 ): Promise<Doc<"projects">> {
   const project = await db.get(projectId);
   if (!project) throw new Error("Project not found");
   if (!(await hasRepoAccess(db, project.repoId, userId))) {
     throw new Error("Not authorized");
   }
+  if (
+    need === "contributor" &&
+    (await getProjectRole(db, project, userId)) !== "contributor"
+  ) {
+    throw new Error(
+      "Project viewers cannot do this. File a feedback task, or ask an Eva admin to set your role to dev.",
+    );
+  }
   return project;
+}
+
+/** `getProjectWithAccess` plus the user's role, for queries that show it. */
+export async function getProjectAccess(
+  db: GenericDatabaseReader<DataModel>,
+  projectId: Id<"projects">,
+  userId: Id<"users">,
+): Promise<{ project: Doc<"projects">; role: ProjectRole }> {
+  const project = await getProjectWithAccess(db, projectId, userId);
+  return { project, role: await getProjectRole(db, project, userId) };
+}
+
+/** What a person drives: a session's owner (`chatOwner`) or a task. */
+type DriveTarget = SessionOwner | Pick<Doc<"agentTasks">, "projectId">;
+
+/**
+ * Throws unless the user may drive the target (chat, run, stop, edit). A
+ * project and its tasks need a contributor (`getProjectWithAccess`). A
+ * standalone session or a quick task adds no rule: the caller's repo or task
+ * access check stays the whole check.
+ */
+export async function assertCanDrive(
+  db: GenericDatabaseReader<DataModel>,
+  target: DriveTarget,
+  userId: Id<"users">,
+): Promise<void> {
+  let projectId: Id<"projects"> | undefined;
+  if (!("kind" in target)) projectId = target.projectId;
+  else if (target.kind === "project") projectId = target.projectId;
+  else if (target.kind === "task") {
+    projectId = (await db.get(target.taskId))?.projectId;
+  }
+  if (projectId) {
+    await getProjectWithAccess(db, projectId, userId, "contributor");
+  }
 }
 
 /**
@@ -435,16 +550,7 @@ export async function isSupersededTaskRun(
 export async function isFirstTaskOnBranch(
   db: GenericDatabaseReader<DataModel>,
   taskId: Id<"agentTasks">,
-  projectId?: Id<"projects">,
 ): Promise<boolean> {
-  if (projectId) {
-    const project = await db.get(projectId);
-    if (!project) return true;
-    const branch = resolveProjectBranchName(project._id, project);
-    return (
-      (await findLivePullRequestOnBranch(db, project.repoId, branch)) === null
-    );
-  }
   const task = await db.get(taskId);
   if (!task?.repoId) return true;
   return (

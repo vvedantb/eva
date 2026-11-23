@@ -14,10 +14,7 @@ import {
   setProjectConversation,
 } from "./_projects/helpers";
 import { recomputeProjectPhase } from "./functions";
-import {
-  finishProjectBuild,
-  markProjectBuildStarted,
-} from "./_projects/buildState";
+import { finishProjectBuild } from "./_projects/buildState";
 import {
   finishProjectInterview,
   interviewTurnSessionId,
@@ -101,27 +98,6 @@ export async function trackEvaluationWorkflow(
     timeoutMs,
     internal.workflowWatchdog.handleStaleEvaluation,
     { reportId, workflowId: id },
-  );
-}
-
-/** Records a workflow as the active build workflow for a project and schedules a stale handler. */
-export async function trackProjectBuildWorkflow(
-  ctx: MutationCtx,
-  projectId: Id<"projects">,
-  workflowId: WorkflowId,
-  options: { clearLastBuildError?: boolean } = {},
-  timeoutMs: number = RUN_TIMEOUT_MS,
-): Promise<void> {
-  const id = String(workflowId);
-  await markProjectBuildStarted(ctx, projectId, id);
-  if (options.clearLastBuildError) {
-    await ctx.db.patch(projectId, { lastBuildError: undefined });
-  }
-  await recomputeProjectPhase(ctx, projectId);
-  await ctx.scheduler.runAfter(
-    timeoutMs,
-    internal.workflowWatchdog.handleStaleBuild,
-    { projectId, workflowId: id },
   );
 }
 
@@ -326,7 +302,10 @@ export async function stopProjectInterview(
   }
 }
 
-/** Cancels a stale build workflow and clears the active build reference. */
+/**
+ * Cancels a stale build workflow (from before the project scheduler) and
+ * clears the active build reference.
+ */
 export const handleStaleBuild = internalMutation({
   args: {
     projectId: v.id("projects"),

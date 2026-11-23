@@ -7,8 +7,9 @@ import type { DatabaseReader } from "../_generated/server";
  * Who a session belongs to. One field, `sessions.owner`, holds it:
  *
  *   standalone   a session the user opened; listed in the sessions sidebar
- *   task         the hidden session behind one quick task (`agentTasks`)
- *   project      the hidden session a project and its tasks share
+ *   task         the hidden session behind one task (`agentTasks`), a quick
+ *                task or a project's child task
+ *   project      the hidden session of a project's coordinator chat
  *
  * The id lives inside its kind, so "task session without a task" cannot be
  * written. The owner is set at insert and never changes: there is no
@@ -54,26 +55,22 @@ export function standaloneOnly(
   return q.eq(q.field("owner.kind"), "standalone");
 }
 
-/** A task: it works on a session it may not own (a project task). */
-type WorkTask = Pick<Doc<"agentTasks">, "_id" | "projectId">;
+/** A task: it always works on its own session. */
+type WorkTask = Pick<Doc<"agentTasks">, "_id">;
 
 /** Anything that works on an owned session: a task, or a loaded owner. */
 export type WorkTarget = WorkTask | OwnerEntity;
 
 /**
  * The one rule for which session something works on (runs, chat, sandbox):
- * a project and all its tasks share the project's session; a quick task
- * owns its own.
+ * every task owns its own session, also when it belongs to a project; a
+ * project owns its coordinator session.
  */
 export function workSessionOwner(target: WorkTarget): OwnedSessionOwner {
-  if ("kind" in target) {
-    return target.kind === "task"
-      ? workSessionOwner(target.task)
-      : { kind: "project", projectId: target.project._id };
-  }
-  return target.projectId !== undefined
-    ? { kind: "project", projectId: target.projectId }
-    : { kind: "task", taskId: target._id };
+  if (!("kind" in target)) return { kind: "task", taskId: target._id };
+  return target.kind === "task"
+    ? { kind: "task", taskId: target.task._id }
+    : { kind: "project", projectId: target.project._id };
 }
 
 /**
@@ -90,8 +87,9 @@ export async function findWorkSession(
 }
 
 /**
- * A project task's own chat in its project's session (`sessionChats.taskId`),
- * if it has one.
+ * A project task's old chat in its project's session (`sessionChats.taskId`),
+ * if it has one. Read-only legacy: new project tasks chat in the Main chat of
+ * their own session. Step 9's migration removes these rows.
  */
 export async function findProjectTaskChat(
   db: DatabaseReader,
@@ -105,8 +103,8 @@ export async function findProjectTaskChat(
 
 /**
  * The session that holds the sandbox of a session, task or project named by
- * a bare id (an MCP token's entity): the session itself, the one a task works
- * on, or a project's. Null for a malformed id or before the session exists.
+ * a bare id (an MCP token's entity): the session itself, a task's own, or a
+ * project's. Null for a malformed id or before the session exists.
  */
 export async function findEntitySession(
   db: DatabaseReader,
@@ -209,8 +207,9 @@ export type OwnerChat = {
 };
 
 /**
- * Who one chat speaks for: a project task's own chat (`sessionChats.taskId`)
- * for that task, any other chat for its session's owner. Attribution, unread,
+ * Who one chat speaks for: a project task's legacy chat in its project's
+ * session (`sessionChats.taskId`) for that task, any other chat for its
+ * session's owner. Attribution, unread,
  * mentions, watches and the busy light all resolve through here.
  */
 export function chatOwner(

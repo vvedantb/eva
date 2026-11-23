@@ -8,17 +8,16 @@ import {
   notifySubscribers,
 } from "./taskSubscribers";
 import { logTaskActivity } from "./taskActivity";
-import { buildProjectBranchName } from "./_projects/helpers";
 import {
   deriveProjectPhaseFromPrEvent,
   isProjectReviewPhase,
 } from "./_projects/prSync";
 import { cancelTaskRunSchedule } from "./_agentTasks/runState";
 import {
-  rotateProjectBranch,
   syncOwnedSessionWithTaskStatus,
   syncProjectSession,
 } from "./_sessions/ownedSession";
+import { recomputeProjectPhase } from "./functions";
 import { reconcileSessionArchiveState } from "./_sessions/prArchive";
 import {
   allPullRequestsTerminal,
@@ -126,7 +125,12 @@ export const handlePullRequestEvent = internalMutation({
         draft: args.draft,
       });
     } else if (terminal) {
-      finished = await applyQuickTaskPrClosed(ctx, owner.taskId, row);
+      finished = await applyTaskPrClosed(ctx, owner.taskId, row);
+      // A merge lets the task's project start the tasks that waited for it.
+      const task = await ctx.db.get(owner.taskId);
+      if (nextState === "merged" && task?.projectId !== undefined) {
+        await recomputeProjectPhase(ctx, task.projectId);
+      }
     }
     if (terminal) {
       // Audit trail of the close; "skipped" when the owner did not move
@@ -198,11 +202,11 @@ async function attachUntrackedPullRequest(
 }
 
 /**
- * A project's phase follows its primary PR through draft/ready, and its PRs as
- * a whole for completion: merged once every PR is terminal and one merged,
- * cancelled once every PR is closed unmerged. Merging the PR of the current
- * branch starts a fresh branch version, so the next cycle opens a new PR.
- * Task statuses are never touched: they are the record of what each task did,
+ * A project's own (legacy) PR: its phase follows its primary PR through
+ * draft/ready, and its PRs as a whole for completion: merged once every PR is
+ * terminal and one merged, cancelled once every PR is closed unmerged. No new
+ * work goes to the project branch: each child task owns its PR. Task
+ * statuses are never touched: they are the record of what each task did,
  * and a merge or close can be undone on GitHub.
  */
 async function applyProjectPrEvent(
@@ -225,13 +229,6 @@ async function applyProjectPrEvent(
       await ctx.db.patch(projectId, { phase: nextPhase });
     }
     return false;
-  }
-
-  const currentBranch =
-    project.branchName ??
-    buildProjectBranchName(projectId, project.branchVersion);
-  if (row.state === "merged" && row.headBranch === currentBranch) {
-    await rotateProjectBranch(ctx, project);
   }
 
   const rows = await listOwnerPullRequests(ctx.db, {
@@ -272,11 +269,12 @@ async function applyProjectPrEvent(
 }
 
 /**
- * A quick task's status follows its PRs: done once every PR is terminal and
- * one merged, cancelled once every PR is closed unmerged. A task with a second
- * PR still open stays where it is.
+ * A task's status follows its PRs: done once every PR is terminal and one
+ * merged, cancelled once every PR is closed unmerged. A task with a second PR
+ * still open stays where it is. A project's child task whose PR closed
+ * unmerged is not cancelled: it shows "needs you" and its dependents wait.
  */
-async function applyQuickTaskPrClosed(
+async function applyTaskPrClosed(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
   row: Doc<"pullRequests">,
@@ -287,6 +285,7 @@ async function applyQuickTaskPrClosed(
   const rows = await listOwnerPullRequests(ctx.db, { kind: "task", taskId });
   if (!allPullRequestsTerminal(rows)) return false;
   const merged = rows.some((pr) => pr.state === "merged");
+  if (!merged && task.projectId !== undefined) return false;
 
   const now = Date.now();
   const newStatus = merged ? "done" : "cancelled";

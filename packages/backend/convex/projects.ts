@@ -25,3 +25,7 @@ export { startDevelopment, createFromTasks } from "./_projects/development";
 export { resolveProjectConflicts } from "./_projects/conflicts";
 
 export { getInternal } from "./_projects/internal";
+
+export { setInstructions, setExtraRepoIds } from "./_projects/settings";
+
+export { getSummaryDoc } from "./_projects/summary";

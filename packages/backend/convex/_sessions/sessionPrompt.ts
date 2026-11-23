@@ -1,5 +1,6 @@
 import type { QueryCtx } from "../_generated/server";
-import type { Doc } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
+import { entityVisible } from "../numId";
 import { resolveSessionBaseBranch } from "./baseBranch";
 import { buildEditPrompt } from "./prompts";
 import { resolveMessageTokens } from "../_mentions/resolveMessageTokens";
@@ -74,10 +75,77 @@ ${message}`;
 }
 
 /**
+ * Longest part of the project summary doc a turn's prompt carries. The agent
+ * reads the rest with `get_eva_doc`.
+ */
+export const PROJECT_SUMMARY_PROMPT_MAX_CHARS = 6_000;
+
+/** Joins the non-empty prompt blocks with a blank line. */
+function joinBlocks(...blocks: string[]): string {
+  return blocks.filter((block) => block.trim() !== "").join("\n\n");
+}
+
+/**
+ * What every coordinator and child task turn knows of its project: the
+ * project instructions and the summary doc, capped at
+ * `PROJECT_SUMMARY_PROMPT_MAX_CHARS`. Empty when neither is set.
+ */
+async function projectBriefBlock(
+  ctx: QueryCtx,
+  project: Pick<Doc<"projects">, "instructions" | "summaryDocId">,
+): Promise<string> {
+  const summary = project.summaryDocId
+    ? entityVisible(await ctx.db.get(project.summaryDocId))
+    : null;
+  const text = summary?.content.trim() ?? "";
+  const max = PROJECT_SUMMARY_PROMPT_MAX_CHARS;
+  const summaryBlock =
+    summary && text
+      ? `Project summary (Eva doc ${summary._id}; it can be out of date):\n${
+          text.length > max
+            ? `${text.slice(0, max)}\n[Cut at ${max} characters. Read the whole doc with get_eva_doc.]`
+            : text
+        }`
+      : "";
+  const instructions = project.instructions?.trim();
+  return joinBlocks(
+    instructions ? `Project instructions:\n${instructions}` : "",
+    summaryBlock,
+  );
+}
+
+/** The tasks a child task depends on: number, title, status and PR link. */
+async function dependenciesBlock(
+  ctx: QueryCtx,
+  taskId: Id<"agentTasks">,
+): Promise<string> {
+  const dependencies = await ctx.db
+    .query("taskDependencies")
+    .withIndex("by_task", (q) => q.eq("taskId", taskId))
+    .collect();
+  const tasks = await Promise.all(
+    dependencies.map((dependency) => ctx.db.get(dependency.dependsOnId)),
+  );
+  const lines = tasks.flatMap((task) =>
+    task
+      ? [
+          `- ${task.taskNumber ? `#${task.taskNumber} ` : ""}"${task.title}" (status: ${task.status})${task.prUrl ? `, PR: ${task.prUrl}` : ""}`,
+        ]
+      : [],
+  );
+  return lines.length > 0
+    ? `This task depends on these tasks:\n${lines.join("\n")}`
+    : "";
+}
+
+/**
  * What the session's owner adds to a turn. A standalone session adds nothing.
  * A task's session leads with the task; a project's leads with the project
  * (its spec as the plan), and a project task's own chat in it with the task.
- * The owner's PR is used: the owner owns it, the session has none.
+ * A project's turns and its tasks' turns also carry the project brief
+ * (`projectBriefBlock`); a project task's carry its dependencies. This is a
+ * snapshot when the turn starts. The owner's PR is used: the owner owns it,
+ * the session has none.
  */
 async function ownerPromptContext(
   ctx: QueryCtx,
@@ -89,8 +157,16 @@ async function ownerPromptContext(
   const taskId = owner.kind === "task" ? owner.taskId : undefined;
   const task = taskId ? await ctx.db.get(taskId) : null;
   if (task) {
+    const project = task.projectId ? await ctx.db.get(task.projectId) : null;
     return {
-      message: withTaskContext(task, message),
+      message: project
+        ? joinBlocks(
+            `This task is part of project "${project.title}". A coordinator chat plans the project; this task does one part of it.`,
+            await projectBriefBlock(ctx, project),
+            await dependenciesBlock(ctx, task._id),
+            withTaskContext(task, message),
+          )
+        : withTaskContext(task, message),
       planContent: task.description,
       prUrl: await taskPrUrl(ctx.db, task),
     };
@@ -99,7 +175,10 @@ async function ownerPromptContext(
   const project = projectId ? await ctx.db.get(projectId) : null;
   if (project) {
     return {
-      message: withProjectContext(project, message),
+      message: withProjectContext(
+        project,
+        joinBlocks(await projectBriefBlock(ctx, project), message),
+      ),
       planContent: await getProjectGeneratedSpec(ctx.db, project._id),
       prUrl: project.prUrl,
     };

@@ -731,6 +731,9 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
           description: input.description,
           ...(input.baseBranch ? { baseBranch: input.baseBranch } : {}),
           ...(input.projectId ? { projectId: input.projectId } : {}),
+          // An agent's task waits for a person's approval before the
+          // project scheduler may start it.
+          approved: false,
         },
       },
       z.string(),

@@ -5,6 +5,7 @@ import {
   getTaskWithAccess,
   hasTaskAccess,
 } from "./functions";
+import { insertTaskDependencies } from "./_agentTasks/dependencies";
 
 const dependencyValidator = v.object({
   _id: v.id("taskDependencies"),
@@ -92,7 +93,7 @@ export const isBlocked = authQuery({
   },
 });
 
-/** Adds a dependency between two tasks, preventing self-references and duplicates. */
+/** Adds a dependency between two tasks, refusing self-references, duplicates and cycles. */
 export const add = authMutation({
   args: {
     taskId: v.id("agentTasks"),
@@ -104,7 +105,7 @@ export const add = authMutation({
       throw new Error("A task cannot depend on itself");
     }
     await Promise.all([
-      getTaskWithAccess(ctx.db, args.taskId, ctx.userId),
+      getTaskWithAccess(ctx.db, args.taskId, ctx.userId, "contributor"),
       getTaskWithAccess(ctx.db, args.dependsOnId, ctx.userId),
     ]);
     const existing = await ctx.db
@@ -116,10 +117,10 @@ export const add = authMutation({
     if (existing) {
       throw new Error("Dependency already exists");
     }
-    return await ctx.db.insert("taskDependencies", {
-      taskId: args.taskId,
-      dependsOnId: args.dependsOnId,
-    });
+    const [id] = await insertTaskDependencies(ctx, [
+      { taskId: args.taskId, dependsOnId: args.dependsOnId },
+    ]);
+    return id;
   },
 });
 
@@ -133,7 +134,7 @@ export const remove = authMutation({
       throw new Error("Dependency not found");
     }
     await Promise.all([
-      getTaskWithAccess(ctx.db, dep.taskId, ctx.userId),
+      getTaskWithAccess(ctx.db, dep.taskId, ctx.userId, "contributor"),
       getTaskWithAccess(ctx.db, dep.dependsOnId, ctx.userId),
     ]);
     await ctx.db.delete(args.id);
@@ -150,7 +151,7 @@ export const removeByTasks = authMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await Promise.all([
-      getTaskWithAccess(ctx.db, args.taskId, ctx.userId),
+      getTaskWithAccess(ctx.db, args.taskId, ctx.userId, "contributor"),
       getTaskWithAccess(ctx.db, args.dependsOnId, ctx.userId),
     ]);
     const dep = await ctx.db

@@ -41,6 +41,7 @@ import {
   snapshotBuildTriggerValidator,
   snapshotScheduleValidator,
   taskActivityFieldValidator,
+  taskOriginValidator,
   taskSandboxEventValidator,
   taskStatusValidator,
   teamMemberRoleValidator,
@@ -625,6 +626,8 @@ export const agentTaskFields = {
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   repoId: v.optional(v.id("githubRepos")),
   projectId: v.optional(v.id("projects")),
+  /** Why the task exists (`taskOriginValidator`); absent when made by hand or by an agent. */
+  origin: v.optional(taskOriginValidator),
   tags: v.optional(v.array(v.string())),
   taskNumber: v.optional(v.number()),
   status: taskStatusValidator,
@@ -662,6 +665,14 @@ export const agentTaskFields = {
   // Manager Ave thread watching this task for completion notifications
   // (mirrors sessions.watchedByAve).
   watchedByAve: v.optional(v.id("aveThreads")),
+  /**
+   * When a person approved this project task to run. The project scheduler
+   * (`scheduleReadyTasks`) starts only approved `todo` tasks. Absent on quick
+   * tasks and on project tasks not approved yet.
+   */
+  approvedAt: v.optional(v.number()),
+  /** Restarts the coordinator spent on this failed task (at most 1). */
+  coordinatorRetries: v.optional(v.number()),
   ...prSummaryFields,
 };
 
@@ -1190,7 +1201,14 @@ export const projectInterviewValidator = v.union(
 
 export const projectFields = {
   ...entityNumIdFields,
+  /** The home repo: the project's URL, number and sidebar place, and the default repo of its tasks. */
   repoId: v.id("githubRepos"),
+  /** More repos a task of this project may target (`assertProjectRepo`). Set by `projects.setExtraRepoIds`. */
+  extraRepoIds: v.optional(v.array(v.id("githubRepos"))),
+  /** Text added to the coordinator's and every child task's prompt (`sessionPrompt.ts`). */
+  instructions: v.optional(v.string()),
+  /** The project summary doc the coordinator keeps (`upsertProjectSummary`). */
+  summaryDocId: v.optional(v.id("docs")),
   userId: v.id("users"),
   title: v.string(),
   description: v.optional(v.string()),

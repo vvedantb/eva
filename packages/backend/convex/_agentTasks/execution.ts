@@ -2,12 +2,12 @@ import { v } from "convex/values";
 import { startTaskRun } from "../_taskWorkflow/startRun";
 import { aiModelValidator, runModeValidator } from "../validators";
 import {
+  assertCanDrive,
   authMutation,
   hasTaskAccess,
   hasActiveRun,
   isFirstTaskOnBranch,
 } from "../functions";
-import { resolveProjectBranchName } from "../_git/branchNames";
 import { resolveTaskWorkflowBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { cancelTaskRunSchedule, scheduleTaskRun } from "./runState";
 
@@ -33,6 +33,7 @@ export const startExecution = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
+    await assertCanDrive(ctx.db, task, ctx.userId);
     if (task.status === "draft") {
       throw new Error("Cannot execute a draft task");
     }
@@ -48,49 +49,8 @@ export const startExecution = authMutation({
       throw new Error("Task already has an active execution");
     }
 
-    const project = task.projectId ? await ctx.db.get(task.projectId) : null;
-
-    if (task.projectId) {
-      if (!project) {
-        throw new Error("Project not found");
-      }
-
-      const projectTasks = await ctx.db
-        .query("agentTasks")
-        .withIndex("by_project", (q) => q.eq("projectId", task.projectId))
-        .collect();
-
-      for (const pt of projectTasks) {
-        if (pt._id === args.id) continue;
-        if (await hasActiveRun(ctx.db, pt._id)) {
-          const awaitingReview =
-            task.status === "business_review" || task.status === "code_review";
-          if (awaitingReview) {
-            await ctx.db.patch(args.id, {
-              status: "todo",
-              updatedAt: Date.now(),
-            });
-          }
-          throw new Error("Another task in this project is already running");
-        }
-      }
-    }
-
-    const firstOnBranch = await isFirstTaskOnBranch(
-      ctx.db,
-      args.id,
-      task.projectId,
-    );
-
-    const branchName =
-      task.projectId && project
-        ? resolveProjectBranchName(task.projectId, project)
-        : undefined;
-    const baseBranch = resolveTaskWorkflowBaseBranch(
-      task,
-      repo,
-      project ?? undefined,
-    );
+    const firstOnBranch = await isFirstTaskOnBranch(ctx.db, args.id);
+    const baseBranch = resolveTaskWorkflowBaseBranch(task, repo);
 
     const runId = await startTaskRun(ctx, {
       task,
@@ -98,8 +58,6 @@ export const startExecution = authMutation({
       userId: ctx.userId,
       baseBranch,
       isFirstTaskOnBranch: firstOnBranch,
-      branchName,
-      projectId: task.projectId,
       mode: args.mode,
       triggeredBy: ctx.userId,
       // Explicit comment (quick-task "Make changes") wins; otherwise consume any
@@ -116,7 +74,6 @@ export const startExecution = authMutation({
       repoId: task.repoId,
       installationId: repo.installationId,
       projectId: task.projectId,
-      branchName,
       baseBranch,
       isFirstTaskOnBranch: firstOnBranch,
       model: task.model ?? repo.defaultModel,
@@ -135,6 +92,7 @@ export const scheduleExecution = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
+    await assertCanDrive(ctx.db, task, ctx.userId);
     if (task.status !== "todo") {
       throw new Error("Only todo tasks can be scheduled");
     }
@@ -170,6 +128,7 @@ export const cancelScheduledExecution = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
+    await assertCanDrive(ctx.db, task, ctx.userId);
     const result = await cancelTaskRunSchedule(ctx, args.id);
     if (!result.ok) throw new Error(result.reason);
     await ctx.db.patch(args.id, { updatedAt: Date.now() });
@@ -188,6 +147,7 @@ export const updateScheduledExecution = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
+    await assertCanDrive(ctx.db, task, ctx.userId);
     if (args.scheduledAt <= Date.now()) {
       throw new Error("Scheduled time must be in the future");
     }

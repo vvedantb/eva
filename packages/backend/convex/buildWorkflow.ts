@@ -1,239 +1,104 @@
 import { v } from "convex/values";
-import { startTaskRun } from "./_taskWorkflow/startRun";
 import { finishTaskRun, taskRunWorkflowId } from "./_agentTasks/runState";
-import {
-  internalMutation,
-  internalQuery,
-  type MutationCtx,
-} from "./_generated/server";
-import type { Doc, Id } from "./_generated/dataModel";
+import { internalMutation, type MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { findOwnedSession } from "./_sessions/owner";
 import { abandonTaskRunSandbox } from "./_sessions/sandbox";
-import { internal } from "./_generated/api";
-import { workflow, cancelTrackedWorkflow } from "./workflowManager";
+import { cancelTrackedWorkflow } from "./workflowManager";
 import {
   authMutation,
   getActiveTaskRun,
-  hasRepoAccess,
+  getProjectWithAccess,
   recomputeProjectPhase,
 } from "./functions";
-import { buildTaskDoneEvent } from "./taskWorkflow";
-import {
-  stopProjectInterview,
-  trackProjectBuildWorkflow,
-} from "./workflowWatchdog";
-import { resolveProjectBranchName } from "./_git/branchNames";
-import { resolveProjectBaseBranch } from "./_taskWorkflow/resolveBaseBranch";
+import { stopProjectInterview } from "./workflowWatchdog";
 import {
   cancelProjectBuildSchedule,
   finishProjectBuild,
   fireProjectBuildSchedule,
-  isProjectBuilding,
   projectBuildWorkflowId,
   projectScheduledBuildAt,
   scheduleProjectBuild,
 } from "./_projects/buildState";
+import { syncProjectSession } from "./_sessions/ownedSession";
 import {
-  ensureWorkSession,
-  ownedSessionBusy,
-  syncProjectSession,
-} from "./_sessions/ownedSession";
+  approveTasks,
+  projectTodoTaskIds,
+  retryFailedTask,
+  scheduleReadyProjectTasks,
+  withdrawUnstartedApprovals,
+} from "./_projects/scheduler";
 
-/** Why a build did not start: the project chat holds the sandbox. */
-const PROJECT_CHAT_BUSY_ERROR =
-  "Eva is still replying in this project's chat, or its sandbox is starting or stopping. Start the build again in a moment.";
+// A project's child tasks run in parallel, each like a quick task, started by
+// the scheduler (`_projects/scheduler.ts`) once a person approved them. The
+// old build names below stay as thin wrappers for older clients and the MCP
+// build tools: "start the build" approves every todo task and schedules;
+// "cancel the build" takes back the approval of every task not started.
 
-/** How long a scheduled build waits for a busy project chat before trying again. */
-const CHAT_BUSY_RETRY_MS = 60_000;
-/** How long a scheduled build keeps waiting for a busy session before it gives up. */
-const CHAT_BUSY_GIVE_UP_MS = 30 * 60_000;
+// --- Scheduler ---
 
 /**
- * Creates the project's session (or reads it) before the build holds it, so
- * a project from before sessions hands its own VM over now: once the build
- * runs, the adoption waits for it (`ownerBusyReason`) and every task would
- * boot a second VM.
+ * Starts the project's ready child tasks: approved `todo` tasks whose
+ * dependencies are done and merged, up to `MAX_PARALLEL_PROJECT_TASKS` in
+ * progress. Idempotent.
  */
-async function claimProjectSessionForBuild(
+export const scheduleReadyTasks = internalMutation({
+  args: { projectId: v.id("projects") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await scheduleReadyProjectTasks(ctx, args.projectId);
+    return null;
+  },
+});
+
+/** A person approves a batch of the project's todo tasks; the scheduler then starts what is ready. */
+export const approveProjectTasks = authMutation({
+  args: {
+    projectId: v.id("projects"),
+    taskIds: v.array(v.id("agentTasks")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      ctx.userId,
+      "contributor",
+    );
+    await approveTasks(ctx, args.projectId, args.taskIds);
+    await scheduleReadyProjectTasks(ctx, args.projectId);
+    return null;
+  },
+});
+
+/**
+ * The coordinator restarts a failed child task, once (`retryFailedTask`).
+ * Internal: the coordinator's tool calls it; a person restarts a task with
+ * `agentTasks.startExecution`, which does not use the count.
+ */
+export const retryFailedTaskAsCoordinator = internalMutation({
+  args: { taskId: v.id("agentTasks") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await retryFailedTask(ctx, args.taskId);
+    return null;
+  },
+});
+
+/** Approves every todo task of the project, then schedules: the old "build". */
+async function approveAllAndSchedule(
   ctx: MutationCtx,
-  project: Doc<"projects">,
+  projectId: Id<"projects">,
 ): Promise<void> {
-  await ensureWorkSession(ctx, { kind: "project", project });
+  await approveTasks(ctx, projectId, await projectTodoTaskIds(ctx.db, projectId));
+  await scheduleReadyProjectTasks(ctx, projectId);
 }
 
-// --- Workflow ---
-
-/** Orchestrates sequential execution of all todo tasks in a project build. */
-export const buildProjectWorkflow = workflow.define({
-  args: {
-    projectId: v.id("projects"),
-    userId: v.id("users"),
-    installationId: v.number(),
-  },
-  handler: async (step, args): Promise<void> => {
-    // Step 1: Fetch all "todo" tasks for the project, sorted by taskNumber
-    const tasks = await step.runQuery(internal.buildWorkflow.getProjectTasks, {
-      projectId: args.projectId,
-    });
-
-    if (tasks.length === 0) {
-      await step.runMutation(internal.buildWorkflow.completeBuild, {
-        projectId: args.projectId,
-      });
-      return;
-    }
-
-    // Step 2: Execute tasks sequentially
-    let failedTaskId: string | undefined;
-    for (const task of tasks) {
-      await step.runMutation(internal.buildWorkflow.startTaskForBuild, {
-        taskId: task._id,
-        projectId: args.projectId,
-        userId: args.userId,
-        installationId: args.installationId,
-      });
-
-      let result = await step.awaitEvent(buildTaskDoneEvent);
-      while (result.taskId !== task._id) {
-        result = await step.awaitEvent(buildTaskDoneEvent);
-      }
-
-      if (!result.success) {
-        failedTaskId = task._id;
-        break;
-      }
-    }
-
-    // Step 3: Finalize the build
-    await step.runMutation(internal.buildWorkflow.completeBuild, {
-      projectId: args.projectId,
-      failedTaskId,
-    });
-  },
-});
-
-// --- Internal functions ---
-
-/** Returns all todo tasks for a project, sorted by task number ascending. */
-export const getProjectTasks = internalQuery({
-  args: { projectId: v.id("projects") },
-  returns: v.array(
-    v.object({
-      _id: v.id("agentTasks"),
-      taskNumber: v.optional(v.number()),
-    }),
-  ),
-  handler: async (ctx, args) => {
-    const tasks = await ctx.db
-      .query("agentTasks")
-      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-      .collect();
-
-    return tasks
-      .filter((t) => t.status === "todo")
-      .sort((a, b) => (a.taskNumber ?? 0) - (b.taskNumber ?? 0))
-      .map((t) => ({ _id: t._id, taskNumber: t.taskNumber }));
-  },
-});
+// --- Old build names (thin wrappers) ---
 
 /**
- * Starts a single task execution within a project build.
- * Combines the logic of agentTasks.startExecution + taskWorkflow.triggerExecution
- * without auth checks (called internally from the build workflow).
- */
-export const startTaskForBuild = internalMutation({
-  args: {
-    taskId: v.id("agentTasks"),
-    projectId: v.id("projects"),
-    userId: v.id("users"),
-    installationId: v.number(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task) throw new Error("Task not found");
-    if (!task.repoId) throw new Error("Task has no associated repository");
-
-    const repo = await ctx.db.get(task.repoId);
-    if (!repo) throw new Error("Repository not found");
-
-    const project = await ctx.db.get(args.projectId);
-    if (!project) throw new Error("Project not found");
-
-    // Check for active runs on this task
-    const existingRuns = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-      .collect();
-    const activeRun = existingRuns.find(
-      (r) => r.status === "queued" || r.status === "running",
-    );
-    if (activeRun) throw new Error("Task already has an active execution");
-
-    // Compute isFirstTaskOnBranch — check if any task in the project had a successful run
-    const projectTasks = await ctx.db
-      .query("agentTasks")
-      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-      .collect();
-
-    let hasSuccessfulRun = false;
-    for (const pt of projectTasks) {
-      const runs = await ctx.db
-        .query("agentRuns")
-        .withIndex("by_task", (q) => q.eq("taskId", pt._id))
-        .collect();
-      if (runs.some((r) => r.status === "success")) {
-        hasSuccessfulRun = true;
-        break;
-      }
-    }
-    const isFirstTaskOnBranch = !hasSuccessfulRun;
-
-    // When this build picks up a task a reviewer sent back via "Make
-    // changes", link the parked change-request comment so the timeline labels
-    // this run "made changes" rather than a bare "success".
-    await startTaskRun(ctx, {
-      task,
-      repo,
-      userId: args.userId,
-      baseBranch: resolveProjectBaseBranch(project, repo),
-      isFirstTaskOnBranch,
-      branchName: resolveProjectBranchName(args.projectId, project),
-      projectId: args.projectId,
-      triggeringCommentId: task.pendingChangeRequestCommentId,
-      clearPendingChangeRequest: true,
-      rollbackStatus: "todo",
-      heldByBuild: true,
-    });
-
-    return null;
-  },
-});
-
-/** Marks a project build as complete, optionally recording which task failed. */
-export const completeBuild = internalMutation({
-  args: {
-    projectId: v.id("projects"),
-    failedTaskId: v.optional(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await finishProjectBuild(ctx, args.projectId, undefined);
-    await ctx.db.patch(args.projectId, {
-      lastBuildError: args.failedTaskId
-        ? `Build stopped: task ${args.failedTaskId} failed`
-        : undefined,
-    });
-    await recomputeProjectPhase(ctx, args.projectId);
-    return null;
-  },
-});
-
-// --- Public mutations ---
-
-/**
- * Frontend trigger — starts the project build workflow.
- * Called from the "Start cooking" button in ProjectDetailClient.
+ * "Start cooking": approves every todo task of the project and starts what
+ * is ready. Kept for older clients and `start_project_build`.
  */
 export const startBuild = authMutation({
   args: {
@@ -241,121 +106,48 @@ export const startBuild = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project || !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId)))
-      throw new Error("Project not found");
-
-    if (isProjectBuilding(project)) {
-      throw new Error("Project already has an active build");
-    }
-    // One agent per sandbox: a build waits for the project chat's reply.
-    if (
-      await ownedSessionBusy(ctx.db, {
-        kind: "project",
-        projectId: project._id,
-      })
-    ) {
-      throw new Error(PROJECT_CHAT_BUSY_ERROR);
-    }
-
-    const repo = await ctx.db.get(project.repoId);
-    if (!repo) throw new Error("Repository not found");
-
-    await claimProjectSessionForBuild(ctx, project);
-    const workflowId = await workflow.start(
-      ctx,
-      internal.buildWorkflow.buildProjectWorkflow,
-      {
-        projectId: args.projectId,
-        userId: ctx.userId,
-        installationId: repo.installationId,
-      },
+    await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      ctx.userId,
+      "contributor",
     );
-
-    await trackProjectBuildWorkflow(ctx, args.projectId, workflowId, {
-      clearLastBuildError: true,
-    });
-
+    await approveAllAndSchedule(ctx, args.projectId);
+    await ctx.db.patch(args.projectId, { lastBuildError: undefined });
     return null;
   },
 });
 
-// --- Scheduled Build ---
+// --- Scheduled build (old name: approve all and schedule at a time) ---
 
 /**
- * Called by the Convex scheduler at the scheduled time.
- * Kicks off the build workflow if the project is still eligible.
+ * Called by the Convex scheduler at the scheduled time: approves every todo
+ * task of the project and starts what is ready.
  */
 export const executeScheduledBuild = internalMutation({
   args: {
     projectId: v.id("projects"),
     scheduledAt: v.optional(v.number()),
-    /** Set on a busy-session retry: when the build was first due. */
+    /** Old busy-session retries carried this; unused now. */
     firstScheduledAt: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
     if (!project) return null;
-
-    // Consume the due schedule before eligibility checks. Behind a running
-    // build it is dropped and no build starts.
+    // Consume the due schedule; a stale or replaced job stops here.
     const fired = await fireProjectBuildSchedule(
       ctx,
       args.projectId,
       args.scheduledAt,
     );
-    if (!fired.ok || fired.next !== undefined) return null;
-    // The project's session is busy (chat reply, run, interview, start or
-    // stop): try again shortly instead of dropping the schedule (`startBuild`
-    // refuses a busy session). After `CHAT_BUSY_GIVE_UP_MS` the schedule gives up and
-    // says why on the project.
-    if (
-      await ownedSessionBusy(ctx.db, {
-        kind: "project",
-        projectId: project._id,
-      })
-    ) {
-      const now = Date.now();
-      const firstDue = args.firstScheduledAt ?? args.scheduledAt ?? now;
-      if (now - firstDue >= CHAT_BUSY_GIVE_UP_MS) {
-        await ctx.db.patch(args.projectId, {
-          lastBuildError:
-            `Scheduled build skipped: the project's sandbox stayed busy for ${CHAT_BUSY_GIVE_UP_MS / 60_000} minutes.`,
-        });
-        return null;
-      }
-      await scheduleProjectBuild(
-        ctx,
-        args.projectId,
-        "scheduleRetry",
-        now + CHAT_BUSY_RETRY_MS,
-        firstDue,
-      );
-      return null;
-    }
-
-    const repo = await ctx.db.get(project.repoId);
-    if (!repo) return null;
-
-    await claimProjectSessionForBuild(ctx, project);
-    const workflowId = await workflow.start(
-      ctx,
-      internal.buildWorkflow.buildProjectWorkflow,
-      {
-        projectId: args.projectId,
-        userId: project.userId,
-        installationId: repo.installationId,
-      },
-    );
-
-    await trackProjectBuildWorkflow(ctx, args.projectId, workflowId);
-
+    if (!fired.ok) return null;
+    await approveAllAndSchedule(ctx, args.projectId);
     return null;
   },
 });
 
-/** Schedules a project build to run at a future timestamp. */
+/** Schedules "approve all and start" for a future time (`schedule_project_build`). */
 export const scheduleBuild = authMutation({
   args: {
     projectId: v.id("projects"),
@@ -363,11 +155,12 @@ export const scheduleBuild = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project || !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId)))
-      throw new Error("Project not found");
-    if (isProjectBuilding(project))
-      throw new Error("Project already has an active build");
+    const project = await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      ctx.userId,
+      "contributor",
+    );
     if (projectScheduledBuildAt(project) !== undefined)
       throw new Error("Project already has a scheduled build");
     if (args.scheduledAt <= Date.now())
@@ -388,20 +181,52 @@ export const cancelScheduledBuild = authMutation({
   args: { projectId: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project || !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId)))
-      throw new Error("Project not found");
+    await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      ctx.userId,
+      "contributor",
+    );
     const cancelled = await cancelProjectBuildSchedule(ctx, args.projectId);
     if (!cancelled.ok) throw new Error(cancelled.reason);
     return null;
   },
 });
 
+/** Reschedules a project build; the new schedule replaces (and cancels) the pending one. */
+export const updateScheduledBuild = authMutation({
+  args: {
+    projectId: v.id("projects"),
+    scheduledAt: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await getProjectWithAccess(
+      ctx.db,
+      args.projectId,
+      ctx.userId,
+      "contributor",
+    );
+    if (args.scheduledAt <= Date.now())
+      throw new Error("Scheduled time must be in the future");
+
+    await scheduleProjectBuild(
+      ctx,
+      args.projectId,
+      "schedule",
+      args.scheduledAt,
+    );
+    return null;
+  },
+});
+
 /**
- * Stops a running build: its workflow, every in-progress task's run (back to
- * todo), then the build state, with `reason` as the build error.
+ * Stops a build workflow from before the scheduler (`projects.build` still
+ * `running`): its workflow, every in-progress task's run on the project
+ * session (back to todo), then the build state, with `reason` as the build
+ * error. Nothing starts such a build any more.
  */
-async function cancelRunningBuild(
+async function cancelLegacyBuild(
   ctx: MutationCtx,
   projectId: Id<"projects">,
   buildWorkflowId: string,
@@ -452,34 +277,40 @@ async function cancelRunningBuild(
   await recomputeProjectPhase(ctx, projectId);
 }
 
-/** Cancels an active build, stopping all in-progress tasks and their workflows. */
+/**
+ * "Cancel the build": takes back the approval of every todo task that has
+ * not started, so nothing new starts. Running tasks keep going (stop one with
+ * `stop_agent`); a build workflow from before the scheduler is stopped. Kept
+ * for older clients and `cancel_project_build`.
+ */
 export const cancelBuild = authMutation({
   args: { projectId: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project || !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId)))
-      throw new Error("Project not found");
-
-    const buildWorkflowId = projectBuildWorkflowId(project);
-    if (buildWorkflowId === undefined) {
-      throw new Error("No active build to cancel");
-    }
-
-    await cancelRunningBuild(
-      ctx,
+    const project = await getProjectWithAccess(
+      ctx.db,
       args.projectId,
-      buildWorkflowId,
-      "Build cancelled by user",
+      ctx.userId,
+      "contributor",
     );
+    await withdrawUnstartedApprovals(ctx, args.projectId);
+    const legacyWorkflowId = projectBuildWorkflowId(project);
+    if (legacyWorkflowId !== undefined) {
+      await cancelLegacyBuild(
+        ctx,
+        args.projectId,
+        legacyWorkflowId,
+        "Build cancelled by user",
+      );
+    }
     return null;
   },
 });
 
 /**
  * The project left the board (completed, cancelled, deleted) while its own
- * work still holds the session (`projectHoldsSession`): stop the build and
- * the interview / spec workflow first, then retire the session
+ * work still holds the session (`projectHoldsSession`): stop a legacy build
+ * and the interview / spec workflow first, then retire the session
  * (`syncProjectSession`), so nothing keeps running on a VM being stopped.
  */
 export const releaseProjectSessionForRetire = internalMutation({
@@ -490,7 +321,7 @@ export const releaseProjectSessionForRetire = internalMutation({
     if (!project) return null;
     const buildWorkflowId = projectBuildWorkflowId(project);
     if (buildWorkflowId !== undefined) {
-      await cancelRunningBuild(
+      await cancelLegacyBuild(
         ctx,
         args.projectId,
         buildWorkflowId,
@@ -502,30 +333,6 @@ export const releaseProjectSessionForRetire = internalMutation({
       error: "Interview stopped: the project was closed",
     });
     await syncProjectSession(ctx, args.projectId);
-    return null;
-  },
-});
-
-/** Reschedules a project build; the new schedule replaces (and cancels) the pending one. */
-export const updateScheduledBuild = authMutation({
-  args: {
-    projectId: v.id("projects"),
-    scheduledAt: v.number(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const project = await ctx.db.get(args.projectId);
-    if (!project || !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId)))
-      throw new Error("Project not found");
-    if (args.scheduledAt <= Date.now())
-      throw new Error("Scheduled time must be in the future");
-
-    await scheduleProjectBuild(
-      ctx,
-      args.projectId,
-      "schedule",
-      args.scheduledAt,
-    );
     return null;
   },
 });

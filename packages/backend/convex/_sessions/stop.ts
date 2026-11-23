@@ -2,16 +2,16 @@ import { v } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import {
+  assertCanDrive,
   authMutation,
   getProjectWithAccess,
   getSessionWithAccess,
   getTaskWithAccess,
-  hasRepoAccess,
 } from "../functions";
 import { isTaskRunning } from "../_agentTasks/runState";
 import { hasOpenChatTurn } from "../_chat/turnProjection";
 import {
-  getSessionChatOrThrow,
+  getSessionChatWithAccess,
   type SessionChatContext,
 } from "../_sessionChats/helpers";
 import { cancelTaskRun } from "../_taskWorkflow/publicMutations";
@@ -19,6 +19,7 @@ import { cancelChatExecution } from "./execution";
 import {
   chatOwner,
   findWorkSession,
+  sessionOwner,
   sessionOwnerTaskId,
 } from "./owner";
 import { findWorkChat, ownerHoldsSession } from "./ownerState";
@@ -89,16 +90,15 @@ export const stopChatTurn = authMutation({
   returns: v.null(),
   handler: async (ctx, { target }) => {
     if ("chatId" in target) {
-      const chat = await getSessionChatOrThrow(ctx.db, target.chatId);
-      if (!(await hasRepoAccess(ctx.db, chat.session.repoId, ctx.userId))) {
-        throw new Error("Not authorized");
-      }
-      await stopChat(ctx, chat);
+      await stopChat(
+        ctx,
+        await getSessionChatWithAccess(ctx.db, target.chatId, ctx.userId),
+      );
       return null;
     }
     await stopTask(
       ctx,
-      await getTaskWithAccess(ctx.db, target.taskId, ctx.userId),
+      await getTaskWithAccess(ctx.db, target.taskId, ctx.userId, "contributor"),
     );
     return null;
   },
@@ -152,6 +152,7 @@ export const stopWorkSandbox = authMutation({
               ),
             });
     if (!session) return null;
+    await assertCanDrive(ctx.db, sessionOwner(session), ctx.userId);
     if (await sessionIsHeld(ctx.db, session)) throw new Error(SANDBOX_HELD_ERROR);
     await requestSessionSandboxStop(ctx, session._id);
     return session._id;

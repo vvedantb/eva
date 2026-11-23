@@ -6,12 +6,14 @@ import type { QueryCtx } from "../_generated/server";
 import {
   authQuery,
   authMutation,
+  assertCanDrive,
   getProjectWithAccess,
   hasRepoAccess,
   hasTaskAccess,
   recomputeProjectPhase,
 } from "../functions";
 import { allocateNumId } from "../numId";
+import { assertProjectRepo } from "../_projects/settings";
 import { createNotification } from "../notifications";
 import { ensureSubscribed } from "../taskSubscribers";
 import {
@@ -89,8 +91,14 @@ export const saveDraft = authMutation({
     const repo = await ctx.db.get(args.repoId);
     if (!repo) throw new Error("Repo not found");
     const project = args.projectId
-      ? await getProjectWithAccess(ctx.db, args.projectId, ctx.userId)
+      ? await getProjectWithAccess(
+          ctx.db,
+          args.projectId,
+          ctx.userId,
+          "contributor",
+        )
       : null;
+    if (project) assertProjectRepo(project, args.repoId);
 
     const now = Date.now();
 
@@ -121,7 +129,7 @@ export const saveDraft = authMutation({
       createdAt: now,
       updatedAt: now,
       createdBy: ctx.userId,
-      baseBranch: resolveNewTaskBaseBranch(args.baseBranch, repo, project),
+      baseBranch: resolveNewTaskBaseBranch(args.baseBranch, repo),
       projectId: args.projectId,
       numId: await allocateNumId(ctx.db, args.repoId, "agentTasks"),
     });
@@ -157,9 +165,9 @@ export const activateDraft = authMutation({
       !(await hasTaskAccess(ctx.db, task, ctx.userId))
     )
       throw new Error("Draft not found");
+    await assertCanDrive(ctx.db, task, ctx.userId);
 
     const repo = task.repoId ? await ctx.db.get(task.repoId) : null;
-    const project = task.projectId ? await ctx.db.get(task.projectId) : null;
 
     const providerAccountId =
       args.providerAccountId === undefined
@@ -173,7 +181,7 @@ export const activateDraft = authMutation({
     await ctx.db.patch(args.id, {
       title: args.title,
       description: args.description,
-      baseBranch: resolveNewTaskBaseBranch(args.baseBranch, repo, project),
+      baseBranch: resolveNewTaskBaseBranch(args.baseBranch, repo),
       model: args.model,
       providerAccountId,
       reasoningLevel: args.reasoningLevel,
@@ -181,6 +189,8 @@ export const activateDraft = authMutation({
       use1mContext: args.use1mContext,
       fastMode: args.fastMode,
       status: "todo",
+      // A person filed it by hand: a project task is approved to run.
+      approvedAt: task.projectId !== undefined ? Date.now() : undefined,
       updatedAt: Date.now(),
       tags: normalizeTaskTags(args.tags),
       assignedTo: args.assignedTo,

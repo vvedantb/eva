@@ -10,10 +10,7 @@ import {
   reasoningLevelValidator,
   runModeValidator,
 } from "../validators";
-import {
-  resolveTaskWorkflowBaseBranch,
-  resolveTaskWorkflowBaseBranchForTask,
-} from "./resolveBaseBranch";
+import { resolveTaskWorkflowBaseBranch } from "./resolveBaseBranch";
 import {
   buildImplementationPrompt,
   buildConflictResolutionPrompt,
@@ -72,7 +69,7 @@ export const getTaskData = internalQuery({
     repoId: v.id("githubRepos"),
     runId: v.id("agentRuns"),
     projectId: v.optional(v.id("projects")),
-    /** The task's session (a project task's: the project's): its sandbox is the one the run reuses. */
+    /** The task's own session: its sandbox is the one the run reuses. */
     ownedSessionId: v.optional(v.id("sessions")),
     branchName: v.optional(v.string()),
     mode: v.optional(runModeValidator),
@@ -137,9 +134,8 @@ export const getTaskData = internalQuery({
     };
 
     let projectContext: { title: string; description?: string } | undefined;
-    let project = null;
     if (args.projectId) {
-      project = await ctx.db.get(args.projectId);
+      const project = await ctx.db.get(args.projectId);
       if (project) {
         projectContext = {
           title: project.title,
@@ -237,7 +233,7 @@ export const getTaskData = internalQuery({
       args.mode === "resolve_conflicts"
         ? buildConflictResolutionPrompt(
             branchName,
-            resolveTaskWorkflowBaseBranch(task, repo, project ?? undefined),
+            resolveTaskWorkflowBaseBranch(task, repo),
             rootDirectory,
             repo.owner,
             repo.name,
@@ -343,11 +339,7 @@ export const getTaskPrCreationData = internalQuery({
       repoOwner: repo.owner,
       repoName: repo.name,
       branchName,
-      baseBranch: await resolveTaskWorkflowBaseBranchForTask(
-        ctx.db,
-        task,
-        repo,
-      ),
+      baseBranch: resolveTaskWorkflowBaseBranch(task, repo),
       taskTitle: task.title,
       taskDescription: task.description,
       rootDirectory: repo.rootDirectory ?? "",

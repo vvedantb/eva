@@ -256,6 +256,24 @@ export const roleUserValidator = v.union(
 );
 export type RoleUser = Infer<typeof roleUserValidator>;
 
+/**
+ * What a person may do in a project, derived from their Eva role
+ * (`projectRoleFor` in `@eva/shared`). A viewer reads and files feedback
+ * tasks; a contributor also chats, runs and edits.
+ */
+export const projectRoleValidator = v.union(
+  v.literal("contributor"),
+  v.literal("viewer"),
+);
+export type ProjectRole = Infer<typeof projectRoleValidator>;
+
+/**
+ * Where a task came from, when that changes how it shows or runs. Absent: a
+ * person or an agent made it. `feedback`: a project viewer filed it
+ * (`createFeedbackTask`). Add new origins to this union.
+ */
+export const taskOriginValidator = v.union(v.literal("feedback"));
+
 export const snapshotScheduleValidator = v.string();
 
 export const snapshotBuildStatusValidator = v.union(

@@ -15,8 +15,9 @@ import {
   buildProjectBranchName,
 } from "./helpers";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
-import { resolveProjectBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
+import { resolveNewTaskBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { createTaskRunSummary } from "../_agentTasks/runSummary";
+import { insertTaskDependencies } from "../_agentTasks/dependencies";
 
 /** Converts a finalized project spec into tasks with dependencies and sets the project to business_review. */
 export const startDevelopment = authMutation({
@@ -29,6 +30,7 @@ export const startDevelopment = authMutation({
       ctx.db,
       args.projectId,
       ctx.userId,
+      "contributor",
     );
     if (project.phase !== "finalized") {
       throw new Error("Project must be finalized before starting development");
@@ -39,8 +41,9 @@ export const startDevelopment = authMutation({
     }
     const spec = parseSpec(generatedSpec);
     const branchName = buildProjectBranchName(args.projectId);
-    const projectBaseBranch = resolveProjectBaseBranch(
-      project,
+    // Each child task opens its own PR to the repo default branch.
+    const taskBaseBranch = resolveNewTaskBaseBranch(
+      undefined,
       await ctx.db.get(project.repoId),
     );
     const taskIdMap = new Map<number, Id<"agentTasks">>();
@@ -59,28 +62,25 @@ export const startDevelopment = authMutation({
         createdAt: now,
         updatedAt: now,
         createdBy: ctx.userId,
-        baseBranch: projectBaseBranch,
+        baseBranch: taskBaseBranch,
         numId,
       });
       await createTaskRunSummary(ctx, taskId, project.repoId);
       await ensureSubscribed(ctx, taskId, ctx.userId);
       taskIdMap.set(taskNumber, taskId);
     }
-    for (let i = 0; i < spec.tasks.length; i++) {
-      const task = spec.tasks[i];
-      const taskNumber = i + 1;
-      const taskId = taskIdMap.get(taskNumber);
-      if (!taskId) continue;
-      for (const depNumber of task.dependencies) {
-        const depTaskId = taskIdMap.get(depNumber);
-        if (depTaskId) {
-          await ctx.db.insert("taskDependencies", {
-            taskId,
-            dependsOnId: depTaskId,
-          });
-        }
-      }
-    }
+    await insertTaskDependencies(
+      ctx,
+      spec.tasks.flatMap((task, i) => {
+        const taskId = taskIdMap.get(i + 1);
+        return taskId === undefined
+          ? []
+          : task.dependencies.flatMap((depNumber) => {
+              const dependsOnId = taskIdMap.get(depNumber);
+              return dependsOnId === undefined ? [] : [{ taskId, dependsOnId }];
+            });
+      }),
+    );
     await ctx.db.patch(args.projectId, {
       phase: "business_review",
       branchName,

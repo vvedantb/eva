@@ -7,7 +7,10 @@ import { cancelScheduledFunction } from "../_scheduling/helpers";
 import { findOwnedSession } from "../_sessions/owner";
 
 /**
- * A project's build (`projects.build`), one field instead of three:
+ * A project's build (`projects.build`), one field instead of three. Since
+ * the project scheduler (`_projects/scheduler.ts`) only the scheduled part is
+ * written: a build at a set time approves and schedules the project's tasks.
+ * `running` is read for build workflows started before it, until they end.
  *
  *   idle ──schedule / scheduleRetry──▶ scheduled ──fire──▶ idle ──start──▶ running ──finish──▶ idle
  *   scheduled ──cancelSchedule──▶ idle
@@ -236,22 +239,6 @@ export async function fireProjectBuildSchedule(
     at,
     now: Date.now(),
   });
-}
-
-/**
- * The build workflow started. Callers check `isProjectBuilding` before they
- * start it, so a rejection throws and rolls the start back.
- */
-export async function markProjectBuildStarted(
-  ctx: MutationCtx,
-  projectId: Id<"projects">,
-  workflowId: string,
-): Promise<void> {
-  const result = await applyProjectBuildEvent(ctx, projectId, {
-    type: "start",
-    workflowId,
-  });
-  if (!result.ok) throw new Error(result.reason);
 }
 
 /**

@@ -12,23 +12,59 @@ import { setTaskLastRunStartedAt } from "../_agentTasks/runSummary";
 import { markTaskRunStarted } from "../_agentTasks/runState";
 import type { taskExecutionWorkflowArgs } from "./workflowDefinition";
 import { ensureWorkSession, ownedSessionBusy } from "../_sessions/ownedSession";
-import { workSessionOwner } from "../_sessions/owner";
 import { TASK_CHAT_BUSY_ERROR } from "./recovery";
 
 /**
- * True while the session a task works on (its own, or its project's) holds
- * its sandbox for a chat turn, a run, a build or a start/stop. A run waits
- * then, as a chat message waits behind a run.
+ * True while the task's own session holds its sandbox for a chat turn, a run
+ * or a start/stop. A run waits then, as a chat message waits behind a run.
  */
 export async function taskWorkSessionBusy(
   db: MutationCtx["db"],
-  task: Pick<Doc<"agentTasks">, "_id" | "projectId">,
+  task: Pick<Doc<"agentTasks">, "_id">,
 ): Promise<boolean> {
-  return await ownedSessionBusy(db, workSessionOwner(task));
+  return await ownedSessionBusy(db, { kind: "task", taskId: task._id });
+}
+
+/** The task's newest run, or null before its first. */
+export async function latestTaskRun(
+  db: MutationCtx["db"],
+  taskId: Id<"agentTasks">,
+): Promise<Doc<"agentRuns"> | null> {
+  return await db
+    .query("agentRuns")
+    .withIndex("by_task", (q) => q.eq("taskId", taskId))
+    .order("desc")
+    .first();
 }
 
 /**
- * The one way to start a quick-task or project-task run. Queues an
+ * A project's child task runs on the project's model and account
+ * (`projects.model`, `projects.providerAccountId`; none is the team
+ * credential), copied when the task starts: on its first run, and again after
+ * a usage limit stopped it, so a changed project account takes over. A
+ * running task keeps its copy, and a later pick in the task's own selector
+ * stays the task's. Returns the task as the run sees it.
+ */
+async function adoptProjectRunSettings(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+): Promise<Doc<"agentTasks">> {
+  if (task.projectId === undefined) return task;
+  const latest = await latestTaskRun(ctx.db, task._id);
+  if (latest !== null && latest.errorType !== "rate_limit") return task;
+  const project = await ctx.db.get(task.projectId);
+  if (!project) return task;
+  const settings = {
+    model: project.model ?? task.model,
+    providerAccountId: project.providerAccountId,
+  };
+  await ctx.db.patch(task._id, settings);
+  return { ...task, ...settings };
+}
+
+/**
+ * The one way to start a task run (a quick task or a project's child task,
+ * each on its own session, branch and PR). Queues an
  * `agentRuns` row, stamps the task's run summary, moves the task to
  * `in_progress` and starts `taskExecutionWorkflow`. A failed start marks the
  * run `workflow_start_failed`, rolls the task back to `rollbackStatus` and
@@ -43,28 +79,20 @@ export async function startTaskRun(
     userId: Id<"users">;
     baseBranch: string;
     isFirstTaskOnBranch: boolean;
-    branchName?: string;
-    projectId?: Id<"projects">;
     mode?: Doc<"agentRuns">["mode"];
     triggeredBy?: Id<"users">;
     triggeringCommentId?: Id<"taskComments">;
     clearPendingChangeRequest: boolean;
     rollbackStatus: Doc<"agentTasks">["status"];
-    /**
-     * A project build's task. The build holds the project's session for its
-     * whole run (chat queues behind it, `sessionChatHasFreeSlot`), and the
-     * previous task's run turn may still be closing, so the busy gate is the
-     * build's own (`startBuild`), not this one.
-     */
-    heldByBuild?: boolean;
   },
 ): Promise<Id<"agentRuns">> {
-  const { task, repo } = p;
+  const { repo } = p;
   // One agent per sandbox: a run waits while its session's chat is mid-reply,
   // as a chat message waits behind a run.
-  if (p.heldByBuild !== true && (await taskWorkSessionBusy(ctx.db, task))) {
+  if (await taskWorkSessionBusy(ctx.db, p.task)) {
     throw new Error(TASK_CHAT_BUSY_ERROR);
   }
+  const task = await adoptProjectRunSettings(ctx, p.task);
   const startedAt = Date.now();
   const runId = await ctx.db.insert("agentRuns", {
     taskId: task._id,
@@ -89,9 +117,8 @@ export async function startTaskRun(
       ? { pendingChangeRequestCommentId: undefined }
       : {}),
   });
-  // A quick task runs on its own session's sandbox, a project task on its
-  // project's. Looked up (or created) here so the run's turn and sandbox
-  // writes land on that one session.
+  // A task runs on its own session's sandbox. Looked up (or created) here so
+  // the run's turn and sandbox writes land on that one session.
   const ownedSession = (await ensureWorkSession(ctx, { kind: "task", task }))
     .session;
   try {
@@ -99,10 +126,10 @@ export async function startTaskRun(
       runId,
       taskId: task._id,
       repoId: repo._id,
+      // The task's own repo's GitHub App installation, never a project's.
       installationId: repo.installationId,
-      projectId: p.projectId,
+      projectId: task.projectId,
       ownedSessionId: ownedSession._id,
-      branchName: p.branchName,
       baseBranch: p.baseBranch,
       isFirstTaskOnBranch: p.isFirstTaskOnBranch,
       model: task.model ?? repo.defaultModel,
@@ -134,7 +161,7 @@ export async function startTaskRun(
  * records the workflow on the task. A failed start closes the turn and
  * rethrows, so `startTaskRun` can roll back.
  *
- * A quick task's run turn is filed under its session (`sessionId`): the
+ * A task's run turn is filed under its session (`sessionId`): the
  * session's chats then see it as their busy gate, so a chat message sent
  * mid-run queues behind the run (`sessionChatHasFreeSlot`), and the run's
  * end drains that queue (`closeTurn`). The turn stays keyed on the run, so

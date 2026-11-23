@@ -124,7 +124,12 @@ export const update = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await getProjectWithAccess(ctx.db, args.id, ctx.userId);
+    const project = await getProjectWithAccess(
+      ctx.db,
+      args.id,
+      ctx.userId,
+      "contributor",
+    );
     // `id` must be omitted — leaving it in the rest-spread patches a stray
     // `id` field onto the document and breaks projects:list return validation.
     const {
@@ -230,7 +235,7 @@ export const addMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
+    await getProjectWithAccess(ctx.db, args.id, ctx.userId, "contributor");
     const conversation = await getProjectConversation(ctx.db, args.id);
     await setProjectConversation(ctx.db, args.id, [
       ...conversation,
@@ -250,7 +255,7 @@ export const remove = authMutation({
   args: { id: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
+    await getProjectWithAccess(ctx.db, args.id, ctx.userId, "contributor");
     await ctx.db.patch(args.id, { deletedAt: Date.now() });
     await syncProjectSession(ctx, args.id);
     return null;
@@ -262,7 +267,7 @@ export const deleteCascade = authMutation({
   args: { id: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
+    await getProjectWithAccess(ctx.db, args.id, ctx.userId, "contributor");
     const tasks = await ctx.db
       .query("agentTasks")
       .withIndex("by_project", (q) => q.eq("projectId", args.id))
@@ -281,7 +286,7 @@ export const clearMessages = authMutation({
   args: { id: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
+    await getProjectWithAccess(ctx.db, args.id, ctx.userId, "contributor");
     await setProjectConversation(ctx.db, args.id, []);
     return null;
   },
@@ -296,7 +301,7 @@ export const updateLastConversationMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
+    await getProjectWithAccess(ctx.db, args.id, ctx.userId, "contributor");
     const messages = [...(await getProjectConversation(ctx.db, args.id))];
     const last = messages[messages.length - 1];
     if (!last) return null;

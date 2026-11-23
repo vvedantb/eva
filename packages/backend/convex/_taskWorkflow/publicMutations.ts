@@ -2,7 +2,11 @@ import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { cancelTrackedWorkflow, toWorkflowId } from "../workflowManager";
-import { authMutation, getActiveTaskRun } from "../functions";
+import {
+  authMutation,
+  getActiveTaskRun,
+  recomputeProjectPhase,
+} from "../functions";
 import {
   advanceTurn,
   closeOpenTurn,
@@ -198,14 +202,11 @@ export async function cancelTaskRun(
 
     // workflow.cancel() aborts execution before the workflow's own sandbox
     // cleanup step runs, so we stop the execution sandbox here.
-    // A run borrowed its session's sandbox (a project task's: the project's):
-    // fail the start it claimed (or finish the VM it attached) through the
-    // session lifecycle. A project's VM stays up for its chat and builds.
+    // A run borrowed its own session's sandbox: fail the start it claimed (or
+    // finish the VM it attached) through the session lifecycle.
     const session = await findWorkSession(ctx.db, task);
     if (session) {
-      await abandonTaskRunSandbox(ctx, session._id, run, {
-        keepActive: task.projectId !== undefined,
-      });
+      await abandonTaskRunSandbox(ctx, session._id, run);
     } else if (run.sandboxId && run.repoId) {
       await ctx.scheduler.runAfter(0, internal.sandbox.stopSandbox, {
         sandboxId: run.sandboxId,
@@ -222,5 +223,10 @@ export async function cancelTaskRun(
     updatedAt: Date.now(),
   });
   await finishTaskRun(ctx, task._id, undefined);
+  // The task left `in_progress`: its project may start the next ones (the
+  // stopped task itself waits for a person).
+  if (task.projectId !== undefined) {
+    await recomputeProjectPhase(ctx, task.projectId);
+  }
 }
 

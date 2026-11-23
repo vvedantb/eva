@@ -11,7 +11,7 @@ import {
 import { allocateNumId } from "./numId";
 import { ensureSubscribed } from "./taskSubscribers";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
-import { resolveTaskWorkflowBaseBranchForTask } from "./_taskWorkflow/resolveBaseBranch";
+import { resolveTaskWorkflowBaseBranch } from "./_taskWorkflow/resolveBaseBranch";
 import { createTaskRunSummary } from "./_agentTasks/runSummary";
 
 const reportValidator = v.object({
@@ -164,11 +164,7 @@ export const autoStartTask = internalMutation({
         task,
         repo,
         userId: args.userId,
-        baseBranch: await resolveTaskWorkflowBaseBranchForTask(
-          ctx.db,
-          task,
-          repo,
-        ),
+        baseBranch: resolveTaskWorkflowBaseBranch(task, repo),
         isFirstTaskOnBranch: true,
         clearPendingChangeRequest: false,
         rollbackStatus: "todo",

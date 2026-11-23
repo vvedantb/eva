@@ -5,7 +5,10 @@ import type {
   GenericDatabaseWriter,
 } from "convex/server";
 import { projectFields, conversationMessageValidator } from "../validators";
-import { sessionStatusValidator } from "../_validators/enums";
+import {
+  projectRoleValidator,
+  sessionStatusValidator,
+} from "../_validators/enums";
 import type { DataModel, Id, Doc } from "../_generated/dataModel";
 
 type ConversationMessage = Doc<"projectDetails">["conversationHistory"][number];
@@ -25,11 +28,14 @@ export const projectWithDetailsValidator = v.object({
    * supported APK reads it.
    */
   activeWorkflowId: v.optional(v.string()),
+  /** The caller's role in this project (`getProjectRole`): what the UI lets them do. */
+  callerRole: projectRoleValidator,
 });
 
 const {
   conversationHistory: _ch,
   generatedSpec: _gs,
+  callerRole: _cr,
   ...projectSummaryFields
 } = projectWithDetailsValidator.fields;
 /** Convex validator for a project summary (excludes conversation history and generated spec). */

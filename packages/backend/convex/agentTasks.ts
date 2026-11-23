@@ -17,6 +17,7 @@ export {
   restore,
   removeAttachment,
   createQuickTask,
+  createFeedbackTask,
   createQuickTasksBatch,
   assignToProject,
   reorderProjectTasks,

@@ -8,13 +8,8 @@ import {
   recomputeProjectPhase,
 } from "../functions";
 import { RUN_TIMEOUT_MS } from "../workflowWatchdog";
-import { buildTaskDoneEvent } from "./events";
 import { closeOpenTurn } from "../_chat/turnStore";
 import { isUsageLimitError, parseUsageLimitResetTime } from "./recovery";
-import {
-  projectBuildWorkflowId,
-  scheduleProjectBuild,
-} from "../_projects/buildState";
 import { finishTaskRun, scheduleTaskRun } from "../_agentTasks/runState";
 import {
   clearTaskRunStreaming,
@@ -23,7 +18,6 @@ import {
   upsertActivityLog,
   finalizeRunStatus,
   recordRunPullRequest,
-  sendCompletionEvent,
 } from "./helpers";
 
 /**
@@ -194,7 +188,7 @@ export const scheduleDeploymentTracking = internalMutation({
   },
 });
 
-/** Completes a run: finalizes status, updates task, sends notifications, and signals build workflow. */
+/** Completes a run: finalizes status, updates the task, and lets its project schedule the next tasks. */
 export const completeRun = internalMutation({
   args: {
     runId: v.id("agentRuns"),
@@ -215,7 +209,6 @@ export const completeRun = internalMutation({
 
     await finalizeRunStatus(ctx, {
       runId: args.runId,
-      projectId: args.projectId,
       success: args.success,
       error: args.error,
       prError: args.prError,
@@ -249,6 +242,7 @@ export const completeRun = internalMutation({
       // reach here. Guarded by `staleCompletion`, so a queued or superseding
       // run keeps its own state.
       await finishTaskRun(ctx, args.taskId, args.runId);
+      // Also schedules the project's next ready tasks (`scheduleReadyTasks`).
       if (task.projectId) {
         await recomputeProjectPhase(ctx, task.projectId);
       }
@@ -264,13 +258,13 @@ export const completeRun = internalMutation({
       const resetAt = parseUsageLimitResetTime(args.error);
       if (resetAt && resetAt > Date.now()) {
         if (task?.projectId) {
-          // Project task: schedule the build to retry at the reset time,
-          // unless a build is already scheduled.
-          await scheduleProjectBuild(
-            ctx,
-            task.projectId,
-            "scheduleRetry",
+          // Project task: the project's scheduler starts nothing while its
+          // account is at the limit, and looks again at the reset time (or
+          // sooner, when a person changes the project's account).
+          await ctx.scheduler.runAt(
             resetAt,
+            internal.buildWorkflow.scheduleReadyTasks,
+            { projectId: task.projectId },
           );
         } else if (task) {
           // Quick task: retry at the reset time, unless a schedule or a
@@ -288,20 +282,6 @@ export const completeRun = internalMutation({
           }
         }
       }
-    }
-
-    const project = args.projectId ? await ctx.db.get(args.projectId) : null;
-    const buildWorkflowId = project && projectBuildWorkflowId(project);
-    if (buildWorkflowId && !staleCompletion) {
-      await sendCompletionEvent(
-        ctx,
-        buildTaskDoneEvent,
-        buildWorkflowId,
-        {
-          taskId: args.taskId,
-          success: args.success,
-        },
-      );
     }
 
     return null;

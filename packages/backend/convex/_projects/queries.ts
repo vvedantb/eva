@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { findLivePullRequestOnBranch } from "../_pullRequests/store";
-import { authQuery, hasRepoAccess } from "../functions";
+import { authQuery, getProjectRole, hasRepoAccess } from "../functions";
 import { internalQuery } from "../_generated/server";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { sessionStatusValidator } from "../_validators/enums";
@@ -33,10 +33,15 @@ import {
 async function buildProjectWithDetails(
   db: GenericDatabaseReader<DataModel>,
   project: Doc<"projects">,
+  userId: Id<"users">,
 ) {
-  const details = await getProjectDetails(db, project._id);
+  const [details, callerRole] = await Promise.all([
+    getProjectDetails(db, project._id),
+    getProjectRole(db, project, userId),
+  ]);
   return {
     ...project,
+    callerRole,
     conversationHistory: details?.conversationHistory ?? [],
     ...(details?.generatedSpec !== undefined
       ? { generatedSpec: details.generatedSpec }
@@ -111,7 +116,7 @@ export const get = authQuery({
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) return null;
     const visible = entityVisible(project);
     if (!visible) return null;
-    return await buildProjectWithDetails(ctx.db, visible);
+    return await buildProjectWithDetails(ctx.db, visible, ctx.userId);
   },
 });
 
@@ -132,7 +137,7 @@ export const getByNumId = authQuery({
       .first();
     const visible = entityVisible(project);
     if (!visible) return null;
-    return await buildProjectWithDetails(ctx.db, visible);
+    return await buildProjectWithDetails(ctx.db, visible, ctx.userId);
   },
 });
 

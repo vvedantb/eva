@@ -159,8 +159,8 @@ async function openTaskPr(
 }
 
 /**
- * Opens a quick task's PR after its sandbox chat pushed commits to the task
- * branch. Without it, a task worked on only through chat never got a PR: only
+ * Opens a task's PR (a quick task's or a project child task's) after its
+ * sandbox chat pushed commits to the task branch. Without it, a task worked on only through chat never got a PR: only
  * a task run opened one. Skips a cancelled task (its PRs stay closed) and a
  * branch that already has a live PR. The PR is ready in code_review and draft
  * otherwise, the same mapping the status-change sync applies.
@@ -173,7 +173,7 @@ export const ensureTaskChatPr = internalAction({
       internal.taskWorkflow.getTaskPrCreationData,
       { taskId: args.taskId },
     );
-    if (!data.isQuickTask || data.taskStatus === "cancelled") return null;
+    if (data.taskStatus === "cancelled") return null;
     try {
       await openTaskPr(
         ctx,

@@ -14,6 +14,7 @@ import {
   hasRepoAccess,
   hasTaskAccess,
   isTaskVisibleTo,
+  listProjectTasksForUser,
 } from "../functions";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { agentTaskValidator } from "./helpers";
@@ -50,7 +51,35 @@ export const agentTaskWithLastRunValidator = v.object({
   hasUnread: v.boolean(),
   /** A chat turn is paused on a blocking question for the user. */
   isAwaitingAnswer: v.boolean(),
+  /**
+   * A project task in a repo the caller cannot access (`listByProject`): only
+   * its number, status and PR state are kept, so project status still counts
+   * it. The title is empty.
+   */
+  locked: v.optional(v.boolean()),
 });
+
+/** A locked `listByProject` row: what derived project status needs, nothing more. */
+function lockedTaskRow(
+  task: Doc<"agentTasks">,
+): Infer<typeof agentTaskWithLastRunValidator> {
+  return {
+    _id: task._id,
+    _creationTime: task._creationTime,
+    title: "",
+    status: task.status,
+    projectId: task.projectId,
+    taskNumber: task.taskNumber,
+    prState: task.prState,
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+    createdBy: task.createdBy,
+    isExecuting: false,
+    hasUnread: false,
+    isAwaitingAnswer: false,
+    locked: true,
+  };
+}
 
 function repoIdsOf(
   tasks: ReadonlyArray<Doc<"agentTasks">>,
@@ -200,7 +229,11 @@ async function enrichTasksWithLastRun(
   );
 }
 
-/** Lists all tasks for a project, enriched with latest run time. */
+/**
+ * Lists all tasks for a project in `taskNumber` order, enriched with latest
+ * run time. A task in a repo the caller cannot access is a locked row
+ * (`lockedTaskRow`).
+ */
 export const listByProject = authQuery({
   args: { projectId: v.id("projects") },
   returns: v.array(agentTaskWithLastRunValidator),
@@ -208,16 +241,22 @@ export const listByProject = authQuery({
     const project = await ctx.db.get(args.projectId);
     if (!project || !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId)))
       return [];
-    const tasks = filterActiveEntities(
-      await ctx.db
-        .query("agentTasks")
-        .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-        .collect(),
-    ).filter((task) => isTaskVisibleTo(task, ctx.userId));
-    const sorted = tasks.sort(
-      (a, b) => (a.taskNumber ?? 0) - (b.taskNumber ?? 0),
+    const rows = (
+      await listProjectTasksForUser(ctx.db, args.projectId, ctx.userId)
+    ).sort((a, b) => (a.task.taskNumber ?? 0) - (b.task.taskNumber ?? 0));
+    const enriched = await enrichTasksWithLastRun(
+      ctx.db,
+      ctx.userId,
+      rows.filter((row) => row.canAccess).map((row) => row.task),
     );
-    return enrichTasksWithLastRun(ctx.db, ctx.userId, sorted);
+    const enrichedById = new Map(enriched.map((row) => [String(row._id), row]));
+    return rows.flatMap<Infer<typeof agentTaskWithLastRunValidator>>(
+      ({ task, canAccess }) => {
+        if (!canAccess) return [lockedTaskRow(task)];
+        const row = enrichedById.get(String(task._id));
+        return row ? [row] : [];
+      },
+    );
   },
 });
 

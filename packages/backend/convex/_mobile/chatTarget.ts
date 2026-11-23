@@ -82,8 +82,8 @@ export const mobileChatValidator = v.object({
   /** The branch Eva booted the sandbox on, when the chat has one; a different `sandboxBranch` is hinted. */
   intendedBranch: v.optional(v.string()),
   /**
-   * The chat's pull request, as the web Review pane reads it (a task in a
-   * project uses the project's, as `taskPrUrl`). The phone diff screen passes
+   * The chat's pull request, as the web Review pane reads it (a task's own,
+   * also in a project). The phone diff screen passes
    * it to `github.getPrDiff`; absent before a PR is open.
    */
   prUrl: v.optional(v.string()),
@@ -199,9 +199,8 @@ export async function resolveMobileChat(
       project?.numId !== undefined
         ? `${base}/projects/${project.numId}/${task.numId ?? ""}/activity`
         : entityHref("task", repo, task.numId);
-    // A task chats in its session chat (a quick task's Main chat, a project
-    // task's own chat in the project's session). Shown as the task (title,
-    // link, PR); read, sent and stopped as that session chat. A task with no
+    // A task chats in the Main chat of its own session (also in a project).
+    // Shown as the task (title, link, PR); read, sent and stopped as that session chat. A task with no
     // session chat yet resolves as below until its first send creates one.
     const [owned, seed] = await Promise.all([
       findWorkChat(db, { kind: "task", task }),
@@ -229,14 +228,13 @@ export async function resolveMobileChat(
           sandboxActive: ownedSandboxActive,
           sandboxBranch: ownedSandboxActive ? session.sandboxBranch : undefined,
           intendedBranch: session.branchName,
-          prUrl: task.projectId === undefined ? task.prUrl : project?.prUrl,
+          prUrl: task.prUrl,
           webPath: taskWebPath,
         },
       };
     }
     // No chat yet: the first send creates it (`ensureOwnerChat`). Nothing
-    // hangs off the task id. A project task may already work on its
-    // project's running session.
+    // hangs off the task id.
     const workSession = await findWorkSession(db, task);
     const workSandboxActive = workSession?.status === "active";
     return {
@@ -257,7 +255,7 @@ export async function resolveMobileChat(
         traits: seed.traits,
         sandboxActive: workSandboxActive,
         sandboxBranch: workSandboxActive ? workSession?.sandboxBranch : undefined,
-        prUrl: task.projectId === undefined ? task.prUrl : project?.prUrl,
+        prUrl: task.prUrl,
         webPath: taskWebPath,
       },
     };

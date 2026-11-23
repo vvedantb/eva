@@ -532,9 +532,7 @@ export async function resolvePrOwnerFromBranch(
     const task = taskId ? await db.get(taskId) : null;
     if (!task || task.repoId === undefined) return null;
     if (!(await repoMatches(db, task.repoId, repo))) return null;
-    // A project task works on the project branch; its own branch name is
-    // never pushed, so a task id always means a quick task here.
-    if (task.projectId !== undefined) return null;
+    // Every task (a quick task or a project's child task) owns its branch.
     return {
       owner: { kind: "task", taskId: task._id },
       repoId: task.repoId,
@@ -575,11 +573,13 @@ export function sessionRepoPullRequest(
     : (forRepo.find((row) => row.origin === "eva") ?? forRepo[0]);
 }
 
-/** The owning project's or quick task's PR summary for a task. */
+/**
+ * A task's own PR summary. Every task owns its PR; an old project task's PR
+ * on the project branch stays with the project (`projects.prUrl`).
+ */
 export async function taskPrUrl(
-  db: DatabaseReader,
+  _db: DatabaseReader,
   task: Doc<"agentTasks">,
 ): Promise<string | undefined> {
-  if (task.projectId === undefined) return task.prUrl;
-  return (await db.get(task.projectId))?.prUrl;
+  return task.prUrl;
 }

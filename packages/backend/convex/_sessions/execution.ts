@@ -6,7 +6,12 @@ import {
   type MutationCtx,
 } from "../_generated/server";
 import { workflow } from "../workflowManager";
-import { authAction, authMutation, hasRepoAccess } from "../functions";
+import {
+  assertCanDrive,
+  authAction,
+  authMutation,
+  hasRepoAccess,
+} from "../functions";
 import {
   aiModelValidator,
   launchTraitsFromStored,
@@ -29,6 +34,7 @@ import {
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
 import { selectUsageLimitRetryUserMessage } from "./resultTarget";
+import { sessionOwner } from "./owner";
 import type { Doc, Id } from "../_generated/dataModel";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
@@ -44,6 +50,7 @@ import {
 import { emptyStallRetryPrompt } from "../_chat/stallRetry";
 import {
   getSessionChatOrThrow,
+  getSessionChatWithAccess,
   listLiveSessionChats,
   loadSessionChat,
   sessionChatHasFreeSlot,
@@ -318,10 +325,12 @@ export const retryLastTurnWithAccount = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const context = await getSessionChatOrThrow(ctx.db, args.chatId);
+    const context = await getSessionChatWithAccess(
+      ctx.db,
+      args.chatId,
+      ctx.userId,
+    );
     const { chat, session } = context;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
-      throw new Error("Not authorized");
     if (
       (await hasOpenChatTurn(ctx.db, chat._id)) ||
       chat.pendingTurn !== undefined
@@ -390,10 +399,12 @@ export const startExecute = authMutation({
   },
   returns: v.union(v.literal("started"), v.literal("queued")),
   handler: async (ctx, args) => {
-    const context = await getSessionChatOrThrow(ctx.db, args.chatId);
+    const context = await getSessionChatWithAccess(
+      ctx.db,
+      args.chatId,
+      ctx.userId,
+    );
     const { chat, session } = context;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
-      throw new Error("Not authorized");
     if (chat.archived === true) throw new Error("This chat is closed");
     await touchUserActivity(ctx, sessionActivityRef(session), {
       source: "chat",
@@ -622,9 +633,11 @@ export const enqueueMessage = authMutation({
     if (!content) return null;
     const displayContent = args.displayContent?.trim();
 
-    const context = await getSessionChatOrThrow(ctx.db, args.chatId);
-    if (!(await hasRepoAccess(ctx.db, context.session.repoId, ctx.userId)))
-      throw new Error("Not authorized");
+    const context = await getSessionChatWithAccess(
+      ctx.db,
+      args.chatId,
+      ctx.userId,
+    );
 
     const {
       chatId,
@@ -744,6 +757,7 @@ export const cancelSessionExecution = authMutation({
     if (!session) throw new Error("Session not found");
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
+    await assertCanDrive(ctx.db, sessionOwner(session), ctx.userId);
     for (const chat of await listLiveSessionChats(ctx.db, session._id)) {
       await cancelChatExecution(ctx, { chat, session }, { holdQueue: true });
     }

@@ -11,6 +11,7 @@ import {
   chatSourceArgValidator,
   chatSourceFieldsForEntityId,
   chatSourceSummaryValidator,
+  listRowsForChatRollUp,
   listRowsForChatSource,
   repoIdForSource,
   resolveChatSource,
@@ -63,12 +64,18 @@ function clip(text: string, limit: number): string {
     : `${trimmed.slice(0, limit - 1)}…`;
 }
 
-/** Oldest first, each row stamped with the newer entry that replaced it. */
+/** One chat's entries, oldest first, stamped (`stampSupersededBy`). */
 async function loadRows(
   ctx: QueryCtx,
   source: ChatSourceArg,
 ): Promise<ChatLogRow[]> {
-  const rows = await listRowsForChatSource(ctx, "chatLogEntries", source);
+  return stampSupersededBy(
+    await listRowsForChatSource(ctx, "chatLogEntries", source),
+  );
+}
+
+/** Oldest first, each row stamped with the newer entry that replaced it. */
+function stampSupersededBy(rows: Doc<"chatLogEntries">[]): ChatLogRow[] {
   // _creationTime, not createdAt: two entries in one millisecond keep order.
   rows.sort((a, b) => a._creationTime - b._creationTime);
   const replacedBy = new Map<string, Id<"chatLogEntries">>();
@@ -204,13 +211,18 @@ export const listForRepo = authQuery({
   },
 });
 
-/** Every entry for one chat, oldest first. */
+/**
+ * Every entry for one chat, oldest first. A project's Log rolls up its child
+ * tasks' entries (`listRowsForChatRollUp`); `sourceTaskId` names the task.
+ */
 export const listForSource = authQuery({
   args: { source: chatSourceArgValidator },
   returns: v.array(chatLogRowValidator),
   handler: async (ctx, args) => {
     if (!(await callerCanSeeChatSource(ctx, args.source))) return [];
-    return loadRows(ctx, args.source);
+    return stampSupersededBy(
+      await listRowsForChatRollUp(ctx, "chatLogEntries", args.source),
+    );
   },
 });
 
