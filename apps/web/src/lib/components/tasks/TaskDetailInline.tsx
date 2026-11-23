@@ -479,6 +479,7 @@ export function TaskDetailInline({
                       taskActivity={taskActivity}
                       users={users}
                       isProjectTask={isProjectTask}
+                      canComment={!isProjectViewer}
                     />
                   </div>
                 </div>

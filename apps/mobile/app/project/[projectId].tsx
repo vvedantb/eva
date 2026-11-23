@@ -26,9 +26,6 @@ import { HeaderMoreButton } from "@/ui/HeaderRail";
 
 type Tab = "overview" | "work";
 
-/** The web phases with a project sandbox, and so the project chat (`useProjectSandbox`). */
-const SANDBOX_PHASES = ["in_progress", "business_review", "code_review"];
-
 /**
  * One project, as the web project page (`ProjectDetailClient`) on a phone:
  * the header (back, the title, the web "…" project menu as a sheet), the
@@ -36,13 +33,13 @@ const SANDBOX_PHASES = ["in_progress", "business_review", "code_review"];
  * (no history), and the tab below. An older project still in planning with
  * an interview or a plan shows "Plan" in place of Tasks; a new project has
  * no planning step. The web Sandbox tab's coordinator chat is the phone
- * chat screen (`/chat/<projectId>`): "Chat" in the bottom bar opens it, in
- * the phases the web shows the Sandbox tab, with the web unread dot. A
+ * chat screen (`/chat/<projectId>`): "Chat" in the bottom bar opens it, with
+ * the web unread dot; a project has no closed state, so it always shows. A
  * contributor gets "Build" (the web "Build Project", with its "Run Eva"
  * confirm) or, while a build runs, "Stop Build" (with the web stop
  * confirm) beside it in thumb reach, with the web's build schedule as a
- * calendar square, and the "…" sheet, led by the web's sandbox and git
- * actions (`useProjectGitActions`). A viewer (`callerRole`) gets
+ * calendar square, and the "…" sheet, led by the web's sandbox actions
+ * (`useProjectGitActions`). A viewer (`callerRole`) gets
  * "Feedback" in their place, as the web header. Not here from the web: the
  * sandbox preview, files and review panes.
  */
@@ -59,7 +56,7 @@ export default function ProjectScreen() {
   const project = useQuery(api.projects.get, listed ? { id: listed._id } : "skip");
   const users = useQuery(api.users.listAll, {});
   const tab: Tab = params.tab === "overview" ? "overview" : "work";
-  // The web page's sandbox and git actions, leading the "…" sheet.
+  // The web page's sandbox actions, leading the "…" sheet.
   const git = useProjectGitActions(project);
   const actions = useProjectActions({ repo: repo ?? EMPTY_REPO, users, onDeleted: leave, extraRows: git.rows });
 
@@ -196,10 +193,8 @@ function ProjectDock({ project, canContribute, onFeedback }: { project: Project;
   const cancelBuild = useMutation(api.buildWorkflow.cancelBuild);
   const [confirm, setConfirm] = useState<"build" | "stop" | null>(null);
   const [busy, setBusy] = useState(false);
-  const showChat = SANDBOX_PHASES.includes(project.phase);
   const canBuild = canContribute && BUILDABLE_PROJECT_PHASES.includes(project.phase);
   const building = isProjectBuilding(project);
-  if (!showChat && !canBuild && canContribute) return null;
 
   const run = async (action: () => Promise<unknown>, success: string | undefined, failure: string) => {
     setBusy(true);
@@ -214,21 +209,19 @@ function ProjectDock({ project, canContribute, onFeedback }: { project: Project;
 
   return (
     <View className="flex-row gap-2 px-4 pt-2" style={{ paddingBottom: insets.bottom + 12 }}>
-      {showChat ? (
-        <View className="min-w-0 flex-1">
-          <Button
-            variant="secondary"
-            accessibilityLabel={unread ? "Chat, unread reply" : "Chat"}
-            leftIcon={<IconMessage size={16} color={theme.secondaryForeground} />}
-            onPress={() => router.push({ pathname: "/chat/[target]", params: { target: project._id } })}
-          >
-            Chat
-          </Button>
-          {unread ? (
-            <View pointerEvents="none" className="absolute right-3 top-3 size-1.5 rounded-full" style={{ backgroundColor: theme.primary }} />
-          ) : null}
-        </View>
-      ) : null}
+      <View className="min-w-0 flex-1">
+        <Button
+          variant="secondary"
+          accessibilityLabel={unread ? "Chat, unread reply" : "Chat"}
+          leftIcon={<IconMessage size={16} color={theme.secondaryForeground} />}
+          onPress={() => router.push({ pathname: "/chat/[target]", params: { target: project._id } })}
+        >
+          Chat
+        </Button>
+        {unread ? (
+          <View pointerEvents="none" className="absolute right-3 top-3 size-1.5 rounded-full" style={{ backgroundColor: theme.primary }} />
+        ) : null}
+      </View>
       {!canContribute ? (
         // The web header's viewer "Feedback": a viewer's one write action in a project.
         <View className="min-w-0 flex-1">

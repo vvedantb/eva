@@ -100,7 +100,8 @@ export function TaskActivity({
   users: User[] | undefined;
   reactionsFor: ReactionsFor;
   currentUserId: Id<"users"> | null | undefined;
-  onReply: (comment: TaskComment) => void;
+  /** Absent for a project viewer (decision 12): no Reply. */
+  onReply: ((comment: TaskComment) => void) | undefined;
   onEdit: (comment: TaskComment) => void;
   onDelete: (id: Id<"taskComments">) => void;
 }) {
@@ -178,7 +179,7 @@ export function TaskActivity({
           groups={menuReactions.groups}
           onToggleReaction={menuReactions.toggle}
           onMoreReactions={() => setPickingFor(menuFor)}
-          onReply={() => onReply(menuFor)}
+          onReply={onReply ? () => onReply(menuFor) : undefined}
           onEdit={ownComment ? () => onEdit(menuFor) : undefined}
           copyText={mentionTokensToEditableText(menuFor.content)}
           onDelete={ownComment ? () => setDeleting(menuFor) : undefined}

@@ -1,6 +1,9 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader } from "../_generated/server";
-import { sessionOwnerTaskId } from "../_sessions/owner";
+import {
+  sessionOwnerProjectId,
+  sessionOwnerTaskId,
+} from "../_sessions/owner";
 
 /**
  * Decision 20: a project's coordinator and every child task run on the
@@ -104,4 +107,19 @@ export async function sessionAccountHolder(
   const project =
     task?.projectId !== undefined ? await db.get(task.projectId) : null;
   return accountHolder(project, providerAccountId, fallback);
+}
+
+/**
+ * The project a session works for: a coordinator's own project, or a child
+ * task's project. Null for a quick task's or a standalone session.
+ */
+export async function sessionProject(
+  db: DatabaseReader,
+  session: Pick<Doc<"sessions">, "owner">,
+): Promise<Doc<"projects"> | null> {
+  const projectId = sessionOwnerProjectId(session);
+  if (projectId !== undefined) return await db.get(projectId);
+  const taskId = sessionOwnerTaskId(session);
+  const task = taskId !== undefined ? await db.get(taskId) : null;
+  return task?.projectId !== undefined ? await db.get(task.projectId) : null;
 }

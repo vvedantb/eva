@@ -75,10 +75,15 @@ export const COORDINATOR_PAUSED_LABEL = "Coordinator paused";
 
 /**
  * The coordinator chat's one-line notice while the hourly cap holds its
- * wake-ups back. A person's message releases them.
+ * wake-ups back. A person's message releases them, so the line asks for one
+ * only from someone who can send (`canSend`; a viewer cannot).
  */
-export function coordinatorPausedTitle(maxAutoTurnsPerHour: number): string {
-  return `${COORDINATOR_PAUSED_LABEL} after ${maxAutoTurnsPerHour} automatic turns this hour. Send a message to continue.`;
+export function coordinatorPausedTitle(
+  maxAutoTurnsPerHour: number,
+  canSend: boolean,
+): string {
+  const title = `${COORDINATOR_PAUSED_LABEL} after ${maxAutoTurnsPerHour} automatic turns this hour.`;
+  return canSend ? `${title} Send a message to continue.` : title;
 }
 
 /** The fields of an `agentTasks.listByProject` row the status rules read. */

@@ -59,7 +59,8 @@ export function ProjectRow({
   /** Derived from the child tasks (`useProjectListStatuses`); undefined while they load. */
   status: ProjectListStatus | undefined;
   users: User[] | undefined;
-  onLongPress: () => void;
+  /** Absent for a viewer (decision 12): no project menu. */
+  onLongPress: (() => void) | undefined;
 }) {
   const router = useRouter();
   const scheme = useScheme();

@@ -84,9 +84,11 @@ export const list = authQuery({
   returns: v.array(projectListItemValidator),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const [projects, awaitingAnswerIds] = await Promise.all([
+    // The role reads only the repo, so one lookup covers every row.
+    const [projects, awaitingAnswerIds, callerRole] = await Promise.all([
       liveProjectsForRepo(ctx.db, args.repoId),
       awaitingAnswerEntityIdsForRepo(ctx.db, args.repoId),
+      getProjectRole(ctx.db, { repoId: args.repoId }, ctx.userId),
     ]);
     const hasUnread = await unreadLookupForList(
       ctx.db,
@@ -102,6 +104,7 @@ export const list = authQuery({
         planningMode: await resolveProjectPlanningMode(ctx.db, project),
         hasUnread: await hasUnread(project),
         isAwaitingAnswer: awaitingAnswerIds.has(String(project._id)),
+        callerRole,
       })),
     );
   },

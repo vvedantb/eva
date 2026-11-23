@@ -1,5 +1,20 @@
 # Changelog
 
+## Projects UI: coordinator always open, read-only menus, viewer gaps
+
+Date: 2026-11-23
+
+WHY: The UI still tied the coordinator chat to the stored phase and offered git actions the read-only coordinator cannot do.
+
+What users see:
+
+- A contributor can always open, wake and message a project's coordinator chat, whatever the old phase (web Sandbox tab and Start, phone Chat and Wake).
+- The project page has no Commit & push, Create PR or Resolve Conflicts (web and phone). Child tasks keep them.
+- A child task's or coordinator's account picker lists the project's account first.
+- Viewers: no long-press menu on the phone projects list, no comment or reply composer on a project's tasks (web and phone), and they see the "Coordinator paused" line without "Send a message to continue".
+
+Architectural: `isProjectPreviewPhase`, `projectCanCreatePr` and `projectCanResolveConflicts` are gone from `@eva/shared`. `reviveCoordinatorSession` (`_sessions/ownedSession.ts`) un-archives a live project's session on `ensureWorkSession` and on every person's chat send. `withProjectAccountFirst` backs `listForSessionOwner`, `listForTaskOwner` and `listForProjectOwner`. `projects.list` rows carry `callerRole`.
+
 ## Projects backend: read-only coordinator, clean asks, old project conversion
 
 Date: 2026-11-23

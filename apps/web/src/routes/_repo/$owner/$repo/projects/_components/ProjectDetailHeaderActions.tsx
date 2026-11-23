@@ -1,5 +1,5 @@
 import { CHAT_HEADER_ACTIONS_CLASS } from "@/lib/components/ChatPageWrapper";
-import { useRef, type ReactNode } from "react";
+import { useRef } from "react";
 import {
   Tooltip,
   TooltipTrigger,
@@ -9,7 +9,6 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   Spinner,
   ConfirmSkipHint,
   skipConfirmTitle,
@@ -31,11 +30,6 @@ import {
 } from "@tabler/icons-react";
 import dayjs from "@eva/shared/dates";
 import { ProjectContextUsage } from "@/lib/components/context-usage";
-import {
-  BusyMenuIcon,
-  SandboxCommandMenuItems,
-} from "@/lib/components/sandbox/SandboxCommandMenuItems";
-import { SandboxCommitPushButton } from "@/lib/components/sandbox/SandboxCommitPushButton";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { ScheduleBuildPopover } from "@/lib/components/projects/ScheduleBuildPopover";
 import { PrMergeConfetti } from "@/lib/components/celebration/PrMergeConfetti";
@@ -48,14 +42,10 @@ import { useProjectMenu } from "@/lib/components/projects/_components/useProject
 import { ProjectDeleteDialog } from "./ProjectDeleteDialog";
 import { useProjectDelete } from "./useProjectDelete";
 import {
-  getProjectMenuFlags,
+  canBuildProject,
   type ProjectDetailProject,
   type ProjectSandboxState,
 } from "./projectDetailHelpers";
-
-type ProjectMenuFlags = ReturnType<typeof getProjectMenuFlags>;
-/** `useRequestConfirm().request`: opens the dialog, or runs directly with Alt held. */
-type RequestConfirm = (openDialog: () => void, run: () => void) => void;
 
 interface ProjectDetailHeaderActionsProps {
   projectId: Id<"projects">;
@@ -63,14 +53,9 @@ interface ProjectDetailHeaderActionsProps {
   repoId: Id<"githubRepos">;
   sandbox: ProjectSandboxState;
   chatTurnOpen: boolean | undefined;
-  prError: string | null;
-  prLinks: { hasItems: boolean; items: ReactNode };
   hasPlanContext: boolean;
-  isResolvingConflicts: boolean;
   isStoppingBuild: boolean;
-  onResolveConflicts: () => Promise<void>;
   onStopBuild: () => Promise<void>;
-  setShowResolveConfirm: (open: boolean) => void;
   setShowStopBuildConfirm: (open: boolean) => void;
   setShowPlanModal: (open: boolean) => void;
   setShowChatModal: (open: boolean) => void;
@@ -83,21 +68,15 @@ export function ProjectDetailHeaderActions({
   repoId,
   sandbox,
   chatTurnOpen,
-  prError,
-  prLinks,
   hasPlanContext,
-  isResolvingConflicts,
   isStoppingBuild,
-  onResolveConflicts,
   onStopBuild,
-  setShowResolveConfirm,
   setShowStopBuildConfirm,
   setShowPlanModal,
   setShowChatModal,
   setIsBuildModalOpen,
 }: ProjectDetailHeaderActionsProps) {
   const {
-    canStartSandbox,
     isSandboxActive,
     isSandboxStarting,
     isSandboxStopping,
@@ -105,9 +84,6 @@ export function ProjectDetailHeaderActions({
     handleStopSandbox,
   } = sandbox;
   const { request: requestConfirm } = useRequestConfirm();
-  const flags = getProjectMenuFlags(project);
-  const hasCommands =
-    flags.showResolveConflicts || flags.hasSandboxCommandItems;
   const { basePath } = useRepo();
   const navigate = useNavigate();
   const projectsPath = `${basePath}/projects`;
@@ -128,7 +104,6 @@ export function ProjectDetailHeaderActions({
 
   return (
     <div className="flex max-sm:min-w-0 flex-col items-end gap-1">
-      {prError && <p className="text-xs text-destructive">{prError}</p>}
       <div className="flex max-sm:flex-wrap items-center max-sm:justify-end gap-1.5 sm:gap-2">
         <PrMergeConfetti owner={{ kind: "project", projectId }} />
         {/* Secondary controls share the chat header track; Build and Stop
@@ -145,24 +120,6 @@ export function ProjectDetailHeaderActions({
               <ProjectCardMenuItems
                 variant="dropdown"
                 {...projectMenu.menuProps}
-                leading={
-                  hasCommands || prLinks.hasItems ? (
-                    <>
-                      <ProjectMoreMenuActionItems
-                        flags={flags}
-                        sandbox={sandbox}
-                        requestConfirm={requestConfirm}
-                        isResolvingConflicts={isResolvingConflicts}
-                        onResolveConflicts={onResolveConflicts}
-                        setShowResolveConfirm={setShowResolveConfirm}
-                      />
-                      {hasCommands && prLinks.hasItems ? (
-                        <DropdownMenuSeparator />
-                      ) : null}
-                      {prLinks.items}
-                    </>
-                  ) : undefined
-                }
                 planItems={
                   hasPlanContext ? (
                     <>
@@ -192,25 +149,18 @@ export function ProjectDetailHeaderActions({
             Inert while a chat turn is in flight; a running build keeps its
             own confirmed "Stop Build", so it is not gated here. This is the
             only wake/sleep control now, the sandbox chat header carries
-            usage alone. */}
-          <SandboxCommitPushButton
-            gitSync={sandbox.sandbox.sandboxGitSync}
-            isSandboxActive={isSandboxActive}
-            target={sandbox.sandbox.gitTarget}
+            usage alone. The coordinator is read-only: no Commit & push. */}
+          <SandboxStartStopButton
+            isActive={isSandboxActive}
+            isToggling={isSandboxStarting || isSandboxStopping}
+            onToggle={(action) => {
+              if (action === "start") void handleStartSandbox();
+              else void handleStopSandbox();
+            }}
+            isAssistantResponding={chatTurnOpen === true}
           />
-          {isSandboxActive || canStartSandbox ? (
-            <SandboxStartStopButton
-              isActive={isSandboxActive}
-              isToggling={isSandboxStarting || isSandboxStopping}
-              onToggle={(action) => {
-                if (action === "start") void handleStartSandbox();
-                else void handleStopSandbox();
-              }}
-              isAssistantResponding={chatTurnOpen === true}
-            />
-          ) : null}
         </div>
-        {flags.canBuildProject ? (
+        {canBuildProject(project) ? (
           isProjectBuilding(project) ? (
             <Button
               size="sm"
@@ -246,64 +196,6 @@ export function ProjectDetailHeaderActions({
         ) : null}
       </div>
     </div>
-  );
-}
-
-function ProjectMoreMenuActionItems({
-  flags,
-  sandbox,
-  requestConfirm,
-  isResolvingConflicts,
-  onResolveConflicts,
-  setShowResolveConfirm,
-}: {
-  flags: ProjectMenuFlags;
-  sandbox: ProjectSandboxState;
-  requestConfirm: RequestConfirm;
-  isResolvingConflicts: boolean;
-  onResolveConflicts: () => Promise<void>;
-  setShowResolveConfirm: (open: boolean) => void;
-}) {
-  const {
-    showResolveConflicts,
-    hasSandboxCommandItems,
-    showRunBackgroundCommands,
-  } = flags;
-  const { handleRunBackgroundCommands, isRunningBackgroundCommands } = sandbox;
-
-  return (
-    <>
-      {showResolveConflicts && (
-        <DropdownMenuItem
-          title={skipConfirmTitle("Resolve Conflicts")}
-          onClick={() =>
-            requestConfirm(
-              () => setShowResolveConfirm(true),
-              () => {
-                void onResolveConflicts();
-              },
-            )
-          }
-          disabled={isResolvingConflicts}
-        >
-          <BusyMenuIcon busy={isResolvingConflicts}>
-            <IconHammer size={14} />
-          </BusyMenuIcon>
-          Resolve Conflicts
-          <ConfirmSkipHint />
-        </DropdownMenuItem>
-      )}
-      {showResolveConflicts && hasSandboxCommandItems ? (
-        <DropdownMenuSeparator />
-      ) : null}
-      <SandboxCommandMenuItems
-        backgroundCommands={{
-          show: showRunBackgroundCommands,
-          busy: isRunningBackgroundCommands,
-          onRun: handleRunBackgroundCommands,
-        }}
-      />
-    </>
   );
 }
 

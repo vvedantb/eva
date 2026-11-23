@@ -24,13 +24,26 @@ export function ProjectSandboxChatPanel({
   const binding = useProjectChatBinding(projectId, projectSession);
   // The coordinator chat only: its proposed task batches and its paused line.
   const taskBatchCards = useProjectTaskBatchCards(projectId);
-  return (
+  const chat = (
     <SandboxChatPanel
       binding={binding}
       {...panel}
       inlineCards={taskBatchCards}
-      preInputBanner={<CoordinatorPausedBanner projectId={projectId} />}
+      preInputBanner={
+        <CoordinatorPausedBanner projectId={projectId} canSend />
+      }
     />
+  );
+  if (!panel.isReadOnly) return chat;
+  // A viewer has no composer, so the paused line sits at the chat's foot,
+  // in the composer's column and inset.
+  return (
+    <div className="flex h-full min-h-0 w-full flex-col">
+      <div className="min-h-0 flex-1">{chat}</div>
+      <div className="mx-auto w-full max-w-3xl px-3 pb-1 md:px-4 md:pb-2">
+        <CoordinatorPausedBanner projectId={projectId} canSend={false} />
+      </div>
+    </div>
   );
 }
 

@@ -308,8 +308,11 @@ function TaskOverview({
               reactionsFor={reactionsFor}
               isProjectTask={task.projectId !== undefined}
               currentUserId={currentUserId}
-              onReply={(comment) =>
-                changeCommentMode({ kind: "reply", comment })
+              // A project viewer reads the discussion but never comments (decision 12).
+              onReply={
+                isProjectViewer
+                  ? undefined
+                  : (comment) => changeCommentMode({ kind: "reply", comment })
               }
               onEdit={(comment) => changeCommentMode({ kind: "edit", comment })}
               onDelete={(id) => {
@@ -325,7 +328,7 @@ function TaskOverview({
         </FieldGroup>
         <View className="mt-4">
           {/* Once the person is known: presence heartbeats need their id. */}
-          {currentUserId ? (
+          {currentUserId && !isProjectViewer ? (
             <CommentComposer
               currentUserId={currentUserId}
               taskId={task._id}

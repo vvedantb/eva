@@ -28,6 +28,7 @@ import {
   findOwnedSession,
   findWorkSession,
   sessionOwnerEntityId,
+  sessionOwnerProjectId,
   workSessionOwner,
   type OwnedSessionOwner,
   type OwnerChat,
@@ -87,12 +88,32 @@ export async function ensureWorkSession(
   ctx: MutationCtx,
   target: OwnerEntity,
 ): Promise<OwnedSessionContext> {
-  const existing = await findWorkSession(ctx.db, target);
+  const found = await findWorkSession(ctx.db, target);
+  const existing = found && (await reviveCoordinatorSession(ctx, found));
   if (existing) {
     return { session: existing, mainChat: await ensureMainChat(ctx, existing) };
   }
   const session = await insertWorkSession(ctx, target);
   return { session, mainChat: await ensureMainChat(ctx, session) };
+}
+
+/**
+ * A coordinator (project-owned) session that an old phase-based close
+ * archived comes back live on use: a project has no closed state (decision
+ * 19). `ensureWorkSession` and every chat send call it, until the
+ * `convertProjects` migration revives the rest. Idempotent; leaves other
+ * sessions and a deleted project's session as they are.
+ */
+export async function reviveCoordinatorSession(
+  ctx: MutationCtx,
+  session: Doc<"sessions">,
+): Promise<Doc<"sessions">> {
+  const projectId = sessionOwnerProjectId(session);
+  if (projectId === undefined || !isSessionArchived(session)) return session;
+  const project = await ctx.db.get(projectId);
+  if (!project || project.deletedAt !== undefined) return session;
+  await unarchiveSession(ctx, session._id, { touch: false });
+  return { ...session, archive: undefined };
 }
 
 /**

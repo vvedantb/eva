@@ -11,10 +11,6 @@ export {
   type ThemeMode,
 } from "./themeMode";
 export {
-  isProjectPreviewPhase,
-  PROJECT_PREVIEW_PHASES,
-} from "./projectPreview";
-export {
   CONVEX_ID_PATTERN,
   MENTION_HREF_REGEX,
   MENTION_TOKEN_REGEX,
@@ -441,8 +437,6 @@ export {
 export { stripErrorPrefix, turnErrorTitle } from "./turnError";
 export {
   PREVIEW_SANDBOX_ALLOWED_STATUSES,
-  projectCanCreatePr,
-  projectCanResolveConflicts,
   taskCanCreatePr,
   taskCanResolveConflicts,
   taskCanStartSandbox,

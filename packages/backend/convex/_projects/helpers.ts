@@ -59,6 +59,8 @@ export const projectListItemValidator = v.object({
   hasUnread: v.boolean(),
   /** The project chat is paused on a blocking question for the user. */
   isAwaitingAnswer: v.boolean(),
+  /** The caller's role in this project (`getProjectRole`): what the UI lets them do. */
+  callerRole: projectRoleValidator,
 });
 
 /** Infers interview vs tasks-only for projects created before `planningMode` existed. */

@@ -523,7 +523,7 @@ export default function ChatScreen() {
               <>
                 {/* Not gated by simple view, as the web: the user set this goal and can clear it. */}
                 <GoalBanner chatId={chat.session?.chatId ?? chat.task?.sessionChatId ?? chat.project?.sessionChatId} target={chat.target} />
-                {chat.project ? <CoordinatorPausedBanner projectId={chat.project.id} /> : null}
+                {chat.project ? <CoordinatorPausedBanner projectId={chat.project.id} canSend /> : null}
                 {chat.session && canReply ? (
                   <PublishRecoveryBanner sessionId={chat.session.id} newest={newestMessage} isSandboxActive={chat.sandboxActive} />
                 ) : null}
@@ -792,9 +792,13 @@ function ChatDock({
       />
     </View>
   ) : (
-    <Text variant="muted" className="px-4 pb-8 pt-3 text-center" style={textColor(scheme, "muted")}>
-      {closedReason ?? "This chat is closed."}
-    </Text>
+    <View>
+      {/* A viewer has no composer: the coordinator's paused line sits over the closed line. */}
+      {viewer && chat.project ? <CoordinatorPausedBanner projectId={chat.project.id} canSend={false} /> : null}
+      <Text variant="muted" className="px-4 pb-8 pt-3 text-center" style={textColor(scheme, "muted")}>
+        {closedReason ?? "This chat is closed."}
+      </Text>
+    </View>
   );
 }
 

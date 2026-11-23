@@ -7,18 +7,16 @@ import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { useSandboxLifecycle } from "@/lib/components/sandbox/useSandboxLifecycle";
 import { useOwnedSession } from "@/lib/components/sandbox/useOwnedSession";
-import { isProjectPreviewPhase, sandboxStartupEntityId } from "@eva/shared";
+import { sandboxStartupEntityId } from "@eva/shared";
 import { toast } from "@vvedantb/ui";
 
 /**
  * A project's sandbox: its session's (`useOwnedSession`), which the project
  * chat, builds and tasks share. Start and background commands act on that
- * session, creating it on first need; Stop never creates it.
+ * session, creating it on first need; Stop never creates it. A project has
+ * no closed state, so its coordinator sandbox can always start.
  */
-export function useProjectSandbox(
-  projectId: Id<"projects">,
-  phase: string | undefined,
-) {
+export function useProjectSandbox(projectId: Id<"projects">) {
   const projectSession = useOwnedSession({ kind: "project", projectId });
   const { sandbox } = projectSession;
   const startSessionSandbox = useMutation(api.sessions.startSandbox);
@@ -31,7 +29,6 @@ export function useProjectSandbox(
   const [isRunningBackgroundCommands, setIsRunningBackgroundCommands] =
     useState(false);
 
-  const canStartSandbox = isProjectPreviewPhase(phase);
   const isSandboxActive = sandbox.status === "active";
   const isSandboxStartingFromStatus = sandbox.status === "starting";
 
@@ -84,7 +81,6 @@ export function useProjectSandbox(
     /** The project's session and chat; the sandbox fields come off it. */
     projectSession,
     sandbox,
-    canStartSandbox,
     isSandboxActive,
     isSandboxStarting: lifecycle.isStarting,
     isSandboxStopping: lifecycle.isStopping,

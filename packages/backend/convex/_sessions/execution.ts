@@ -36,6 +36,7 @@ import { resolveMessageCredential } from "../_userProviderAccounts/credentialSou
 import { selectUsageLimitRetryUserMessage } from "./resultTarget";
 import { sessionOwner } from "./owner";
 import { routePersonChatMessage } from "../_projects/reports";
+import { reviveCoordinatorSession } from "./ownedSession";
 import { sessionAccountHolder } from "../_projects/runSettings";
 import type { Doc, Id } from "../_generated/dataModel";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
@@ -717,7 +718,9 @@ export async function sendSessionChatMessage(
     sentViaOrchestrator?: boolean;
   },
 ): Promise<void> {
-  const { chat, session } = params.context;
+  const { chat } = params.context;
+  // A person's message reopens a coordinator chat an old phase-based close archived.
+  const session = await reviveCoordinatorSession(ctx, params.context.session);
   await touchUserActivity(ctx, sessionActivityRef(session), {
     source: "chat",
     userId: params.userId,

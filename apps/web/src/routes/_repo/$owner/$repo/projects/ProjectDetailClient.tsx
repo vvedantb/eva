@@ -2,15 +2,10 @@ import { useState, useEffect } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useChatTurnOpen } from "@/lib/components/chat/useChatTurnOpen";
 import { useChatUnread } from "@/lib/components/sandbox/useChatUnread";
-import { useAction, useMutation } from "convex/react";
+import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api } from "@eva/backend";
-import {
-  Button,
-  CenteredSpinner,
-  toast,
-  convexErrorMessage,
-} from "@vvedantb/ui";
+import { Button, CenteredSpinner, toast } from "@vvedantb/ui";
 import { IconMessage } from "@tabler/icons-react";
 import { ProjectStageBadge } from "@/lib/components/projects/ProjectPhaseBadge";
 import { ProjectFeedbackModal } from "@/lib/components/projects/ProjectFeedbackModal";
@@ -30,18 +25,13 @@ import { useAgentBrowsingAutoSwitch } from "@/lib/components/sandbox/useSandboxL
 import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
 import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
-import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
 import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
-import {
-  StopConfirmDialog,
-  ResolveConfirmDialog,
-} from "@/lib/components/tasks/_components/TaskConfirmDialogs";
+import { StopConfirmDialog } from "@/lib/components/tasks/_components/TaskConfirmDialogs";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";
 import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
 import type { EntityResolveStatus } from "@/lib/numId";
 import {
-  getProjectPrFlags,
   isProjectDraftOrFinalized,
   parseProjectSpec,
 } from "./_components/projectDetailHelpers";
@@ -83,33 +73,18 @@ export function ProjectDetailClient({
   const [isStartingBuild, setIsStartingBuild] = useState(false);
   const [isStoppingBuild, setIsStoppingBuild] = useState(false);
   const [showStopBuildConfirm, setShowStopBuildConfirm] = useState(false);
-  const [showResolveConfirm, setShowResolveConfirm] = useState(false);
-  const [isCreatingPr, setIsCreatingPr] = useState(false);
-  const [isResolvingConflicts, setIsResolvingConflicts] = useState(false);
-  const [prError, setPrError] = useState<string | null>(null);
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const cancelBuild = useMutation(api.buildWorkflow.cancelBuild);
-  const resolveProjectConflicts = useMutation(
-    api.projects.resolveProjectConflicts,
-  );
-  const createProjectPrAction = useAction(
-    api.taskWorkflowActions.createProjectPr,
-  );
 
   const project = useQuery(api.projects.get, { id: projectId });
   useEntityDocumentTitle(project?.title);
   const { status: projectStatus } = useProjectTaskStatus(projectId, repo._id);
   const streaming = useQuery(api.streaming.get, { entityId: projectId });
-  const latestDeployment = useQuery(
-    api.agentRuns.getLatestDeploymentByProject,
-    { projectId: projectId },
-  );
 
-  const sandbox = useProjectSandbox(projectId, project?.phase);
+  const sandbox = useProjectSandbox(projectId);
   const {
-    canStartSandbox,
     isSandboxActive,
     isSandboxStarting,
     isSandboxStopping,
@@ -197,42 +172,6 @@ export function ProjectDetailClient({
     setIsStoppingBuild(false);
   };
 
-  const handleCreatePr = async () => {
-    setPrError(null);
-    setIsCreatingPr(true);
-    try {
-      await createProjectPrAction({ projectId: projectId });
-    } catch (err) {
-      setPrError(convexErrorMessage(err, "Failed to create PR"));
-    }
-    setIsCreatingPr(false);
-  };
-
-  const { canCreatePr } = getProjectPrFlags(project, latestDeployment);
-  // Create PR only: the header menu draws the PR rows (`ProjectCardMenuItems`).
-  const prLinks = usePrLinkMenuItems({
-    createPr: {
-      enabled: canCreatePr,
-      isCreating: isCreatingPr,
-      onCreate: handleCreatePr,
-    },
-    prUrl: undefined,
-    hasDeployment: false,
-  });
-
-  const handleResolveConflicts = async () => {
-    setPrError(null);
-    setIsResolvingConflicts(true);
-    try {
-      await resolveProjectConflicts({ projectId: projectId });
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to resolve conflicts";
-      setPrError(message);
-    }
-    setIsResolvingConflicts(false);
-  };
-
   if (project === undefined) {
     return <CenteredSpinner label="Loading project" />;
   }
@@ -261,7 +200,7 @@ export function ProjectDetailClient({
             projectHref={`${basePath}/projects/${projectPathSegment}`}
             activeTab={isSandboxSurface ? "sandbox" : mainTab}
             workTabLabel={isDraftOrFinalized ? "Plan" : "Tasks"}
-            showSandbox={canStartSandbox && !isDraftOrFinalized}
+            showSandbox={!isDraftOrFinalized}
             isSandboxActive={isSandboxActive}
             isSandboxStarting={isSandboxStarting}
             isSandboxStopping={isSandboxStopping}
@@ -288,14 +227,9 @@ export function ProjectDetailClient({
               repoId={repo._id}
               sandbox={sandbox}
               chatTurnOpen={chatTurnOpen}
-              prError={prError}
-              prLinks={prLinks}
               hasPlanContext={hasPlanContext}
-              isResolvingConflicts={isResolvingConflicts}
               isStoppingBuild={isStoppingBuild}
-              onResolveConflicts={handleResolveConflicts}
               onStopBuild={handleStopBuild}
-              setShowResolveConfirm={setShowResolveConfirm}
               setShowStopBuildConfirm={setShowStopBuildConfirm}
               setShowPlanModal={setShowPlanModal}
               setShowChatModal={setShowChatModal}
@@ -349,13 +283,6 @@ export function ProjectDetailClient({
         onOpenChange={setShowStopBuildConfirm}
         onConfirm={handleStopBuild}
         isLoading={isStoppingBuild}
-      />
-
-      <ResolveConfirmDialog
-        open={showResolveConfirm}
-        onOpenChange={setShowResolveConfirm}
-        onConfirm={handleResolveConflicts}
-        isLoading={isResolvingConflicts}
       />
 
       {parsedSpec && (
