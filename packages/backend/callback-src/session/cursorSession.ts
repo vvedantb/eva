@@ -16,9 +16,6 @@ const store = createSessionStore({
   persistStateFile: CURSOR_PERSIST_STATE_FILE,
   resumeField: "resumeSessionId",
   getActiveId: () => S.activeCursorSessionId,
-  setActiveId: (id) => {
-    S.activeCursorSessionId = id;
-  },
 });
 
 const readCursorSessionState = store.readSessionState;

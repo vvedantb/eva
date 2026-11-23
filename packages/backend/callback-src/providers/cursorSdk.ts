@@ -798,10 +798,8 @@ export async function resolveCursorTurnCostUsd(deps: {
   before: CursorCostSnapshot | null;
   fetchAfter: () => Promise<CursorCostSnapshot | null>;
   sleep: (delayMs: number) => Promise<void>;
-  retryDelaysMs?: readonly number[];
 }): Promise<number | undefined> {
   if (!deps.before) return undefined;
-  const delays = deps.retryDelaysMs ?? COST_LOOKUP_RETRY_DELAYS_MS;
   for (let attempt = 0; ; attempt++) {
     const after = await deps.fetchAfter();
     const rawCents = after
@@ -811,7 +809,7 @@ export async function resolveCursorTurnCostUsd(deps: {
       // Float cents to dollars, at a precision cents can actually carry.
       return Math.round((rawCents / 100) * 1e6) / 1e6;
     }
-    const delayMs = delays[attempt];
+    const delayMs = COST_LOOKUP_RETRY_DELAYS_MS[attempt];
     if (delayMs === undefined) return undefined;
     await deps.sleep(delayMs);
   }
