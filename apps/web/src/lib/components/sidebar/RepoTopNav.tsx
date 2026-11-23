@@ -5,7 +5,12 @@ import type { ComponentType } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { IconSunrise } from "@tabler/icons-react";
 import { cn } from "@eva/ui";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@vvedantb/ui";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  UnreadDot,
+} from "@vvedantb/ui";
 import { api } from "@eva/backend";
 import {
   SharedLayoutNav,
@@ -27,6 +32,7 @@ type TopNavItem = {
   name: string;
   href: string;
   icon: ComponentType<{ size?: number; className?: string }>;
+  unread: boolean;
 };
 
 /**
@@ -45,14 +51,22 @@ export function RepoTopNav({
 }: RepoTopNavProps) {
   // Today only exists while the "Daily standup" system automation is on, so
   // the entry appears with the install and disappears with the uninstall.
-  const standupEnabled = useQuery(
-    api.today.isStandupEnabled,
+  // A dot marks a standup the user has not opened yet.
+  const standup = useQuery(
+    api.today.standupStatus,
     repo ? { repoId: repo._id } : "skip",
   );
 
   const items: TopNavItem[] =
-    standupEnabled === true
-      ? [{ name: "Today", href: `${repoBasePath}/today`, icon: IconSunrise }]
+    standup?.enabled === true
+      ? [
+          {
+            name: "Today",
+            href: `${repoBasePath}/today`,
+            icon: IconSunrise,
+            unread: standup.unreadAt !== null,
+          },
+        ]
       : [];
   if (items.length === 0) return null;
 
@@ -79,6 +93,9 @@ export function RepoTopNav({
                 )}
               />
               {!collapsed && <span className="truncate">{item.name}</span>}
+              {!collapsed && (
+                <UnreadDot show={item.unread && !isActive} className="ml-auto" />
+              )}
             </Link>
           </SharedLayoutNavSurface>
         );

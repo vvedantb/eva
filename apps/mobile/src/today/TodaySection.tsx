@@ -6,7 +6,8 @@ import { tabBarReserve } from "@vvedantb/native-ui/floating";
 import { Markdown } from "@vvedantb/native-ui/markdown";
 import { EmptyState, SkeletonList, SkeletonRow } from "@vvedantb/native-ui/primitives";
 import { useLargerText } from "@vvedantb/native-ui/theme";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
+import { useEffect } from "react";
 import { FlatList, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { RepoSection } from "@/ui/RepoPicker";
@@ -26,9 +27,25 @@ const RING = 4;
  * so the history keeps the section.
  */
 export function useShowsToday(repoId: Id<"githubRepos"> | undefined) {
-  const enabled = useQuery(api.today.isStandupEnabled, repoId ? { repoId } : "skip");
+  const status = useQuery(api.today.standupStatus, repoId ? { repoId } : "skip");
   const entries = useQuery(api.today.listStandups, repoId ? { repoId } : "skip");
-  return enabled === true || (entries?.length ?? 0) > 0;
+  return status?.enabled === true || (entries?.length ?? 0) > 0;
+}
+
+/**
+ * Opening the Today section reads every standup so far, as opening the web
+ * Today page, so the web sidebar dot and composer card clear too. An effect,
+ * as the section also opens from `?section=` or the last-used pill, not only
+ * a tap; the pager keeps every section mounted, so it waits for `active`.
+ */
+export function useMarkStandupsRead(repoId: Id<"githubRepos"> | undefined, active: boolean) {
+  const status = useQuery(api.today.standupStatus, repoId && active ? { repoId } : "skip");
+  const markRead = useMutation(api.today.markStandupsRead);
+  const unreadAt = status?.unreadAt ?? null;
+  useEffect(() => {
+    if (!repoId || unreadAt === null) return;
+    void markRead({ repoId });
+  }, [repoId, unreadAt, markRead]);
 }
 
 /**

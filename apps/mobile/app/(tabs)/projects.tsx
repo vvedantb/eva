@@ -8,7 +8,7 @@ import { useSharedValue } from "react-native-reanimated";
 import { DocsSection } from "@/docs/DocsSection";
 import { AutomationsSection } from "@/automations/AutomationsSection";
 import { ProjectsSection, useProjectRepo } from "@/projects/ProjectsSection";
-import { TodaySection, useShowsToday } from "@/today/TodaySection";
+import { TodaySection, useMarkStandupsRead, useShowsToday } from "@/today/TodaySection";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme } from "@/ui/theme";
 import { lastTabSection, sectionIndex } from "@/ui/sectionIndex";
@@ -50,6 +50,7 @@ export default function ProjectsScreen() {
     router.setParams({ section: next });
   };
   const section = sections[index] ?? { id: "projects", label: "Projects" };
+  useMarkStandupsRead(repo?._id, section.id === "today");
   // Where the pages are, shared by the pager and the pill indicator.
   const progress = useSharedValue(index);
   const foreground = EVA_THEME[useScheme()].foreground;
