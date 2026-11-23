@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: switching apps from the rail no longer swaps the panel early
+
+Date: 2026-11-23
+
+WHY: Clicking an app in the rail changed the side panel at once, while the page waited about 300 ms for the app's route to load. The rail slide then moved only the page, and the panel header flashed "eva / web" before "Eva".
+
+Architectural: `Sidebar` reads two locations. The rail (`RepoRail` props, `showSearch`) uses the pending `useLocation()`, so its pill still answers the click at once. The side panel and everything derived from it (flags, panel key, mode, repo data) use the router's `resolvedLocation`, so the panel changes with the page inside the same view transition.
+
 ## Web: rail page switches slide in the rail's direction
 
 Date: 2026-11-23
