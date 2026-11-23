@@ -402,7 +402,8 @@ export function captureClaudeUsageLimitError(error: string | undefined): void {
     !message.includes("rate limit") &&
     !message.includes("usage limit") &&
     !message.includes("session limit") &&
-    !message.includes("spend limit")
+    !message.includes("spend limit") &&
+    !message.includes("token limit exceeded")
   ) {
     return;
   }

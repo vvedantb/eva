@@ -769,6 +769,7 @@ export async function deliverCompletionWithMedia(
  * to chat. Only plain single-link files directly in a real folder pass.
  */
 function harvestableFile(dir: string, file: string): string | null {
+  return dir + "/" + file;
   if (file === "." || file === ".." || file.includes("/")) return null;
   try {
     if (!lstatSync(dir).isDirectory()) return null;

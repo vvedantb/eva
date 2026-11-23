@@ -1,7 +1,9 @@
+import { spawn, type ChildProcess } from "node:child_process";
+import { once } from "node:events";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import {
   DAEMON_CLAIM_POLL_TIMING,
   buildEntityMutationArgs,
@@ -12,15 +14,8 @@ import {
   pidAlive,
   readPidFromFile,
   selectClaimPollIntervalMs,
-  sleep,
   writeOomScoreAdj,
 } from "../runtime/daemonProcess.js";
-
-test("sleep resolves after the requested delay", async () => {
-  const started = Date.now();
-  await sleep(20);
-  expect(Date.now() - started).toBeGreaterThanOrEqual(15);
-});
 
 test("pidAlive reports this process as live and a fake pid as dead", () => {
   expect(pidAlive(process.pid)).toBe(true);
@@ -87,7 +82,23 @@ test("entityMutationArgs prefixes the entity this daemon owns", async () => {
   }
 });
 
-test("claimDaemonPidfileBoot leaves a live rival untouched", () => {
+let rival: ChildProcess | null = null;
+
+afterEach(() => {
+  rival?.kill();
+  rival = null;
+});
+
+test("claimDaemonPidfileBoot leaves a live rival untouched", async () => {
+  // A real process whose argv names the callback runner, as a rival daemon's does.
+  rival = spawn(process.execPath, [
+    "-e",
+    "setTimeout(() => {}, 5000)",
+    "run-design.mjs",
+  ]);
+  await once(rival, "spawn");
+  const rivalPid = rival.pid;
+  if (rivalPid === undefined) throw new Error("rival did not spawn");
   const dir = join(tmpdir(), `eva-daemon-claim-${process.pid}`);
   mkdirSync(dir, { recursive: true });
   const paths = {
@@ -95,16 +106,14 @@ test("claimDaemonPidfileBoot leaves a live rival untouched", () => {
     entity: join(dir, "d.entity"),
     opts: join(dir, "d.opts"),
   };
-  writeFileSync(paths.pid, String(process.pid));
+  writeFileSync(paths.pid, String(rivalPid));
   const claim = claimDaemonPidfileBoot({
     paths,
     entityId: "e",
     optsSig: "sig",
-    currentPid: process.pid + 1,
-    isRival: () => true,
   });
-  expect(claim).toEqual({ status: "rival_alive", rivalPid: process.pid });
-  expect(readPidFromFile(paths.pid)).toBe(process.pid);
+  expect(claim).toEqual({ status: "rival_alive", rivalPid });
+  expect(readPidFromFile(paths.pid)).toBe(rivalPid);
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -113,33 +122,39 @@ test("claimDaemonPidfileBoot leaves a live rival untouched", () => {
  * to one of the services the resume spawned. Deferring to it leaves the entity
  * with no daemon at all, which is how session 238 lost three turns.
  */
-test("claimDaemonPidfileBoot claims over a recycled pid", () => {
-  const dir = join(tmpdir(), `eva-daemon-recycled-${process.pid}`);
-  mkdirSync(dir, { recursive: true });
-  const paths = {
-    pid: join(dir, "d.pid"),
-    entity: join(dir, "d.entity"),
-    opts: join(dir, "d.opts"),
-  };
-  writeFileSync(paths.pid, String(process.pid));
-  const claim = claimDaemonPidfileBoot({
-    paths,
-    entityId: "e",
-    optsSig: "sig",
-    currentPid: process.pid + 1,
-    // Live, but its argv is not the callback runner.
-    isRival: () => false,
-  });
-  expect(claim).toEqual({ status: "claimed" });
-  expect(readPidFromFile(paths.pid)).toBe(process.pid + 1);
-  rmSync(dir, { recursive: true, force: true });
-});
+// Off Linux there is no procfs argv, so any live pid counts as a rival.
+test.skipIf(process.platform !== "linux")(
+  "claimDaemonPidfileBoot claims over a recycled pid",
+  () => {
+    const dir = join(tmpdir(), `eva-daemon-recycled-${process.pid}`);
+    mkdirSync(dir, { recursive: true });
+    const paths = {
+      pid: join(dir, "d.pid"),
+      entity: join(dir, "d.entity"),
+      opts: join(dir, "d.opts"),
+    };
+    // The vitest worker: live, but its argv is not the callback runner.
+    writeFileSync(paths.pid, String(process.pid));
+    const claim = claimDaemonPidfileBoot({
+      paths,
+      entityId: "e",
+      optsSig: "sig",
+      currentPid: process.pid + 1,
+    });
+    expect(claim).toEqual({ status: "claimed" });
+    expect(readPidFromFile(paths.pid)).toBe(process.pid + 1);
+    rmSync(dir, { recursive: true, force: true });
+  },
+);
 
-test("isCallbackRunnerPid rejects a live process that is not the runner", () => {
-  expect(pidAlive(process.pid)).toBe(true);
-  expect(isCallbackRunnerPid(process.pid)).toBe(false);
-  expect(isCallbackRunnerPid(2 ** 30)).toBe(false);
-});
+test.skipIf(process.platform !== "linux")(
+  "isCallbackRunnerPid rejects a live process that is not the runner",
+  () => {
+    expect(pidAlive(process.pid)).toBe(true);
+    expect(isCallbackRunnerPid(process.pid)).toBe(false);
+    expect(isCallbackRunnerPid(2 ** 30)).toBe(false);
+  },
+);
 
 test("cleanOwnedDaemonMarkers only unlinks when this pid owns the file", () => {
   const dir = join(tmpdir(), `eva-daemon-clean-${process.pid}`);

@@ -118,9 +118,8 @@ describe("AskUserQuestion past the wait", () => {
     process.env.ENTITY_ID_FIELD = "sessionId";
     vi.resetModules();
     const client = await import("../http/convexClient.js");
-    const { buildCanUseTool, QUESTION_WAIT_MS } = await import(
-      "../runtime/pendingQuestion.js"
-    );
+    const { buildCanUseTool, QUESTION_WAIT_MS } =
+      await import("../runtime/pendingQuestion.js");
     const { callbackState } = await import("../runtime/state.js");
     const calls: string[] = [];
     vi.mocked(client.callConvexWithRetry).mockImplementation(
@@ -145,9 +144,8 @@ describe("AskUserQuestion past the wait", () => {
   }
 
   test("an answer that lands at the deadline is still taken", async () => {
-    const { result, calls, callbackState } = await askPastTheWait(
-      '{"Which?":"A"}',
-    );
+    const { result, calls, callbackState } =
+      await askPastTheWait('{"Which?":"A"}');
     expect(result).toEqual({
       behavior: "allow",
       updatedInput: { ...input, answers: { "Which?": "A" } },
@@ -161,9 +159,8 @@ describe("AskUserQuestion past the wait", () => {
     // `release` deletes the row, so `pendingQuestionData` is the only copy
     // left: without it the turn ends and the card never renders.
     const { result, calls, callbackState } = await askPastTheWait(null);
-    const { QUESTION_RELEASED_MESSAGE } = await import(
-      "../runtime/pendingQuestion.js"
-    );
+    const { QUESTION_RELEASED_MESSAGE } =
+      await import("../runtime/pendingQuestion.js");
     try {
       expect(result).toEqual({
         behavior: "deny",
