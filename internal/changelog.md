@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: composer action cards match the composer width
+
+Date: 2026-11-23
+
+WHY: The Today and last-session cards spanned the full landing column, wider than the composer card above them.
+
+Architectural: The row in `ComposerActionCards` takes `px-3 md:px-4`, the same inset `ChatComposer` puts around its card.
+
 ## Web: action cards under the landing composer (Today + last session)
 
 Date: 2026-11-23
