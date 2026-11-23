@@ -26,11 +26,9 @@ import {
 } from "@vvedantb/ui";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { projectPlanningPhase } from "@eva/shared";
-import {
-  phaseConfig,
-  type ProjectPhase,
-} from "@/lib/components/projects/ProjectPhaseBadge";
+import type { ProjectStatus } from "@eva/shared/projectStatus";
+import { NEEDS_YOU_LABELS } from "@eva/shared/projectView";
+import type { ProjectPhase } from "@/lib/components/projects/ProjectPhaseBadge";
 import { ProjectCardMenuItems } from "./_components/ProjectCardMenuItems";
 import { useProjectMenu } from "./_components/useProjectMenu";
 import {
@@ -40,8 +38,10 @@ import {
 } from "@/lib/components/sandbox/sandboxStatusStyles";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { AwaitingAnswerMark } from "@/lib/components/ui/AwaitingAnswerMark";
+import { NeedsYouMark } from "@/lib/components/ui/NeedsYouMark";
 import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
 import { ProjectProgressBar } from "./ProjectProgressBar";
+import { ProjectStageCounts } from "./ProjectStageCounts";
 import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
 
 interface ProjectCardProps {
@@ -57,6 +57,8 @@ interface ProjectCardProps {
   members?: Array<Id<"users">>;
   projectLead?: Id<"users">;
   phase: ProjectPhase;
+  /** Derived from the child tasks (`useProjectStatuses`). */
+  status?: ProjectStatus;
   planningMode: "interview" | "tasks_only";
   isBuilding?: boolean;
   sandboxStatus?: SandboxStatus;
@@ -91,6 +93,7 @@ export function ProjectCard({
   members,
   projectLead,
   phase,
+  status,
   planningMode,
   isBuilding = false,
   sandboxStatus,
@@ -124,15 +127,12 @@ export function ProjectCard({
     ),
   ];
   const previewText = description ?? rawInput;
-  // Draft and finalized share the To Do column; this badge tells them apart.
-  const planningPhase = projectPlanningPhase(phase);
-  const PlanningIcon = planningPhase ? phaseConfig[planningPhase].icon : null;
+  const needsYou = status?.needsYou ?? [];
 
   const MAX_AVATARS = 3;
   const allAvatarIds = memberIds.length > 0 ? memberIds : [userId];
   const shownAvatarIds = allAvatarIds.slice(0, MAX_AVATARS);
   const hiddenCount = allAvatarIds.length - MAX_AVATARS;
-
 
   const cardContent = (
     <ListRow
@@ -210,6 +210,19 @@ export function ProjectCard({
             </TooltipTrigger>
             <TooltipContent>Eva asked you a question</TooltipContent>
           </Tooltip>
+        ) : needsYou.length > 0 ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="relative mt-[3px] flex items-center hit-target">
+                <NeedsYouMark />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              {needsYou.length === 1
+                ? NEEDS_YOU_LABELS[needsYou[0].reason]
+                : `${needsYou.length} tasks need you`}
+            </TooltipContent>
+          </Tooltip>
         ) : sandboxStatus &&
           showsSandboxStatusDot(sandboxStatus, simpleView) ? (
           <Tooltip>
@@ -231,18 +244,6 @@ export function ProjectCard({
       </div>
 
       <div className="flex flex-wrap items-center gap-1">
-        {planningPhase && PlanningIcon ? (
-          <Badge
-            className={cn(
-              "gap-0.5 border-transparent px-1.5 py-0 text-3xs font-medium leading-4",
-              phaseConfig[planningPhase].bg,
-              phaseConfig[planningPhase].text,
-            )}
-          >
-            <PlanningIcon className="size-2.5 shrink-0" />
-            {phaseConfig[planningPhase].label}
-          </Badge>
-        ) : null}
         <Tooltip>
           <TooltipTrigger asChild>
             <Badge
@@ -266,10 +267,8 @@ export function ProjectCard({
       </div>
 
       <div className="mt-0.5 pt-0.5">
-        <ProjectProgressBar
-          projectId={projectId}
-          className="h-1 bg-secondary/80"
-        />
+        <ProjectProgressBar status={status} className="h-1 bg-secondary/80" />
+        <ProjectStageCounts status={status} className="mt-1.5" />
         <div className="mt-2 flex items-center gap-2">
           <div className="flex min-w-0 items-center gap-1.5">
             <AvatarStack size={18} className="-space-x-0.5">

@@ -40,12 +40,10 @@ export function isProjectDraftOrFinalized(project: ProjectDetailProject) {
   return project.phase === "draft" || project.phase === "finalized";
 }
 
-export function getProjectMenuFlags(
-  project: ProjectDetailProject,
-  sandbox: ProjectSandboxState,
-) {
+export function getProjectMenuFlags(project: ProjectDetailProject) {
   const canBuildProject = BUILDABLE_PROJECT_PHASES.includes(project.phase);
-  const showRunBackgroundCommands = sandbox.isSandboxActive;
+  // The coordinator sandbox runs no dev server or background commands.
+  const showRunBackgroundCommands = false;
   const showResolveConflicts = projectCanResolveConflicts(project);
   const hasSandboxCommandItems = showRunBackgroundCommands;
   return {

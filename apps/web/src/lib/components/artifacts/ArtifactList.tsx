@@ -19,7 +19,8 @@ export function ArtifactList({
 }: {
   artifacts: ArtifactRow[];
   emptyDescription: string;
-  showSource?: boolean;
+  /** `"task"`: only rows a child task made (a project's own tab). */
+  showSource?: boolean | "task";
   /** Single column — the sandbox Artifacts pane is too narrow for the grid. */
   compact?: boolean;
   /** Open a row in place instead of navigating to the viewer. */

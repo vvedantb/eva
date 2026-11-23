@@ -1,5 +1,7 @@
 import {
+  MAX_COORDINATOR_RETRIES,
   MAX_PARALLEL_PROJECT_TASKS,
+  projectTaskStage,
   tasksToStart,
   type DependencyFacts,
   type ProjectTaskFacts,
@@ -10,6 +12,10 @@ import { filterActiveEntities, isEntityDeleted } from "../numId";
 import { isFirstTaskOnBranch } from "../functions";
 import { latestTaskRun, startTaskRun } from "../_taskWorkflow/startRun";
 import { resolveTaskWorkflowBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
+import { findOwnedSession } from "../_sessions/owner";
+import { ownedSessionBusy } from "../_sessions/ownedSession";
+import { isCoordinatorPaused, requestCoordinatorWake } from "./coordinatorWake";
+import { findOpenAsk } from "./reports";
 
 /**
  * The project scheduler: it replaces the old one-at-a-time build. It starts
@@ -26,7 +32,7 @@ import { resolveTaskWorkflowBaseBranch } from "../_taskWorkflow/resolveBaseBranc
  */
 
 /** A project's child tasks that are not deleted. */
-async function listProjectTasks(
+export async function listProjectTasks(
   db: DatabaseReader,
   projectId: Id<"projects">,
 ): Promise<Doc<"agentTasks">[]> {
@@ -57,19 +63,68 @@ async function taskDependencyFacts(
   );
 }
 
+/** What every task's facts read of its project, loaded once. */
+export interface ProjectFactsContext {
+  project: Pick<Doc<"projects">, "_id" | "providerAccountId">;
+  now: number;
+  /** When the coordinator last finished a turn while it is idle now; undefined while it is busy or never ran. */
+  coordinatorIdleSince?: number;
+  /** The hourly cap holds a wake-up back (`isCoordinatorPaused`). */
+  coordinatorPaused: boolean;
+}
+
+/** Loads the project half of the facts (`ProjectFactsContext`). */
+export async function loadProjectFactsContext(
+  db: DatabaseReader,
+  project: Pick<Doc<"projects">, "_id" | "providerAccountId">,
+  now: number,
+): Promise<ProjectFactsContext> {
+  const owner = { kind: "project" as const, projectId: project._id };
+  const [session, busy, coordinatorPaused] = await Promise.all([
+    findOwnedSession(db, owner),
+    ownedSessionBusy(db, owner),
+    isCoordinatorPaused(db, project._id),
+  ]);
+  return {
+    project,
+    now,
+    coordinatorIdleSince: busy ? undefined : session?.lastTurnFinishedAt,
+    coordinatorPaused,
+  };
+}
+
+/**
+ * Who must answer the task's open ask now: the coordinator, until it had a
+ * turn after the ask and is idle again without answering, or its wake-ups
+ * are paused; then a person.
+ */
+function openAskHolder(
+  ask: Pick<Doc<"projectTaskReports">, "createdAt"> | null,
+  context: ProjectFactsContext,
+): ProjectTaskFacts["openAsk"] {
+  if (!ask) return undefined;
+  const passed =
+    context.coordinatorPaused ||
+    (context.coordinatorIdleSince !== undefined &&
+      context.coordinatorIdleSince > ask.createdAt);
+  return passed ? "person" : "coordinator";
+}
+
 /**
  * One child task as the shared rules read it. Only a `todo` task's latest
- * run matters: a failed or cancelled run puts its task back to `todo`.
+ * run matters: a failed or cancelled run puts its task back to `todo`. A
+ * task with an open ask is waiting, never halted: its run ended on purpose.
  */
 export async function projectTaskFacts(
   db: DatabaseReader,
-  project: Pick<Doc<"projects">, "providerAccountId">,
+  context: ProjectFactsContext,
   task: Doc<"agentTasks">,
-  now: number,
 ): Promise<ProjectTaskFacts> {
-  const [dependencies, latest] = await Promise.all([
+  const { project, now } = context;
+  const [dependencies, latest, ask] = await Promise.all([
     taskDependencyFacts(db, task._id),
     task.status === "todo" ? latestTaskRun(db, task._id) : null,
+    findOpenAsk(db, task._id),
   ]);
   const runPending =
     task.run !== undefined ||
@@ -82,7 +137,10 @@ export async function projectTaskFacts(
     (latest.limitResetAt === undefined || latest.limitResetAt > now) &&
     task.providerAccountId === project.providerAccountId;
   const halted =
-    runPending || latest === null || latest.errorType === "rate_limit"
+    runPending ||
+    latest === null ||
+    latest.errorType === "rate_limit" ||
+    ask !== null
       ? undefined
       : latest.status === "error"
         ? "failed"
@@ -99,6 +157,8 @@ export async function projectTaskFacts(
     usageLimited,
     runPending,
     dependencies,
+    coordinatorRetries: task.coordinatorRetries,
+    openAsk: openAskHolder(ask, context),
   };
 }
 
@@ -108,9 +168,10 @@ export async function projectTaskFacts(
  * other tasks. A task whose chat is replying waits for the next event; a
  * workflow that failed to start is marked on its run and shows as failed.
  */
-async function startProjectTask(
+export async function startProjectTask(
   ctx: MutationCtx,
   task: Doc<"agentTasks">,
+  note?: string,
 ): Promise<boolean> {
   if (task.repoId === undefined) return false;
   const repo = await ctx.db.get(task.repoId);
@@ -125,6 +186,7 @@ async function startProjectTask(
       triggeringCommentId: task.pendingChangeRequestCommentId,
       clearPendingChangeRequest: true,
       rollbackStatus: "todo",
+      note,
     });
     return true;
   } catch (error) {
@@ -143,9 +205,9 @@ export async function scheduleReadyProjectTasks(
   const project = await ctx.db.get(projectId);
   if (!project || isEntityDeleted(project)) return [];
   const tasks = await listProjectTasks(ctx.db, projectId);
-  const now = Date.now();
+  const context = await loadProjectFactsContext(ctx.db, project, Date.now());
   const facts = await Promise.all(
-    tasks.map((task) => projectTaskFacts(ctx.db, project, task, now)),
+    tasks.map((task) => projectTaskFacts(ctx.db, context, task)),
   );
   const byId = new Map(tasks.map((task) => [String(task._id), task]));
   const started: Id<"agentTasks">[] = [];
@@ -153,7 +215,84 @@ export async function scheduleReadyProjectTasks(
     const task = byId.get(id);
     if (task && (await startProjectTask(ctx, task))) started.push(task._id);
   }
+  // The same events can need the coordinator: a failure, a finished batch.
+  await requestEventWakes(ctx, tasks, facts);
   return started;
+}
+
+/**
+ * Asks for the coordinator wake-ups the task state calls for (decision 16):
+ * a task whose run failed and that the coordinator may still retry (one
+ * wake-up for each failed run), and a batch it proposed whose tasks have all
+ * ended: launched, cancelled, or failed after its retry (one for each
+ * batch). Idempotent by key, so calling it on every event is safe.
+ */
+async function requestEventWakes(
+  ctx: MutationCtx,
+  tasks: readonly Doc<"agentTasks">[],
+  facts: readonly ProjectTaskFacts[],
+): Promise<void> {
+  const projectId = tasks[0]?.projectId;
+  if (projectId === undefined) return;
+  const factsById = new Map(facts.map((fact) => [fact.id, fact]));
+  for (const task of tasks) {
+    const fact = factsById.get(String(task._id));
+    if (
+      fact?.halted !== "failed" ||
+      (task.coordinatorRetries ?? 0) >= MAX_COORDINATOR_RETRIES
+    ) {
+      continue;
+    }
+    const run = await latestTaskRun(ctx.db, task._id);
+    if (!run) continue;
+    await requestCoordinatorWake(ctx, {
+      projectId,
+      reason: "failed",
+      key: `failed:${run._id}`,
+      text: `Task ${taskLabel(task)} failed: ${(run.error ?? "no error text").slice(0, 300)}. You may retry it once with retry_task and a note on what to change.`,
+    });
+  }
+  const batches = await ctx.db
+    .query("projectTaskBatches")
+    .withIndex("by_project", (q) => q.eq("projectId", projectId))
+    .collect();
+  for (const batch of batches) {
+    const batchFacts = batch.taskIds.flatMap((id) => {
+      const fact = factsById.get(String(id));
+      return fact ? [fact] : [];
+    });
+    if (!isBatchFinished(batchFacts)) continue;
+    await requestCoordinatorWake(ctx, {
+      projectId,
+      reason: "batch_done",
+      key: `batch:${batch._id}`,
+      text: `Every task of the batch you proposed at ${new Date(batch.createdAt).toISOString()} has ended. Update the summary and propose the next tasks if the work goes on.`,
+    });
+  }
+}
+
+/** `#12 "Title"`: how wake-ups and the task table name a task. */
+export function taskLabel(
+  task: Pick<Doc<"agentTasks">, "taskNumber" | "title">,
+): string {
+  return `${task.taskNumber !== undefined ? `#${task.taskNumber} ` : ""}"${task.title}"`;
+}
+
+/**
+ * A batch ended when a person approved some of it and every one of its tasks
+ * is launched, cancelled, or failed after the coordinator's retry. A batch
+ * nobody approved never ends by itself.
+ */
+export function isBatchFinished(tasks: readonly ProjectTaskFacts[]): boolean {
+  if (tasks.length === 0 || !tasks.some((task) => task.approved)) return false;
+  return tasks.every((task) => {
+    const stage = projectTaskStage(task);
+    if (stage === "launched" || stage === "cancelled") return true;
+    return (
+      task.halted === "failed" &&
+      (task.coordinatorRetries ?? 0) >= MAX_COORDINATOR_RETRIES
+    );
+  });
 }
 
 /**
@@ -218,19 +357,24 @@ export async function withdrawUnstartedApprovals(
 export async function retryFailedTask(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
+  note: string,
 ): Promise<void> {
   const task = await ctx.db.get(taskId);
   if (!task || task.projectId === undefined || isEntityDeleted(task)) {
     throw new Error("Project task not found");
   }
-  if ((task.coordinatorRetries ?? 0) > 0) {
+  if ((task.coordinatorRetries ?? 0) >= MAX_COORDINATOR_RETRIES) {
     throw new Error(
       "The coordinator already retried this task once. A person decides now.",
     );
   }
   const project = await ctx.db.get(task.projectId);
   if (!project) throw new Error("Project not found");
-  const facts = await projectTaskFacts(ctx.db, project, task, Date.now());
+  const facts = await projectTaskFacts(
+    ctx.db,
+    await loadProjectFactsContext(ctx.db, project, Date.now()),
+    task,
+  );
   if (facts.halted !== "failed") {
     throw new Error("Only a task whose last run failed can be retried");
   }
@@ -242,8 +386,17 @@ export async function retryFailedTask(
       `${MAX_PARALLEL_PROJECT_TASKS} tasks already run in this project. Retry when one ends.`,
     );
   }
-  await ctx.db.patch(taskId, { coordinatorRetries: 1 });
-  if (!(await startProjectTask(ctx, task))) {
+  await ctx.db.patch(taskId, {
+    coordinatorRetries: (task.coordinatorRetries ?? 0) + 1,
+  });
+  const trimmed = note.trim();
+  if (
+    !(await startProjectTask(
+      ctx,
+      task,
+      trimmed ? `The project coordinator retried this task after its last run failed. Its note:\n${trimmed}` : undefined,
+    ))
+  ) {
     throw new Error("The task did not start. Try again in a moment.");
   }
 }

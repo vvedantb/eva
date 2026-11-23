@@ -19,6 +19,7 @@ import {
   finalizeRunStatus,
   recordRunPullRequest,
 } from "./helpers";
+import { findOpenAsk } from "../_projects/reports";
 
 /**
  * Transitions a queued run to running, sets streaming activity, and schedules
@@ -225,11 +226,17 @@ export const completeRun = internalMutation({
     const staleCompletion =
       (await hasActiveRun(ctx.db, args.taskId)) ||
       (await isSupersededTaskRun(ctx.db, args.taskId, args.runId));
+    // A project task that asked its coordinator a question ended its turn on
+    // purpose: it stays `in_progress` (keeping its parallel slot) until the
+    // answer starts its next run (`_projects/reports.ts`).
+    const waitingForAnswer =
+      task?.projectId !== undefined &&
+      (await findOpenAsk(ctx.db, args.taskId)) !== null;
     if (task && !staleCompletion) {
       await ctx.db.patch(args.taskId, {
         // The run owns `in_progress` only. A status the user picked mid-run
         // (done, cancelled, a review column) is theirs and stays.
-        ...(task.status === "in_progress"
+        ...(task.status === "in_progress" && !waitingForAnswer
           ? { status: args.success ? "business_review" : "todo" }
           : {}),
         updatedAt: now,

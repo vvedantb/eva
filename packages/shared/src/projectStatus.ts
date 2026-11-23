@@ -33,6 +33,18 @@ export interface ProjectTaskFacts extends DependencyFacts {
   runPending: boolean;
   /** The tasks this task depends on. A deleted dependency is left out. */
   dependencies: readonly DependencyFacts[];
+  /**
+   * Restarts the coordinator spent on this task (`agentTasks.coordinatorRetries`).
+   * Absent reads as 0.
+   */
+  coordinatorRetries?: number;
+  /**
+   * The task's open ask (`report_to_coordinator` with `kind: "ask"`), by who
+   * must answer it now: the coordinator, or a person once the coordinator had
+   * its turn without answering (or its wake-ups are paused). Absent when no
+   * ask is open.
+   */
+  openAsk?: "coordinator" | "person";
 }
 
 /** Where a task stands for the people who read the project. */
@@ -54,7 +66,8 @@ export type NeedsYouReason =
   | "pr_closed"
   | "approve"
   | "dependency_cancelled"
-  | "review";
+  | "review"
+  | "question";
 
 /**
  * A task's stage. `done` is launched only once its PR merged (or when it has
@@ -84,13 +97,29 @@ export function isDependencyMet(dependency: DependencyFacts): boolean {
   return projectTaskStage(dependency) === "launched";
 }
 
-/** Why the task waits for a person, or undefined when it does not. */
+/**
+ * The coordinator may restart a failed task this many times (decision 17).
+ * After that a failure waits for a person.
+ */
+export const MAX_COORDINATOR_RETRIES = 1;
+
+/**
+ * Why the task waits for a person, or undefined when it does not. A first
+ * failure is the coordinator's to handle (it may retry once); only a failure
+ * after that retry needs a person. An open ask needs a person only once the
+ * coordinator passed on it.
+ */
 export function projectTaskNeedsYou(
   task: ProjectTaskFacts,
 ): NeedsYouReason | undefined {
   if (task.status === "cancelled") return undefined;
   if (task.usageLimited) return "usage_limit";
-  if (task.halted === "failed") return "failed";
+  if (task.openAsk === "person") return "question";
+  if (task.halted === "failed") {
+    return (task.coordinatorRetries ?? 0) >= MAX_COORDINATOR_RETRIES
+      ? "failed"
+      : undefined;
+  }
   if (task.halted === "cancelled") return "stopped";
   if (task.prState === "closed") return "pr_closed";
   if (task.status === "todo" || task.status === "draft") {
@@ -101,6 +130,14 @@ export function projectTaskNeedsYou(
     return undefined;
   }
   return projectTaskStage(task) === "in_review" ? "review" : undefined;
+}
+
+/**
+ * True while the task waits for its coordinator: it asked a question and
+ * stopped its turn. It stays `in_progress` and keeps its parallel slot.
+ */
+export function projectTaskWaitsForCoordinator(task: ProjectTaskFacts): boolean {
+  return task.status !== "cancelled" && task.openAsk === "coordinator";
 }
 
 export interface ProjectStatus {

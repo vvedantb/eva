@@ -154,7 +154,12 @@ export {
   type PrState,
   type PrStateTone,
 } from "./prState";
-export { canSendSessionForReview, sessionCountLabel, sessionMenuActions, type SessionMenuAction } from "./sessionMenu";
+export {
+  canSendSessionForReview,
+  sessionCountLabel,
+  sessionMenuActions,
+  type SessionMenuAction,
+} from "./sessionMenu";
 export {
   draftCountAfterRemove,
   draftsAfterRemove,
@@ -336,6 +341,7 @@ export {
   clearedProjectFilter,
   clearedProjectFilters,
   filterAndSortProjects,
+  searchAndSortProjects,
   currentInterviewQuestion,
   formatInterviewAnswer,
   interviewTurnText,
@@ -394,7 +400,12 @@ export {
   transcriptLiveArgs,
   transcriptTailArgs,
 } from "./chatTranscript";
-export { placeChatUiPanels, type PanelPlacement, type PlaceablePanel, type PlacementMessage } from "./chatUiPanelPlacement";
+export {
+  placeChatUiPanels,
+  type PanelPlacement,
+  type PlaceablePanel,
+  type PlacementMessage,
+} from "./chatUiPanelPlacement";
 export {
   attachmentFileKind,
   chatAttachmentErrorMessage,
@@ -412,7 +423,12 @@ export {
   type AttachmentFileKind,
   type ResolvedMediaEntry,
 } from "./attachmentLabels";
-export { ECHO_HISTORY_LIMIT, decideDraftPull, rememberOwnSave, type DraftPullDecision } from "./chatDraftPull";
+export {
+  ECHO_HISTORY_LIMIT,
+  decideDraftPull,
+  rememberOwnSave,
+  type DraftPullDecision,
+} from "./chatDraftPull";
 export {
   MID_TURN_SLEEP_HINT,
   sandboxDisplayStatus,

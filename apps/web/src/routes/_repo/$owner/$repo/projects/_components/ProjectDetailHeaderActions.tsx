@@ -105,7 +105,7 @@ export function ProjectDetailHeaderActions({
     handleStopSandbox,
   } = sandbox;
   const { request: requestConfirm } = useRequestConfirm();
-  const flags = getProjectMenuFlags(project, sandbox);
+  const flags = getProjectMenuFlags(project);
   const hasCommands =
     flags.showResolveConflicts || flags.hasSandboxCommandItems;
   const { basePath } = useRepo();

@@ -88,7 +88,8 @@ interface SandboxTabBarProps {
   /** Builtin tab id (SandboxTab) or a custom tab's name slug. */
   activeTab: string;
   onTabChange: (tab: string) => void;
-  onNewPreview: () => void;
+  /** Absent where the sandbox runs no dev server (a project coordinator). */
+  onNewPreview?: () => void;
   newPreviewDisabled?: boolean;
   showPrdTab?: boolean;
   /** When true, shows a content indicator on the Plan tab. */
@@ -217,10 +218,12 @@ export function SandboxTabBar({
     expandIfCollapsed();
   };
 
-  const handleNewPreview = () => {
-    onNewPreview();
-    expandIfCollapsed();
-  };
+  const handleNewPreview = onNewPreview
+    ? () => {
+        onNewPreview();
+        expandIfCollapsed();
+      }
+    : undefined;
 
   useCycleSandboxTabHotkey({
     activeTab: resolvedTab,

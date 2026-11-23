@@ -7,7 +7,11 @@ import {
   type MutationCtx,
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { authMutation, getSessionWithAccess } from "../functions";
+import {
+  assertCanDrive,
+  authMutation,
+  getSessionWithAccess,
+} from "../functions";
 import { workflow } from "../workflowManager";
 import { resolveSessionBaseBranch } from "./baseBranch";
 import {
@@ -48,7 +52,11 @@ import {
 import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
 import { buildSessionBranchName } from "../_git/branchNames";
 import { errorMessage } from "@vvedantb/server";
-import { sessionOwnerProjectId, sessionOwnerTaskId } from "./owner";
+import {
+  sessionOwner,
+  sessionOwnerProjectId,
+  sessionOwnerTaskId,
+} from "./owner";
 import { recordProjectInterviewClaim } from "../_projects/interviewState";
 import {
   isProjectPreviewAllowed,
@@ -94,6 +102,8 @@ export const startSandbox = authMutation({
       args.sessionId,
       ctx.userId,
     );
+    // A project's or project task's sandbox starts only for a contributor.
+    await assertCanDrive(ctx.db, sessionOwner(session), ctx.userId);
     const blocked = await previewBlockedError(ctx.db, session);
     if (blocked) throw blocked;
     await requestSessionSandboxStart(ctx, session);

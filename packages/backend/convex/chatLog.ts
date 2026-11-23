@@ -300,7 +300,11 @@ export const saveQuote = authMutation({
   },
 });
 
-/** The Log as markdown, for the agent's `read_chat_log` tool. */
+/**
+ * The Log as markdown, for the agent's `read_chat_log` tool. A project's Log
+ * rolls up its child tasks' entries, as the Log tab does
+ * (`listRowsForChatRollUp`).
+ */
 export const markdownForSource = authQuery({
   args: { source: chatSourceArgValidator },
   returns: v.string(),
@@ -308,7 +312,11 @@ export const markdownForSource = authQuery({
     if (!(await callerCanSeeChatSource(ctx, args.source))) {
       throw new Error("Not authorized to read this chat's log.");
     }
-    return renderChatLogMarkdown(await loadRows(ctx, args.source));
+    return renderChatLogMarkdown(
+      stampSupersededBy(
+        await listRowsForChatRollUp(ctx, "chatLogEntries", args.source),
+      ),
+    );
   },
 });
 

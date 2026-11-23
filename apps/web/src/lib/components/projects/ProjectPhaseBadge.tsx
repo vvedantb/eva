@@ -8,6 +8,11 @@ import {
   PROJECT_PHASE_LABELS,
   type ProjectColumn,
 } from "@eva/shared";
+import type { ProjectStage, ProjectTaskStage } from "@eva/shared/projectStatus";
+import {
+  PROJECT_STAGE_LABELS,
+  PROJECT_TASK_STAGE_LABELS,
+} from "@eva/shared/projectView";
 import {
   IconCircle,
   IconNotes,
@@ -26,7 +31,7 @@ export { PROJECT_PHASES } from "@eva/backend";
 
 export { ACTIVE_PROJECT_PHASES, BUILDABLE_PROJECT_PHASES } from "@eva/shared";
 
-interface PhaseStyle {
+export interface PhaseStyle {
   bg: string;
   cardBg: string;
   bar: string;
@@ -123,6 +128,53 @@ export const columnConfig: Record<ProjectColumn, PhaseStyle> = {
   completed: phaseConfig.completed,
   cancelled: phaseConfig.cancelled,
 };
+
+/**
+ * A task's derived stage (`projectTaskStage`): the styles of the stored phase
+ * it replaces. In review uses the code review style; launched uses merged.
+ */
+export const projectTaskStageConfig: Record<ProjectTaskStage, PhaseStyle> = {
+  todo: { ...columnConfig.todo, label: PROJECT_TASK_STAGE_LABELS.todo },
+  in_progress: {
+    ...phaseConfig.in_progress,
+    label: PROJECT_TASK_STAGE_LABELS.in_progress,
+  },
+  in_review: {
+    ...phaseConfig.code_review,
+    label: PROJECT_TASK_STAGE_LABELS.in_review,
+  },
+  launched: {
+    ...phaseConfig.completed,
+    label: PROJECT_TASK_STAGE_LABELS.launched,
+  },
+  cancelled: {
+    ...phaseConfig.cancelled,
+    label: PROJECT_TASK_STAGE_LABELS.cancelled,
+  },
+};
+
+/** A project's derived stage (`projectStatus`): kanban columns, list sections, badges. */
+export const projectStageConfig: Record<ProjectStage, PhaseStyle> = {
+  todo: { ...projectTaskStageConfig.todo, label: PROJECT_STAGE_LABELS.todo },
+  in_progress: projectTaskStageConfig.in_progress,
+  in_review: projectTaskStageConfig.in_review,
+  done: {
+    ...projectTaskStageConfig.launched,
+    label: PROJECT_STAGE_LABELS.done,
+  },
+};
+
+/** The project's derived stage, in the phase badge's look. */
+export function ProjectStageBadge({ stage }: { stage: ProjectStage }) {
+  const config = projectStageConfig[stage];
+  const Icon = config.icon;
+  return (
+    <Badge className={`${config.text} ${config.bg} border-transparent`}>
+      <Icon size={14} className={`mr-1 ${config.text}`} />
+      {config.label}
+    </Badge>
+  );
+}
 
 interface ProjectPhaseBadgeProps {
   phase: ProjectPhase;

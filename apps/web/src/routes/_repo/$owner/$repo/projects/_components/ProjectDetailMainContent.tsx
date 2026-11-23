@@ -7,7 +7,7 @@ import { ProjectActiveLayout } from "@/lib/components/projects/ProjectActiveLayo
 import type { ProjectMainTab } from "@/lib/components/projects/ProjectMainTabs";
 import { ProjectOverviewTab } from "@/lib/components/projects/ProjectOverviewTab";
 import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
-import type { EntityResolveStatus } from "@/lib/numId";
+import { entityPathSegment, type EntityResolveStatus } from "@/lib/numId";
 import type { ProjectDetailProject } from "./projectDetailHelpers";
 
 interface ProjectDetailMainContentProps {
@@ -66,8 +66,15 @@ export function ProjectDetailMainContent({
           >
             <ProjectOverviewTab
               projectId={projectId}
+              repoId={repoId}
               title={project.title}
               description={project.description}
+              documentsHref={
+                entityPathSegment(project)
+                  ? `${basePath}/projects/${entityPathSegment(project)}/sandbox/documents`
+                  : undefined
+              }
+              canContribute={project.callerRole === "contributor"}
             />
           </m.div>
         ) : isDraftOrFinalized ? (

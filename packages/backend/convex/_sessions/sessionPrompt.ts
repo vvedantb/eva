@@ -13,8 +13,13 @@ import { listLiveSessionChats } from "../_sessionChats/helpers";
 import { buildSessionBranchName } from "../_git/branchNames";
 import { sandboxOwnerKey } from "@eva/shared";
 import { taskPrUrl } from "../_pullRequests/store";
+import { MAX_PARALLEL_PROJECT_TASKS } from "@eva/shared/projectStatus";
 import { chatOwner } from "./owner";
 import { getProjectGeneratedSpec } from "../_projects/helpers";
+import {
+  formatProjectTaskTable,
+  loadProjectTaskRows,
+} from "../_projects/taskTable";
 
 // --- Turn config ---
 
@@ -138,14 +143,52 @@ async function dependenciesBlock(
     : "";
 }
 
+/** What a child task knows of its place in the project and how it reports up. */
+const CHILD_TASK_RULES = `This task is one part of a project. The project's coordinator plans the work and other tasks run beside this one, each on its own branch and PR to main.
+- Do only this task. Keep your change safe to merge alone.
+- Read sibling tasks, docs and the summary with list_agents (scope "project"), list_eva_docs and list_artifacts (scope "project") and read_chat_log. Never change a sibling's work.
+- report_to_coordinator with kind "report" tells the coordinator something other tasks need (for example a changed API). Keep working after it.
+- report_to_coordinator with kind "ask" asks a question you cannot answer yourself. After an ask, stop and end your turn: the answer starts your next run.
+- If main moved and your branch conflicts, rebase and fix the conflicts yourself.`;
+
+/**
+ * The project half of a child task's prompt: its place in the project, the
+ * project brief (`projectBriefBlock`) and its dependencies. A snapshot when
+ * the turn or run starts. Shared by the task's chat turns (`ownerPromptContext`)
+ * and its runs (`taskWorkflow.getTaskData`).
+ */
+export async function childTaskProjectBlock(
+  ctx: QueryCtx,
+  task: Pick<Doc<"agentTasks">, "_id">,
+  project: Pick<Doc<"projects">, "title" | "instructions" | "summaryDocId">,
+): Promise<string> {
+  return joinBlocks(
+    `This task is part of project "${project.title}".`,
+    CHILD_TASK_RULES,
+    await projectBriefBlock(ctx, project),
+    await dependenciesBlock(ctx, task._id),
+  );
+}
+
+/** How a coordinator works; leads every coordinator turn. */
+export const COORDINATOR_RULES = `You are this project's coordinator. You plan the project and keep it moving; child tasks do the work.
+- Never edit, commit or push code. Your sandbox is read-only: read code to plan, nothing more.
+- Split work into child tasks with create_tasks_batch (or create_task): one repo each, a short title, a full description and a phase label. Split by files, so tasks running at the same time do not touch the same code. When two tasks must touch the same area, make one depend on the other.
+- Plan each task so its PR is safe to merge alone, or put the work behind a flag. If the repo has no flag method, ask the person.
+- Tasks you create wait for a person's approval. You cannot start them. At most ${MAX_PARALLEL_PROJECT_TASKS} run at once; the scheduler starts approved tasks when their dependencies are merged.
+- A running task does not see your summary updates. If it must know something now, message it with send_chat_message.
+- Answer a task's question with send_chat_message to that task. If you cannot, say so in this chat so a person answers.
+- A failed task: read its state with get_agent_state, then retry it once with retry_task and a note on what to change, or tell the person.
+- Keep the project summary current with update_project_summary: goal, launched, in progress, next, decisions, risks.`;
+
 /**
  * What the session's owner adds to a turn. A standalone session adds nothing.
- * A task's session leads with the task; a project's leads with the project
- * (its spec as the plan), and a project task's own chat in it with the task.
- * A project's turns and its tasks' turns also carry the project brief
- * (`projectBriefBlock`); a project task's carry its dependencies. This is a
- * snapshot when the turn starts. The owner's PR is used: the owner owns it,
- * the session has none.
+ * A task's session leads with the task; a project child task's also carries
+ * the project (`childTaskProjectBlock`). A project's session is its
+ * coordinator: it leads with the coordinator rules, the project brief and the
+ * live task table (`formatProjectTaskTable`). This is a snapshot when the
+ * turn starts. The owner's PR is used: the owner owns it, the session has
+ * none.
  */
 async function ownerPromptContext(
   ctx: QueryCtx,
@@ -161,14 +204,12 @@ async function ownerPromptContext(
     return {
       message: project
         ? joinBlocks(
-            `This task is part of project "${project.title}". A coordinator chat plans the project; this task does one part of it.`,
-            await projectBriefBlock(ctx, project),
-            await dependenciesBlock(ctx, task._id),
+            await childTaskProjectBlock(ctx, task, project),
             withTaskContext(task, message),
           )
         : withTaskContext(task, message),
       planContent: task.description,
-      prUrl: await taskPrUrl(ctx.db, task),
+      prUrl: taskPrUrl(task),
     };
   }
   const projectId = owner.kind === "project" ? owner.projectId : undefined;
@@ -177,7 +218,14 @@ async function ownerPromptContext(
     return {
       message: withProjectContext(
         project,
-        joinBlocks(await projectBriefBlock(ctx, project), message),
+        joinBlocks(
+          COORDINATOR_RULES,
+          await projectBriefBlock(ctx, project),
+          formatProjectTaskTable(
+            await loadProjectTaskRows(ctx.db, project, session.userId),
+          ),
+          message,
+        ),
       ),
       planContent: await getProjectGeneratedSpec(ctx.db, project._id),
       prUrl: project.prUrl,

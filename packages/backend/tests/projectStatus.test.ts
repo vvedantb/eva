@@ -5,6 +5,7 @@ import {
   projectStatus,
   projectTaskNeedsYou,
   projectTaskStage,
+  projectTaskWaitsForCoordinator,
   tasksToStart,
   type ProjectTaskFacts,
 } from "@eva/shared/projectStatus";
@@ -119,10 +120,41 @@ describe("project status", () => {
     ).toBe("in_progress");
   });
 
+  test("a first failure is the coordinator's; a failure after its retry needs a person", () => {
+    expect(
+      projectTaskNeedsYou(task("a", 1, { halted: "failed" })),
+    ).toBeUndefined();
+    expect(
+      projectTaskNeedsYou(
+        task("a", 1, { halted: "failed", coordinatorRetries: 0 }),
+      ),
+    ).toBeUndefined();
+    expect(
+      projectTaskNeedsYou(
+        task("a", 1, { halted: "failed", coordinatorRetries: 1 }),
+      ),
+    ).toBe("failed");
+  });
+
+  test("an open ask waits for the coordinator, then for a person", () => {
+    const waiting = task("a", 1, {
+      status: "in_progress",
+      openAsk: "coordinator",
+    });
+    expect(projectTaskWaitsForCoordinator(waiting)).toBe(true);
+    expect(projectTaskNeedsYou(waiting)).toBeUndefined();
+    // The waiting task keeps its slot: it counts as in progress.
+    expect(projectStatus([waiting]).counts.in_progress).toBe(1);
+
+    const passed = task("a", 1, { status: "in_progress", openAsk: "person" });
+    expect(projectTaskWaitsForCoordinator(passed)).toBe(false);
+    expect(projectTaskNeedsYou(passed)).toBe("question");
+    expect(
+      projectTaskWaitsForCoordinator(task("a", 1, { status: "in_progress" })),
+    ).toBe(false);
+  });
+
   test("says why a task needs a person", () => {
-    expect(projectTaskNeedsYou(task("a", 1, { halted: "failed" }))).toBe(
-      "failed",
-    );
     expect(
       projectTaskNeedsYou(
         task("a", 1, { status: "business_review", prState: "closed" }),

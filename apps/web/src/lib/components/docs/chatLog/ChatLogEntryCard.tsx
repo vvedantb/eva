@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { cn } from "@eva/ui";
 import { Markdown } from "@vvedantb/ui";
 import { IconChevronRight } from "@tabler/icons-react";
@@ -29,9 +30,12 @@ function timeOfDay(timestamp: number): string {
 export function ChatLogEntryCard({
   entry,
   history = [],
+  source,
 }: {
   entry: ChatLogEntry;
   history?: ChatLogEntry[];
+  /** A project's Log: the child task that wrote the entry. */
+  source?: ReactNode;
 }) {
   const header = (
     <div className="flex items-center gap-2 text-2xs text-muted-foreground">
@@ -45,6 +49,7 @@ export function ChatLogEntryCard({
       >
         {CHAT_LOG_KIND_LABELS[entry.kind]}
       </span>
+      {source}
       <span className="ml-auto tabular-nums">
         {AUTHOR_LABELS[entry.author]} · {timeOfDay(entry.createdAt)}
       </span>

@@ -311,6 +311,8 @@ export const resolveChatTargetForUser = internalQuery({
       devPort: v.optional(v.number()),
       /** A task or project on its session: the session that holds its sandbox. */
       sandboxSessionId: v.optional(v.id("sessions")),
+      /** A project's own id, or a project task's project. */
+      projectId: v.optional(v.id("projects")),
     }),
   ),
   handler: async (ctx, args) => {
@@ -328,8 +330,8 @@ export const resolveChatTargetForUser = internalQuery({
     if (!repo) return null;
 
     const doc = hit.doc;
-    // A task's or project's sandbox lives on its session (a project task's
-    // on the project's); none before that session exists.
+    // A task's or project's sandbox lives on its own session; none before
+    // that session exists.
     const ownerSession =
       hit.kind === "task"
         ? await findWorkSession(ctx.db, hit.doc)
@@ -360,6 +362,12 @@ export const resolveChatTargetForUser = internalQuery({
       sandboxId: sandboxRow?.sandboxId,
       devPort: sandboxRow?.devPort ?? repo.devPort,
       sandboxSessionId: ownerSession?._id,
+      projectId:
+        hit.kind === "project"
+          ? hit.doc._id
+          : hit.kind === "task"
+            ? hit.doc.projectId
+            : undefined,
     };
   },
 });
@@ -826,13 +834,13 @@ function chatTargetOwner(
   return projectId ? { kind, projectId } : null;
 }
 
-/** A task's PR: its own summary, or its project's for a project task. */
+/** A task's own PR summary (every task owns its PR). */
 async function taskPrUrlById(
   ctx: QueryCtx,
   taskId: Id<"agentTasks">,
 ): Promise<string | undefined> {
   const task = await ctx.db.get(taskId);
-  return task ? await taskPrUrl(ctx.db, task) : undefined;
+  return task ? taskPrUrl(task) : undefined;
 }
 
 /** One pull request linked to a chat, as reported over MCP. */

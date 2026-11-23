@@ -9,6 +9,7 @@ import {
   authMutation,
   getActiveTaskRun,
   getProjectWithAccess,
+  normalizeIdOrThrow,
   recomputeProjectPhase,
 } from "./functions";
 import { stopProjectInterview } from "./workflowWatchdog";
@@ -72,15 +73,26 @@ export const approveProjectTasks = authMutation({
 });
 
 /**
- * The coordinator restarts a failed child task, once (`retryFailedTask`).
- * Internal: the coordinator's tool calls it; a person restarts a task with
- * `agentTasks.startExecution`, which does not use the count.
+ * The coordinator restarts a failed child task, once (`retryFailedTask`),
+ * with a note on what went wrong that the retried run's prompt carries.
+ * Internal: the coordinator's `retry_task` tool calls it; a person restarts a
+ * task with `agentTasks.startExecution`, which does not use the count.
  */
 export const retryFailedTaskAsCoordinator = internalMutation({
-  args: { taskId: v.id("agentTasks") },
+  args: {
+    /** The coordinator's project: the task must belong to it. */
+    projectId: v.string(),
+    taskId: v.string(),
+    note: v.string(),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await retryFailedTask(ctx, args.taskId);
+    const taskId = normalizeIdOrThrow(ctx.db, "agentTasks", args.taskId, "Task");
+    const task = await ctx.db.get(taskId);
+    if (String(task?.projectId) !== args.projectId) {
+      throw new Error("That task is not part of this project.");
+    }
+    await retryFailedTask(ctx, taskId, args.note);
     return null;
   },
 });

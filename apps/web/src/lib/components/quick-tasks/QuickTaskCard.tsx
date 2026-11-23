@@ -48,7 +48,7 @@ import {
   type Priority,
 } from "@/lib/components/priority/priorityMeta";
 import dayjs, { compactRelativeTime } from "@eva/shared/dates";
-import type { MouseEvent } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
@@ -111,6 +111,8 @@ interface QuickTaskCardProps {
   hasUnread?: boolean;
   /** A chat turn waits on a blocking question; the "?" mark wins every other mark. */
   isAwaitingAnswer?: boolean;
+  /** Extra badges after the tags (the project task list's stage, repo and PR). */
+  badges?: ReactNode;
 }
 
 export function QuickTaskCard({
@@ -144,6 +146,7 @@ export function QuickTaskCard({
   isAgentActive = false,
   hasUnread = false,
   isAwaitingAnswer = false,
+  badges,
 }: QuickTaskCardProps) {
   const showError = hasError && status !== "done";
   const statusMeta = statusConfig[status];
@@ -181,7 +184,8 @@ export function QuickTaskCard({
   const hasMetadata =
     projectName !== undefined ||
     (tags !== undefined && tags.length > 0) ||
-    hasDraftComment;
+    hasDraftComment ||
+    badges !== undefined;
 
   const creatorFirstName =
     createdByUser?.firstName ?? createdByUser?.fullName?.split(/\s+/)[0];
@@ -354,6 +358,7 @@ export function QuickTaskCard({
               </span>
             </Badge>
           ) : null}
+          {badges}
         </div>
       ) : null}
 

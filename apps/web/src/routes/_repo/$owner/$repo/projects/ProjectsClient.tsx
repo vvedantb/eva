@@ -39,19 +39,19 @@ import {
   IconSortDescending,
   IconX,
 } from "@tabler/icons-react";
-import { columnConfig } from "@/lib/components/projects/ProjectPhaseBadge";
+import { projectStageConfig } from "@/lib/components/projects/ProjectPhaseBadge";
+import { useProjectStatuses } from "@/lib/components/projects/useProjectStatus";
 import {
-  PROJECT_COLUMNS,
   PROJECT_SORT_FIELDS,
   PROJECT_SORT_FIELD_LABELS,
   clearedProjectFilter,
   clearedProjectFilters,
-  filterAndSortProjects,
-  projectColumn,
+  searchAndSortProjects,
   projectFilterChips,
   toggleHiddenProjectPhase,
-  type ProjectColumn,
 } from "@eva/shared";
+import type { ProjectStage } from "@eva/shared/projectStatus";
+import { PROJECT_STAGES } from "@eva/shared/projectView";
 import { ProjectsTimeline } from "@/lib/components/projects/ProjectsTimeline";
 import { ProjectsListView } from "@/lib/components/projects/ProjectsListView";
 import { ProjectsKanbanView } from "./_components/ProjectsKanbanView";
@@ -84,6 +84,13 @@ function isProjectView(value: string): value is ProjectView {
 export function ProjectsClient() {
   const { repo, basePath, owner, name } = useRepo();
   const projects = useQuery(api.projects.list, { repoId: repo._id });
+  // Each project's stage is derived from its child tasks, never stored.
+  const statuses = useProjectStatuses(
+    repo._id,
+    projects?.map((project) => project._id),
+  );
+  const stageOf = (projectId: string): ProjectStage =>
+    statuses?.get(projectId)?.stage ?? "todo";
   const [isCreating, setIsCreating] = useState(false);
   const [
     { q, view, hiddenPhases, sortField, sortDir, timelineRange, timelineZoom },
@@ -92,9 +99,9 @@ export function ProjectsClient() {
   const searchQuery = q;
   // Derive the visible set from the persisted blocklist so new columns show
   // by default and "all visible" is independent of how many columns exist.
-  const hiddenPhaseSet = new Set<ProjectColumn>(hiddenPhases);
-  const visiblePhases = new Set<ProjectColumn>(
-    PROJECT_COLUMNS.filter((c) => !hiddenPhaseSet.has(c)),
+  const hiddenPhaseSet = new Set<ProjectStage>(hiddenPhases);
+  const visiblePhases = new Set<ProjectStage>(
+    PROJECT_STAGES.filter((c) => !hiddenPhaseSet.has(c)),
   );
   const selection = useProjectsSelection(
     (projects ?? []).map((project) => project._id),
@@ -108,29 +115,31 @@ export function ProjectsClient() {
   const projectDelete = useProjectDelete(repo._id, exitSelectMode);
   const hasProjects = projects !== undefined && projects.length > 0;
 
-  const filteredSorted = filterAndSortProjects(projects ?? [], {
-    q: searchQuery,
-    hiddenPhases,
-    sortField,
-    sortDir,
-  });
+  const filteredSorted = searchAndSortProjects(
+    (projects ?? []).filter(
+      (project) => !hiddenPhaseSet.has(stageOf(project._id)),
+    ),
+    { q: searchQuery, sortField, sortDir },
+  );
 
-  const projectsByPhaseInitial: Record<ProjectColumn, typeof filteredSorted> = {
+  const projectsByPhaseInitial: Record<ProjectStage, typeof filteredSorted> = {
     todo: [],
     in_progress: [],
-    business_review: [],
-    code_review: [],
-    completed: [],
-    cancelled: [],
+    in_review: [],
+    done: [],
   };
-  const projectsByPhase = PROJECT_COLUMNS.reduce((acc, column) => {
-    acc[column] = filteredSorted.filter((p) => projectColumn(p.phase) === column);
+  const projectsByPhase = PROJECT_STAGES.reduce((acc, stage) => {
+    acc[stage] = filteredSorted.filter((p) => stageOf(p._id) === stage);
     return acc;
   }, projectsByPhaseInitial);
 
-  const handlePhaseToggle = (column: ProjectColumn) => {
+  const handlePhaseToggle = (stage: ProjectStage) => {
     setParams({
-      hiddenPhases: toggleHiddenProjectPhase(hiddenPhases, column, PROJECT_COLUMNS),
+      hiddenPhases: toggleHiddenProjectPhase(
+        hiddenPhases,
+        stage,
+        PROJECT_STAGES,
+      ),
     });
   };
 
@@ -143,7 +152,7 @@ export function ProjectsClient() {
 
   const activeFilterLabels = projectFilterChips(
     { q, hiddenPhases, sortField, sortDir },
-    PROJECT_COLUMNS,
+    PROJECT_STAGES,
   );
 
   const clearFilter = (key: string) => {
@@ -249,13 +258,13 @@ export function ProjectsClient() {
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <IconFilter size={16} className="mr-2" />
-                {visiblePhases.size === PROJECT_COLUMNS.length
+                {visiblePhases.size === PROJECT_STAGES.length
                   ? "All Phases"
                   : `${visiblePhases.size} Phases`}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
-                {PROJECT_COLUMNS.map((p) => {
-                  const cfg = columnConfig[p];
+                {PROJECT_STAGES.map((p) => {
+                  const cfg = projectStageConfig[p];
                   return (
                     <DropdownMenuCheckboxItem
                       key={p}
@@ -310,7 +319,7 @@ export function ProjectsClient() {
               onClearAll={clearAllFilters}
             />
           )}
-          {projects === undefined ? (
+          {projects === undefined || statuses === undefined ? (
             <CenteredSpinner label="Loading projects" />
           ) : projects.length === 0 ? (
             <div className="flex min-h-0 flex-1 items-center justify-center">
@@ -364,6 +373,7 @@ export function ProjectsClient() {
                     <ProjectsKanbanView
                       projectsByPhase={projectsByPhase}
                       visiblePhases={visiblePhases}
+                      statuses={statuses}
                       owner={owner}
                       name={name}
                       basePath={basePath}
@@ -385,6 +395,7 @@ export function ProjectsClient() {
                 >
                   <ProjectsTimeline
                     projects={filteredSorted}
+                    stageOf={stageOf}
                     basePath={basePath}
                     range={timelineRange}
                     zoom={timelineZoom}
@@ -404,6 +415,7 @@ export function ProjectsClient() {
                   <ProjectsListView
                     projectsByPhase={projectsByPhase}
                     visiblePhases={visiblePhases}
+                    statuses={statuses}
                     onDelete={projectDelete.requestSingle}
                     isSelecting={selection.isSelecting}
                     selectedIds={selection.selectedIds}

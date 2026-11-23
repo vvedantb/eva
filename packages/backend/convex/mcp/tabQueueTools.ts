@@ -246,7 +246,7 @@ The queue drains as turns finish, so a message listed here can start running at 
       mutating: false,
       input: entityRefArgs,
       handler: async (ref) => {
-        const resolved = await resolveChat(ref);
+        const resolved = await resolveChat(ref, "read");
         if ("content" in resolved) return resolved;
         const { target } = resolved;
 

@@ -5,7 +5,8 @@ import type { api, Id } from "@eva/backend";
 import { entityPathSegment } from "@/lib/numId";
 import { useNavigate } from "@tanstack/react-router";
 import { IconChevronRight } from "@tabler/icons-react";
-import { phaseConfig } from "@/lib/components/projects/ProjectPhaseBadge";
+import type { ProjectStage } from "@eva/shared/projectStatus";
+import { projectStageConfig } from "@/lib/components/projects/ProjectPhaseBadge";
 import { ScheduleDatesPopover } from "./ScheduleDatesPopover";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 
@@ -13,6 +14,7 @@ type Project = FunctionReturnType<typeof api.projects.list>[number];
 
 interface UnscheduledProjectsSectionProps {
   projects: Project[];
+  stageOf: (projectId: string) => ProjectStage;
   basePath: string;
   onSchedule: (id: Id<"projects">, start: number, end: number) => void;
 }
@@ -22,6 +24,7 @@ interface UnscheduledProjectsSectionProps {
  *  the timeline. Uses native <details> so it needs no open/close state. */
 export function UnscheduledProjectsSection({
   projects,
+  stageOf,
   basePath,
   onSchedule,
 }: UnscheduledProjectsSectionProps) {
@@ -41,7 +44,7 @@ export function UnscheduledProjectsSection({
       </summary>
       <div className="border-t border-border">
         {projects.map((project) => {
-          const config = phaseConfig[project.phase];
+          const config = projectStageConfig[stageOf(project._id)];
           const Icon = config.icon;
           return (
             <div

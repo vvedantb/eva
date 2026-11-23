@@ -17,6 +17,7 @@ import {
 } from "@/lib/components/tasks/firstRunChatTurn";
 import { useTaskOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
 import { useTaskSession } from "./useTaskSession";
+import { useIsProjectViewer } from "@/lib/components/projects/useProjectRole";
 
 type TaskChatTask = FunctionReturnType<typeof api.agentTasks.get> | undefined;
 type TaskChatRun =
@@ -28,7 +29,16 @@ export function TaskSandboxChatPanel({
   ...panel
 }: SandboxChatPanelProps & { taskId: Id<"agentTasks"> }) {
   const binding = useTaskChatBinding(taskId);
-  return <SandboxChatPanel binding={binding} {...panel} />;
+  const task = useQuery(api.agentTasks.get, { id: taskId });
+  // A project viewer reads a child task's chat but never writes to it.
+  const isProjectViewer = useIsProjectViewer(task?.projectId);
+  return (
+    <SandboxChatPanel
+      binding={binding}
+      {...panel}
+      isReadOnly={panel.isReadOnly === true || isProjectViewer}
+    />
+  );
 }
 
 /**

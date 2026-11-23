@@ -43,23 +43,37 @@ export async function latestTaskRun(
  * credential), copied when the task starts: on its first run, and again after
  * a usage limit stopped it, so a changed project account takes over. A
  * running task keeps its copy, and a later pick in the task's own selector
- * stays the task's. Returns the task as the run sees it.
+ * stays the task's.
+ *
+ * Returns the task as the run sees it, and whose personal account the run may
+ * unlock (`credentialOwnerUserId`). The project's account was checked against
+ * the project's owner (`projects.update`), so while the task runs on it that
+ * owner unlocks it, not the person who created the task (decision 20). Any
+ * other account is the task creator's own pick.
  */
 async function adoptProjectRunSettings(
   ctx: MutationCtx,
   task: Doc<"agentTasks">,
-): Promise<Doc<"agentTasks">> {
-  if (task.projectId === undefined) return task;
+): Promise<{ task: Doc<"agentTasks">; credentialOwnerUserId: Id<"users"> }> {
+  const project = task.projectId ? await ctx.db.get(task.projectId) : null;
+  if (!project) return { task, credentialOwnerUserId: task.createdBy };
   const latest = await latestTaskRun(ctx.db, task._id);
-  if (latest !== null && latest.errorType !== "rate_limit") return task;
-  const project = await ctx.db.get(task.projectId);
-  if (!project) return task;
-  const settings = {
-    model: project.model ?? task.model,
-    providerAccountId: project.providerAccountId,
+  let adopted = task;
+  if (latest === null || latest.errorType === "rate_limit") {
+    const settings = {
+      model: project.model ?? task.model,
+      providerAccountId: project.providerAccountId,
+    };
+    await ctx.db.patch(task._id, settings);
+    adopted = { ...task, ...settings };
+  }
+  return {
+    task: adopted,
+    credentialOwnerUserId:
+      adopted.providerAccountId === project.providerAccountId
+        ? project.userId
+        : task.createdBy,
   };
-  await ctx.db.patch(task._id, settings);
-  return { ...task, ...settings };
 }
 
 /**
@@ -84,6 +98,8 @@ export async function startTaskRun(
     triggeringCommentId?: Id<"taskComments">;
     clearPendingChangeRequest: boolean;
     rollbackStatus: Doc<"agentTasks">["status"];
+    /** Extra text for the run's prompt (`agentRuns.note`). */
+    note?: string;
   },
 ): Promise<Id<"agentRuns">> {
   const { repo } = p;
@@ -92,7 +108,10 @@ export async function startTaskRun(
   if (await taskWorkSessionBusy(ctx.db, p.task)) {
     throw new Error(TASK_CHAT_BUSY_ERROR);
   }
-  const task = await adoptProjectRunSettings(ctx, p.task);
+  const { task, credentialOwnerUserId } = await adoptProjectRunSettings(
+    ctx,
+    p.task,
+  );
   const startedAt = Date.now();
   const runId = await ctx.db.insert("agentRuns", {
     taskId: task._id,
@@ -102,10 +121,11 @@ export async function startTaskRun(
     mode: p.mode,
     triggeredBy: p.triggeredBy,
     triggeringCommentId: p.triggeringCommentId,
+    ...(p.note !== undefined ? { note: p.note } : {}),
     credentialSourceLabel: await resolveCredentialSourceLabel(
       ctx.db,
       task.providerAccountId,
-      task.createdBy,
+      credentialOwnerUserId,
     ),
     model: normalizeAIModel(task.model),
   });
@@ -134,7 +154,7 @@ export async function startTaskRun(
       isFirstTaskOnBranch: p.isFirstTaskOnBranch,
       model: task.model ?? repo.defaultModel,
       providerAccountId: task.providerAccountId,
-      credentialOwnerUserId: task.createdBy,
+      credentialOwnerUserId,
       userId: p.userId,
       mode: p.mode,
     });

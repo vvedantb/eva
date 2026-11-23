@@ -288,7 +288,7 @@ The returned "previewUrl" opens the app and requires an Eva login — it is for 
           ctx.runQuery(internal.sandboxIdlePause.getSettingsInternal, {}),
         ]);
         const chatRef = withSelfDefault(ref, credentials);
-        const resolved = await resolveEntityTarget(chatRef, userId);
+        const resolved = await resolveEntityTarget(chatRef, userId, "read");
         if ("content" in resolved) return resolved;
         const { target } = resolved;
         const wakeUrl = wakePreviewUrl(target, idlePause.mode, path);

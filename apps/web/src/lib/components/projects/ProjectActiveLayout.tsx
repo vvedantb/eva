@@ -16,20 +16,20 @@ import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { IconChecklist } from "@tabler/icons-react";
 import { QuickTaskModal } from "../quick-tasks/QuickTaskModal";
 import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
-import type { ProjectPhase } from "./ProjectPhaseBadge";
 import type { EntityResolveStatus } from "@/lib/numId";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { TASK_TAGS } from "@eva/shared";
+import type { ProjectRole } from "@eva/shared/projectRoles";
+import { ProjectFeedbackModal } from "./ProjectFeedbackModal";
+import { useProjectTaskStatus } from "./useProjectStatus";
 
 interface Project {
   _id: Id<"projects">;
   numId?: number;
   title: string;
-  branchName?: string;
-  sandboxId?: string;
-  phase: ProjectPhase;
-  rawInput: string;
+  repoId: Id<"githubRepos">;
+  callerRole: ProjectRole;
 }
 
 interface ProjectActiveLayoutProps {
@@ -53,15 +53,22 @@ export function ProjectActiveLayout({
   const navigate = useNavigate();
   const { repo } = useRepo();
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const projectPathSegment = entityPathSegment(project);
+  const canContribute = project.callerRole === "contributor";
 
-  const tasks = useQuery(api.agentTasks.listByProject, { projectId });
+  const { tasks, failedTaskIds } = useProjectTaskStatus(
+    projectId,
+    project.repoId,
+  );
   const users = useQuery(api.users.listAll);
   const projects = useQuery(api.projects.list, { repoId: repo._id });
 
   let selectedTaskId: Id<"agentTasks"> | null = null;
   if (selectedTaskIdParam && tasks) {
-    const match = tasks.find((t) => t._id === selectedTaskIdParam);
+    const match = tasks.find(
+      (t) => t._id === selectedTaskIdParam && t.locked !== true,
+    );
     selectedTaskId = match?._id ?? null;
   }
 
@@ -127,7 +134,6 @@ export function ProjectActiveLayout({
   }
   const allTags = [...tagSet].sort();
 
-
   const notFoundPane = (
     <EntityNotFound
       entityLabel="task"
@@ -156,11 +162,17 @@ export function ProjectActiveLayout({
         leftPanel={() => (
           <div className="flex h-full min-h-0 flex-col overflow-hidden">
             <ProjectTaskListPanel
+              projectId={projectId}
               tasks={tasks ?? []}
+              failedTaskIds={failedTaskIds}
               selectedTaskId={selectedTaskId}
               onSelectTask={handleSelectTask}
-              onCreateTask={() => setCreateTaskOpen(true)}
+              onCreateTask={() =>
+                canContribute ? setCreateTaskOpen(true) : setFeedbackOpen(true)
+              }
               projectNumId={project.numId}
+              homeRepoId={project.repoId}
+              canContribute={canContribute}
             />
           </div>
         )}
@@ -212,6 +224,11 @@ export function ProjectActiveLayout({
         users={users ?? undefined}
         projects={projects ?? undefined}
         allTags={allTags}
+      />
+      <ProjectFeedbackModal
+        projectId={projectId}
+        isOpen={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
       />
     </div>
   );

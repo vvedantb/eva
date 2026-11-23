@@ -74,6 +74,9 @@ import {
   logFields,
   workProfileFields,
   taskDependencyFields,
+  projectTaskReportFields,
+  projectTaskBatchFields,
+  projectCoordinatorWakeFields,
   notificationFields,
   repoEnvVarFields,
   repoSnapshotFields,
@@ -197,6 +200,15 @@ const schema = defineSchema({
     .index("by_user_parent", ["userId", "parentId"])
     .index("by_user_repo", ["userId", "repoId"]),
 
+  projectTaskReports: defineTable(projectTaskReportFields)
+    .index("by_project", ["projectId"])
+    .index("by_task_and_state", ["taskId", "state"]),
+  projectTaskBatches: defineTable(projectTaskBatchFields).index("by_project", [
+    "projectId",
+  ]),
+  projectCoordinatorWakes: defineTable(projectCoordinatorWakeFields)
+    .index("by_project_and_key", ["projectId", "key"])
+    .index("by_project_and_sent", ["projectId", "sentAt"]),
   taskDependencies: defineTable(taskDependencyFields)
     .index("by_task", ["taskId"])
     .index("by_task_and_depends_on", ["taskId", "dependsOnId"])

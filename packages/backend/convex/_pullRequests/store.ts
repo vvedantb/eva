@@ -577,9 +577,8 @@ export function sessionRepoPullRequest(
  * A task's own PR summary. Every task owns its PR; an old project task's PR
  * on the project branch stays with the project (`projects.prUrl`).
  */
-export async function taskPrUrl(
-  _db: DatabaseReader,
-  task: Doc<"agentTasks">,
-): Promise<string | undefined> {
+export function taskPrUrl(
+  task: Pick<Doc<"agentTasks">, "prUrl">,
+): string | undefined {
   return task.prUrl;
 }

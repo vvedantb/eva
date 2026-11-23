@@ -43,6 +43,11 @@ export interface SandboxChatPanelProps {
   /** Opens the Agents sandbox tab (used by the sub-agent CTA row in the chat). */
   onOpenAgentsTab?: () => void;
   onSandboxToggle?: (action: "start" | "stop") => void;
+  /**
+   * The reader may not write to this chat (a project viewer): the transcript
+   * shows with no composer, the same as a read-only session.
+   */
+  isReadOnly?: boolean;
 }
 
 /**
@@ -59,6 +64,7 @@ export function SandboxChatPanel({
   onViewDiff,
   onOpenAgentsTab,
   onSandboxToggle,
+  isReadOnly = false,
 }: SandboxChatPanelProps & { binding: SandboxChatBinding }) {
   const { repo, basePath } = useRepo();
   const { entity, doc, model, firstRun, ownerLabel } = binding;
@@ -145,15 +151,18 @@ export function SandboxChatPanel({
     repoId: repo._id,
     model,
     isExecuting,
+    isReadOnly,
     doc,
-    canSwitchAccount: true,
+    canSwitchAccount: !isReadOnly,
     messages,
     accounts: binding.accounts,
     resolveAccountId: binding.resolveAccountId,
     switchProviderAccount,
     isSandboxActive,
-    sendCommand: (command) =>
-      handleSend(command, undefined, { skipReviewComments: true }),
+    sendCommand: isReadOnly
+      ? undefined
+      : (command) =>
+          handleSend(command, undefined, { skipReviewComments: true }),
   });
 
   // The first run opens the chat, so it shows once nothing older is left.
@@ -178,9 +187,7 @@ export function SandboxChatPanel({
       />
       <SubagentThreadLayer
         surface={chatSurface}
-        parentTitle={
-          doc?.title ?? (ownerLabel === "task" ? "Task" : "Project")
-        }
+        parentTitle={doc?.title ?? (ownerLabel === "task" ? "Task" : "Project")}
         messages={chatMessages}
         streamingActivity={streaming?.currentActivity}
         sandboxRunning={isSandboxActive}
@@ -205,6 +212,7 @@ export function SandboxChatPanel({
           onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
           isExecuting={isExecuting}
           isInputDisabled={composer.isInputDisabled}
+          isArchived={isReadOnly}
           placeholder={composer.placeholder}
           emptyStateTitle={
             isSandboxActive
@@ -220,7 +228,7 @@ export function SandboxChatPanel({
           onStartSandbox={startSandboxHandler(
             isSandboxActive,
             isSandboxToggling,
-            onSandboxToggle,
+            isReadOnly ? undefined : onSandboxToggle,
           )}
           modelPicker={{
             model,

@@ -54,8 +54,10 @@ export function ProjectDetailSandboxContent({
   openDiffs,
   openAgentsTab,
 }: ProjectDetailSandboxContentProps) {
+  // A viewer reads the coordinator chat but never writes to it or wakes it.
+  const isViewer = project.callerRole === "viewer";
   const {
-    canStartSandbox,
+    canStartSandbox: canStartAsOwner,
     isSandboxActive,
     isSandboxStarting,
     isSandboxStopping,
@@ -64,8 +66,10 @@ export function ProjectDetailSandboxContent({
     handleStartSandbox,
     handleStopSandbox,
   } = sandbox;
+  const canStartSandbox = canStartAsOwner && !isViewer;
 
-  const tab = sandboxTab ?? "preview";
+  // The coordinator has no Preview (no dev server): Documents is its first tab.
+  const tab = sandboxTab ?? "documents";
   // Always mount the sandbox panel when the project can have one so tabs
   // stay reachable while stopped — same as sessions. Panes self-gate.
   const projectSandboxPanel = (
@@ -75,7 +79,7 @@ export function ProjectDetailSandboxContent({
     collapsed: boolean,
     onToggle: () => void,
   ) =>
-    canStartSandbox ||
+    canStartAsOwner ||
     projectSandboxId ||
     isSandboxActive ||
     isSandboxStarting ||
@@ -145,8 +149,9 @@ export function ProjectDetailSandboxContent({
           onOpenFile={openFile}
           onViewDiff={openDiffs}
           onOpenAgentsTab={openAgentsTab}
+          isReadOnly={isViewer}
           onSandboxToggle={
-            canStartSandbox || isSandboxActive
+            !isViewer && (canStartSandbox || isSandboxActive)
               ? (action) => {
                   if (action === "start") void handleStartSandbox();
                   else void handleStopSandbox();

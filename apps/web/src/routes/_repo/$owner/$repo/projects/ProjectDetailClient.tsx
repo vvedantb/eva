@@ -5,7 +5,16 @@ import { useChatUnread } from "@/lib/components/sandbox/useChatUnread";
 import { useAction, useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api } from "@eva/backend";
-import { CenteredSpinner, toast, convexErrorMessage } from "@vvedantb/ui";
+import {
+  Button,
+  CenteredSpinner,
+  toast,
+  convexErrorMessage,
+} from "@vvedantb/ui";
+import { IconMessage } from "@tabler/icons-react";
+import { ProjectStageBadge } from "@/lib/components/projects/ProjectPhaseBadge";
+import { ProjectFeedbackModal } from "@/lib/components/projects/ProjectFeedbackModal";
+import { useProjectTaskStatus } from "@/lib/components/projects/useProjectStatus";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
@@ -80,6 +89,7 @@ export function ProjectDetailClient({
   const [prError, setPrError] = useState<string | null>(null);
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
   const cancelBuild = useMutation(api.buildWorkflow.cancelBuild);
   const resolveProjectConflicts = useMutation(
     api.projects.resolveProjectConflicts,
@@ -90,6 +100,7 @@ export function ProjectDetailClient({
 
   const project = useQuery(api.projects.get, { id: projectId });
   useEntityDocumentTitle(project?.title);
+  const { status: projectStatus } = useProjectTaskStatus(projectId, repo._id);
   const streaming = useQuery(api.streaming.get, { entityId: projectId });
   const latestDeployment = useQuery(
     api.agentRuns.getLatestDeploymentByProject,
@@ -197,10 +208,7 @@ export function ProjectDetailClient({
     setIsCreatingPr(false);
   };
 
-  const { canCreatePr } = getProjectPrFlags(
-    project,
-    latestDeployment,
-  );
+  const { canCreatePr } = getProjectPrFlags(project, latestDeployment);
   // Create PR only: the header menu draws the PR rows (`ProjectCardMenuItems`).
   const prLinks = usePrLinkMenuItems({
     createPr: {
@@ -236,6 +244,7 @@ export function ProjectDetailClient({
   }
 
   const isDraftOrFinalized = isProjectDraftOrFinalized(project);
+  const canContribute = project.callerRole === "contributor";
   const parsedSpec = parseProjectSpec(project.generatedSpec);
   const hasPlanContext = Boolean(parsedSpec);
 
@@ -263,27 +272,37 @@ export function ProjectDetailClient({
       fillHeight
       childPadding={false}
       headerRight={
-        !isDraftOrFinalized ? (
-          <ProjectDetailHeaderActions
-            projectId={projectId}
-            project={project}
-            repoId={repo._id}
-            sandbox={sandbox}
-            chatTurnOpen={chatTurnOpen}
-            prError={prError}
-            prLinks={prLinks}
-            hasPlanContext={hasPlanContext}
-            isResolvingConflicts={isResolvingConflicts}
-            isStoppingBuild={isStoppingBuild}
-            onResolveConflicts={handleResolveConflicts}
-            onStopBuild={handleStopBuild}
-            setShowResolveConfirm={setShowResolveConfirm}
-            setShowStopBuildConfirm={setShowStopBuildConfirm}
-            setShowPlanModal={setShowPlanModal}
-            setShowChatModal={setShowChatModal}
-            setIsBuildModalOpen={setIsBuildModalOpen}
-          />
-        ) : null
+        <div className="flex max-sm:min-w-0 items-center gap-1.5 sm:gap-2">
+          {projectStatus ? (
+            <ProjectStageBadge stage={projectStatus.stage} />
+          ) : null}
+          {!canContribute ? (
+            <Button size="sm" onClick={() => setIsFeedbackOpen(true)}>
+              <IconMessage size={16} aria-hidden />
+              Feedback
+            </Button>
+          ) : !isDraftOrFinalized ? (
+            <ProjectDetailHeaderActions
+              projectId={projectId}
+              project={project}
+              repoId={repo._id}
+              sandbox={sandbox}
+              chatTurnOpen={chatTurnOpen}
+              prError={prError}
+              prLinks={prLinks}
+              hasPlanContext={hasPlanContext}
+              isResolvingConflicts={isResolvingConflicts}
+              isStoppingBuild={isStoppingBuild}
+              onResolveConflicts={handleResolveConflicts}
+              onStopBuild={handleStopBuild}
+              setShowResolveConfirm={setShowResolveConfirm}
+              setShowStopBuildConfirm={setShowStopBuildConfirm}
+              setShowPlanModal={setShowPlanModal}
+              setShowChatModal={setShowChatModal}
+              setIsBuildModalOpen={setIsBuildModalOpen}
+            />
+          ) : null}
+        </div>
       }
     >
       <ProjectDetailMainContent
@@ -346,6 +365,12 @@ export function ProjectDetailClient({
           onOpenChange={setShowPlanModal}
         />
       )}
+
+      <ProjectFeedbackModal
+        projectId={projectId}
+        isOpen={isFeedbackOpen}
+        onClose={() => setIsFeedbackOpen(false)}
+      />
 
       <ProjectInterviewHistoryDialog
         conversationHistory={project.conversationHistory}

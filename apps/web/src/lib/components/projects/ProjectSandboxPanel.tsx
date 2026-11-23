@@ -38,6 +38,7 @@ import {
   SessionDocumentsPanel,
   useSourceDocuments,
 } from "@/lib/components/docs/SessionDocumentsPanel";
+import { useProjectDocuments } from "./useProjectDocuments";
 
 interface ProjectSandboxPanelProps {
   projectId: Id<"projects">;
@@ -100,7 +101,11 @@ export function ProjectSandboxPanel({
   const viewState = useQuery(api.sandboxPanes.getViewState, { owner });
   const releaseBrowserLock = useMutation(api.sandboxPanes.releaseBrowserLock);
 
-  const activeTab: SandboxTab = sandboxTab;
+  // The coordinator runs no dev server, so it has no Preview: an old
+  // `/sandbox/preview` link lands on Documents.
+  const activeTab: SandboxTab =
+    sandboxTab === "preview" ? "documents" : sandboxTab;
+  const projectDocuments = useProjectDocuments(projectId, repoId);
 
   // Content-keyed Agents tab, folded from the chat transcript the project's
   // chat panel already subscribes to (same entity ids). Artifacts stay on the
@@ -151,7 +156,9 @@ export function ProjectSandboxPanel({
     navigateToSandboxTab(tab);
   };
 
-  const enabledTabs = withBrowserTab(panes.enabledTabs);
+  const enabledTabs = withBrowserTab(panes.enabledTabs).filter(
+    (tab) => tab !== "preview",
+  );
   const { owner: ownerParam, repo: repoParam } = useParams({ strict: false });
 
   return (
@@ -177,10 +184,6 @@ export function ProjectSandboxPanel({
             onTabChange={handleTabChange}
             collapsed={collapsed}
             onToggle={onToggle}
-            onNewPreview={() => {
-              panes.handleNewPreview();
-              navigateToSandboxTab("preview");
-            }}
             newPreviewDisabled={panes.newPreviewDisabled}
             enabledTabs={enabledTabs}
             showFilesTab
@@ -212,7 +215,10 @@ export function ProjectSandboxPanel({
                 : "hidden"
             }
           >
-            <SessionDocumentsPanel source={artifactSource} />
+            <SessionDocumentsPanel
+              source={artifactSource}
+              project={projectDocuments}
+            />
           </div>
           <div
             className={
@@ -234,10 +240,7 @@ export function ProjectSandboxPanel({
                 : "hidden"
             }
           >
-            <SandboxAgentsPanel
-              entity={chatBinding.entity}
-              agents={agents}
-            />
+            <SandboxAgentsPanel entity={chatBinding.entity} agents={agents} />
           </div>
           <ReviewChatTargetProvider value={chatKeys.draftTarget ?? null}>
             <SandboxPaneSlots

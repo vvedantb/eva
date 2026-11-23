@@ -17,6 +17,7 @@ import {
 } from "./prompts";
 import { resolveMessageTokens } from "../_mentions/resolveMessageTokens";
 import { listReadableSiblingRepos } from "../_githubRepos/sandboxRead";
+import { childTaskProjectBlock } from "../_sessions/sessionPrompt";
 
 const MONTH_NAMES = [
   "January",
@@ -134,6 +135,9 @@ export const getTaskData = internalQuery({
     };
 
     let projectContext: { title: string; description?: string } | undefined;
+    // A child task's run carries the same project half its chat turns do:
+    // its place in the project, the brief and its dependencies.
+    let projectBlock = "";
     if (args.projectId) {
       const project = await ctx.db.get(args.projectId);
       if (project) {
@@ -143,8 +147,11 @@ export const getTaskData = internalQuery({
             project.description ?? undefined,
           ),
         };
+        projectBlock = await childTaskProjectBlock(ctx, task, project);
       }
     }
+    // The coordinator's retry note or the answer to the task's question.
+    const runNote = (await ctx.db.get(args.runId))?.note?.trim() ?? "";
 
     const resolvedTaskDescription = await resolveDescriptionForPrompt(
       task.description ?? undefined,
@@ -259,7 +266,9 @@ export const getTaskData = internalQuery({
           );
 
     return {
-      prompt,
+      prompt: [prompt, projectBlock, runNote]
+        .filter((block) => block !== "")
+        .join("\n\n"),
       repoOwner: repo.owner,
       repoName: repo.name,
       branchName,

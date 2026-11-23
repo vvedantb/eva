@@ -68,7 +68,7 @@ export function ProjectMainTabs({
           value === "overview"
             ? `${projectHref}/overview`
             : value === "sandbox"
-              ? `${projectHref}/sandbox/preview`
+              ? `${projectHref}/sandbox/documents`
               : projectHref;
         navigate({ to: toInternalRepoHref(href) });
       }}

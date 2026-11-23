@@ -1,29 +1,31 @@
 "use client";
 
-import { useQuery } from "convex-helpers/react/cache/hooks";
-import { api } from "@eva/backend";
-import { projectProgressSegments } from "@eva/shared";
-import type { Id } from "@eva/backend";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@vvedantb/ui";
+import type { ProjectStatus } from "@eva/shared/projectStatus";
 import {
-  statusConfig,
-  TASK_STATUSES,
-} from "@/lib/components/tasks/TaskStatusBadge";
+  PROJECT_TASK_STAGES,
+  projectStageSegments,
+} from "@eva/shared/projectView";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@vvedantb/ui";
+import { projectTaskStageConfig } from "./ProjectPhaseBadge";
 
 interface ProjectProgressBarProps {
-  projectId: Id<"projects">;
+  /** The project's derived status (`useProjectTaskStatus` / `useProjectStatuses`). */
+  status: ProjectStatus | undefined;
   className?: string;
 }
 
 export function ProjectProgressBar({
-  projectId,
+  status,
   className,
 }: ProjectProgressBarProps) {
-  const progress = useQuery(api.projects.getTaskProgress, { projectId });
+  if (!status) return null;
 
-  if (!progress) return null;
+  // Fills stay at full track width and scale from the left — same compositor
+  // rule as UsageBar. `.project-progress-fill` is the hook for
+  // `html[data-page-motion=off]` (do not add that rule here).
+  const segments = projectStageSegments(status);
 
-  if (progress.total === 0) {
+  if (segments.length === 0) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>
@@ -38,11 +40,6 @@ export function ProjectProgressBar({
     );
   }
 
-  // Fills stay at full track width and scale from the left — same compositor
-  // rule as UsageBar. `.project-progress-fill` is the hook for
-  // `html[data-page-motion=off]` (do not add that rule here).
-  const segments = projectProgressSegments(progress);
-
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -51,8 +48,8 @@ export function ProjectProgressBar({
         >
           {segments.map((segment) => (
             <div
-              key={segment.status}
-              className={`project-progress-fill absolute inset-y-0 w-full origin-left transition-transform duration-[var(--motion-base)] ${statusConfig[segment.status].bar}`}
+              key={segment.stage}
+              className={`project-progress-fill absolute inset-y-0 w-full origin-left transition-transform duration-[var(--motion-base)] ${projectTaskStageConfig[segment.stage].bar}`}
               style={{
                 left: `${segment.offset * 100}%`,
                 transform: `scaleX(${segment.ratio})`,
@@ -63,15 +60,17 @@ export function ProjectProgressBar({
       </TooltipTrigger>
       <TooltipContent>
         <div className="flex flex-col gap-1">
-          {TASK_STATUSES.flatMap((s) => {
-            if (progress[s] <= 0) return [];
-            const Icon = statusConfig[s].icon;
+          {PROJECT_TASK_STAGES.flatMap((stage) => {
+            const count = status.counts[stage];
+            if (count <= 0) return [];
+            const config = projectTaskStageConfig[stage];
+            const Icon = config.icon;
             return [
               <span
-                key={s}
-                className={`flex items-center gap-1.5 ${statusConfig[s].text}`}
+                key={stage}
+                className={`flex items-center gap-1.5 ${config.text}`}
               >
-                <Icon size={12} /> {progress[s]} {statusConfig[s].label}
+                <Icon size={12} /> {count} {config.label}
               </span>,
             ];
           })}

@@ -19,7 +19,12 @@ import type { ActionCtx, MutationCtx } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { requireCurrentUserId } from "./_auth/currentUser";
 import { assertNotInMaintenance } from "./maintenance";
-import type { DataModel, Doc, Id } from "./_generated/dataModel";
+import type {
+  DataModel,
+  Doc,
+  Id,
+  TableNames,
+} from "./_generated/dataModel";
 import { scheduleProjectPrSync } from "./_projects/prSync";
 import { isEntityDeleted } from "./numId";
 import { buildTaskBranchName } from "./_git/branchNames";
@@ -672,3 +677,18 @@ export const {
   resolveUserId: (ctx) => requireCurrentUserId(ctx),
   resolveActionUserId: (ctx) => resolveActionUserId(ctx),
 });
+
+/**
+ * A string id from outside Convex's validators (an MCP tool's argument),
+ * checked against its table. Throws `${what} not found` when it is not one.
+ */
+export function normalizeIdOrThrow<Table extends TableNames>(
+  db: GenericDatabaseReader<DataModel>,
+  table: Table,
+  id: string,
+  what: string,
+): Id<Table> {
+  const normalized = db.normalizeId(table, id);
+  if (normalized === null) throw new Error(`${what} not found`);
+  return normalized;
+}

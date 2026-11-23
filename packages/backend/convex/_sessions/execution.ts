@@ -35,6 +35,7 @@ import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults"
 import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
 import { selectUsageLimitRetryUserMessage } from "./resultTarget";
 import { sessionOwner } from "./owner";
+import { routePersonChatMessage } from "../_projects/reports";
 import type { Doc, Id } from "../_generated/dataModel";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
@@ -421,6 +422,20 @@ export const startExecute = authMutation({
     const repo = await ctx.db.get(session.repoId);
     if (!repo) throw new Error("Repository not found");
 
+    // In a project task waiting on its question, this message is the answer
+    // and starts the task's next run (`routePersonChatMessage`). The user row
+    // is already stored (the client sends addMessage first).
+    if (
+      await routePersonChatMessage(ctx, {
+        context,
+        userId: ctx.userId,
+        message: args.message,
+        insertUserRow: false,
+      })
+    ) {
+      return "started";
+    }
+
     const { chatId, message, sourceProposedPlanId, ...settings } = args;
     void chatId;
 
@@ -687,12 +702,42 @@ export async function sendSessionChatMessage(
     authorUserId: params.userId,
     surface: { kind: "session", session, chat },
   });
+  // A project task waiting on its question takes this as the answer.
+  if (
+    await routePersonChatMessage(ctx, {
+      context: params.context,
+      userId: params.userId,
+      message: params.content,
+      insertUserRow: true,
+    })
+  ) {
+    return;
+  }
   await enqueueChatMessage(ctx, params);
   // Sends at once when the chat is idle. Otherwise the queue waits: behind
   // the running turn, for a usage-limit reset, for a free parallel-chat
   // slot, or for Eva to wake — a sleeping sandbox is woken here and its
   // ready drain sends the message.
   await drainChatQueueQuietly(ctx, chat._id);
+}
+
+/**
+ * Queues a message Eva sends by itself (a project coordinator's wake-up) on
+ * a session chat and drains the queue: it runs at once on an idle chat, after
+ * the running turn otherwise, and a sleeping sandbox wakes for it. No user
+ * activity and no mentions: no person typed it. The caller checks the target.
+ */
+export async function queueSystemChatMessage(
+  ctx: MutationCtx,
+  params: {
+    context: SessionChatContext;
+    userId: Id<"users">;
+    content: string;
+    settings: TurnSettings;
+  },
+): Promise<void> {
+  await enqueueChatMessage(ctx, { ...params, sentViaOrchestrator: true });
+  await drainChatQueueQuietly(ctx, params.context.chat._id);
 }
 
 /**

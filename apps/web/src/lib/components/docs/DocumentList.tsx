@@ -9,6 +9,7 @@ import {
   SessionSourceList,
   SessionSourceRow,
 } from "@/lib/components/sandbox/SessionSourcePane";
+import { ChatSourceLink } from "@/lib/components/sandbox/ChatSourceBadge";
 
 type DocRow = FunctionReturnType<typeof api.docs.listForSource>[number];
 
@@ -17,10 +18,13 @@ export function DocumentList({
   docs,
   emptyDescription,
   onOpen,
+  showTaskSource = false,
 }: {
   docs: DocRow[];
   emptyDescription: string;
   onOpen: (docId: string) => void;
+  /** A project's tab: rows a child task made name and link that task. */
+  showTaskSource?: boolean;
 }) {
   if (docs.length === 0) {
     return (
@@ -41,6 +45,11 @@ export function DocumentList({
           timeLabel={compactRelativeTime(doc.updatedAt)}
           icon={<IconFile size={16} />}
           link={<button type="button" onClick={() => onOpen(doc._id)} />}
+          trailing={
+            showTaskSource && doc.source?.kind === "task" ? (
+              <ChatSourceLink source={doc.source} sandboxTab="documents" />
+            ) : undefined
+          }
         />
       ))}
     </SessionSourceList>

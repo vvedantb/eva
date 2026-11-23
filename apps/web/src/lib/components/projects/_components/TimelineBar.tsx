@@ -3,10 +3,8 @@
 import type { FunctionReturnType } from "convex/server";
 import { type api } from "@eva/backend";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@vvedantb/ui";
-import {
-  phaseConfig,
-  type ProjectPhase,
-} from "@/lib/components/projects/ProjectPhaseBadge";
+import type { ProjectStage } from "@eva/shared/projectStatus";
+import { projectStageConfig } from "@/lib/components/projects/ProjectPhaseBadge";
 import {
   statusConfig,
   TASK_STATUSES,
@@ -18,18 +16,18 @@ type ProjectProgress = FunctionReturnType<
 
 interface TimelineBarProps {
   name: string;
-  phase: ProjectPhase;
+  stage: ProjectStage;
   progress?: ProjectProgress;
 }
 
 /**
- * The inner content of a timeline bar: a phase-tinted track, a saturated fill
+ * The inner content of a timeline bar: a stage-tinted track, a saturated fill
  * sized to the share of completed tasks (Linear-style), the project name and a
  * percentage. Wrapped in a tooltip with the full per-status breakdown. Purely
  * presentational — progress is fed in so the row issues no query of its own.
  */
-export function TimelineBar({ name, phase, progress }: TimelineBarProps) {
-  const config = phaseConfig[phase];
+export function TimelineBar({ name, stage, progress }: TimelineBarProps) {
+  const config = projectStageConfig[stage];
   const total = progress?.total ?? 0;
   const done = progress?.done ?? 0;
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;

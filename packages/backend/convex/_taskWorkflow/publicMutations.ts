@@ -28,6 +28,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { errorMessage } from "@vvedantb/server";
 import { findWorkSession } from "../_sessions/owner";
 import { abandonTaskRunSandbox } from "../_sessions/sandbox";
+import { closeTaskReports } from "../_projects/reports";
 
 /** Retrieves the active workflow ID for a task, or null if none exists. */
 async function getActiveWorkflowId(
@@ -224,8 +225,10 @@ export async function cancelTaskRun(
   });
   await finishTaskRun(ctx, task._id, undefined);
   // The task left `in_progress`: its project may start the next ones (the
-  // stopped task itself waits for a person).
+  // stopped task itself waits for a person). A stop also closes the task's
+  // open question to its coordinator.
   if (task.projectId !== undefined) {
+    await closeTaskReports(ctx, task._id);
     await recomputeProjectPhase(ctx, task.projectId);
   }
 }

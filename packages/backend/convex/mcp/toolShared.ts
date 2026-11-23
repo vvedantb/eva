@@ -4,6 +4,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { internal } from "../_generated/api";
 import { z } from "zod";
 import type { JsonValue } from "../_jev/jsonValue";
+import type { McpCallerOwner } from "./projectScope";
 
 // Leaf module shared by tools.ts and orchestratorTools.ts. Lives apart from
 // tools.ts so the orchestrator registration does not close an import cycle
@@ -47,6 +48,14 @@ export interface McpCredentials {
    * start or message agents register a watch on this thread.
    */
   aveThreadId?: string;
+  /**
+   * The task or project the sandbox chat speaks for (`chatOwner`), resolved
+   * once for each request (`mcp.projectQueries.resolveCallerOwner`). "This
+   * chat" means this owner (`withSelfDefault`), and the project tool rules
+   * read it (`mcp/projectScope.ts`). Absent for a standalone session and for
+   * callers with no sandbox chat.
+   */
+  owner?: McpCallerOwner;
 }
 
 /**

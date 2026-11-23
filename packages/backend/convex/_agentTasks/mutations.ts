@@ -63,6 +63,7 @@ import {
   notifyTaskAssignee,
   updateTaskArgs,
 } from "./updateTask";
+import { closeTaskReports } from "../_projects/reports";
 
 // Status transitions that notify subscribers. Mid-run automated transitions
 // (todo/in_progress) are intentionally excluded; those patch status directly
@@ -185,6 +186,8 @@ export const updateStatus = authMutation({
       args.status === "code_review" && previousStatus !== "code_review";
     const enteringCancelled =
       args.status === "cancelled" && previousStatus !== "cancelled";
+    // A cancelled task's open question to its coordinator closes with it.
+    if (enteringCancelled) await closeTaskReports(ctx, task._id);
     const leavingCancelled =
       previousStatus === "cancelled" &&
       args.status !== "cancelled" &&
@@ -364,15 +367,18 @@ const createQuickTaskArgs = {
    * approves it later (`approveProjectTasks`).
    */
   approved: v.optional(v.boolean()),
+  /** A project task's phase label (`agentTasks.phaseLabel`). */
+  phaseLabel: v.optional(v.string()),
 };
 
 /**
  * Creates one `todo` task, in a project when `projectId` is set (next
  * `taskNumber`; the repo must be one of the project's, `assertProjectRepo`).
  * `need` is the project role the caller must hold; `origin` marks why the
- * task exists. The one insert for `createQuickTask` and `createFeedbackTask`.
+ * task exists. The one insert for `createQuickTask`, `createFeedbackTask` and
+ * the coordinator's tasks (`_projects/batches.ts`).
  */
-async function createTodoTask(
+export async function createTodoTask(
   ctx: MutationCtx & { userId: Id<"users"> },
   args: ObjectType<typeof createQuickTaskArgs>,
   options: {
@@ -436,6 +442,8 @@ async function createTodoTask(
     priority: args.priority,
     attachmentStorageIds: args.attachmentStorageIds,
     origin: options.origin,
+    phaseLabel:
+      args.projectId !== undefined ? args.phaseLabel?.trim() || undefined : undefined,
     approvedAt:
       args.projectId !== undefined && options.approved ? now : undefined,
     numId,

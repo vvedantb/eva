@@ -37,8 +37,8 @@ import {
   FIELD_TEXT_CLASS,
   FIELD_TRIGGER_CLASS,
 } from "@/lib/components/fields/FieldsSection";
-import { ProjectPhaseBadge } from "./ProjectPhaseBadge";
-import { ProjectPhaseSelect } from "./_components/ProjectPhaseSelect";
+import { ProjectPhaseBadge, ProjectStageBadge } from "./ProjectPhaseBadge";
+import { useProjectTaskStatus } from "./useProjectStatus";
 import { ProjectDateRangeField } from "./_components/ProjectDateRangeField";
 import { PriorityPicker } from "@/lib/components/priority/PriorityPicker";
 import {
@@ -46,6 +46,7 @@ import {
   useProviderAccounts,
 } from "@/lib/hooks/useAvailableAiModels";
 import { ProjectTagsPopover } from "./_components/ProjectTagsPopover";
+import { ProjectCoordinatorFields } from "./_components/ProjectCoordinatorFields";
 import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { useUpdateProject } from "./useUpdateProject";
@@ -65,6 +66,7 @@ export function ProjectFieldsPanel({
   const users = useQuery(api.users.listAll);
   const currentUserId = useQuery(api.auth.me);
   const updateProject = useUpdateProject(projectId);
+  const { status } = useProjectTaskStatus(projectId, repo._id);
 
   const displayName = (user: NonNullable<typeof users>[number]) =>
     user.fullName ||
@@ -113,16 +115,17 @@ export function ProjectFieldsPanel({
   return (
     <div className="space-y-4">
       <FieldsSection title="Properties">
+        {/* Stage is derived from the child tasks; only the old planning
+            phases (interview and plan tabs) still read the stored phase. */}
         {project.phase === "draft" || project.phase === "finalized" ? (
           <div className={FIELD_ROW_CLASS}>
             <ProjectPhaseBadge phase={project.phase} />
           </div>
-        ) : (
-          <ProjectPhaseSelect
-            value={project.phase}
-            onChange={(phase) => updateProject({ id: projectId, phase })}
-          />
-        )}
+        ) : status ? (
+          <div className={FIELD_ROW_CLASS}>
+            <ProjectStageBadge stage={status.stage} />
+          </div>
+        ) : null}
 
         <div className={FIELD_ROW_CLASS}>
           <PriorityPicker
@@ -305,6 +308,13 @@ export function ProjectFieldsPanel({
           </Tooltip>
         </div>
       </FieldsSection>
+
+      <ProjectCoordinatorFields
+        projectId={projectId}
+        homeRepoId={project.repoId}
+        instructions={project.instructions}
+        extraRepoIds={project.extraRepoIds ?? []}
+      />
 
       <FieldsSection title="Dates">
         <ProjectDateRangeField

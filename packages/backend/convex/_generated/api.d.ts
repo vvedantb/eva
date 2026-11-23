@@ -10,6 +10,7 @@
 
 import type * as _agentRuns_mutations from "../_agentRuns/mutations.js";
 import type * as _agentRuns_queries from "../_agentRuns/queries.js";
+import type * as _agentTasks_dependencies from "../_agentTasks/dependencies.js";
 import type * as _agentTasks_drafts from "../_agentTasks/drafts.js";
 import type * as _agentTasks_execution from "../_agentTasks/execution.js";
 import type * as _agentTasks_helpers from "../_agentTasks/helpers.js";
@@ -86,6 +87,7 @@ import type * as _connectors_tokens from "../_connectors/tokens.js";
 import type * as _deployment_vercel from "../_deployment/vercel.js";
 import type * as _docEditor_markdown from "../_docEditor/markdown.js";
 import type * as _docs_access from "../_docs/access.js";
+import type * as _docs_body from "../_docs/body.js";
 import type * as _drafts_helpers from "../_drafts/helpers.js";
 import type * as _drafts_mutations from "../_drafts/mutations.js";
 import type * as _drafts_queries from "../_drafts/queries.js";
@@ -207,8 +209,10 @@ import type * as _prRecapWorkflow_staleDoc from "../_prRecapWorkflow/staleDoc.js
 import type * as _prRecapWorkflow_start from "../_prRecapWorkflow/start.js";
 import type * as _prRecapWorkflow_walkthrough from "../_prRecapWorkflow/walkthrough.js";
 import type * as _previewToolCalls_calls from "../_previewToolCalls/calls.js";
+import type * as _projects_batches from "../_projects/batches.js";
 import type * as _projects_buildState from "../_projects/buildState.js";
 import type * as _projects_conflicts from "../_projects/conflicts.js";
+import type * as _projects_coordinatorWake from "../_projects/coordinatorWake.js";
 import type * as _projects_development from "../_projects/development.js";
 import type * as _projects_helpers from "../_projects/helpers.js";
 import type * as _projects_internal from "../_projects/internal.js";
@@ -217,6 +221,11 @@ import type * as _projects_mutations from "../_projects/mutations.js";
 import type * as _projects_prSync from "../_projects/prSync.js";
 import type * as _projects_previewGate from "../_projects/previewGate.js";
 import type * as _projects_queries from "../_projects/queries.js";
+import type * as _projects_reports from "../_projects/reports.js";
+import type * as _projects_scheduler from "../_projects/scheduler.js";
+import type * as _projects_settings from "../_projects/settings.js";
+import type * as _projects_summary from "../_projects/summary.js";
+import type * as _projects_taskTable from "../_projects/taskTable.js";
 import type * as _pty_consoleSessionName from "../_pty/consoleSessionName.js";
 import type * as _pty_launchDevServerInVercelConsole from "../_pty/launchDevServerInVercelConsole.js";
 import type * as _pty_owners from "../_pty/owners.js";
@@ -595,6 +604,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   "_agentRuns/mutations": typeof _agentRuns_mutations;
   "_agentRuns/queries": typeof _agentRuns_queries;
+  "_agentTasks/dependencies": typeof _agentTasks_dependencies;
   "_agentTasks/drafts": typeof _agentTasks_drafts;
   "_agentTasks/execution": typeof _agentTasks_execution;
   "_agentTasks/helpers": typeof _agentTasks_helpers;
@@ -671,6 +681,7 @@ declare const fullApi: ApiFromModules<{
   "_deployment/vercel": typeof _deployment_vercel;
   "_docEditor/markdown": typeof _docEditor_markdown;
   "_docs/access": typeof _docs_access;
+  "_docs/body": typeof _docs_body;
   "_drafts/helpers": typeof _drafts_helpers;
   "_drafts/mutations": typeof _drafts_mutations;
   "_drafts/queries": typeof _drafts_queries;
@@ -792,8 +803,10 @@ declare const fullApi: ApiFromModules<{
   "_prRecapWorkflow/start": typeof _prRecapWorkflow_start;
   "_prRecapWorkflow/walkthrough": typeof _prRecapWorkflow_walkthrough;
   "_previewToolCalls/calls": typeof _previewToolCalls_calls;
+  "_projects/batches": typeof _projects_batches;
   "_projects/buildState": typeof _projects_buildState;
   "_projects/conflicts": typeof _projects_conflicts;
+  "_projects/coordinatorWake": typeof _projects_coordinatorWake;
   "_projects/development": typeof _projects_development;
   "_projects/helpers": typeof _projects_helpers;
   "_projects/internal": typeof _projects_internal;
@@ -802,6 +815,11 @@ declare const fullApi: ApiFromModules<{
   "_projects/prSync": typeof _projects_prSync;
   "_projects/previewGate": typeof _projects_previewGate;
   "_projects/queries": typeof _projects_queries;
+  "_projects/reports": typeof _projects_reports;
+  "_projects/scheduler": typeof _projects_scheduler;
+  "_projects/settings": typeof _projects_settings;
+  "_projects/summary": typeof _projects_summary;
+  "_projects/taskTable": typeof _projects_taskTable;
   "_pty/consoleSessionName": typeof _pty_consoleSessionName;
   "_pty/launchDevServerInVercelConsole": typeof _pty_launchDevServerInVercelConsole;
   "_pty/owners": typeof _pty_owners;

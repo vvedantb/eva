@@ -46,7 +46,11 @@ import {
   type ChatEntityKind,
 } from "../validators";
 import { mcpPullRequestValidator, type McpLinkedRepo } from "./queries";
-import { chatSourceArg, repoRefLabel } from "./toolShared";
+import {
+  chatSourceArg,
+  repoRefLabel,
+  type McpCredentials,
+} from "./toolShared";
 import {
   customerConvexOrigin,
   resolvePublicConvexCloudUrl,
@@ -1864,12 +1868,20 @@ export const handleMcpRequest = internalAction({
         const server = new McpServer(evaMcpServerInfo(process.env.WEB_APP_URL));
         // Register tools with credentials (including optional scoped repo /
         // session entity for browser tools).
-        const credentials = {
+        const owner =
+          entityId !== undefined || chatId !== undefined
+            ? await ctx.runQuery(
+                internal.mcp.projectQueries.resolveCallerOwner,
+                { entityKind, entityId, chatId },
+              )
+            : null;
+        const credentials: McpCredentials = {
           clerkUserId,
           scopedRepoId,
           entityId,
           entityKind,
           chatId,
+          ...(owner !== null ? { owner } : {}),
         };
         const user = await ctx.runQuery(internal.auth.getUserByClerkId, {
           clerkId: clerkUserId,

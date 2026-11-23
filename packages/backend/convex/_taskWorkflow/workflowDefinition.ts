@@ -54,7 +54,7 @@ export const taskExecutionWorkflowArgs = {
   isFirstTaskOnBranch: v.boolean(),
   model: v.optional(aiModelValidator),
   providerAccountId: v.optional(v.id("userProviderAccounts")),
-  /** Entity owner for personal-credential decrypt (task.createdBy). */
+  /** Who unlocks the run's personal account: the task creator, or the project owner for the project's account (`startTaskRun`). */
   credentialOwnerUserId: v.optional(v.id("users")),
   userId: v.id("users"),
   mode: v.optional(runModeValidator),

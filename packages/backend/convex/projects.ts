@@ -29,3 +29,7 @@ export { getInternal } from "./_projects/internal";
 export { setInstructions, setExtraRepoIds } from "./_projects/settings";
 
 export { getSummaryDoc } from "./_projects/summary";
+
+export { listTaskReports } from "./_projects/reports";
+
+export { listTaskBatches, getCoordinatorState } from "./_projects/batches";

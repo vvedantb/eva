@@ -396,7 +396,7 @@ Each row has its id, content, authorId, parentId (set on replies) and createdAt.
       mutating: false,
       input: entityRefArgs,
       handler: async (ref) => {
-        const resolved = await resolveChat(ref);
+        const resolved = await resolveChat(ref, "read");
         if ("content" in resolved) return resolved;
         const { target } = resolved;
         if (target.kind !== "task") {
@@ -508,7 +508,7 @@ The Log is append-only: it is how the user catches up on this chat weeks later, 
       mutating: false,
       input: { ...entityRefArgs },
       handler: async (ref) => {
-        const resolved = await resolveChat(ref);
+        const resolved = await resolveChat(ref, "read");
         if ("content" in resolved) return resolved;
         const { target } = resolved;
         const source = chatSourceArg(target);

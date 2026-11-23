@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
@@ -21,9 +22,12 @@ import { baseDocEditorExtensions, useDocSync } from "./_utils/useDocSync";
 export function SourceDocumentEditor({
   doc,
   onBack,
+  header,
 }: {
   doc: { _id: Id<"docs">; title: string };
   onBack: () => void;
+  /** Above the body: a project summary's live task counts. */
+  header?: ReactNode;
 }) {
   return (
     <SessionSourceDetail
@@ -31,6 +35,7 @@ export function SourceDocumentEditor({
       onBack={onBack}
       title={<DocTitleInput key={doc._id} id={doc._id} title={doc.title} />}
     >
+      {header ? <div className="shrink-0 px-4 pt-3">{header}</div> : null}
       <DocBody docId={doc._id} />
     </SessionSourceDetail>
   );

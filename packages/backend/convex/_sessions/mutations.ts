@@ -3,11 +3,13 @@ import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import {
+  assertCanDrive,
   authMutation,
   getRepoWithAccess,
   getSessionWithAccess,
   hasRepoAccess,
 } from "../functions";
+import { findWorkChat } from "./ownerState";
 import { allocateNumId } from "../numId";
 import {
   aiModelValidator,
@@ -509,7 +511,9 @@ export const archive = authMutation({
 /**
  * A task's or project's session and the chat it talks in (`getOwnedWithSeed`),
  * created on first use. The owner's chat and sandbox panels call this before
- * their first send or Start when `getOwnedWithSeed` is still null.
+ * their first send or Start when `getOwnedWithSeed` is still null. Only a
+ * person who may drive the owner creates it (a project viewer may not); an
+ * existing session and chat are returned to any reader.
  */
 export const ensureOwned = authMutation({
   args: { owner: ownedSessionOwnerValidator },
@@ -521,6 +525,11 @@ export const ensureOwned = authMutation({
       ctx.userId,
     );
     if (!entity) throw new Error(`${args.owner.kind} not found`);
+    const existing = await findWorkChat(ctx.db, entity);
+    if (existing) {
+      return { sessionId: existing.session._id, chatId: existing.chat._id };
+    }
+    await assertCanDrive(ctx.db, args.owner, ctx.userId);
     const { session, chat } = await ensureOwnerChat(ctx, entity);
     return { sessionId: session._id, chatId: chat._id };
   },

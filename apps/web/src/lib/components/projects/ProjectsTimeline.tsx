@@ -22,10 +22,8 @@ import {
   ListEnter,
 } from "@vvedantb/ui";
 import type { GanttFeature, GanttStatus, GanttRange } from "@vvedantb/ui";
-import {
-  phaseConfig,
-  type ProjectPhase,
-} from "@/lib/components/projects/ProjectPhaseBadge";
+import type { ProjectStage } from "@eva/shared/projectStatus";
+import { projectStageConfig } from "@/lib/components/projects/ProjectPhaseBadge";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
 import { TimelineBar } from "./_components/TimelineBar";
@@ -45,6 +43,8 @@ type ProjectProgress = FunctionReturnType<
 
 interface ProjectsTimelineProps {
   projects: Project[];
+  /** The project's derived stage (`projectStatus`). */
+  stageOf: (projectId: string) => ProjectStage;
   basePath: string;
   range: GanttRange;
   zoom: number;
@@ -52,11 +52,11 @@ interface ProjectsTimelineProps {
   onZoomChange: (zoom: number) => void;
 }
 
-// status.color is only used by the sidebar dot fallback (we supply a phase icon
-// instead), but GanttFeature requires it, so map phases to their bar colour.
-function phaseStatus(phase: ProjectPhase): GanttStatus {
-  const { label, barColor } = phaseConfig[phase];
-  return { id: phase, name: label, color: barColor };
+// status.color is only used by the sidebar dot fallback (we supply a stage
+// icon instead), but GanttFeature requires it, so map stages to their bar colour.
+function stageStatus(stage: ProjectStage): GanttStatus {
+  const { label, barColor } = projectStageConfig[stage];
+  return { id: stage, name: label, color: barColor };
 }
 
 /** Lives inside GanttProvider so it can read scrollToToday from context and
@@ -78,6 +78,7 @@ function GanttTodayBridge({
 
 export function ProjectsTimeline({
   projects,
+  stageOf,
   basePath,
   range,
   zoom,
@@ -147,7 +148,7 @@ export function ProjectsTimeline({
         name: project.title,
         startAt: new Date(project.projectStartDate),
         endAt: new Date(project.projectEndDate),
-        status: phaseStatus(project.phase),
+        status: stageStatus(stageOf(project._id)),
       });
     } else {
       unscheduled.push(project);
@@ -212,8 +213,7 @@ export function ProjectsTimeline({
           <GanttSidebar headerTitle="Projects" headerMeta="Progress">
             {features.map((feature, index) => {
               const project = scheduledProjectMap.get(feature.id);
-              const phase = project?.phase ?? "draft";
-              const config = phaseConfig[phase];
+              const config = projectStageConfig[stageOf(feature.id)];
               const Icon = config.icon;
               return (
                 <ListEnter key={feature.id} index={index}>
@@ -240,8 +240,6 @@ export function ProjectsTimeline({
             <GanttHeader />
             <GanttFeatureList>
               {features.map((feature, index) => {
-                const phase =
-                  scheduledProjectMap.get(feature.id)?.phase ?? "draft";
                 return (
                   <ListEnter
                     key={feature.id}
@@ -256,7 +254,7 @@ export function ProjectsTimeline({
                     >
                       <TimelineBar
                         name={feature.name}
-                        phase={phase}
+                        stage={stageOf(feature.id)}
                         progress={progressMap.get(feature.id)}
                       />
                     </GanttFeatureItem>
@@ -276,6 +274,7 @@ export function ProjectsTimeline({
 
       <UnscheduledProjectsSection
         projects={unscheduled}
+        stageOf={stageOf}
         basePath={basePath}
         onSchedule={handleSchedule}
       />
