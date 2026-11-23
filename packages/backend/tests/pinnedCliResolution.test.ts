@@ -31,6 +31,9 @@ const PINNED = "2.1.283";
 
 let root = "";
 let npmLog = "";
+// The launch guard runs `node`. Under bun test, process.execPath is Bun, so
+// find node on the real PATH before the test replaces it.
+const nodeDir = dirname(Bun.which("node") ?? process.execPath);
 
 /** Lays out `<prefix>/bin/claude` plus its package manifest at `version`. */
 function installCli(prefix: string, version: string): string {
@@ -76,7 +79,7 @@ beforeEach(() => {
       join(imagePrefix(), "bin"),
       join(userPrefix(), "bin"),
       stubs,
-      dirname(process.execPath),
+      nodeDir,
       "/usr/bin",
       "/bin",
     ].join(":"),
