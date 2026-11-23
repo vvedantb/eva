@@ -72,7 +72,9 @@ function takeBearerServer(
   };
 }
 
-export function consumeEvaMcpEnvironment(env: EvaMcpEnvironment): {
+export function consumeEvaMcpEnvironment(
+  env: EvaMcpEnvironment & Record<string, string | undefined>,
+): {
   servers: McpServers;
   workerHandoffEnv: Record<string, string>;
 } {
