@@ -25,7 +25,8 @@ import {
  *   `RECAP_AWAY_MS` and a turn finished while they were away.
  *   `chatReads.markRead` starts it (it alone knows the read time before it
  *   moves).
- * - "full" ("Recap"): the whole chat, from the chat menu (`requestFull`).
+ * - "full" ("Recap"): the whole chat, from the chat menu (`requestFull`), or
+ *   on a reopen after `RECAP_REVISIT_MS` with nothing new.
  * `textGen.generateChatRecap` writes the text. A
  * project's Main chat covers every chat in the project's session, and names
  * its task chats as chips. One row per (user, chat); a new absence replaces
@@ -34,6 +35,8 @@ import {
 
 /** Away at least this long before a recap is worth a model call. */
 export const RECAP_AWAY_MS = 30 * 60 * 1000;
+/** Away this long with nothing new, a reopen recaps the whole chat. */
+export const RECAP_REVISIT_MS = 4 * 60 * 60 * 1000;
 
 /** Newest rows read per chat; a recap is about the latest work, not all of it. */
 const MESSAGES_PER_CHAT = 60;
@@ -64,28 +67,35 @@ function getRecapRow(
 }
 
 /**
- * Called from `markRead` with the read time it is about to replace. Starts a
- * recap when the user was away long enough and missed a finished turn.
+ * Called from `markRead` on every open of a chat the user has seen before,
+ * with the read row as it was. Starts a recap when they were away long
+ * enough:
+ * - a turn finished since they read it, and `RECAP_AWAY_MS` passed: "away",
+ *   covering what happened since they last saw the chat;
+ * - nothing new, but `RECAP_REVISIT_MS` passed: "full", the whole chat, so
+ *   they find where they left off.
  */
 export async function maybeStartRecap(
   ctx: MutationCtx,
   input: {
     userId: Id<"users">;
     parentId: ChatParentId;
-    previousReadAt: number;
+    lastReadAt: number;
+    /** The later of the read time and the last visit. */
+    lastSeenAt: number;
     lastTurnFinishedAt: number | undefined;
     now: number;
   },
 ): Promise<void> {
-  const missedTurn =
-    input.lastTurnFinishedAt !== undefined &&
-    input.lastTurnFinishedAt > input.previousReadAt;
-  if (!missedTurn || input.now - input.previousReadAt < RECAP_AWAY_MS) return;
+  if (input.lastTurnFinishedAt === undefined) return;
+  const awayMs = input.now - input.lastSeenAt;
+  const missedTurn = input.lastTurnFinishedAt > input.lastReadAt;
+  if (missedTurn ? awayMs < RECAP_AWAY_MS : awayMs < RECAP_REVISIT_MS) return;
   await startRecap(ctx, {
     userId: input.userId,
     parentId: input.parentId,
-    kind: "away",
-    since: input.previousReadAt,
+    kind: missedTurn ? "away" : "full",
+    since: missedTurn ? input.lastSeenAt : 0,
     now: input.now,
   });
 }
