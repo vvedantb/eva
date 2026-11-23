@@ -1621,6 +1621,8 @@ export const chatReadFields = {
   parentId: chatReadParentIdValidator,
   repoId: v.id("githubRepos"),
   lastReadAt: v.number(),
+  /** Last time the chat was on screen, read or not (chat rows only; recaps). */
+  lastVisitedAt: v.optional(v.number()),
 };
 
 // One row per (user, repo): when the user last opened the repo's Today page,
