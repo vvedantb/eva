@@ -81,6 +81,13 @@ export interface SandboxMount {
   mode: "read-write" | "snapshot";
 }
 
+/**
+ * A project coordinator's sandbox size (plan decision 22): 2 vCPU, 4 GB on
+ * Vercel. It only reads code and plans, so it runs no dev server. Raise it if
+ * a large repo runs out of memory; there is no setting in v1.
+ */
+export const COORDINATOR_VCPUS = 2;
+
 /** Parameters to create a sandbox, optionally seeded from a snapshot. */
 export interface SandboxCreateParams {
   /** Vercel snapshotId. Omit for a bare sandbox. */
@@ -110,6 +117,11 @@ export interface SandboxCreateParams {
    * because the caller's fallback is a cold cache, not an error.
    */
   mounts?: SandboxMount[];
+  /**
+   * vCPUs for the sandbox (Vercel gives 2 GB of memory for each). Omit for
+   * the provider default. A project coordinator passes `COORDINATOR_VCPUS`.
+   */
+  vcpus?: number;
 }
 
 /** Narrowed view of a snapshot record. */

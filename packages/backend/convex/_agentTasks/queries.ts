@@ -31,6 +31,8 @@ import {
   unreadLookupForRepo,
 } from "../chatReads";
 import { gatherAccessibleRepos } from "../_githubRepos/helpers";
+import { factsForClient, loadProjectTaskFacts } from "../_projects/taskTable";
+import { projectTaskFactsValidator } from "../_validators/projectTasks";
 import {
   liveOwnedSessionStatuses,
   liveTaskSandboxStatuses,
@@ -57,6 +59,12 @@ export const agentTaskWithLastRunValidator = v.object({
    * it. The title is empty.
    */
   locked: v.optional(v.boolean()),
+  /**
+   * `listByProject` only: the task as the shared status rules read it
+   * (`@eva/shared/projectStatus`), with the usage limit, dependencies, open
+   * ask and coordinator retries the row alone does not carry.
+   */
+  facts: v.optional(projectTaskFactsValidator),
 });
 
 /** A locked `listByProject` row: what derived project status needs, nothing more. */
@@ -241,9 +249,19 @@ export const listByProject = authQuery({
     const project = await ctx.db.get(args.projectId);
     if (!project || !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId)))
       return [];
-    const rows = (
-      await listProjectTasksForUser(ctx.db, args.projectId, ctx.userId)
-    ).sort((a, b) => (a.task.taskNumber ?? 0) - (b.task.taskNumber ?? 0));
+    const [listed, factsById] = await Promise.all([
+      listProjectTasksForUser(ctx.db, args.projectId, ctx.userId),
+      loadProjectTaskFacts(ctx.db, project),
+    ]);
+    const withFacts = (
+      row: Infer<typeof agentTaskWithLastRunValidator>,
+    ): Infer<typeof agentTaskWithLastRunValidator> => {
+      const facts = factsById.get(String(row._id));
+      return facts ? { ...row, facts: factsForClient(facts) } : row;
+    };
+    const rows = listed.sort(
+      (a, b) => (a.task.taskNumber ?? 0) - (b.task.taskNumber ?? 0),
+    );
     const enriched = await enrichTasksWithLastRun(
       ctx.db,
       ctx.userId,
@@ -252,9 +270,9 @@ export const listByProject = authQuery({
     const enrichedById = new Map(enriched.map((row) => [String(row._id), row]));
     return rows.flatMap<Infer<typeof agentTaskWithLastRunValidator>>(
       ({ task, canAccess }) => {
-        if (!canAccess) return [lockedTaskRow(task)];
+        if (!canAccess) return [withFacts(lockedTaskRow(task))];
         const row = enrichedById.get(String(task._id));
-        return row ? [row] : [];
+        return row ? [withFacts(row)] : [];
       },
     );
   },

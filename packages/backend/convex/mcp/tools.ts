@@ -14,6 +14,8 @@ import {
   orchestratorQuestionTools,
 } from "./agentInteractionTools";
 import { defineTool, type EvaTool } from "./registry";
+import { applyProjectToolPolicy, projectCallerOf } from "./projectScope";
+import { projectTools, siblingRowRefusal } from "./projectTools";
 import { jsonValue } from "../_jev/jsonValue";
 import { evaluateTool } from "../_mcp/evaluateTool";
 import { previewTools } from "../_mcp/previewTools";
@@ -30,6 +32,7 @@ import {
 
 import {
   chatSourceArg,
+  guarded,
   matchRepoByName,
   mcpCallAsUser,
   repoRefLabel,
@@ -668,8 +671,9 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       ),
     repoName: z
       .string()
+      .optional()
       .describe(
-        'Repo name (e.g. "eva" or "vvedantb/eva"). Resolved by matching against your connected repos.',
+        'Repo name (e.g. "eva" or "vvedantb/eva"). Resolved by matching against your connected repos. Required, except in a project coordinator chat, where it defaults to the project\'s home repo and must be one of the project\'s repos.',
       ),
     // No `model` here on purpose: a task runs on the repo's configured default
     // model (createQuickTask: `args.model ?? repo.defaultModel`). The picker
@@ -691,18 +695,100 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       .string()
       .optional()
       .describe(
-        "Optional project ID (Convex ID from the projects table) to attach this task to. When provided, the task's number is automatically set to the next position in the project.",
+        "Optional project ID (Convex ID from the projects table) to attach this task to. When provided, the task's number is automatically set to the next position in the project. In a project coordinator chat the task joins this project by default.",
+      ),
+    phaseLabel: z
+      .string()
+      .optional()
+      .describe(
+        'Project tasks: the phase this task belongs to (a label like "Phase 1: API"), for grouping only.',
+      ),
+    dependsOn: z
+      .array(z.number().int())
+      .optional()
+      .describe(
+        "Project coordinator only: numbers of this project's existing tasks (3 for #3) that must be merged before this one starts.",
       ),
   };
 
   type TaskInput = {
     title: string;
     description: string;
-    repoName: string;
+    repoName?: string;
     baseBranch?: string;
     app?: string;
     projectId?: string;
+    phaseLabel?: string;
   };
+
+  const caller = projectCallerOf(credentials.owner);
+
+  /**
+   * The project a task tool creates into on the coordinator's behalf: its own
+   * project when the call names none or names it. Undefined for any other
+   * caller or project. A child task may not create tasks in its project.
+   */
+  function coordinatorProject(
+    projectId: string | undefined,
+  ): string | ReturnType<typeof toolErrorResult> | undefined {
+    if (caller?.role === "child" && projectId === caller.projectId) {
+      return toolErrorResult(
+        "A project task cannot add tasks to its project. Suggest the task to the coordinator with report_to_coordinator.",
+      );
+    }
+    if (caller?.role !== "coordinator") return undefined;
+    if (projectId !== undefined && projectId !== caller.projectId) {
+      return toolErrorResult(
+        "The project coordinator creates tasks only in its own project.",
+      );
+    }
+    return caller.projectId;
+  }
+
+  /** The repo id a coordinator task targets: named, or the home repo (undefined). */
+  async function coordinatorRepoId(
+    repoName: string | undefined,
+    app: string | undefined,
+    userId: string,
+  ): Promise<{ repoId?: string } | ReturnType<typeof toolErrorResult>> {
+    if (repoName === undefined) return {};
+    const resolved = await resolveRepoByName(repoName, app, userId);
+    if ("content" in resolved) return resolved;
+    return { repoId: resolved.repo.id };
+  }
+
+  /**
+   * The coordinator proposes tasks in its project: `todo`, not approved, in
+   * the project's repos, with dependencies that make no cycle. One call is
+   * one batch card in the coordinator chat.
+   */
+  async function proposeProjectTasks(
+    projectId: string,
+    userId: string,
+    tasks: Array<{
+      title: string;
+      description?: string;
+      repoId?: string;
+      phaseLabel?: string;
+      dependsOn?: number[];
+      dependsOnTaskNumbers?: number[];
+    }>,
+  ) {
+    return guarded(async () => {
+      const created = await ctx.runMutation(
+        internal._projects.batches.createTasksFromCoordinator,
+        { projectId, userId, tasks },
+      );
+      return toolJsonResult({
+        projectId,
+        taskIds: created.taskIds,
+        batchId: created.batchId,
+        taskCount: created.taskIds.length,
+        status: "proposed",
+        note: "The tasks wait for a person to approve them in this chat. You cannot start them.",
+      });
+    });
+  }
 
   async function createTaskForRepo(
     input: TaskInput,
@@ -711,6 +797,9 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     | { taskId: string; repoFullName: string }
     | ReturnType<typeof toolErrorResult>
   > {
+    if (input.repoName === undefined) {
+      return toolErrorResult('Pass "repoName": which repo the task runs in.');
+    }
     const resolved = await resolveRepoByName(input.repoName, input.app, userId);
     if ("content" in resolved) return resolved;
     const { repo } = resolved;
@@ -731,6 +820,9 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
           description: input.description,
           ...(input.baseBranch ? { baseBranch: input.baseBranch } : {}),
           ...(input.projectId ? { projectId: input.projectId } : {}),
+          ...(input.projectId && input.phaseLabel
+            ? { phaseLabel: input.phaseLabel }
+            : {}),
           // An agent's task waits for a person's approval before the
           // project scheduler may start it.
           approved: false,
@@ -753,6 +845,8 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       input: taskArgs,
       handler: async (input) => {
         const { userId } = await getContext();
+        const project = coordinatorProject(input.projectId);
+        if (typeof project === "object") return project;
         const result = await createTaskForRepo(input, userId);
         if ("content" in result) return result;
 
@@ -781,11 +875,26 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     defineTool({
       name: "create_task",
       description:
-        "Create a task on the Eva platform without starting execution. Use this to queue tasks for later review or manual execution.",
+        "Create a task on the Eva platform without starting execution. Use this to queue tasks for later review or manual execution. In a project coordinator chat the task joins this project as a proposal: todo, not approved, with optional phaseLabel and dependsOn (task numbers).",
       mutating: true,
       input: taskArgs,
       handler: async (input) => {
         const { userId } = await getContext();
+        const project = coordinatorProject(input.projectId);
+        if (typeof project === "object") return project;
+        if (project !== undefined) {
+          const repo = await coordinatorRepoId(input.repoName, input.app, userId);
+          if ("content" in repo) return repo;
+          return proposeProjectTasks(project, userId, [
+            {
+              title: input.title,
+              description: input.description,
+              ...repo,
+              phaseLabel: input.phaseLabel,
+              dependsOnTaskNumbers: input.dependsOn,
+            },
+          ]);
+        }
         const result = await createTaskForRepo(input, userId);
         if ("content" in result) return result;
 
@@ -812,13 +921,16 @@ Example: [
   { "title": "Build UI", "description": "...", "dependsOn": [1] }
 ]
 
-This creates 3 tasks where Build API depends on Setup DB schema, and Build UI depends on Build API.`,
+This creates 3 tasks where Build API depends on Setup DB schema, and Build UI depends on Build API.
+
+In a project coordinator chat the batch joins this project (do not pass projectTitle): every task is todo and waits for a person's approval. Each task may name its own repoName (one of the project's repos; default the home repo), a phaseLabel, and dependsOnTaskNumbers for this project's existing tasks. A batch whose dependencies make a cycle is refused.`,
       mutating: true,
       input: {
         repoName: z
           .string()
+          .optional()
           .describe(
-            'Repo name (e.g. "eva" or "vvedantb/eva"). Resolved by matching against your connected repos.',
+            'Repo name (e.g. "eva" or "vvedantb/eva"). Resolved by matching against your connected repos. Required outside a project coordinator chat.',
           ),
         tasks: z
           .array(
@@ -833,6 +945,22 @@ This creates 3 tasks where Build API depends on Setup DB schema, and Build UI de
                 .optional()
                 .describe(
                   "Array of 0-based indices of tasks this task depends on",
+                ),
+              repoName: z
+                .string()
+                .optional()
+                .describe(
+                  "Project coordinator only: this task's repo, one of the project's repos. Defaults to the batch repoName, else the home repo.",
+                ),
+              phaseLabel: z
+                .string()
+                .optional()
+                .describe("Project coordinator only: this task's phase label."),
+              dependsOnTaskNumbers: z
+                .array(z.number().int())
+                .optional()
+                .describe(
+                  "Project coordinator only: numbers of this project's existing tasks this task depends on.",
                 ),
             }),
           )
@@ -859,6 +987,34 @@ This creates 3 tasks where Build API depends on Setup DB schema, and Build UI de
       },
       handler: async (input) => {
         const { userId } = await getContext();
+        if (caller?.role === "coordinator") {
+          if (input.projectTitle !== undefined) {
+            return toolErrorResult(
+              "The project coordinator adds tasks to its own project. Drop projectTitle.",
+            );
+          }
+          const tasks = [];
+          for (const task of input.tasks) {
+            const repo = await coordinatorRepoId(
+              task.repoName ?? input.repoName,
+              input.app,
+              userId,
+            );
+            if ("content" in repo) return repo;
+            tasks.push({
+              title: task.title,
+              description: task.description,
+              ...repo,
+              phaseLabel: task.phaseLabel,
+              dependsOn: task.dependsOn,
+              dependsOnTaskNumbers: task.dependsOnTaskNumbers,
+            });
+          }
+          return proposeProjectTasks(caller.projectId, userId, tasks);
+        }
+        if (input.repoName === undefined) {
+          return toolErrorResult('Pass "repoName": which repo the tasks run in.');
+        }
         const resolved = await resolveRepoByName(
           input.repoName,
           input.app,
@@ -964,6 +1120,41 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
         const resolved = await resolveEntityTarget(ref, userId);
         if ("content" in resolved) return resolved;
         const { target } = resolved;
+
+        // The coordinator messages only its project's tasks
+        // (`projectTargetRefusal` already refused anything outside it). A
+        // message to a task waiting on its question is the answer: it starts
+        // the task's next run, unless a person answered first.
+        if (caller?.role === "coordinator") {
+          if (target.kind !== "task") {
+            return toolErrorResult(
+              "The project coordinator messages only its project's tasks.",
+            );
+          }
+          const answer = await guarded(async () => {
+            const outcome = await ctx.runMutation(
+              internal._projects.reports.answerAskAsCoordinator,
+              {
+                taskId: target.targetId,
+                projectId: caller.projectId,
+                userId,
+                message,
+              },
+            );
+            if (outcome === "none") return null;
+            if (outcome === "answered_by_person") {
+              return toolErrorResult(
+                "A person already answered this task's question, and the task went on with that answer. Your message was not sent. Send it again only if it adds something.",
+              );
+            }
+            return toolJsonResult({
+              ...entitySummary(target),
+              delivered: "started",
+              answeredQuestion: true,
+            });
+          });
+          if (answer !== null) return answer;
+        }
 
         // A session daemon may message a sibling chat of its own session, but
         // never the chat it is running in.
@@ -1104,8 +1295,9 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
       input: {
         repoName: z
           .string()
+          .optional()
           .describe(
-            'Repo whose docs to list (e.g. "eva"). Resolved against your connected repos.',
+            'Repo whose docs to list (e.g. "eva"). Resolved against your connected repos. Required unless scope is "project".',
           ),
         app: z
           .string()
@@ -1117,9 +1309,34 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
           .enum(["document", "pr-recap"])
           .optional()
           .describe("Filter by doc kind. Omit to list all docs."),
+        scope: z
+          .enum(["project"])
+          .optional()
+          .describe(
+            'In a project chat (its coordinator or one of its tasks): "project" lists the docs of the project and of every task in it, the summary included.',
+          ),
       },
-      handler: async ({ repoName, app, kind }) => {
+      handler: async ({ repoName, app, kind, scope }) => {
         const { userId } = await getContext();
+        if (scope === "project") {
+          if (caller === undefined) {
+            return toolErrorResult('scope "project" works only in a project chat.');
+          }
+          const docs = await mcpCallAsUser(
+            ctx,
+            clerkUserId,
+            {
+              type: "query",
+              path: "docs:listForSource",
+              args: { source: { kind: "project", projectId: caller.projectId } },
+            },
+            jsonValue,
+          );
+          return toolJsonResult({ projectId: caller.projectId, docs });
+        }
+        if (repoName === undefined) {
+          return toolErrorResult('Pass "repoName", or scope "project" in a project chat.');
+        }
         const resolved = await resolveRepoByName(repoName, app, userId);
         if ("content" in resolved) return resolved;
         const { repo } = resolved;
@@ -1153,6 +1370,8 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
       },
       handler: async ({ docId, title, content, description }) => {
         await getContext();
+        const refusal = await siblingRowRefusal(ctx, caller, "docs", docId);
+        if (refusal) return refusal;
         await mcpCallAsUser(
           ctx,
           clerkUserId,
@@ -1443,11 +1662,34 @@ Do NOT use this for session walkthrough recordings, screen captures, or screensh
     defineTool({
       name: "list_artifacts",
       description:
-        "List all Eva artifacts across the teams you belong to, each with its hosted view URL.",
+        'List all Eva artifacts across the teams you belong to, each with its hosted view URL. In a project chat, scope "project" lists only the artifacts of the project and its tasks.',
       mutating: false,
-      input: {},
-      handler: async () => {
+      input: {
+        scope: z
+          .enum(["project"])
+          .optional()
+          .describe(
+            '"project": only this project\'s artifacts and its tasks\' (project chats only).',
+          ),
+      },
+      handler: async ({ scope }) => {
         await getContext();
+        if (scope === "project") {
+          if (caller === undefined) {
+            return toolErrorResult('scope "project" works only in a project chat.');
+          }
+          const artifacts = await mcpCallAsUser(
+            ctx,
+            clerkUserId,
+            {
+              type: "query",
+              path: "artifacts:listForSource",
+              args: { source: { kind: "project", projectId: caller.projectId } },
+            },
+            jsonValue,
+          );
+          return toolJsonResult({ projectId: caller.projectId, artifacts });
+        }
         const artifacts = await ctx.runAction(
           internal.mcp.nodeActions.listArtifacts,
           { clerkUserId },
@@ -1728,6 +1970,7 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
   tools.push(...chatSelfTools(credentials, ctx));
   tools.push(...chatContentTools(credentials, ctx));
   tools.push(...workTools(credentials, ctx));
+  tools.push(...projectTools(credentials, ctx));
   tools.push(...automationTools(credentials, ctx));
   tools.push(...tabQueueTools(credentials, ctx));
   tools.push(...agentInteractionTools(credentials, ctx));
@@ -1739,5 +1982,7 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
     tools.push(...orchestratorQuestionTools(credentials, ctx));
   }
 
-  return tools;
+  // The project hub rules (`mcp/projectScope.ts`): hide or refuse by who
+  // the caller speaks for.
+  return applyProjectToolPolicy(tools, caller);
 }

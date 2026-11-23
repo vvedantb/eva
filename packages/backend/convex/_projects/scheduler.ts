@@ -12,7 +12,7 @@ import { filterActiveEntities, isEntityDeleted } from "../numId";
 import { isFirstTaskOnBranch } from "../functions";
 import { latestTaskRun, startTaskRun } from "../_taskWorkflow/startRun";
 import { resolveTaskWorkflowBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
-import { findOwnedSession } from "../_sessions/owner";
+import { findOwnedSession, type OwnedSessionOwner } from "../_sessions/owner";
 import { ownedSessionBusy } from "../_sessions/ownedSession";
 import { isCoordinatorPaused, requestCoordinatorWake } from "./coordinatorWake";
 import { findOpenAsk } from "./reports";
@@ -79,7 +79,7 @@ export async function loadProjectFactsContext(
   project: Pick<Doc<"projects">, "_id" | "providerAccountId">,
   now: number,
 ): Promise<ProjectFactsContext> {
-  const owner = { kind: "project" as const, projectId: project._id };
+  const owner: OwnedSessionOwner = { kind: "project", projectId: project._id };
   const [session, busy, coordinatorPaused] = await Promise.all([
     findOwnedSession(db, owner),
     ownedSessionBusy(db, owner),

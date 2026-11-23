@@ -155,6 +155,31 @@ export const mintInstallationToken = internalAction({
   },
 });
 
+/**
+ * A read-only token for one repository (contents and metadata read): what a
+ * project coordinator's sandbox gets. GitHub refuses a push with it.
+ */
+export const mintReadOnlyRepoToken = internalAction({
+  args: {
+    installationId: v.number(),
+    githubId: v.optional(v.number()),
+    name: v.string(),
+  },
+  returns: sandboxGitCredentialValidator,
+  handler: async (_ctx, args) => {
+    return toSandboxGitCredential(
+      await appAuth()({
+        type: "installation",
+        installationId: args.installationId,
+        permissions: { contents: "read", metadata: "read" },
+        ...(args.githubId !== undefined
+          ? { repositoryIds: [args.githubId] }
+          : { repositoryNames: [args.name] }),
+      }),
+    );
+  },
+});
+
 /** Internal action wrapper for the single-repository sibling token. */
 export const mintSiblingRepoToken = internalAction({
   args: {

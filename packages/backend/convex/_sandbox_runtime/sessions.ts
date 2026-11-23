@@ -36,7 +36,11 @@ import {
   ensureGitCredentialHelper,
 } from "./gitCredentials";
 import { ensureSwapFile } from "./swap";
-import type { SandboxClient, SandboxHandle } from "../_sandbox/provider";
+import {
+  COORDINATOR_VCPUS,
+  type SandboxClient,
+  type SandboxHandle,
+} from "../_sandbox/provider";
 import { sandboxOwnerKey, sandboxStartupEntityId } from "@eva/shared";
 import type { ProgressStep } from "./startupProgress";
 import { isSupersededStart } from "../_sandbox/transitions";
@@ -765,6 +769,10 @@ async function prepareSessionSandboxInternal(
   const launchSession = await ctx.runQuery(internal.sessions.getInternal, {
     id: args.sessionId,
   });
+  // A project coordinator only reads code (plan decision 22): a small
+  // sandbox, no dependency install, and no dev server, background or startup
+  // commands, so it has no Preview.
+  const coordinator = launchSession?.owner.kind === "project";
   completedSteps.push({
     type: "tool",
     label: "Loading repository config...",
@@ -847,6 +855,19 @@ async function prepareSessionSandboxInternal(
           );
           // No setupBranch here: resumeReusedSandbox already owns the branch
           // step, and a `checkout -B` would undo a branch the user switched to.
+          if (coordinator) {
+            reusedResult = {
+              sandbox: handle,
+              isNew: false,
+              usedSnapshot: false,
+              sandboxDetails,
+              branchName: args.branchName,
+              devPort: undefined,
+              devCommand: undefined,
+              resumeFellBack: false,
+            };
+            return;
+          }
           const services = await runLoggedSessionStep(
             "reuseSessionSandbox.startSessionServices",
             sandboxDetails,
@@ -1097,10 +1118,11 @@ async function prepareSessionSandboxInternal(
         undefined,
         { mode: "none" },
         undefined,
-        false,
+        coordinator, // skipInstallDeps: a coordinator only reads code
         forkFrom,
         undefined, // driveCacheRole
         true, // deferDocker: awaited below, before services need it
+        coordinator ? COORDINATOR_VCPUS : undefined,
       ),
   );
   // The fork has been taken (or has failed) once this settles: only now is it
@@ -1207,7 +1229,7 @@ async function prepareSessionSandboxInternal(
     // from the snapshot's baked commit, so the common no-dep-change session keeps
     // its fast baked node_modules. Fresh-clone (non-snapshot) sessions already
     // installed inside createSandboxAndPrepareRepo, so this is snapshot-only.
-    if (prepared.usedSnapshot) {
+    if (prepared.usedSnapshot && !coordinator) {
       await emitSessionProgress(
         ctx,
         args.sessionId,
@@ -1261,6 +1283,23 @@ async function prepareSessionSandboxInternal(
       await ctx.runMutation(internal.sessions.clearSandboxSetupPending, {
         sessionId: args.sessionId,
       });
+    }
+
+    if (coordinator) {
+      await completeSessionProgress(ctx, args.sessionId);
+      logSession(
+        `prepareSessionSandboxInternal summary: elapsed=${formatDurationMsShort(Date.now() - startedAt)}, path=new-coordinator, isNew=true, usedSnapshot=${prepared.usedSnapshot} (${sandboxDetails})`,
+      );
+      return {
+        sandbox: handle,
+        isNew: true,
+        usedSnapshot: prepared.usedSnapshot,
+        sandboxDetails,
+        branchName: args.branchName,
+        devPort: undefined,
+        devCommand: undefined,
+        resumeFellBack: reuseId !== undefined,
+      };
     }
 
     await emitSessionProgress(

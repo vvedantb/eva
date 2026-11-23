@@ -8,6 +8,7 @@ export {
   listTaskProgress,
   countBuilding,
   getProjectPrCreationData,
+  listStatusesForRepo,
 } from "./_projects/queries";
 
 export {

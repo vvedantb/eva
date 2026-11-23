@@ -12,11 +12,15 @@ import {
 } from "./entityRef";
 import {
   confirmedDeleteArg,
+  guarded,
   mcpCallAsUser,
   mcpGetContext,
   type McpCredentials,
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
+import { projectCallerOf } from "./projectScope";
+import { projectTaskRefArgs, resolveProjectTaskRef } from "./projectTools";
+import { internal } from "../_generated/api";
 
 const projectIdArg = z
   .string()
@@ -108,6 +112,26 @@ export function workTools(
 
   const projectInput = { projectId: projectIdArg, ...entityRefArgs };
   const taskInput = { taskId: taskIdArg, ...entityRefArgs };
+  // update_task and delete_task also take a task's number in the caller's
+  // project (`projectTaskRefArgs`), so a coordinator names "#3" directly.
+  const projectTaskInput = {
+    ...entityRefArgs,
+    ...projectTaskRefArgs,
+  };
+  const caller = projectCallerOf(credentials.owner);
+
+  /** A task named by id, by its number in the caller's project, or by ref. */
+  async function resolveTask(
+    ref: EntityRef & { taskId?: string; taskNumber?: number },
+  ): Promise<{ target: EntityTarget } | ReturnType<typeof toolErrorResult>> {
+    const { taskId, taskNumber, ...rest } = ref;
+    const directId = await resolveProjectTaskRef(ctx, caller, {
+      taskId,
+      taskNumber,
+    });
+    if (typeof directId === "object") return directId;
+    return resolveKind("task", directId, rest);
+  }
 
   // ───────────────────────────────────────────────────────────────────────────
   // Project builds
@@ -233,12 +257,18 @@ This does not stop the project's sandbox chat (use stop_agent with kind "project
   tools.push(
     defineTool({
       name: "update_task",
-      description: `Edit a quick task's title, description, tags, priority or base branch. Only the fields you pass change.
+      description: `Edit a task's title, description, tags, priority or base branch (and a project task's phaseLabel). Only the fields you pass change.
 
-Status and review state cannot be changed here; those stay a person's call. "tags" replaces the whole tag list. "priority": null clears it.`,
+Status and review state cannot be changed here; those stay a person's call. "tags" replaces the whole tag list. "priority": null clears it.
+
+In a project coordinator chat, name the task by taskNumber; you can change only tasks of this project that have not started, and the change takes back the task's approval, so a person approves it again.`,
       mutating: true,
       input: {
-        ...taskInput,
+        ...projectTaskInput,
+        phaseLabel: z
+          .string()
+          .optional()
+          .describe("Project coordinator only: the task's phase label. Empty clears it."),
         title: z.string().min(1).optional().describe("New title."),
         description: z
           .string()
@@ -256,12 +286,12 @@ Status and review state cannot be changed here; those stay a person's call. "tag
           .describe("Branch the task's work is based on."),
       },
       handler: async ({
-        taskId,
         title,
         description,
         tags,
         priority,
         baseBranch,
+        phaseLabel,
         ...ref
       }) => {
         const updates: Record<string, JsonValue> = {};
@@ -270,21 +300,46 @@ Status and review state cannot be changed here; those stay a person's call. "tag
         if (tags !== undefined) updates.tags = tags;
         if (priority !== undefined) updates.priority = priority;
         if (baseBranch !== undefined) updates.baseBranch = baseBranch;
-        if (Object.keys(updates).length === 0) {
+        if (Object.keys(updates).length === 0 && phaseLabel === undefined) {
           return toolErrorResult(
-            'Nothing to change: pass at least one of "title", "description", "tags", "priority" or "baseBranch".',
+            'Nothing to change: pass at least one of "title", "description", "tags", "priority", "baseBranch" or "phaseLabel".',
           );
         }
-        const resolved = await resolveKind("task", taskId, ref);
+        if (phaseLabel !== undefined && caller?.role !== "coordinator") {
+          return toolErrorResult(
+            "Only a project coordinator sets a task's phaseLabel.",
+          );
+        }
+        const resolved = await resolveTask(ref);
         if ("content" in resolved) return resolved;
         const { target } = resolved;
-        await runMutation("agentTasks:update", {
-          id: target.targetId,
-          ...updates,
-        });
+        if (caller?.role === "coordinator") {
+          // Only a task not started yet; the edit takes its approval back.
+          const refused = await guarded(async () => {
+            await ctx.runMutation(
+              internal.mcp.projectQueries.editTaskAsCoordinator,
+              {
+                projectId: caller.projectId,
+                taskId: target.targetId,
+                ...(phaseLabel !== undefined ? { phaseLabel } : {}),
+              },
+            );
+            return null;
+          });
+          if (refused !== null) return refused;
+        }
+        if (Object.keys(updates).length > 0) {
+          await runMutation("agentTasks:update", {
+            id: target.targetId,
+            ...updates,
+          });
+        }
         return toolJsonResult({
           ...entitySummary(target),
-          updated: Object.keys(updates),
+          updated: [
+            ...Object.keys(updates),
+            ...(phaseLabel !== undefined ? ["phaseLabel"] : []),
+          ],
         });
       },
     }),
@@ -366,14 +421,14 @@ Only tasks in "todo" can be scheduled, and not while a run is queued or running.
   tools.push(
     defineTool({
       name: "delete_task",
-      description: `Delete a quick task (soft delete): it disappears from lists and its url. Ask the user in chat and get an explicit yes first.
+      description: `Delete a task (soft delete): it disappears from lists and its url. Ask the user in chat and get an explicit yes first. In a project coordinator chat, name the task by taskNumber; only this project's tasks.
 
 Deleting also cancels its scheduled run, drops its run summary and queues its sandbox for deletion. restore_task brings the task row back, but none of those.`,
       mutating: true,
-      input: { ...taskInput, confirmed: confirmedDeleteArg },
+      input: { ...projectTaskInput, confirmed: confirmedDeleteArg },
       // `confirmed` rides along in `ref`; the schema already required it.
-      handler: async ({ taskId, ...ref }) => {
-        const resolved = await resolveKind("task", taskId, ref);
+      handler: async (ref) => {
+        const resolved = await resolveTask(ref);
         if ("content" in resolved) return resolved;
         const { target } = resolved;
         await runMutation("agentTasks:remove", { id: target.targetId });

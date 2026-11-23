@@ -1,4 +1,4 @@
-import { v, type Infer } from "convex/values";
+import type { Infer } from "convex/values";
 import {
   projectTaskNeedsYou,
   projectTaskStage,
@@ -9,7 +9,10 @@ import type { DatabaseReader } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { hasTaskAccess } from "../functions";
 import { isEntityDeleted } from "../numId";
-import { prStateValidator, taskStatusValidator } from "../validators";
+import {
+  projectTaskFactsValidator,
+  projectTaskRowValidator,
+} from "../_validators/projectTasks";
 import {
   listProjectTasks,
   loadProjectFactsContext,
@@ -24,60 +27,38 @@ import {
  * rules are the shared ones (`@eva/shared/projectStatus`).
  */
 
+/** The facts in their return shape (a mutable copy of the dependencies). */
+export function factsForClient(
+  facts: ProjectTaskFacts,
+): Infer<typeof projectTaskFactsValidator> {
+  return { ...facts, dependencies: [...facts.dependencies] };
+}
+
+/**
+ * Every child task's facts for the project, in no set order. The one loader
+ * the list queries share.
+ */
+export async function loadProjectTaskFacts(
+  db: DatabaseReader,
+  project: Doc<"projects">,
+): Promise<Map<string, ProjectTaskFacts>> {
+  const [tasks, context] = await Promise.all([
+    listProjectTasks(db, project._id),
+    loadProjectFactsContext(db, project, Date.now()),
+  ]);
+  const facts = await Promise.all(
+    tasks.map((task) => projectTaskFacts(db, context, task)),
+  );
+  return new Map(facts.map((fact) => [fact.id, fact]));
+}
+
 /** At most this many tasks go into the coordinator's prompt table. */
 export const PROJECT_TASK_TABLE_PROMPT_LIMIT = 60;
 
 /** Longest ask or report text one table row carries. */
 const ROW_TEXT_MAX = 300;
 
-const needsYouValidator = v.union(
-  v.literal("usage_limit"),
-  v.literal("failed"),
-  v.literal("stopped"),
-  v.literal("pr_closed"),
-  v.literal("approve"),
-  v.literal("dependency_cancelled"),
-  v.literal("review"),
-  v.literal("question"),
-);
-
-/**
- * One task row. A task in a repo the reader cannot open is `locked`: only
- * its id, so derived counts still include it.
- */
-export const projectTaskRowValidator = v.union(
-  v.object({ locked: v.literal(true), taskId: v.id("agentTasks") }),
-  v.object({
-    locked: v.literal(false),
-    taskId: v.id("agentTasks"),
-    taskNumber: v.optional(v.number()),
-    title: v.string(),
-    status: taskStatusValidator,
-    stage: v.union(
-      v.literal("launched"),
-      v.literal("in_review"),
-      v.literal("in_progress"),
-      v.literal("todo"),
-      v.literal("cancelled"),
-    ),
-    approved: v.boolean(),
-    phaseLabel: v.optional(v.string()),
-    repoId: v.optional(v.id("githubRepos")),
-    /** `owner/name` of the task's repo. */
-    repo: v.optional(v.string()),
-    prState: v.optional(prStateValidator),
-    prUrl: v.optional(v.string()),
-    /** The task numbers (or ids, for an unnumbered task) it depends on. */
-    dependsOn: v.array(v.string()),
-    needsYou: v.optional(needsYouValidator),
-    waitingForCoordinator: v.boolean(),
-    /** The open question to the coordinator, when there is one. */
-    openAsk: v.optional(v.string()),
-    /** Reports newer than the coordinator's last turn. */
-    newReports: v.array(v.string()),
-    coordinatorRetries: v.number(),
-  }),
-);
+export { projectTaskFactsValidator, projectTaskRowValidator };
 
 export type ProjectTaskRow = Infer<typeof projectTaskRowValidator>;
 

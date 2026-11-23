@@ -15,7 +15,8 @@ import { insertTaskDependencies } from "../_agentTasks/dependencies";
 import { latestChatMessageId, resolveChatParent } from "../_chat/chatParent";
 import { listProjectTasks } from "./scheduler";
 import { assertProjectRepo } from "./settings";
-import { loadProjectTaskRows, projectTaskRowValidator } from "./taskTable";
+import { loadProjectTaskRows } from "./taskTable";
+import { projectTaskRowValidator } from "../_validators/projectTasks";
 import {
   coordinatorAutoTurnsInLastHour,
   isCoordinatorPaused,
@@ -69,11 +70,12 @@ export async function createCoordinatorTasks(
   );
   // Checked for every task before any is written.
   for (const task of tasks) assertProjectRepo(project, task.repoId ?? project.repoId);
-  const existingByNumber = new Map(
-    (await listProjectTasks(ctx.db, projectId)).flatMap((task) =>
-      task.taskNumber !== undefined ? [[task.taskNumber, task._id] as const] : [],
-    ),
-  );
+  const existingByNumber = new Map<number, Id<"agentTasks">>();
+  for (const task of await listProjectTasks(ctx.db, projectId)) {
+    if (task.taskNumber !== undefined) {
+      existingByNumber.set(task.taskNumber, task._id);
+    }
+  }
   const userCtx = { ...ctx, userId };
   const taskIds: Id<"agentTasks">[] = [];
   for (const task of tasks) {

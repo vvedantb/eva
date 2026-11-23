@@ -22,6 +22,7 @@ import {
   requestCoordinatorWake,
 } from "./coordinatorWake";
 import { startProjectTask, taskLabel } from "./scheduler";
+import { taskWorkSessionBusy } from "../_taskWorkflow/startRun";
 
 /**
  * Hub awareness between a project's coordinator and its child tasks
@@ -38,7 +39,8 @@ import { startProjectTask, taskLabel } from "./scheduler";
  *    (`answerAskAsCoordinator`), which starts the task's next run with the
  *    answer in its prompt. If it cannot answer, the task shows "needs you"
  *    once its turn ended (`openAskHolder` in the scheduler) and a person
- *    answers.
+ *    answers. An answer is taken only when the run can start, so a refused
+ *    answer leaves the ask open.
  * 4. A person can always answer in the task chat (`routePersonChatMessage`).
  *    The first answer wins: it marks the ask answered, so a late coordinator
  *    answer is refused and starts no second run.
@@ -148,17 +150,17 @@ function answerNote(
 }
 
 /**
- * Starts the task's next run with the answer (rule 3). False when the task
- * is gone or its run did not start.
+ * Whether the task's next run can start now: the task is live and nothing
+ * holds its session. Checked before an answer is taken, so a refused answer
+ * changes nothing.
  */
-async function resumeAskingTask(
+async function canResumeAskingTask(
   ctx: MutationCtx,
   task: Doc<"agentTasks">,
-  note: string,
 ): Promise<boolean> {
   if (isEntityDeleted(task) || task.status === "cancelled") return false;
   if (await hasActiveRun(ctx.db, task._id)) return false;
-  return await startProjectTask(ctx, task, note);
+  return !(await taskWorkSessionBusy(ctx.db, task));
 }
 
 /**
@@ -187,7 +189,7 @@ export async function routePersonChatMessage(
   const task = await ctx.db.get(owner.taskId);
   if (!task?.projectId) return false;
   const ask = await findOpenAsk(ctx.db, task._id);
-  if (!ask || (await hasActiveRun(ctx.db, task._id))) return false;
+  if (!ask || !(await canResumeAskingTask(ctx, task))) return false;
   await answerOpenAsk(ctx, task._id, params.userId);
   if (params.insertUserRow) {
     await ctx.db.insert("messages", {
@@ -198,11 +200,9 @@ export async function routePersonChatMessage(
       userId: params.userId,
     });
   }
-  return await resumeAskingTask(
-    ctx,
-    task,
-    answerNote(ask, "a person", params.message),
-  );
+  // A failed start shows on the task as a failed run (`startTaskRun`).
+  await startProjectTask(ctx, task, answerNote(ask, "a person", params.message));
+  return true;
 }
 
 /**
@@ -233,7 +233,13 @@ export const answerAskAsCoordinator = internalMutation({
     if (!task || String(task.projectId) !== args.projectId) {
       throw new Error("That task is not part of this project.");
     }
-    const ask = await answerOpenAsk(ctx, task._id, "coordinator");
+    const open = await findOpenAsk(ctx.db, task._id);
+    if (open && !(await canResumeAskingTask(ctx, task))) {
+      throw new Error(
+        "The task cannot start its next run now. Try again in a moment.",
+      );
+    }
+    const ask = open ? await answerOpenAsk(ctx, task._id, "coordinator") : null;
     if (ask) {
       const { chat } = await ensureTaskChat(ctx, task);
       await ctx.db.insert("messages", {
@@ -244,7 +250,7 @@ export const answerAskAsCoordinator = internalMutation({
         userId,
         sentViaOrchestrator: true,
       });
-      await resumeAskingTask(
+      await startProjectTask(
         ctx,
         task,
         answerNote(ask, "the project coordinator", args.message),

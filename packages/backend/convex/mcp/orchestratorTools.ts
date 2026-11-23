@@ -15,6 +15,7 @@ import {
   type RepoInfo,
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
+import { projectCallerOf } from "./projectScope";
 
 const agentKindArg = z
   .enum(["session", "task", "project"])
@@ -93,6 +94,7 @@ export function fleetTools(
   const { clerkUserId, aveThreadId, resolveRepoScope, resolveWatchThreadId } =
     fleetHelpers(credentials, ctx);
   const { entityId } = credentials;
+  const caller = projectCallerOf(credentials.owner);
 
   // ───────────────────────────────────────────────────────────────────────────
   // list_agents
@@ -123,17 +125,37 @@ export function fleetTools(
           .describe(
             "By default only agents with a turn in flight are returned. Set true to also include idle sessions and not-yet-started tasks.",
           ),
+        scope: z
+          .enum(["project"])
+          .optional()
+          .describe(
+            'In a project chat (its coordinator or one of its tasks): "project" returns every task of this project with its state, phase, repo, PR state, dependencies, needs-you reason and open question. Read-only.',
+          ),
       },
-      handler: async ({ repoName, app, includeIdle }) => {
+      handler: async ({ repoName, app, includeIdle, scope }) => {
         const { userId } = await mcpGetContext(ctx, clerkUserId);
-        const scope = await resolveRepoScope(repoName, app, userId);
-        if ("content" in scope) return scope;
+        if (scope === "project") {
+          if (caller === undefined) {
+            return toolErrorResult('scope "project" works only in a project chat.');
+          }
+          const tasks = await ctx.runQuery(
+            internal.mcp.projectQueries.projectTaskTable,
+            { projectId: caller.projectId, userId },
+          );
+          return toolJsonResult({
+            projectId: caller.projectId,
+            tasks,
+            count: tasks.length,
+          });
+        }
+        const repoScope = await resolveRepoScope(repoName, app, userId);
+        if ("content" in repoScope) return repoScope;
 
         const agents = await ctx.runAction(
           internal.mcp.nodeActions.orchestratorListAgents,
           {
             clerkUserId,
-            repos: scope.repos.map((repo) => ({
+            repos: repoScope.repos.map((repo) => ({
               id: repo.id,
               // App-qualified so a monorepo's app rows are distinguishable in
               // the fleet table (they are separate repo records sharing a name).
@@ -196,6 +218,20 @@ export function fleetTools(
       },
       handler: async ({ kind, id }) => {
         await mcpGetContext(ctx, clerkUserId);
+        // A coordinator stops only its own project's tasks.
+        if (caller?.role === "coordinator") {
+          const projectId =
+            kind === "task"
+              ? await ctx.runQuery(internal.mcp.projectQueries.taskProjectId, {
+                  taskId: id,
+                })
+              : null;
+          if (projectId === null || projectId !== caller.projectId) {
+            return toolErrorResult(
+              "The project coordinator stops only its own project's tasks.",
+            );
+          }
+        }
         const { buildRunning } = await ctx.runAction(
           internal.mcp.nodeActions.orchestratorStopAgent,
           { clerkUserId, kind, id },

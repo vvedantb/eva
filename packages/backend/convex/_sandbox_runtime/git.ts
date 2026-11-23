@@ -400,6 +400,8 @@ export async function createSandbox(
    * See ../_sandbox/driveCache.ts.
    */
   driveCacheRole: DriveCacheRole = DRIVE_CACHE_READER,
+  /** vCPUs; omit for the provider default (see `SandboxCreateParams.vcpus`). */
+  vcpus?: number,
 ): Promise<SandboxHandle> {
   // Keyed on the repo, so every sandbox for a repo shares one cache. Absent
   // only on paths that never resolve a repo, which then get no mount at all.
@@ -453,6 +455,7 @@ export async function createSandbox(
         }),
       },
       readyTimeoutSeconds: timeoutSeconds,
+      ...(vcpus !== undefined ? { vcpus } : {}),
       mounts: repoId
         ? [
             {
@@ -1825,6 +1828,8 @@ export async function createSandboxAndPrepareRepo(
   // `dockerReady` before anything that needs Docker. Docker takes 2.8s at p50
   // and 14.6s at p90, which a new session's repo prep should not wait on.
   deferDocker = false,
+  /** vCPUs for the new sandbox; omit for the provider default. */
+  vcpus?: number,
 ): Promise<PreparedSandbox> {
   let sandbox: SandboxHandle | undefined;
   try {
@@ -1846,6 +1851,7 @@ export async function createSandboxAndPrepareRepo(
             onSandboxAcquired,
             forkFrom,
             driveCacheRole,
+            vcpus,
           );
         } catch (err) {
           if (!forkFrom && effectiveSnapshot && isSnapshotUnusableError(err)) {
@@ -1865,6 +1871,7 @@ export async function createSandboxAndPrepareRepo(
               onSandboxAcquired,
               undefined, // forkFrom — the fallback is a fresh boot
               driveCacheRole,
+              vcpus,
             );
           } else {
             throw err;

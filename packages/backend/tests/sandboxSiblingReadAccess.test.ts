@@ -358,7 +358,7 @@ describe("resolveCredentialRequest — sandboxes bound to no entity", () => {
 });
 
 describe("resolveCredentialRequest — entity kinds", () => {
-  test.each(["session", "task", "project"] as const)(
+  test.each(["session", "task"] as const)(
     "sandbox bound via a %s's session resolves its owner",
     async (entity) => {
       const { t, ids } = await fixture({ entity });
@@ -370,6 +370,18 @@ describe("resolveCredentialRequest — entity kinds", () => {
       });
     },
   );
+
+  test("a project coordinator's sandbox only ever gets read-only tokens", async () => {
+    const { t } = await fixture({ entity: "project" });
+    expect(await resolve(t, "AcmeOrg/design-system.git")).toMatchObject({
+      kind: "read_only",
+      installationId: 2,
+      owner: "AcmeOrg",
+      name: "design-system",
+    });
+    // Its home repo too: GitHub refuses a push with this token.
+    expect(await resolve(t, undefined)).toMatchObject({ kind: "read_only" });
+  });
 });
 
 describe("listReadableSiblingRepos", () => {

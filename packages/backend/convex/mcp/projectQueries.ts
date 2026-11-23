@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { v, type Infer } from "convex/values";
 import { internalMutation, internalQuery } from "../_generated/server";
 import type { DatabaseReader } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
@@ -12,10 +12,8 @@ import { chatOwner } from "../_sessions/owner";
 import { loadSessionChat } from "../_sessionChats/helpers";
 import { isEntityDeleted } from "../numId";
 import { listProjectTasks } from "../_projects/scheduler";
-import {
-  loadProjectTaskRows,
-  projectTaskRowValidator,
-} from "../_projects/taskTable";
+import { loadProjectTaskRows } from "../_projects/taskTable";
+import { projectTaskRowValidator } from "../_validators/projectTasks";
 import { upsertProjectSummary } from "../_projects/summary";
 
 // The Convex side of the project-aware MCP tools (`mcp/projectScope.ts`
@@ -31,12 +29,17 @@ const callerOwnerValidator = v.union(
   }),
 );
 
+type CallerOwner = Infer<typeof callerOwnerValidator>;
+
 /** The task's project, as the caller owner carries it. */
-async function taskOwner(db: DatabaseReader, taskId: Id<"agentTasks">) {
+async function taskOwner(
+  db: DatabaseReader,
+  taskId: Id<"agentTasks">,
+): Promise<CallerOwner | null> {
   const task = await db.get(taskId);
   if (!task) return null;
   return {
-    kind: "task" as const,
+    kind: "task",
     taskId: String(task._id),
     ...(task.projectId !== undefined
       ? { projectId: String(task.projectId) }
@@ -57,7 +60,7 @@ export const resolveCallerOwner = internalQuery({
     chatId: v.optional(v.string()),
   },
   returns: v.union(callerOwnerValidator, v.null()),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<CallerOwner | null> => {
     const chatId = args.chatId
       ? ctx.db.normalizeId("sessionChats", args.chatId)
       : null;
@@ -66,7 +69,7 @@ export const resolveCallerOwner = internalQuery({
       if (!context) return null;
       const owner = chatOwner(context.chat, context.session);
       if (owner.kind === "project") {
-        return { kind: "project" as const, projectId: String(owner.projectId) };
+        return { kind: "project", projectId: String(owner.projectId) };
       }
       return owner.kind === "task" ? await taskOwner(ctx.db, owner.taskId) : null;
     }
@@ -78,7 +81,7 @@ export const resolveCallerOwner = internalQuery({
     if (args.entityKind === "project") {
       const projectId = ctx.db.normalizeId("projects", args.entityId);
       return projectId
-        ? { kind: "project" as const, projectId: String(projectId) }
+        ? { kind: "project", projectId: String(projectId) }
         : null;
     }
     const sessionId = ctx.db.normalizeId("sessions", args.entityId);
@@ -86,7 +89,7 @@ export const resolveCallerOwner = internalQuery({
     if (!session) return null;
     if (session.owner.kind === "project") {
       return {
-        kind: "project" as const,
+        kind: "project",
         projectId: String(session.owner.projectId),
       };
     }

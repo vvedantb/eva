@@ -90,11 +90,13 @@ function cleanErrorMessage(error: Error): string {
 /**
  * Turns a backend error thrown inside a tool (typically from mcpCallAsUser)
  * into a tool error the agent can read, optionally with a recovery hint.
+ * `run` may return something other than a tool result (a check that passed);
+ * only a thrown error becomes the tool error.
  */
-export async function guarded(
-  run: () => Promise<CallToolResult>,
+export async function guarded<T = CallToolResult>(
+  run: () => Promise<T>,
   hint?: string,
-): Promise<CallToolResult> {
+): Promise<T | CallToolResult> {
   try {
     return await run();
   } catch (error) {
