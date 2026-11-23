@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: side-panel links slide the page like the rail
+
+Date: 2026-11-23
+
+WHY: The side panel's links (Projects, Quick Tasks, Stats and so on) are a vertical list like the rail, so moving between them now slides the page up or down the same way.
+
+Architectural: `railNavDirection.ts` also tracks `.vt-panel a[href]` clicks against the panel's `aria-current="page"` link (`nav` source) and returns `{ source, direction }`. The router adds `nav-down` / `nav-up` to the `page` type only when the click is already a page swap, so moving from one session or project to another stays instant. globals.css slides only the page for `nav-*` (24px, 240 ms in, 144 ms out, no delay); the panel stays put.
+
 ## Web: switching apps from the rail no longer swaps the panel early
 
 Date: 2026-11-23

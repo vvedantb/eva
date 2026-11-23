@@ -861,6 +861,24 @@
     animation: t-vt-rail-in-from-above 240ms var(--motion-ease-out) 40ms both;
   }
 
+  /* A side-panel link (`nav-down` / `nav-up`): the same slide on the page
+   * only; the panel is the list that was clicked, so it stays put. */
+  html:active-view-transition-type(nav-down)::view-transition-old(page) {
+    animation: t-vt-rail-out-up 144ms var(--motion-ease-out) both;
+  }
+
+  html:active-view-transition-type(nav-up)::view-transition-old(page) {
+    animation: t-vt-rail-out-down 144ms var(--motion-ease-out) both;
+  }
+
+  html:active-view-transition-type(nav-down)::view-transition-new(page) {
+    animation: t-vt-rail-in-from-below 240ms var(--motion-ease-out) both;
+  }
+
+  html:active-view-transition-type(nav-up)::view-transition-new(page) {
+    animation: t-vt-rail-in-from-above 240ms var(--motion-ease-out) both;
+  }
+
   @keyframes t-vt-rail-in-from-below {
     from {
       opacity: 0;
