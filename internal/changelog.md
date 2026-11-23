@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: env variables, snapshots and PR recap tabs slide too
+
+Date: 2026-11-23
+
+WHY: Extends the team-page tab slide to the other pages whose tabs swap the page content.
+
+Architectural: `EnvVariablesPageClient` (Repo/Team) and `SnapshotsClient` (Configuration/Status/Builds) replace their own `AnimatePresence` opacity fades with `TabsTransition`, and `PrRecapPanel` (Recap/Summary) wraps its views. The orders are the exported `envVarScopes`, `snapshotSettingsTabs` and `PR_RECAP_VIEWS`. Left out: list filters (sessions, reviews, feedback, quick tasks, projects) and form toggles stay instant; the review panel keeps every tab mounted; route-outlet tabs (project, sandbox surface, review nav, logs) would slide the new route out with the old panel; the testing-arena panels need a full-height option in `TabsTransition`.
+
 ## Web: team tab content slides from the picked tab's side (@vvedantb/ui 0.62.0)
 
 Date: 2026-11-23
