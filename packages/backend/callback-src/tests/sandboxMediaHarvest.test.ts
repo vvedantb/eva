@@ -52,7 +52,8 @@ mock.module("../http/convexClient.js", () => ({
   },
 }));
 
-const { uploadAndAttachSandboxMedia } = await import("../runtime/completion.js");
+const { uploadAndAttachSandboxMedia } =
+  await import("../runtime/completion.js");
 
 afterAll(() => {
   rmSync(WORK_DIR, { recursive: true, force: true });

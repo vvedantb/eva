@@ -146,19 +146,21 @@ describe("AskUserQuestion past the wait", () => {
       await import("../runtime/pendingQuestion.js");
     const { callbackState } = await import("../runtime/state.js");
     const calls: string[] = [];
-    callConvexWithRetry.mockImplementation(
-      async (_type, path) => {
-        calls.push(path);
-        return {
-          status: "success",
-          value: {
-            answer: path === "pendingQuestions:release" ? releaseAnswer : null,
-          },
-        };
-      },
-    );
+    callConvexWithRetry.mockImplementation(async (_type, path) => {
+      calls.push(path);
+      return {
+        status: "success",
+        value: {
+          answer: path === "pendingQuestions:release" ? releaseAnswer : null,
+        },
+      };
+    });
     vi.useFakeTimers();
-    const pending = buildCanUseTool()("AskUserQuestion", input, permissionOptions("toolu_q"));
+    const pending = buildCanUseTool()(
+      "AskUserQuestion",
+      input,
+      permissionOptions("toolu_q"),
+    );
     await advanceTimersByTimeAsync(QUESTION_WAIT_MS + 1000);
     const result = await pending;
     return { result, calls, callbackState };

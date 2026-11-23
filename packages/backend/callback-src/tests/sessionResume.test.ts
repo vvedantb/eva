@@ -1,7 +1,15 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, mock, test, vi } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+  vi,
+} from "bun:test";
 
 // Runtime homes live under /tmp and die with the sandbox; persist dirs survive
 // it. Both point into one throwaway root so the test never touches /home/eva.
@@ -35,15 +43,12 @@ mock.module("../config.js", () => {
   };
 });
 
-const { callbackState: S, resetStateForTests } = await import(
-  "../runtime/state.js"
-);
-const { prepareCodexSessionState, syncCodexStateToPersist } = await import(
-  "../session/codexSession.js"
-);
-const { prepareCursorSessionState, syncCursorStateToPersist } = await import(
-  "../session/cursorSession.js"
-);
+const { callbackState: S, resetStateForTests } =
+  await import("../runtime/state.js");
+const { prepareCodexSessionState, syncCodexStateToPersist } =
+  await import("../session/codexSession.js");
+const { prepareCursorSessionState, syncCursorStateToPersist } =
+  await import("../session/cursorSession.js");
 const { prepareOpencodeSessionState, syncOpencodeStateToPersist } =
   await import("../session/opencodeSession.js");
 

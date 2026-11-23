@@ -27,16 +27,14 @@ test("sends a redacted completion after the lease is released", async () => {
     args: JsonObject;
     leaseAtSend: TurnLeaseIdentity | null;
   }[] = [];
-  callConvexWithRetry.mockImplementation(
-    async (_type, path, args) => {
-      sent.push({
-        path,
-        args: { ...args },
-        leaseAtSend: getCurrentTurnLease(),
-      });
-      return null;
-    },
-  );
+  callConvexWithRetry.mockImplementation(async (_type, path, args) => {
+    sent.push({
+      path,
+      args: { ...args },
+      leaseAtSend: getCurrentTurnLease(),
+    });
+    return null;
+  });
   beginTurnOwnership("claim", { turnId: "turn-1", leaseGeneration: 2 });
   // Built at runtime so secret scanners do not flag a fake token in the source.
   const token = ["ghs", "A1b2C3d4E5f6G7h8I9j0"].join("_");

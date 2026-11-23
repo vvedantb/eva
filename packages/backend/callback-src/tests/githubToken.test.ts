@@ -17,9 +17,7 @@ const CREDENTIALS = {
 };
 
 function respondWith(body: string, status = 200): void {
-  spyOn(globalThis, "fetch").mockImplementation(
-    async () => new Response(body, { status }),
-  );
+  spyOn(globalThis, "fetch").mockResolvedValue(new Response(body, { status }));
 }
 
 beforeEach(() => {
@@ -100,9 +98,7 @@ describe("ensureGithubToken", () => {
   });
 
   it("keeps the existing token when the network fails", async () => {
-    spyOn(globalThis, "fetch").mockImplementation(async () => {
-      throw new Error("socket closed");
-    });
+    spyOn(globalThis, "fetch").mockRejectedValue(new Error("socket closed"));
 
     await expect(ensureGithubToken(CREDENTIALS)).resolves.toEqual({
       refreshed: false,

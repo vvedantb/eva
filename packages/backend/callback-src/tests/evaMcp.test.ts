@@ -71,7 +71,10 @@ test("consumeEvaMcpEnvironment merges Linear MCP from a bearer token", () => {
 });
 
 test("consumeEvaMcpEnvironment merges Figma MCP only when a bearer is set", () => {
-  const env = { FIGMA_MCP_AUTH: "fig-oauth", FIGMA_MCP_URL: "https://mcp.figma.com/mcp" };
+  const env = {
+    FIGMA_MCP_AUTH: "fig-oauth",
+    FIGMA_MCP_URL: "https://mcp.figma.com/mcp",
+  };
   const { servers } = consumeEvaMcpEnvironment(env);
   expect(servers.figma).toEqual({
     type: "http",
