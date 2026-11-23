@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: action cards under the landing composer (Today + last session)
+
+Date: 2026-11-23
+
+WHY: The Today card sat above the greeting and could be dismissed, but it is a standing suggestion of what to do next, not a notice.
+
+Architectural: `TodayStandupCard` became `ComposerActionCards`, rendered under `ChatComposer` in `NewSessionComposer`. Today shows whenever `standupStatus.enabled` ("New standup · <day>" + "Open Today" while unread, else "Today" + "View Today"); the dismiss button and its `markStandupsRead` call are gone, so only opening Today marks standups read. The second card links the user's most recently updated session, from the cached `sessions.list` + `auth.me` through the shared `filterSessionsStartedBy` / `sortSessionsForSidebar`. Two cards sit side by side from `sm`, stacked below it; one card takes the full width.
+
 ## Web: neutral greys no longer tint red (oklab colour mixing)
 
 Date: 2026-11-23

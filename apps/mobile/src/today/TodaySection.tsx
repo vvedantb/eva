@@ -35,9 +35,9 @@ export function useShowsToday(repoId: Id<"githubRepos"> | undefined) {
 
 /**
  * Opening the Today section reads every standup so far, as opening the web
- * Today page, so the web sidebar dot and composer card clear too. An effect,
- * as the section also opens from `?section=` or the last-used pill, not only
- * a tap, and a standup that lands while Today is open is read on arrival.
+ * Today page, so the web sidebar dot clears and the composer card turns to
+ * "View Today". An effect, as the section also opens from `?section=` or the
+ * last-used pill, not only a tap, and a standup that lands while Today is open is read on arrival.
  * The pager keeps every section mounted, so it waits for `active`. The repo
  * comes from `useProjectRepo`, as the web page reads it from `useRepo`, so
  * the effect is not driven by a `repoId` argument. It only writes while one
