@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: rail page switches slide in the rail's direction
+
+Date: 2026-11-23
+
+WHY: Switching pages from the vertical rail only faded the content; sliding the side panel and page up or down with the rail shows where you went, like the tab slide does sideways.
+
+Architectural: `lib/railNavDirection.ts` records a rail click's direction (the clicked `[data-rail-tile]` below or above the `[data-active]` one, by position). The router's `defaultViewTransition.types` adds `rail-down` / `rail-up` to the `page` type for that navigation, even between apps on the same leaf route. globals.css names the side panel (`.vt-panel` on `SidebarPanel`) `panel` for those types and slides both 24px: 240 ms in (the page 40 ms behind), 144 ms out. Other page swaps keep the plain rise. "Disable page animations" still stops it.
+
 ## Web: view switchers slide (quick tasks, projects, testing arena)
 
 Date: 2026-11-23

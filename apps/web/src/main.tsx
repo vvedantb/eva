@@ -22,6 +22,7 @@ import {
 import { STALE_DEPLOY_RELOAD_PARAM } from "./lib/utils/staleDeployReloadParam";
 import { readSignedInHint } from "./lib/authHint";
 import { migrateLegacyStorageKeys } from "./lib/migrateLegacyStorageKeys";
+import { takeRailDirection } from "./lib/railNavDirection";
 import { InnerApp } from "./InnerApp";
 import "./fonts";
 import "./globals.css";
@@ -76,13 +77,20 @@ const router = createRouter({
   // search filters — stay instant. Moves inside one entity (a session's
   // sandbox tabs, its Review sub-tabs) cross leaf routes too, but are tab
   // switches, not page swaps. Returning `false` skips the transition.
+  //
+  // A rail click also tags the swap `rail-down` / `rail-up` (`railNavDirection`):
+  // the side panel and page slide in the rail's direction. Every rail click is
+  // a page swap, even between two apps on the same leaf route.
   defaultViewTransition: {
-    types: ({ fromLocation, toLocation }) =>
-      fromLocation !== undefined &&
-      !isSameEntity(fromLocation.pathname, toLocation.pathname) &&
-      leafRouteId(fromLocation.pathname) !== leafRouteId(toLocation.pathname)
+    types: ({ fromLocation, toLocation }) => {
+      if (fromLocation === undefined) return false;
+      const rail = takeRailDirection();
+      if (rail !== null) return ["page", `rail-${rail}`];
+      return !isSameEntity(fromLocation.pathname, toLocation.pathname) &&
+        leafRouteId(fromLocation.pathname) !== leafRouteId(toLocation.pathname)
         ? ["page"]
-        : false,
+        : false;
+    },
   },
   // Monorepo apps: address bar + link hrefs use /owner/repo/app/… while the
   // route tree matches /owner/repo--app/… (single $repo segment).

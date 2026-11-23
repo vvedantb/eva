@@ -820,6 +820,75 @@
     animation: t-vt-rise-in var(--motion-base) var(--motion-ease-out) both;
   }
 
+  /*
+   * A rail click (`rail-down` / `rail-up`, `railNavDirection.ts`): the side
+   * panel and the page slide 24px in the rail's direction, like the tab slide
+   * (`TabsTransition`) turned vertical. A lower tile brings content up from
+   * below. The page follows the panel by 40ms so the two read as one move.
+   */
+  html:active-view-transition-type(rail-down) .vt-panel,
+  html:active-view-transition-type(rail-up) .vt-panel {
+    view-transition-name: panel;
+  }
+
+  ::view-transition-group(panel) {
+    animation: none;
+  }
+
+  html:active-view-transition-type(rail-down)::view-transition-old(panel),
+  html:active-view-transition-type(rail-down)::view-transition-old(page) {
+    animation: t-vt-rail-out-up 144ms var(--motion-ease-out) both;
+  }
+
+  html:active-view-transition-type(rail-up)::view-transition-old(panel),
+  html:active-view-transition-type(rail-up)::view-transition-old(page) {
+    animation: t-vt-rail-out-down 144ms var(--motion-ease-out) both;
+  }
+
+  html:active-view-transition-type(rail-down)::view-transition-new(panel) {
+    animation: t-vt-rail-in-from-below 240ms var(--motion-ease-out) both;
+  }
+
+  html:active-view-transition-type(rail-up)::view-transition-new(panel) {
+    animation: t-vt-rail-in-from-above 240ms var(--motion-ease-out) both;
+  }
+
+  html:active-view-transition-type(rail-down)::view-transition-new(page) {
+    animation: t-vt-rail-in-from-below 240ms var(--motion-ease-out) 40ms both;
+  }
+
+  html:active-view-transition-type(rail-up)::view-transition-new(page) {
+    animation: t-vt-rail-in-from-above 240ms var(--motion-ease-out) 40ms both;
+  }
+
+  @keyframes t-vt-rail-in-from-below {
+    from {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+  }
+
+  @keyframes t-vt-rail-in-from-above {
+    from {
+      opacity: 0;
+      transform: translateY(-24px);
+    }
+  }
+
+  @keyframes t-vt-rail-out-up {
+    to {
+      opacity: 0;
+      transform: translateY(-24px);
+    }
+  }
+
+  @keyframes t-vt-rail-out-down {
+    to {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+  }
+
   html[data-page-motion="off"]::view-transition-group(*),
   html[data-page-motion="off"]::view-transition-old(*),
   html[data-page-motion="off"]::view-transition-new(*) {
