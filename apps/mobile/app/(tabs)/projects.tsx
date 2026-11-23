@@ -50,7 +50,7 @@ export default function ProjectsScreen() {
     router.setParams({ section: next });
   };
   const section = sections[index] ?? { id: "projects", label: "Projects" };
-  useMarkStandupsRead(repo?._id, section.id === "today");
+  useMarkStandupsRead(section.id === "today");
   // Where the pages are, shared by the pager and the pill indicator.
   const progress = useSharedValue(index);
   const foreground = EVA_THEME[useScheme()].foreground;

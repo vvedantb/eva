@@ -10,6 +10,7 @@ import { useMutation, useQuery } from "convex/react";
 import { useEffect } from "react";
 import { FlatList, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useProjectRepo } from "@/projects/ProjectsSection";
 import { RepoSection } from "@/ui/RepoPicker";
 import { copyText } from "@/ui/copyText";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
@@ -36,9 +37,15 @@ export function useShowsToday(repoId: Id<"githubRepos"> | undefined) {
  * Opening the Today section reads every standup so far, as opening the web
  * Today page, so the web sidebar dot and composer card clear too. An effect,
  * as the section also opens from `?section=` or the last-used pill, not only
- * a tap; the pager keeps every section mounted, so it waits for `active`.
+ * a tap, and a standup that lands while Today is open is read on arrival.
+ * The pager keeps every section mounted, so it waits for `active`. The repo
+ * comes from `useProjectRepo`, as the web page reads it from `useRepo`, so
+ * the effect is not driven by a `repoId` argument. It only writes while one
+ * is unread.
  */
-export function useMarkStandupsRead(repoId: Id<"githubRepos"> | undefined, active: boolean) {
+export function useMarkStandupsRead(active: boolean) {
+  const { repo } = useProjectRepo();
+  const repoId = repo?._id;
   const status = useQuery(api.today.standupStatus, repoId && active ? { repoId } : "skip");
   const markRead = useMutation(api.today.markStandupsRead);
   const unreadAt = status?.unreadAt ?? null;
