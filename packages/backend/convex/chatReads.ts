@@ -4,7 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { assertMessageParentAccess, authMutation, authQuery } from "./functions";
 import { chatTurnEntityIdValidator } from "./validators";
 import { chatOwnerEntityId } from "./_sessions/owner";
-import { maybeStartRecap } from "./chatRecaps";
+import { expireRecap, maybeStartRecap } from "./chatRecaps";
 
 type ChatEntityId =
   | Id<"sessionChats">
@@ -225,7 +225,11 @@ export const touchVisit = authMutation({
 });
 
 export const markRead = authMutation({
-  args: { parentId: chatTurnEntityIdValidator },
+  args: {
+    parentId: chatTurnEntityIdValidator,
+    /** The chat just came on screen (not a reply landing while it was). */
+    opened: v.optional(v.boolean()),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
@@ -235,7 +239,10 @@ export const markRead = authMutation({
     // Read before the upsert moves it. A first open (no row) has no absence.
     const row = await getReadRow(ctx.db, ctx.userId, args.parentId);
     await upsertReadRow(ctx, ctx.userId, entity);
-    if (row) {
+    // Recaps belong to one visit: an open expires the last one, then may
+    // write a new one. A reply landing while the chat is watched does neither.
+    if (args.opened === true) await expireRecap(ctx, ctx.userId, args.parentId, now);
+    if (row && args.opened === true) {
       await maybeStartRecap(ctx, {
         userId: ctx.userId,
         parentId: args.parentId,
@@ -244,6 +251,8 @@ export const markRead = authMutation({
         lastTurnFinishedAt: entity.lastTurnFinishedAt,
         now,
       });
+    }
+    if (row) {
       // Throttled: the client marks on every open and every landed reply,
       // and `touchVisit` keeps it fresh while the chat stays on screen.
       if (now - (row.lastVisitedAt ?? 0) > VISIT_WRITE_INTERVAL_MS) {

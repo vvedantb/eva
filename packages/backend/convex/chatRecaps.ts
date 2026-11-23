@@ -66,6 +66,26 @@ function getRecapRow(
     .unique();
 }
 
+/** A recap younger than this survives an open: a quick double open keeps it. */
+const RECAP_KEEP_ON_REOPEN_MS = 60_000;
+
+/**
+ * On an open, drops the user's recap from an earlier visit: it said what
+ * happened before that visit, and showing it again on every open (until ×
+ * or a sent message) was stale.
+ */
+export async function expireRecap(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  parentId: ChatParentId,
+  now: number,
+): Promise<void> {
+  const existing = await getRecapRow(ctx.db, userId, parentId);
+  if (existing && now - existing.createdAt > RECAP_KEEP_ON_REOPEN_MS) {
+    await ctx.db.delete(existing._id);
+  }
+}
+
 /**
  * Called from `markRead` on every open of a chat the user has seen before,
  * with the read row as it was. Starts a recap when they were away long

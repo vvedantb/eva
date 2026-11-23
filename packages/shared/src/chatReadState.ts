@@ -62,7 +62,7 @@ export function useChatReadState({
      whether to write a recap (`chatRecaps.maybeStartRecap`). */
   useEffect(() => {
     if (!isActive || parentId === undefined) return;
-    void markRead({ parentId });
+    void markRead({ parentId, opened: true });
     // Present while on screen, and once on leaving: the next recap measures
     // the absence from here, not from the open.
     const timer = setInterval(() => touchVisit({ parentId }).catch(() => undefined), VISIT_HEARTBEAT_MS);
