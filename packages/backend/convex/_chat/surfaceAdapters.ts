@@ -59,7 +59,7 @@ export type ChatSurfaceAdapter<TId extends ChatEntityId, TEntity> = {
     db: DatabaseReader,
     streamingEntityId: string,
   ) => TId | null;
-  /** Any additional streamingActivity rows to clear alongside the turn's own (sessions also clear their summary row). */
+  /** Any additional streamingActivity rows to clear alongside the turn's own. */
   extraStreamingClears: (id: TId) => string[];
   syntheticTurnMessageId: (entity: TEntity) => Id<"messages"> | undefined;
   sandboxId: (entity: TEntity) => string | undefined;
@@ -223,15 +223,14 @@ export type ChatAdapterVisitor<R> = <TId extends ChatEntityId, TEntity>(
 /**
  * A turn owner that is not a chat: a quick-task run or a one-shot agent. It
  * has no placeholder, queue or synthetic turn, so it does not fit
- * `ChatSurfaceAdapter`. `summary` and `interview` work on a chat row and are
- * told apart from its chat turns by the turn's lane.
+ * `ChatSurfaceAdapter`. `interview` works on a chat row and is told apart from
+ * its chat turns by the turn's lane.
  */
 export type AgentTurnOwner =
   | { kind: "run"; id: Id<"agentRuns"> }
   | { kind: "automation"; id: Id<"automationRuns"> }
   | { kind: "doc"; id: Id<"docs"> }
   | { kind: "evaluation"; id: Id<"evaluationReports"> }
-  | { kind: "summary"; id: Id<"sessions"> }
   /** Filed under the project's session. */
   | { kind: "interview"; id: Id<"sessions"> };
 
@@ -241,15 +240,11 @@ export type TurnAdapterVisitor<R> = {
   agent: (owner: AgentTurnOwner) => R;
 };
 
+/** The one lane, the project interview: filed under the project's session. */
 function laneOwner(
   db: DatabaseReader,
   entityId: string,
-  lane: TurnLane,
 ): AgentTurnOwner | null {
-  if (lane === "summary") {
-    const id = db.normalizeId("sessions", entityId);
-    return id ? { kind: "summary", id } : null;
-  }
   const id = db.normalizeId("sessions", entityId);
   return id ? { kind: "interview", id } : null;
 }
@@ -280,7 +275,7 @@ export function turnAdapterForEntity<R>(
   visit: TurnAdapterVisitor<R>,
 ): R | null {
   if (turn.lane !== undefined) {
-    const owner = laneOwner(db, turn.entityId, turn.lane);
+    const owner = laneOwner(db, turn.entityId);
     return owner ? visit.agent(owner) : null;
   }
   const chatId = sessionChatAdapter.parseId(db, turn.entityId);
@@ -305,25 +300,5 @@ export async function trackSessionChatWorkflow(
     timeoutMs,
     internal.workflowWatchdog.handleStaleSessionChat,
     { chatId, workflowId: String(workflowId) },
-  );
-}
-
-/**
- * Schedules the `TURN_BACKSTOP_MS` backstop for a session-level workflow (the
- * summary). The session row keeps no workflow slot: the summary's lane turn
- * holds the id once the agent launches, and the backstop asks the workflow
- * itself.
- */
-export async function trackSessionWorkflow(
-  ctx: MutationCtx,
-  sessionId: Id<"sessions">,
-  workflowId: WorkflowId,
-  timeoutMs: number = RUN_TIMEOUT_MS,
-): Promise<void> {
-  const id = String(workflowId);
-  await ctx.scheduler.runAfter(
-    timeoutMs,
-    internal.workflowWatchdog.handleStaleSession,
-    { sessionId, workflowId: id },
   );
 }

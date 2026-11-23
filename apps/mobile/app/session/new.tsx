@@ -11,7 +11,7 @@ import {
 import { carriedAccountForProvider, defaultAccountForProvider, toPickerAccounts } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared/gitDefaults";
-import { useUser } from "@clerk/clerk-expo";
+import { useUser } from "@clerk/expo";
 import { IconBrandGithub, IconChevronDown, IconStack2 } from "@tabler/icons-react-native";
 import { PromptInput } from "@vvedantb/native-ui/ai";
 import { RouterStackPageHeader } from "@vvedantb/native-ui/expo-router";

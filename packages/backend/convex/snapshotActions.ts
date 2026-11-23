@@ -45,7 +45,7 @@ import {
   resolveCodexCliVersion,
 } from "./_sandbox_runtime/launch";
 import { Sandbox, Snapshot } from "@vercel/sandbox";
-import { SANDBOX_TAG } from "./_sandbox/tags";
+import { SANDBOX_TAG, foreignSandboxDeployment } from "./_sandbox/tags";
 import {
   CHROME_RUNTIME_LIBRARY_PACKAGES,
   CORE_TOOLCHAIN_PACKAGES,
@@ -954,12 +954,17 @@ export const deleteSeededSnapshot = internalAction({
  * One-shot / ops cleanup: delete every Vercel snap_* in the project that is not
  * (1) a seeded / base Image capture, or (2) the currentSnapshotId of a sandbox
  * Eva still references. Ghost sandboxes that only exist in Sandbox.list are
- * not protected — their snaps are orphans.
+ * not protected — their snaps are orphans. A sandbox tagged with another
+ * Convex deployment keeps its snap: this deployment cannot know its owner rows.
+ *
+ * `minIdleMs` also keeps any snap created or restored inside that window. The
+ * weekly cron sets it: a snapshot has no owner tag, so recent use is the only
+ * sign that a capture in flight or another deployment's base Image needs it.
  *
  *   npx convex run snapshotActions:purgeUnreferencedVercelSnapshots --prod '{"repoId":"…"}'
  */
 export const purgeUnreferencedVercelSnapshots = internalAction({
-  args: { repoId: v.id("githubRepos") },
+  args: { repoId: v.id("githubRepos"), minIdleMs: v.optional(v.number()) },
   returns: v.object({
     protectedCount: v.number(),
     liveSandboxCount: v.number(),
@@ -1011,8 +1016,9 @@ export const purgeUnreferencedVercelSnapshots = internalAction({
     const sandboxes = await Sandbox.list(creds);
     for await (const sandbox of sandboxes) {
       liveSandboxCount += 1;
-      if (!knownSandboxIds.has(sandbox.name)) continue;
-      evaSandboxCount += 1;
+      const ours = knownSandboxIds.has(sandbox.name);
+      if (!ours && foreignSandboxDeployment(sandbox.tags) === null) continue;
+      if (ours) evaSandboxCount += 1;
       const currentId = sandbox.currentSnapshotId;
       if (typeof currentId === "string" && currentId.length > 0) {
         protectedIds.add(currentId);
@@ -1020,11 +1026,16 @@ export const purgeUnreferencedVercelSnapshots = internalAction({
     }
 
     const listed = await Snapshot.list(creds);
+    const idleCutoff = Date.now() - (args.minIdleMs ?? 0);
     let deletedCount = 0;
     let skippedCount = 0;
     // list() yields plain metadata (`id`, no .delete()) — re-hydrate to delete.
     for await (const meta of listed) {
       if (protectedIds.has(meta.id)) {
+        skippedCount += 1;
+        continue;
+      }
+      if (Math.max(meta.createdAt, meta.lastUsedAt ?? 0) > idleCutoff) {
         skippedCount += 1;
         continue;
       }
@@ -1072,6 +1083,7 @@ export const purgeUnreferencedVercelSnapshots = internalAction({
  */
 export const purgeUnreferencedVercelSnapshotsAll = internalAction({
   args: {
+    minIdleMs: v.optional(v.number()),
     repoIndex: v.optional(v.number()),
     deleted: v.optional(v.number()),
     protected: v.optional(v.number()),
@@ -1130,7 +1142,7 @@ export const purgeUnreferencedVercelSnapshotsAll = internalAction({
         projectsSeen.add(projectKey);
         const result = await ctx.runAction(
           internal.snapshotActions.purgeUnreferencedVercelSnapshots,
-          { repoId },
+          { repoId, minIdleMs: args.minIdleMs },
         );
         deleted += result.deletedCount;
         protectedCount += result.protectedCount;
@@ -1151,6 +1163,7 @@ export const purgeUnreferencedVercelSnapshotsAll = internalAction({
         0,
         internal.snapshotActions.purgeUnreferencedVercelSnapshotsAll,
         {
+          minIdleMs: args.minIdleMs,
           repoIndex: nextIndex,
           deleted,
           protected: protectedCount,
@@ -1178,5 +1191,34 @@ export const purgeUnreferencedVercelSnapshotsAll = internalAction({
       projects,
       done: true,
     };
+  },
+});
+
+/** Snapshots created or restored inside this window survive the weekly purge. */
+const SCHEDULED_PURGE_MIN_IDLE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Weekly cron entry for {@link purgeUnreferencedVercelSnapshotsAll}: orphan
+ * snapshots bill Snapshot Storage until someone deletes them.
+ *
+ * Shares `appSettings.sandboxIdlePauseMode` with the idle and leak sweeps. A
+ * dev deployment that mirrors prod holds prod's Vercel credentials and a stale
+ * copy of its sessions, so it would read prod's newer snapshots as orphans;
+ * the sync script switches the mode `off` there.
+ */
+export const purgeOrphanSnapshotsScheduled = internalAction({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const { mode } = await ctx.runQuery(
+      internal.sandboxIdlePause.getSettingsInternal,
+      {},
+    );
+    if (mode !== "on") return null;
+    await ctx.runAction(
+      internal.snapshotActions.purgeUnreferencedVercelSnapshotsAll,
+      { minIdleMs: SCHEDULED_PURGE_MIN_IDLE_MS },
+    );
+    return null;
   },
 });

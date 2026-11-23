@@ -395,10 +395,6 @@
     50% { opacity: 0; }
   }
 
-  @media (prefers-reduced-motion: reduce) {
-    .ss-term__caret { animation: none; }
-  }
-
   /* With toolbar controls the bar becomes a unified toolbar, as in Notes or
      Finder: the title goes left beside the lights and the controls go right. */
   .ss-window__title[data-toolbar] {

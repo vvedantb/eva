@@ -87,8 +87,4 @@
   .ss-stage[data-palette="mono"][data-theme="dark"] .ss-check__tick {
     stroke: #111;
   }
-
-  @media (prefers-reduced-motion: reduce) {
-    .ss-check__arc { animation: none; }
-  }
 }

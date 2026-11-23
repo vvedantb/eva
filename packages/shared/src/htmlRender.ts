@@ -88,9 +88,9 @@ export function htmlRenderFrameHeight(
 }
 
 /**
- * A theme token as a complete CSS value. Eva stores colours as bare RGB
- * channels (`244 245 246`) for Tailwind's alpha syntax; a page should be able
- * to write `var(--primary)`, so those are wrapped in `rgb()`.
+ * A theme token as a complete CSS value. A page writes `var(--primary)`, so a
+ * host that stores colours as bare RGB channels (`244 245 246`, as the phone
+ * theme does) has them wrapped in `rgb()`.
  */
 export function htmlRenderThemeValue(raw: string): string {
   const value = raw.trim();

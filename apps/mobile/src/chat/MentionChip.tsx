@@ -52,7 +52,8 @@ export function UserMessageText({ content }: { content: string }) {
   );
 }
 
-function MessageMarkdown({ content }: { content: string }) {
+/** Markdown with `@` and `/` tokens as chips (a sent message, a recap). */
+export function MessageMarkdown({ content }: { content: string }) {
   const colors = useChipColors();
   return (
     <Markdown

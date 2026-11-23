@@ -455,3 +455,102 @@ ${args.transcript.slice(0, MAX_TRANSCRIPT_INPUT)}`,
     }
   },
 });
+
+/**
+ * Recaps are read word by word, so they get a stronger model than titles:
+ * nano echoed prompt labels. Haiku 5.5 beat GPT-6 Luna on one mock project
+ * (19 November 2026): 4-6 s against 8-12 s, and it named task chats as chips
+ * every run, where Luna never did.
+ */
+const RECAP_MODEL = "anthropic/claude-haiku-5.5";
+
+/** "17 hours", "2 days", "45 minutes": how long the user was away, for the opening line. */
+function formatAway(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 90) return `${minutes} minutes`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours} hours`;
+  return `${Math.round(hours / 24)} days`;
+}
+
+/** Keeps `@[Title](id)` chips the context offered; any other id becomes plain text. */
+function keepKnownMentions(text: string, allowedIds: ReadonlyArray<string>): string {
+  return text.replace(/@\[([^\]]+)\]\(([^)]+)\)/g, (token, label: string, id: string) =>
+    allowedIds.includes(id) ? token : label,
+  );
+}
+
+/** What `writeRecap` reads: `chatRecaps.recapContext`'s result. */
+interface RecapContext {
+  kind: "away" | "full";
+  awayMs: number;
+  transcript: string;
+  log: string;
+  allowedIds: ReadonlyArray<string>;
+}
+
+/** One recap from `model`. Exported for model comparisons; throws on a gateway error. */
+export async function writeRecap(model: string, context: RecapContext): Promise<string> {
+  const away = formatAway(context.awayMs);
+  const chips =
+    context.allowedIds.length > 0
+      ? "\n- When you name a task chat, copy its @[Title](id) token exactly as written in the transcript. Use each token at most once."
+      : "";
+  const opening =
+    context.kind === "away"
+      ? `The user was away from this coding chat for ${away}. Write a short recap of what happened while they were away, so they can pick up in seconds.
+
+Rules:
+- Start with "In the last ${away}," and say the main outcome in one sentence.`
+      : `Write a short recap of this whole coding chat, so the user can pick it up in seconds.
+
+Rules:
+- Start with what the chat set out to do and where it stands now, in one sentence.`;
+  const result = await generateText({
+    model,
+    prompt: `${opening}
+- Then at most two short paragraphs, separated by a blank line: first what was built or decided, then what is waiting on the user (approvals, questions, unpushed work, failures).
+- Write them as normal sentences. Never start a paragraph with a label such as "Built:" or "Waiting on the user:".
+- If nothing is waiting on the user, leave that out; do not say so.
+- Hard limit: 80 words in total. Cut detail before you go over. Plain prose, no headings, no bullet lists, no code or backticks.
+- Write in the third person about the agent ("the agent", or no subject); never copy its "I" sentences.
+- State only facts from the transcript. Do not invent names, numbers or results.${chips}
+
+Log entries:
+${context.log || "(none)"}
+
+Transcript, oldest first (the newest part when it is long):
+${context.transcript || "(no messages)"}`,
+    providerOptions: { ...FLEX_GATEWAY_PROVIDER_OPTIONS },
+  });
+  return keepKnownMentions(stripWrappingQuotes(result.text), context.allowedIds);
+}
+
+/**
+ * Writes the "Since you've been gone" recap a `chatRecaps` row asks for
+ * (started by `chatReads.markRead`). Background work on the flex tier; a
+ * failure drops the row, so the card simply does not show.
+ */
+export const generateChatRecap = internalAction({
+  args: { recapId: v.id("chatRecaps") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const context = await ctx.runQuery(internal.chatRecaps.recapContext, {
+      recapId: args.recapId,
+    });
+    if (!context) return null;
+    let text = "";
+    try {
+      if (context.transcript || context.log) {
+        text = await writeRecap(RECAP_MODEL, context);
+      }
+    } catch (error) {
+      console.error("[textGen.generateChatRecap]", error);
+    }
+    await ctx.runMutation(internal.chatRecaps.applyRecap, {
+      recapId: args.recapId,
+      text,
+    });
+    return null;
+  },
+});

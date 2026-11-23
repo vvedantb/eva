@@ -9,7 +9,6 @@ import type { Id } from "../_generated/dataModel";
 export const TASK_RUN_STREAM_PREFIX = "task-run-";
 export const AUTOMATION_RUN_STREAM_PREFIX = "automation-run-";
 export const PR_RECAP_STREAM_PREFIX = "pr-recap:";
-export const SESSION_SUMMARY_STREAM_PREFIX = "summary:";
 
 export function automationRunStreamingEntityId(
   runId: Id<"automationRuns">,
@@ -19,10 +18,4 @@ export function automationRunStreamingEntityId(
 
 export function prRecapStreamingEntityId(docId: Id<"docs">): string {
   return `${PR_RECAP_STREAM_PREFIX}${String(docId)}`;
-}
-
-export function sessionSummaryStreamingEntityId(
-  sessionId: Id<"sessions">,
-): string {
-  return `${SESSION_SUMMARY_STREAM_PREFIX}${String(sessionId)}`;
 }

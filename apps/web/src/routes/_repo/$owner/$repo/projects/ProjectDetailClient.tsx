@@ -269,6 +269,7 @@ export function ProjectDetailClient({
             project={project}
             repoId={repo._id}
             sandbox={sandbox}
+            chatId={chatId}
             chatTurnOpen={chatTurnOpen}
             prError={prError}
             prLinks={prLinks}

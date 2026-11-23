@@ -65,7 +65,7 @@ export function DocModeSwitcher() {
             <DropdownMenuItem
               key={docMode}
               onClick={() => setMode(docMode)}
-              className={docMode === mode ? "bg-accent" : undefined}
+              className={docMode === mode ? "bg-accent-soft" : undefined}
             >
               <ModeIcon size={16} />
               {config.label}

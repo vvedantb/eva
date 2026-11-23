@@ -13,7 +13,7 @@ import { prStateValidator, sessionStatusValidator } from "./validators";
  * @deprecated The phone's old API names, kept for installed APKs: each is the
  * `chats.*` function under its old name (`chats.ts`), plus the old session
  * list. Remove once no supported APK calls them (the app offers updates; see
- * `src/update/updateCheck.ts`).
+ * `src/update/UpdateDialog.tsx`).
  */
 export {
   archive as archiveSession,

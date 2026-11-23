@@ -2,9 +2,9 @@
 
 import { useLocalStorage } from "usehooks-ts";
 import {
-  SANDBOX_RAIL_LABELLED_WIDTH_PX,
-  SANDBOX_RAIL_WIDTH_PX,
-} from "./sandboxRail";
+  SIDE_PANEL_RAIL_LABELLED_WIDTH_PX,
+  SIDE_PANEL_RAIL_WIDTH_PX,
+} from "@vvedantb/ui";
 
 /** One preference for every sandbox rail in the app, hence a fixed key. */
 const STORAGE_KEY = "eva:sandbox-rail:labels";
@@ -37,5 +37,7 @@ export function useSandboxRailLabels(): SandboxRailLabels {
  */
 export function useSandboxRailWidthPx(): number {
   const { showLabels } = useSandboxRailLabels();
-  return showLabels ? SANDBOX_RAIL_LABELLED_WIDTH_PX : SANDBOX_RAIL_WIDTH_PX;
+  return showLabels
+    ? SIDE_PANEL_RAIL_LABELLED_WIDTH_PX
+    : SIDE_PANEL_RAIL_WIDTH_PX;
 }

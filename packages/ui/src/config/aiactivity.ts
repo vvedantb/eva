@@ -13,13 +13,13 @@ export const aiactivityConfig = {
   },
   ActivityQuestionCard: {
     // eva's `accent` is the neutral hover fill, not a brand colour.
-    classes: { selectedOption: "bg-accent" },
+    classes: { selectedOption: "bg-accent-soft" },
   },
   ModelPicker: {
     classes: {
       trigger:
-        "motion-press flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground active:scale-[0.98] disabled:opacity-50",
+        "motion-press flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground hover:bg-accent-soft hover:text-foreground active:scale-[0.98] disabled:opacity-50",
     },
-    badgeRing: { trigger: "rgb(var(--input))", panel: "rgb(var(--muted))" },
+    badgeRing: { trigger: "var(--border)", panel: "var(--surface-secondary)" },
   },
 } satisfies UiConfig;

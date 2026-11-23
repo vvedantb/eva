@@ -5,8 +5,8 @@
   "description": "Meet Eva, your new AI coworker. Manage tasks, ship code, and track progress in real-time.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#F4F5F6",
-  "theme_color": "#F4F5F6",
+  "background_color": "#F5F5F5",
+  "theme_color": "#F5F5F5",
   "scope": "/",
   "icons": [
     { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" },
