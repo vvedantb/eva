@@ -1,10 +1,10 @@
-import { describe, it, expect, afterEach } from "bun:test";
+import { describe, it, expect, afterEach, vi } from "bun:test";
+import { stubEnv, unstubAllEnvs } from "../../tests/_helpers/env";
+import { freshModules } from "./freshModules";
 import {
   decideGitStateReport,
   formatBranch,
   resolveBranchTarget,
-  startBranchWatcher,
-  stopBranchWatcher,
 } from "../runtime/branchWatcher.js";
 
 describe("resolveBranchTarget", () => {
@@ -12,6 +12,10 @@ describe("resolveBranchTarget", () => {
     expect(resolveBranchTarget("sessionId", "s1")).toEqual({
       kind: "session",
       sessionId: "s1",
+    });
+    expect(resolveBranchTarget("chatId", "c1")).toEqual({
+      kind: "sessionChat",
+      chatId: "c1",
     });
     expect(resolveBranchTarget("taskId", "t1")).toEqual({
       kind: "task",
@@ -99,13 +103,19 @@ describe("decideGitStateReport", () => {
 
 describe("startBranchWatcher", () => {
   afterEach(() => {
-    stopBranchWatcher();
+    vi.useRealTimers();
+    unstubAllEnvs();
+    freshModules();
   });
 
-  it("is a no-op without a reportable entity", () => {
-    // No ENTITY_ID / ENTITY_ID_FIELD in the test env, so no timers or watchers
-    // may be installed — nothing to report onto.
-    expect(() => startBranchWatcher()).not.toThrow();
-    expect(() => stopBranchWatcher()).not.toThrow();
+  it("installs no poll without a reportable entity", async () => {
+    // An arena run has no document to report the branch onto.
+    stubEnv("ENTITY_ID_FIELD", "arenaId");
+    stubEnv("ENTITY_ID", "a1");
+    freshModules();
+    vi.useFakeTimers();
+    const { startBranchWatcher } = await import("../runtime/branchWatcher.js");
+    startBranchWatcher();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

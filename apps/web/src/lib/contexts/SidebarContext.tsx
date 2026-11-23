@@ -2,10 +2,7 @@
 
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { useSessionStorage } from "usehooks-ts";
-import {
-  popInSidebarPanelNextFrame,
-  popOutSidebarPanel,
-} from "@/lib/components/sidebar/sidebarPanelMotion";
+import { popInShellPanelNextFrame, popOutShellPanel } from "@vvedantb/ui";
 
 const COOKIE_NAME = "sidebar-collapsed";
 const ONE_YEAR = 60 * 60 * 24 * 365;
@@ -53,11 +50,11 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   const setCollapsed = (value: boolean) => {
     writeCookie(value);
     if (value) {
-      popOutSidebarPanel(() => setCollapsedState(true));
+      popOutShellPanel(() => setCollapsedState(true));
       return;
     }
     setCollapsedState(false);
-    popInSidebarPanelNextFrame();
+    popInShellPanelNextFrame();
   };
 
   return (

@@ -1,23 +1,24 @@
 #!/usr/bin/env bash
 # Runs one package's bun tests: `scripts/test-affected.sh <package> [upstream...]`.
 #
-# With TEST_BASE_REF set (a pull request) it runs only the test files the diff can
-# reach (bun test --changed). Bun follows relative imports but not workspace
-# packages, so a diff in an upstream package or in root install config runs
-# the whole suite instead. test-timings.json balances the parallel workers.
+# On a pull request the shared CI workflow sets VV_TEST_CHANGED to
+# `--changed=origin/<base>` (it is empty for a full run, and the workflow
+# already forces a full run for config, lockfile and similar changes). Bun's
+# --changed follows relative imports but not workspace packages, so a diff in
+# an upstream package still runs the whole suite. test-timings.json makes the
+# parallel workers start the slowest files first.
 set -euo pipefail
 
 pkg=$1
 shift
 args=(--parallel --timings=test-timings.json)
 
-if [ -n "${TEST_BASE_REF:-}" ]; then
-  base=$(git merge-base "$TEST_BASE_REF" HEAD)
-  if git diff --quiet "$base" -- "$@" package.json pnpm-lock.yaml \
-    pnpm-workspace.yaml patches "$pkg/package.json" "$pkg/bunfig.toml"; then
+if [ -n "${VV_TEST_CHANGED:-}" ]; then
+  base=$(git merge-base "${VV_TEST_CHANGED#--changed=}" HEAD)
+  if git diff --quiet "$base" -- "$@" "$pkg/bunfig.toml"; then
     args+=("--changed=$base")
   else
-    echo "$pkg: upstream or install config changed, so every test runs."
+    echo "$pkg: an upstream package or test setup changed, so every test runs."
   fi
 fi
 

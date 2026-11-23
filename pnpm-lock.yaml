@@ -47,8 +47,8 @@ importers:
   .:
     devDependencies:
       '@vvedantb/config':
-        specifier: ^0.11.0
-        version: 0.11.0(@expo/config-plugins@57.0.12(typescript@5.9.3))(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.12.2)(happy-dom@18.0.1)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0))
+        specifier: ^0.14.0
+        version: 0.14.0(@expo/config-plugins@57.0.12(typescript@5.9.3))(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.12.2)(happy-dom@18.0.1)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0))
       husky:
         specifier: ^9.1.7
         version: 9.1.7
@@ -125,8 +125,8 @@ importers:
         specifier: ^3.36.1
         version: 3.41.1(react@19.3.0)
       '@vvedantb/ui':
-        specifier: 0.54.1
-        version: 0.54.1(3bf7b62af384a264ffe8f99d7a11c9ad)
+        specifier: 0.62.1
+        version: 0.62.1(3bf7b62af384a264ffe8f99d7a11c9ad)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -249,8 +249,8 @@ importers:
         specifier: ^3.49.0
         version: 3.50.0(react-native-svg@15.15.4(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3))(react@19.2.3))(react@19.2.3)
       '@vvedantb/native-ui':
-        specifier: 0.32.0
-        version: 0.32.0(527fc8d9696409e07c63a85943a52787)
+        specifier: 0.34.0
+        version: 0.34.0(527fc8d9696409e07c63a85943a52787)
       '@vvedantb/server':
         specifier: 0.17.0
         version: 0.17.0(@ai-sdk/gateway@4.0.134(zod@4.6.7))(@clerk/backend@2.33.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@jitl/quickjs-singlefile-cjs-release-sync@0.32.0)(@json-render/core@0.21.0(zod@4.6.7))(@modelcontextprotocol/sdk@1.29.0(zod@4.6.7))(ai@7.0.161(zod@4.6.7))(convex-helpers@0.1.114(@standard-schema/spec@1.1.0)(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@clerk/react@6.18.7(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(bufferutil@4.1.0)(react@19.2.3))(hono@4.12.25)(react@19.2.3)(typescript@5.9.3)(zod@4.6.7))(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@clerk/react@6.18.7(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(bufferutil@4.1.0)(react@19.2.3))(quickjs-emscripten-core@0.32.0)(zod@4.6.7)
@@ -406,8 +406,8 @@ importers:
         specifier: 19.3.0
         version: 19.3.0
       '@vvedantb/config':
-        specifier: ^0.11.0
-        version: 0.11.0(@expo/config-plugins@57.0.12(typescript@5.9.3))(vitest@3.2.7(@types/debug@4.1.13)(@types/node@22.19.17)(happy-dom@18.0.1)(jiti@1.21.7)(lightningcss@1.33.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0))
+        specifier: ^0.14.0
+        version: 0.14.0(@expo/config-plugins@57.0.12(typescript@5.9.3))(vitest@3.2.7(@types/debug@4.1.13)(@types/node@22.19.17)(happy-dom@18.0.1)(jiti@1.21.7)(lightningcss@1.33.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0))
       babel-preset-expo:
         specifier: ~57.0.16
         version: 57.0.16(@babel/core@7.29.7)(@babel/runtime@7.29.7)(expo@57.0.31)(react-refresh@0.14.2)
@@ -559,8 +559,8 @@ importers:
         specifier: 0.17.0
         version: 0.17.0(@ai-sdk/gateway@4.0.134(zod@4.6.7))(@clerk/backend@2.33.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@jitl/quickjs-singlefile-cjs-release-sync@0.32.0)(@json-render/core@0.21.0(zod@4.6.7))(@modelcontextprotocol/sdk@1.29.0(zod@4.6.7))(ai@7.0.161(zod@4.6.7))(convex-helpers@0.1.114(@standard-schema/spec@1.1.0)(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@clerk/react@6.18.7(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(hono@4.12.25)(react@19.3.0)(typescript@7.0.1-rc)(zod@4.6.7))(convex@1.40.0(@clerk/clerk-react@5.61.6(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@clerk/react@6.18.7(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(bufferutil@4.1.0)(react@19.3.0)(utf-8-validate@6.0.6))(quickjs-emscripten-core@0.32.0)(zod@4.6.7)
       '@vvedantb/ui':
-        specifier: 0.54.1
-        version: 0.54.1(56b3adcde63b003abee464e0296bf9b7)
+        specifier: ^0.62.1
+        version: 0.62.1(56b3adcde63b003abee464e0296bf9b7)
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
@@ -889,8 +889,8 @@ importers:
         specifier: 19.3.0
         version: 19.3.0
       '@vvedantb/ui':
-        specifier: 0.54.1
-        version: 0.54.1(56007529793abfc8b2c1fe1b736bfab5)
+        specifier: 0.62.1
+        version: 0.62.1(56007529793abfc8b2c1fe1b736bfab5)
       cronstrue:
         specifier: ^3.13.0
         version: 3.14.0
@@ -907,8 +907,8 @@ importers:
         specifier: ^3.33.0
         version: 3.41.1(react@19.3.0)
       '@vvedantb/ui':
-        specifier: 0.54.1
-        version: 0.54.1(56007529793abfc8b2c1fe1b736bfab5)
+        specifier: 0.62.1
+        version: 0.62.1(56007529793abfc8b2c1fe1b736bfab5)
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -6515,8 +6515,8 @@ packages:
   '@vitest/utils@3.2.7':
     resolution: {integrity: sha512-x6BDOd7dyo3PFLY3I9/HJ25X/6OurhGXk2/B9gOZNPF7XDVjeBK4k01lQE5uvDpbuheErh91qYuE1E2OEjK3Rw==}
 
-  '@vvedantb/config@0.11.0':
-    resolution: {integrity: sha512-LVlddb/z5t6Q5cESIfLCTZbGNFrsfu5wo9Im5G5mda+zxQDUeVV4AEUD1MB4p+Z11oXwJtWYLFdf1uL4ml7nkQ==}
+  '@vvedantb/config@0.14.0':
+    resolution: {integrity: sha512-4RZmeSdxxIx2nFzp3fQavkrpwpj30mLFdTuJQ3SJp0RB84aTVvoKBM1FyuCEDPsm7hG/cjQ/SPwljp4hhAJU0g==}
     hasBin: true
     peerDependencies:
       '@electron/asar': ^3.2.0 || ^4.0.0
@@ -6530,10 +6530,10 @@ packages:
       vitest:
         optional: true
 
-  '@vvedantb/native-ui@0.32.0':
-    resolution: {integrity: sha512-Du4inqQl8mZPkzTCTkO/jJmbRr6KGVx9A8yhejo8uXaFCNrGHWOwN7YjKKjtZxLgBrfluWqkS8uDy6O9vnRXXA==}
+  '@vvedantb/native-ui@0.34.0':
+    resolution: {integrity: sha512-KBrlC9Y3sOrpUCojwC6HO70umifghXTBnhEvJuOkIZ5TAFrLSOw+q30Blu0tf4FjcpO3OL0mEnk6QRboyFx7Sw==}
     peerDependencies:
-      '@clerk/expo': '>=4.0.0'
+      '@clerk/expo': '>=4.16.0'
       '@expo/vector-icons': '*'
       '@json-render/core': '>=0.21.0'
       '@json-render/react-native': '>=0.21.0'
@@ -6681,8 +6681,8 @@ packages:
       zod:
         optional: true
 
-  '@vvedantb/ui@0.54.1':
-    resolution: {integrity: sha512-yaEDsqqAB3sO+3X+WZoBDikv0sXQH87CZa8uFFI7DtCjmOJhKiB1/gZLn1ZQsJKKTKh190dK3Vf4jZsvvH0OvQ==}
+  '@vvedantb/ui@0.62.1':
+    resolution: {integrity: sha512-8EgEZI16fl+2g1SnZhySe6CT5ZbZz2HnGgGzRCxg2dk8V8p4NaNxwVXTmOBX0ipPa0Z+MVScQKJU4nKgxjQIHg==}
     peerDependencies:
       '@clerk/clerk-react': 5.61.6
       '@json-render/core': '>=0.21.0'
@@ -17770,17 +17770,17 @@ snapshots:
       tinyrainbow: 2.0.0
     optional: true
 
-  '@vvedantb/config@0.11.0(@expo/config-plugins@57.0.12(typescript@5.9.3))(vitest@3.2.7(@types/debug@4.1.13)(@types/node@22.19.17)(happy-dom@18.0.1)(jiti@1.21.7)(lightningcss@1.33.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0))':
+  '@vvedantb/config@0.14.0(@expo/config-plugins@57.0.12(typescript@5.9.3))(vitest@3.2.7(@types/debug@4.1.13)(@types/node@22.19.17)(happy-dom@18.0.1)(jiti@1.21.7)(lightningcss@1.33.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0))':
     optionalDependencies:
       '@expo/config-plugins': 57.0.12(typescript@5.9.3)
       vitest: 3.2.7(@types/debug@4.1.13)(@types/node@22.19.17)(happy-dom@18.0.1)(jiti@1.21.7)(lightningcss@1.33.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0)
 
-  '@vvedantb/config@0.11.0(@expo/config-plugins@57.0.12(typescript@5.9.3))(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.12.2)(happy-dom@18.0.1)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0))':
+  '@vvedantb/config@0.14.0(@expo/config-plugins@57.0.12(typescript@5.9.3))(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.12.2)(happy-dom@18.0.1)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0))':
     optionalDependencies:
       '@expo/config-plugins': 57.0.12(typescript@5.9.3)
       vitest: 3.2.7(@types/debug@4.1.13)(@types/node@24.12.2)(happy-dom@18.0.1)(jiti@2.7.0)(lightningcss@1.33.0)(terser@5.48.0)(tsx@4.21.0)(yaml@2.9.0)
 
-  '@vvedantb/native-ui@0.32.0(527fc8d9696409e07c63a85943a52787)':
+  '@vvedantb/native-ui@0.34.0(527fc8d9696409e07c63a85943a52787)':
     dependencies:
       '@expo/vector-icons': 15.1.1(expo-font@57.0.4)(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3))(react@19.2.3)
       '@rn-primitives/select': 1.5.2(@rn-primitives/portal@1.5.3(@types/react@19.3.0)(react-native-web@0.21.4(encoding@0.1.13)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3))(react@19.2.3)(use-sync-external-store@1.6.0(react@19.2.3)))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.4(encoding@0.1.13)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.86.3(@babel/core@7.29.7))(@types/react@19.3.0)(bufferutil@4.1.0)(react@19.2.3))(react@19.2.3)
@@ -17860,7 +17860,7 @@ snapshots:
       quickjs-emscripten-core: 0.32.0
       zod: 4.6.7
 
-  '@vvedantb/ui@0.54.1(3bf7b62af384a264ffe8f99d7a11c9ad)':
+  '@vvedantb/ui@0.62.1(3bf7b62af384a264ffe8f99d7a11c9ad)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -17920,7 +17920,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 4.6.7
 
-  '@vvedantb/ui@0.54.1(56007529793abfc8b2c1fe1b736bfab5)':
+  '@vvedantb/ui@0.62.1(56007529793abfc8b2c1fe1b736bfab5)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)
@@ -17980,7 +17980,7 @@ snapshots:
       motion: 12.38.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       zod: 4.6.7
 
-  '@vvedantb/ui@0.54.1(56b3adcde63b003abee464e0296bf9b7)':
+  '@vvedantb/ui@0.62.1(56b3adcde63b003abee464e0296bf9b7)':
     dependencies:
       '@dnd-kit/core': 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@dnd-kit/modifiers': 9.0.0(@dnd-kit/core@6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)

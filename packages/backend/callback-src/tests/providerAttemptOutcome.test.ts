@@ -28,6 +28,15 @@ const cleanAttempt: ProviderAttemptResult = {
   toolStallErrorMessage: "",
 };
 
+const everyWatchdog = {
+  timedOutForNoOutput: true,
+  timedOutForMaxRuntime: true,
+  timedOutForFirstEvent: true,
+  timedOutForFirstAssistant: true,
+  timedOutAfterFirstText: true,
+  timedOutForZombie: true,
+} satisfies Partial<ProviderAttemptResult>;
+
 function attempt(
   overrides: Partial<ProviderAttemptResult> = {},
 ): ProviderAttemptResult {
@@ -119,19 +128,30 @@ describe("resolveProviderAttemptOutcome", () => {
     );
     expect(outcome.success).toBe(false);
     expect(outcome.error).toContain("ran out of memory");
+    expect(outcome.error).toContain("nothing was completed");
   });
 
-  /** The provider diagnosed itself; its wording reaches the user unchanged. */
-  test("a provider error event is reported verbatim", () => {
-    const outcome = resolveProviderAttemptOutcome(
-      attempt({ code: 1 }),
-      resultEvent({ isError: true, result: "Credit balance is too low" }),
-    );
-    expect(outcome).toEqual({
-      success: false,
-      error: "Credit balance is too low",
-    });
-  });
+  /**
+   * The provider diagnosed itself; its wording reaches the user unchanged. A
+   * timeout cancels the run and the runner still emits an error result, so
+   * that event, not the timeout flag, names the failure.
+   */
+  test.each([
+    ["an exit", { code: 1 }],
+    ["a timeout", { code: 1, timedOutForMaxRuntime: true }],
+  ])(
+    "a provider error event after %s is reported verbatim",
+    (_label, overrides) => {
+      const outcome = resolveProviderAttemptOutcome(
+        attempt(overrides),
+        resultEvent({ isError: true, result: "Credit balance is too low" }),
+      );
+      expect(outcome).toEqual({
+        success: false,
+        error: "Credit balance is too low",
+      });
+    },
+  );
 
   /**
    * The agent answered, then its process exited badly on the way out (a flush
@@ -154,30 +174,52 @@ describe("resolveProviderAttemptOutcome", () => {
     ).toEqual({ success: true, error: null });
   });
 
-  test("a watchdog with no result event fails, naming the phase", () => {
+  test.each([
+    [{ timedOutForMaxRuntime: true }, "max runtime"],
+    [{ timedOutForNoOutput: true }, "no stdout"],
+    [{ timedOutForFirstEvent: true }, "no parseable"],
+    [{ timedOutForFirstAssistant: true }, "no assistant response"],
+    [{ timedOutAfterFirstText: true }, "stalled after first text"],
+    [{ timedOutForZombie: true }, "zombie state"],
+  ])(
+    "a watchdog with no result event fails, naming the phase (%o)",
+    (overrides, phase) => {
+      const outcome = resolveProviderAttemptOutcome(attempt(overrides), null);
+      expect(outcome.success).toBe(false);
+      expect(outcome.error).toContain(phase);
+    },
+  );
+
+  test("a stalled tool fails with the stall message, not a timeout phase", () => {
     const outcome = resolveProviderAttemptOutcome(
-      attempt({ timedOutForMaxRuntime: true }),
+      attempt({
+        toolStallErrorMessage: "Bash has produced no output for 10m",
+        ...everyWatchdog,
+      }),
       null,
     );
     expect(outcome.success).toBe(false);
-    expect(outcome.error).toContain("max runtime");
+    expect(outcome.error).toMatch(/^Bash has produced no output for 10m\n\n/);
   });
 
-  test("a stalled tool fails with the stall message", () => {
-    const outcome = resolveProviderAttemptOutcome(
-      attempt({ toolStallErrorMessage: "Bash has produced no output for 10m" }),
-      null,
-    );
-    expect(outcome.success).toBe(false);
-    expect(outcome.error).toContain("Bash has produced no output for 10m");
+  test("an ordinary non-zero exit names its exit code", () => {
+    expect(
+      resolveProviderAttemptOutcome(attempt({ code: 23 }), null).error,
+    ).toMatch(/^Claude CLI exited with code 23\n\n/);
   });
 
-  test("a fatal heartbeat error outranks the exit code", () => {
+  test("a fatal heartbeat error outranks every local diagnosis", () => {
     S.fatalHeartbeatErrorMessage = "Turn lease lost";
-    const outcome = resolveProviderAttemptOutcome(attempt({ code: 23 }), null);
+    const outcome = resolveProviderAttemptOutcome(
+      attempt({
+        code: 137,
+        toolStallErrorMessage: "Bash has produced no output for 10m",
+        ...everyWatchdog,
+      }),
+      null,
+    );
     expect(outcome.success).toBe(false);
-    expect(outcome.error).toContain("Turn lease lost");
-    expect(outcome.error).not.toContain("exited with code 23");
+    expect(outcome.error).toMatch(/^Turn lease lost\n\n/);
   });
 
   /** Failures carry the captured output so a blank agent crash is diagnosable. */

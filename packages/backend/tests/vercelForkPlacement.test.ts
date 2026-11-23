@@ -61,7 +61,10 @@ const { createVercelClient } = await import(
 );
 
 const forkOnce = async () => {
-  const client = createVercelClient({ token: "t", teamId: "team", projectId: "prj" });
+  const client = createVercelClient(
+    { token: "t", teamId: "team", projectId: "prj" },
+    8,
+  );
   await expect(
     client.create({
       forkFrom: "source-sbx",

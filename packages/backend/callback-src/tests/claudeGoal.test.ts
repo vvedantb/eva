@@ -193,11 +193,31 @@ describe("turn helpers", () => {
         message: { model: "claude-opus-5", content: [] },
       }),
     ).toBe(true);
+    // A subagent frame is not the goal's own work.
+    expect(
+      isGoalWorkFrame({
+        type: "assistant",
+        parent_tool_use_id: "toolu_agent",
+        message: { model: "claude-opus-5", content: [] },
+      }),
+    ).toBe(false);
+    expect(
+      isGoalWorkFrame({
+        type: "user",
+        parent_tool_use_id: null,
+        message: { model: "claude-opus-5", content: [] },
+      }),
+    ).toBe(false);
   });
 
   test("sameGoal compares every stored field", () => {
     expect(sameGoal(active, { ...active })).toBe(true);
     expect(sameGoal(active, { ...active, checks: 1 })).toBe(false);
+    expect(sameGoal(active, { ...active, objective: "ship it" })).toBe(false);
+    expect(sameGoal(active, { ...active, status: "complete" })).toBe(false);
+    expect(sameGoal(active, { ...active, lastCheck: "tests fail" })).toBe(
+      false,
+    );
     expect(sameGoal(null, null)).toBe(true);
     expect(sameGoal(active, null)).toBe(false);
   });

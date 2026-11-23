@@ -8,7 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@vvedantb/ui";
 import type { PointerGestureHandlers } from "../usePreviewMiniPlayerFrame";
 
 const BUTTON_CLASS =
-  "motion-press flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground active:scale-[0.9] hover:bg-accent hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/40";
+  "motion-press flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground active:scale-[0.9] hover:bg-accent-soft hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/40";
 
 /**
  * Title bar of the floating preview: the whole bar is the drag handle, so the

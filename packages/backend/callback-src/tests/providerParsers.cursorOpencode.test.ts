@@ -2,12 +2,13 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { callbackState as S, resetStateForTests } from "../runtime/state.js";
-import type { CanonicalEvent, JsonObject, JsonValue } from "../types.js";
-import {
-  cursorAdapter,
-  cursorParseLine,
-  probeCursorSdkToolResult,
-} from "../providers/cursor.js";
+import type {
+  CanonicalEvent,
+  JsonObject,
+  JsonValue,
+  ToolCompleteResult,
+} from "../types.js";
+import { cursorAdapter, cursorParseLine } from "../providers/cursor.js";
 import { opencodeAdapter, opencodeParseLine } from "../providers/opencode.js";
 
 /** Session-store writes the stream hooks fire, captured instead of persisted. */
@@ -31,6 +32,17 @@ beforeEach(() => {
   S.firstAssistantEventAt = 0;
   sessionCalls.length = 0;
 });
+
+/** The result a terminal Cursor `tool_call` event completes its step with. */
+function cursorToolResult(
+  status: string,
+  result?: JsonValue,
+): ToolCompleteResult | undefined {
+  const event: JsonObject = { type: "tool_call", status, name: "shell" };
+  if (result !== undefined) event.result = result;
+  const last = cursorParseLine(event).at(-1);
+  return last?.kind === "complete_tool" ? last.result : undefined;
+}
 
 function fixtureEvents(name: string): JsonObject[] {
   return readFileSync(join(import.meta.dirname, "fixtures", name), "utf8")
@@ -120,34 +132,40 @@ describe("the Cursor SDK parser", () => {
     // A duration with an unusable diff, and a diff with an unusable duration:
     // one bad field must never cost the other.
     expect(
-      probeCursorSdkToolResult("completed", {
+      cursorToolResult("completed", {
         status: "success",
         value: { diffString: 5, executionTime: 99 },
       }),
     ).toEqual({ durationMs: 99 });
     expect(
-      probeCursorSdkToolResult("completed", {
+      cursorToolResult("completed", {
         status: "success",
         value: { diffString: " -a ", executionTime: "99" },
       }),
     ).toEqual({ output: { text: "-a" } });
     // Only finite numbers are durations.
     expect(
-      probeCursorSdkToolResult("completed", {
+      cursorToolResult("completed", {
         status: "success",
         value: { executionTime: Number.NaN },
       }),
     ).toBeUndefined();
     // A blank `{message}` is not output, but the failure still reads as one.
     expect(
-      probeCursorSdkToolResult("error", {
+      cursorToolResult("error", {
         status: "error",
         error: { message: "   " },
       }),
     ).toEqual({ isError: true });
+    expect(
+      cursorToolResult("error", {
+        status: "error",
+        error: { message: "tool exploded" },
+      }),
+    ).toEqual({ output: { text: "tool exploded" }, isError: true });
     // A non-string message falls through to the shared multi-key probe.
     expect(
-      probeCursorSdkToolResult("error", {
+      cursorToolResult("error", {
         status: "error",
         error: { message: 5, stdout: "fallback" },
       }),
@@ -158,21 +176,26 @@ describe("the Cursor SDK parser", () => {
     // `{status:"success"}` carries nothing to unwrap, so the envelope itself is
     // the payload — and it holds no output, error or files.
     expect(
-      probeCursorSdkToolResult("completed", { status: "success" }),
+      cursorToolResult("completed", { status: "success" }),
     ).toBeUndefined();
     expect(
-      probeCursorSdkToolResult("completed", { status: "success", value: null }),
+      cursorToolResult("completed", { status: "success", value: null }),
     ).toBeUndefined();
     // A status of "error" on the event is enough on its own.
-    expect(probeCursorSdkToolResult("error", { status: "success" })).toEqual({
+    expect(cursorToolResult("error", { status: "success" })).toEqual({
       isError: true,
     });
-    expect(probeCursorSdkToolResult("error", undefined)).toEqual({
+    expect(cursorToolResult("error", undefined)).toEqual({
       isError: true,
     });
-    // Unenveloped payloads still read through.
+    expect(cursorToolResult("completed", undefined)).toBeUndefined();
+    // Unenveloped payloads still read through, bare strings included.
+    expect(cursorToolResult("completed", "raw output")).toEqual({
+      output: { text: "raw output" },
+      isError: undefined,
+    });
     expect(
-      probeCursorSdkToolResult("completed", { stdout: "direct", exitCode: 0 }),
+      cursorToolResult("completed", { stdout: "direct", exitCode: 0 }),
     ).toMatchObject({ output: { text: "direct", exitCode: 0 } });
   });
 

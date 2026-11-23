@@ -34,9 +34,12 @@ import {
   usableExpandedPanelSize,
   usePersistentPanelSize,
 } from "@/lib/hooks/usePersistentPanelSize";
-import { motionEase, useMediaQuery } from "@vvedantb/ui";
-import { popOutSandboxCard } from "@/lib/components/sandbox/sandboxCardMotion";
-import { slideNextResize } from "@/lib/dockMotion";
+import {
+  motionEase,
+  popOutSidePanel,
+  slideNextResize,
+  useMediaQuery,
+} from "@vvedantb/ui";
 
 interface PanelContext {
   rightPanelCollapsed: boolean;
@@ -212,7 +215,7 @@ export function ResizablePanelLayout({
     }
     // A sandbox card shrinks back into its rail tab first; other right
     // panels have no card, so they collapse at once.
-    popOutSandboxCard(rightPanelElementRef.current, () => {
+    popOutSidePanel(rightPanelElementRef.current, () => {
       slideNextResize(groupElementRef.current, "close");
       panel.collapse();
     });

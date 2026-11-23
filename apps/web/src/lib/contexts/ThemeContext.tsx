@@ -96,31 +96,20 @@ function applyCustomThemeVars(customTheme: CustomTheme, _isDark: boolean) {
     document.head.appendChild(styleEl);
   }
 
+  // Brand is the package `--accent` (focus, chart-1 and sidebar primary follow
+  // it). `--accent-soft` is the tinted hover fill that `bg-accent-soft` reads.
   styleEl.textContent = `
     :root {
-      --primary: ${colors.light.primary};
-      --primary-foreground: ${colors.light.foreground};
-      --ring: ${colors.light.primary};
-      --chart-1: ${colors.light.primary};
-      --accent: ${colors.light.accent};
-      --accent-foreground: ${colors.light.accentFg};
-      --sidebar-primary: ${colors.light.primary};
-      --sidebar-primary-foreground: ${colors.light.foreground};
-      --sidebar-ring: ${colors.light.primary};
-      --sidebar-accent-foreground: ${colors.light.accentFg};
+      --accent: ${colors.light.primary};
+      --accent-foreground: ${colors.light.foreground};
+      --accent-soft: ${colors.light.accent};
+      --accent-soft-foreground: ${colors.light.accentFg};
     }
-    .dark,
-    .dark.neutral {
-      --primary: ${colors.dark.primary};
-      --primary-foreground: ${colors.dark.foreground};
-      --ring: ${colors.dark.primary};
-      --chart-1: ${colors.dark.primary};
-      --accent: ${colors.dark.accent};
-      --accent-foreground: ${colors.dark.accentFg};
-      --sidebar-primary: ${colors.dark.primary};
-      --sidebar-primary-foreground: ${colors.dark.foreground};
-      --sidebar-ring: ${colors.dark.primary};
-      --sidebar-accent-foreground: ${colors.dark.accentFg};
+    .dark {
+      --accent: ${colors.dark.primary};
+      --accent-foreground: ${colors.dark.foreground};
+      --accent-soft: ${colors.dark.accent};
+      --accent-soft-foreground: ${colors.dark.accentFg};
     }
   `;
 }

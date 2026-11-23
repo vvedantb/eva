@@ -223,6 +223,8 @@ export const controlsConfig = {
   Tabs: {
     variant: "segmented",
     pillMotion: "xy",
+    // Tab content slides 32px from the side of the picked tab (`TabsTransition`).
+    transition: "slide",
     classes: {
       // `justify-center-safe`: centred content that overflows would make the
       // leading tabs unreachable; safe alignment falls back to start.

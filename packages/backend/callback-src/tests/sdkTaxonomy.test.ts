@@ -1,11 +1,11 @@
 import { test, expect, beforeEach } from "bun:test";
 import { callbackState as S, resetStateForTests } from "../runtime/state.js";
 import {
-  diffNewBackgroundTaskIds,
   parseClaudeSdkTaxonomy,
   resetSdkTaxonomyStateForTest,
 } from "../parse/sdkTaxonomy.js";
 import { applyCanonicalEvents } from "../parse/canonical.js";
+import type { JsonObject } from "../types.js";
 
 beforeEach(() => {
   resetStateForTests();
@@ -187,10 +187,37 @@ test("parseClaudeSdkTaxonomy announces new background tasks by description", () 
     "Long build",
     "task-2",
   ]);
+
+  // A later change re-lists known tasks; only the unseen one gets a notice.
+  applyCanonicalEvents(
+    parseClaudeSdkTaxonomy({
+      type: "system",
+      subtype: "background_tasks_changed",
+      tasks: [{ task_id: "task-2" }, { task_id: "task-3" }],
+    }),
+  );
+  expect(S.accumulatedSteps.map((step) => step.detail)).toEqual([
+    "Long build",
+    "task-2",
+    "task-3",
+  ]);
 });
 
 test("parseClaudeSdkTaxonomy ignores malformed events without throwing", () => {
-  for (const event of [
+  // An active tool, so a malformed tool_progress has a step it could patch.
+  applyCanonicalEvents([
+    {
+      kind: "push_step",
+      trackingId: "tool-1",
+      step: {
+        type: "bash",
+        label: "Running command...",
+        toolUseId: "tool-1",
+        status: "active",
+      },
+    },
+  ]);
+  const malformed: JsonObject[] = [
     {},
     { type: "   " },
     { type: 7 },
@@ -202,13 +229,10 @@ test("parseClaudeSdkTaxonomy ignores malformed events without throwing", () => {
       elapsed_time_seconds: "12",
     },
     { type: "system", subtype: "hook_started", hook_name: "Hook" },
-  ]) {
+  ];
+  for (const event of malformed) {
     expect(parseClaudeSdkTaxonomy(event)).toEqual([]);
   }
-  expect(S.accumulatedSteps).toHaveLength(0);
-});
-
-test("diffNewBackgroundTaskIds returns only unseen task ids", () => {
-  expect(diffNewBackgroundTaskIds(["a", "b"])).toEqual(["a", "b"]);
-  expect(diffNewBackgroundTaskIds(["b", "c"])).toEqual(["c"]);
+  expect(S.accumulatedSteps).toHaveLength(1);
+  expect(S.accumulatedSteps[0]?.detail).toBeUndefined();
 });

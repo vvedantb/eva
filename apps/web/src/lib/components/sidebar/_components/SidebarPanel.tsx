@@ -50,7 +50,7 @@ export function SidebarPanel({
   return (
     // No edge line: the panel shares the page tone, and the gap to the
     // content divides them, as on the rail (docs/eva-ui.md).
-    <Sidebar.Panel className="bg-sidebar" data-sidebar-dock-panel>
+    <Sidebar.Panel className="vt-panel bg-sidebar">
       <ContextSidebarHeaderActionProvider key={panelKey}>
         {(headerAction) => (
           <>

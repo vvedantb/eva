@@ -1,69 +1,112 @@
-import { describe, expect, it, test } from "bun:test";
 import {
-  applyGithubTokenToEnv,
-  ensureGithubToken,
-  tokenFromActionResponse,
-} from "../providers/githubToken.js";
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  mock,
+  spyOn,
+} from "bun:test";
+import { stubEnv, unstubAllEnvs } from "../../tests/_helpers/env";
+import { ensureGithubToken } from "../providers/githubToken.js";
 
-describe("tokenFromActionResponse", () => {
-  it("reads data.value.token", () => {
-    expect(
-      tokenFromActionResponse({
-        value: { token: "ghs_abc" },
-      }),
-    ).toBe("ghs_abc");
-  });
+const CREDENTIALS = {
+  convexUrl: "https://example.convex.cloud",
+  convexToken: "convex-token",
+  repoId: "repo-1",
+};
 
-  it("rejects missing or non-string tokens", () => {
-    expect(tokenFromActionResponse(null)).toBeNull();
-    expect(tokenFromActionResponse({ value: "x" })).toBeNull();
-    expect(tokenFromActionResponse({ value: { token: 1 } })).toBeNull();
-  });
+function respondWith(body: string, status = 200): void {
+  spyOn(globalThis, "fetch").mockImplementation(
+    async () => new Response(body, { status }),
+  );
+}
+
+beforeEach(() => {
+  stubEnv("GITHUB_TOKEN", "old");
+  stubEnv("GH_TOKEN", "old");
+});
+
+afterEach(() => {
+  mock.restore();
+  unstubAllEnvs();
 });
 
 describe("ensureGithubToken", () => {
-  it("skips when Convex credentials are missing", async () => {
-    const result = await ensureGithubToken({
-      convexUrl: undefined,
-      convexToken: "t",
-      repoId: "r",
+  it("writes the fetched token to both env names git and gh read", async () => {
+    respondWith(JSON.stringify({ value: { token: "ghs_from_convex" } }));
+
+    await expect(ensureGithubToken(CREDENTIALS)).resolves.toEqual({
+      refreshed: true,
     });
-    expect(result).toEqual({ refreshed: false });
+    expect(process.env.GITHUB_TOKEN).toBe("ghs_from_convex");
+    expect(process.env.GH_TOKEN).toBe("ghs_from_convex");
   });
 
-  it("applies a fetched token onto the provided env", async () => {
-    const env: { GITHUB_TOKEN?: string; GH_TOKEN?: string } = {};
-    const result = await ensureGithubToken({
-      convexUrl: "https://example.convex.cloud",
-      convexToken: "convex-token",
-      repoId: "repo-1",
-      env,
-      fetchFn: async () =>
-        new Response(JSON.stringify({ value: { token: "ghs_from_convex" } }), {
-          status: 200,
+  it("asks Convex for this repo's installation token with the sandbox token", async () => {
+    respondWith(JSON.stringify({ value: { token: "ghs_x" } }));
+
+    await ensureGithubToken(CREDENTIALS);
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://example.convex.cloud/api/action",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          Authorization: "Bearer convex-token",
         }),
-    });
-    expect(result).toEqual({ refreshed: true });
-    expect(env.GITHUB_TOKEN).toBe("ghs_from_convex");
-    expect(env.GH_TOKEN).toBe("ghs_from_convex");
+        body: JSON.stringify({
+          path: "github:getInstallationTokenAction",
+          args: { repoId: "repo-1" },
+          format: "json",
+        }),
+      }),
+    );
   });
 
-  it("treats a non-OK response as a no-op", async () => {
-    const env: { GITHUB_TOKEN?: string } = { GITHUB_TOKEN: "old" };
-    const result = await ensureGithubToken({
-      convexUrl: "https://example.convex.cloud",
-      convexToken: "convex-token",
-      repoId: "repo-1",
-      env,
-      fetchFn: async () => new Response("no", { status: 503 }),
-    });
-    expect(result).toEqual({ refreshed: false });
-    expect(env.GITHUB_TOKEN).toBe("old");
-  });
-});
+  it("does not call Convex when a credential is missing", async () => {
+    respondWith("{}");
 
-test("applyGithubTokenToEnv writes both names", () => {
-  const env: { GITHUB_TOKEN?: string; GH_TOKEN?: string } = {};
-  applyGithubTokenToEnv(env, "ghs_x");
-  expect(env).toEqual({ GITHUB_TOKEN: "ghs_x", GH_TOKEN: "ghs_x" });
+    for (const params of [
+      { ...CREDENTIALS, convexUrl: undefined },
+      { ...CREDENTIALS, convexToken: undefined },
+      { ...CREDENTIALS, repoId: undefined },
+    ]) {
+      await expect(ensureGithubToken(params)).resolves.toEqual({
+        refreshed: false,
+      });
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [
+      "a non-OK response, even with a token body",
+      JSON.stringify({ value: { token: "ghs_error_page" } }),
+      503,
+    ],
+    ["malformed JSON", "{ nope", 200],
+    ["a missing envelope", JSON.stringify(null), 200],
+    ["a non-object value", JSON.stringify({ value: "x" }), 200],
+    ["a non-string token", JSON.stringify({ value: { token: 1 } }), 200],
+  ])("keeps the existing token on %s", async (_case, body, status) => {
+    respondWith(body, status);
+
+    await expect(ensureGithubToken(CREDENTIALS)).resolves.toEqual({
+      refreshed: false,
+    });
+    expect(process.env.GITHUB_TOKEN).toBe("old");
+    expect(process.env.GH_TOKEN).toBe("old");
+  });
+
+  it("keeps the existing token when the network fails", async () => {
+    spyOn(globalThis, "fetch").mockImplementation(async () => {
+      throw new Error("socket closed");
+    });
+
+    await expect(ensureGithubToken(CREDENTIALS)).resolves.toEqual({
+      refreshed: false,
+    });
+    expect(process.env.GITHUB_TOKEN).toBe("old");
+  });
 });

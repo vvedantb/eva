@@ -145,7 +145,7 @@ bashDescribe("the generated command kills a real process tree", () => {
       `echo $$ > ${parentPidFile}\nsleep 300 &\necho $! > ${childPidFile}\nwait\n`,
     );
 
-    // setsid so the tree's parent is init, not vitest: node reaps its own
+    // setsid so the tree's parent is init, not the test runner: node reaps its own
     // children asynchronously, and a zombie still answers `kill -0`, which
     // would push the wait loop to its SIGKILL fallback for the wrong reason.
     spawn("setsid", ["bash", script], {

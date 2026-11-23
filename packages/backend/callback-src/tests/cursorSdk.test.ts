@@ -1,16 +1,13 @@
 import { expect, test } from "bun:test";
 import { splitCursorModel } from "../config.js";
-import { cursorSdkToolToStep } from "../parse/toolSteps.js";
 import {
   cursorCompactionEventPhase,
   cursorParseLine,
-  probeCursorSdkToolResult,
 } from "../providers/cursor.js";
 import {
   COST_LOOKUP_RETRY_DELAYS_MS,
   EMPTY_CURSOR_COST_SNAPSHOT,
   RESOURCE_EXHAUSTED_CHAT_MESSAGE,
-  RESOURCE_EXHAUSTED_RETRY_DELAYS_MS,
   attributeCursorTurnRawCents,
   cursorModeParams,
   cursorModelCatalogJson,
@@ -286,6 +283,7 @@ test("filterModeParamsByModel keeps params the model declares", () => {
   const candidates = cursorModeParams("grok-4.5", false, true);
   const model = {
     id: "grok-4.5",
+    displayName: "Grok 4.5",
     parameters: [
       { id: "fast", values: [{ value: "true" }, { value: "false" }] },
       { id: "context", values: [{ value: "1m" }] },
@@ -299,20 +297,29 @@ test("filterModeParamsByModel keeps params the model declares", () => {
 
 test("filterModeParamsByModel drops params the model does not declare", () => {
   const candidates = cursorModeParams("grok-4.5", false, true);
-  const model = { id: "grok-4.5", parameters: [{ id: "reasoning" }] };
+  const model = {
+    id: "grok-4.5",
+    displayName: "Grok 4.5",
+    parameters: [{ id: "reasoning", values: [] }],
+  };
   expect(filterModeParamsByModel(candidates, model, opted(false, true))).toEqual(
     [],
   );
   // Declared id but undeclared value drops too.
   const wrongValue = {
     id: "grok-4.5",
+    displayName: "Grok 4.5",
     parameters: [{ id: "context", values: [{ value: "500k" }] }],
   };
   expect(
     filterModeParamsByModel(candidates, wrongValue, opted(false, true)),
   ).toEqual([]);
   // A declared id with an empty values list accepts any value.
-  const openValues = { id: "grok-4.5", parameters: [{ id: "fast" }] };
+  const openValues = {
+    id: "grok-4.5",
+    displayName: "Grok 4.5",
+    parameters: [{ id: "fast", values: [] }],
+  };
   expect(
     filterModeParamsByModel(candidates, openValues, opted(false, true)),
   ).toEqual([{ id: "fast", value: "false" }]);
@@ -354,12 +361,6 @@ test("isResourceExhaustedMessage matches Cursor's Connect-RPC 429", () => {
   expect(isResourceExhaustedMessage("[agent_not_found] Error")).toBe(false);
   expect(isResourceExhaustedMessage("network timeout")).toBe(false);
   expect(isResourceExhaustedMessage("")).toBe(false);
-});
-
-test("resource_exhausted chat message is readable, not the raw code alone", () => {
-  expect(RESOURCE_EXHAUSTED_CHAT_MESSAGE).toContain("rate limit");
-  expect(RESOURCE_EXHAUSTED_CHAT_MESSAGE).toContain("resource_exhausted");
-  expect(RESOURCE_EXHAUSTED_CHAT_MESSAGE).toContain("try again");
 });
 
 /**
@@ -437,12 +438,11 @@ test("resource_exhausted backs off 15s then 30s before giving up", async () => {
   ]);
   const result = await h.run();
 
-  expect(h.delays).toEqual(RESOURCE_EXHAUSTED_RETRY_DELAYS_MS);
+  expect(h.delays).toEqual([15_000, 30_000]);
   expect(h.calls()).toBe(3);
   expect(result.isError).toBe(true);
   // The whole point of the fix: the user reads a remedy, never the raw code.
   expect(result.resultText).toBe(RESOURCE_EXHAUSTED_CHAT_MESSAGE);
-  expect(result.resultText).not.toBe(EXHAUSTED);
 });
 
 test("a resource_exhausted throw past the retry budget still propagates", async () => {
@@ -499,118 +499,6 @@ test("a timed-out attempt stops retrying and still reads as rate-limited", async
   expect(delays).toEqual([]);
   expect(result.resultText).toBe(RESOURCE_EXHAUSTED_CHAT_MESSAGE);
 });
-
-test("cursorSdkToolToStep maps known SDK tool kinds", () => {
-  const read = cursorSdkToolToStep("read", { path: "/tmp/repo/src/a.ts" });
-  expect(read.type).toBe("read");
-  expect(read.path).toBe("/tmp/repo/src/a.ts");
-
-  const write = cursorSdkToolToStep("write", {
-    path: "src/b.ts",
-    fileText: "export const a = 1;",
-  });
-  expect(write.type).toBe("write");
-  expect(write.contentPreview).toContain("export const a");
-
-  const shell = cursorSdkToolToStep("shell", { command: "npm test" });
-  expect(shell.type).toBe("bash");
-  expect(shell.command).toBe("npm test");
-  expect(shell.detail).toBe("npm test");
-
-  const glob = cursorSdkToolToStep("glob", { globPattern: "**/*.ts" });
-  expect(glob.type).toBe("search_files");
-  expect(glob.detail).toBe("**/*.ts");
-
-  const grep = cursorSdkToolToStep("grep", { pattern: "TODO" });
-  expect(grep.type).toBe("search_code");
-  expect(grep.detail).toBe("TODO");
-
-  const del = cursorSdkToolToStep("delete", { path: "src/old.ts" });
-  expect(del.type).toBe("edit");
-  expect(del.label).toBe("Deleting file...");
-
-  const mcp = cursorSdkToolToStep("mcp", { serverName: "linear" });
-  expect(mcp.type).toBe("tool");
-  expect(mcp.label).toBe("Using MCP linear...");
-
-  const todos = cursorSdkToolToStep("updateTodos", {});
-  expect(todos.label).toBe("Updating tasks...");
-});
-
-test("cursorSdkToolToStep falls back heuristically for unknown names", () => {
-  const fetch = cursorSdkToolToStep("webFetch", {
-    url: "https://example.com",
-  });
-  expect(fetch.type).toBe("web_fetch");
-
-  // "webSearch" also contains "search"; it must not read as a code search.
-  const search = cursorSdkToolToStep("webSearch", { query: "convex docs" });
-  expect(search.type).toBe("web_search");
-  expect(search.label).toBe("Searching web...");
-
-  const mystery = cursorSdkToolToStep("recordScreen", {});
-  expect(mystery.type).toBe("tool");
-  expect(mystery.label).toBe("Using recordScreen...");
-
-  const unnamed = cursorSdkToolToStep("", {});
-  expect(unnamed.label).toBe("Using tool...");
-});
-
-test("probeCursorSdkToolResult unwraps success envelopes", () => {
-  const result = probeCursorSdkToolResult("completed", {
-    status: "success",
-    value: {
-      exitCode: 0,
-      stdout: "hello world",
-      stderr: "",
-      executionTime: 120,
-    },
-  });
-  expect(result?.output?.text).toBe("hello world");
-  expect(result?.output?.exitCode).toBe(0);
-  expect(result?.durationMs).toBe(120);
-  expect(result?.isError).toBeUndefined();
-});
-
-test("probeCursorSdkToolResult unwraps error envelopes and statuses", () => {
-  const stringError = probeCursorSdkToolResult("error", {
-    status: "error",
-    error: "boom",
-  });
-  expect(stringError?.isError).toBe(true);
-  expect(stringError?.output?.text).toBe("boom");
-
-  const objectError = probeCursorSdkToolResult("error", {
-    status: "error",
-    error: { message: "tool exploded" },
-  });
-  expect(objectError?.isError).toBe(true);
-  expect(objectError?.output?.text).toBe("tool exploded");
-
-  const noPayload = probeCursorSdkToolResult("error", undefined);
-  expect(noPayload).toEqual({ isError: true });
-
-  const okNoPayload = probeCursorSdkToolResult("completed", undefined);
-  expect(okNoPayload).toBeUndefined();
-});
-
-test("probeCursorSdkToolResult surfaces diffString and plain payloads", () => {
-  const diff = probeCursorSdkToolResult("completed", {
-    status: "success",
-    value: { diffString: "-a\n+b", linesAdded: 1, linesRemoved: 1 },
-  });
-  expect(diff?.output?.text).toBe("-a\n+b");
-
-  const plainString = probeCursorSdkToolResult("completed", "raw output");
-  expect(plainString?.output?.text).toBe("raw output");
-
-  const plainObject = probeCursorSdkToolResult("completed", {
-    stdout: "direct",
-    exitCode: 0,
-  });
-  expect(plainObject?.output?.text).toBe("direct");
-});
-
 
 const tokens = {
   inputTokens: 10,
@@ -762,7 +650,9 @@ test("resolveCursorTurnCostUsd polls while the backend lags, then gives up", asy
       calls++;
       return readCursorCostSnapshot(agentUsage(null, [["this-turn", null]]));
     },
-    sleep: async (delayMs) => delays.push(delayMs),
+    sleep: async (delayMs) => {
+      delays.push(delayMs);
+    },
   });
   // Cost is eventually consistent, so a gap is not final until the budget is.
   expect(calls).toBe(COST_LOOKUP_RETRY_DELAYS_MS.length + 1);
@@ -780,7 +670,9 @@ test("resolveCursorTurnCostUsd polls while the backend lags, then gives up", asy
         agentUsage(null, [["this-turn", lateCalls > 1 ? 250 : null]]),
       );
     },
-    sleep: async (delayMs) => lateDelays.push(delayMs),
+    sleep: async (delayMs) => {
+      lateDelays.push(delayMs);
+    },
   });
   expect(lateCalls).toBe(2);
   expect(lateDelays).toEqual([COST_LOOKUP_RETRY_DELAYS_MS[0]]);

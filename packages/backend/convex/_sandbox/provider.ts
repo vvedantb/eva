@@ -298,6 +298,12 @@ export type SandboxCredentials = {
   token: string;
   teamId: string;
   projectId: string;
+  /**
+   * vCPUs for sandboxes created with these credentials: the size of the app
+   * they were resolved for (`githubRepos.sandboxSize`). It rides here because
+   * credentials are the one thing every create path resolves per app.
+   */
+  vcpus: number;
 };
 
 /**

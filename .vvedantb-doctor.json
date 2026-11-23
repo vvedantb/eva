@@ -3,6 +3,10 @@
     "no-eslint": "eslint-plugin-react-you-might-not-need-an-effect is an ESLint-format plugin that oxlint loads through jsPlugins in .oxlintrc.json; ESLint is not installed and never runs."
   },
   "ciCommands": {
+    "scripts/test-affected.sh apps/web packages/shared packages/backend packages/ui": "The web bun test suite. On a pull request it runs only the tests the diff can reach (VV_TEST_CHANGED). Bun's --changed does not follow workspace imports, so a diff in the listed upstream packages runs the full suite.",
+    "scripts/test-affected.sh packages/backend packages/shared packages/backend/tests/_helpers/preload.ts": "The backend bun test suite, narrowed the same way. A change to @eva/shared or to the test preload, which no test imports, runs the full suite.",
+    "cd packages/backend && bun test tests/sourceEncoding.test.ts": "The source-encoding test scans every git-tracked file for control bytes and imports nothing from the repo, so --changed never selects it. It runs on every pull request, outside narrowing, so a bad byte in any file is always caught.",
+    "pnpm test:schema-narrowing": "A node --test suite that reads the Convex schema from disk; --changed cannot select it, so it runs on every pull request. It was part of the old `pnpm test` chain, split out so the bun test commands can be narrowed.",
     "node scripts/check-shared-backend.mjs": "Fails when the phone app calls a Convex function that the web app never calls, unless the function is listed with a reason, which lint, typecheck and test do not compare.",
     "./scripts/check-apk-compat.sh": "Type-checks the newest published APK source against this backend when the backend changed and warns (never fails) on what installed phones will lose, which typecheck of the current code cannot see.",
     "node scripts/compiler-check.mjs": "Runs the React Compiler over the web source and fails on a new bailout that is not in the baseline, which lint, typecheck and test do not report.",

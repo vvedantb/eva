@@ -33,22 +33,32 @@ permissions:
 
 jobs:
   check:
-    uses: vvedantb/packages/.github/workflows/ci-app.yml@main
+    uses: vvedantb/workflows/.github/workflows/ci-app.yml@main
     with:
-      runs_on: boat-large
+      runs_on: ubuntu-latest
       node_version: "24"
-      # The schema gate diffs against the merge base, so it needs history.
+      # The schema gate and the test scope both diff against the merge base, so
+      # the checkout needs full history (affected_tests requires fetch_depth: 0).
       fetch_depth: 0
+      # Run the command lines together in the one Check job. max_parallel caps
+      # how many run at once. This runner has 4 vCPUs and 16 GB. On the old
+      # 8-core runner 2 and 4 both ran the Checks step in 25 s while all-at-once
+      # took 30 s: the heavy commands (tsrs, oxlint, bun test) are each
+      # multi-threaded, so too many at once contend for cores. 2 is the lowest
+      # peak load, so it fits 4 vCPUs best. Run ids: PR body. Under Bun the tests
+      # take seconds, so typecheck and build are now the long lines.
+      parallel: true
+      max_parallel: 2
+      # Pull requests run only the tests the diff can reach; pushes to main run
+      # everything. The workflow exports VV_TEST_SCOPE and VV_TEST_CHANGED to
+      # every command; scripts/test-affected.sh reads VV_TEST_CHANGED. Bun's
+      # --changed follows relative imports only, not workspace packages, so the
+      # script still runs a package's full suite when an upstream package changed.
+      affected_tests: true
+      bun_version: "1.4.4"
       env: |
         BASE_REF=origin/${{ github.base_ref || 'main' }}
         SCHEMA_NARROWING_BASE=${{ github.event_name == 'push' && github.event.before || '' }}
-        TEST_BASE_REF=${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
-      # Every line below runs at once; the job fails if any line fails.
-      parallel: true
-      install_command: |
-        pnpm install --frozen-lockfile
-        curl -fsSL https://bun.sh/install | bash -s "bun-v1.4.4"
-        echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
       commands: |
         # tsrs only. `convex codegen` must never run in automation because
         # it uploads to the linked deployment. convex/_generated is checked in,
@@ -56,11 +66,15 @@ jobs:
         pnpm typecheck
         pnpm lint
         pnpm build
-        # Pull requests run only the tests their diff can reach; pushes to main
-        # run everything. Each package's arguments are the workspace packages
-        # its tests import.
+        # Each package's arguments are the workspace packages its tests import.
         scripts/test-affected.sh apps/web packages/shared packages/backend packages/ui
-        scripts/test-affected.sh packages/backend packages/shared
+        scripts/test-affected.sh packages/backend packages/shared packages/backend/tests/_helpers/preload.ts
+        # sourceEncoding scans every git-tracked text file for control bytes. It
+        # imports nothing from the repo, so --changed never selects it, and
+        # narrowing would hide a bad byte added to any file. It runs on every PR.
+        cd packages/backend && bun test tests/sourceEncoding.test.ts
+        # The schema-gate node test is not bun test and reads the schema from
+        # disk, so --changed cannot select it; it always runs (fast, one file).
         pnpm test:schema-narrowing
         # One backend for both apps: fails when the phone calls a Convex
         # function the web never calls, unless it is allowed with a reason.
@@ -77,88 +91,20 @@ jobs:
         # live rows may still hold it. See docs/eva-convex.md > Migrations.
         node scripts/check-schema-narrowing.mjs
 
-  # Push releases run from here, after check, so a release waits for lint and tests to pass.
-  # This job is the path gate: no release runner starts unless the merge could be a release
-  # and touches a file that reaches the APK. There is no commit-message gate: a push to
-  # main releases when its diff touches one of the paths below, and only then. On a pull
-  # request this whole gate is skipped.
-  release-paths:
-    name: release paths
-    needs: check
-    if: github.event_name == 'push'
-    runs-on: boat-large
-    permissions:
-      contents: read
-    outputs:
-      changed: ${{ steps.diff.outputs.changed }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-      - id: diff
-        shell: bash
-        env:
-          BEFORE: ${{ github.event.before }}
-          AFTER: ${{ github.sha }}
-        run: |
-          # Pathspecs: files that reach the APK. Metro bundles @eva/shared and the
-          # runtime exports of @eva/backend (packages/backend/index.ts re-exports from
-          # convex/), so both stay in the filter. Keep it equal to that closure. Docs,
-          # the mobile .env.example, shared tests, convex tests, web and .github/**
-          # (this file too) do not release. The root package.json and pnpm-lock.yaml are left out
-          # on purpose: they have no per-app part, so any dependency bump in the repo would ship
-          # an APK. A real mobile dependency change edits apps/mobile/package.json.
-          #
-          # These are the release-android.yml push paths, translated one for one into git
-          # pathspecs: a positive x/** becomes ':(glob)x/**', a plain file ':(glob)file'
-          # (root-anchored, like GitHub), and a negative !y into ':(exclude,glob)y'.
-          pathspecs=(
-            ':(glob)apps/mobile/**'
-            ':(exclude,glob)apps/mobile/**/*.md'
-            ':(exclude,glob)apps/mobile/.env.example'
-            ':(glob)packages/shared/**'
-            ':(exclude,glob)packages/shared/**/*.test.ts'
-            ':(glob)packages/backend/package.json'
-            ':(glob)packages/backend/index.ts'
-            ':(glob)packages/backend/convex/**'
-            ':(exclude,glob)packages/backend/convex/**/*.test.ts'
-            ':(glob)pnpm-workspace.yaml'
-            ':(glob)patches/**'
-            ':(glob)scripts/build-android-release.sh'
-            ':(glob)scripts/check-clerk-native-api.sh'
-          )
-
-          # A forced push can set BEFORE to a commit we do not have, and a brand new branch
-          # sets it to all-zeros. We cannot diff against it, so release and let the shared
-          # workflow make the final call.
-          if ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
-            echo "BEFORE $BEFORE is not a commit we have; treating as a release path change."
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          files="$(git diff --name-only "$BEFORE" "$AFTER" -- "${pathspecs[@]}")"
-          if [ -n "$files" ]; then
-            echo "Release paths changed:"
-            echo "$files"
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "No release paths changed."
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
-
-  # The Android release itself. It calls the shared workflow exactly as the old
-  # release-android.yml push trigger did. release_on: always makes the shared workflow release
-  # every push that reaches it, so the path gate above is the only gate.
+  # Push releases. The release build starts at once, in parallel with check, so the APK
+  # is ready when check ends. It does not need check: the shared workflow waits for the
+  # check job before publish (wait_for_check_job), so a failed check publishes nothing.
+  # Its pathspecs input is the path gate: a push that changes none of them skips the
+  # release cleanly. A pull request never runs this job.
   release:
-    needs: release-paths
-    if: needs.release-paths.outputs.changed == 'true'
+    if: github.event_name == 'push'
     permissions:
+      actions: read
       contents: write
     concurrency:
       group: release-android
       cancel-in-progress: false
-    uses: vvedantb/packages/.github/workflows/release-android-apk.yml@main
+    uses: vvedantb/workflows/.github/workflows/release-android-apk.yml@main
     with:
       app_name: eva
       release_title: Eva
@@ -168,6 +114,30 @@ jobs:
       tag_prefix: eva-apk-
       mark_as_latest: false
       release_on: always
+      # The nested check job is named "check / Check". The shared wait matches a
+      # job name equal to this value or ending in " / Check", so "Check" finds it.
+      wait_for_check_job: Check
+      # Files that reach the APK. Metro bundles @eva/shared and the runtime exports
+      # of @eva/backend (packages/backend/index.ts re-exports from convex/), so both
+      # stay in the filter. Keep it equal to that closure. Docs, the mobile
+      # .env.example, shared tests, convex tests, web and .github/** do not release.
+      # The root package.json and pnpm-lock.yaml are left out on purpose: they have
+      # no per-app part, so any dependency bump in the repo would ship an APK. A real
+      # mobile dependency change edits apps/mobile/package.json.
+      pathspecs: |
+        :(glob)apps/mobile/**
+        :(exclude,glob)apps/mobile/**/*.md
+        :(exclude,glob)apps/mobile/.env.example
+        :(glob)packages/shared/**
+        :(exclude,glob)packages/shared/**/*.test.ts
+        :(glob)packages/backend/package.json
+        :(glob)packages/backend/index.ts
+        :(glob)packages/backend/convex/**
+        :(exclude,glob)packages/backend/convex/**/*.test.ts
+        :(glob)pnpm-workspace.yaml
+        :(glob)patches/**
+        :(glob)scripts/build-android-release.sh
+        :(glob)scripts/check-clerk-native-api.sh
       # A boat.dev runner. It has no Android SDK: the shared workflow installs
       # the command line tools and sdk_packages when it finds none.
       runs_on: boat-large

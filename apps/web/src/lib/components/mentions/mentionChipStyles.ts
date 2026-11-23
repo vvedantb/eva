@@ -6,7 +6,7 @@
  * page) wider than a phone viewport.
  */
 export const MENTION_CHIP_CLASS =
-  "inline-flex max-sm:max-w-full items-center rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground";
+  "inline-flex max-sm:max-w-full items-center rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent-soft-foreground";
 
 export const SKILL_CHIP_CLASS = MENTION_CHIP_CLASS;
 

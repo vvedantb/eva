@@ -30,24 +30,15 @@ test("buildEvaMcpServers requires both environment values", () => {
   expect(buildEvaMcpServers({})).toEqual({});
 });
 
-test("consumeEvaMcpEnvironment removes credentials after reading them", () => {
+test("consumeEvaMcpEnvironment removes credentials but hands them to trusted worker children", () => {
   const env = {
     EVA_MCP_AUTH: "token-123",
     EVA_MCP_BASE_URL: "https://example.convex.site",
   };
-  const { servers } = consumeEvaMcpEnvironment(env);
+  const { servers, workerHandoffEnv } = consumeEvaMcpEnvironment(env);
 
   expect(Object.keys(servers)).toEqual(["eva"]);
-  expect(env).toEqual({});
-});
-
-test("consumeEvaMcpEnvironment keeps a handoff for trusted worker children", () => {
-  const env = {
-    EVA_MCP_AUTH: "token-123",
-    EVA_MCP_BASE_URL: "https://example.convex.site",
-  };
-  const { workerHandoffEnv } = consumeEvaMcpEnvironment(env);
-
+  expect(Object.keys(env)).toEqual([]);
   expect(workerHandoffEnv).toEqual({
     EVA_MCP_AUTH: "token-123",
     EVA_MCP_BASE_URL: "https://example.convex.site",

@@ -54,39 +54,46 @@ describe("DaemonSupervisor", () => {
 
   test("refresh waits for every independently live region", () => {
     const supervisor = new DaemonSupervisor<Claim, Turn>();
+    const quiet = {
+      watchedTurnActive: false,
+      backgroundAgentCount: 0,
+      sdkMessagePending: false,
+    };
+    expect(supervisor.decideRefresh(quiet)).toEqual({ action: "continue" });
+
     supervisor.noticeRefresh();
     expect(
-      supervisor.decideRefresh({
-        watchedTurnActive: true,
-        backgroundAgentCount: 0,
-        sdkMessagePending: false,
-      }),
+      supervisor.decideRefresh({ ...quiet, watchedTurnActive: true }),
     ).toEqual({ action: "defer", blocker: "watched turn" });
 
-    expect(supervisor.parkClaim({ prompt: "hello" })).toBe(true);
+    expect(supervisor.beginSyntheticOpen()).toBe(true);
+    expect(supervisor.decideRefresh(quiet)).toEqual({
+      action: "defer",
+      blocker: "synthetic turn opening",
+    });
     expect(
-      supervisor.decideRefresh({
-        watchedTurnActive: false,
-        backgroundAgentCount: 0,
-        sdkMessagePending: false,
-      }),
-    ).toEqual({ action: "defer", blocker: "claimed turn" });
+      supervisor.startTurn({ kind: "synthetic", messageId: "message-1" }),
+    ).toBe(true);
+    expect(supervisor.decideRefresh(quiet)).toEqual({
+      action: "defer",
+      blocker: "running",
+    });
+    supervisor.settleTurn();
 
+    expect(supervisor.parkClaim({ prompt: "hello" })).toBe(true);
+    expect(supervisor.decideRefresh(quiet)).toEqual({
+      action: "defer",
+      blocker: "claimed turn",
+    });
     supervisor.takeClaim();
+
     expect(
-      supervisor.decideRefresh({
-        watchedTurnActive: false,
-        backgroundAgentCount: 1,
-        sdkMessagePending: false,
-      }),
+      supervisor.decideRefresh({ ...quiet, backgroundAgentCount: 1 }),
     ).toEqual({ action: "defer", blocker: "background agent" });
     expect(
-      supervisor.decideRefresh({
-        watchedTurnActive: false,
-        backgroundAgentCount: 0,
-        sdkMessagePending: false,
-      }),
-    ).toEqual({ action: "exit" });
+      supervisor.decideRefresh({ ...quiet, sdkMessagePending: true }),
+    ).toEqual({ action: "defer", blocker: "queued SDK message" });
+    expect(supervisor.decideRefresh(quiet)).toEqual({ action: "exit" });
   });
 
   test("explicit stop wins over all work", () => {

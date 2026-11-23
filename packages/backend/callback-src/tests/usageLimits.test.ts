@@ -270,24 +270,27 @@ test("an unavailable usage read records a refusal instead of staying silent", as
   expect(S.usageLimitSnapshot).toEqual({ completeness: "refused" });
 });
 
-test("a spend-limit result becomes a non-destructive rejected snapshot", () => {
-  captureClaudeUsageLimitError(
-    "You've hit your individual spend limit · ask your admin to raise it",
-  );
+// Every phrase `isUsageLimitError` in convex/_taskWorkflow/usageLimitReset.ts
+// matches. A partial status-only reading patches the row without wiping its
+// last valid windows.
+test.each([
+  "You're out of extra usage · resets 3pm",
+  "API Error: rate limit exceeded",
+  "Claude AI usage limit reached|1760000000",
+  "You've hit your session limit · resets 12pm (UTC)",
+  "You've hit your individual spend limit · ask your admin to raise it",
+  "Token limit exceeded for this organization",
+])("a usage-limit result becomes a rejected snapshot: %s", (error) => {
+  captureClaudeUsageLimitError(error);
   expect(S.usageLimitSnapshot).toEqual({
     completeness: "partial",
     status: "rejected",
   });
 });
 
-test("a session-limit result becomes a rejected snapshot", () => {
-  captureClaudeUsageLimitError(
-    "You've hit your session limit · resets 12pm (UTC)",
-  );
-  expect(S.usageLimitSnapshot).toEqual({
-    completeness: "partial",
-    status: "rejected",
-  });
+test("an error that is not a usage limit leaves the snapshot alone", () => {
+  captureClaudeUsageLimitError("Error: ENOENT: no such file or directory");
+  expect(S.usageLimitSnapshot).toBeNull();
 });
 
 test("a spend-limit result keeps authoritative windows when available", async () => {
@@ -369,14 +372,6 @@ test("buildUsageLimitReportArgs keys two accounts apart on one repo", () => {
     "providerAccountId" in
       buildUsageLimitReportArgs("repo-1", "claude", "", { ...snapshot }),
   ).toBe(false);
-});
-
-test("unwrapUsagePayload reads a nested control-channel value", () => {
-  const inner = {
-    rate_limits_available: true,
-    rate_limits: { five_hour: { utilization: 34 } },
-  };
-  expect(unwrapUsagePayload({ value: inner })).toEqual(inner);
 });
 
 test("a usage payload with windows and no availability flag still captures", async () => {

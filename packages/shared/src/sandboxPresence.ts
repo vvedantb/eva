@@ -13,7 +13,9 @@ export function sandboxPresenceRoomId(entityId: string): string {
  * A visible tab counts as "in use" only for this long after the last input
  * (pointer, key, wheel, scroll, touch, or switching to the tab). A tab left
  * visible on an unattended screen kept session 98 awake overnight; after this
- * window it leaves presence, sends no preview ping and never auto-wakes.
+ * window it leaves presence and never auto-wakes. The preview proxy's
+ * on-screen ping does not use this window: it reports input since its last
+ * ping, so it stops within a minute of the last input.
  */
 export const SANDBOX_ENGAGED_WINDOW_MS = 10 * 60_000;
 

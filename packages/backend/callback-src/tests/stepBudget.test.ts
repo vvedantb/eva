@@ -58,6 +58,11 @@ test("enforceStepBudget strips heavy fields oldest-first under budget", () => {
   // Labels always survive
   expect(steps.every((s) => typeof s.label === "string")).toBe(true);
   expect(steps[0]?.command).toBe("echo one");
+  // Two old outputs are enough to fit; the newest output and the edit stay.
+  expect(steps[0]?.output).toBeUndefined();
+  expect(steps[1]?.output).toBeUndefined();
+  expect(steps[2]?.output?.text).toBe(fat);
+  expect(steps[3]?.edits).toEqual([{ oldText: fat, newText: fat }]);
 });
 
 test("enforceStepBudget drops subagent messages before parent output", () => {

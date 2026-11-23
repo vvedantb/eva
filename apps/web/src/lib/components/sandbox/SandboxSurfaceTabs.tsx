@@ -15,10 +15,11 @@ import {
  * Which half of an entity a surface-owning page is showing: its own detail view
  * (`main`) or the sandbox workspace. Quick tasks and projects both route on this.
  */
-export type SandboxSurface = "main" | "sandbox";
+export const SANDBOX_SURFACES = ["main", "sandbox"] as const;
+export type SandboxSurface = (typeof SANDBOX_SURFACES)[number];
 
 function isSandboxSurface(value: string): value is SandboxSurface {
-  return value === "main" || value === "sandbox";
+  return SANDBOX_SURFACES.some((surface) => surface === value);
 }
 
 /**

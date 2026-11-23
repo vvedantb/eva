@@ -76,7 +76,7 @@ export function DocCommentsPanel({
           className={cn(
             "max-sm:hit-target rounded-md px-2 max-sm:py-1 text-xs font-medium transition-colors",
             filter === "open"
-              ? "bg-accent text-accent-foreground"
+              ? "bg-accent-soft text-accent-soft-foreground"
               : "text-muted-foreground hover:text-foreground",
           )}
         >
@@ -88,7 +88,7 @@ export function DocCommentsPanel({
           className={cn(
             "max-sm:hit-target rounded-md px-2 max-sm:py-1 text-xs font-medium transition-colors",
             filter === "resolved"
-              ? "bg-accent text-accent-foreground"
+              ? "bg-accent-soft text-accent-soft-foreground"
               : "text-muted-foreground hover:text-foreground",
           )}
         >

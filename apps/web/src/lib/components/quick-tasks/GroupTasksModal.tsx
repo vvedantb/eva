@@ -280,7 +280,7 @@ export function GroupTasksModal({
                         onClick={() => setSelectedProjectId(project._id)}
                         className={`w-full rounded-lg p-3 text-left transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/35 ${
                           selectedProjectId === project._id
-                            ? "ring-2 ring-primary bg-accent"
+                            ? "ring-2 ring-primary bg-accent-soft"
                             : "bg-muted hover:bg-muted/70"
                         }`}
                       >

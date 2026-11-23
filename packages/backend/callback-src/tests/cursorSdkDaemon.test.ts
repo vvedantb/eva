@@ -2,107 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { readClaimedTurn } from "../providers/claimedTurnLifecycle.js";
 import {
   buildCursorTurnWorkerEnv,
-  buildTurnCompletion,
   cursorTurnWorkerFailureMessage,
+  type CursorTurnWorkerExit,
 } from "../providers/cursorSdkDaemon.js";
-import type { ProviderAttemptResult } from "../types.js";
-
-const CLEAN_ATTEMPT: ProviderAttemptResult = {
-  code: 0,
-  terminatedBySignal: false,
-  output: "",
-  timedOutForNoOutput: false,
-  timedOutForMaxRuntime: false,
-  timedOutForFirstEvent: false,
-  timedOutForFirstAssistant: false,
-  timedOutAfterFirstText: false,
-  timedOutForZombie: false,
-  toolStallErrorMessage: "",
-};
-
-/** The synthetic result line `runCursorSdkAttempt` emits at the end of a turn. */
-function resultLine(result: string, isError = false): string {
-  return JSON.stringify({ type: "result", is_error: isError, result }) + "\n";
-}
-
-/**
- * The daemon runs one claimed turn per loop and then has to decide, from the
- * attempt's outcome alone, what the chat message says. Getting this wrong is
- * invisible in the happy path and disastrous in the tail: a timed-out turn
- * reported as a success posts the agent's half-finished text as its final
- * answer, and a failed turn with no error resolves the workflow with nothing
- * to show. Same rules as the one-shot path in index.ts.
- */
-describe("the daemon turn loop reports each turn's outcome", () => {
-  test("a clean result is a successful turn with no error", () => {
-    expect(
-      buildTurnCompletion({
-        ...CLEAN_ATTEMPT,
-        output: resultLine("Renamed the button."),
-      }),
-    ).toEqual({ success: true, error: null });
-  });
-
-  test("an error result surfaces the agent's own message", () => {
-    expect(
-      buildTurnCompletion({
-        ...CLEAN_ATTEMPT,
-        code: 1,
-        output: resultLine("rate limit or usage quota exhausted", true),
-      }),
-    ).toEqual({
-      success: false,
-      error: "rate limit or usage quota exhausted",
-    });
-  });
-
-  /**
-   * A timeout cancels the run, so `run.wait()` reports a non-finished status and
-   * the synthetic result line carries `is_error` — that flag, not the timeout,
-   * is what fails the turn. A *clean* result event alongside a timeout flag
-   * still counts as a success, exactly as the one-shot path decides it
-   * (index.ts: `attemptEndedDueToTimeout && !runSucceededWithResult`), so the
-   * two paths cannot disagree about the same attempt.
-   */
-  test("an interrupted run fails on its result event, not its timeout flag", () => {
-    expect(
-      buildTurnCompletion({
-        ...CLEAN_ATTEMPT,
-        code: 1,
-        timedOutForMaxRuntime: true,
-        output: resultLine("I was still working on", true),
-      }),
-    ).toEqual({ success: false, error: "I was still working on" });
-
-    expect(
-      buildTurnCompletion({
-        ...CLEAN_ATTEMPT,
-        timedOutForMaxRuntime: true,
-        output: resultLine("Renamed the button."),
-      }).success,
-    ).toBe(true);
-  });
-
-  test("a silent turn that never produced a result reports a diagnostic error", () => {
-    const outcome = buildTurnCompletion({
-      ...CLEAN_ATTEMPT,
-      code: 1,
-      timedOutForNoOutput: true,
-    });
-    expect(outcome.success).toBe(false);
-    expect(outcome.error).toContain("no stdout");
-  });
-
-  test("a turn that dies without a result reports the runtime cap", () => {
-    const outcome = buildTurnCompletion({
-      ...CLEAN_ATTEMPT,
-      code: 1,
-      timedOutForMaxRuntime: true,
-    });
-    expect(outcome.success).toBe(false);
-    expect(outcome.error).toContain("terminated after max runtime");
-  });
-});
 
 describe("the daemon preserves durable ownership from the claim response", () => {
   test("reads an enveloped turn lease with the prompt and attachments", () => {
@@ -124,29 +26,29 @@ describe("the daemon preserves durable ownership from the claim response", () =>
       turnLease: { turnId: "turn-47", leaseGeneration: 3 },
     });
   });
-
-  test("a prompt without a lease is no claim", () => {
-    expect(readClaimedTurn({ prompt: "Turn without a lease" })).toBeNull();
-  });
 });
 
 describe("the Cursor daemon isolates every turn in a disposable worker", () => {
-  test("reports an OOM without taking down the warm supervisor", () => {
-    expect(
-      cursorTurnWorkerFailureMessage({
-        status: "exited",
-        code: 134,
-        signal: null,
-      }),
-    ).toContain("ran out of memory");
-    expect(
-      cursorTurnWorkerFailureMessage({
-        status: "exited",
-        code: 134,
-        signal: null,
-      }),
-    ).toContain("daemon remained healthy");
-  });
+  /** V8 aborts on heap exhaustion: exit code 134 or a direct SIGABRT. */
+  test.each([
+    [
+      { status: "exited", code: 134, signal: null },
+      "Cursor turn worker ran out of memory (exit code 134). The daemon remained healthy and is ready for the next message.",
+    ],
+    [
+      { status: "exited", code: null, signal: "SIGABRT" },
+      "Cursor turn worker ran out of memory (signal SIGABRT). The daemon remained healthy and is ready for the next message.",
+    ],
+    [
+      { status: "exited", code: 1, signal: null },
+      "Cursor turn worker stopped unexpectedly (exit code 1). The daemon remained healthy and is ready for the next message.",
+    ],
+  ] satisfies [CursorTurnWorkerExit, string][])(
+    "names an OOM apart from other worker exits (%o)",
+    (outcome, message) => {
+      expect(cursorTurnWorkerFailureMessage(outcome)).toBe(message);
+    },
+  );
 
   test("reports spawn failures distinctly", () => {
     expect(

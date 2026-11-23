@@ -133,6 +133,7 @@ export function Sidebar({ children }: { children: ReactNode }) {
 
   return (
     <AppShell.Root
+      variant="rail"
       scroll="document"
       resizable={SIDEBAR_RESIZE}
       // Collapsed, or a route with no side panel: the content sits next to the rail.
