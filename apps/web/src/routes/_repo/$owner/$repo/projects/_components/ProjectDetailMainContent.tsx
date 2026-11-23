@@ -3,89 +3,86 @@ import { tokenTransition } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
 import type { Id } from "@eva/backend";
 import { ProjectTabs } from "@/lib/components/projects/ProjectTabs";
-import { ProjectActiveLayout } from "@/lib/components/projects/ProjectActiveLayout";
 import type { ProjectMainTab } from "@/lib/components/projects/ProjectMainTabs";
 import { ProjectOverviewTab } from "@/lib/components/projects/ProjectOverviewTab";
-import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
+import { ProjectTaskView } from "@/lib/components/projects/ProjectTaskView";
 import { entityPathSegment, type EntityResolveStatus } from "@/lib/numId";
 import type { ProjectDetailProject } from "./projectDetailHelpers";
 
 interface ProjectDetailMainContentProps {
   projectId: Id<"projects">;
   project: ProjectDetailProject;
-  isSandboxSurface: boolean;
   mainTab: ProjectMainTab;
   isDraftOrFinalized: boolean;
-  sandboxContent: ReactNode;
+  /** The coordinator: its chat and rail (Tasks first). */
+  coordinatorContent: ReactNode;
   streamingActivity: string | undefined;
   sandboxStartupActivity: string | undefined;
   basePath: string;
   repoId: Id<"githubRepos">;
+  /** A task is open (`$taskNumId`): it replaces the coordinator. */
+  isTaskOpen: boolean;
   selectedTaskId?: Id<"agentTasks">;
+  /** Resolve status of selectedTaskId's numId; undefined when no task is selected. */
   selectedTaskStatus?: EntityResolveStatus;
-  detailTab?: TaskDetailTab;
 }
 
+/**
+ * The project body: Overview, the Plan while a project still plans, else the
+ * coordinator — or, with a task open, that task's own chat and sandbox.
+ */
 export function ProjectDetailMainContent({
   projectId,
   project,
-  isSandboxSurface,
   mainTab,
   isDraftOrFinalized,
-  sandboxContent,
+  coordinatorContent,
   streamingActivity,
   sandboxStartupActivity,
   basePath,
   repoId,
+  isTaskOpen,
   selectedTaskId,
   selectedTaskStatus,
-  detailTab,
 }: ProjectDetailMainContentProps) {
+  const projectSegment = entityPathSegment(project);
+  const projectHref = projectSegment
+    ? `${basePath}/projects/${projectSegment}`
+    : `${basePath}/projects`;
+  const view =
+    mainTab === "overview"
+      ? "overview"
+      : isDraftOrFinalized
+        ? "plan"
+        : isTaskOpen
+          ? "task"
+          : "coordinator";
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <AnimatePresence mode="wait" initial={false}>
-        {isSandboxSurface ? (
-          <m.div
-            key="sandbox"
-            className="min-h-0 flex-1 overflow-hidden"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={tokenTransition.fast}
-          >
-            {sandboxContent}
-          </m.div>
-        ) : mainTab === "overview" ? (
-          <m.div
-            key="overview"
-            className="flex min-h-0 flex-1 flex-col"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={tokenTransition.fast}
-          >
+        <m.div
+          key={view === "task" ? `task:${selectedTaskId ?? ""}` : view}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={tokenTransition.fast}
+        >
+          {view === "overview" ? (
             <ProjectOverviewTab
               projectId={projectId}
               repoId={repoId}
               title={project.title}
               description={project.description}
               documentsHref={
-                entityPathSegment(project)
-                  ? `${basePath}/projects/${entityPathSegment(project)}/sandbox/documents`
+                projectSegment
+                  ? `${projectHref}/sandbox/documents`
                   : undefined
               }
               canContribute={project.callerRole === "contributor"}
             />
-          </m.div>
-        ) : isDraftOrFinalized ? (
-          <m.div
-            key="plan"
-            className="flex min-h-0 flex-1 flex-col"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={tokenTransition.fast}
-          >
+          ) : view === "plan" ? (
             <ProjectTabs
               projectId={projectId}
               projectPhase={project.phase}
@@ -98,26 +95,19 @@ export function ProjectDetailMainContent({
               basePath={basePath}
               repoId={repoId}
             />
-          </m.div>
-        ) : (
-          <m.div
-            key="tasks"
-            className="flex min-h-0 flex-1 flex-col"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={tokenTransition.fast}
-          >
-            <ProjectActiveLayout
+          ) : view === "task" ? (
+            <ProjectTaskView
               projectId={projectId}
-              project={project}
-              basePath={basePath}
-              selectedTaskId={selectedTaskId}
-              selectedTaskStatus={selectedTaskStatus}
-              detailTab={detailTab}
+              repoId={project.repoId}
+              projectNumId={project.numId}
+              coordinatorHref={`${projectHref}/sandbox/tasks`}
+              taskId={selectedTaskId}
+              taskStatus={selectedTaskStatus}
             />
-          </m.div>
-        )}
+          ) : (
+            coordinatorContent
+          )}
+        </m.div>
       </AnimatePresence>
     </div>
   );

@@ -112,6 +112,7 @@ export const list = authQuery({
 
 /** A project's tasks by display status (`projectTaskDisplayStatus`). */
 const displayStatusCountsValidator = v.object({
+  triage: v.number(),
   working: v.number(),
   blocked: v.number(),
   idle: v.number(),

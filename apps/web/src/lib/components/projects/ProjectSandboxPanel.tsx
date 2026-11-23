@@ -3,11 +3,9 @@
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id, SandboxOwner } from "@eva/backend";
-import {
-  isSessionSandboxTab,
-  type SandboxTab,
-  type TaskRouteSandboxTab,
-} from "@/lib/search-params";
+import { IconChecklist } from "@tabler/icons-react";
+import { KeepAlivePane } from "@/lib/components/sandbox/KeepAlivePane";
+import type { SandboxTabDescriptor } from "@/routes/_repo/$owner/$repo/sessions/_components/SandboxTabTrigger";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { entityPathSegment } from "@/lib/numId";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -39,6 +37,9 @@ import {
   useSourceDocuments,
 } from "@/lib/components/docs/SessionDocumentsPanel";
 import { useProjectDocuments } from "./useProjectDocuments";
+import { ProjectTasksPanel } from "./ProjectTasksPanel";
+import { isProjectSandboxTab, type ProjectSandboxTab } from "./projectSandboxTabs";
+import { useProjectTaskStatus } from "./useProjectStatus";
 
 interface ProjectSandboxPanelProps {
   projectId: Id<"projects">;
@@ -54,7 +55,9 @@ interface ProjectSandboxPanelProps {
   owner: SandboxOwner;
   panes: SandboxPanesApi;
   terminalPanel: TerminalPanelApi;
-  sandboxTab: TaskRouteSandboxTab;
+  sandboxTab: ProjectSandboxTab;
+  /** A contributor: approves, rejects and adds tasks. */
+  canContribute: boolean;
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
   /**
@@ -83,6 +86,7 @@ export function ProjectSandboxPanel({
   panes,
   terminalPanel,
   sandboxTab,
+  canContribute,
   onStartSandbox,
   isSandboxStarting,
   autoWakeEligible,
@@ -102,10 +106,21 @@ export function ProjectSandboxPanel({
   const releaseBrowserLock = useMutation(api.sandboxPanes.releaseBrowserLock);
 
   // The coordinator runs no dev server, so it has no Preview: an old
-  // `/sandbox/preview` link lands on Documents.
-  const activeTab: SandboxTab =
-    sandboxTab === "preview" ? "documents" : sandboxTab;
+  // `/sandbox/preview` link lands on Tasks.
+  const activeTab: ProjectSandboxTab =
+    sandboxTab === "preview" ? "tasks" : sandboxTab;
   const projectDocuments = useProjectDocuments(projectId, repoId);
+  const { status: taskStatus } = useProjectTaskStatus(projectId, repoId);
+  const triageCount = taskStatus?.counts.triage ?? 0;
+  // Tasks leads the rail; its badge counts what waits in Triage.
+  const tasksTab: SandboxTabDescriptor = {
+    value: "tasks",
+    label: "Tasks",
+    icon: { kind: "component", Icon: IconChecklist },
+    count: triageCount > 0 ? triageCount : undefined,
+    indicatorLabel:
+      triageCount > 0 ? `${triageCount} tasks in Triage` : undefined,
+  };
 
   // Content-keyed Agents tab, folded from the chat transcript the project's
   // chat panel already subscribes to (same entity ids). Artifacts stay on the
@@ -120,8 +135,8 @@ export function ProjectSandboxPanel({
     sandboxRunning: isActive,
   });
 
-  const navigateToSandboxTab = (tab: SandboxTab) => {
-    if (tab === "prd" || !projectPathSegment) return;
+  const navigateToSandboxTab = (tab: ProjectSandboxTab) => {
+    if (!projectPathSegment) return;
     if (tab === "review") {
       void navigate({
         to: toInternalRepoHref(
@@ -152,8 +167,7 @@ export function ProjectSandboxPanel({
 
   // This surface has no custom tabs, so the tab bar only emits builtin ids.
   const handleTabChange = (tab: string) => {
-    if (!isSessionSandboxTab(tab) || tab === "prd") return;
-    navigateToSandboxTab(tab);
+    if (isProjectSandboxTab(tab)) navigateToSandboxTab(tab);
   };
 
   const enabledTabs = withBrowserTab(panes.enabledTabs).filter(
@@ -186,6 +200,7 @@ export function ProjectSandboxPanel({
             onToggle={onToggle}
             newPreviewDisabled={panes.newPreviewDisabled}
             enabledTabs={enabledTabs}
+            leadingTabs={[tasksTab]}
             showFilesTab
             showAgentsTab={hasAgents}
             hasRunningAgents={hasRunningAgents}
@@ -199,6 +214,18 @@ export function ProjectSandboxPanel({
         }
       >
         <div className="h-full overflow-hidden">
+          <KeepAlivePane
+            active={activeTab === "tasks"}
+            className="flex h-full min-h-0 flex-col overflow-hidden"
+          >
+            <ProjectTasksPanel
+              projectId={projectId}
+              projectNumId={projectNumId}
+              repoId={repoId}
+              basePath={basePath}
+              canContribute={canContribute}
+            />
+          </KeepAlivePane>
           <div
             className={
               activeTab === "artifacts"

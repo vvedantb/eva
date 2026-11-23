@@ -119,8 +119,12 @@ export function isSessionSandboxTab(s: string): s is SandboxTab {
   return SANDBOX_TABS.some((tab) => tab === s);
 }
 
-/** Tabs that only mean anything while the VM is up: Review, Agents, PRD, … do not. */
+/**
+ * Tabs that do not talk to the VM: Review, Agents, PRD, … and a project
+ * coordinator's Tasks.
+ */
 const NON_VM_SANDBOX_TABS = new Set([
+  "tasks",
   "review",
   "agents",
   "prd",

@@ -119,8 +119,9 @@ describe("project status", () => {
     expect(reopened.stage).toBe("in_progress");
     expect(reopened.needsYou).toEqual([{ id: "c", reason: "approve" }]);
     expect(reopened.counts).toEqual({
+      triage: 1,
       working: 0,
-      blocked: 1,
+      blocked: 0,
       idle: 0,
       archived: 1,
     });
@@ -135,6 +136,7 @@ describe("project status", () => {
     ]);
     expect(reviewing.stage).toBe("in_progress");
     expect(reviewing.counts).toEqual({
+      triage: 0,
       working: 0,
       blocked: 1,
       idle: 1,
@@ -207,8 +209,13 @@ test("hasDependencyCycle finds a loop, including a task waiting on itself", () =
 describe("projectTaskDisplayStatus", () => {
   const cases: Array<[string, Partial<ProjectTaskFacts>, string]> = [
     ["running", { status: "in_progress", runPending: true }, "working"],
-    ["unapproved todo", { approved: false }, "blocked"],
-    ["unapproved draft", { status: "draft", approved: false }, "blocked"],
+    ["unapproved todo", { approved: false }, "triage"],
+    ["unapproved draft", { status: "draft", approved: false }, "triage"],
+    [
+      "unapproved, with a cancelled dependency",
+      { approved: false, dependencies: [{ status: "cancelled" }] },
+      "triage",
+    ],
     ["PR open", { status: "done", prState: "open" }, "blocked"],
     ["code review", { status: "code_review" }, "blocked"],
     ["business review", { status: "business_review" }, "blocked"],

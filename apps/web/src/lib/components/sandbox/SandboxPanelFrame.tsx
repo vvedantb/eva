@@ -30,10 +30,13 @@ export function SandboxPanelFrame({
 export function SandboxEmptyRailFrame({
   collapsed,
   onToggle,
+  fill = false,
   children,
 }: {
   collapsed: boolean;
   onToggle: () => void;
+  /** The body fills the card (a list) instead of centring a message. */
+  fill?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -45,7 +48,8 @@ export function SandboxEmptyRailFrame({
       </div>
       <div
         className={cn(
-          "flex min-h-0 min-w-0 flex-1 items-center justify-center p-8",
+          "flex min-h-0 min-w-0 flex-1",
+          fill ? "flex-col" : "items-center justify-center p-8",
           collapsed && "md:hidden",
         )}
       >

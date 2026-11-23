@@ -11,7 +11,6 @@ import { useOwnedChatBinding } from "@/lib/components/chat/useOwnedChatBinding";
 import type { OwnedSession } from "@/lib/components/sandbox/useOwnedSession";
 import { useProjectOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
 import { CoordinatorPausedBanner } from "./CoordinatorPausedBanner";
-import { useProjectTaskBatchCards } from "./useProjectTaskBatchCards";
 
 export function ProjectSandboxChatPanel({
   projectId,
@@ -22,13 +21,11 @@ export function ProjectSandboxChatPanel({
   projectSession: OwnedSession;
 }) {
   const binding = useProjectChatBinding(projectId, projectSession);
-  // The coordinator chat only: its proposed task batches and its paused line.
-  const taskBatchCards = useProjectTaskBatchCards(projectId);
+  // The coordinator chat only: its paused line.
   const chat = (
     <SandboxChatPanel
       binding={binding}
       {...panel}
-      inlineCards={taskBatchCards}
       preInputBanner={
         <CoordinatorPausedBanner projectId={projectId} canSend />
       }

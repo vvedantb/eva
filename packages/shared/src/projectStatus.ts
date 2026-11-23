@@ -141,25 +141,34 @@ export function projectTaskWaitsForCoordinator(task: ProjectTaskFacts): boolean 
 }
 
 /**
- * How a project's child task shows in its task list, by who must act: the
- * agent (`working`), a person or the coordinator (`blocked`), nobody yet
- * (`idle`: approved, waiting for a dependency or a free slot), or no one any
- * more (`archived`). The project itself keeps its stages (`projectStatus`),
- * and counts its tasks by these statuses.
+ * How a project's child task shows in its task list, by who must act: a
+ * contributor must approve or reject it (`triage`), the agent (`working`), a
+ * person or the coordinator (`blocked`), nobody yet (`idle`: approved,
+ * waiting for a dependency or a free slot), or no one any more (`archived`).
+ * The project itself keeps its stages (`projectStatus`), and counts its
+ * tasks by these statuses.
  */
-export type ProjectTaskDisplayStatus = "working" | "blocked" | "idle" | "archived";
+export type ProjectTaskDisplayStatus =
+  | "triage"
+  | "working"
+  | "blocked"
+  | "idle"
+  | "archived";
 
 /**
- * A child task's display status. Archived: launched or cancelled. Blocked:
- * waits for a person (`projectTaskNeedsYou`), for its coordinator (an open
- * ask, or a first failure it may retry), is halted, or is in review. Working:
- * in progress. Idle: an approved todo task nothing holds back.
+ * A child task's display status. Archived: launched or cancelled. Triage: a
+ * todo or draft task nobody approved yet (feedback, or a coordinator
+ * proposal). Blocked: waits for a person (`projectTaskNeedsYou`), for its
+ * coordinator (an open ask, or a first failure it may retry), is halted, or
+ * is in review. Working: in progress. Idle: an approved todo task nothing
+ * holds back.
  */
 export function projectTaskDisplayStatus(
   task: ProjectTaskFacts,
 ): ProjectTaskDisplayStatus {
   const stage = projectTaskStage(task);
   if (stage === "launched" || stage === "cancelled") return "archived";
+  if (stage === "todo" && !task.approved) return "triage";
   if (
     stage === "in_review" ||
     task.halted !== undefined ||
@@ -188,6 +197,7 @@ export function projectStatus(
   tasks: readonly ProjectTaskFacts[],
 ): ProjectStatus {
   const counts: Record<ProjectTaskDisplayStatus, number> = {
+    triage: 0,
     working: 0,
     blocked: 0,
     idle: 0,

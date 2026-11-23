@@ -23,7 +23,8 @@ import {
   ListEnter,
   useFirstPaintGate,
 } from "@vvedantb/ui";
-import { IconCheck, IconPlus } from "@tabler/icons-react";
+import { IconCheck } from "@tabler/icons-react";
+import { firstNameByUserId } from "@eva/shared";
 import type { RepoAppMarkRepo } from "@/lib/components/RepoLogo";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 import { projectTaskDisplayStatusConfig } from "./ProjectPhaseBadge";
@@ -38,7 +39,6 @@ type ViewedTask = { row: Task; view: ProjectTaskView };
 
 /** What every row of the list shares. */
 interface RowContext {
-  selectedTaskId: Id<"agentTasks"> | null;
   onSelectTask: (id: Id<"agentTasks">) => void;
   failedTaskIds: ReadonlySet<string>;
   /** Open asks and reports by task id (`useProjectTaskNotes`). */
@@ -48,6 +48,8 @@ interface RowContext {
   homeRepoId: Id<"githubRepos">;
   reposById: ReadonlyMap<string, RepoAppMarkRepo>;
   canContribute: boolean;
+  /** Feedback authors' first names, by user id (the Triage origin line). */
+  authorNames: ReadonlyMap<string, string>;
 }
 
 function ProjectTaskRowFor({
@@ -63,7 +65,11 @@ function ProjectTaskRowFor({
       view={task.view}
       notes={context.notesByTask.get(task.row._id)}
       hasError={context.failedTaskIds.has(task.row._id)}
-      selectedTaskId={context.selectedTaskId}
+      authorName={
+        task.row.createdBy === undefined
+          ? undefined
+          : context.authorNames.get(task.row.createdBy)
+      }
       onSelectTask={context.onSelectTask}
       basePath={context.basePath}
       projectNumId={context.projectNumId}
@@ -108,10 +114,7 @@ interface ProjectTaskListPanelProps {
   tasks: Task[];
   /** Tasks whose latest run failed (`useProjectTaskStatus`). */
   failedTaskIds: ReadonlySet<string>;
-  selectedTaskId: Id<"agentTasks"> | null;
   onSelectTask: (id: Id<"agentTasks">) => void;
-  /** New task for a contributor, feedback for a viewer. */
-  onCreateTask: () => void;
   projectNumId?: number;
   /** The project's repo; a task in another repo shows its repo. */
   homeRepoId: Id<"githubRepos">;
@@ -123,9 +126,7 @@ export function ProjectTaskListPanel({
   projectId,
   tasks,
   failedTaskIds,
-  selectedTaskId,
   onSelectTask,
-  onCreateTask,
   projectNumId,
   homeRepoId,
   canContribute,
@@ -134,6 +135,7 @@ export function ProjectTaskListPanel({
   const firstPaint = useFirstPaintGate();
   const approveTasks = useMutation(api.buildWorkflow.approveProjectTasks);
   const [isApproving, setIsApproving] = useState(false);
+  const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set());
   const [scrollParent, setScrollParent] = useState<HTMLDivElement | null>(null);
   const repos = useQuery(api.githubRepos.list, {});
   const reposById = new Map<string, RepoAppMarkRepo>(
@@ -143,6 +145,19 @@ export function ProjectTaskListPanel({
   const notesByTask = useProjectTaskNotes(projectId);
   const sections = projectTaskStatusSections(tasks, failedTaskIds);
   const toApprove = unapprovedTodoTaskIds(tasks);
+  const feedbackAuthorIds = [
+    ...new Set(
+      tasks.flatMap((task) =>
+        task.origin === "feedback" && task.createdBy !== undefined
+          ? [task.createdBy]
+          : [],
+      ),
+    ),
+  ];
+  const authors = useQuery(
+    api.users.getMany,
+    feedbackAuthorIds.length > 0 ? { ids: feedbackAuthorIds } : "skip",
+  );
 
   const approveAll = async () => {
     setIsApproving(true);
@@ -155,12 +170,27 @@ export function ProjectTaskListPanel({
     setIsApproving(false);
   };
 
-  const defaultExpandedKeys = sections
-    .filter((section) => section.defaultOpen)
+  // Groups come and go with their tasks, so the open set is derived: each
+  // group's default, flipped where the reader toggled it.
+  const expandedKeys = sections
+    .filter((section) => section.defaultOpen !== toggled.has(section.status))
     .map((section) => section.status);
+  const setExpandedKeys = (keys: string[]) => {
+    const open = new Set(keys);
+    setToggled(
+      new Set(
+        sections
+          .filter((section) => section.defaultOpen !== open.has(section.status))
+          .map((section) => section.status),
+      ),
+    );
+  };
+
+  if (sections.length === 0) {
+    return <p className="px-5 py-2 text-sm text-muted-foreground">No tasks</p>;
+  }
 
   const context: RowContext = {
-    selectedTaskId,
     onSelectTask,
     failedTaskIds,
     notesByTask,
@@ -169,39 +199,25 @@ export function ProjectTaskListPanel({
     homeRepoId,
     reposById,
     canContribute,
+    authorNames: firstNameByUserId(authors ?? []),
   };
 
-  // New and unapproved tasks wait in Blocked, so its header carries Approve and "+".
-  const blockedActions = (
-    <>
-      {canContribute && toApprove.length > 0 ? (
-        <Button
-          size="sm"
-          className="h-6 px-2 text-xs"
-          disabled={isApproving}
-          onClick={(e) => {
-            e.stopPropagation();
-            void approveAll();
-          }}
-        >
-          <IconCheck size={12} aria-hidden />
-          Approve
-        </Button>
-      ) : null}
+  // Feedback and coordinator proposals wait in Triage: its header approves them all.
+  const triageActions =
+    canContribute && toApprove.length > 0 ? (
       <Button
-        size="icon-sm"
-        variant="outline"
-        className="h-6 text-xs"
-        aria-label={canContribute ? "New task" : "Feedback"}
+        size="sm"
+        className="h-6 px-2 text-xs"
+        disabled={isApproving}
         onClick={(e) => {
           e.stopPropagation();
-          onCreateTask();
+          void approveAll();
         }}
       >
-        <IconPlus size={12} />
+        <IconCheck size={12} aria-hidden />
+        Approve all
       </Button>
-    </>
-  );
+    ) : undefined;
 
   return (
     <div
@@ -213,7 +229,8 @@ export function ProjectTaskListPanel({
       <Accordion
         type="multiple"
         className="px-3 [&_hr]:bg-border"
-        defaultValue={defaultExpandedKeys}
+        value={expandedKeys}
+        onValueChange={setExpandedKeys}
       >
         {sections.map(({ status, tasks: sectionTasks }) => (
           <AccordionItem key={status} value={status}>
@@ -221,13 +238,11 @@ export function ProjectTaskListPanel({
               <SectionHeader
                 status={status}
                 count={sectionTasks.length}
-                actions={status === "blocked" ? blockedActions : undefined}
+                actions={status === "triage" ? triageActions : undefined}
               />
             </AccordionTrigger>
             <AccordionContent className="flex flex-col gap-1 px-3">
-              {sectionTasks.length === 0 ? (
-                <p className="text-sm text-muted-foreground py-2">No tasks</p>
-              ) : scrollParent ? (
+              {scrollParent ? (
                 <Virtuoso
                   customScrollParent={scrollParent}
                   totalCount={sectionTasks.length}

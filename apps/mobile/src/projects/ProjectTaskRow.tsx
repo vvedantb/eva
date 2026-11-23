@@ -1,13 +1,14 @@
 import { api, type Id } from "@eva/backend";
 import { formatEntityNumLabel } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { PROJECT_TASK_DISPLAY_STATUS_LABELS, type ProjectTaskNotes, type ProjectTaskView } from "@eva/shared/projectView";
-import { IconLock, IconX } from "@tabler/icons-react-native";
-import { SurfaceRow } from "@vvedantb/native-ui/primitives";
+import { isUnapprovedTodoTask, projectTaskOriginLabel, type ProjectTaskNotes, type ProjectTaskView } from "@eva/shared/projectView";
+import { IconLock } from "@tabler/icons-react-native";
+import { Button, SurfaceRow } from "@vvedantb/native-ui/primitives";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation } from "convex/react";
-import { Pressable, Text, View } from "react-native";
+import { useState } from "react";
+import { Text, View } from "react-native";
 import { taskDisplayStatusAppearance } from "@/projects/phaseAppearance";
 import { hasProjectTaskBadges, ProjectTaskBadges, type ProjectTaskBadgeFacts } from "@/projects/ProjectTaskBadges";
 import type { ProjectTaskListRow } from "@/projects/useProjectStatus";
@@ -16,22 +17,23 @@ import type { RepoRow } from "@/sessions/SessionGroup";
 import { useScheme } from "@/ui/theme";
 
 /**
- * One compact row of a project's task list, and of the coordinator chat's
- * task cards, as the web `ProjectTaskRow`: the compact quick-task card
- * numbered "#project/task", striped by the task's display status
- * (`projectTaskDisplayStatus`; `showStatus` names it where no section header
- * does), with the project task badges. A contributor cancels a todo
- * task nobody approved with the X beside it (the row itself is one button),
- * and a long press opens the task menu (`onLongPress`); a viewer gets
- * neither. A task in a repo the reader cannot open is a locked row.
+ * One compact row of a project's task list, as the web `ProjectTaskRow`:
+ * the compact quick-task card numbered "#project/task", striped by the
+ * task's display status (`projectTaskDisplayStatus`), with the project task
+ * badges. A Triage row names its origin (`projectTaskOriginLabel`) in place
+ * of the Feedback and "Needs approval" badges, and a contributor rejects or
+ * approves it with the buttons beside it (the row itself is one button). A
+ * long press opens the task menu (`onLongPress`); a viewer gets neither. A
+ * task in a repo the reader cannot open is a locked row.
  */
 export function ProjectTaskRow({
   task,
   view,
-  showStatus = false,
+  authorName,
   notes,
   hasError,
   hasDraftComment,
+  projectId,
   projectNumId,
   homeRepoId,
   reposById,
@@ -40,12 +42,13 @@ export function ProjectTaskRow({
 }: {
   task: ProjectTaskListRow;
   view: ProjectTaskView;
-  /** Name the display status in a badge (the chat card has no sections). */
-  showStatus?: boolean;
+  /** The first name of the person who wrote a feedback task (`createdBy`). */
+  authorName: string | undefined;
   /** The task's open question and open reports (`useProjectTaskNotes`). */
   notes: ProjectTaskNotes | undefined;
   hasError: boolean;
   hasDraftComment: boolean;
+  projectId: Id<"projects">;
   projectNumId: number | undefined;
   homeRepoId: Id<"githubRepos">;
   reposById: ReadonlyMap<string, RepoRow>;
@@ -54,20 +57,21 @@ export function ProjectTaskRow({
 }) {
   const scheme = useScheme();
   const appearance = taskDisplayStatusAppearance(view.displayStatus, scheme);
-  const StatusIcon = appearance.icon;
   if (task.locked === true) return <LockedTaskRow taskNumber={task.taskNumber} projectNumId={projectNumId} accentColor={appearance.bar} />;
+  const triage = view.displayStatus === "triage";
   const badges: ProjectTaskBadgeFacts = {
-    needsYou: view.needsYou,
+    // A Triage row's origin line says it waits for approval.
+    needsYou: view.needsYou === "approve" ? undefined : view.needsYou,
     waitingForCoordinator: view.waitingForCoordinator,
     ask: notes?.ask,
     reports: notes?.reports ?? [],
     phaseLabel: task.phaseLabel,
-    isFeedback: task.origin === "feedback",
+    isFeedback: !triage && task.origin === "feedback",
     repo: task.repoId !== undefined && task.repoId !== homeRepoId ? reposById.get(String(task.repoId)) : undefined,
     hasPr: task.prUrl !== undefined,
     prState: task.prState,
   };
-  const canCancel = canContribute && task.status === "todo" && task.approvedAt === undefined;
+  const canTriage = canContribute && triage && isUnapprovedTodoTask(task);
   return (
     <View className="flex-row items-center gap-1">
       <View className="min-w-0 flex-1">
@@ -83,18 +87,16 @@ export function ProjectTaskRow({
           compact
           accentColor={appearance.bar}
           badges={
-            showStatus || hasProjectTaskBadges(badges) ? (
+            triage || hasProjectTaskBadges(badges) ? (
               <>
-                {showStatus ? (
-                  <MetaPill leading={<StatusIcon size={12} color={appearance.text} />} label={PROJECT_TASK_DISPLAY_STATUS_LABELS[view.displayStatus]} />
-                ) : null}
+                {triage ? <MetaPill label={projectTaskOriginLabel(task.origin, authorName)} /> : null}
                 <ProjectTaskBadges badges={badges} />
               </>
             ) : undefined
           }
         />
       </View>
-      {canCancel ? <CancelTaskButton taskId={task._id} /> : null}
+      {canTriage ? <TriageButtons projectId={projectId} taskId={task._id} /> : null}
     </View>
   );
 }
@@ -133,20 +135,37 @@ function LockedTaskRow({
   );
 }
 
-/** The web row's X on a todo task nobody approved: cancels (rejects) it, beside the card as the row is one button. */
-function CancelTaskButton({ taskId }: { taskId: Id<"agentTasks"> }) {
-  const muted = EVA_THEME[useScheme()].mutedForeground;
+/**
+ * A Triage row's Reject (cancels the task) and Approve (lets the scheduler
+ * start it), beside the card as the row is one button.
+ */
+function TriageButtons({ projectId, taskId }: { projectId: Id<"projects">; taskId: Id<"agentTasks"> }) {
   const updateStatus = useMutation(api.agentTasks.updateStatus);
+  const approveTasks = useMutation(api.buildWorkflow.approveProjectTasks);
+  const [busy, setBusy] = useState(false);
+  const run = <Result,>(action: Promise<Result>, error: string) => {
+    setBusy(true);
+    action.catch(() => toast.error(error)).finally(() => setBusy(false));
+  };
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Cancel task"
-      onPress={() => {
-        updateStatus({ id: taskId, status: "cancelled" }).catch(() => toast.error("Couldn't cancel the task"));
-      }}
-      className="h-11 w-11 items-center justify-center rounded-lg active:opacity-70"
-    >
-      <IconX size={16} color={muted} />
-    </Pressable>
+    <View className="flex-row items-center gap-1">
+      <Button
+        size="sm"
+        variant="ghost"
+        fullWidth={false}
+        disabled={busy}
+        onPress={() => run(updateStatus({ id: taskId, status: "cancelled" }), "Couldn't reject the task")}
+      >
+        Reject
+      </Button>
+      <Button
+        size="sm"
+        fullWidth={false}
+        disabled={busy}
+        onPress={() => run(approveTasks({ projectId, taskIds: [taskId] }), "Couldn't approve the task")}
+      >
+        Approve
+      </Button>
+    </View>
   );
 }

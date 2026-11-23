@@ -33,4 +33,4 @@ export { getSummaryDoc } from "./_projects/summary";
 
 export { listTaskReports } from "./_projects/reports";
 
-export { listTaskBatches, getCoordinatorState } from "./_projects/batches";
+export { getCoordinatorState } from "./_projects/batches";

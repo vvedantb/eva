@@ -9,18 +9,22 @@ import {
 } from "@/lib/components/sandbox/sandboxStatusStyles";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
-/** Primary project tabs. `work` is the index route, so it owns every deep link. */
-export type ProjectMainTab = "overview" | "work" | "sandbox";
+/**
+ * Primary project tabs: Overview, and the work tab — the coordinator (its
+ * chat and rail, Tasks first) or, while a project still plans, its Plan.
+ * `work` is the index route, so it owns every deep link.
+ */
+export type ProjectMainTab = "overview" | "work";
 
 function isProjectMainTab(value: string): value is ProjectMainTab {
-  return value === "overview" || value === "work" || value === "sandbox";
+  return value === "overview" || value === "work";
 }
 
 export function ProjectMainTabs({
   projectHref,
   activeTab,
   workTabLabel,
-  showSandbox = false,
+  showSandboxStatus = false,
   isSandboxActive = false,
   isSandboxStarting = false,
   isSandboxStopping = false,
@@ -29,16 +33,16 @@ export function ProjectMainTabs({
   /** Project base path, e.g. `/owner/repo/projects/3` (pre-internal form). */
   projectHref: string;
   activeTab: ProjectMainTab;
-  /** "Tasks" for active projects, "Plan" while drafting. */
+  /** "Coordinator" for active projects, "Plan" while drafting. */
   workTabLabel: string;
-  /** When true, Sandbox sits as a peer of Overview / Tasks. */
-  showSandbox?: boolean;
+  /** The work tab is the coordinator: it carries its sandbox status dot. */
+  showSandboxStatus?: boolean;
   isSandboxActive?: boolean;
   isSandboxStarting?: boolean;
   isSandboxStopping?: boolean;
   /**
-   * The project chat has an unseen reply. The chat lives on the sandbox tab,
-   * so the dot shows only while another tab is open.
+   * The coordinator chat has an unseen reply. The chat lives on the work
+   * tab, so the dot shows only while Overview is open.
    */
   hasUnread?: boolean;
 }) {
@@ -55,7 +59,9 @@ export function ProjectMainTabs({
         ? "active"
         : null;
   const sandboxStatus =
-    liveStatus && showsSandboxStatusDot(liveStatus, simpleView)
+    showSandboxStatus &&
+    liveStatus &&
+    showsSandboxStatusDot(liveStatus, simpleView)
       ? liveStatus
       : null;
 
@@ -65,11 +71,7 @@ export function ProjectMainTabs({
       onValueChange={(value) => {
         if (!isProjectMainTab(value)) return;
         const href =
-          value === "overview"
-            ? `${projectHref}/overview`
-            : value === "sandbox"
-              ? `${projectHref}/sandbox/documents`
-              : projectHref;
+          value === "overview" ? `${projectHref}/overview` : projectHref;
         navigate({ to: toInternalRepoHref(href) });
       }}
     >
@@ -77,20 +79,17 @@ export function ProjectMainTabs({
           switchers (sessions, quick tasks) and needs no hairline of its own. */}
       <TabsList size="sm" className="tabs-segmented" aria-label="Project view">
         <TabsTrigger value="overview">Overview</TabsTrigger>
-        <TabsTrigger value="work">{workTabLabel}</TabsTrigger>
-        {showSandbox ? (
-          <TabsTrigger value="sandbox" className="gap-1.5">
-            Sandbox
-            {sandboxStatus ? (
-              <span
-                className={`size-2 shrink-0 rounded-full ${SANDBOX_STATUS_STYLES[sandboxStatus].dot}`}
-                title={SANDBOX_STATUS_STYLES[sandboxStatus].label}
-                aria-label={SANDBOX_STATUS_STYLES[sandboxStatus].label}
-              />
-            ) : null}
-            <UnreadDot show={hasUnread && activeTab !== "sandbox"} />
-          </TabsTrigger>
-        ) : null}
+        <TabsTrigger value="work" className="gap-1.5">
+          {workTabLabel}
+          {sandboxStatus ? (
+            <span
+              className={`size-2 shrink-0 rounded-full ${SANDBOX_STATUS_STYLES[sandboxStatus].dot}`}
+              title={SANDBOX_STATUS_STYLES[sandboxStatus].label}
+              aria-label={SANDBOX_STATUS_STYLES[sandboxStatus].label}
+            />
+          ) : null}
+          <UnreadDot show={hasUnread && activeTab !== "work"} />
+        </TabsTrigger>
       </TabsList>
     </Tabs>
   );

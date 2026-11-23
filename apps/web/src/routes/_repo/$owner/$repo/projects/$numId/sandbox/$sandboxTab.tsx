@@ -4,10 +4,13 @@ import {
   isLegacyDesktopSandboxTab,
   isLegacyDiffsSandboxTab,
   isLegacyPrSandboxTab,
-  isTaskRouteSandboxTab,
   reviewPathFromSearch,
   splitCorruptedSandboxTabParam,
 } from "@/lib/search-params";
+import {
+  isProjectSandboxTab,
+  PROJECT_DEFAULT_SANDBOX_TAB,
+} from "@/lib/components/projects/projectSandboxTabs";
 
 function redirectToProjectReview(args: {
   owner: string;
@@ -101,9 +104,9 @@ export const Route = createFileRoute(
       }
       const sandboxTab = isLegacyDesktopSandboxTab(corrupted.tab)
         ? "computer"
-        : isTaskRouteSandboxTab(corrupted.tab)
+        : isProjectSandboxTab(corrupted.tab)
           ? corrupted.tab
-          : "preview";
+          : PROJECT_DEFAULT_SANDBOX_TAB;
       throw redirect({
         to: "/$owner/$repo/projects/$numId/sandbox/$sandboxTab",
         params: {
@@ -144,14 +147,14 @@ export const Route = createFileRoute(
         search,
       });
     }
-    if (!isTaskRouteSandboxTab(params.sandboxTab)) {
+    if (!isProjectSandboxTab(params.sandboxTab)) {
       throw redirect({
         to: "/$owner/$repo/projects/$numId/sandbox/$sandboxTab",
         params: {
           owner: params.owner,
           repo: params.repo,
           numId: params.numId,
-          sandboxTab: "preview",
+          sandboxTab: PROJECT_DEFAULT_SANDBOX_TAB,
         },
       });
     }

@@ -23,13 +23,11 @@ import {
 import { useProjectSandbox } from "@/lib/components/projects/useProjectSandbox";
 import { useAgentBrowsingAutoSwitch } from "@/lib/components/sandbox/useSandboxLifecycle";
 import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
-import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
-import type { TaskRouteSandboxTab } from "@/lib/search-params";
-import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
 import type { EntityResolveStatus } from "@/lib/numId";
+import type { ProjectSandboxTab } from "@/lib/components/projects/projectSandboxTabs";
 import {
   isProjectDraftOrFinalized,
   parseProjectSpec,
@@ -45,23 +43,20 @@ import {
 export function ProjectDetailClient({
   projectId,
   projectNumId,
-  surface,
   sandboxTab,
   selectedTaskId,
   selectedTaskStatus,
-  detailTab,
   mainTab = "work",
 }: {
   projectId: Id<"projects">;
   projectNumId?: number;
-  surface: SandboxSurface;
-  sandboxTab?: TaskRouteSandboxTab;
+  /** The coordinator rail's tab (Tasks on the project index). */
+  sandboxTab: ProjectSandboxTab;
   /** Primary tab. `work` is the index route, so deep links keep working. */
   mainTab?: ProjectMainTab;
   selectedTaskId?: Id<"agentTasks">;
   /** Resolve status of selectedTaskId's numId; undefined when no task is selected. */
   selectedTaskStatus?: EntityResolveStatus;
-  detailTab?: TaskDetailTab;
 }) {
   const navigate = useNavigate();
   const { basePath, repo } = useRepo();
@@ -96,8 +91,6 @@ export function ProjectDetailClient({
     if (!isSandboxActive || !projectSandboxId || !chatId) return;
     void prewarmSessionChatDaemon({ chatId });
   }, [chatId, isSandboxActive, projectSandboxId, prewarmSessionChatDaemon]);
-
-  const isSandboxSurface = surface === "sandbox";
 
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
   const [expandRightSignal, setExpandRightSignal] = useState(0);
@@ -173,15 +166,14 @@ export function ProjectDetailClient({
       title={
         <ProjectBreadcrumb projectId={project._id} title={project.title} />
       }
-      /* Overview / Tasks / Sandbox live in the header — replaces the old
-         Project|Sandbox surface switcher and the secondary tab strip. */
+      /* Overview / Coordinator (Plan while drafting) live in the header. */
       titleAfter={
         projectPathSegment ? (
           <ProjectMainTabs
             projectHref={`${basePath}/projects/${projectPathSegment}`}
-            activeTab={isSandboxSurface ? "sandbox" : mainTab}
-            workTabLabel={isDraftOrFinalized ? "Plan" : "Tasks"}
-            showSandbox={!isDraftOrFinalized}
+            activeTab={mainTab}
+            workTabLabel={isDraftOrFinalized ? "Plan" : "Coordinator"}
+            showSandboxStatus={!isDraftOrFinalized}
             isSandboxActive={isSandboxActive}
             isSandboxStarting={isSandboxStarting}
             isSandboxStopping={isSandboxStopping}
@@ -220,15 +212,15 @@ export function ProjectDetailClient({
       <ProjectDetailMainContent
         projectId={projectId}
         project={project}
-        isSandboxSurface={isSandboxSurface}
         mainTab={mainTab}
         isDraftOrFinalized={isDraftOrFinalized}
-        sandboxContent={
+        coordinatorContent={
           <ProjectDetailSandboxContent
             projectId={projectId}
             projectNumId={projectNumId}
             project={project}
             repoId={repo._id}
+            basePath={basePath}
             sandboxTab={sandboxTab}
             sandbox={sandbox}
             chatTurnOpen={chatTurnOpen}
@@ -243,9 +235,9 @@ export function ProjectDetailClient({
         sandboxStartupActivity={sandboxStartupActivity}
         basePath={basePath}
         repoId={repo._id}
+        isTaskOpen={selectedTaskStatus !== undefined}
         selectedTaskId={selectedTaskId}
         selectedTaskStatus={selectedTaskStatus}
-        detailTab={detailTab}
       />
 
       {parsedSpec && (

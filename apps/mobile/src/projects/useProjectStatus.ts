@@ -46,7 +46,7 @@ export function useProjectListStatuses(repoId: Id<"githubRepos">): ReadonlyMap<s
 
 /**
  * Each task's open ask and open reports (`listTaskReports`), keyed by task
- * id. The task list and the coordinator chat's task cards both read it.
+ * id, for the project task list.
  */
 export function useProjectTaskNotes(projectId: Id<"projects">): ReadonlyMap<string, ProjectTaskNotes> {
   const reports = useQuery(api.projects.listTaskReports, { projectId });

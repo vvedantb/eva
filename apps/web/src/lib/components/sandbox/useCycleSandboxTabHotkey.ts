@@ -10,8 +10,9 @@ import type { SandboxTab } from "@/lib/search-params";
 const SANDBOX_TAB_BAR_ORDER: SandboxTab[] = ["preview", "browser", "review"];
 
 /**
- * Returns the Shift+Tab cycle order: enabled builtins, then Editor/Computer
- * when shown, then File Viewer / PRD if shown, then custom tab slugs.
+ * Returns the Shift+Tab cycle order: an owner's leading tabs, enabled
+ * builtins, then Editor/Computer when shown, then File Viewer / PRD if
+ * shown, then custom tab slugs.
  */
 function getCyclableSandboxTabs(
   enabledTabs?: ReadonlyArray<SandboxTab>,
@@ -24,6 +25,7 @@ function getCyclableSandboxTabs(
   showAgentsTab?: boolean,
   showArtifactsTab?: boolean,
   showDocumentsTab?: boolean,
+  leadingTabSlugs: ReadonlyArray<string> = [],
 ): string[] {
   const tabs = enabledTabs
     ? SANDBOX_TAB_BAR_ORDER.filter((tab) => enabledTabs.includes(tab))
@@ -42,8 +44,7 @@ function getCyclableSandboxTabs(
   const withDocuments = showDocumentsTab
     ? [...withArtifacts, "documents"]
     : withArtifacts;
-  if (!customTabSlugs || customTabSlugs.length === 0) return withDocuments;
-  return [...withDocuments, ...customTabSlugs];
+  return [...leadingTabSlugs, ...withDocuments, ...(customTabSlugs ?? [])];
 }
 
 /**
@@ -72,6 +73,7 @@ export function useCycleSandboxTabHotkey({
   showDesignsTab,
   showFilesTab,
   customTabSlugs,
+  leadingTabSlugs,
   showComputerTab,
   showEditorTab,
   showAgentsTab,
@@ -86,6 +88,8 @@ export function useCycleSandboxTabHotkey({
   showDesignsTab?: boolean;
   showFilesTab?: boolean;
   customTabSlugs?: ReadonlyArray<string>;
+  /** Owner-only tabs ahead of the sandbox tabs (a project's Tasks). */
+  leadingTabSlugs?: ReadonlyArray<string>;
   showComputerTab?: boolean;
   showEditorTab?: boolean;
   showAgentsTab?: boolean;
@@ -104,6 +108,7 @@ export function useCycleSandboxTabHotkey({
     showAgentsTab,
     showArtifactsTab,
     showDocumentsTab,
+    leadingTabSlugs,
   );
 
   const options = { enabled: enabled && cyclableTabs.length > 1 };

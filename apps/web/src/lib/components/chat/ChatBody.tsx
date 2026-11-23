@@ -76,7 +76,6 @@ import { ChatArtifactCard } from "@/lib/components/artifacts/ChatArtifactCard";
 import { AgentFeedbackCard } from "@/lib/components/chat/feedback/AgentFeedbackCard";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";
 import {
-  Fragment,
   startTransition,
   useDeferredValue,
   useRef,
@@ -148,18 +147,6 @@ interface TranscriptWindow {
 /** Typing pause before find searches the history above the loaded rows. */
 const FIND_SEARCH_DELAY_MS = 350;
 
-/**
- * A card the chat's owner adds to the transcript (a project's task batches),
- * placed by the same rule as the agent-posted cards: under `messageId`, else
- * after the last message created before it.
- */
-export interface ChatInlineCard {
-  _id: string;
-  messageId?: string;
-  createdAt: number;
-  node: ReactNode;
-}
-
 /** One agent-posted card in the transcript, placed by `placeChatUiPanels`. */
 interface InlineCard {
   _id: string;
@@ -169,8 +156,7 @@ interface InlineCard {
     | { kind: "panel"; spec: string }
     | { kind: "html"; render: Doc<"chatHtmlRenders"> }
     | { kind: "envVarRequest"; request: Doc<"envVarRequests"> }
-    | { kind: "sessionProposal"; proposal: Doc<"sessionProposals"> }
-    | { kind: "owner"; node: ReactNode };
+    | { kind: "sessionProposal"; proposal: Doc<"sessionProposals"> };
 }
 
 interface ChatBodyProps {
@@ -327,8 +313,6 @@ interface ChatBodyProps {
   }) => Promise<void>;
   /** Hides the left jump rail (Ave: one endless thread, too many ticks). */
   hideJumpRail?: boolean;
-  /** Cards the chat's owner adds (a project coordinator's task batches). */
-  inlineCards?: ReadonlyArray<ChatInlineCard>;
 }
 
 export function ChatBody(props: ChatBodyProps) {
@@ -389,7 +373,6 @@ function ChatBodyInner({
   afterMessage,
   onForkTranscript,
   hideJumpRail = false,
-  inlineCards,
 }: ChatBodyProps) {
   const citations = usePendingCitations();
   const snapshots = usePendingPreviewSnapshots();
@@ -878,14 +861,6 @@ function ChatBodyInner({
           card: { kind: "sessionProposal", proposal },
         }),
       ),
-      ...(inlineCards ?? []).map(
-        (card): InlineCard => ({
-          _id: card._id,
-          messageId: card.messageId,
-          createdAt: card.createdAt,
-          card: { kind: "owner", node: card.node },
-        }),
-      ),
     ],
     displayMessages,
     hasOlderHistory,
@@ -995,8 +970,6 @@ function ChatBodyInner({
                   onReply={handlePanelReply}
                 />
               );
-            case "owner":
-              return <Fragment key={_id}>{card.node}</Fragment>;
           }
         });
 

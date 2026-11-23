@@ -34,7 +34,10 @@ import {
   useMediaQuery,
   type SidePanelTabLayout,
 } from "@vvedantb/ui";
-import { SandboxTabTrigger } from "./SandboxTabTrigger";
+import {
+  SandboxTabTrigger,
+  type SandboxTabDescriptor,
+} from "./SandboxTabTrigger";
 import { buildSandboxTabDescriptors } from "./sandboxTabDescriptors";
 import { SandboxTabBarTools } from "./SandboxTabBarTools";
 
@@ -89,6 +92,8 @@ interface SandboxTabBarProps {
   enabledTabs?: ReadonlyArray<SandboxTab>;
   /** User-defined tabs for this app; expected pre-filtered to enabled ones. */
   customTabs?: ReadonlyArray<Doc<"appTabs">>;
+  /** Owner-only tabs ahead of the sandbox tabs (a project's Tasks). */
+  leadingTabs?: ReadonlyArray<SandboxTabDescriptor>;
   /** When set (and fresh), shows a pulse on the Browser tab. */
   agentBrowsingAt?: number;
   /** When false, view hotkeys are inert (inactive cached session shells). */
@@ -124,6 +129,7 @@ export function SandboxTabBar({
   hasRunningAgents = false,
   enabledTabs,
   customTabs,
+  leadingTabs = [],
   agentBrowsingAt,
   hotkeysEnabled = true,
   className,
@@ -155,7 +161,9 @@ export function SandboxTabBar({
     slugifyAppTabName(tab.name),
   );
 
-  const tabDescriptors = buildSandboxTabDescriptors({
+  const tabDescriptors = [
+    ...leadingTabs,
+    ...buildSandboxTabDescriptors({
     baseTabs: tabs,
     showBrowserActivity: isAgentBrowsingActive(agentBrowsingAt),
     showEditorTab: showEditorItem,
@@ -171,8 +179,9 @@ export function SandboxTabBar({
     artifactCount,
     showDocumentsTab,
     documentCount,
-    customTabs: visibleCustomTabs,
-  });
+      customTabs: visibleCustomTabs,
+    }),
+  ];
   // Desktop is icon-only unless the reader has asked for the labelled rail.
   const iconOnly = !isMobile && !showLabels;
   // Phone-only rule: the desktop rail decides its own labels above.
@@ -220,6 +229,7 @@ export function SandboxTabBar({
     showFilesTab: showFiles,
     showAgentsTab: showAgents,
     customTabSlugs,
+    leadingTabSlugs: leadingTabs.map((tab) => tab.value),
     showComputerTab: showDesktopItem,
     showEditorTab: showEditorItem,
     enabled: hotkeysEnabled,

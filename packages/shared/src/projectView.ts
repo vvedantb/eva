@@ -35,6 +35,7 @@ export const PROJECT_STAGE_LABELS: Record<ProjectStage, string> = {
  * the order of the task counts and progress bar parts a project shows.
  */
 export const PROJECT_TASK_DISPLAY_STATUSES = [
+  "triage",
   "working",
   "blocked",
   "idle",
@@ -45,6 +46,7 @@ export const PROJECT_TASK_DISPLAY_STATUS_LABELS: Record<
   ProjectTaskDisplayStatus,
   string
 > = {
+  triage: "Triage",
   working: "Working",
   blocked: "Blocked",
   idle: "Idle",
@@ -241,18 +243,39 @@ export function projectArchivedShare(counts: ProjectStatus["counts"]): {
   };
 }
 
-/** The todo tasks a contributor approves with one Approve. */
+/**
+ * True for a todo task nobody approved yet that the caller can see: what
+ * Approve (`approveProjectTasks`) and Reject act on in Triage.
+ */
+export function isUnapprovedTodoTask(row: ProjectTaskRow): boolean {
+  return (
+    row.locked !== true &&
+    row.status === "todo" &&
+    row.approvedAt === undefined
+  );
+}
+
+/** The todo tasks a contributor approves with one "Approve all". */
 export function unapprovedTodoTaskIds<Row extends ProjectTaskRow>(
   rows: readonly Row[],
 ): Row["_id"][] {
-  return rows
-    .filter(
-      (row) =>
-        row.locked !== true &&
-        row.status === "todo" &&
-        row.approvedAt === undefined,
-    )
-    .map((row) => row._id);
+  return rows.filter(isUnapprovedTodoTask).map((row) => row._id);
+}
+
+/** A Triage row's origin when no person wrote it: the coordinator proposed it. */
+export const PROPOSED_BY_COORDINATOR_LABEL = "Proposed by coordinator";
+
+/**
+ * Where a Triage task came from, its row's second line: "Feedback · Ana" for
+ * feedback (just "Feedback" while the name is unknown), else the
+ * coordinator's proposal.
+ */
+export function projectTaskOriginLabel(
+  origin: Doc<"agentTasks">["origin"],
+  authorName: string | undefined,
+): string {
+  if (origin !== "feedback") return PROPOSED_BY_COORDINATOR_LABEL;
+  return authorName ? `Feedback · ${authorName}` : "Feedback";
 }
 
 /**
@@ -287,10 +310,11 @@ export interface SectionableProjectTaskRow extends ProjectTaskRow {
 }
 
 /**
- * A project's task list: one section per display status (Working, Blocked,
- * Idle, Archived), each row with its view. Idle keeps the project's order
- * (`taskNumber`); every other section puts the latest run first, else the
- * newest task. A section starts open when it has tasks and is not Archived.
+ * A project's task list: one section per display status that has tasks
+ * (Triage, Working, Blocked, Idle, Archived), each row with its view. Idle
+ * keeps the project's order (`taskNumber`); every other section puts the
+ * latest run first, else the newest task. Every section but Archived starts
+ * open.
  */
 export function projectTaskStatusSections<
   Row extends SectionableProjectTaskRow,
@@ -307,18 +331,15 @@ export function projectTaskStatusSections<
     view: projectTaskView(row, failedTaskIds.has(row._id)),
   }));
   const lastRun = (row: Row) => row.lastRunStartedAt ?? row.createdAt;
-  return PROJECT_TASK_DISPLAY_STATUSES.map((status) => {
+  return PROJECT_TASK_DISPLAY_STATUSES.flatMap((status) => {
     const matching = viewed.filter(
       (task) => task.view.displayStatus === status,
     );
+    if (matching.length === 0) return [];
     const tasks =
       status === "idle"
         ? matching
         : matching.sort((a, b) => lastRun(b.row) - lastRun(a.row));
-    return {
-      status,
-      tasks,
-      defaultOpen: tasks.length > 0 && status !== "archived",
-    };
+    return [{ status, tasks, defaultOpen: status !== "archived" }];
   });
 }

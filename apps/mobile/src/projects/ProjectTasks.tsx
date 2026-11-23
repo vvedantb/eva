@@ -1,8 +1,9 @@
 import { api } from "@eva/backend";
+import { firstNameByUserId } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { PROJECT_TASK_DISPLAY_STATUS_LABELS, projectTaskStatusSections, unapprovedTodoTaskIds } from "@eva/shared/projectView";
-import { IconCheck, IconPlus } from "@tabler/icons-react-native";
-import { Button, SkeletonList, SkeletonRow } from "@vvedantb/native-ui/primitives";
+import { IconCheck, IconLayoutList, IconPlus } from "@tabler/icons-react-native";
+import { Button, EmptyState, SkeletonList, SkeletonRow } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -26,14 +27,15 @@ type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 
 /**
- * The web project Tasks tab (`ProjectTaskListPanel`) at phone width: a
- * collapsible section per display status, Working, Blocked, Idle, Archived
- * (`projectTaskStatusSections`: Idle in project order, the rest latest run
- * first; Archived starts folded), with the compact project task rows
- * (`ProjectTaskRow`; a locked row for a task in a repo the reader cannot
- * open). Blocked, where new and unapproved tasks wait, carries Approve
- * (every todo task nobody approved yet, for a contributor) and "+" (a new
- * task; feedback for a viewer). A tap opens the task.
+ * The web project task list (`ProjectTaskListPanel`) at phone width: a
+ * collapsible section per display status that has tasks, Triage, Working,
+ * Blocked, Idle, Archived (`projectTaskStatusSections`: Idle in project
+ * order, the rest latest run first; Archived starts folded), with the
+ * compact project task rows (`ProjectTaskRow`; a locked row for a task in a
+ * repo the reader cannot open). Triage carries "Approve all" (every todo
+ * task nobody approved yet). For a contributor, the first section carries
+ * "+" (a new task), or the empty state does when there are no tasks; a
+ * viewer files feedback from the screen's dock. A tap opens the task.
  */
 export function ProjectTasks({
   project,
@@ -42,7 +44,6 @@ export function ProjectTasks({
   tasks,
   failedTaskIds,
   canContribute,
-  onFeedback,
 }: {
   project: Project;
   repo: Repo;
@@ -52,7 +53,6 @@ export function ProjectTasks({
   failedTaskIds: ReadonlySet<string>;
   /** The reader may approve, cancel and run (`callerRole`). */
   canContribute: boolean;
-  onFeedback: () => void;
 }) {
   const router = useRouter();
   const scheme = useScheme();
@@ -66,6 +66,17 @@ export function ProjectTasks({
   const [approving, setApproving] = useState(false);
   // Sections the user folded or unfolded, against each one's `defaultOpen`.
   const [toggled, toggle] = toggledProjectTaskStatuses.useSet("all");
+  const sections = tasks === undefined ? [] : projectTaskStatusSections(tasks, failedTaskIds);
+  // One lookup for the people who wrote the Triage feedback tasks.
+  const authorIds = [
+    ...new Set(
+      (sections.find((section) => section.status === "triage")?.tasks ?? []).flatMap(({ row }) =>
+        row.origin === "feedback" && row.createdBy !== undefined ? [row.createdBy] : [],
+      ),
+    ),
+  ];
+  const authors = useQuery(api.users.getMany, authorIds.length > 0 ? { ids: authorIds } : "skip");
+  const authorNames = firstNameByUserId(authors ?? []);
 
   if (tasks === undefined) {
     return (
@@ -101,9 +112,9 @@ export function ProjectTasks({
     <>
       <SectionList
         {...LIST_WINDOW}
-        sections={projectTaskStatusSections(tasks, failedTaskIds).map((section) => {
+        sections={sections.map((section, index) => {
           const open = section.defaultOpen !== toggled.has(section.status);
-          return { status: section.status, count: section.tasks.length, open, data: open ? section.tasks : [] };
+          return { status: section.status, first: index === 0, count: section.tasks.length, open, data: open ? section.tasks : [] };
         })}
         keyExtractor={(task) => task.row._id}
         stickySectionHeadersEnabled={false}
@@ -119,9 +130,9 @@ export function ProjectTasks({
               open={section.open}
               onToggle={() => toggle(section.status)}
               trailing={
-                section.status === "blocked" ? (
+                canContribute && (section.first || section.status === "triage") ? (
                   <View className="mr-1 flex-row items-center gap-1">
-                    {toApprove.length > 0 ? (
+                    {section.status === "triage" && toApprove.length > 0 ? (
                       <Button
                         size="sm"
                         fullWidth={false}
@@ -130,18 +141,20 @@ export function ProjectTasks({
                         leftIcon={<IconCheck size={14} color={EVA_THEME[scheme].primaryForeground} />}
                         onPress={approveAll}
                       >
-                        Approve
+                        Approve all
                       </Button>
                     ) : null}
-                    {/* The web outline "+" on Blocked: a 44 square here, in place of the web 24. */}
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={canContribute ? "New task" : "Feedback"}
-                      onPress={canContribute ? openNewTask : onFeedback}
-                      className="h-11 w-11 items-center justify-center rounded-lg active:opacity-70"
-                    >
-                      <IconPlus size={14} color={muted} />
-                    </Pressable>
+                    {/* The web outline "+": a 44 square here, in place of the web 24. */}
+                    {section.first ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="New task"
+                        onPress={openNewTask}
+                        className="h-11 w-11 items-center justify-center rounded-lg active:opacity-70"
+                      >
+                        <IconPlus size={14} color={muted} />
+                      </Pressable>
+                    ) : null}
                   </View>
                 ) : undefined
               }
@@ -153,9 +166,11 @@ export function ProjectTasks({
           <ProjectTaskRow
             task={row}
             view={view}
+            authorName={row.createdBy !== undefined ? authorNames.get(row.createdBy) : undefined}
             notes={notesByTask.get(row._id)}
             hasError={failedTaskIds.has(row._id)}
             hasDraftComment={draftTaskIds.has(row._id)}
+            projectId={project._id}
             projectNumId={project.numId}
             homeRepoId={project.repoId}
             reposById={reposById}
@@ -163,6 +178,24 @@ export function ProjectTasks({
             onLongPress={() => actions.openSheet(row)}
           />
         )}
+        ListEmptyComponent={
+          <EmptyState
+            icon={IconLayoutList}
+            title="No tasks"
+            action={
+              canContribute ? (
+                <Button
+                  size="sm"
+                  fullWidth={false}
+                  leftIcon={<IconPlus size={16} color={EVA_THEME[scheme].primaryForeground} />}
+                  onPress={openNewTask}
+                >
+                  New task
+                </Button>
+              ) : undefined
+            }
+          />
+        }
         renderSectionFooter={({ section }) => <FoldFooter open={section.open} count={section.count} empty="No tasks" />}
         contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 24 }}
       />

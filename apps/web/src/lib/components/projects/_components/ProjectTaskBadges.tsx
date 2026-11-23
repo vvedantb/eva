@@ -11,6 +11,7 @@ import {
 } from "@eva/shared/projectView";
 import {
   Badge,
+  Button,
   LIST_ROW_CONTROL_CLASS,
   Tooltip,
   TooltipContent,
@@ -20,19 +21,21 @@ import {
   IconAlertTriangle,
   IconGitPullRequest,
   IconHelpCircle,
+  IconCheck,
   IconMessage,
-  IconX,
 } from "@tabler/icons-react";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { prStateIconClass } from "@/lib/components/prStateIconClass";
 import { RepoAppMark, type RepoAppMarkRepo } from "@/lib/components/RepoLogo";
 import { repoDisplayLabel } from "@/lib/utils/repoGrouping";
-import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
-import { catchMutationError } from "@/lib/utils/mutationToast";
+import {
+  catchMutationError,
+  withMutationToast,
+} from "@/lib/utils/mutationToast";
 
 /** The task card's metadata badge size (`QuickTaskCard` tags and project). */
-export const BADGE_CLASS = "max-w-40 px-1.5 py-0 text-3xs font-medium leading-4";
+const BADGE_CLASS = "max-w-40 px-1.5 py-0 text-3xs font-medium leading-4";
 
 /** Reports a row's tooltip lists; the badge counts all of them. */
 const MAX_REPORTS_SHOWN = 3;
@@ -53,14 +56,17 @@ function AskBadge({ ask, interactive }: { ask: string; interactive: boolean }) {
 }
 
 /**
- * A project task row's extra badges, after its tags: why it needs you (or
- * that it waits for its coordinator), its open question, linked to the task
- * chat where a person answers it, its open reports, its phase label, a
- * feedback origin, its repo when it is not the home repo, and its PR. A
- * contributor can cancel a todo task nobody approved yet (rejects it).
+ * A project task row's extra badges, after its tags: a Triage task's origin,
+ * why it needs you (or that it waits for its coordinator), its open
+ * question, linked to the task chat where a person answers it, its open
+ * reports, its phase label, a feedback origin, its repo when it is not the
+ * home repo, and its PR. A contributor rejects (cancels) or approves a
+ * Triage task at the end of the line.
  */
 export function ProjectTaskBadges({
   taskId,
+  projectId,
+  origin,
   needsYou,
   waitingForCoordinator,
   ask,
@@ -71,9 +77,12 @@ export function ProjectTaskBadges({
   repo,
   prUrl,
   prState,
-  canCancel,
+  canTriage,
 }: {
   taskId: Id<"agentTasks">;
+  projectId: Id<"projects"> | undefined;
+  /** A Triage task's origin (`projectTaskOriginLabel`). */
+  origin: string | undefined;
   needsYou: NeedsYouReason | undefined;
   waitingForCoordinator: boolean;
   /** The task's open question (`report_to_coordinator` ask). */
@@ -88,11 +97,18 @@ export function ProjectTaskBadges({
   repo: RepoAppMarkRepo | undefined;
   prUrl: string | undefined;
   prState: PrState | undefined;
-  canCancel: boolean;
+  /** Shows Reject and Approve: a contributor's unapproved todo task. */
+  canTriage: boolean;
 }) {
   const updateStatus = useMutation(api.agentTasks.updateStatus);
+  const approveTasks = useMutation(api.buildWorkflow.approveProjectTasks);
   return (
     <>
+      {origin ? (
+        <span className="min-w-0 truncate text-2xs text-muted-foreground">
+          {origin}
+        </span>
+      ) : null}
       {needsYou ? (
         <Badge variant="secondary" className={BADGE_CLASS}>
           <span className="flex min-w-0 items-center gap-0.5">
@@ -192,35 +208,47 @@ export function ProjectTaskBadges({
           </Badge>
         </a>
       ) : null}
-      {canCancel ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            {/* design-check-ignore-next-line — the card kebab button (CARD_KEBAB_CLASS) */}
-            <button
-              type="button"
-              aria-label="Cancel task"
+      {canTriage ? (
+        <span
+          className={cn("ml-auto flex shrink-0 gap-1", LIST_ROW_CONTROL_CLASS)}
+        >
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 px-2 text-xs"
+            onClick={(event) => {
+              event.stopPropagation();
+              event.preventDefault();
+              void catchMutationError(
+                updateStatus({ id: taskId, status: "cancelled" }),
+                "Couldn't reject the task",
+                "project-task-cancel",
+              );
+            }}
+          >
+            Reject
+          </Button>
+          {projectId ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-6 px-2 text-xs"
               onClick={(event) => {
                 event.stopPropagation();
                 event.preventDefault();
-                void catchMutationError(
-                  updateStatus({ id: taskId, status: "cancelled" }),
-                  "Couldn't cancel the task",
-                  "project-task-cancel",
-                );
+                void withMutationToast(
+                  approveTasks({ projectId, taskIds: [taskId] }),
+                  "Task approved",
+                  "Couldn't approve the task",
+                  "project-approve",
+                ).catch(() => undefined);
               }}
-              // The card kebab's look, shown at every width.
-              className={cn(
-                "ml-auto",
-                CARD_KEBAB_CLASS,
-                "sm:flex",
-                LIST_ROW_CONTROL_CLASS,
-              )}
             >
-              <IconX className="size-3.5" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>Cancel task</TooltipContent>
-        </Tooltip>
+              <IconCheck size={12} aria-hidden />
+              Approve
+            </Button>
+          ) : null}
+        </span>
       ) : null}
     </>
   );

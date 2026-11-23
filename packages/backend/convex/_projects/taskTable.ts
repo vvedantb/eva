@@ -22,9 +22,9 @@ import {
 
 /**
  * One table of a project's child tasks with their derived state, shared by
- * the coordinator's prompt (`formatProjectTaskTable`), the coordinator's
- * `list_agents` project scope and the task cards (`listTaskBatches`). The
- * rules are the shared ones (`@eva/shared/projectStatus`).
+ * the coordinator's prompt (`formatProjectTaskTable`) and the coordinator's
+ * `list_agents` project scope. The rules are the shared ones
+ * (`@eva/shared/projectStatus`).
  */
 
 /** The facts in their return shape (a mutable copy of the dependencies). */

@@ -4,13 +4,14 @@ import { ProjectSandboxPanel } from "@/lib/components/projects/ProjectSandboxPan
 import { ProjectSandboxChatPanel } from "@/lib/components/projects/ProjectSandboxChatPanel";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { SandboxSurfaceProviders } from "@/lib/components/sandbox/SandboxSurfaceProviders";
-import { SandboxNotStartedRail } from "@/lib/components/sandbox/SandboxPanelFrame";
+import { SandboxEmptyRailFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
+import { ProjectTasksPanel } from "@/lib/components/projects/ProjectTasksPanel";
+import type { ProjectSandboxTab } from "@/lib/components/projects/projectSandboxTabs";
 import {
   SandboxWorkspace,
   type TerminalPanelApi,
 } from "@/lib/components/sandbox/SandboxWorkspace";
 import type { SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
-import type { TaskRouteSandboxTab } from "@/lib/search-params";
 import type {
   ProjectDetailProject,
   ProjectSandboxState,
@@ -26,7 +27,8 @@ interface ProjectDetailSandboxContentProps {
   projectNumId?: number;
   project: ProjectDetailProject;
   repoId: Id<"githubRepos">;
-  sandboxTab?: TaskRouteSandboxTab;
+  basePath: string;
+  sandboxTab: ProjectSandboxTab;
   sandbox: ProjectSandboxState;
   chatTurnOpen: boolean | undefined;
   sandboxRailWidthPx: number;
@@ -41,6 +43,7 @@ export function ProjectDetailSandboxContent({
   projectNumId,
   project,
   repoId,
+  basePath,
   sandboxTab,
   sandbox,
   chatTurnOpen,
@@ -64,8 +67,6 @@ export function ProjectDetailSandboxContent({
     handleStopSandbox,
   } = sandbox;
 
-  // The coordinator has no Preview (no dev server): Documents is its first tab.
-  const tab = sandboxTab ?? "documents";
   // Always mount the sandbox panel so tabs stay reachable while stopped —
   // same as sessions. Panes self-gate.
   const projectSandboxPanel = (
@@ -89,7 +90,8 @@ export function ProjectDetailSandboxContent({
       owner={owner}
       panes={panes}
       terminalPanel={terminalPanel}
-      sandboxTab={tab}
+      sandboxTab={sandboxTab}
+      canContribute={!isViewer}
       onStartSandbox={
         canStartSandbox && !isSandboxStopping ? handleStartSandbox : undefined
       }
@@ -173,15 +175,22 @@ export function ProjectDetailSandboxContent({
           }
         </SandboxWorkspace>
       ) : (
+        // No session yet, so no sandbox tabs: the card holds the Tasks tab
+        // (feedback can wait in Triage before the coordinator ever ran).
         layout(({ rightPanelCollapsed, onToggleRightPanel }) => (
-          <SandboxNotStartedRail
+          <SandboxEmptyRailFrame
             collapsed={rightPanelCollapsed}
             onToggle={onToggleRightPanel}
-            ownerLabel="project"
-            isPending={sandbox.sandbox.sessionPending}
-            onStart={canStartSandbox ? handleStartSandbox : undefined}
-            isStarting={isSandboxStarting}
-          />
+            fill
+          >
+            <ProjectTasksPanel
+              projectId={projectId}
+              projectNumId={projectNumId}
+              repoId={repoId}
+              basePath={basePath}
+              canContribute={!isViewer}
+            />
+          </SandboxEmptyRailFrame>
         ))
       )}
     </SandboxSurfaceProviders>

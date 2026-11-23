@@ -26,6 +26,7 @@ import {
   IconEye,
   IconCircleCheck,
   IconCircleX,
+  IconInbox,
 } from "@tabler/icons-react";
 
 /** Single source of truth: matches Convex `projects.phase`. */
@@ -135,14 +136,19 @@ export const columnConfig: Record<ProjectColumn, PhaseStyle> = {
 
 /**
  * A child task's display status (`projectTaskDisplayStatus`): the task list
- * groups and rows, and a project's task counts and progress bar. Working
- * looks as In Progress, Blocked as the needs-you warning, Idle as To Do,
- * Archived as Cancelled.
+ * groups and rows, and a project's task counts and progress bar. Triage
+ * takes the Code Review purple, Working looks as In Progress, Blocked as the
+ * needs-you warning, Idle as To Do, Archived as Cancelled.
  */
 export const projectTaskDisplayStatusConfig: Record<
   ProjectTaskDisplayStatus,
   PhaseStyle
 > = {
+  triage: {
+    ...phaseConfig.code_review,
+    label: PROJECT_TASK_DISPLAY_STATUS_LABELS.triage,
+    icon: IconInbox,
+  },
   working: {
     ...phaseConfig.in_progress,
     label: PROJECT_TASK_DISPLAY_STATUS_LABELS.working,

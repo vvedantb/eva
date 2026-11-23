@@ -9,14 +9,11 @@ import {
   getProjectWithAccess,
   normalizeIdOrThrow,
 } from "../functions";
-import { projectTaskBatchFields } from "../validators";
 import { createTodoTask } from "../_agentTasks/mutations";
 import { insertTaskDependencies } from "../_agentTasks/dependencies";
 import { latestChatMessageId, resolveChatParent } from "../_chat/chatParent";
 import { listProjectTasks } from "./scheduler";
 import { assertProjectRepo } from "./settings";
-import { loadProjectTaskRows } from "./taskTable";
-import { projectTaskRowValidator } from "../_validators/projectTasks";
 import {
   coordinatorAutoTurnsInLastHour,
   isCoordinatorPaused,
@@ -28,7 +25,7 @@ import {
  * `create_tasks_batch`): `todo` and not approved (decision 7), each in one of
  * the project's repos, with dependencies that make no cycle. One tool call is
  * one `projectTaskBatches` row, anchored to the coordinator message it ran
- * in, so the chat shows one card for each batch.
+ * in.
  */
 
 /** Most tasks one coordinator call may propose. */
@@ -157,47 +154,6 @@ export const createTasksFromCoordinator = internalMutation({
           : {}),
       })),
     }),
-});
-
-const batchValidator = v.object({
-  _id: v.id("projectTaskBatches"),
-  _creationTime: v.number(),
-  ...projectTaskBatchFields,
-  /** The batch's tasks that still exist, in batch order, with derived state. */
-  tasks: v.array(projectTaskRowValidator),
-});
-
-/**
- * Every batch the coordinator proposed, oldest first, each with its tasks'
- * live rows (`loadProjectTaskRows`: stage, needs-you reason, waiting for
- * the coordinator, open ask). A task in a repo the caller cannot open is a
- * locked row. The chat places a card for each batch under `messageId`.
- */
-export const listTaskBatches = authQuery({
-  args: { projectId: v.id("projects") },
-  returns: v.array(batchValidator),
-  handler: async (ctx, args) => {
-    const project = await getProjectWithAccess(
-      ctx.db,
-      args.projectId,
-      ctx.userId,
-    );
-    const [batches, rows] = await Promise.all([
-      ctx.db
-        .query("projectTaskBatches")
-        .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
-        .collect(),
-      loadProjectTaskRows(ctx.db, project, ctx.userId),
-    ]);
-    const rowById = new Map(rows.map((row) => [String(row.taskId), row]));
-    return batches.map((batch) => ({
-      ...batch,
-      tasks: batch.taskIds.flatMap((id) => {
-        const row = rowById.get(String(id));
-        return row ? [row] : [];
-      }),
-    }));
-  },
 });
 
 /**

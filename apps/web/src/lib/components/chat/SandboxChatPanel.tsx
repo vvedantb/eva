@@ -10,7 +10,7 @@ import { SandboxChatHeaderActions } from "@/lib/components/sandbox/SandboxStartS
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useOlderTranscript } from "@/lib/hooks/useChatTranscript";
 import { useProviderAccountHandoff } from "@/lib/hooks/useProviderAccountHandoff";
-import { ChatBody, type ChatInlineCard } from "./ChatBody";
+import { ChatBody } from "./ChatBody";
 import { SandboxBranchChip } from "./SandboxBranchChip";
 import {
   sandboxTurnSettings,
@@ -66,12 +66,9 @@ export function SandboxChatPanel({
   onOpenAgentsTab,
   onSandboxToggle,
   isReadOnly = false,
-  inlineCards,
   preInputBanner,
 }: SandboxChatPanelProps & {
   binding: SandboxChatBinding;
-  /** Owner-specific cards in the transcript (a project's task batches). */
-  inlineCards?: ReadonlyArray<ChatInlineCard>;
   /** Owner-specific notice above the composer (a paused coordinator). */
   preInputBanner?: ReactNode;
 }) {
@@ -257,7 +254,6 @@ export function SandboxChatPanel({
               beforeBanner={preInputBanner}
             />
           }
-          inlineCards={inlineCards}
           composerChips={<SandboxChatStatusChips surface={chatSurface} />}
           underCardLeading={
             <SandboxBranchChip

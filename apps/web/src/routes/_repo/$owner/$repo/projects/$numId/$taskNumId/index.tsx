@@ -1,18 +1,11 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 
+/**
+ * One project task: its own chat and sandbox in place of the coordinator's.
+ * The shell is rendered by the `$numId` layout so the header stays mounted.
+ */
 export const Route = createFileRoute(
   "/_repo/$owner/$repo/projects/$numId/$taskNumId/",
 )({
-  beforeLoad: ({ params }) => {
-    throw redirect({
-      to: "/$owner/$repo/projects/$numId/$taskNumId/$detailTab",
-      params: {
-        owner: params.owner,
-        repo: params.repo,
-        numId: params.numId,
-        taskNumId: params.taskNumId,
-        detailTab: "activity",
-      },
-    });
-  },
+  component: () => null,
 });

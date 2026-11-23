@@ -21,17 +21,19 @@ import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { useScheme } from "@/ui/theme";
 import { HeaderMoreButton } from "@/ui/HeaderRail";
 
-type Tab = "overview" | "work";
+type Tab = "overview" | "coordinator";
 
 /**
  * One project, as the web project page (`ProjectDetailClient`) on a phone:
  * the header (back, the title, the web "…" project menu as a sheet), the
- * web Overview | Tasks switch under it, kept in `?tab=` and set in place
- * (no history), and the tab below. An older project still in planning with
- * an interview or a plan shows "Plan" in place of Tasks; a new project has
- * no planning step. The web Sandbox tab's coordinator chat is the phone
- * chat screen (`/chat/<projectId>`): "Chat" in the bottom bar opens it, with
- * the web unread dot; a project has no closed state, so it always shows. A
+ * web Overview | Coordinator switch under it, kept in `?tab=` and set in
+ * place (no history), Coordinator by default, and the tab below. An older
+ * project still in planning with an interview or a plan shows "Plan" in
+ * place of Coordinator; a new project has no planning step. Coordinator is
+ * the project's task list (`ProjectTasks`); the coordinator chat itself is
+ * the phone chat screen (`/chat/<projectId>`), as embedding it would fork
+ * the chat screen: "Chat" in the bottom bar opens it, with the web unread
+ * dot; a project has no closed state, so it always shows. A
  * contributor gets the "…" sheet, led by the web's sandbox actions
  * (`useProjectGitActions`); tasks start through Approve and the project
  * scheduler. A viewer (`callerRole`) gets "Feedback" beside Chat, as the
@@ -50,7 +52,7 @@ export default function ProjectScreen() {
   const listed = projects?.find((candidate) => candidate._id === params.projectId);
   const project = useQuery(api.projects.get, listed ? { id: listed._id } : "skip");
   const users = useQuery(api.users.listAll, {});
-  const tab: Tab = params.tab === "overview" ? "overview" : "work";
+  const tab: Tab = params.tab === "overview" ? "overview" : "coordinator";
   // The web page's sandbox actions, leading the "…" sheet.
   const git = useProjectGitActions(project);
   const actions = useProjectActions({ repo: repo ?? EMPTY_REPO, users, onDeleted: leave, extraRows: git.rows });
@@ -90,7 +92,7 @@ export default function ProjectScreen() {
           value={tab}
           options={[
             { value: "overview", label: "Overview" },
-            { value: "work", label: showPlan ? "Plan" : "Tasks" },
+            { value: "coordinator", label: showPlan ? "Plan" : "Coordinator" },
           ]}
           onChange={(next) => router.setParams({ tab: next })}
         />
@@ -102,7 +104,6 @@ export default function ProjectScreen() {
         users={users}
         showPlan={showPlan}
         canContribute={canContribute}
-        onFeedback={openFeedback}
       />
       {showPlan ? null : <ProjectDock project={project} canContribute={canContribute} onFeedback={openFeedback} />}
       {actions.dialogs}
@@ -122,7 +123,6 @@ function ProjectTab({
   users,
   showPlan,
   canContribute,
-  onFeedback,
 }: {
   tab: Tab;
   project: Project;
@@ -130,7 +130,6 @@ function ProjectTab({
   users: User[] | undefined;
   showPlan: boolean;
   canContribute: boolean;
-  onFeedback: () => void;
 }) {
   const { tasks, failedTaskIds, status } = useProjectTaskStatus(project._id, repo._id);
   if (tab === "overview") {
@@ -145,7 +144,6 @@ function ProjectTab({
       tasks={tasks}
       failedTaskIds={failedTaskIds}
       canContribute={canContribute}
-      onFeedback={onFeedback}
     />
   );
 }

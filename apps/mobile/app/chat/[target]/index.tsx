@@ -187,8 +187,7 @@ export default function ChatScreen() {
         message._id === liveReplyId,
   );
   const { mineByMessageId: mine, agentReports } = groupChatFeedback(feedbackRows ?? [], me ?? undefined);
-  // A project's coordinator chat carries the task batches it proposed, as cards under their turns.
-  const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder, chat?.project?.id);
+  const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder);
   // A project viewer reads the coordinator chat and its child task chats but never writes in them (`callerRole`).
   const chatTask = useQuery(api.agentTasks.get, chat?.task ? { id: chat.task.id } : "skip");
   const viewer = useIsProjectViewer(chat?.project?.id ?? chatTask?.projectId);

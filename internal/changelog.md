@@ -1,5 +1,11 @@
 # Changelog
 
+## Projects: Overview | Coordinator, Tasks on the rail, Triage
+
+Date: 2026-11-23
+
+Projects open on the Coordinator (Sandbox renamed; the Tasks tab moved to the coordinator rail's first item), unapproved tasks sit in a new Triage group with Approve / Reject / Approve all, a task opens its own chat and sandbox in place, and the chat's proposed-task cards and `projects.listTaskBatches` are gone (web and phone).
+
 ## Projects: three stages, task counts by display status
 
 Date: 2026-11-23

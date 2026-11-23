@@ -2,13 +2,14 @@
 
 import type { Id } from "@eva/backend";
 import { taskScheduledAt } from "@eva/backend";
-import type {
-  ProjectTaskNotes,
-  ProjectTaskView,
+import {
+  isUnapprovedTodoTask,
+  projectTaskOriginLabel,
+  type ProjectTaskNotes,
+  type ProjectTaskView,
 } from "@eva/shared/projectView";
 import { IconLock } from "@tabler/icons-react";
 import {
-  Badge,
   ListRow,
   Tooltip,
   TooltipContent,
@@ -20,22 +21,21 @@ import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
 import { entityPathSegment } from "@/lib/numId";
 import type { ProjectTaskListRow } from "../useProjectStatus";
 import { projectTaskDisplayStatusConfig } from "../ProjectPhaseBadge";
-import { BADGE_CLASS, ProjectTaskBadges } from "./ProjectTaskBadges";
+import { ProjectTaskBadges } from "./ProjectTaskBadges";
 
 /**
- * One compact row of a project's task list, and of the coordinator chat's
- * task cards: the stripe is the task's display status
- * (`projectTaskDisplayStatus`), and `showStatus` names it where no section
- * header does. A task in a repo the reader cannot open is a locked row: its
- * number and a lock, no title and no link.
+ * One compact row of a project's task list: the stripe is the task's display
+ * status (`projectTaskDisplayStatus`). A Triage row's second line is its
+ * origin, and a contributor approves or rejects it there. A task in a repo
+ * the reader cannot open is a locked row: its number and a lock, no title
+ * and no link.
  */
 export function ProjectTaskRow({
   task,
   view,
-  showStatus = false,
   notes,
   hasError,
-  selectedTaskId,
+  authorName,
   onSelectTask,
   basePath,
   projectNumId,
@@ -45,12 +45,11 @@ export function ProjectTaskRow({
 }: {
   task: ProjectTaskListRow;
   view: ProjectTaskView;
-  /** Name the display status in a badge (the chat card has no sections). */
-  showStatus?: boolean;
   /** The task's open question and open reports (`useProjectTaskNotes`). */
   notes: ProjectTaskNotes | undefined;
   hasError: boolean;
-  selectedTaskId: Id<"agentTasks"> | null;
+  /** The feedback author's first name, once known. */
+  authorName: string | undefined;
   onSelectTask: (id: Id<"agentTasks">) => void;
   basePath: string;
   projectNumId?: number;
@@ -83,14 +82,18 @@ export function ProjectTaskRow({
     task.repoId !== undefined && task.repoId !== homeRepoId
       ? reposById.get(task.repoId)
       : undefined;
-  const isFeedback = task.origin === "feedback";
-  const canCancel =
-    canContribute && task.status === "todo" && task.approvedAt === undefined;
-  const { needsYou, waitingForCoordinator } = view;
+  const isTriage = view.displayStatus === "triage";
+  // In Triage the origin replaces the Feedback badge and "Needs approval".
+  const origin = isTriage
+    ? projectTaskOriginLabel(task.origin, authorName)
+    : undefined;
+  const isFeedback = !isTriage && task.origin === "feedback";
+  const needsYou = isTriage ? undefined : view.needsYou;
+  const canTriage = canContribute && isTriage && isUnapprovedTodoTask(task);
+  const { waitingForCoordinator } = view;
   const reports = notes?.reports ?? [];
-  const StatusIcon = statusConfig.icon;
   const hasBadges =
-    showStatus ||
+    origin !== undefined ||
     needsYou !== undefined ||
     waitingForCoordinator ||
     notes?.ask !== undefined ||
@@ -99,7 +102,7 @@ export function ProjectTaskRow({
     isFeedback ||
     otherRepo !== undefined ||
     task.prUrl !== undefined ||
-    canCancel;
+    canTriage;
   return (
     <QuickTaskCard
       id={task._id}
@@ -121,7 +124,6 @@ export function ProjectTaskRow({
           ? `${basePath}/quick-tasks/${segment}`
           : `${basePath}/quick-tasks`
       }
-      isActive={selectedTaskId === task._id}
       onClick={(event) => {
         event.preventDefault();
         onSelectTask(task._id);
@@ -136,19 +138,10 @@ export function ProjectTaskRow({
       }}
       badges={
         hasBadges ? (
-          <>
-            {showStatus ? (
-              <Badge variant="secondary" className={BADGE_CLASS}>
-                <span className="flex min-w-0 items-center gap-0.5">
-                  <StatusIcon
-                    className={`size-2.5 shrink-0 ${statusConfig.text}`}
-                  />
-                  {statusConfig.label}
-                </span>
-              </Badge>
-            ) : null}
-            <ProjectTaskBadges
+          <ProjectTaskBadges
               taskId={task._id}
+              projectId={task.projectId}
+              origin={origin}
               needsYou={needsYou}
               waitingForCoordinator={waitingForCoordinator}
               ask={notes?.ask}
@@ -163,9 +156,8 @@ export function ProjectTaskRow({
               repo={otherRepo}
               prUrl={task.prUrl}
               prState={task.prState}
-              canCancel={canCancel}
+              canTriage={canTriage}
             />
-          </>
         ) : undefined
       }
     />
