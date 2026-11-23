@@ -8,6 +8,7 @@ Same rules as `CLAUDE.md`. Domain details live in the two docs below — read th
 - If already on main and the user asks to ship: commit and push directly to main.
 - Prefer `/preflight` occasionally over husky commit/push gates (hooks under `.husky/` are commented out).
 - Plans: final step is `/ship` unless the user says not to.
+- The `/commit`, `/push` and `/ship` skills are vendored files in `.agents/skills/{commit,push,ship}`, maintained in this repo.
 
 ## Always
 

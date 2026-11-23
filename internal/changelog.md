@@ -1,5 +1,89 @@
 # Changelog
 
+## Web: team tab content slides from the picked tab's side (@vvedantb/ui 0.62.0)
+
+Date: 2026-11-23
+
+WHY: Switching tabs on a team page swapped the content at once; a short slide from the side of the picked tab shows where the new content came from, as a phone swipe does.
+
+Architectural: packages #336 adds `TabsTransition` (`"none"`, `"slide"`, `"push"`; `value` plus `order`, built on Motion `AnimatePresence` with a custom direction) and `UiConfig.Tabs.transition`. `@eva/ui` `controlsConfig` sets `transition: "slide"` (32px plus fade, 240 ms in, 140 ms out). `TeamDetailClient` wraps its panels in `TabsTransition` with the exported `teamDetailTabs` order. Other tab pages opt in by wrapping their panels the same way. `@vvedantb/ui` is now 0.62.0 in every workspace (it was a mix of 0.55.0, 0.57.0 and ^0.60.0).
+
+## Callback tests: pruned, repaired, type-checked, security gaps covered
+
+Date: 2026-11-23
+
+WHY: Devs found the tests low-value. An audit of `callback-src/tests` showed 81% sound, but duplicates, assertions that could not fail, test-only seams, and no tests on secret redaction or the media-upload guard.
+
+Architectural: Duplicate and vacuous tests are merged into one keeper per contract or deleted; weak assertions now fail when behaviour breaks (each new or repaired test was proven by a deliberate code break). New tests cover redaction of tool output and turn completions, the symlink/hard-link media guard, non-Claude `extractResultEvent`, session resume after restart, `enforceTurnLease` and the deposition fence. Test-only seams and dead code are removed (`fetchFn`/`env` on `ensureGithubToken`, `isRival`, `waitMs`, `buildTurnCompletion`, `resolveResumeId`, `setActiveId`, `stopBranchWatcher`, background-shell test helpers, null-lease branches). `typecheck:callback` now also type-checks `callback-src/tests` (`callback-src/tests/tsconfig.json`).
+## Web: `globals.css` imports `@vvedantb/ui/tokens` with full colours
+
+Date: 2026-11-22
+
+WHY: Eva kept shadcn-style `R G B` channel variables and `compat-shadcn-rgb.css` because the full tokens import sets oklch colours. That forced a hand-copied radius scale (#1458) and a second colour system next to vhub and Verve.
+
+Architectural: Eva now takes light, dark and neutral surfaces, brand, `--segment`, `--danger`, `--success`, `--warning`, `--radius` and the radius utilities from the package. Eva keeps only its own tokens (`--status-*`, `--cat-*`, `--warning-bg`, `--accent-soft`, …) as full `rgb()` values.
+- Tailwind: `bg-primary` is the brand `--accent`; `text-muted-foreground` is `--muted`; `bg-muted` is `--surface-secondary` (`@theme` in `globals.css`). `bg-accent` is now the brand fill, so eva's soft hover fill moved to `bg-accent-soft` / `text-accent-soft-foreground` (`--accent-soft`). `tailwind.config.js` keeps only eva's own colours and uses `color-mix` for opacity.
+- Theme picker: `ACCENT_COLORS` hold `rgb()` values. `applyCustomThemeVars` sets `--accent`, `--accent-foreground`, `--accent-soft` and `--accent-soft-foreground`. Focus, chart-1 and sidebar primary follow `--accent`.
+- Every `rgb(var(--x))` call site now uses `var(--x)` or `color-mix`. The HTML-render frame maps the shadcn names a page reads to the package tokens (`PAGE_TOKEN_SOURCE`).
+- Package `markdown.css` 0.60.0 still reads `rgb(var(--foreground))`; a colour-only shim in `globals.css` overrides it. Delete it when the package ships full colours.
+- Dark and neutral surfaces now match the package (light `--background` #F5F5F5, dark #060606). `SHELL_COLOR`, `index.html` and `manifest.json` follow. The extension config gains an `accent-soft` alias for shared `@eva/ui` classes.
+
+## Web: rail groups get their rounded corners back
+
+Date: 2026-11-22
+
+WHY: `@vvedantb/ui` 0.60.0 `railGroupClass` uses `rounded-[calc(var(--radius-lg)+0.25rem)]`. Eva does not import `@vvedantb/ui/tokens`, so `--radius-lg` was undefined, the `calc()` was invalid and the corners were square.
+
+Architectural: `globals.css` now defines `--radius-lg`, `--radius-md` and `--radius-sm` in `@theme inline`, copied from the package tokens. The full tokens import stays skipped because it sets oklch colours that clash with `compat-shadcn-rgb.css`. No className overrides on `RailGroup` or `RepoRail`.
+
+## Skills: commit, push and ship are vendored in-repo
+
+Date: 2026-11-22
+
+WHY: Stop depending on the public external skills repo before it goes private. `commit`, `push` and `ship` now live as local files in `.agents/skills/` and their `skills-lock.json` entries are gone.
+
+Architectural: these three skills are edited here and no longer overwritten by a skills update. `README.md`, `AGENTS.md`, `CLAUDE.md` and the `audit` skill say so.
+
+## Web: Appearance tiles come from the package (@vvedantb/ui 0.60.0)
+
+Date: 2026-11-21
+
+WHY: The package now ships eva's theme tiles as `ThemeModePicker`, so the local copy only repeated it.
+
+Architectural: Theme settings and the onboarding theme step render `<ThemeModePicker value onChange compact? />`; `AppearanceSection.tsx` is deleted. The account menu keeps eva's `toggleTheme`: it resolves `system` to the live appearance before it cycles, and the package's `nextThemeInCycle` does not. `@vvedantb/ui` ^0.59.2 → ^0.60.0 in web only.
+
+## Web: rail, side panel and mobile header tones come from the package (@vvedantb/ui 0.59.2)
+
+Date: 2026-11-21
+
+WHY: The package now draws eva's trough, pill, side panel card and page-tone mobile header by default. eva's local copies only repeated it.
+
+Architectural: one token remap stays in `globals.css`: `@theme inline { --color-segment: rgb(var(--segment-active)) }`. Compat maps `bg-segment` to `--card`, which in dark and neutral is the trough itself, so without it the pill would vanish. Removed: the `.rail-track` rules, `railGroupThemeClass`, the `rail-track` hooks on `RepoRail`, `ButtonTrack`s and `CHAT_HEADER_ACTIONS_CLASS`, `listClassName="tabs-segmented"` on the sandbox `SidePanelTabs.List`, the `SandboxPanelFrame` card and arrow tones, and `bg-background` on `Sidebar.MobileHeader`. Kept: `.tabs-segmented` (eva's own opt-in look for eva `TabsList`s), `.t-side-panel-arrow` and `[data-dock-slide]`. `@vvedantb/ui` 0.57.0 → ^0.59.2 in web only; Vite dedupes it, so `@eva/ui`'s 0.57.0 pin does not ship a second copy.
+
+## Android release builds in parallel with Check; @vvedantb/config 0.12.0
+
+Date: 2026-11-20
+
+WHY: A releasing merge ran three boat-large jobs in a row (check, release paths, release), so the APK waited for Check and an extra runner start. The build now starts with Check and only publish waits.
+
+Architectural: `ci.yml`'s `release` job (push only, no `needs`) calls the shared `release-android-apk.yml@main` directly. Its `pathspecs` input is the path gate (soft skip when no changed file matches), and `wait_for_check_job: Check` makes the shared workflow wait for the Check job before Publish, so a failed Check publishes nothing. There is no local wrapper: `release-android-ci.yml` is deleted and `scripts/build-android-release.sh` has no `WAIT_FOR_CI_CHECK` polling. Manual `release-android.yml` runs do not wait. `@vvedantb/config` 0.11.0 → 0.12.0 (release APKs are arm64-v8a only).
+
+## Web: rail shell, dock motion and sandbox side panel come from the package (@vvedantb/ui 0.57.0)
+
+Date: 2026-11-20
+
+WHY: Other apps can now use eva's layout with one prop (`AppShell` `variant="rail"`). eva kept its own copies of the dock motion, the sandbox tabs and the button tracks, so the two would drift.
+
+Architectural: `Sidebar.tsx` sets `variant="rail"` on `AppShell.Root`. `SidebarContext` calls the package `popOutShellPanel` / `popInShellPanelNextFrame`; `RepoRail` spreads `shellDockTileProps`. The sandbox pane is `SidePanelTabs.Frame`, its rail `SidePanelTabs.Rail` and `.List`, and each tab `SidePanelTabs.Tab`; `ResizablePanelLayout` closes the card with `popOutSidePanel`. Tool and header groups use `ButtonTrack` / `buttonTrackClass`. eva's tones stay: `rail-track` and `tabs-segmented` in `globals.css` still win over the package tokens, and the arrow transition (`.t-side-panel-arrow`) and dock-slide rules stay there because eva does not import the package CSS. Removed: `lib/dockMotion.ts`, `sidebarPanelMotion.ts`, `sandboxCardMotion.ts`, `sandboxRail.ts`. `@vvedantb/ui` 0.55.0 → 0.57.0 (web, `@eva/ui`, extension; the `@eva/shared` dev pin stays, so no APK release).
+
+## Phone update check asks V Store
+
+Date: 2026-11-20
+
+WHY: The check read GitHub releases, which works only while this repository is public. V Store knows the newest release either way.
+
+Architectural: `UpdateDialog` passes `vStore` (package name and the APK link) to `UpdateChecker` in place of `source`. `@vvedantb/native-ui` goes to 0.34.0. The prompt and its buttons are unchanged.
+
 ## Web: menu and popover zoom comes from the package (@vvedantb/ui 0.55.0)
 
 Date: 2026-11-20

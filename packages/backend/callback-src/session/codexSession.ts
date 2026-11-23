@@ -27,9 +27,6 @@ const store = createSessionStore({
   persistStateFile: CODEX_PERSIST_STATE_FILE,
   resumeField: "resumeThreadId",
   getActiveId: () => S.activeCodexThreadId,
-  setActiveId: (id) => {
-    S.activeCodexThreadId = id;
-  },
 });
 
 const readCodexSessionState = store.readSessionState;

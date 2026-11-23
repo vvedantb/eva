@@ -27,6 +27,7 @@ import {
   CORNER_BADGE_CLASS,
   UnreadCornerBadge,
   Sidebar,
+  shellDockTileProps,
 } from "@vvedantb/ui";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { RepoLabelDialog } from "@/lib/components/RepoLabelDialog";
@@ -34,7 +35,6 @@ import { RailAppHotkeys } from "@/lib/components/sidebar/RailAppHotkeys";
 import { RailSettingsMenu } from "@/lib/components/sidebar/RailSettingsMenu";
 import { SidebarUserMenu } from "@/lib/components/sidebar/SidebarUserMenu";
 import { ShortcutKbd } from "@/lib/components/ui/Kbd";
-import { railGroupThemeClass } from "@/lib/components/sidebar/SharedLayoutNav";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { useSearch } from "@/lib/contexts/SearchContext";
 import { isHomePath } from "@/lib/components/sidebar/homePaths";
@@ -75,9 +75,9 @@ function isRowActive(
 
 /**
  * Cut-out tone for the solid active rail icons: the active pill's fill
- * (`.rail-track > .t-tabs-pill`), so the cut-out reads as a hole in the icon.
+ * (`bg-segment`, eva's `--segment-active`), so the cut-out reads as a hole in the icon.
  */
-const CUTOUT_COLOR = "rgb(var(--segment-active) / 1)";
+const CUTOUT_COLOR = "var(--segment)";
 
 /** Green: something is running right now (sessions, sandboxes). */
 const RAIL_BADGE_LIVE_CLASS = cn(CORNER_BADGE_CLASS, "bg-success text-white");
@@ -201,7 +201,7 @@ function RepoRailView({
       {/* Three package rail groups: a shared trough each, with one pill that
           slides to the active tile. The gaps divide them, so there are no rules. */}
       <Sidebar.RailHeader>
-        <Sidebar.RailGroup className={railGroupThemeClass}>
+        <Sidebar.RailGroup>
           <Sidebar.RailItem
             asChild
             label="Eva home"
@@ -263,7 +263,7 @@ function RepoRailView({
           the rail starts at the top so its first tiles stay reachable. */}
       <Sidebar.RailBody className="scrollbar scroll-fade justify-center-safe max-md:overscroll-y-contain">
         {repos.length === 0 ? null : (
-          <Sidebar.RailGroup className={railGroupThemeClass}>
+          <Sidebar.RailGroup>
             {repos.map((row, index) => {
               const displayName = repoDisplayLabel(row);
               // Mirrors RailAppHotkeys: only the first nine tiles get a slot.
@@ -363,7 +363,7 @@ function RepoRailView({
         />
       ) : null}
       <Sidebar.RailFooter>
-        <Sidebar.RailGroup className={railGroupThemeClass}>
+        <Sidebar.RailGroup>
           {simpleView ? null : (
             <Sidebar.RailItem
               asChild
@@ -384,7 +384,7 @@ function RepoRailView({
             </Sidebar.RailItem>
           )}
           <Sidebar.RailItem
-            data-sidebar-dock-tile
+            {...shellDockTileProps}
             label={collapsed ? "Show sidebar" : "Hide sidebar"}
             onClick={() => setCollapsed(!collapsed)}
           >

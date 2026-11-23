@@ -6,6 +6,7 @@ import { internal } from "./_generated/api";
 import { decryptCredentialMap } from "./_envVars/encryptedEntries";
 import { getAIModelProvider } from "./validators";
 import type { SandboxCredentials } from "./_sandbox/provider";
+import { sandboxVcpus } from "@eva/shared";
 import {
   presentEnv,
   selectVercelCredentials,
@@ -156,11 +157,28 @@ async function selectVercelCredentialsForRepo(
   };
 }
 
+/**
+ * vCPUs for the target app's sandboxes. Always the target's own size, never
+ * the sibling whose Vercel project the credentials came from.
+ */
+async function resolveSandboxVcpus(
+  ctx: GenericActionCtx<DataModel>,
+  repoId: Id<"githubRepos">,
+): Promise<number> {
+  const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
+    id: repoId,
+  });
+  return sandboxVcpus(repo?.sandboxSize);
+}
+
 async function resolveVercelCredentialsForRepo(
   ctx: GenericActionCtx<DataModel>,
   repoId: Id<"githubRepos">,
 ): Promise<Extract<SandboxCredentials, { kind: "vercel" }>> {
-  const { selected } = await selectVercelCredentialsForRepo(ctx, repoId);
+  const [{ selected }, vcpus] = await Promise.all([
+    selectVercelCredentialsForRepo(ctx, repoId),
+    resolveSandboxVcpus(ctx, repoId),
+  ]);
   if (!selected.ok) {
     throw new Error(selected.message);
   }
@@ -169,6 +187,7 @@ async function resolveVercelCredentialsForRepo(
     token: selected.token,
     teamId: selected.teamId,
     projectId: selected.projectId,
+    vcpus,
   };
 }
 
@@ -187,10 +206,10 @@ export async function tryResolveSandboxCredentials(
     }
   | { ok: false; error: string }
 > {
-  const { credentialRepoId, selected } = await selectVercelCredentialsForRepo(
-    ctx,
-    repoId,
-  );
+  const [{ credentialRepoId, selected }, vcpus] = await Promise.all([
+    selectVercelCredentialsForRepo(ctx, repoId),
+    resolveSandboxVcpus(ctx, repoId),
+  ]);
   if (!selected.ok) {
     return { ok: false, error: selected.message };
   }
@@ -202,6 +221,7 @@ export async function tryResolveSandboxCredentials(
       token: selected.token,
       teamId: selected.teamId,
       projectId: selected.projectId,
+      vcpus,
     },
     sandboxEnvVars,
   };

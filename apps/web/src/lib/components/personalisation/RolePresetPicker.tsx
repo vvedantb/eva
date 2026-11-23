@@ -48,7 +48,7 @@ export function RolePresetPicker({
                 // not shift the grid.
                 "h-full w-full cursor-pointer rounded-surface border p-3 text-left transition-[background-color,border-color]",
                 isActive
-                  ? "border-border bg-accent text-accent-foreground"
+                  ? "border-border bg-accent-soft text-accent-soft-foreground"
                   : "border-transparent bg-muted/40 text-muted-foreground hover:bg-muted/60",
               )}
             >

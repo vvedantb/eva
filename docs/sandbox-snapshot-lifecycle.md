@@ -33,7 +33,7 @@ Knobs live in `packages/backend/convex/_sandbox/vercelSnapshotOptions.ts`.
 
 The Vercel SDK resumes a stopped sandbox on **any** exec (`withResume`, no opt-out up to 3.8.0). Eva patches it (`patches/@vercel__sandbox.patch`, `setAutoResume(false)`) and turns lazy resume off on every handle (`withoutLazyResume` in `vercelProvider.ts`): such calls now throw `SandboxNotRunningError`, and only `start()` wakes a VM. The patch is keyed by package name only, so it applies to every SDK version; if an upgrade changes `withResume` so the patch no longer applies, `pnpm install` fails, and the type check (`setAutoResume`) plus `vercelSandboxNoLazyResume.test.ts` fail if it is ever missing. Then re-create it with `pnpm patch @vercel/sandbox@<version>`. A background job that runs a command after Stop wakes the VM while the owner row still says `closed`, and idle pause only scans `active` rows. Owner-scoped jobs (linked-repo prep, Convex readiness watch, PR description) check `sandboxStillWanted` before they exec. Best-effort jobs (kill, stall diagnostics, deadline extension) use `getRunningSandboxHandle` and skip a VM that is not running. The leak sweep catches the rest (post-turn push races, startup-command loops).
 
-Idle pause rule (`_sandbox/idlePolicy.ts`): pause when the agent finished ≥ `sandboxIdleAfterAgentMinutes` (default 5) ago **and** the last human interaction was ≥ `sandboxIdleAfterInteractionMinutes` (default 60) ago, and nothing is busy (open turn, run, build, chat workflow, a queued message that is not held by a usage limit, a streaming row younger than 15 min) or present (a sandbox tab open in the foreground, presence room `sandbox:<entityId>`). Interactions are recorded in the `sandboxActivity` table (`_sandbox/activity.ts`): message sends, turn/run completion, sandbox ready, preview/terminal/editor/file opens, and a once-a-minute traffic heartbeat the in-sandbox preview proxy posts to `/api/preview/activity` while external requests flow. `dry-run` logs `[sandboxIdlePause] would-pause …` to Axiom without acting; `on` stops via the same helpers as the Stop button, with divider "Sandbox paused after N min idle". Pausing changes *when* the one snapshot per sandbox is taken, not how many exist. With the mode `on`, opening a sandbox tab of a paused entity resumes it, and the stable link `/p/<kind>/<id>` wakes it from outside Eva.
+Idle pause rule (`_sandbox/idlePolicy.ts`): pause when the agent finished ≥ `sandboxIdleAfterAgentMinutes` (default 5) ago **and** the last human interaction was ≥ `sandboxIdleAfterInteractionMinutes` (default 60) ago, and nothing is busy (open turn, run, build, chat workflow, a queued message that is not held by a usage limit, a streaming row younger than 15 min) or present (a sandbox tab open in the foreground, presence room `sandbox:<entityId>`). Interactions are recorded in the `sandboxActivity` table (`_sandbox/activity.ts`): message sends, turn/run completion, sandbox ready, preview/terminal/editor/file opens, and a once-a-minute heartbeat the in-sandbox preview proxy posts to `/api/preview/activity`. The heartbeat fires for non-browser clients, and for a visible proxied page that had input since its last ping, so it stops within about 2 minutes of the last input and the interaction grace is the only timer after it. An Eva sandbox tab still counts as present for 10 minutes after its last input (`SANDBOX_ENGAGED_WINDOW_MS`). `dry-run` logs `[sandboxIdlePause] would-pause …` to Axiom without acting; `on` stops via the same helpers as the Stop button, with divider "Sandbox paused after N min idle". Pausing changes *when* the one snapshot per sandbox is taken, not how many exist. With the mode `on`, opening a sandbox tab of a paused entity resumes it, and the stable link `/p/<kind>/<id>` wakes it from outside Eva.
 
 ## Death → delete (not stop-only)
 
@@ -43,6 +43,7 @@ Idle pause rule (`_sandbox/idlePolicy.ts`): pause when the agent finished ≥ `s
 | Session unarchived / PR reopened | Cancel grace |
 | Quick task `done` / `cancelled` | Same 48h grace delete |
 | Weekly cron | `sweepDeadSandboxes` backstop |
+| Weekly cron (30 min later) | `purgeOrphanSnapshotsScheduled`: deletes orphan `snap_*`, but keeps any created or restored in the last 7 days. Runs only when `sandboxIdlePauseMode` is `on`. |
 
 `vercelProvider.delete()` deletes the sandbox **and** actively purges listed `snap_*` — Vercel cascade alone is unreliable.
 
@@ -114,7 +115,9 @@ npx convex run sandbox:inspectSnapshotsByIds --prod '{"snapshotIds":["snap_…"]
 1. All seeded / base Image snap ids (`listAllProtectedSnapshotIds`)
 2. `currentSnapshotId` only for sandboxes whose **name is still referenced in Eva** (`listReferencedSandboxIds`)
 
-Ghosts that only appear in Vercel `Sandbox.list` are **not** protected — their snaps are orphans.
+3. `currentSnapshotId` of a sandbox tagged with another Convex deployment (`eva.deployment`)
+
+Other ghosts that only appear in Vercel `Sandbox.list` are **not** protected — their snaps are orphans.
 
 Repos missing `VERCEL_PROJECT_ID` are skipped by the all-projects runner.
 

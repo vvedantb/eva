@@ -6,7 +6,9 @@ Skeleton loading states: see `docs/skullet.md` (use `LoadingSkeleton`, not `skul
 
 ## Surfaces (tone-based)
 
-Surface tokens map 1:1 to the HeroUI palette: `--background` (page canvas) → `--card`/`--popover` (surface, elevated) → `--muted` (surface-secondary) → `--secondary` (default). Accent (`--primary`/`--accent`/`--ring`/`--chart-1`/sidebar accent), `--radius`, and `--font-*` are user-defined via theme settings — never hardcode them.
+`globals.css` imports `@vvedantb/ui/tokens`, so the tokens are the package's full colours (oklch or `rgb()`), never bare `R G B` channels. Surfaces: `--background` (page canvas) → `--surface-card`/`--overlay` (surface, elevated) → `--surface-secondary` (fill) → `--default` (secondary fill). `--muted` is grey **text**; `--accent` is the **brand** colour. Eva's own tokens (`--status-*`, `--cat-*`, `--warning-bg`, `--accent-soft`…) sit in `globals.css`. Brand (`--accent`, which `--focus` and `--chart-1` follow), `--accent-soft`, `--radius` and `--font-*` are user-defined via theme settings — never hardcode them.
+
+The shadcn class names still work: `bg-primary` is the brand, `text-muted-foreground` is grey text, `bg-muted` is the soft fill (`--surface-secondary`), `bg-card`, `bg-popover`, `bg-destructive` and `ring-ring` map to the package tokens. `bg-accent` is the **brand** fill, as in the package. For the soft hover or selected fill, use `bg-accent-soft` / `text-accent-soft-foreground` (the theme picker tints it). Write `var(--token)` or `color-mix(in oklch, var(--token) 40%, transparent)` in CSS and inline styles, never `rgb(var(--token))`.
 
 **Borders**
 
@@ -39,7 +41,7 @@ Surface tokens map 1:1 to the HeroUI palette: `--background` (page canvas) → `
 
 ## Rails, tracks and the sandbox card
 
-Groups of controls sit on a **track**: the segmented-tabs trough (`--secondary` light, `--card` dark), with the active item on the lighter pill (`--segment-active`). The gap between tracks divides groups, so the chrome has no edge lines, separators or resting dividers.
+Groups of controls sit on a **track**: the segmented-tabs trough (`--default` light, `--surface-card` dark), with the active item on the lighter pill (`--segment`). The gap between tracks divides groups, so the chrome has no edge lines, separators or resting dividers.
 
 **App rail**
 
@@ -57,10 +59,10 @@ Groups of controls sit on a **track**: the segmented-tabs trough (`--secondary` 
 
 **Sandbox rail and card**
 
-- The sandbox rail puts the tools on a `SANDBOX_RAIL_GROUP_CLASS` track and the tabs on a `tabs-segmented` list, centred in the rail. There is no collapse button: pressing the active tab shows or hides the card (Ctrl+Alt+B too). Empty rails (no sandbox yet) keep `SandboxPanelToggleButton`.
+- The sandbox rail is the package `SidePanelTabs.Rail`: the tools on a `ButtonTrack` (`rail-track`) and the tabs on a `SidePanelTabs.List` (`tabs-segmented`), centred in the rail. There is no collapse button: pressing the active tab shows or hides the card (Ctrl+Alt+B too). Empty rails (no sandbox yet) keep `SandboxPanelToggleButton`.
 - The sandbox split has no resting divider (`ResizablePanelLayout` `seamlessSeparator`; the line and grip show on hover and drag).
-- The content is a `bg-card` card (`md:my-2 md:mr-1.5 md:rounded-surface`) with an arrow at the active rail tab (`SandboxPanelFrame`, `.sandbox-tab-arrow`). Panels inside stay transparent so the card shows through — no `bg-background` on a panel root. The arrow renders before the positioned card, so the card covers its inner half.
-- The card moves like a macOS dock window (`dockMotion.ts` via `sandboxCardMotion.ts`): it grows out of the active tab on open, shrinks back into it on close, and settles on a tab switch. The left sidebar panel uses the same motion on hide and show only, into the "Hide sidebar" tile (`sidebarPanelMotion.ts`); app switches do not move it. The chat pane beside the card slides to its new width in step (`slideNextResize`); drags stay instant. Only "Disable page animations" skips them.
+- The content is a `bg-card` card (`md:my-2 md:mr-1.5 md:rounded-surface`) with an arrow at the active rail tab (`SandboxPanelFrame` on the package `SidePanelTabs.Frame`, `.t-side-panel-arrow`). Panels inside stay transparent so the card shows through — no `bg-background` on a panel root. The arrow renders before the positioned card, so the card covers its inner half.
+- The card moves like a macOS dock window (package dock motion; `popOutSidePanel` closes it): it grows out of the active tab on open, shrinks back into it on close, and settles on a tab switch. The left sidebar panel uses the same motion on hide and show only, into the "Hide sidebar" tile (package `popOutShellPanel` / `popInShellPanelNextFrame`, with `AppShell` `variant="rail"`); app switches do not move it. The chat pane beside the card slides to its new width in step (`slideNextResize`); drags stay instant. Only "Disable page animations" skips them.
 - Desktop only: the phone tab strip keeps its own layout.
 
 **Radius**

@@ -58,16 +58,16 @@ type PollOutcome =
 
 /**
  * Polls until the user answers, the turn is cancelled (signal aborts), or
- * `waitMs` passes. On timeout `pendingQuestions:release` takes an answer that
- * just landed, else drops the row, in one mutation, so no answer is lost.
+ * `QUESTION_WAIT_MS` passes. On timeout `pendingQuestions:release` takes an
+ * answer that just landed, else drops the row, in one mutation, so no answer
+ * is lost.
  */
-export async function pollForAnswer(
+async function pollForAnswer(
   toolUseId: string,
   signal: AbortSignal,
-  waitMs: number = QUESTION_WAIT_MS,
 ): Promise<PollOutcome> {
   const args = { entityId: ENTITY_ID ?? "", toolUseId };
-  const deadline = Date.now() + waitMs;
+  const deadline = Date.now() + QUESTION_WAIT_MS;
   while (!signal.aborted) {
     const timedOut = Date.now() >= deadline;
     const result = await callConvexWithRetry(

@@ -224,21 +224,6 @@ function resetTurnState(): void {
   resetDaemonTurnStreamingState();
 }
 
-/**
- * Turn outcome → completion payload, using the same rules as the one-shot path
- * (index.ts): a result event decides success, a timeout demotes it, and a
- * failure without a result event reports the shared diagnostic error message.
- */
-export function buildTurnCompletion(attempt: ProviderAttemptResult): {
-  success: boolean;
-  error: string | null;
-} {
-  return resolveProviderAttemptOutcome(
-    attempt,
-    extractResultEvent(attempt.output),
-  );
-}
-
 /** Reports one finished turn to the chat workflow (mirrors the one-shot completion). */
 async function finalizeTurn(attempt: ProviderAttemptResult): Promise<void> {
   // Only flushStreaming parses buffered lines into accumulatedSteps, so the
@@ -246,7 +231,10 @@ async function finalizeTurn(attempt: ProviderAttemptResult): Promise<void> {
   // completion mutation persists it.
   await drainStreamingAndCompleteSteps();
   const resultEvent = extractResultEvent(attempt.output);
-  const { success, error } = buildTurnCompletion(attempt);
+  const { success, error } = resolveProviderAttemptOutcome(
+    attempt,
+    resultEvent,
+  );
   const completionArgs = buildTurnCompletionPayload({
     success,
     result: resultEvent?.result ?? S.rawOutput,

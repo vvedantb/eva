@@ -1134,7 +1134,7 @@ function getLeaseTerminalReason() {
   return terminalReason;
 }
 function isSameTurnLease(a, b) {
-  if (a === null || b === null) return a === b;
+  if (b === null) return false;
   return a.turnId === b.turnId && a.leaseGeneration === b.leaseGeneration;
 }
 function decideTurnLeaseExit(input) {
@@ -1174,7 +1174,7 @@ function noteHeartbeatResponse(response, sentUnder) {
   const current = getCurrentTurnLease();
   if (!isSameTurnLease(sentUnder, current)) {
     log(
-      "stale turn lease verdict ignored (" + reason + ") sentUnder=" + String(sentUnder?.turnId) + " current=" + String(current?.turnId)
+      "stale turn lease verdict ignored (" + reason + ") sentUnder=" + sentUnder.turnId + " current=" + String(current?.turnId)
     );
     return false;
   }
@@ -2303,8 +2303,7 @@ function tokenFromActionResponse(data) {
 }
 async function fetchInstallationToken(params) {
   try {
-    const fetchFn = params.fetchFn ?? fetchWithTimeout;
-    const response = await fetchFn(params.convexUrl + "/api/action", {
+    const response = await fetchWithTimeout(params.convexUrl + "/api/action", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -2323,9 +2322,9 @@ async function fetchInstallationToken(params) {
     return { token: null };
   }
 }
-function applyGithubTokenToEnv(env, token) {
-  env.GITHUB_TOKEN = token;
-  env.GH_TOKEN = token;
+function applyGithubTokenToEnv(token) {
+  process.env.GITHUB_TOKEN = token;
+  process.env.GH_TOKEN = token;
 }
 async function ensureGithubToken(params) {
   const convexUrl = params.convexUrl;
@@ -2337,11 +2336,10 @@ async function ensureGithubToken(params) {
   const result = await fetchInstallationToken({
     convexUrl,
     convexToken,
-    repoId,
-    fetchFn: params.fetchFn
+    repoId
   });
   if (result.token === null) return { refreshed: false };
-  applyGithubTokenToEnv(params.env ?? process.env, result.token);
+  applyGithubTokenToEnv(result.token);
   return { refreshed: true };
 }
 async function refreshDaemonGithubTokenFromEnv() {
@@ -3583,20 +3581,11 @@ function createSessionStore(config) {
       label + "(state)"
     );
   };
-  const resolveResumeId = () => {
-    const persisted = readSessionState();
-    if (!persisted) return null;
-    if (config.resumeField === "resumeThreadId") {
-      return persisted.resumeThreadId ?? null;
-    }
-    return persisted.resumeSessionId ?? null;
-  };
   return {
     readSessionState,
     writeSessionState,
     hydratePersistedState,
-    syncStateToPersist,
-    resolveResumeId
+    syncStateToPersist
   };
 }
 
@@ -3607,10 +3596,7 @@ var store = createSessionStore({
   localStateFile: CODEX_LOCAL_STATE_FILE,
   persistStateFile: CODEX_PERSIST_STATE_FILE,
   resumeField: "resumeThreadId",
-  getActiveId: () => callbackState.activeCodexThreadId,
-  setActiveId: (id) => {
-    callbackState.activeCodexThreadId = id;
-  }
+  getActiveId: () => callbackState.activeCodexThreadId
 });
 var readCodexSessionState = store.readSessionState;
 var writeCodexSessionState = store.writeSessionState;
@@ -3820,10 +3806,7 @@ var store2 = createSessionStore({
   localStateFile: CURSOR_LOCAL_STATE_FILE,
   persistStateFile: CURSOR_PERSIST_STATE_FILE,
   resumeField: "resumeSessionId",
-  getActiveId: () => callbackState.activeCursorSessionId,
-  setActiveId: (id) => {
-    callbackState.activeCursorSessionId = id;
-  }
+  getActiveId: () => callbackState.activeCursorSessionId
 });
 var readCursorSessionState = store2.readSessionState;
 var writeCursorSessionState = store2.writeSessionState;
@@ -4061,10 +4044,7 @@ var store3 = createSessionStore({
   localStateFile: OPENCODE_LOCAL_STATE_FILE,
   persistStateFile: OPENCODE_PERSIST_STATE_FILE,
   resumeField: "resumeSessionId",
-  getActiveId: () => callbackState.activeOpencodeSessionId,
-  setActiveId: (id) => {
-    callbackState.activeOpencodeSessionId = id;
-  }
+  getActiveId: () => callbackState.activeOpencodeSessionId
 });
 var readOpencodeSessionState = store3.readSessionState;
 var writeOpencodeSessionState = store3.writeSessionState;
@@ -4559,9 +4539,7 @@ function readGitState() {
 }
 var target = null;
 var lastReported = null;
-var pollInterval = null;
 var debounceTimer = null;
-var headWatcher = null;
 var checkInFlight = false;
 var recheckQueued = false;
 var started = false;
@@ -4615,7 +4593,7 @@ function scheduleCheck() {
 }
 function watchHeadIn(gitDir) {
   try {
-    headWatcher = watch(gitDir, (_event, filename) => {
+    const headWatcher = watch(gitDir, (_event, filename) => {
       if (filename !== "HEAD") return;
       scheduleCheck();
     });
@@ -4652,7 +4630,7 @@ function startBranchWatcher() {
   } else {
     log("branchWatcher: " + gitDir + " is not a directory; polling only");
   }
-  pollInterval = setInterval(() => {
+  const pollInterval = setInterval(() => {
     void runCheckLoop();
   }, POLL_INTERVAL_MS);
   pollInterval.unref();
@@ -5167,9 +5145,8 @@ function entityMutationArgs(fields) {
 }
 function claimDaemonPidfileBoot(params) {
   const currentPid = params.currentPid ?? process.pid;
-  const isRival = params.isRival ?? isCallbackRunnerPid;
   const rivalPid = readPidFromFile(params.paths.pid);
-  if (!Number.isNaN(rivalPid) && rivalPid !== currentPid && isRival(rivalPid)) {
+  if (!Number.isNaN(rivalPid) && rivalPid !== currentPid && isCallbackRunnerPid(rivalPid)) {
     return { status: "rival_alive", rivalPid };
   }
   writeFileSync7(params.paths.pid, String(currentPid));
@@ -5865,9 +5842,9 @@ async function postQuestion(toolUseId, payload) {
     payload
   });
 }
-async function pollForAnswer(toolUseId, signal, waitMs = QUESTION_WAIT_MS) {
+async function pollForAnswer(toolUseId, signal) {
   const args = { entityId: ENTITY_ID ?? "", toolUseId };
-  const deadline = Date.now() + waitMs;
+  const deadline = Date.now() + QUESTION_WAIT_MS;
   while (!signal.aborted) {
     const timedOut = Date.now() >= deadline;
     const result = await callConvexWithRetry(
@@ -9098,14 +9075,13 @@ function attributeCursorTurnRawCents(before, after) {
 var COST_LOOKUP_RETRY_DELAYS_MS = [2e3, 2e3];
 async function resolveCursorTurnCostUsd(deps) {
   if (!deps.before) return void 0;
-  const delays = deps.retryDelaysMs ?? COST_LOOKUP_RETRY_DELAYS_MS;
   for (let attempt = 0; ; attempt++) {
     const after = await deps.fetchAfter();
     const rawCents = after ? attributeCursorTurnRawCents(deps.before, after) : null;
     if (rawCents !== null) {
       return Math.round(rawCents / 100 * 1e6) / 1e6;
     }
-    const delayMs = delays[attempt];
+    const delayMs = COST_LOOKUP_RETRY_DELAYS_MS[attempt];
     if (delayMs === void 0) return void 0;
     await deps.sleep(delayMs);
   }
@@ -9629,16 +9605,13 @@ function spawnCursorTurnWorker(turn, promptFile) {
 function resetTurnState3() {
   resetDaemonTurnStreamingState();
 }
-function buildTurnCompletion(attempt) {
-  return resolveProviderAttemptOutcome(
-    attempt,
-    extractResultEvent(attempt.output)
-  );
-}
 async function finalizeTurn3(attempt) {
   await drainStreamingAndCompleteSteps();
   const resultEvent = extractResultEvent(attempt.output);
-  const { success, error } = buildTurnCompletion(attempt);
+  const { success, error } = resolveProviderAttemptOutcome(
+    attempt,
+    resultEvent
+  );
   const completionArgs = buildTurnCompletionPayload({
     success,
     result: resultEvent?.result ?? callbackState.rawOutput,

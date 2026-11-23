@@ -4,32 +4,32 @@
  * stage's `theme` prop only switches the kit's shadows and inks.
  */
 .landing-stage .ss-stage {
-  --ss-canvas: rgb(var(--background));
-  --ss-surface: rgb(var(--card));
-  --ss-chrome: rgb(var(--card));
-  --ss-well: rgb(var(--muted));
-  --ss-raised: rgb(var(--popover));
-  --ss-fill: rgb(var(--secondary));
-  --ss-line: rgb(var(--border));
-  --ss-line-faint: rgb(var(--border) / 0.6);
-  --ss-text-strong: rgb(var(--foreground));
-  --ss-text: rgb(var(--muted-foreground));
-  --ss-text-faint: rgb(var(--muted-foreground) / 0.75);
-  --ss-icon: rgb(var(--muted-foreground));
-  --ss-icon-faint: rgb(var(--muted-foreground) / 0.5);
-  --ss-accent: rgb(var(--primary));
-  --ss-accent-2: rgb(var(--chart-3));
-  --ss-accent-soft: rgb(var(--primary) / 0.1);
-  --ss-accent-text: rgb(var(--primary));
-  --ss-success: rgb(var(--success));
-  --ss-success-soft: rgb(var(--success) / 0.12);
-  --ss-success-text: rgb(var(--status-done));
-  --ss-warning: rgb(var(--warning));
-  --ss-warning-soft: rgb(var(--warning) / 0.14);
-  --ss-warning-text: rgb(var(--warning-strong));
-  --ss-danger: rgb(var(--destructive));
-  --ss-danger-soft: rgb(var(--destructive) / 0.1);
-  --ss-danger-text: rgb(var(--destructive-strong));
+  --ss-canvas: var(--background);
+  --ss-surface: var(--surface-card);
+  --ss-chrome: var(--surface-card);
+  --ss-well: var(--surface-secondary);
+  --ss-raised: var(--overlay);
+  --ss-fill: var(--default);
+  --ss-line: var(--border);
+  --ss-line-faint: color-mix(in oklch, var(--border) 60%, transparent);
+  --ss-text-strong: var(--foreground);
+  --ss-text: var(--muted);
+  --ss-text-faint: color-mix(in oklch, var(--muted) 75%, transparent);
+  --ss-icon: var(--muted);
+  --ss-icon-faint: color-mix(in oklch, var(--muted) 50%, transparent);
+  --ss-accent: var(--accent);
+  --ss-accent-2: var(--chart-3);
+  --ss-accent-soft: color-mix(in oklch, var(--accent) 10%, transparent);
+  --ss-accent-text: var(--accent);
+  --ss-success: var(--success);
+  --ss-success-soft: color-mix(in oklch, var(--success) 12%, transparent);
+  --ss-success-text: var(--status-done);
+  --ss-warning: var(--warning);
+  --ss-warning-soft: color-mix(in oklch, var(--warning) 14%, transparent);
+  --ss-warning-text: var(--warning-strong);
+  --ss-danger: var(--danger);
+  --ss-danger-soft: color-mix(in oklch, var(--danger) 10%, transparent);
+  --ss-danger-text: var(--destructive-strong);
   --ss-font: var(--font-sans);
   --ss-mono: var(--font-mono);
   --ss-radius-sm: min(var(--radius), 0.5rem);
@@ -45,7 +45,7 @@
 
 /* Dark depth comes from a lighter surface, not a shadow. */
 .landing-stage .ss-stage[data-theme="dark"] {
-  --ss-raised: rgb(var(--secondary));
+  --ss-raised: var(--default);
 }
 
 /* The loop seam: the scene fades out and back around a snap to `initial`. */

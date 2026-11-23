@@ -472,7 +472,8 @@ export function isEnvVarScope(s: string): s is EnvVarScope {
   return envVarScopes.some((scope) => scope === s);
 }
 
-const teamDetailTabs = [
+/** Team page tabs in their on-screen order (the tab content slides by it). */
+export const teamDetailTabs = [
   "activity",
   "members",
   "codebases",

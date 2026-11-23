@@ -56,7 +56,7 @@ function malformedPayloads(types: readonly string[]): JsonObject[] {
   return payloads;
 }
 
-test("claudeParseLine never throws and never invents events", () => {
+test("claudeParseLine never throws and ignores non-message frames", () => {
   resetStateForTests();
   const payloads = malformedPayloads([
     "assistant",
@@ -70,8 +70,9 @@ test("claudeParseLine never throws and never invents events", () => {
   for (const payload of payloads) {
     const events = claudeParseLine(payload);
     expect(Array.isArray(events)).toBe(true);
-    for (const event of events) {
-      expect(typeof event.kind).toBe("string");
+    // `result` and unknown frames carry no activity, whatever their fields.
+    if (payload.type === "result" || payload.type === "unknown_kind") {
+      expect(events).toEqual([]);
     }
   }
 });
@@ -345,7 +346,20 @@ test("claude todo tools fold malformed checklists best-effort", () => {
     { content: "renamed", status: "pending" },
   ]);
   // A malformed TodoWrite payload clears the checklist, as it always has.
-  expect(todos({ todos: "not an array" })).toEqual([]);
+  expect(
+    claudeParseLine({
+      type: "assistant",
+      message: {
+        content: [
+          {
+            type: "tool_use",
+            name: "TodoWrite",
+            input: { todos: "not an array" },
+          },
+        ],
+      },
+    }),
+  ).toEqual([{ kind: "set_todos", todos: [] }]);
 });
 
 test("codexParseLine never throws and ignores unknown frames", () => {
@@ -398,6 +412,7 @@ test("codex reasoning items route text on any lifecycle frame", () => {
     expect(
       codexParseLine({ type, item: { type: "reasoning", text: "   " } }),
     ).toEqual([]);
+    expect(codexParseLine({ type, item: { type: "reasoning" } })).toEqual([]);
   }
 });
 

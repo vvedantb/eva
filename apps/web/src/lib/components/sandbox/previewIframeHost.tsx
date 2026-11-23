@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { cn } from "@eva/ui";
-import { useWebPreview } from "@vvedantb/ui";
+import { DOCK_MOTION_EVENT, useWebPreview } from "@vvedantb/ui";
 import {
   armPreviewMiniPlayer,
   disarmPreviewMiniPlayer,
@@ -17,7 +17,6 @@ import {
   resolveMiniPlayerLogicalSize,
 } from "./previewContain";
 import { setPreviewDocumentLoading } from "./previewDocumentLoading";
-import { DOCK_MOTION_EVENT } from "@/lib/dockMotion";
 
 /**
  * Global preview-iframe keep-alive.
@@ -153,7 +152,7 @@ function getPreviewGesture(): PreviewGesture | null {
 const movingPanels = new Map<Element, number>();
 
 function onDockMotion(event: Event): void {
-  // Duck-typed, not `instanceof`: a hot-reloaded `dockMotion` module is a
+  // Duck-typed, not `instanceof`: a hot-reloaded dock motion module is a
   // second class, and the event must still land.
   if (!("ms" in event) || typeof event.ms !== "number") return;
   const panel = event.target;
