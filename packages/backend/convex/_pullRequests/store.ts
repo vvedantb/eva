@@ -264,6 +264,7 @@ export async function recordPullRequest(
       headBranch: args.headBranch ?? existing.headBranch,
       baseBranch: args.baseBranch ?? existing.baseBranch,
       title: args.title ?? existing.title,
+      ...mergedAtPatch(existing.state, args.state, now),
       // A merged or closed PR has nothing left to watch.
       ...(isLivePrState(args.state) ? {} : { watch: undefined }),
       updatedAt: now,
@@ -277,6 +278,7 @@ export async function recordPullRequest(
       baseBranch: args.baseBranch,
       title: args.title,
       state: args.state,
+      ...mergedAtPatch(undefined, args.state, now),
       primary,
       origin: args.origin,
       owner: args.owner,
@@ -300,8 +302,10 @@ export async function setPullRequestState(
     baseBranch?: string;
   },
 ): Promise<void> {
+  const now = Date.now();
   await ctx.db.patch(row._id, {
     state: patch.state,
+    ...mergedAtPatch(row.state, patch.state, now),
     ...(patch.stateOnArchive !== undefined
       ? { stateOnArchive: patch.stateOnArchive ?? undefined }
       : {}),
@@ -310,9 +314,23 @@ export async function setPullRequestState(
     ...(patch.baseBranch !== undefined ? { baseBranch: patch.baseBranch } : {}),
     // A merged or closed PR has nothing left to watch.
     ...(isLivePrState(patch.state) ? {} : { watch: undefined }),
-    updatedAt: Date.now(),
+    updatedAt: now,
   });
   await syncOwnerPrSummary(ctx, ownerRef(row.owner));
+}
+
+/**
+ * `mergedAt` follows the state: stamped on the move into merged, cleared on
+ * the move out (a reopen), untouched otherwise. `updatedAt` cannot stand in,
+ * as title and branch webhooks bump it too.
+ */
+function mergedAtPatch(
+  previous: PrState | undefined,
+  next: PrState,
+  now: number,
+): { mergedAt?: number } {
+  if (next === "merged") return previous === "merged" ? {} : { mergedAt: now };
+  return previous === "merged" ? { mergedAt: undefined } : {};
 }
 
 /**

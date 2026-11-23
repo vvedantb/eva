@@ -174,7 +174,15 @@ export {
   type ChatSourceKind,
   type ChatSourceLabelFields,
 } from "./chatSourceLabel";
-export { standupEntryHeading, standupEntryTime } from "./standup";
+export {
+  needsMeLabel,
+  standupEntryHeading,
+  standupEntryTime,
+  TODAY_UPDATE_TITLE,
+  todayMergedSince,
+  todaySections,
+  type TodaySectionId,
+} from "./today";
 export {
   QUICK_TASK_FILTER_DEFAULTS,
   QUICK_TASK_LIST_DEFAULTS,

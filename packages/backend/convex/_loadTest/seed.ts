@@ -424,6 +424,7 @@ async function insertTaskWithChildren(
       prUrl: `https://github.com/loadtest/focal-repo/pull/t${i}-${projectId ?? "q"}`,
       prNumber: 100000 + i,
       state: "merged",
+      mergedAt: createdAt + DAY,
       primary: true,
       origin: "eva",
       owner: { kind: "task", taskId },

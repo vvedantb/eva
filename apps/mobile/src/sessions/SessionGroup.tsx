@@ -374,7 +374,7 @@ export function SessionListRow({
 }
 
 /** The web `SessionPrIcon`: a pull-request icon in the PR state's tone, at 14 to sit with the 14 title. */
-function PrIcon({ state, scheme }: { state: PrState | undefined; scheme: Scheme }) {
+export function PrIcon({ state, scheme }: { state: PrState | undefined; scheme: Scheme }) {
   return (
     <IconGitPullRequest
       size={14}

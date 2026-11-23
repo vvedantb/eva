@@ -524,6 +524,8 @@ export const pullRequestFields = {
   owner: prOwnerValidator,
   /** Set while the owner's agent watches this PR. Cleared once it is terminal. */
   watch: v.optional(prWatchValidator),
+  /** When Eva saw the PR merge. Set and cleared with `state` (`setPullRequestState`). */
+  mergedAt: v.optional(v.number()),
   createdAt: v.number(),
   updatedAt: v.number(),
 };
@@ -1625,8 +1627,8 @@ export const chatReadFields = {
   lastVisitedAt: v.optional(v.number()),
 };
 
-// One row per (user, repo): when the user last opened the repo's Today page,
-// so a standup published after that shows as unread to them alone.
+// Retired: Today no longer tracks reads. Kept only until
+// `dataMigrations:drainStandupReads` empties it in prod, then dropped.
 export const standupReadFields = {
   userId: v.id("users"),
   repoId: v.id("githubRepos"),

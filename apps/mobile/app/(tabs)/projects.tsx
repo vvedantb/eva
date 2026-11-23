@@ -8,7 +8,7 @@ import { useSharedValue } from "react-native-reanimated";
 import { DocsSection } from "@/docs/DocsSection";
 import { AutomationsSection } from "@/automations/AutomationsSection";
 import { ProjectsSection, useProjectRepo } from "@/projects/ProjectsSection";
-import { TodaySection, useMarkStandupsRead, useShowsToday } from "@/today/TodaySection";
+import { TodaySection } from "@/today/TodaySection";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme } from "@/ui/theme";
 import { lastTabSection, sectionIndex } from "@/ui/sectionIndex";
@@ -22,27 +22,20 @@ const SECTIONS: ReadonlyArray<{ id: Section; label: string }> = [
   { id: "today", label: "Today" },
 ];
 
-/** The section pills shown: Today only while the standup is on or has history (outside the screen, see `sectionIndex`). */
-function visibleSections(showsToday: boolean) {
-  return showsToday ? SECTIONS : SECTIONS.filter((option) => option.id !== "today");
-}
-
 /**
  * The Projects tab holds the web's per-repo pages that are not a place to
  * chat: Projects (`ProjectsClient`), Documents (the drawer's Documents
  * panel), Automations (the web Automations sidebar) and Today, switched by pills under the title (`?section=`)
  * or a sideways swipe on the content (`Pager`), as the Sessions tab. All
- * of them share the repo (`?repo=`). Today shows while the repo's Daily
- * standup is on, as the web sidebar, or has history (`useShowsToday`). The
- * title follows the section; only Projects has the "+" (the web "New
+ * of them share the repo (`?repo=`). Today is the user's dashboard for
+ * the repo, always shown, as the web sidebar. The title follows the section; only Projects has the "+" (the web "New
  * Project").
  */
 export default function ProjectsScreen() {
   const router = useRouter();
   const { section: sectionParam } = useLocalSearchParams<{ section?: string }>();
-  const { repo, openNew } = useProjectRepo();
-  const showsToday = useShowsToday(repo?._id);
-  const sections = visibleSections(showsToday);
+  const { openNew } = useProjectRepo();
+  const sections = SECTIONS;
   const lastSection = lastTabSection.useValue("projects");
   const index = sectionIndex(sections, sectionParam ?? lastSection ?? undefined);
   const showSection = (next: string | undefined) => {
@@ -50,7 +43,6 @@ export default function ProjectsScreen() {
     router.setParams({ section: next });
   };
   const section = sections[index] ?? { id: "projects", label: "Projects" };
-  useMarkStandupsRead(section.id === "today");
   // Where the pages are, shared by the pager and the pill indicator.
   const progress = useSharedValue(index);
   const foreground = EVA_THEME[useScheme()].foreground;

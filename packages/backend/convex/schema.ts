@@ -147,6 +147,8 @@ const schema = defineSchema({
     .index("by_task", ["owner.taskId"])
     .index("by_project", ["owner.projectId"])
     .index("by_repo_and_head_branch", ["repoId", "headBranch"])
+    // Today's Merged section: a repo's merges since a cut-off.
+    .index("by_repo_and_merged_at", ["repoId", "mergedAt"])
     // Watched PRs on a base branch: a push there may cause a merge conflict.
     .index("by_repo_base_and_watch", [
       "repoId",

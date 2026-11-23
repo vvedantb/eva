@@ -1,153 +1,186 @@
-import { api, type Id } from "@eva/backend";
-import { standupEntryHeading, standupEntryTime } from "@eva/shared";
+import { api, type Id, type TodayItem } from "@eva/backend";
+import {
+  standupEntryHeading,
+  standupEntryTime,
+  TODAY_UPDATE_TITLE,
+  todayMergedSince,
+  todaySections,
+  type TodaySectionId,
+} from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconSunrise } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
 import { Markdown } from "@vvedantb/native-ui/markdown";
-import { EmptyState, SkeletonList, SkeletonRow } from "@vvedantb/native-ui/primitives";
+import { EmptyState, SectionLabel, SkeletonList, SkeletonRow } from "@vvedantb/native-ui/primitives";
 import { useLargerText } from "@vvedantb/native-ui/theme";
-import { useMutation, useQuery } from "convex/react";
-import { useEffect } from "react";
-import { FlatList, Text, View } from "react-native";
+import { useQuery } from "convex/react";
+import { useRouter } from "expo-router";
+import { Pressable, SectionList, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useProjectRepo } from "@/projects/ProjectsSection";
+import { PrIcon } from "@/sessions/SessionGroup";
 import { RepoSection } from "@/ui/RepoPicker";
+import { AwaitingAnswerMark, WorkingMark } from "@/ui/RowStatus";
+import { TimeAgo } from "@/ui/TimeAgo";
 import { copyText } from "@/ui/copyText";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
-import { LIST_WINDOW } from "@/ui/listWindow";
-
-/** The rail's left inset and the dot on it: the web `pl-6`, `size-2`, `ring-4`. */
-const RAIL_INSET = 24;
-const DOT = 8;
-const RING = 4;
 
 /**
- * Whether the Projects tab shows Today for a repo: while its Daily standup
- * automation is on, as the web sidebar, or while it has standups. The web
- * keeps a paused standup's page reachable by URL; a phone has no URL bar,
- * so the history keeps the section.
- */
-export function useShowsToday(repoId: Id<"githubRepos"> | undefined) {
-  const status = useQuery(api.today.standupStatus, repoId ? { repoId } : "skip");
-  const entries = useQuery(api.today.listStandups, repoId ? { repoId } : "skip");
-  return status?.enabled === true || (entries?.length ?? 0) > 0;
-}
-
-/**
- * Opening the Today section reads every standup so far, as opening the web
- * Today page, so the web sidebar dot and composer card clear too. An effect,
- * as the section also opens from `?section=` or the last-used pill, not only
- * a tap, and a standup that lands while Today is open is read on arrival.
- * The pager keeps every section mounted, so it waits for `active`. The repo
- * comes from `useProjectRepo`, as the web page reads it from `useRepo`, so
- * the effect is not driven by a `repoId` argument. It only writes while one
- * is unread.
- */
-export function useMarkStandupsRead(active: boolean) {
-  const { repo } = useProjectRepo();
-  const repoId = repo?._id;
-  const status = useQuery(api.today.standupStatus, repoId && active ? { repoId } : "skip");
-  const markRead = useMutation(api.today.markStandupsRead);
-  const unreadAt = status?.unreadAt ?? null;
-  useEffect(() => {
-    if (!repoId || unreadAt === null) return;
-    void markRead({ repoId });
-  }, [repoId, unreadAt, markRead]);
-}
-
-/**
- * The web Today page (`TodayClient`) for one repo: every published Daily
- * standup as a timeline, a rail down the left with a dot per entry (the
- * newest in the primary colour), each a card with its day and publish time
- * over the summary, its headings as quiet labels (`headings="label"`).
- * Not here from the web: the "Daily standup is off" state and its "Turn on
- * Daily standup" button, as the section only shows while the standup is on
- * or has history.
+ * The web Today page (`TodayClient`) for one repo: the signed-in user's
+ * Needs you, In progress and Merged items (shared `todaySections`, empty
+ * ones hidden), then the latest Daily standup as an Update card while the
+ * standup is on. A row opens its session, quick task or project.
  */
 export function TodaySection() {
   return (
-    <RepoSection icon={IconSunrise} placeholder={<StandupPlaceholders />}>
-      {(repo) => <StandupList repoId={repo._id} />}
+    <RepoSection icon={IconSunrise} placeholder={<TodayPlaceholders />}>
+      {(repo) => <TodayList repoId={repo._id} />}
     </RepoSection>
   );
 }
 
-function StandupList({ repoId }: { repoId: Id<"githubRepos"> }) {
-  const entries = useQuery(api.today.listStandups, { repoId });
+function TodayList({ repoId }: { repoId: Id<"githubRepos"> }) {
+  const dashboard = useQuery(api.today.dashboard, {
+    repoId,
+    mergedSince: todayMergedSince(Date.now()),
+  });
   const theme = EVA_THEME[useScheme()];
   const largerText = useLargerText();
   const insets = useSafeAreaInsets();
-  if (entries === undefined) return <StandupPlaceholders />;
-  if (entries.length === 0) {
-    return (
-      <EmptyState
-        icon={IconSunrise}
-        title="No standups yet"
-        description="The Daily standup automation is on — its first summary will show up here after the next scheduled run."
-      />
-    );
+  if (dashboard === undefined) return <TodayPlaceholders />;
+  const sections = dashboard
+    ? todaySections(dashboard).map((section) => ({ ...section, data: section.items }))
+    : [];
+  const standup = dashboard?.standup ?? null;
+  if (sections.length === 0 && standup === null) {
+    return <EmptyState icon={IconSunrise} title="Nothing needs you" />;
   }
   return (
-    <FlatList
-      {...LIST_WINDOW}
-      data={entries}
-      keyExtractor={(entry) => entry.id}
-      renderItem={({ item: entry, index }) => (
-        // The rail is a left border on every item with no gap between them, so it runs unbroken; the 16 between cards is padding.
-        <View style={{ borderLeftWidth: 1, borderLeftColor: theme.border, paddingLeft: RAIL_INSET, paddingBottom: 16 }}>
-          <View
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-            style={{
-              position: "absolute",
-              left: -(DOT / 2 + RING) - 0.5,
-              top: 16 - RING,
-              width: DOT + RING * 2,
-              height: DOT + RING * 2,
-              borderRadius: DOT,
-              borderWidth: RING,
-              borderColor: theme.background,
-              backgroundColor: index === 0 ? theme.primary : theme.border,
-            }}
-          />
-          <View className="rounded-lg" style={{ backgroundColor: theme.card }}>
-            <View className="flex-row items-center justify-between gap-2 px-4 py-3" style={{ borderBottomWidth: 1, borderBottomColor: theme.border }}>
-              <Text accessibilityRole="header" className="font-instrument-sans-semibold text-sm" style={{ fontWeight: "600", color: theme.foreground }}>
-                {standupEntryHeading(entry.publishedAt)}
-              </Text>
-              <Text
-                className="font-instrument-sans text-xs"
-                style={{ color: theme.mutedForeground, letterSpacing: XS_TRACKING, fontVariant: ["tabular-nums"] }}
-              >
-                {standupEntryTime(entry.publishedAt)}
-              </Text>
-            </View>
-            <View className="px-4 py-3">
-              <Markdown leading="normal" headings="label" onCopyCode={copyText} onCopyTable={copyText}>
-                {entry.content}
-              </Markdown>
+    <SectionList
+      sections={sections}
+      keyExtractor={(item) => item.id}
+      stickySectionHeadersEnabled={false}
+      renderSectionHeader={({ section }) => <SectionTitle title={section.title} />}
+      renderItem={({ item, section, index }) => (
+        <TodayRow
+          item={item}
+          repoId={repoId}
+          sectionId={section.id}
+          first={index === 0}
+          last={index === section.data.length - 1}
+        />
+      )}
+      ListFooterComponent={
+        standup ? (
+          <View>
+            <SectionTitle title={TODAY_UPDATE_TITLE} />
+            <View className="rounded-lg" style={{ backgroundColor: theme.card }}>
+              <View className="flex-row items-center justify-between gap-2 px-4 pt-3">
+                <Text accessibilityRole="header" className="font-instrument-sans-semibold text-sm" style={{ fontWeight: "600", color: theme.foreground }}>
+                  {standupEntryHeading(standup.publishedAt)}
+                </Text>
+                <Text
+                  className="font-instrument-sans text-xs"
+                  style={{ color: theme.mutedForeground, letterSpacing: XS_TRACKING, fontVariant: ["tabular-nums"] }}
+                >
+                  {standupEntryTime(standup.publishedAt)}
+                </Text>
+              </View>
+              <View className="px-4 pb-3">
+                <Markdown leading="normal" headings="label" onCopyCode={copyText} onCopyTable={copyText}>
+                  {standup.content}
+                </Markdown>
+              </View>
             </View>
           </View>
-        </View>
-      )}
-      // The web list `pl-6` rail sits 16 in from the page edge, as the web `comfortable` page padding.
-      contentContainerStyle={{ paddingLeft: 20, paddingRight: 16, paddingTop: 8, paddingBottom: tabBarReserve(largerText, insets.bottom) }}
+        ) : null
+      }
+      contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: tabBarReserve(largerText, insets.bottom) }}
     />
   );
 }
 
-/** While the standups load: cards shaped as an entry, 16 apart, on the rail's inset. */
-function StandupPlaceholders() {
+/** The web section title: the quiet uppercase label, 24 above, 8 below. */
+function SectionTitle({ title }: { title: string }) {
+  return (
+    <SectionLabel uppercase className="mb-1 mt-6 px-1">
+      {title}
+    </SectionLabel>
+  );
+}
+
+/**
+ * One item on its section's card (rounded only on the card's ends): the
+ * Sessions row's leading mark (the "?" in Needs you, else the working grid,
+ * else the PR icon), the title, then when it last moved.
+ */
+function TodayRow({
+  item,
+  repoId,
+  sectionId,
+  first,
+  last,
+}: {
+  item: TodayItem;
+  repoId: Id<"githubRepos">;
+  sectionId: TodaySectionId;
+  first: boolean;
+  last: boolean;
+}) {
+  const router = useRouter();
+  const scheme = useScheme();
+  const theme = EVA_THEME[scheme];
+  const open = () => {
+    if (item.kind === "session") router.push({ pathname: "/chat/[target]", params: { target: item.id } });
+    else if (item.kind === "task") router.push({ pathname: "/quick-task/[taskId]", params: { taskId: item.id, repo: repoId } });
+    else router.push({ pathname: "/project/[projectId]", params: { projectId: item.id, repo: repoId } });
+  };
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={item.title}
+      onPress={open}
+      className="min-h-14 flex-row items-center gap-3 px-4 active:opacity-70"
+      style={{
+        backgroundColor: theme.card,
+        borderTopLeftRadius: first ? 8 : 0,
+        borderTopRightRadius: first ? 8 : 0,
+        borderBottomLeftRadius: last ? 8 : 0,
+        borderBottomRightRadius: last ? 8 : 0,
+      }}
+    >
+      <View className="w-[18px] items-center">
+        {sectionId === "needsMe" ? (
+          <AwaitingAnswerMark />
+        ) : item.working ? (
+          <WorkingMark />
+        ) : (
+          <PrIcon state={item.prState} scheme={scheme} />
+        )}
+      </View>
+      <Text numberOfLines={1} className="font-instrument-sans flex-1 text-sm" style={{ color: theme.foreground }}>
+        {item.title}
+      </Text>
+      <TimeAgo
+        at={item.at}
+        className="font-instrument-sans text-xs"
+        style={{ color: theme.mutedForeground, letterSpacing: XS_TRACKING, fontVariant: ["tabular-nums"] }}
+      />
+    </Pressable>
+  );
+}
+
+/** While Today loads: one card of rows. */
+function TodayPlaceholders() {
   const card = EVA_THEME[useScheme()].card;
   return (
     <SkeletonList
-      label="Loading standups"
-      count={3}
+      label="Loading Today"
+      count={1}
       divided={false}
-      className="pl-11 pr-4"
+      className="px-4 pt-14"
       renderRow={(row) => (
-        <View className="mb-4 rounded-lg" style={{ backgroundColor: card }}>
-          <SkeletonRow index={row} lines={2} trailing={false} minHeight={160} className="px-4" />
+        <View className="rounded-lg" style={{ backgroundColor: card }}>
+          <SkeletonRow index={row} lines={1} trailing={false} minHeight={168} className="px-4" />
         </View>
       )}
     />

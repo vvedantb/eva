@@ -38,7 +38,7 @@ type TopNavItem = {
 /**
  * Per-repo workspace shortcuts above the build-pipeline nav. These sit outside
  * the Ship/Test/More groups because they are not pipeline stages: Today is
- * what already happened. Inbox lives on the left icon rail instead, being
+ * what needs me and what moved. Inbox lives on the left icon rail instead, being
  * global rather than per-repo. Unsent drafts show as marks on their own rows
  * (quick tasks in To Do, a pencil on session rows, a pill on task cards).
  */
@@ -49,26 +49,21 @@ export function RepoTopNav({
   repo,
   onNavigate,
 }: RepoTopNavProps) {
-  // Today only exists while the "Daily standup" system automation is on, so
-  // the entry appears with the install and disappears with the uninstall.
-  // A dot marks a standup the user has not opened yet.
-  const standup = useQuery(
-    api.today.standupStatus,
+  // Today is every repo's personal dashboard. The dot marks an item of
+  // mine whose agent waits on my answer, so it clears when I answer.
+  const needsMe = useQuery(
+    api.today.needsMeCount,
     repo ? { repoId: repo._id } : "skip",
   );
 
-  const items: TopNavItem[] =
-    standup?.enabled === true
-      ? [
-          {
-            name: "Today",
-            href: `${repoBasePath}/today`,
-            icon: IconSunrise,
-            unread: standup.unreadAt !== null,
-          },
-        ]
-      : [];
-  if (items.length === 0) return null;
+  const items: TopNavItem[] = [
+    {
+      name: "Today",
+      href: `${repoBasePath}/today`,
+      icon: IconSunrise,
+      unread: (needsMe ?? 0) > 0,
+    },
+  ];
 
   return (
     <SharedLayoutNav layoutId="repo-top-nav" className="space-y-1">

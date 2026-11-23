@@ -354,3 +354,19 @@ export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionChatBackgroundAgents,
   internal.dataMigrations.pruneSessionBackgroundAgents,
 ]);
+
+/**
+ * Deletes every standupReads row. Today no longer tracks reads, so the table
+ * leaves the schema once this has run in prod.
+ * `npx convex run --prod dataMigrations:runDrainStandupReads`
+ */
+export const drainStandupReads = dataMigrations.define({
+  table: "standupReads",
+  migrateOne: async (ctx, row) => {
+    await ctx.db.delete(row._id);
+  },
+});
+
+export const runDrainStandupReads = dataMigrations.runner([
+  internal.dataMigrations.drainStandupReads,
+]);

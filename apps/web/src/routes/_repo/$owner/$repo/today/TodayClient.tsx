@@ -1,30 +1,42 @@
 "use client";
 
-import { useEffect } from "react";
+import { Link } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { useMutation } from "convex/react";
-import { api, DAILY_STANDUP_KEY } from "@eva/backend";
+import type { FunctionReturnType } from "convex/server";
+import { api, type TodayItem } from "@eva/backend";
 import { cn } from "@eva/ui";
-import { standupEntryHeading, standupEntryTime } from "@eva/shared";
+import {
+  entityHref,
+  prStateLabel,
+  standupEntryHeading,
+  standupEntryTime,
+  TODAY_UPDATE_TITLE,
+  todayMergedSince,
+  todaySections,
+} from "@eva/shared";
 import {
   CenteredSpinner,
-  tokenTransition,
-  staggerDelay,
-  Markdown,
   EmptyState,
-  Button,
+  LoadingState,
+  Markdown,
+  RelativeDateTime,
+  staggerDelay,
+  tokenTransition,
 } from "@vvedantb/ui";
 import { m } from "motion/react";
-import { IconSunrise, IconPlus } from "@tabler/icons-react";
+import { IconGitPullRequest, IconSunrise } from "@tabler/icons-react";
 import dayjs from "dayjs";
 import { PageWrapper } from "@/lib/components/PageWrapper";
+import { AwaitingAnswerMark } from "@/lib/components/ui/AwaitingAnswerMark";
+import { prStateIconClass } from "@/lib/components/prStateIconClass";
+import { SESSIONS_LEADING_SLOT } from "@/lib/components/sidebar/_utils/sessionsSidebarLayout";
 import { useRepo } from "@/lib/contexts/RepoContext";
-import { withMutationToast } from "@/lib/utils/mutationToast";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 
 /**
  * A standup is a lead line plus a couple of `###` theme headings, so the
  * default heading scale swamps the bullets it labels. Demote headings to a
- * quiet section label and tighten list spacing to keep each card skimmable.
+ * quiet section label and tighten list spacing to keep the card skimmable.
  */
 const standupProseClass =
   "text-sm " +
@@ -37,113 +49,160 @@ const standupProseClass =
   "[&_h1]:mb-1.5 [&_h2]:mb-1.5 [&_h3]:mb-1.5 [&_h4]:mb-1.5 " +
   "[&_ul]:my-0 [&_li]:my-0.5 [&_p]:my-1.5";
 
+/** Section title: the quiet uppercase label the standup headings use. */
+const sectionTitleClass =
+  "mb-2 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground";
+
 /**
- * Every published run of this app's "Daily standup" system automation as a
- * changelog-style timeline. The sidebar tab only shows while the automation is
- * enabled, but the page stays reachable by URL so history is never lost.
+ * The signed-in user's live dashboard for this repo (`today.dashboard`):
+ * Needs you, In progress and Merged (shared `todaySections`, empty ones
+ * hidden), then the latest Daily standup as an Update while the standup is on.
  */
 export function TodayClient() {
   const { repoId } = useRepo();
-  const entries = useQuery(api.today.listStandups, { repoId });
-  const status = useQuery(api.today.standupStatus, { repoId });
-  const enabled = status?.enabled;
-  const unreadAt = status?.unreadAt ?? null;
-  const install = useMutation(api.automations.installSystemAutomation);
-  const markRead = useMutation(api.today.markStandupsRead);
-
-  // Opening Today reads every standup so far. An effect, not a click handler,
-  // because the page is also reached by URL, and a standup that lands while
-  // the page is open is read on arrival. It only writes while one is unread.
-  useEffect(() => {
-    if (unreadAt === null) return;
-    void markRead({ repoId });
-  }, [unreadAt, repoId, markRead]);
+  const dashboard = useQuery(api.today.dashboard, {
+    repoId,
+    mergedSince: todayMergedSince(Date.now()),
+  });
 
   return (
     <PageWrapper title="Today" comfortable>
-      {entries === undefined ? (
-        <CenteredSpinner label="Loading standups" />
-      ) : entries.length === 0 ? (
-        enabled === false ? (
-          <EmptyState.Root>
-            <EmptyState.Icon icon={IconSunrise} size={24} />
-            <EmptyState.Title>Daily standup is off</EmptyState.Title>
-            <EmptyState.Description>
-              Turn on the Daily standup automation and eva will post a short
-              summary of what shipped here every morning.
-            </EmptyState.Description>
-            <EmptyState.Actions>
-              <Button
-                size="sm"
-                onClick={() => {
-                  void withMutationToast(
-                    install({ repoId, key: DAILY_STANDUP_KEY }),
-                    "Daily standup switched on",
-                    "Couldn't switch on Daily standup",
-                    "daily-standup-install",
-                  );
-                }}
-                className="mt-6"
-              >
-                <IconPlus size={16} />
-                Turn on Daily standup
-              </Button>
-            </EmptyState.Actions>
-          </EmptyState.Root>
-        ) : (
-          <EmptyState.Root>
-            <EmptyState.Icon icon={IconSunrise} size={24} />
-            <EmptyState.Title>No standups yet</EmptyState.Title>
-            <EmptyState.Description>
-              The Daily standup automation is on — its first summary will show
-              up here after the next scheduled run.
-            </EmptyState.Description>
-          </EmptyState.Root>
-        )
+      {dashboard === undefined ? (
+        <CenteredSpinner label="Loading Today" />
       ) : (
-        // The rail is drawn on the list, not per entry, so it runs unbroken
-        // between cards instead of restarting at each one.
-        <ol className="relative space-y-4 border-l border-border pl-6 sm:pl-8">
-          {entries.map((entry, index) => (
-            <m.li
-              key={entry.id}
-              className="relative"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{
-                ...tokenTransition.base,
-                delay: staggerDelay(index),
-              }}
-            >
-              <span
-                className={cn(
-                  "absolute -left-6 top-4 size-2 rounded-full ring-4 ring-background sm:-left-8",
-                  index === 0 ? "bg-primary" : "bg-border",
-                )}
-                aria-hidden
-              />
-              <article className="rounded-surface bg-card">
-                <header className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
-                  <h2 className="text-sm font-semibold">
-                    {standupEntryHeading(entry.publishedAt)}
-                  </h2>
-                  <time
-                    dateTime={dayjs(entry.publishedAt).toISOString()}
-                    className="shrink-0 text-2xs tabular-nums text-muted-foreground"
-                  >
-                    {standupEntryTime(entry.publishedAt)}
-                  </time>
-                </header>
-                <div className="px-4 py-3">
-                  <Markdown className={standupProseClass}>
-                    {entry.content}
-                  </Markdown>
-                </div>
-              </article>
-            </m.li>
-          ))}
-        </ol>
+        <TodayBody dashboard={dashboard} />
       )}
     </PageWrapper>
+  );
+}
+
+function TodayBody({
+  dashboard,
+}: {
+  dashboard: FunctionReturnType<typeof api.today.dashboard>;
+}) {
+  const sections = dashboard ? todaySections(dashboard) : [];
+  const standup = dashboard?.standup ?? null;
+  if (sections.length === 0 && standup === null) {
+    return (
+      <EmptyState.Root>
+        <EmptyState.Icon icon={IconSunrise} size={24} />
+        <EmptyState.Title>Nothing needs you</EmptyState.Title>
+      </EmptyState.Root>
+    );
+  }
+  return (
+    <div className="space-y-8">
+      {sections.map((section, index) => (
+        <m.section
+          key={section.id}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...tokenTransition.base, delay: staggerDelay(index) }}
+        >
+          <h2 className={sectionTitleClass}>{section.title}</h2>
+          <ul className="rounded-surface bg-card p-1">
+            {section.items.map((item) => (
+              <TodayRow
+                key={item.id}
+                item={item}
+                awaitingAnswer={section.id === "needsMe"}
+              />
+            ))}
+          </ul>
+        </m.section>
+      ))}
+      {standup ? (
+        <m.section
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{
+            ...tokenTransition.base,
+            delay: staggerDelay(sections.length),
+          }}
+        >
+          <h2 className={sectionTitleClass}>{TODAY_UPDATE_TITLE}</h2>
+          <article className="rounded-surface bg-card">
+            <header className="flex items-center justify-between gap-2 px-4 pt-3">
+              <h3 className="text-sm font-semibold">
+                {standupEntryHeading(standup.publishedAt)}
+              </h3>
+              <time
+                dateTime={dayjs(standup.publishedAt).toISOString()}
+                className="shrink-0 text-2xs tabular-nums text-muted-foreground"
+              >
+                {standupEntryTime(standup.publishedAt)}
+              </time>
+            </header>
+            <div className="px-4 pb-3">
+              <Markdown className={standupProseClass}>{standup.content}</Markdown>
+            </div>
+          </article>
+        </m.section>
+      ) : null}
+    </div>
+  );
+}
+
+/** One item: the sidebar's leading mark, the title, then when it last moved. */
+function TodayRow({
+  item,
+  awaitingAnswer,
+}: {
+  item: TodayItem;
+  awaitingAnswer: boolean;
+}) {
+  const { repo } = useRepo();
+  return (
+    <li>
+      <Link
+        to={toInternalRepoHref(entityHref(item.kind, repo, item.numId))}
+        className="motion-press flex items-center gap-2 rounded-[calc(var(--radius)-4px)] px-3 py-2 text-sm hover:bg-accent-soft active:scale-[0.99]"
+      >
+        <TodayLeading item={item} awaitingAnswer={awaitingAnswer} />
+        <span className="min-w-0 flex-1 truncate">{item.title}</span>
+        <RelativeDateTime
+          at={item.at}
+          className="shrink-0 text-2xs tabular-nums text-muted-foreground"
+        />
+      </Link>
+    </li>
+  );
+}
+
+/**
+ * The sidebar `SessionStatusLeading` order: the "?" mark while Eva waits on
+ * the user, the working grid while a turn runs, else the PR icon in its
+ * state colour. Every Today item has one of the three.
+ */
+function TodayLeading({
+  item,
+  awaitingAnswer,
+}: {
+  item: TodayItem;
+  awaitingAnswer: boolean;
+}) {
+  if (awaitingAnswer) {
+    return (
+      <span className={SESSIONS_LEADING_SLOT} title="Waiting for your answer">
+        <AwaitingAnswerMark />
+      </span>
+    );
+  }
+  if (item.working) {
+    return (
+      <span className={SESSIONS_LEADING_SLOT} title="Working">
+        <LoadingState label="Working" variant="Drive" size="sm" iconOnly />
+      </span>
+    );
+  }
+  return (
+    <span className={SESSIONS_LEADING_SLOT}>
+      <IconGitPullRequest
+        size={14}
+        className={cn("shrink-0", prStateIconClass(item.prState))}
+        title={`PR: ${prStateLabel(item.prState)}`}
+      />
+    </span>
   );
 }
