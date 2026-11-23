@@ -158,7 +158,7 @@
 
 .sd .sd-continue[data-on] {
   background: var(--ss-accent);
-  color: rgb(var(--primary-foreground));
+  color: var(--accent-foreground);
 }
 
 /* Terminal: one output pane, mono */

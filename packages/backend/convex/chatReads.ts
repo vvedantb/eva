@@ -4,6 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { assertMessageParentAccess, authMutation, authQuery } from "./functions";
 import { chatTurnEntityIdValidator } from "./validators";
 import { chatOwnerEntityId } from "./_sessions/owner";
+import { expireRecap, maybeStartRecap } from "./chatRecaps";
 
 type ChatEntityId =
   | Id<"sessionChats">
@@ -176,6 +177,9 @@ export const isUnread = authQuery({
   },
 });
 
+/** `lastVisitedAt` moves at most this often; recaps need minutes, not seconds. */
+const VISIT_WRITE_INTERVAL_MS = 60_000;
+
 /** Upserts the user's read row for one chat entity, skipping repeat calls past its watermark. */
 async function upsertReadRow(
   ctx: MutationCtx,
@@ -200,14 +204,61 @@ async function upsertReadRow(
   await ctx.db.patch(row._id, { lastReadAt, repoId: entity.repoId });
 }
 
-export const markRead = authMutation({
+/**
+ * The open chat is still on screen (every few minutes) or just left it.
+ * Moves only `lastVisitedAt`, so a recap measures the absence from when the
+ * user left, not from when they opened the chat: watching a long turn is
+ * not being away from it.
+ */
+export const touchVisit = authMutation({
   args: { parentId: chatTurnEntityIdValidator },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
+    const row = await getReadRow(ctx.db, ctx.userId, args.parentId);
+    const now = Date.now();
+    if (row && now - (row.lastVisitedAt ?? 0) > VISIT_WRITE_INTERVAL_MS) {
+      await ctx.db.patch(row._id, { lastVisitedAt: now });
+    }
+    return null;
+  },
+});
+
+export const markRead = authMutation({
+  args: {
+    parentId: chatTurnEntityIdValidator,
+    /** The chat just came on screen (not a reply landing while it was). */
+    opened: v.optional(v.boolean()),
+  },
   returns: v.null(),
   handler: async (ctx, args) => {
     await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
     const entity = await ctx.db.get(args.parentId);
     if (!entity) return null;
+    const now = Date.now();
+    // Read before the upsert moves it. A first open (no row) has no absence.
+    const row = await getReadRow(ctx.db, ctx.userId, args.parentId);
     await upsertReadRow(ctx, ctx.userId, entity);
+    // Recaps belong to one visit: an open expires the last one, then may
+    // write a new one. A reply landing while the chat is watched does neither.
+    if (args.opened === true) await expireRecap(ctx, ctx.userId, args.parentId, now);
+    if (row && args.opened === true) {
+      await maybeStartRecap(ctx, {
+        userId: ctx.userId,
+        parentId: args.parentId,
+        lastReadAt: row.lastReadAt,
+        lastSeenAt: Math.max(row.lastReadAt, row.lastVisitedAt ?? 0),
+        lastTurnFinishedAt: entity.lastTurnFinishedAt,
+        now,
+      });
+    }
+    if (row) {
+      // Throttled: the client marks on every open and every landed reply,
+      // and `touchVisit` keeps it fresh while the chat stays on screen.
+      if (now - (row.lastVisitedAt ?? 0) > VISIT_WRITE_INTERVAL_MS) {
+        await ctx.db.patch(row._id, { lastVisitedAt: now });
+      }
+    }
     // The sidebar keys a session's unread dot by the session id, so reading
     // one of its chats also reads the session.
     const chatId = ctx.db.normalizeId("sessionChats", args.parentId);

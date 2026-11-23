@@ -144,7 +144,7 @@
   padding: 0 12px;
   border-radius: var(--ss-radius-md);
   background: var(--ss-accent);
-  color: rgb(var(--primary-foreground));
+  color: var(--accent-foreground);
   font-size: 12px;
   font-weight: 500;
   transition: background 0.3s ease, color 0.3s ease;

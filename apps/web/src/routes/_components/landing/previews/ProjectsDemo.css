@@ -48,7 +48,7 @@
   padding: 6px 12px;
   border-radius: var(--ss-radius-md);
   background: var(--ss-accent);
-  color: rgb(var(--primary-foreground));
+  color: var(--accent-foreground);
   font-size: 12.5px;
   font-weight: 500;
   line-height: 1.3;

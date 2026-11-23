@@ -93,4 +93,14 @@ crons.cron(
   {},
 );
 
+// Orphan snapshots (left by deleted or replaced sandboxes) bill Snapshot
+// Storage until deleted. Runs after the dead sandbox sweep, and keeps anything
+// created or restored in the last 7 days.
+crons.cron(
+  "orphan snapshot purge",
+  "30 3 * * 0",
+  internal.snapshotActions.purgeOrphanSnapshotsScheduled,
+  {},
+);
+
 export default crons;

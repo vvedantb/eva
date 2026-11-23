@@ -95,8 +95,4 @@
   @keyframes ss-avatar-wait {
     to { transform: rotate(1turn); }
   }
-
-  @media (prefers-reduced-motion: reduce) {
-    .ss-avatar[data-ring]::after { animation: none; }
-  }
 }

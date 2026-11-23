@@ -39,6 +39,8 @@ import { entityPathSegment } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { ProjectCardMenuItems } from "@/lib/components/projects/_components/ProjectCardMenuItems";
 import { useProjectMenu } from "@/lib/components/projects/_components/useProjectMenu";
+import { useRecapChat } from "@/lib/components/chat/useRecapChat";
+import { RecapChatMenuItem } from "@/lib/components/chat/RecapChatMenuItem";
 import { ProjectDeleteDialog } from "./ProjectDeleteDialog";
 import { useProjectDelete } from "./useProjectDelete";
 import {
@@ -52,6 +54,8 @@ interface ProjectDetailHeaderActionsProps {
   project: ProjectDetailProject;
   repoId: Id<"githubRepos">;
   sandbox: ProjectSandboxState;
+  /** The project's main chat, once it exists: Recap chat recaps it. */
+  chatId: Id<"sessionChats"> | undefined;
   chatTurnOpen: boolean | undefined;
   hasPlanContext: boolean;
   isStoppingBuild: boolean;
@@ -67,6 +71,7 @@ export function ProjectDetailHeaderActions({
   project,
   repoId,
   sandbox,
+  chatId,
   chatTurnOpen,
   hasPlanContext,
   isStoppingBuild,
@@ -84,6 +89,7 @@ export function ProjectDetailHeaderActions({
     handleStopSandbox,
   } = sandbox;
   const { request: requestConfirm } = useRequestConfirm();
+  const recapChat = useRecapChat(chatId);
   const { basePath } = useRepo();
   const navigate = useNavigate();
   const projectsPath = `${basePath}/projects`;
@@ -120,6 +126,11 @@ export function ProjectDetailHeaderActions({
               <ProjectCardMenuItems
                 variant="dropdown"
                 {...projectMenu.menuProps}
+                leading={
+                  recapChat ? (
+                    <RecapChatMenuItem onSelect={recapChat} />
+                  ) : undefined
+                }
                 planItems={
                   hasPlanContext ? (
                     <>

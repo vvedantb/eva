@@ -1,4 +1,4 @@
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth } from "@clerk/expo";
 import { Redirect, Stack } from "expo-router";
 import { EnsureUser } from "@/auth/EnsureUser";
 import { useStackScreenOptions } from "@/ui/stackOptions";

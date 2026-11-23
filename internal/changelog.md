@@ -28,7 +28,7 @@ What users see:
 - The coordinator chat is always reachable: a new project, or one whose tasks are all done, no longer loses its chat or sandbox.
 - New projects skip the interview whatever an older phone sends.
 
-Architectural: every GitHub token a coordinator sandbox gets is read-only (`mintSandboxGitToken`, `isReadOnlySandboxOwner`, the `evaReadOnlyGit` VM token claim). A run that ended on its ask is recorded as `RUN_WAITING_FOR_ANSWER`. `_projects/runSettings.ts` holds the decision 20 rules for runs and chat turns. `projects.phase` is written only by `recomputeProjectPhase` (derived) and the legacy project PR webhook. `agentTasks.branchName` (new, optional) keeps an old project branch. `migrations:convertProjects` converts old projects (runbook in the plan).
+Architectural: every GitHub token a coordinator sandbox gets is read-only (`mintSandboxGitToken`, `isReadOnlySandboxOwner`, the `evaReadOnlyGit` VM token claim). A run that ended on its ask is recorded as `RUN_WAITING_FOR_ANSWER`. `_projects/runSettings.ts` holds the decision 20 rules for runs and chat turns. `projects.phase` is written only by `recomputeProjectPhase` (derived) and the legacy project PR webhook. `agentTasks.branchName` (new, optional) keeps an old project branch. `migrations:convertProjects` converts old projects (runbook in the plan). A coordinator's Recap reads each child task's Main chat in the task's own session (`chatRecaps.recapChats`), and a coordinator sandbox stays at `COORDINATOR_VCPUS` whatever the app's sandbox size.
 
 ## Projects run by a coordinator chat, with parallel child tasks
 
@@ -48,6 +48,282 @@ What users see:
 - A project's stage is derived from its tasks: the Change Phase bulk action and the card's Phase menu are gone, and the timeline shows launched tasks out of all tasks.
 
 Architectural: `ProjectTaskBatchCard` (rows are `ProjectTaskRow`, data from `listByProject` plus `listTaskBatches` for grouping) reaches `ChatBody` through a new `inlineCards` prop and the existing `placeChatUiPanels` placement; only `ProjectSandboxChatPanel` passes it, so session and quick task chats are unchanged. `CoordinatorPausedBanner` (`getCoordinatorState`) sits in `SandboxChatPreInput`. The projects list reads `listStatusesForRepo` in one subscription (`useProjectListStatuses`) instead of one `listByProject` per project. Task rows read the server's `facts` (`projectTaskFactsFromRow`), so usage limit, cancelled dependency and question reasons show; open asks and reports come from `listTaskReports` (`projectTaskNotesByTask`). `@eva/shared/projectView` gains the copy and helpers (additive). A viewer's child-task pane disables text edits, properties, file removal and sandbox start.
+
+## Web: composer action cards match the composer footer width
+
+Date: 2026-11-23
+
+WHY: Matching the composer card still read too wide; the cards should line up with the narrower footer bar (branch, stash, model) under it.
+
+Architectural: The `ComposerActionCards` row inset goes from `px-3 md:px-4` to `px-6 md:px-8`: `ChatComposer`'s wrapper padding plus the footer's own inset. The cards are also compact: `xs` button (28px), 16px icon, `py-1.5 pr-1.5 pl-3` over the `tight` Surface's `p-3`, and an 8px gap between cards. Follow-up: the two numbers live in two files; a shared inset class would stop them drifting.
+
+## Web: composer action cards match the composer width
+
+Date: 2026-11-23
+
+WHY: The Today and last-session cards spanned the full landing column, wider than the composer card above them.
+
+Architectural: The row in `ComposerActionCards` takes `px-3 md:px-4`, the same inset `ChatComposer` puts around its card.
+
+## Web: action cards under the landing composer (Today + last session)
+
+Date: 2026-11-23
+
+WHY: The Today card sat above the greeting and could be dismissed, but it is a standing suggestion of what to do next, not a notice.
+
+Architectural: `TodayStandupCard` became `ComposerActionCards`, rendered under `ChatComposer` in `NewSessionComposer`. Today shows whenever `standupStatus.enabled` ("New standup · <day>" + "Open Today" while unread, else "Today" + "View Today"); the dismiss button and its `markStandupsRead` call are gone, so only opening Today marks standups read. The second card links the user's most recently updated session, from the cached `sessions.list` + `auth.me` through the shared `filterSessionsStartedBy` / `sortSessionsForSidebar`. Two cards sit side by side from `sm`, stacked below it; one card takes the full width.
+
+## Web: neutral greys no longer tint red (oklab colour mixing)
+
+Date: 2026-11-23
+
+WHY: In the dark neutral theme the sessions sidebar rendered faintly red (rgb 37 34 35) beside the page (34 35 37) after the full-colour token switch.
+
+Architectural: Tailwind's `v()` (and 47 other `color-mix(..., transparent)` sites in web and `@eva/ui`) mixed in oklch. Chrome sets a near-grey's hue to `none` there but keeps its small chroma, which then renders at hue 0. They now mix in oklab, which has no hue; the result is otherwise the same. Follow-up: five package token mixes (`--focus-ring`, `--danger-ring`, base.css) still use oklch.
+
+## Web: env variables, snapshots and PR recap tabs slide too
+
+Date: 2026-11-23
+
+WHY: Extends the team-page tab slide to the other pages whose tabs swap the page content.
+
+Architectural: `EnvVariablesPageClient` (Repo/Team) and `SnapshotsClient` (Configuration/Status/Builds) replace their own `AnimatePresence` opacity fades with `TabsTransition`, and `PrRecapPanel` (Recap/Summary) wraps its views. The orders are the exported `envVarScopes`, `snapshotSettingsTabs` and `PR_RECAP_VIEWS`. Left out: list filters (sessions, reviews, feedback, quick tasks, projects) and form toggles stay instant; the review panel keeps every tab mounted; route-outlet tabs (project, sandbox surface, review nav, logs) would slide the new route out with the old panel; the testing-arena panels need a full-height option in `TabsTransition`.
+
+
+## Recap on a revisit after 4 hours
+
+Date: 2026-11-23
+
+WHY: A recap started only when a reply finished while you were away, so reopening a session whose last reply you had seen showed nothing, however long you were gone.
+
+Architectural: `useChatReadState` now calls `markRead` on every open, not only when a reply is unread. `chatReads` rows gain `lastVisitedAt` (written at most once a minute). `maybeStartRecap` measures the absence from the later of the read and the visit: a missed turn after 30 minutes gives the "away" recap; nothing new after `RECAP_REVISIT_MS` (4 hours) gives a "full" ("Recap") one. One more mutation per chat open. While a chat is on screen, `touchVisit` moves `lastVisitedAt` every 5 minutes and once on leaving, so watching a long turn no longer reads as being away (the old rule measured from the open or the last read, so a watched 30-minute turn showed "Since you've been gone"). Recaps now start only on an open (`markRead({ opened: true })`), never when a reply lands on a watched chat, and an open deletes the recap from an earlier visit (`expireRecap`): prod held 5 recaps, one 73 hours old with nothing after it, shown again on every open.
+## Web: team tab content slides from the picked tab's side (@vvedantb/ui 0.62.0)
+
+Date: 2026-11-23
+
+WHY: Switching tabs on a team page swapped the content at once; a short slide from the side of the picked tab shows where the new content came from, as a phone swipe does.
+
+Architectural: packages #336 adds `TabsTransition` (`"none"`, `"slide"`, `"push"`; `value` plus `order`, built on Motion `AnimatePresence` with a custom direction) and `UiConfig.Tabs.transition`. `@eva/ui` `controlsConfig` sets `transition: "slide"` (32px plus fade, 240 ms in, 140 ms out). `TeamDetailClient` wraps its panels in `TabsTransition` with the exported `teamDetailTabs` order. Other tab pages opt in by wrapping their panels the same way. `@vvedantb/ui` is now 0.62.0 in every workspace (it was a mix of 0.55.0, 0.57.0 and ^0.60.0).
+
+## Callback tests: pruned, repaired, type-checked, security gaps covered
+
+Date: 2026-11-23
+
+WHY: Devs found the tests low-value. An audit of `callback-src/tests` showed 81% sound, but duplicates, assertions that could not fail, test-only seams, and no tests on secret redaction or the media-upload guard.
+
+Architectural: Duplicate and vacuous tests are merged into one keeper per contract or deleted; weak assertions now fail when behaviour breaks (each new or repaired test was proven by a deliberate code break). New tests cover redaction of tool output and turn completions, the symlink/hard-link media guard, non-Claude `extractResultEvent`, session resume after restart, `enforceTurnLease` and the deposition fence. Test-only seams and dead code are removed (`fetchFn`/`env` on `ensureGithubToken`, `isRival`, `waitMs`, `buildTurnCompletion`, `resolveResumeId`, `setActiveId`, `stopBranchWatcher`, background-shell test helpers, null-lease branches). `typecheck:callback` now also type-checks `callback-src/tests` (`callback-src/tests/tsconfig.json`).
+## Web: `globals.css` imports `@vvedantb/ui/tokens` with full colours
+
+Date: 2026-11-22
+
+WHY: Eva kept shadcn-style `R G B` channel variables and `compat-shadcn-rgb.css` because the full tokens import sets oklch colours. That forced a hand-copied radius scale (#1458) and a second colour system next to vhub and Verve.
+
+Architectural: Eva now takes light, dark and neutral surfaces, brand, `--segment`, `--danger`, `--success`, `--warning`, `--radius` and the radius utilities from the package. Eva keeps only its own tokens (`--status-*`, `--cat-*`, `--warning-bg`, `--accent-soft`, …) as full `rgb()` values.
+- Tailwind: `bg-primary` is the brand `--accent`; `text-muted-foreground` is `--muted`; `bg-muted` is `--surface-secondary` (`@theme` in `globals.css`). `bg-accent` is now the brand fill, so eva's soft hover fill moved to `bg-accent-soft` / `text-accent-soft-foreground` (`--accent-soft`). `tailwind.config.js` keeps only eva's own colours and uses `color-mix` for opacity.
+- Theme picker: `ACCENT_COLORS` hold `rgb()` values. `applyCustomThemeVars` sets `--accent`, `--accent-foreground`, `--accent-soft` and `--accent-soft-foreground`. Focus, chart-1 and sidebar primary follow `--accent`.
+- Every `rgb(var(--x))` call site now uses `var(--x)` or `color-mix`. The HTML-render frame maps the shadcn names a page reads to the package tokens (`PAGE_TOKEN_SOURCE`).
+- Package `markdown.css` 0.60.0 still reads `rgb(var(--foreground))`; a colour-only shim in `globals.css` overrides it. Delete it when the package ships full colours.
+- Dark and neutral surfaces now match the package (light `--background` #F5F5F5, dark #060606). `SHELL_COLOR`, `index.html` and `manifest.json` follow. The extension config gains an `accent-soft` alias for shared `@eva/ui` classes.
+
+## Web: rail groups get their rounded corners back
+
+Date: 2026-11-22
+
+WHY: `@vvedantb/ui` 0.60.0 `railGroupClass` uses `rounded-[calc(var(--radius-lg)+0.25rem)]`. Eva does not import `@vvedantb/ui/tokens`, so `--radius-lg` was undefined, the `calc()` was invalid and the corners were square.
+
+Architectural: `globals.css` now defines `--radius-lg`, `--radius-md` and `--radius-sm` in `@theme inline`, copied from the package tokens. The full tokens import stays skipped because it sets oklch colours that clash with `compat-shadcn-rgb.css`. No className overrides on `RailGroup` or `RepoRail`.
+
+## Skills: commit, push and ship are vendored in-repo
+
+Date: 2026-11-22
+
+WHY: Stop depending on the public external skills repo before it goes private. `commit`, `push` and `ship` now live as local files in `.agents/skills/` and their `skills-lock.json` entries are gone.
+
+Architectural: these three skills are edited here and no longer overwritten by a skills update. `README.md`, `AGENTS.md`, `CLAUDE.md` and the `audit` skill say so.
+
+## Web: Appearance tiles come from the package (@vvedantb/ui 0.60.0)
+
+Date: 2026-11-21
+
+WHY: The package now ships eva's theme tiles as `ThemeModePicker`, so the local copy only repeated it.
+
+Architectural: Theme settings and the onboarding theme step render `<ThemeModePicker value onChange compact? />`; `AppearanceSection.tsx` is deleted. The account menu keeps eva's `toggleTheme`: it resolves `system` to the live appearance before it cycles, and the package's `nextThemeInCycle` does not. `@vvedantb/ui` ^0.59.2 → ^0.60.0 in web only.
+
+## Web: rail, side panel and mobile header tones come from the package (@vvedantb/ui 0.59.2)
+
+Date: 2026-11-21
+
+WHY: The package now draws eva's trough, pill, side panel card and page-tone mobile header by default. eva's local copies only repeated it.
+
+Architectural: one token remap stays in `globals.css`: `@theme inline { --color-segment: rgb(var(--segment-active)) }`. Compat maps `bg-segment` to `--card`, which in dark and neutral is the trough itself, so without it the pill would vanish. Removed: the `.rail-track` rules, `railGroupThemeClass`, the `rail-track` hooks on `RepoRail`, `ButtonTrack`s and `CHAT_HEADER_ACTIONS_CLASS`, `listClassName="tabs-segmented"` on the sandbox `SidePanelTabs.List`, the `SandboxPanelFrame` card and arrow tones, and `bg-background` on `Sidebar.MobileHeader`. Kept: `.tabs-segmented` (eva's own opt-in look for eva `TabsList`s), `.t-side-panel-arrow` and `[data-dock-slide]`. `@vvedantb/ui` 0.57.0 → ^0.59.2 in web only; Vite dedupes it, so `@eva/ui`'s 0.57.0 pin does not ship a second copy.
+
+## Android release builds in parallel with Check; @vvedantb/config 0.12.0
+
+Date: 2026-11-20
+
+WHY: A releasing merge ran three boat-large jobs in a row (check, release paths, release), so the APK waited for Check and an extra runner start. The build now starts with Check and only publish waits.
+
+Architectural: `ci.yml`'s `release` job (push only, no `needs`) calls the shared `release-android-apk.yml@main` directly. Its `pathspecs` input is the path gate (soft skip when no changed file matches), and `wait_for_check_job: Check` makes the shared workflow wait for the Check job before Publish, so a failed Check publishes nothing. There is no local wrapper: `release-android-ci.yml` is deleted and `scripts/build-android-release.sh` has no `WAIT_FOR_CI_CHECK` polling. Manual `release-android.yml` runs do not wait. `@vvedantb/config` 0.11.0 → 0.12.0 (release APKs are arm64-v8a only).
+
+## Web: rail shell, dock motion and sandbox side panel come from the package (@vvedantb/ui 0.57.0)
+
+Date: 2026-11-20
+
+WHY: Other apps can now use eva's layout with one prop (`AppShell` `variant="rail"`). eva kept its own copies of the dock motion, the sandbox tabs and the button tracks, so the two would drift.
+
+Architectural: `Sidebar.tsx` sets `variant="rail"` on `AppShell.Root`. `SidebarContext` calls the package `popOutShellPanel` / `popInShellPanelNextFrame`; `RepoRail` spreads `shellDockTileProps`. The sandbox pane is `SidePanelTabs.Frame`, its rail `SidePanelTabs.Rail` and `.List`, and each tab `SidePanelTabs.Tab`; `ResizablePanelLayout` closes the card with `popOutSidePanel`. Tool and header groups use `ButtonTrack` / `buttonTrackClass`. eva's tones stay: `rail-track` and `tabs-segmented` in `globals.css` still win over the package tokens, and the arrow transition (`.t-side-panel-arrow`) and dock-slide rules stay there because eva does not import the package CSS. Removed: `lib/dockMotion.ts`, `sidebarPanelMotion.ts`, `sandboxCardMotion.ts`, `sandboxRail.ts`. `@vvedantb/ui` 0.55.0 → 0.57.0 (web, `@eva/ui`, extension; the `@eva/shared` dev pin stays, so no APK release).
+
+## Phone update check asks V Store
+
+Date: 2026-11-20
+
+WHY: The check read GitHub releases, which works only while this repository is public. V Store knows the newest release either way.
+
+Architectural: `UpdateDialog` passes `vStore` (package name and the APK link) to `UpdateChecker` in place of `source`. `@vvedantb/native-ui` goes to 0.34.0. The prompt and its buttons are unchanged.
+
+## Web: menu and popover zoom comes from the package (@vvedantb/ui 0.55.0)
+
+Date: 2026-11-20
+
+WHY: The 40% grow-from-trigger motion for menus and popovers lived only in eva's config; the package default still zoomed from 95%, so other apps did not get it and eva kept its own copy.
+
+Architectural: packages #312 adds `triggerZoomAnimateClass` (fade plus `zoom-*-[0.4]` at `--radix-popper-transform-origin`, open 150 ms, close 100 ms) and uses it for dropdown, context menu and popover defaults. `@eva/ui` `config/overlays.ts` imports it instead of its own `triggerZoomClass` and drops the per-primitive `origin-*` classes. That also fixes the dropdown origin: it read as the menu centre (104px 104.5px), and now it is the trigger corner (208px 0px). `@vvedantb/ui` 0.54.1 → 0.55.0.
+
+## Web: menus and popovers grow from 40%, like modals
+
+Date: 2026-11-20
+
+WHY: Compared side by side (80%, 60%, 40%), 40% reads most clearly as growing out of the trigger and matches the modals.
+
+Architectural: `@eva/ui` `config/overlays.ts` `triggerZoomClass` goes from `zoom-in-[0.8]` / `zoom-out-[0.8]` to `[0.4]`. Timing is unchanged (open 150 ms, close 100 ms).
+
+## Phone update prompt: shared component and Install from V Store
+
+Date: 2026-11-20
+
+WHY: Other apps need the same "Update available" prompt, and the phone app can now also be updated from V Store.
+
+Architectural: The check and the dialog moved to `@vvedantb/native-ui` (`UpdateChecker`). `src/update/UpdateDialog.tsx` only passes Eva's values: the `eva-apk-` releases, the installed version (0.1.0 skips the check), SecureStore under the same `eva.updateDismissed` key, and the same text. `src/update/updateCheck.ts` is gone. New: "Install from V Store" only opens V Store (`vstore://updates`); when V Store is not installed the button is replaced by a notice and Download stays.
+
+## Web: menus and popovers grow from their trigger
+
+Date: 2026-11-20
+
+WHY: Modals grow out of what opened them; dropdowns, right-click menus and popovers only scaled from 95%, which barely read as coming from the trigger.
+
+Architectural: `@eva/ui` `config/overlays.ts` adds `triggerZoomClass` (fade plus `zoom-in-[0.8]` / `zoom-out-[0.8]`, open 150 ms, close 100 ms) at the Radix transform origin: the trigger, or the cursor for a context menu. Dropdown and context menus (`menuContentClass`, sub-menus too) and Popover use it; Popover drops its 8px side slide so it moves like the menus. Hover card and Select keep `floatingMotionClass`. 80%, not the modals' 40%, because these open constantly.
+
+## Web: modals close with the same zoom (@vvedantb/ui 0.54.1)
+
+Date: 2026-11-20
+
+WHY: Modals grew out of their trigger on open but vanished at once on close; the shrink back into the trigger never played.
+
+Architectural: Radix Presence reads the animation in the same commit that sets `data-state="closed"`, but the package keyed its closing styles (and the `t-modal-presence-wait` animation Presence waits on) only on `.is-closing`, which a MutationObserver adds a moment later, so Presence unmounted at once. packages #308 keys them on `[data-state="closed"]` too. `@vvedantb/ui` 0.54.0 → 0.54.1; Eva's `html[data-page-motion="off"]` rule in globals.css covers the new selector.
+
+## Web: @vvedantb/ui 0.54.0, the package patch is gone
+
+Date: 2026-11-20
+
+WHY: Eva carried a pnpm patch of `@vvedantb/ui` (from #1395) that made the bulk action bar icon-only with tooltip labels. It edited the package source and its built JS, so every upgrade had to move it and any upstream change to the file could break it.
+
+Architectural: packages #307 adds `BulkActionBar labels` (`"inline"` default, `"tooltip"`) and the `UiConfig` entry `BulkActionBar: { labels }`. `@eva/ui`'s `controlsConfig` sets `labels: "tooltip"` for every bar (inbox, projects, quick tasks). `patches/@vvedantb__ui@0.53.0.patch` and its `patchedDependencies` entry are deleted; `@vvedantb/ui` 0.53.0 → 0.54.0 in web, the Chrome extension, `@eva/shared` and `@eva/ui`.
+
+## Web: @vvedantb/ui 0.53.0, reduced-motion setting covers the package
+
+Date: 2026-11-20
+
+WHY: Eva passes `MotionProvider reducedMotion="never"`, but the package's own dialogs, sheets and `motion-reduce:` classes still read the OS setting, so OS reduced-motion users lost modal motion against Eva's rule.
+
+Architectural: `@vvedantb/ui` 0.52.0 → 0.53.0 (packages #306). `MotionProvider reducedMotion` now stamps `html[data-reduced-motion]` and provides context; the package's `prefersReducedMotion()`, the Dialog zoom, the `motion-reduce:` variant (`utilities.css`, which Eva imports), `motion.css` and the landing CSS follow it. Eva needs no code change beyond the upgrade. The pnpm patch moves to 0.53.0 unchanged.
+
+## Web sidebar: main content slides with the panel
+
+Date: 2026-11-20
+
+WHY: Hiding or showing the sidebar slid the package aside's width, but the main content jumped to its new margin, so the two moved out of step.
+
+Architectural: `dockMotion.slideWith(follower, leader, property)` copies the leader's transition timing onto the follower for one change and fires `DOCK_MOTION_EVENT` on it, so a preview iframe inside steps aside. `sidebarPanelMotion` slides `<main>`'s `margin-left` with the shell aside (280 ms, out-quint, read from the aside) on hide, after the pop out, and on show.
+
+## Web: @vvedantb/ui 0.52.0, modals grow from their trigger
+
+Date: 2026-11-20
+
+WHY: Modals should open like the sandbox card does, out of what you pressed; they also replayed their entrance about 300 ms after opening when the content re-rendered.
+
+Architectural: `@vvedantb/ui` 0.51.0 → 0.52.0 (packages #303) in web, the Chrome extension, `@eva/shared` and `@eva/ui`. The package's `modalTransition` aims each Dialog at the press that opened it (within 500 ms) or the focused control, starting at 40% scale; with neither it keeps the centred zoom, and the command palette stays instant. Eva's pnpm patch of the package (icon-only bulk action bar) moves to 0.52.0 unchanged.
+
+## Web preview iframe steps aside during dock motion
+
+Date: 2026-11-19
+
+WHY: The preview iframe glitched when the sandbox card popped in or out. It lives in the root `PreviewIframeHost` overlay, not in the card, so it could not follow the card's scale and lagged the chat-pane width slide by a frame.
+
+Architectural: `dockMotion` fires `DOCK_MOTION_EVENT` on the panel with the motion's length (pop in 380 ms, switch 220 ms, pop out 660 ms with the hold). `previewIframeHost` hides any overlay whose anchor is inside that panel (`opacity-0`, no pointer events), then re-measures it at the end and fades it back over 150 ms. The listener checks the event type and its `ms` field, not `instanceof`, so a hot-reloaded module still matches.
+
+## Web sandbox split: chat pane slides with the card
+
+Date: 2026-11-19
+
+WHY: The card popped in and out smoothly, but the chat pane beside it jumped to its new width, so the two read as out of step.
+
+Architectural: `dockMotion.slideNextResize` marks the `react-resizable-panels` group (`data-dock-slide`) for one toggle, and globals.css transitions the panels' `flex-grow` with the pop's timing (380 ms open, 260 ms close, out-quint). `ResizablePanelLayout` calls it before the toggle's resize, before the collapse after the pop out, and on the expand signal. A drag never sets it, so it stays 1:1 with the pointer.
+
+## Web sidebar panel: dock pop on hide and show
+
+Date: 2026-11-19
+
+WHY: The sandbox card docks into its rail tab; the left panel should hide and show the same way, so both rails share one motion.
+
+Architectural: The motion moves to `lib/dockMotion.ts` (`dockPopIn`, `dockNudge`, `dockPopOut`, with a left or right rail edge); `sandboxCardMotion.ts` is now a thin wrapper. `SidebarContext.setCollapsed`, which the rail tile, the shortcut and search all call, pops the panel out into the `data-sidebar-dock-tile` tile before it collapses, and pops it in on the next frame after it shows. App switches do not move the panel. The aim checks height, not width, because the package's aside slides its width open from 0. The docked frame now holds for 400 ms (past that 280 ms slide) or until the next pop in, so a hiding panel never flashes back at full size.
+
+## Design check bans reduced-motion gates
+
+Date: 2026-11-19
+
+WHY: The app has no reduced-motion mode, but a new gate still slipped in (sandbox card) and hid motion for readers with the OS setting.
+
+Architectural: `scripts/design-check.mjs` adds the `reduced-motion` reason: `prefers-reduced-motion` (now also in `.css` files), `useReducedMotion`, and a `reducedMotion` config of "user" or "always". Comment lines are skipped. The vendored stageshow gates (7 CSS media blocks and the bubble `matchMedia`) are gone, so the baseline holds none. CLAUDE.md has a one-line rule.
+
+## Web sandbox card: motion ignores OS reduced motion
+
+Date: 2026-11-19
+
+WHY: The dock motion checked `prefers-reduced-motion`, which the app does not support, so readers with that OS setting saw no motion.
+
+Architectural: `sandboxCardMotion.motionOff` reads only `html[data-page-motion=off]`.
+
+## Web sandbox card: dock pop in and out, active tab toggles it
+
+Date: 2026-11-19
+
+WHY: The card appeared and vanished with no link to the rail; growing out of the tab and shrinking back into it shows where the panel lives. Pressing the active tab now does the collapse button's job, so the button is gone. The arrow painted over content at the card's edge.
+
+Architectural: `sandboxCardMotion.ts` holds the Web Animations: `popInSandboxCard`, `nudgeSandboxCard` (both from `useActiveTabArrow`'s observers, after it measures) and `popOutSandboxCard`, which `ResizablePanelLayout.handleToggle` runs before `panel.collapse()` (found through the right panel's `elementRef`). The shortcut and the active tab share that path. `SandboxTabTrigger` reads the reselect on mouse down or Enter/Space, since Radix selects on mouse down; the rail `Tabs` use `activationMode="manual"`, because mouse down plus focus fired two changes before the URL updated and a closed panel opened then closed. The active tab's tooltip says "Hide panel (shortcut)". The arrow renders before the now `relative` card. Empty rails keep `SandboxPanelToggleButton`.
+
+## Session summary: schema field and turn lane removed
+
+Date: 2026-11-19
+
+WHY: `dataMigrations:retireSessionSummaries` ran on prod, so nothing stores a summary any more.
+
+Architectural: `sessions.summary` and the `"summary"` turn lane leave the schema (`turnLaneValidator` is now only `"interview"`, and `laneOwner` drops its lane argument). The PR body no longer adds a Summary section. The three retire migrations are deleted; the schema-narrowing markers name them from the base revision.
+
+## Session summary retired; "Recap chat" on every chat
+
+Date: 2026-11-19
+
+WHY: The summary woke the sandbox and ran an agent to write bullets the away recap and the Log already cover; it existed only on sessions.
+
+Architectural: `summarizeWorkflow.ts`, the web summary accordion and modal, the phone `SessionSummary`, the session-level workflow watchdog (`trackSessionWorkflow`, `handleStaleSession`) and the `summary:` stream prefix are gone. `chatRecaps` rows gain `kind` ("away" | "full"); `chatRecaps.requestFull` starts a whole-chat recap from "Recap chat" in the session, quick task and project "…" menus (web `useRecapChat` + `RecapChatMenuItem`, phone chat menu). Card titles come from `RECAP_TITLE`. `sessions.summary` and the `"summary"` turn lane stay in the schema until `dataMigrations:retireSessionSummaries` runs on prod. `check-apk-compat.sh` now warns in CI instead of failing: old APKs may break, and prod Convex deploys with the next phone release.
+
+## Chat recap: "Since you've been gone" (web and phone)
+
+Date: 2026-11-19
+
+WHY: Coming back to a long-running chat meant scrolling the transcript to learn what happened. Amp's Recap (Spaces and threads) solves this with a short summary only you see; we copy it.
+
+Architectural: `chatReads.markRead` now returns the read time it replaced; when that is 30+ minutes old and a turn finished since, `chatRecaps.maybeStartRecap` writes a per-user `chatRecaps` row and schedules `textGen.generateChatRecap` (flex tier, `RECAP_MODEL` = Claude Haiku 5.5: faster than GPT-6 Luna and the only one that used task chips; nano echoed prompt labels). `recapContext` reads the transcript and Log since the read time (newest 16k characters); a project's Main chat reads every chat in the project session and offers task chats as `@[Title](taskId)` chips, and unknown ids are stripped. `useChatRecap` (`@eva/shared/chatReadState`) feeds `ChatRecapCard` (web `ChatBody`) and `RecapCard` (phone chat screen), inside `ChatLastTurn` under the newest message (after it, the viewport padding pushed it a screen down); × deletes the row, and the card hides once you send a message after it. No backfill: recaps start on the next long absence.
 
 ## Web sidebar: repo banner inset with rounded corners
 

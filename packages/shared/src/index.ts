@@ -75,6 +75,13 @@ export {
   sandboxPresenceRoomId,
 } from "./sandboxPresence";
 export {
+  DEFAULT_SANDBOX_SIZE,
+  SANDBOX_SIZES,
+  SANDBOX_SIZE_OPTIONS,
+  sandboxVcpus,
+  type SandboxSize,
+} from "./sandboxSize";
+export {
   DEFAULT_PREVIEW_PORT,
   DESKTOP_PORT,
   EDITOR_PORT,

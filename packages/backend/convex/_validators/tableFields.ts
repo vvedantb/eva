@@ -321,10 +321,8 @@ export const turnEntityIdValidator = v.union(
  * A one-shot agent that works on a row which also owns chat turns. The lane
  * keeps its turn apart from the chat's: chat turns leave it unset.
  */
-export const turnLaneValidator = v.union(
-  v.literal("summary"),
-  v.literal("interview"),
-);
+// Session summary turns removed. schema-narrowing-ok: retireSessionSummaries
+export const turnLaneValidator = v.literal("interview");
 
 export type TurnLane = Infer<typeof turnLaneValidator>;
 
@@ -800,7 +798,7 @@ export const sessionFields = {
    * project. Owned by `_sessions/owner.ts`; set at insert, never changed.
    */
   owner: sessionOwnerValidator,
-  summary: v.optional(v.array(v.string())),
+  // `summary` removed. schema-narrowing-ok: retireSessionSummaries
   createdBy: v.optional(v.id("users")),
   planContent: v.optional(v.string()),
   /** Sticky Plan/Build toggle. Absent sessions are Build. */
@@ -1079,6 +1077,13 @@ export const snapshotBuildFields = {
   seededApps: v.optional(v.array(seededAppResultValidator)),
 };
 
+/** Keys of `SANDBOX_SIZES` in @eva/shared. */
+export const sandboxSizeValidator = v.union(
+  v.literal("small"),
+  v.literal("medium"),
+  v.literal("large"),
+);
+
 export const githubRepoFields = {
   owner: v.string(),
   name: v.string(),
@@ -1103,6 +1108,9 @@ export const githubRepoFields = {
   // Opt-in: agents read and update `.eva/memory/` in the repo (Agent Memory
   // Repo spec). Shared across sibling app rows.
   agentMemoryEnabled: v.optional(v.boolean()),
+  // vCPUs / memory of this app's sandboxes (`SANDBOX_SIZES` in @eva/shared).
+  // Per-app: apps of one monorepo need different sizes. Absent = large.
+  sandboxSize: v.optional(sandboxSizeValidator),
   hidden: v.optional(v.boolean()),
   deploymentProjectName: v.optional(v.string()),
   domains: v.optional(v.array(v.string())),
@@ -1650,6 +1658,33 @@ export const chatReadFields = {
   parentId: chatReadParentIdValidator,
   repoId: v.id("githubRepos"),
   lastReadAt: v.number(),
+  /** Last time the chat was on screen, read or not (chat rows only; recaps). */
+  lastVisitedAt: v.optional(v.number()),
+};
+
+// One row per (user, repo): when the user last opened the repo's Today page,
+// so a standup published after that shows as unread to them alone.
+export const standupReadFields = {
+  userId: v.id("users"),
+  repoId: v.id("githubRepos"),
+  lastReadAt: v.number(),
+};
+
+// One row per (user, chat): a recap only that user sees (see chatRecaps).
+// "away" covers what happened since they left; "full" is the whole chat, asked
+// for from the chat menu. `text` is unset while the model writes it.
+export const chatRecapKindValidator = v.union(
+  v.literal("away"),
+  v.literal("full"),
+);
+export const chatRecapFields = {
+  userId: v.id("users"),
+  parentId: chatParentIdValidator,
+  kind: chatRecapKindValidator,
+  /** The read time the recap covers activity after. */
+  since: v.number(),
+  createdAt: v.number(),
+  text: v.optional(v.string()),
 };
 
 // Per-sandbox bearer secret the in-sandbox git credential helper presents to

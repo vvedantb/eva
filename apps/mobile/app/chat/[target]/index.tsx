@@ -1,6 +1,6 @@
 import { api, findUsageLimitHold, getAIModelProvider, isHeldByUsageLimit, normalizeAIModel, type Id } from "@eva/backend";
 import { groupChatFeedback } from "@eva/shared/chatFeedback";
-import { findNewMessageIds, useChatReadState } from "@eva/shared/chatReadState";
+import { findNewMessageIds, useChatReadState, useChatRecap } from "@eva/shared/chatReadState";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
 import {
   buildPrecedingUserTurns,
@@ -34,7 +34,7 @@ import { messageLinkHref } from "@eva/shared/messageLink";
 import { appendCitationsToPrompt } from "@eva/shared/assistantCitation";
 import { formatQuestionAnswers, type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { collectThreadFindDocuments } from "@eva/shared/threadFind";
-import { IconChevronDown, IconMessageCircle, IconPlayerStop, IconSearch } from "@tabler/icons-react-native";
+import { IconChevronDown, IconMessageCircle, IconPlayerStop, IconSearch, IconSparkles } from "@tabler/icons-react-native";
 import {
   ChoiceQuestion,
   Conversation,
@@ -83,6 +83,7 @@ import { useProposedPlans } from "@/chat/ProposedPlanCard";
 import { BackgroundAgentsChip } from "@/chat/BackgroundAgentsChip";
 import { QueuedMessagesPanel } from "@/chat/QueuedMessagesPanel";
 import { ComposerTasksPanel } from "@/chat/ComposerTasksPanel";
+import { RecapCard } from "@/chat/RecapCard";
 import { GoalBanner } from "@/chat/GoalBanner";
 import { PublishRecoveryBanner } from "@/chat/PublishRecoveryBanner";
 import { SystemAlertRow } from "@/chat/SystemAlertRow";
@@ -108,7 +109,6 @@ import { WEB_URL } from "@/config";
 import { useSessionActions } from "@/sessions/useSessionActions";
 import { useIsProjectViewer } from "@/projects/useProjectStatus";
 import { CoordinatorPausedBanner } from "@/projects/CoordinatorPausedBanner";
-import { SessionSummaryBlock, useSessionSummary } from "@/sessions/SessionSummary";
 import { textColor, useScheme } from "@/ui/theme";
 import { useChatTranscript } from "@/chat/useChatTranscript";
 
@@ -150,12 +150,19 @@ export default function ChatScreen() {
   const focused = useIsFocused();
   const appActive = useAppActive();
   const { newSinceAt } = useChatReadState({ parentId, active: focused && appActive });
+  const me = useQuery(api.auth.me, {});
+  // "Since you've been gone", as the web: written when you return after a long absence, under the newest message.
+  const { recap, dismiss: dismissRecap } = useChatRecap({
+    parentId,
+    active: focused && appActive,
+    messages: messages ?? [],
+    currentUserId: me ?? undefined,
+  });
   // A session chat's sandbox: the header wakes or sleeps it, and a failed wake shows under the header.
   const sandbox = useSessionSandbox(chat?.session?.id);
   // The session's running chats and this chat's queue: a send parked while every run slot is taken.
   const runningChats = useQuery(api.turns.listSessionChatStatuses, chat?.session ? { sessionId: chat.session.id } : "skip");
   const queued = useQuery(api.queuedMessages.listByParent, parentId ? { parentId } : "skip");
-  const me = useQuery(api.auth.me, {});
   // A teammate's turn shows their avatar and first name, from the same lookup as the web `ChatBody`.
   const teammateIds = otherUserIdsInChat(messages ?? [], me ?? undefined);
   const teammates = useQuery(api.users.getMany, teammateIds.length > 0 ? { ids: teammateIds } : "skip");
@@ -199,12 +206,7 @@ export default function ChatScreen() {
   const [find, setFind] = useState<{ target: string; activeId: string | null } | null>(null);
   const findOpen = find !== null && find.target === target;
   const findActiveId = findOpen ? find.activeId : null;
-  // The web header's Summarise Session: once the sandbox is awake and the chat has a message.
-  const summary = useSessionSummary({
-    sessionId: chat?.session?.id,
-    hasSummary: (sessionRow?.summary?.length ?? 0) > 0,
-    canSummarise: sandbox.isActive && (messages?.length ?? 0) > 0,
-  });
+  const requestRecap = useMutation(api.chatRecaps.requestFull);
 
   if (chat === undefined || chat === null) {
     return (
@@ -367,7 +369,16 @@ export default function ChatScreen() {
     visible.map((message) => ({ id: message._id, text: tokenizedToDisplayText(message.content), skip: message.isSystemAlert === true })),
   );
   const leadingMenu: MenuEntry[] = [{ label: "Find in chat", icon: IconSearch, onSelect: () => setFind({ target, activeId: null }) }];
-  if (summary.menuItem) leadingMenu.push(summary.menuItem);
+  // The web "Recap chat": a recap of the whole chat, as the "Recap" card under the newest message.
+  if (parentId && visible.length > 0) {
+    leadingMenu.push({
+      label: "Recap chat",
+      icon: IconSparkles,
+      onSelect: () => {
+        requestRecap({ parentId }).catch(() => toast.error("Couldn't recap this chat"));
+      },
+    });
+  }
   const panelReply =
     canReply && chat.sandboxActive
       ? (message: string) => {
@@ -402,9 +413,7 @@ export default function ChatScreen() {
       />
       <SandboxErrorBanner sandbox={sandbox} />
       {chat.session ? <SessionChatTabs sessionId={chat.session.id} activeChatId={chat.session.chatId} archived={chat.session.archived} /> : null}
-      {chat.session ? <SessionSummaryBlock sessionId={chat.session.id} summary={sessionRow?.summary} /> : null}
       {sessionActions.dialogs}
-      {summary.dialog}
       <Conversation>
         {findOpen ? (
           <ThreadFindBar
@@ -444,6 +453,11 @@ export default function ChatScreen() {
           ListHeaderComponent={
             // Inverted, the header is the bottom, under the newest message.
             <>
+              {recap && visible.length > 0 ? (
+                <View className={`pt-3 ${THREAD_INSET}`}>
+                  <RecapCard kind={recap.kind} text={recap.text} onDismiss={dismissRecap} />
+                </View>
+              ) : null}
               {/* The live reply shows its own status; this covers a turn whose reply is not written yet. */}
               {working && questions === null && liveReplyId === undefined ? (
                 <View className={`pt-3 ${THREAD_INSET}`}>

@@ -9,6 +9,7 @@ import type { FunctionReturnType } from "convex/server";
 import { useNavigate } from "@tanstack/react-router";
 import {
   isSnapshotSettingsTab,
+  snapshotSettingsTabs,
   type SnapshotSettingsTab,
 } from "@/lib/search-params";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -19,12 +20,11 @@ import {
   Switch,
   Tabs,
   TabsList,
+  TabsTransition,
   TabsTrigger,
-  tokenTransition,
   SettingsSection,
   SettingsEmptyState,
 } from "@vvedantb/ui";
-import { AnimatePresence, m } from "motion/react";
 import { EvaConfigSection } from "@/lib/components/evaConfig/EvaConfigSection";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { CronScheduleCard } from "@/lib/components/CronScheduleCard";
@@ -179,46 +179,38 @@ export function SnapshotsClient({
       }
       tabs={tabs}
     >
-      <AnimatePresence mode="wait" initial={false}>
-        <m.div
-          key={activeTab}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={tokenTransition.fast}
-        >
-          {activeTab === "configuration" ? (
-            <SnapshotConfigurationTab repoId={repoId} snapshot={snapshot} />
-          ) : null}
+      <TabsTransition value={activeTab} order={snapshotSettingsTabs}>
+        {activeTab === "configuration" ? (
+          <SnapshotConfigurationTab repoId={repoId} snapshot={snapshot} />
+        ) : null}
 
-          {activeTab === "status" ? (
-            snapshot ? (
-              <SnapshotStatusTab
-                snapshot={snapshot}
-                builds={builds}
-                seededApps={seededApps}
-                building={building}
-                cancelling={cancelling}
-                onRebuild={handleRebuild}
-                onCancelBuild={handleCancelBuild}
-              />
-            ) : (
-              <NoSnapshotConfigured />
-            )
-          ) : null}
-
-          {activeTab === "builds" ? (
-            <SnapshotBuildsTab
+        {activeTab === "status" ? (
+          snapshot ? (
+            <SnapshotStatusTab
               snapshot={snapshot}
               builds={builds}
-              expandedBuild={expandedBuild}
-              onExpandedBuildChange={setExpandedBuild}
+              seededApps={seededApps}
+              building={building}
               cancelling={cancelling}
+              onRebuild={handleRebuild}
               onCancelBuild={handleCancelBuild}
             />
-          ) : null}
-        </m.div>
-      </AnimatePresence>
+          ) : (
+            <NoSnapshotConfigured />
+          )
+        ) : null}
+
+        {activeTab === "builds" ? (
+          <SnapshotBuildsTab
+            snapshot={snapshot}
+            builds={builds}
+            expandedBuild={expandedBuild}
+            onExpandedBuildChange={setExpandedBuild}
+            cancelling={cancelling}
+            onCancelBuild={handleCancelBuild}
+          />
+        ) : null}
+      </TabsTransition>
     </SettingsPage>
   );
 }

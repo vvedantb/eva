@@ -42,7 +42,7 @@ function ProgressRing({ pct }: { pct: number }) {
         cy={size / 2}
         r={radius}
         fill="none"
-        stroke="rgb(var(--border))"
+        stroke="var(--border)"
         strokeWidth={stroke}
       />
       {pct > 0 && (
@@ -51,7 +51,7 @@ function ProgressRing({ pct }: { pct: number }) {
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="rgb(var(--primary))"
+          stroke="var(--accent)"
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={circumference}

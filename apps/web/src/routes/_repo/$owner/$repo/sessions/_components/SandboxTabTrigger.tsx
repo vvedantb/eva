@@ -1,11 +1,5 @@
 import type { ComponentType } from "react";
-import { cn } from "@eva/ui";
-import {
-  TabsTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@vvedantb/ui";
+import { SidePanelTabs, type SidePanelTabLayout } from "@vvedantb/ui";
 import { TablerIconByName } from "@/lib/components/TablerIconByName";
 
 /**
@@ -47,153 +41,57 @@ export interface SandboxTabDescriptor {
   count?: number;
 }
 
-/**
- * How one chip is arranged. The three cases are genuinely different shapes, so
- * they are named rather than derived from booleans at each call site:
- * `row` is the phone strip (icon beside label), `icon` is the 44px desktop rail
- * and the crowded phone strip (label in a tooltip), `stacked` is the labelled
- * desktop rail (icon over label).
- */
-export type SandboxTabLayout = "row" | "icon" | "stacked";
+/* eva's idle-tab hover: the secondary tone, not the package's half pill. */
+const TAB_HOVER_CLASS = "data-[state=inactive]:hover:bg-secondary";
 
-/* The chip: `TabsTrigger` already supplies `rounded-lg`, `motion-press`,
-   `relative z-1` and the active text colour, and the active *fill* is the
-   `TabsList` sliding pill gliding underneath. Only the resting/hover tones and
-   the tighter panel density belong here. */
-/* `max-sm:h-10`: the phone strip is the only place these are tapped, and 32px
-   sits under the comfortable-tap floor. `hit-target` is the wrong tool here —
-   its 8px bleed would overlap the neighbouring chip across the 4px gap. */
-const TAB_CLASS =
-  "group/tab h-8 max-sm:h-10 shrink-0 gap-1.5 px-2.5 text-xs data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-secondary data-[state=inactive]:hover:text-foreground";
-
-/* Geometry only — the `md:` prefixes hold because the two rail layouts are
-   chosen off the same 768px breakpoint the media query reads. */
-const TAB_LAYOUT_CLASS: Record<SandboxTabLayout, string> = {
-  row: "",
-  icon: "md:w-8 md:justify-center md:px-0",
-  stacked:
-    "md:h-auto md:w-full md:flex-col md:justify-center md:gap-0.5 md:px-1 md:py-1.5",
-};
-
-const ICON_CLASS = "size-4 shrink-0";
-
-/* Selection lives in Radix's `data-state` on the trigger, so the outline/filled
-   swap is pure CSS — the trigger never needs to know which tab is active. */
-const OUTLINE_WHEN_IDLE_CLASS = cn(
-  ICON_CLASS,
-  "group-data-[state=active]/tab:hidden",
-);
-const FILLED_WHEN_ACTIVE_CLASS = cn(
-  ICON_CLASS,
-  "hidden group-data-[state=active]/tab:block",
-);
-/* No filled variant: thicken the outline instead (Tabler's default is 2). */
-const BOLD_WHEN_ACTIVE_CLASS = cn(
-  ICON_CLASS,
-  "group-data-[state=active]/tab:stroke-[2.75]",
-);
-
-/* Two-digit counts still fit: the pill grows from a 14px circle via `px-1`
-   rather than being fixed-width, and `tabular-nums` keeps it from twitching as
-   the number changes. */
-const COUNT_BADGE_CLASS =
-  "inline-flex h-3.5 min-w-3.5 shrink-0 items-center justify-center rounded-full bg-primary px-1 font-medium text-[9px] text-primary-foreground leading-none tabular-nums";
-
-function TabIcon({ icon }: { icon: SandboxTabIcon }) {
+function tabIcons(icon: SandboxTabIcon) {
   if (icon.kind === "name") {
-    return (
-      <>
-        <TablerIconByName
-          name={icon.name}
-          className={OUTLINE_WHEN_IDLE_CLASS}
-        />
-        <TablerIconByName
-          name={icon.name}
-          variant="filled"
-          className={FILLED_WHEN_ACTIVE_CLASS}
-        />
-      </>
-    );
+    return {
+      icon: <TablerIconByName name={icon.name} />,
+      activeIcon: <TablerIconByName name={icon.name} variant="filled" />,
+    };
   }
   const { Icon, ActiveIcon } = icon;
-  if (!ActiveIcon) return <Icon className={BOLD_WHEN_ACTIVE_CLASS} />;
-  return (
-    <>
-      <Icon className={OUTLINE_WHEN_IDLE_CLASS} />
-      <ActiveIcon className={FILLED_WHEN_ACTIVE_CLASS} />
-    </>
-  );
+  return {
+    icon: <Icon />,
+    activeIcon: ActiveIcon ? <ActiveIcon /> : undefined,
+  };
 }
 
 interface SandboxTabTriggerProps {
   tab: SandboxTabDescriptor;
   /** Defaults to the icon rail — the shape every surface but the phone uses. */
-  layout?: SandboxTabLayout;
+  layout?: SidePanelTabLayout;
   /**
-   * Fired on click when this tab is already selected. Radix skips
-   * `onValueChange` in that case, so a collapsed rail would otherwise ignore
-   * the click that should expand onto the current view.
+   * Fired on a press of this tab while it is already selected (the rail uses
+   * it to show or hide the card). Radix skips `onValueChange` in that case.
    */
   onReselect?: () => void;
+  /** Second tooltip line for the selected tab: what a press does. */
+  reselectHint?: string;
 }
 
+/** One sandbox tab: the descriptor on the package `SidePanelTabs.Tab`. */
 export function SandboxTabTrigger({
   tab,
   layout = "icon",
   onReselect,
+  reselectHint,
 }: SandboxTabTriggerProps) {
-  const labelHidden = layout === "icon";
-  const count =
-    tab.count !== undefined && tab.count > 0 ? tab.count : undefined;
-  const trigger = (
-    <TabsTrigger
-      value={tab.value}
-      aria-label={labelHidden ? tab.label : undefined}
-      className={cn(TAB_CLASS, TAB_LAYOUT_CLASS[layout])}
-      onClick={onReselect}
-    >
-      <TabIcon icon={tab.icon} />
-      {layout === "row" ? tab.label : null}
-      {layout === "stacked" ? (
-        /* One line, clipped: a rail that reflows per tab name would make the
-           whole column ragged, and the tooltip is gone at this width. */
-        <span className="w-full truncate text-3xs leading-3">{tab.label}</span>
-      ) : null}
-      {count !== undefined ? (
-        <span
-          aria-label={tab.indicatorLabel}
-          className={cn(
-            COUNT_BADGE_CLASS,
-            layout !== "row" && "absolute right-0 top-0",
-          )}
-        >
-          {count > 99 ? "99+" : count}
-        </span>
-      ) : tab.indicator ? (
-        <span
-          aria-label={tab.indicatorLabel}
-          className={cn(
-            "size-1.5 shrink-0 rounded-full bg-primary",
-            layout !== "row" && "absolute right-0.5 top-0.5",
-            tab.indicator === "activity" &&
-              "animate-pulse ring-2 ring-primary/30",
-          )}
-        />
-      ) : null}
-    </TabsTrigger>
-  );
-  // A visible label needs no tooltip repeating it.
-  if (!labelHidden) return trigger;
+  const { icon, activeIcon } = tabIcons(tab.icon);
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        {/* Span keeps Tooltip `data-state` off the trigger — Radix Tabs also
-            uses `data-state` for active/inactive. */}
-        <span className="inline-flex">{trigger}</span>
-      </TooltipTrigger>
-      <TooltipContent side="left" className="text-xs">
-        {tab.label}
-      </TooltipContent>
-    </Tooltip>
+    <SidePanelTabs.Tab
+      value={tab.value}
+      label={tab.label}
+      icon={icon}
+      activeIcon={activeIcon}
+      layout={layout}
+      count={tab.count}
+      indicator={tab.indicator}
+      indicatorLabel={tab.indicatorLabel}
+      onReselect={onReselect}
+      reselectHint={reselectHint}
+      className={TAB_HOVER_CLASS}
+    />
   );
 }

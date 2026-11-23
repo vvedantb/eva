@@ -1,50 +1,60 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect } from "vitest";
 import { createSessionStore } from "../session/createSessionStore.js";
 
-test("createSessionStore reads and writes resume id", () => {
-  const dir = mkdtempSync(join(tmpdir(), "session-store-"));
-  let activeId = "";
-  const store = createSessionStore({
+function storePaths(dir: string) {
+  return {
     runtimeHomeDir: dir + "/runtime",
     persistDir: dir + "/persist",
     localStateFile: dir + "/runtime/session-state.json",
     persistStateFile: dir + "/persist/session-state.json",
+  };
+}
+
+test("createSessionStore reads and writes resume id", () => {
+  const dir = mkdtempSync(join(tmpdir(), "session-store-"));
+  let activeId = "";
+  const store = createSessionStore({
+    ...storePaths(dir),
     resumeField: "resumeSessionId",
     getActiveId: () => activeId,
-    setActiveId: (id) => {
-      activeId = id;
-    },
   });
 
   expect(store.readSessionState()).toBe(null);
   activeId = "sess-123";
   store.writeSessionState();
-  const read = store.readSessionState();
-  expect(read).toBeTruthy();
-  if (read) {
-    expect(read.resumeSessionId).toBe("sess-123");
-  }
+  expect(store.readSessionState()).toEqual({ resumeSessionId: "sess-123" });
 });
 
-test("createSessionStore resolveResumeId prefers local state", () => {
+/**
+ * The local file is this sandbox's live state; the persist copy can lag it by
+ * a turn. Without a local file (hydrate copy failed), the persist copy is
+ * still a valid resume point.
+ */
+test("readSessionState prefers local state and falls back to the persist copy", () => {
   const dir = mkdtempSync(join(tmpdir(), "session-store-"));
-  mkdirSync(dir + "/runtime", { recursive: true });
+  const paths = storePaths(dir);
+  mkdirSync(paths.runtimeHomeDir, { recursive: true });
+  mkdirSync(paths.persistDir, { recursive: true });
   writeFileSync(
-    dir + "/runtime/session-state.json",
-    JSON.stringify({ resumeThreadId: "thread-abc", updatedAt: "t" }),
-    "utf8",
+    paths.localStateFile,
+    JSON.stringify({ resumeThreadId: "thread-local" }),
+  );
+  writeFileSync(
+    paths.persistStateFile,
+    JSON.stringify({ resumeThreadId: "thread-persisted" }),
   );
   const store = createSessionStore({
-    runtimeHomeDir: dir + "/runtime",
-    persistDir: dir + "/persist",
-    localStateFile: dir + "/runtime/session-state.json",
-    persistStateFile: dir + "/persist/session-state.json",
+    ...paths,
     resumeField: "resumeThreadId",
     getActiveId: () => "",
-    setActiveId: () => {},
   });
-  expect(store.resolveResumeId()).toBe("thread-abc");
+
+  expect(store.readSessionState()).toEqual({ resumeThreadId: "thread-local" });
+  rmSync(paths.localStateFile);
+  expect(store.readSessionState()).toEqual({
+    resumeThreadId: "thread-persisted",
+  });
 });

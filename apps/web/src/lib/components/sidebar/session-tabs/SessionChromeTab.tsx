@@ -154,14 +154,14 @@ export function SessionChromeTab({
                   <span
                     aria-hidden
                     className={cn(
-                      "pointer-events-none absolute -left-2.5 bottom-0 h-2 w-2.5 bg-[radial-gradient(circle_at_top_left,transparent_7.5px,currentColor_8px,currentColor_10px,rgb(var(--background))_10.5px)]",
+                      "pointer-events-none absolute -left-2.5 bottom-0 h-2 w-2.5 bg-[radial-gradient(circle_at_top_left,transparent_7.5px,currentColor_8px,currentColor_10px,var(--background)_10.5px)]",
                       groupColor.accent,
                     )}
                   />
                   <span
                     aria-hidden
                     className={cn(
-                      "pointer-events-none absolute -right-2.5 bottom-0 h-2 w-2.5 bg-[radial-gradient(circle_at_top_right,transparent_7.5px,currentColor_8px,currentColor_10px,rgb(var(--background))_10.5px)]",
+                      "pointer-events-none absolute -right-2.5 bottom-0 h-2 w-2.5 bg-[radial-gradient(circle_at_top_right,transparent_7.5px,currentColor_8px,currentColor_10px,var(--background)_10.5px)]",
                       groupColor.accent,
                     )}
                   />

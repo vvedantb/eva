@@ -63,6 +63,7 @@ test("codex sets toolUseId, file_change files, and failed isError", () => {
   expect(shell?.toolUseId).toBe("item_shell1");
   expect(shell?.output?.text).toContain("PASS");
   expect(shell?.output?.exitCode).toBe(0);
+  expect(shell?.status).toBe("complete");
 
   const files = S.accumulatedSteps.find((s) => s.toolUseId === "item_fc1");
   expect(files?.type).toBe("edit");
@@ -120,6 +121,112 @@ test("opencode captures output, exit, error, and durationMs", () => {
   const err = S.accumulatedSteps.find((s) => s.toolUseId === "part_oc2");
   expect(err?.isError).toBe(true);
   expect(err?.output?.text).toContain("exit status 1");
+});
+
+test("every provider redacts secrets and tail-caps tool output", () => {
+  // Fake token in the GitHub shape. It sits at the tail, so it survives the
+  // cap and only redaction can remove it.
+  const token = "ghp_" + "A".repeat(36);
+  const raw = "x".repeat(3000) + "\npushed with GH_TOKEN=" + token;
+  const streams: [string, JsonObject[]][] = [
+    [
+      "claude",
+      [
+        {
+          type: "assistant",
+          message: {
+            content: [
+              {
+                type: "tool_use",
+                id: "t1",
+                name: "Bash",
+                input: { command: "git push" },
+              },
+            ],
+          },
+        },
+        {
+          type: "user",
+          message: {
+            content: [{ type: "tool_result", tool_use_id: "t1", content: raw }],
+          },
+        },
+      ],
+    ],
+    [
+      "codex",
+      [
+        {
+          type: "item.started",
+          item: { id: "t1", type: "command_execution", command: "git push" },
+        },
+        {
+          type: "item.completed",
+          item: {
+            id: "t1",
+            type: "command_execution",
+            aggregated_output: raw,
+            exit_code: 0,
+          },
+        },
+      ],
+    ],
+    [
+      "cursor",
+      [
+        {
+          type: "tool_call",
+          status: "running",
+          call_id: "t1",
+          name: "shell",
+          args: { command: "git push" },
+        },
+        {
+          type: "tool_call",
+          status: "completed",
+          call_id: "t1",
+          name: "shell",
+          result: { status: "success", value: { stdout: raw, exitCode: 0 } },
+        },
+      ],
+    ],
+    [
+      "opencode",
+      [
+        {
+          type: "tool_use",
+          part: {
+            id: "t1",
+            tool: "bash",
+            state: { status: "running", input: { command: "git push" } },
+          },
+        },
+        {
+          type: "tool_use",
+          part: {
+            id: "t1",
+            tool: "bash",
+            state: {
+              status: "completed",
+              output: raw,
+              input: { command: "git push" },
+            },
+          },
+        },
+      ],
+    ],
+  ];
+  for (const [provider, events] of streams) {
+    resetStateForTests();
+    for (const event of events) {
+      applyCanonicalEvents(parseToCanonical(event, provider));
+    }
+    const output = S.accumulatedSteps.find((s) => s.toolUseId === "t1")?.output;
+    expect(output?.text, provider).toMatch(/GH_TOKEN=\*\*\*$/);
+    expect(output?.text, provider).not.toContain("ghp_");
+    expect(output?.text.length, provider).toBe(1200);
+    expect(output?.truncated, provider).toBe(true);
+  }
 });
 
 test("a wrong-typed field never costs a sibling field", () => {

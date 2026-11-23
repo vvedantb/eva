@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api, DAILY_STANDUP_KEY } from "@eva/backend";
@@ -44,8 +45,19 @@ const standupProseClass =
 export function TodayClient() {
   const { repoId } = useRepo();
   const entries = useQuery(api.today.listStandups, { repoId });
-  const enabled = useQuery(api.today.isStandupEnabled, { repoId });
+  const status = useQuery(api.today.standupStatus, { repoId });
+  const enabled = status?.enabled;
+  const unreadAt = status?.unreadAt ?? null;
   const install = useMutation(api.automations.installSystemAutomation);
+  const markRead = useMutation(api.today.markStandupsRead);
+
+  // Opening Today reads every standup so far. An effect, not a click handler,
+  // because the page is also reached by URL, and a standup that lands while
+  // the page is open is read on arrival. It only writes while one is unread.
+  useEffect(() => {
+    if (unreadAt === null) return;
+    void markRead({ repoId });
+  }, [unreadAt, repoId, markRead]);
 
   return (
     <PageWrapper title="Today" comfortable>
