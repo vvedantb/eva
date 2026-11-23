@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: view switchers slide (quick tasks, projects, testing arena)
+
+Date: 2026-11-23
+
+WHY: The quick tasks Kanban/List switch, the projects Kanban/Timeline/List switch and the testing arena Code/Browser tabs now slide from the side of the picked view, like the other tab sets.
+
+Architectural: `QuickTasksClient` and `ProjectsClient` replace their per-view `AnimatePresence` fade-ups with `TabsTransition`. Quick tasks keep one fade-up branch for entering from loading or empty, with the board/list slide inside it. The orders are `QUICK_TASK_VIEWS` (now also the toolbar's type guard), `PROJECT_VIEW_ORDER` (from `VIEW_OPTIONS`) and `ARENA_TABS`. Each project view keeps its own layout via `PROJECT_VIEW_PANEL_CLASS`. List filters (active/archived and the like) and the timeline range stay instant.
+
 ## Web: quick task Task/Sandbox and project tabs slide (@vvedantb/ui 0.62.1)
 
 Date: 2026-11-23
