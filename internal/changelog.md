@@ -7,6 +7,13 @@ Date: 2026-11-23
 WHY: A recap started only when a reply finished while you were away, so reopening a session whose last reply you had seen showed nothing, however long you were gone.
 
 Architectural: `useChatReadState` now calls `markRead` on every open, not only when a reply is unread. `chatReads` rows gain `lastVisitedAt` (written at most once a minute). `maybeStartRecap` measures the absence from the later of the read and the visit: a missed turn after 30 minutes gives the "away" recap; nothing new after `RECAP_REVISIT_MS` (4 hours) gives a "full" ("Recap") one. One more mutation per chat open. While a chat is on screen, `touchVisit` moves `lastVisitedAt` every 5 minutes and once on leaving, so watching a long turn no longer reads as being away (the old rule measured from the open or the last read, so a watched 30-minute turn showed "Since you've been gone"). Recaps now start only on an open (`markRead({ opened: true })`), never when a reply lands on a watched chat, and an open deletes the recap from an earlier visit (`expireRecap`): prod held 5 recaps, one 73 hours old with nothing after it, shown again on every open.
+## Web: team tab content slides from the picked tab's side (@vvedantb/ui 0.62.0)
+
+Date: 2026-11-23
+
+WHY: Switching tabs on a team page swapped the content at once; a short slide from the side of the picked tab shows where the new content came from, as a phone swipe does.
+
+Architectural: packages #336 adds `TabsTransition` (`"none"`, `"slide"`, `"push"`; `value` plus `order`, built on Motion `AnimatePresence` with a custom direction) and `UiConfig.Tabs.transition`. `@eva/ui` `controlsConfig` sets `transition: "slide"` (32px plus fade, 240 ms in, 140 ms out). `TeamDetailClient` wraps its panels in `TabsTransition` with the exported `teamDetailTabs` order. Other tab pages opt in by wrapping their panels the same way. `@vvedantb/ui` is now 0.62.0 in every workspace (it was a mix of 0.55.0, 0.57.0 and ^0.60.0).
 
 ## Callback tests: pruned, repaired, type-checked, security gaps covered
 

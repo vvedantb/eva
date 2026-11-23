@@ -1,7 +1,11 @@
 import { useRef } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
-import { isTeamDetailTab, type TeamDetailTab } from "@/lib/search-params";
+import {
+  isTeamDetailTab,
+  teamDetailTabs,
+  type TeamDetailTab,
+} from "@/lib/search-params";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { RepoLogo } from "@/lib/components/RepoLogo";
@@ -11,6 +15,7 @@ import {
   Tabs,
   TabsList,
   TabsTrigger,
+  TabsTransition,
   Button,
   CenteredSpinner,
 } from "@vvedantb/ui";
@@ -237,27 +242,29 @@ export function TeamDetailClient({
         </div>
       </div>
 
-      {tab === "activity" ? <TeamActivityTab members={members} /> : null}
-      {tab === "members" ? (
-        <TeamMembersTab
-          teamId={team._id}
-          teamName={displayName}
-          members={members}
-          isOwner={isOwner}
-        />
-      ) : null}
-      {simpleView ? null : tab === "codebases" ? (
-        <TeamReposTab
-          teamId={team._id}
-          repos={repos}
-          allRepos={allRepos}
-          isOwner={isOwner}
-        />
-      ) : null}
-      {simpleView ? null : tab === "env" ? (
-        <TeamEnvVarsTab teamId={team._id} teamEnvVars={teamEnvVars} />
-      ) : null}
-      {tab === "artifacts" ? <TeamArtifactsTab teamId={team._id} /> : null}
+      <TabsTransition value={tab} order={teamDetailTabs}>
+        {tab === "activity" ? <TeamActivityTab members={members} /> : null}
+        {tab === "members" ? (
+          <TeamMembersTab
+            teamId={team._id}
+            teamName={displayName}
+            members={members}
+            isOwner={isOwner}
+          />
+        ) : null}
+        {simpleView ? null : tab === "codebases" ? (
+          <TeamReposTab
+            teamId={team._id}
+            repos={repos}
+            allRepos={allRepos}
+            isOwner={isOwner}
+          />
+        ) : null}
+        {simpleView ? null : tab === "env" ? (
+          <TeamEnvVarsTab teamId={team._id} teamEnvVars={teamEnvVars} />
+        ) : null}
+        {tab === "artifacts" ? <TeamArtifactsTab teamId={team._id} /> : null}
+      </TabsTransition>
     </PageWrapper>
   );
 }
