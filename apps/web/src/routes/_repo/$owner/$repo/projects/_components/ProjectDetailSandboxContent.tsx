@@ -4,7 +4,6 @@ import { ProjectSandboxPanel } from "@/lib/components/projects/ProjectSandboxPan
 import { ProjectSandboxChatPanel } from "@/lib/components/projects/ProjectSandboxChatPanel";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { SandboxSurfaceProviders } from "@/lib/components/sandbox/SandboxSurfaceProviders";
-import { SandboxEmptyRailFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
 import { ProjectTasksPanel } from "@/lib/components/projects/ProjectTasksPanel";
 import type { ProjectSandboxTab } from "@/lib/components/projects/projectSandboxTabs";
 import {
@@ -175,14 +174,10 @@ export function ProjectDetailSandboxContent({
           }
         </SandboxWorkspace>
       ) : (
-        // No session yet, so no sandbox tabs: the card holds the Tasks tab
-        // (feedback can wait in Triage before the coordinator ever ran).
-        layout(({ rightPanelCollapsed, onToggleRightPanel }) => (
-          <SandboxEmptyRailFrame
-            collapsed={rightPanelCollapsed}
-            onToggle={onToggleRightPanel}
-            fill
-          >
+        // No session yet, so no sandbox tabs: the card holds only the Tasks
+        // list (feedback can wait in Triage before the coordinator ever ran).
+        layout(() => (
+          <div className="flex h-full min-h-0 flex-col">
             <ProjectTasksPanel
               projectId={projectId}
               projectNumId={projectNumId}
@@ -190,7 +185,7 @@ export function ProjectDetailSandboxContent({
               basePath={basePath}
               canContribute={!isViewer}
             />
-          </SandboxEmptyRailFrame>
+          </div>
         ))
       )}
     </SandboxSurfaceProviders>
