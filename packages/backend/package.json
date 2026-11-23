@@ -11,7 +11,7 @@
     "dev:evalucom": "cross-env CONVEX_DEPLOYMENT=dev:good-mule-506 convex dev",
     "dev:all": "concurrently -n personal,evalucom -c blue,green \"pnpm dev:personal\" \"pnpm dev:evalucom\"",
     "typecheck": "tsrs --noEmit --fast -p convex/tsconfig.json",
-    "typecheck:callback": "tsrs --noEmit --fast -p callback-src/tsconfig.json",
+    "typecheck:callback": "tsrs --noEmit --fast -p callback-src/tsconfig.json && tsrs --noEmit --fast -p callback-src/tests/tsconfig.json",
     "typecheck:annotation": "tsrs --noEmit --fast -p preview-annotation-src/tsconfig.json",
     "build:callback": "node scripts/build-callback-script.mjs",
     "build:annotation": "node scripts/build-annotation-script.mjs",

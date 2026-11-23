@@ -1,5 +1,13 @@
 # Changelog
 
+## Callback tests: pruned, repaired, type-checked, security gaps covered
+
+Date: 2026-11-23
+
+WHY: Devs found the tests low-value. An audit of `callback-src/tests` showed 81% sound, but duplicates, assertions that could not fail, test-only seams, and no tests on secret redaction or the media-upload guard.
+
+Architectural: Duplicate and vacuous tests are merged into one keeper per contract or deleted; weak assertions now fail when behaviour breaks (each new or repaired test was proven by a deliberate code break). New tests cover redaction of tool output and turn completions, the symlink/hard-link media guard, non-Claude `extractResultEvent`, session resume after restart, `enforceTurnLease` and the deposition fence. Test-only seams and dead code are removed (`fetchFn`/`env` on `ensureGithubToken`, `isRival`, `waitMs`, `buildTurnCompletion`, `resolveResumeId`, `setActiveId`, `stopBranchWatcher`, background-shell test helpers, null-lease branches). `typecheck:callback` now also type-checks `callback-src/tests` (`callback-src/tests/tsconfig.json`).
+
 ## Session summary: schema field and turn lane removed
 
 Date: 2026-11-19

@@ -21,6 +21,15 @@ vi.mock("../http/convexClient.js", async (importOriginal) => ({
 const originalClaim = process.env.CLAIM_MUTATION;
 const originalEntityField = process.env.ENTITY_ID_FIELD;
 
+/** The SDK's per-call permission options for one tool use. */
+function permissionOptions(toolUseID: string) {
+  return {
+    toolUseID,
+    requestId: "req_" + toolUseID,
+    signal: new AbortController().signal,
+  };
+}
+
 afterEach(() => {
   if (originalClaim === undefined) {
     delete process.env.CLAIM_MUTATION;
@@ -47,11 +56,11 @@ describe("buildCanUseTool Agent/Task background policy", () => {
     const result = await canUseTool(
       "Agent",
       { run_in_background: true },
-      { toolUseID: "toolu_test", signal: new AbortController().signal },
+      permissionOptions("toolu_test"),
     );
-    expect(result.behavior).toBe("allow");
-    if (result.behavior === "allow") {
-      expect(result.updatedInput.run_in_background).toBe(true);
+    expect(result?.behavior).toBe("allow");
+    if (result?.behavior === "allow") {
+      expect(result.updatedInput?.run_in_background).toBe(true);
     }
   });
 
@@ -63,11 +72,11 @@ describe("buildCanUseTool Agent/Task background policy", () => {
     const result = await canUseTool(
       "Task",
       { run_in_background: true },
-      { toolUseID: "toolu_test", signal: new AbortController().signal },
+      permissionOptions("toolu_test"),
     );
-    expect(result.behavior).toBe("allow");
-    if (result.behavior === "allow") {
-      expect(result.updatedInput.run_in_background).toBe(false);
+    expect(result?.behavior).toBe("allow");
+    if (result?.behavior === "allow") {
+      expect(result.updatedInput?.run_in_background).toBe(false);
     }
   });
 });
@@ -85,11 +94,11 @@ describe("buildCanUseTool AskUserQuestion answers", () => {
     const result = await canUseTool(
       "AskUserQuestion",
       { questions: [{ question: "Which?", options: [{ label: "A" }] }] },
-      { toolUseID: "toolu_q", signal: new AbortController().signal },
+      permissionOptions("toolu_q"),
     );
-    expect(result.behavior).toBe("allow");
-    if (result.behavior === "allow") {
-      expect(result.updatedInput.answers).toEqual({
+    expect(result?.behavior).toBe("allow");
+    if (result?.behavior === "allow") {
+      expect(result.updatedInput?.answers).toEqual({
         "Which?": "A",
         ignored: 1,
       });
@@ -134,10 +143,7 @@ describe("AskUserQuestion past the wait", () => {
       },
     );
     vi.useFakeTimers();
-    const pending = buildCanUseTool()("AskUserQuestion", input, {
-      toolUseID: "toolu_q",
-      signal: new AbortController().signal,
-    });
+    const pending = buildCanUseTool()("AskUserQuestion", input, permissionOptions("toolu_q"));
     await vi.advanceTimersByTimeAsync(QUESTION_WAIT_MS + 1000);
     const result = await pending;
     return { result, calls, callbackState };
@@ -198,15 +204,12 @@ describe("the canUseTool gate grants MCP on every surface", () => {
     return buildCanUseTool();
   }
 
-  const options = () => ({
-    toolUseID: "toolu_test",
-    signal: new AbortController().signal,
-  });
+  const options = () => permissionOptions("toolu_test");
 
   test("an MCP tool is allowed on a task chat", async () => {
     const canUseTool = await gateFor("taskId");
     const result = await canUseTool("mcp__eva__list_repos", {}, options());
-    expect(result.behavior).toBe("allow");
+    expect(result?.behavior).toBe("allow");
   });
 
   test("a surface with no answering UI lets AskUserQuestion through instead of blocking", async () => {

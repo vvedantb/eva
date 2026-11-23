@@ -5,6 +5,7 @@ import {
   resetSdkTaxonomyStateForTest,
 } from "../parse/sdkTaxonomy.js";
 import { applyCanonicalEvents } from "../parse/canonical.js";
+import type { JsonObject } from "../types.js";
 
 beforeEach(() => {
   resetStateForTests();
@@ -216,7 +217,7 @@ test("parseClaudeSdkTaxonomy ignores malformed events without throwing", () => {
       },
     },
   ]);
-  for (const event of [
+  const malformed: JsonObject[] = [
     {},
     { type: "   " },
     { type: 7 },
@@ -228,7 +229,8 @@ test("parseClaudeSdkTaxonomy ignores malformed events without throwing", () => {
       elapsed_time_seconds: "12",
     },
     { type: "system", subtype: "hook_started", hook_name: "Hook" },
-  ]) {
+  ];
+  for (const event of malformed) {
     expect(parseClaudeSdkTaxonomy(event)).toEqual([]);
   }
   expect(S.accumulatedSteps).toHaveLength(1);

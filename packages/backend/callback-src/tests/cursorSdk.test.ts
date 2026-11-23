@@ -283,6 +283,7 @@ test("filterModeParamsByModel keeps params the model declares", () => {
   const candidates = cursorModeParams("grok-4.5", false, true);
   const model = {
     id: "grok-4.5",
+    displayName: "Grok 4.5",
     parameters: [
       { id: "fast", values: [{ value: "true" }, { value: "false" }] },
       { id: "context", values: [{ value: "1m" }] },
@@ -296,20 +297,29 @@ test("filterModeParamsByModel keeps params the model declares", () => {
 
 test("filterModeParamsByModel drops params the model does not declare", () => {
   const candidates = cursorModeParams("grok-4.5", false, true);
-  const model = { id: "grok-4.5", parameters: [{ id: "reasoning" }] };
+  const model = {
+    id: "grok-4.5",
+    displayName: "Grok 4.5",
+    parameters: [{ id: "reasoning", values: [] }],
+  };
   expect(filterModeParamsByModel(candidates, model, opted(false, true))).toEqual(
     [],
   );
   // Declared id but undeclared value drops too.
   const wrongValue = {
     id: "grok-4.5",
+    displayName: "Grok 4.5",
     parameters: [{ id: "context", values: [{ value: "500k" }] }],
   };
   expect(
     filterModeParamsByModel(candidates, wrongValue, opted(false, true)),
   ).toEqual([]);
   // A declared id with an empty values list accepts any value.
-  const openValues = { id: "grok-4.5", parameters: [{ id: "fast" }] };
+  const openValues = {
+    id: "grok-4.5",
+    displayName: "Grok 4.5",
+    parameters: [{ id: "fast", values: [] }],
+  };
   expect(
     filterModeParamsByModel(candidates, openValues, opted(false, true)),
   ).toEqual([{ id: "fast", value: "false" }]);
@@ -640,7 +650,9 @@ test("resolveCursorTurnCostUsd polls while the backend lags, then gives up", asy
       calls++;
       return readCursorCostSnapshot(agentUsage(null, [["this-turn", null]]));
     },
-    sleep: async (delayMs) => delays.push(delayMs),
+    sleep: async (delayMs) => {
+      delays.push(delayMs);
+    },
   });
   // Cost is eventually consistent, so a gap is not final until the budget is.
   expect(calls).toBe(COST_LOOKUP_RETRY_DELAYS_MS.length + 1);
@@ -658,7 +670,9 @@ test("resolveCursorTurnCostUsd polls while the backend lags, then gives up", asy
         agentUsage(null, [["this-turn", lateCalls > 1 ? 250 : null]]),
       );
     },
-    sleep: async (delayMs) => lateDelays.push(delayMs),
+    sleep: async (delayMs) => {
+      lateDelays.push(delayMs);
+    },
   });
   expect(lateCalls).toBe(2);
   expect(lateDelays).toEqual([COST_LOOKUP_RETRY_DELAYS_MS[0]]);

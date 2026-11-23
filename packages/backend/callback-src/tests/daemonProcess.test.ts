@@ -14,6 +14,7 @@ import {
   pidAlive,
   readPidFromFile,
   selectClaimPollIntervalMs,
+  startDaemonDepositionFence,
   writeOomScoreAdj,
 } from "../runtime/daemonProcess.js";
 
@@ -181,4 +182,32 @@ test("cleanOwnedDaemonMarkers only unlinks when this pid owns the file", () => {
   });
   expect(existsSync(paths.pid)).toBe(false);
   rmSync(dir, { recursive: true, force: true });
+});
+
+/**
+ * A launch that races past the boot claim overwrites the pidfile; the deposed
+ * daemon must exit or it double-claims turns forever, but never mid-turn.
+ */
+test("a deposed daemon exits only once its active work ends", () => {
+  vi.useFakeTimers();
+  let busy = true;
+  const onDeposedIdle = vi.fn();
+  const fence = startDaemonDepositionFence({
+    readOwnerPid: () => process.pid + 1,
+    hasActiveWork: () => busy,
+    pollIntervalMs: 1000,
+    log: () => {},
+    logPrefix: "test daemon",
+    onDeposedIdle,
+  });
+  try {
+    vi.advanceTimersByTime(5000);
+    expect(onDeposedIdle).not.toHaveBeenCalled();
+    busy = false;
+    vi.advanceTimersByTime(1000);
+    expect(onDeposedIdle).toHaveBeenCalledTimes(1);
+  } finally {
+    fence.stop();
+    vi.useRealTimers();
+  }
 });
