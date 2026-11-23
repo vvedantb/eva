@@ -31,6 +31,7 @@ import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { stackBaseParser, stackOnPrParser } from "@/lib/search-params";
 import { CodebasesPicker, useCodebasesSelection } from "./CodebasesPicker";
 import { EvaSetupCard } from "./EvaSetupCard";
+import { TodayStandupCard } from "./TodayStandupCard";
 
 /**
  * Shared landing composer for repo home and `/sessions`: branding + prompt,
@@ -152,6 +153,7 @@ export function NewSessionComposer() {
     <div className="flex h-full items-center justify-center p-4 sm:p-6">
       <div className="flex w-full max-w-2xl flex-col gap-3">
         <EvaSetupCard />
+        <TodayStandupCard />
         <h1 className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
           <span>
             {firstName ? (
