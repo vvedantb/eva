@@ -1,5 +1,13 @@
 # Changelog
 
+## Recap on a revisit after 4 hours
+
+Date: 2026-11-23
+
+WHY: A recap started only when a reply finished while you were away, so reopening a session whose last reply you had seen showed nothing, however long you were gone.
+
+Architectural: `useChatReadState` now calls `markRead` on every open, not only when a reply is unread. `chatReads` rows gain `lastVisitedAt` (written at most once a minute). `maybeStartRecap` measures the absence from the later of the read and the visit: a missed turn after 30 minutes gives the "away" recap; nothing new after `RECAP_REVISIT_MS` (4 hours) gives a "full" ("Recap") one. One more mutation per chat open.
+
 ## Web: `globals.css` imports `@vvedantb/ui/tokens` with full colours
 
 Date: 2026-11-22

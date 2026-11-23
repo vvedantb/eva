@@ -14,9 +14,10 @@ export type ChatReadParentId = FunctionArgs<typeof api.chatReads.markRead>["pare
 /**
  * Read state of the open chat.
  *
- * - Marks the chat read while it is on screen (`active`: the web's route and
- *   tab visibility, the phone's screen focus and app foreground), and again
- *   when a reply lands while it is.
+ * - Marks the chat read each time it comes on screen (`active`: the web's
+ *   route and tab visibility, the phone's screen focus and app foreground),
+ *   and again when a reply lands while it is. The server also records the
+ *   visit and may start a recap.
  * - Returns `newSinceAt`, the read time from before `markRead` moved it, which
  *   the "NEW" divider anchors on. It is captured from the first `isUnread`
  *   result after the chat becomes active and held until it goes inactive or
@@ -48,9 +49,15 @@ export function useChatReadState({
 
   const hasUnread = read?.hasUnread;
   /* eslint-disable no-effect/no-event-handler --
-     The trigger is a turn finishing on the server, which arrives as a
-     live-query change to `isUnread`; there is no local event to mark read
-     from. */
+     The triggers are the chat coming on screen (web route and tab, phone
+     focus and foreground: no single event across both apps) and a turn
+     finishing on the server, which arrives as a live-query change to
+     `isUnread`. Every open marks, read or not: the server decides on it
+     whether to write a recap (`chatRecaps.maybeStartRecap`). */
+  useEffect(() => {
+    if (!isActive || parentId === undefined) return;
+    void markRead({ parentId });
+  }, [parentId, isActive, markRead]);
   useEffect(() => {
     if (!isActive || parentId === undefined || hasUnread !== true) return;
     void markRead({ parentId });

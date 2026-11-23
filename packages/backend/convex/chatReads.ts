@@ -177,17 +177,17 @@ export const isUnread = authQuery({
   },
 });
 
-/**
- * Upserts the user's read row for one chat entity, skipping repeat calls past
- * its watermark. Returns the read time it replaced, if it moved one.
- */
+/** `lastVisitedAt` moves at most this often; recaps need minutes, not seconds. */
+const VISIT_WRITE_INTERVAL_MS = 60_000;
+
+/** Upserts the user's read row for one chat entity, skipping repeat calls past its watermark. */
 async function upsertReadRow(
   ctx: MutationCtx,
   userId: Id<"users">,
   entity: ChatEntity,
-): Promise<number | undefined> {
+): Promise<void> {
   // A task with no repo is never unread (see `hasUnreadFor`); nothing to store.
-  if (entity.repoId === undefined) return undefined;
+  if (entity.repoId === undefined) return;
   const row = await getReadRow(ctx.db, userId, entity._id);
   const lastReadAt = Date.now();
   if (!row) {
@@ -197,12 +197,11 @@ async function upsertReadRow(
       repoId: entity.repoId,
       lastReadAt,
     });
-    return undefined;
+    return;
   }
   // Already past the watermark: skip, so repeat calls on mount do not churn.
-  if (row.lastReadAt >= (entity.lastTurnFinishedAt ?? 0)) return undefined;
+  if (row.lastReadAt >= (entity.lastTurnFinishedAt ?? 0)) return;
   await ctx.db.patch(row._id, { lastReadAt, repoId: entity.repoId });
-  return row.lastReadAt;
 }
 
 export const markRead = authMutation({
@@ -212,16 +211,23 @@ export const markRead = authMutation({
     await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
     const entity = await ctx.db.get(args.parentId);
     if (!entity) return null;
-    const previousReadAt = await upsertReadRow(ctx, ctx.userId, entity);
-    // A first open (no read row yet) has no absence to recap.
-    if (previousReadAt !== undefined) {
+    const now = Date.now();
+    // Read before the upsert moves it. A first open (no row) has no absence.
+    const row = await getReadRow(ctx.db, ctx.userId, args.parentId);
+    await upsertReadRow(ctx, ctx.userId, entity);
+    if (row) {
       await maybeStartRecap(ctx, {
         userId: ctx.userId,
         parentId: args.parentId,
-        previousReadAt,
+        lastReadAt: row.lastReadAt,
+        lastSeenAt: Math.max(row.lastReadAt, row.lastVisitedAt ?? 0),
         lastTurnFinishedAt: entity.lastTurnFinishedAt,
-        now: Date.now(),
+        now,
       });
+      // Throttled: the client marks on every open and every landed reply.
+      if (now - (row.lastVisitedAt ?? 0) > VISIT_WRITE_INTERVAL_MS) {
+        await ctx.db.patch(row._id, { lastVisitedAt: now });
+      }
     }
     // The sidebar keys a session's unread dot by the session id, so reading
     // one of its chats also reads the session.
