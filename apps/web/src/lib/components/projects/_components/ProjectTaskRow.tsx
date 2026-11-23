@@ -26,7 +26,7 @@ import { ProjectTaskBadges } from "./ProjectTaskBadges";
 /**
  * One compact row of a project's task list: the stripe is the task's display
  * status (`projectTaskDisplayStatus`). A Triage row's second line is its
- * origin, and a contributor approves or rejects it there. A task in a repo
+ * origin, with Approve and Reject. A task in a repo
  * the reader cannot open is a locked row: its number and a lock, no title
  * and no link.
  */
@@ -41,7 +41,6 @@ export function ProjectTaskRow({
   projectNumId,
   homeRepoId,
   reposById,
-  canContribute,
 }: {
   task: ProjectTaskListRow;
   view: ProjectTaskView;
@@ -55,7 +54,6 @@ export function ProjectTaskRow({
   projectNumId?: number;
   homeRepoId: Id<"githubRepos">;
   reposById: ReadonlyMap<string, RepoAppMarkRepo>;
-  canContribute: boolean;
 }) {
   const statusConfig = projectTaskDisplayStatusConfig[view.displayStatus];
   if (task.locked === true) {
@@ -89,7 +87,7 @@ export function ProjectTaskRow({
     : undefined;
   const isFeedback = !isTriage && task.origin === "feedback";
   const needsYou = isTriage ? undefined : view.needsYou;
-  const canTriage = canContribute && isTriage && isUnapprovedTodoTask(task);
+  const canTriage = isTriage && isUnapprovedTodoTask(task);
   const { waitingForCoordinator } = view;
   const reports = notes?.reports ?? [];
   const hasBadges =

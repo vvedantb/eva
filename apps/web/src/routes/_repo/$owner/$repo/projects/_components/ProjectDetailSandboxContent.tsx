@@ -52,11 +52,7 @@ export function ProjectDetailSandboxContent({
   openDiffs,
   openAgentsTab,
 }: ProjectDetailSandboxContentProps) {
-  // A viewer reads the coordinator chat but never writes to it or wakes it.
-  // A contributor can always wake it: a project has no closed state.
-  // Project roles are gone: everyone with repo access contributes.
-  const isViewer = false;
-  const canStartSandbox = !isViewer;
+  // The coordinator can always wake: a project has no closed state.
   const {
     isSandboxActive,
     isSandboxStarting,
@@ -91,15 +87,11 @@ export function ProjectDetailSandboxContent({
       panes={panes}
       terminalPanel={terminalPanel}
       sandboxTab={sandboxTab}
-      canContribute={!isViewer}
-      onStartSandbox={
-        canStartSandbox && !isSandboxStopping ? handleStartSandbox : undefined
-      }
+      onStartSandbox={isSandboxStopping ? undefined : handleStartSandbox}
       isSandboxStarting={isSandboxStarting}
       autoWakeEligible={
         sandbox.sandbox.status === "closed" &&
         projectSandboxId !== undefined &&
-        canStartSandbox &&
         !isProjectBuilding(project) &&
         // Still loading counts as busy: never wake under a live turn.
         chatTurnOpen === false
@@ -133,15 +125,10 @@ export function ProjectDetailSandboxContent({
           onOpenFile={openFile}
           onViewDiff={openDiffs}
           onOpenAgentsTab={openAgentsTab}
-          isReadOnly={isViewer}
-          onSandboxToggle={
-            canStartSandbox
-              ? (action) => {
-                  if (action === "start") void handleStartSandbox();
-                  else void handleStopSandbox();
-                }
-              : undefined
-          }
+          onSandboxToggle={(action) => {
+            if (action === "start") void handleStartSandbox();
+            else void handleStopSandbox();
+          }}
         />
       )}
       rightPanel={rightPanel}
@@ -184,7 +171,6 @@ export function ProjectDetailSandboxContent({
               projectNumId={projectNumId}
               repoId={repoId}
               basePath={basePath}
-              canContribute={!isViewer}
             />
           </div>
         ))

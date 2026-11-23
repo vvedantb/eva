@@ -1,5 +1,6 @@
 import { api, type Id } from "@eva/backend";
-import { entityHref } from "@eva/shared";
+import { entityHref, readableServerError } from "@eva/shared";
+import { projectDeleteNote } from "@eva/shared/projectView";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconClipboard, IconCopy, IconGitBranch, IconLink, IconTrash, IconUserPlus } from "@tabler/icons-react-native";
 import { ConfirmDialog, SheetRow, MenuDivider, MenuSheet, SubmenuRow } from "@vvedantb/native-ui/primitives";
@@ -32,7 +33,8 @@ type Page = "root" | "lead" | "copy";
  * (`openSheet`), with a page per web submenu: Project Lead and Copy
  * (Title, Link, Branch name), then Delete. Delete asks first, with the web
  * `ProjectDeleteDialog`, and has no Undo, as the web (nothing restores a
- * deleted project); `onDeleted` runs after.
+ * deleted project); `onDeleted` runs after. A refusal (a child task runs)
+ * toasts its reason.
  * The rest act at once. Writes are the web mutations. Render `dialogs` once.
  * Not here from the web menu: Edit details, Open in new tab and the PR submenus.
  */
@@ -169,7 +171,7 @@ export function useProjectActions({
             </Text>
             ?
             <Text style={{ color: theme.warning }}>
-              {"\n\nIts tasks stay as quick tasks, with their chats and PRs. A project with a running task cannot be deleted."}
+              {`\n\n${projectDeleteNote(1)}`}
             </Text>
             {"\n\nThis action cannot be undone."}
           </>
@@ -183,7 +185,8 @@ export function useProjectActions({
               toast.success("Project deleted");
               onDeleted?.();
             })
-            .catch(() => toast.error("Couldn't delete project"));
+            // It refuses while a child task runs: say why.
+            .catch((error: Error) => toast.error(readableServerError(error, "Couldn't delete project")));
         }}
       />
     </>

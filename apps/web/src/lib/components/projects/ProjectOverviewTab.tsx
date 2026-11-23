@@ -16,15 +16,12 @@ export function ProjectOverviewTab({
   title,
   description,
   documentsHref,
-  canContribute,
 }: {
   projectId: Id<"projects">;
   repoId: Id<"githubRepos">;
   title: string;
   description: string | undefined;
   documentsHref: string | undefined;
-  /** A viewer sees every field but cannot change one. */
-  canContribute: boolean;
 }) {
   const { status } = useProjectTaskStatus(projectId, repoId);
   return (
@@ -47,10 +44,7 @@ export function ProjectOverviewTab({
           />
         </div>
         <div className="mt-6 flex shrink-0 flex-col px-4 pb-4 md:mt-0 md:overflow-y-auto md:scrollbar md:px-0 md:pb-6 md:pl-8 md:pr-6 md:pt-5">
-          {/* `disabled` reaches every field control inside: read-only for viewers. */}
-          <fieldset disabled={!canContribute} className="min-w-0">
-            <ProjectFieldsPanel projectId={projectId} />
-          </fieldset>
+          <ProjectFieldsPanel projectId={projectId} />
         </div>
       </div>
     </div>

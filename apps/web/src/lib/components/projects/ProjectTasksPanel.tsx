@@ -16,7 +16,7 @@ import { ProjectTaskListPanel } from "./ProjectTaskListPanel";
 import { useProjectTaskStatus } from "./useProjectStatus";
 
 /**
- * The coordinator rail's Tasks tab: the title (with "+" for a contributor),
+ * The coordinator rail's Tasks tab: the title with "+",
  * the progress bar and counts, then the tasks grouped Triage, Working,
  * Blocked, Idle, Archived. A row opens the task in place of the coordinator.
  */
@@ -25,13 +25,11 @@ export function ProjectTasksPanel({
   projectNumId,
   repoId,
   basePath,
-  canContribute,
 }: {
   projectId: Id<"projects">;
   projectNumId: number | undefined;
   repoId: Id<"githubRepos">;
   basePath: string;
-  canContribute: boolean;
 }) {
   const navigate = useNavigate();
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
@@ -64,16 +62,14 @@ export function ProjectTasksPanel({
       <div className="flex shrink-0 flex-col gap-2 px-4 pt-3 pb-2">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-medium text-foreground">Tasks</h2>
-          {canContribute ? (
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              aria-label="New task"
-              onClick={() => setCreateTaskOpen(true)}
-            >
-              <IconPlus size={14} />
-            </Button>
-          ) : null}
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="New task"
+            onClick={() => setCreateTaskOpen(true)}
+          >
+            <IconPlus size={14} />
+          </Button>
         </div>
         <ProjectProgressBar status={status} />
         <ProjectStageCounts status={status} />
@@ -86,19 +82,16 @@ export function ProjectTasksPanel({
           onSelectTask={openTask}
           projectNumId={projectNumId}
           homeRepoId={repoId}
-          canContribute={canContribute}
         />
       </div>
-      {canContribute ? (
-        <QuickTaskModal
-          isOpen={createTaskOpen}
-          onClose={() => setCreateTaskOpen(false)}
-          projectId={projectId}
-          users={users ?? undefined}
-          projects={projects ?? undefined}
-          allTags={[...tagSet].sort()}
-        />
-      ) : null}
+      <QuickTaskModal
+        isOpen={createTaskOpen}
+        onClose={() => setCreateTaskOpen(false)}
+        projectId={projectId}
+        users={users ?? undefined}
+        projects={projects ?? undefined}
+        allTags={[...tagSet].sort()}
+      />
     </div>
   );
 }

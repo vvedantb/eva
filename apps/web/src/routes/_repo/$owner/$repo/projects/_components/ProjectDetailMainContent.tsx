@@ -80,7 +80,6 @@ export function ProjectDetailMainContent({
                   ? `${projectHref}/sandbox/documents`
                   : undefined
               }
-              canContribute
             />
           ) : view === "plan" ? (
             <ProjectTabs
@@ -101,6 +100,11 @@ export function ProjectDetailMainContent({
               repoId={project.repoId}
               projectNumId={project.numId}
               coordinatorHref={`${projectHref}/sandbox/tasks`}
+              documentsHref={
+                projectSegment
+                  ? `${projectHref}/sandbox/documents`
+                  : undefined
+              }
               taskId={selectedTaskId}
               taskStatus={selectedTaskStatus}
             />

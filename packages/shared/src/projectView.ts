@@ -67,20 +67,23 @@ export const NEEDS_YOU_LABELS: Record<NeedsYouReason, string> = {
 /** A task that asked its coordinator a question and waits for the answer. */
 export const WAITING_FOR_COORDINATOR_LABEL = "Waiting for coordinator";
 
+/**
+ * The delete confirm's note: `projects.remove` keeps a project's child tasks
+ * as quick tasks (it refuses while one runs, and says so).
+ */
+export function projectDeleteNote(count: number): string {
+  return `${count === 1 ? "Its" : "Their"} tasks stay as quick tasks.`;
+}
+
 /** The project's coordinator hit its hourly cap of automatic turns. */
 export const COORDINATOR_PAUSED_LABEL = "Coordinator paused";
 
 /**
  * The coordinator chat's one-line notice while the hourly cap holds its
- * wake-ups back. A person's message releases them, so the line asks for one
- * only where the reader can send (`canSend`).
+ * wake-ups back. A person's message releases them, so the line asks for one.
  */
-export function coordinatorPausedTitle(
-  maxAutoTurnsPerHour: number,
-  canSend: boolean,
-): string {
-  const title = `${COORDINATOR_PAUSED_LABEL} after ${maxAutoTurnsPerHour} automatic turns this hour.`;
-  return canSend ? `${title} Send a message to continue.` : title;
+export function coordinatorPausedTitle(maxAutoTurnsPerHour: number): string {
+  return `${COORDINATOR_PAUSED_LABEL} after ${maxAutoTurnsPerHour} automatic turns this hour. Send a message to continue.`;
 }
 
 /** The fields of an `agentTasks.listByProject` row the status rules read. */

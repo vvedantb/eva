@@ -1,6 +1,6 @@
 import { findPrimaryPullRequest } from "../_pullRequests/store";
 import { internal } from "../_generated/api";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import {
   phaseValidator,
   priorityValidator,
@@ -257,7 +257,7 @@ export const remove = authMutation({
     const tasks = await listProjectTasks(ctx.db, args.id);
     for (const task of tasks) {
       if (task.status === "in_progress" || (await taskRunPending(ctx.db, task))) {
-        throw new Error(
+        throw new ConvexError(
           `Task ${taskLabel(task)} is running. Stop it or wait for it to end, then delete the project.`,
         );
       }

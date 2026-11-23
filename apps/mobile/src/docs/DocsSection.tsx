@@ -1,5 +1,5 @@
 import { api, type Id } from "@eva/backend";
-import { chatSourceKindLabel, chatSourceShortLabel, type ChatSourceKind } from "@eva/shared";
+import { chatSourceKindLabel, chatSourceShortLabel, type ChatSourceKind, type ChatSourceLabelFields } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
   IconCode,
@@ -27,7 +27,6 @@ import { useScheme, XS_TRACKING } from "@/ui/theme";
 import { LIST_WINDOW } from "@/ui/listWindow";
 
 type DocRow = FunctionReturnType<typeof api.docs.list>[number];
-type DocSource = NonNullable<DocRow["source"]>;
 
 /** The web `ChatSourceBadge` icons, as the Sessions, Quick Tasks and Projects sections. */
 const SOURCE_ICONS: Record<ChatSourceKind, ComponentType<IconProps>> = {
@@ -80,7 +79,22 @@ function DocList({ repoId }: { repoId: Id<"githubRepos"> }) {
   );
 }
 
-function DocListRow({ doc, repoId, onLongPress }: { doc: DocRow; repoId: Id<"githubRepos">; onLongPress: () => void }) {
+/**
+ * One document row. `source` is the badge under the title: the doc's own
+ * source by default, null for none (a project's list names only the task
+ * that made a doc).
+ */
+export function DocListRow({
+  doc,
+  repoId,
+  onLongPress,
+  source = doc.source,
+}: {
+  doc: DocRow;
+  repoId: Id<"githubRepos">;
+  onLongPress: () => void;
+  source?: ChatSourceLabelFields | null;
+}) {
   const router = useRouter();
   const theme = EVA_THEME[useScheme()];
   const title = displayTitle(doc.title);
@@ -98,7 +112,7 @@ function DocListRow({ doc, repoId, onLongPress }: { doc: DocRow; repoId: Id<"git
         <Text numberOfLines={1} className="font-instrument-sans text-sm" style={{ color: theme.foreground }}>
           {title}
         </Text>
-        {doc.source ? <ChatSourceBadge source={doc.source} /> : null}
+        {source ? <ChatSourceBadge source={source} /> : null}
       </View>
       <Text
         className="font-instrument-sans text-xs"
@@ -111,7 +125,7 @@ function DocListRow({ doc, repoId, onLongPress }: { doc: DocRow; repoId: Id<"git
 }
 
 /** The web `ChatSourceBadge`: the chat a doc was made in ("Session #12") on a muted pill, radius 6. */
-function ChatSourceBadge({ source }: { source: DocSource }) {
+export function ChatSourceBadge({ source }: { source: ChatSourceLabelFields }) {
   const theme = EVA_THEME[useScheme()];
   const Icon = SOURCE_ICONS[source.kind];
   return (
@@ -137,7 +151,7 @@ type DocMenuTarget = Pick<DocRow, "_id" | "title" | "source">;
  * Delete, behind the web "Delete Document" confirm, then `docs.remove`
  * with the web toasts. Render `dialogs` once.
  */
-function useDocActions() {
+export function useDocActions() {
   const router = useRouter();
   const theme = EVA_THEME[useScheme()];
   const [target, setTarget] = useState<DocMenuTarget | null>(null);

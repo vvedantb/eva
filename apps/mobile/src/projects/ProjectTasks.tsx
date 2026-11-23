@@ -33,9 +33,8 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
  * order, the rest latest run first; Archived starts folded), with the
  * compact project task rows (`ProjectTaskRow`; a locked row for a task in a
  * repo the reader cannot open). Triage carries "Approve all" (every todo
- * task nobody approved yet). For a contributor, the first section carries
- * "+" (a new task), or the empty state does when there are no tasks; a
- * viewer files feedback from the screen's dock. A tap opens the task.
+ * task nobody approved yet). The first section carries "+" (a new task),
+ * or the empty state does when there are no tasks. A tap opens the task.
  */
 export function ProjectTasks({
   project,
@@ -43,7 +42,6 @@ export function ProjectTasks({
   users,
   tasks,
   failedTaskIds,
-  canContribute,
 }: {
   project: Project;
   repo: Repo;
@@ -51,8 +49,6 @@ export function ProjectTasks({
   /** `agentTasks.listByProject`, undefined while it loads (`useProjectTaskStatus`). */
   tasks: ProjectTaskListRow[] | undefined;
   failedTaskIds: ReadonlySet<string>;
-  /** The reader may approve, cancel and run (`callerRole`). */
-  canContribute: boolean;
 }) {
   const router = useRouter();
   const scheme = useScheme();
@@ -96,7 +92,7 @@ export function ProjectTasks({
     router.push({ pathname: "/quick-task/new", params: { repoId: repo._id, projectId: project._id } });
   const draftTaskIds = new Set<string>(draftMarks?.taskIds ?? []);
   const reposById = new Map((repos ?? []).map((entry) => [String(entry._id), entry]));
-  const toApprove = canContribute ? unapprovedTodoTaskIds(tasks) : [];
+  const toApprove = unapprovedTodoTaskIds(tasks);
 
   const approveAll = () => {
     setApproving(true);
@@ -130,7 +126,7 @@ export function ProjectTasks({
               open={section.open}
               onToggle={() => toggle(section.status)}
               trailing={
-                canContribute && (section.first || section.status === "triage") ? (
+                section.first || section.status === "triage" ? (
                   <View className="mr-1 flex-row items-center gap-1">
                     {section.status === "triage" && toApprove.length > 0 ? (
                       <Button
@@ -174,7 +170,6 @@ export function ProjectTasks({
             projectNumId={project.numId}
             homeRepoId={project.repoId}
             reposById={reposById}
-            canContribute={canContribute}
             onLongPress={() => actions.openSheet(row)}
           />
         )}
@@ -183,16 +178,14 @@ export function ProjectTasks({
             icon={IconLayoutList}
             title="No tasks"
             action={
-              canContribute ? (
-                <Button
-                  size="sm"
-                  fullWidth={false}
-                  leftIcon={<IconPlus size={16} color={EVA_THEME[scheme].primaryForeground} />}
-                  onPress={openNewTask}
-                >
-                  New task
-                </Button>
-              ) : undefined
+              <Button
+                size="sm"
+                fullWidth={false}
+                leftIcon={<IconPlus size={16} color={EVA_THEME[scheme].primaryForeground} />}
+                onPress={openNewTask}
+              >
+                New task
+              </Button>
             }
           />
         }

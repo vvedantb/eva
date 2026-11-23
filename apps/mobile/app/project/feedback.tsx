@@ -16,11 +16,11 @@ import { useAttachments } from "@/chat/useAttachments";
 import { useScheme } from "@/ui/theme";
 
 /**
- * A viewer's one write action in a project, as the web `ProjectFeedbackModal`
- * on a phone: a full screen in place of the dialog, with the text and the
- * chat's file picker (`AttachButton`). "Send" calls
- * `agentTasks.createFeedbackTask`: the task lands in the project's To Do, not
- * approved, so nothing runs until a contributor approves it. Then back to
+ * Feedback on a project, as the web `ProjectFeedbackModal` on a phone: a
+ * full screen in place of the dialog, with the text and the chat's file
+ * picker (`AttachButton`). "Send" calls `agentTasks.createFeedbackTask`: the
+ * task lands in Triage, not approved, so nothing runs until someone
+ * approves it. Then back to
  * the project. Routes as `/project/feedback?projectId=<id>&repo=<repoId>`;
  * the project resolves through the repo's list, so its id keeps its type.
  */

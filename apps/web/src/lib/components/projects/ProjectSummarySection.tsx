@@ -1,7 +1,9 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api, type Id } from "@eva/backend";
+import { cn } from "@eva/ui";
 import type { ProjectStatus } from "@eva/shared/projectStatus";
 import { Markdown } from "@vvedantb/ui";
 import { IconArrowUpRight } from "@tabler/icons-react";
@@ -27,7 +29,6 @@ export function ProjectSummarySection({
   documentsHref: string | undefined;
 }) {
   const summaryDoc = useQuery(api.projects.getSummaryDoc, { projectId });
-  const navigate = useNavigate();
   return (
     <section className="space-y-3">
       <ProjectStageCounts status={status} />
@@ -39,20 +40,13 @@ export function ProjectSummarySection({
               {summaryDoc.title}
             </h2>
             {documentsHref ? (
-              // design-check-ignore-next-line — same "View all" chip as SessionSourcePane
-              <button
-                type="button"
-                className={sessionSourceViewAllClass}
-                onClick={() =>
-                  void navigate({
-                    to: toInternalRepoHref(documentsHref),
-                    search: (prev) => ({ ...prev, panelItem: summaryDoc._id }),
-                  })
-                }
+              <ProjectSummaryDocLink
+                docId={summaryDoc._id}
+                documentsHref={documentsHref}
               >
                 Open
                 <IconArrowUpRight size={14} />
-              </button>
+              </ProjectSummaryDocLink>
             ) : null}
           </div>
           <Markdown className="prose prose-sm dark:prose-invert max-w-none">
@@ -61,5 +55,39 @@ export function ProjectSummarySection({
         </div>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * Opens the project's summary doc in its Documents tab: the "View all" chip
+ * of `SessionSourcePane`.
+ */
+export function ProjectSummaryDocLink({
+  docId,
+  documentsHref,
+  className,
+  children,
+}: {
+  docId: Id<"docs">;
+  /** The project's Documents tab (pre-internal path). */
+  documentsHref: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  const navigate = useNavigate();
+  return (
+    // design-check-ignore-next-line — same "View all" chip as SessionSourcePane
+    <button
+      type="button"
+      className={cn(sessionSourceViewAllClass, className)}
+      onClick={() =>
+        void navigate({
+          to: toInternalRepoHref(documentsHref),
+          search: (prev) => ({ ...prev, panelItem: docId }),
+        })
+      }
+    >
+      {children}
+    </button>
   );
 }

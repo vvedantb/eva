@@ -47,7 +47,6 @@ interface RowContext {
   projectNumId?: number;
   homeRepoId: Id<"githubRepos">;
   reposById: ReadonlyMap<string, RepoAppMarkRepo>;
-  canContribute: boolean;
   /** Feedback authors' first names, by user id (the Triage origin line). */
   authorNames: ReadonlyMap<string, string>;
 }
@@ -75,7 +74,6 @@ function ProjectTaskRowFor({
       projectNumId={context.projectNumId}
       homeRepoId={context.homeRepoId}
       reposById={context.reposById}
-      canContribute={context.canContribute}
     />
   );
 }
@@ -118,8 +116,6 @@ interface ProjectTaskListPanelProps {
   projectNumId?: number;
   /** The project's repo; a task in another repo shows its repo. */
   homeRepoId: Id<"githubRepos">;
-  /** The caller may approve, cancel and run (`callerRole`). */
-  canContribute: boolean;
 }
 
 export function ProjectTaskListPanel({
@@ -129,7 +125,6 @@ export function ProjectTaskListPanel({
   onSelectTask,
   projectNumId,
   homeRepoId,
-  canContribute,
 }: ProjectTaskListPanelProps) {
   const { basePath } = useRepo();
   const firstPaint = useFirstPaintGate();
@@ -198,13 +193,12 @@ export function ProjectTaskListPanel({
     projectNumId,
     homeRepoId,
     reposById,
-    canContribute,
     authorNames: firstNameByUserId(authors ?? []),
   };
 
   // Feedback and coordinator proposals wait in Triage: its header approves them all.
   const triageActions =
-    canContribute && toApprove.length > 0 ? (
+    toApprove.length > 0 ? (
       <Button
         size="sm"
         className="h-6 px-2 text-xs"

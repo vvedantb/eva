@@ -30,10 +30,10 @@ export type ModelPick = {
   repoId: Id<"githubRepos">;
   model: AIModel;
   /** Stored traits; absent fields are the model's defaults. */
-  traits: StoredModelTraits;
+  traits?: StoredModelTraits;
   onModelChange: (model: AIModel) => void;
-  /** Called with only the trait that changed. */
-  onTraitsChange: (partial: StoredModelTraits) => void;
+  /** Called with only the trait that changed. Absent: no trait rows (a project's model, as the web field). */
+  onTraitsChange?: (partial: StoredModelTraits) => void;
   /**
    * The provider account the model runs on, as the web picker's Team and
    * personal rows. Absent: Team only (the chat's account is not this user's to change).
@@ -103,7 +103,7 @@ function InstanceIcon({ instance, size, badge }: { instance: Instance; size: num
  * name. A row picks the model and its account and closes the sheet; a trait
  * pick keeps it open, as the web panel.
  */
-export function ModelChip({ repoId, model, traits, onModelChange, onTraitsChange, account }: ModelPick) {
+export function ModelChip({ repoId, model, traits = {}, onModelChange, onTraitsChange, account }: ModelPick) {
   const color = useFooterChipColor();
   const theme = EVA_THEME[useScheme()];
   const [open, setOpen] = useState(false);
@@ -166,7 +166,7 @@ export function ModelChip({ repoId, model, traits, onModelChange, onTraitsChange
         title="Model"
         header={
           <>
-            <TraitRows model={model} traits={traits} onChange={onTraitsChange} />
+            {onTraitsChange ? <TraitRows model={model} traits={traits} onChange={onTraitsChange} /> : null}
             <View className="px-2">
               <SearchInput size="md" value={search} onChange={setSearch} label="Search models" placeholder="Search models..." />
             </View>

@@ -187,9 +187,6 @@ export default function ChatScreen() {
   );
   const { mineByMessageId: mine, agentReports } = groupChatFeedback(feedbackRows ?? [], me ?? undefined);
   const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder);
-  const chatTask = useQuery(api.agentTasks.get, chat?.task ? { id: chat.task.id } : "skip");
-  // Project roles are gone: everyone with repo access writes here.
-  const viewer = false;
   // The agent's proposed plans, each under the message that proposed it (session chats only, as the web).
   const planAfter = useProposedPlans(chat, sessionRow?.planContent);
   // Rows seen on screen, so an agent page mounts its WebView only once its row shows.
@@ -220,7 +217,7 @@ export default function ChatScreen() {
   }
 
   const working = turn !== undefined && turn !== null;
-  const canReply = chat.canReply && !viewer;
+  const { canReply } = chat;
   // Queued here while the session's run slots are all taken: the server parked the send (the web `isWaitingForSlot`).
   const runningCount = runningChats?.length ?? 0;
   const waitingForSlot = !working && (queued?.length ?? 0) > 0 && runningCount >= MAX_PARALLEL_CHATS;
@@ -236,11 +233,9 @@ export default function ChatScreen() {
   // Waking or sleeping is the whole story; awake, the web line teaches desktop drop, so the phone keeps the title.
   const emptyDescription = sandboxAwake || sandbox.isToggling ? "" : SANDBOX_CHAT_COPY.asleepDescription;
   // Why a closed session takes no message: its PR merged or closed, or it was archived (the web banner).
-  const closedReason = viewer
-    ? "Only contributors can chat in a project."
-    : chat.session
-      ? getSessionReadOnlyMessage({ isArchived: chat.session.archived, prState: sessionRow?.prState })
-      : undefined;
+  const closedReason = chat.session
+    ? getSessionReadOnlyMessage({ isArchived: chat.session.archived, prState: sessionRow?.prState })
+    : undefined;
   const streamingEntityId = parentId ? chatStreamingEntityId(parentId) : undefined;
   const dayStarts = findDayBoundaryIds(visible);
   const newBoundaryId = findNewMessageIds(visible, newSinceAt, me ?? undefined)[0];
@@ -393,7 +388,7 @@ export default function ChatScreen() {
         onBack={() => goBackOrReplace(router)}
         onOpenWeb={openWebChat}
         onCopyLink={() => void Clipboard.setStringAsync(webUrl(chat.webPath))}
-        onStop={working && !viewer ? handleStop : undefined}
+        onStop={working ? handleStop : undefined}
         leadingItems={leadingMenu}
         usage={<UsageButton chat={chat} />}
         sandbox={<SandboxControl sandbox={sandbox} working={working} />}
@@ -535,7 +530,7 @@ export default function ChatScreen() {
               <>
                 {/* Not gated by simple view, as the web: the user set this goal and can clear it. */}
                 <GoalBanner chatId={chat.session?.chatId ?? chat.task?.sessionChatId ?? chat.project?.sessionChatId} target={chat.target} />
-                {chat.project ? <CoordinatorPausedBanner projectId={chat.project.id} canSend /> : null}
+                {chat.project ? <CoordinatorPausedBanner projectId={chat.project.id} /> : null}
                 {chat.session && canReply ? (
                   <PublishRecoveryBanner sessionId={chat.session.id} newest={newestMessage} isSandboxActive={chat.sandboxActive} />
                 ) : null}
@@ -596,7 +591,7 @@ function ChatDock({
   savedQuestion: { raw: string; questions: ParsedQuestion[] } | null;
   /** The transcript, newest first: a usage limit the newest turn hit holds sends until the reset. */
   messagesNewestFirst: ChatMessage[];
-  /** The chat takes a message: open (`chat.canReply`), and the reader is no project viewer. */
+  /** The chat takes a message (`chat.canReply`). */
   canReply: boolean;
   /** A closed session's reason (`getSessionReadOnlyMessage`), in place of "This chat is closed." */
   closedReason: string | undefined;
@@ -701,9 +696,7 @@ function ChatDock({
   // A blocking question wins: it holds the turn open and its answer resumes the run.
   const saved = !pending && savedQuestion && savedQuestion.raw !== answeredSaved && canReply ? savedQuestion : null;
 
-  // Open to others but not to this reader: a project viewer, who never answers the agent's question.
-  const viewer = chat.canReply && !canReply;
-  return pending && questions && !viewer ? (
+  return pending && questions ? (
     questionDock(pending.toolUseId, questions, async (answers) => {
       if (!chat.parentId) return;
       try {
@@ -805,8 +798,6 @@ function ChatDock({
     </View>
   ) : (
     <View>
-      {/* A viewer has no composer: the coordinator's paused line sits over the closed line. */}
-      {viewer && chat.project ? <CoordinatorPausedBanner projectId={chat.project.id} canSend={false} /> : null}
       <Text variant="muted" className="px-4 pb-8 pt-3 text-center" style={textColor(scheme, "muted")}>
         {closedReason ?? "This chat is closed."}
       </Text>

@@ -43,7 +43,6 @@ export function ActivityTimeline({
   taskActivity,
   users,
   isProjectTask,
-  canComment,
 }: {
   taskId: Id<"agentTasks">;
   createdAt: number | undefined;
@@ -52,8 +51,6 @@ export function ActivityTimeline({
   comments: Comments | undefined;
   taskActivity: TaskActivity | undefined;
   users: Users | undefined;
-  /** False for a project viewer (decision 12): no comment or reply composer. */
-  canComment: boolean;
 }) {
   const [deletingCommentId, setDeletingCommentId] =
     useState<Id<"taskComments"> | null>(null);
@@ -144,7 +141,6 @@ export function ActivityTimeline({
                     taskId={taskId}
                     users={users}
                     repliesByParentId={repliesByParentId}
-                    canReply={canComment}
                     onDeleteRequest={(commentId) =>
                       requestConfirm(
                         () => setDeletingCommentId(commentId),
@@ -184,7 +180,7 @@ export function ActivityTimeline({
           })
         )}
 
-        {canComment ? <TaskActivityComposer taskId={taskId} /> : null}
+        <TaskActivityComposer taskId={taskId} />
       </div>
 
       <Dialog

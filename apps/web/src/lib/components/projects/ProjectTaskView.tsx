@@ -1,8 +1,9 @@
 "use client";
 
-import type { Id } from "@eva/backend";
+import { useQuery } from "convex-helpers/react/cache/hooks";
+import { api, type Id } from "@eva/backend";
 import { Spinner } from "@vvedantb/ui";
-import { IconArrowLeft } from "@tabler/icons-react";
+import { IconArrowLeft, IconFileText } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
@@ -10,13 +11,14 @@ import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
 import { TaskDetailInline } from "@/lib/components/tasks/TaskDetailInline";
 import type { EntityResolveStatus } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
+import { ProjectSummaryDocLink } from "./ProjectSummarySection";
 import { useProjectTaskStatus } from "./useProjectStatus";
 
 /**
  * One project task in place of the coordinator: a back link to the
- * coordinator's Tasks tab, then the task's own chat and sandbox (the quick
- * task's sandbox view, `TaskDetailInline` in `project-task` mode). No
- * properties column. A task of another project, or one the reader cannot
+ * coordinator's Tasks tab and a link to the project's summary doc, then the
+ * task's own chat and sandbox (the quick task's sandbox view,
+ * `TaskDetailInline` in `project-task` mode). No properties column. A task of another project, or one the reader cannot
  * open, is not found.
  */
 export function ProjectTaskView({
@@ -24,6 +26,7 @@ export function ProjectTaskView({
   repoId,
   projectNumId,
   coordinatorHref,
+  documentsHref,
   taskId,
   taskStatus,
 }: {
@@ -32,11 +35,14 @@ export function ProjectTaskView({
   projectNumId: number | undefined;
   /** The coordinator's Tasks tab (pre-internal form). */
   coordinatorHref: string;
+  /** The project's Documents tab (pre-internal form), or undefined without a numId. */
+  documentsHref: string | undefined;
   taskId: Id<"agentTasks"> | undefined;
   taskStatus: EntityResolveStatus | undefined;
 }) {
   const navigate = useNavigate();
   const { tasks } = useProjectTaskStatus(projectId, repoId);
+  const summaryDoc = useQuery(api.projects.getSummaryDoc, { projectId });
   const task = tasks?.find((row) => row._id === taskId && row.locked !== true);
 
   if (taskStatus === "loading" || (taskId !== undefined && !tasks)) {
@@ -72,6 +78,16 @@ export function ProjectTaskView({
             {task.title}
           </span>
         </div>
+        {summaryDoc && documentsHref ? (
+          <ProjectSummaryDocLink
+            docId={summaryDoc._id}
+            documentsHref={documentsHref}
+            className="ml-auto min-w-0 shrink"
+          >
+            <IconFileText size={14} className="shrink-0" />
+            <span className="truncate">{summaryDoc.title}</span>
+          </ProjectSummaryDocLink>
+        ) : null}
       </div>
       <TaskDetailInline
         key={task._id}

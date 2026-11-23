@@ -126,7 +126,7 @@ export function QuickTaskRow({
   projectNumId?: number;
   /** The user has an unsent comment on this task (`drafts.listMarks`): a "Draft comment" pill after the tags, as the web card. */
   hasDraftComment: boolean;
-  /** The row menu; absent when the reader may not act on the task (a project viewer). */
+  /** The row menu. */
   onLongPress?: () => void;
   /** In select mode: a tap or long press ticks the row, and a checkbox leads it, as the inbox. */
   selection?: { checked: boolean; onToggle: () => void };

@@ -27,7 +27,11 @@ import {
   IconInfoCircle,
 } from "@tabler/icons-react";
 import dayjs from "@eva/shared/dates";
-import { FALLBACK_GIT_BASE_BRANCH, getUserInitials } from "@eva/shared";
+import {
+  FALLBACK_GIT_BASE_BRANCH,
+  getUserInitials,
+  projectPickerAccounts,
+} from "@eva/shared";
 import { UserInitials } from "@eva/shared/user-initials";
 import { Facehash } from "facehash";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -86,22 +90,13 @@ export function ProjectFieldsPanel({
   const isOwner =
     currentUserId !== undefined && currentUserId === project.userId;
   const creator = (users ?? []).find((user) => user._id === project.userId);
-  const ownerAccountLabel =
-    creator?.firstName?.trim() || creator?.fullName?.trim() || "Personal";
-  const displayAccounts =
-    isOwner || !project.providerAccountId
-      ? accounts
-      : [
-          {
-            id: project.providerAccountId,
-            provider: getAIModelProvider(currentModel),
-            label: ownerAccountLabel,
-            // The project owner's account, shown to a collaborator: theirs, not
-            // the viewer's, so it must never be defaulted to.
-            isOwn: false,
-          },
-          ...accounts,
-        ];
+  const displayAccounts = projectPickerAccounts(accounts, {
+    isOwner,
+    providerAccountId: project.providerAccountId,
+    provider: getAIModelProvider(currentModel),
+    ownerLabel:
+      creator?.firstName?.trim() || creator?.fullName?.trim() || "Personal",
+  });
   const displayBaseBranch =
     project.baseBranch ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
   const reviewers = (users ?? []).filter((u) => u.role === "dev");

@@ -21,10 +21,10 @@ import { useScheme } from "@/ui/theme";
  * the compact quick-task card numbered "#project/task", striped by the
  * task's display status (`projectTaskDisplayStatus`), with the project task
  * badges. A Triage row names its origin (`projectTaskOriginLabel`) in place
- * of the Feedback and "Needs approval" badges, and a contributor rejects or
- * approves it with the buttons beside it (the row itself is one button). A
- * long press opens the task menu (`onLongPress`); a viewer gets neither. A
- * task in a repo the reader cannot open is a locked row.
+ * of the Feedback and "Needs approval" badges, with Reject and Approve
+ * beside it (the row itself is one button). A long press opens the task
+ * menu (`onLongPress`). A task in a repo the reader cannot open is a locked
+ * row.
  */
 export function ProjectTaskRow({
   task,
@@ -37,7 +37,6 @@ export function ProjectTaskRow({
   projectNumId,
   homeRepoId,
   reposById,
-  canContribute,
   onLongPress,
 }: {
   task: ProjectTaskListRow;
@@ -52,8 +51,7 @@ export function ProjectTaskRow({
   projectNumId: number | undefined;
   homeRepoId: Id<"githubRepos">;
   reposById: ReadonlyMap<string, RepoRow>;
-  canContribute: boolean;
-  onLongPress?: () => void;
+  onLongPress: () => void;
 }) {
   const scheme = useScheme();
   const appearance = taskDisplayStatusAppearance(view.displayStatus, scheme);
@@ -71,7 +69,7 @@ export function ProjectTaskRow({
     hasPr: task.prUrl !== undefined,
     prState: task.prState,
   };
-  const canTriage = canContribute && triage && isUnapprovedTodoTask(task);
+  const canTriage = triage && isUnapprovedTodoTask(task);
   return (
     <View className="flex-row items-center gap-1">
       <View className="min-w-0 flex-1">
@@ -83,7 +81,7 @@ export function ProjectTaskRow({
           hasDraftComment={hasDraftComment}
           creator={undefined}
           projectNumId={projectNumId}
-          onLongPress={canContribute ? onLongPress : undefined}
+          onLongPress={onLongPress}
           compact
           accentColor={appearance.bar}
           badges={

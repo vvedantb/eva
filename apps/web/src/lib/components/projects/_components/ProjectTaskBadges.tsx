@@ -60,8 +60,8 @@ function AskBadge({ ask, interactive }: { ask: string; interactive: boolean }) {
  * why it needs you (or that it waits for its coordinator), its open
  * question, linked to the task chat where a person answers it, its open
  * reports, its phase label, a feedback origin, its repo when it is not the
- * home repo, and its PR. A contributor rejects (cancels) or approves a
- * Triage task at the end of the line.
+ * home repo, and its PR. Reject (cancel) and Approve end a Triage task's
+ * line.
  */
 export function ProjectTaskBadges({
   taskId,
@@ -97,7 +97,7 @@ export function ProjectTaskBadges({
   repo: RepoAppMarkRepo | undefined;
   prUrl: string | undefined;
   prState: PrState | undefined;
-  /** Shows Reject and Approve: a contributor's unapproved todo task. */
+  /** Shows Reject and Approve: an unapproved todo task. */
   canTriage: boolean;
 }) {
   const updateStatus = useMutation(api.agentTasks.updateStatus);

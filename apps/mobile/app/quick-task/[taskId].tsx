@@ -26,6 +26,7 @@ import {
   IconChecklist,
   IconCalendarClock,
   IconClock,
+  IconFileText,
   IconFolder,
   IconMessage,
   IconPlayerPlay,
@@ -185,11 +186,7 @@ function TaskOverview({
   const updateTask = useMutation(api.agentTasks.update);
   const reactionsFor = useTaskReactions(task._id, users, currentUserId);
 
-  // A project viewer reads a child task but never edits, runs or wakes it, as the web.
-  // Project roles are gone: everyone with repo access drives the task.
-  const isProjectViewer = false;
-  const editable =
-    runs !== undefined && canEditTaskText(task.status, hasActiveRun) && !isProjectViewer;
+  const editable = runs !== undefined && canEditTaskText(task.status, hasActiveRun);
   const update: UpdateTask = (fields, failure) => {
     updateTask({ id: task._id, ...fields }).catch(() => toast.error(failure));
   };
@@ -219,7 +216,7 @@ function TaskOverview({
       <StackPageHeader
         title={formatEntityNumLabel({ numId: task.numId }) ?? "Task"}
         onBack={onLeave}
-        headerRight={isProjectViewer ? undefined : <HeaderMoreButton label="Task actions" onPress={() => actions.openSheet(task)} />}
+        headerRight={<HeaderMoreButton label="Task actions" onPress={() => actions.openSheet(task)} />}
       />
       {/* The focused field (the comment box, the description or the title) scrolls into view 16 above the keyboard. */}
       <KeyboardAwareScrollView
@@ -246,9 +243,9 @@ function TaskOverview({
         />
         {scheduledAt ? (
           <Pressable
-            accessibilityRole={task.status === "todo" && !isProjectViewer ? "button" : "text"}
-            accessibilityHint={task.status === "todo" && !isProjectViewer ? "Changes or removes the schedule" : undefined}
-            disabled={task.status !== "todo" || isProjectViewer}
+            accessibilityRole={task.status === "todo" ? "button" : "text"}
+            accessibilityHint={task.status === "todo" ? "Changes or removes the schedule" : undefined}
+            disabled={task.status !== "todo"}
             onPress={() => setScheduling(true)}
             hitSlop={{ top: 8, bottom: 8 }}
             className="mt-2 flex-row items-center gap-1.5 self-start rounded-full px-2.5 py-1 active:opacity-70"
@@ -294,7 +291,6 @@ function TaskOverview({
           projects={projects}
           allTags={allTags}
           update={update}
-          readOnly={isProjectViewer}
         />
 
         <FieldGroup title="Activity">
@@ -308,12 +304,7 @@ function TaskOverview({
               reactionsFor={reactionsFor}
               isProjectTask={task.projectId !== undefined}
               currentUserId={currentUserId}
-              // A project viewer reads the discussion but never comments (decision 12).
-              onReply={
-                isProjectViewer
-                  ? undefined
-                  : (comment) => changeCommentMode({ kind: "reply", comment })
-              }
+              onReply={(comment) => changeCommentMode({ kind: "reply", comment })}
               onEdit={(comment) => changeCommentMode({ kind: "edit", comment })}
               onDelete={(id) => {
                 comments.remove(id);
@@ -328,7 +319,7 @@ function TaskOverview({
         </FieldGroup>
         <View className="mt-4">
           {/* Once the person is known: presence heartbeats need their id. */}
-          {currentUserId && !isProjectViewer ? (
+          {currentUserId ? (
             <CommentComposer
               currentUserId={currentUserId}
               taskId={task._id}
@@ -353,8 +344,7 @@ function TaskOverview({
         }
         onRemove={() => writeSchedule(cancelSchedule({ id: task._id }), "Schedule removed", "Couldn't remove schedule")}
       />
-      <TaskDock
-        onSchedule={() => setScheduling(true)} task={task} runs={runs} hasActiveRun={hasActiveRun} />
+      <TaskDock onSchedule={() => setScheduling(true)} task={task} runs={runs} hasActiveRun={hasActiveRun} />
 
       {actions.dialogs}
       {git.dialogs}
@@ -374,22 +364,18 @@ function TaskProperties({
   projects,
   allTags,
   update,
-  readOnly,
 }: {
   task: QuickTask;
   users: User[] | undefined;
   projects: FunctionReturnType<typeof api.projects.list> | undefined;
   allTags: string[];
   update: UpdateTask;
-  /** A project viewer's task: every field reads only. */
-  readOnly: boolean;
 }) {
   const scheme = useScheme();
   const muted = EVA_THEME[scheme].mutedForeground;
   const updateStatus = useMutation(api.agentTasks.updateStatus);
   const [field, setField] = useState<Field | null>(null);
-  // A project viewer reads the fields; no sheet opens.
-  const openField = (next: Field) => (readOnly ? undefined : () => setField(next));
+  const openField = (next: Field) => () => setField(next);
   const reviewer = task.assignedTo
     ? users?.find((user) => user._id === task.assignedTo)
     : undefined;
@@ -446,6 +432,7 @@ function TaskProperties({
           color={project ? undefined : muted}
           onPress={openField("project")}
         />
+        {task.projectId ? <ProjectSummaryRow projectId={task.projectId} /> : null}
       </FieldGroup>
       <FooterSheet
         open={field === "status"}
@@ -499,6 +486,22 @@ function TaskProperties({
         }
       />
     </>
+  );
+}
+
+/** A project task's link to its project's summary document, once the coordinator wrote one. */
+function ProjectSummaryRow({ projectId }: { projectId: Id<"projects"> }) {
+  const router = useRouter();
+  const muted = EVA_THEME[useScheme()].mutedForeground;
+  const summaryDoc = useQuery(api.projects.getSummaryDoc, { projectId });
+  if (!summaryDoc) return null;
+  return (
+    <FieldRow
+      label="Project summary"
+      icon={<IconFileText size={16} color={muted} />}
+      value={summaryDoc.title}
+      onPress={() => router.push({ pathname: "/doc/[docId]", params: { docId: summaryDoc._id, repo: summaryDoc.repoId } })}
+    />
   );
 }
 

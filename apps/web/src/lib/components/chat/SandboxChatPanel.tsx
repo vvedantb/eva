@@ -44,11 +44,6 @@ export interface SandboxChatPanelProps {
   /** Opens the Agents sandbox tab (used by the sub-agent CTA row in the chat). */
   onOpenAgentsTab?: () => void;
   onSandboxToggle?: (action: "start" | "stop") => void;
-  /**
-   * The reader may not write to this chat (a project viewer): the transcript
-   * shows with no composer, the same as a read-only session.
-   */
-  isReadOnly?: boolean;
 }
 
 /**
@@ -65,7 +60,6 @@ export function SandboxChatPanel({
   onViewDiff,
   onOpenAgentsTab,
   onSandboxToggle,
-  isReadOnly = false,
   preInputBanner,
 }: SandboxChatPanelProps & {
   binding: SandboxChatBinding;
@@ -157,18 +151,15 @@ export function SandboxChatPanel({
     repoId: repo._id,
     model,
     isExecuting,
-    isReadOnly,
     doc,
-    canSwitchAccount: !isReadOnly,
+    canSwitchAccount: true,
     messages,
     accounts: binding.accounts,
     resolveAccountId: binding.resolveAccountId,
     switchProviderAccount,
     isSandboxActive,
-    sendCommand: isReadOnly
-      ? undefined
-      : (command) =>
-          handleSend(command, undefined, { skipReviewComments: true }),
+    sendCommand: (command) =>
+      handleSend(command, undefined, { skipReviewComments: true }),
   });
 
   // The first run opens the chat, so it shows once nothing older is left.
@@ -218,7 +209,6 @@ export function SandboxChatPanel({
           onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
           isExecuting={isExecuting}
           isInputDisabled={composer.isInputDisabled}
-          isArchived={isReadOnly}
           placeholder={composer.placeholder}
           emptyStateTitle={
             isSandboxActive
@@ -234,7 +224,7 @@ export function SandboxChatPanel({
           onStartSandbox={startSandboxHandler(
             isSandboxActive,
             isSandboxToggling,
-            isReadOnly ? undefined : onSandboxToggle,
+            onSandboxToggle,
           )}
           modelPicker={{
             model,

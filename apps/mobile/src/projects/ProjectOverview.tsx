@@ -1,11 +1,13 @@
-import { api, type Id } from "@eva/backend";
+import { api, getAIModelProvider, normalizeAIModel, type Id } from "@eva/backend";
 import {
   FALLBACK_GIT_BASE_BRANCH,
   PRIORITY_LABELS,
   PRIORITY_ORDER,
   PROJECT_PHASE_LABELS,
   isProjectPlanning,
+  projectPickerAccounts,
   repoDisplayLabel,
+  toPickerAccounts,
   type Priority,
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
@@ -22,7 +24,8 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
-import { FooterSheet } from "@/chat/ComposerFooter";
+import { FooterSheet, useSimpleView } from "@/chat/ComposerFooter";
+import { ModelChip } from "@/chat/ModelChip";
 import { phaseAppearance, projectStageAppearance } from "@/projects/phaseAppearance";
 import { ProjectProgress, ProjectStageCounts } from "@/projects/ProjectProgress";
 import { RepoAppMark } from "@/sessions/SessionGroup";
@@ -45,25 +48,24 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
  * Instructions and Repos (`ProjectCoordinatorFields`), Dates, Labels and
  * Created. Status is the derived stage (an older project still planning
  * shows its phase) and reads only. Priority and Project Lead open a bottom
- * sheet each and write `projects.update`, as the web selects; Instructions
- * save when the field loses focus; Repos toggles extra repos in a sheet. A
- * viewer reads every field and changes none. Field rows are 48 high (web
+ * sheet each and write `projects.update`, as the web selects; the model
+ * chip (hidden in simple view, as the web) writes the model and, for the
+ * project's owner, its account; Instructions save when the field loses
+ * focus; Repos toggles extra repos in a sheet. Field rows are 48 high (web
  * 40). Not here from the web: editing the context, the code reviewer,
- * members, model, dates and labels pickers.
+ * members, dates and labels pickers.
  */
 export function ProjectOverview({
   project,
   repo,
   users,
   status,
-  canContribute,
 }: {
   project: Project;
   repo: Repo;
   users: User[] | undefined;
   /** The derived status (`useProjectTaskStatus`), undefined while the tasks load. */
   status: ProjectStatus | undefined;
-  canContribute: boolean;
 }) {
   const scheme = useScheme();
   const theme = EVA_THEME[scheme];
@@ -71,12 +73,13 @@ export function ProjectOverview({
   const summaryDoc = useQuery(api.projects.getSummaryDoc, { projectId: project._id });
   const repos = useQuery(api.githubRepos.list, {});
   const currentUserId = useQuery(api.auth.me, {});
+  const ownAccounts = useQuery(api.userProviderAccounts.listSelectable, {});
+  const simpleView = useSimpleView();
   const updateProject = useMutation(api.projects.update);
   const setInstructions = useMutation(api.projects.setInstructions);
   const setExtraRepoIds = useMutation(api.projects.setExtraRepoIds);
   const [sheet, setSheet] = useState<"priority" | "lead" | "repos" | null>(null);
-  // A viewer's rows read only: no sheet opens.
-  const openSheet = (next: "priority" | "lead" | "repos") => (canContribute ? () => setSheet(next) : undefined);
+  const openSheet = (next: "priority" | "lead" | "repos") => () => setSheet(next);
   const extraRepoIds = project.extraRepoIds ?? [];
   const repoChoices = (repos ?? []).filter((entry) => entry._id !== project.repoId);
   const extraRepos = repoChoices.filter((entry) => extraRepoIds.includes(entry._id));
@@ -96,6 +99,15 @@ export function ProjectOverview({
   const lead = userById(project.projectLead);
   const reviewer = userById(project.codeReviewer);
   const creator = userById(project.userId);
+  const model = normalizeAIModel(project.model);
+  // As the web field: only the owner changes the account; anyone else sees the owner's.
+  const isOwner = currentUserId !== undefined && currentUserId === project.userId;
+  const accounts = projectPickerAccounts(toPickerAccounts(ownAccounts ?? []), {
+    isOwner,
+    providerAccountId: project.providerAccountId,
+    provider: getAIModelProvider(model),
+    ownerLabel: creator?.firstName?.trim() || creator?.fullName?.trim() || "Personal",
+  });
   // The stage is derived from the child tasks; only an older project still planning shows its stored phase.
   const planning = isProjectPlanning(project.phase);
   const stage = planning
@@ -193,22 +205,32 @@ export function ProjectOverview({
           value={memberCount > 0 ? `${memberCount} member${memberCount > 1 ? "s" : ""}` : "Members"}
           color={memberCount > 0 ? undefined : muted}
         />
+        {simpleView ? null : (
+          <View className="min-h-12 flex-row items-center">
+            <ModelChip
+              repoId={project.repoId}
+              model={model}
+              onModelChange={(next) => update({ model: next }, "Couldn't change the model")}
+              account={{
+                accounts,
+                value: project.providerAccountId ?? null,
+                onChange: (providerAccountId) => {
+                  if (isOwner) update({ providerAccountId }, "Couldn't change the account");
+                },
+              }}
+            />
+          </View>
+        )}
         <FieldRow label="Base branch for all tasks in this project" icon={<IconGitBranch size={16} color={muted} />} value={baseBranch} />
       </FieldGroup>
       <FieldGroup title="Instructions">
-        {canContribute ? (
-          <Textarea
-            // Uncontrolled so typing never fights the live query; saves when it loses focus, as the web.
-            key={project.instructions ?? ""}
-            defaultValue={project.instructions ?? ""}
-            accessibilityLabel="Project instructions"
-            onEndEditing={(event) => saveInstructions(event.nativeEvent.text)}
-          />
-        ) : (
-          <Text className="font-instrument-sans px-2 text-sm" style={{ color: project.instructions ? theme.foreground : muted }}>
-            {project.instructions || "No instructions"}
-          </Text>
-        )}
+        <Textarea
+          // Uncontrolled so typing never fights the live query; saves when it loses focus, as the web.
+          key={project.instructions ?? ""}
+          defaultValue={project.instructions ?? ""}
+          accessibilityLabel="Project instructions"
+          onEndEditing={(event) => saveInstructions(event.nativeEvent.text)}
+        />
       </FieldGroup>
       <FieldGroup title="Repos">
         <FieldRow

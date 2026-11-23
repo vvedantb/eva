@@ -10,17 +10,13 @@ import { tokenTransition } from "@vvedantb/ui";
 /**
  * The coordinator chat's "needs you" line while the hourly cap of automatic
  * turns holds its wake-ups back (`getCoordinatorState`). A person's message
- * releases them, so the line sits above the composer. A viewer has no
- * composer: the line sits at the chat's foot and asks for no message
- * (`canSend`). Same frame as the usage-limit recovery card, in the needs-you
+ * releases them, so the line sits above the composer. Same frame as the usage-limit recovery card, in the needs-you
  * tone.
  */
 export function CoordinatorPausedBanner({
   projectId,
-  canSend,
 }: {
   projectId: Id<"projects">;
-  canSend: boolean;
 }) {
   const state = useQuery(api.projects.getCoordinatorState, { projectId });
   return (
@@ -36,7 +32,7 @@ export function CoordinatorPausedBanner({
         >
           <IconAlertTriangle size={18} className="shrink-0 text-warning" />
           <p className="min-w-0 text-sm font-medium">
-            {coordinatorPausedTitle(state.maxAutoTurnsPerHour, canSend)}
+            {coordinatorPausedTitle(state.maxAutoTurnsPerHour)}
           </p>
         </m.div>
       ) : null}

@@ -22,8 +22,6 @@ interface CommentThreadProps {
   users: Users | undefined;
   repliesByParentId: Map<Id<"taskComments">, TaskComment[]>;
   onDeleteRequest: (commentId: Id<"taskComments">) => void;
-  /** The root card's reply composer; false for a project viewer. */
-  canReply?: boolean;
   depth?: number;
 }
 
@@ -78,7 +76,6 @@ export function CommentThread({
   users,
   repliesByParentId,
   onDeleteRequest,
-  canReply = true,
   depth = 0,
 }: CommentThreadProps) {
   const replies = repliesByParentId.get(comment._id) ?? [];
@@ -104,14 +101,10 @@ export function CommentThread({
           onDeleteRequest={onDeleteRequest}
           depth={depth}
         />
-        {canReply ? (
-          <>
-            <Separator className={THREAD_SEPARATOR_CLASS} />
-            <div className={cn(THREAD_ROW_X_CLASS, "py-2")}>
-              <CommentReplyComposer taskId={taskId} parentId={comment._id} />
-            </div>
-          </>
-        ) : null}
+        <Separator className={THREAD_SEPARATOR_CLASS} />
+        <div className={cn(THREAD_ROW_X_CLASS, "py-2")}>
+          <CommentReplyComposer taskId={taskId} parentId={comment._id} />
+        </div>
       </Surface>
     );
   }

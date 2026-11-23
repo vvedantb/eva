@@ -1,5 +1,11 @@
 # Changelog
 
+## Projects UI: role and dependency gates removed, phone Documents tab and model picker
+
+Date: 2026-11-23
+
+Everyone gets the full project UI plus Feedback; the Blocked badge is gone; phone projects gain a Documents tab and a model/account picker; a child task links to the project summary; a refused delete toasts its reason (web and phone).
+
 ## Projects: no roles, no dependencies, the coordinator starts its tasks
 
 Date: 2026-11-23

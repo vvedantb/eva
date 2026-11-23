@@ -56,8 +56,6 @@ interface ProjectSandboxPanelProps {
   panes: SandboxPanesApi;
   terminalPanel: TerminalPanelApi;
   sandboxTab: ProjectSandboxTab;
-  /** A contributor: approves, rejects and adds tasks. */
-  canContribute: boolean;
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
   /**
@@ -86,7 +84,6 @@ export function ProjectSandboxPanel({
   panes,
   terminalPanel,
   sandboxTab,
-  canContribute,
   onStartSandbox,
   isSandboxStarting,
   autoWakeEligible,
@@ -223,7 +220,6 @@ export function ProjectSandboxPanel({
               projectNumId={projectNumId}
               repoId={repoId}
               basePath={basePath}
-              canContribute={canContribute}
             />
           </KeepAlivePane>
           <div

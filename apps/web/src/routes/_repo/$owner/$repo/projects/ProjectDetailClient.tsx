@@ -157,8 +157,6 @@ export function ProjectDetailClient({
   }
 
   const isDraftOrFinalized = isProjectDraftOrFinalized(project);
-  // Project roles are gone: everyone with repo access contributes.
-  const canContribute = true;
   const parsedSpec = parseProjectSpec(project.generatedSpec);
   const hasPlanContext = Boolean(parsedSpec);
 
@@ -189,12 +187,11 @@ export function ProjectDetailClient({
           {projectStatus ? (
             <ProjectStageBadge stage={projectStatus.stage} />
           ) : null}
-          {!canContribute ? (
-            <Button size="sm" onClick={() => setIsFeedbackOpen(true)}>
-              <IconMessage size={16} aria-hidden />
-              Feedback
-            </Button>
-          ) : !isDraftOrFinalized ? (
+          <Button size="sm" onClick={() => setIsFeedbackOpen(true)}>
+            <IconMessage size={16} aria-hidden />
+            Feedback
+          </Button>
+          {!isDraftOrFinalized ? (
             <ProjectDetailHeaderActions
               projectId={projectId}
               project={project}

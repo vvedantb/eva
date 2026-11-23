@@ -18,10 +18,9 @@ import { useTaskAttachments } from "@/lib/components/quick-tasks/useTaskAttachme
 import { withMutationToast } from "@/lib/utils/mutationToast";
 
 /**
- * A viewer's one write action in a project (`agentTasks.createFeedbackTask`):
- * text plus files, the same file picker as the quick task composer. The task
- * lands in the project's To Do, not approved, so nothing runs until a
- * contributor approves it.
+ * Files feedback on a project (`agentTasks.createFeedbackTask`): text plus
+ * files, the same file picker as the quick task composer. The task lands in
+ * Triage, not approved, so nothing runs until someone approves it.
  */
 export function ProjectFeedbackModal({
   projectId,
