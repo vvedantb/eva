@@ -4,7 +4,7 @@
 // defaults are left out, so the package renders them.
 import { createElement } from "react";
 import { IconChevronDown, IconSearch } from "@tabler/icons-react";
-import type { UiConfig } from "@vvedantb/ui";
+import { triggerZoomAnimateClass, type UiConfig } from "@vvedantb/ui";
 
 /**
  * Radix defaults to 700ms open / 300ms close. Call sites had drifted to 0, 200,
@@ -25,24 +25,19 @@ const TOOLTIP_DELAY_MS = 300;
 const overlayClass =
   "fixed inset-0 z-50 bg-black/80 backdrop-blur-xs data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0";
 
-/** Popover, hover card and select panels slide in from the side they open on. */
+/** Hover card and select panels slide in from the side they open on. */
 const floatingMotionClass =
   "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:data-[side=bottom]:slide-out-to-top-2 data-[state=closed]:data-[side=left]:slide-out-to-right-2 data-[state=closed]:data-[side=right]:slide-out-to-left-2 data-[state=closed]:data-[side=top]:slide-out-to-bottom-2";
 
 /**
- * Scale+fade from the trigger, matching `PopoverContent` — menus and popovers are
- * the same class of non-modal overlay, so they move the same way.
+ * Menu panel classes: eva's menu surface plus the package's
+ * `triggerZoomAnimateClass` (grow out of the trigger at 40%, as modals do;
+ * open 150ms, close 100ms so a menu never lingers after a selection).
  *
- * The exit is deliberately faster than the enter (75ms vs 150ms). An earlier
- * symmetric version made composer menus (traits, model) feel sticky on click:
- * the cost was the menu lingering *after* a selection, not the open itself, so
- * the fix is a quick outbound path rather than no motion at all.
- *
- * `origin` and `maxHeight` must be the Radix transform-origin and
- * available-height var classes for the specific primitive — pass them literally
- * so Tailwind can see them.
+ * `maxHeight` must be the Radix available-height var class for the specific
+ * primitive — pass it literally so Tailwind can see it.
  */
-function menuContentClass(origin: string, maxHeight: string): string {
+function menuContentClass(maxHeight: string): string {
   return [
     // Height cap at the space Radix measured between the trigger and the
     // viewport edge, with internal scroll, so a long menu (e.g. many PR links)
@@ -50,18 +45,15 @@ function menuContentClass(origin: string, maxHeight: string): string {
     // a 320px viewport.
     "z-50 min-w-48 overflow-x-hidden overflow-y-auto scrollbar max-sm:max-w-[calc(100vw-2rem)] bg-popover/95 p-1 text-popover-foreground backdrop-blur-md smooth-shadow-ring-lg",
     "rounded-menu",
-    origin,
     maxHeight,
-    "duration-150 data-[state=closed]:duration-75 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95",
+    triggerZoomAnimateClass,
   ].join(" ");
 }
 
 const dropdownMenuContentClass = menuContentClass(
-  "origin-(--radix-dropdown-menu-content-transform-origin)",
   "max-h-(--radix-dropdown-menu-content-available-height)",
 );
 const contextMenuContentClass = menuContentClass(
-  "origin-(--radix-context-menu-content-transform-origin)",
   "max-h-(--radix-context-menu-content-available-height)",
 );
 
@@ -129,7 +121,7 @@ export const overlaysConfig = {
       trigger: "cursor-pointer",
       // Caps its height and scrolls internally so a long popover cannot run
       // off a phone screen; `max-w` keeps `w-72` inside a 320px viewport.
-      content: `z-50 w-72 max-sm:max-w-[calc(100vw-2rem)] max-sm:max-h-[85dvh] max-sm:overflow-y-auto max-sm:scrollbar bg-popover/95 p-4 text-popover-foreground backdrop-blur-md smooth-shadow-ring-lg outline-hidden origin-(--radix-popover-content-transform-origin) rounded-surface ${floatingMotionClass}`,
+      content: `z-50 w-72 max-sm:max-w-[calc(100vw-2rem)] max-sm:max-h-[85dvh] max-sm:overflow-y-auto max-sm:scrollbar bg-popover/95 p-4 text-popover-foreground backdrop-blur-md smooth-shadow-ring-lg outline-hidden rounded-surface ${triggerZoomAnimateClass}`,
     },
   },
   HoverCard: {

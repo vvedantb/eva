@@ -2,9 +2,9 @@
 
 `.github/workflows/release-android.yml` builds a signed APK with `scripts/build-android-release.sh` and publishes it as a GitHub Release in this repository. The APK is for sideloading only. It is not on Google Play.
 
-**Eva is not in V Store.** The release uses the tag prefix `eva-apk-`. V Store's catalog sync reads `mobile-apk-*` tags only, so it does not see these releases. This repository adds no V Store catalog entry.
+**Eva is in V Store.** The release uses the tag prefix `eva-apk-`, which V Store's catalog entry for Eva names. The app's update check asks V Store for the newest version.
 
-The workflow is a thin caller of the shared workflow `vvedantb/packages/.github/workflows/release-android-apk.yml@main`, as vmem and Velth use. The shared workflow README ("Android APK release workflow") describes every input.
+The workflow is a thin caller of the shared workflow `vvedantb/workflows/.github/workflows/release-android-apk.yml@main`, as vmem and Velth use. The shared workflow README ("Android APK release workflow") describes every input.
 
 ## When it runs
 
@@ -13,9 +13,11 @@ The workflow is a thin caller of the shared workflow `vvedantb/packages/.github/
 | Push to `main` that changes an APK input | Signed build, published with the next patch version. |
 | Manual run (`workflow_dispatch`) | The same. Optional `version` input (like `0.1.1`). `dry_run: true` builds and signs, and uploads the APK as the Actions artifact `eva-android-dry-run`. It publishes nothing. |
 
-Pushes to `main` that touch no APK input build nothing. The `release paths` job in `ci.yml` checks the push diff against the list below, and the `release` job passes `release_on: always` to the shared workflow. The commit message and the PR title do not matter.
+Pushes to `main` that touch no APK input build nothing. The `release` job in `ci.yml` calls the shared `release-android-apk.yml@main` directly. Its `pathspecs` input lists the APK inputs (below). On a push, the shared workflow skips the release cleanly when no changed file matches. It passes `release_on: always`, so the commit message and the PR title do not matter.
 
-APK inputs (the `paths` filter) are the files Metro bundles: `apps/mobile/**` (not Markdown or `.env.example`), `packages/shared/**`, `packages/backend/index.ts`, `packages/backend/convex/**`, `packages/backend/package.json`, `pnpm-workspace.yaml`, `patches/**`, `scripts/build-android-release.sh` and `scripts/check-clerk-native-api.sh`. The backend folder is broad because `@eva/backend` re-exports runtime code from `convex/`. The root `package.json` and `pnpm-lock.yaml` are not inputs: they have no per-app part, so a dependency bump anywhere would ship an APK. A mobile dependency change edits `apps/mobile/package.json`. Keep the filter equal to the real import closure.
+On a push, the APK build runs in parallel with Check, so a releasing merge uses two `boat-large` runners (Check and the build). Publish waits for Check: the `wait_for_check_job: Check` input makes the shared workflow wait for the Check job of the same run (up to 45 minutes) after the build and before publish. It fails if Check does not succeed, so nothing is published. The nested job is named `check / Check`; the shared wait also matches a name that ends in ` / Check`. Manual runs do not wait.
+
+APK inputs (the `pathspecs` input in `ci.yml`) are the files Metro bundles: `apps/mobile/**` (not Markdown or `.env.example`), `packages/shared/**`, `packages/backend/index.ts`, `packages/backend/convex/**`, `packages/backend/package.json`, `pnpm-workspace.yaml`, `patches/**`, `scripts/build-android-release.sh` and `scripts/check-clerk-native-api.sh`. The backend folder is broad because `@eva/backend` re-exports runtime code from `convex/`. The root `package.json` and `pnpm-lock.yaml` are not inputs: they have no per-app part, so a dependency bump anywhere would ship an APK. A mobile dependency change edits `apps/mobile/package.json`. Keep the filter equal to the real import closure.
 
 ## Versions
 
@@ -73,7 +75,7 @@ Until both exist, the release APK works and shows no push.
 
 `plugins/withReleaseSigning.js` adds a `release` signing config to `android/app/build.gradle` at prebuild. It reads `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD` from the environment, else from `keystore.properties` in the repository root (gitignored). A release task stops if one is missing.
 
-The script runs `expo prebuild --platform android --clean`, then `./gradlew assembleRelease` for `arm64-v8a` and `x86_64`. It then checks the APK with `aapt2` (package, `versionCode`, `versionName`) and `apksigner` (not the debug key). Only then does it write `release.json`.
+The script runs `expo prebuild --platform android --clean`, then `./gradlew assembleRelease` for `arm64-v8a` only (`@vvedantb/config` 0.12.0 dropped `x86_64` for release APKs). It then checks the APK with `aapt2` (package, `versionCode`, `versionName`) and `apksigner` (not the debug key). Only then does it write `release.json`.
 
 ## Build locally
 

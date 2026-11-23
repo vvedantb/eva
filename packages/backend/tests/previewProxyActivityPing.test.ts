@@ -1,8 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import {
-  SANDBOX_ENGAGED_WINDOW_MS,
-  SANDBOX_ENGAGEMENT_INPUT_EVENTS,
-} from "@eva/shared";
+import { SANDBOX_ENGAGEMENT_INPUT_EVENTS } from "@eva/shared";
 import {
   extractFunctionSource,
   previewProxySource,
@@ -11,7 +8,8 @@ import {
 /**
  * Regression guard for session 98, which stayed awake overnight: a proxied
  * page left visible on an unattended screen kept posting the on-screen ping.
- * The ping now needs a visible page AND input inside the engaged window.
+ * The ping now needs a visible page AND input since the last ping, so the
+ * idle-pause grace is the only timer after the last input.
  *
  * Runs the shipped ping function (lifted from the proxy template, with its
  * `${…}` placeholders filled the way the template fills them) against a stub
@@ -30,7 +28,6 @@ const HEARTBEAT_MS = Number(heartbeatMatch[1].replaceAll("_", ""));
 
 const pingFunctionSource = extractFunctionSource(SIGNATURE)
   .slice(SIGNATURE.indexOf("function () {"))
-  .replaceAll("${SANDBOX_ENGAGED_WINDOW_MS}", String(SANDBOX_ENGAGED_WINDOW_MS))
   .replaceAll("${ACTIVITY_HEARTBEAT_INTERVAL_MS}", String(HEARTBEAT_MS))
   .replaceAll(
     "${JSON.stringify(SANDBOX_ENGAGEMENT_INPUT_EVENTS)}",
@@ -82,34 +79,47 @@ describe("on-screen activity ping", () => {
     vi.useRealTimers();
   });
 
-  test("a visible page nobody touches stops pinging after the engaged window", () => {
+  test("a visible page nobody touches pings once, for the page load", () => {
     const page = loadPage("visible");
     expect(page.pings()).toBe(1);
 
-    vi.advanceTimersByTime(SANDBOX_ENGAGED_WINDOW_MS);
-    const pingsWhileEngaged = page.pings();
-    expect(pingsWhileEngaged).toBeGreaterThan(1);
-
     vi.advanceTimersByTime(8 * 60 * 60 * 1000);
-    expect(page.pings()).toBe(pingsWhileEngaged);
+    expect(page.pings()).toBe(1);
   });
 
-  test("input on an idle page pings at once and resumes the heartbeat", () => {
+  test("the ping stops one heartbeat after the last input", () => {
     const page = loadPage("visible");
-    vi.advanceTimersByTime(SANDBOX_ENGAGED_WINDOW_MS + HEARTBEAT_MS);
-    const idlePings = page.pings();
+    vi.advanceTimersByTime(HEARTBEAT_MS / 2);
+    page.input("pointermove");
+    vi.advanceTimersByTime(HEARTBEAT_MS);
+    expect(page.pings()).toBe(2);
+
+    vi.advanceTimersByTime(8 * 60 * 60 * 1000);
+    expect(page.pings()).toBe(2);
+  });
+
+  test("steady input pings once per heartbeat, not once per event", () => {
+    const page = loadPage("visible");
+    for (let second = 0; second < (3 * HEARTBEAT_MS) / 1000; second += 1) {
+      vi.advanceTimersByTime(1000);
+      page.input("pointermove");
+    }
+    expect(page.pings()).toBe(4);
+  });
+
+  test("input on an idle page pings at once", () => {
+    const page = loadPage("visible");
+    vi.advanceTimersByTime(5 * HEARTBEAT_MS);
+    expect(page.pings()).toBe(1);
 
     page.input("pointerdown");
-    expect(page.pings()).toBe(idlePings + 1);
-
-    vi.advanceTimersByTime(HEARTBEAT_MS);
-    expect(page.pings()).toBe(idlePings + 2);
+    expect(page.pings()).toBe(2);
   });
 
   test("a hidden page never pings, even with input", () => {
     const page = loadPage("hidden");
     page.input("keydown");
-    vi.advanceTimersByTime(SANDBOX_ENGAGED_WINDOW_MS);
+    vi.advanceTimersByTime(10 * HEARTBEAT_MS);
     expect(page.pings()).toBe(0);
   });
 });

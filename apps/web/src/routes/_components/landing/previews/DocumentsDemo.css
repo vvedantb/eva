@@ -181,7 +181,7 @@
   height: 24px;
   border-radius: var(--ss-radius-sm);
   background: var(--ss-accent);
-  color: rgb(var(--primary-foreground));
+  color: var(--accent-foreground);
 }
 
 /* Text that moves with an opening row keeps one layer, so it never steps. */

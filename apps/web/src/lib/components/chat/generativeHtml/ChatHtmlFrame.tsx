@@ -26,12 +26,33 @@ import { useThemeMode } from "@/lib/hooks/useThemeMode";
  */
 const SANDBOX = "allow-scripts allow-forms allow-popups";
 
+/** The package token behind each shadcn-style name a page can read. Names not listed are the same token. */
+const PAGE_TOKEN_SOURCE: Partial<Record<string, string>> = {
+  "--card": "--surface-card",
+  "--card-foreground": "--surface-foreground",
+  "--popover": "--overlay",
+  "--popover-foreground": "--overlay-foreground",
+  "--muted": "--surface-secondary",
+  "--muted-foreground": "--muted",
+  "--secondary": "--default",
+  "--secondary-foreground": "--default-foreground",
+  "--primary": "--accent",
+  "--primary-foreground": "--accent-foreground",
+  "--accent": "--accent-soft",
+  "--accent-foreground": "--accent-soft-foreground",
+  "--ring": "--focus",
+  "--destructive": "--danger",
+  "--destructive-foreground": "--danger-foreground",
+};
+
 /** Eva's live theme tokens, as complete CSS values, for the page's `:root`. */
 function readHostContext(theme: HtmlRenderAppearance): HtmlRenderHostContext {
   const style = getComputedStyle(document.documentElement);
   const variables: Record<string, string> = {};
   for (const name of HTML_RENDER_THEME_VARIABLES) {
-    const value = htmlRenderThemeValue(style.getPropertyValue(name));
+    const value = htmlRenderThemeValue(
+      style.getPropertyValue(PAGE_TOKEN_SOURCE[name] ?? name),
+    );
     if (value !== "") variables[name] = value;
   }
   return { theme, styles: { variables } };

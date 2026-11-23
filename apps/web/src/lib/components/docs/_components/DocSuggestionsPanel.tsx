@@ -148,7 +148,7 @@ function SuggestionRow({
 }) {
   const userId = toUserId(suggestion.userId);
   return (
-    <div className="relative border-b border-border p-3 transition-colors hover:bg-accent/40">
+    <div className="relative border-b border-border p-3 transition-colors hover:bg-accent-soft/40">
       {/* A real button stretched across the row rather than `onClick` on the
           wrapper: the row had no keyboard path and no role at all. The row keeps
           its own controls, which is why this is an overlay and not a wrapper —

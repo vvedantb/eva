@@ -1049,6 +1049,13 @@ export const snapshotBuildFields = {
   seededApps: v.optional(v.array(seededAppResultValidator)),
 };
 
+/** Keys of `SANDBOX_SIZES` in @eva/shared. */
+export const sandboxSizeValidator = v.union(
+  v.literal("small"),
+  v.literal("medium"),
+  v.literal("large"),
+);
+
 export const githubRepoFields = {
   owner: v.string(),
   name: v.string(),
@@ -1073,6 +1080,9 @@ export const githubRepoFields = {
   // Opt-in: agents read and update `.eva/memory/` in the repo (Agent Memory
   // Repo spec). Shared across sibling app rows.
   agentMemoryEnabled: v.optional(v.boolean()),
+  // vCPUs / memory of this app's sandboxes (`SANDBOX_SIZES` in @eva/shared).
+  // Per-app: apps of one monorepo need different sizes. Absent = large.
+  sandboxSize: v.optional(sandboxSizeValidator),
   hidden: v.optional(v.boolean()),
   deploymentProjectName: v.optional(v.string()),
   domains: v.optional(v.array(v.string())),

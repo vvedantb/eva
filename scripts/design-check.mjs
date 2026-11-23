@@ -2,7 +2,7 @@
 // HeroUI-style design system (see CLAUDE.md "UI Design System") replaced:
 // arbitrary font sizes, raw radius/shadow/palette utilities, raw <button>
 // tags, hardcoded colours, and white/black literals that do not flip with
-// the theme. Every check is a plain regex over file text, per line — no
+// the theme, and any `prefers-reduced-motion` gate (CSS too). Every check is a plain regex over file text, per line — no
 // AST — mirroring scripts/compiler-check.mjs, the house precedent for a
 // custom gate: same baseline shape, same --update flow, same tone.
 //
@@ -41,7 +41,10 @@ function walk(dir, out = []) {
   for (const entry of entries) {
     const p = path.join(dir, entry.name);
     if (entry.isDirectory()) walk(p, out);
-    else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
+    else if (
+      /\.(?:tsx?|css)$/.test(entry.name) &&
+      !/\.test\.tsx?$/.test(entry.name)
+    ) {
       out.push(p);
     }
   }
@@ -149,6 +152,14 @@ const TEXT_WHITE_BLACK_RE = new RegExp(
 const HARDCODED_COLOUR_RE =
   /#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})\b|\b(?:rgb|rgba|hsl|hsla)\(/i;
 
+// The app has no reduced-motion mode (globals.css): only "Disable page
+// animations" turns motion off. Catches the media query (CSS or matchMedia),
+// motion's / Reanimated's `useReducedMotion`, and a `reducedMotion` config
+// that follows the OS. Comment lines are skipped so the ban can be explained.
+const REDUCED_MOTION_RE =
+  /prefers-reduced-motion|\buseReducedMotion\b|\breducedMotion\s*[:=]\s*\{?\s*["'](?:user|always)["']/;
+const COMMENT_LINE_RE = /^\s*(?:\/\/|\/\*|\*)/;
+
 // key: "relpath :: reason" -> Set<line number>, for the report.
 const found = new Map();
 function addViolation(relPath, reason, lineNumber) {
@@ -187,6 +198,7 @@ for (const file of SCAN_ROOTS.flatMap((root) => walk(root))) {
     "apps/web/src/routes/_components/landing/",
   );
   const isPackagesUi = relPath.startsWith("packages/ui/src/");
+  const isCss = relPath.endsWith(".css");
 
   // Unclosed parens from a class-helper call on an earlier line. While this is
   // above zero, every quoted string we meet is still part of that call.
@@ -196,6 +208,16 @@ for (const file of SCAN_ROOTS.flatMap((root) => walk(root))) {
     const lineNumber = i + 1;
     const line = lines[i];
     const ignored = ignoredLines.has(lineNumber);
+
+    if (
+      !ignored &&
+      !COMMENT_LINE_RE.test(line) &&
+      REDUCED_MOTION_RE.test(line)
+    ) {
+      addViolation(relPath, "reduced-motion", lineNumber);
+    }
+    // CSS files are scanned for the reduced-motion gate only.
+    if (isCss) continue;
 
     // raw-button: apps/web/src only — packages/ui/src is where the Button
     // primitive itself lives, so a literal <button> there is expected.
