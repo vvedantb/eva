@@ -136,7 +136,7 @@ export const getTaskData = internalQuery({
 
     let projectContext: { title: string; description?: string } | undefined;
     // A child task's run carries the same project half its chat turns do:
-    // its place in the project, the brief and its dependencies.
+    // its place in the project and the brief.
     let projectBlock = "";
     if (args.projectId) {
       const project = await ctx.db.get(args.projectId);
@@ -147,7 +147,7 @@ export const getTaskData = internalQuery({
             project.description ?? undefined,
           ),
         };
-        projectBlock = await childTaskProjectBlock(ctx, task, project);
+        projectBlock = await childTaskProjectBlock(ctx, project);
       }
     }
     // The coordinator's retry note or the answer to the task's question.

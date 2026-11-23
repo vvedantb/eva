@@ -66,8 +66,8 @@ export function ProjectDeleteDialog({
           </p>
           <div className="mt-3 p-3 bg-warning-bg rounded-surface">
             <p className="text-sm text-warning">
-              This will permanently delete the project{plural} and all
-              associated tasks, agent runs, and dependencies.
+              Its tasks stay as quick tasks, with their chats and PRs. A
+              project with a running task cannot be deleted.
             </p>
           </div>
           <p className="text-sm text-muted-foreground mt-3">

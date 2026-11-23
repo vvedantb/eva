@@ -1,5 +1,11 @@
 # Changelog
 
+## Projects: no roles, no dependencies, the coordinator starts its tasks
+
+Date: 2026-11-23
+
+Project roles and task dependencies are gone, the coordinator's tasks start at once (Triage holds feedback), `delete_task` refuses a started task, and a project delete is refused while a task runs and keeps its tasks as quick tasks (`projects.remove`; `projects.deleteCascade` and `agentTasks.deleteCascade` are gone).
+
 ## Projects: Overview | Coordinator, Tasks on the rail, Triage
 
 Date: 2026-11-23

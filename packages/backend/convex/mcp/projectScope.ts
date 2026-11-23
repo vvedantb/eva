@@ -55,8 +55,9 @@ const CHILD_HIDDEN_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Tools a coordinator never gets: starting work is a person's approval
- * (decision 7), so no run or schedule.
+ * Tools a coordinator never gets: its tasks start through the scheduler
+ * (in task-number order, at most `MAX_PARALLEL_PROJECT_TASKS`), so no direct
+ * run or schedule.
  */
 const COORDINATOR_HIDDEN_TOOLS: ReadonlySet<string> = new Set([
   "create_and_run_task",

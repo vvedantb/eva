@@ -2,6 +2,7 @@ import { v, type Infer } from "convex/values";
 import type { FilterBuilder, NamedTableInfo } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader } from "../_generated/server";
+import { COORDINATOR_VCPUS } from "../_sandbox/provider";
 
 /**
  * Who a session belongs to. One field, `sessions.owner`, holds it:
@@ -135,6 +136,31 @@ export async function findEntitySession(
  */
 export function isReadOnlySandboxOwner(owner: SessionOwner): boolean {
   return owner.kind === "project";
+}
+
+/** How a session's sandbox boots, by its owner. */
+export interface SessionSandboxProfile {
+  /** vCPUs of a new sandbox; undefined takes the app's size setting. */
+  vcpus: number | undefined;
+  /**
+   * Installs dependencies and runs the startup and background commands and
+   * the dev server (the Preview).
+   */
+  runsServices: boolean;
+}
+
+/**
+ * A project coordinator only reads code (plan decision 22): a small sandbox
+ * (`COORDINATOR_VCPUS`), no dependency install, and no dev server,
+ * background or startup commands, so it has no Preview. Every other owner
+ * gets the app's size and its services. Unknown owner: the default.
+ */
+export function sessionSandboxProfile(
+  owner: SessionOwner | undefined,
+): SessionSandboxProfile {
+  return owner !== undefined && isReadOnlySandboxOwner(owner)
+    ? { vcpus: COORDINATOR_VCPUS, runsServices: false }
+    : { vcpus: undefined, runsServices: true };
 }
 
 /** The task a session belongs to, or undefined for any other owner. */

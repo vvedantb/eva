@@ -56,7 +56,8 @@ function useTaskDetailQueries(taskId: Id<"agentTasks">) {
   const taskSession = useTaskSession(taskId, task);
   const currentUserId = useQuery(api.auth.me);
   const isOwner = currentUserId === task?.createdBy;
-  const isBlocked = useQuery(api.taskDependencies.isBlocked, { taskId });
+  // Task dependencies are gone; the blocked badge goes with them.
+  const isBlocked = false;
   const runs = useQuery(api.agentRuns.listByTask, { taskId });
   const hasActiveRun = Boolean(
     runs?.some((run) => run.status === "queued" || run.status === "running"),

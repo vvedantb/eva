@@ -93,7 +93,6 @@ import { displayTitle } from "@/ui/format";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { useScheme } from "@/ui/theme";
 import { HeaderMoreButton } from "@/ui/HeaderRail";
-import { useIsProjectViewer } from "@/projects/useProjectStatus";
 
 type QuickTask = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
@@ -187,7 +186,8 @@ function TaskOverview({
   const reactionsFor = useTaskReactions(task._id, users, currentUserId);
 
   // A project viewer reads a child task but never edits, runs or wakes it, as the web.
-  const isProjectViewer = useIsProjectViewer(task.projectId);
+  // Project roles are gone: everyone with repo access drives the task.
+  const isProjectViewer = false;
   const editable =
     runs !== undefined && canEditTaskText(task.status, hasActiveRun) && !isProjectViewer;
   const update: UpdateTask = (fields, failure) => {

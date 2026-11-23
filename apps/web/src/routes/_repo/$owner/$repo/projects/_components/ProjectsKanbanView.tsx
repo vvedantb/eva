@@ -141,7 +141,6 @@ function VirtualProjectColumn({
                   members={project.members}
                   projectLead={project.projectLead}
                   status={statuses.get(project._id)}
-                  planningMode={project.planningMode}
                   isBuilding={isProjectBuilding(project)}
                   sandboxStatus={project.sandboxStatus}
                   hasUnread={project.hasUnread}

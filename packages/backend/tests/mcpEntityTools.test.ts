@@ -196,8 +196,9 @@ describe("list_entities returns what the caller can already open", () => {
     expect(byId.get(f.taskId)?.sandboxStatus).toBe("active");
     expect(byId.get(f.taskId)?.isExecuting).toBe(false);
 
-    // A project reports its phase, and has never started a sandbox.
-    expect(byId.get(f.projectId)?.status).toBe("in_progress");
+    // A project reports its derived stage (no tasks: todo), and has never
+    // started a sandbox.
+    expect(byId.get(f.projectId)?.status).toBe("todo");
     expect(byId.get(f.projectId)?.sandboxStatus).toBe("closed");
   });
 
@@ -227,8 +228,14 @@ describe("list_entities returns what the caller can already open", () => {
       (await listFor(f, { status: "code_review" })).entities.map((e) => e.id),
     ).toEqual([f.taskId]);
     expect(
-      (await listFor(f, { status: "in_progress" })).entities.map((e) => e.id),
+      (await listFor(f, { status: "todo", kind: "project" })).entities.map(
+        (e) => e.id,
+      ),
     ).toEqual([f.projectId]);
+    // The stored phase is not the filter any more.
+    expect(
+      (await listFor(f, { status: "in_progress", kind: "project" })).entities,
+    ).toEqual([]);
 
     // "active" is a session word. Tasks and projects never match it, rather
     // than the filter being silently ignored for them.

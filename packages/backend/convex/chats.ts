@@ -1,13 +1,12 @@
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import {
-  assertCanDrive,
   authMutation,
   authQuery,
   getSessionWithAccess,
   hasRepoAccess,
 } from "./functions";
-import { assertStandaloneSession, chatOwner } from "./_sessions/owner";
+import { assertStandaloneSession } from "./_sessions/owner";
 import { stopChat, stopTask } from "./_sessions/stop";
 import type { SessionChatContext } from "./_sessionChats/helpers";
 import { ensureOwnerChat } from "./_sessions/ownedSession";
@@ -52,22 +51,12 @@ export const get = authQuery({
   },
 });
 
-/** Resolves a target the caller may write to (`assertCanDrive`), or throws. */
+/** Resolves a target the caller may write to (repo access), or throws. */
 async function resolveWritableChat(ctx: AuthMutationCtx, target: string) {
   const resolved = await resolveMobileChat(ctx.db, target);
   if (!resolved) throw new Error("Chat not found");
   if (!(await hasRepoAccess(ctx.db, resolved.repoId, ctx.userId)))
     throw new Error("Not authorized");
-  const { entity } = resolved;
-  await assertCanDrive(
-    ctx.db,
-    entity.kind === "session"
-      ? chatOwner(entity.context.chat, entity.context.session)
-      : entity.kind === "task"
-        ? entity.task
-        : { kind: "project", projectId: entity.project._id },
-    ctx.userId,
-  );
   return resolved;
 }
 

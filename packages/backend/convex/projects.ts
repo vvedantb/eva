@@ -16,7 +16,6 @@ export {
   update,
   addMessage,
   remove,
-  deleteCascade,
   clearMessages,
   updateLastConversationMessage,
 } from "./_projects/mutations";

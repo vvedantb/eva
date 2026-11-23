@@ -20,17 +20,17 @@ The business team opens the project and sees what is launched, what is in progre
 | # | Decision | Reason |
 |---|---|---|
 | 1 | The coordinator chats and creates tasks. No interview step, no plan step. | One conversation, not two that do not know each other. |
-| 2 | Child tasks run in parallel and follow `taskDependencies`. | The dependency table exists but the build ignores it today. |
+| 2 | Child tasks run in parallel in task-number order. **Task dependencies are removed** (`taskDependencies` is cleared by `dataMigrations:clearTaskDependencies`, then dropped). | Simpler: the coordinator orders tasks and creates follow-ups after a merge. |
 | 3 | Each child task has its own sandbox, branch and PR **straight to main**. No project branch, no phase branch. | Amp's model. Merged means launched. No long-lived branch to drift. One review for each task. |
 | 4 | Phases are labels that group tasks for status. They are not branches. | Follows from 3. |
 | 5 | A child task rebases and fixes its own merge conflicts. | It knows its own change. The coordinator stays read-only. |
 | 6 | The coordinator sandbox is read-only. | Keeps the main thread free and cheap. |
-| 7 | The coordinator proposes a batch of tasks as `todo`. The user approves the batch once. After that the scheduler starts each task when its dependencies are done. | One check from a person before money is spent. Cancel a `todo` task to reject it (from 422). |
+| 7 | **The coordinator starts tasks directly**: its tasks are created approved and the scheduler starts them at once. **Triage holds feedback** (and tasks a person adds without approving); a person approves them there. | The cap of 3 and the hourly wake-up cap bound the spend. |
 | 8 | A person merges each PR. The coordinator never merges in v1. | No unreviewed agent code on main. |
 | 9 | At most **3** child tasks run at the same time in one project. Hard-coded constant in v1. | 5 parallel agents cost about 5 times one agent (Cursor docs, cited in the eesel.ai review of 11 September 2026). |
 | 10 | Old projects are converted in place. | One code path. History is kept. |
 | 11 | Project context reuses Documents, Artifacts and the chat Log. No new store. | They already carry `chatSourceFields`. |
-| 12 | Roles come from the user's existing Eva role (`users.role`: `dev`, `designer`, `business`). **Devs are Contributors. Everyone else is a Viewer.** No role setting for each project. Viewers read everything and can file a feedback task. Contributors can chat and run tasks. | The user asked for the simplest rule. Business team can report without starting agent runs. |
+| 12 | **Project roles are removed.** Project access is plain repo access. Anyone with access can chat, run tasks and file feedback. | Simplest rule. |
 | 13 | A project has a home repo plus a list of extra repos. Each child task targets exactly **one** repo and opens its PR there. A dependency can cross repos. | Real case: a carepulse-ts project that needs a change in carepulse_v2. Cheap, because each task already has its own session and `agentTasks.repoId`. Amp does the same: its Space agent starts a thread "in the project you named" (Amp docs, "Spaces", read 19 November 2026). |
 | 14 | Hub model with a read-only view. Child tasks never message each other. A task can read sibling status and docs, and can report to the coordinator. The coordinator can message any child task. | Easy to follow, cannot loop. Amp documents the same shape: threads report to the Space, no thread-to-thread chat, files move only when asked (Amp docs, "Spaces" and "Agent to Agent", read 19 November 2026). |
 | 15 | No parallel tool set. Reuse and extend the existing MCP tools; add only the tools listed in step 3. | The fleet tools (`mcp/orchestratorTools.ts`) and task tools already cover most needs. |

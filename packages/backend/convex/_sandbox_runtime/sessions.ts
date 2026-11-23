@@ -36,11 +36,7 @@ import {
   ensureGitCredentialHelper,
 } from "./gitCredentials";
 import { ensureSwapFile } from "./swap";
-import {
-  COORDINATOR_VCPUS,
-  type SandboxClient,
-  type SandboxHandle,
-} from "../_sandbox/provider";
+import type { SandboxClient, SandboxHandle } from "../_sandbox/provider";
 import { sandboxOwnerKey, sandboxStartupEntityId } from "@eva/shared";
 import type { ProgressStep } from "./startupProgress";
 import { isSupersededStart } from "../_sandbox/transitions";
@@ -59,7 +55,10 @@ import type { GenericActionCtx } from "convex/server";
 import { startDesktopWithChrome } from "./desktop";
 import { sleep } from "../_shared/async";
 import { SANDBOX_GIT_WRITE } from "../githubAuth";
-import { isReadOnlySandboxOwner } from "../_sessions/owner";
+import {
+  isReadOnlySandboxOwner,
+  sessionSandboxProfile,
+} from "../_sessions/owner";
 
 /**
  * Starts the app server in Preview Console (Vercel tmux) so Console can show
@@ -771,10 +770,9 @@ async function prepareSessionSandboxInternal(
   const launchSession = await ctx.runQuery(internal.sessions.getInternal, {
     id: args.sessionId,
   });
-  // A project coordinator only reads code (plan decision 22): a small
-  // sandbox, no dependency install, and no dev server, background or startup
-  // commands, so it has no Preview.
-  const coordinator =
+  // A project coordinator only reads code (`sessionSandboxProfile`).
+  const profile = sessionSandboxProfile(launchSession?.owner);
+  const readOnly =
     launchSession !== null && isReadOnlySandboxOwner(launchSession.owner);
   completedSteps.push({
     type: "tool",
@@ -858,7 +856,7 @@ async function prepareSessionSandboxInternal(
           );
           // No setupBranch here: resumeReusedSandbox already owns the branch
           // step, and a `checkout -B` would undo a branch the user switched to.
-          if (coordinator) {
+          if (!profile.runsServices) {
             reusedResult = {
               sandbox: handle,
               isNew: false,
@@ -1121,13 +1119,13 @@ async function prepareSessionSandboxInternal(
         undefined,
         { mode: "none" },
         undefined,
-        coordinator, // skipInstallDeps: a coordinator only reads code
+        !profile.runsServices, // skipInstallDeps
         forkFrom,
         undefined, // driveCacheRole
         true, // deferDocker: awaited below, before services need it
-        coordinator ? COORDINATOR_VCPUS : undefined,
+        profile.vcpus,
         // Its env and clone tokens only read its home repo (decision 6).
-        coordinator
+        readOnly
           ? {
               kind: "read",
               repo: { githubId: repo?.githubId, name: args.repoName },
@@ -1239,7 +1237,7 @@ async function prepareSessionSandboxInternal(
     // from the snapshot's baked commit, so the common no-dep-change session keeps
     // its fast baked node_modules. Fresh-clone (non-snapshot) sessions already
     // installed inside createSandboxAndPrepareRepo, so this is snapshot-only.
-    if (prepared.usedSnapshot && !coordinator) {
+    if (prepared.usedSnapshot && profile.runsServices) {
       await emitSessionProgress(
         ctx,
         args.sessionId,
@@ -1295,7 +1293,7 @@ async function prepareSessionSandboxInternal(
       });
     }
 
-    if (coordinator) {
+    if (!profile.runsServices) {
       await completeSessionProgress(ctx, args.sessionId);
       logSession(
         `prepareSessionSandboxInternal summary: elapsed=${formatDurationMsShort(Date.now() - startedAt)}, path=new-coordinator, isNew=true, usedSnapshot=${prepared.usedSnapshot} (${sandboxDetails})`,

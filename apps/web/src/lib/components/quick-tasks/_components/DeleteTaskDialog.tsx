@@ -11,7 +11,7 @@ import { useRepo } from "@/lib/contexts/RepoContext";
 /** Deletes a quick task. Shared by the confirm dialog and Alt-click bypass. */
 export function useDeleteAgentTask() {
   const { repoId } = useRepo();
-  return useMutation(api.agentTasks.deleteCascade).withOptimisticUpdate(
+  return useMutation(api.agentTasks.remove).withOptimisticUpdate(
     (localStore, args) => {
       patchLoadedQuery(localStore, api.agentTasks.getAllTasks, { repoId }, (cur) =>
         cur.filter((task) => task._id !== args.id),

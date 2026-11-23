@@ -6,7 +6,6 @@ import type { QueryCtx } from "../_generated/server";
 import {
   authQuery,
   authMutation,
-  assertCanDrive,
   getProjectWithAccess,
   hasRepoAccess,
   hasTaskAccess,
@@ -95,7 +94,6 @@ export const saveDraft = authMutation({
           ctx.db,
           args.projectId,
           ctx.userId,
-          "contributor",
         )
       : null;
     if (project) assertProjectRepo(project, args.repoId);
@@ -165,7 +163,6 @@ export const activateDraft = authMutation({
       !(await hasTaskAccess(ctx.db, task, ctx.userId))
     )
       throw new Error("Draft not found");
-    await assertCanDrive(ctx.db, task, ctx.userId);
 
     const repo = task.repoId ? await ctx.db.get(task.repoId) : null;
 

@@ -17,6 +17,7 @@ import { defineTool, type EvaTool } from "./registry";
 import { applyProjectToolPolicy, projectCallerOf } from "./projectScope";
 import { projectTools, siblingRowRefusal } from "./projectTools";
 import { jsonValue } from "../_jev/jsonValue";
+import { MAX_PARALLEL_PROJECT_TASKS } from "@eva/shared/projectStatus";
 import { evaluateTool } from "../_mcp/evaluateTool";
 import { previewTools } from "../_mcp/previewTools";
 import { renderUiTool } from "../_mcp/renderUiTool";
@@ -703,12 +704,6 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       .describe(
         'Project tasks: the phase this task belongs to (a label like "Phase 1: API"), for grouping only.',
       ),
-    dependsOn: z
-      .array(z.number().int())
-      .optional()
-      .describe(
-        "Project coordinator only: numbers of this project's existing tasks (3 for #3) that must be merged before this one starts.",
-      ),
   };
 
   type TaskInput = {
@@ -758,11 +753,11 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
   }
 
   /**
-   * The coordinator proposes tasks in its project: `todo`, not approved, in
-   * the project's repos, with dependencies that make no cycle. One call is
-   * one batch card in the coordinator chat.
+   * The coordinator creates tasks in its project: `todo` and approved, in the
+   * project's repos, so the scheduler starts them at once. One call is one
+   * batch card in the coordinator chat.
    */
-  async function proposeProjectTasks(
+  async function createProjectTasks(
     projectId: string,
     userId: string,
     tasks: Array<{
@@ -770,8 +765,6 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       description?: string;
       repoId?: string;
       phaseLabel?: string;
-      dependsOn?: number[];
-      dependsOnTaskNumbers?: number[];
     }>,
   ) {
     return guarded(async () => {
@@ -784,8 +777,8 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
         taskIds: created.taskIds,
         batchId: created.batchId,
         taskCount: created.taskIds.length,
-        status: "proposed",
-        note: "The tasks wait for a person to approve them in this chat. You cannot start them.",
+        status: "created",
+        note: `The scheduler starts them in task-number order, at most ${MAX_PARALLEL_PROJECT_TASKS} at once.`,
       });
     });
   }
@@ -823,8 +816,8 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
           ...(input.projectId && input.phaseLabel
             ? { phaseLabel: input.phaseLabel }
             : {}),
-          // An agent's task waits for a person's approval before the
-          // project scheduler may start it.
+          // A project task from an agent outside the coordinator waits in
+          // Triage for a person's approval.
           approved: false,
         },
       },
@@ -875,7 +868,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     defineTool({
       name: "create_task",
       description:
-        "Create a task on the Eva platform without starting execution. Use this to queue tasks for later review or manual execution. In a project coordinator chat the task joins this project as a proposal: todo, not approved, with optional phaseLabel and dependsOn (task numbers).",
+        "Create a task on the Eva platform without starting execution. Use this to queue tasks for later review or manual execution. In a project coordinator chat the task joins this project and starts as soon as a slot is free, with an optional phaseLabel.",
       mutating: true,
       input: taskArgs,
       handler: async (input) => {
@@ -885,13 +878,12 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
         if (project !== undefined) {
           const repo = await coordinatorRepoId(input.repoName, input.app, userId);
           if ("content" in repo) return repo;
-          return proposeProjectTasks(project, userId, [
+          return createProjectTasks(project, userId, [
             {
               title: input.title,
               description: input.description,
               ...repo,
               phaseLabel: input.phaseLabel,
-              dependsOnTaskNumbers: input.dependsOn,
             },
           ]);
         }
@@ -911,19 +903,9 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
   tools.push(
     defineTool({
       name: "create_tasks_batch",
-      description: `Create multiple tasks at once with dependencies between them, and optionally group them into a project.
+      description: `Create multiple tasks at once, and optionally group them into a project. Each task in the array has a title and a description.
 
-Each task in the array has a title, description, and optional dependsOn array of 0-based indices referencing other tasks in the same batch.
-
-Example: [
-  { "title": "Setup DB schema", "description": "..." },
-  { "title": "Build API", "description": "...", "dependsOn": [0] },
-  { "title": "Build UI", "description": "...", "dependsOn": [1] }
-]
-
-This creates 3 tasks where Build API depends on Setup DB schema, and Build UI depends on Build API.
-
-In a project coordinator chat the batch joins this project (do not pass projectTitle): every task is todo and waits for a person's approval. Each task may name its own repoName (one of the project's repos; default the home repo), a phaseLabel, and dependsOnTaskNumbers for this project's existing tasks. A batch whose dependencies make a cycle is refused.`,
+In a project coordinator chat the batch joins this project (do not pass projectTitle): the scheduler starts the tasks in task-number order as slots free up, so list them in the order they should run. Each task may name its own repoName (one of the project's repos; default the home repo) and a phaseLabel.`,
       mutating: true,
       input: {
         repoName: z
@@ -940,12 +922,6 @@ In a project coordinator chat the batch joins this project (do not pass projectT
                 .string()
                 .optional()
                 .describe("Full prompt/instructions for the task"),
-              dependsOn: z
-                .array(z.number())
-                .optional()
-                .describe(
-                  "Array of 0-based indices of tasks this task depends on",
-                ),
               repoName: z
                 .string()
                 .optional()
@@ -956,12 +932,6 @@ In a project coordinator chat the batch joins this project (do not pass projectT
                 .string()
                 .optional()
                 .describe("Project coordinator only: this task's phase label."),
-              dependsOnTaskNumbers: z
-                .array(z.number().int())
-                .optional()
-                .describe(
-                  "Project coordinator only: numbers of this project's existing tasks this task depends on.",
-                ),
             }),
           )
           .describe("Ordered array of tasks to create"),
@@ -1006,11 +976,9 @@ In a project coordinator chat the batch joins this project (do not pass projectT
               description: task.description,
               ...repo,
               phaseLabel: task.phaseLabel,
-              dependsOn: task.dependsOn,
-              dependsOnTaskNumbers: task.dependsOnTaskNumbers,
             });
           }
-          return proposeProjectTasks(caller.projectId, userId, tasks);
+          return createProjectTasks(caller.projectId, userId, tasks);
         }
         if (input.repoName === undefined) {
           return toolErrorResult('Pass "repoName": which repo the tasks run in.');
@@ -1028,13 +996,12 @@ In a project coordinator chat the batch joins this project (do not pass projectT
           clerkUserId,
           {
             type: "mutation",
-            path: "_agentTasks/mutations:createBatchWithDependencies",
+            path: "_agentTasks/mutations:createTasksBatch",
             args: {
               repoId: repo.id,
               tasks: input.tasks.map((t) => ({
                 title: t.title,
                 ...(t.description ? { description: t.description } : {}),
-                ...(t.dependsOn ? { dependsOn: t.dependsOn } : {}),
               })),
               ...(input.projectTitle
                 ? { projectTitle: input.projectTitle }

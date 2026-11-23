@@ -31,7 +31,7 @@ import {
   unreadLookupForRepo,
 } from "../chatReads";
 import { gatherAccessibleRepos } from "../_githubRepos/helpers";
-import { factsForClient, loadProjectTaskFacts } from "../_projects/taskTable";
+import { loadProjectTaskFacts } from "../_projects/taskTable";
 import { projectTaskFactsValidator } from "../_validators/projectTasks";
 import {
   liveOwnedSessionStatuses,
@@ -61,8 +61,8 @@ export const agentTaskWithLastRunValidator = v.object({
   locked: v.optional(v.boolean()),
   /**
    * `listByProject` only: the task as the shared status rules read it
-   * (`@eva/shared/projectStatus`), with the usage limit, dependencies, open
-   * ask and coordinator retries the row alone does not carry.
+   * (`@eva/shared/projectStatus`), with the usage limit, open ask and
+   * coordinator retries the row alone does not carry.
    */
   facts: v.optional(projectTaskFactsValidator),
 });
@@ -257,7 +257,7 @@ export const listByProject = authQuery({
       row: Infer<typeof agentTaskWithLastRunValidator>,
     ): Infer<typeof agentTaskWithLastRunValidator> => {
       const facts = factsById.get(String(row._id));
-      return facts ? { ...row, facts: factsForClient(facts) } : row;
+      return facts ? { ...row, facts } : row;
     };
     const rows = listed.sort(
       (a, b) => (a.task.taskNumber ?? 0) - (b.task.taskNumber ?? 0),
@@ -472,39 +472,6 @@ export const getAllTasks = authQuery({
     );
     const tasks = taskArrays.flat().sort((a, b) => a.createdAt - b.createdAt);
     return enrichTasksWithLastRun(ctx.db, ctx.userId, tasks);
-  },
-});
-
-/** Returns the tasks that depend on a given task (its downstream dependents). */
-export const getDependentTasks = authQuery({
-  args: { taskId: v.id("agentTasks") },
-  returns: v.array(
-    v.object({
-      _id: v.id("agentTasks"),
-      title: v.string(),
-      taskNumber: v.optional(v.number()),
-    }),
-  ),
-  handler: async (ctx, args) => {
-    const task = await ctx.db.get(args.taskId);
-    if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) return [];
-    const dependents = await ctx.db
-      .query("taskDependencies")
-      .withIndex("by_dependency", (q) => q.eq("dependsOnId", args.taskId))
-      .collect();
-    const depTasks = await Promise.all(
-      dependents.map((dep) => ctx.db.get(dep.taskId)),
-    );
-    return filterActiveEntities(
-      depTasks.filter(
-        (t): t is Exclude<typeof t, null> =>
-          t !== null && isTaskVisibleTo(t, ctx.userId),
-      ),
-    ).map((t) => ({
-      _id: t._id,
-      title: t.title,
-      taskNumber: t.taskNumber,
-    }));
   },
 });
 

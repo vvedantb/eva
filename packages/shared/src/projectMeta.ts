@@ -322,7 +322,6 @@ const projectSpecSchema = z.object({
       z.object({
         title: z.string().nullish(),
         description: z.string().nullish(),
-        dependencies: z.array(z.number()).nullish(),
       }),
     )
     .nullish(),
@@ -331,7 +330,6 @@ const projectSpecSchema = z.object({
 export interface ProjectSpecTask {
   title: string;
   description: string;
-  dependencies: number[];
 }
 
 export interface ProjectSpec {
@@ -356,7 +354,6 @@ export function parseProjectSpec(specJson: string): ProjectSpec | null {
     tasks: (parsed.data.tasks ?? []).map((task) => ({
       title: task.title ?? "",
       description: task.description ?? "",
-      dependencies: task.dependencies ?? [],
     })),
   };
 }

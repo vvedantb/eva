@@ -3,11 +3,10 @@
 import type { Id } from "@eva/backend";
 import type { MouseEvent } from "react";
 import { UserInitials } from "@eva/shared/user-initials";
-import { IconDots, IconListCheck, IconSparkles } from "@tabler/icons-react";
+import { IconDots } from "@tabler/icons-react";
 import { cn } from "@eva/ui";
 import {
   AvatarStack,
-  Badge,
   ContextMenu,
   ContextMenuTrigger,
   ContextMenuContent,
@@ -59,7 +58,6 @@ interface ProjectCardProps {
   projectLead?: Id<"users">;
   /** Derived from the child tasks (`useProjectListStatuses`). */
   status?: ProjectListStatus;
-  planningMode: "interview" | "tasks_only";
   isBuilding?: boolean;
   sandboxStatus?: SandboxStatus;
   /** Finished project chat reply the user has not seen (`api.projects.list`). */
@@ -93,7 +91,6 @@ export function ProjectCard({
   members,
   projectLead,
   status,
-  planningMode,
   isBuilding = false,
   sandboxStatus,
   hasUnread = false,
@@ -235,29 +232,6 @@ export function ProjectCard({
         ) : null}
         {/* `mt-[7px]` centres the 6px dot on the 20px title line. */}
         <UnreadDot show={hasUnread} className="mt-[7px]" />
-      </div>
-
-      <div className="flex flex-wrap items-center gap-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Badge
-              variant="secondary"
-              className="gap-0.5 px-1.5 py-0 text-3xs font-medium leading-4"
-            >
-              {planningMode === "interview" ? (
-                <IconSparkles className="size-2.5 shrink-0" />
-              ) : (
-                <IconListCheck className="size-2.5 shrink-0" />
-              )}
-              {planningMode === "interview" ? "Interview" : "Tasks only"}
-            </Badge>
-          </TooltipTrigger>
-          <TooltipContent>
-            {planningMode === "interview"
-              ? "Created with AI interview and generated plan"
-              : "Created as a tasks-only container"}
-          </TooltipContent>
-        </Tooltip>
       </div>
 
       <div className="mt-0.5 pt-0.5">

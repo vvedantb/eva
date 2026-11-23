@@ -6,11 +6,6 @@ import { prStateValidator } from "./tableFields";
 // module: the list queries build their validators from these at load time,
 // so they must not pull the scheduler's import graph in.
 
-const dependencyFactsValidator = v.object({
-  status: taskStatusValidator,
-  prState: v.optional(prStateValidator),
-});
-
 /**
  * `ProjectTaskFacts` (`@eva/shared/projectStatus`) as a return value: what
  * clients pass to the shared rules (`projectStatus`, `projectTaskNeedsYou`).
@@ -24,7 +19,6 @@ export const projectTaskFactsValidator = v.object({
   halted: v.optional(v.union(v.literal("failed"), v.literal("cancelled"))),
   usageLimited: v.boolean(),
   runPending: v.boolean(),
-  dependencies: v.array(dependencyFactsValidator),
   coordinatorRetries: v.optional(v.number()),
   openAsk: v.optional(v.union(v.literal("coordinator"), v.literal("person"))),
 });
@@ -35,7 +29,6 @@ const needsYouValidator = v.union(
   v.literal("stopped"),
   v.literal("pr_closed"),
   v.literal("approve"),
-  v.literal("dependency_cancelled"),
   v.literal("review"),
   v.literal("question"),
 );
@@ -66,8 +59,6 @@ export const projectTaskRowValidator = v.union(
     repo: v.optional(v.string()),
     prState: v.optional(prStateValidator),
     prUrl: v.optional(v.string()),
-    /** The task numbers (or ids, for an unnumbered task) it depends on. */
-    dependsOn: v.array(v.string()),
     needsYou: v.optional(needsYouValidator),
     waitingForCoordinator: v.boolean(),
     /** The open question to the coordinator, when there is one. */

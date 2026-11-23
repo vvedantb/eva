@@ -103,8 +103,8 @@ describe("project meta", () => {
       title: "Plan",
       description: "",
       tasks: [
-        { title: "One", description: "", dependencies: [0] },
-        { title: "", description: "", dependencies: [] },
+        { title: "One", description: "" },
+        { title: "", description: "" },
       ],
     });
     expect(parseProjectSpec("not json")).toBeNull();

@@ -3,7 +3,6 @@ import {
   MAX_PARALLEL_PROJECT_TASKS,
   projectTaskStage,
   tasksToStart,
-  type DependencyFacts,
   type ProjectTaskFacts,
 } from "@eva/shared/projectStatus";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -21,15 +20,16 @@ import { RUN_WAITING_FOR_ANSWER } from "../_taskWorkflow/helpers";
 
 /**
  * The project scheduler: it replaces the old one-at-a-time build. It starts
- * every approved `todo` child task whose dependencies are launched (done and
- * merged), in `taskNumber` order, while fewer than
+ * every approved `todo` child task that is not halted and has no run
+ * pending, in `taskNumber` order, while fewer than
  * `MAX_PARALLEL_PROJECT_TASKS` are in progress. Each task runs like a quick
  * task: its own session, sandbox, branch and PR to main. The rules are the
  * shared ones (`@eva/shared/projectStatus`); this module only loads the facts
  * and starts runs.
  *
- * It runs on three events: a batch approval, a child task's status change
- * (`recomputeProjectPhase`), and a child PR merge (the PR webhook). It is
+ * It runs on these events: the coordinator creates tasks, a person approves
+ * or creates one, a child task's status changes (`recomputeProjectPhase`),
+ * and a child PR merges (the PR webhook). It is
  * idempotent: a second call on the same state starts nothing.
  */
 
@@ -43,25 +43,6 @@ export async function listProjectTasks(
       .query("agentTasks")
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
       .collect(),
-  );
-}
-
-/** The tasks `task` depends on, as the dependency rule reads them. */
-async function taskDependencyFacts(
-  db: DatabaseReader,
-  taskId: Id<"agentTasks">,
-): Promise<DependencyFacts[]> {
-  const rows = await db
-    .query("taskDependencies")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .collect();
-  const dependencies = await Promise.all(
-    rows.map((row) => db.get(row.dependsOnId)),
-  );
-  return dependencies.flatMap((dep) =>
-    dep === null || isEntityDeleted(dep)
-      ? []
-      : [{ status: dep.status, prState: dep.prState }],
   );
 }
 
@@ -126,8 +107,7 @@ export async function projectTaskFacts(
   task: Doc<"agentTasks">,
 ): Promise<ProjectTaskFacts> {
   const { project, now } = context;
-  const [dependencies, latest, ask] = await Promise.all([
-    taskDependencyFacts(db, task._id),
+  const [latest, ask] = await Promise.all([
     task.status === "todo" ? latestTaskRun(db, task._id) : null,
     findOpenAsk(db, task._id),
   ]);
@@ -162,7 +142,6 @@ export async function projectTaskFacts(
     halted,
     usageLimited,
     runPending,
-    dependencies,
     coordinatorRetries: task.coordinatorRetries,
     openAsk: openAskHolder(ask, context),
   };
@@ -229,7 +208,7 @@ export async function scheduleReadyProjectTasks(
 /**
  * Asks for the coordinator wake-ups the task state calls for (decision 16):
  * a task whose run failed and that the coordinator may still retry (one
- * wake-up for each failed run), and a batch it proposed whose tasks have all
+ * wake-up for each failed run), and a batch it created whose tasks have all
  * ended: launched, cancelled, or failed after its retry (one for each
  * batch). Idempotent by key, so calling it on every event is safe.
  */
@@ -272,7 +251,7 @@ async function requestEventWakes(
       projectId,
       reason: "batch_done",
       key: `batch:${batch._id}`,
-      text: `Every task of the batch you proposed at ${new Date(batch.createdAt).toISOString()} has ended. Update the summary and propose the next tasks if the work goes on.`,
+      text: `Every task of the batch you created at ${new Date(batch.createdAt).toISOString()} has ended. Update the summary and create the next tasks if the work goes on.`,
     });
   }
 }
@@ -285,9 +264,10 @@ export function taskLabel(
 }
 
 /**
- * A batch ended when a person approved some of it and every one of its tasks
- * is launched, cancelled, or failed after the coordinator's retry. A batch
- * nobody approved never ends by itself.
+ * A batch ended when some of it was approved (the coordinator's tasks are,
+ * at creation) and every one of its tasks is launched, cancelled, or failed
+ * after the coordinator's retry. A batch with no approved task never ends by
+ * itself.
  */
 export function isBatchFinished(tasks: readonly ProjectTaskFacts[]): boolean {
   if (tasks.length === 0 || !tasks.some((task) => task.approved)) return false;

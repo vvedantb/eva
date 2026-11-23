@@ -1,5 +1,5 @@
 import type { QueryCtx } from "../_generated/server";
-import type { Doc, Id } from "../_generated/dataModel";
+import type { Doc } from "../_generated/dataModel";
 import { entityVisible } from "../numId";
 import { resolveSessionBaseBranch } from "./baseBranch";
 import { buildEditPrompt } from "./prompts";
@@ -119,30 +119,6 @@ async function projectBriefBlock(
   );
 }
 
-/** The tasks a child task depends on: number, title, status and PR link. */
-async function dependenciesBlock(
-  ctx: QueryCtx,
-  taskId: Id<"agentTasks">,
-): Promise<string> {
-  const dependencies = await ctx.db
-    .query("taskDependencies")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .collect();
-  const tasks = await Promise.all(
-    dependencies.map((dependency) => ctx.db.get(dependency.dependsOnId)),
-  );
-  const lines = tasks.flatMap((task) =>
-    task
-      ? [
-          `- ${task.taskNumber ? `#${task.taskNumber} ` : ""}"${task.title}" (status: ${task.status})${task.prUrl ? `, PR: ${task.prUrl}` : ""}`,
-        ]
-      : [],
-  );
-  return lines.length > 0
-    ? `This task depends on these tasks:\n${lines.join("\n")}`
-    : "";
-}
-
 /** What a child task knows of its place in the project and how it reports up. */
 const CHILD_TASK_RULES = `This task is one part of a project. The project's coordinator plans the work and other tasks run beside this one, each on its own branch and PR to main.
 - Do only this task. Keep your change safe to merge alone.
@@ -152,30 +128,29 @@ const CHILD_TASK_RULES = `This task is one part of a project. The project's coor
 - If main moved and your branch conflicts, rebase and fix the conflicts yourself.`;
 
 /**
- * The project half of a child task's prompt: its place in the project, the
- * project brief (`projectBriefBlock`) and its dependencies. A snapshot when
+ * The project half of a child task's prompt: its place in the project and
+ * the project brief (`projectBriefBlock`). A snapshot when
  * the turn or run starts. Shared by the task's chat turns (`ownerPromptContext`)
  * and its runs (`taskWorkflow.getTaskData`).
  */
 export async function childTaskProjectBlock(
   ctx: QueryCtx,
-  task: Pick<Doc<"agentTasks">, "_id">,
   project: Pick<Doc<"projects">, "title" | "instructions" | "summaryDocId">,
 ): Promise<string> {
   return joinBlocks(
     `This task is part of project "${project.title}".`,
     CHILD_TASK_RULES,
     await projectBriefBlock(ctx, project),
-    await dependenciesBlock(ctx, task._id),
   );
 }
 
 /** How a coordinator works; leads every coordinator turn. */
 export const COORDINATOR_RULES = `You are this project's coordinator. You plan the project and keep it moving; child tasks do the work.
 - Never edit, commit or push code. Your sandbox is read-only: read code to plan, nothing more.
-- Split work into child tasks with create_tasks_batch (or create_task): one repo each, a short title, a full description and a phase label. Split by files, so tasks running at the same time do not touch the same code. When two tasks must touch the same area, make one depend on the other.
+- Split work into child tasks with create_tasks_batch (or create_task): one repo each, a short title, a full description and a phase label. Split by files, so tasks running at the same time do not touch the same code. When two tasks must touch the same area, create the second only after the first is merged.
 - Plan each task so its PR is safe to merge alone, or put the work behind a flag. If the repo has no flag method, ask the person.
-- Tasks you create wait for a person's approval. You cannot start them. At most ${MAX_PARALLEL_PROJECT_TASKS} run at once; the scheduler starts approved tasks when their dependencies are merged.
+- Tasks you create start at once: the scheduler runs them in task-number order, at most ${MAX_PARALLEL_PROJECT_TASKS} at a time. Create them in the order they should run.
+- Feedback from people waits in Triage until a person approves it. You cannot approve it; read it and plan around it.
 - A running task does not see your summary updates. If it must know something now, message it with send_chat_message.
 - Answer a task's question with send_chat_message to that task. If you cannot, say so in this chat so a person answers.
 - A failed task: read its state with get_agent_state, then retry it once with retry_task and a note on what to change, or tell the person.
@@ -204,7 +179,7 @@ async function ownerPromptContext(
     return {
       message: project
         ? joinBlocks(
-            await childTaskProjectBlock(ctx, task, project),
+            await childTaskProjectBlock(ctx, project),
             withTaskContext(task, message),
           )
         : withTaskContext(task, message),

@@ -1,11 +1,11 @@
 import { v, type Infer } from "convex/values";
 import { internalMutation, internalQuery } from "../_generated/server";
 import type { DatabaseReader } from "../_generated/server";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import {
   getProjectWithAccess,
-  hasActiveRun,
   normalizeIdOrThrow,
+  taskRunPending,
 } from "../functions";
 import { chatEntityKindValidator } from "../validators";
 import { chatOwner } from "../_sessions/owner";
@@ -167,10 +167,36 @@ export const rowSourceScope = internalQuery({
 });
 
 /**
- * The coordinator edits one of its project's tasks (smaller rules of the
- * plan): only a task that has not started, and the edit takes the task's
- * approval back, so a person approves the changed task again. Sets the
- * phase label when given.
+ * The task of the coordinator's project it may change or delete: one that
+ * has not started (still todo or draft, no run pending). Throws otherwise.
+ * The one rule for `update_task` and `delete_task` in a coordinator chat.
+ */
+async function notStartedProjectTask(
+  db: DatabaseReader,
+  projectId: string,
+  taskId: string,
+  action: "change" | "delete",
+): Promise<Doc<"agentTasks">> {
+  const task = await db.get(
+    normalizeIdOrThrow(db, "agentTasks", taskId, "Task"),
+  );
+  if (!task || isEntityDeleted(task) || String(task.projectId) !== projectId) {
+    throw new Error("That task is not part of this project.");
+  }
+  const started =
+    (task.status !== "todo" && task.status !== "draft") ||
+    (await taskRunPending(db, task));
+  if (started) {
+    throw new Error(
+      `That task has started. The coordinator can ${action} only tasks that have not started; message it with send_chat_message instead.`,
+    );
+  }
+  return task;
+}
+
+/**
+ * The coordinator edits one of its project's tasks: only a task that has
+ * not started (`notStartedProjectTask`). Sets the phase label when given.
  */
 export const editTaskAsCoordinator = internalMutation({
   args: {
@@ -180,32 +206,31 @@ export const editTaskAsCoordinator = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const task = await ctx.db.get(
-      normalizeIdOrThrow(ctx.db, "agentTasks", args.taskId, "Task"),
+    const task = await notStartedProjectTask(
+      ctx.db,
+      args.projectId,
+      args.taskId,
+      "change",
     );
-    if (
-      !task ||
-      isEntityDeleted(task) ||
-      String(task.projectId) !== args.projectId
-    ) {
-      throw new Error("That task is not part of this project.");
+    if (args.phaseLabel !== undefined) {
+      await ctx.db.patch(task._id, {
+        phaseLabel: args.phaseLabel.trim() || undefined,
+        updatedAt: Date.now(),
+      });
     }
-    const started =
-      (task.status !== "todo" && task.status !== "draft") ||
-      task.run !== undefined ||
-      (await hasActiveRun(ctx.db, task._id));
-    if (started) {
-      throw new Error(
-        "That task has started. The coordinator can change only tasks that have not started; message it with send_chat_message instead.",
-      );
-    }
-    await ctx.db.patch(task._id, {
-      approvedAt: undefined,
-      ...(args.phaseLabel !== undefined
-        ? { phaseLabel: args.phaseLabel.trim() || undefined }
-        : {}),
-      updatedAt: Date.now(),
-    });
+    return null;
+  },
+});
+
+/**
+ * Throws unless the coordinator may delete this task of its project: only a
+ * task that has not started (`notStartedProjectTask`).
+ */
+export const assertCoordinatorMayDeleteTask = internalQuery({
+  args: { projectId: v.string(), taskId: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await notStartedProjectTask(ctx.db, args.projectId, args.taskId, "delete");
     return null;
   },
 });
@@ -223,7 +248,6 @@ export const updateProjectSummary = internalMutation({
       ctx.db,
       normalizeIdOrThrow(ctx.db, "projects", args.projectId, "Project"),
       normalizeIdOrThrow(ctx.db, "users", args.userId, "User"),
-      "contributor",
     );
     if (!args.markdown.trim()) throw new Error("The summary cannot be empty.");
     return await upsertProjectSummary(ctx, project._id, args.markdown);

@@ -797,7 +797,6 @@ describe("mobile api", () => {
       const byId = new Map(listed.map((project) => [project._id, project]));
       expect(byId.get(tasksOnly)).toMatchObject({
         phase: "business_review",
-        planningMode: "tasks_only",
         description: "Keep a draft when the network drops.",
         priority: "high",
         baseBranch: "main",
@@ -806,7 +805,6 @@ describe("mobile api", () => {
       // The description is what the coordinator's first turn carries.
       expect(byId.get(interview)).toMatchObject({
         phase: "business_review",
-        planningMode: "tasks_only",
         description: "Shorter onboarding copy.",
       });
       // No project branch and no interview transcript.

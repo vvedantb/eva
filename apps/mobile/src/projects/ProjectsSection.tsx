@@ -185,8 +185,7 @@ function ProjectList({ repo }: { repo: Repo }) {
               project={project}
               status={statuses?.get(project._id)}
               users={users}
-              // A viewer reads only (decision 12): no project menu.
-              onLongPress={project.callerRole === "contributor" ? () => actions.openSheet(project) : undefined}
+              onLongPress={() => actions.openSheet(project)}
             />
           )}
           renderSectionFooter={({ section }) => <FoldFooter open={section.open} count={section.count} empty="No projects" />}

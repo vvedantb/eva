@@ -5,7 +5,7 @@ export type {
 } from "./convex/_validators/tableFields";
 export type { SandboxOwner } from "./convex/_sandbox/owner";
 export type { PrOwnerRef } from "./convex/_pullRequests/store";
-export type { ChatEntityKind, ProjectRole } from "./convex/_validators/enums";
+export type { ChatEntityKind } from "./convex/_validators/enums";
 export { api } from "./convex/_generated/api";
 export { GITHUB_AUTH_REQUIRED } from "./convex/_github/authErrors";
 export { publishErrorNeedsForcePush } from "./convex/_sandbox_runtime/divergedPublish";

@@ -65,7 +65,6 @@ import { useQuickTaskHeaderActionsSlot } from "@/lib/components/quick-tasks/Quic
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { useRepo } from "@/lib/contexts/RepoContext";
-import { useIsProjectViewer } from "@/lib/components/projects/useProjectRole";
 
 interface TaskDetailInlineProps {
   onClose: () => void;
@@ -158,9 +157,8 @@ export function TaskDetailInline({
     handleCreatePr,
     taskSession,
   } = useTaskDetail(taskId, routing);
-  // A project viewer reads a child task but never edits, runs or wakes it:
-  // the same rule as its chat (`TaskSandboxChatPanel`).
-  const isProjectViewer = useIsProjectViewer(task?.projectId);
+  // Project roles are gone: everyone with repo access drives the task.
+  const isProjectViewer = false;
   const canStartSandbox = canStartSandboxAsTask && !isProjectViewer;
   const canEditText = canEditTaskText && !isProjectViewer;
   const { sandbox } = taskSession;

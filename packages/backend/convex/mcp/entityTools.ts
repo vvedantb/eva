@@ -135,7 +135,7 @@ Only entities you could already open in Eva are returned. The page is capped; "t
           .string()
           .optional()
           .describe(
-            'Exact lifecycle value to filter on: a session\'s sandbox status ("active", "starting", "stopping", "closed"), a task\'s status ("draft", "todo", "in_progress", "code_review", "business_review", "done", "cancelled"), or a project\'s phase ("draft", "finalized", "in_progress", "business_review", "code_review", "completed", "cancelled"). A value that belongs to another surface simply matches nothing there.',
+            'Exact lifecycle value to filter on: a session\'s sandbox status ("active", "starting", "stopping", "closed"), a task\'s status ("draft", "todo", "in_progress", "code_review", "business_review", "done", "cancelled"), or a project\'s stage ("todo", "in_progress", "done"). A value that belongs to another surface simply matches nothing there.',
           ),
         limit: z
           .number()

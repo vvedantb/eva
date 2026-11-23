@@ -10,9 +10,7 @@ import {
   normalizeIdOrThrow,
 } from "../functions";
 import { createTodoTask } from "../_agentTasks/mutations";
-import { insertTaskDependencies } from "../_agentTasks/dependencies";
 import { latestChatMessageId, resolveChatParent } from "../_chat/chatParent";
-import { listProjectTasks } from "./scheduler";
 import { assertProjectRepo } from "./settings";
 import {
   coordinatorAutoTurnsInLastHour,
@@ -21,14 +19,13 @@ import {
 } from "./coordinatorWake";
 
 /**
- * The tasks a project's coordinator proposes (`create_task`,
- * `create_tasks_batch`): `todo` and not approved (decision 7), each in one of
- * the project's repos, with dependencies that make no cycle. One tool call is
- * one `projectTaskBatches` row, anchored to the coordinator message it ran
- * in.
+ * The tasks a project's coordinator creates (`create_task`,
+ * `create_tasks_batch`): `todo` and approved, each in one of the project's
+ * repos, so the scheduler starts them at once. One tool call is one
+ * `projectTaskBatches` row, anchored to the coordinator message it ran in.
  */
 
-/** Most tasks one coordinator call may propose. */
+/** Most tasks one coordinator call may create. */
 export const MAX_TASKS_PER_COORDINATOR_BATCH = 20;
 
 const coordinatorTaskInput = v.object({
@@ -37,10 +34,6 @@ const coordinatorTaskInput = v.object({
   /** One of the project's repos; absent is the home repo. */
   repoId: v.optional(v.id("githubRepos")),
   phaseLabel: v.optional(v.string()),
-  /** 0-based indexes of tasks earlier or later in this same batch. */
-  dependsOn: v.optional(v.array(v.number())),
-  /** `taskNumber`s of the project's existing tasks. */
-  dependsOnTaskNumbers: v.optional(v.array(v.number())),
 });
 
 /** Creates the coordinator's tasks and their batch row. */
@@ -53,26 +46,19 @@ export async function createCoordinatorTasks(
   },
 ): Promise<{ taskIds: Id<"agentTasks">[]; batchId: Id<"projectTaskBatches"> }> {
   const { projectId, userId, tasks } = params;
-  if (tasks.length === 0) throw new Error("Propose at least one task.");
+  if (tasks.length === 0) throw new Error("Create at least one task.");
   if (tasks.length > MAX_TASKS_PER_COORDINATOR_BATCH) {
     throw new Error(
-      `Propose at most ${MAX_TASKS_PER_COORDINATOR_BATCH} tasks at once.`,
+      `Create at most ${MAX_TASKS_PER_COORDINATOR_BATCH} tasks at once.`,
     );
   }
   const project = await getProjectWithAccess(
     ctx.db,
     projectId,
     userId,
-    "contributor",
   );
   // Checked for every task before any is written.
   for (const task of tasks) assertProjectRepo(project, task.repoId ?? project.repoId);
-  const existingByNumber = new Map<number, Id<"agentTasks">>();
-  for (const task of await listProjectTasks(ctx.db, projectId)) {
-    if (task.taskNumber !== undefined) {
-      existingByNumber.set(task.taskNumber, task._id);
-    }
-  }
   const userCtx = { ...ctx, userId };
   const taskIds: Id<"agentTasks">[] = [];
   for (const task of tasks) {
@@ -86,34 +72,10 @@ export async function createCoordinatorTasks(
           description: task.description,
           phaseLabel: task.phaseLabel,
         },
-        { need: "contributor", approved: false },
+        { approved: true },
       ),
     );
   }
-  const edges: Array<{
-    taskId: Id<"agentTasks">;
-    dependsOnId: Id<"agentTasks">;
-  }> = [];
-  tasks.forEach((task, index) => {
-    for (const dependsOnIndex of task.dependsOn ?? []) {
-      const dependsOnId = taskIds[dependsOnIndex];
-      if (!Number.isInteger(dependsOnIndex) || dependsOnId === undefined) {
-        throw new Error(
-          `Task ${index} depends on index ${dependsOnIndex}, which is not in this batch.`,
-        );
-      }
-      edges.push({ taskId: taskIds[index], dependsOnId });
-    }
-    for (const taskNumber of task.dependsOnTaskNumbers ?? []) {
-      const dependsOnId = existingByNumber.get(taskNumber);
-      if (dependsOnId === undefined) {
-        throw new Error(`This project has no task #${taskNumber}.`);
-      }
-      edges.push({ taskId: taskIds[index], dependsOnId });
-    }
-  });
-  // Refuses a task that depends on itself or a cycle; the whole call fails.
-  await insertTaskDependencies(ctx, edges);
   const parentId = await resolveChatParent(ctx.db, "project", projectId);
   const messageId = parentId
     ? await latestChatMessageId(ctx.db, parentId)

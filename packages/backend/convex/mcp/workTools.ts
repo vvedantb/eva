@@ -45,8 +45,7 @@ const nullReply = z.null();
  * the Eva UI button calls, run as the user, so its access checks and gates
  * apply unchanged.
  *
- * Deliberately absent: task status and review state (a person's call) and
- * `deleteCascade` (irreversible, removes the task's history too).
+ * Deliberately absent: task status and review state (a person's call).
  */
 export function workTools(
   credentials: McpCredentials,
@@ -136,7 +135,7 @@ export function workTools(
 
 Status and review state cannot be changed here; those stay a person's call. "tags" replaces the whole tag list. "priority": null clears it.
 
-In a project coordinator chat, name the task by taskNumber; you can change only tasks of this project that have not started, and the change takes back the task's approval, so a person approves it again.`,
+In a project coordinator chat, name the task by taskNumber; you can change only tasks of this project that have not started.`,
       mutating: true,
       input: {
         ...projectTaskInput,
@@ -189,7 +188,7 @@ In a project coordinator chat, name the task by taskNumber; you can change only 
         if ("content" in resolved) return resolved;
         const { target } = resolved;
         if (caller?.role === "coordinator") {
-          // Only a task not started yet; the edit takes its approval back.
+          // Only a task not started yet.
           const refused = await guarded(async () => {
             await ctx.runMutation(
               internal.mcp.projectQueries.editTaskAsCoordinator,
@@ -296,7 +295,7 @@ Only tasks in "todo" can be scheduled, and not while a run is queued or running.
   tools.push(
     defineTool({
       name: "delete_task",
-      description: `Delete a task (soft delete): it disappears from lists and its url. Ask the user in chat and get an explicit yes first. In a project coordinator chat, name the task by taskNumber; only this project's tasks.
+      description: `Delete a task (soft delete): it disappears from lists and its url. Ask the user in chat and get an explicit yes first. In a project coordinator chat, name the task by taskNumber; only this project's tasks that have not started.
 
 Deleting also cancels its scheduled run, drops its run summary and queues its sandbox for deletion. restore_task brings the task row back, but none of those.`,
       mutating: true,
@@ -306,6 +305,16 @@ Deleting also cancels its scheduled run, drops its run summary and queues its sa
         const resolved = await resolveTask(ref);
         if ("content" in resolved) return resolved;
         const { target } = resolved;
+        if (caller?.role === "coordinator") {
+          const refused = await guarded(async () => {
+            await ctx.runQuery(
+              internal.mcp.projectQueries.assertCoordinatorMayDeleteTask,
+              { projectId: caller.projectId, taskId: target.targetId },
+            );
+            return null;
+          });
+          if (refused !== null) return refused;
+        }
         await runMutation("agentTasks:remove", { id: target.targetId });
         return toolJsonResult({
           ...entitySummary(target),

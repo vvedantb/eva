@@ -754,7 +754,6 @@ const projectDocSchema = z.object({
   _creationTime: z.number(),
   numId: z.number().optional(),
   title: z.string(),
-  phase: z.string(),
   updatedAt: z.number().optional(),
   build: z.object({ state: z.enum(["scheduled", "running"]) }).optional(),
   model: z.string().optional(),
@@ -1163,11 +1162,14 @@ export const orchestratorGetAgentState = internalAction({
 
     if (kind === "project") {
       const project = projectDocSchema.parse(rawDoc);
+      const stage = await ctx.runQuery(internal.mcp.queries.projectStage, {
+        projectId: id,
+      });
       return {
         ...common,
         numId: project.numId,
         title: project.title,
-        status: project.phase,
+        status: stage ?? "todo",
         model: ownChat?.lastModel ?? ownedRead?.chatSeed.model,
         updatedAt: project.updatedAt ?? project._creationTime,
         deploymentUrl: undefined,

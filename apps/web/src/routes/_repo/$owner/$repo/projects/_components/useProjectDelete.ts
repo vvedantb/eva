@@ -27,16 +27,15 @@ export interface ProjectDeleteController {
 /**
  * Deleting projects from the board — one card or a whole selection.
  *
- * `deleteCascade` also soft-deletes the project's tasks and there is no restore
- * mutation, so both paths keep their confirm dialog (Alt still skips it) and
- * neither offers an Undo.
+ * `projects.remove` has no restore mutation, so both paths keep their
+ * confirm dialog (Alt still skips it) and neither offers an Undo.
  */
 export function useProjectDelete(
   repoId: Id<"githubRepos">,
   onDeleted: () => void,
 ): ProjectDeleteController {
   const deleteProject = useMutation(
-    api.projects.deleteCascade,
+    api.projects.remove,
   ).withOptimisticUpdate((localStore, args) => {
     patchLoadedQuery(localStore, api.projects.list, { repoId }, (list) =>
       list.filter((p) => p._id !== args.id),

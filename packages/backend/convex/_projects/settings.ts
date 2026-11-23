@@ -20,7 +20,7 @@ export function assertProjectRepo(
 ): void {
   if (!projectRepoIds(project).includes(repoId)) {
     throw new Error(
-      "This repository is not part of the project. A contributor can add it in project settings.",
+      "This repository is not part of the project. Add it in project settings first.",
     );
   }
 }
@@ -34,7 +34,6 @@ export const setInstructions = authMutation({
       ctx.db,
       args.projectId,
       ctx.userId,
-      "contributor",
     );
     const instructions = args.instructions.trim();
     await ctx.db.patch(args.projectId, {
@@ -60,7 +59,6 @@ export const setExtraRepoIds = authMutation({
       ctx.db,
       args.projectId,
       ctx.userId,
-      "contributor",
     );
     const current = new Set(project.extraRepoIds ?? []);
     const next = [...new Set<Id<"githubRepos">>(args.repoIds)].filter(

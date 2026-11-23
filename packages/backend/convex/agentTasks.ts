@@ -4,7 +4,6 @@ export {
   getByNumId,
   countSandboxTasks,
   getAllTasks,
-  getDependentTasks,
   getStatusesByIds,
   listAttachments,
   listOpenTaskTitles,
@@ -20,7 +19,6 @@ export {
   createFeedbackTask,
   createQuickTasksBatch,
   assignToProject,
-  deleteCascade,
 } from "./_agentTasks/mutations";
 
 export {

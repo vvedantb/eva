@@ -107,7 +107,6 @@ import { useTypingPresence } from "@/chat/useTypingPresence";
 import { useMentionComposer } from "@/chat/useMentionComposer";
 import { WEB_URL } from "@/config";
 import { useSessionActions } from "@/sessions/useSessionActions";
-import { useIsProjectViewer } from "@/projects/useProjectStatus";
 import { CoordinatorPausedBanner } from "@/projects/CoordinatorPausedBanner";
 import { textColor, useScheme } from "@/ui/theme";
 import { useChatTranscript } from "@/chat/useChatTranscript";
@@ -188,9 +187,9 @@ export default function ChatScreen() {
   );
   const { mineByMessageId: mine, agentReports } = groupChatFeedback(feedbackRows ?? [], me ?? undefined);
   const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder);
-  // A project viewer reads the coordinator chat and its child task chats but never writes in them (`callerRole`).
   const chatTask = useQuery(api.agentTasks.get, chat?.task ? { id: chat.task.id } : "skip");
-  const viewer = useIsProjectViewer(chat?.project?.id ?? chatTask?.projectId);
+  // Project roles are gone: everyone with repo access writes here.
+  const viewer = false;
   // The agent's proposed plans, each under the message that proposed it (session chats only, as the web).
   const planAfter = useProposedPlans(chat, sessionRow?.planContent);
   // Rows seen on screen, so an agent page mounts its WebView only once its row shows.

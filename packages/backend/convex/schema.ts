@@ -219,10 +219,8 @@ const schema = defineSchema({
   projectCoordinatorWakes: defineTable(projectCoordinatorWakeFields)
     .index("by_project_and_key", ["projectId", "key"])
     .index("by_project_and_sent", ["projectId", "sentAt"]),
-  taskDependencies: defineTable(taskDependencyFields)
-    .index("by_task", ["taskId"])
-    .index("by_task_and_depends_on", ["taskId", "dependsOnId"])
-    .index("by_dependency", ["dependsOnId"]),
+  // drop after dataMigrations:clearTaskDependencies runs
+  taskDependencies: defineTable(taskDependencyFields),
   taskSandboxEvents: defineTable(taskSandboxEventFields).index("by_task", [
     "taskId",
   ]),

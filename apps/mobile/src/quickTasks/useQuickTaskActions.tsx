@@ -81,7 +81,7 @@ export function useQuickTaskActions({
   const updateStatus = useMutation(api.agentTasks.updateStatus);
   const updateTask = useMutation(api.agentTasks.update);
   const startExecution = useMutation(api.agentTasks.startExecution);
-  const deleteTask = useMutation(api.agentTasks.deleteCascade);
+  const deleteTask = useMutation(api.agentTasks.remove);
 
   const close = () => {
     setTarget(null);

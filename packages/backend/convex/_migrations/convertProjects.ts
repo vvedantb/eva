@@ -212,12 +212,8 @@ export function specSummaryMarkdown(
     return `# ${project.title}\n\n## Plan from the old planning interview\n\n${specJson.trim()}\n`;
   }
   const tasks = spec.tasks.map((task, index) => {
-    const dependsOn =
-      task.dependencies.length > 0
-        ? ` (after ${task.dependencies.map((n) => `#${n}`).join(", ")})`
-        : "";
     const body = task.description.trim();
-    return `${index + 1}. **${task.title.trim() || "Untitled"}**${dependsOn}${body ? `\n   ${body.replace(/\n/g, "\n   ")}` : ""}`;
+    return `${index + 1}. **${task.title.trim() || "Untitled"}**${body ? `\n   ${body.replace(/\n/g, "\n   ")}` : ""}`;
   });
   return [
     `# ${spec.title.trim() || project.title}`,

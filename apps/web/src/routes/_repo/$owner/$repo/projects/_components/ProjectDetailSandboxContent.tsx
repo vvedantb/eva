@@ -54,7 +54,8 @@ export function ProjectDetailSandboxContent({
 }: ProjectDetailSandboxContentProps) {
   // A viewer reads the coordinator chat but never writes to it or wakes it.
   // A contributor can always wake it: a project has no closed state.
-  const isViewer = project.callerRole === "viewer";
+  // Project roles are gone: everyone with repo access contributes.
+  const isViewer = false;
   const canStartSandbox = !isViewer;
   const {
     isSandboxActive,

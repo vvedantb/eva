@@ -3,7 +3,6 @@ import { formatEntityNumLabel, PROJECT_PHASE_LABELS, projectPlanningPhase } from
 import { PROJECT_STAGE_LABELS, projectListNeedsYouLabel, type ProjectListStatus } from "@eva/shared/projectView";
 import { projectStatus } from "@eva/shared/projectStatus";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconListCheck, IconSparkles } from "@tabler/icons-react-native";
 import { SurfaceRow } from "@vvedantb/native-ui/primitives";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import type { FunctionReturnType } from "convex/server";
@@ -32,11 +31,6 @@ const NO_TASKS: ProjectListStatus = {
   coordinatorPaused: false,
 };
 
-/** The planning-mode badge: the web `Badge variant="secondary"` with its sparkles or checklist icon. */
-export function PlanningModeBadge({ mode }: { mode: Project["planningMode"] }) {
-  return <MetaPill icon={mode === "interview" ? IconSparkles : IconListCheck} label={mode === "interview" ? "Interview" : "Tasks only"} />;
-}
-
 /**
  * One project, as the web `ProjectCard` in the list view at phone width: a
  * card with its derived stage's stripe, then the number and title with the
@@ -44,7 +38,7 @@ export function PlanningModeBadge({ mode }: { mode: Project["planningMode"] }) {
  * sandbox dot) and unread dot; the description (else the raw input, in
  * italics) on two lines; the task progress bar and the stage counts
  * (`projectStatus`); then the lead and members, and the Draft or Finalised badge (a To Do
- * project) and the planning-mode badge where the web kebab sits. Sized for a thumb: a 14
+ * project) where the web kebab sits. Sized for a thumb: a 14
  * title, 12 secondary text, `py-3`, 8 apart. A tap opens the project; a long
  * press opens the project menu (`onLongPress`), as the web kebab and
  * right-click. The web border beam on a building project is not drawn: the
@@ -165,10 +159,9 @@ export function ProjectRow({
               {`+${hiddenCount}`}
             </Text>
           ) : null}
-          {/* The planning badge ends the footer, where the web kebab sits (the long press is the menu), so a card is a line shorter. */}
+          {/* The Draft or Finalised badge ends the footer, where the web kebab sits (the long press is the menu). */}
           <View className="ml-auto flex-row items-center gap-1.5">
             {planningPhase ? <MetaPill icon={appearance.icon} label={PROJECT_PHASE_LABELS[planningPhase]} /> : null}
-            <PlanningModeBadge mode={project.planningMode} />
           </View>
         </View>
       </View>

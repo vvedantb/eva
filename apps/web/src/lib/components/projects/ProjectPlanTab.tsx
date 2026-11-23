@@ -127,11 +127,6 @@ export function ProjectPlanTab({
                   {i + 1}.
                 </span>
                 <span className="text-sm flex-1">{task.title}</span>
-                {task.dependencies.length > 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    after {task.dependencies.join(", ")}
-                  </span>
-                )}
               </div>
             ))}
           </div>

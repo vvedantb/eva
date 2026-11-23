@@ -1,14 +1,15 @@
 import type { Infer } from "convex/values";
 import {
+  projectStatus,
   projectTaskNeedsYou,
   projectTaskStage,
   projectTaskWaitsForCoordinator,
+  type ProjectStage,
   type ProjectTaskFacts,
 } from "@eva/shared/projectStatus";
 import type { DatabaseReader } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { hasTaskAccess } from "../functions";
-import { isEntityDeleted } from "../numId";
 import {
   projectTaskFactsValidator,
   projectTaskRowValidator,
@@ -27,13 +28,6 @@ import {
  * (`@eva/shared/projectStatus`).
  */
 
-/** The facts in their return shape (a mutable copy of the dependencies). */
-export function factsForClient(
-  facts: ProjectTaskFacts,
-): Infer<typeof projectTaskFactsValidator> {
-  return { ...facts, dependencies: [...facts.dependencies] };
-}
-
 /**
  * Every child task's facts for the project, in no set order. The one loader
  * the list queries share.
@@ -50,6 +44,15 @@ export async function loadProjectTaskFacts(
     tasks.map((task) => projectTaskFacts(db, context, task)),
   );
   return new Map(facts.map((fact) => [fact.id, fact]));
+}
+
+/** The project's derived stage (`projectStatus`): what lists and MCP report as its status. */
+export async function derivedProjectStage(
+  db: DatabaseReader,
+  project: Doc<"projects">,
+): Promise<ProjectStage> {
+  return projectStatus([...(await loadProjectTaskFacts(db, project)).values()])
+    .stage;
 }
 
 /** At most this many tasks go into the coordinator's prompt table. */
@@ -73,11 +76,7 @@ async function taskRow(
   facts: ProjectTaskFacts,
   coordinatorLastTurnAt: number,
 ): Promise<ProjectTaskRow> {
-  const [dependencyRows, reports, repo] = await Promise.all([
-    db
-      .query("taskDependencies")
-      .withIndex("by_task", (q) => q.eq("taskId", task._id))
-      .collect(),
+  const [reports, repo] = await Promise.all([
     db
       .query("projectTaskReports")
       .withIndex("by_task_and_state", (q) =>
@@ -86,9 +85,6 @@ async function taskRow(
       .collect(),
     task.repoId ? db.get(task.repoId) : null,
   ]);
-  const dependencies = await Promise.all(
-    dependencyRows.map((row) => db.get(row.dependsOnId)),
-  );
   const ask = reports.find((row) => row.kind === "ask");
   return {
     locked: false,
@@ -103,11 +99,6 @@ async function taskRow(
     repo: repo ? `${repo.owner}/${repo.name}` : undefined,
     prState: task.prState,
     prUrl: task.prUrl,
-    dependsOn: dependencies.flatMap((dep) =>
-      dep && !isEntityDeleted(dep)
-        ? [dep.taskNumber !== undefined ? `#${dep.taskNumber}` : String(dep._id)]
-        : [],
-    ),
     needsYou: projectTaskNeedsYou(facts),
     waitingForCoordinator: projectTaskWaitsForCoordinator(facts),
     openAsk: ask ? clip(ask.text) : undefined,
@@ -154,14 +145,14 @@ export async function loadProjectTaskRows(
 
 /** One line of the prompt table. */
 function formatRow(row: ProjectTaskRow): string {
-  if (row.locked) return `| (a task in a repo you cannot open) | | | | | | |`;
+  if (row.locked) return `| (a task in a repo you cannot open) | | | | | |`;
   const state = row.waitingForCoordinator
     ? "waiting for you (it asked)"
     : row.needsYou
       ? `${row.stage}, needs a person: ${row.needsYou}`
       : row.approved || row.stage !== "todo"
         ? row.stage
-        : "todo, not approved";
+        : "todo, in Triage (a person approves it)";
   const notes = [
     row.openAsk ? `asks: ${row.openAsk}` : "",
     ...row.newReports.map((text) => `report: ${text}`),
@@ -170,12 +161,12 @@ function formatRow(row: ProjectTaskRow): string {
     .join(" / ")
     .replaceAll("|", "/")
     .replaceAll("\n", " ");
-  return `| ${taskLabel(row).replaceAll("|", "/")} (${row.taskId}) | ${state} | ${row.phaseLabel ?? ""} | ${row.repo ?? ""} | ${row.prState ?? "no PR"} | ${row.dependsOn.join(", ")} | ${notes} |`;
+  return `| ${taskLabel(row).replaceAll("|", "/")} (${row.taskId}) | ${state} | ${row.phaseLabel ?? ""} | ${row.repo ?? ""} | ${row.prState ?? "no PR"} | ${notes} |`;
 }
 
 /**
  * The coordinator's task table: number, title and id, state, phase, repo, PR
- * state, dependencies, and open asks or new reports. At most
+ * state, and open asks or new reports. At most
  * `PROJECT_TASK_TABLE_PROMPT_LIMIT` rows; tasks still open come first when
  * the table is cut. Empty when the project has no tasks.
  */
@@ -192,8 +183,8 @@ export function formatProjectTaskTable(rows: readonly ProjectTaskRow[]): string 
       : "";
   return [
     `Project tasks (live when this turn started):`,
-    `| Task | State | Phase | Repo | PR | Depends on | Asks and reports |`,
-    `|---|---|---|---|---|---|---|`,
+    `| Task | State | Phase | Repo | PR | Asks and reports |`,
+    `|---|---|---|---|---|---|`,
     ...shown.map(formatRow),
   ].join("\n") + cut;
 }

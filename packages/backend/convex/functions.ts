@@ -29,13 +29,10 @@ import { scheduleProjectPrSync } from "./_projects/prSync";
 import { isEntityDeleted } from "./numId";
 import { taskBranchName } from "./_git/branchNames";
 import { cancelTaskRunSchedule } from "./_agentTasks/runState";
-import type { SessionOwner } from "./_sessions/owner";
 import {
   projectStatus,
   type ProjectStage,
 } from "@eva/shared/projectStatus";
-import { projectRoleFor } from "@eva/shared/projectRoles";
-import type { ProjectRole } from "./_validators/enums";
 import {
   allPullRequestsTerminal,
   findLivePullRequestOnBranch,
@@ -208,22 +205,17 @@ export async function listProjectTasksForUser(
   );
 }
 
-/**
- * Loads a task and verifies access through its repository or project.
- * `need: "contributor"` also applies the project role rule (`assertCanDrive`).
- */
+/** Loads a task and verifies access through its repository or project. */
 export async function getTaskWithAccess(
   db: GenericDatabaseReader<DataModel>,
   taskId: Id<"agentTasks">,
   userId: Id<"users">,
-  need: ProjectRole = "viewer",
 ): Promise<Doc<"agentTasks">> {
   const task = await db.get(taskId);
   if (!task) throw new Error("Task not found");
   if (!(await hasTaskAccess(db, task, userId))) {
     throw new Error("Not authorized");
   }
-  if (need === "contributor") await assertCanDrive(db, task, userId);
   return task;
 }
 
@@ -348,7 +340,6 @@ export async function recomputeProjectPhase(
       approved: task.approvedAt !== undefined,
       usageLimited: false,
       runPending: false,
-      dependencies: [],
     })),
   );
   if (
@@ -371,88 +362,18 @@ export async function recomputeProjectPhase(
   }
 }
 
-/**
- * The user's role in a project (`projectRoleFor`): from their Eva role, or
- * contributor as an admin or an owner of the project repo's team. The caller
- * checks repo access.
- */
-export async function getProjectRole(
-  db: GenericDatabaseReader<DataModel>,
-  project: Pick<Doc<"projects">, "repoId">,
-  userId: Id<"users">,
-): Promise<ProjectRole> {
-  const user = await db.get(userId);
-  if (!user) return "viewer";
-  if (projectRoleFor(user, false) === "contributor") return "contributor";
-  const repo = await db.get(project.repoId);
-  const membership =
-    repo?.teamId !== undefined
-      ? await getTeamMembership(db, repo.teamId, userId)
-      : null;
-  return projectRoleFor(user, membership?.role === "owner");
-}
-
-/**
- * Fetches a project by ID, throwing if not found or the user lacks access.
- * `need: "contributor"` is the one role check for project writes: chat with
- * the coordinator or a child task, approve, run, stop, cancel, retry, edit
- * settings. A viewer only reads and files feedback tasks.
- */
+/** Fetches a project by ID, throwing if not found or the user lacks repo access. */
 export async function getProjectWithAccess(
   db: GenericDatabaseReader<DataModel>,
   projectId: Id<"projects">,
   userId: Id<"users">,
-  need: ProjectRole = "viewer",
 ): Promise<Doc<"projects">> {
   const project = await db.get(projectId);
   if (!project) throw new Error("Project not found");
   if (!(await hasRepoAccess(db, project.repoId, userId))) {
     throw new Error("Not authorized");
   }
-  if (
-    need === "contributor" &&
-    (await getProjectRole(db, project, userId)) !== "contributor"
-  ) {
-    throw new Error(
-      "Project viewers cannot do this. File a feedback task, or ask an Eva admin to set your role to dev.",
-    );
-  }
   return project;
-}
-
-/** `getProjectWithAccess` plus the user's role, for queries that show it. */
-export async function getProjectAccess(
-  db: GenericDatabaseReader<DataModel>,
-  projectId: Id<"projects">,
-  userId: Id<"users">,
-): Promise<{ project: Doc<"projects">; role: ProjectRole }> {
-  const project = await getProjectWithAccess(db, projectId, userId);
-  return { project, role: await getProjectRole(db, project, userId) };
-}
-
-/** What a person drives: a session's owner (`chatOwner`) or a task. */
-type DriveTarget = SessionOwner | Pick<Doc<"agentTasks">, "projectId">;
-
-/**
- * Throws unless the user may drive the target (chat, run, stop, edit). A
- * project and its tasks need a contributor (`getProjectWithAccess`). A
- * standalone session or a quick task adds no rule: the caller's repo or task
- * access check stays the whole check.
- */
-export async function assertCanDrive(
-  db: GenericDatabaseReader<DataModel>,
-  target: DriveTarget,
-  userId: Id<"users">,
-): Promise<void> {
-  let projectId: Id<"projects"> | undefined;
-  if (!("kind" in target)) projectId = target.projectId;
-  else if (target.kind === "project") projectId = target.projectId;
-  else if (target.kind === "task") {
-    projectId = (await db.get(target.taskId))?.projectId;
-  }
-  if (projectId) {
-    await getProjectWithAccess(db, projectId, userId, "contributor");
-  }
 }
 
 /**
@@ -485,6 +406,17 @@ export async function hasActiveRun(
   taskId: Id<"agentTasks">,
 ): Promise<boolean> {
   return (await getActiveTaskRun(db, taskId)) !== null;
+}
+
+/**
+ * A run of the task is queued, running, scheduled or waiting to retry: its
+ * run lifecycle is set (`agentTasks.run`) or an agent run is active.
+ */
+export async function taskRunPending(
+  db: GenericDatabaseReader<DataModel>,
+  task: Pick<Doc<"agentTasks">, "_id" | "run">,
+): Promise<boolean> {
+  return task.run !== undefined || (await hasActiveRun(db, task._id));
 }
 
 /** True when a later-started run exists on the same task (stale workflow completion). */
@@ -527,7 +459,7 @@ export async function isFirstTaskOnBranch(
   );
 }
 
-/** Deletes a task and all its related data (runs, dependencies, scheduled functions). */
+/** Deletes a task and all its related data (runs, activity, scheduled functions). */
 export async function deleteTaskRelatedData(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
@@ -540,20 +472,6 @@ export async function deleteTaskRelatedData(
     .collect();
   for (const run of runs) {
     await ctx.db.delete(run._id);
-  }
-  const dependencies = await ctx.db
-    .query("taskDependencies")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .collect();
-  for (const dep of dependencies) {
-    await ctx.db.delete(dep._id);
-  }
-  const dependents = await ctx.db
-    .query("taskDependencies")
-    .withIndex("by_dependency", (q) => q.eq("dependsOnId", taskId))
-    .collect();
-  for (const dep of dependents) {
-    await ctx.db.delete(dep._id);
   }
   const activityEvents = await ctx.db
     .query("taskActivity")

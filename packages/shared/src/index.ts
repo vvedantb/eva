@@ -371,7 +371,6 @@ export {
   type ProjectTaskProgress,
   type SectionableProjectTask,
 } from "./projectMeta";
-export { projectRoleFor, type ProjectRole } from "./projectRoles";
 export { MAINTENANCE_ERROR, isMaintenanceError } from "./maintenance";
 export {
   APP_SORT_LABELS,

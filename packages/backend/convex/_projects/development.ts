@@ -1,5 +1,4 @@
 import { v } from "convex/values";
-import type { Id } from "../_generated/dataModel";
 import {
   authMutation,
   EMPTY_PROJECT_PHASE,
@@ -13,11 +12,10 @@ import { parseSpec, getProjectGeneratedSpec } from "./helpers";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { resolveNewTaskBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { createTaskRunSummary } from "../_agentTasks/runSummary";
-import { insertTaskDependencies } from "../_agentTasks/dependencies";
 
 /**
- * Old interview projects only: converts a finalized spec into tasks with
- * dependencies. The tasks wait for a person's approval; the phase follows
+ * Old interview projects only: converts a finalized spec into tasks. The
+ * tasks wait in Triage for a person's approval; the phase follows
  * from them (`recomputeProjectPhase`). New projects plan in their
  * coordinator chat and never reach `finalized`.
  */
@@ -31,7 +29,6 @@ export const startDevelopment = authMutation({
       ctx.db,
       args.projectId,
       ctx.userId,
-      "contributor",
     );
     if (project.phase !== "finalized") {
       throw new Error("Project must be finalized before starting development");
@@ -46,7 +43,6 @@ export const startDevelopment = authMutation({
       undefined,
       await ctx.db.get(project.repoId),
     );
-    const taskIdMap = new Map<number, Id<"agentTasks">>();
     const now = Date.now();
     for (let i = 0; i < spec.tasks.length; i++) {
       const task = spec.tasks[i];
@@ -67,20 +63,7 @@ export const startDevelopment = authMutation({
       });
       await createTaskRunSummary(ctx, taskId, project.repoId);
       await ensureSubscribed(ctx, taskId, ctx.userId);
-      taskIdMap.set(taskNumber, taskId);
     }
-    await insertTaskDependencies(
-      ctx,
-      spec.tasks.flatMap((task, i) => {
-        const taskId = taskIdMap.get(i + 1);
-        return taskId === undefined
-          ? []
-          : task.dependencies.flatMap((depNumber) => {
-              const dependsOnId = taskIdMap.get(depNumber);
-              return dependsOnId === undefined ? [] : [{ taskId, dependsOnId }];
-            });
-      }),
-    );
     await ctx.db.patch(args.projectId, { description: spec.description });
     await recomputeProjectPhase(ctx, args.projectId);
     return null;

@@ -15,7 +15,6 @@ export const resolveProjectConflicts = authMutation({
       ctx.db,
       args.projectId,
       ctx.userId,
-      "contributor",
     );
     throw new Error(
       "A project's own PR takes no new runs. Resolve conflicts in the task whose PR has them.",

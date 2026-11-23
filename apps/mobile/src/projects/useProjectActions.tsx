@@ -31,8 +31,8 @@ type Page = "root" | "lead" | "copy";
  * on a row, or the project header "…", opens it as a bottom sheet
  * (`openSheet`), with a page per web submenu: Project Lead and Copy
  * (Title, Link, Branch name), then Delete. Delete asks first, with the web
- * `ProjectDeleteDialog`, and has no Undo, as the web (`deleteCascade`
- * deletes the tasks too and nothing restores them); `onDeleted` runs after.
+ * `ProjectDeleteDialog`, and has no Undo, as the web (nothing restores a
+ * deleted project); `onDeleted` runs after.
  * The rest act at once. Writes are the web mutations. Render `dialogs` once.
  * Not here from the web menu: Edit details, Open in new tab and the PR submenus.
  */
@@ -56,7 +56,7 @@ export function useProjectActions({
   const [deleteTarget, setDeleteTarget] = useState<ProjectMenuTarget | null>(null);
   const currentUserId = useQuery(api.auth.me, {});
   const updateProject = useMutation(api.projects.update);
-  const deleteProject = useMutation(api.projects.deleteCascade);
+  const deleteProject = useMutation(api.projects.remove);
 
   const close = () => {
     setTarget(null);
@@ -169,7 +169,7 @@ export function useProjectActions({
             </Text>
             ?
             <Text style={{ color: theme.warning }}>
-              {"\n\nThis will permanently delete the project and all associated tasks, agent runs, and dependencies."}
+              {"\n\nIts tasks stay as quick tasks, with their chats and PRs. A project with a running task cannot be deleted."}
             </Text>
             {"\n\nThis action cannot be undone."}
           </>

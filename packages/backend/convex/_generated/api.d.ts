@@ -10,7 +10,6 @@
 
 import type * as _agentRuns_mutations from "../_agentRuns/mutations.js";
 import type * as _agentRuns_queries from "../_agentRuns/queries.js";
-import type * as _agentTasks_dependencies from "../_agentTasks/dependencies.js";
 import type * as _agentTasks_drafts from "../_agentTasks/drafts.js";
 import type * as _agentTasks_execution from "../_agentTasks/execution.js";
 import type * as _agentTasks_helpers from "../_agentTasks/helpers.js";
@@ -575,7 +574,6 @@ import type * as syncSettings from "../syncSettings.js";
 import type * as taskActivity from "../taskActivity.js";
 import type * as taskActivityCoalesce from "../taskActivityCoalesce.js";
 import type * as taskComments from "../taskComments.js";
-import type * as taskDependencies from "../taskDependencies.js";
 import type * as taskReactions from "../taskReactions.js";
 import type * as taskSandboxEvents from "../taskSandboxEvents.js";
 import type * as taskSubscribers from "../taskSubscribers.js";
@@ -610,7 +608,6 @@ import type {
 declare const fullApi: ApiFromModules<{
   "_agentRuns/mutations": typeof _agentRuns_mutations;
   "_agentRuns/queries": typeof _agentRuns_queries;
-  "_agentTasks/dependencies": typeof _agentTasks_dependencies;
   "_agentTasks/drafts": typeof _agentTasks_drafts;
   "_agentTasks/execution": typeof _agentTasks_execution;
   "_agentTasks/helpers": typeof _agentTasks_helpers;
@@ -1175,7 +1172,6 @@ declare const fullApi: ApiFromModules<{
   taskActivity: typeof taskActivity;
   taskActivityCoalesce: typeof taskActivityCoalesce;
   taskComments: typeof taskComments;
-  taskDependencies: typeof taskDependencies;
   taskReactions: typeof taskReactions;
   taskSandboxEvents: typeof taskSandboxEvents;
   taskSubscribers: typeof taskSubscribers;

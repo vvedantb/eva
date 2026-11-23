@@ -3,6 +3,8 @@ import { v, type Infer } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 import { hasRepoAccess } from "../functions";
+import type { ProjectStage } from "@eva/shared/projectStatus";
+import { derivedProjectStage } from "../_projects/taskTable";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { isSessionArchived } from "../_sessions/archive";
 import {
@@ -17,7 +19,6 @@ import {
 import { listSelectableAccountsFor } from "../_userProviderAccounts/listing";
 import {
   ALL_TASK_STATUSES,
-  PROJECT_PHASES,
   SANDBOX_STATUSES,
   getAIModelProvider,
   prOriginValidator,
@@ -347,9 +348,11 @@ export const resolveChatTargetForUser = internalQuery({
       targetId: doc._id,
       numId: doc.numId,
       title: doc.title,
-      // A project tracks a phase where the other two track a status; both
-      // answer the same "where is this up to" question for the caller.
-      status: hit.kind === "project" ? hit.doc.phase : hit.doc.status,
+      // A project's status is derived from its tasks (`projectStatus`).
+      status:
+        hit.kind === "project"
+          ? await derivedProjectStage(ctx.db, hit.doc)
+          : hit.doc.status,
       prUrl: hit.doc.prUrl,
       branchName: hit.kind === "task" ? undefined : hit.doc.branchName,
       repoId,
@@ -397,7 +400,7 @@ const listedEntityValidator = v.object({
   id: v.string(),
   numId: v.optional(v.number()),
   title: v.string(),
-  /** Lifecycle: a session's sandbox status, a task's status, a project's phase. */
+  /** Lifecycle: a session's sandbox status, a task's status, a project's derived stage. */
   status: v.string(),
   /** Preview VM state, `"closed"` when the entity has never started one. */
   sandboxStatus: v.string(),
@@ -436,10 +439,10 @@ function asTaskStatus(
   return ALL_TASK_STATUSES.find((candidate) => candidate === status);
 }
 
-function asProjectPhase(
-  status: string,
-): (typeof PROJECT_PHASES)[number] | undefined {
-  return PROJECT_PHASES.find((candidate) => candidate === status);
+const PROJECT_STAGES: readonly ProjectStage[] = ["todo", "in_progress", "done"];
+
+function asProjectStage(status: string): ProjectStage | undefined {
+  return PROJECT_STAGES.find((candidate) => candidate === status);
 }
 
 /**
@@ -524,16 +527,20 @@ async function scanProjects(
   take: number,
 ): Promise<Doc<"projects">[]> {
   if (status !== undefined) {
-    const narrowed = asProjectPhase(status);
+    // The stage is derived, so it filters a repo's live projects (few).
+    const narrowed = asProjectStage(status);
     if (narrowed === undefined) return [];
     const rows = await ctx.db
       .query("projects")
-      .withIndex("by_repo_and_phase", (q) =>
-        q.eq("repoId", repoId).eq("phase", narrowed),
+      .withIndex("by_repo_and_deleted", (q) =>
+        q.eq("repoId", repoId).eq("deletedAt", undefined),
       )
       .order("desc")
-      .take(take);
-    return filterActiveEntities(rows);
+      .collect();
+    const stages = await Promise.all(
+      rows.map((row) => derivedProjectStage(ctx.db, row)),
+    );
+    return rows.filter((_, index) => stages[index] === narrowed).slice(0, take);
   }
   return ctx.db
     .query("projects")
@@ -668,7 +675,7 @@ export const listEntitiesForUser = internalQuery({
                 id: doc._id,
                 numId: doc.numId,
                 title: doc.title,
-                status: doc.phase,
+                status: await derivedProjectStage(ctx.db, doc),
                 sandboxStatus:
                   (await projectSandboxStatus(ctx.db, doc)) ?? "closed",
                 isExecuting: projectIsExecuting(doc, openChatEntityIds),
@@ -709,6 +716,25 @@ export const listEntitiesForUser = internalQuery({
     // repo, so "more exists" is true even when fewer than `limit` rows came
     // back. Saying so beats a short page that reads as the whole picture.
     return { entities, truncated: rows.length > limit || take < limit };
+  },
+});
+
+/**
+ * A project's derived stage (`projectStatus`), for `get_agent_state`. The
+ * caller has already proven access by reading the project as the user.
+ */
+export const projectStage = internalQuery({
+  args: { projectId: v.string() },
+  returns: v.union(
+    v.literal("todo"),
+    v.literal("in_progress"),
+    v.literal("done"),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const projectId = ctx.db.normalizeId("projects", args.projectId);
+    const project = projectId ? await ctx.db.get(projectId) : null;
+    return project ? await derivedProjectStage(ctx.db, project) : null;
   },
 });
 

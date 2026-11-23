@@ -27,16 +27,17 @@ import {
 } from "./_projects/scheduler";
 
 // A project's child tasks run in parallel, each like a quick task, started by
-// the scheduler (`_projects/scheduler.ts`) once a person approved them. There
+// the scheduler (`_projects/scheduler.ts`) once approved: the coordinator's
+// at creation, feedback once a person approves it from Triage. There
 // is no project build to start, schedule or cancel any more; what is left of
 // it below only winds down builds stored before the scheduler.
 
 // --- Scheduler ---
 
 /**
- * Starts the project's ready child tasks: approved `todo` tasks whose
- * dependencies are done and merged, up to `MAX_PARALLEL_PROJECT_TASKS` in
- * progress. Idempotent.
+ * Starts the project's ready child tasks: approved `todo` tasks, not halted
+ * and with no run pending, up to `MAX_PARALLEL_PROJECT_TASKS` in progress.
+ * Idempotent.
  */
 export const scheduleReadyTasks = internalMutation({
   args: { projectId: v.id("projects") },
@@ -47,7 +48,7 @@ export const scheduleReadyTasks = internalMutation({
   },
 });
 
-/** A person approves a batch of the project's todo tasks; the scheduler then starts what is ready. */
+/** A person approves tasks waiting in Triage; the scheduler then starts what is ready. */
 export const approveProjectTasks = authMutation({
   args: {
     projectId: v.id("projects"),
@@ -59,7 +60,6 @@ export const approveProjectTasks = authMutation({
       ctx.db,
       args.projectId,
       ctx.userId,
-      "contributor",
     );
     await approveTasks(ctx, args.projectId, args.taskIds);
     await scheduleReadyProjectTasks(ctx, args.projectId);

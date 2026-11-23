@@ -60,7 +60,6 @@ export const NEEDS_YOU_LABELS: Record<NeedsYouReason, string> = {
   stopped: "Run stopped",
   pr_closed: "PR closed",
   approve: "Needs approval",
-  dependency_cancelled: "Dependency cancelled",
   review: "Ready for review",
   question: "Question for you",
 };
@@ -74,7 +73,7 @@ export const COORDINATOR_PAUSED_LABEL = "Coordinator paused";
 /**
  * The coordinator chat's one-line notice while the hourly cap holds its
  * wake-ups back. A person's message releases them, so the line asks for one
- * only from someone who can send (`canSend`; a viewer cannot).
+ * only where the reader can send (`canSend`).
  */
 export function coordinatorPausedTitle(
   maxAutoTurnsPerHour: number,
@@ -96,16 +95,16 @@ export interface ProjectTaskRow {
   /** A task in a repo the caller cannot access: only status fields are set. */
   locked?: boolean;
   /**
-   * The server's facts for the task (`listByProject`): the usage limit,
-   * dependencies and open ask the row alone does not carry.
+   * The server's facts for the task (`listByProject`): the usage limit and
+   * open ask the row alone does not carry.
    */
   facts?: ProjectTaskFacts;
 }
 
 /**
  * One row as the shared rules read it. A row with the server's `facts` uses
- * them as they are. Without them the usage limit, the dependencies and open
- * asks never show here. A locked row counts as approved: its approval is not
+ * them as they are. Without them the usage limit and open asks never show
+ * here. A locked row counts as approved: its approval is not
  * the caller's to give.
  */
 export function projectTaskFactsFromRow(
@@ -123,7 +122,6 @@ export function projectTaskFactsFromRow(
     halted: failed && !runPending ? "failed" : undefined,
     usageLimited: false,
     runPending,
-    dependencies: [],
     coordinatorRetries: row.coordinatorRetries,
   };
 }
@@ -255,26 +253,26 @@ export function isUnapprovedTodoTask(row: ProjectTaskRow): boolean {
   );
 }
 
-/** The todo tasks a contributor approves with one "Approve all". */
+/** The todo tasks a person approves with one "Approve all". */
 export function unapprovedTodoTaskIds<Row extends ProjectTaskRow>(
   rows: readonly Row[],
 ): Row["_id"][] {
   return rows.filter(isUnapprovedTodoTask).map((row) => row._id);
 }
 
-/** A Triage row's origin when no person wrote it: the coordinator proposed it. */
-export const PROPOSED_BY_COORDINATOR_LABEL = "Proposed by coordinator";
+/** A Triage row's origin when it is not feedback: added without approval. */
+export const ADDED_WITHOUT_APPROVAL_LABEL = "Added without approval";
 
 /**
  * Where a Triage task came from, its row's second line: "Feedback · Ana" for
- * feedback (just "Feedback" while the name is unknown), else the
- * coordinator's proposal.
+ * feedback (just "Feedback" while the name is unknown), else a task added to
+ * the project without approval. The coordinator's tasks never wait here.
  */
 export function projectTaskOriginLabel(
   origin: Doc<"agentTasks">["origin"],
   authorName: string | undefined,
 ): string {
-  if (origin !== "feedback") return PROPOSED_BY_COORDINATOR_LABEL;
+  if (origin !== "feedback") return ADDED_WITHOUT_APPROVAL_LABEL;
   return authorName ? `Feedback · ${authorName}` : "Feedback";
 }
 

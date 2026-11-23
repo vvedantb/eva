@@ -74,7 +74,8 @@ export default function ProjectScreen() {
   const planning = isProjectPlanning(project.phase);
   // Only an older project still planning, with an interview or a plan to show, keeps the Plan view.
   const showPlan = planning && (project.conversationHistory.length > 0 || project.generatedSpec !== undefined);
-  const canContribute = project.callerRole === "contributor";
+  // Project roles are gone: everyone with repo access contributes.
+  const canContribute = true;
   const openFeedback = () => router.push({ pathname: "/project/feedback", params: { projectId: project._id, repo: repo._id } });
   return (
     <Screen

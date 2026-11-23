@@ -80,7 +80,7 @@ export function ProjectDetailMainContent({
                   ? `${projectHref}/sandbox/documents`
                   : undefined
               }
-              canContribute={project.callerRole === "contributor"}
+              canContribute
             />
           ) : view === "plan" ? (
             <ProjectTabs

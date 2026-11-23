@@ -157,7 +157,8 @@ export function ProjectDetailClient({
   }
 
   const isDraftOrFinalized = isProjectDraftOrFinalized(project);
-  const canContribute = project.callerRole === "contributor";
+  // Project roles are gone: everyone with repo access contributes.
+  const canContribute = true;
   const parsedSpec = parseProjectSpec(project.generatedSpec);
   const hasPlanContext = Boolean(parsedSpec);
 

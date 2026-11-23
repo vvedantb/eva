@@ -546,7 +546,6 @@ export const handleCompletion = authMutation({
       ctx.db,
       args.projectId,
       ctx.userId,
-      "contributor",
     );
     const entityId = await interviewTurnSessionId(ctx.db, args.projectId);
     const settled =
@@ -616,7 +615,6 @@ export const startInterview = authMutation({
       ctx.db,
       args.projectId,
       ctx.userId,
-      "contributor",
     );
     if (isProjectInterviewing(project)) return null;
     await assertOldInterviewProject(ctx, project._id);
@@ -657,7 +655,6 @@ export const startSpec = authMutation({
       ctx.db,
       args.projectId,
       ctx.userId,
-      "contributor",
     );
     if (isProjectInterviewing(project)) return null;
     await assertOldInterviewProject(ctx, project._id);

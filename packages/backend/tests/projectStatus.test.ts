@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
   MAX_PARALLEL_PROJECT_TASKS,
-  hasDependencyCycle,
   projectStatus,
   projectTaskDisplayStatus,
   projectTaskNeedsYou,
@@ -13,9 +12,8 @@ import {
 
 /**
  * The derived project status and the scheduler's pick, shared by web, phone
- * and `scheduleReadyTasks`. Plan check: A, B (depends on A), C. Approve all:
- * A and C start together; B starts only after A's PR merges; a failed C
- * stops nobody.
+ * and `scheduleReadyTasks`: approved todo tasks start in task-number order,
+ * at most the parallel limit at once; a failed task stops nobody.
  */
 
 function task(
@@ -30,30 +28,15 @@ function task(
     approved: true,
     usageLimited: false,
     runPending: false,
-    dependencies: [],
     ...facts,
   };
 }
 
 describe("tasksToStart", () => {
-  test("starts independent approved tasks together and holds a dependent until its PR merges", () => {
-    const a = task("a", 1);
-    const b = task("b", 2, { dependencies: [{ status: "todo" }] });
-    const c = task("c", 3);
-    expect(tasksToStart([a, b, c])).toEqual(["a", "c"]);
-
-    // A is done but its PR is still open: B waits.
-    const bWaiting = task("b", 2, {
-      dependencies: [{ status: "done", prState: "open" }],
-    });
-    expect(tasksToStart([bWaiting])).toEqual([]);
-
-    // A's PR merged: B starts. C failed meanwhile and does not block it.
-    const bReady = task("b", 2, {
-      dependencies: [{ status: "done", prState: "merged" }],
-    });
+  test("starts approved tasks together; a failed one blocks nobody", () => {
+    expect(tasksToStart([task("a", 1), task("b", 2)])).toEqual(["a", "b"]);
     const cFailed = task("c", 3, { halted: "failed" });
-    expect(tasksToStart([bReady, cFailed])).toEqual(["b"]);
+    expect(tasksToStart([task("b", 2), cFailed])).toEqual(["b"]);
   });
 
   test("keeps at most the parallel limit in progress, in task number order", () => {
@@ -75,9 +58,6 @@ describe("tasksToStart", () => {
         task("unapproved", 1, { approved: false }),
         task("stopped", 2, { halted: "cancelled" }),
         task("retrying", 3, { runPending: true }),
-        task("blockedByCancel", 4, {
-          dependencies: [{ status: "cancelled" }],
-        }),
       ]),
     ).toEqual([]);
     // The project's account is at its limit: nothing new starts.
@@ -185,11 +165,6 @@ describe("project status", () => {
         task("a", 1, { status: "business_review", prState: "closed" }),
       ),
     ).toBe("pr_closed");
-    expect(
-      projectTaskNeedsYou(
-        task("a", 1, { dependencies: [{ status: "cancelled" }] }),
-      ),
-    ).toBe("dependency_cancelled");
     expect(projectTaskNeedsYou(task("a", 1, { status: "code_review" }))).toBe(
       "review",
     );
@@ -200,22 +175,11 @@ describe("project status", () => {
   });
 });
 
-test("hasDependencyCycle finds a loop, including a task waiting on itself", () => {
-  expect(hasDependencyCycle([["b", "a"], ["c", "b"]])).toBe(false);
-  expect(hasDependencyCycle([["b", "a"], ["c", "b"], ["a", "c"]])).toBe(true);
-  expect(hasDependencyCycle([["a", "a"]])).toBe(true);
-});
-
 describe("projectTaskDisplayStatus", () => {
   const cases: Array<[string, Partial<ProjectTaskFacts>, string]> = [
     ["running", { status: "in_progress", runPending: true }, "working"],
     ["unapproved todo", { approved: false }, "triage"],
     ["unapproved draft", { status: "draft", approved: false }, "triage"],
-    [
-      "unapproved, with a cancelled dependency",
-      { approved: false, dependencies: [{ status: "cancelled" }] },
-      "triage",
-    ],
     ["PR open", { status: "done", prState: "open" }, "blocked"],
     ["code review", { status: "code_review" }, "blocked"],
     ["business review", { status: "business_review" }, "blocked"],
@@ -234,12 +198,6 @@ describe("projectTaskDisplayStatus", () => {
     ["stopped", { halted: "cancelled" }, "blocked"],
     ["PR closed", { status: "in_progress", prState: "closed" }, "blocked"],
     ["usage limit", { status: "in_progress", usageLimited: true }, "blocked"],
-    [
-      "cancelled dependency",
-      { dependencies: [{ status: "cancelled" }] },
-      "blocked",
-    ],
-    ["approved, waits for a dependency", { dependencies: [{ status: "todo" }] }, "idle"],
     ["approved, waits for a slot", {}, "idle"],
     ["done and merged", { status: "done", prState: "merged" }, "archived"],
     ["done with no PR", { status: "done" }, "archived"],

@@ -354,3 +354,15 @@ export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionChatBackgroundAgents,
   internal.dataMigrations.pruneSessionBackgroundAgents,
 ]);
+
+/**
+ * Task dependencies are gone: deletes every `taskDependencies` row so the
+ * table can leave the schema.
+ * `npx convex run --prod dataMigrations:run '{fn: "dataMigrations:clearTaskDependencies"}'`
+ */
+export const clearTaskDependencies = dataMigrations.define({
+  table: "taskDependencies",
+  migrateOne: async (ctx, doc) => {
+    await ctx.db.delete(doc._id);
+  },
+});

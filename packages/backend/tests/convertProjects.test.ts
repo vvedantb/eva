@@ -30,8 +30,8 @@ const SPEC = JSON.stringify({
   title: "Offline mode",
   description: "Keep working when the network drops.",
   tasks: [
-    { title: "Cache layer", description: "Store reads.", dependencies: [] },
-    { title: "Sync", description: "Replay writes.", dependencies: [1] },
+    { title: "Cache layer", description: "Store reads." },
+    { title: "Sync", description: "Replay writes." },
   ],
 });
 
@@ -244,7 +244,7 @@ describe("convertProjects", () => {
       const summary = docs.find((doc) => doc._id === project?.summaryDocId);
       expect(summary?.content).toContain("## Goal");
       expect(summary?.content).toContain("Keep working when the network drops.");
-      expect(summary?.content).toContain("**Sync** (after #1)");
+      expect(summary?.content).toContain("**Sync**");
       const planning = docs.find(
         (doc) => doc.title === PLANNING_INTERVIEW_DOC_TITLE,
       );

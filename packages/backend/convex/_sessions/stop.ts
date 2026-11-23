@@ -2,7 +2,6 @@ import { v } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import {
-  assertCanDrive,
   authMutation,
   getProjectWithAccess,
   getSessionWithAccess,
@@ -20,7 +19,6 @@ import { cancelChatExecution } from "./execution";
 import {
   chatOwner,
   findWorkSession,
-  sessionOwner,
   sessionOwnerTaskId,
 } from "./owner";
 import { findWorkChat, ownerHoldsSession } from "./ownerState";
@@ -106,7 +104,7 @@ export const stopChatTurn = authMutation({
     }
     await stopTask(
       ctx,
-      await getTaskWithAccess(ctx.db, target.taskId, ctx.userId, "contributor"),
+      await getTaskWithAccess(ctx.db, target.taskId, ctx.userId),
     );
     return null;
   },
@@ -160,7 +158,6 @@ export const stopWorkSandbox = authMutation({
               ),
             });
     if (!session) return null;
-    await assertCanDrive(ctx.db, sessionOwner(session), ctx.userId);
     if (await sessionIsHeld(ctx.db, session)) throw new Error(SANDBOX_HELD_ERROR);
     await requestSessionSandboxStop(ctx, session._id);
     return session._id;

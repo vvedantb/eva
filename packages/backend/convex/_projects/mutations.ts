@@ -11,8 +11,9 @@ import {
   EMPTY_PROJECT_PHASE,
   hasRepoAccess,
   getProjectWithAccess,
-  softDeleteAgentTask,
+  taskRunPending,
 } from "../functions";
+import { listProjectTasks, taskLabel } from "./scheduler";
 import { allocateNumId } from "../numId";
 import {
   getProjectConversation,
@@ -38,8 +39,7 @@ import {
  * so the person need not repeat it. The client opens the coordinator chat;
  * nothing is sent for them. `skipPlanning` stays accepted for older clients
  * and is ignored: every project starts the same way, and nothing starts the
- * old interview for it (`resolveProjectPlanningMode` reads it as
- * `tasks_only`).
+ * old interview for it.
  */
 export const create = authMutation({
   args: {
@@ -118,7 +118,6 @@ export const update = authMutation({
       ctx.db,
       args.id,
       ctx.userId,
-      "contributor",
     );
     // `id` must be omitted — leaving it in the rest-spread patches a stray
     // `id` field onto the document and breaks projects:list return validation.
@@ -228,7 +227,7 @@ export const addMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId, "contributor");
+    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
     const conversation = await getProjectConversation(ctx.db, args.id);
     await setProjectConversation(ctx.db, args.id, [
       ...conversation,
@@ -243,32 +242,38 @@ export const addMessage = authMutation({
   },
 });
 
-/** Soft-deletes a project (row retained; hidden from lists and direct URLs). */
+/**
+ * Soft-deletes a project (row retained; hidden from lists and direct URLs).
+ * Refused while a child task runs. Its child tasks stay as quick tasks, with
+ * their sessions, branches and PRs: they leave the project and lose what
+ * only a project task has (number, phase label, approval, coordinator
+ * retries).
+ */
 export const remove = authMutation({
   args: { id: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId, "contributor");
-    await ctx.db.patch(args.id, { deletedAt: Date.now() });
-    await syncProjectSession(ctx, args.id);
-    return null;
-  },
-});
-
-/** Soft-deletes a project and all its tasks. */
-export const deleteCascade = authMutation({
-  args: { id: v.id("projects") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId, "contributor");
-    const tasks = await ctx.db
-      .query("agentTasks")
-      .withIndex("by_project", (q) => q.eq("projectId", args.id))
-      .collect();
+    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
+    const tasks = await listProjectTasks(ctx.db, args.id);
     for (const task of tasks) {
-      await softDeleteAgentTask(ctx, task._id);
+      if (task.status === "in_progress" || (await taskRunPending(ctx.db, task))) {
+        throw new Error(
+          `Task ${taskLabel(task)} is running. Stop it or wait for it to end, then delete the project.`,
+        );
+      }
     }
-    await ctx.db.patch(args.id, { deletedAt: Date.now() });
+    const now = Date.now();
+    for (const task of tasks) {
+      await ctx.db.patch(task._id, {
+        projectId: undefined,
+        taskNumber: undefined,
+        phaseLabel: undefined,
+        approvedAt: undefined,
+        coordinatorRetries: undefined,
+        updatedAt: now,
+      });
+    }
+    await ctx.db.patch(args.id, { deletedAt: now });
     await syncProjectSession(ctx, args.id);
     return null;
   },
@@ -279,7 +284,7 @@ export const clearMessages = authMutation({
   args: { id: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId, "contributor");
+    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
     await setProjectConversation(ctx.db, args.id, []);
     return null;
   },
@@ -294,7 +299,7 @@ export const updateLastConversationMessage = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId, "contributor");
+    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
     const messages = [...(await getProjectConversation(ctx.db, args.id))];
     const last = messages[messages.length - 1];
     if (!last) return null;

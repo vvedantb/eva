@@ -670,9 +670,10 @@ export const agentTaskFields = {
   // (mirrors sessions.watchedByAve).
   watchedByAve: v.optional(v.id("aveThreads")),
   /**
-   * When a person approved this project task to run. The project scheduler
-   * (`scheduleReadyTasks`) starts only approved `todo` tasks. Absent on quick
-   * tasks and on project tasks not approved yet.
+   * When this project task was approved to run: at creation for the
+   * coordinator's tasks, from Triage by a person for feedback. The project
+   * scheduler (`scheduleReadyTasks`) starts only approved `todo` tasks.
+   * Absent on quick tasks and on project tasks waiting in Triage.
    */
   approvedAt: v.optional(v.number()),
   /** Restarts the coordinator spent on this failed task (at most 1). */
@@ -2308,7 +2309,7 @@ export const projectTaskReportFields = {
 };
 
 /**
- * Tasks the coordinator proposed in one tool call, for the task card in its
+ * Tasks the coordinator created in one tool call, for the task card in its
  * chat. `messageId` is the coordinator turn the call ran in.
  */
 export const projectTaskBatchFields = {

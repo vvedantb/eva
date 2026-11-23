@@ -7,7 +7,6 @@ import {
 } from "../_generated/server";
 import { workflow } from "../workflowManager";
 import {
-  assertCanDrive,
   authAction,
   authMutation,
   hasRepoAccess,
@@ -34,7 +33,6 @@ import {
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
 import { selectUsageLimitRetryUserMessage } from "./resultTarget";
-import { sessionOwner } from "./owner";
 import { routePersonChatMessage } from "../_projects/reports";
 import { reviveCoordinatorSession } from "./ownedSession";
 import { sessionAccountHolder } from "../_projects/runSettings";
@@ -830,7 +828,6 @@ export const cancelSessionExecution = authMutation({
     if (!session) throw new Error("Session not found");
     if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
       throw new Error("Not authorized");
-    await assertCanDrive(ctx.db, sessionOwner(session), ctx.userId);
     for (const chat of await listLiveSessionChats(ctx.db, session._id)) {
       await cancelChatExecution(ctx, { chat, session }, { holdQueue: true });
     }

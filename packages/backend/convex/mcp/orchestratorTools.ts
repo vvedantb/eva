@@ -129,7 +129,7 @@ export function fleetTools(
           .enum(["project"])
           .optional()
           .describe(
-            'In a project chat (its coordinator or one of its tasks): "project" returns every task of this project with its state, phase, repo, PR state, dependencies, needs-you reason and open question. Read-only.',
+            'In a project chat (its coordinator or one of its tasks): "project" returns every task of this project with its state, phase, repo, PR state, needs-you reason and open question. Read-only.',
           ),
       },
       handler: async ({ repoName, app, includeIdle, scope }) => {
@@ -179,7 +179,7 @@ export function fleetTools(
     defineTool({
       name: "get_agent_state",
       description:
-        'Inspect one agent in depth: status, whether a turn is in flight, what it is doing right now (live activity), the tail of its transcript, how many messages are queued behind it, its preview deployment, and every pull request it holds ("pullRequests", primary first). Long messages are truncated. For a project, "status" is its phase, the transcript is its sandbox chat, "isExecuting" also counts a running build or spec workflow, and "buildRunning" says whether a build is in flight. A session in a linked-session group also returns "sessionGroup": its name and every member across repos.',
+        'Inspect one agent in depth: status, whether a turn is in flight, what it is doing right now (live activity), the tail of its transcript, how many messages are queued behind it, its preview deployment, and every pull request it holds ("pullRequests", primary first). Long messages are truncated. For a project, "status" is its derived stage (todo, in_progress, done), the transcript is its sandbox chat, "isExecuting" also counts a running build or spec workflow, and "buildRunning" says whether a build is in flight. A session in a linked-session group also returns "sessionGroup": its name and every member across repos.',
       mutating: false,
       input: {
         kind: agentKindArg,

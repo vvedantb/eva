@@ -8,7 +8,6 @@ import {
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import {
-  assertCanDrive,
   authMutation,
   getSessionWithAccess,
 } from "../functions";
@@ -52,7 +51,7 @@ import {
 import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
 import { buildSessionBranchName } from "../_git/branchNames";
 import { errorMessage } from "@vvedantb/server";
-import { sessionOwner, sessionOwnerTaskId } from "./owner";
+import { sessionOwnerTaskId } from "./owner";
 import { recordProjectInterviewClaim } from "../_projects/interviewState";
 import {
   isPreviewSandboxAllowed,
@@ -94,8 +93,6 @@ export const startSandbox = authMutation({
       args.sessionId,
       ctx.userId,
     );
-    // A project's or project task's sandbox starts only for a contributor.
-    await assertCanDrive(ctx.db, sessionOwner(session), ctx.userId);
     const blocked = await previewBlockedError(ctx.db, session);
     if (blocked) throw blocked;
     await requestSessionSandboxStart(ctx, session);
@@ -108,7 +105,7 @@ export const startSandbox = authMutation({
  * never ran has no branch to preview (its first run boots the sandbox); a
  * task with a VM already may resume it. A project's coordinator always may:
  * a project has no closed state (decision 19), so its chat stays reachable
- * for a contributor whatever its tasks' status.
+ * whatever its tasks' status.
  */
 async function previewBlockedError(
   db: DatabaseReader,

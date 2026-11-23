@@ -9,18 +9,21 @@ export const MAX_PARALLEL_PROJECT_TASKS = 3;
 type TaskStatus = Doc<"agentTasks">["status"];
 type PrState = NonNullable<Doc<"agentTasks">["prState"]>;
 
-/** What a dependency rule reads of a task. */
-export interface DependencyFacts {
+/** What the stage rule reads of a task. */
+export interface TaskStageFacts {
   status: TaskStatus;
   /** The task's PR summary state; undefined when it has no PR. */
   prState?: PrState;
 }
 
 /** One child task, as the status and scheduling rules read it. */
-export interface ProjectTaskFacts extends DependencyFacts {
+export interface ProjectTaskFacts extends TaskStageFacts {
   id: string;
   taskNumber?: number;
-  /** A person approved the task (`agentTasks.approvedAt`). */
+  /**
+   * The task may run (`agentTasks.approvedAt`): the coordinator's tasks are
+   * approved at creation; feedback waits for a person.
+   */
   approved: boolean;
   /**
    * The latest run ended and nothing restarts it by itself: it failed, or a
@@ -31,8 +34,6 @@ export interface ProjectTaskFacts extends DependencyFacts {
   usageLimited: boolean;
   /** A run is queued, running, scheduled or waiting to retry. */
   runPending: boolean;
-  /** The tasks this task depends on. A deleted dependency is left out. */
-  dependencies: readonly DependencyFacts[];
   /**
    * Restarts the coordinator spent on this task (`agentTasks.coordinatorRetries`).
    * Absent reads as 0.
@@ -65,7 +66,6 @@ export type NeedsYouReason =
   | "stopped"
   | "pr_closed"
   | "approve"
-  | "dependency_cancelled"
   | "review"
   | "question";
 
@@ -73,7 +73,7 @@ export type NeedsYouReason =
  * A task's stage. `done` is launched only once its PR merged (or when it has
  * no PR); a done task with a PR still open or closed is in review.
  */
-export function projectTaskStage(task: DependencyFacts): ProjectTaskStage {
+export function projectTaskStage(task: TaskStageFacts): ProjectTaskStage {
   switch (task.status) {
     case "done":
       return task.prState === undefined || task.prState === "merged"
@@ -90,11 +90,6 @@ export function projectTaskStage(task: DependencyFacts): ProjectTaskStage {
     case "draft":
       return "todo";
   }
-}
-
-/** A dependency lets its dependents start once it is launched: done and merged. */
-export function isDependencyMet(dependency: DependencyFacts): boolean {
-  return projectTaskStage(dependency) === "launched";
 }
 
 /**
@@ -123,11 +118,7 @@ export function projectTaskNeedsYou(
   if (task.halted === "cancelled") return "stopped";
   if (task.prState === "closed") return "pr_closed";
   if (task.status === "todo" || task.status === "draft") {
-    if (!task.approved) return "approve";
-    if (task.dependencies.some((dep) => dep.status === "cancelled")) {
-      return "dependency_cancelled";
-    }
-    return undefined;
+    return task.approved ? undefined : "approve";
   }
   return projectTaskStage(task) === "in_review" ? "review" : undefined;
 }
@@ -142,9 +133,9 @@ export function projectTaskWaitsForCoordinator(task: ProjectTaskFacts): boolean 
 
 /**
  * How a project's child task shows in its task list, by who must act: a
- * contributor must approve or reject it (`triage`), the agent (`working`), a
+ * person must approve or reject it (`triage`), the agent (`working`), a
  * person or the coordinator (`blocked`), nobody yet (`idle`: approved,
- * waiting for a dependency or a free slot), or no one any more (`archived`).
+ * waiting for a free slot), or no one any more (`archived`).
  * The project itself keeps its stages (`projectStatus`), and counts its
  * tasks by these statuses.
  */
@@ -157,8 +148,8 @@ export type ProjectTaskDisplayStatus =
 
 /**
  * A child task's display status. Archived: launched or cancelled. Triage: a
- * todo or draft task nobody approved yet (feedback, or a coordinator
- * proposal). Blocked: waits for a person (`projectTaskNeedsYou`), for its
+ * todo or draft task nobody approved yet (feedback, or a task a person
+ * added without approving it). Blocked: waits for a person (`projectTaskNeedsYou`), for its
  * coordinator (an open ask, or a first failure it may retry), is halted, or
  * is in review. Working: in progress. Idle: an approved todo task nothing
  * holds back.
@@ -225,8 +216,8 @@ export function projectStatus(
 
 /**
  * The tasks the scheduler starts now, in `taskNumber` order: approved `todo`
- * tasks with no run pending, not halted, whose dependencies are all met, up
- * to `MAX_PARALLEL_PROJECT_TASKS` in progress. Nothing starts while the
+ * tasks with no run pending and not halted, up to
+ * `MAX_PARALLEL_PROJECT_TASKS` in progress. Nothing starts while the
  * project's account is at its usage limit.
  */
 export function tasksToStart(tasks: readonly ProjectTaskFacts[]): string[] {
@@ -242,35 +233,9 @@ export function tasksToStart(tasks: readonly ProjectTaskFacts[]): string[] {
         task.status === "todo" &&
         task.approved &&
         task.halted === undefined &&
-        !task.runPending &&
-        task.dependencies.every(isDependencyMet),
+        !task.runPending,
     )
     .sort((a, b) => (a.taskNumber ?? 0) - (b.taskNumber ?? 0))
     .slice(0, slots)
     .map((task) => task.id);
-}
-
-/**
- * True when the dependency edges (task id → the id it depends on) form a
- * cycle, so no task in it could ever start.
- */
-export function hasDependencyCycle(
-  edges: ReadonlyArray<readonly [string, string]>,
-): boolean {
-  const next = new Map<string, string[]>();
-  for (const [from, to] of edges) {
-    next.set(from, [...(next.get(from) ?? []), to]);
-  }
-  const done = new Set<string>();
-  const onPath = new Set<string>();
-  const visit = (id: string): boolean => {
-    if (onPath.has(id)) return true;
-    if (done.has(id)) return false;
-    onPath.add(id);
-    const cyclic = (next.get(id) ?? []).some(visit);
-    onPath.delete(id);
-    done.add(id);
-    return cyclic;
-  };
-  return [...next.keys()].some(visit);
 }

@@ -118,15 +118,6 @@ export const deleteRepoStep = internalMutation({
             deleted++;
           }
 
-          const deps = await ctx.db
-            .query("taskDependencies")
-            .withIndex("by_task", (q) => q.eq("taskId", task._id))
-            .collect();
-          for (const d of deps) {
-            await ctx.db.delete(d._id);
-            deleted++;
-          }
-
           const streaming = await ctx.db
             .query("streamingActivity")
             .withIndex("by_entity", (q) => q.eq("entityId", String(task._id)))

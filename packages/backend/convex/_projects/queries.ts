@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { findLivePullRequestOnBranch } from "../_pullRequests/store";
-import { authQuery, getProjectRole, hasRepoAccess } from "../functions";
+import { authQuery, hasRepoAccess } from "../functions";
 import { internalQuery } from "../_generated/server";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { sessionStatusValidator } from "../_validators/enums";
@@ -13,8 +13,8 @@ import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import {
   projectWithDetailsValidator,
   projectListItemValidator,
-  resolveProjectPlanningMode,
   getProjectDetails,
+  clientProject,
 } from "./helpers";
 import { resolveProjectBranchName } from "../_git/branchNames";
 import { resolveProjectBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
@@ -36,15 +36,10 @@ import {
 async function buildProjectWithDetails(
   db: GenericDatabaseReader<DataModel>,
   project: Doc<"projects">,
-  userId: Id<"users">,
 ) {
-  const [details, callerRole] = await Promise.all([
-    getProjectDetails(db, project._id),
-    getProjectRole(db, project, userId),
-  ]);
+  const details = await getProjectDetails(db, project._id);
   return {
-    ...project,
-    callerRole,
+    ...clientProject(project),
     conversationHistory: details?.conversationHistory ?? [],
     ...(details?.generatedSpec !== undefined
       ? { generatedSpec: details.generatedSpec }
@@ -84,11 +79,9 @@ export const list = authQuery({
   returns: v.array(projectListItemValidator),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    // The role reads only the repo, so one lookup covers every row.
-    const [projects, awaitingAnswerIds, callerRole] = await Promise.all([
+    const [projects, awaitingAnswerIds] = await Promise.all([
       liveProjectsForRepo(ctx.db, args.repoId),
       awaitingAnswerEntityIdsForRepo(ctx.db, args.repoId),
-      getProjectRole(ctx.db, { repoId: args.repoId }, ctx.userId),
     ]);
     const hasUnread = await unreadLookupForList(
       ctx.db,
@@ -98,13 +91,11 @@ export const list = authQuery({
     );
     return await Promise.all(
       projects.map(async (project) => ({
-        ...project,
+        ...clientProject(project),
         // A project's sandbox lives on its session; the row shows that.
         sandboxStatus: await projectSandboxStatus(ctx.db, project),
-        planningMode: await resolveProjectPlanningMode(ctx.db, project),
         hasUnread: await hasUnread(project),
         isAwaitingAnswer: awaitingAnswerIds.has(String(project._id)),
-        callerRole,
       })),
     );
   },
@@ -175,7 +166,7 @@ export const get = authQuery({
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) return null;
     const visible = entityVisible(project);
     if (!visible) return null;
-    return await buildProjectWithDetails(ctx.db, visible, ctx.userId);
+    return await buildProjectWithDetails(ctx.db, visible);
   },
 });
 
@@ -196,7 +187,7 @@ export const getByNumId = authQuery({
       .first();
     const visible = entityVisible(project);
     if (!visible) return null;
-    return await buildProjectWithDetails(ctx.db, visible, ctx.userId);
+    return await buildProjectWithDetails(ctx.db, visible);
   },
 });
 

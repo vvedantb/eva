@@ -40,7 +40,6 @@
     "./projectStatus": "./src/projectStatus.ts",
     "./projectView": "./src/projectView.ts",
     "./publishRecovery": "./src/publishRecovery.ts",
-    "./projectRoles": "./src/projectRoles.ts",
     "./proposedPlan": "./src/proposedPlan.ts",
     "./threadFind": "./src/threadFind.ts",
     "./redactSecrets": "./src/redactSecrets.ts",
