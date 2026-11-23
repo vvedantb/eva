@@ -4,7 +4,7 @@
 
 **Eva is in V Store.** The release uses the tag prefix `eva-apk-`, which V Store's catalog entry for Eva names. The app's update check asks V Store for the newest version.
 
-The workflow is a thin caller of the shared workflow `vvedantb/packages/.github/workflows/release-android-apk.yml@main`, as vmem and Velth use. The shared workflow README ("Android APK release workflow") describes every input.
+The workflow is a thin caller of the shared workflow `vvedantb/workflows/.github/workflows/release-android-apk.yml@main`, as vmem and Velth use. The shared workflow README ("Android APK release workflow") describes every input.
 
 ## When it runs
 

@@ -33,7 +33,7 @@ permissions:
 
 jobs:
   check:
-    uses: vvedantb/packages/.github/workflows/ci-app.yml@main
+    uses: vvedantb/workflows/.github/workflows/ci-app.yml@main
     with:
       runs_on: ubuntu-latest
       node_version: "24"
@@ -110,7 +110,7 @@ jobs:
     concurrency:
       group: release-android
       cancel-in-progress: false
-    uses: vvedantb/packages/.github/workflows/release-android-apk.yml@main
+    uses: vvedantb/workflows/.github/workflows/release-android-apk.yml@main
     with:
       app_name: eva
       release_title: Eva
