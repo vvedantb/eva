@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
-import { tokenTransition } from "@vvedantb/ui";
-import { AnimatePresence, m } from "motion/react";
+import { TabsTransition } from "@vvedantb/ui";
 import type { Id } from "@eva/backend";
 import { ProjectTabs } from "@/lib/components/projects/ProjectTabs";
 import { ProjectActiveLayout } from "@/lib/components/projects/ProjectActiveLayout";
-import type { ProjectMainTab } from "@/lib/components/projects/ProjectMainTabs";
+import {
+  PROJECT_MAIN_TABS,
+  type ProjectMainTab,
+} from "@/lib/components/projects/ProjectMainTabs";
 import { ProjectOverviewTab } from "@/lib/components/projects/ProjectOverviewTab";
 import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
 import type { EntityResolveStatus } from "@/lib/numId";
@@ -43,75 +45,48 @@ export function ProjectDetailMainContent({
 }: ProjectDetailMainContentProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <AnimatePresence mode="wait" initial={false}>
+      <TabsTransition
+        value={isSandboxSurface ? "sandbox" : mainTab}
+        order={PROJECT_MAIN_TABS}
+        className="flex min-h-0 flex-1 flex-col"
+        panelClassName={
+          isSandboxSurface
+            ? "min-h-0 flex-1 overflow-hidden"
+            : "flex min-h-0 flex-1 flex-col"
+        }
+      >
         {isSandboxSurface ? (
-          <m.div
-            key="sandbox"
-            className="min-h-0 flex-1 overflow-hidden"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={tokenTransition.fast}
-          >
-            {sandboxContent}
-          </m.div>
+          sandboxContent
         ) : mainTab === "overview" ? (
-          <m.div
-            key="overview"
-            className="flex min-h-0 flex-1 flex-col"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={tokenTransition.fast}
-          >
-            <ProjectOverviewTab
-              projectId={projectId}
-              title={project.title}
-              description={project.description}
-            />
-          </m.div>
+          <ProjectOverviewTab
+            projectId={projectId}
+            title={project.title}
+            description={project.description}
+          />
         ) : isDraftOrFinalized ? (
-          <m.div
-            key="plan"
-            className="flex min-h-0 flex-1 flex-col"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={tokenTransition.fast}
-          >
-            <ProjectTabs
-              projectId={projectId}
-              projectPhase={project.phase}
-              interviewRunning={project.interview !== undefined}
-              rawInput={project.rawInput}
-              generatedSpec={project.generatedSpec}
-              conversationHistory={project.conversationHistory}
-              streamingActivity={streamingActivity}
-              sandboxStartupActivity={sandboxStartupActivity}
-              basePath={basePath}
-              repoId={repoId}
-            />
-          </m.div>
+          <ProjectTabs
+            projectId={projectId}
+            projectPhase={project.phase}
+            interviewRunning={project.interview !== undefined}
+            rawInput={project.rawInput}
+            generatedSpec={project.generatedSpec}
+            conversationHistory={project.conversationHistory}
+            streamingActivity={streamingActivity}
+            sandboxStartupActivity={sandboxStartupActivity}
+            basePath={basePath}
+            repoId={repoId}
+          />
         ) : (
-          <m.div
-            key="tasks"
-            className="flex min-h-0 flex-1 flex-col"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={tokenTransition.fast}
-          >
-            <ProjectActiveLayout
-              projectId={projectId}
-              project={project}
-              basePath={basePath}
-              selectedTaskId={selectedTaskId}
-              selectedTaskStatus={selectedTaskStatus}
-              detailTab={detailTab}
-            />
-          </m.div>
+          <ProjectActiveLayout
+            projectId={projectId}
+            project={project}
+            basePath={basePath}
+            selectedTaskId={selectedTaskId}
+            selectedTaskStatus={selectedTaskStatus}
+            detailTab={detailTab}
+          />
         )}
-      </AnimatePresence>
+      </TabsTransition>
     </div>
   );
 }

@@ -9,11 +9,15 @@ import {
 } from "@/lib/components/sandbox/sandboxStatusStyles";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
-/** Primary project tabs. `work` is the index route, so it owns every deep link. */
-export type ProjectMainTab = "overview" | "work" | "sandbox";
+/**
+ * Primary project tabs, in their on-screen order (the content slides by it).
+ * `work` is the index route, so it owns every deep link.
+ */
+export const PROJECT_MAIN_TABS = ["overview", "work", "sandbox"] as const;
+export type ProjectMainTab = (typeof PROJECT_MAIN_TABS)[number];
 
 function isProjectMainTab(value: string): value is ProjectMainTab {
-  return value === "overview" || value === "work" || value === "sandbox";
+  return PROJECT_MAIN_TABS.some((tab) => tab === value);
 }
 
 export function ProjectMainTabs({

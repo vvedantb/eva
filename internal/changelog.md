@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: quick task Task/Sandbox and project tabs slide (@vvedantb/ui 0.62.1)
+
+Date: 2026-11-23
+
+WHY: The quick task's Task/Sandbox switch and the project's Overview/Plan|Tasks/Sandbox tabs crossfaded; they now slide from the side of the picked tab, like the team page.
+
+Architectural: packages #340 adds `TabsTransition` `panelClassName`, so full-height panels keep their flex classes. `TaskDetailInline` and `ProjectDetailMainContent` replace their `AnimatePresence` fades with `TabsTransition`; the orders are the new `SANDBOX_SURFACES` and `PROJECT_MAIN_TABS` constants, which the tab components' type guards now use too. `@vvedantb/ui` 0.62.0 → 0.62.1 in every workspace.
+
 ## Web: composer action cards match the composer footer width
 
 Date: 2026-11-23
