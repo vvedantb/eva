@@ -22,7 +22,7 @@ import {
 import { STALE_DEPLOY_RELOAD_PARAM } from "./lib/utils/staleDeployReloadParam";
 import { readSignedInHint } from "./lib/authHint";
 import { migrateLegacyStorageKeys } from "./lib/migrateLegacyStorageKeys";
-import { takeRailDirection } from "./lib/railNavDirection";
+import { takeNavDirection } from "./lib/railNavDirection";
 import { InnerApp } from "./InnerApp";
 import "./fonts";
 import "./globals.css";
@@ -78,18 +78,22 @@ const router = createRouter({
   // sandbox tabs, its Review sub-tabs) cross leaf routes too, but are tab
   // switches, not page swaps. Returning `false` skips the transition.
   //
-  // A rail click also tags the swap `rail-down` / `rail-up` (`railNavDirection`):
-  // the side panel and page slide in the rail's direction. Every rail click is
-  // a page swap, even between two apps on the same leaf route.
+  // A vertical nav click also tags the swap with its direction
+  // (`railNavDirection`): `rail-down` / `rail-up` slide the side panel and the
+  // page, `nav-down` / `nav-up` (a side-panel link) slide the page only. Every
+  // rail click is a page swap, even between two apps on the same leaf route; a
+  // panel link only when it is one anyway, so picking another session stays
+  // instant.
   defaultViewTransition: {
     types: ({ fromLocation, toLocation }) => {
       if (fromLocation === undefined) return false;
-      const rail = takeRailDirection();
-      if (rail !== null) return ["page", `rail-${rail}`];
-      return !isSameEntity(fromLocation.pathname, toLocation.pathname) &&
-        leafRouteId(fromLocation.pathname) !== leafRouteId(toLocation.pathname)
-        ? ["page"]
-        : false;
+      const nav = takeNavDirection();
+      if (nav?.source === "rail") return ["page", `rail-${nav.direction}`];
+      const pageSwap =
+        !isSameEntity(fromLocation.pathname, toLocation.pathname) &&
+        leafRouteId(fromLocation.pathname) !== leafRouteId(toLocation.pathname);
+      if (!pageSwap) return false;
+      return nav ? ["page", `nav-${nav.direction}`] : ["page"];
     },
   },
   // Monorepo apps: address bar + link hrefs use /owner/repo/app/… while the
