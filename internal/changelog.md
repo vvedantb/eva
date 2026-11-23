@@ -8,6 +8,14 @@ WHY: Extends the team-page tab slide to the other pages whose tabs swap the page
 
 Architectural: `EnvVariablesPageClient` (Repo/Team) and `SnapshotsClient` (Configuration/Status/Builds) replace their own `AnimatePresence` opacity fades with `TabsTransition`, and `PrRecapPanel` (Recap/Summary) wraps its views. The orders are the exported `envVarScopes`, `snapshotSettingsTabs` and `PR_RECAP_VIEWS`. Left out: list filters (sessions, reviews, feedback, quick tasks, projects) and form toggles stay instant; the review panel keeps every tab mounted; route-outlet tabs (project, sandbox surface, review nav, logs) would slide the new route out with the old panel; the testing-arena panels need a full-height option in `TabsTransition`.
 
+
+## Recap on a revisit after 4 hours
+
+Date: 2026-11-23
+
+WHY: A recap started only when a reply finished while you were away, so reopening a session whose last reply you had seen showed nothing, however long you were gone.
+
+Architectural: `useChatReadState` now calls `markRead` on every open, not only when a reply is unread. `chatReads` rows gain `lastVisitedAt` (written at most once a minute). `maybeStartRecap` measures the absence from the later of the read and the visit: a missed turn after 30 minutes gives the "away" recap; nothing new after `RECAP_REVISIT_MS` (4 hours) gives a "full" ("Recap") one. One more mutation per chat open. While a chat is on screen, `touchVisit` moves `lastVisitedAt` every 5 minutes and once on leaving, so watching a long turn no longer reads as being away (the old rule measured from the open or the last read, so a watched 30-minute turn showed "Since you've been gone"). Recaps now start only on an open (`markRead({ opened: true })`), never when a reply lands on a watched chat, and an open deletes the recap from an earlier visit (`expireRecap`): prod held 5 recaps, one 73 hours old with nothing after it, shown again on every open.
 ## Web: team tab content slides from the picked tab's side (@vvedantb/ui 0.62.0)
 
 Date: 2026-11-23
