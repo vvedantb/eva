@@ -7,7 +7,7 @@ import { taskStageAppearance } from "@/projects/phaseAppearance";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 
 /** The stages a project's counts show, most finished first; empty stages are left out. */
-function shownStages(status: ProjectStatus) {
+function shownStages(status: Pick<ProjectStatus, "counts">) {
   return PROJECT_STAGE_COUNT_ORDER.filter((stage) => status.counts[stage] > 0);
 }
 
@@ -18,7 +18,7 @@ function shownStages(status: ProjectStatus) {
  * yet") is the bar's spoken label here. `thin` is the list row's 4 high bar;
  * the Overview's is 6.
  */
-export function ProjectProgress({ status, thin = false }: { status: ProjectStatus; thin?: boolean }) {
+export function ProjectProgress({ status, thin = false }: { status: Pick<ProjectStatus, "counts">; thin?: boolean }) {
   const scheme = useScheme();
   const secondary = EVA_THEME[scheme].secondary;
   const segments = projectStageSegments(status);
@@ -56,7 +56,7 @@ export function ProjectProgress({ status, thin = false }: { status: ProjectStatu
  * Launched · 1 In Review"), each in its stage's icon and colour, from live
  * data. Nothing renders without tasks.
  */
-export function ProjectStageCounts({ status }: { status: ProjectStatus }) {
+export function ProjectStageCounts({ status }: { status: Pick<ProjectStatus, "counts"> }) {
   const scheme = useScheme();
   const shown = shownStages(status);
   if (shown.length === 0) return null;

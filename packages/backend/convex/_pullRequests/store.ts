@@ -11,10 +11,11 @@ import type { prOwnerRefValidator } from "../_validators/tableFields";
 import {
   buildProjectBranchName,
   buildSessionBranchName,
-  buildTaskBranchName,
   EVA_BRANCH_PREFIX,
+  taskBranchName,
 } from "../_git/branchNames";
 import { extractPrNumber } from "../_github/prUrl";
+import { isEntityDeleted } from "../numId";
 import {
   schedulePrLifecycleActions,
   type PrLifecycleTransition,
@@ -536,7 +537,7 @@ export async function resolvePrOwnerFromBranch(
     return {
       owner: { kind: "task", taskId: task._id },
       repoId: task.repoId,
-      isMainBranch: args.branch === buildTaskBranchName(task._id),
+      isMainBranch: args.branch === taskBranchName(task),
     };
   }
 
@@ -544,6 +545,21 @@ export async function resolvePrOwnerFromBranch(
   const project = projectId ? await db.get(projectId) : null;
   if (!project) return null;
   if (!(await repoMatches(db, project.repoId, repo))) return null;
+  // A project task converted from the old project branch kept that branch
+  // (`agentTasks.branchName`): a new PR there is the task's own.
+  const keeper = (
+    await db
+      .query("agentTasks")
+      .withIndex("by_project", (q) => q.eq("projectId", project._id))
+      .collect()
+  ).find((task) => task.branchName === args.branch && !isEntityDeleted(task));
+  if (keeper?.repoId !== undefined) {
+    return {
+      owner: { kind: "task", taskId: keeper._id },
+      repoId: keeper.repoId,
+      isMainBranch: true,
+    };
+  }
   return {
     owner: { kind: "project", projectId: project._id },
     repoId: project.repoId,

@@ -21,6 +21,7 @@ import {
   hasTaskAccess,
   softDeleteAgentTask,
   recomputeProjectPhase,
+  EMPTY_PROJECT_PHASE,
 } from "../functions";
 import { allocateNumId } from "../numId";
 import {
@@ -28,7 +29,6 @@ import {
   buildTaskNotificationMessage,
   runTraitFields,
 } from "./helpers";
-import { buildProjectBranchName } from "../_projects/helpers";
 import { resolveNewTaskBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { logTaskActivity } from "../taskActivity";
@@ -716,18 +716,15 @@ export const createBatchWithDependencies = authMutation({
         userId: ctx.userId,
         title: args.projectTitle,
         rawInput: args.projectTitle,
-        phase: "business_review",
-        planningMode: "tasks_only",
+        phase: EMPTY_PROJECT_PHASE,
         baseBranch,
         projectStartDate: now,
         numId: projectNumId,
       });
-      await ctx.db.patch(projectId, {
-        branchName: buildProjectBranchName(projectId),
-      });
       for (const taskId of taskIds) {
         await ctx.db.patch(taskId, { projectId });
       }
+      await recomputeProjectPhase(ctx, projectId);
     }
 
     return { taskIds, projectId };

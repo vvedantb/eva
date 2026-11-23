@@ -56,6 +56,17 @@ export function buildTaskBranchName(taskId: Id<"agentTasks">): string {
   return `${EVA_BRANCH_PREFIX}task-${String(taskId)}`;
 }
 
+/**
+ * The branch a task works and opens its PR on: its kept branch (a project
+ * task converted from the old project branch, `agentTasks.branchName`), else
+ * `eva/task-<id>`. Every reader of a task's branch asks here.
+ */
+export function taskBranchName(
+  task: Pick<Doc<"agentTasks">, "_id" | "branchName">,
+): string {
+  return task.branchName ?? buildTaskBranchName(task._id);
+}
+
 /** Converts text to a URL-safe lowercase slug, truncated to 50 characters. */
 function slugify(text: string): string {
   const slug = text

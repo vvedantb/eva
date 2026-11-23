@@ -3,7 +3,7 @@ import type { Id } from "../_generated/dataModel";
 import type { Infer, Validator } from "convex/values";
 import { LlmJson } from "@solvers-hub/llm-json";
 import { toWorkflowId, workflow } from "../workflowManager";
-import { buildTaskBranchName } from "../_git/branchNames";
+import { taskBranchName } from "../_git/branchNames";
 import {
   findPullRequestByUrl,
   recordPullRequest,
@@ -225,7 +225,7 @@ export async function recordRunPullRequest(
     state: existing?.state ?? args.state ?? "draft",
     primary: true,
     origin: "eva",
-    headBranch: buildTaskBranchName(task._id),
+    headBranch: taskBranchName(task),
     baseBranch: task.baseBranch,
     title: task.title,
   });

@@ -29,6 +29,7 @@ import {
 } from "./helpers";
 import { deleteQueuedMessages } from "./purge";
 import { findOpenTurn } from "../_chat/turnStore";
+import { sessionAccountHolder } from "../_projects/runSettings";
 
 /**
  * Continuation of `ensureMainChat`: moves the next bounded page of a heavy

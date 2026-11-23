@@ -1,17 +1,16 @@
 import { api, type Id } from "@eva/backend";
 import {
-  ACTIVE_PROJECT_PHASES,
   FALLBACK_GIT_BASE_BRANCH,
   PRIORITY_LABELS,
   PRIORITY_ORDER,
   PROJECT_PHASE_LABELS,
   isProjectPlanning,
+  repoDisplayLabel,
   type Priority,
-  type ProjectPhase,
 } from "@eva/shared";
-import { repoDisplayLabel } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import type { ProjectStatus } from "@eva/shared/projectStatus";
+import { PROJECT_STAGE_LABELS } from "@eva/shared/projectView";
 import { IconArrowUpRight, IconCalendar, IconFolders, IconGitBranch, IconTag, IconUser, IconUserPlus, IconUsers } from "@tabler/icons-react-native";
 import { Markdown } from "@vvedantb/native-ui/markdown";
 import { SheetRow, Textarea } from "@vvedantb/native-ui/primitives";
@@ -24,7 +23,7 @@ import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { FooterSheet } from "@/chat/ComposerFooter";
-import { phaseAppearance } from "@/projects/phaseAppearance";
+import { phaseAppearance, projectStageAppearance } from "@/projects/phaseAppearance";
 import { ProjectProgress, ProjectStageCounts } from "@/projects/ProjectProgress";
 import { RepoAppMark } from "@/sessions/SessionGroup";
 import { PriorityIcon } from "@/quickTasks/PriorityIcon";
@@ -44,7 +43,8 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
  * derived status, then the coordinator's summary document, which opens in
  * full), then the web fields column (`ProjectFieldsPanel`): Properties,
  * Instructions and Repos (`ProjectCoordinatorFields`), Dates, Labels and
- * Created. Phase (outside planning), Priority and Project Lead open a bottom
+ * Created. Status is the derived stage (an older project still planning
+ * shows its phase) and reads only. Priority and Project Lead open a bottom
  * sheet each and write `projects.update`, as the web selects; Instructions
  * save when the field loses focus; Repos toggles extra repos in a sheet. A
  * viewer reads every field and changes none. Field rows are 48 high (web
@@ -74,9 +74,9 @@ export function ProjectOverview({
   const updateProject = useMutation(api.projects.update);
   const setInstructions = useMutation(api.projects.setInstructions);
   const setExtraRepoIds = useMutation(api.projects.setExtraRepoIds);
-  const [sheet, setSheet] = useState<"phase" | "priority" | "lead" | "repos" | null>(null);
+  const [sheet, setSheet] = useState<"priority" | "lead" | "repos" | null>(null);
   // A viewer's rows read only: no sheet opens.
-  const openSheet = (next: "phase" | "priority" | "lead" | "repos") => (canContribute ? () => setSheet(next) : undefined);
+  const openSheet = (next: "priority" | "lead" | "repos") => (canContribute ? () => setSheet(next) : undefined);
   const extraRepoIds = project.extraRepoIds ?? [];
   const repoChoices = (repos ?? []).filter((entry) => entry._id !== project.repoId);
   const extraRepos = repoChoices.filter((entry) => extraRepoIds.includes(entry._id));
@@ -96,8 +96,13 @@ export function ProjectOverview({
   const lead = userById(project.projectLead);
   const reviewer = userById(project.codeReviewer);
   const creator = userById(project.userId);
-  const phase = phaseAppearance(project.phase, scheme);
+  // The stage is derived from the child tasks; only an older project still planning shows its stored phase.
   const planning = isProjectPlanning(project.phase);
+  const stage = planning
+    ? { ...phaseAppearance(project.phase, scheme), label: PROJECT_PHASE_LABELS[project.phase] }
+    : status
+      ? { ...projectStageAppearance(status.stage, scheme), label: PROJECT_STAGE_LABELS[status.stage] }
+      : undefined;
   const baseBranch = project.baseBranch ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
   const memberCount = project.members?.length ?? 0;
   const dateRange = [project.projectStartDate, project.projectEndDate]
@@ -159,13 +164,9 @@ export function ProjectOverview({
       ) : null}
 
       <FieldGroup title="Properties">
-        <FieldRow
-          label="Phase"
-          icon={<phase.icon size={16} color={phase.text} />}
-          value={PROJECT_PHASE_LABELS[project.phase]}
-          color={phase.text}
-          onPress={planning ? undefined : openSheet("phase")}
-        />
+        {stage ? (
+          <FieldRow label="Status" icon={<stage.icon size={16} color={stage.text} />} value={stage.label} color={stage.text} />
+        ) : null}
         <FieldRow
           label="Priority"
           icon={<PriorityIcon level={project.priority} />}
@@ -238,21 +239,6 @@ export function ProjectOverview({
         />
       </FieldGroup>
 
-      {/* The web `ProjectPhaseSelect`: the phases a user can pick (planning drives Draft and Finalized). */}
-      <FooterSheet open={sheet === "phase"} onOpenChange={(open) => setSheet(open ? "phase" : null)} title="Status">
-        {ACTIVE_PROJECT_PHASES.map((option: ProjectPhase) => {
-          const { icon: Icon, text } = phaseAppearance(option, scheme);
-          return (
-            <SheetRow
-              key={option}
-              leading={<Icon size={20} color={text} />}
-              title={PROJECT_PHASE_LABELS[option]}
-              active={project.phase === option}
-              onPress={() => update({ phase: option }, "Couldn't change the phase")}
-            />
-          );
-        })}
-      </FooterSheet>
       {/* The web Repos menu: every other repo the reader can access; a toggle writes at once and keeps the sheet open. */}
       <FooterSheet open={sheet === "repos"} onOpenChange={(open) => setSheet(open ? "repos" : null)} title="Repos">
         {repoChoices.map((choice) => (

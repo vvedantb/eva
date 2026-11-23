@@ -15,8 +15,8 @@ import {
 } from "../validators";
 import { storedComposerTraits } from "../_shared/composerTraits";
 import {
-  buildTaskBranchName,
   resolveProjectBranchName,
+  taskBranchName,
 } from "../_git/branchNames";
 import {
   ensureMainChat,
@@ -27,7 +27,6 @@ import { archiveSession, isSessionArchived, unarchiveSession } from "./archive";
 import {
   findOwnedSession,
   findWorkSession,
-  isTerminalProjectPhase,
   sessionOwnerEntityId,
   workSessionOwner,
   type OwnedSessionOwner,
@@ -49,7 +48,7 @@ import { taskRunSettings } from "../_projects/runSettings";
  *
  *   owner created ──first need──▶ ensureWorkSession (one session, never two)
  *   task done / cancelled / deleted,
- *   project completed / cancelled / deleted ──▶ retireOwnedSession (stop + archive)
+ *   project deleted ──▶ retireOwnedSession (stop + archive)
  *   reopened / restored ──▶ reviveOwnedSession (unarchive)
  */
 
@@ -226,7 +225,7 @@ function ownedSessionSeed(entity: OwnerEntity) {
       title: task.title,
       // The task's own branch: its PRs stay owned by the task
       // (`resolvePrOwnerFromBranch`).
-      branchName: buildTaskBranchName(task._id),
+      branchName: taskBranchName(task),
       baseBranch: task.baseBranch,
     };
   }
@@ -425,7 +424,7 @@ export async function liveOwnedSessionStatuses(
 
 /**
  * The owner left the board (a task done/cancelled/deleted, a project
- * completed/cancelled/deleted): stop its sandbox, archive its session and
+ * deleted): stop its sandbox, archive its session and
  * start the 48h sandbox delete grace.
  */
 export async function retireOwnedSession(
@@ -493,7 +492,7 @@ export function isTerminalTaskStatus(status: Doc<"agentTasks">["status"]) {
 /**
  * The one lifecycle mapping: an owner entering a terminal state retires its
  * session, one leaving it revives it. A task: done/cancelled. A project:
- * completed/cancelled.
+ * deleted.
  */
 async function syncOwnedSessionWithTerminal(
   ctx: MutationCtx,
@@ -521,10 +520,12 @@ export async function syncOwnedSessionWithTaskStatus(
 }
 
 /**
- * Project phase (or delete) → its session. Reads the project's current
- * state rather than a transition, so it is safe to call after any write and
- * to run late (`syncProjectSessionLifecycle`): a completed, cancelled or
- * deleted project's session is retired, any other is live.
+ * Project delete → its session. Reads the project's current state rather
+ * than a transition, so it is safe to call after any write and to run late
+ * (`syncProjectSessionLifecycle`): a deleted project's session is retired,
+ * any other is live. The stored phase plays no part: a project has no closed
+ * state (decision 19), so its coordinator chat stays reachable when every
+ * task is done, and a session an old phase-based close archived revives.
  */
 export async function syncProjectSession(
   ctx: MutationCtx,
@@ -535,8 +536,7 @@ export async function syncProjectSession(
     findOwnedSession(ctx.db, { kind: "project", projectId }),
   ]);
   if (!project || !session) return;
-  const retired =
-    isTerminalProjectPhase(project.phase) || project.deletedAt !== undefined;
+  const retired = project.deletedAt !== undefined;
   // The build or interview stops first; that mutation retires the session.
   if (retired && !isSessionArchived(session) && projectHoldsSession(project)) {
     await ctx.scheduler.runAfter(
@@ -554,10 +554,7 @@ export async function syncProjectSession(
   );
 }
 
-/**
- * `syncProjectSession` for phase writers that cannot import this module
- * (`functions.ts` stays a leaf): scheduled right after the write.
- */
+/** `syncProjectSession`, scheduled (callers that cannot import this module). */
 export const syncProjectSessionLifecycle = internalMutation({
   args: { projectId: v.id("projects") },
   returns: v.null(),

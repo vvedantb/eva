@@ -106,6 +106,8 @@ import { useTypingPresence } from "@/chat/useTypingPresence";
 import { useMentionComposer } from "@/chat/useMentionComposer";
 import { WEB_URL } from "@/config";
 import { useSessionActions } from "@/sessions/useSessionActions";
+import { useIsProjectViewer } from "@/projects/useProjectStatus";
+import { CoordinatorPausedBanner } from "@/projects/CoordinatorPausedBanner";
 import { SessionSummaryBlock, useSessionSummary } from "@/sessions/SessionSummary";
 import { textColor, useScheme } from "@/ui/theme";
 import { useChatTranscript } from "@/chat/useChatTranscript";
@@ -178,7 +180,11 @@ export default function ChatScreen() {
         message._id === liveReplyId,
   );
   const { mineByMessageId: mine, agentReports } = groupChatFeedback(feedbackRows ?? [], me ?? undefined);
-  const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder);
+  // A project's coordinator chat carries the task batches it proposed, as cards under their turns.
+  const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder, chat?.project?.id);
+  // A project viewer reads the coordinator chat and its child task chats but never writes in them (`callerRole`).
+  const chatTask = useQuery(api.agentTasks.get, chat?.task ? { id: chat.task.id } : "skip");
+  const viewer = useIsProjectViewer(chat?.project?.id ?? chatTask?.projectId);
   // The agent's proposed plans, each under the message that proposed it (session chats only, as the web).
   const planAfter = useProposedPlans(chat, sessionRow?.planContent);
   // Rows seen on screen, so an agent page mounts its WebView only once its row shows.
@@ -214,6 +220,7 @@ export default function ChatScreen() {
   }
 
   const working = turn !== undefined && turn !== null;
+  const canReply = chat.canReply && !viewer;
   // Queued here while the session's run slots are all taken: the server parked the send (the web `isWaitingForSlot`).
   const runningCount = runningChats?.length ?? 0;
   const waitingForSlot = !working && (queued?.length ?? 0) > 0 && runningCount >= MAX_PARALLEL_CHATS;
@@ -229,9 +236,11 @@ export default function ChatScreen() {
   // Waking or sleeping is the whole story; awake, the web line teaches desktop drop, so the phone keeps the title.
   const emptyDescription = sandboxAwake || sandbox.isToggling ? "" : SANDBOX_CHAT_COPY.asleepDescription;
   // Why a closed session takes no message: its PR merged or closed, or it was archived (the web banner).
-  const closedReason = chat.session
-    ? getSessionReadOnlyMessage({ isArchived: chat.session.archived, prState: sessionRow?.prState })
-    : undefined;
+  const closedReason = viewer
+    ? "Only contributors can chat in a project."
+    : chat.session
+      ? getSessionReadOnlyMessage({ isArchived: chat.session.archived, prState: sessionRow?.prState })
+      : undefined;
   const streamingEntityId = parentId ? chatStreamingEntityId(parentId) : undefined;
   const dayStarts = findDayBoundaryIds(visible);
   const newBoundaryId = findNewMessageIds(visible, newSinceAt, me ?? undefined)[0];
@@ -324,7 +333,7 @@ export default function ChatScreen() {
   // Retry on a failed turn re-sends the prompt that turn answered, attachments included, as the web.
   const retryFor = (messageId: string) => {
     const prompt = precedingUserTurns.get(messageId);
-    if (!chat.canReply || !prompt) return undefined;
+    if (!canReply || !prompt) return undefined;
     return () => {
       send({ target: chat.target, message: prompt.content, attachmentStorageIds: prompt.attachmentStorageIds }).catch(() =>
         toast.error("Couldn't send your message"),
@@ -348,7 +357,7 @@ export default function ChatScreen() {
       // Eva's replies only, as the web cites them (`<cited_assistant>`); the composer must be there to take it,
       // so not while a question card stands in its place.
       onSelectText:
-        message.role === "assistant" && chat.canReply && !pending && !savedQuestion && message.content.trim() !== ""
+        message.role === "assistant" && canReply && !pending && !savedQuestion && message.content.trim() !== ""
           ? () => quotes.select(message._id, message.content)
           : undefined,
     });
@@ -360,7 +369,7 @@ export default function ChatScreen() {
   const leadingMenu: MenuEntry[] = [{ label: "Find in chat", icon: IconSearch, onSelect: () => setFind({ target, activeId: null }) }];
   if (summary.menuItem) leadingMenu.push(summary.menuItem);
   const panelReply =
-    chat.canReply && chat.sandboxActive
+    canReply && chat.sandboxActive
       ? (message: string) => {
           send({ target: chat.target, message }).catch(() => toast.error("Couldn't send your message"));
         }
@@ -375,7 +384,7 @@ export default function ChatScreen() {
         onBack={() => goBackOrReplace(router)}
         onOpenWeb={openWebChat}
         onCopyLink={() => void Clipboard.setStringAsync(webUrl(chat.webPath))}
-        onStop={working ? handleStop : undefined}
+        onStop={working && !viewer ? handleStop : undefined}
         leadingItems={leadingMenu}
         usage={<UsageButton chat={chat} />}
         sandbox={<SandboxControl sandbox={sandbox} working={working} />}
@@ -507,13 +516,15 @@ export default function ChatScreen() {
             questions={questions}
             savedQuestion={savedQuestion}
             messagesNewestFirst={newestFirst}
+            canReply={canReply}
             closedReason={closedReason}
             onStop={handleStop}
             banners={
               <>
                 {/* Not gated by simple view, as the web: the user set this goal and can clear it. */}
                 <GoalBanner chatId={chat.session?.chatId ?? chat.task?.sessionChatId ?? chat.project?.sessionChatId} target={chat.target} />
-                {chat.session && chat.canReply ? (
+                {chat.project ? <CoordinatorPausedBanner projectId={chat.project.id} /> : null}
+                {chat.session && canReply ? (
                   <PublishRecoveryBanner sessionId={chat.session.id} newest={newestMessage} isSandboxActive={chat.sandboxActive} />
                 ) : null}
               </>
@@ -554,6 +565,7 @@ function ChatDock({
   questions,
   savedQuestion,
   messagesNewestFirst,
+  canReply,
   closedReason,
   onStop,
   banners,
@@ -572,6 +584,8 @@ function ChatDock({
   savedQuestion: { raw: string; questions: ParsedQuestion[] } | null;
   /** The transcript, newest first: a usage limit the newest turn hit holds sends until the reset. */
   messagesNewestFirst: ChatMessage[];
+  /** The chat takes a message: open (`chat.canReply`), and the reader is no project viewer. */
+  canReply: boolean;
   /** A closed session's reason (`getSessionReadOnlyMessage`), in place of "This chat is closed." */
   closedReason: string | undefined;
   onStop: () => void;
@@ -673,9 +687,11 @@ function ChatDock({
     </View>
   );
   // A blocking question wins: it holds the turn open and its answer resumes the run.
-  const saved = !pending && savedQuestion && savedQuestion.raw !== answeredSaved && chat.canReply ? savedQuestion : null;
+  const saved = !pending && savedQuestion && savedQuestion.raw !== answeredSaved && canReply ? savedQuestion : null;
 
-  return pending && questions ? (
+  // Open to others but not to this reader: a project viewer, who never answers the agent's question.
+  const viewer = chat.canReply && !canReply;
+  return pending && questions && !viewer ? (
     questionDock(pending.toolUseId, questions, async (answers) => {
       if (!chat.parentId) return;
       try {
@@ -695,7 +711,7 @@ function ChatDock({
         toast.error("Couldn't send your answer");
       }
     })
-  ) : chat.canReply ? (
+  ) : canReply ? (
     // Eva's web pill composer, the + on the muted fill, 10 more in on the right as the
     // thread. Send stays ready during a turn (a send queues behind it) and Stop sits beside
     // it, as `stopMode="alongside"`.
@@ -765,7 +781,7 @@ function ChatDock({
               <>
                 <BackgroundAgentsChip
                   chatId={chat.session?.chatId ?? chat.task?.sessionChatId ?? chat.project?.sessionChatId}
-                  readOnly={!chat.canReply}
+                  readOnly={!canReply}
                 />
                 <BackgroundProcessesChip sessionId={chat.session?.id} />
               </>

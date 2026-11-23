@@ -27,7 +27,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { projectStageAppearance } from "@/projects/phaseAppearance";
 import { ProjectRow } from "@/projects/ProjectRow";
 import { useProjectActions } from "@/projects/useProjectActions";
-import { useProjectStatuses } from "@/projects/useProjectStatus";
+import { useProjectListStatuses } from "@/projects/useProjectStatus";
 import { CardGap, FoldFooter, FoldHeader } from "@/ui/FoldHeader";
 import { FilterChipsBar } from "@/ui/FilterChipsBar";
 import { persistedIdSet } from "@/storage/persistedStore";
@@ -63,9 +63,9 @@ export function useProjectRepo() {
  * the toolbar (search and the Options sheet: sort and stages, the web
  * `ProjectsClient` toolbar) and its "Filtered by" chips, then a collapsible
  * section per shown derived stage (`projectStatus`: To Do, In Progress, In
- * Review, Done; icon, label, count), each with its project cards or "No
- * projects". A project counts as To Do until its tasks load. Sections with projects start open, as
- * the web. A long press on a card opens the web project menu as a sheet
+ * Review, Done; icon, label, count; `listStatusesForRepo`), each with its
+ * project cards or "No projects". Sections with projects start open, as the
+ * web. A long press on a card opens the web project menu as a sheet
  * (`useProjectActions`). A `SectionList`, as a repo's projects have no cap.
  * Not here from the web: the kanban and timeline views, select mode and its
  * bulk bar.
@@ -92,10 +92,7 @@ function ProjectList({ repo }: { repo: Repo }) {
   const scheme = useScheme();
   const projects = useQuery(api.projects.list, { repoId: repo._id });
   // Each project's stage is derived from its child tasks, never stored.
-  const statuses = useProjectStatuses(
-    repo._id,
-    projects?.map((project) => project._id),
-  );
+  const statuses = useProjectListStatuses(repo._id);
   const stageOf = (projectId: string): ProjectStage => statuses?.get(projectId)?.stage ?? "todo";
   const users = useQuery(api.users.listAll, {});
   const [filters, setFilters] = useState<StageListFilters>(STAGE_LIST_DEFAULTS);

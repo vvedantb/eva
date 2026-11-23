@@ -606,8 +606,8 @@ const sessionChatQueueConfig: ChatQueueConfig<
   fallbackProvider: ({ chat }) => chat.provider,
   stickyTraits: ({ chat }) => chat,
   // The queued model may belong to another provider than the stored pick.
-  turnAccountId: (ctx, { session }, next) =>
-    resolveTurnProviderAccountId(ctx.db, {
+  turnAccountId: async (ctx, { session }, next) =>
+    await resolveTurnProviderAccountId(ctx.db, {
       requestedAccountId: next.providerAccountId,
       ownerUserId: await sessionAccountHolder(
         ctx.db,

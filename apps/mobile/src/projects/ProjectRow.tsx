@@ -1,7 +1,6 @@
 import { isProjectBuilding, type api, type Id } from "@eva/backend";
 import { formatEntityNumLabel, PROJECT_PHASE_LABELS, projectPlanningPhase } from "@eva/shared";
-import type { ProjectStatus } from "@eva/shared/projectStatus";
-import { NEEDS_YOU_LABELS, PROJECT_STAGE_LABELS } from "@eva/shared/projectView";
+import { PROJECT_STAGE_LABELS, projectListNeedsYouLabel, type ProjectListStatus } from "@eva/shared/projectView";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconListCheck, IconSparkles } from "@tabler/icons-react-native";
 import { SurfaceRow } from "@vvedantb/native-ui/primitives";
@@ -25,10 +24,11 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
 const MAX_AVATARS = 3;
 
 /** A project with no tasks yet, until its tasks load. */
-const NO_TASKS: ProjectStatus = {
+const NO_TASKS: ProjectListStatus = {
   stage: "todo",
   counts: { launched: 0, in_review: 0, in_progress: 0, todo: 0, cancelled: 0 },
-  needsYou: [],
+  needsYouCount: 0,
+  coordinatorPaused: false,
 };
 
 /** The planning-mode badge: the web `Badge variant="secondary"` with its sparkles or checklist icon. */
@@ -56,8 +56,8 @@ export function ProjectRow({
   onLongPress,
 }: {
   project: Project;
-  /** Derived from the child tasks (`useProjectStatuses`); undefined while they load. */
-  status: ProjectStatus | undefined;
+  /** Derived from the child tasks (`useProjectListStatuses`); undefined while they load. */
+  status: ProjectListStatus | undefined;
   users: User[] | undefined;
   onLongPress: () => void;
 }) {
@@ -68,9 +68,8 @@ export function ProjectRow({
   const simpleView = useSimpleView();
   const appearance = phaseAppearance(project.phase, scheme);
   const shownStatus = status ?? NO_TASKS;
-  const needsYou = shownStatus.needsYou;
-  const needsYouLabel =
-    needsYou.length === 0 ? undefined : needsYou.length === 1 ? NEEDS_YOU_LABELS[needsYou[0].reason] : `${needsYou.length} tasks need you`;
+  // A paused coordinator, or tasks that wait for a person.
+  const needsYouLabel = projectListNeedsYouLabel(shownStatus);
   // Draft and finalized share To Do: the badge tells them apart.
   const planningPhase = projectPlanningPhase(project.phase);
   const numLabel = formatEntityNumLabel({ numId: project.numId });

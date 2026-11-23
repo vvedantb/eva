@@ -1,5 +1,5 @@
-import { PROJECT_PHASES, api, type Id } from "@eva/backend";
-import { PROJECT_PHASE_LABELS, entityHref, type ProjectPhase } from "@eva/shared";
+import { api, type Id } from "@eva/backend";
+import { entityHref } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconClipboard, IconCopy, IconGitBranch, IconLink, IconTrash, IconUserPlus } from "@tabler/icons-react-native";
 import { ConfirmDialog, SheetRow, MenuDivider, MenuSheet, SubmenuRow } from "@vvedantb/native-ui/primitives";
@@ -10,7 +10,6 @@ import * as Clipboard from "expo-clipboard";
 import { useState, type ReactNode } from "react";
 import { Text } from "react-native";
 import { WEB_URL } from "@/config";
-import { phaseAppearance } from "@/projects/phaseAppearance";
 import { userLabel } from "@/quickTasks/QuickTaskListOptions";
 import { useScheme } from "@/ui/theme";
 
@@ -20,18 +19,17 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
 export interface ProjectMenuTarget {
   _id: Id<"projects">;
   title: string;
-  phase: ProjectPhase;
   numId?: number;
   projectLead?: Id<"users">;
   branchName?: string;
 }
 
-type Page = "root" | "phase" | "lead" | "copy";
+type Page = "root" | "lead" | "copy";
 
 /**
  * The web project menu (`ProjectCardMenuItems`) on the phone: a long press
  * on a row, or the project header "…", opens it as a bottom sheet
- * (`openSheet`), with a page per web submenu: Phase, Project Lead and Copy
+ * (`openSheet`), with a page per web submenu: Project Lead and Copy
  * (Title, Link, Branch name), then Delete. Delete asks first, with the web
  * `ProjectDeleteDialog`, and has no Undo, as the web (`deleteCascade`
  * deletes the tasks too and nothing restores them); `onDeleted` runs after.
@@ -81,7 +79,6 @@ export function useProjectActions({
         return (
           <>
             {extraRows?.(close)}
-            <SubmenuRow icon={phaseAppearance(project.phase, scheme).icon} title="Phase" onPress={() => setPage("phase")} />
             <SubmenuRow icon={IconUserPlus} title="Project Lead" onPress={() => setPage("lead")} />
             <MenuDivider />
             <SubmenuRow icon={IconCopy} title="Copy" onPress={() => setPage("copy")} />
@@ -97,19 +94,6 @@ export function useProjectActions({
             />
           </>
         );
-      case "phase":
-        return PROJECT_PHASES.map((phase) => {
-          const { icon: Icon, text } = phaseAppearance(phase, scheme);
-          return (
-            <SheetRow
-              key={phase}
-              leading={<Icon size={20} color={text} />}
-              title={PROJECT_PHASE_LABELS[phase]}
-              active={project.phase === phase}
-              onPress={() => act(() => updateProject({ id: project._id, phase }), "Couldn't change the phase")}
-            />
-          );
-        });
       case "lead":
         return (
           <>
@@ -153,7 +137,6 @@ export function useProjectActions({
 
   const titles: Record<Page, string> = {
     root: target?.title ?? "",
-    phase: "Phase",
     lead: "Project Lead",
     copy: "Copy",
   };

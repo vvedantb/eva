@@ -8,15 +8,8 @@ import {
   notifySubscribers,
 } from "./taskSubscribers";
 import { logTaskActivity } from "./taskActivity";
-import {
-  deriveProjectPhaseFromPrEvent,
-  isProjectReviewPhase,
-} from "./_projects/prSync";
 import { cancelTaskRunSchedule } from "./_agentTasks/runState";
-import {
-  syncOwnedSessionWithTaskStatus,
-  syncProjectSession,
-} from "./_sessions/ownedSession";
+import { syncOwnedSessionWithTaskStatus } from "./_sessions/ownedSession";
 import { recomputeProjectPhase } from "./functions";
 import { reconcileSessionArchiveState } from "./_sessions/prArchive";
 import {
@@ -120,10 +113,7 @@ export const handlePullRequestEvent = internalMutation({
     const terminal = nextState === "merged" || nextState === "closed";
     let finished = false;
     if (owner.kind === "project") {
-      finished = await applyProjectPrEvent(ctx, owner.projectId, row, {
-        action: args.action,
-        draft: args.draft,
-      });
+      finished = await applyProjectPrEvent(ctx, owner.projectId, row);
     } else if (terminal) {
       finished = await applyTaskPrClosed(ctx, owner.taskId, row);
       // A merge lets the task's project start the tasks that waited for it.
@@ -202,34 +192,20 @@ async function attachUntrackedPullRequest(
 }
 
 /**
- * A project's own (legacy) PR: its phase follows its primary PR through
- * draft/ready, and its PRs as a whole for completion: merged once every PR is
- * terminal and one merged, cancelled once every PR is closed unmerged. No new
- * work goes to the project branch: each child task owns its PR. Task
- * statuses are never touched: they are the record of what each task did,
- * and a merge or close can be undone on GitHub.
+ * A project's own (legacy) PR, from before child tasks owned their PRs. Once
+ * every project PR is terminal, the project's stored phase records the end:
+ * completed when one merged, cancelled when all closed unmerged. No new work
+ * goes to the project branch. Task statuses are never touched: they are the
+ * record of what each task did, and a merge or close can be undone on GitHub.
  */
 async function applyProjectPrEvent(
   ctx: MutationCtx,
   projectId: Id<"projects">,
   row: Doc<"pullRequests">,
-  event: { action: string; draft: boolean | undefined },
 ): Promise<boolean> {
   const project = await ctx.db.get(projectId);
   if (!project) return false;
-
-  if (row.state !== "merged" && row.state !== "closed") {
-    const nextPhase = deriveProjectPhaseFromPrEvent(event.action, event.draft);
-    if (
-      row.primary &&
-      nextPhase !== null &&
-      isProjectReviewPhase(project.phase) &&
-      project.phase !== nextPhase
-    ) {
-      await ctx.db.patch(projectId, { phase: nextPhase });
-    }
-    return false;
-  }
+  if (row.state !== "merged" && row.state !== "closed") return false;
 
   const rows = await listOwnerPullRequests(ctx.db, {
     kind: "project",
@@ -237,8 +213,9 @@ async function applyProjectPrEvent(
   });
   if (!allPullRequestsTerminal(rows)) return false;
   const merged = rows.some((pr) => pr.state === "merged");
+  // Legacy: what older phone builds show for a project whose own PR ended.
+  // `recomputeProjectPhase` leaves this final phase until a task runs again.
   await ctx.db.patch(projectId, { phase: merged ? "completed" : "cancelled" });
-  await syncProjectSession(ctx, projectId);
 
   // One notification for the project as a whole, never one per task, and a
   // single activity entry on the task that opened the PR so the merge/close

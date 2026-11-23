@@ -648,6 +648,13 @@ export const agentTaskFields = {
   use1mContext: v.optional(v.boolean()),
   fastMode: v.optional(v.boolean()),
   baseBranch: v.optional(v.string()),
+  /**
+   * The task's own branch when it is not `eva/task-<id>` (`taskBranchName`).
+   * Only Step 9's conversion writes it: a project task that was in progress
+   * on its project's old branch keeps that branch, so its work goes on in its
+   * own PR.
+   */
+  branchName: v.optional(v.string()),
   /** The task's own run lifecycle; absent = idle. Written only by `_agentTasks/runState.ts`. */
   run: v.optional(taskRunValidator),
   // Legacy run fields removed. schema-narrowing-ok: migrateTaskRunState

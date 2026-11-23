@@ -12,6 +12,7 @@ import { copyText } from "@/ui/copyText";
 import { useScheme } from "@/ui/theme";
 import { EnvVarRequestCard, SessionProposalCard } from "./AgentRequestCards";
 import { ChatHtmlFrame } from "./ChatHtmlFrame";
+import { ProjectTaskBatchCard, type ProjectTaskBatch } from "./ProjectTaskBatchCard";
 import { AgentFeedbackCard, ChatArtifactCard } from "./TurnOutputs";
 
 /** One agent-posted card in the transcript, placed by `placeChatUiPanels`, as the web `ChatBody`. */
@@ -23,7 +24,8 @@ export type InlineCard = {
     | { kind: "panel"; spec: string }
     | { kind: "html"; render: Doc<"chatHtmlRenders"> }
     | { kind: "envVarRequest"; request: Doc<"envVarRequests"> }
-    | { kind: "sessionProposal"; proposal: Doc<"sessionProposals"> };
+    | { kind: "sessionProposal"; proposal: Doc<"sessionProposals"> }
+    | { kind: "projectTaskBatch"; batch: ProjectTaskBatch };
 };
 
 /** An artifact or agent report, placed by the same rule but kept with the turn's output. */
@@ -38,7 +40,8 @@ export type TurnOutput = {
 
 /**
  * The chat's agent-posted cards (`render_ui` panels, `render_html` pages, a
- * secret the agent asked for, a session it proposes) and
+ * secret the agent asked for, a session it proposes, in a project's
+ * coordinator chat the tasks it proposed) and
  * turn outputs (`create_artifact` artifacts, `submit_feedback` reports), each
  * placed under its turn, else under the newest row before it, else after the
  * last message, as the web `ChatBody`. One query each per chat. The
@@ -51,12 +54,15 @@ export function useChatCards(
   rows: readonly PlacementMessage[],
   agentReports: readonly ChatFeedbackRow[],
   hasOlderHistory: boolean,
+  /** A coordinator chat's project: its task batches (`projects.listTaskBatches`) are cards too. */
+  projectId: Id<"projects"> | undefined,
 ) {
   const panels = useQuery(api.chatUi.listByParent, parentId ? { parentId } : "skip");
   const htmlRenders = useQuery(api.chatHtml.listByParent, parentId ? { parentId } : "skip");
   const envVarRequests = useQuery(api.envVarRequests.listByParent, parentId ? { parentId } : "skip");
   const sessionProposals = useQuery(api.sessionProposals.listByParent, parentId ? { parentId } : "skip");
   const artifacts = useQuery(api.artifacts.listForChat, parentId ? { parentId } : "skip");
+  const taskBatches = useQuery(api.projects.listTaskBatches, projectId ? { projectId } : "skip");
   const cards = placeChatUiPanels<InlineCard>(
     [
       ...(panels ?? []).map((panel) => ({
@@ -85,6 +91,14 @@ export function useChatCards(
           messageId: proposal.messageId,
           createdAt: proposal.createdAt,
           card: { kind: "sessionProposal", proposal },
+        }),
+      ),
+      ...(taskBatches ?? []).map(
+        (batch): InlineCard => ({
+          _id: batch._id,
+          messageId: batch.messageId,
+          createdAt: batch.createdAt,
+          card: { kind: "projectTaskBatch", batch },
         }),
       ),
     ],
@@ -146,6 +160,8 @@ export function InlineCards({
             return <EnvVarRequestCard key={_id} request={card.request} onReply={onReply} />;
           case "sessionProposal":
             return <SessionProposalCard key={_id} proposal={card.proposal} onReply={onReply} />;
+          case "projectTaskBatch":
+            return <ProjectTaskBatchCard key={_id} batch={card.batch} />;
         }
       })}
     </View>

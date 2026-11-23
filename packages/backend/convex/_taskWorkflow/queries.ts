@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internalQuery } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { buildTaskBranchName } from "../_git/branchNames";
+import { taskBranchName } from "../_git/branchNames";
 import { findLivePullRequestOnBranch } from "../_pullRequests/store";
 import { taskStatusValidator } from "../_validators/enums";
 import {
@@ -224,7 +224,7 @@ export const getTaskData = internalQuery({
       }),
     );
 
-    const branchName = args.branchName || buildTaskBranchName(args.taskId);
+    const branchName = args.branchName || taskBranchName(task);
 
     const rootDirectory = repo.rootDirectory ?? "";
 
@@ -333,7 +333,7 @@ export const getTaskPrCreationData = internalQuery({
         (b.startedAt ?? b._creationTime) - (a.startedAt ?? a._creationTime),
     );
     const latestRun = sortedRuns[0] ?? null;
-    const branchName = buildTaskBranchName(args.taskId);
+    const branchName = taskBranchName(task);
     // Only a live PR blocks a new one: after a merge or close, new commits on
     // the branch need a fresh PR.
     const livePr = await findLivePullRequestOnBranch(

@@ -582,6 +582,23 @@ export const handleCompletion = authMutation({
 });
 
 /**
+ * Refuses the old interview / spec for any project that never had one. A
+ * project created now plans in its coordinator chat and has no interview
+ * transcript (`projects.create`), so nothing starts these workflows for it.
+ * An old project mid-interview may finish it until Step 9 removes them.
+ */
+async function assertOldInterviewProject(
+  ctx: MutationCtx,
+  projectId: Id<"projects">,
+): Promise<void> {
+  if ((await getProjectConversation(ctx.db, projectId)).length === 0) {
+    throw new Error(
+      "This project plans in its coordinator chat. Ask the coordinator there.",
+    );
+  }
+}
+
+/**
  * Public mutation to start a project interview question.
  */
 export const startInterview = authMutation({
@@ -602,6 +619,7 @@ export const startInterview = authMutation({
       "contributor",
     );
     if (isProjectInterviewing(project)) return null;
+    await assertOldInterviewProject(ctx, project._id);
 
     const repo = await ctx.db.get(project.repoId);
     if (!repo) throw new Error("Repository not found");
@@ -642,6 +660,7 @@ export const startSpec = authMutation({
       "contributor",
     );
     if (isProjectInterviewing(project)) return null;
+    await assertOldInterviewProject(ctx, project._id);
 
     const repo = await ctx.db.get(project.repoId);
     if (!repo) throw new Error("Repository not found");

@@ -93,6 +93,7 @@ import { displayTitle } from "@/ui/format";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { useScheme } from "@/ui/theme";
 import { HeaderMoreButton } from "@/ui/HeaderRail";
+import { useIsProjectViewer } from "@/projects/useProjectStatus";
 
 type QuickTask = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
@@ -185,8 +186,10 @@ function TaskOverview({
   const updateTask = useMutation(api.agentTasks.update);
   const reactionsFor = useTaskReactions(task._id, users, currentUserId);
 
+  // A project viewer reads a child task but never edits, runs or wakes it, as the web.
+  const isProjectViewer = useIsProjectViewer(task.projectId);
   const editable =
-    runs !== undefined && canEditTaskText(task.status, hasActiveRun);
+    runs !== undefined && canEditTaskText(task.status, hasActiveRun) && !isProjectViewer;
   const update: UpdateTask = (fields, failure) => {
     updateTask({ id: task._id, ...fields }).catch(() => toast.error(failure));
   };
@@ -216,7 +219,7 @@ function TaskOverview({
       <StackPageHeader
         title={formatEntityNumLabel({ numId: task.numId }) ?? "Task"}
         onBack={onLeave}
-        headerRight={<HeaderMoreButton label="Task actions" onPress={() => actions.openSheet(task)} />}
+        headerRight={isProjectViewer ? undefined : <HeaderMoreButton label="Task actions" onPress={() => actions.openSheet(task)} />}
       />
       {/* The focused field (the comment box, the description or the title) scrolls into view 16 above the keyboard. */}
       <KeyboardAwareScrollView
@@ -243,9 +246,9 @@ function TaskOverview({
         />
         {scheduledAt ? (
           <Pressable
-            accessibilityRole={task.status === "todo" ? "button" : "text"}
-            accessibilityHint={task.status === "todo" ? "Changes or removes the schedule" : undefined}
-            disabled={task.status !== "todo"}
+            accessibilityRole={task.status === "todo" && !isProjectViewer ? "button" : "text"}
+            accessibilityHint={task.status === "todo" && !isProjectViewer ? "Changes or removes the schedule" : undefined}
+            disabled={task.status !== "todo" || isProjectViewer}
             onPress={() => setScheduling(true)}
             hitSlop={{ top: 8, bottom: 8 }}
             className="mt-2 flex-row items-center gap-1.5 self-start rounded-full px-2.5 py-1 active:opacity-70"
@@ -291,6 +294,7 @@ function TaskOverview({
           projects={projects}
           allTags={allTags}
           update={update}
+          readOnly={isProjectViewer}
         />
 
         <FieldGroup title="Activity">
@@ -367,17 +371,22 @@ function TaskProperties({
   projects,
   allTags,
   update,
+  readOnly,
 }: {
   task: QuickTask;
   users: User[] | undefined;
   projects: FunctionReturnType<typeof api.projects.list> | undefined;
   allTags: string[];
   update: UpdateTask;
+  /** A project viewer's task: every field reads only. */
+  readOnly: boolean;
 }) {
   const scheme = useScheme();
   const muted = EVA_THEME[scheme].mutedForeground;
   const updateStatus = useMutation(api.agentTasks.updateStatus);
   const [field, setField] = useState<Field | null>(null);
+  // A project viewer reads the fields; no sheet opens.
+  const openField = (next: Field) => (readOnly ? undefined : () => setField(next));
   const reviewer = task.assignedTo
     ? users?.find((user) => user._id === task.assignedTo)
     : undefined;
@@ -395,7 +404,7 @@ function TaskProperties({
             icon={<status.icon size={16} color={status.text} />}
             value={TASK_STATUS_LABELS[task.status]}
             color={status.text}
-            onPress={() => setField("status")}
+            onPress={openField("status")}
           />
         ) : null}
         <FieldRow
@@ -403,7 +412,7 @@ function TaskProperties({
           icon={<PriorityIcon level={task.priority} />}
           value={task.priority ? PRIORITY_LABELS[task.priority] : "Priority"}
           color={task.priority ? undefined : muted}
-          onPress={() => setField("priority")}
+          onPress={openField("priority")}
         />
         <FieldRow
           label="Code Reviewer"
@@ -416,7 +425,7 @@ function TaskProperties({
           }
           value={reviewer ? getUserDisplayName(reviewer) : "Code Reviewer"}
           color={reviewer ? undefined : muted}
-          onPress={() => setField("reviewer")}
+          onPress={openField("reviewer")}
         />
         <FieldRow
           label="Labels"
@@ -425,14 +434,14 @@ function TaskProperties({
             task.tags && task.tags.length > 0 ? task.tags.join(", ") : "Labels"
           }
           color={task.tags && task.tags.length > 0 ? undefined : muted}
-          onPress={() => setField("tags")}
+          onPress={openField("tags")}
         />
         <FieldRow
           label="Project"
           icon={<IconFolder size={16} color={muted} />}
           value={project ? project.title : "Project"}
           color={project ? undefined : muted}
-          onPress={() => setField("project")}
+          onPress={openField("project")}
         />
       </FieldGroup>
       <FooterSheet

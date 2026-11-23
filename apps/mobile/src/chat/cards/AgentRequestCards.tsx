@@ -9,7 +9,7 @@ import { Pressable, Text, View } from "react-native";
 import { useScheme } from "@/ui/theme";
 
 /** The web `Surface density="tight"` the two pending cards sit on: the card fill, a hairline, radius 12. */
-function CardSurface({ children, testID }: { children: ReactNode; testID?: string }) {
+export function CardSurface({ children, testID }: { children: ReactNode; testID?: string }) {
   const theme = EVA_THEME[useScheme()];
   return (
     <View testID={testID} className="gap-3 rounded-xl border p-3" style={{ backgroundColor: theme.card, borderColor: theme.border }}>

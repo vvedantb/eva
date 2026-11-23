@@ -1,21 +1,17 @@
-import { api, type Id } from "@eva/backend";
-import { formatEntityNumLabel } from "@eva/shared";
+import { api } from "@eva/backend";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { projectTaskWaitsForCoordinator, type NeedsYouReason } from "@eva/shared/projectStatus";
 import { PROJECT_TASK_STAGE_LABELS, projectTaskStageSections, unapprovedTodoTaskIds } from "@eva/shared/projectView";
-import { IconCheck, IconLock, IconPlus, IconX } from "@tabler/icons-react-native";
-import { Button, SkeletonList, SkeletonRow, SurfaceRow } from "@vvedantb/native-ui/primitives";
-import { withAlpha } from "@vvedantb/native-ui/theme";
+import { IconCheck, IconPlus } from "@tabler/icons-react-native";
+import { Button, SkeletonList, SkeletonRow } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, SectionList, Text, View } from "react-native";
+import { Pressable, SectionList, View } from "react-native";
 import { taskStageAppearance } from "@/projects/phaseAppearance";
-import { hasProjectTaskBadges, ProjectTaskBadges } from "@/projects/ProjectTaskBadges";
-import type { ProjectTaskListRow } from "@/projects/useProjectStatus";
-import { META_TEXT, QuickTaskRow } from "@/quickTasks/QuickTaskRow";
+import { ProjectTaskRow } from "@/projects/ProjectTaskRow";
+import { useProjectTaskNotes, type ProjectTaskListRow } from "@/projects/useProjectStatus";
 import { persistedIdSet } from "@/storage/persistedStore";
 import { useQuickTaskActions } from "@/quickTasks/useQuickTaskActions";
 import { CardGap, FoldFooter, FoldHeader } from "@/ui/FoldHeader";
@@ -33,15 +29,12 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
  * The web project Tasks tab (`ProjectTaskListPanel`) at phone width: a
  * collapsible section per derived task stage in workflow order
  * (`projectTaskStageSections`: To Do in project order, the rest latest run
- * first; live sections start open), with the quick-task cards numbered
- * "#project/task" and the web task badges (needs you, waiting for the
- * coordinator, phase, feedback, other repo, PR). A task in a repo the reader
- * cannot open is a locked row: its number and a lock. To Do carries Approve
- * (every todo task nobody approved yet) and "+" (a new task; feedback for a
- * viewer). A contributor cancels an unapproved todo task with the X beside
- * it, and a long press opens the web task card menu (`useQuickTaskActions`);
- * a viewer gets neither. A tap opens the task. Not here from the web: drag
- * to reorder To Do.
+ * first; live sections start open), with the project task rows
+ * (`ProjectTaskRow`: the quick-task card numbered "#project/task" with the
+ * web task badges; a locked row for a task in a repo the reader cannot
+ * open). To Do carries Approve (every todo task nobody approved yet, for a
+ * contributor) and "+" (a new task; feedback for a viewer). A tap opens the
+ * task. Not here from the web: drag to reorder To Do.
  */
 export function ProjectTasks({
   project,
@@ -68,6 +61,7 @@ export function ProjectTasks({
   const draftMarks = useQuery(api.drafts.listMarks, { repoId: repo._id });
   const projects = useQuery(api.projects.list, { repoId: repo._id });
   const repos = useQuery(api.githubRepos.list, {});
+  const notesByTask = useProjectTaskNotes(project._id);
   const actions = useQuickTaskActions({ repo, users, projects });
   const approveTasks = useMutation(api.buildWorkflow.approveProjectTasks);
   const [approving, setApproving] = useState(false);
@@ -102,38 +96,6 @@ export function ProjectTasks({
         () => toast.error("Couldn't approve the tasks"),
       )
       .then(() => setApproving(false));
-  };
-
-  const renderTask = (task: ProjectTaskListRow, needsYou: NeedsYouReason | undefined) => {
-    if (task.locked === true) return <LockedTaskRow taskNumber={task.taskNumber} projectNumId={project.numId} />;
-    const otherRepo = task.repoId !== undefined && task.repoId !== project.repoId ? reposById.get(String(task.repoId)) : undefined;
-    const badges = {
-      needsYou,
-      waitingForCoordinator: task.facts !== undefined && projectTaskWaitsForCoordinator(task.facts),
-      phaseLabel: task.phaseLabel,
-      isFeedback: task.origin === "feedback",
-      repo: otherRepo,
-      hasPr: task.prUrl !== undefined,
-    };
-    const canCancel = canContribute && task.status === "todo" && task.approvedAt === undefined;
-    return (
-      <View className="flex-row items-center gap-1">
-        <View className="min-w-0 flex-1">
-          <QuickTaskRow
-            task={task}
-            // A draft task sits in To Do, striped as To Do.
-            status={task.status === "draft" ? "todo" : task.status}
-            hasError={failedTaskIds.has(task._id)}
-            hasDraftComment={draftTaskIds.has(task._id)}
-            creator={users?.find((user) => user._id === task.createdBy)}
-            projectNumId={project.numId}
-            onLongPress={canContribute ? () => actions.openSheet(task) : undefined}
-            badges={hasProjectTaskBadges(badges) ? <ProjectTaskBadges {...badges} prState={task.prState} /> : undefined}
-          />
-        </View>
-        {canCancel ? <CancelTaskButton taskId={task._id} /> : null}
-      </View>
-    );
   };
 
   return (
@@ -188,55 +150,26 @@ export function ProjectTasks({
           );
         }}
         ItemSeparatorComponent={CardGap}
-        renderItem={({ item }) => renderTask(item.row, item.needsYou)}
+        renderItem={({ item: { row, needsYou, waitingForCoordinator } }) => (
+          <ProjectTaskRow
+            task={row}
+            needsYou={needsYou}
+            waitingForCoordinator={waitingForCoordinator}
+            notes={notesByTask.get(row._id)}
+            hasError={failedTaskIds.has(row._id)}
+            hasDraftComment={draftTaskIds.has(row._id)}
+            creator={users?.find((user) => user._id === row.createdBy)}
+            projectNumId={project.numId}
+            homeRepoId={project.repoId}
+            reposById={reposById}
+            canContribute={canContribute}
+            onLongPress={() => actions.openSheet(row)}
+          />
+        )}
         renderSectionFooter={({ section }) => <FoldFooter open={section.open} count={section.count} empty="No tasks" />}
         contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 24 }}
       />
       {actions.dialogs}
     </>
-  );
-}
-
-/**
- * A task in a repo the reader cannot open: the To Do stripe, its number and
- * a lock, no title. A tap says why, as the web tooltip.
- */
-function LockedTaskRow({ taskNumber, projectNumId }: { taskNumber: number | undefined; projectNumId: number | undefined }) {
-  const scheme = useScheme();
-  const theme = EVA_THEME[scheme];
-  const muted = theme.mutedForeground;
-  const numLabel = formatEntityNumLabel({ numId: taskNumber, projectNumId });
-  return (
-    <SurfaceRow
-      accessibilityLabel={numLabel ? `Locked task ${numLabel}` : "Locked task"}
-      accessibilityHint="You do not have access to this repo"
-      accentColor={taskStageAppearance("todo", scheme).bar}
-      backgroundColor={theme.card}
-      className="min-h-12 flex-row items-center gap-1.5 px-3 py-3 pl-3.5"
-      onPress={() => toast("You do not have access to this repo")}
-    >
-      {numLabel ? (
-        <Text style={{ ...META_TEXT, fontFamily: "monospace", color: withAlpha(muted, 0.55), fontVariant: ["tabular-nums"] }}>{numLabel}</Text>
-      ) : null}
-      <IconLock size={14} color={muted} />
-    </SurfaceRow>
-  );
-}
-
-/** The web row's X on a todo task nobody approved: cancels (rejects) it, beside the card as the row is one button. */
-export function CancelTaskButton({ taskId }: { taskId: Id<"agentTasks"> }) {
-  const muted = EVA_THEME[useScheme()].mutedForeground;
-  const updateStatus = useMutation(api.agentTasks.updateStatus);
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Cancel task"
-      onPress={() => {
-        updateStatus({ id: taskId, status: "cancelled" }).catch(() => toast.error("Couldn't cancel the task"));
-      }}
-      className="h-11 w-11 items-center justify-center rounded-lg active:opacity-70"
-    >
-      <IconX size={16} color={muted} />
-    </Pressable>
   );
 }
