@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: neutral greys no longer tint red (oklab colour mixing)
+
+Date: 2026-11-23
+
+WHY: In the dark neutral theme the sessions sidebar rendered faintly red (rgb 37 34 35) beside the page (34 35 37) after the full-colour token switch.
+
+Architectural: Tailwind's `v()` (and 47 other `color-mix(..., transparent)` sites in web and `@eva/ui`) mixed in oklch. Chrome sets a near-grey's hue to `none` there but keeps its small chroma, which then renders at hue 0. They now mix in oklab, which has no hue; the result is otherwise the same. Follow-up: five package token mixes (`--focus-ring`, `--danger-ring`, base.css) still use oklch.
+
 ## Web: env variables, snapshots and PR recap tabs slide too
 
 Date: 2026-11-23

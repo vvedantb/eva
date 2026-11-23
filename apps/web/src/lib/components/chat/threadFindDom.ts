@@ -12,8 +12,8 @@ const ACTIVE_HIGHLIGHT_NAME = "eva-thread-find-active";
  * React 19's hoisted `<style href precedence>` because globals.css is owned
  * elsewhere.
  */
-export const THREAD_FIND_HIGHLIGHT_CSS = `::highlight(${HIGHLIGHT_NAME}){background-color:color-mix(in oklch, var(--accent) 30%, transparent);}
-::highlight(${ACTIVE_HIGHLIGHT_NAME}){background-color:color-mix(in oklch, var(--accent) 65%, transparent);color:var(--accent-foreground);}`;
+export const THREAD_FIND_HIGHLIGHT_CSS = `::highlight(${HIGHLIGHT_NAME}){background-color:color-mix(in oklab, var(--accent) 30%, transparent);}
+::highlight(${ACTIVE_HIGHLIGHT_NAME}){background-color:color-mix(in oklab, var(--accent) 65%, transparent);color:var(--accent-foreground);}`;
 
 /**
  * Null on browsers without the CSS Custom Highlight API (Firefox < 140 at time
