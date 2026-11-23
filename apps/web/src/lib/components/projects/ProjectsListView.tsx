@@ -10,7 +10,8 @@ import {
   useFirstPaintGate,
 } from "@vvedantb/ui";
 import { IconChevronRight } from "@tabler/icons-react";
-import type { ProjectStage, ProjectStatus } from "@eva/shared/projectStatus";
+import type { ProjectStage } from "@eva/shared/projectStatus";
+import type { ProjectListStatus } from "@eva/shared/projectView";
 import { PROJECT_STAGES } from "@eva/shared/projectView";
 import { projectStageConfig } from "@/lib/components/projects/ProjectPhaseBadge";
 import { entityPathSegment } from "@/lib/numId";
@@ -24,8 +25,8 @@ type Project = FunctionReturnType<typeof api.projects.list>[number];
 interface ProjectsListViewProps {
   projectsByPhase: Record<ProjectStage, Project[]>;
   visiblePhases: Set<ProjectStage>;
-  /** Derived status by project id (`useProjectStatuses`). */
-  statuses: ReadonlyMap<string, ProjectStatus>;
+  /** Derived status by project id (`useProjectListStatuses`). */
+  statuses: ReadonlyMap<string, ProjectListStatus>;
   onDelete: (id: Id<"projects">, title: string) => void;
   isSelecting?: boolean;
   selectedIds?: Set<Id<"projects">>;
@@ -137,7 +138,6 @@ export function ProjectsListView({
                               accentColor={projectStageConfig[phase].bar}
                               members={project.members}
                               projectLead={project.projectLead}
-                              phase={project.phase}
                               status={statuses.get(project._id)}
                               planningMode={project.planningMode}
                               isBuilding={isProjectBuilding(project)}

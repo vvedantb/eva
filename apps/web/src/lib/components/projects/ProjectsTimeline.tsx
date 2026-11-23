@@ -3,7 +3,6 @@
 import { useRef, useEffect } from "react";
 import type { MutableRefObject } from "react";
 import type { FunctionReturnType } from "convex/server";
-import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
@@ -23,6 +22,7 @@ import {
 } from "@vvedantb/ui";
 import type { GanttFeature, GanttStatus, GanttRange } from "@vvedantb/ui";
 import type { ProjectStage } from "@eva/shared/projectStatus";
+import type { ProjectListStatus } from "@eva/shared/projectView";
 import { projectStageConfig } from "@/lib/components/projects/ProjectPhaseBadge";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
@@ -37,14 +37,13 @@ import {
 } from "@/lib/utils/mutationToast";
 
 type Project = FunctionReturnType<typeof api.projects.list>[number];
-type ProjectProgress = FunctionReturnType<
-  typeof api.projects.listTaskProgress
->[number];
 
 interface ProjectsTimelineProps {
   projects: Project[];
   /** The project's derived stage (`projectStatus`). */
   stageOf: (projectId: string) => ProjectStage;
+  /** Derived status by project id (`useProjectListStatuses`). */
+  statuses: ReadonlyMap<string, ProjectListStatus>;
   basePath: string;
   range: GanttRange;
   zoom: number;
@@ -79,6 +78,7 @@ function GanttTodayBridge({
 export function ProjectsTimeline({
   projects,
   stageOf,
+  statuses,
   basePath,
   range,
   zoom,
@@ -87,9 +87,6 @@ export function ProjectsTimeline({
 }: ProjectsTimelineProps) {
   const navigate = useNavigate();
   const { repo } = useRepo();
-  const progressList = useQuery(api.projects.listTaskProgress, {
-    repoId: repo._id,
-  });
   const updateProject = useMutation(api.projects.update).withOptimisticUpdate(
     (localStore, args) => {
       const {
@@ -130,11 +127,6 @@ export function ProjectsTimeline({
       );
     },
   );
-
-  const progressMap = new Map<string, ProjectProgress>();
-  for (const entry of progressList ?? []) {
-    progressMap.set(entry.projectId, entry);
-  }
 
   const scheduled: GanttFeature[] = [];
   const scheduledProjectMap = new Map<string, Project>();
@@ -224,7 +216,7 @@ export function ProjectsTimeline({
                     meta={
                       project ? (
                         <TimelineSidebarMeta
-                          progress={progressMap.get(feature.id)}
+                          counts={statuses.get(feature.id)?.counts}
                           lead={project.projectLead}
                           members={project.members}
                           fallbackUserId={project.userId}
@@ -255,7 +247,7 @@ export function ProjectsTimeline({
                       <TimelineBar
                         name={feature.name}
                         stage={stageOf(feature.id)}
-                        progress={progressMap.get(feature.id)}
+                        counts={statuses.get(feature.id)?.counts}
                       />
                     </GanttFeatureItem>
                   </ListEnter>

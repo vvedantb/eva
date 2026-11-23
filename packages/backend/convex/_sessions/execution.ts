@@ -36,6 +36,7 @@ import { resolveMessageCredential } from "../_userProviderAccounts/credentialSou
 import { selectUsageLimitRetryUserMessage } from "./resultTarget";
 import { sessionOwner } from "./owner";
 import { routePersonChatMessage } from "../_projects/reports";
+import { sessionAccountHolder } from "../_projects/runSettings";
 import type { Doc, Id } from "../_generated/dataModel";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
@@ -103,13 +104,21 @@ async function stageAndStartChatTurn(
   const [stickyProviderAccountId, user] = await Promise.all([
     resolveTurnProviderAccountId(ctx.db, {
       requestedAccountId: settings.providerAccountId,
-      ownerUserId: session.createdBy ?? session.userId,
+      ownerUserId: await sessionAccountHolder(
+        ctx.db,
+        session,
+        settings.providerAccountId,
+      ),
       model: settings.model,
       changePolicy: "owner-pool",
     }),
     ctx.db.get(params.actingUserId),
   ]);
-  const credentialOwnerUserId = session.createdBy ?? session.userId;
+  const credentialOwnerUserId = await sessionAccountHolder(
+    ctx.db,
+    session,
+    stickyProviderAccountId,
+  );
   const streamingEntityId = sessionChatStreamingEntityId(chat._id);
 
   await clearStreamingActivity(ctx, streamingEntityId);
@@ -222,7 +231,11 @@ async function enqueueChatMessage(
   const { settings } = params;
   const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
     requestedAccountId: settings.providerAccountId,
-    ownerUserId: session.createdBy ?? session.userId,
+    ownerUserId: await sessionAccountHolder(
+      ctx.db,
+      session,
+      settings.providerAccountId,
+    ),
     model: settings.model,
     changePolicy: "owner-pool",
   });
@@ -354,7 +367,11 @@ export const retryLastTurnWithAccount = authMutation({
     if (!repo) throw new Error("Repository not found");
 
     const providerAccountId = args.providerAccountId ?? undefined;
-    const ownerUserId = session.createdBy ?? session.userId;
+    const ownerUserId = await sessionAccountHolder(
+      ctx.db,
+      session,
+      providerAccountId,
+    );
     await ctx.db.patch(userMessage._id, {
       ...(await resolveMessageCredential(
         ctx.db,
@@ -520,7 +537,11 @@ export const prewarmDaemon = authMutation({
     // claimPendingTurn and leaves the chat stuck on Working). The sticky traits
     // must go through `launchTraitsFromStored` — the same normalisation the
     // composer applies — because the send path omits defaults.
-    const credentialOwnerUserId = session.createdBy ?? session.userId;
+    const credentialOwnerUserId = await sessionAccountHolder(
+      ctx.db,
+      session,
+      chat.providerAccountId,
+    );
     const normalizedModel = normalizeAIModel(chat.lastModel);
     await ctx.scheduler.runAfter(0, internal.sandbox.prewarmSessionDaemon, {
       sandboxId,
@@ -614,7 +635,11 @@ export const getDaemonPrewarmData = internalQuery({
       sandboxId: session.sandboxId,
       repoId: session.repoId,
       ownerUserId: session.userId,
-      credentialOwnerUserId: session.createdBy ?? session.userId,
+      credentialOwnerUserId: await sessionAccountHolder(
+        ctx.db,
+        session,
+        chat.providerAccountId,
+      ),
       model: normalizedModel,
       // Normalised here, not in the caller: the traits must be exactly what the
       // composer sends (defaults omitted) or the prewarm's opts sig differs from

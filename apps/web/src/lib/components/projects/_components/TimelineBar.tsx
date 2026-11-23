@@ -1,36 +1,32 @@
 "use client";
 
-import type { FunctionReturnType } from "convex/server";
-import { type api } from "@eva/backend";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@vvedantb/ui";
-import type { ProjectStage } from "@eva/shared/projectStatus";
+import type {
+  ProjectStage,
+  ProjectTaskStage,
+} from "@eva/shared/projectStatus";
+import { projectLaunchedShare } from "@eva/shared/projectView";
 import { projectStageConfig } from "@/lib/components/projects/ProjectPhaseBadge";
-import {
-  statusConfig,
-  TASK_STATUSES,
-} from "@/lib/components/tasks/TaskStatusBadge";
-
-type ProjectProgress = FunctionReturnType<
-  typeof api.projects.listTaskProgress
->[number];
+import { ProjectStageCounts } from "@/lib/components/projects/ProjectStageCounts";
 
 interface TimelineBarProps {
   name: string;
   stage: ProjectStage;
-  progress?: ProjectProgress;
+  /** Task counts by derived stage (`listStatusesForRepo`). */
+  counts?: Record<ProjectTaskStage, number>;
 }
 
 /**
  * The inner content of a timeline bar: a stage-tinted track, a saturated fill
- * sized to the share of completed tasks (Linear-style), the project name and a
- * percentage. Wrapped in a tooltip with the full per-status breakdown. Purely
- * presentational — progress is fed in so the row issues no query of its own.
+ * sized to the share of launched tasks (Linear-style), the project name and a
+ * percentage. Wrapped in a tooltip with the counts by derived stage. Purely
+ * presentational — counts are fed in so the row issues no query of its own.
  */
-export function TimelineBar({ name, stage, progress }: TimelineBarProps) {
+export function TimelineBar({ name, stage, counts }: TimelineBarProps) {
   const config = projectStageConfig[stage];
-  const total = progress?.total ?? 0;
-  const done = progress?.done ?? 0;
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const { launched, total, percent: pct } = counts
+    ? projectLaunchedShare(counts)
+    : { launched: 0, total: 0, percent: 0 };
 
   return (
     <Tooltip>
@@ -59,23 +55,12 @@ export function TimelineBar({ name, stage, progress }: TimelineBarProps) {
         </div>
       </TooltipTrigger>
       <TooltipContent>
-        {total > 0 ? (
+        {counts && total > 0 ? (
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium">
-              {done}/{total} tasks done · {pct}%
+              {launched}/{total} tasks launched · {pct}%
             </span>
-            {TASK_STATUSES.flatMap((s) => {
-              if ((progress?.[s] ?? 0) <= 0) return [];
-              const Icon = statusConfig[s].icon;
-              return [
-                <span
-                  key={s}
-                  className={`flex items-center gap-1.5 text-xs ${statusConfig[s].text}`}
-                >
-                  <Icon size={12} /> {progress?.[s]} {statusConfig[s].label}
-                </span>,
-              ];
-            })}
+            <ProjectStageCounts status={{ counts }} className="text-xs" />
           </div>
         ) : (
           <span className="text-xs text-muted-foreground">No tasks yet</span>

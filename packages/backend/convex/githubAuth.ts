@@ -146,18 +146,54 @@ export const mintInstallationToken = internalAction({
   args: { installationId: v.number() },
   returns: sandboxGitCredentialValidator,
   handler: async (_ctx, args) => {
-    return toSandboxGitCredential(
-      await appAuth()({
-        type: "installation",
-        installationId: args.installationId,
-      }),
-    );
+    return await mintSandboxGitToken(args.installationId, SANDBOX_GIT_WRITE);
   },
 });
 
 /**
- * A read-only token for one repository (contents and metadata read): what a
- * project coordinator's sandbox gets. GitHub refuses a push with it.
+ * What a sandbox may do with GitHub. Every sandbox pushes its own work
+ * (`write`: a full installation token), except a project coordinator's
+ * (plan decision 6): it only reads one repository (`read`: contents and
+ * metadata read, scoped to that repository), and GitHub refuses its push.
+ * Who gets `read` is decided by `isReadOnlySandboxOwner` (`_sessions/owner.ts`).
+ */
+export type SandboxGitAccess =
+  | { kind: "write" }
+  | { kind: "read"; repo: { githubId?: number; name: string } };
+
+export const SANDBOX_GIT_WRITE: SandboxGitAccess = { kind: "write" };
+
+/**
+ * The one minting rule for a GitHub token a sandbox holds: the env token
+ * written at create (`createSandbox`), the clone token, the runner's refresh
+ * (`github:getInstallationTokenAction`) and the credential helper's answer
+ * for a coordinator (`/api/git-credentials`).
+ */
+export async function mintSandboxGitToken(
+  installationId: number,
+  access: SandboxGitAccess,
+): Promise<{ token: string; expiresAt: number }> {
+  if (access.kind === "write") {
+    return toSandboxGitCredential(
+      await appAuth()({ type: "installation", installationId }),
+    );
+  }
+  const { repo } = access;
+  return toSandboxGitCredential(
+    await appAuth()({
+      type: "installation",
+      installationId,
+      permissions: { contents: "read", metadata: "read" },
+      ...(repo.githubId !== undefined
+        ? { repositoryIds: [repo.githubId] }
+        : { repositoryNames: [repo.name] }),
+    }),
+  );
+}
+
+/**
+ * A read-only token for one repository: what a project coordinator's
+ * credential helper gets (`mintSandboxGitToken` with `read`).
  */
 export const mintReadOnlyRepoToken = internalAction({
   args: {
@@ -167,16 +203,10 @@ export const mintReadOnlyRepoToken = internalAction({
   },
   returns: sandboxGitCredentialValidator,
   handler: async (_ctx, args) => {
-    return toSandboxGitCredential(
-      await appAuth()({
-        type: "installation",
-        installationId: args.installationId,
-        permissions: { contents: "read", metadata: "read" },
-        ...(args.githubId !== undefined
-          ? { repositoryIds: [args.githubId] }
-          : { repositoryNames: [args.name] }),
-      }),
-    );
+    return await mintSandboxGitToken(args.installationId, {
+      kind: "read",
+      repo: { githubId: args.githubId, name: args.name },
+    });
   },
 });
 

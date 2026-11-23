@@ -10,12 +10,14 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import { filterActiveEntities, isEntityDeleted } from "../numId";
 import { isFirstTaskOnBranch } from "../functions";
-import { latestTaskRun, startTaskRun } from "../_taskWorkflow/startRun";
+import { startTaskRun } from "../_taskWorkflow/startRun";
+import { latestTaskRun } from "./runSettings";
 import { resolveTaskWorkflowBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { findOwnedSession, type OwnedSessionOwner } from "../_sessions/owner";
 import { ownedSessionBusy } from "../_sessions/ownedSession";
 import { isCoordinatorPaused, requestCoordinatorWake } from "./coordinatorWake";
 import { findOpenAsk } from "./reports";
+import { RUN_WAITING_FOR_ANSWER } from "../_taskWorkflow/helpers";
 
 /**
  * The project scheduler: it replaces the old one-at-a-time build. It starts
@@ -113,7 +115,10 @@ function openAskHolder(
 /**
  * One child task as the shared rules read it. Only a `todo` task's latest
  * run matters: a failed or cancelled run puts its task back to `todo`. A
- * task with an open ask is waiting, never halted: its run ended on purpose.
+ * task with an open ask is waiting, never halted: its run ended on purpose
+ * (`RUN_WAITING_FOR_ANSWER`, not an error). A `todo` task whose latest run
+ * ended waiting but whose ask is closed was stopped while it waited
+ * (`closeTaskReports`): it is halted as stopped, so nothing restarts it.
  */
 export async function projectTaskFacts(
   db: DatabaseReader,
@@ -144,7 +149,8 @@ export async function projectTaskFacts(
       ? undefined
       : latest.status === "error"
         ? "failed"
-        : latest.status === "cancelled"
+        : latest.status === "cancelled" ||
+            latest.exitReason === RUN_WAITING_FOR_ANSWER
           ? "cancelled"
           : undefined;
   return {

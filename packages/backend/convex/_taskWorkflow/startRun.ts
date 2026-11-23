@@ -1,6 +1,6 @@
 import type { ObjectType } from "convex/values";
 import type { WorkflowId } from "@convex-dev/workflow";
-import type { DatabaseReader, MutationCtx } from "../_generated/server";
+import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { workflow } from "../workflowManager";
@@ -13,6 +13,12 @@ import { markTaskRunStarted } from "../_agentTasks/runState";
 import type { taskExecutionWorkflowArgs } from "./workflowDefinition";
 import { ensureWorkSession, ownedSessionBusy } from "../_sessions/ownedSession";
 import { TASK_CHAT_BUSY_ERROR } from "./recovery";
+import {
+  accountHolder,
+  latestTaskRun,
+  projectRunSettings,
+  takesProjectSettings,
+} from "../_projects/runSettings";
 
 /**
  * True while the task's own session holds its sandbox for a chat turn, a run
@@ -25,31 +31,12 @@ export async function taskWorkSessionBusy(
   return await ownedSessionBusy(db, { kind: "task", taskId: task._id });
 }
 
-/** The task's newest run, or null before its first. */
-export async function latestTaskRun(
-  db: DatabaseReader,
-  taskId: Id<"agentTasks">,
-): Promise<Doc<"agentRuns"> | null> {
-  return await db
-    .query("agentRuns")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .order("desc")
-    .first();
-}
-
 /**
- * A project's child task runs on the project's model and account
- * (`projects.model`, `projects.providerAccountId`; none is the team
- * credential), copied when the task starts: on its first run, and again after
- * a usage limit stopped it, so a changed project account takes over. A
- * running task keeps its copy, and a later pick in the task's own selector
- * stays the task's.
- *
- * Returns the task as the run sees it, and whose personal account the run may
- * unlock (`credentialOwnerUserId`). The project's account was checked against
- * the project's owner (`projects.update`), so while the task runs on it that
- * owner unlocks it, not the person who created the task (decision 20). Any
- * other account is the task creator's own pick.
+ * A project's child task runs on the project's model and account, copied
+ * when the task starts (`takesProjectSettings`, decision 20). Returns the
+ * task as the run sees it, and whose personal account the run may unlock
+ * (`accountHolder`): the project owner for the project's account, else the
+ * person who created the task.
  */
 async function adoptProjectRunSettings(
   ctx: MutationCtx,
@@ -57,22 +44,19 @@ async function adoptProjectRunSettings(
 ): Promise<{ task: Doc<"agentTasks">; credentialOwnerUserId: Id<"users"> }> {
   const project = task.projectId ? await ctx.db.get(task.projectId) : null;
   if (!project) return { task, credentialOwnerUserId: task.createdBy };
-  const latest = await latestTaskRun(ctx.db, task._id);
   let adopted = task;
-  if (latest === null || latest.errorType === "rate_limit") {
-    const settings = {
-      model: project.model ?? task.model,
-      providerAccountId: project.providerAccountId,
-    };
+  if (takesProjectSettings(await latestTaskRun(ctx.db, task._id))) {
+    const settings = projectRunSettings(project, task);
     await ctx.db.patch(task._id, settings);
     adopted = { ...task, ...settings };
   }
   return {
     task: adopted,
-    credentialOwnerUserId:
-      adopted.providerAccountId === project.providerAccountId
-        ? project.userId
-        : task.createdBy,
+    credentialOwnerUserId: accountHolder(
+      project,
+      adopted.providerAccountId,
+      task.createdBy,
+    ),
   };
 }
 

@@ -58,6 +58,8 @@ import { resolveVercelConsoleDevCommand } from "./vercelAppPorts";
 import type { GenericActionCtx } from "convex/server";
 import { startDesktopWithChrome } from "./desktop";
 import { sleep } from "../_shared/async";
+import { SANDBOX_GIT_WRITE } from "../githubAuth";
+import { isReadOnlySandboxOwner } from "../_sessions/owner";
 
 /**
  * Starts the app server in Preview Console (Vercel tmux) so Console can show
@@ -772,7 +774,8 @@ async function prepareSessionSandboxInternal(
   // A project coordinator only reads code (plan decision 22): a small
   // sandbox, no dependency install, and no dev server, background or startup
   // commands, so it has no Preview.
-  const coordinator = launchSession?.owner.kind === "project";
+  const coordinator =
+    launchSession !== null && isReadOnlySandboxOwner(launchSession.owner);
   completedSteps.push({
     type: "tool",
     label: "Loading repository config...",
@@ -1123,6 +1126,13 @@ async function prepareSessionSandboxInternal(
         undefined, // driveCacheRole
         true, // deferDocker: awaited below, before services need it
         coordinator ? COORDINATOR_VCPUS : undefined,
+        // Its env and clone tokens only read its home repo (decision 6).
+        coordinator
+          ? {
+              kind: "read",
+              repo: { githubId: repo?.githubId, name: args.repoName },
+            }
+          : SANDBOX_GIT_WRITE,
       ),
   );
   // The fork has been taken (or has failed) once this settles: only now is it

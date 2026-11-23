@@ -26,9 +26,10 @@ import {
 } from "@vvedantb/ui";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import type { ProjectStatus } from "@eva/shared/projectStatus";
-import { NEEDS_YOU_LABELS } from "@eva/shared/projectView";
-import type { ProjectPhase } from "@/lib/components/projects/ProjectPhaseBadge";
+import {
+  projectListNeedsYouLabel,
+  type ProjectListStatus,
+} from "@eva/shared/projectView";
 import { ProjectCardMenuItems } from "./_components/ProjectCardMenuItems";
 import { useProjectMenu } from "./_components/useProjectMenu";
 import {
@@ -56,9 +57,8 @@ interface ProjectCardProps {
   accentColor: string;
   members?: Array<Id<"users">>;
   projectLead?: Id<"users">;
-  phase: ProjectPhase;
-  /** Derived from the child tasks (`useProjectStatuses`). */
-  status?: ProjectStatus;
+  /** Derived from the child tasks (`useProjectListStatuses`). */
+  status?: ProjectListStatus;
   planningMode: "interview" | "tasks_only";
   isBuilding?: boolean;
   sandboxStatus?: SandboxStatus;
@@ -92,7 +92,6 @@ export function ProjectCard({
   accentColor,
   members,
   projectLead,
-  phase,
   status,
   planningMode,
   isBuilding = false,
@@ -112,7 +111,6 @@ export function ProjectCard({
     projectId,
     title,
     description,
-    phase,
     projectLead,
     href,
     showOpenInNewTab: true,
@@ -127,7 +125,7 @@ export function ProjectCard({
     ),
   ];
   const previewText = description ?? rawInput;
-  const needsYou = status?.needsYou ?? [];
+  const needsYouLabel = status ? projectListNeedsYouLabel(status) : undefined;
 
   const MAX_AVATARS = 3;
   const allAvatarIds = memberIds.length > 0 ? memberIds : [userId];
@@ -210,18 +208,14 @@ export function ProjectCard({
             </TooltipTrigger>
             <TooltipContent>Eva asked you a question</TooltipContent>
           </Tooltip>
-        ) : needsYou.length > 0 ? (
+        ) : needsYouLabel !== undefined ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="relative mt-[3px] flex items-center hit-target">
                 <NeedsYouMark />
               </span>
             </TooltipTrigger>
-            <TooltipContent>
-              {needsYou.length === 1
-                ? NEEDS_YOU_LABELS[needsYou[0].reason]
-                : `${needsYou.length} tasks need you`}
-            </TooltipContent>
+            <TooltipContent>{needsYouLabel}</TooltipContent>
           </Tooltip>
         ) : sandboxStatus &&
           showsSandboxStatusDot(sandboxStatus, simpleView) ? (

@@ -9,19 +9,24 @@ import {
   type Priority,
   type ProjectPhase,
 } from "@eva/shared";
+import { repoDisplayLabel } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconCalendar, IconGitBranch, IconTag, IconUser, IconUserPlus, IconUsers } from "@tabler/icons-react-native";
+import type { ProjectStatus } from "@eva/shared/projectStatus";
+import { IconArrowUpRight, IconCalendar, IconFolders, IconGitBranch, IconTag, IconUser, IconUserPlus, IconUsers } from "@tabler/icons-react-native";
 import { Markdown } from "@vvedantb/native-ui/markdown";
-import { SheetRow } from "@vvedantb/native-ui/primitives";
+import { SheetRow, Textarea } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import dayjs from "dayjs";
+import { useRouter } from "expo-router";
 import { useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { FooterSheet } from "@/chat/ComposerFooter";
 import { phaseAppearance } from "@/projects/phaseAppearance";
-import { ProjectProgress } from "@/projects/ProjectProgress";
+import { ProjectProgress, ProjectStageCounts } from "@/projects/ProjectProgress";
+import { RepoAppMark } from "@/sessions/SessionGroup";
 import { PriorityIcon } from "@/quickTasks/PriorityIcon";
 import { userLabel } from "@/quickTasks/QuickTaskListOptions";
 import { FieldGroup, FieldRow } from "@/ui/FieldRows";
@@ -34,21 +39,55 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
 
 /**
  * The web project Overview tab (`ProjectOverviewTab`) in one column: the
- * title, "Project context" (the description, as Markdown), the task
- * progress bar, then the web fields column (`ProjectFieldsPanel`):
- * Properties, Dates, Labels and Created. Phase (outside planning), Priority
- * and Project Lead open a bottom sheet each and write `projects.update`, as
- * the web selects; the rest read only here. Field rows are 48 high (web 40).
- * Not here from the web: editing the context, the code reviewer, members,
- * model, dates and labels pickers.
+ * title, "Project context" (the description, as Markdown), the status block
+ * (`ProjectSummarySection`: live stage counts and the progress bar from the
+ * derived status, then the coordinator's summary document, which opens in
+ * full), then the web fields column (`ProjectFieldsPanel`): Properties,
+ * Instructions and Repos (`ProjectCoordinatorFields`), Dates, Labels and
+ * Created. Phase (outside planning), Priority and Project Lead open a bottom
+ * sheet each and write `projects.update`, as the web selects; Instructions
+ * save when the field loses focus; Repos toggles extra repos in a sheet. A
+ * viewer reads every field and changes none. Field rows are 48 high (web
+ * 40). Not here from the web: editing the context, the code reviewer,
+ * members, model, dates and labels pickers.
  */
-export function ProjectOverview({ project, repo, users }: { project: Project; repo: Repo; users: User[] | undefined }) {
+export function ProjectOverview({
+  project,
+  repo,
+  users,
+  status,
+  canContribute,
+}: {
+  project: Project;
+  repo: Repo;
+  users: User[] | undefined;
+  /** The derived status (`useProjectTaskStatus`), undefined while the tasks load. */
+  status: ProjectStatus | undefined;
+  canContribute: boolean;
+}) {
   const scheme = useScheme();
   const theme = EVA_THEME[scheme];
-  const progress = useQuery(api.projects.getTaskProgress, { projectId: project._id });
+  const router = useRouter();
+  const summaryDoc = useQuery(api.projects.getSummaryDoc, { projectId: project._id });
+  const repos = useQuery(api.githubRepos.list, {});
   const currentUserId = useQuery(api.auth.me, {});
   const updateProject = useMutation(api.projects.update);
-  const [sheet, setSheet] = useState<"phase" | "priority" | "lead" | null>(null);
+  const setInstructions = useMutation(api.projects.setInstructions);
+  const setExtraRepoIds = useMutation(api.projects.setExtraRepoIds);
+  const [sheet, setSheet] = useState<"phase" | "priority" | "lead" | "repos" | null>(null);
+  // A viewer's rows read only: no sheet opens.
+  const openSheet = (next: "phase" | "priority" | "lead" | "repos") => (canContribute ? () => setSheet(next) : undefined);
+  const extraRepoIds = project.extraRepoIds ?? [];
+  const repoChoices = (repos ?? []).filter((entry) => entry._id !== project.repoId);
+  const extraRepos = repoChoices.filter((entry) => extraRepoIds.includes(entry._id));
+  const saveInstructions = (value: string) => {
+    if (value.trim() === (project.instructions ?? "")) return;
+    setInstructions({ projectId: project._id, instructions: value }).catch(() => toast.error("Couldn't save instructions"));
+  };
+  const toggleRepo = (repoId: Id<"githubRepos">) => {
+    const next = extraRepoIds.includes(repoId) ? extraRepoIds.filter((id) => id !== repoId) : [...extraRepoIds, repoId];
+    setExtraRepoIds({ projectId: project._id, repoIds: next }).catch(() => toast.error("Couldn't update repos"));
+  };
   const update = (fields: Omit<Parameters<typeof updateProject>[0], "id">, failure: string) => {
     setSheet(null);
     updateProject({ id: project._id, ...fields }).catch(() => toast.error(failure));
@@ -68,7 +107,13 @@ export function ProjectOverview({ project, repo, users }: { project: Project; re
   const muted = theme.mutedForeground;
 
   return (
-    <ScrollView className="flex-1" contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24 }}>
+    // The instructions field scrolls into view 16 above the keyboard.
+    <KeyboardAwareScrollView
+      bottomOffset={16}
+      style={{ flex: 1 }}
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 24 }}
+    >
       <Text accessibilityRole="header" className="font-instrument-sans-semibold text-lg" style={{ fontWeight: "600", color: theme.foreground }}>
         {project.title}
       </Text>
@@ -84,9 +129,32 @@ export function ProjectOverview({ project, repo, users }: { project: Project; re
           </Text>
         )}
       </View>
-      {progress ? (
-        <View className="mt-4">
-          <ProjectProgress progress={progress} />
+      {status ? (
+        <View className="mt-4 gap-3">
+          <ProjectStageCounts status={status} />
+          <ProjectProgress status={status} />
+        </View>
+      ) : null}
+      {summaryDoc ? (
+        <View className="mt-3 gap-2 rounded-xl p-4" style={{ backgroundColor: theme.card }}>
+          <View className="flex-row items-center justify-between gap-3">
+            <Text numberOfLines={1} className="font-instrument-sans-medium min-w-0 flex-1 text-sm" style={{ fontWeight: "500", color: theme.foreground }}>
+              {summaryDoc.title}
+            </Text>
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={`Open ${summaryDoc.title}`}
+              onPress={() => router.push({ pathname: "/doc/[docId]", params: { docId: summaryDoc._id, repo: repo._id } })}
+              hitSlop={8}
+              className="flex-row items-center gap-1 active:opacity-70"
+            >
+              <Text className="font-instrument-sans text-xs" style={{ color: muted }}>
+                Open
+              </Text>
+              <IconArrowUpRight size={14} color={muted} />
+            </Pressable>
+          </View>
+          <Markdown>{summaryDoc.content}</Markdown>
         </View>
       ) : null}
 
@@ -96,21 +164,21 @@ export function ProjectOverview({ project, repo, users }: { project: Project; re
           icon={<phase.icon size={16} color={phase.text} />}
           value={PROJECT_PHASE_LABELS[project.phase]}
           color={phase.text}
-          onPress={planning ? undefined : () => setSheet("phase")}
+          onPress={planning ? undefined : openSheet("phase")}
         />
         <FieldRow
           label="Priority"
           icon={<PriorityIcon level={project.priority} />}
           value={project.priority ? PRIORITY_LABELS[project.priority] : "Priority"}
           color={project.priority ? undefined : muted}
-          onPress={() => setSheet("priority")}
+          onPress={openSheet("priority")}
         />
         <FieldRow
           label="Project Lead"
           icon={<IconUser size={16} color={muted} />}
           value={lead ? (userLabel(lead) ?? "Unknown") : project.projectLead ? "Unknown" : "Project Lead"}
           color={project.projectLead ? undefined : muted}
-          onPress={() => setSheet("lead")}
+          onPress={openSheet("lead")}
         />
         <FieldRow
           label="Code Reviewer"
@@ -125,6 +193,30 @@ export function ProjectOverview({ project, repo, users }: { project: Project; re
           color={memberCount > 0 ? undefined : muted}
         />
         <FieldRow label="Base branch for all tasks in this project" icon={<IconGitBranch size={16} color={muted} />} value={baseBranch} />
+      </FieldGroup>
+      <FieldGroup title="Instructions">
+        {canContribute ? (
+          <Textarea
+            // Uncontrolled so typing never fights the live query; saves when it loses focus, as the web.
+            key={project.instructions ?? ""}
+            defaultValue={project.instructions ?? ""}
+            accessibilityLabel="Project instructions"
+            onEndEditing={(event) => saveInstructions(event.nativeEvent.text)}
+          />
+        ) : (
+          <Text className="font-instrument-sans px-2 text-sm" style={{ color: project.instructions ? theme.foreground : muted }}>
+            {project.instructions || "No instructions"}
+          </Text>
+        )}
+      </FieldGroup>
+      <FieldGroup title="Repos">
+        <FieldRow
+          label="Extra repos"
+          icon={<IconFolders size={16} color={muted} />}
+          value={extraRepos.length > 0 ? extraRepos.map(repoDisplayLabel).join(", ") : "Extra repos"}
+          color={extraRepos.length > 0 ? undefined : muted}
+          onPress={openSheet("repos")}
+        />
       </FieldGroup>
       <FieldGroup title="Dates">
         <FieldRow label="Dates" icon={<IconCalendar size={16} color={muted} />} value={dateRange || "No dates"} color={dateRange ? undefined : muted} />
@@ -161,6 +253,19 @@ export function ProjectOverview({ project, repo, users }: { project: Project; re
           );
         })}
       </FooterSheet>
+      {/* The web Repos menu: every other repo the reader can access; a toggle writes at once and keeps the sheet open. */}
+      <FooterSheet open={sheet === "repos"} onOpenChange={(open) => setSheet(open ? "repos" : null)} title="Repos">
+        {repoChoices.map((choice) => (
+          <SheetRow
+            key={choice._id}
+            leading={<RepoAppMark repo={choice} scheme={scheme} />}
+            title={repoDisplayLabel(choice)}
+            active={extraRepoIds.includes(choice._id)}
+            multiple
+            onPress={() => toggleRepo(choice._id)}
+          />
+        ))}
+      </FooterSheet>
       {/* The web `PriorityPicker`. */}
       <FooterSheet open={sheet === "priority"} onOpenChange={(open) => setSheet(open ? "priority" : null)} title="Priority">
         <SheetRow
@@ -192,6 +297,6 @@ export function ProjectOverview({ project, repo, users }: { project: Project; re
           />
         ))}
       </FooterSheet>
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }

@@ -18,6 +18,7 @@ import { ScheduleSheet } from "@/ui/ScheduleSheet";
 import { ProjectPlan } from "@/projects/ProjectPlan";
 import { ProjectTasks } from "@/projects/ProjectTasks";
 import { useProjectActions } from "@/projects/useProjectActions";
+import { useProjectTaskStatus } from "@/projects/useProjectStatus";
 import { useProjectGitActions } from "@/sandbox/OwnedSandboxActions";
 import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { useScheme } from "@/ui/theme";
@@ -31,15 +32,18 @@ const SANDBOX_PHASES = ["in_progress", "business_review", "code_review"];
 /**
  * One project, as the web project page (`ProjectDetailClient`) on a phone:
  * the header (back, the title, the web "…" project menu as a sheet), the
- * web Overview | Tasks switch ("Plan" while drafting) under it, kept in
- * `?tab=` and set in place (no history), and the tab below. The web Sandbox
- * tab's project chat is the phone chat screen (`/chat/<projectId>`):
- * "Chat" in the bottom bar opens it, in the phases the web shows the
- * Sandbox tab, with the web unread dot. "Build" (the web "Build Project",
- * with its "Run Eva" confirm) or, while a build runs, "Stop Build" (with
- * the web stop confirm) sits beside it in thumb reach, with the web's build
- * schedule as a calendar square. The "…" sheet leads with the web's sandbox
- * and git actions (`useProjectGitActions`). Not here from the web: the
+ * web Overview | Tasks switch under it, kept in `?tab=` and set in place
+ * (no history), and the tab below. An older project still in planning with
+ * an interview or a plan shows "Plan" in place of Tasks; a new project has
+ * no planning step. The web Sandbox tab's coordinator chat is the phone
+ * chat screen (`/chat/<projectId>`): "Chat" in the bottom bar opens it, in
+ * the phases the web shows the Sandbox tab, with the web unread dot. A
+ * contributor gets "Build" (the web "Build Project", with its "Run Eva"
+ * confirm) or, while a build runs, "Stop Build" (with the web stop
+ * confirm) beside it in thumb reach, with the web's build schedule as a
+ * calendar square, and the "…" sheet, led by the web's sandbox and git
+ * actions (`useProjectGitActions`). A viewer (`callerRole`) gets
+ * "Feedback" in their place, as the web header. Not here from the web: the
  * sandbox preview, files and review panes.
  */
 export default function ProjectScreen() {
@@ -74,13 +78,17 @@ export default function ProjectScreen() {
   }
 
   const planning = isProjectPlanning(project.phase);
+  // Only an older project still planning, with an interview or a plan to show, keeps the Plan view.
+  const showPlan = planning && (project.conversationHistory.length > 0 || project.generatedSpec !== undefined);
+  const canContribute = project.callerRole === "contributor";
+  const openFeedback = () => router.push({ pathname: "/project/feedback", params: { projectId: project._id, repo: repo._id } });
   return (
     <Screen
       title={project.title}
       onBack={leave}
       headerRight={
-        // The web header "…" (`ProjectDetailHeaderActions`), shown outside planning as the web.
-        planning ? undefined : (
+        // The web header "…" (`ProjectDetailHeaderActions`), shown to a contributor outside planning as the web.
+        planning || !canContribute ? undefined : (
           <HeaderMoreButton label="More" onPress={() => actions.openSheet(project)} />
         )
       }
@@ -90,22 +98,63 @@ export default function ProjectScreen() {
           value={tab}
           options={[
             { value: "overview", label: "Overview" },
-            { value: "work", label: planning ? "Plan" : "Tasks" },
+            { value: "work", label: showPlan ? "Plan" : "Tasks" },
           ]}
           onChange={(next) => router.setParams({ tab: next })}
         />
       </View>
-      {tab === "overview" ? (
-        <ProjectOverview project={project} repo={repo} users={users} />
-      ) : planning ? (
-        <ProjectPlan project={project} />
-      ) : (
-        <ProjectTasks project={project} repo={repo} users={users} />
-      )}
-      {planning ? null : <ProjectDock project={project} />}
+      <ProjectTab
+        tab={tab}
+        project={project}
+        repo={repo}
+        users={users}
+        showPlan={showPlan}
+        canContribute={canContribute}
+        onFeedback={openFeedback}
+      />
+      {showPlan ? null : <ProjectDock project={project} canContribute={canContribute} onFeedback={openFeedback} />}
       {actions.dialogs}
       {git.dialogs}
     </Screen>
+  );
+}
+
+type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
+type User = FunctionReturnType<typeof api.users.listAll>[number];
+
+/** The open tab, over the project's child tasks and their derived status (`useProjectTaskStatus`). */
+function ProjectTab({
+  tab,
+  project,
+  repo,
+  users,
+  showPlan,
+  canContribute,
+  onFeedback,
+}: {
+  tab: Tab;
+  project: Project;
+  repo: Repo;
+  users: User[] | undefined;
+  showPlan: boolean;
+  canContribute: boolean;
+  onFeedback: () => void;
+}) {
+  const { tasks, failedTaskIds, status } = useProjectTaskStatus(project._id, repo._id);
+  if (tab === "overview") {
+    return <ProjectOverview project={project} repo={repo} users={users} status={status} canContribute={canContribute} />;
+  }
+  if (showPlan) return <ProjectPlan project={project} />;
+  return (
+    <ProjectTasks
+      project={project}
+      repo={repo}
+      users={users}
+      tasks={tasks}
+      failedTaskIds={failedTaskIds}
+      canContribute={canContribute}
+      onFeedback={onFeedback}
+    />
   );
 }
 
@@ -125,10 +174,11 @@ function Screen({ title, onBack, headerRight, children }: { title: string; onBac
 type Project = NonNullable<FunctionReturnType<typeof api.projects.get>>;
 
 /**
- * The bottom bar: "Chat" (the project chat, with the unread dot while a
- * reply waits) and the web build button, each behind the web confirm.
+ * The bottom bar: "Chat" (the coordinator chat, with the unread dot while a
+ * reply waits), then the web build button behind the web confirm for a
+ * contributor, or "Feedback" for a viewer.
  */
-function ProjectDock({ project }: { project: Project }) {
+function ProjectDock({ project, canContribute, onFeedback }: { project: Project; canContribute: boolean; onFeedback: () => void }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const theme = EVA_THEME[useScheme()];
@@ -147,9 +197,9 @@ function ProjectDock({ project }: { project: Project }) {
   const [confirm, setConfirm] = useState<"build" | "stop" | null>(null);
   const [busy, setBusy] = useState(false);
   const showChat = SANDBOX_PHASES.includes(project.phase);
-  const canBuild = BUILDABLE_PROJECT_PHASES.includes(project.phase);
+  const canBuild = canContribute && BUILDABLE_PROJECT_PHASES.includes(project.phase);
   const building = isProjectBuilding(project);
-  if (!showChat && !canBuild) return null;
+  if (!showChat && !canBuild && canContribute) return null;
 
   const run = async (action: () => Promise<unknown>, success: string | undefined, failure: string) => {
     setBusy(true);
@@ -177,6 +227,14 @@ function ProjectDock({ project }: { project: Project }) {
           {unread ? (
             <View pointerEvents="none" className="absolute right-3 top-3 size-1.5 rounded-full" style={{ backgroundColor: theme.primary }} />
           ) : null}
+        </View>
+      ) : null}
+      {!canContribute ? (
+        // The web header's viewer "Feedback": a viewer's one write action in a project.
+        <View className="min-w-0 flex-1">
+          <Button leftIcon={<IconMessage size={16} color={theme.primaryForeground} />} onPress={onFeedback}>
+            Feedback
+          </Button>
         </View>
       ) : null}
       {canBuild ? (

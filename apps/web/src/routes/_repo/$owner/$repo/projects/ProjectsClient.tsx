@@ -40,7 +40,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { projectStageConfig } from "@/lib/components/projects/ProjectPhaseBadge";
-import { useProjectStatuses } from "@/lib/components/projects/useProjectStatus";
+import { useProjectListStatuses } from "@/lib/components/projects/useProjectStatus";
 import {
   PROJECT_SORT_FIELDS,
   PROJECT_SORT_FIELD_LABELS,
@@ -57,11 +57,7 @@ import { ProjectsListView } from "@/lib/components/projects/ProjectsListView";
 import { ProjectsKanbanView } from "./_components/ProjectsKanbanView";
 import { ProjectDeleteDialog } from "./_components/ProjectDeleteDialog";
 import { ProjectsSelectButton } from "./_components/ProjectsSelectButton";
-import {
-  ProjectsBulkBar,
-  type ProjectBulkAction,
-} from "./_components/ProjectsBulkBar";
-import { ProjectsChangePhaseDialog } from "./_components/ProjectsChangePhaseDialog";
+import { ProjectsBulkBar } from "./_components/ProjectsBulkBar";
 import { useProjectsSelection } from "./_components/useProjectsSelection";
 import { useProjectDelete } from "./_components/useProjectDelete";
 import { ActiveFiltersBar } from "./_components/ActiveFiltersBar";
@@ -85,10 +81,7 @@ export function ProjectsClient() {
   const { repo, basePath, owner, name } = useRepo();
   const projects = useQuery(api.projects.list, { repoId: repo._id });
   // Each project's stage is derived from its child tasks, never stored.
-  const statuses = useProjectStatuses(
-    repo._id,
-    projects?.map((project) => project._id),
-  );
+  const statuses = useProjectListStatuses(repo._id);
   const stageOf = (projectId: string): ProjectStage =>
     statuses?.get(projectId)?.stage ?? "todo";
   const [isCreating, setIsCreating] = useState(false);
@@ -106,11 +99,8 @@ export function ProjectsClient() {
   const selection = useProjectsSelection(
     (projects ?? []).map((project) => project._id),
   );
-  const [activeBulkAction, setActiveBulkAction] =
-    useState<ProjectBulkAction | null>(null);
   const exitSelectMode = () => {
     selection.exit();
-    setActiveBulkAction(null);
   };
   const projectDelete = useProjectDelete(repo._id, exitSelectMode);
   const hasProjects = projects !== undefined && projects.length > 0;
@@ -396,6 +386,7 @@ export function ProjectsClient() {
                   <ProjectsTimeline
                     projects={filteredSorted}
                     stageOf={stageOf}
+                    statuses={statuses}
                     basePath={basePath}
                     range={timelineRange}
                     zoom={timelineZoom}
@@ -435,7 +426,6 @@ export function ProjectsClient() {
                 selection.selectAll(filteredSorted.map((p) => p._id))
               }
               onClearSelection={selection.clear}
-              onSetBulkAction={setActiveBulkAction}
               onDelete={() =>
                 projectDelete.requestBulk([...selection.selectedIds])
               }
@@ -446,12 +436,6 @@ export function ProjectsClient() {
       <NewProjectModal
         isOpen={isCreating}
         onClose={() => setIsCreating(false)}
-      />
-      <ProjectsChangePhaseDialog
-        isOpen={activeBulkAction === "phase"}
-        onClose={() => setActiveBulkAction(null)}
-        selectedProjectIds={selection.selectedIds}
-        onSuccess={exitSelectMode}
       />
       <ProjectDeleteDialog
         target={projectDelete.target}

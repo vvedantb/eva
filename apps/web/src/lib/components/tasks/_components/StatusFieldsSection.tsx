@@ -209,7 +209,6 @@ export function StatusFieldsSection({
           isOpen={isCreatingProject}
           onClose={() => setIsCreatingProject(false)}
           onCreated={(id) => updateTask({ id: taskId, projectId: id })}
-          defaultSkipPlanning
         />
       </FieldsSection>
     </div>

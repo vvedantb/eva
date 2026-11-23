@@ -3,6 +3,7 @@ import {
   projectStatus,
   projectTaskNeedsYou,
   projectTaskStage,
+  projectTaskWaitsForCoordinator,
   type NeedsYouReason,
   type ProjectStage,
   type ProjectStatus,
@@ -66,6 +67,20 @@ export const NEEDS_YOU_LABELS: Record<NeedsYouReason, string> = {
   question: "Question for you",
 };
 
+/** A task that asked its coordinator a question and waits for the answer. */
+export const WAITING_FOR_COORDINATOR_LABEL = "Waiting for coordinator";
+
+/** The project's coordinator hit its hourly cap of automatic turns. */
+export const COORDINATOR_PAUSED_LABEL = "Coordinator paused";
+
+/**
+ * The coordinator chat's one-line notice while the hourly cap holds its
+ * wake-ups back. A person's message releases them.
+ */
+export function coordinatorPausedTitle(maxAutoTurnsPerHour: number): string {
+  return `${COORDINATOR_PAUSED_LABEL} after ${maxAutoTurnsPerHour} automatic turns this hour. Send a message to continue.`;
+}
+
 /** The fields of an `agentTasks.listByProject` row the status rules read. */
 export interface ProjectTaskRow {
   _id: string;
@@ -77,18 +92,24 @@ export interface ProjectTaskRow {
   coordinatorRetries?: number;
   /** A task in a repo the caller cannot access: only status fields are set. */
   locked?: boolean;
+  /**
+   * The server's facts for the task (`listByProject`): the usage limit,
+   * dependencies and open ask the row alone does not carry.
+   */
+  facts?: ProjectTaskFacts;
 }
 
 /**
- * One row as the shared rules read it. The list rows do not carry the usage
- * limit, the dependencies or open asks, so those never show here; the
- * scheduler reads them on the server. A locked row counts as approved: its
- * approval is not the caller's to give.
+ * One row as the shared rules read it. A row with the server's `facts` uses
+ * them as they are. Without them the usage limit, the dependencies and open
+ * asks never show here. A locked row counts as approved: its approval is not
+ * the caller's to give.
  */
 export function projectTaskFactsFromRow(
   row: ProjectTaskRow,
   failed: boolean,
 ): ProjectTaskFacts {
+  if (row.facts !== undefined) return row.facts;
   const runPending = row.run !== undefined;
   return {
     id: row._id,
@@ -114,15 +135,100 @@ export function projectStatusFromRows(
   );
 }
 
-/** One task's stage and the reason it waits for a person, if any. */
+/**
+ * One task's stage, the reason it waits for a person, if any, and whether it
+ * waits for its coordinator to answer a question.
+ */
 export function projectTaskView(
   row: ProjectTaskRow,
   failed: boolean,
-): { stage: ProjectTaskStage; needsYou: NeedsYouReason | undefined } {
+): {
+  stage: ProjectTaskStage;
+  needsYou: NeedsYouReason | undefined;
+  waitingForCoordinator: boolean;
+} {
   const facts = projectTaskFactsFromRow(row, failed);
   return {
     stage: projectTaskStage(facts),
     needsYou: projectTaskNeedsYou(facts),
+    waitingForCoordinator: projectTaskWaitsForCoordinator(facts),
+  };
+}
+
+/** What `listTaskReports` returns for one report or ask. */
+export interface ProjectTaskReportRow {
+  taskId: string;
+  kind: "report" | "ask";
+  text: string;
+  state: "open" | "answered" | "closed";
+  createdAt: number;
+}
+
+/** A task's open ask and its open reports, newest report first. */
+export interface ProjectTaskNotes {
+  ask: string | undefined;
+  reports: string[];
+}
+
+/**
+ * The open ask and open reports of each task, keyed by task id. Answered and
+ * closed rows are left out. A report stays open until its task stops.
+ */
+export function projectTaskNotesByTask(
+  rows: readonly ProjectTaskReportRow[],
+): ReadonlyMap<string, ProjectTaskNotes> {
+  const byTask = new Map<string, ProjectTaskNotes>();
+  const newestFirst = [...rows].sort((a, b) => b.createdAt - a.createdAt);
+  for (const row of newestFirst) {
+    if (row.state !== "open") continue;
+    const notes = byTask.get(row.taskId) ?? { ask: undefined, reports: [] };
+    if (row.kind === "ask") notes.ask = notes.ask ?? row.text;
+    else notes.reports.push(row.text);
+    byTask.set(row.taskId, notes);
+  }
+  return byTask;
+}
+
+/**
+ * What the projects list reads for each project (`listStatusesForRepo`):
+ * the derived stage and counts, how many tasks need a person, and whether
+ * the coordinator is paused at its hourly cap.
+ */
+export interface ProjectListStatus {
+  stage: ProjectStage;
+  counts: Record<ProjectTaskStage, number>;
+  needsYouCount: number;
+  coordinatorPaused: boolean;
+}
+
+/**
+ * Why a project on the list needs a person, in a few words, or undefined
+ * when it does not. A paused coordinator comes first: nothing moves until a
+ * person writes to it.
+ */
+export function projectListNeedsYouLabel(
+  status: ProjectListStatus,
+): string | undefined {
+  if (status.coordinatorPaused) return COORDINATOR_PAUSED_LABEL;
+  if (status.needsYouCount === 0) return undefined;
+  return status.needsYouCount === 1
+    ? "1 task needs you"
+    : `${status.needsYouCount} tasks need you`;
+}
+
+/**
+ * Launched tasks out of the tasks still counted (cancelled ones are left
+ * out), and the share as a whole percent: the timeline's progress.
+ */
+export function projectLaunchedShare(
+  counts: Record<ProjectTaskStage, number>,
+): { launched: number; total: number; percent: number } {
+  const total =
+    counts.launched + counts.in_review + counts.in_progress + counts.todo;
+  return {
+    launched: counts.launched,
+    total,
+    percent: total > 0 ? Math.round((counts.launched / total) * 100) : 0,
   };
 }
 
@@ -145,7 +251,7 @@ export function unapprovedTodoTaskIds<Row extends ProjectTaskRow>(
  * non-empty stage's share of the tasks and where it starts, both from 0 to 1.
  */
 export function projectStageSegments(
-  status: ProjectStatus,
+  status: Pick<ProjectStatus, "counts">,
 ): Array<{ stage: ProjectTaskStage; ratio: number; offset: number }> {
   const total = PROJECT_TASK_STAGES.reduce(
     (sum, stage) => sum + status.counts[stage],
@@ -180,7 +286,7 @@ export interface SectionableProjectTaskRow extends ProjectTaskRow {
 
 /**
  * A project's task list: one section per task stage in workflow order, each
- * row with the reason it waits for a person. To Do keeps the project's order
+ * row with the reason it waits for a person or its coordinator. To Do keeps the project's order
  * (`taskNumber`); every other section puts the latest run first, else the
  * newest task. A section starts open when it has tasks and is not Launched
  * or Cancelled.
@@ -190,7 +296,11 @@ export function projectTaskStageSections<Row extends SectionableProjectTaskRow>(
   failedTaskIds: ReadonlySet<string>,
 ): Array<{
   stage: ProjectTaskStage;
-  tasks: Array<{ row: Row; needsYou: NeedsYouReason | undefined }>;
+  tasks: Array<{
+    row: Row;
+    needsYou: NeedsYouReason | undefined;
+    waitingForCoordinator: boolean;
+  }>;
   defaultOpen: boolean;
 }> {
   const viewed = rows.map((row) => ({
@@ -201,7 +311,11 @@ export function projectTaskStageSections<Row extends SectionableProjectTaskRow>(
   return PROJECT_TASK_STAGES.map((stage) => {
     const matching = viewed
       .filter((task) => task.stage === stage)
-      .map(({ row, needsYou }) => ({ row, needsYou }));
+      .map(({ row, needsYou, waitingForCoordinator }) => ({
+        row,
+        needsYou,
+        waitingForCoordinator,
+      }));
     const tasks =
       stage === "todo"
         ? matching

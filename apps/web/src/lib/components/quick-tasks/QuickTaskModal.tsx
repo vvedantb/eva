@@ -1018,7 +1018,6 @@ export function QuickTaskModal({
         isOpen={isCreatingProject}
         onClose={() => setIsCreatingProject(false)}
         onCreated={(id) => setSelectedProjectId(id)}
-        defaultSkipPlanning
       />
     </>
   );

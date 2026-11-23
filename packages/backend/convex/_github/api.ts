@@ -5,7 +5,12 @@ import { makeFunctionReference } from "convex/server";
 import { action } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
-import { getInstallationOctokit, getInstallationToken } from "../githubAuth";
+import {
+  getInstallationOctokit,
+  mintSandboxGitToken,
+  SANDBOX_GIT_WRITE,
+} from "../githubAuth";
+import { isReadOnlyGitIdentity } from "../_auth/sandboxIdentity";
 import { detectAppsForRepo, resolveInstallationRepo } from "./helpers";
 import { authAction, getActionRepoWithAccess } from "../functions";
 import { assertUserCanUseRepo, listInstallationReposForUser } from "./userAuth";
@@ -24,13 +29,22 @@ const installationAccessStateRef = makeFunctionReference<
   InstallationAccessState
 >("githubRepos:getInstallationAccessState");
 
-/** Returns a short-lived installation token for a given GitHub repo's app installation. */
+/**
+ * Returns a short-lived installation token for a given GitHub repo's app
+ * installation. The in-sandbox runner refreshes `GITHUB_TOKEN` / `GH_TOKEN`
+ * here; a read-only sandbox's VM token (`isReadOnlyGitIdentity`) gets a
+ * read-only token for that repo only.
+ */
 export const getInstallationTokenAction = action({
   args: { repoId: v.id("githubRepos") },
   returns: v.object({ token: v.string() }),
   handler: async (ctx, args) => {
     const repo = await getActionRepoWithAccess(ctx, args.repoId);
-    const token = await getInstallationToken(repo.installationId);
+    const readOnly = isReadOnlyGitIdentity(await ctx.auth.getUserIdentity());
+    const { token } = await mintSandboxGitToken(
+      repo.installationId,
+      readOnly ? { kind: "read", repo } : SANDBOX_GIT_WRITE,
+    );
     return { token };
   },
 });

@@ -21,6 +21,7 @@ import { workflow } from "../workflowManager";
 import { resolveSessionBaseBranch } from "./baseBranch";
 import { scheduleStuckStartExpiry } from "../_sandbox/transitions";
 import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
+import { sessionAccountHolder } from "../_projects/runSettings";
 import {
   assertProviderAccountUsableBy,
   resolveDefaultProviderAccountId,
@@ -351,7 +352,11 @@ export const addMessage = authMutation({
         ? await resolveMessageCredential(
             ctx.db,
             args.providerAccountId ?? chat.providerAccountId,
-            session.createdBy ?? session.userId,
+            await sessionAccountHolder(
+              ctx.db,
+              session,
+              args.providerAccountId ?? chat.providerAccountId,
+            ),
           )
         : undefined;
     await ctx.db.insert("messages", {

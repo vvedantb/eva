@@ -18,8 +18,9 @@ import {
   upsertActivityLog,
   finalizeRunStatus,
   recordRunPullRequest,
+  RUN_WAITING_FOR_ANSWER,
 } from "./helpers";
-import { findOpenAsk } from "../_projects/reports";
+import { findOpenAsk, runEndedOnAsk } from "../_projects/reports";
 
 /**
  * Transitions a queued run to running, sets streaming activity, and schedules
@@ -207,6 +208,11 @@ export const completeRun = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const now = Date.now();
+    const run = await ctx.db.get(args.runId);
+    // The completion of a run that ended on its ask came in as a success
+    // (`handleCompletion`); it is recorded as waiting, not as done.
+    const endedOnAsk =
+      args.success && run !== null && (await runEndedOnAsk(ctx.db, run));
 
     await finalizeRunStatus(ctx, {
       runId: args.runId,
@@ -214,7 +220,7 @@ export const completeRun = internalMutation({
       error: args.error,
       prError: args.prError,
       prUrl: args.prUrl,
-      exitReason: args.exitReason,
+      exitReason: endedOnAsk ? RUN_WAITING_FOR_ANSWER : args.exitReason,
       claudeResult: args.claudeResult,
     });
 

@@ -124,6 +124,14 @@ export function buildRunResultSummary(
   return prUrl ? "Created task PR" : "Pushed commit to task branch";
 }
 
+/**
+ * `exitReason` of a project task's run that ended on its own open ask
+ * (`report_to_coordinator` with `kind: "ask"`, `runEndedOnAsk`): a normal
+ * outcome, not an error. The task stays `in_progress` and waits for the
+ * answer, which starts its next run.
+ */
+export const RUN_WAITING_FOR_ANSWER = "waiting_for_answer";
+
 /** Patches the run document with final status, error, PR URL, and result summary. */
 export async function finalizeRunStatus(
   ctx: MutationCtx,
@@ -177,7 +185,11 @@ export async function finalizeRunStatus(
   await scheduleTaskOrchestratorNotify(
     ctx,
     run.taskId,
-    params.success ? "success" : "error",
+    params.exitReason === RUN_WAITING_FOR_ANSWER
+      ? "waiting"
+      : params.success
+        ? "success"
+        : "error",
   );
 }
 

@@ -31,8 +31,11 @@ import { taskWorkSessionBusy } from "../_taskWorkflow/startRun";
  * an `ask` is a question.
  *
  * The ask rules:
- * 1. The task's turn ends (the tool tells the agent to stop). Its run then
- *    ends without moving the task: it stays `in_progress` and keeps its
+ * 1. The task's turn ends (the tool tells the agent to stop). A run that
+ *    ended on its ask (`runEndedOnAsk`) is a normal outcome, never an error:
+ *    the completion is taken as a success whatever the agent reported (the
+ *    commit gate fails a turn that only asked), and the run is recorded with
+ *    `RUN_WAITING_FOR_ANSWER`. The task stays `in_progress` and keeps its
  *    parallel slot (`completeRun`), and reads as waiting, not failed.
  * 2. An ask wakes the coordinator at once (`requestCoordinatorWake`).
  * 3. The coordinator answers with `send_chat_message`
@@ -65,6 +68,19 @@ export async function findOpenAsk(
     )
     .collect();
   return open.find((row) => row.kind === "ask") ?? null;
+}
+
+/**
+ * True when the task's run ended on an ask it filed during that run: the
+ * open ask is newer than the run's start. An older open ask (a person
+ * restarted the task without answering) does not count.
+ */
+export async function runEndedOnAsk(
+  db: DatabaseReader,
+  run: Pick<Doc<"agentRuns">, "taskId" | "startedAt">,
+): Promise<boolean> {
+  const ask = await findOpenAsk(db, run.taskId);
+  return ask !== null && ask.createdAt >= (run.startedAt ?? 0);
 }
 
 /**

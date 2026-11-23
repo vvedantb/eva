@@ -10,6 +10,7 @@ import {
   isInstallationAllowed,
   parseRepoPath,
 } from "./_sandbox_runtime/gitCredentialsPath";
+import { isReadOnlySandboxOwner } from "./_sessions/owner";
 
 /** Upserts the credential row for a sandbox, replacing any prior secret. */
 export const upsertForSandbox = internalMutation({
@@ -102,7 +103,7 @@ async function lookupSandboxOwner(
       userId: session.userId,
       repoId: session.repoId,
       sessionId: session._id,
-      readOnly: session.owner.kind === "project",
+      readOnly: isReadOnlySandboxOwner(session.owner),
     };
   }
 

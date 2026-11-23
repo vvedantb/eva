@@ -25,6 +25,7 @@ import {
 import type { BackgroundAgentEntry } from "../_validators/tableFields";
 import { trackSessionChatWorkflow } from "../_chat/surfaceAdapters";
 import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
+import { sessionAccountHolder } from "../_projects/runSettings";
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";
@@ -608,7 +609,11 @@ const sessionChatQueueConfig: ChatQueueConfig<
   turnAccountId: (ctx, { session }, next) =>
     resolveTurnProviderAccountId(ctx.db, {
       requestedAccountId: next.providerAccountId,
-      ownerUserId: session.createdBy ?? session.userId,
+      ownerUserId: await sessionAccountHolder(
+        ctx.db,
+        session,
+        next.providerAccountId,
+      ),
       model: next.model,
       changePolicy: "owner-pool",
     }),
@@ -639,7 +644,7 @@ const sessionChatQueueConfig: ChatQueueConfig<
       ...(await resolveMessageCredential(
         ctx.db,
         prepared.providerAccountId,
-        session.createdBy ?? session.userId,
+        await sessionAccountHolder(ctx.db, session, prepared.providerAccountId),
       )),
       model: prepared.model,
       reasoningLevel: next.reasoningLevel,
@@ -716,7 +721,11 @@ const sessionChatQueueConfig: ChatQueueConfig<
           model: prepared.model,
           ...launchTraits,
           providerAccountId: prepared.providerAccountId,
-          credentialOwnerUserId: session.createdBy ?? session.userId,
+          credentialOwnerUserId: await sessionAccountHolder(
+            ctx.db,
+            session,
+            prepared.providerAccountId,
+          ),
           userId: next.userId,
           installationId: prepared.repo.installationId,
           turnId,

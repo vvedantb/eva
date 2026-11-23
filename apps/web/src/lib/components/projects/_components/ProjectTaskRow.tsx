@@ -3,6 +3,7 @@
 import type { Id } from "@eva/backend";
 import { taskScheduledAt } from "@eva/backend";
 import type { NeedsYouReason } from "@eva/shared/projectStatus";
+import type { ProjectTaskNotes } from "@eva/shared/projectView";
 import { IconLock } from "@tabler/icons-react";
 import { ListRow, Tooltip, TooltipContent, TooltipTrigger } from "@vvedantb/ui";
 import { QuickTaskCard } from "@/lib/components/quick-tasks/QuickTaskCard";
@@ -14,12 +15,15 @@ import { projectTaskStageConfig } from "../ProjectPhaseBadge";
 import { ProjectTaskBadges } from "./ProjectTaskBadges";
 
 /**
- * One row of a project's task list. A task in a repo the reader cannot open
- * is a locked row: its number and a lock, no title and no link.
+ * One row of a project's task list, and of the coordinator chat's task
+ * cards. A task in a repo the reader cannot open is a locked row: its number
+ * and a lock, no title and no link.
  */
 export function ProjectTaskRow({
   task,
   needsYou,
+  waitingForCoordinator,
+  notes,
   hasError,
   selectedTaskId,
   onSelectTask,
@@ -31,6 +35,9 @@ export function ProjectTaskRow({
 }: {
   task: ProjectTaskListRow;
   needsYou: NeedsYouReason | undefined;
+  waitingForCoordinator: boolean;
+  /** The task's open question and open reports (`useProjectTaskNotes`). */
+  notes: ProjectTaskNotes | undefined;
   hasError: boolean;
   selectedTaskId: Id<"agentTasks"> | null;
   onSelectTask: (id: Id<"agentTasks">) => void;
@@ -67,8 +74,13 @@ export function ProjectTaskRow({
   const isFeedback = task.origin === "feedback";
   const canCancel =
     canContribute && task.status === "todo" && task.approvedAt === undefined;
+  const reports = notes?.reports ?? [];
   const hasBadges =
     needsYou !== undefined ||
+    waitingForCoordinator ||
+    notes?.ask !== undefined ||
+    reports.length > 0 ||
+    task.phaseLabel !== undefined ||
     isFeedback ||
     otherRepo !== undefined ||
     task.prUrl !== undefined ||
@@ -107,6 +119,15 @@ export function ProjectTaskRow({
           <ProjectTaskBadges
             taskId={task._id}
             needsYou={needsYou}
+            waitingForCoordinator={waitingForCoordinator}
+            ask={notes?.ask}
+            reports={reports}
+            chatHref={
+              segment
+                ? `${basePath}/quick-tasks/${segment}/sandbox/preview`
+                : undefined
+            }
+            phaseLabel={task.phaseLabel}
             isFeedback={isFeedback}
             repo={otherRepo}
             prUrl={task.prUrl}

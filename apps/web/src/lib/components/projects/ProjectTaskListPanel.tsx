@@ -9,6 +9,7 @@ import type {
 import {
   projectTaskStageSections,
   unapprovedTodoTaskIds,
+  type ProjectTaskNotes,
 } from "@eva/shared/projectView";
 import { useState, type ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
@@ -38,16 +39,25 @@ import type { RepoAppMarkRepo } from "@/lib/components/RepoLogo";
 import { withMutationToast } from "@/lib/utils/mutationToast";
 import { projectTaskStageConfig } from "./ProjectPhaseBadge";
 import { ProjectTaskRow } from "./_components/ProjectTaskRow";
-import type { ProjectTaskListRow } from "./useProjectStatus";
+import {
+  useProjectTaskNotes,
+  type ProjectTaskListRow,
+} from "./useProjectStatus";
 
 type Task = ProjectTaskListRow;
-type TaskWithReason = { row: Task; needsYou: NeedsYouReason | undefined };
+type TaskWithReason = {
+  row: Task;
+  needsYou: NeedsYouReason | undefined;
+  waitingForCoordinator: boolean;
+};
 
 /** What every row of the list shares. */
 interface RowContext {
   selectedTaskId: Id<"agentTasks"> | null;
   onSelectTask: (id: Id<"agentTasks">) => void;
   failedTaskIds: ReadonlySet<string>;
+  /** Open asks and reports by task id (`useProjectTaskNotes`). */
+  notesByTask: ReadonlyMap<string, ProjectTaskNotes>;
   basePath: string;
   projectNumId?: number;
   homeRepoId: Id<"githubRepos">;
@@ -115,6 +125,8 @@ function ProjectTaskRowFor({
     <ProjectTaskRow
       task={task.row}
       needsYou={task.needsYou}
+      waitingForCoordinator={task.waitingForCoordinator}
+      notes={context.notesByTask.get(task.row._id)}
       hasError={context.failedTaskIds.has(task.row._id)}
       selectedTaskId={context.selectedTaskId}
       onSelectTask={context.onSelectTask}
@@ -197,6 +209,7 @@ export function ProjectTaskListPanel({
     (repos ?? []).map((repo) => [repo._id, repo]),
   );
 
+  const notesByTask = useProjectTaskNotes(projectId);
   const sections = projectTaskStageSections(tasks, failedTaskIds);
   const tasksFor = (stage: ProjectTaskStage) =>
     sections.find((section) => section.stage === stage)?.tasks ?? [];
@@ -258,6 +271,7 @@ export function ProjectTaskListPanel({
     selectedTaskId,
     onSelectTask,
     failedTaskIds,
+    notesByTask,
     basePath,
     projectNumId,
     homeRepoId,

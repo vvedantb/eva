@@ -11,7 +11,7 @@ export function ProjectStageCounts({
   status,
   className,
 }: {
-  status: ProjectStatus | undefined;
+  status: Pick<ProjectStatus, "counts"> | undefined;
   className?: string;
 }) {
   const shown = PROJECT_STAGE_COUNT_ORDER.filter(

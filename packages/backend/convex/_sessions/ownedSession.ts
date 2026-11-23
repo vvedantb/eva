@@ -39,6 +39,7 @@ import { ownerHoldsSession, projectHoldsSession } from "./ownerState";
 import { hasOpenChatTurn } from "../_chat/turnProjection";
 import { markAllRunningExited } from "../backgroundProcesses";
 import { nextSandboxStartAttempt } from "../_sandbox/transitions";
+import { taskRunSettings } from "../_projects/runSettings";
 
 /**
  * The hidden session behind a task (`owner: { kind: "task" }`, a quick task
@@ -163,20 +164,24 @@ export type ChatSeed = typeof chatSeedValidator.type;
  * exists (and for a chat with no sticky `lastModel`). From then on the chat
  * keeps its own sticky picks, apart from the owner's run settings.
  *
- * Model: the owner's run model, else (a project task) its project's, else
- * the repo default, else `DEFAULT_AI_MODEL`. Traits: the model's defaults.
- * Account: the owner's.
+ * Model and account: the owner's run settings — a project's own, a task's
+ * `taskRunSettings` (a project task takes its project's until its first run,
+ * decision 20) — with the model falling back to the project's, then the repo
+ * default, then `DEFAULT_AI_MODEL`. Traits: the model's defaults.
  */
 export async function chatSeedSettings(
   db: DatabaseReader,
   entity: OwnerEntity,
 ): Promise<ChatSeed> {
-  const doc = entity.kind === "task" ? entity.task : entity.project;
+  const run =
+    entity.kind === "task"
+      ? await taskRunSettings(db, entity.task)
+      : entity.project;
   return {
-    model: normalizeAIModel(doc.model ?? (await ownerFallbackModel(db, entity))),
+    model: normalizeAIModel(run.model ?? (await ownerFallbackModel(db, entity))),
     traits: storedComposerTraits(null),
-    ...(doc.providerAccountId !== undefined
-      ? { providerAccountId: doc.providerAccountId }
+    ...(run.providerAccountId !== undefined
+      ? { providerAccountId: run.providerAccountId }
       : {}),
   };
 }

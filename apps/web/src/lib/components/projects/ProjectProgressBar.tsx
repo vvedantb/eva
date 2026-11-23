@@ -9,8 +9,8 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "@vvedantb/ui";
 import { projectTaskStageConfig } from "./ProjectPhaseBadge";
 
 interface ProjectProgressBarProps {
-  /** The project's derived status (`useProjectTaskStatus` / `useProjectStatuses`). */
-  status: ProjectStatus | undefined;
+  /** The project's derived status (`useProjectTaskStatus` / `useProjectListStatuses`). */
+  status: Pick<ProjectStatus, "counts"> | undefined;
   className?: string;
 }
 

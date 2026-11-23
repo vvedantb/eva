@@ -1,7 +1,8 @@
 "use client";
 
-import type { FunctionReturnType } from "convex/server";
-import type { api, Id } from "@eva/backend";
+import type { Id } from "@eva/backend";
+import type { ProjectTaskStage } from "@eva/shared/projectStatus";
+import { projectLaunchedShare } from "@eva/shared/projectView";
 import {
   AvatarStack,
   Tooltip,
@@ -10,12 +11,9 @@ import {
 } from "@vvedantb/ui";
 import { UserInitials } from "@eva/shared/user-initials";
 
-type ProjectProgress = FunctionReturnType<
-  typeof api.projects.listTaskProgress
->[number];
-
 interface TimelineSidebarMetaProps {
-  progress?: ProjectProgress;
+  /** Task counts by derived stage (`listStatusesForRepo`). */
+  counts?: Record<ProjectTaskStage, number>;
   lead?: Id<"users">;
   members?: Id<"users">[];
   /** Shown when a project has neither a lead nor members. */
@@ -67,7 +65,7 @@ function ProgressRing({ pct }: { pct: number }) {
 /** Trailing content for a timeline sidebar row: a completion ring + the
  *  lead/member avatars. Presentational; progress is supplied by the parent. */
 export function TimelineSidebarMeta({
-  progress,
+  counts,
   lead,
   members,
   fallbackUserId,
@@ -83,9 +81,9 @@ export function TimelineSidebarMeta({
   const shown = all.slice(0, MAX_AVATARS);
   const hidden = all.length - shown.length;
 
-  const total = progress?.total ?? 0;
-  const done = progress?.done ?? 0;
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const { launched, total, percent: pct } = counts
+    ? projectLaunchedShare(counts)
+    : { launched: 0, total: 0, percent: 0 };
 
   return (
     <div className="flex items-center gap-2">
@@ -96,7 +94,9 @@ export function TimelineSidebarMeta({
           </span>
         </TooltipTrigger>
         <TooltipContent>
-          {total > 0 ? `${done}/${total} tasks done · ${pct}%` : "No tasks yet"}
+          {total > 0
+            ? `${launched}/${total} tasks launched · ${pct}%`
+            : "No tasks yet"}
         </TooltipContent>
       </Tooltip>
       <AvatarStack size={18} className="-space-x-1">

@@ -28,7 +28,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { errorMessage } from "@vvedantb/server";
 import { findWorkSession } from "../_sessions/owner";
 import { abandonTaskRunSandbox } from "../_sessions/sandbox";
-import { closeTaskReports } from "../_projects/reports";
+import { closeTaskReports, runEndedOnAsk } from "../_projects/reports";
 
 /** Retrieves the active workflow ID for a task, or null if none exists. */
 async function getActiveWorkflowId(
@@ -144,11 +144,14 @@ export const handleCompletion = authMutation({
       finalizingAt: Date.now(),
     });
 
+    // A project task that asked its coordinator ended its turn on purpose:
+    // a clean outcome, even when the commit gate failed the turn.
+    const endedOnAsk = await runEndedOnAsk(ctx.db, latestRunningRun);
     try {
       await sendCompletionEvent(ctx, taskCompleteEvent, workflowId, {
-        success: args.success,
+        success: endedOnAsk || args.success,
         result: args.result,
-        error: args.error,
+        error: endedOnAsk ? null : args.error,
         activityLog: args.activityLog,
       });
     } catch (error) {

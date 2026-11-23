@@ -1,5 +1,24 @@
 # Changelog
 
+## Projects run by a coordinator chat, with parallel child tasks
+
+Date: 2026-11-23
+
+WHY: Big work does not fit in one session or one quick task. A project now holds it: one coordinator chat plans the work and proposes tasks, and each task runs on its own like a quick task, so people see what is launched, in progress and still to do.
+
+What users see:
+
+- A new project opens straight on its coordinator chat. There is no interview or plan step; the New Project dialog no longer asks for one. Old projects that still have an interview or a plan keep those tabs.
+- The coordinator never edits code. It proposes tasks in batches; each batch is a live card in its chat with the task's number, title, stage, repo (when it is not the home repo), PR, phase label and why it needs you. One Approve starts the batch; a task's ✕ rejects it. A click opens the task in the project's task pane.
+- Child tasks run in parallel (at most 3 at a time), each with its own sandbox, branch and PR to main, and they wait for their dependencies to launch. A task can target another repo of the project.
+- A task can report to the coordinator or ask it a question. The task list and the card show the open question and the task's reports; "Waiting for coordinator" shows until the coordinator answers, "Question for you" once it passes the question on. Answer in the task's own chat.
+- The coordinator wakes by itself at most 10 times an hour. At the cap its chat shows one line and the project needs you until someone sends a message.
+- Roles: devs are contributors (chat, approve, run, change settings); everyone else is a viewer who reads everything, including child tasks, and files feedback tasks.
+- The project Overview shows the summary document the coordinator keeps, with live task counts above it.
+- A project's stage is derived from its tasks: the Change Phase bulk action and the card's Phase menu are gone, and the timeline shows launched tasks out of all tasks.
+
+Architectural: `ProjectTaskBatchCard` (rows are `ProjectTaskRow`, data from `listByProject` plus `listTaskBatches` for grouping) reaches `ChatBody` through a new `inlineCards` prop and the existing `placeChatUiPanels` placement; only `ProjectSandboxChatPanel` passes it, so session and quick task chats are unchanged. `CoordinatorPausedBanner` (`getCoordinatorState`) sits in `SandboxChatPreInput`. The projects list reads `listStatusesForRepo` in one subscription (`useProjectListStatuses`) instead of one `listByProject` per project. Task rows read the server's `facts` (`projectTaskFactsFromRow`), so usage limit, cancelled dependency and question reasons show; open asks and reports come from `listTaskReports` (`projectTaskNotesByTask`). `@eva/shared/projectView` gains the copy and helpers (additive). A viewer's child-task pane disables text edits, properties, file removal and sandbox start.
+
 ## Web sidebar: repo banner inset with rounded corners
 
 Date: 2026-11-19

@@ -126,6 +126,17 @@ export async function findEntitySession(
     : null;
 }
 
+/**
+ * The one rule for a read-only sandbox: a project coordinator's (plan
+ * decision 6). Every GitHub token such a sandbox gets is read-only
+ * (`mintSandboxGitToken`): the env token at create, the clone, the runner's
+ * refresh (its VM token carries `EVA_READ_ONLY_GIT_CLAIM`) and the credential
+ * helper (`sandboxGitCredentials.resolveCredentialRequest`).
+ */
+export function isReadOnlySandboxOwner(owner: SessionOwner): boolean {
+  return owner.kind === "project";
+}
+
 /** The task a session belongs to, or undefined for any other owner. */
 export function sessionOwnerTaskId(
   session: OwnerFields,

@@ -65,6 +65,7 @@ import { useQuickTaskHeaderActionsSlot } from "@/lib/components/quick-tasks/Quic
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { useRepo } from "@/lib/contexts/RepoContext";
+import { useIsProjectViewer } from "@/lib/components/projects/useProjectRole";
 
 interface TaskDetailInlineProps {
   onClose: () => void;
@@ -136,7 +137,7 @@ export function TaskDetailInline({
     handleStartExecution,
     handleResolveConflicts,
     // Sandbox preview
-    canStartSandbox,
+    canStartSandbox: canStartSandboxAsTask,
     canViewSandbox,
     showSandbox,
     isSandboxActive,
@@ -157,6 +158,11 @@ export function TaskDetailInline({
     handleCreatePr,
     taskSession,
   } = useTaskDetail(taskId, routing);
+  // A project viewer reads a child task but never edits, runs or wakes it:
+  // the same rule as its chat (`TaskSandboxChatPanel`).
+  const isProjectViewer = useIsProjectViewer(task?.projectId);
+  const canStartSandbox = canStartSandboxAsTask && !isProjectViewer;
+  const canEditText = canEditTaskText && !isProjectViewer;
   const { sandbox } = taskSession;
   // A task chats in a session chat (a project task's own chat in the
   // project's session); before that chat exists, the task id reads empty.
@@ -333,7 +339,7 @@ export function TaskDetailInline({
           onViewDiff={openDiffs}
           onOpenAgentsTab={openAgentsTab}
           onSandboxToggle={
-            canStartSandbox || isSandboxActive
+            !isProjectViewer && (canStartSandbox || isSandboxActive)
               ? (action) => {
                   if (action === "start") void handleStartSandbox();
                   else void handleStopSandbox();
@@ -425,7 +431,7 @@ export function TaskDetailInline({
                       <TaskHeader
                         taskNumber={task?.taskNumber}
                         title={task?.title}
-                        canEditTaskText={canEditTaskText}
+                        canEditTaskText={canEditText}
                         hasActiveRun={hasActiveRun}
                         taskId={taskId}
                       />
@@ -446,13 +452,16 @@ export function TaskDetailInline({
                     </div>
                     <TaskDescription
                       description={task?.description}
-                      canEditTaskText={canEditTaskText}
+                      canEditTaskText={canEditText}
                       hasActiveRun={hasActiveRun}
                       taskId={taskId}
                       inline={true}
                     />
 
-                    <TaskAttachments taskId={taskId} />
+                    {/* `disabled` reaches the remove buttons: read-only for viewers. */}
+                    <fieldset disabled={isProjectViewer} className="min-w-0">
+                      <TaskAttachments taskId={taskId} />
+                    </fieldset>
 
                     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
                       <div className="text-sm font-medium text-foreground">
@@ -483,19 +492,23 @@ export function TaskDetailInline({
                 !showMobileProperties && "max-md:hidden",
               )}
             >
-              <StatusFieldsSection
-                taskId={taskId}
-                task={task}
-                status={status}
-                isBlocked={isBlocked}
-                users={users}
-                projects={projects}
-                baseBranch={baseBranch}
-                latestDeployment={latestDeployment}
-                hasRuns={hasRuns}
-                isOwner={isOwner}
-                allTags={allTags}
-              />
+              {/* `disabled` reaches every field control inside: read-only for
+                  project viewers, as on the project's Overview. */}
+              <fieldset disabled={isProjectViewer} className="min-w-0">
+                <StatusFieldsSection
+                  taskId={taskId}
+                  task={task}
+                  status={status}
+                  isBlocked={isBlocked}
+                  users={users}
+                  projects={projects}
+                  baseBranch={baseBranch}
+                  latestDeployment={latestDeployment}
+                  hasRuns={hasRuns}
+                  isOwner={isOwner}
+                  allTags={allTags}
+                />
+              </fieldset>
             </div>
           </div>
         </div>

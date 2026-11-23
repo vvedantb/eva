@@ -1,9 +1,13 @@
-import { useQueries } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import type { FunctionReturnType } from "convex/server";
 import { api, type Id } from "@eva/backend";
 import type { ProjectStatus } from "@eva/shared/projectStatus";
-import { projectStatusFromRows } from "@eva/shared/projectView";
+import {
+  projectStatusFromRows,
+  projectTaskNotesByTask,
+  type ProjectListStatus,
+  type ProjectTaskNotes,
+} from "@eva/shared/projectView";
 
 export type ProjectTaskListRow = FunctionReturnType<
   typeof api.agentTasks.listByProject
@@ -44,50 +48,26 @@ export function useProjectTaskStatus(
   return { tasks, failedTaskIds: failedTaskIds ?? new Set<string>(), status };
 }
 
-/** A `useQueries` result: an error reads as still loading. */
-function listedTasks(
-  result: ProjectTaskListRow[] | Error | undefined,
-): ProjectTaskListRow[] | undefined {
-  return result === undefined || result instanceof Error ? undefined : result;
+/**
+ * Derived status for every project of a repo, keyed by project id: one
+ * subscription for the whole list (`listStatusesForRepo`). Undefined while
+ * it loads, so cards never jump between columns while the page fills in.
+ */
+export function useProjectListStatuses(
+  repoId: Id<"githubRepos">,
+): ReadonlyMap<string, ProjectListStatus> | undefined {
+  const rows = useQuery(api.projects.listStatusesForRepo, { repoId });
+  if (rows === undefined) return undefined;
+  return new Map(rows.map((row) => [String(row.projectId), row]));
 }
 
 /**
- * Derived status for every project on a list page, keyed by project id.
- * Undefined until every project's tasks have loaded, so cards never jump
- * between columns while the page fills in.
+ * Each task's open ask and open reports (`listTaskReports`), keyed by task
+ * id. The task list and the coordinator chat's task cards both read it.
  */
-export function useProjectStatuses(
-  repoId: Id<"githubRepos">,
-  projectIds: ReadonlyArray<Id<"projects">> | undefined,
-): ReadonlyMap<string, ProjectStatus> | undefined {
-  // Keyed by a joined id string so the compiler only rebuilds the query map
-  // (and `useQueries` only resubscribes) when the set of projects changes.
-  const idsKey = (projectIds ?? []).join(" ");
-  const queries = Object.fromEntries(
-    (idsKey ? idsKey.split(" ") : []).map((projectId) => [
-      projectId,
-      { query: api.agentTasks.listByProject, args: { projectId } },
-    ]),
-  );
-  const results = useQueries(queries);
-  const rowsByProject = (projectIds ?? []).map(
-    (projectId): [Id<"projects">, ProjectTaskListRow[] | undefined] => [
-      projectId,
-      listedTasks(results[projectId]),
-    ],
-  );
-  const loaded =
-    projectIds !== undefined &&
-    rowsByProject.every(([, rows]) => rows !== undefined);
-  const allRows = loaded
-    ? rowsByProject.flatMap(([, rows]) => rows ?? [])
-    : undefined;
-  const failedTaskIds = useFailedTaskIds(repoId, allRows);
-  if (!loaded || failedTaskIds === undefined) return undefined;
-  return new Map(
-    rowsByProject.map(([projectId, rows]) => [
-      String(projectId),
-      projectStatusFromRows(rows ?? [], failedTaskIds),
-    ]),
-  );
+export function useProjectTaskNotes(
+  projectId: Id<"projects">,
+): ReadonlyMap<string, ProjectTaskNotes> {
+  const reports = useQuery(api.projects.listTaskReports, { projectId });
+  return projectTaskNotesByTask(reports ?? []);
 }

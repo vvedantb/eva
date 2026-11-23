@@ -120,7 +120,6 @@ export function ProjectDetailHeaderActions({
     projectId,
     title: project.title,
     description: project.description,
-    phase: project.phase,
     projectLead: project.projectLead,
     href: segment ? `${projectsPath}/${segment}` : undefined,
     branchName: project.branchName,

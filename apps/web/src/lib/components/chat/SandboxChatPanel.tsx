@@ -2,6 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
+import type { ReactNode } from "react";
 import { api } from "@eva/backend";
 import { sandboxComposerState, SANDBOX_CHAT_COPY } from "@eva/shared";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
@@ -9,7 +10,7 @@ import { SandboxChatHeaderActions } from "@/lib/components/sandbox/SandboxStartS
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useOlderTranscript } from "@/lib/hooks/useChatTranscript";
 import { useProviderAccountHandoff } from "@/lib/hooks/useProviderAccountHandoff";
-import { ChatBody } from "./ChatBody";
+import { ChatBody, type ChatInlineCard } from "./ChatBody";
 import { SandboxBranchChip } from "./SandboxBranchChip";
 import {
   sandboxTurnSettings,
@@ -65,7 +66,15 @@ export function SandboxChatPanel({
   onOpenAgentsTab,
   onSandboxToggle,
   isReadOnly = false,
-}: SandboxChatPanelProps & { binding: SandboxChatBinding }) {
+  inlineCards,
+  preInputBanner,
+}: SandboxChatPanelProps & {
+  binding: SandboxChatBinding;
+  /** Owner-specific cards in the transcript (a project's task batches). */
+  inlineCards?: ReadonlyArray<ChatInlineCard>;
+  /** Owner-specific notice above the composer (a paused coordinator). */
+  preInputBanner?: ReactNode;
+}) {
   const { repo, basePath } = useRepo();
   const { entity, doc, model, firstRun, ownerLabel } = binding;
   // All undefined until the owner's session exists: nothing to read yet, and
@@ -242,7 +251,13 @@ export function SandboxChatPanel({
           }}
           onSend={handleSend}
           onCancel={handleCancel}
-          preInputContent={<SandboxChatPreInput surface={chatSurface} />}
+          preInputContent={
+            <SandboxChatPreInput
+              surface={chatSurface}
+              beforeBanner={preInputBanner}
+            />
+          }
+          inlineCards={inlineCards}
           composerChips={<SandboxChatStatusChips surface={chatSurface} />}
           underCardLeading={
             <SandboxBranchChip

@@ -23,6 +23,7 @@ import { TASK_TAGS } from "@eva/shared";
 import type { ProjectRole } from "@eva/shared/projectRoles";
 import { ProjectFeedbackModal } from "./ProjectFeedbackModal";
 import { useProjectTaskStatus } from "./useProjectStatus";
+import { projectTaskPaneHref } from "./useProjectTaskBatchCards";
 
 interface Project {
   _id: Id<"projects">;
@@ -84,16 +85,11 @@ export function ProjectActiveLayout({
     useDetailPaneSignals(selectedTaskIdParam);
 
   const handleSelectTask = (id: Id<"agentTasks">) => {
-    if (!projectPathSegment) return;
     const task = tasks?.find((t) => t._id === id);
-    const taskPathSegment = task ? entityPathSegment(task) : null;
-    if (!taskPathSegment) return;
+    const href = task ? projectTaskPaneHref(basePath, project, task) : null;
+    if (href === null) return;
     nudge();
-    navigate({
-      to: toInternalRepoHref(
-        `${basePath}/projects/${projectPathSegment}/${taskPathSegment}/activity`,
-      ),
-    });
+    navigate({ to: toInternalRepoHref(href) });
   };
 
   const handleCloseTask = () => {
