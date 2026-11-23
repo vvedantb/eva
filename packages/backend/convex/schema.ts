@@ -28,6 +28,7 @@ import {
   taskReactionFields,
   taskSubscriberFields,
   chatReadFields,
+  standupReadFields,
   chatRecapFields,
   repoSkillFields,
   repoSkillContentFields,
@@ -197,6 +198,10 @@ const schema = defineSchema({
   chatReads: defineTable(chatReadFields)
     .index("by_user_parent", ["userId", "parentId"])
     .index("by_user_repo", ["userId", "repoId"]),
+  standupReads: defineTable(standupReadFields).index("by_user_repo", [
+    "userId",
+    "repoId",
+  ]),
   chatRecaps: defineTable(chatRecapFields).index("by_user_parent", [
     "userId",
     "parentId",

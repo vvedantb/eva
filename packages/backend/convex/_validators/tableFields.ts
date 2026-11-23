@@ -1625,6 +1625,14 @@ export const chatReadFields = {
   lastVisitedAt: v.optional(v.number()),
 };
 
+// One row per (user, repo): when the user last opened the repo's Today page,
+// so a standup published after that shows as unread to them alone.
+export const standupReadFields = {
+  userId: v.id("users"),
+  repoId: v.id("githubRepos"),
+  lastReadAt: v.number(),
+};
+
 // One row per (user, chat): a recap only that user sees (see chatRecaps).
 // "away" covers what happened since they left; "full" is the whole chat, asked
 // for from the chat menu. `text` is unset while the model writes it.

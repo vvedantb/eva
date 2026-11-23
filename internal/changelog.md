@@ -1,5 +1,29 @@
 # Changelog
 
+## Web: composer action cards match the composer footer width
+
+Date: 2026-11-23
+
+WHY: Matching the composer card still read too wide; the cards should line up with the narrower footer bar (branch, stash, model) under it.
+
+Architectural: The `ComposerActionCards` row inset goes from `px-3 md:px-4` to `px-6 md:px-8`: `ChatComposer`'s wrapper padding plus the footer's own inset. The cards are also compact: `xs` button (28px), 16px icon, `py-1.5 pr-1.5 pl-3` over the `tight` Surface's `p-3`, and an 8px gap between cards. Follow-up: the two numbers live in two files; a shared inset class would stop them drifting.
+
+## Web: composer action cards match the composer width
+
+Date: 2026-11-23
+
+WHY: The Today and last-session cards spanned the full landing column, wider than the composer card above them.
+
+Architectural: The row in `ComposerActionCards` takes `px-3 md:px-4`, the same inset `ChatComposer` puts around its card.
+
+## Web: action cards under the landing composer (Today + last session)
+
+Date: 2026-11-23
+
+WHY: The Today card sat above the greeting and could be dismissed, but it is a standing suggestion of what to do next, not a notice.
+
+Architectural: `TodayStandupCard` became `ComposerActionCards`, rendered under `ChatComposer` in `NewSessionComposer`. Today shows whenever `standupStatus.enabled` ("New standup · <day>" + "Open Today" while unread, else "Today" + "View Today"); the dismiss button and its `markStandupsRead` call are gone, so only opening Today marks standups read. The second card links the user's most recently updated session, from the cached `sessions.list` + `auth.me` through the shared `filterSessionsStartedBy` / `sortSessionsForSidebar`. Two cards sit side by side from `sm`, stacked below it; one card takes the full width.
+
 ## Web: neutral greys no longer tint red (oklab colour mixing)
 
 Date: 2026-11-23
