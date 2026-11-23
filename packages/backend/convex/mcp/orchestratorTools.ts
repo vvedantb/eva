@@ -210,7 +210,7 @@ export function fleetTools(
     defineTool({
       name: "stop_agent",
       description:
-        'Cancel the agent\'s in-flight turn. WARNING: cancelling a session immediately starts its next queued message, so stopping a session with a backlog does not leave it idle — check get_agent_state first and expect to stop it again. For a project this stops only its sandbox chat; a running build keeps going and the reply says so with "buildRunning" (use cancel_project_build to stop it).',
+        'Cancel the agent\'s in-flight turn. WARNING: cancelling a session immediately starts its next queued message, so stopping a session with a backlog does not leave it idle — check get_agent_state first and expect to stop it again. For a project this stops only its sandbox chat; a legacy project build keeps going and the reply says so with "buildRunning". Project child tasks are their own agents: stop each with kind "task".',
       mutating: true,
       input: {
         kind: agentKindArg,
@@ -243,7 +243,7 @@ export function fleetTools(
           ...(buildRunning
             ? {
                 buildRunning,
-                note: "The project build is still running. Only its sandbox chat was cancelled; call cancel_project_build if the user wants the build stopped too.",
+                note: "A legacy project build is still running. Only its sandbox chat was cancelled; the build ends on its own.",
               }
             : {}),
         });

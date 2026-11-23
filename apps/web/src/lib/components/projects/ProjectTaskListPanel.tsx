@@ -2,42 +2,31 @@
 
 import type { Id } from "@eva/backend";
 import { api } from "@eva/backend";
-import type {
-  NeedsYouReason,
-  ProjectTaskStage,
-} from "@eva/shared/projectStatus";
+import type { ProjectTaskDisplayStatus } from "@eva/shared/projectStatus";
 import {
-  projectTaskStageSections,
+  projectTaskStatusSections,
   unapprovedTodoTaskIds,
   type ProjectTaskNotes,
+  type ProjectTaskView,
 } from "@eva/shared/projectView";
 import { useState, type ReactNode } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { Virtuoso } from "react-virtuoso";
 import { useMutation } from "convex/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
-import { DndContext, closestCenter, type DragEndEvent } from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import {
   Accordion,
   AccordionItem,
   AccordionTrigger,
   AccordionContent,
   Button,
-  useDragSensors,
   ListEnter,
   useFirstPaintGate,
 } from "@vvedantb/ui";
-import { IconCheck, IconGripVertical, IconPlus } from "@tabler/icons-react";
+import { IconCheck, IconPlus } from "@tabler/icons-react";
 import type { RepoAppMarkRepo } from "@/lib/components/RepoLogo";
 import { withMutationToast } from "@/lib/utils/mutationToast";
-import { projectTaskStageConfig } from "./ProjectPhaseBadge";
+import { projectTaskDisplayStatusConfig } from "./ProjectPhaseBadge";
 import { ProjectTaskRow } from "./_components/ProjectTaskRow";
 import {
   useProjectTaskNotes,
@@ -45,11 +34,7 @@ import {
 } from "./useProjectStatus";
 
 type Task = ProjectTaskListRow;
-type TaskWithReason = {
-  row: Task;
-  needsYou: NeedsYouReason | undefined;
-  waitingForCoordinator: boolean;
-};
+type ViewedTask = { row: Task; view: ProjectTaskView };
 
 /** What every row of the list shares. */
 interface RowContext {
@@ -65,67 +50,17 @@ interface RowContext {
   canContribute: boolean;
 }
 
-function SortableTaskWrapper({
-  task,
-  context,
-  index,
-  firstPaint,
-}: {
-  task: TaskWithReason;
-  context: RowContext;
-  index: number;
-  firstPaint: boolean;
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: task.row._id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`flex items-center gap-1 ${isDragging ? "opacity-50" : ""}`}
-    >
-      <button
-        type="button"
-        aria-label={`Reorder ${task.row.title}`}
-        className="max-sm:hit-target cursor-grab touch-none text-muted-foreground hover:text-foreground shrink-0 max-sm:p-1.5"
-        {...attributes}
-        {...listeners}
-      >
-        <IconGripVertical size={14} aria-hidden />
-      </button>
-      <div className="flex-1 min-w-0">
-        <ListEnter index={index} firstPaint={firstPaint}>
-          <ProjectTaskRowFor task={task} context={context} />
-        </ListEnter>
-      </div>
-    </div>
-  );
-}
-
 function ProjectTaskRowFor({
   task,
   context,
 }: {
-  task: TaskWithReason;
+  task: ViewedTask;
   context: RowContext;
 }) {
   return (
     <ProjectTaskRow
       task={task.row}
-      needsYou={task.needsYou}
-      waitingForCoordinator={task.waitingForCoordinator}
+      view={task.view}
       notes={context.notesByTask.get(task.row._id)}
       hasError={context.failedTaskIds.has(task.row._id)}
       selectedTaskId={context.selectedTaskId}
@@ -140,15 +75,15 @@ function ProjectTaskRowFor({
 }
 
 function SectionHeader({
-  stage,
+  status,
   count,
   actions,
 }: {
-  stage: ProjectTaskStage;
+  status: ProjectTaskDisplayStatus;
   count: number;
   actions?: ReactNode;
 }) {
-  const config = projectTaskStageConfig[stage];
+  const config = projectTaskDisplayStatusConfig[status];
   const StageIcon = config.icon;
   return (
     <div className="flex flex-1 items-center justify-between">
@@ -180,7 +115,7 @@ interface ProjectTaskListPanelProps {
   projectNumId?: number;
   /** The project's repo; a task in another repo shows its repo. */
   homeRepoId: Id<"githubRepos">;
-  /** The caller may approve, cancel, reorder and run (`callerRole`). */
+  /** The caller may approve, cancel and run (`callerRole`). */
   canContribute: boolean;
 }
 
@@ -197,10 +132,6 @@ export function ProjectTaskListPanel({
 }: ProjectTaskListPanelProps) {
   const { basePath } = useRepo();
   const firstPaint = useFirstPaintGate();
-  const [localTodoOrder, setLocalTodoOrder] = useState<
-    Id<"agentTasks">[] | null
-  >(null);
-  const reorderTasks = useMutation(api.agentTasks.reorderProjectTasks);
   const approveTasks = useMutation(api.buildWorkflow.approveProjectTasks);
   const [isApproving, setIsApproving] = useState(false);
   const [scrollParent, setScrollParent] = useState<HTMLDivElement | null>(null);
@@ -210,24 +141,7 @@ export function ProjectTaskListPanel({
   );
 
   const notesByTask = useProjectTaskNotes(projectId);
-  const sections = projectTaskStageSections(tasks, failedTaskIds);
-  const tasksFor = (stage: ProjectTaskStage) =>
-    sections.find((section) => section.stage === stage)?.tasks ?? [];
-
-  let todoTasks = tasksFor("todo");
-  if (localTodoOrder) {
-    const taskMap = new Map(todoTasks.map((t) => [t.row._id, t]));
-    const orderSet = new Set(localTodoOrder);
-    const ordered: TaskWithReason[] = [];
-    for (const id of localTodoOrder) {
-      const task = taskMap.get(id);
-      if (task) ordered.push(task);
-    }
-    for (const task of tasksFor("todo")) {
-      if (!orderSet.has(task.row._id)) ordered.push(task);
-    }
-    todoTasks = ordered;
-  }
+  const sections = projectTaskStatusSections(tasks, failedTaskIds);
   const toApprove = unapprovedTodoTaskIds(tasks);
 
   const approveAll = async () => {
@@ -241,31 +155,9 @@ export function ProjectTaskListPanel({
     setIsApproving(false);
   };
 
-  // Mouse arms on distance, touch on a hold — a single PointerSensor cannot do
-  // both, and distance-based activation on touch loses the pointer to the list's
-  // own scroll, so reorder was impossible on a phone.
-  const sensors = useDragSensors({ sortable: true });
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const oldIndex = todoTasks.findIndex((t) => t.row._id === active.id);
-    const newIndex = todoTasks.findIndex((t) => t.row._id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-
-    const currentOrder = todoTasks.map((t) => t.row._id);
-    const newOrder = arrayMove(currentOrder, oldIndex, newIndex);
-    setLocalTodoOrder(newOrder);
-
-    reorderTasks({ projectId, taskIds: newOrder }).then(() => {
-      setLocalTodoOrder(null);
-    });
-  };
-
   const defaultExpandedKeys = sections
     .filter((section) => section.defaultOpen)
-    .map((section) => section.stage);
+    .map((section) => section.status);
 
   const context: RowContext = {
     selectedTaskId,
@@ -279,7 +171,8 @@ export function ProjectTaskListPanel({
     canContribute,
   };
 
-  const todoActions = (
+  // New and unapproved tasks wait in Blocked, so its header carries Approve and "+".
+  const blockedActions = (
     <>
       {canContribute && toApprove.length > 0 ? (
         <Button
@@ -322,64 +215,40 @@ export function ProjectTaskListPanel({
         className="px-3 [&_hr]:bg-border"
         defaultValue={defaultExpandedKeys}
       >
-        {sections.map(({ stage, tasks: sectionTasks }) => {
-          const stageTasks = stage === "todo" ? todoTasks : sectionTasks;
-          return (
-            <AccordionItem key={stage} value={stage}>
-              <AccordionTrigger className="p-2 hover:no-underline">
-                <SectionHeader
-                  stage={stage}
-                  count={stageTasks.length}
-                  actions={stage === "todo" ? todoActions : undefined}
-                />
-              </AccordionTrigger>
-              <AccordionContent className="flex flex-col gap-2 px-3">
-                {stageTasks.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-2">No tasks</p>
-                ) : stage === "todo" && canContribute ? (
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd}
-                  >
-                    <SortableContext
-                      items={stageTasks.map((t) => t.row._id)}
-                      strategy={verticalListSortingStrategy}
+        {sections.map(({ status, tasks: sectionTasks }) => (
+          <AccordionItem key={status} value={status}>
+            <AccordionTrigger className="p-2 hover:no-underline">
+              <SectionHeader
+                status={status}
+                count={sectionTasks.length}
+                actions={status === "blocked" ? blockedActions : undefined}
+              />
+            </AccordionTrigger>
+            <AccordionContent className="flex flex-col gap-1 px-3">
+              {sectionTasks.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">No tasks</p>
+              ) : scrollParent ? (
+                <Virtuoso
+                  customScrollParent={scrollParent}
+                  totalCount={sectionTasks.length}
+                  overscan={200}
+                  itemContent={(index) => (
+                    <ListEnter
+                      index={index}
+                      firstPaint={firstPaint.current}
+                      className="pb-1"
                     >
-                      {stageTasks.map((task, index) => (
-                        <SortableTaskWrapper
-                          key={task.row._id}
-                          task={task}
-                          context={context}
-                          index={index}
-                          firstPaint={firstPaint.current}
-                        />
-                      ))}
-                    </SortableContext>
-                  </DndContext>
-                ) : scrollParent ? (
-                  <Virtuoso
-                    customScrollParent={scrollParent}
-                    totalCount={stageTasks.length}
-                    overscan={200}
-                    itemContent={(index) => (
-                      <ListEnter
-                        index={index}
-                        firstPaint={firstPaint.current}
-                        className="pb-2"
-                      >
-                        <ProjectTaskRowFor
-                          task={stageTasks[index]}
-                          context={context}
-                        />
-                      </ListEnter>
-                    )}
-                  />
-                ) : null}
-              </AccordionContent>
-            </AccordionItem>
-          );
-        })}
+                      <ProjectTaskRowFor
+                        task={sectionTasks[index]}
+                        context={context}
+                      />
+                    </ListEnter>
+                  )}
+                />
+              ) : null}
+            </AccordionContent>
+          </AccordionItem>
+        ))}
       </Accordion>
     </div>
   );

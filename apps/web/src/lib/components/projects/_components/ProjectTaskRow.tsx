@@ -2,27 +2,37 @@
 
 import type { Id } from "@eva/backend";
 import { taskScheduledAt } from "@eva/backend";
-import type { NeedsYouReason } from "@eva/shared/projectStatus";
-import type { ProjectTaskNotes } from "@eva/shared/projectView";
+import type {
+  ProjectTaskNotes,
+  ProjectTaskView,
+} from "@eva/shared/projectView";
 import { IconLock } from "@tabler/icons-react";
-import { ListRow, Tooltip, TooltipContent, TooltipTrigger } from "@vvedantb/ui";
+import {
+  Badge,
+  ListRow,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@vvedantb/ui";
 import { QuickTaskCard } from "@/lib/components/quick-tasks/QuickTaskCard";
 import type { RepoAppMarkRepo } from "@/lib/components/RepoLogo";
 import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
 import { entityPathSegment } from "@/lib/numId";
 import type { ProjectTaskListRow } from "../useProjectStatus";
-import { projectTaskStageConfig } from "../ProjectPhaseBadge";
-import { ProjectTaskBadges } from "./ProjectTaskBadges";
+import { projectTaskDisplayStatusConfig } from "../ProjectPhaseBadge";
+import { BADGE_CLASS, ProjectTaskBadges } from "./ProjectTaskBadges";
 
 /**
- * One row of a project's task list, and of the coordinator chat's task
- * cards. A task in a repo the reader cannot open is a locked row: its number
- * and a lock, no title and no link.
+ * One compact row of a project's task list, and of the coordinator chat's
+ * task cards: the stripe is the task's display status
+ * (`projectTaskDisplayStatus`), and `showStatus` names it where no section
+ * header does. A task in a repo the reader cannot open is a locked row: its
+ * number and a lock, no title and no link.
  */
 export function ProjectTaskRow({
   task,
-  needsYou,
-  waitingForCoordinator,
+  view,
+  showStatus = false,
   notes,
   hasError,
   selectedTaskId,
@@ -34,8 +44,9 @@ export function ProjectTaskRow({
   canContribute,
 }: {
   task: ProjectTaskListRow;
-  needsYou: NeedsYouReason | undefined;
-  waitingForCoordinator: boolean;
+  view: ProjectTaskView;
+  /** Name the display status in a badge (the chat card has no sections). */
+  showStatus?: boolean;
   /** The task's open question and open reports (`useProjectTaskNotes`). */
   notes: ProjectTaskNotes | undefined;
   hasError: boolean;
@@ -47,12 +58,13 @@ export function ProjectTaskRow({
   reposById: ReadonlyMap<string, RepoAppMarkRepo>;
   canContribute: boolean;
 }) {
+  const statusConfig = projectTaskDisplayStatusConfig[view.displayStatus];
   if (task.locked === true) {
     return (
       <ListRow
-        accentClassName={projectTaskStageConfig.todo.bar}
+        accentClassName={statusConfig.bar}
         aria-label="Locked task"
-        contentClassName="flex items-center gap-1.5 px-2.5 py-2 pl-3 sm:px-3 sm:py-2.5 sm:pl-3.5"
+        contentClassName="flex items-center gap-1.5 px-2.5 py-1.5 pl-3"
       >
         <EntityNumLabel numId={task.taskNumber} projectNumId={projectNumId} />
         <Tooltip>
@@ -74,8 +86,11 @@ export function ProjectTaskRow({
   const isFeedback = task.origin === "feedback";
   const canCancel =
     canContribute && task.status === "todo" && task.approvedAt === undefined;
+  const { needsYou, waitingForCoordinator } = view;
   const reports = notes?.reports ?? [];
+  const StatusIcon = statusConfig.icon;
   const hasBadges =
+    showStatus ||
     needsYou !== undefined ||
     waitingForCoordinator ||
     notes?.ask !== undefined ||
@@ -114,26 +129,43 @@ export function ProjectTaskRow({
       assignedTo={task.assignedTo}
       projectId={task.projectId}
       repoId={task.repoId}
+      compact
+      accent={{
+        className: statusConfig.bar,
+        working: view.displayStatus === "working",
+      }}
       badges={
         hasBadges ? (
-          <ProjectTaskBadges
-            taskId={task._id}
-            needsYou={needsYou}
-            waitingForCoordinator={waitingForCoordinator}
-            ask={notes?.ask}
-            reports={reports}
-            chatHref={
-              segment
-                ? `${basePath}/quick-tasks/${segment}/sandbox/preview`
-                : undefined
-            }
-            phaseLabel={task.phaseLabel}
-            isFeedback={isFeedback}
-            repo={otherRepo}
-            prUrl={task.prUrl}
-            prState={task.prState}
-            canCancel={canCancel}
-          />
+          <>
+            {showStatus ? (
+              <Badge variant="secondary" className={BADGE_CLASS}>
+                <span className="flex min-w-0 items-center gap-0.5">
+                  <StatusIcon
+                    className={`size-2.5 shrink-0 ${statusConfig.text}`}
+                  />
+                  {statusConfig.label}
+                </span>
+              </Badge>
+            ) : null}
+            <ProjectTaskBadges
+              taskId={task._id}
+              needsYou={needsYou}
+              waitingForCoordinator={waitingForCoordinator}
+              ask={notes?.ask}
+              reports={reports}
+              chatHref={
+                segment
+                  ? `${basePath}/quick-tasks/${segment}/sandbox/preview`
+                  : undefined
+              }
+              phaseLabel={task.phaseLabel}
+              isFeedback={isFeedback}
+              repo={otherRepo}
+              prUrl={task.prUrl}
+              prState={task.prState}
+              canCancel={canCancel}
+            />
+          </>
         ) : undefined
       }
     />

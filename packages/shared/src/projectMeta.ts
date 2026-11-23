@@ -34,13 +34,6 @@ export const ACTIVE_PROJECT_PHASES: ProjectPhase[] = [
   "cancelled",
 ];
 
-/** Phases where the autonomous "Build Project" workflow can start. */
-export const BUILDABLE_PROJECT_PHASES: ProjectPhase[] = [
-  "in_progress",
-  "business_review",
-  "code_review",
-];
-
 /** Draft and finalized projects show the plan (interview and spec) in place of tasks. */
 export function isProjectPlanning(phase: ProjectPhase): boolean {
   return phase === "draft" || phase === "finalized";

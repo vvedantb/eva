@@ -3,6 +3,7 @@ import {
   MAX_PARALLEL_PROJECT_TASKS,
   hasDependencyCycle,
   projectStatus,
+  projectTaskDisplayStatus,
   projectTaskNeedsYou,
   projectTaskStage,
   projectTaskWaitsForCoordinator,
@@ -179,4 +180,43 @@ test("hasDependencyCycle finds a loop, including a task waiting on itself", () =
   expect(hasDependencyCycle([["b", "a"], ["c", "b"]])).toBe(false);
   expect(hasDependencyCycle([["b", "a"], ["c", "b"], ["a", "c"]])).toBe(true);
   expect(hasDependencyCycle([["a", "a"]])).toBe(true);
+});
+
+describe("projectTaskDisplayStatus", () => {
+  const cases: Array<[string, Partial<ProjectTaskFacts>, string]> = [
+    ["running", { status: "in_progress", runPending: true }, "working"],
+    ["unapproved todo", { approved: false }, "blocked"],
+    ["unapproved draft", { status: "draft", approved: false }, "blocked"],
+    ["PR open", { status: "done", prState: "open" }, "blocked"],
+    ["code review", { status: "code_review" }, "blocked"],
+    ["business review", { status: "business_review" }, "blocked"],
+    [
+      "ask for the coordinator",
+      { status: "in_progress", openAsk: "coordinator" },
+      "blocked",
+    ],
+    ["ask for a person", { status: "in_progress", openAsk: "person" }, "blocked"],
+    ["first failure", { status: "in_progress", halted: "failed" }, "blocked"],
+    [
+      "failure after the retry",
+      { status: "in_progress", halted: "failed", coordinatorRetries: 1 },
+      "blocked",
+    ],
+    ["stopped", { halted: "cancelled" }, "blocked"],
+    ["PR closed", { status: "in_progress", prState: "closed" }, "blocked"],
+    ["usage limit", { status: "in_progress", usageLimited: true }, "blocked"],
+    [
+      "cancelled dependency",
+      { dependencies: [{ status: "cancelled" }] },
+      "blocked",
+    ],
+    ["approved, waits for a dependency", { dependencies: [{ status: "todo" }] }, "idle"],
+    ["approved, waits for a slot", {}, "idle"],
+    ["done and merged", { status: "done", prState: "merged" }, "archived"],
+    ["done with no PR", { status: "done" }, "archived"],
+    ["cancelled", { status: "cancelled", approved: false }, "archived"],
+  ];
+  test.each(cases)("%s", (_name, facts, expected) => {
+    expect(projectTaskDisplayStatus(task("a", 1, facts))).toBe(expected);
+  });
 });

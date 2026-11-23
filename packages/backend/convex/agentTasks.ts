@@ -20,7 +20,6 @@ export {
   createFeedbackTask,
   createQuickTasksBatch,
   assignToProject,
-  reorderProjectTasks,
   deleteCascade,
 } from "./_agentTasks/mutations";
 

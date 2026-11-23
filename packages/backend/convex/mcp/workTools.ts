@@ -22,13 +22,6 @@ import { projectCallerOf } from "./projectScope";
 import { projectTaskRefArgs, resolveProjectTaskRef } from "./projectTools";
 import { internal } from "../_generated/api";
 
-const projectIdArg = z
-  .string()
-  .optional()
-  .describe(
-    'The project\'s Convex id. Alternatively name it with "id", "prUrl", or "numId" plus repoName.',
-  );
-
 const taskIdArg = z
   .string()
   .optional()
@@ -110,7 +103,6 @@ export function workTools(
     return at;
   }
 
-  const projectInput = { projectId: projectIdArg, ...entityRefArgs };
   const taskInput = { taskId: taskIdArg, ...entityRefArgs };
   // update_task and delete_task also take a task's number in the caller's
   // project (`projectTaskRefArgs`), so a coordinator names "#3" directly.
@@ -132,123 +124,6 @@ export function workTools(
     if (typeof directId === "object") return directId;
     return resolveKind("task", directId, rest);
   }
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // Project builds
-  // ───────────────────────────────────────────────────────────────────────────
-
-  tools.push(
-    defineTool({
-      name: "start_project_build",
-      description: `Start a project's build now — the "Start cooking" button. It approves every todo task of the project; the scheduler then runs them in parallel (at most 3 at once), each as its own task with its own branch and PR to main, and starts a task only once every task it depends on is done and its PR merged.
-
-The reply only means the tasks were approved; follow progress with list_entities. A pending scheduled build is left in place.`,
-      mutating: true,
-      input: projectInput,
-      handler: async ({ projectId, ...ref }) => {
-        const resolved = await resolveKind("project", projectId, ref);
-        if ("content" in resolved) return resolved;
-        const { target } = resolved;
-        await runMutation("buildWorkflow:startBuild", {
-          projectId: target.targetId,
-        });
-        return toolJsonResult({ ...entitySummary(target), build: "started" });
-      },
-    }),
-  );
-
-  tools.push(
-    defineTool({
-      name: "schedule_project_build",
-      description: `Schedule a project's build to start at a future time: at that time every todo task is approved and the scheduler starts what is ready. Use update_scheduled_project_build to move an existing schedule.
-
-Rejected when one is already scheduled, or when the time is not in the future.`,
-      mutating: true,
-      input: { ...projectInput, scheduledAt: scheduledAtArg },
-      handler: async ({ projectId, scheduledAt, ...ref }) => {
-        const at = futureTime(scheduledAt);
-        if (typeof at !== "number") return at;
-        const resolved = await resolveKind("project", projectId, ref);
-        if ("content" in resolved) return resolved;
-        const { target } = resolved;
-        await runMutation("buildWorkflow:scheduleBuild", {
-          projectId: target.targetId,
-          scheduledAt: at,
-        });
-        return toolJsonResult({
-          ...entitySummary(target),
-          build: "scheduled",
-          scheduledAt: new Date(at).toISOString(),
-        });
-      },
-    }),
-  );
-
-  tools.push(
-    defineTool({
-      name: "update_scheduled_project_build",
-      description: `Move a project's scheduled build to a new future time. Any existing schedule is replaced; with none, this creates one. Rejected when the time is not in the future.`,
-      mutating: true,
-      input: { ...projectInput, scheduledAt: scheduledAtArg },
-      handler: async ({ projectId, scheduledAt, ...ref }) => {
-        const at = futureTime(scheduledAt);
-        if (typeof at !== "number") return at;
-        const resolved = await resolveKind("project", projectId, ref);
-        if ("content" in resolved) return resolved;
-        const { target } = resolved;
-        await runMutation("buildWorkflow:updateScheduledBuild", {
-          projectId: target.targetId,
-          scheduledAt: at,
-        });
-        return toolJsonResult({
-          ...entitySummary(target),
-          build: "rescheduled",
-          scheduledAt: new Date(at).toISOString(),
-        });
-      },
-    }),
-  );
-
-  tools.push(
-    defineTool({
-      name: "cancel_scheduled_project_build",
-      description: `Cancel a project's scheduled build before it starts. Does not touch a build that is already running (use cancel_project_build). Rejected when the project has no scheduled build.`,
-      mutating: true,
-      input: projectInput,
-      handler: async ({ projectId, ...ref }) => {
-        const resolved = await resolveKind("project", projectId, ref);
-        if ("content" in resolved) return resolved;
-        const { target } = resolved;
-        await runMutation("buildWorkflow:cancelScheduledBuild", {
-          projectId: target.targetId,
-        });
-        return toolJsonResult({
-          ...entitySummary(target),
-          build: "schedule_cancelled",
-        });
-      },
-    }),
-  );
-
-  tools.push(
-    defineTool({
-      name: "cancel_project_build",
-      description: `Stop a project's build: every approved todo task that has not started loses its approval, so nothing new starts. Tasks already running keep going (stop one with stop_agent); finished tasks are left alone.
-
-This does not stop the project's sandbox chat (use stop_agent with kind "project").`,
-      mutating: true,
-      input: projectInput,
-      handler: async ({ projectId, ...ref }) => {
-        const resolved = await resolveKind("project", projectId, ref);
-        if ("content" in resolved) return resolved;
-        const { target } = resolved;
-        await runMutation("buildWorkflow:cancelBuild", {
-          projectId: target.targetId,
-        });
-        return toolJsonResult({ ...entitySummary(target), build: "cancelled" });
-      },
-    }),
-  );
 
   // ───────────────────────────────────────────────────────────────────────────
   // Quick task lifecycle

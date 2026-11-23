@@ -36,7 +36,6 @@ function BatchCard({ batch, project }: { batch: ProjectTaskBatch; project: Proje
   const { tasks, failedTaskIds } = useProjectTaskStatus(project._id, project.repoId);
   const notesByTask = useProjectTaskNotes(project._id);
   const repos = useQuery(api.githubRepos.list, {});
-  const users = useQuery(api.users.listAll, {});
   const approveTasks = useMutation(api.buildWorkflow.approveProjectTasks);
   const [approving, setApproving] = useState(false);
   const canContribute = project.callerRole === "contributor";
@@ -64,19 +63,18 @@ function BatchCard({ batch, project }: { batch: ProjectTaskBatch; project: Proje
       <Text className="font-instrument-sans text-xs" style={{ color: theme.mutedForeground }}>
         Proposed tasks
       </Text>
-      <View className="gap-2">
+      <View className="gap-1">
         {batchTasks.map((task) => {
           const view = projectTaskView(task, failedTaskIds.has(task._id));
           return (
             <ProjectTaskRow
               key={task._id}
               task={task}
-              needsYou={view.needsYou}
-              waitingForCoordinator={view.waitingForCoordinator}
+              view={view}
+              showStatus
               notes={notesByTask.get(task._id)}
               hasError={failedTaskIds.has(task._id)}
               hasDraftComment={false}
-              creator={users?.find((user) => user._id === task.createdBy)}
               projectNumId={project.numId}
               homeRepoId={project.repoId}
               reposById={reposById}

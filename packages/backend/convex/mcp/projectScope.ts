@@ -46,30 +46,22 @@ const COORDINATOR_ONLY_TOOLS: ReadonlySet<string> = new Set([
 const CHILD_ONLY_TOOLS: ReadonlySet<string> = new Set(["report_to_coordinator"]);
 
 /**
- * Tools a child task never gets: it cannot create tasks in batches, stop an
- * agent, or run, schedule or cancel its project's build.
+ * Tools a child task never gets: it cannot create tasks in batches or stop
+ * an agent.
  */
 const CHILD_HIDDEN_TOOLS: ReadonlySet<string> = new Set([
   "create_tasks_batch",
   "stop_agent",
-  "start_project_build",
-  "schedule_project_build",
-  "update_scheduled_project_build",
-  "cancel_scheduled_project_build",
-  "cancel_project_build",
 ]);
 
 /**
  * Tools a coordinator never gets: starting work is a person's approval
- * (decision 7), so no run, schedule or build start.
+ * (decision 7), so no run or schedule.
  */
 const COORDINATOR_HIDDEN_TOOLS: ReadonlySet<string> = new Set([
   "create_and_run_task",
   "schedule_task",
   "update_scheduled_task",
-  "start_project_build",
-  "schedule_project_build",
-  "update_scheduled_project_build",
 ]);
 
 /** Session-only tools a project chat refuses with a clear error. */

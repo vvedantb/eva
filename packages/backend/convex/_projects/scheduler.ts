@@ -322,7 +322,7 @@ export async function approveTasks(
   }
 }
 
-/** Every `todo` task of the project: what "start the build" approves. */
+/** Every `todo` task of the project: what a build scheduled before the scheduler approves when it fires. */
 export async function projectTodoTaskIds(
   db: DatabaseReader,
   projectId: Id<"projects">,
@@ -330,28 +330,6 @@ export async function projectTodoTaskIds(
   return (await listProjectTasks(db, projectId))
     .filter((task) => task.status === "todo")
     .map((task) => task._id);
-}
-
-/**
- * Takes the approval back from every approved `todo` task that has not
- * started, so the scheduler starts nothing more. Running tasks keep going:
- * each owns its PR. Returns how many tasks it touched.
- */
-export async function withdrawUnstartedApprovals(
-  ctx: MutationCtx,
-  projectId: Id<"projects">,
-): Promise<number> {
-  const waiting = (await listProjectTasks(ctx.db, projectId)).filter(
-    (task) =>
-      task.status === "todo" &&
-      task.approvedAt !== undefined &&
-      task.run === undefined,
-  );
-  const now = Date.now();
-  for (const task of waiting) {
-    await ctx.db.patch(task._id, { approvedAt: undefined, updatedAt: now });
-  }
-  return waiting.length;
 }
 
 /**

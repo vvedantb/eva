@@ -14,12 +14,9 @@ import {
 } from "./functions";
 import { stopProjectInterview } from "./workflowWatchdog";
 import {
-  cancelProjectBuildSchedule,
   finishProjectBuild,
   fireProjectBuildSchedule,
   projectBuildWorkflowId,
-  projectScheduledBuildAt,
-  scheduleProjectBuild,
 } from "./_projects/buildState";
 import { syncProjectSession } from "./_sessions/ownedSession";
 import {
@@ -27,14 +24,12 @@ import {
   projectTodoTaskIds,
   retryFailedTask,
   scheduleReadyProjectTasks,
-  withdrawUnstartedApprovals,
 } from "./_projects/scheduler";
 
 // A project's child tasks run in parallel, each like a quick task, started by
-// the scheduler (`_projects/scheduler.ts`) once a person approved them. The
-// old build names below stay as thin wrappers for older clients and the MCP
-// build tools: "start the build" approves every todo task and schedules;
-// "cancel the build" takes back the approval of every task not started.
+// the scheduler (`_projects/scheduler.ts`) once a person approved them. There
+// is no project build to start, schedule or cancel any more; what is left of
+// it below only winds down builds stored before the scheduler.
 
 // --- Scheduler ---
 
@@ -97,44 +92,12 @@ export const retryFailedTaskAsCoordinator = internalMutation({
   },
 });
 
-/** Approves every todo task of the project, then schedules: the old "build". */
-async function approveAllAndSchedule(
-  ctx: MutationCtx,
-  projectId: Id<"projects">,
-): Promise<void> {
-  await approveTasks(ctx, projectId, await projectTodoTaskIds(ctx.db, projectId));
-  await scheduleReadyProjectTasks(ctx, projectId);
-}
-
-// --- Old build names (thin wrappers) ---
+// --- Builds stored before the scheduler ---
 
 /**
- * "Start cooking": approves every todo task of the project and starts what
- * is ready. Kept for older clients and `start_project_build`.
- */
-export const startBuild = authMutation({
-  args: {
-    projectId: v.id("projects"),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(
-      ctx.db,
-      args.projectId,
-      ctx.userId,
-      "contributor",
-    );
-    await approveAllAndSchedule(ctx, args.projectId);
-    await ctx.db.patch(args.projectId, { lastBuildError: undefined });
-    return null;
-  },
-});
-
-// --- Scheduled build (old name: approve all and schedule at a time) ---
-
-/**
- * Called by the Convex scheduler at the scheduled time: approves every todo
- * task of the project and starts what is ready.
+ * A build scheduled before the scheduler, firing at its time: approves every
+ * todo task of the project and starts what is ready. Nothing schedules a new
+ * one; this drains the jobs already pending.
  */
 export const executeScheduledBuild = internalMutation({
   args: {
@@ -154,80 +117,12 @@ export const executeScheduledBuild = internalMutation({
       args.scheduledAt,
     );
     if (!fired.ok) return null;
-    await approveAllAndSchedule(ctx, args.projectId);
-    return null;
-  },
-});
-
-/** Schedules "approve all and start" for a future time (`schedule_project_build`). */
-export const scheduleBuild = authMutation({
-  args: {
-    projectId: v.id("projects"),
-    scheduledAt: v.number(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const project = await getProjectWithAccess(
-      ctx.db,
-      args.projectId,
-      ctx.userId,
-      "contributor",
-    );
-    if (projectScheduledBuildAt(project) !== undefined)
-      throw new Error("Project already has a scheduled build");
-    if (args.scheduledAt <= Date.now())
-      throw new Error("Scheduled time must be in the future");
-
-    await scheduleProjectBuild(
+    await approveTasks(
       ctx,
       args.projectId,
-      "schedule",
-      args.scheduledAt,
+      await projectTodoTaskIds(ctx.db, args.projectId),
     );
-    return null;
-  },
-});
-
-/** Cancels a previously scheduled build for a project. */
-export const cancelScheduledBuild = authMutation({
-  args: { projectId: v.id("projects") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(
-      ctx.db,
-      args.projectId,
-      ctx.userId,
-      "contributor",
-    );
-    const cancelled = await cancelProjectBuildSchedule(ctx, args.projectId);
-    if (!cancelled.ok) throw new Error(cancelled.reason);
-    return null;
-  },
-});
-
-/** Reschedules a project build; the new schedule replaces (and cancels) the pending one. */
-export const updateScheduledBuild = authMutation({
-  args: {
-    projectId: v.id("projects"),
-    scheduledAt: v.number(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(
-      ctx.db,
-      args.projectId,
-      ctx.userId,
-      "contributor",
-    );
-    if (args.scheduledAt <= Date.now())
-      throw new Error("Scheduled time must be in the future");
-
-    await scheduleProjectBuild(
-      ctx,
-      args.projectId,
-      "schedule",
-      args.scheduledAt,
-    );
+    await scheduleReadyProjectTasks(ctx, args.projectId);
     return null;
   },
 });
@@ -288,36 +183,6 @@ async function cancelLegacyBuild(
   await ctx.db.patch(projectId, { lastBuildError: reason });
   await recomputeProjectPhase(ctx, projectId);
 }
-
-/**
- * "Cancel the build": takes back the approval of every todo task that has
- * not started, so nothing new starts. Running tasks keep going (stop one with
- * `stop_agent`); a build workflow from before the scheduler is stopped. Kept
- * for older clients and `cancel_project_build`.
- */
-export const cancelBuild = authMutation({
-  args: { projectId: v.id("projects") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const project = await getProjectWithAccess(
-      ctx.db,
-      args.projectId,
-      ctx.userId,
-      "contributor",
-    );
-    await withdrawUnstartedApprovals(ctx, args.projectId);
-    const legacyWorkflowId = projectBuildWorkflowId(project);
-    if (legacyWorkflowId !== undefined) {
-      await cancelLegacyBuild(
-        ctx,
-        args.projectId,
-        legacyWorkflowId,
-        "Build cancelled by user",
-      );
-    }
-    return null;
-  },
-});
 
 /**
  * The project left the board (completed, cancelled, deleted) while its own

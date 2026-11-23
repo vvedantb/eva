@@ -1,5 +1,11 @@
 # Changelog
 
+## Project tasks: Working / Blocked / Idle / Archived, compact rows, no build controls
+
+Date: 2026-11-23
+
+Project task lists group child tasks as Working, Blocked, Idle and Archived (`projectTaskDisplayStatus`) in compact rows, and drag-to-reorder, Run Eva, Stop Build, Schedule build and the five `*_project_build` MCP tools are gone (web and phone).
+
 ## Projects UI: coordinator always open, read-only menus, viewer gaps
 
 Date: 2026-11-23

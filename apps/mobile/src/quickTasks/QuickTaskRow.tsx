@@ -115,6 +115,8 @@ export function QuickTaskRow({
   onLongPress,
   selection,
   badges,
+  compact = false,
+  accentColor,
 }: {
   task: QuickTaskRowTask;
   status: DisplayTaskStatus;
@@ -130,6 +132,14 @@ export function QuickTaskRow({
   selection?: { checked: boolean; onToggle: () => void };
   /** Extra badges after the tags, as the web card's `badges` (a project task's needs-you, repo and PR). */
   badges?: ReactNode;
+  /**
+   * One tight row (a project's task list and the coordinator's task cards),
+   * as the web `compact` card: the age ends the title line, no creator line,
+   * 44 high at least.
+   */
+  compact?: boolean;
+  /** The stripe from the caller's own status (a project task's display status) in place of `status`. */
+  accentColor?: string;
 }) {
   const router = useRouter();
   const scheme = useScheme();
@@ -162,16 +172,21 @@ export function QuickTaskRow({
     .filter(Boolean)
     .join(", ");
   const muted = theme.mutedForeground;
+  const age = (
+    <Text className="font-instrument-sans" style={{ ...META_TEXT, color: withAlpha(muted, 0.7), fontVariant: ["tabular-nums"] }}>
+      {timeAgo(task.createdAt)}
+    </Text>
+  );
 
   return (
     <SurfaceRow
       accessibilityLabel={displayTitle(task.title)}
       accessibilityHint={selection ? (selection.checked ? "Selected" : "Not selected") : hint}
-      accentColor={showError ? theme.destructive : appearance.bar}
+      accentColor={showError ? theme.destructive : (accentColor ?? appearance.bar)}
       backgroundColor={showError ? withAlpha(theme.destructive, 0.05) : theme.card}
       borderColor={showError ? withAlpha(theme.destructive, 0.3) : undefined}
       // The web `px-2.5 pl-3` and `gap-1.5`; `py-3` (web `py-2`) for a thumb.
-      className="min-h-[72px] gap-1.5 px-3 py-3 pl-3.5"
+      className={compact ? "min-h-11 justify-center gap-1 px-3 py-2 pl-3.5" : "min-h-[72px] gap-1.5 px-3 py-3 pl-3.5"}
       onPress={
         selection
           ? selection.onToggle
@@ -180,7 +195,7 @@ export function QuickTaskRow({
       onLongPress={selection ? selection.onToggle : onLongPress}
       longPressLabel="Task actions"
     >
-      <View className="flex-row items-start gap-2">
+      <View className={compact ? "flex-row items-center gap-2" : "flex-row items-start gap-2"}>
         {selection ? <Checkbox checked={selection.checked} onCheckedChange={selection.onToggle} accessibilityLabel="Select task" /> : null}
         <View className="min-w-0 flex-1 flex-row items-baseline gap-1.5">
           {numLabel ? (
@@ -197,7 +212,7 @@ export function QuickTaskRow({
             {displayTitle(task.title)}
           </Text>
         </View>
-        <View className="shrink-0 flex-row items-center gap-1.5 pt-0.5">
+        <View className={compact ? "shrink-0 flex-row items-center gap-1.5" : "shrink-0 flex-row items-center gap-1.5 pt-0.5"}>
           {task.priority ? <PriorityIcon level={task.priority} /> : null}
           {task.isAwaitingAnswer ? (
             <AwaitingAnswerMark />
@@ -211,6 +226,7 @@ export function QuickTaskRow({
           ) : null}
           {showUnread ? <View className="size-1.5 rounded-full" style={{ backgroundColor: theme.primary }} /> : null}
           {scheduled ? <IconClock size={14} color={theme.primary} /> : null}
+          {compact ? age : null}
         </View>
       </View>
 
@@ -245,23 +261,23 @@ export function QuickTaskRow({
         </View>
       ) : null}
 
-      <View className="mt-0.5 flex-row items-center justify-between gap-2 pt-0.5">
-        <View className="min-w-0 flex-row items-center gap-1.5">
-          {creator ? (
-            <>
-              <InitialsAvatar user={creator} size={16} />
-              {creatorFirstName ? (
-                <Text numberOfLines={1} className="font-instrument-sans min-w-0" style={{ ...META_TEXT, color: withAlpha(muted, 0.75) }}>
-                  {creatorFirstName}
-                </Text>
-              ) : null}
-            </>
-          ) : null}
+      {compact ? null : (
+        <View className="mt-0.5 flex-row items-center justify-between gap-2 pt-0.5">
+          <View className="min-w-0 flex-row items-center gap-1.5">
+            {creator ? (
+              <>
+                <InitialsAvatar user={creator} size={16} />
+                {creatorFirstName ? (
+                  <Text numberOfLines={1} className="font-instrument-sans min-w-0" style={{ ...META_TEXT, color: withAlpha(muted, 0.75) }}>
+                    {creatorFirstName}
+                  </Text>
+                ) : null}
+              </>
+            ) : null}
+          </View>
+          {age}
         </View>
-        <Text className="font-instrument-sans" style={{ ...META_TEXT, color: withAlpha(muted, 0.7), fontVariant: ["tabular-nums"] }}>
-          {timeAgo(task.createdAt)}
-        </Text>
-      </View>
+      )}
     </SurfaceRow>
   );
 }

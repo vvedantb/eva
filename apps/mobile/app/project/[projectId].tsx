@@ -1,20 +1,17 @@
-import { api, isProjectBuilding, projectScheduledBuildAt } from "@eva/backend";
-import { BUILDABLE_PROJECT_PHASES, isProjectPlanning } from "@eva/shared";
+import { api } from "@eva/backend";
+import { isProjectPlanning } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconCalendarClock, IconHammer, IconLayoutKanban, IconMessage, IconPlayerStop } from "@tabler/icons-react-native";
+import { IconLayoutKanban, IconMessage } from "@tabler/icons-react-native";
 import { goBackOrReplace } from "@vvedantb/native-ui/expo-router";
 import { StackPageHeader } from "@vvedantb/native-ui/layout";
-import { Button, CenteredSpinner, ConfirmDialog, EmptyState } from "@vvedantb/native-ui/primitives";
-import { toast } from "@vvedantb/native-ui/toast";
-import { useMutation, useQuery } from "convex/react";
+import { Button, CenteredSpinner, EmptyState } from "@vvedantb/native-ui/primitives";
+import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import dayjs from "dayjs";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState, type ReactNode } from "react";
-import { Pressable, View } from "react-native";
+import type { ReactNode } from "react";
+import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ProjectOverview } from "@/projects/ProjectOverview";
-import { ScheduleSheet } from "@/ui/ScheduleSheet";
 import { ProjectPlan } from "@/projects/ProjectPlan";
 import { ProjectTasks } from "@/projects/ProjectTasks";
 import { useProjectActions } from "@/projects/useProjectActions";
@@ -35,12 +32,10 @@ type Tab = "overview" | "work";
  * no planning step. The web Sandbox tab's coordinator chat is the phone
  * chat screen (`/chat/<projectId>`): "Chat" in the bottom bar opens it, with
  * the web unread dot; a project has no closed state, so it always shows. A
- * contributor gets "Build" (the web "Build Project", with its "Run Eva"
- * confirm) or, while a build runs, "Stop Build" (with the web stop
- * confirm) beside it in thumb reach, with the web's build schedule as a
- * calendar square, and the "…" sheet, led by the web's sandbox actions
- * (`useProjectGitActions`). A viewer (`callerRole`) gets
- * "Feedback" in their place, as the web header. Not here from the web: the
+ * contributor gets the "…" sheet, led by the web's sandbox actions
+ * (`useProjectGitActions`); tasks start through Approve and the project
+ * scheduler. A viewer (`callerRole`) gets "Feedback" beside Chat, as the
+ * web header. Not here from the web: the
  * sandbox preview, files and review panes.
  */
 export default function ProjectScreen() {
@@ -172,8 +167,7 @@ type Project = NonNullable<FunctionReturnType<typeof api.projects.get>>;
 
 /**
  * The bottom bar: "Chat" (the coordinator chat, with the unread dot while a
- * reply waits), then the web build button behind the web confirm for a
- * contributor, or "Feedback" for a viewer.
+ * reply waits), then "Feedback" for a viewer.
  */
 function ProjectDock({ project, canContribute, onFeedback }: { project: Project; canContribute: boolean; onFeedback: () => void }) {
   const router = useRouter();
@@ -183,29 +177,6 @@ function ProjectDock({ project, canContribute, onFeedback }: { project: Project;
   const owned = useQuery(api.sessions.getOwnedWithSeed, { owner: { kind: "project", projectId: project._id } });
   const chatId = owned?.session?.chatId;
   const unread = useQuery(api.chatReads.isUnread, chatId ? { parentId: chatId } : "skip")?.hasUnread === true;
-  const startBuild = useMutation(api.buildWorkflow.startBuild);
-  // The web split Build button's schedule half (`ScheduleBuildPopover`).
-  const scheduleBuild = useMutation(api.buildWorkflow.scheduleBuild);
-  const updateScheduledBuild = useMutation(api.buildWorkflow.updateScheduledBuild);
-  const cancelScheduledBuild = useMutation(api.buildWorkflow.cancelScheduledBuild);
-  const [scheduling, setScheduling] = useState(false);
-  const scheduledBuildAt = projectScheduledBuildAt(project);
-  const cancelBuild = useMutation(api.buildWorkflow.cancelBuild);
-  const [confirm, setConfirm] = useState<"build" | "stop" | null>(null);
-  const [busy, setBusy] = useState(false);
-  const canBuild = canContribute && BUILDABLE_PROJECT_PHASES.includes(project.phase);
-  const building = isProjectBuilding(project);
-
-  const run = async (action: () => Promise<unknown>, success: string | undefined, failure: string) => {
-    setBusy(true);
-    try {
-      await action();
-      if (success) toast.success(success);
-    } catch {
-      toast.error(failure);
-    }
-    setBusy(false);
-  };
 
   return (
     <View className="flex-row gap-2 px-4 pt-2" style={{ paddingBottom: insets.bottom + 12 }}>
@@ -230,80 +201,6 @@ function ProjectDock({ project, canContribute, onFeedback }: { project: Project;
           </Button>
         </View>
       ) : null}
-      {canBuild ? (
-        <View className="min-w-0 flex-1">
-          {building ? (
-            <Button
-              variant="destructive"
-              loading={busy}
-              disabled={busy}
-              leftIcon={<IconPlayerStop size={16} color={theme.destructiveForeground} />}
-              onPress={() => setConfirm("stop")}
-            >
-              Stop Build
-            </Button>
-          ) : (
-            <Button
-              loading={busy}
-              disabled={busy}
-              leftIcon={<IconHammer size={16} color={theme.primaryForeground} />}
-              onPress={() => setConfirm("build")}
-            >
-              {scheduledBuildAt !== undefined ? `Build · ${dayjs(scheduledBuildAt).format("MMM D, h:mm A")}` : "Build"}
-            </Button>
-          )}
-        </View>
-      ) : null}
-      {canBuild && !building ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={scheduledBuildAt !== undefined ? "Change or remove the build schedule" : "Schedule build"}
-          onPress={() => setScheduling(true)}
-          className="h-11 w-11 items-center justify-center rounded-xl active:opacity-70"
-          style={{ backgroundColor: theme.secondary }}
-        >
-          <IconCalendarClock size={18} color={scheduledBuildAt !== undefined ? theme.primary : theme.secondaryForeground} />
-        </Pressable>
-      ) : null}
-      <ScheduleSheet
-        open={scheduling}
-        onOpenChange={setScheduling}
-        title="Schedule build"
-        scheduleLabel="Schedule build"
-        scheduledAt={scheduledBuildAt}
-        onSchedule={(at) => {
-          setScheduling(false);
-          void (scheduledBuildAt === undefined
-            ? run(() => scheduleBuild({ projectId: project._id, scheduledAt: at }), "Build scheduled", "Couldn't schedule build")
-            : run(() => updateScheduledBuild({ projectId: project._id, scheduledAt: at }), "Build schedule updated", "Couldn't update build schedule"));
-        }}
-        onRemove={() => {
-          setScheduling(false);
-          void run(() => cancelScheduledBuild({ projectId: project._id }), "Build schedule removed", "Couldn't remove build schedule");
-        }}
-      />
-      {/* The web `RunEvaDialog`. */}
-      <ConfirmDialog
-        open={confirm === "build"}
-        onOpenChange={(open) => setConfirm(open ? "build" : null)}
-        title="Run Eva"
-        description={
-          "This will allow Eva to autonomously work through all tasks in sequence until the project is fully built.\n\n" +
-          "Best suited for projects with well-defined requirements. If Eva makes an error on an earlier task, it may carry forward into subsequent tasks."
-        }
-        confirmLabel="Start cooking"
-        onConfirm={() => void run(() => startBuild({ projectId: project._id }), "Build started", "Couldn't start build")}
-      />
-      {/* The web `StopConfirmDialog`. */}
-      <ConfirmDialog
-        open={confirm === "stop"}
-        onOpenChange={(open) => setConfirm(open ? "stop" : null)}
-        title="Stop Execution"
-        description="This will stop the agent mid-execution. Any uncommitted progress on this run will be lost."
-        confirmLabel="Stop Execution"
-        variant="destructive"
-        onConfirm={() => void run(() => cancelBuild({ projectId: project._id }), undefined, "Could not stop the build. Try again.")}
-      />
     </View>
   );
 }

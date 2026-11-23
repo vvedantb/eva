@@ -32,7 +32,7 @@ import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
 /** The task card's metadata badge size (`QuickTaskCard` tags and project). */
-const BADGE_CLASS = "max-w-40 px-1.5 py-0 text-3xs font-medium leading-4";
+export const BADGE_CLASS = "max-w-40 px-1.5 py-0 text-3xs font-medium leading-4";
 
 /** Reports a row's tooltip lists; the badge counts all of them. */
 const MAX_REPORTS_SHOWN = 3;

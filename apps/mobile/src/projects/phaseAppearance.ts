@@ -1,7 +1,8 @@
 import type { ProjectColumn, ProjectPhase } from "@eva/shared";
-import type { ProjectStage, ProjectTaskStage } from "@eva/shared/projectStatus";
+import type { ProjectStage, ProjectTaskDisplayStatus, ProjectTaskStage } from "@eva/shared/projectStatus";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
+  IconAlertTriangle,
   IconCheck,
   IconCircleCheck,
   IconCircleX,
@@ -69,4 +70,22 @@ export function taskStageAppearance(stage: ProjectTaskStage, scheme: Scheme) {
 /** A project stage's icon and colours, as the web `projectStageConfig`: Done looks as Launched. */
 export function projectStageAppearance(stage: ProjectStage, scheme: Scheme) {
   return taskStageAppearance(stage === "done" ? "launched" : stage, scheme);
+}
+
+/**
+ * A child task's display status, as the web `projectTaskDisplayStatusConfig`:
+ * Working as In Progress, Blocked as the needs-you warning, Idle as To Do,
+ * Archived as Cancelled.
+ */
+export function taskDisplayStatusAppearance(status: ProjectTaskDisplayStatus, scheme: Scheme) {
+  if (status === "blocked") {
+    const warning = EVA_THEME[scheme].warning;
+    return { icon: IconAlertTriangle, text: warning, bar: warning };
+  }
+  const stage: Record<Exclude<ProjectTaskDisplayStatus, "blocked">, ProjectTaskStage> = {
+    working: "in_progress",
+    idle: "todo",
+    archived: "cancelled",
+  };
+  return taskStageAppearance(stage[status], scheme);
 }

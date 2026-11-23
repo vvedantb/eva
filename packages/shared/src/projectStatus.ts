@@ -140,6 +140,36 @@ export function projectTaskWaitsForCoordinator(task: ProjectTaskFacts): boolean 
   return task.status !== "cancelled" && task.openAsk === "coordinator";
 }
 
+/**
+ * How a project's child task shows in its task list, by who must act: the
+ * agent (`working`), a person or the coordinator (`blocked`), nobody yet
+ * (`idle`: approved, waiting for a dependency or a free slot), or no one any
+ * more (`archived`). The project itself keeps its stages (`projectStatus`).
+ */
+export type ProjectTaskDisplayStatus = "working" | "blocked" | "idle" | "archived";
+
+/**
+ * A child task's display status. Archived: launched or cancelled. Blocked:
+ * waits for a person (`projectTaskNeedsYou`), for its coordinator (an open
+ * ask, or a first failure it may retry), is halted, or is in review. Working:
+ * in progress. Idle: an approved todo task nothing holds back.
+ */
+export function projectTaskDisplayStatus(
+  task: ProjectTaskFacts,
+): ProjectTaskDisplayStatus {
+  const stage = projectTaskStage(task);
+  if (stage === "launched" || stage === "cancelled") return "archived";
+  if (
+    stage === "in_review" ||
+    task.halted !== undefined ||
+    task.openAsk !== undefined ||
+    projectTaskNeedsYou(task) !== undefined
+  ) {
+    return "blocked";
+  }
+  return stage === "in_progress" ? "working" : "idle";
+}
+
 export interface ProjectStatus {
   stage: ProjectStage;
   counts: Record<ProjectTaskStage, number>;

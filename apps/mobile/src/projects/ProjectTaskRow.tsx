@@ -1,40 +1,37 @@
 import { api, type Id } from "@eva/backend";
 import { formatEntityNumLabel } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import type { NeedsYouReason } from "@eva/shared/projectStatus";
-import type { ProjectTaskNotes } from "@eva/shared/projectView";
+import { PROJECT_TASK_DISPLAY_STATUS_LABELS, type ProjectTaskNotes, type ProjectTaskView } from "@eva/shared/projectView";
 import { IconLock, IconX } from "@tabler/icons-react-native";
 import { SurfaceRow } from "@vvedantb/native-ui/primitives";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation } from "convex/react";
-import type { FunctionReturnType } from "convex/server";
 import { Pressable, Text, View } from "react-native";
-import { taskStageAppearance } from "@/projects/phaseAppearance";
+import { taskDisplayStatusAppearance } from "@/projects/phaseAppearance";
 import { hasProjectTaskBadges, ProjectTaskBadges, type ProjectTaskBadgeFacts } from "@/projects/ProjectTaskBadges";
 import type { ProjectTaskListRow } from "@/projects/useProjectStatus";
-import { META_TEXT, QuickTaskRow } from "@/quickTasks/QuickTaskRow";
+import { META_TEXT, MetaPill, QuickTaskRow } from "@/quickTasks/QuickTaskRow";
 import type { RepoRow } from "@/sessions/SessionGroup";
 import { useScheme } from "@/ui/theme";
 
-type User = FunctionReturnType<typeof api.users.listAll>[number];
-
 /**
- * One row of a project's task list, and of the coordinator chat's task
- * cards, as the web `ProjectTaskRow`: the quick-task card numbered
- * "#project/task" with the project task badges. A contributor cancels a todo
+ * One compact row of a project's task list, and of the coordinator chat's
+ * task cards, as the web `ProjectTaskRow`: the compact quick-task card
+ * numbered "#project/task", striped by the task's display status
+ * (`projectTaskDisplayStatus`; `showStatus` names it where no section header
+ * does), with the project task badges. A contributor cancels a todo
  * task nobody approved with the X beside it (the row itself is one button),
  * and a long press opens the task menu (`onLongPress`); a viewer gets
  * neither. A task in a repo the reader cannot open is a locked row.
  */
 export function ProjectTaskRow({
   task,
-  needsYou,
-  waitingForCoordinator,
+  view,
+  showStatus = false,
   notes,
   hasError,
   hasDraftComment,
-  creator,
   projectNumId,
   homeRepoId,
   reposById,
@@ -42,23 +39,26 @@ export function ProjectTaskRow({
   onLongPress,
 }: {
   task: ProjectTaskListRow;
-  needsYou: NeedsYouReason | undefined;
-  waitingForCoordinator: boolean;
+  view: ProjectTaskView;
+  /** Name the display status in a badge (the chat card has no sections). */
+  showStatus?: boolean;
   /** The task's open question and open reports (`useProjectTaskNotes`). */
   notes: ProjectTaskNotes | undefined;
   hasError: boolean;
   hasDraftComment: boolean;
-  creator: User | undefined;
   projectNumId: number | undefined;
   homeRepoId: Id<"githubRepos">;
   reposById: ReadonlyMap<string, RepoRow>;
   canContribute: boolean;
   onLongPress?: () => void;
 }) {
-  if (task.locked === true) return <LockedTaskRow taskNumber={task.taskNumber} projectNumId={projectNumId} />;
+  const scheme = useScheme();
+  const appearance = taskDisplayStatusAppearance(view.displayStatus, scheme);
+  const StatusIcon = appearance.icon;
+  if (task.locked === true) return <LockedTaskRow taskNumber={task.taskNumber} projectNumId={projectNumId} accentColor={appearance.bar} />;
   const badges: ProjectTaskBadgeFacts = {
-    needsYou,
-    waitingForCoordinator,
+    needsYou: view.needsYou,
+    waitingForCoordinator: view.waitingForCoordinator,
     ask: notes?.ask,
     reports: notes?.reports ?? [],
     phaseLabel: task.phaseLabel,
@@ -77,10 +77,21 @@ export function ProjectTaskRow({
           status={task.status === "draft" ? "todo" : task.status}
           hasError={hasError}
           hasDraftComment={hasDraftComment}
-          creator={creator}
+          creator={undefined}
           projectNumId={projectNumId}
           onLongPress={canContribute ? onLongPress : undefined}
-          badges={hasProjectTaskBadges(badges) ? <ProjectTaskBadges badges={badges} /> : undefined}
+          compact
+          accentColor={appearance.bar}
+          badges={
+            showStatus || hasProjectTaskBadges(badges) ? (
+              <>
+                {showStatus ? (
+                  <MetaPill leading={<StatusIcon size={12} color={appearance.text} />} label={PROJECT_TASK_DISPLAY_STATUS_LABELS[view.displayStatus]} />
+                ) : null}
+                <ProjectTaskBadges badges={badges} />
+              </>
+            ) : undefined
+          }
         />
       </View>
       {canCancel ? <CancelTaskButton taskId={task._id} /> : null}
@@ -89,10 +100,18 @@ export function ProjectTaskRow({
 }
 
 /**
- * A task in a repo the reader cannot open: the To Do stripe, its number and
+ * A task in a repo the reader cannot open: its status stripe, its number and
  * a lock, no title. A tap says why, as the web tooltip.
  */
-function LockedTaskRow({ taskNumber, projectNumId }: { taskNumber: number | undefined; projectNumId: number | undefined }) {
+function LockedTaskRow({
+  taskNumber,
+  projectNumId,
+  accentColor,
+}: {
+  taskNumber: number | undefined;
+  projectNumId: number | undefined;
+  accentColor: string;
+}) {
   const scheme = useScheme();
   const theme = EVA_THEME[scheme];
   const muted = theme.mutedForeground;
@@ -101,9 +120,9 @@ function LockedTaskRow({ taskNumber, projectNumId }: { taskNumber: number | unde
     <SurfaceRow
       accessibilityLabel={numLabel ? `Locked task ${numLabel}` : "Locked task"}
       accessibilityHint="You do not have access to this repo"
-      accentColor={taskStageAppearance("todo", scheme).bar}
+      accentColor={accentColor}
       backgroundColor={theme.card}
-      className="min-h-12 flex-row items-center gap-1.5 px-3 py-3 pl-3.5"
+      className="min-h-11 flex-row items-center gap-1.5 px-3 py-2 pl-3.5"
       onPress={() => toast("You do not have access to this repo")}
     >
       {numLabel ? (

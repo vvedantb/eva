@@ -1519,8 +1519,8 @@ export const orchestratorStopAgent = internalAction({
       return { buildRunning: false };
     }
     // The app's chat Stop (`sessions.stopChatTurn`): a task's run and chat,
-    // a project's own chat. A project's running build is its own workflow and
-    // is reported back rather than cancelled (cancel_project_build owns that).
+    // a project's own chat. A legacy project build is its own workflow and is
+    // reported back rather than cancelled; it ends on its own.
     if (kind === "task") {
       await runAsUser("mutation", clerkUserId, "sessions:stopChatTurn", {
         target: { taskId: id },

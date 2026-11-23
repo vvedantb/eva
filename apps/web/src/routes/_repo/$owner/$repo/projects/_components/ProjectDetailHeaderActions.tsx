@@ -1,37 +1,15 @@
 import { CHAT_HEADER_ACTIONS_CLASS } from "@/lib/components/ChatPageWrapper";
-import { useRef } from "react";
 import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
   Button,
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-  Spinner,
-  ConfirmSkipHint,
-  skipConfirmTitle,
-  useRequestConfirm,
 } from "@vvedantb/ui";
-import {
-  isProjectBuilding,
-  projectScheduledBuildAt,
-  type Id,
-} from "@eva/backend";
-import {
-  IconHammer,
-  IconPlayerStop,
-  IconChevronDown,
-  IconCalendarClock,
-  IconDots,
-  IconFileText,
-  IconMessage,
-} from "@tabler/icons-react";
-import dayjs from "@eva/shared/dates";
+import type { Id } from "@eva/backend";
+import { IconDots, IconFileText, IconMessage } from "@tabler/icons-react";
 import { ProjectContextUsage } from "@/lib/components/context-usage";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
-import { ScheduleBuildPopover } from "@/lib/components/projects/ScheduleBuildPopover";
 import { PrMergeConfetti } from "@/lib/components/celebration/PrMergeConfetti";
 import { useNavigate } from "@tanstack/react-router";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -43,10 +21,9 @@ import { useRecapChat } from "@/lib/components/chat/useRecapChat";
 import { RecapChatMenuItem } from "@/lib/components/chat/RecapChatMenuItem";
 import { ProjectDeleteDialog } from "./ProjectDeleteDialog";
 import { useProjectDelete } from "./useProjectDelete";
-import {
-  canBuildProject,
-  type ProjectDetailProject,
-  type ProjectSandboxState,
+import type {
+  ProjectDetailProject,
+  ProjectSandboxState,
 } from "./projectDetailHelpers";
 
 interface ProjectDetailHeaderActionsProps {
@@ -58,12 +35,8 @@ interface ProjectDetailHeaderActionsProps {
   chatId: Id<"sessionChats"> | undefined;
   chatTurnOpen: boolean | undefined;
   hasPlanContext: boolean;
-  isStoppingBuild: boolean;
-  onStopBuild: () => Promise<void>;
-  setShowStopBuildConfirm: (open: boolean) => void;
   setShowPlanModal: (open: boolean) => void;
   setShowChatModal: (open: boolean) => void;
-  setIsBuildModalOpen: (open: boolean) => void;
 }
 
 export function ProjectDetailHeaderActions({
@@ -74,12 +47,8 @@ export function ProjectDetailHeaderActions({
   chatId,
   chatTurnOpen,
   hasPlanContext,
-  isStoppingBuild,
-  onStopBuild,
-  setShowStopBuildConfirm,
   setShowPlanModal,
   setShowChatModal,
-  setIsBuildModalOpen,
 }: ProjectDetailHeaderActionsProps) {
   const {
     isSandboxActive,
@@ -88,7 +57,6 @@ export function ProjectDetailHeaderActions({
     handleStartSandbox,
     handleStopSandbox,
   } = sandbox;
-  const { request: requestConfirm } = useRequestConfirm();
   const recapChat = useRecapChat(chatId);
   const { basePath } = useRepo();
   const navigate = useNavigate();
@@ -112,8 +80,8 @@ export function ProjectDetailHeaderActions({
     <div className="flex max-sm:min-w-0 flex-col items-end gap-1">
       <div className="flex max-sm:flex-wrap items-center max-sm:justify-end gap-1.5 sm:gap-2">
         <PrMergeConfetti owner={{ kind: "project", projectId }} />
-        {/* Secondary controls share the chat header track; Build and Stop
-            Build stay outside it as the page's filled primary action. */}
+        {/* The controls share the chat header track. Tasks start through
+            Approve and the project scheduler, so there is no build button. */}
         <div className={CHAT_HEADER_ACTIONS_CLASS}>
           <ProjectContextUsage repoId={repoId} projectId={projectId} />
           <DropdownMenu>
@@ -157,8 +125,7 @@ export function ProjectDetailHeaderActions({
             isDeleting={projectDelete.isDeleting}
           />
           {/* One control for both directions — see `SandboxStartStopButton`.
-            Inert while a chat turn is in flight; a running build keeps its
-            own confirmed "Stop Build", so it is not gated here. This is the
+            Inert while a chat turn is in flight. This is the
             only wake/sleep control now, the sandbox chat header carries
             usage alone. The coordinator is read-only: no Commit & push. */}
           <SandboxStartStopButton
@@ -171,116 +138,7 @@ export function ProjectDetailHeaderActions({
             isAssistantResponding={chatTurnOpen === true}
           />
         </div>
-        {canBuildProject(project) ? (
-          isProjectBuilding(project) ? (
-            <Button
-              size="sm"
-              variant="destructive"
-              aria-label="Stop build"
-              title={skipConfirmTitle("Stop Build")}
-              onClick={() =>
-                requestConfirm(
-                  () => setShowStopBuildConfirm(true),
-                  () => {
-                    void onStopBuild();
-                  },
-                )
-              }
-              disabled={isStoppingBuild}
-            >
-              {isStoppingBuild ? (
-                <Spinner variant="circle" size="sm" aria-hidden />
-              ) : (
-                <IconPlayerStop size={16} aria-hidden />
-              )}
-              <span className="hidden sm:inline">Stop Build</span>
-              <ConfirmSkipHint />
-            </Button>
-          ) : (
-            <SplitBuildButton
-              projectId={projectId}
-              scheduledBuildAt={projectScheduledBuildAt(project)}
-              hasActiveBuild={isProjectBuilding(project)}
-              onBuild={() => setIsBuildModalOpen(true)}
-            />
-          )
-        ) : null}
       </div>
-    </div>
-  );
-}
-
-// `max-sm:h-10`: the two halves abut, so the `hit-target` bleed each `size="sm"`
-// carries would be spent on the other half rather than on the tap target.
-const SPLIT_BUTTON_HALF =
-  "hover:translate-y-0 active:scale-100 group-hover/split:bg-primary/92 max-sm:h-10";
-
-function SplitBuildButton({
-  projectId,
-  scheduledBuildAt,
-  hasActiveBuild,
-  onBuild,
-}: {
-  projectId: Id<"projects">;
-  scheduledBuildAt: number | undefined;
-  hasActiveBuild: boolean;
-  onBuild: () => void;
-}) {
-  const chevronRef = useRef<HTMLButtonElement>(null);
-  const isScheduled = scheduledBuildAt !== undefined;
-  // Hidden below `sm`, so it doubles as the button's accessible name there.
-  const buildLabel = isScheduled
-    ? dayjs(scheduledBuildAt).format("MMM D, h:mm A")
-    : "Run Eva";
-
-  // Halves cancel their own press so the wrapper scales as one unit — see the
-  // twin in `TaskFooter`. `motion-press` replaces a hand-listed
-  // `transition-[transform,background-color]` that named `transform` and so
-  // never matched the `scale` property `scale-[0.96]` compiles to.
-  return (
-    <div className="group/split motion-press flex items-center active:scale-[0.96]">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div>
-            <Button
-              shape="rounded"
-              size="sm"
-              aria-label={buildLabel}
-              onClick={
-                isScheduled ? () => chevronRef.current?.click() : onBuild
-              }
-              className={`rounded-r-none ${SPLIT_BUTTON_HALF}`}
-            >
-              {isScheduled ? (
-                <IconCalendarClock size={16} aria-hidden />
-              ) : (
-                <IconHammer size={16} aria-hidden />
-              )}
-              <span className="hidden sm:inline">{buildLabel}</span>
-            </Button>
-          </div>
-        </TooltipTrigger>
-        {isScheduled ? (
-          <TooltipContent>Click to change or remove schedule</TooltipContent>
-        ) : null}
-      </Tooltip>
-      <ScheduleBuildPopover
-        projectId={projectId}
-        scheduledBuildAt={scheduledBuildAt}
-        disabled={hasActiveBuild}
-        trigger={
-          <Button
-            shape="rounded"
-            ref={chevronRef}
-            size="sm"
-            aria-label="Schedule build"
-            disabled={hasActiveBuild}
-            className={`rounded-l-none border-l border-l-primary-foreground/20 px-2 max-sm:px-3 ${SPLIT_BUTTON_HALF}`}
-          >
-            <IconChevronDown size={14} aria-hidden />
-          </Button>
-        }
-      />
     </div>
   );
 }

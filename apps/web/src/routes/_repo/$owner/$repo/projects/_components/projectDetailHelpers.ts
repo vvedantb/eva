@@ -1,7 +1,6 @@
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
 import { parseProjectSpec as parseSpec, type ProjectSpec } from "@eva/shared";
-import { BUILDABLE_PROJECT_PHASES } from "@/lib/components/projects/ProjectPhaseBadge";
 import type { useProjectSandbox } from "@/lib/components/projects/useProjectSandbox";
 
 export type ProjectDetailProject = NonNullable<
@@ -14,10 +13,6 @@ export type ParsedProjectSpec = ProjectSpec;
 
 export function isProjectDraftOrFinalized(project: ProjectDetailProject) {
   return project.phase === "draft" || project.phase === "finalized";
-}
-
-export function canBuildProject(project: ProjectDetailProject) {
-  return BUILDABLE_PROJECT_PHASES.includes(project.phase);
 }
 
 export function parseProjectSpec(

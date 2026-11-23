@@ -1,12 +1,14 @@
 import type { Doc } from "@eva/backend";
 import {
   projectStatus,
+  projectTaskDisplayStatus,
   projectTaskNeedsYou,
   projectTaskStage,
   projectTaskWaitsForCoordinator,
   type NeedsYouReason,
   type ProjectStage,
   type ProjectStatus,
+  type ProjectTaskDisplayStatus,
   type ProjectTaskFacts,
   type ProjectTaskStage,
 } from "./projectStatus";
@@ -45,6 +47,24 @@ export const PROJECT_TASK_STAGE_LABELS: Record<ProjectTaskStage, string> = {
   in_review: "In Review",
   launched: "Launched",
   cancelled: "Cancelled",
+};
+
+/** A project's task list groups, in order (`projectTaskStatusSections`). */
+export const PROJECT_TASK_DISPLAY_STATUSES = [
+  "working",
+  "blocked",
+  "idle",
+  "archived",
+] as const satisfies readonly ProjectTaskDisplayStatus[];
+
+export const PROJECT_TASK_DISPLAY_STATUS_LABELS: Record<
+  ProjectTaskDisplayStatus,
+  string
+> = {
+  working: "Working",
+  blocked: "Blocked",
+  idle: "Idle",
+  archived: "Archived",
 };
 
 /** The stage counts a project shows, most finished first. Cancelled is left out. */
@@ -141,23 +161,27 @@ export function projectStatusFromRows(
 }
 
 /**
- * One task's stage, the reason it waits for a person, if any, and whether it
- * waits for its coordinator to answer a question.
+ * One task's stage, its display status, the reason it waits for a person, if
+ * any, and whether it waits for its coordinator to answer a question.
  */
 export function projectTaskView(
   row: ProjectTaskRow,
   failed: boolean,
-): {
-  stage: ProjectTaskStage;
-  needsYou: NeedsYouReason | undefined;
-  waitingForCoordinator: boolean;
-} {
+): ProjectTaskView {
   const facts = projectTaskFactsFromRow(row, failed);
   return {
     stage: projectTaskStage(facts),
+    displayStatus: projectTaskDisplayStatus(facts),
     needsYou: projectTaskNeedsYou(facts),
     waitingForCoordinator: projectTaskWaitsForCoordinator(facts),
   };
+}
+
+export interface ProjectTaskView {
+  stage: ProjectTaskStage;
+  displayStatus: ProjectTaskDisplayStatus;
+  needsYou: NeedsYouReason | undefined;
+  waitingForCoordinator: boolean;
 }
 
 /** What `listTaskReports` returns for one report or ask. */
@@ -283,53 +307,45 @@ export function projectStageSegments(
   return segments;
 }
 
-/** The fields `projectTaskStageSections` reads from an `agentTasks.listByProject` row. */
+/** The fields `projectTaskStatusSections` reads from an `agentTasks.listByProject` row. */
 export interface SectionableProjectTaskRow extends ProjectTaskRow {
   createdAt: number;
   lastRunStartedAt?: number;
 }
 
 /**
- * A project's task list: one section per task stage in workflow order, each
- * row with the reason it waits for a person or its coordinator. To Do keeps the project's order
+ * A project's task list: one section per display status (Working, Blocked,
+ * Idle, Archived), each row with its view. Idle keeps the project's order
  * (`taskNumber`); every other section puts the latest run first, else the
- * newest task. A section starts open when it has tasks and is not Launched
- * or Cancelled.
+ * newest task. A section starts open when it has tasks and is not Archived.
  */
-export function projectTaskStageSections<Row extends SectionableProjectTaskRow>(
+export function projectTaskStatusSections<
+  Row extends SectionableProjectTaskRow,
+>(
   rows: readonly Row[],
   failedTaskIds: ReadonlySet<string>,
 ): Array<{
-  stage: ProjectTaskStage;
-  tasks: Array<{
-    row: Row;
-    needsYou: NeedsYouReason | undefined;
-    waitingForCoordinator: boolean;
-  }>;
+  status: ProjectTaskDisplayStatus;
+  tasks: Array<{ row: Row; view: ProjectTaskView }>;
   defaultOpen: boolean;
 }> {
   const viewed = rows.map((row) => ({
     row,
-    ...projectTaskView(row, failedTaskIds.has(row._id)),
+    view: projectTaskView(row, failedTaskIds.has(row._id)),
   }));
   const lastRun = (row: Row) => row.lastRunStartedAt ?? row.createdAt;
-  return PROJECT_TASK_STAGES.map((stage) => {
-    const matching = viewed
-      .filter((task) => task.stage === stage)
-      .map(({ row, needsYou, waitingForCoordinator }) => ({
-        row,
-        needsYou,
-        waitingForCoordinator,
-      }));
+  return PROJECT_TASK_DISPLAY_STATUSES.map((status) => {
+    const matching = viewed.filter(
+      (task) => task.view.displayStatus === status,
+    );
     const tasks =
-      stage === "todo"
+      status === "idle"
         ? matching
         : matching.sort((a, b) => lastRun(b.row) - lastRun(a.row));
     return {
-      stage,
+      status,
       tasks,
-      defaultOpen:
-        tasks.length > 0 && stage !== "launched" && stage !== "cancelled",
+      defaultOpen: tasks.length > 0 && status !== "archived",
     };
   });
 }

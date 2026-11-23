@@ -8,12 +8,18 @@ import {
   PROJECT_PHASE_LABELS,
   type ProjectColumn,
 } from "@eva/shared";
-import type { ProjectStage, ProjectTaskStage } from "@eva/shared/projectStatus";
+import type {
+  ProjectStage,
+  ProjectTaskDisplayStatus,
+  ProjectTaskStage,
+} from "@eva/shared/projectStatus";
 import {
   PROJECT_STAGE_LABELS,
+  PROJECT_TASK_DISPLAY_STATUS_LABELS,
   PROJECT_TASK_STAGE_LABELS,
 } from "@eva/shared/projectView";
 import {
+  IconAlertTriangle,
   IconCircle,
   IconNotes,
   IconCheck,
@@ -29,7 +35,7 @@ export type ProjectPhase = Doc<"projects">["phase"];
 
 export { PROJECT_PHASES } from "@eva/backend";
 
-export { ACTIVE_PROJECT_PHASES, BUILDABLE_PROJECT_PHASES } from "@eva/shared";
+export { ACTIVE_PROJECT_PHASES } from "@eva/shared";
 
 export interface PhaseStyle {
   bg: string;
@@ -150,6 +156,38 @@ export const projectTaskStageConfig: Record<ProjectTaskStage, PhaseStyle> = {
   cancelled: {
     ...phaseConfig.cancelled,
     label: PROJECT_TASK_STAGE_LABELS.cancelled,
+  },
+};
+
+/**
+ * A child task's display status (`projectTaskDisplayStatus`): the task list
+ * groups and rows. Working looks as In Progress, Blocked as the needs-you
+ * warning, Idle as To Do, Archived as Cancelled.
+ */
+export const projectTaskDisplayStatusConfig: Record<
+  ProjectTaskDisplayStatus,
+  PhaseStyle
+> = {
+  working: {
+    ...projectTaskStageConfig.in_progress,
+    label: PROJECT_TASK_DISPLAY_STATUS_LABELS.working,
+  },
+  blocked: {
+    bg: "bg-warning-bg",
+    cardBg: "bg-warning/5",
+    bar: "bg-warning",
+    barColor: "var(--warning)",
+    text: "text-warning",
+    label: PROJECT_TASK_DISPLAY_STATUS_LABELS.blocked,
+    icon: IconAlertTriangle,
+  },
+  idle: {
+    ...projectTaskStageConfig.todo,
+    label: PROJECT_TASK_DISPLAY_STATUS_LABELS.idle,
+  },
+  archived: {
+    ...projectTaskStageConfig.cancelled,
+    label: PROJECT_TASK_DISPLAY_STATUS_LABELS.archived,
   },
 };
 

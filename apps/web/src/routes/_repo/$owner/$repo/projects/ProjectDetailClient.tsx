@@ -5,7 +5,7 @@ import { useChatUnread } from "@/lib/components/sandbox/useChatUnread";
 import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api } from "@eva/backend";
-import { Button, CenteredSpinner, toast } from "@vvedantb/ui";
+import { Button, CenteredSpinner } from "@vvedantb/ui";
 import { IconMessage } from "@tabler/icons-react";
 import { ProjectStageBadge } from "@/lib/components/projects/ProjectPhaseBadge";
 import { ProjectFeedbackModal } from "@/lib/components/projects/ProjectFeedbackModal";
@@ -27,7 +27,6 @@ import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
-import { StopConfirmDialog } from "@/lib/components/tasks/_components/TaskConfirmDialogs";
 import type { TaskRouteSandboxTab } from "@/lib/search-params";
 import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
 import type { EntityResolveStatus } from "@/lib/numId";
@@ -41,7 +40,6 @@ import { ProjectDetailSandboxContent } from "./_components/ProjectDetailSandboxC
 import {
   ProjectInterviewHistoryDialog,
   ProjectPlanDialog,
-  RunEvaDialog,
 } from "./_components/ProjectDetailDialogs";
 
 export function ProjectDetailClient({
@@ -69,14 +67,9 @@ export function ProjectDetailClient({
   const { basePath, repo } = useRepo();
   const simpleView = useSimpleView();
   const sandboxRailWidthPx = useSandboxRailWidthPx();
-  const [isBuildModalOpen, setIsBuildModalOpen] = useState(false);
-  const [isStartingBuild, setIsStartingBuild] = useState(false);
-  const [isStoppingBuild, setIsStoppingBuild] = useState(false);
-  const [showStopBuildConfirm, setShowStopBuildConfirm] = useState(false);
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
-  const cancelBuild = useMutation(api.buildWorkflow.cancelBuild);
 
   const project = useQuery(api.projects.get, { id: projectId });
   useEntityDocumentTitle(project?.title);
@@ -160,18 +153,6 @@ export function ProjectDetailClient({
     setExpandRightSignal((n) => n + 1);
   };
 
-  const handleStopBuild = async () => {
-    if (!project) return;
-    setIsStoppingBuild(true);
-    try {
-      await cancelBuild({ projectId: projectId });
-    } catch (err) {
-      console.error("Failed to stop build:", err);
-      toast.error("Could not stop the build. Try again.");
-    }
-    setIsStoppingBuild(false);
-  };
-
   if (project === undefined) {
     return <CenteredSpinner label="Loading project" />;
   }
@@ -229,12 +210,8 @@ export function ProjectDetailClient({
               chatId={chatId}
               chatTurnOpen={chatTurnOpen}
               hasPlanContext={hasPlanContext}
-              isStoppingBuild={isStoppingBuild}
-              onStopBuild={handleStopBuild}
-              setShowStopBuildConfirm={setShowStopBuildConfirm}
               setShowPlanModal={setShowPlanModal}
               setShowChatModal={setShowChatModal}
-              setIsBuildModalOpen={setIsBuildModalOpen}
             />
           ) : null}
         </div>
@@ -269,21 +246,6 @@ export function ProjectDetailClient({
         selectedTaskId={selectedTaskId}
         selectedTaskStatus={selectedTaskStatus}
         detailTab={detailTab}
-      />
-
-      <RunEvaDialog
-        projectId={projectId}
-        open={isBuildModalOpen}
-        setOpen={setIsBuildModalOpen}
-        isStarting={isStartingBuild}
-        setIsStarting={setIsStartingBuild}
-      />
-
-      <StopConfirmDialog
-        open={showStopBuildConfirm}
-        onOpenChange={setShowStopBuildConfirm}
-        onConfirm={handleStopBuild}
-        isLoading={isStoppingBuild}
       />
 
       {parsedSpec && (

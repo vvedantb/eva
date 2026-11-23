@@ -81,19 +81,19 @@ export function ProjectTaskBatchCard({
     >
       <Surface density="tight" className="min-w-0 max-w-full">
         <div
-          className="flex min-w-0 flex-col gap-3"
+          className="flex min-w-0 flex-col gap-2"
           data-testid="project-task-batch-card"
         >
           <p className="text-xs text-muted-foreground">Proposed tasks</p>
-          <div className="flex min-w-0 flex-col gap-2">
+          <div className="flex min-w-0 flex-col gap-1">
             {tasks.map((task) => {
               const view = projectTaskView(task, failedTaskIds.has(task._id));
               return (
                 <ProjectTaskRow
                   key={task._id}
                   task={task}
-                  needsYou={view.needsYou}
-                  waitingForCoordinator={view.waitingForCoordinator}
+                  view={view}
+                  showStatus
                   notes={notesByTask.get(task._id)}
                   hasError={failedTaskIds.has(task._id)}
                   selectedTaskId={null}

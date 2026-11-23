@@ -181,7 +181,7 @@ describe("a draft is private to its creator", () => {
 
 describe("tasks cannot cross into another tenant", () => {
   test(
-    "assign, update, create and reorder need access to every row",
+    "assign, update and create need access to every row",
     async () => {
       const f = await fixture();
       await expect(
@@ -209,12 +209,6 @@ describe("tasks cannot cross into another tenant", () => {
           projectId: f.strangerProjectId,
         }),
       ).rejects.toThrow("Not authorized");
-      await expect(
-        f.stranger.mutation(api.agentTasks.reorderProjectTasks, {
-          projectId: f.strangerProjectId,
-          taskIds: [f.taskId],
-        }),
-      ).rejects.toThrow("Task not found");
       const task = await f.t.run((ctx) => ctx.db.get(f.taskId));
       expect(task?.projectId).toBe(f.projectId);
       expect(task?.repoId).toBe(f.repoId);

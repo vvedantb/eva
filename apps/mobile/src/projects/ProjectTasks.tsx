@@ -1,6 +1,6 @@
 import { api } from "@eva/backend";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { PROJECT_TASK_STAGE_LABELS, projectTaskStageSections, unapprovedTodoTaskIds } from "@eva/shared/projectView";
+import { PROJECT_TASK_DISPLAY_STATUS_LABELS, projectTaskStatusSections, unapprovedTodoTaskIds } from "@eva/shared/projectView";
 import { IconCheck, IconPlus } from "@tabler/icons-react-native";
 import { Button, SkeletonList, SkeletonRow } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
@@ -9,17 +9,17 @@ import type { FunctionReturnType } from "convex/server";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, SectionList, View } from "react-native";
-import { taskStageAppearance } from "@/projects/phaseAppearance";
+import { taskDisplayStatusAppearance } from "@/projects/phaseAppearance";
 import { ProjectTaskRow } from "@/projects/ProjectTaskRow";
 import { useProjectTaskNotes, type ProjectTaskListRow } from "@/projects/useProjectStatus";
 import { persistedIdSet } from "@/storage/persistedStore";
 import { useQuickTaskActions } from "@/quickTasks/useQuickTaskActions";
-import { CardGap, FoldFooter, FoldHeader } from "@/ui/FoldHeader";
+import { FoldFooter, FoldHeader } from "@/ui/FoldHeader";
 import { useScheme } from "@/ui/theme";
 import { LIST_WINDOW } from "@/ui/listWindow";
 
-/** A project's task stage groups folded away from their default, kept on the device. */
-const toggledProjectTaskStatuses = persistedIdSet("projectTaskStatusesToggled");
+/** A project's task status groups folded away from their default, kept on the device. */
+const toggledProjectTaskStatuses = persistedIdSet("projectTaskDisplayStatusesToggled");
 
 type Project = NonNullable<FunctionReturnType<typeof api.projects.get>>;
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
@@ -27,14 +27,13 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
 
 /**
  * The web project Tasks tab (`ProjectTaskListPanel`) at phone width: a
- * collapsible section per derived task stage in workflow order
- * (`projectTaskStageSections`: To Do in project order, the rest latest run
- * first; live sections start open), with the project task rows
- * (`ProjectTaskRow`: the quick-task card numbered "#project/task" with the
- * web task badges; a locked row for a task in a repo the reader cannot
- * open). To Do carries Approve (every todo task nobody approved yet, for a
- * contributor) and "+" (a new task; feedback for a viewer). A tap opens the
- * task. Not here from the web: drag to reorder To Do.
+ * collapsible section per display status, Working, Blocked, Idle, Archived
+ * (`projectTaskStatusSections`: Idle in project order, the rest latest run
+ * first; Archived starts folded), with the compact project task rows
+ * (`ProjectTaskRow`; a locked row for a task in a repo the reader cannot
+ * open). Blocked, where new and unapproved tasks wait, carries Approve
+ * (every todo task nobody approved yet, for a contributor) and "+" (a new
+ * task; feedback for a viewer). A tap opens the task.
  */
 export function ProjectTasks({
   project,
@@ -75,8 +74,8 @@ export function ProjectTasks({
         divided={false}
         className="px-3"
         renderRow={(row) => (
-          <View className="mb-2 rounded-lg" style={{ backgroundColor: EVA_THEME[scheme].card }}>
-            <SkeletonRow index={row} lines={2} trailing={false} minHeight={72} className="px-3" />
+          <View className="mb-1 rounded-lg" style={{ backgroundColor: EVA_THEME[scheme].card }}>
+            <SkeletonRow index={row} lines={1} trailing={false} minHeight={44} className="px-3" />
           </View>
         )}
       />
@@ -102,25 +101,25 @@ export function ProjectTasks({
     <>
       <SectionList
         {...LIST_WINDOW}
-        sections={projectTaskStageSections(tasks, failedTaskIds).map((section) => {
-          const open = section.defaultOpen !== toggled.has(section.stage);
-          return { stage: section.stage, count: section.tasks.length, open, data: open ? section.tasks : [] };
+        sections={projectTaskStatusSections(tasks, failedTaskIds).map((section) => {
+          const open = section.defaultOpen !== toggled.has(section.status);
+          return { status: section.status, count: section.tasks.length, open, data: open ? section.tasks : [] };
         })}
         keyExtractor={(task) => task.row._id}
         stickySectionHeadersEnabled={false}
         renderSectionHeader={({ section }) => {
-          const { icon, text } = taskStageAppearance(section.stage, scheme);
+          const { icon, text } = taskDisplayStatusAppearance(section.status, scheme);
           return (
             <FoldHeader
               icon={icon}
               color={text}
-              label={PROJECT_TASK_STAGE_LABELS[section.stage]}
+              label={PROJECT_TASK_DISPLAY_STATUS_LABELS[section.status]}
               count={section.count}
               noun="task"
               open={section.open}
-              onToggle={() => toggle(section.stage)}
+              onToggle={() => toggle(section.status)}
               trailing={
-                section.stage === "todo" ? (
+                section.status === "blocked" ? (
                   <View className="mr-1 flex-row items-center gap-1">
                     {toApprove.length > 0 ? (
                       <Button
@@ -134,7 +133,7 @@ export function ProjectTasks({
                         Approve
                       </Button>
                     ) : null}
-                    {/* The web outline "+" on To Do: a 44 square here, in place of the web 24. */}
+                    {/* The web outline "+" on Blocked: a 44 square here, in place of the web 24. */}
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={canContribute ? "New task" : "Feedback"}
@@ -149,16 +148,14 @@ export function ProjectTasks({
             />
           );
         }}
-        ItemSeparatorComponent={CardGap}
-        renderItem={({ item: { row, needsYou, waitingForCoordinator } }) => (
+        ItemSeparatorComponent={TaskGap}
+        renderItem={({ item: { row, view } }) => (
           <ProjectTaskRow
             task={row}
-            needsYou={needsYou}
-            waitingForCoordinator={waitingForCoordinator}
+            view={view}
             notes={notesByTask.get(row._id)}
             hasError={failedTaskIds.has(row._id)}
             hasDraftComment={draftTaskIds.has(row._id)}
-            creator={users?.find((user) => user._id === row.createdBy)}
             projectNumId={project.numId}
             homeRepoId={project.repoId}
             reposById={reposById}
@@ -172,4 +169,9 @@ export function ProjectTasks({
       {actions.dialogs}
     </>
   );
+}
+
+/** The gap between compact task rows: half the quick-task card gap (`CardGap`). */
+function TaskGap() {
+  return <View className="h-1" />;
 }

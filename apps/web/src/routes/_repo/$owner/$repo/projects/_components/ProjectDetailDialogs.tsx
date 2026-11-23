@@ -1,91 +1,16 @@
 import {
-  Button,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
   DialogBody,
 } from "@vvedantb/ui";
-import { useMutation } from "convex/react";
-import { api, type Id } from "@eva/backend";
-import { IconHammer, IconMessage } from "@tabler/icons-react";
+import { IconMessage } from "@tabler/icons-react";
 import { ProjectChatMessageList } from "@/lib/components/projects/ProjectChatMessageList";
-import { withMutationToast } from "@/lib/utils/mutationToast";
 import type {
   ParsedProjectSpec,
   ProjectDetailProject,
 } from "./projectDetailHelpers";
-
-export function RunEvaDialog({
-  projectId,
-  open,
-  setOpen,
-  isStarting,
-  setIsStarting,
-}: {
-  projectId: Id<"projects">;
-  open: boolean;
-  setOpen: (open: boolean) => void;
-  isStarting: boolean;
-  setIsStarting: (isStarting: boolean) => void;
-}) {
-  const startBuild = useMutation(api.buildWorkflow.startBuild);
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(v) => {
-        if (!v) setOpen(false);
-      }}
-    >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Run Eva</DialogTitle>
-        </DialogHeader>
-        <div>
-          <p className="text-muted-foreground">
-            This will allow Eva to autonomously work through all tasks in
-            sequence until the project is fully built.
-          </p>
-          <p className="text-sm text-muted-foreground mt-2">
-            Best suited for projects with well-defined requirements. If Eva
-            makes an error on an earlier task, it may carry forward into
-            subsequent tasks.
-          </p>
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => setOpen(false)}>
-            Cancel
-          </Button>
-          <Button
-            disabled={isStarting}
-            onClick={async () => {
-              setIsStarting(true);
-              try {
-                await withMutationToast(
-                  startBuild({
-                    projectId: projectId,
-                  }),
-                  "Build started",
-                  "Couldn't start build",
-                  "project-build-start",
-                );
-                setOpen(false);
-              } catch {
-                setIsStarting(false);
-                return;
-              }
-              setIsStarting(false);
-            }}
-          >
-            <IconHammer size={16} />
-            {isStarting ? "Starting..." : "Start cooking"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 export function ProjectPlanDialog({
   parsedSpec,

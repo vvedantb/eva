@@ -731,43 +731,6 @@ export const createBatchWithDependencies = authMutation({
   },
 });
 
-/** Reorders tasks within a project by reassigning task numbers. */
-export const reorderProjectTasks = authMutation({
-  args: {
-    projectId: v.id("projects"),
-    taskIds: v.array(v.id("agentTasks")),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(
-      ctx.db,
-      args.projectId,
-      ctx.userId,
-      "contributor",
-    );
-    const now = Date.now();
-    const existingNumbers: number[] = [];
-    for (const taskId of args.taskIds) {
-      const task = await ctx.db.get(taskId);
-      if (
-        !task ||
-        task.projectId !== args.projectId ||
-        !(await hasTaskAccess(ctx.db, task, ctx.userId))
-      )
-        throw new Error("Task not found");
-      existingNumbers.push(task.taskNumber ?? 0);
-    }
-    const sortedNumbers = [...existingNumbers].sort((a, b) => a - b);
-    for (let i = 0; i < args.taskIds.length; i++) {
-      await ctx.db.patch(args.taskIds[i], {
-        taskNumber: sortedNumbers[i],
-        updatedAt: now,
-      });
-    }
-    return null;
-  },
-});
-
 /** Soft-deletes a task and all tasks that transitively depend on it. */
 export const deleteCascade = authMutation({
   args: { id: v.id("agentTasks") },

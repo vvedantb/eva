@@ -55,7 +55,7 @@ Groups of controls sit on a **track**: the segmented-tabs trough (`--default` li
 
 - Header actions (session, quick task and project) sit on one track: `CHAT_HEADER_ACTIONS_CLASS` (`ChatPageWrapper`); it hides when empty.
 - Buttons on any `rail-track` are flat: no resting fill; hover is half the pill. Carry state with the icon colour — wake is a green play, sleep a red stop — never a filled destructive button on a track.
-- Primary filled actions (Run, Build, Stop Build) stay outside the track.
+- Primary filled actions (a task's Run) stay outside the track.
 
 **Sandbox rail and card**
 
