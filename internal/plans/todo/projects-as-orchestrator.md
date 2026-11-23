@@ -1,7 +1,7 @@
 # Projects as orchestrator (coordinator chat + parallel child tasks)
 
 **Date:** 2026-11-19
-**Status:** TODO. No code written. Decisions below are agreed with the user (session 405 chat log).
+**Status:** IN PROGRESS. Steps 0–2 in progress. Decisions below are agreed with the user (session 405 chat log).
 **Related:** session 422 "Convert sessions to projects with feedback tasks" (this plan replaces its build change and keeps its promote + feedback ideas). `internal/sessions-vs-projects.md`, `internal/conductor.md`.
 **Supersedes:** root `chat-in-sandbox-for-projects-and-tasks.md` (delete it in step 0).
 
