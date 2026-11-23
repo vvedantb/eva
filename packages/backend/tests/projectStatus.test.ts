@@ -100,25 +100,46 @@ describe("project status", () => {
     expect(projectTaskStage({ status: "draft" })).toBe("todo");
   });
 
-  test("an empty project is todo; one with only launched or cancelled tasks is done", () => {
+  test("a project is todo until a task starts, done once every task is launched or cancelled, else in progress", () => {
     expect(projectStatus([]).stage).toBe("todo");
+    expect(
+      projectStatus([task("a", 1), task("b", 2, { status: "draft" })]).stage,
+    ).toBe("todo");
     expect(
       projectStatus([
         task("a", 1, { status: "done", prState: "merged" }),
         task("b", 2, { status: "cancelled" }),
       ]).stage,
     ).toBe("done");
-    // A new task reopens it.
+    // A new task reopens it: some launched while others remain.
     const reopened = projectStatus([
       task("a", 1, { status: "done", prState: "merged" }),
       task("c", 3, { approved: false }),
     ]);
-    expect(reopened.stage).toBe("todo");
+    expect(reopened.stage).toBe("in_progress");
     expect(reopened.needsYou).toEqual([{ id: "c", reason: "approve" }]);
+    expect(reopened.counts).toEqual({
+      working: 0,
+      blocked: 1,
+      idle: 0,
+      archived: 1,
+    });
     expect(
       projectStatus([task("a", 1, { status: "in_progress" }), task("b", 2)])
         .stage,
     ).toBe("in_progress");
+    // A task in review alone keeps the project in progress.
+    const reviewing = projectStatus([
+      task("a", 1, { status: "code_review" }),
+      task("b", 2),
+    ]);
+    expect(reviewing.stage).toBe("in_progress");
+    expect(reviewing.counts).toEqual({
+      working: 0,
+      blocked: 1,
+      idle: 1,
+      archived: 0,
+    });
   });
 
   test("a first failure is the coordinator's; a failure after its retry needs a person", () => {
@@ -144,8 +165,9 @@ describe("project status", () => {
     });
     expect(projectTaskWaitsForCoordinator(waiting)).toBe(true);
     expect(projectTaskNeedsYou(waiting)).toBeUndefined();
-    // The waiting task keeps its slot: it counts as in progress.
-    expect(projectStatus([waiting]).counts.in_progress).toBe(1);
+    // The waiting task keeps its slot: its stage stays in progress.
+    expect(projectTaskStage(waiting)).toBe("in_progress");
+    expect(projectStatus([waiting]).stage).toBe("in_progress");
 
     const passed = task("a", 1, { status: "in_progress", openAsk: "person" });
     expect(projectTaskWaitsForCoordinator(passed)).toBe(false);

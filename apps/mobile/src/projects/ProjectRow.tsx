@@ -1,6 +1,7 @@
 import { isProjectBuilding, type api, type Id } from "@eva/backend";
 import { formatEntityNumLabel, PROJECT_PHASE_LABELS, projectPlanningPhase } from "@eva/shared";
 import { PROJECT_STAGE_LABELS, projectListNeedsYouLabel, type ProjectListStatus } from "@eva/shared/projectView";
+import { projectStatus } from "@eva/shared/projectStatus";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconListCheck, IconSparkles } from "@tabler/icons-react-native";
 import { SurfaceRow } from "@vvedantb/native-ui/primitives";
@@ -26,7 +27,7 @@ const MAX_AVATARS = 3;
 /** A project with no tasks yet, until its tasks load. */
 const NO_TASKS: ProjectListStatus = {
   stage: "todo",
-  counts: { launched: 0, in_review: 0, in_progress: 0, todo: 0, cancelled: 0 },
+  counts: projectStatus([]).counts,
   needsYouCount: 0,
   coordinatorPaused: false,
 };

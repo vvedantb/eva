@@ -1,5 +1,11 @@
 # Changelog
 
+## Projects: three stages, task counts by display status
+
+Date: 2026-11-23
+
+Projects show To Do, In Progress and Done only (In Review is gone), and project task counts and progress bars use Working / Blocked / Idle / Archived (web, phone, `listStatusesForRepo`).
+
 ## Project tasks: Working / Blocked / Idle / Archived, compact rows, no build controls
 
 Date: 2026-11-23

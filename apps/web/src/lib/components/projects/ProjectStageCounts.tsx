@@ -1,11 +1,12 @@
 import { cn } from "@eva/ui";
 import type { ProjectStatus } from "@eva/shared/projectStatus";
-import { PROJECT_STAGE_COUNT_ORDER } from "@eva/shared/projectView";
-import { projectTaskStageConfig } from "./ProjectPhaseBadge";
+import { PROJECT_TASK_DISPLAY_STATUSES } from "@eva/shared/projectView";
+import { projectTaskDisplayStatusConfig } from "./ProjectPhaseBadge";
 
 /**
- * The project's task counts by derived stage ("2 Launched · 1 In Review"),
- * from live data. Empty stages are left out; nothing renders without tasks.
+ * The project's task counts by display status ("2 Working · 1 Blocked"),
+ * from live data, in the task list groups' looks. Empty statuses are left
+ * out; nothing renders without tasks.
  */
 export function ProjectStageCounts({
   status,
@@ -14,8 +15,8 @@ export function ProjectStageCounts({
   status: Pick<ProjectStatus, "counts"> | undefined;
   className?: string;
 }) {
-  const shown = PROJECT_STAGE_COUNT_ORDER.filter(
-    (stage) => (status?.counts[stage] ?? 0) > 0,
+  const shown = PROJECT_TASK_DISPLAY_STATUSES.filter(
+    (displayStatus) => (status?.counts[displayStatus] ?? 0) > 0,
   );
   if (!status || shown.length === 0) return null;
   return (
@@ -25,16 +26,16 @@ export function ProjectStageCounts({
         className,
       )}
     >
-      {shown.map((stage) => {
-        const config = projectTaskStageConfig[stage];
+      {shown.map((displayStatus) => {
+        const config = projectTaskDisplayStatusConfig[displayStatus];
         const Icon = config.icon;
         return (
           <span
-            key={stage}
+            key={displayStatus}
             className={cn("flex items-center gap-1", config.text)}
           >
             <Icon size={12} aria-hidden />
-            {status.counts[stage]} {config.label}
+            {status.counts[displayStatus]} {config.label}
           </span>
         );
       })}

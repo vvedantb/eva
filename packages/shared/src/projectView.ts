@@ -21,35 +21,19 @@ import {
 export const PROJECT_STAGES = [
   "todo",
   "in_progress",
-  "in_review",
   "done",
 ] as const satisfies readonly ProjectStage[];
 
 export const PROJECT_STAGE_LABELS: Record<ProjectStage, string> = {
   todo: "To Do",
   in_progress: "In Progress",
-  in_review: "In Review",
   done: "Done",
 };
 
-/** Task stages in workflow order: the project task list sections. */
-export const PROJECT_TASK_STAGES = [
-  "todo",
-  "in_progress",
-  "in_review",
-  "launched",
-  "cancelled",
-] as const satisfies readonly ProjectTaskStage[];
-
-export const PROJECT_TASK_STAGE_LABELS: Record<ProjectTaskStage, string> = {
-  todo: "To Do",
-  in_progress: "In Progress",
-  in_review: "In Review",
-  launched: "Launched",
-  cancelled: "Cancelled",
-};
-
-/** A project's task list groups, in order (`projectTaskStatusSections`). */
+/**
+ * A project's task list groups, in order (`projectTaskStatusSections`), and
+ * the order of the task counts and progress bar parts a project shows.
+ */
 export const PROJECT_TASK_DISPLAY_STATUSES = [
   "working",
   "blocked",
@@ -66,14 +50,6 @@ export const PROJECT_TASK_DISPLAY_STATUS_LABELS: Record<
   idle: "Idle",
   archived: "Archived",
 };
-
-/** The stage counts a project shows, most finished first. Cancelled is left out. */
-export const PROJECT_STAGE_COUNT_ORDER = [
-  "launched",
-  "in_review",
-  "in_progress",
-  "todo",
-] as const satisfies readonly ProjectTaskStage[];
 
 /** Why a task waits for a person, in a few words. */
 export const NEEDS_YOU_LABELS: Record<NeedsYouReason, string> = {
@@ -220,12 +196,12 @@ export function projectTaskNotesByTask(
 
 /**
  * What the projects list reads for each project (`listStatusesForRepo`):
- * the derived stage and counts, how many tasks need a person, and whether
- * the coordinator is paused at its hourly cap.
+ * the derived stage and task counts by display status, how many tasks need a
+ * person, and whether the coordinator is paused at its hourly cap.
  */
 export interface ProjectListStatus {
   stage: ProjectStage;
-  counts: Record<ProjectTaskStage, number>;
+  counts: ProjectStatus["counts"];
   needsYouCount: number;
   coordinatorPaused: boolean;
 }
@@ -246,18 +222,22 @@ export function projectListNeedsYouLabel(
 }
 
 /**
- * Launched tasks out of the tasks still counted (cancelled ones are left
- * out), and the share as a whole percent: the timeline's progress.
+ * Archived tasks (launched or cancelled) out of all tasks, and the share as
+ * a whole percent: the timeline's progress.
  */
-export function projectLaunchedShare(
-  counts: Record<ProjectTaskStage, number>,
-): { launched: number; total: number; percent: number } {
-  const total =
-    counts.launched + counts.in_review + counts.in_progress + counts.todo;
+export function projectArchivedShare(counts: ProjectStatus["counts"]): {
+  archived: number;
+  total: number;
+  percent: number;
+} {
+  const total = PROJECT_TASK_DISPLAY_STATUSES.reduce(
+    (sum, status) => sum + counts[status],
+    0,
+  );
   return {
-    launched: counts.launched,
+    archived: counts.archived,
     total,
-    percent: total > 0 ? Math.round((counts.launched / total) * 100) : 0,
+    percent: total > 0 ? Math.round((counts.archived / total) * 100) : 0,
   };
 }
 
@@ -276,32 +256,25 @@ export function unapprovedTodoTaskIds<Row extends ProjectTaskRow>(
 }
 
 /**
- * The progress bar's coloured parts, in `PROJECT_TASK_STAGES` order: each
- * non-empty stage's share of the tasks and where it starts, both from 0 to 1.
+ * The progress bar's coloured parts, in `PROJECT_TASK_DISPLAY_STATUSES`
+ * order: each non-empty display status's share of the tasks and where it
+ * starts, both from 0 to 1.
  */
-export function projectStageSegments(
+export function projectStatusSegments(
   status: Pick<ProjectStatus, "counts">,
-): Array<{ stage: ProjectTaskStage; ratio: number; offset: number }> {
-  const total = PROJECT_TASK_STAGES.reduce(
-    (sum, stage) => sum + status.counts[stage],
-    0,
-  );
-  if (total === 0) return [];
+): Array<{ status: ProjectTaskDisplayStatus; ratio: number; offset: number }> {
+  const { total } = projectArchivedShare(status.counts);
   const segments: Array<{
-    stage: ProjectTaskStage;
+    status: ProjectTaskDisplayStatus;
     ratio: number;
     offset: number;
   }> = [];
   let offset = 0;
-  const order: readonly ProjectTaskStage[] = [
-    ...PROJECT_STAGE_COUNT_ORDER,
-    "cancelled",
-  ];
-  for (const stage of order) {
-    const count = status.counts[stage];
+  for (const displayStatus of PROJECT_TASK_DISPLAY_STATUSES) {
+    const count = status.counts[displayStatus];
     if (count === 0) continue;
     const ratio = count / total;
-    segments.push({ stage, ratio, offset });
+    segments.push({ status: displayStatus, ratio, offset });
     offset += ratio;
   }
   return segments;

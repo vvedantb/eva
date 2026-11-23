@@ -115,7 +115,6 @@ export function ProjectsClient() {
   const projectsByPhaseInitial: Record<ProjectStage, typeof filteredSorted> = {
     todo: [],
     in_progress: [],
-    in_review: [],
     done: [],
   };
   const projectsByPhase = PROJECT_STAGES.reduce((acc, stage) => {

@@ -62,8 +62,8 @@ export function useProjectRepo() {
  * The web Projects list view at phone width, for one repo: the repo picker,
  * the toolbar (search and the Options sheet: sort and stages, the web
  * `ProjectsClient` toolbar) and its "Filtered by" chips, then a collapsible
- * section per shown derived stage (`projectStatus`: To Do, In Progress, In
- * Review, Done; icon, label, count; `listStatusesForRepo`), each with its
+ * section per shown derived stage (`projectStatus`: To Do, In Progress,
+ * Done; icon, label, count; `listStatusesForRepo`), each with its
  * project cards or "No projects". Sections with projects start open, as the
  * web. A long press on a card opens the web project menu as a sheet
  * (`useProjectActions`). A `SectionList`, as a repo's projects have no cap.

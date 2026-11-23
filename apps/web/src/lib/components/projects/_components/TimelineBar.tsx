@@ -1,32 +1,29 @@
 "use client";
 
 import { Tooltip, TooltipTrigger, TooltipContent } from "@vvedantb/ui";
-import type {
-  ProjectStage,
-  ProjectTaskStage,
-} from "@eva/shared/projectStatus";
-import { projectLaunchedShare } from "@eva/shared/projectView";
+import type { ProjectStage, ProjectStatus } from "@eva/shared/projectStatus";
+import { projectArchivedShare } from "@eva/shared/projectView";
 import { projectStageConfig } from "@/lib/components/projects/ProjectPhaseBadge";
 import { ProjectStageCounts } from "@/lib/components/projects/ProjectStageCounts";
 
 interface TimelineBarProps {
   name: string;
   stage: ProjectStage;
-  /** Task counts by derived stage (`listStatusesForRepo`). */
-  counts?: Record<ProjectTaskStage, number>;
+  /** Task counts by display status (`listStatusesForRepo`). */
+  counts?: ProjectStatus["counts"];
 }
 
 /**
  * The inner content of a timeline bar: a stage-tinted track, a saturated fill
- * sized to the share of launched tasks (Linear-style), the project name and a
- * percentage. Wrapped in a tooltip with the counts by derived stage. Purely
+ * sized to the share of archived tasks (Linear-style), the project name and a
+ * percentage. Wrapped in a tooltip with the counts by display status. Purely
  * presentational — counts are fed in so the row issues no query of its own.
  */
 export function TimelineBar({ name, stage, counts }: TimelineBarProps) {
   const config = projectStageConfig[stage];
-  const { launched, total, percent: pct } = counts
-    ? projectLaunchedShare(counts)
-    : { launched: 0, total: 0, percent: 0 };
+  const { archived, total, percent: pct } = counts
+    ? projectArchivedShare(counts)
+    : { archived: 0, total: 0, percent: 0 };
 
   return (
     <Tooltip>
@@ -58,7 +55,7 @@ export function TimelineBar({ name, stage, counts }: TimelineBarProps) {
         {counts && total > 0 ? (
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium">
-              {launched}/{total} tasks launched · {pct}%
+              {archived}/{total} tasks archived · {pct}%
             </span>
             <ProjectStageCounts status={{ counts }} className="text-xs" />
           </div>

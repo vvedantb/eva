@@ -110,18 +110,18 @@ export const list = authQuery({
   },
 });
 
-const stageCountsValidator = v.object({
-  launched: v.number(),
-  in_review: v.number(),
-  in_progress: v.number(),
-  todo: v.number(),
-  cancelled: v.number(),
+/** A project's tasks by display status (`projectTaskDisplayStatus`). */
+const displayStatusCountsValidator = v.object({
+  working: v.number(),
+  blocked: v.number(),
+  idle: v.number(),
+  archived: v.number(),
 });
 
 /**
  * Every live project of a repo with its derived status, in one call for the
  * projects list (`projectStatus` over each project's task facts): its stage,
- * task counts by stage, how many tasks need a person, and whether its
+ * task counts by display status, how many tasks need a person, and whether its
  * coordinator's automatic turns are paused at the hourly cap (that needs a
  * person too). Tasks in repos the caller cannot open still count.
  */
@@ -132,11 +132,10 @@ export const listStatusesForRepo = authQuery({
       projectId: v.id("projects"),
       stage: v.union(
         v.literal("done"),
-        v.literal("in_review"),
         v.literal("in_progress"),
         v.literal("todo"),
       ),
-      counts: stageCountsValidator,
+      counts: displayStatusCountsValidator,
       needsYouCount: v.number(),
       coordinatorPaused: v.boolean(),
     }),

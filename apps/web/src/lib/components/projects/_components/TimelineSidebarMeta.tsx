@@ -1,8 +1,8 @@
 "use client";
 
 import type { Id } from "@eva/backend";
-import type { ProjectTaskStage } from "@eva/shared/projectStatus";
-import { projectLaunchedShare } from "@eva/shared/projectView";
+import type { ProjectStatus } from "@eva/shared/projectStatus";
+import { projectArchivedShare } from "@eva/shared/projectView";
 import {
   AvatarStack,
   Tooltip,
@@ -12,8 +12,8 @@ import {
 import { UserInitials } from "@eva/shared/user-initials";
 
 interface TimelineSidebarMetaProps {
-  /** Task counts by derived stage (`listStatusesForRepo`). */
-  counts?: Record<ProjectTaskStage, number>;
+  /** Task counts by display status (`listStatusesForRepo`). */
+  counts?: ProjectStatus["counts"];
   lead?: Id<"users">;
   members?: Id<"users">[];
   /** Shown when a project has neither a lead nor members. */
@@ -81,9 +81,9 @@ export function TimelineSidebarMeta({
   const shown = all.slice(0, MAX_AVATARS);
   const hidden = all.length - shown.length;
 
-  const { launched, total, percent: pct } = counts
-    ? projectLaunchedShare(counts)
-    : { launched: 0, total: 0, percent: 0 };
+  const { archived, total, percent: pct } = counts
+    ? projectArchivedShare(counts)
+    : { archived: 0, total: 0, percent: 0 };
 
   return (
     <div className="flex items-center gap-2">
@@ -95,7 +95,7 @@ export function TimelineSidebarMeta({
         </TooltipTrigger>
         <TooltipContent>
           {total > 0
-            ? `${launched}/${total} tasks launched · ${pct}%`
+            ? `${archived}/${total} tasks archived · ${pct}%`
             : "No tasks yet"}
         </TooltipContent>
       </Tooltip>

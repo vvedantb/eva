@@ -11,12 +11,10 @@ import {
 import type {
   ProjectStage,
   ProjectTaskDisplayStatus,
-  ProjectTaskStage,
 } from "@eva/shared/projectStatus";
 import {
   PROJECT_STAGE_LABELS,
   PROJECT_TASK_DISPLAY_STATUS_LABELS,
-  PROJECT_TASK_STAGE_LABELS,
 } from "@eva/shared/projectView";
 import {
   IconAlertTriangle,
@@ -136,40 +134,17 @@ export const columnConfig: Record<ProjectColumn, PhaseStyle> = {
 };
 
 /**
- * A task's derived stage (`projectTaskStage`): the styles of the stored phase
- * it replaces. In review uses the code review style; launched uses merged.
- */
-export const projectTaskStageConfig: Record<ProjectTaskStage, PhaseStyle> = {
-  todo: { ...columnConfig.todo, label: PROJECT_TASK_STAGE_LABELS.todo },
-  in_progress: {
-    ...phaseConfig.in_progress,
-    label: PROJECT_TASK_STAGE_LABELS.in_progress,
-  },
-  in_review: {
-    ...phaseConfig.code_review,
-    label: PROJECT_TASK_STAGE_LABELS.in_review,
-  },
-  launched: {
-    ...phaseConfig.completed,
-    label: PROJECT_TASK_STAGE_LABELS.launched,
-  },
-  cancelled: {
-    ...phaseConfig.cancelled,
-    label: PROJECT_TASK_STAGE_LABELS.cancelled,
-  },
-};
-
-/**
  * A child task's display status (`projectTaskDisplayStatus`): the task list
- * groups and rows. Working looks as In Progress, Blocked as the needs-you
- * warning, Idle as To Do, Archived as Cancelled.
+ * groups and rows, and a project's task counts and progress bar. Working
+ * looks as In Progress, Blocked as the needs-you warning, Idle as To Do,
+ * Archived as Cancelled.
  */
 export const projectTaskDisplayStatusConfig: Record<
   ProjectTaskDisplayStatus,
   PhaseStyle
 > = {
   working: {
-    ...projectTaskStageConfig.in_progress,
+    ...phaseConfig.in_progress,
     label: PROJECT_TASK_DISPLAY_STATUS_LABELS.working,
   },
   blocked: {
@@ -182,24 +157,26 @@ export const projectTaskDisplayStatusConfig: Record<
     icon: IconAlertTriangle,
   },
   idle: {
-    ...projectTaskStageConfig.todo,
+    ...columnConfig.todo,
     label: PROJECT_TASK_DISPLAY_STATUS_LABELS.idle,
   },
   archived: {
-    ...projectTaskStageConfig.cancelled,
+    ...phaseConfig.cancelled,
     label: PROJECT_TASK_DISPLAY_STATUS_LABELS.archived,
   },
 };
 
-/** A project's derived stage (`projectStatus`): kanban columns, list sections, badges. */
+/**
+ * A project's derived stage (`projectStatus`): kanban columns, list
+ * sections, badges. Done looks as Completed.
+ */
 export const projectStageConfig: Record<ProjectStage, PhaseStyle> = {
-  todo: { ...projectTaskStageConfig.todo, label: PROJECT_STAGE_LABELS.todo },
-  in_progress: projectTaskStageConfig.in_progress,
-  in_review: projectTaskStageConfig.in_review,
-  done: {
-    ...projectTaskStageConfig.launched,
-    label: PROJECT_STAGE_LABELS.done,
+  todo: { ...columnConfig.todo, label: PROJECT_STAGE_LABELS.todo },
+  in_progress: {
+    ...phaseConfig.in_progress,
+    label: PROJECT_STAGE_LABELS.in_progress,
   },
+  done: { ...phaseConfig.completed, label: PROJECT_STAGE_LABELS.done },
 };
 
 /** The project's derived stage, in the phase badge's look. */

@@ -1,12 +1,10 @@
 "use client";
 
 import type { ProjectStatus } from "@eva/shared/projectStatus";
-import {
-  PROJECT_TASK_STAGES,
-  projectStageSegments,
-} from "@eva/shared/projectView";
+import { projectStatusSegments } from "@eva/shared/projectView";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@vvedantb/ui";
-import { projectTaskStageConfig } from "./ProjectPhaseBadge";
+import { projectTaskDisplayStatusConfig } from "./ProjectPhaseBadge";
+import { ProjectStageCounts } from "./ProjectStageCounts";
 
 interface ProjectProgressBarProps {
   /** The project's derived status (`useProjectTaskStatus` / `useProjectListStatuses`). */
@@ -23,7 +21,7 @@ export function ProjectProgressBar({
   // Fills stay at full track width and scale from the left — same compositor
   // rule as UsageBar. `.project-progress-fill` is the hook for
   // `html[data-page-motion=off]` (do not add that rule here).
-  const segments = projectStageSegments(status);
+  const segments = projectStatusSegments(status);
 
   if (segments.length === 0) {
     return (
@@ -48,8 +46,8 @@ export function ProjectProgressBar({
         >
           {segments.map((segment) => (
             <div
-              key={segment.stage}
-              className={`project-progress-fill absolute inset-y-0 w-full origin-left transition-transform duration-[var(--motion-base)] ${projectTaskStageConfig[segment.stage].bar}`}
+              key={segment.status}
+              className={`project-progress-fill absolute inset-y-0 w-full origin-left transition-transform duration-[var(--motion-base)] ${projectTaskDisplayStatusConfig[segment.status].bar}`}
               style={{
                 left: `${segment.offset * 100}%`,
                 transform: `scaleX(${segment.ratio})`,
@@ -59,22 +57,10 @@ export function ProjectProgressBar({
         </div>
       </TooltipTrigger>
       <TooltipContent>
-        <div className="flex flex-col gap-1">
-          {PROJECT_TASK_STAGES.flatMap((stage) => {
-            const count = status.counts[stage];
-            if (count <= 0) return [];
-            const config = projectTaskStageConfig[stage];
-            const Icon = config.icon;
-            return [
-              <span
-                key={stage}
-                className={`flex items-center gap-1.5 ${config.text}`}
-              >
-                <Icon size={12} /> {count} {config.label}
-              </span>,
-            ];
-          })}
-        </div>
+        <ProjectStageCounts
+          status={status}
+          className="flex-col items-start gap-1 text-xs"
+        />
       </TooltipContent>
     </Tooltip>
   );

@@ -92,12 +92,12 @@ describe("recomputeProjectPhase", () => {
   test(
     "unstarted or running tasks block completion",
     async () => {
-      // A running child task shows the project in progress (tasks run in
-      // parallel, with no build); a todo one leaves it in review.
+      // A launched task next to a todo or running one shows the project
+      // in progress (tasks run in parallel, with no build).
       const cases: Array<
         [Doc<"agentTasks">["status"], Doc<"projects">["phase"]]
       > = [
-        ["todo", "business_review"],
+        ["todo", "in_progress"],
         ["in_progress", "in_progress"],
       ];
       for (const [blocker, phase] of cases) {
@@ -150,7 +150,7 @@ describe("recomputeProjectPhase", () => {
           ["done", "business_review"],
           prState,
         );
-        expect(await recompute()).toBe("business_review");
+        expect(await recompute()).toBe("in_progress");
       }
     },
     TIMEOUT_MS,

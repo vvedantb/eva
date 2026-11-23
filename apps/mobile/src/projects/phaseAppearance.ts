@@ -1,5 +1,5 @@
 import type { ProjectColumn, ProjectPhase } from "@eva/shared";
-import type { ProjectStage, ProjectTaskDisplayStatus, ProjectTaskStage } from "@eva/shared/projectStatus";
+import type { ProjectStage, ProjectTaskDisplayStatus } from "@eva/shared/projectStatus";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
   IconAlertTriangle,
@@ -53,39 +53,26 @@ export function columnAppearance(column: ProjectColumn, scheme: Scheme) {
   return column === "todo" ? statusAppearance("todo", scheme) : phaseAppearance(column, scheme);
 }
 
-/** The phase each task stage borrows its look from, as the web `projectTaskStageConfig`. */
-const TASK_STAGE_COLUMNS: Record<ProjectTaskStage, ProjectColumn> = {
-  todo: "todo",
-  in_progress: "in_progress",
-  in_review: "code_review",
-  launched: "completed",
-  cancelled: "cancelled",
-};
-
-/** A task stage's icon and colours (section headers, stage counts, the progress bar). */
-export function taskStageAppearance(stage: ProjectTaskStage, scheme: Scheme) {
-  return columnAppearance(TASK_STAGE_COLUMNS[stage], scheme);
-}
-
-/** A project stage's icon and colours, as the web `projectStageConfig`: Done looks as Launched. */
+/** A project stage's icon and colours, as the web `projectStageConfig`: Done looks as Completed. */
 export function projectStageAppearance(stage: ProjectStage, scheme: Scheme) {
-  return taskStageAppearance(stage === "done" ? "launched" : stage, scheme);
+  return columnAppearance(stage === "done" ? "completed" : stage, scheme);
 }
 
 /**
  * A child task's display status, as the web `projectTaskDisplayStatusConfig`:
  * Working as In Progress, Blocked as the needs-you warning, Idle as To Do,
- * Archived as Cancelled.
+ * Archived as Cancelled. The task list groups, a project's task counts and
+ * its progress bar.
  */
 export function taskDisplayStatusAppearance(status: ProjectTaskDisplayStatus, scheme: Scheme) {
   if (status === "blocked") {
     const warning = EVA_THEME[scheme].warning;
     return { icon: IconAlertTriangle, text: warning, bar: warning };
   }
-  const stage: Record<Exclude<ProjectTaskDisplayStatus, "blocked">, ProjectTaskStage> = {
+  const column: Record<Exclude<ProjectTaskDisplayStatus, "blocked">, ProjectColumn> = {
     working: "in_progress",
     idle: "todo",
     archived: "cancelled",
   };
-  return taskStageAppearance(stage[status], scheme);
+  return columnAppearance(column[status], scheme);
 }

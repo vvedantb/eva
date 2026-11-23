@@ -289,23 +289,14 @@ export const EMPTY_PROJECT_PHASE: Doc<"projects">["phase"] = "business_review";
 
 /**
  * The stored phase for a derived project stage (`projectStatus`). Only older
- * phone builds read it; nothing in the backend decides on it. In review
- * splits as the old phases did (business review while any task is there,
- * else code review), so a legacy project PR keeps its draft / ready sync.
+ * phone builds read it; nothing in the backend decides on it.
  */
-function phaseForStage(
-  stage: ProjectStage,
-  tasks: readonly Pick<Doc<"agentTasks">, "status">[],
-): Doc<"projects">["phase"] {
+function phaseForStage(stage: ProjectStage): Doc<"projects">["phase"] {
   switch (stage) {
     case "done":
       return "completed";
     case "in_progress":
       return "in_progress";
-    case "in_review":
-      return tasks.some((task) => task.status === "business_review")
-        ? "business_review"
-        : "code_review";
     case "todo":
       return EMPTY_PROJECT_PHASE;
   }
@@ -361,7 +352,7 @@ export async function recomputeProjectPhase(
     })),
   );
   if (
-    stage !== "in_progress" &&
+    !tasks.some((task) => task.status === "in_progress") &&
     (project.phase === "completed" || project.phase === "cancelled")
   ) {
     const projectPrs = await listOwnerPullRequests(db, {
@@ -370,7 +361,7 @@ export async function recomputeProjectPhase(
     });
     if (projectPrs.length > 0 && allPullRequestsTerminal(projectPrs)) return;
   }
-  const next = phaseForStage(stage, tasks);
+  const next = phaseForStage(stage);
   if (next === project.phase) return;
   await ctx.db.patch(project._id, { phase: next });
   const updated = await ctx.db.get(project._id);

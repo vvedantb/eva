@@ -56,7 +56,7 @@ export type ProjectTaskStage =
   | "cancelled";
 
 /** Where the project as a whole stands. */
-export type ProjectStage = "done" | "in_review" | "in_progress" | "todo";
+export type ProjectStage = "done" | "in_progress" | "todo";
 
 /** Why a task waits for a person. */
 export type NeedsYouReason =
@@ -144,7 +144,8 @@ export function projectTaskWaitsForCoordinator(task: ProjectTaskFacts): boolean 
  * How a project's child task shows in its task list, by who must act: the
  * agent (`working`), a person or the coordinator (`blocked`), nobody yet
  * (`idle`: approved, waiting for a dependency or a free slot), or no one any
- * more (`archived`). The project itself keeps its stages (`projectStatus`).
+ * more (`archived`). The project itself keeps its stages (`projectStatus`),
+ * and counts its tasks by these statuses.
  */
 export type ProjectTaskDisplayStatus = "working" | "blocked" | "idle" | "archived";
 
@@ -172,39 +173,43 @@ export function projectTaskDisplayStatus(
 
 export interface ProjectStatus {
   stage: ProjectStage;
-  counts: Record<ProjectTaskStage, number>;
+  /** The project's tasks by display status (`projectTaskDisplayStatus`). */
+  counts: Record<ProjectTaskDisplayStatus, number>;
   needsYou: Array<{ id: string; reason: NeedsYouReason }>;
 }
 
 /**
- * The project's stage: done when every task is launched or cancelled, todo
- * when it has no tasks, else the most active stage any task is in.
+ * The project's stage, its task counts by display status, and the tasks that
+ * wait for a person. Done: at least one task, and every task is launched or
+ * cancelled. To Do: no task has started (every task is still todo, or there
+ * are none). In Progress: anything else.
  */
 export function projectStatus(
   tasks: readonly ProjectTaskFacts[],
 ): ProjectStatus {
-  const counts: Record<ProjectTaskStage, number> = {
-    launched: 0,
-    in_review: 0,
-    in_progress: 0,
-    todo: 0,
-    cancelled: 0,
+  const counts: Record<ProjectTaskDisplayStatus, number> = {
+    working: 0,
+    blocked: 0,
+    idle: 0,
+    archived: 0,
   };
   const needsYou: ProjectStatus["needsYou"] = [];
+  let finished = 0;
+  let notStarted = 0;
   for (const task of tasks) {
-    counts[projectTaskStage(task)] += 1;
+    counts[projectTaskDisplayStatus(task)] += 1;
+    const stage = projectTaskStage(task);
+    if (stage === "launched" || stage === "cancelled") finished += 1;
+    if (stage === "todo") notStarted += 1;
     const reason = projectTaskNeedsYou(task);
     if (reason !== undefined) needsYou.push({ id: task.id, reason });
   }
-  const finished = counts.launched + counts.cancelled;
   const stage: ProjectStage =
-    tasks.length > 0 && finished === tasks.length
-      ? "done"
-      : counts.in_progress > 0
-        ? "in_progress"
-        : counts.in_review > 0
-          ? "in_review"
-          : "todo";
+    notStarted === tasks.length
+      ? "todo"
+      : finished === tasks.length
+        ? "done"
+        : "in_progress";
   return { stage, counts, needsYou };
 }
 
