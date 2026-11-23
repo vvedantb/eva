@@ -11,13 +11,13 @@ import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconSunrise } from "@tabler/icons-react-native";
 import { tabBarReserve } from "@vvedantb/native-ui/floating";
 import { Markdown } from "@vvedantb/native-ui/markdown";
-import { EmptyState, SectionLabel, SkeletonList, SkeletonRow } from "@vvedantb/native-ui/primitives";
+import { EmptyState, SkeletonList, SkeletonRow } from "@vvedantb/native-ui/primitives";
 import { useLargerText } from "@vvedantb/native-ui/theme";
 import { useQuery } from "convex/react";
 import { useRouter } from "expo-router";
 import { Pressable, SectionList, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { PrIcon } from "@/sessions/SessionGroup";
+import { prStatusAppearance } from "@/reviews/prAppearance";
 import { RepoSection } from "@/ui/RepoPicker";
 import { AwaitingAnswerMark, WorkingMark } from "@/ui/RowStatus";
 import { TimeAgo } from "@/ui/TimeAgo";
@@ -59,7 +59,7 @@ function TodayList({ repoId }: { repoId: Id<"githubRepos"> }) {
       sections={sections}
       keyExtractor={(item) => item.id}
       stickySectionHeadersEnabled={false}
-      renderSectionHeader={({ section }) => <SectionTitle title={section.title} />}
+      renderSectionHeader={({ section }) => <SectionTitle title={section.title} count={section.data.length} />}
       renderItem={({ item, section, index }) => (
         <TodayRow
           item={item}
@@ -99,12 +99,20 @@ function TodayList({ repoId }: { repoId: Id<"githubRepos"> }) {
   );
 }
 
-/** The web section title: the quiet uppercase label, 24 above, 8 below. */
-function SectionTitle({ title }: { title: string }) {
+/** The web section title: sentence case in the foreground, the count muted and tabular beside it. */
+function SectionTitle({ title, count }: { title: string; count?: number }) {
+  const theme = EVA_THEME[useScheme()];
   return (
-    <SectionLabel uppercase className="mb-1 mt-6 px-1">
-      {title}
-    </SectionLabel>
+    <View className="mb-2 mt-6 flex-row items-baseline gap-1.5 px-1">
+      <Text accessibilityRole="header" className="font-instrument-sans-medium text-sm" style={{ color: theme.foreground }}>
+        {title}
+      </Text>
+      {count === undefined ? null : (
+        <Text className="font-instrument-sans text-xs" style={{ color: theme.mutedForeground, fontVariant: ["tabular-nums"] }}>
+          {count}
+        </Text>
+      )}
+    </View>
   );
 }
 
@@ -154,7 +162,7 @@ function TodayRow({
         ) : item.working ? (
           <WorkingMark />
         ) : (
-          <PrIcon state={item.prState} scheme={scheme} />
+          <TodayPrIcon item={item} />
         )}
       </View>
       <Text numberOfLines={1} className="font-instrument-sans flex-1 text-sm" style={{ color: theme.foreground }}>
@@ -167,6 +175,15 @@ function TodayRow({
       />
     </Pressable>
   );
+}
+
+/** The web Today PR mark: the review surface's glyph and colour for each state (merged, draft, closed, open). */
+function TodayPrIcon({ item }: { item: TodayItem }) {
+  const scheme = useScheme();
+  const status = item.prState === "draft" || item.prState === undefined ? "open" : item.prState;
+  const appearance = prStatusAppearance(status, item.prState === "draft", scheme);
+  const Icon = appearance.icon;
+  return <Icon size={14} color={appearance.text} accessibilityLabel={`PR: ${appearance.label}`} />;
 }
 
 /** While Today loads: one card of rows. */

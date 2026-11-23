@@ -7,7 +7,6 @@ import { api, type TodayItem } from "@eva/backend";
 import { cn } from "@eva/ui";
 import {
   entityHref,
-  prStateLabel,
   standupEntryHeading,
   standupEntryTime,
   TODAY_UPDATE_TITLE,
@@ -24,11 +23,11 @@ import {
   tokenTransition,
 } from "@vvedantb/ui";
 import { m } from "motion/react";
-import { IconGitPullRequest, IconSunrise } from "@tabler/icons-react";
+import { IconSunrise } from "@tabler/icons-react";
 import dayjs from "dayjs";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import { AwaitingAnswerMark } from "@/lib/components/ui/AwaitingAnswerMark";
-import { prStateIconClass } from "@/lib/components/prStateIconClass";
+import { statusMeta } from "@/lib/components/reviews/_components/prOverviewMeta";
 import { SESSIONS_LEADING_SLOT } from "@/lib/components/sidebar/_utils/sessionsSidebarLayout";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
@@ -49,9 +48,12 @@ const standupProseClass =
   "[&_h1]:mb-1.5 [&_h2]:mb-1.5 [&_h3]:mb-1.5 [&_h4]:mb-1.5 " +
   "[&_ul]:my-0 [&_li]:my-0.5 [&_p]:my-1.5";
 
-/** Section title: the quiet uppercase label the standup headings use. */
+/**
+ * Section title in sentence case, as the review surface's labels: caps at this
+ * size read as a form. The count beside it is muted and tabular.
+ */
 const sectionTitleClass =
-  "mb-2 px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground";
+  "mb-2 flex items-baseline gap-1.5 px-4 text-sm font-medium text-foreground";
 
 /**
  * The signed-in user's live dashboard for this repo (`today.dashboard`):
@@ -92,7 +94,8 @@ function TodayBody({
     );
   }
   return (
-    <div className="space-y-8">
+    // A reading measure: a title and its time stay close enough to scan as one line.
+    <div className="max-w-3xl space-y-8">
       {sections.map((section, index) => (
         <m.section
           key={section.id}
@@ -100,7 +103,12 @@ function TodayBody({
           animate={{ opacity: 1, y: 0 }}
           transition={{ ...tokenTransition.base, delay: staggerDelay(index) }}
         >
-          <h2 className={sectionTitleClass}>{section.title}</h2>
+          <h2 className={sectionTitleClass}>
+            {section.title}
+            <span className="text-xs font-normal tabular-nums text-muted-foreground">
+              {section.items.length}
+            </span>
+          </h2>
           <ul className="rounded-surface bg-card p-1">
             {section.items.map((item) => (
               <TodayRow
@@ -157,7 +165,8 @@ function TodayRow({
     <li>
       <Link
         to={toInternalRepoHref(entityHref(item.kind, repo, item.numId))}
-        className="motion-press flex items-center gap-2 rounded-[calc(var(--radius)-4px)] px-3 py-2 text-sm hover:bg-accent-soft active:scale-[0.99]"
+        // 40 high (py-2.5 + 20 line) for the minimum hit area; a ring for keyboard focus.
+        className="motion-press flex items-center gap-2.5 rounded-[calc(var(--radius)-4px)] px-3 py-2.5 text-sm hover:bg-accent-soft focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/40 active:scale-[0.99]"
       >
         <TodayLeading item={item} awaitingAnswer={awaitingAnswer} />
         <span className="min-w-0 flex-1 truncate">{item.title}</span>
@@ -196,13 +205,19 @@ function TodayLeading({
       </span>
     );
   }
+  // The review surface's one state table: merged, draft and closed each get
+  // their own glyph, not only a colour.
+  const draft = item.prState === "draft";
+  const meta = statusMeta(
+    item.prState === "draft" || item.prState === undefined
+      ? "open"
+      : item.prState,
+    draft,
+  );
+  const Icon = meta.icon;
   return (
-    <span className={SESSIONS_LEADING_SLOT}>
-      <IconGitPullRequest
-        size={14}
-        className={cn("shrink-0", prStateIconClass(item.prState))}
-        title={`PR: ${prStateLabel(item.prState)}`}
-      />
+    <span className={SESSIONS_LEADING_SLOT} title={`PR: ${meta.label}`}>
+      <Icon size={14} className={cn("shrink-0", meta.textClassName)} />
     </span>
   );
 }
