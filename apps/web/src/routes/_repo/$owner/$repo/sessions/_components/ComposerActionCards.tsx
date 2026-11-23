@@ -69,18 +69,18 @@ export function ComposerActionCards() {
   return (
     // Lines up with ChatComposer's under-card footer: its `p-3 md:p-4` wrapper
     // plus the footer's own `w-[calc(100%-1.5rem)] md:w-[calc(100%-2rem)]`.
-    <div className="flex flex-col gap-3 px-6 sm:flex-row md:px-8">
+    <div className="flex flex-col gap-2 px-6 sm:flex-row md:px-8">
       {cards.map((card) => (
         <Surface
           key={card.key}
           density="tight"
-          className="flex min-w-0 items-center gap-3 sm:flex-1 sm:basis-0"
+          className="flex min-w-0 items-center gap-2.5 py-1.5 pr-1.5 pl-3 sm:flex-1 sm:basis-0"
         >
-          <card.icon size={18} className="shrink-0 text-muted-foreground" />
+          <card.icon size={16} className="shrink-0 text-muted-foreground" />
           <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
             {card.title}
           </p>
-          <Button asChild size="sm" variant="secondary" className="shrink-0">
+          <Button asChild size="xs" variant="secondary" className="shrink-0">
             <Link to={card.href}>{card.action}</Link>
           </Button>
         </Surface>
