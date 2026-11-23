@@ -531,10 +531,9 @@ const ownedSessionRefValidator = v.object({
 
 /**
  * The session a task or project works on (its sandbox) and the chat it talks
- * in (a quick task's or project's Main chat, a project task's own chat in the
- * project's session), for the owner's chat and sandbox panels. `session` is
- * null until the session exists; `chatId` absent while a project task has
- * not chatted yet (its project's session may already run). `ensureOwned`
+ * in (the Main chat of its own session), for the owner's chat and sandbox
+ * panels. `session` is null until the session exists; `chatId` absent until
+ * the chat exists. `ensureOwned`
  * creates both. `chatSeed` is what the chat starts on (`chatSeedSettings`):
  * clients show it until the chat has its own picks. Null when the owner is
  * gone or not visible.

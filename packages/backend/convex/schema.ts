@@ -250,7 +250,7 @@ const schema = defineSchema({
     .index("by_session", ["sessionId"])
     .index("by_session_and_number", ["sessionId", "number"])
     .index("by_repo", ["repoId"])
-    // A project task's chat in its project's session.
+    // Legacy: an old project task's chat in its project's session.
     .index("by_task", ["taskId"]),
   // Legacy daemon-poll mirror. Chat daemons poll their `sessionChats` row
   // directly; `backfillSessionChats` empties this table and it can then be

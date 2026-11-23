@@ -90,8 +90,8 @@ export const create = authMutation({
     });
 
     // A "Make changes" submission parks itself on the task as the pending
-    // change-request comment. The next run created for this task (Build Project
-    // for project tasks, immediate startExecution for quick tasks) copies it
+    // change-request comment. The next run created for this task (the project
+    // scheduler or startExecution) copies it
     // onto the run's `triggeringCommentId`, so the timeline labels that run
     // "made changes" rather than a bare "success".
     if (args.requestsChanges) {

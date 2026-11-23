@@ -1,6 +1,6 @@
 import type { ObjectType } from "convex/values";
 import type { WorkflowId } from "@convex-dev/workflow";
-import type { MutationCtx } from "../_generated/server";
+import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { internal } from "../_generated/api";
 import { workflow } from "../workflowManager";
@@ -27,7 +27,7 @@ export async function taskWorkSessionBusy(
 
 /** The task's newest run, or null before its first. */
 export async function latestTaskRun(
-  db: MutationCtx["db"],
+  db: DatabaseReader,
   taskId: Id<"agentTasks">,
 ): Promise<Doc<"agentRuns"> | null> {
   return await db

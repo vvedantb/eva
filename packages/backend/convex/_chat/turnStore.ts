@@ -444,8 +444,8 @@ export async function closeTurn(
   const runId = ctx.db.normalizeId("agentRuns", turn.entityId);
   if (session && chatParentId) {
     await ctx.db.patch(session._id, { lastTurnFinishedAt: finishedAt });
-    // A task's or project's session reads unread on its owner's card (a
-    // project task's own chat on the task's), so the owner gets the
+    // A task's or project's session reads unread on its owner's card (an old
+    // project task's legacy chat on the task's), so the owner gets the
     // watermark too (`chatReads.markRead` reads it with the chat).
     const chatId = ctx.db.normalizeId("sessionChats", chatParentId);
     const chat = chatId ? await ctx.db.get(chatId) : null;

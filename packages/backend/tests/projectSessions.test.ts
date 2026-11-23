@@ -4,15 +4,18 @@ import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { DEFAULT_AI_MODEL } from "../convex/validators";
 import { openTurn } from "../convex/_chat/turnStore";
-import { rotateProjectBranch } from "../convex/_sessions/ownedSession";
-import { buildProjectBranchName } from "../convex/_git/branchNames";
+import { ownedSessionBusy } from "../convex/_sessions/ownedSession";
+import { taskWorkSessionBusy } from "../convex/_taskWorkflow/startRun";
+import {
+  buildProjectBranchName,
+  buildTaskBranchName,
+} from "../convex/_git/branchNames";
 
 /**
- * PR 2: a project and its tasks run on the project's one owned session.
- * Guards the rules that keep it a single engine: one session per project,
- * project tasks share it (each with its own chat), chat queues behind a
- * running build and a build waits for the chat, and a merged PR's branch
- * rotation moves the session to the new branch and drops its old VM.
+ * A project owns one hidden session (its coordinator's), and each of its
+ * child tasks owns its own session, branch and Main chat, exactly like a
+ * quick task, so tasks of one project run in parallel without holding each
+ * other or the project.
  */
 
 const modules = import.meta.glob("../convex/**/*.ts");
@@ -71,7 +74,7 @@ describe("projects on sessions", () => {
   });
 
   test(
-    "a project owns one hidden session, and its tasks work on it in their own chat",
+    "a project owns one hidden session, and each of its tasks owns its own",
     async () => {
       const f = await fixture();
       const first = await ensureProjectSession(f);
@@ -83,23 +86,30 @@ describe("projects on sessions", () => {
       const taskChat = await f.asUser.mutation(api.sessions.ensureOwned, {
         owner: { kind: "task", taskId: f.taskId },
       });
-      expect(taskChat.sessionId).toBe(first.sessionId);
-      expect(taskChat.chatId).not.toBe(first.chatId);
+      expect(taskChat.sessionId).not.toBe(first.sessionId);
       expect(
         await f.asUser.mutation(api.sessions.ensureOwned, {
           owner: { kind: "task", taskId: f.taskId },
         }),
       ).toEqual(taskChat);
-      const chat = await f.t.run((ctx) => ctx.db.get(taskChat.chatId));
-      expect(chat).toMatchObject({ isMain: false, taskId: f.taskId });
-      const sessions = await f.t.run((ctx) =>
-        ctx.db.query("sessions").collect(),
+      const [chat, taskSession, projectSession] = await f.t.run(
+        async (ctx) => [
+          await ctx.db.get(taskChat.chatId),
+          await ctx.db.get(taskChat.sessionId),
+          await ctx.db.get(first.sessionId),
+        ],
       );
-      expect(sessions).toHaveLength(1);
-      expect(sessions[0]).toMatchObject({
+      // The task chats in its own session's Main chat, on its own branch.
+      expect(chat).toMatchObject({ isMain: true });
+      expect(chat?.taskId).toBeUndefined();
+      expect(taskSession).toMatchObject({
+        owner: { kind: "task", taskId: f.taskId },
+        branchName: buildTaskBranchName(f.taskId),
+        status: "closed",
+      });
+      expect(projectSession).toMatchObject({
         owner: { kind: "project", projectId: f.projectId },
         branchName: buildProjectBranchName(f.projectId),
-        status: "closed",
       });
       // Owned sessions refuse session-only actions; a user cannot open more chats.
       await expect(
@@ -112,26 +122,27 @@ describe("projects on sessions", () => {
   );
 
   test(
-    "a project chat message queues behind a running build, and a build waits for the chat",
+    "two tasks of one project are busy apart: a reply in one holds neither the other nor the project",
     async () => {
       const f = await fixture();
-      const { sessionId, chatId } = await ensureProjectSession(f);
-      await f.t.run(async (ctx) => {
-        await ctx.db.patch(f.projectId, {
-          build: { state: "running", workflowId: "wf-build" },
-        });
-      });
-      expect(
-        await f.asUser.mutation(api.sessionWorkflow.startExecute, {
-          chatId,
-          message: "while building",
-          model: DEFAULT_AI_MODEL,
+      const other = await f.t.run(async (ctx) =>
+        ctx.db.insert("agentTasks", {
+          repoId: f.repoId,
+          projectId: f.projectId,
+          title: "Second project task",
+          status: "todo",
+          numId: 2,
+          createdAt: 0,
+          updatedAt: 0,
+          createdBy: f.userId,
         }),
-      ).toBe("queued");
-
-      // No build yet, but the chat is replying: the build is refused.
+      );
+      const { sessionId, chatId } = await f.asUser.mutation(
+        api.sessions.ensureOwned,
+        { owner: { kind: "task", taskId: f.taskId } },
+      );
+      await ensureProjectSession(f);
       await f.t.run(async (ctx) => {
-        await ctx.db.patch(f.projectId, { build: undefined });
         await openTurn(ctx, {
           entityId: chatId,
           sessionId,
@@ -140,72 +151,15 @@ describe("projects on sessions", () => {
           repoId: f.repoId,
         });
       });
-      await expect(
-        f.asUser.mutation(api.buildWorkflow.startBuild, {
+      const busy = await f.t.run(async (ctx) => [
+        await taskWorkSessionBusy(ctx.db, { _id: f.taskId }),
+        await taskWorkSessionBusy(ctx.db, { _id: other }),
+        await ownedSessionBusy(ctx.db, {
+          kind: "project",
           projectId: f.projectId,
         }),
-      ).rejects.toThrow("still replying in this project's chat");
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "a merged PR rotates the project branch and drops the session's sandbox in one write",
-    async () => {
-      const f = await fixture();
-      const { sessionId } = await ensureProjectSession(f);
-      await f.t.run(async (ctx) => {
-        await ctx.db.patch(sessionId, {
-          sandboxId: "sbx-project",
-          status: "active",
-          sandboxStartAttempt: 3,
-        });
-        const project = await ctx.db.get(f.projectId);
-        if (!project) throw new Error("project missing");
-        await rotateProjectBranch(ctx, project);
-      });
-      const [project, session] = await f.t.run(async (ctx) => [
-        await ctx.db.get(f.projectId),
-        await ctx.db.get(sessionId),
       ]);
-      const nextBranch = buildProjectBranchName(f.projectId, 2);
-      expect(project).toMatchObject({ branchVersion: 2, branchName: nextBranch });
-      expect(session).toMatchObject({ branchName: nextBranch, status: "closed" });
-      expect(session?.sandboxId).toBeUndefined();
-      // A start in flight on the old branch is fenced off.
-      expect(session?.sandboxStartAttempt).toBe(4);
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "a branch rotation waits while the project chat is replying",
-    async () => {
-      const f = await fixture();
-      const { sessionId, chatId } = await ensureProjectSession(f);
-      await f.t.run(async (ctx) => {
-        await ctx.db.patch(sessionId, { sandboxId: "sbx-busy", status: "active" });
-        await openTurn(ctx, {
-          entityId: chatId,
-          sessionId,
-          streamingEntityId: String(chatId),
-          model: DEFAULT_AI_MODEL,
-          repoId: f.repoId,
-        });
-        const project = await ctx.db.get(f.projectId);
-        if (!project) throw new Error("project missing");
-        await rotateProjectBranch(ctx, project);
-      });
-      const [project, session] = await f.t.run(async (ctx) => [
-        await ctx.db.get(f.projectId),
-        await ctx.db.get(sessionId),
-      ]);
-      // The project moves on; the busy session keeps its VM and branch.
-      expect(project?.branchVersion).toBe(2);
-      expect(session).toMatchObject({
-        sandboxId: "sbx-busy",
-        branchName: buildProjectBranchName(f.projectId),
-      });
+      expect(busy).toEqual([true, false, false]);
     },
     TIMEOUT_MS,
   );

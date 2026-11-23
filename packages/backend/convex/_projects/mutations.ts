@@ -1,4 +1,5 @@
 import { findPrimaryPullRequest } from "../_pullRequests/store";
+import { internal } from "../_generated/api";
 import { v } from "convex/values";
 import {
   phaseValidator,
@@ -188,6 +189,14 @@ export const update = authMutation({
     if (phase !== undefined) updates.phase = phase;
     if (Object.keys(updates).length > 0) {
       await ctx.db.patch(args.id, updates);
+    }
+    // A new account lifts a usage-limit hold: the scheduler goes on.
+    if (nextProviderAccountId !== project.providerAccountId) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.buildWorkflow.scheduleReadyTasks,
+        { projectId: args.id },
+      );
     }
     // The session mirrors the title and base branch, moves to an edited
     // branch (the one branch writer), and follows the phase.

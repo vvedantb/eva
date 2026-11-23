@@ -3,7 +3,6 @@ import { describe, expect, test } from "vitest";
 import { internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
-import { isFirstTaskOnBranch } from "../convex/functions";
 import { isSessionArchived } from "../convex/_sessions/archive";
 
 /**
@@ -236,16 +235,10 @@ describe("a project pull request merging", () => {
       ).toEqual(["done", "in_progress", "todo"]);
       const project = await t.run((ctx) => ctx.db.get(ids.projectId));
       expect(project?.phase).toBe("completed");
-      // The merged branch is spent: the next build needs a fresh one. The old
-      // PR stays linked as history, but no longer sits on the live branch, so
-      // the next run opens a new PR instead of refreshing it.
-      expect(project?.branchVersion).toBe(3);
-      expect(project?.branchName).not.toBe("eva/project-billing-v2");
+      // A project's own PR is legacy: no new work goes to its branch, so a
+      // merge no longer rotates it. Each child task opens its own PR.
+      expect(project?.branchVersion).toBe(2);
       expect(project?.prState).toBe("merged");
-      const firstOnBranch = await t.run((ctx) =>
-        isFirstTaskOnBranch(ctx.db, ids.building, ids.projectId),
-      );
-      expect(firstOnBranch).toBe(true);
     },
     TIMEOUT_MS,
   );

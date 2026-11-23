@@ -438,8 +438,6 @@ export async function createSessionChat(
     createdBy: Id<"users">;
     title?: string;
     inheritFrom?: ChatSettingsSource;
-    /** A project task's own chat in its project's session. */
-    taskId?: Id<"agentTasks">;
   },
 ): Promise<Doc<"sessionChats">> {
   const { session } = params;
@@ -464,7 +462,6 @@ export async function createSessionChat(
     createdBy: params.createdBy,
     updatedAt: Date.now(),
     ...copyChatSettings(source),
-    ...(params.taskId !== undefined ? { taskId: params.taskId } : {}),
   });
   const chat = await ctx.db.get(chatId);
   if (!chat) throw new Error("Chat was not created");

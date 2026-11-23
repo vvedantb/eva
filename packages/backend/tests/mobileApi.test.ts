@@ -411,9 +411,9 @@ describe("mobile api", () => {
       expect(await asUser.query(api.chats.get, { target: ids.sessionId })).toMatchObject({ prUrl });
       expect(await asUser.query(api.chats.get, { target: ids.taskId })).toMatchObject({ prUrl });
       expect(await asUser.query(api.chats.get, { target: ids.projectId })).toMatchObject({ prUrl: projectPr });
-      // A task in a project ships through the project's pull request.
+      // A task in a project ships through its own pull request, not the project's.
       await t.run((ctx) => ctx.db.patch(ids.taskId, { projectId: ids.projectId }));
-      expect(await asUser.query(api.chats.get, { target: ids.taskId })).toMatchObject({ prUrl: projectPr });
+      expect(await asUser.query(api.chats.get, { target: ids.taskId })).toMatchObject({ prUrl });
     },
     TIMEOUT_MS,
   );

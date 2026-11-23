@@ -584,10 +584,9 @@ export const sessionChatFields = {
     v.union(v.id("sessions"), v.id("agentTasks"), v.id("projects")),
   ),
   /**
-   * A project task's own chat inside its project's session (never Main). The
-   * one kind of extra chat an owned session holds: it keeps the task's chat
-   * apart from the project's, as before projects ran on sessions. Set at
-   * insert, never changed.
+   * Legacy: an old project task's own chat inside its project's session
+   * (never Main). Nothing writes it now (a project task chats in its own
+   * session's Main chat); read for old rows until step 9's migration.
    */
   taskId: v.optional(v.id("agentTasks")),
   ...chatDaemonEntityFields,
@@ -653,8 +652,8 @@ export const agentTaskFields = {
   run: v.optional(taskRunValidator),
   // Legacy run fields removed. schema-narrowing-ok: migrateTaskRunState
   // The change-request comment that put this task back to "todo" via "Make
-  // changes". Project-task change runs start later (Build Project), decoupled
-  // from the comment, so the id is parked here and copied onto the run's
+  // changes". A project task's change run starts later (the project
+  // scheduler), decoupled from the comment, so the id is parked here and copied onto the run's
   // `triggeringCommentId` when the run is created, then cleared. Lets the
   // timeline label project re-runs "made changes" like quick-task re-runs.
   pendingChangeRequestCommentId: v.optional(v.id("taskComments")),

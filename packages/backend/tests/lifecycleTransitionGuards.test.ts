@@ -80,15 +80,32 @@ async function projectWithTasks(
 }
 
 describe("recomputeProjectPhase", () => {
+  // It schedules the project's task scheduler; keep that job parked: these
+  // tests check the phase only.
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   test(
     "unstarted or running tasks block completion",
     async () => {
-      for (const blocker of ["todo", "in_progress"] as const) {
+      // A running child task shows the project in progress (tasks run in
+      // parallel, with no build); a todo one leaves it in review.
+      const cases: Array<
+        [Doc<"agentTasks">["status"], Doc<"projects">["phase"]]
+      > = [
+        ["todo", "business_review"],
+        ["in_progress", "in_progress"],
+      ];
+      for (const [blocker, phase] of cases) {
         const { recompute } = await projectWithTasks("business_review", [
           "done",
           blocker,
         ]);
-        expect(await recompute()).toBe("business_review");
+        expect(await recompute()).toBe(phase);
       }
     },
     TIMEOUT_MS,
