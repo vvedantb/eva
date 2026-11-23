@@ -332,7 +332,8 @@ export const viewModeParser = parseAsStringLiteral(viewModes)
   .withDefault("desktop")
   .withOptions(tabOptions);
 
-const snapshotSettingsTabs = ["configuration", "status", "builds"] as const;
+/** Snapshot settings tabs in their on-screen order (the content slides by it). */
+export const snapshotSettingsTabs = ["configuration", "status", "builds"] as const;
 export type SnapshotSettingsTab = (typeof snapshotSettingsTabs)[number];
 
 export function isSnapshotSettingsTab(s: string): s is SnapshotSettingsTab {
@@ -465,7 +466,8 @@ export const branchParser = parseAsString
   .withDefault("main")
   .withOptions(searchOptions);
 
-const envVarScopes = ["repo", "team"] as const;
+/** Env variable scope tabs in their on-screen order (the content slides by it). */
+export const envVarScopes = ["repo", "team"] as const;
 export type EnvVarScope = (typeof envVarScopes)[number];
 
 export function isEnvVarScope(s: string): s is EnvVarScope {
