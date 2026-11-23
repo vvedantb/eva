@@ -67,9 +67,9 @@ export function ComposerActionCards() {
   if (cards.length === 0) return null;
 
   return (
-    // `px-3 md:px-4` matches ChatComposer's own inset, so the row lines up
-    // with the composer card instead of the wider page column.
-    <div className="flex flex-col gap-3 px-3 sm:flex-row md:px-4">
+    // Lines up with ChatComposer's under-card footer: its `p-3 md:p-4` wrapper
+    // plus the footer's own `w-[calc(100%-1.5rem)] md:w-[calc(100%-2rem)]`.
+    <div className="flex flex-col gap-3 px-6 sm:flex-row md:px-8">
       {cards.map((card) => (
         <Surface
           key={card.key}

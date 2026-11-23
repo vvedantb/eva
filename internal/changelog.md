@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: composer action cards match the composer footer width
+
+Date: 2026-11-23
+
+WHY: Matching the composer card still read too wide; the cards should line up with the narrower footer bar (branch, stash, model) under it.
+
+Architectural: The `ComposerActionCards` row inset goes from `px-3 md:px-4` to `px-6 md:px-8`: `ChatComposer`'s wrapper padding plus the footer's own inset. Follow-up: the two numbers live in two files; a shared inset class would stop them drifting.
+
 ## Web: composer action cards match the composer width
 
 Date: 2026-11-23
