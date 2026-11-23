@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { authQuery, hasRepoAccess } from "../functions";
 import { allocateNumId, entityVisible, isEntityDeleted } from "../numId";
@@ -33,12 +33,32 @@ export async function upsertProjectSummary(
     await replaceDocBody(ctx, existing._id, markdown);
     return existing._id;
   }
+  const docId = await insertProjectDoc(
+    ctx,
+    project,
+    `${project.title} summary`,
+    markdown,
+  );
+  await ctx.db.patch(projectId, { summaryDocId: docId });
+  return docId;
+}
+
+/**
+ * Inserts a doc in the project's home repo, filed under the project as its
+ * chat source, so it lists in the project's Documents.
+ */
+export async function insertProjectDoc(
+  ctx: MutationCtx,
+  project: Pick<Doc<"projects">, "_id" | "repoId">,
+  title: string,
+  markdown: string,
+): Promise<Id<"docs">> {
   const now = Date.now();
   const docId = await ctx.db.insert("docs", {
     repoId: project.repoId,
     sourceKind: "project",
-    sourceProjectId: projectId,
-    title: `${project.title} summary`,
+    sourceProjectId: project._id,
+    title,
     content: markdown,
     contentUpdatedAt: now,
     createdAt: now,
@@ -46,7 +66,6 @@ export async function upsertProjectSummary(
     numId: await allocateNumId(ctx.db, project.repoId, "docs"),
   });
   await prosemirrorSync.create(ctx, docId, markdownToDocJson(markdown));
-  await ctx.db.patch(projectId, { summaryDocId: docId });
   return docId;
 }
 

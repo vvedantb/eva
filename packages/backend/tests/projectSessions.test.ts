@@ -1,4 +1,5 @@
 import { convexTest } from "convex-test";
+import workflow from "@convex-dev/workflow/test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
@@ -6,6 +7,7 @@ import { DEFAULT_AI_MODEL } from "../convex/validators";
 import { openTurn } from "../convex/_chat/turnStore";
 import { ownedSessionBusy } from "../convex/_sessions/ownedSession";
 import { taskWorkSessionBusy } from "../convex/_taskWorkflow/startRun";
+import { sessionAccountHolder } from "../convex/_projects/runSettings";
 import {
   buildProjectBranchName,
   buildTaskBranchName,
@@ -165,22 +167,93 @@ describe("projects on sessions", () => {
   );
 
   test(
-    "a completed project retires its session and a reopened one revives it",
+    "a project's coordinator session ignores the stored phase: an old client's phase write changes nothing, and only a delete retires it",
     async () => {
       const f = await fixture();
       const { sessionId } = await ensureProjectSession(f);
+      const before = await f.t.run((ctx) => ctx.db.get(f.projectId));
       await f.asUser.mutation(api.projects.update, {
         id: f.projectId,
         phase: "completed",
       });
-      const retired = await f.t.run((ctx) => ctx.db.get(sessionId));
-      expect(retired?.archive).toBeDefined();
-      await f.asUser.mutation(api.projects.update, {
-        id: f.projectId,
-        phase: "business_review",
+      const after = await f.t.run(async (ctx) => ({
+        project: await ctx.db.get(f.projectId),
+        session: await ctx.db.get(sessionId),
+      }));
+      expect(after.project?.phase).toBe(before?.phase);
+      expect(after.session?.archive).toBeUndefined();
+      await f.asUser.mutation(api.projects.remove, { id: f.projectId });
+      const removed = await f.t.run((ctx) => ctx.db.get(sessionId));
+      expect(removed?.archive).toBeDefined();
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a contributor reaches the coordinator whatever the stored phase: a new or finished project's sandbox starts",
+    async () => {
+      for (const phase of ["draft", "completed", "cancelled"] as const) {
+        const f = await fixture();
+        workflow.register(f.t);
+        await f.t.run((ctx) => ctx.db.patch(f.projectId, { phase }));
+        const { sessionId } = await ensureProjectSession(f);
+        await f.asUser.mutation(api.sessions.startSandbox, { sessionId });
+        const session = await f.t.run((ctx) => ctx.db.get(sessionId));
+        expect(session?.status).toBe("starting");
+      }
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a person chatting in a child task runs on the project's account, unlocked as the project owner (decision 20)",
+    async () => {
+      const f = await fixture();
+      const { creatorId, accountId } = await f.t.run(async (ctx) => {
+        // The task was made by someone else; the project owner owns the account.
+        const creatorId = await ctx.db.insert("users", {
+          clerkId: "clerk|task-creator",
+        });
+        const now = Date.now();
+        const accountId = await ctx.db.insert("userProviderAccounts", {
+          userId: f.userId,
+          provider: "claude",
+          label: "Project account",
+          credentials: [],
+          createdAt: now,
+          updatedAt: now,
+        });
+        await ctx.db.patch(f.projectId, {
+          model: DEFAULT_AI_MODEL,
+          providerAccountId: accountId,
+        });
+        await ctx.db.patch(f.taskId, { createdBy: creatorId });
+        return { creatorId, accountId };
       });
-      const revived = await f.t.run((ctx) => ctx.db.get(sessionId));
-      expect(revived?.archive).toBeUndefined();
+      // The task chat starts on the project's account before the task ever ran.
+      const { sessionId, chatId } = await f.asUser.mutation(
+        api.sessions.ensureOwned,
+        { owner: { kind: "task", taskId: f.taskId } },
+      );
+      const seeded = await f.t.run((ctx) => ctx.db.get(chatId));
+      expect(seeded?.providerAccountId).toBe(accountId);
+      expect(seeded?.lastModel).toBe(DEFAULT_AI_MODEL);
+      // The project's account unlocks as the project owner, like the runs;
+      // the team credential stays the task creator's.
+      const holders = await f.t.run(async (ctx) => {
+        const session = await ctx.db.get(sessionId);
+        if (!session) throw new Error("session missing");
+        return [
+          await sessionAccountHolder(ctx.db, session, accountId),
+          await sessionAccountHolder(ctx.db, session, undefined),
+        ];
+      });
+      expect(holders).toEqual([f.userId, creatorId]);
+      // Picking it in the chat is allowed, though the creator does not own it.
+      await f.asUser.mutation(api.sessionChats.setProviderAccountId, {
+        chatId,
+        providerAccountId: accountId,
+      });
     },
     TIMEOUT_MS,
   );

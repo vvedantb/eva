@@ -10,6 +10,10 @@ import {
   requestCoordinatorWake,
 } from "../convex/_projects/coordinatorWake";
 import { fileTaskReport } from "../convex/_projects/reports";
+import { RUN_WAITING_FOR_ANSWER } from "../convex/_taskWorkflow/helpers";
+import { acquireTurnLease, openTurn } from "../convex/_chat/turnStore";
+import { workflow as workflowManager } from "../convex/workflowManager";
+import { projectTaskNeedsYou } from "@eva/shared/projectStatus";
 import { ensureTaskChat } from "../convex/_sessions/ownedSession";
 import {
   applyProjectToolPolicy,
@@ -246,6 +250,107 @@ describe("a child task's ask", () => {
       });
       const rows = await reports(f);
       expect(rows.find((row) => row.taskId === f.a)?.state).toBe("closed");
+    },
+    TIMEOUT_MS,
+  );
+});
+
+describe("a run that ended on its ask", () => {
+  test(
+    "finishes as a clean waiting outcome: no error, not failed, no failure wake-up; a stop then halts it as stopped",
+    async () => {
+      const f = await fixture();
+      const { runId, turnId, leaseGeneration } = await f.t.run(async (ctx) => {
+        const runId = await ctx.db.insert("agentRuns", {
+          taskId: f.a,
+          repoId: f.repoId,
+          status: "running",
+          logs: [],
+          startedAt: Date.now() - 1_000,
+        });
+        await ctx.db.patch(f.a, {
+          run: { state: "running", workflowId: "wf-ask", runId },
+        });
+        const turnId = await openTurn(ctx, {
+          entityId: runId,
+          streamingEntityId: `task-run-${runId}`,
+          model: DEFAULT_AI_MODEL,
+          repoId: f.repoId,
+        });
+        const turn = await ctx.db.get(turnId);
+        if (!turn) throw new Error("turn missing");
+        await acquireTurnLease(ctx, turn, "running");
+        const leased = await ctx.db.get(turnId);
+        return { runId, turnId, leaseGeneration: leased?.leaseGeneration ?? 0 };
+      });
+      // The agent asks during the run, then stops without a commit: the
+      // commit gate reports a failure.
+      await ask(f, f.a, "Which API version?");
+      const sent = vi
+        .spyOn(workflowManager, "sendEvent")
+        .mockImplementation(async () => "event-1");
+      try {
+        await f.asUser.mutation(api.taskWorkflow.handleCompletion, {
+          taskId: f.a,
+          runId,
+          success: false,
+          result: "I asked the coordinator.",
+          error:
+            "Agent finished without creating a new git commit. Edit the required files, run git add and git commit locally, then try again.",
+          activityLog: null,
+          turnId,
+          leaseGeneration,
+        });
+        expect(sent).toHaveBeenCalledTimes(1);
+        expect(sent.mock.calls[0]?.[1]).toMatchObject({
+          value: { success: true, error: null },
+        });
+      } finally {
+        sent.mockRestore();
+      }
+      // The workflow then completes the run as it does any success.
+      await f.t.mutation(internal.taskWorkflow.completeRun, {
+        runId,
+        taskId: f.a,
+        projectId: f.projectId,
+        success: true,
+        error: null,
+        prError: null,
+        prUrl: null,
+        activityLog: null,
+      });
+      const run = await f.t.run((ctx) => ctx.db.get(runId));
+      expect(run?.status).toBe("success");
+      expect(run?.error).toBeUndefined();
+      expect(run?.exitReason).toBe(RUN_WAITING_FOR_ANSWER);
+      const waiting = await factsOf(f, f.a);
+      if (!waiting) throw new Error("facts missing");
+      expect(waiting.status).toBe("in_progress");
+      expect(waiting.halted).toBeUndefined();
+      expect(waiting.openAsk).toBe("coordinator");
+      expect(projectTaskNeedsYou(waiting)).toBeUndefined();
+      // Only the ask woke the coordinator: no "failed" wake-up.
+      expect((await wakes(f)).map((wake) => wake.reason)).toEqual(["ask"]);
+
+      // A person stops the waiting task: the ask closes and the task halts
+      // as stopped, so the scheduler does not restart it.
+      await f.asUser.mutation(api.sessions.stopChatTurn, {
+        target: { taskId: f.a },
+      });
+      const stopped = await factsOf(f, f.a);
+      expect(stopped?.status).toBe("todo");
+      expect(stopped?.halted).toBe("cancelled");
+      expect(stopped?.openAsk).toBeUndefined();
+      await f.t.mutation(internal.buildWorkflow.scheduleReadyTasks, {
+        projectId: f.projectId,
+      });
+      const runs = await f.t.run((ctx) =>
+        ctx.db
+          .query("agentRuns")
+          .withIndex("by_task", (q) => q.eq("taskId", f.a))
+          .collect(),
+      );
+      expect(runs).toHaveLength(1);
     },
     TIMEOUT_MS,
   );

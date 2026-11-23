@@ -87,11 +87,24 @@ export async function ensureWorkSession(
   ctx: MutationCtx,
   target: OwnerEntity,
 ): Promise<OwnedSessionContext> {
-  const owner = workSessionOwner(target);
-  const existing = await findOwnedSession(ctx.db, owner);
+  const existing = await findWorkSession(ctx.db, target);
   if (existing) {
     return { session: existing, mainChat: await ensureMainChat(ctx, existing) };
   }
+  const session = await insertWorkSession(ctx, target);
+  return { session, mainChat: await ensureMainChat(ctx, session) };
+}
+
+/**
+ * Inserts the session the task or project works on, without its Main chat.
+ * `ensureWorkSession` adds a new Main chat; Step 9's conversion instead moves
+ * a task's old chat in as Main. The caller checks that none exists.
+ */
+export async function insertWorkSession(
+  ctx: MutationCtx,
+  target: OwnerEntity,
+): Promise<Doc<"sessions">> {
+  const owner = workSessionOwner(target);
   const seed = ownedSessionSeed(target);
   const repo = await ctx.db.get(seed.repoId);
   if (!repo) throw new Error("Repository not found");
@@ -111,7 +124,7 @@ export async function ensureWorkSession(
   });
   const session = await ctx.db.get(sessionId);
   if (!session) throw new Error("Owned session was not created");
-  return { session, mainChat: await ensureMainChat(ctx, session) };
+  return session;
 }
 
 /**

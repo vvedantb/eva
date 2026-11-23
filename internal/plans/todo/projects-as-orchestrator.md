@@ -295,3 +295,27 @@ Follow `docs/eva-convex.md` (migration, deploy, run on dev then prod, narrow, de
 All earlier questions are decided (19 November 2026) and are in the decisions table: cross-repo tasks (13), awareness (14), MCP tools (15), wake-ups (16), failures (17), child task chat (18), project end (19), roles (12), model and account (20), scope cut (21).
 
 1. **Task card look.** Row layout, status wording and the "needs you" marker need a visual choice from the user. Ask at the start of step 4.
+
+## Step 9 runbook
+
+The conversion is `convertProjects` (`packages/backend/convex/_migrations/convertProjects.ts`, exported from `migrations.ts`). It is idempotent, runs one project for each mutation, and continues from its cursor after 4 minutes. Read its module comment for what it does in each case. Run every command from `packages/backend`.
+
+**1. Dev.** Deploy the backend change, then:
+
+1. Dry run: `npx convex run migrations:convertProjects '{"dryRun": true}'`. It writes nothing. Read the counts and `inProgressTasksOnProjectBranch`. If it returns `done: false`, run it again with `'{"dryRun": true, "cursor": <cursor>}'`.
+2. Run: `npx convex run migrations:convertProjects`. A long run schedules itself; follow it with `npx convex logs` until `convertProjects done`.
+3. Check: run the dry run again. `projectsChanged` must be 0 and `inProgressTasksOnProjectBranch` empty.
+
+**2. Production.** Same three commands with `--prod`. Before the real run, show the user the dry run's `inProgressTasksOnProjectBranch` list (and `reviewTasksOnProjectBranch`, `orphanChats`, `tasksApproved`). Then run, then dry-run again to confirm 0.
+
+**3. Leftovers a person decides on.** A listed task with no `branchName` shares the old branch with an earlier task of its project and starts fresh on `eva/task-<id>`. A task with `projectPrLive: true` pushes into the project's still-open PR on that branch. Review-stage tasks keep their work in the project PR (step 9.3). `orphanChats` rows still carry `sessionChats.taskId`: delete them or clear the field before step 4.
+
+**4. Narrow (a later deploy, only after step 2 ran on production and `scripts/check-apk-compat.sh` passes without the old names).** Follow `docs/eva-convex.md`, in this order:
+
+1. Remove the old code: `projectInterviewWorkflow.ts` (both workflows, `startInterview`, `startSpec`), `_projects/interviewState.ts`, `projects.startDevelopment`, `projects.addMessage`, `clearMessages`, `updateLastConversationMessage`, the `conversationHistory` / `generatedSpec` read paths in `_projects/queries.ts` and `sessionPrompt.ts`, `findProjectTaskChat` and the `taskId` branch of `chatOwner`, `_projects/buildState.ts` with the build wrappers in `buildWorkflow.ts`, `_projects/prSync.ts` and the legacy project PR writes in `githubWebhook.ts` (`applyProjectPrEvent`), and the phase write in `recomputeProjectPhase`.
+2. Add one clearing migration, run it on dev then production: delete every `projectDetails` row; clear `projects.planningMode`, `interview`, `build`, `branchName`, `branchVersion`, `lastBuildError`, the project PR summary fields, `members`, `codeReviewer`; clear `sessionChats.taskId`. Make `projects.phase` optional first, then clear it.
+3. Narrow the schema: drop those fields, the `projectDetails` table, the `projects.by_repo_and_phase` index and the `sessionChats.by_task` index. Deploy to dev, then production.
+4. Delete `convertProjects` and the clearing migration.
+5. UI (web and phone agents): remove `ProjectTabs`, `ProjectChatTab`, the Interview and Plan tabs and mobile `ProjectPlan`, and read the derived status only.
+
+Not done by the conversion: step 9.1's "map `members` to roles". Roles come from `users.role` (decision 12), so nothing is mapped.

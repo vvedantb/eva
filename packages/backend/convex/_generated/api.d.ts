@@ -190,6 +190,7 @@ import type * as _migrations_backfillQueuedMessageOrder from "../_migrations/bac
 import type * as _migrations_backfillSessionChats from "../_migrations/backfillSessionChats.js";
 import type * as _migrations_backfillTaskSubscribers from "../_migrations/backfillTaskSubscribers.js";
 import type * as _migrations_cleanup from "../_migrations/cleanup.js";
+import type * as _migrations_convertProjects from "../_migrations/convertProjects.js";
 import type * as _migrations_deleteRepos from "../_migrations/deleteRepos.js";
 import type * as _migrations_deploymentUrl from "../_migrations/deploymentUrl.js";
 import type * as _migrations_excludeConvexUrlFromSandbox from "../_migrations/excludeConvexUrlFromSandbox.js";
@@ -220,9 +221,9 @@ import type * as _projects_internal from "../_projects/internal.js";
 import type * as _projects_interviewState from "../_projects/interviewState.js";
 import type * as _projects_mutations from "../_projects/mutations.js";
 import type * as _projects_prSync from "../_projects/prSync.js";
-import type * as _projects_previewGate from "../_projects/previewGate.js";
 import type * as _projects_queries from "../_projects/queries.js";
 import type * as _projects_reports from "../_projects/reports.js";
+import type * as _projects_runSettings from "../_projects/runSettings.js";
 import type * as _projects_scheduler from "../_projects/scheduler.js";
 import type * as _projects_settings from "../_projects/settings.js";
 import type * as _projects_summary from "../_projects/summary.js";
@@ -789,6 +790,7 @@ declare const fullApi: ApiFromModules<{
   "_migrations/backfillSessionChats": typeof _migrations_backfillSessionChats;
   "_migrations/backfillTaskSubscribers": typeof _migrations_backfillTaskSubscribers;
   "_migrations/cleanup": typeof _migrations_cleanup;
+  "_migrations/convertProjects": typeof _migrations_convertProjects;
   "_migrations/deleteRepos": typeof _migrations_deleteRepos;
   "_migrations/deploymentUrl": typeof _migrations_deploymentUrl;
   "_migrations/excludeConvexUrlFromSandbox": typeof _migrations_excludeConvexUrlFromSandbox;
@@ -819,9 +821,9 @@ declare const fullApi: ApiFromModules<{
   "_projects/interviewState": typeof _projects_interviewState;
   "_projects/mutations": typeof _projects_mutations;
   "_projects/prSync": typeof _projects_prSync;
-  "_projects/previewGate": typeof _projects_previewGate;
   "_projects/queries": typeof _projects_queries;
   "_projects/reports": typeof _projects_reports;
+  "_projects/runSettings": typeof _projects_runSettings;
   "_projects/scheduler": typeof _projects_scheduler;
   "_projects/settings": typeof _projects_settings;
   "_projects/summary": typeof _projects_summary;

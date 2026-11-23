@@ -1,5 +1,20 @@
 # Changelog
 
+## Projects backend: read-only coordinator, clean asks, old project conversion
+
+Date: 2026-11-23
+
+WHY: The coordinator must not be able to push, a task that asks a question must not look failed, and old projects must move to the new model without losing work.
+
+What users see:
+
+- A task that asks its coordinator a question now waits quietly: no error row, no failed state, no retry. Stop on a waiting task closes its question.
+- Chatting directly in a project's task runs on the project's model and account, like its runs.
+- The coordinator chat is always reachable: a new project, or one whose tasks are all done, no longer loses its chat or sandbox.
+- New projects skip the interview whatever an older phone sends.
+
+Architectural: every GitHub token a coordinator sandbox gets is read-only (`mintSandboxGitToken`, `isReadOnlySandboxOwner`, the `evaReadOnlyGit` VM token claim). A run that ended on its ask is recorded as `RUN_WAITING_FOR_ANSWER`. `_projects/runSettings.ts` holds the decision 20 rules for runs and chat turns. `projects.phase` is written only by `recomputeProjectPhase` (derived) and the legacy project PR webhook. `agentTasks.branchName` (new, optional) keeps an old project branch. `migrations:convertProjects` converts old projects (runbook in the plan).
+
 ## Projects run by a coordinator chat, with parallel child tasks
 
 Date: 2026-11-23
