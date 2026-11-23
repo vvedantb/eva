@@ -5,20 +5,21 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useNavigate } from "@tanstack/react-router";
 import { api, type Id } from "@eva/backend";
 import { TASK_TAGS } from "@eva/shared";
+import { projectStatusCountsLine } from "@eva/shared/projectView";
 import { Button } from "@vvedantb/ui";
 import { IconPlus } from "@tabler/icons-react";
 import { entityPathSegment } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { QuickTaskModal } from "../quick-tasks/QuickTaskModal";
 import { ProjectProgressBar } from "./ProjectProgressBar";
-import { ProjectStageCounts } from "./ProjectStageCounts";
 import { ProjectTaskListPanel } from "./ProjectTaskListPanel";
 import { useProjectTaskStatus } from "./useProjectStatus";
 
 /**
- * The coordinator rail's Tasks tab: the title with "+",
- * the progress bar and counts, then the tasks grouped Triage, Working,
- * Blocked, Idle, Archived. A row opens the task in place of the coordinator.
+ * The coordinator rail's Tasks tab: the title with "+", a thin progress bar
+ * and the counts as one muted line, then the tasks grouped Triage, Working,
+ * Blocked, Idle, Archived, and their Pull requests. A row opens the task in
+ * place of the coordinator.
  */
 export function ProjectTasksPanel({
   projectId,
@@ -71,8 +72,12 @@ export function ProjectTasksPanel({
             <IconPlus size={14} />
           </Button>
         </div>
-        <ProjectProgressBar status={status} />
-        <ProjectStageCounts status={status} />
+        <ProjectProgressBar status={status} className="h-1" />
+        {status ? (
+          <p className="text-2xs tabular-nums text-muted-foreground">
+            {projectStatusCountsLine(status.counts)}
+          </p>
+        ) : null}
       </div>
       <div className="min-h-0 flex-1">
         <ProjectTaskListPanel
@@ -80,7 +85,6 @@ export function ProjectTasksPanel({
           tasks={tasks ?? []}
           failedTaskIds={failedTaskIds}
           onSelectTask={openTask}
-          projectNumId={projectNumId}
           homeRepoId={repoId}
         />
       </div>

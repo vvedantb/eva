@@ -1,5 +1,11 @@
 # Changelog
 
+## Projects: flat Tasks list like Amp and Capy
+
+Date: 2026-11-23
+
+The project Tasks list has flat rows (status icon, title, one plain line from `projectTaskSummaryLine`, age), muted group headers on a soft band, a thin bar with one counts line, hover-only Approve / Reject, and a Pull requests group; the task badges are gone (web and phone).
+
 ## Projects UI: role and dependency gates removed, phone Documents tab and model picker
 
 Date: 2026-11-23

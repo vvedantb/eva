@@ -7,7 +7,7 @@ import { withAlpha } from "@vvedantb/native-ui/theme";
 import type { FunctionReturnType } from "convex/server";
 import dayjs from "dayjs";
 import { useRouter } from "expo-router";
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType } from "react";
 import { Text, View } from "react-native";
 import { useSimpleView } from "@/chat/ComposerFooter";
 import { quickTaskDraftRoute, type QuickTaskDraft } from "@/quickTasks/DraftsMenu";
@@ -42,16 +42,16 @@ export const SANDBOX_DOT = {
 
 /**
  * A card's meta badge: the web `Badge variant="secondary"` with a 12 icon
- * (planning mode, Draft, Finalised), or any 12-ish `leading` mark in its place.
+ * (planning mode, Draft, Finalised).
  */
-export function MetaPill({ icon: Icon, leading, label }: { icon?: ComponentType<IconProps>; leading?: ReactNode; label: string }) {
+export function MetaPill({ icon: Icon, label }: { icon?: ComponentType<IconProps>; label: string }) {
   const theme = EVA_THEME[useScheme()];
   return (
     <View
       className="max-w-48 flex-row items-center gap-1 self-start rounded-full border px-2 py-0.5"
       style={{ backgroundColor: theme.secondary, borderColor: theme.border }}
     >
-      {leading ?? (Icon ? <Icon size={12} color={theme.secondaryForeground} /> : null)}
+      {Icon ? <Icon size={12} color={theme.secondaryForeground} /> : null}
       <Text
         numberOfLines={1}
         className="font-instrument-sans-medium shrink"
@@ -86,11 +86,11 @@ export function QuickTaskDraftRow({ draft }: { draft: QuickTaskDraft }) {
         {displayTitle(draft.title)}
       </Text>
       <View className="mt-0.5 flex-row items-center justify-between gap-2 pt-0.5">
-        <MetaPill icon={IconFileText} label="Draft" />
-        <Text className="font-instrument-sans" style={{ ...META_TEXT, color: withAlpha(muted, 0.7), fontVariant: ["tabular-nums"] }}>
-          {timeAgo(draft.updatedAt)}
-        </Text>
-      </View>
+      <MetaPill icon={IconFileText} label="Draft" />
+      <Text className="font-instrument-sans" style={{ ...META_TEXT, color: withAlpha(muted, 0.7), fontVariant: ["tabular-nums"] }}>
+        {timeAgo(draft.updatedAt)}
+      </Text>
+    </View>
     </SurfaceRow>
   );
 }
@@ -110,36 +110,20 @@ export function QuickTaskRow({
   status,
   hasError,
   creator,
-  projectNumId,
   hasDraftComment,
   onLongPress,
   selection,
-  badges,
-  compact = false,
-  accentColor,
 }: {
   task: QuickTaskRowTask;
   status: DisplayTaskStatus;
   hasError: boolean;
   creator: User | undefined;
-  /** In a project's task list: the number reads "#project/task", as the web card. */
-  projectNumId?: number;
   /** The user has an unsent comment on this task (`drafts.listMarks`): a "Draft comment" pill after the tags, as the web card. */
   hasDraftComment: boolean;
   /** The row menu. */
   onLongPress?: () => void;
   /** In select mode: a tap or long press ticks the row, and a checkbox leads it, as the inbox. */
   selection?: { checked: boolean; onToggle: () => void };
-  /** Extra badges after the tags, as the web card's `badges` (a project task's needs-you, repo and PR). */
-  badges?: ReactNode;
-  /**
-   * One tight row (a project's task list and the coordinator's task cards),
-   * as the web `compact` card: the age ends the title line, no creator line,
-   * 44 high at least.
-   */
-  compact?: boolean;
-  /** The stripe from the caller's own status (a project task's display status) in place of `status`. */
-  accentColor?: string;
 }) {
   const router = useRouter();
   const scheme = useScheme();
@@ -155,7 +139,7 @@ export function QuickTaskRow({
   const sandbox = task.sandboxStatus ? SANDBOX_DOT[task.sandboxStatus] : undefined;
   const showSandbox = sandbox !== undefined && !simpleView;
   const showUnread = task.hasUnread && !task.isExecuting;
-  const numLabel = formatEntityNumLabel({ numId: task.numId, projectNumId });
+  const numLabel = formatEntityNumLabel({ numId: task.numId });
   const creatorFirstName = creator ? firstNameFromUser(creator) : null;
   const scheduledAt = taskScheduledAt(task);
   const scheduled = scheduledAt
@@ -182,11 +166,11 @@ export function QuickTaskRow({
     <SurfaceRow
       accessibilityLabel={displayTitle(task.title)}
       accessibilityHint={selection ? (selection.checked ? "Selected" : "Not selected") : hint}
-      accentColor={showError ? theme.destructive : (accentColor ?? appearance.bar)}
+      accentColor={showError ? theme.destructive : appearance.bar}
       backgroundColor={showError ? withAlpha(theme.destructive, 0.05) : theme.card}
       borderColor={showError ? withAlpha(theme.destructive, 0.3) : undefined}
       // The web `px-2.5 pl-3` and `gap-1.5`; `py-3` (web `py-2`) for a thumb.
-      className={compact ? "min-h-11 justify-center gap-1 px-3 py-2 pl-3.5" : "min-h-[72px] gap-1.5 px-3 py-3 pl-3.5"}
+      className="min-h-[72px] gap-1.5 px-3 py-3 pl-3.5"
       onPress={
         selection
           ? selection.onToggle
@@ -195,7 +179,7 @@ export function QuickTaskRow({
       onLongPress={selection ? selection.onToggle : onLongPress}
       longPressLabel="Task actions"
     >
-      <View className={compact ? "flex-row items-center gap-2" : "flex-row items-start gap-2"}>
+      <View className="flex-row items-start gap-2">
         {selection ? <Checkbox checked={selection.checked} onCheckedChange={selection.onToggle} accessibilityLabel="Select task" /> : null}
         <View className="min-w-0 flex-1 flex-row items-baseline gap-1.5">
           {numLabel ? (
@@ -212,7 +196,7 @@ export function QuickTaskRow({
             {displayTitle(task.title)}
           </Text>
         </View>
-        <View className={compact ? "shrink-0 flex-row items-center gap-1.5" : "shrink-0 flex-row items-center gap-1.5 pt-0.5"}>
+        <View className="shrink-0 flex-row items-center gap-1.5 pt-0.5">
           {task.priority ? <PriorityIcon level={task.priority} /> : null}
           {task.isAwaitingAnswer ? (
             <AwaitingAnswerMark />
@@ -226,11 +210,10 @@ export function QuickTaskRow({
           ) : null}
           {showUnread ? <View className="size-1.5 rounded-full" style={{ backgroundColor: theme.primary }} /> : null}
           {scheduled ? <IconClock size={14} color={theme.primary} /> : null}
-          {compact ? age : null}
         </View>
       </View>
 
-      {(task.tags && task.tags.length > 0) || hasDraftComment || badges ? (
+      {(task.tags && task.tags.length > 0) || hasDraftComment ? (
         <View className="flex-row flex-wrap items-center gap-1">
           {(task.tags ?? []).slice(0, MAX_TAGS).map((tag) => (
             // Web: a `secondary` badge, `px-1.5 font-medium`, a tag icon; 12 text and a 12 icon (web 10).
@@ -257,27 +240,24 @@ export function QuickTaskRow({
             </Text>
           ) : null}
           {hasDraftComment ? <MetaPill icon={IconPencil} label="Draft comment" /> : null}
-          {badges}
         </View>
       ) : null}
 
-      {compact ? null : (
-        <View className="mt-0.5 flex-row items-center justify-between gap-2 pt-0.5">
-          <View className="min-w-0 flex-row items-center gap-1.5">
-            {creator ? (
-              <>
-                <InitialsAvatar user={creator} size={16} />
-                {creatorFirstName ? (
-                  <Text numberOfLines={1} className="font-instrument-sans min-w-0" style={{ ...META_TEXT, color: withAlpha(muted, 0.75) }}>
-                    {creatorFirstName}
-                  </Text>
-                ) : null}
-              </>
-            ) : null}
-          </View>
-          {age}
+      <View className="mt-0.5 flex-row items-center justify-between gap-2 pt-0.5">
+        <View className="min-w-0 flex-row items-center gap-1.5">
+          {creator ? (
+            <>
+              <InitialsAvatar user={creator} size={16} />
+              {creatorFirstName ? (
+                <Text numberOfLines={1} className="font-instrument-sans min-w-0" style={{ ...META_TEXT, color: withAlpha(muted, 0.75) }}>
+                  {creatorFirstName}
+                </Text>
+              ) : null}
+            </>
+          ) : null}
         </View>
-      )}
+        {age}
+      </View>
     </SurfaceRow>
   );
 }

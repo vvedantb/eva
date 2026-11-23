@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@eva/ui";
 import type { ProjectStatus } from "@eva/shared/projectStatus";
 import { projectStatusSegments } from "@eva/shared/projectView";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@vvedantb/ui";
@@ -28,7 +29,10 @@ export function ProjectProgressBar({
       <Tooltip>
         <TooltipTrigger asChild>
           <div
-            className={`h-1.5 overflow-hidden rounded-full bg-secondary/85 ${className ?? ""}`}
+            className={cn(
+              "h-1.5 overflow-hidden rounded-full bg-secondary/85",
+              className,
+            )}
           />
         </TooltipTrigger>
         <TooltipContent>
@@ -42,7 +46,10 @@ export function ProjectProgressBar({
     <Tooltip>
       <TooltipTrigger asChild>
         <div
-          className={`relative h-1.5 overflow-hidden rounded-full bg-secondary ${className ?? ""}`}
+          className={cn(
+            "relative h-1.5 overflow-hidden rounded-full bg-secondary",
+            className,
+          )}
         >
           {segments.map((segment) => (
             <div

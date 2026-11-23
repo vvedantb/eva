@@ -100,7 +100,6 @@
   "apps/web/src/lib/components/projects/ProjectCard.tsx :: raw-button",
   "apps/web/src/lib/components/projects/ProjectDescription.tsx :: raw-button",
   "apps/web/src/lib/components/projects/ProjectFieldsPanel.tsx :: raw-button",
-  "apps/web/src/lib/components/projects/ProjectTaskListPanel.tsx :: raw-button",
   "apps/web/src/lib/components/projects/ProjectsListView.tsx :: raw-button",
   "apps/web/src/lib/components/projects/ProjectsListView.tsx :: raw-radius",
   "apps/web/src/lib/components/projects/_components/ProjectDateRangeField.tsx :: raw-button",

@@ -2,9 +2,12 @@
 
 import type { Id } from "@eva/backend";
 import { api } from "@eva/backend";
-import type { ProjectTaskDisplayStatus } from "@eva/shared/projectStatus";
+import { firstNameByUserId, repoDisplayLabel } from "@eva/shared";
 import {
+  PROJECT_TASK_DISPLAY_STATUS_LABELS,
+  projectTaskPullRequests,
   projectTaskStatusSections,
+  projectTaskSummaryLine,
   unapprovedTodoTaskIds,
   type ProjectTaskNotes,
   type ProjectTaskView,
@@ -23,12 +26,11 @@ import {
   ListEnter,
   useFirstPaintGate,
 } from "@vvedantb/ui";
-import { IconCheck } from "@tabler/icons-react";
-import { firstNameByUserId } from "@eva/shared";
+import { IconChevronRight } from "@tabler/icons-react";
 import type { RepoAppMarkRepo } from "@/lib/components/RepoLogo";
 import { withMutationToast } from "@/lib/utils/mutationToast";
-import { projectTaskDisplayStatusConfig } from "./ProjectPhaseBadge";
 import { ProjectTaskRow } from "./_components/ProjectTaskRow";
+import { ProjectTaskPrRow } from "./_components/ProjectTaskPrRow";
 import {
   useProjectTaskNotes,
   type ProjectTaskListRow,
@@ -37,6 +39,9 @@ import {
 type Task = ProjectTaskListRow;
 type ViewedTask = { row: Task; view: ProjectTaskView };
 
+/** The Pull requests group's key, beside the display statuses. */
+const PULL_REQUESTS = "pull_requests";
+
 /** What every row of the list shares. */
 interface RowContext {
   onSelectTask: (id: Id<"agentTasks">) => void;
@@ -44,7 +49,6 @@ interface RowContext {
   /** Open asks and reports by task id (`useProjectTaskNotes`). */
   notesByTask: ReadonlyMap<string, ProjectTaskNotes>;
   basePath: string;
-  projectNumId?: number;
   homeRepoId: Id<"githubRepos">;
   reposById: ReadonlyMap<string, RepoAppMarkRepo>;
   /** Feedback authors' first names, by user id (the Triage origin line). */
@@ -52,57 +56,68 @@ interface RowContext {
 }
 
 function ProjectTaskRowFor({
-  task,
+  task: { row, view },
   context,
 }: {
   task: ViewedTask;
   context: RowContext;
 }) {
+  const otherRepo =
+    row.repoId !== undefined && row.repoId !== context.homeRepoId
+      ? context.reposById.get(row.repoId)
+      : undefined;
   return (
     <ProjectTaskRow
-      task={task.row}
-      view={task.view}
-      notes={context.notesByTask.get(task.row._id)}
-      hasError={context.failedTaskIds.has(task.row._id)}
-      authorName={
-        task.row.createdBy === undefined
-          ? undefined
-          : context.authorNames.get(task.row.createdBy)
-      }
+      task={row}
+      view={view}
+      line={projectTaskSummaryLine(row, view, {
+        notes: context.notesByTask.get(row._id),
+        failed: context.failedTaskIds.has(row._id),
+        authorName:
+          row.createdBy === undefined
+            ? undefined
+            : context.authorNames.get(row.createdBy),
+        otherRepoLabel: otherRepo ? repoDisplayLabel(otherRepo) : undefined,
+      })}
       onSelectTask={context.onSelectTask}
       basePath={context.basePath}
-      projectNumId={context.projectNumId}
-      homeRepoId={context.homeRepoId}
-      reposById={context.reposById}
     />
   );
 }
 
-function SectionHeader({
-  status,
+/**
+ * A group's header on a soft band: the label, the count and a chevron that
+ * turns open, all muted. `actions` sit at the band's end, outside the toggle.
+ */
+function GroupHeader({
+  label,
   count,
   actions,
 }: {
-  status: ProjectTaskDisplayStatus;
+  label: string;
   count: number;
   actions?: ReactNode;
 }) {
-  const config = projectTaskDisplayStatusConfig[status];
-  const StageIcon = config.icon;
   return (
-    <div className="flex flex-1 items-center justify-between">
-      <div className="flex items-center gap-1.5">
-        <StageIcon size={14} className={config.text} />
-        <span className={`text-sm font-medium ${config.text}`}>
-          {config.label}
-        </span>
-        <span className="text-xs text-muted-foreground/60 tabular-nums">
-          {count}
-        </span>
-      </div>
-      {actions ? (
-        <div className="mr-2 flex items-center gap-1.5">{actions}</div>
-      ) : null}
+    <div className="flex items-center gap-1 rounded-control bg-muted/60 pr-1">
+      <AccordionTrigger
+        classes={{
+          header: "flex min-w-0 flex-1",
+          trigger:
+            "group/section flex flex-1 items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground",
+        }}
+        icon={
+          <IconChevronRight
+            size={12}
+            aria-hidden
+            className="shrink-0 transition-transform duration-150 group-data-[state=open]/section:rotate-90"
+          />
+        }
+      >
+        <span>{label}</span>
+        <span className="tabular-nums text-muted-foreground/60">{count}</span>
+      </AccordionTrigger>
+      {actions}
     </div>
   );
 }
@@ -113,17 +128,20 @@ interface ProjectTaskListPanelProps {
   /** Tasks whose latest run failed (`useProjectTaskStatus`). */
   failedTaskIds: ReadonlySet<string>;
   onSelectTask: (id: Id<"agentTasks">) => void;
-  projectNumId?: number;
-  /** The project's repo; a task in another repo shows its repo. */
+  /** The project's repo; a task in another repo names its repo. */
   homeRepoId: Id<"githubRepos">;
 }
 
+/**
+ * The project's tasks as flat rows under muted group headers: Triage,
+ * Working, Blocked, Idle, Archived (`projectTaskStatusSections`), then the
+ * tasks' Pull requests. Archived starts closed.
+ */
 export function ProjectTaskListPanel({
   projectId,
   tasks,
   failedTaskIds,
   onSelectTask,
-  projectNumId,
   homeRepoId,
 }: ProjectTaskListPanelProps) {
   const { basePath } = useRepo();
@@ -139,6 +157,7 @@ export function ProjectTaskListPanel({
 
   const notesByTask = useProjectTaskNotes(projectId);
   const sections = projectTaskStatusSections(tasks, failedTaskIds);
+  const pullRequests = projectTaskPullRequests(tasks);
   const toApprove = unapprovedTodoTaskIds(tasks);
   const feedbackAuthorIds = [
     ...new Set(
@@ -167,16 +186,25 @@ export function ProjectTaskListPanel({
 
   // Groups come and go with their tasks, so the open set is derived: each
   // group's default, flipped where the reader toggled it.
-  const expandedKeys = sections
-    .filter((section) => section.defaultOpen !== toggled.has(section.status))
-    .map((section) => section.status);
+  const groups = [
+    ...sections.map((section) => ({
+      key: section.status,
+      defaultOpen: section.defaultOpen,
+    })),
+    ...(pullRequests.length > 0
+      ? [{ key: PULL_REQUESTS, defaultOpen: true }]
+      : []),
+  ];
+  const expandedKeys = groups
+    .filter((group) => group.defaultOpen !== toggled.has(group.key))
+    .map((group) => group.key);
   const setExpandedKeys = (keys: string[]) => {
     const open = new Set(keys);
     setToggled(
       new Set(
-        sections
-          .filter((section) => section.defaultOpen !== open.has(section.status))
-          .map((section) => section.status),
+        groups
+          .filter((group) => group.defaultOpen !== open.has(group.key))
+          .map((group) => group.key),
       ),
     );
   };
@@ -190,25 +218,21 @@ export function ProjectTaskListPanel({
     failedTaskIds,
     notesByTask,
     basePath,
-    projectNumId,
     homeRepoId,
     reposById,
     authorNames: firstNameByUserId(authors ?? []),
   };
 
-  // Feedback and coordinator proposals wait in Triage: its header approves them all.
+  // Feedback and tasks added without approval wait in Triage: its header
+  // approves them all.
   const triageActions =
     toApprove.length > 0 ? (
       <Button
-        size="sm"
-        className="h-6 px-2 text-xs"
+        size="xs"
+        variant="ghost"
         disabled={isApproving}
-        onClick={(e) => {
-          e.stopPropagation();
-          void approveAll();
-        }}
+        onClick={() => void approveAll()}
       >
-        <IconCheck size={12} aria-hidden />
         Approve all
       </Button>
     ) : undefined;
@@ -222,31 +246,25 @@ export function ProjectTaskListPanel({
     >
       <Accordion
         type="multiple"
-        className="px-3 [&_hr]:bg-border"
+        className="px-3 pb-3"
         value={expandedKeys}
         onValueChange={setExpandedKeys}
       >
         {sections.map(({ status, tasks: sectionTasks }) => (
-          <AccordionItem key={status} value={status}>
-            <AccordionTrigger className="p-2 hover:no-underline">
-              <SectionHeader
-                status={status}
-                count={sectionTasks.length}
-                actions={status === "triage" ? triageActions : undefined}
-              />
-            </AccordionTrigger>
-            <AccordionContent className="flex flex-col gap-1 px-3">
+          <AccordionItem key={status} value={status} className="not-first:mt-2">
+            <GroupHeader
+              label={PROJECT_TASK_DISPLAY_STATUS_LABELS[status]}
+              count={sectionTasks.length}
+              actions={status === "triage" ? triageActions : undefined}
+            />
+            <AccordionContent className="pt-1 pb-0">
               {scrollParent ? (
                 <Virtuoso
                   customScrollParent={scrollParent}
                   totalCount={sectionTasks.length}
                   overscan={200}
                   itemContent={(index) => (
-                    <ListEnter
-                      index={index}
-                      firstPaint={firstPaint.current}
-                      className="pb-1"
-                    >
+                    <ListEnter index={index} firstPaint={firstPaint.current}>
                       <ProjectTaskRowFor
                         task={sectionTasks[index]}
                         context={context}
@@ -258,6 +276,16 @@ export function ProjectTaskListPanel({
             </AccordionContent>
           </AccordionItem>
         ))}
+        {pullRequests.length > 0 ? (
+          <AccordionItem value={PULL_REQUESTS} className="not-first:mt-2">
+            <GroupHeader label="Pull requests" count={pullRequests.length} />
+            <AccordionContent className="pt-1 pb-0">
+              {pullRequests.map((task) => (
+                <ProjectTaskPrRow key={task._id} task={task} />
+              ))}
+            </AccordionContent>
+          </AccordionItem>
+        ) : null}
       </Accordion>
     </div>
   );

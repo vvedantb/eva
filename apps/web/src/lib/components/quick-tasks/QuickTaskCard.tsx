@@ -48,7 +48,7 @@ import {
   type Priority,
 } from "@/lib/components/priority/priorityMeta";
 import dayjs, { compactRelativeTime } from "@eva/shared/dates";
-import type { MouseEvent, ReactNode } from "react";
+import type { MouseEvent } from "react";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
@@ -111,18 +111,6 @@ interface QuickTaskCardProps {
   hasUnread?: boolean;
   /** A chat turn waits on a blocking question; the "?" mark wins every other mark. */
   isAwaitingAnswer?: boolean;
-  /** Extra badges after the tags (the project task list's stage, repo and PR). */
-  badges?: ReactNode;
-  /**
-   * One tight row (the project task list, the coordinator's task cards): the
-   * age and the menu end the title line, and there is no creator line.
-   */
-  compact?: boolean;
-  /**
-   * The stripe and the beam from the caller's own status (a project task's
-   * display status) in place of `status`.
-   */
-  accent?: { className: string; working: boolean };
 }
 
 export function QuickTaskCard({
@@ -156,21 +144,15 @@ export function QuickTaskCard({
   isAgentActive = false,
   hasUnread = false,
   isAwaitingAnswer = false,
-  badges,
-  compact = false,
-  accent,
 }: QuickTaskCardProps) {
   const showError = hasError && status !== "done";
   const statusMeta = statusConfig[status];
-  const accentClass = showError
-    ? "bg-destructive"
-    : (accent?.className ?? statusMeta.bar);
+  const accentClass = showError ? "bg-destructive" : statusMeta.bar;
   // Two different signals, two different marks: the beam is the column the task
   // sits in, so it stays on `status` alone — it used to switch on for any live
   // workflow, which read as a permanent spinner on cards nobody was working on.
   // A live turn gets the same pixel grid the session rows use instead.
-  const isInProgress =
-    !hasError && (accent ? accent.working : status === "in_progress");
+  const isInProgress = !hasError && status === "in_progress";
   const showAgentPulse = !hasError && !isInProgress && isAgentActive;
   const simpleView = useSimpleView();
 
@@ -199,8 +181,7 @@ export function QuickTaskCard({
   const hasMetadata =
     projectName !== undefined ||
     (tags !== undefined && tags.length > 0) ||
-    hasDraftComment ||
-    badges !== undefined;
+    hasDraftComment;
 
   const creatorFirstName =
     createdByUser?.firstName ?? createdByUser?.fullName?.split(/\s+/)[0];
@@ -252,11 +233,7 @@ export function QuickTaskCard({
           : undefined
       }
       aria-label={title}
-      contentClassName={
-        compact
-          ? "flex flex-col gap-0.5 px-2.5 py-1.5 pl-3"
-          : "flex flex-col gap-1.5 px-2.5 py-2 pl-3 sm:px-3 sm:py-2.5 sm:pl-3.5"
-      }
+      contentClassName="flex flex-col gap-1.5 px-2.5 py-2 pl-3 sm:px-3 sm:py-2.5 sm:pl-3.5"
       className={cn(
         showError
           ? "border border-destructive/30 bg-destructive/5"
@@ -266,12 +243,7 @@ export function QuickTaskCard({
         isSelected && "ring-2 ring-primary/40",
       )}
     >
-      <div
-        className={cn(
-          "flex min-w-0 gap-2",
-          compact ? "items-center" : "items-start",
-        )}
-      >
+      <div className="flex min-w-0 items-start gap-2">
         {isSelecting ? (
           <Checkbox
             checked={isSelected}
@@ -294,12 +266,7 @@ export function QuickTaskCard({
           </MarqueeOnHover>
         </div>
 
-        <div
-          className={cn(
-            "flex shrink-0 items-center gap-1.5",
-            !compact && "pt-0.5",
-          )}
-        >
+        <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
           {priority ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -369,7 +336,6 @@ export function QuickTaskCard({
               </TooltipContent>
             </Tooltip>
           ) : null}
-          {compact ? ageAndMenu : null}
         </div>
       </div>
 
@@ -414,29 +380,26 @@ export function QuickTaskCard({
               </span>
             </Badge>
           ) : null}
-          {badges}
         </div>
       ) : null}
 
-      {compact ? null : (
-        <div className="mt-0.5 flex items-center justify-between gap-2 pt-0.5">
-          <div className="flex min-w-0 items-center gap-1.5">
-            {createdByUser ? (
-              <>
-                <UserInitials user={createdByUser} size="sm" />
-                {creatorFirstName ? (
-                  <MarqueeOnHover className="min-w-0 text-2xs text-muted-foreground/75">
-                    <span data-pii>{creatorFirstName}</span>
-                  </MarqueeOnHover>
-                ) : null}
-              </>
-            ) : null}
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            {ageAndMenu}
-          </div>
+      <div className="mt-0.5 flex items-center justify-between gap-2 pt-0.5">
+        <div className="flex min-w-0 items-center gap-1.5">
+          {createdByUser ? (
+            <>
+              <UserInitials user={createdByUser} size="sm" />
+              {creatorFirstName ? (
+                <MarqueeOnHover className="min-w-0 text-2xs text-muted-foreground/75">
+                  <span data-pii>{creatorFirstName}</span>
+                </MarqueeOnHover>
+              ) : null}
+            </>
+          ) : null}
         </div>
-      )}
+        <div className="flex shrink-0 items-center gap-1.5">
+          {ageAndMenu}
+        </div>
+      </div>
     </ListRow>
   );
 

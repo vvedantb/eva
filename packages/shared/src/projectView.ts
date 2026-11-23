@@ -1,4 +1,6 @@
 import type { Doc } from "@eva/backend";
+import { prStateLabel } from "./prState";
+import { prNumberFromGithubUrl } from "./prReview";
 import {
   projectStatus,
   projectTaskDisplayStatus,
@@ -53,15 +55,19 @@ export const PROJECT_TASK_DISPLAY_STATUS_LABELS: Record<
   archived: "Archived",
 };
 
-/** Why a task waits for a person, in a few words. */
+/**
+ * Why a task waits for a person, in plain words: a Blocked row's second line
+ * (`projectTaskSummaryLine`). Review and question rows add the PR or the
+ * question when they know it.
+ */
 export const NEEDS_YOU_LABELS: Record<NeedsYouReason, string> = {
-  usage_limit: "Usage limit reached",
-  failed: "Run failed",
+  usage_limit: "Usage limit",
+  failed: "Failed twice",
   stopped: "Run stopped",
   pr_closed: "PR closed",
   approve: "Needs approval",
-  review: "Ready for review",
-  question: "Question for you",
+  review: "Needs you: review",
+  question: "Asks you a question",
 };
 
 /** A task that asked its coordinator a question and waits for the answer. */
@@ -266,17 +272,123 @@ export function unapprovedTodoTaskIds<Row extends ProjectTaskRow>(
 /** A Triage row's origin when it is not feedback: added without approval. */
 export const ADDED_WITHOUT_APPROVAL_LABEL = "Added without approval";
 
-/**
- * Where a Triage task came from, its row's second line: "Feedback · Ana" for
- * feedback (just "Feedback" while the name is unknown), else a task added to
- * the project without approval. The coordinator's tasks never wait here.
- */
-export function projectTaskOriginLabel(
-  origin: Doc<"agentTasks">["origin"],
-  authorName: string | undefined,
+/** What `projectTaskSummaryLine` reads of an `agentTasks.listByProject` row. */
+export interface SummarizableProjectTaskRow {
+  numId?: number;
+  status: Doc<"agentTasks">["status"];
+  origin?: Doc<"agentTasks">["origin"];
+  phaseLabel?: string;
+  prUrl?: string;
+  prState?: Doc<"agentTasks">["prState"];
+}
+
+/** "#9003" from a GitHub PR URL, else the URL's last path part. */
+export function prShortLabel(prUrl: string): string {
+  const prNumber = prNumberFromGithubUrl(prUrl);
+  if (prNumber !== undefined) return `#${prNumber}`;
+  return prUrl.split(/[?#]/)[0].split("/").filter(Boolean).pop() ?? prUrl;
+}
+
+/** The one reason a row shows, by its display status. */
+function projectTaskReason(
+  row: SummarizableProjectTaskRow,
+  view: ProjectTaskView,
+  facts: { ask: string | undefined; failed: boolean; authorName: string | undefined },
 ): string {
-  if (origin !== "feedback") return ADDED_WITHOUT_APPROVAL_LABEL;
-  return authorName ? `Feedback · ${authorName}` : "Feedback";
+  switch (view.displayStatus) {
+    case "triage":
+      if (row.origin !== "feedback") return ADDED_WITHOUT_APPROVAL_LABEL;
+      return facts.authorName ? `Feedback from ${facts.authorName}` : "Feedback";
+    case "working":
+      return view.waitingForCoordinator
+        ? WAITING_FOR_COORDINATOR_LABEL
+        : PROJECT_TASK_DISPLAY_STATUS_LABELS.working;
+    case "idle":
+      return "Waiting for a free slot";
+    case "archived":
+      if (row.status === "cancelled") return "Cancelled";
+      return row.prState === "merged" ? "Merged" : "Done";
+    case "blocked":
+      break;
+  }
+  if (facts.ask !== undefined) return `Asks: ${facts.ask}`;
+  if (view.needsYou === "review" && row.prUrl !== undefined) {
+    return `${NEEDS_YOU_LABELS.review} PR ${prShortLabel(row.prUrl)}`;
+  }
+  if (view.needsYou !== undefined) return NEEDS_YOU_LABELS[view.needsYou];
+  return facts.failed ? "Run failed" : WAITING_FOR_COORDINATOR_LABEL;
+}
+
+/**
+ * A project task row's second line, one plain sentence for web and phone:
+ * "#904 · Needs you: review PR #9003 · api · Phase 2 · 1 report". The task
+ * number, the one reason for its display status (a Triage task's origin, a
+ * Blocked task's needs-you reason or open question, Idle's wait, Archived's
+ * end), the repo when it is not the project's (`otherRepoLabel`), the phase,
+ * and the open report count.
+ */
+export function projectTaskSummaryLine(
+  row: SummarizableProjectTaskRow,
+  view: ProjectTaskView,
+  extra: {
+    notes: ProjectTaskNotes | undefined;
+    failed: boolean;
+    /** A feedback task's author, by first name, once known. */
+    authorName: string | undefined;
+    /** Set only when the task's repo differs from the project's home repo. */
+    otherRepoLabel: string | undefined;
+  },
+): string {
+  const reports = extra.notes?.reports.length ?? 0;
+  return [
+    row.numId !== undefined ? `#${row.numId}` : undefined,
+    projectTaskReason(row, view, {
+      ask: extra.notes?.ask,
+      failed: extra.failed,
+      authorName: extra.authorName,
+    }),
+    extra.otherRepoLabel,
+    row.phaseLabel,
+    reports === 0 ? undefined : reports === 1 ? "1 report" : `${reports} reports`,
+  ]
+    .filter((part) => part !== undefined && part !== "")
+    .join(" · ");
+}
+
+/** The tasks that have a PR: the task list's Pull requests group, in list order. */
+export function projectTaskPullRequests<
+  Row extends SummarizableProjectTaskRow & { locked?: boolean },
+>(rows: readonly Row[]): Array<Row & { prUrl: string }> {
+  return rows.flatMap((row) =>
+    row.locked !== true && row.prUrl !== undefined
+      ? [{ ...row, prUrl: row.prUrl }]
+      : [],
+  );
+}
+
+/** A Pull requests row's second line: "#9003 · Open · via #904". */
+export function projectTaskPrLine(
+  row: SummarizableProjectTaskRow & { prUrl: string },
+): string {
+  return [
+    prShortLabel(row.prUrl),
+    prStateLabel(row.prState),
+    row.numId !== undefined ? `via #${row.numId}` : undefined,
+  ]
+    .filter((part) => part !== undefined)
+    .join(" · ");
+}
+
+/** The task counts as one muted line: "3 triage · 2 blocked · 1 archived". */
+export function projectStatusCountsLine(
+  counts: ProjectStatus["counts"],
+): string {
+  return PROJECT_TASK_DISPLAY_STATUSES.filter((status) => counts[status] > 0)
+    .map(
+      (status) =>
+        `${counts[status]} ${PROJECT_TASK_DISPLAY_STATUS_LABELS[status].toLowerCase()}`,
+    )
+    .join(" · ");
 }
 
 /**

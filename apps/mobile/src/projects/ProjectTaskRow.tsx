@@ -1,97 +1,127 @@
 import { api, type Id } from "@eva/backend";
-import { formatEntityNumLabel } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { isUnapprovedTodoTask, projectTaskOriginLabel, type ProjectTaskNotes, type ProjectTaskView } from "@eva/shared/projectView";
+import { isUnapprovedTodoTask, projectTaskPrLine, type ProjectTaskView } from "@eva/shared/projectView";
 import { IconLock } from "@tabler/icons-react-native";
 import { Button, SurfaceRow } from "@vvedantb/native-ui/primitives";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation } from "convex/react";
-import { useState } from "react";
-import { Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import { useState, type ReactNode } from "react";
+import { Linking, Text, View } from "react-native";
 import { taskDisplayStatusAppearance } from "@/projects/phaseAppearance";
-import { hasProjectTaskBadges, ProjectTaskBadges, type ProjectTaskBadgeFacts } from "@/projects/ProjectTaskBadges";
 import type { ProjectTaskListRow } from "@/projects/useProjectStatus";
-import { META_TEXT, MetaPill, QuickTaskRow } from "@/quickTasks/QuickTaskRow";
-import type { RepoRow } from "@/sessions/SessionGroup";
+import { META_TEXT } from "@/quickTasks/QuickTaskRow";
+import { PrIcon } from "@/sessions/SessionGroup";
+import { displayTitle, timeAgo } from "@/ui/format";
 import { useScheme } from "@/ui/theme";
 
 /**
- * One compact row of a project's task list, as the web `ProjectTaskRow`:
- * the compact quick-task card numbered "#project/task", striped by the
- * task's display status (`projectTaskDisplayStatus`), with the project task
- * badges. A Triage row names its origin (`projectTaskOriginLabel`) in place
- * of the Feedback and "Needs approval" badges, with Reject and Approve
- * beside it (the row itself is one button). A long press opens the task
- * menu (`onLongPress`). A task in a repo the reader cannot open is a locked
- * row.
+ * The web flat row body (`ProjectFlatRowBody`): an icon, the title on one
+ * line, one muted sentence under it, and `trailing` at the end. No fill: the
+ * row fades while pressed.
+ */
+function FlatRow({
+  icon,
+  title,
+  line,
+  trailing,
+  accessibilityLabel,
+  accessibilityHint,
+  onPress,
+  onLongPress,
+}: {
+  icon: ReactNode;
+  title: string;
+  line: string;
+  trailing?: ReactNode;
+  accessibilityLabel: string;
+  accessibilityHint?: string;
+  onPress: () => void;
+  onLongPress?: () => void;
+}) {
+  const theme = EVA_THEME[useScheme()];
+  return (
+    <SurfaceRow
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint ?? line}
+      backgroundColor="transparent"
+      className="min-h-11 flex-row items-start gap-2.5 px-2 py-2"
+      onPress={onPress}
+      onLongPress={onLongPress}
+      longPressLabel="Task actions"
+    >
+      <View className="h-5 justify-center">{icon}</View>
+      <View className="min-w-0 flex-1">
+        <Text numberOfLines={1} className="font-instrument-sans-medium text-sm" style={{ fontWeight: "500", color: theme.foreground }}>
+          {title}
+        </Text>
+        <Text numberOfLines={1} className="font-instrument-sans" style={{ ...META_TEXT, color: theme.mutedForeground }}>
+          {line}
+        </Text>
+      </View>
+      {trailing}
+    </SurfaceRow>
+  );
+}
+
+/**
+ * One flat row of a project's task list, as the web `ProjectTaskRow`: the
+ * display status icon in its colour, the title, and `line`
+ * (`projectTaskSummaryLine`), with the age at the end. A Triage row keeps
+ * Reject and Approve visible beside it (the phone has no hover). A tap opens
+ * the task; a long press opens the task menu (`onLongPress`). A task in a
+ * repo the reader cannot open is a locked row with no link.
  */
 export function ProjectTaskRow({
   task,
   view,
-  authorName,
-  notes,
-  hasError,
-  hasDraftComment,
+  line,
   projectId,
-  projectNumId,
-  homeRepoId,
-  reposById,
   onLongPress,
 }: {
   task: ProjectTaskListRow;
   view: ProjectTaskView;
-  /** The first name of the person who wrote a feedback task (`createdBy`). */
-  authorName: string | undefined;
-  /** The task's open question and open reports (`useProjectTaskNotes`). */
-  notes: ProjectTaskNotes | undefined;
-  hasError: boolean;
-  hasDraftComment: boolean;
+  line: string;
   projectId: Id<"projects">;
-  projectNumId: number | undefined;
-  homeRepoId: Id<"githubRepos">;
-  reposById: ReadonlyMap<string, RepoRow>;
   onLongPress: () => void;
 }) {
+  const router = useRouter();
   const scheme = useScheme();
-  const appearance = taskDisplayStatusAppearance(view.displayStatus, scheme);
-  if (task.locked === true) return <LockedTaskRow taskNumber={task.taskNumber} projectNumId={projectNumId} accentColor={appearance.bar} />;
-  const triage = view.displayStatus === "triage";
-  const badges: ProjectTaskBadgeFacts = {
-    // A Triage row's origin line says it waits for approval.
-    needsYou: view.needsYou === "approve" ? undefined : view.needsYou,
-    waitingForCoordinator: view.waitingForCoordinator,
-    ask: notes?.ask,
-    reports: notes?.reports ?? [],
-    phaseLabel: task.phaseLabel,
-    isFeedback: !triage && task.origin === "feedback",
-    repo: task.repoId !== undefined && task.repoId !== homeRepoId ? reposById.get(String(task.repoId)) : undefined,
-    hasPr: task.prUrl !== undefined,
-    prState: task.prState,
-  };
-  const canTriage = triage && isUnapprovedTodoTask(task);
+  const muted = EVA_THEME[scheme].mutedForeground;
+  const { icon: StatusIcon, text } = taskDisplayStatusAppearance(view.displayStatus, scheme);
+  const icon = <StatusIcon size={14} color={text} />;
+  if (task.locked === true) {
+    return (
+      <FlatRow
+        icon={icon}
+        title="Locked task"
+        line={line}
+        trailing={<IconLock size={14} color={muted} />}
+        accessibilityLabel="Locked task"
+        accessibilityHint="You do not have access to this repo"
+        onPress={() => toast("You do not have access to this repo")}
+      />
+    );
+  }
+  const canTriage = view.displayStatus === "triage" && isUnapprovedTodoTask(task);
   return (
     <View className="flex-row items-center gap-1">
       <View className="min-w-0 flex-1">
-        <QuickTaskRow
-          task={task}
-          // A draft task sits in To Do, striped as To Do.
-          status={task.status === "draft" ? "todo" : task.status}
-          hasError={hasError}
-          hasDraftComment={hasDraftComment}
-          creator={undefined}
-          projectNumId={projectNumId}
-          onLongPress={onLongPress}
-          compact
-          accentColor={appearance.bar}
-          badges={
-            triage || hasProjectTaskBadges(badges) ? (
-              <>
-                {triage ? <MetaPill label={projectTaskOriginLabel(task.origin, authorName)} /> : null}
-                <ProjectTaskBadges badges={badges} />
-              </>
-            ) : undefined
+        <FlatRow
+          icon={icon}
+          title={displayTitle(task.title)}
+          line={line}
+          trailing={
+            canTriage ? undefined : (
+              <Text className="font-instrument-sans" style={{ ...META_TEXT, color: withAlpha(muted, 0.7), fontVariant: ["tabular-nums"] }}>
+                {timeAgo(task.updatedAt)}
+              </Text>
+            )
           }
+          accessibilityLabel={displayTitle(task.title)}
+          onPress={() => router.push({ pathname: "/quick-task/[taskId]", params: { taskId: task._id, repo: task.repoId } })}
+          onLongPress={onLongPress}
         />
       </View>
       {canTriage ? <TriageButtons projectId={projectId} taskId={task._id} /> : null}
@@ -99,43 +129,23 @@ export function ProjectTaskRow({
   );
 }
 
-/**
- * A task in a repo the reader cannot open: its status stripe, its number and
- * a lock, no title. A tap says why, as the web tooltip.
- */
-function LockedTaskRow({
-  taskNumber,
-  projectNumId,
-  accentColor,
-}: {
-  taskNumber: number | undefined;
-  projectNumId: number | undefined;
-  accentColor: string;
-}) {
+/** A Pull requests row, as the web `ProjectTaskPrRow`: a tap opens the PR. */
+export function ProjectTaskPrRow({ task }: { task: ProjectTaskListRow & { prUrl: string } }) {
   const scheme = useScheme();
-  const theme = EVA_THEME[scheme];
-  const muted = theme.mutedForeground;
-  const numLabel = formatEntityNumLabel({ numId: taskNumber, projectNumId });
   return (
-    <SurfaceRow
-      accessibilityLabel={numLabel ? `Locked task ${numLabel}` : "Locked task"}
-      accessibilityHint="You do not have access to this repo"
-      accentColor={accentColor}
-      backgroundColor={theme.card}
-      className="min-h-11 flex-row items-center gap-1.5 px-3 py-2 pl-3.5"
-      onPress={() => toast("You do not have access to this repo")}
-    >
-      {numLabel ? (
-        <Text style={{ ...META_TEXT, fontFamily: "monospace", color: withAlpha(muted, 0.55), fontVariant: ["tabular-nums"] }}>{numLabel}</Text>
-      ) : null}
-      <IconLock size={14} color={muted} />
-    </SurfaceRow>
+    <FlatRow
+      icon={<PrIcon state={task.prState} scheme={scheme} />}
+      title={displayTitle(task.title)}
+      line={projectTaskPrLine(task)}
+      accessibilityLabel={`Open the PR for ${displayTitle(task.title)}`}
+      onPress={() => void Linking.openURL(task.prUrl)}
+    />
   );
 }
 
 /**
- * A Triage row's Reject (cancels the task) and Approve (lets the scheduler
- * start it), beside the card as the row is one button.
+ * A Triage row's compact Reject (cancels the task) and Approve (lets the
+ * scheduler start it), beside the row as the row is one button.
  */
 function TriageButtons({ projectId, taskId }: { projectId: Id<"projects">; taskId: Id<"agentTasks"> }) {
   const updateStatus = useMutation(api.agentTasks.updateStatus);
@@ -146,7 +156,7 @@ function TriageButtons({ projectId, taskId }: { projectId: Id<"projects">; taskI
     action.catch(() => toast.error(error)).finally(() => setBusy(false));
   };
   return (
-    <View className="flex-row items-center gap-1">
+    <View className="flex-row items-center">
       <Button
         size="sm"
         variant="ghost"
@@ -158,6 +168,7 @@ function TriageButtons({ projectId, taskId }: { projectId: Id<"projects">; taskI
       </Button>
       <Button
         size="sm"
+        variant="ghost"
         fullWidth={false}
         disabled={busy}
         onPress={() => run(approveTasks({ projectId, taskIds: [taskId] }), "Couldn't approve the task")}

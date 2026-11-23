@@ -1,163 +1,249 @@
 "use client";
 
-import type { Id } from "@eva/backend";
-import { taskScheduledAt } from "@eva/backend";
+import { api, type Id } from "@eva/backend";
+import { cn } from "@eva/ui";
+import { compactRelativeTime } from "@eva/shared/dates";
 import {
   isUnapprovedTodoTask,
-  projectTaskOriginLabel,
-  type ProjectTaskNotes,
   type ProjectTaskView,
 } from "@eva/shared/projectView";
 import { IconLock } from "@tabler/icons-react";
 import {
+  Button,
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuTrigger,
+  LIST_ROW_CONTROL_CLASS,
   ListRow,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
 } from "@vvedantb/ui";
-import { QuickTaskCard } from "@/lib/components/quick-tasks/QuickTaskCard";
-import type { RepoAppMarkRepo } from "@/lib/components/RepoLogo";
-import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
+import { useMutation } from "convex/react";
+import type { ReactNode } from "react";
+import { DynamicLink } from "@/lib/components/DynamicLink";
+import { TaskCardMenuItems } from "@/lib/components/quick-tasks/_components/TaskCardMenuItems";
+import { useTaskMenu } from "@/lib/components/quick-tasks/_components/useTaskMenu";
 import { entityPathSegment } from "@/lib/numId";
+import {
+  catchMutationError,
+  withMutationToast,
+} from "@/lib/utils/mutationToast";
+import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import type { ProjectTaskListRow } from "../useProjectStatus";
 import { projectTaskDisplayStatusConfig } from "../ProjectPhaseBadge";
-import { ProjectTaskBadges } from "./ProjectTaskBadges";
+
+/** A flat row: no fill at rest, the list row hover tint, no stripe. */
+export const FLAT_ROW_CLASS = "bg-transparent";
+export const FLAT_ROW_CONTENT_CLASS = "px-2 py-1.5";
 
 /**
- * One compact row of a project's task list: the stripe is the task's display
- * status (`projectTaskDisplayStatus`). A Triage row's second line is its
- * origin, with Approve and Reject. A task in a repo
- * the reader cannot open is a locked row: its number and a lock, no title
- * and no link.
+ * The project task list's flat row body: a status icon, the title on one
+ * line, one muted sentence under it, and `trailing` (the age) at the end.
+ */
+export function ProjectFlatRowBody({
+  icon,
+  title,
+  line,
+  trailing,
+}: {
+  icon: ReactNode;
+  title: string;
+  line: string;
+  trailing?: ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <span className="flex h-5 shrink-0 items-center">{icon}</span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-2sm font-medium leading-5 tracking-[-0.01em] text-foreground">
+          {title}
+        </p>
+        <p className="truncate text-xs leading-4 text-muted-foreground">
+          {line}
+        </p>
+      </div>
+      {trailing}
+    </div>
+  );
+}
+
+/** The muted age at a row's end. */
+export function RowAge({
+  at,
+  className,
+}: {
+  at: number;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "flex h-5 shrink-0 items-center text-2xs tabular-nums text-muted-foreground/70",
+        className,
+      )}
+    >
+      {compactRelativeTime(at)}
+    </span>
+  );
+}
+
+/**
+ * One flat row of a project's task list: the display status icon, the
+ * title, and `line` (`projectTaskSummaryLine`). A Triage row shows Reject
+ * and Approve in place of its age on hover. Right-click opens the task menu.
+ * A task in a repo the reader cannot open is a locked row with no link.
  */
 export function ProjectTaskRow({
   task,
   view,
-  notes,
-  hasError,
-  authorName,
+  line,
   onSelectTask,
   basePath,
-  projectNumId,
-  homeRepoId,
-  reposById,
 }: {
   task: ProjectTaskListRow;
   view: ProjectTaskView;
-  /** The task's open question and open reports (`useProjectTaskNotes`). */
-  notes: ProjectTaskNotes | undefined;
-  hasError: boolean;
-  /** The feedback author's first name, once known. */
-  authorName: string | undefined;
+  line: string;
   onSelectTask: (id: Id<"agentTasks">) => void;
   basePath: string;
-  projectNumId?: number;
-  homeRepoId: Id<"githubRepos">;
-  reposById: ReadonlyMap<string, RepoAppMarkRepo>;
 }) {
-  const statusConfig = projectTaskDisplayStatusConfig[view.displayStatus];
+  const config = projectTaskDisplayStatusConfig[view.displayStatus];
+  const StatusIcon = config.icon;
+  const icon = <StatusIcon size={14} className={config.text} aria-hidden />;
+  const segment = entityPathSegment(task);
+  const href = segment
+    ? `${basePath}/quick-tasks/${segment}`
+    : `${basePath}/quick-tasks`;
+  const { menuProps, dialogs, hasDialogOpen } = useTaskMenu({
+    id: task._id,
+    title: task.title,
+    status: task.status,
+    href,
+    showOpenInNewTab: true,
+    assignedTo: task.assignedTo,
+    projectId: task.projectId,
+    repoId: task.repoId,
+  });
   if (task.locked === true) {
     return (
       <ListRow
-        accentClassName={statusConfig.bar}
-        aria-label="Locked task"
-        contentClassName="flex items-center gap-1.5 px-2.5 py-1.5 pl-3"
+        title="You do not have access to this repo"
+        className={FLAT_ROW_CLASS}
+        contentClassName={FLAT_ROW_CONTENT_CLASS}
       >
-        <EntityNumLabel numId={task.taskNumber} projectNumId={projectNumId} />
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="relative flex items-center text-muted-foreground hit-target">
-              <IconLock size={14} aria-hidden />
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>You do not have access to this repo</TooltipContent>
-        </Tooltip>
+        <ProjectFlatRowBody
+          icon={icon}
+          title="Locked task"
+          line={line}
+          trailing={
+            <IconLock
+              size={14}
+              className="mt-0.5 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
+          }
+        />
       </ListRow>
     );
   }
-  const segment = entityPathSegment(task);
-  const otherRepo =
-    task.repoId !== undefined && task.repoId !== homeRepoId
-      ? reposById.get(task.repoId)
+  const triageProjectId =
+    view.displayStatus === "triage" && isUnapprovedTodoTask(task)
+      ? task.projectId
       : undefined;
-  const isTriage = view.displayStatus === "triage";
-  // In Triage the origin replaces the Feedback badge and "Needs approval".
-  const origin = isTriage
-    ? projectTaskOriginLabel(task.origin, authorName)
-    : undefined;
-  const isFeedback = !isTriage && task.origin === "feedback";
-  const needsYou = isTriage ? undefined : view.needsYou;
-  const canTriage = isTriage && isUnapprovedTodoTask(task);
-  const { waitingForCoordinator } = view;
-  const reports = notes?.reports ?? [];
-  const hasBadges =
-    origin !== undefined ||
-    needsYou !== undefined ||
-    waitingForCoordinator ||
-    notes?.ask !== undefined ||
-    reports.length > 0 ||
-    task.phaseLabel !== undefined ||
-    isFeedback ||
-    otherRepo !== undefined ||
-    task.prUrl !== undefined ||
-    canTriage;
   return (
-    <QuickTaskCard
-      id={task._id}
-      title={task.title}
-      description={task.description}
-      status={task.status}
-      isAgentActive={task.isExecuting}
-      hasUnread={task.hasUnread}
-      isAwaitingAnswer={task.isAwaitingAnswer}
-      hasError={hasError}
-      sandboxStatus={task.sandboxStatus}
-      numId={task.numId}
-      projectNumId={projectNumId}
-      tags={task.tags}
-      createdAt={task._creationTime}
-      scheduledAt={taskScheduledAt(task)}
-      href={
-        segment
-          ? `${basePath}/quick-tasks/${segment}`
-          : `${basePath}/quick-tasks`
-      }
-      onClick={(event) => {
-        event.preventDefault();
-        onSelectTask(task._id);
-      }}
-      assignedTo={task.assignedTo}
-      projectId={task.projectId}
-      repoId={task.repoId}
-      compact
-      accent={{
-        className: statusConfig.bar,
-        working: view.displayStatus === "working",
-      }}
-      badges={
-        hasBadges ? (
-          <ProjectTaskBadges
-              taskId={task._id}
-              projectId={task.projectId}
-              origin={origin}
-              needsYou={needsYou}
-              waitingForCoordinator={waitingForCoordinator}
-              ask={notes?.ask}
-              reports={reports}
-              chatHref={
-                segment
-                  ? `${basePath}/quick-tasks/${segment}/sandbox/preview`
-                  : undefined
+    <>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <ListRow
+            link={<DynamicLink to={toInternalRepoHref(href)} search={true} />}
+            onClick={(event) => {
+              event.preventDefault();
+              if (!hasDialogOpen) onSelectTask(task._id);
+            }}
+            aria-label={task.title}
+            className={FLAT_ROW_CLASS}
+            contentClassName={FLAT_ROW_CONTENT_CLASS}
+          >
+            <ProjectFlatRowBody
+              icon={icon}
+              title={task.title}
+              line={line}
+              trailing={
+                triageProjectId !== undefined ? (
+                  <>
+                    <RowAge
+                      at={task.updatedAt}
+                      className="group-hover:hidden group-focus-within:hidden"
+                    />
+                    <TriageButtons
+                      projectId={triageProjectId}
+                      taskId={task._id}
+                    />
+                  </>
+                ) : (
+                  <RowAge at={task.updatedAt} />
+                )
               }
-              phaseLabel={task.phaseLabel}
-              isFeedback={isFeedback}
-              repo={otherRepo}
-              prUrl={task.prUrl}
-              prState={task.prState}
-              canTriage={canTriage}
             />
-        ) : undefined
-      }
-    />
+          </ListRow>
+        </ContextMenuTrigger>
+        <ContextMenuContent onClick={(event) => event.stopPropagation()}>
+          <TaskCardMenuItems variant="context" {...menuProps} />
+        </ContextMenuContent>
+      </ContextMenu>
+      {dialogs}
+    </>
+  );
+}
+
+/**
+ * A Triage row's Reject (cancels the task) and Approve (lets the scheduler
+ * start it). They show on row hover or focus only.
+ */
+function TriageButtons({
+  projectId,
+  taskId,
+}: {
+  projectId: Id<"projects">;
+  taskId: Id<"agentTasks">;
+}) {
+  const updateStatus = useMutation(api.agentTasks.updateStatus);
+  const approveTasks = useMutation(api.buildWorkflow.approveProjectTasks);
+  return (
+    <span
+      className={cn(
+        "hidden shrink-0 items-center gap-1 group-hover:flex group-focus-within:flex",
+        LIST_ROW_CONTROL_CLASS,
+      )}
+    >
+      <Button
+        size="xs"
+        variant="ghost"
+        onClick={(event) => {
+          event.stopPropagation();
+          event.preventDefault();
+          void catchMutationError(
+            updateStatus({ id: taskId, status: "cancelled" }),
+            "Couldn't reject the task",
+            "project-task-cancel",
+          );
+        }}
+      >
+        Reject
+      </Button>
+      <Button
+        size="xs"
+        variant="secondary"
+        onClick={(event) => {
+          event.stopPropagation();
+          event.preventDefault();
+          void withMutationToast(
+            approveTasks({ projectId, taskIds: [taskId] }),
+            "Task approved",
+            "Couldn't approve the task",
+            "project-approve",
+          ).catch(() => undefined);
+        }}
+      >
+        Approve
+      </Button>
+    </span>
   );
 }

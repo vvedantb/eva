@@ -1,22 +1,31 @@
 import { api } from "@eva/backend";
-import { firstNameByUserId } from "@eva/shared";
+import { firstNameByUserId, repoDisplayLabel } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { PROJECT_TASK_DISPLAY_STATUS_LABELS, projectTaskStatusSections, unapprovedTodoTaskIds } from "@eva/shared/projectView";
-import { IconCheck, IconLayoutList, IconPlus } from "@tabler/icons-react-native";
+import {
+  PROJECT_TASK_DISPLAY_STATUS_LABELS,
+  projectStatusCountsLine,
+  projectStatusFromRows,
+  projectTaskPullRequests,
+  projectTaskStatusSections,
+  projectTaskSummaryLine,
+  unapprovedTodoTaskIds,
+  type ProjectTaskView,
+} from "@eva/shared/projectView";
+import { IconLayoutList, IconPlus } from "@tabler/icons-react-native";
 import { Button, EmptyState, SkeletonList, SkeletonRow } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, SectionList, View } from "react-native";
-import { taskDisplayStatusAppearance } from "@/projects/phaseAppearance";
-import { ProjectTaskRow } from "@/projects/ProjectTaskRow";
+import { Pressable, SectionList, Text, View } from "react-native";
+import { ProjectProgress } from "@/projects/ProjectProgress";
+import { ProjectTaskPrRow, ProjectTaskRow } from "@/projects/ProjectTaskRow";
 import { useProjectTaskNotes, type ProjectTaskListRow } from "@/projects/useProjectStatus";
 import { persistedIdSet } from "@/storage/persistedStore";
 import { useQuickTaskActions } from "@/quickTasks/useQuickTaskActions";
-import { FoldFooter, FoldHeader } from "@/ui/FoldHeader";
-import { useScheme } from "@/ui/theme";
+import { FoldBandHeader, FoldFooter } from "@/ui/FoldHeader";
+import { useScheme, XS_TRACKING } from "@/ui/theme";
 import { LIST_WINDOW } from "@/ui/listWindow";
 
 /** A project's task status groups folded away from their default, kept on the device. */
@@ -25,16 +34,21 @@ const toggledProjectTaskStatuses = persistedIdSet("projectTaskDisplayStatusesTog
 type Project = NonNullable<FunctionReturnType<typeof api.projects.get>>;
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 type User = FunctionReturnType<typeof api.users.listAll>[number];
+/** One list row: a task under its display status, or a task's PR. */
+type Item = { kind: "task"; row: ProjectTaskListRow; view: ProjectTaskView } | { kind: "pr"; row: ProjectTaskListRow & { prUrl: string } };
+
+/** The Pull requests group's key, beside the display statuses (web `PULL_REQUESTS`). */
+const PULL_REQUESTS = "pull_requests";
 
 /**
- * The web project task list (`ProjectTaskListPanel`) at phone width: a
- * collapsible section per display status that has tasks, Triage, Working,
- * Blocked, Idle, Archived (`projectTaskStatusSections`: Idle in project
- * order, the rest latest run first; Archived starts folded), with the
- * compact project task rows (`ProjectTaskRow`; a locked row for a task in a
- * repo the reader cannot open). Triage carries "Approve all" (every todo
- * task nobody approved yet). The first section carries "+" (a new task),
- * or the empty state does when there are no tasks. A tap opens the task.
+ * The web project Tasks panel at phone width: a thin progress bar and the
+ * counts as one muted line, then a collapsible group per display status
+ * that has tasks, Triage, Working, Blocked, Idle, Archived
+ * (`projectTaskStatusSections`; Archived starts folded), and the tasks'
+ * Pull requests. Rows are flat (`ProjectTaskRow`, `ProjectTaskPrRow`).
+ * Triage carries "Approve all" (every todo task nobody approved yet). The
+ * first group carries "+" (a new task), or the empty state does when there
+ * are no tasks.
  */
 export function ProjectTasks({
   project,
@@ -53,7 +67,6 @@ export function ProjectTasks({
   const router = useRouter();
   const scheme = useScheme();
   const muted = EVA_THEME[scheme].mutedForeground;
-  const draftMarks = useQuery(api.drafts.listMarks, { repoId: repo._id });
   const projects = useQuery(api.projects.list, { repoId: repo._id });
   const repos = useQuery(api.githubRepos.list, {});
   const notesByTask = useProjectTaskNotes(project._id);
@@ -80,19 +93,37 @@ export function ProjectTasks({
         label="Loading tasks"
         divided={false}
         className="px-3"
-        renderRow={(row) => (
-          <View className="mb-1 rounded-lg" style={{ backgroundColor: EVA_THEME[scheme].card }}>
-            <SkeletonRow index={row} lines={1} trailing={false} minHeight={44} className="px-3" />
-          </View>
-        )}
+        renderRow={(row) => <SkeletonRow index={row} lines={2} trailing={false} minHeight={44} className="px-2" />}
       />
     );
   }
   const openNewTask = () =>
     router.push({ pathname: "/quick-task/new", params: { repoId: repo._id, projectId: project._id } });
-  const draftTaskIds = new Set<string>(draftMarks?.taskIds ?? []);
   const reposById = new Map((repos ?? []).map((entry) => [String(entry._id), entry]));
   const toApprove = unapprovedTodoTaskIds(tasks);
+  const pullRequests = projectTaskPullRequests(tasks);
+  const status = projectStatusFromRows(tasks, failedTaskIds);
+  const groups = [
+    ...sections.map((section) => ({
+      key: section.status,
+      label: PROJECT_TASK_DISPLAY_STATUS_LABELS[section.status],
+      noun: "task",
+      defaultOpen: section.defaultOpen,
+      items: section.tasks.map(({ row, view }): Item => ({ kind: "task", row, view })),
+    })),
+    ...(pullRequests.length > 0
+      ? [{ key: PULL_REQUESTS, label: "Pull requests", noun: "PR", defaultOpen: true, items: pullRequests.map((row): Item => ({ kind: "pr", row })) }]
+      : []),
+  ];
+  const lineFor = (row: ProjectTaskListRow, view: ProjectTaskView) => {
+    const otherRepo = row.repoId !== undefined && row.repoId !== project.repoId ? reposById.get(String(row.repoId)) : undefined;
+    return projectTaskSummaryLine(row, view, {
+      notes: notesByTask.get(row._id),
+      failed: failedTaskIds.has(row._id),
+      authorName: row.createdBy !== undefined ? authorNames.get(row.createdBy) : undefined,
+      otherRepoLabel: otherRepo ? repoDisplayLabel(otherRepo) : undefined,
+    });
+  };
 
   const approveAll = () => {
     setApproving(true);
@@ -108,35 +139,38 @@ export function ProjectTasks({
     <>
       <SectionList
         {...LIST_WINDOW}
-        sections={sections.map((section, index) => {
-          const open = section.defaultOpen !== toggled.has(section.status);
-          return { status: section.status, first: index === 0, count: section.tasks.length, open, data: open ? section.tasks : [] };
+        sections={groups.map((group, index) => {
+          const open = group.defaultOpen !== toggled.has(group.key);
+          return { ...group, first: index === 0, count: group.items.length, open, data: open ? group.items : [] };
         })}
-        keyExtractor={(task) => task.row._id}
+        keyExtractor={(item) => `${item.kind}:${item.row._id}`}
         stickySectionHeadersEnabled={false}
+        ListHeaderComponent={
+          sections.length > 0 ? (
+            <View className="gap-2 px-1 pb-3 pt-1">
+              <ProjectProgress status={status} thin />
+              <Text
+                className="font-instrument-sans"
+                style={{ fontSize: 12, lineHeight: 16, letterSpacing: XS_TRACKING, color: muted, fontVariant: ["tabular-nums"] }}
+              >
+                {projectStatusCountsLine(status.counts)}
+              </Text>
+            </View>
+          ) : null
+        }
         renderSectionHeader={({ section }) => {
-          const { icon, text } = taskDisplayStatusAppearance(section.status, scheme);
           return (
-            <FoldHeader
-              icon={icon}
-              color={text}
-              label={PROJECT_TASK_DISPLAY_STATUS_LABELS[section.status]}
+            <FoldBandHeader
+              label={section.label}
               count={section.count}
-              noun="task"
+              noun={section.noun}
               open={section.open}
-              onToggle={() => toggle(section.status)}
+              onToggle={() => toggle(section.key)}
               trailing={
-                section.first || section.status === "triage" ? (
+                section.first || section.key === "triage" ? (
                   <View className="mr-1 flex-row items-center gap-1">
-                    {section.status === "triage" && toApprove.length > 0 ? (
-                      <Button
-                        size="sm"
-                        fullWidth={false}
-                        loading={approving}
-                        disabled={approving}
-                        leftIcon={<IconCheck size={14} color={EVA_THEME[scheme].primaryForeground} />}
-                        onPress={approveAll}
-                      >
+                    {section.key === "triage" && toApprove.length > 0 ? (
+                      <Button size="sm" variant="ghost" fullWidth={false} loading={approving} disabled={approving} onPress={approveAll}>
                         Approve all
                       </Button>
                     ) : null}
@@ -157,22 +191,19 @@ export function ProjectTasks({
             />
           );
         }}
-        ItemSeparatorComponent={TaskGap}
-        renderItem={({ item: { row, view } }) => (
-          <ProjectTaskRow
-            task={row}
-            view={view}
-            authorName={row.createdBy !== undefined ? authorNames.get(row.createdBy) : undefined}
-            notes={notesByTask.get(row._id)}
-            hasError={failedTaskIds.has(row._id)}
-            hasDraftComment={draftTaskIds.has(row._id)}
-            projectId={project._id}
-            projectNumId={project.numId}
-            homeRepoId={project.repoId}
-            reposById={reposById}
-            onLongPress={() => actions.openSheet(row)}
-          />
-        )}
+        renderItem={({ item }) =>
+          item.kind === "pr" ? (
+            <ProjectTaskPrRow task={item.row} />
+          ) : (
+            <ProjectTaskRow
+              task={item.row}
+              view={item.view}
+              line={lineFor(item.row, item.view)}
+              projectId={project._id}
+              onLongPress={() => actions.openSheet(item.row)}
+            />
+          )
+        }
         ListEmptyComponent={
           <EmptyState
             icon={IconLayoutList}
@@ -195,9 +226,4 @@ export function ProjectTasks({
       {actions.dialogs}
     </>
   );
-}
-
-/** The gap between compact task rows: half the quick-task card gap (`CardGap`). */
-function TaskGap() {
-  return <View className="h-1" />;
 }

@@ -1,0 +1,124 @@
+import { describe, expect, it } from "vitest";
+import {
+  projectStatusCountsLine,
+  projectTaskPrLine,
+  projectTaskPullRequests,
+  projectTaskSummaryLine,
+  type ProjectTaskView,
+  type SummarizableProjectTaskRow,
+} from "@eva/shared/projectView";
+
+// The project task list's plain-text lines, shared by the web and the phone.
+
+const view = (
+  displayStatus: ProjectTaskView["displayStatus"],
+  needsYou?: ProjectTaskView["needsYou"],
+): ProjectTaskView => ({
+  stage: "todo",
+  displayStatus,
+  needsYou,
+  waitingForCoordinator: false,
+});
+
+/** A typed row, so literals keep their union types. */
+const task = (row: SummarizableProjectTaskRow & { locked?: boolean }) => row;
+
+const none = {
+  notes: undefined,
+  failed: false,
+  authorName: undefined,
+  otherRepoLabel: undefined,
+};
+
+describe("projectTaskSummaryLine", () => {
+  it("names a Triage task's origin", () => {
+    const row = task({ numId: 904, status: "todo", origin: "feedback" });
+    expect(
+      projectTaskSummaryLine(row, view("triage", "approve"), {
+        ...none,
+        authorName: "Ana",
+      }),
+    ).toBe("#904 · Feedback from Ana");
+    expect(
+      projectTaskSummaryLine({ status: "todo" }, view("triage", "approve"), none),
+    ).toBe("Added without approval");
+  });
+
+  it("says why a Blocked task needs you, with its PR or its question", () => {
+    const row = task({
+      numId: 905,
+      status: "done",
+      prUrl: "https://github.com/acme/web/pull/9003",
+      prState: "open",
+    });
+    expect(projectTaskSummaryLine(row, view("blocked", "review"), none)).toBe(
+      "#905 · Needs you: review PR #9003",
+    );
+    expect(
+      projectTaskSummaryLine(row, view("blocked", "question"), {
+        ...none,
+        notes: { ask: "Which DB?", reports: [] },
+      }),
+    ).toBe("#905 · Asks: Which DB?");
+    expect(
+      projectTaskSummaryLine({ status: "in_progress" }, view("blocked", "failed"), none),
+    ).toBe("Failed twice");
+  });
+
+  it("adds the other repo, the phase and the report count", () => {
+    const row = task({ numId: 7, status: "todo", phaseLabel: "Phase 2" });
+    expect(
+      projectTaskSummaryLine(row, view("idle"), {
+        ...none,
+        otherRepoLabel: "api",
+        notes: { ask: undefined, reports: ["a", "b"] },
+      }),
+    ).toBe("#7 · Waiting for a free slot · api · Phase 2 · 2 reports");
+  });
+
+  it("says how an Archived task ended", () => {
+    expect(
+      projectTaskSummaryLine(
+        { status: "done", prUrl: "https://x/pull/1", prState: "merged" },
+        view("archived"),
+        none,
+      ),
+    ).toBe("Merged");
+    expect(
+      projectTaskSummaryLine({ status: "cancelled" }, view("archived"), none),
+    ).toBe("Cancelled");
+  });
+});
+
+describe("project task PRs and counts", () => {
+  it("lists the tasks with a PR, and reads each one as a line", () => {
+    const rows = [
+      task({ numId: 1, status: "done" }),
+      task({
+        numId: 2,
+        status: "done",
+        prUrl: "https://github.com/acme/web/pull/8357",
+        prState: "merged",
+      }),
+      task({ numId: 3, status: "done", prUrl: "https://x/y", locked: true }),
+    ];
+    const prs = projectTaskPullRequests(rows);
+    expect(prs.map((row) => row.numId)).toEqual([2]);
+    expect(projectTaskPrLine(prs[0])).toBe("#8357 · Merged · via #2");
+    expect(
+      projectTaskPrLine({ status: "done", prUrl: "https://gitlab.com/a/-/merge_requests/12" }),
+    ).toBe("12 · PR");
+  });
+
+  it("counts the non-empty statuses in list order", () => {
+    expect(
+      projectStatusCountsLine({
+        triage: 3,
+        working: 0,
+        blocked: 2,
+        idle: 1,
+        archived: 1,
+      }),
+    ).toBe("3 triage · 2 blocked · 1 idle · 1 archived");
+  });
+});
