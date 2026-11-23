@@ -204,6 +204,26 @@ async function upsertReadRow(
   await ctx.db.patch(row._id, { lastReadAt, repoId: entity.repoId });
 }
 
+/**
+ * The open chat is still on screen (every few minutes) or just left it.
+ * Moves only `lastVisitedAt`, so a recap measures the absence from when the
+ * user left, not from when they opened the chat: watching a long turn is
+ * not being away from it.
+ */
+export const touchVisit = authMutation({
+  args: { parentId: chatTurnEntityIdValidator },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
+    const row = await getReadRow(ctx.db, ctx.userId, args.parentId);
+    const now = Date.now();
+    if (row && now - (row.lastVisitedAt ?? 0) > VISIT_WRITE_INTERVAL_MS) {
+      await ctx.db.patch(row._id, { lastVisitedAt: now });
+    }
+    return null;
+  },
+});
+
 export const markRead = authMutation({
   args: { parentId: chatTurnEntityIdValidator },
   returns: v.null(),
@@ -224,7 +244,8 @@ export const markRead = authMutation({
         lastTurnFinishedAt: entity.lastTurnFinishedAt,
         now,
       });
-      // Throttled: the client marks on every open and every landed reply.
+      // Throttled: the client marks on every open and every landed reply,
+      // and `touchVisit` keeps it fresh while the chat stays on screen.
       if (now - (row.lastVisitedAt ?? 0) > VISIT_WRITE_INTERVAL_MS) {
         await ctx.db.patch(row._id, { lastVisitedAt: now });
       }
