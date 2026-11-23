@@ -177,23 +177,3 @@ export async function flushBackgroundShellQueue(): Promise<void> {
     flushInFlight = false;
   }
 }
-
-/** Test helper — reset module state between unit tests. */
-export function resetBackgroundShellsForTests(): void {
-  pendingBashToolUses.clear();
-  pendingKillShellUses.clear();
-  eventQueue.length = 0;
-  flushInFlight = false;
-  flushCooldownUntil = 0;
-}
-
-/** Test helper — expose the regex for unit coverage. */
-export function matchBackgroundShellId(resultText: string): string | null {
-  const match = BG_SHELL_ID_RE.exec(resultText);
-  return match?.[1] ?? null;
-}
-
-/** Test helper — pending queue length. */
-export function backgroundShellQueueLengthForTests(): number {
-  return eventQueue.length;
-}

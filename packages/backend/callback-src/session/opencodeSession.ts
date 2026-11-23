@@ -25,9 +25,6 @@ const store = createSessionStore({
   persistStateFile: OPENCODE_PERSIST_STATE_FILE,
   resumeField: "resumeSessionId",
   getActiveId: () => S.activeOpencodeSessionId,
-  setActiveId: (id) => {
-    S.activeOpencodeSessionId = id;
-  },
 });
 
 const readOpencodeSessionState = store.readSessionState;

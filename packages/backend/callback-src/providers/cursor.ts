@@ -24,7 +24,7 @@ import type { ProviderAdapter } from "./types.js";
  * `{exitCode, stdout, stderr, executionTime}`, edit value `{diffString}`);
  * plain payloads fall through to the shared multi-key probe.
  */
-export function probeCursorSdkToolResult(
+function probeCursorSdkToolResult(
   status: string,
   result: JsonValue | undefined,
 ): ToolCompleteResult | undefined {

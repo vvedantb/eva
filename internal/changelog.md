@@ -6,8 +6,15 @@ Date: 2026-11-23
 
 WHY: A recap started only when a reply finished while you were away, so reopening a session whose last reply you had seen showed nothing, however long you were gone.
 
-Architectural: `useChatReadState` now calls `markRead` on every open, not only when a reply is unread. `chatReads` rows gain `lastVisitedAt` (written at most once a minute). `maybeStartRecap` measures the absence from the later of the read and the visit: a missed turn after 30 minutes gives the "away" recap; nothing new after `RECAP_REVISIT_MS` (4 hours) gives a "full" ("Recap") one. One more mutation per chat open.
+Architectural: `useChatReadState` now calls `markRead` on every open, not only when a reply is unread. `chatReads` rows gain `lastVisitedAt` (written at most once a minute). `maybeStartRecap` measures the absence from the later of the read and the visit: a missed turn after 30 minutes gives the "away" recap; nothing new after `RECAP_REVISIT_MS` (4 hours) gives a "full" ("Recap") one. One more mutation per chat open. While a chat is on screen, `touchVisit` moves `lastVisitedAt` every 5 minutes and once on leaving, so watching a long turn no longer reads as being away (the old rule measured from the open or the last read, so a watched 30-minute turn showed "Since you've been gone").
 
+## Callback tests: pruned, repaired, type-checked, security gaps covered
+
+Date: 2026-11-23
+
+WHY: Devs found the tests low-value. An audit of `callback-src/tests` showed 81% sound, but duplicates, assertions that could not fail, test-only seams, and no tests on secret redaction or the media-upload guard.
+
+Architectural: Duplicate and vacuous tests are merged into one keeper per contract or deleted; weak assertions now fail when behaviour breaks (each new or repaired test was proven by a deliberate code break). New tests cover redaction of tool output and turn completions, the symlink/hard-link media guard, non-Claude `extractResultEvent`, session resume after restart, `enforceTurnLease` and the deposition fence. Test-only seams and dead code are removed (`fetchFn`/`env` on `ensureGithubToken`, `isRival`, `waitMs`, `buildTurnCompletion`, `resolveResumeId`, `setActiveId`, `stopBranchWatcher`, background-shell test helpers, null-lease branches). `typecheck:callback` now also type-checks `callback-src/tests` (`callback-src/tests/tsconfig.json`).
 ## Web: `globals.css` imports `@vvedantb/ui/tokens` with full colours
 
 Date: 2026-11-22
