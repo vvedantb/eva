@@ -63,6 +63,7 @@ test("codex sets toolUseId, file_change files, and failed isError", () => {
   expect(shell?.toolUseId).toBe("item_shell1");
   expect(shell?.output?.text).toContain("PASS");
   expect(shell?.output?.exitCode).toBe(0);
+  expect(shell?.status).toBe("complete");
 
   const files = S.accumulatedSteps.find((s) => s.toolUseId === "item_fc1");
   expect(files?.type).toBe("edit");

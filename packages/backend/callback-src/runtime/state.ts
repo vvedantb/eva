@@ -391,7 +391,3 @@ export function resetStateForTests(): void {
   callbackState.lastReportedUsageLimits = "";
   callbackState.lastReportedUsageLimitsAt = 0;
 }
-
-export function getPendingQuestionForTest(): string {
-  return callbackState.pendingQuestionData;
-}

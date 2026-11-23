@@ -21,32 +21,23 @@ describe("parseLinkedReposEnv", () => {
     expect(parseLinkedReposEnv(raw)).toEqual([validRepo, second]);
   });
 
-  test("returns an empty array when the env var is missing", () => {
-    expect(parseLinkedReposEnv(undefined)).toEqual([]);
-  });
-
-  test("returns an empty array when the env var is empty", () => {
-    expect(parseLinkedReposEnv("")).toEqual([]);
-  });
-
-  test("returns an empty array for invalid JSON", () => {
-    expect(parseLinkedReposEnv("{not json")).toEqual([]);
-  });
-
-  test("returns an empty array when the payload is not an array", () => {
-    expect(parseLinkedReposEnv(JSON.stringify(validRepo))).toEqual([]);
-  });
-
-  test("returns an empty array when an entry is missing a field", () => {
-    const { baseBranch: _baseBranch, ...missingBaseBranch } = validRepo;
-    expect(parseLinkedReposEnv(JSON.stringify([missingBaseBranch]))).toEqual(
-      [],
-    );
-  });
-
-  test("returns an empty array when a field has the wrong type", () => {
-    const wrongType = { ...validRepo, path: 42 };
-    expect(parseLinkedReposEnv(JSON.stringify([wrongType]))).toEqual([]);
+  const { baseBranch: _baseBranch, ...missingBaseBranch } = validRepo;
+  test.each([
+    ["the env var is missing", undefined],
+    ["the env var is empty", ""],
+    ["the JSON is invalid", "{not json"],
+    ["the payload is not an array", JSON.stringify(validRepo)],
+    ["an entry is missing a field", JSON.stringify([missingBaseBranch])],
+    [
+      "a field has the wrong type",
+      JSON.stringify([{ ...validRepo, path: 42 }]),
+    ],
+    [
+      "one entry of several is invalid",
+      JSON.stringify([validRepo, { ...validRepo, path: 42 }]),
+    ],
+  ])("returns an empty array when %s", (_case, raw) => {
+    expect(parseLinkedReposEnv(raw)).toEqual([]);
   });
 });
 
