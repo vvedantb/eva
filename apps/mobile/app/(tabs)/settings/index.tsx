@@ -1,6 +1,6 @@
 import { api } from "@eva/backend";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { useAuth, useUser } from "@clerk/clerk-expo";
+import { useAuth, useUser } from "@clerk/expo";
 import { Button } from "@vvedantb/native-ui/button";
 import { PageHeader, ScreenContainer, SettingsSection, SettingsToggleRow } from "@vvedantb/native-ui/layout";
 import { ConfirmDialog, Switch } from "@vvedantb/native-ui/primitives";

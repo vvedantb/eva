@@ -185,7 +185,7 @@ export function MultipleChoiceQuestion({
                   key={`${option.label}-${optIdx}`}
                   className={`relative shadow-none transition-[background-color,border-color,box-shadow] duration-[var(--motion-fast)] has-[button:focus-visible]:ring-2 has-[button:focus-visible]:ring-ring/35 ${
                     isSelected
-                      ? "border-primary bg-accent ring-1 ring-primary"
+                      ? "border-primary bg-accent-soft ring-1 ring-primary"
                       : "border-transparent bg-secondary hover:bg-muted"
                   } ${isLoading ? "pointer-events-none opacity-50" : ""}`}
                 >
@@ -234,7 +234,7 @@ export function MultipleChoiceQuestion({
             <Card
               className={`relative shadow-none transition-[background-color,border-color,box-shadow] duration-[var(--motion-fast)] has-[button:focus-visible]:ring-2 has-[button:focus-visible]:ring-ring/35 ${
                 otherActive[currentStep]
-                  ? "border-primary bg-accent ring-1 ring-primary"
+                  ? "border-primary bg-accent-soft ring-1 ring-primary"
                   : "border-transparent bg-secondary hover:bg-muted"
               } ${isLoading ? "pointer-events-none opacity-50" : ""}`}
             >

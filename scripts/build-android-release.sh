@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Build a signed, sideloadable Eva Android release APK (arm64-v8a + x86_64,
-# embedded JS), then write release.json next to it. No EAS.
+# Build a signed, sideloadable Eva Android release APK (arm64-v8a only, since
+# @vvedantb/config 0.12.0 dropped x86_64 for release APKs; embedded JS), then
+# write release.json next to it. No EAS.
 #
 # Thin wrapper over the shared vvedantb-android-release bin, driven by
 # scripts/android-release.config.json. The build logic lives in @vvedantb/config;
@@ -14,3 +15,4 @@ set -euo pipefail
 # from @vvedantb/config, so install first.
 pnpm install --frozen-lockfile --filter '@eva/mobile...' --filter '{.}'
 exec pnpm exec vvedantb-android-release --config scripts/android-release.config.json
+

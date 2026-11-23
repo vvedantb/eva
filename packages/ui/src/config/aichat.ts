@@ -68,7 +68,7 @@ export const aichatConfig = {
       // than a phone-width composer: wrap instead of squashing.
       footer: "justify-between gap-1 max-sm:flex-wrap",
       submit: "rounded-full",
-      tabItem: "flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent",
+      tabItem: "flex items-center gap-2 px-3 py-2 text-xs hover:bg-accent-soft",
     },
     submitIcons: {
       send: createElement(IconArrowUp, { className: "size-4" }),
@@ -83,7 +83,7 @@ export const aichatConfig = {
       createElement(ProviderIcon, { provider, size: 14 }),
     classes: {
       trigger:
-        "motion-press rounded-lg p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground active:scale-[0.92] disabled:opacity-50",
+        "motion-press rounded-lg p-1.5 text-muted-foreground hover:bg-accent-soft hover:text-foreground active:scale-[0.92] disabled:opacity-50",
     },
   },
   TraitsPanel: {
@@ -138,8 +138,8 @@ export const aichatConfig = {
       item: {
         grid: "size-24 overflow-hidden rounded-surface",
         inline:
-          "flex h-8 cursor-pointer select-none items-center gap-1.5 rounded-surface border border-border px-1.5 font-medium text-sm transition-colors hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
-        list: "flex w-full items-center gap-3 border p-3 rounded-surface hover:bg-accent/50",
+          "flex h-8 cursor-pointer select-none items-center gap-1.5 rounded-surface border border-border px-1.5 font-medium text-sm transition-colors hover:bg-accent-soft hover:text-accent-soft-foreground dark:hover:bg-accent-soft/50",
+        list: "flex w-full items-center gap-3 border p-3 rounded-surface hover:bg-accent-soft/50",
       },
       preview: {
         grid: "size-full bg-muted",

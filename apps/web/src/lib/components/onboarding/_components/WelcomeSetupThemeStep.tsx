@@ -1,4 +1,4 @@
-import { AppearanceSection } from "@/lib/components/theme/_components/AppearanceSection";
+import { ThemeModePicker } from "@vvedantb/ui";
 import { AccentColorSection } from "@/lib/components/theme/_components/AccentColorSection";
 import { SectionLabel } from "@/lib/components/theme/_components/SectionLabel";
 import type { AccentColor } from "@/lib/contexts/ThemeContext";
@@ -24,10 +24,10 @@ export function WelcomeSetupThemeStep({
       </p>
       <section>
         <SectionLabel>Appearance</SectionLabel>
-        <AppearanceSection
+        <ThemeModePicker
           compact
-          currentMode={currentMode}
-          onModeChange={onModeChange}
+          value={currentMode}
+          onChange={onModeChange}
         />
       </section>
       <section>

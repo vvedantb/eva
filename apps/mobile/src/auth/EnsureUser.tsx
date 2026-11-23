@@ -1,5 +1,5 @@
 import { api } from "@eva/backend";
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth } from "@clerk/expo";
 import { IconAlertTriangle } from "@tabler/icons-react-native";
 import { Button } from "@vvedantb/native-ui/button";
 import { CenteredSpinner, EmptyState } from "@vvedantb/native-ui/primitives";
@@ -41,8 +41,8 @@ function describe<Caught>(caught: Caught): { code: string; message: string } {
  * spinner without end.
  *
  * Note: native-ui `AuthProviders` is `ClerkProvider` > `ConvexProviderWithClerk`
- * with its default `useAuth` from `@clerk/clerk-expo`. Mobile and native-ui
- * resolve one copy of `@clerk/clerk-expo` (one entry in `node_modules/.pnpm`,
+ * with its default `useAuth` from `@clerk/expo`. Mobile and native-ui
+ * resolve one copy of `@clerk/expo` (one entry in `node_modules/.pnpm`,
  * checked 2026-11-09). A second copy would leave Convex without Clerk
  * auth, so `isAuthenticated` below would stay false.
  */

@@ -128,7 +128,7 @@ export function SessionTabsOverflowMenu({
                             }
                             className={cn(
                               "cursor-pointer",
-                              isSelected && "bg-accent",
+                              isSelected && "bg-accent-soft",
                             )}
                           >
                             <span className="truncate">{session.title}</span>

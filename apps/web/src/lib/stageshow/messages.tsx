@@ -181,7 +181,7 @@ export function Bubble({ avatar, from, typing = false, tail, source, tapback, cl
     const src = stage.querySelector<HTMLElement>(`[data-target="${source}"]`) ?? stage.querySelector<HTMLElement>(source)
     const text = el.querySelector<HTMLElement>('.ss-bubble__text')
     if (!src || !text) return
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || el.closest('[data-still]')) return
+    if (el.closest('[data-still]')) return
     // Measure where it rests, not where an earlier run already moved it
     el.style.transition = 'none'
     el.style.left = el.style.top = '0px'

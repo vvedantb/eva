@@ -10,9 +10,7 @@ import type {
   FontFamily,
   LetterSpacing,
 } from "@/lib/contexts/ThemeContext";
-import { Spinner, SettingsSection } from "@vvedantb/ui";
-import { type ThemeMode } from "@/lib/hooks/useThemeMode";
-import { AppearanceSection } from "./_components/AppearanceSection";
+import { Spinner, SettingsSection, ThemeModePicker } from "@vvedantb/ui";
 import { PresetsSection } from "./_components/PresetsSection";
 import { AccentColorSection } from "./_components/AccentColorSection";
 import { TypographySection } from "./_components/TypographySection";
@@ -24,10 +22,6 @@ export function ThemeSettingsClient() {
 
   const resolved = resolveCustomTheme(customTheme);
   const { accentColor, radius, fontFamily, letterSpacing } = resolved;
-
-  const handleModeChange = (mode: ThemeMode) => {
-    setTheme(mode);
-  };
 
   const handleAccentChange = (color: AccentColor) => {
     setCustomTheme({ ...customTheme, accentColor: color });
@@ -65,10 +59,7 @@ export function ThemeSettingsClient() {
         title="Appearance"
         bodyClassName="max-w-2xl"
       >
-        <AppearanceSection
-          currentMode={theme}
-          onModeChange={handleModeChange}
-        />
+        <ThemeModePicker value={theme} onChange={setTheme} />
       </SettingsSection>
 
       <SettingsSection

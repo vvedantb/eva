@@ -161,7 +161,7 @@
   height: 16px;
   border-radius: 4px;
   background: var(--ss-accent);
-  color: rgb(var(--primary-foreground));
+  color: var(--accent-foreground);
   opacity: 0;
   scale: 0.8;
   transition: opacity 0.15s ease, scale 0.15s ease;
@@ -242,7 +242,7 @@
   padding: 0 12px;
   border-radius: var(--ss-radius-md);
   background: var(--ss-accent);
-  color: rgb(var(--primary-foreground));
+  color: var(--accent-foreground);
   font-size: 12px;
   font-weight: 500;
 }

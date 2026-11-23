@@ -23,11 +23,11 @@ const BLUE_MARK = "0,256 217,275 256,449 295,275 512,256";
  */
 const TOASTER_STYLE: CSSProperties & Record<`--${string}`, string> = {
   fontFamily: "inherit",
-  "--normal-bg": "rgb(var(--card))",
-  "--normal-border": "rgb(var(--border))",
-  "--normal-text": "rgb(var(--foreground))",
-  "--normal-bg-hover": "rgb(var(--muted))",
-  "--normal-border-hover": "rgb(var(--border))",
+  "--normal-bg": "var(--surface-card)",
+  "--normal-border": "var(--border)",
+  "--normal-text": "var(--foreground)",
+  "--normal-bg-hover": "var(--surface-secondary)",
+  "--normal-border-hover": "var(--border)",
 };
 
 export const foundationsConfig = {
@@ -57,7 +57,7 @@ export const foundationsConfig = {
     labelStyle: {
       // Eva tokens are `R G B` triplets — wrap with rgb() for gradients.
       backgroundImage:
-        "linear-gradient(90deg, rgb(var(--muted-foreground)) 35%, rgb(var(--foreground)) 50%, rgb(var(--muted-foreground)) 65%)",
+        "linear-gradient(90deg, var(--muted) 35%, var(--foreground) 50%, var(--muted) 65%)",
       backgroundSize: "200% 100%",
     },
   },

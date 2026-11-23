@@ -239,7 +239,7 @@ export function ProjectChatTab({
   if (!hasStarted && !isLocked) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-4 sm:p-8 text-center">
-        <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center mb-4">
+        <div className="w-16 h-16 rounded-full bg-accent-soft flex items-center justify-center mb-4">
           <IconPlayerPlay size={32} className="text-primary" />
         </div>
         <h3 className="text-lg font-semibold text-foreground mb-2">
