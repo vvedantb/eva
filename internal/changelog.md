@@ -1,5 +1,13 @@
 # Changelog
 
+## Mobile: smaller release APK (R8, shrink resources, arm64 only)
+
+Date: 2026-11-24
+
+WHY: The release APK was about 62 MB. About 50 MB of the contents was unminified dex, and a large part of `res/` was unused icon fonts.
+
+Architectural: `expo-build-properties` in `app.config.ts` sets `buildArchs: ["arm64-v8a"]`, `enableMinifyInReleaseBuilds` and `enableShrinkResourcesInReleaseBuilds`, with keep rules in `PROGUARD_RULES` for Hermes, React Native, Expo modules, Reanimated, worklets and Clerk. `x86_64` stays out because CI never runs the release APK on an emulator. The first release with R8 needs a device smoke test.
+
 ## Web: fix main CI, React Compiler bailout in KanbanBoard
 
 Date: 2026-11-24
@@ -7,6 +15,7 @@ Date: 2026-11-24
 WHY: `compiler-check` failed because React Compiler cannot compile a `finally` clause, and the kanban drop glide added one.
 
 Architectural: `KanbanBoard.handleDragEnd` clears `droppedId` once after the try/catch (the catch swallows), so it runs on success and error with no `finally`.
+
 
 ## Web: review tabs, logs views, sidebar rows, kanban cards and stats load motion
 
@@ -28,6 +37,7 @@ Date: 2026-11-24
 WHY: Switching tabs in the sandbox panel (sessions, quick tasks, projects) played a small scale settle. It now slides the content in from the side of the picked tab, matching the tab-content and rail slides.
 
 Architectural: `@vvedantb/ui` 0.63.0 replaces `dockNudge` with `dockSwitch(panel, fromTab, toTab)`. `SidePanelTabs.Frame` calls it on a tab switch: each card child slides 24px with a fade over 240 ms, on the axis between the old and new tab (vertical on the rail, horizontal on the phone strip). Enter only: the panes are keep-alive (`hidden` / `<Activity>`), so the old pane cannot leave without remounting iframes and terminals. The card dispatches `DockMotionEvent`, so the preview iframe host steps aside during the slide.
+
 
 ## Web: side-panel links slide the page like the rail
 
