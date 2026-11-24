@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: fix main CI, React Compiler bailout in KanbanBoard
+
+Date: 2026-11-24
+
+WHY: `compiler-check` failed because React Compiler cannot compile a `finally` clause, and the kanban drop glide added one.
+
+Architectural: `KanbanBoard.handleDragEnd` clears `droppedId` once after the try/catch (the catch swallows), so it runs on success and error with no `finally`.
+
 ## Web: review tabs, logs views, sidebar rows, kanban cards and stats load motion
 
 Date: 2026-11-24
