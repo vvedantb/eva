@@ -16,7 +16,8 @@ import { ProjectTaskListPanel } from "./ProjectTaskListPanel";
 import { useProjectTaskStatus } from "./useProjectStatus";
 
 /**
- * The coordinator rail's Tasks tab: the title with "+", a thin progress bar
+ * The coordinator rail's Tasks tab: the title with "+" (a new task, to Triage
+ * unless "Start now"), a thin progress bar
  * and the counts as one muted line, then the tasks grouped Triage, Working,
  * Blocked, Idle, Archived, and their Pull requests. A row opens the task in
  * place of the coordinator.

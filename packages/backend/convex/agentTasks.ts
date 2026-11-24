@@ -16,7 +16,6 @@ export {
   restore,
   removeAttachment,
   createQuickTask,
-  createFeedbackTask,
   createQuickTasksBatch,
   assignToProject,
 } from "./_agentTasks/mutations";

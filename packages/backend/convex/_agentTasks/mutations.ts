@@ -1,5 +1,5 @@
 import { v, type ObjectType } from "convex/values";
-import type { Doc, Id } from "../_generated/dataModel";
+import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import {
@@ -340,14 +340,13 @@ const createQuickTaskArgs = {
 /**
  * Creates one `todo` task, in a project when `projectId` is set (next
  * `taskNumber`; the repo may be any the user can access).
- * `origin` marks why the task exists. The one insert for `createQuickTask`,
- * `createFeedbackTask` and the coordinator's tasks (`_projects/batches.ts`).
+ * The one insert for `createQuickTask` and the coordinator's tasks
+ * (`_projects/batches.ts`).
  */
 export async function createTodoTask(
   ctx: MutationCtx & { userId: Id<"users"> },
   args: ObjectType<typeof createQuickTaskArgs>,
   options: {
-    origin?: Doc<"agentTasks">["origin"];
     /** A project task is approved at creation: the scheduler may start it. */
     approved: boolean;
   },
@@ -399,7 +398,6 @@ export async function createTodoTask(
     assignedTo: args.assignedTo,
     priority: args.priority,
     attachmentStorageIds: args.attachmentStorageIds,
-    origin: options.origin,
     phaseLabel:
       args.projectId !== undefined ? args.phaseLabel?.trim() || undefined : undefined,
     approvedAt:
@@ -448,49 +446,6 @@ export const createQuickTask = authMutation({
   returns: v.id("agentTasks"),
   handler: (ctx, args) =>
     createTodoTask(ctx, args, { approved: args.approved !== false }),
-});
-
-/** Longest title a feedback task takes from the first line of its text. */
-const FEEDBACK_TITLE_MAX = 80;
-
-/**
- * Feedback on a project from anyone with repo access: a normal `todo` task in
- * the project's home repo, marked `origin: "feedback"`. It is not approved,
- * so it waits in Triage until a person approves it; the coordinator sees it
- * on its next turn.
- */
-export const createFeedbackTask = authMutation({
-  args: {
-    projectId: v.id("projects"),
-    text: v.string(),
-    attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-  },
-  returns: v.id("agentTasks"),
-  handler: async (ctx, args) => {
-    const text = args.text.trim();
-    if (!text) throw new Error("Write your feedback first");
-    const project = await getProjectWithAccess(
-      ctx.db,
-      args.projectId,
-      ctx.userId,
-    );
-    const firstLine = text.split("\n")[0]?.trim() ?? text;
-    const title =
-      firstLine.length > FEEDBACK_TITLE_MAX
-        ? `${firstLine.slice(0, FEEDBACK_TITLE_MAX - 1)}…`
-        : firstLine;
-    return createTodoTask(
-      ctx,
-      {
-        repoId: project.repoId,
-        projectId: project._id,
-        title,
-        description: text,
-        attachmentStorageIds: args.attachmentStorageIds,
-      },
-      { origin: "feedback", approved: false },
-    );
-  },
 });
 
 /** Creates multiple tasks at once for a given repo. */

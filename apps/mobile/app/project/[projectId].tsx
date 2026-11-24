@@ -36,8 +36,8 @@ type Tab = "overview" | "coordinator" | "documents";
  * the project's task list (`ProjectTasks`); the coordinator chat itself is
  * the phone chat screen (`/chat/<projectId>`), as embedding it would fork
  * the chat screen: "Chat" in the bottom bar opens it, with the web unread
- * dot; a project has no closed state, so it always shows. "Feedback"
- * beside it files a feedback task into Triage, as the web header. Outside
+ * dot; a project has no closed state, so it always shows. The task list's
+ * "+" adds a task to Triage, or starts it now. Outside
  * planning the "…" sheet is led by the web's sandbox actions
  * (`useProjectGitActions`); the coordinator starts approved tasks. Not here
  * from the web: the sandbox preview, files and review panes.
@@ -76,7 +76,6 @@ export default function ProjectScreen() {
   const planning = isProjectPlanning(project.phase);
   // Only an older project still planning, with an interview or a plan to show, keeps the Plan view.
   const showPlan = planning && (project.conversationHistory.length > 0 || project.generatedSpec !== undefined);
-  const openFeedback = () => router.push({ pathname: "/project/feedback", params: { projectId: project._id, repo: repo._id } });
   return (
     <Screen
       title={project.title}
@@ -106,7 +105,7 @@ export default function ProjectScreen() {
         users={users}
         showPlan={showPlan}
       />
-      {showPlan ? null : <ProjectDock project={project} onFeedback={openFeedback} />}
+      {showPlan ? null : <ProjectDock project={project} />}
       {actions.dialogs}
       {git.dialogs}
     </Screen>
@@ -162,11 +161,8 @@ function Screen({ title, onBack, headerRight, children }: { title: string; onBac
 
 type Project = NonNullable<FunctionReturnType<typeof api.projects.get>>;
 
-/**
- * The bottom bar: "Chat" (the coordinator chat, with the unread dot while a
- * reply waits), then "Feedback".
- */
-function ProjectDock({ project, onFeedback }: { project: Project; onFeedback: () => void }) {
+/** The bottom bar: "Chat" (the coordinator chat, with the unread dot while a reply waits). */
+function ProjectDock({ project }: { project: Project }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const theme = EVA_THEME[useScheme()];
@@ -189,12 +185,6 @@ function ProjectDock({ project, onFeedback }: { project: Project; onFeedback: ()
         {unread ? (
           <View pointerEvents="none" className="absolute right-3 top-3 size-1.5 rounded-full" style={{ backgroundColor: theme.primary }} />
         ) : null}
-      </View>
-      {/* The web header "Feedback": files a feedback task into Triage. */}
-      <View className="min-w-0 flex-1">
-        <Button leftIcon={<IconMessage size={16} color={theme.primaryForeground} />} onPress={onFeedback}>
-          Feedback
-        </Button>
       </View>
     </View>
   );

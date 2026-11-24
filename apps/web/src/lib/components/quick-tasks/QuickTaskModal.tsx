@@ -6,6 +6,7 @@ import {
   DialogContent,
   DialogFooter,
   Button,
+  Checkbox,
   Input,
   Spinner,
   Popover,
@@ -619,6 +620,8 @@ export function QuickTaskModal({
   );
   const [tagSearch, setTagSearch] = useState("");
   const [priority, setPriority] = useState<Priority | undefined>(undefined);
+  // A project task waits in Triage unless the person starts it now.
+  const [startNow, setStartNow] = useState(false);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
 
@@ -689,6 +692,7 @@ export function QuickTaskModal({
     setSelectedTags([]);
     setTagSearch("");
     setPriority(undefined);
+    setStartNow(false);
     setHydratedDraftId(null);
     attachments.reset();
     readiness.reset();
@@ -742,6 +746,7 @@ export function QuickTaskModal({
             tags: taskTags,
             assignedTo,
             attachmentStorageIds: taskAttachmentIds,
+            approved: startNow,
           }),
           "Couldn't create task",
           "task-create",
@@ -761,6 +766,7 @@ export function QuickTaskModal({
             assignedTo,
             priority,
             attachmentStorageIds: taskAttachmentIds,
+            approved: startNow,
           }),
           "Couldn't create task",
           "task-create",
@@ -998,7 +1004,16 @@ export function QuickTaskModal({
                 handleDeleteDraft={handleDeleteDraft}
               />
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              {selectedProjectId ? (
+                <label className="mr-1 flex items-center gap-2 text-sm text-muted-foreground">
+                  <Checkbox
+                    checked={startNow}
+                    onCheckedChange={(checked) => setStartNow(checked === true)}
+                  />
+                  Start now
+                </label>
+              ) : null}
               <Button variant="secondary" onClick={handleClose}>
                 Cancel
               </Button>

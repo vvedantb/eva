@@ -47,8 +47,8 @@ const PULL_REQUESTS = "pull_requests";
  * (`projectTaskStatusSections`; Archived starts folded), and the tasks'
  * Pull requests. Rows are flat (`ProjectTaskRow`, `ProjectTaskPrRow`).
  * Triage carries "Approve all" (every todo task nobody approved yet). The
- * first group carries "+" (a new task), or the empty state does when there
- * are no tasks.
+ * first group carries "+" (a new task, to Triage unless "Start now"), or the
+ * empty state does when there are no tasks.
  */
 export function ProjectTasks({
   project,
@@ -76,11 +76,11 @@ export function ProjectTasks({
   // Sections the user folded or unfolded, against each one's `defaultOpen`.
   const [toggled, toggle] = toggledProjectTaskStatuses.useSet("all");
   const sections = tasks === undefined ? [] : projectTaskStatusSections(tasks, failedTaskIds);
-  // One lookup for the people who wrote the Triage feedback tasks.
+  // One lookup for the people who added the Triage tasks ("Added by <name>").
   const authorIds = [
     ...new Set(
       (sections.find((section) => section.status === "triage")?.tasks ?? []).flatMap(({ row }) =>
-        row.origin === "feedback" && row.createdBy !== undefined ? [row.createdBy] : [],
+        row.createdBy !== undefined ? [row.createdBy] : [],
       ),
     ),
   ];

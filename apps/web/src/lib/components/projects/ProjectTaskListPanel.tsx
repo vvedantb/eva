@@ -51,7 +51,7 @@ interface RowContext {
   basePath: string;
   homeRepoId: Id<"githubRepos">;
   reposById: ReadonlyMap<string, RepoAppMarkRepo>;
-  /** Feedback authors' first names, by user id (the Triage origin line). */
+  /** Who added each Triage task, first names by user id ("Added by <name>"). */
   authorNames: ReadonlyMap<string, string>;
 }
 
@@ -159,18 +159,18 @@ export function ProjectTaskListPanel({
   const sections = projectTaskStatusSections(tasks, failedTaskIds);
   const pullRequests = projectTaskPullRequests(tasks);
   const toApprove = unapprovedTodoTaskIds(tasks);
-  const feedbackAuthorIds = [
+  const triageAuthorIds = [
     ...new Set(
-      tasks.flatMap((task) =>
-        task.origin === "feedback" && task.createdBy !== undefined
-          ? [task.createdBy]
-          : [],
+      (
+        sections.find((section) => section.status === "triage")?.tasks ?? []
+      ).flatMap(({ row }) =>
+        row.createdBy !== undefined ? [row.createdBy] : [],
       ),
     ),
   ];
   const authors = useQuery(
     api.users.getMany,
-    feedbackAuthorIds.length > 0 ? { ids: feedbackAuthorIds } : "skip",
+    triageAuthorIds.length > 0 ? { ids: triageAuthorIds } : "skip",
   );
 
   const approveAll = async () => {
@@ -223,8 +223,8 @@ export function ProjectTaskListPanel({
     authorNames: firstNameByUserId(authors ?? []),
   };
 
-  // Feedback and tasks added without approval wait in Triage: its header
-  // approves them all.
+  // Tasks added without "Start now" wait in Triage: its header approves them
+  // all.
   const triageActions =
     toApprove.length > 0 ? (
       <Button

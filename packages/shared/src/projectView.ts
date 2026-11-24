@@ -269,14 +269,10 @@ export function unapprovedTodoTaskIds<Row extends ProjectTaskRow>(
   return rows.filter(isUnapprovedTodoTask).map((row) => row._id);
 }
 
-/** A Triage row's origin when it is not feedback: added without approval. */
-export const ADDED_WITHOUT_APPROVAL_LABEL = "Added without approval";
-
 /** What `projectTaskSummaryLine` reads of an `agentTasks.listByProject` row. */
 export interface SummarizableProjectTaskRow {
   numId?: number;
   status: Doc<"agentTasks">["status"];
-  origin?: Doc<"agentTasks">["origin"];
   phaseLabel?: string;
   prUrl?: string;
   prState?: Doc<"agentTasks">["prState"];
@@ -297,8 +293,9 @@ function projectTaskReason(
 ): string {
   switch (view.displayStatus) {
     case "triage":
-      if (row.origin !== "feedback") return ADDED_WITHOUT_APPROVAL_LABEL;
-      return facts.authorName ? `Feedback from ${facts.authorName}` : "Feedback";
+      return facts.authorName
+        ? `Added by ${facts.authorName}`
+        : NEEDS_YOU_LABELS.approve;
     case "working":
       return view.waitingForCoordinator
         ? WAITING_FOR_COORDINATOR_LABEL
@@ -322,7 +319,7 @@ function projectTaskReason(
 /**
  * A project task row's second line, one plain sentence for web and phone:
  * "#904 · Needs you: review PR #9003 · api · Phase 2 · 1 report". The task
- * number, the one reason for its display status (a Triage task's origin, a
+ * number, the one reason for its display status (who added a Triage task, a
  * Blocked task's needs-you reason or open question, Idle's wait, Archived's
  * end), the repo when it is not the project's (`otherRepoLabel`), the phase,
  * and the open report count.
@@ -333,7 +330,7 @@ export function projectTaskSummaryLine(
   extra: {
     notes: ProjectTaskNotes | undefined;
     failed: boolean;
-    /** A feedback task's author, by first name, once known. */
+    /** Who added a Triage task, by first name, once known. */
     authorName: string | undefined;
     /** Set only when the task's repo differs from the project's home repo. */
     otherRepoLabel: string | undefined;

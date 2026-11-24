@@ -31,17 +31,17 @@ const none = {
 };
 
 describe("projectTaskSummaryLine", () => {
-  it("names a Triage task's origin", () => {
-    const row = task({ numId: 904, status: "todo", origin: "feedback" });
+  it("names who added a Triage task", () => {
+    const row = task({ numId: 904, status: "todo" });
     expect(
       projectTaskSummaryLine(row, view("triage", "approve"), {
         ...none,
         authorName: "Ana",
       }),
-    ).toBe("#904 · Feedback from Ana");
+    ).toBe("#904 · Added by Ana");
     expect(
       projectTaskSummaryLine({ status: "todo" }, view("triage", "approve"), none),
-    ).toBe("Added without approval");
+    ).toBe("Needs approval");
   });
 
   it("says why a Blocked task needs you, with its PR or its question", () => {

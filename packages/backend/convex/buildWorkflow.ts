@@ -28,7 +28,7 @@ import {
 
 // A project's child tasks run in parallel, each like a quick task, started by
 // the scheduler (`_projects/scheduler.ts`) once approved: the coordinator's
-// at creation, feedback once a person approves it from Triage. There
+// at creation, a person's once approved (at creation or from Triage). There
 // is no project build to start, schedule or cancel any more; what is left of
 // it below only winds down builds stored before the scheduler.
 

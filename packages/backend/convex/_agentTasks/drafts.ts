@@ -146,6 +146,8 @@ export const activateDraft = authMutation({
     tags: v.optional(v.array(v.string())),
     assignedTo: v.optional(v.id("users")),
     attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
+    /** As `createQuickTask`: a project task is approved unless this is false. */
+    approved: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -159,6 +161,7 @@ export const activateDraft = authMutation({
       throw new Error("Draft not found");
 
     const repo = task.repoId ? await ctx.db.get(task.repoId) : null;
+    const approved = task.projectId !== undefined && args.approved !== false;
 
     const providerAccountId =
       args.providerAccountId === undefined
@@ -180,8 +183,7 @@ export const activateDraft = authMutation({
       use1mContext: args.use1mContext,
       fastMode: args.fastMode,
       status: "todo",
-      // A person filed it by hand: a project task is approved to run.
-      approvedAt: task.projectId !== undefined ? Date.now() : undefined,
+      approvedAt: approved ? Date.now() : undefined,
       updatedAt: Date.now(),
       tags: normalizeTaskTags(args.tags),
       assignedTo: args.assignedTo,
@@ -209,6 +211,14 @@ export const activateDraft = authMutation({
           "assigned",
         ),
       });
+    }
+    // An approved project task may start: the scheduler picks it up.
+    if (task.projectId && approved) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.buildWorkflow.scheduleReadyTasks,
+        { projectId: task.projectId },
+      );
     }
     if (task.projectId) {
       await recomputeProjectPhase(ctx, task.projectId);

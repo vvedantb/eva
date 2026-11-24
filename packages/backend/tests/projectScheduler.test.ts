@@ -15,7 +15,7 @@ import { COORDINATOR_VCPUS } from "../convex/_sandbox/provider";
 /**
  * The project as an orchestrator, through the real Convex functions: the
  * scheduler and its cap, the coordinator's tasks (start at once) against
- * feedback (waits in Triage), the coordinator's one retry and its wake-ups,
+ * a person's unapproved task (waits in Triage), the coordinator's one retry and its wake-ups,
  * the repos the coordinator may use, locked rows, the roll-up of docs, artifacts and
  * log, the copy of the project's model and account, the coordinator's
  * delete rule, project delete, and the coordinator's sandbox.
@@ -234,7 +234,7 @@ describe("project scheduler", () => {
 
 describe("who starts project tasks", () => {
   test(
-    "the coordinator's tasks are approved and the scheduler runs at once; feedback waits in Triage",
+    "the coordinator's tasks are approved and the scheduler runs at once; a person's waits in Triage",
     async () => {
       const f = await fixture(0);
       const created = await f.t.mutation(
@@ -261,23 +261,25 @@ describe("who starts project tasks", () => {
         "in_progress",
       ]);
 
-      const feedbackId = await f.asUser.mutation(api.agentTasks.createFeedbackTask, {
+      // "+" without "Start now": not approved.
+      const triageId = await f.asUser.mutation(api.agentTasks.createQuickTask, {
+        repoId: f.repoId,
         projectId: f.projectId,
-        text: "The button is hard to find",
+        title: "The button is hard to find",
+        approved: false,
       });
       await schedule(f);
-      const feedback = await taskDoc(f, feedbackId);
-      expect(feedback.status).toBe("todo");
-      expect(feedback.approvedAt).toBeUndefined();
-      expect(feedback.origin).toBe("feedback");
-      expect(projectTaskDisplayStatus(await factsOf(f, feedbackId))).toBe("triage");
+      const triaged = await taskDoc(f, triageId);
+      expect(triaged.status).toBe("todo");
+      expect(triaged.approvedAt).toBeUndefined();
+      expect(projectTaskDisplayStatus(await factsOf(f, triageId))).toBe("triage");
 
       // A person approves it from Triage: it starts.
       await f.asUser.mutation(api.buildWorkflow.approveProjectTasks, {
         projectId: f.projectId,
-        taskIds: [feedbackId],
+        taskIds: [triageId],
       });
-      expect((await taskDoc(f, feedbackId)).status).toBe("in_progress");
+      expect((await taskDoc(f, triageId)).status).toBe("in_progress");
     },
     TIMEOUT_MS,
   );

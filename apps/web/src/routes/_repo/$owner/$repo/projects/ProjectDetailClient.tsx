@@ -5,11 +5,7 @@ import { useChatUnread } from "@/lib/components/sandbox/useChatUnread";
 import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api } from "@eva/backend";
-import { Button, CenteredSpinner } from "@vvedantb/ui";
-import { IconMessage } from "@tabler/icons-react";
-import { ProjectStageBadge } from "@/lib/components/projects/ProjectPhaseBadge";
-import { ProjectFeedbackModal } from "@/lib/components/projects/ProjectFeedbackModal";
-import { useProjectTaskStatus } from "@/lib/components/projects/useProjectStatus";
+import { CenteredSpinner } from "@vvedantb/ui";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
@@ -64,11 +60,9 @@ export function ProjectDetailClient({
   const sandboxRailWidthPx = useSandboxRailWidthPx();
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
-  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
 
   const project = useQuery(api.projects.get, { id: projectId });
   useEntityDocumentTitle(project?.title);
-  const { status: projectStatus } = useProjectTaskStatus(projectId, repo._id);
   const streaming = useQuery(api.streaming.get, { entityId: projectId });
 
   const sandbox = useProjectSandbox(projectId);
@@ -183,28 +177,19 @@ export function ProjectDetailClient({
       fillHeight
       childPadding={false}
       headerRight={
-        <div className="flex max-sm:min-w-0 items-center gap-1.5 sm:gap-2">
-          {projectStatus ? (
-            <ProjectStageBadge stage={projectStatus.stage} />
-          ) : null}
-          <Button size="sm" onClick={() => setIsFeedbackOpen(true)}>
-            <IconMessage size={16} aria-hidden />
-            Feedback
-          </Button>
-          {!isDraftOrFinalized ? (
-            <ProjectDetailHeaderActions
-              projectId={projectId}
-              project={project}
-              repoId={repo._id}
-              sandbox={sandbox}
-              chatId={chatId}
-              chatTurnOpen={chatTurnOpen}
-              hasPlanContext={hasPlanContext}
-              setShowPlanModal={setShowPlanModal}
-              setShowChatModal={setShowChatModal}
-            />
-          ) : null}
-        </div>
+        isDraftOrFinalized ? null : (
+          <ProjectDetailHeaderActions
+            projectId={projectId}
+            project={project}
+            repoId={repo._id}
+            sandbox={sandbox}
+            chatId={chatId}
+            chatTurnOpen={chatTurnOpen}
+            hasPlanContext={hasPlanContext}
+            setShowPlanModal={setShowPlanModal}
+            setShowChatModal={setShowChatModal}
+          />
+        )
       }
     >
       <ProjectDetailMainContent
@@ -245,12 +230,6 @@ export function ProjectDetailClient({
           onOpenChange={setShowPlanModal}
         />
       )}
-
-      <ProjectFeedbackModal
-        projectId={projectId}
-        isOpen={isFeedbackOpen}
-        onClose={() => setIsFeedbackOpen(false)}
-      />
 
       <ProjectInterviewHistoryDialog
         conversationHistory={project.conversationHistory}

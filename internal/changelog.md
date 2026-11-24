@@ -1,5 +1,11 @@
 # Changelog
 
+## Projects: "+" replaces Feedback; no header status badge
+
+Date: 2026-11-24
+
+The project header loses its status badge and Feedback button (web and phone; `agentTasks.createFeedbackTask` and the phone feedback screen are gone); a project task added with "+" waits in Triage ("Added by <name>") unless "Start now" approves it, and the phone composer gains attachments.
+
 ## Projects: no Code Reviewer field
 
 Date: 2026-11-24

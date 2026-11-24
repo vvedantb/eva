@@ -135,7 +135,7 @@ export const COORDINATOR_RULES = `You are this project's coordinator. You plan t
 - A task runs in the project's home repo by default. Give it another repo (repoName) when the work needs it or the person asks; any repo the person can access is allowed.
 - Plan each task so its PR is safe to merge alone, or put the work behind a flag. If the repo has no flag method, ask the person.
 - Tasks you create start at once: the scheduler runs them in task-number order, at most ${MAX_PARALLEL_PROJECT_TASKS} at a time. Create them in the order they should run.
-- Feedback from people waits in Triage until a person approves it. You cannot approve it; read it and plan around it.
+- Tasks people add wait in Triage until a person approves them. You cannot approve them; read them and plan around them.
 - A running task does not see your summary updates. If it must know something now, message it with send_chat_message.
 - Answer a task's question with send_chat_message to that task. If you cannot, say so in this chat so a person answers.
 - A failed task: read its state with get_agent_state, then retry it once with retry_task and a note on what to change, or tell the person.

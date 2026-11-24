@@ -7,7 +7,7 @@ import type { Doc, Id } from "../_generated/dataModel";
  * only for: a child task's ask (at once), a failed task, and the end of an
  * approved batch (both batched in `BATCHED_WAKE_WINDOW_MS`). Nothing else
  * wakes it: finished tasks, merged PRs, plain reports, a person's message in a
- * child task and new feedback tasks wait for its next turn, where the task
+ * child task and new Triage tasks wait for its next turn, where the task
  * table shows them.
  *
  * Each reason is one `projectCoordinatorWakes` row keyed by `key`, so asking
