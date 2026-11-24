@@ -558,14 +558,6 @@ const componentZips = splitComponents(
 
 const targetFlags = ["--url", target.url, "--admin-key", target.adminKey];
 
-// Root tables first, and only here is --replace-all right: it clears tables the
-// snapshot omits, which is what makes the local deployment a mirror rather than a
-// merge. The component imports below must not repeat the flag — see there.
-runConvex(["import", ...targetFlags, "--replace-all", "--yes", zipPath], {
-  label: `import into ${target.name}`,
-  secrets: [target.adminKey],
-});
-
 // Env vars before the component imports: a repo whose auth.config.ts reads one
 // cannot be pushed until they exist, and pushing is how the components get
 // installed (see installComponents).
@@ -717,6 +709,21 @@ function installComponents() {
     unset: ["CONVEX_AGENT_MODE"],
   });
 }
+
+// Push the checked-out schema before any import. Import validates every row
+// against the schema the backend holds, and the daemon may not have pushed yet,
+// or may hold an older one: every new prod field then fails the import
+// (`queueHeldAt`, then `sandboxSize`, 20 to 24 Nov 2026). Env vars are set above,
+// so an auth.config.ts that reads one can push.
+installComponents();
+
+// Root tables first, and only here is --replace-all right: it clears tables the
+// snapshot omits, which is what makes the local deployment a mirror rather than a
+// merge. The component imports below must not repeat the flag — see there.
+runConvex(["import", ...targetFlags, "--replace-all", "--yes", zipPath], {
+  label: `import into ${target.name}`,
+  secrets: [target.adminKey],
+});
 
 // --replace, not --replace-all: --replace-all is deployment-wide even alongside
 // --component, so it also clears every ROOT table not present in the component's
