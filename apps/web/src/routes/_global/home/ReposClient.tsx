@@ -61,6 +61,7 @@ export function ReposClient() {
     try {
       const { newApps: found } = await syncRepos();
       if (found.length > 0) setNewApps(found);
+      else toast.success("Repos synced. No new apps found.");
     } catch (err) {
       console.error("Sync failed:", err);
       toast.error("Could not sync your repositories. Try again.");
