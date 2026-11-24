@@ -1,8 +1,9 @@
 import { convexTest } from "convex-test";
 import workflow from "@convex-dev/workflow/test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Tenant isolation for tasks, projects, runs and chats. Each public function
@@ -11,7 +12,6 @@ import schema from "../convex/schema";
  * or a teammate could read another member's private draft.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const OWNER = "clerk|tenant-owner";
 const MATE = "clerk|tenant-mate";

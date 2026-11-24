@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { buildLinkedReposEnv } from "../convex/_sandbox_runtime/linkedReposEnv";
 
 test("buildLinkedReposEnv returns no env vars for a single-repo session", () => {

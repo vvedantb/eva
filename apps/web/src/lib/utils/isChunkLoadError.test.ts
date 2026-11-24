@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { isChunkLoadError } from "@vvedantb/ui/client";
 
 test("isChunkLoadError detects ChunkLoadError name and common messages", () => {

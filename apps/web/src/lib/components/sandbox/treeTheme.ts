@@ -35,6 +35,6 @@ export const TREE_UNSAFE_CSS = `
   [data-file-tree-search-input]:focus-visible,
   [data-file-tree-search-input][data-file-tree-search-input-fake-focus="true"] {
     outline: none;
-    border-color: color-mix(in oklch, var(--focus) 50%, transparent);
+    border-color: color-mix(in oklab, var(--focus) 50%, transparent);
   }
 `;

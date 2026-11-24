@@ -7,6 +7,148 @@ Date: 2026-11-17
 WHY: The Eva seed copied every prod env var into each sandbox. Sandboxes then sent real email (`EMAIL_ENV=production`), held the prod GitHub app key, and rejected the dev Clerk sign-in.
 
 Architectural: `.eva/sandbox-env.json` lists, per Convex app, every env var a sandbox gets, each with one rule: `copy` from the source, `eva` (the sandbox's Eva env var of the same name, for test keys), a fixed `value`, or a `generate`d secret or ES256 key pair. `sync-to-local.mjs --sandbox-env` sets those, removes every other var on the local backend, and reports source vars not in the file and `eva` vars Eva does not provide. The loader, `scripts/sandbox-env.mjs`, and the env block of `sync-to-local.mjs` are shared word for word with carepulse-ts. Name listing now asks for `--names-only` on Convex CLI 1.42+, as carepulse-ts already did. `.eva/config.json` seeds with `--sandbox-env`.
+## Mobile: smaller release APK (R8, shrink resources, arm64 only)
+
+Date: 2026-11-24
+
+WHY: The release APK was about 62 MB. About 50 MB of the contents was unminified dex, and a large part of `res/` was unused icon fonts.
+
+Architectural: `expo-build-properties` in `app.config.ts` sets `buildArchs: ["arm64-v8a"]`, `enableMinifyInReleaseBuilds` and `enableShrinkResourcesInReleaseBuilds`, with keep rules in `PROGUARD_RULES` for Hermes, React Native, Expo modules, Reanimated, worklets and Clerk. `x86_64` stays out because CI never runs the release APK on an emulator. The first release with R8 needs a device smoke test.
+
+## Web: fix main CI, React Compiler bailout in KanbanBoard
+
+Date: 2026-11-24
+
+WHY: `compiler-check` failed because React Compiler cannot compile a `finally` clause, and the kanban drop glide added one.
+
+Architectural: `KanbanBoard.handleDragEnd` clears `droppedId` once after the try/catch (the catch swallows), so it runs on success and error with no `finally`.
+
+
+## Web: review tabs, logs views, sidebar rows, kanban cards and stats load motion
+
+Date: 2026-11-24
+
+WHY: The last places that still swapped at once now move: review tabs and logs views slide like other tabs, sidebar rows fold in and out, kanban cards glide to their new column, and Stats fades in after its spinner.
+
+Architectural:
+- `useKeepAliveTabSlide` + globals.css `data-tab-pane`: the tab slide for keep-alive panes (`ReviewTabsPanel` keeps Summary, Timeline and Code mounted with `invisible`). The new pane plays `t-tab-pane-in`; the old one plays `t-tab-pane-out`, whose `visibility: visible` keyframes hold it on screen over `invisible`. Gated on `data-tab-dir`, set only after the first switch, so mount does not slide.
+- Settings → Usage views (Overview, Type, Project) use `TabsTransition` (`LOG_VIEW_ORDER`) in place of an opacity fade.
+- `sidebarRowPresence`: session, automation and review rows open their height on arrive and fold it on archive or delete (220 ms). They clip only while moving (`transitionEnd: overflow visible`), so focus rings stay. Review rows gained an `AnimatePresence` (`initial={false}`).
+- `kanbanCardGlide`: quick task and project cards carry `layoutId`, so a status or phase change glides the card between columns (320 ms). The new column clips it while it travels. A card the user just dropped skips it (`droppedId`, cleared when the mutation resolves).
+- `useLoadedFade`: Stats fades its content in when it replaces the spinner; cached data shows at once. Lists, empty states (`EmptyState.enter`) and `PageWrapper animated` pages already animated in, so they are unchanged.
+
+## Web: sandbox panel tabs slide like tab content
+
+Date: 2026-11-24
+
+WHY: Switching tabs in the sandbox panel (sessions, quick tasks, projects) played a small scale settle. It now slides the content in from the side of the picked tab, matching the tab-content and rail slides.
+
+Architectural: `@vvedantb/ui` 0.63.0 replaces `dockNudge` with `dockSwitch(panel, fromTab, toTab)`. `SidePanelTabs.Frame` calls it on a tab switch: each card child slides 24px with a fade over 240 ms, on the axis between the old and new tab (vertical on the rail, horizontal on the phone strip). Enter only: the panes are keep-alive (`hidden` / `<Activity>`), so the old pane cannot leave without remounting iframes and terminals. The card dispatches `DockMotionEvent`, so the preview iframe host steps aside during the slide.
+
+
+## Web: side-panel links slide the page like the rail
+
+Date: 2026-11-23
+
+WHY: The side panel's links (Projects, Quick Tasks, Stats and so on) are a vertical list like the rail, so moving between them now slides the page up or down the same way.
+
+Architectural: `railNavDirection.ts` also tracks `.vt-panel a[href]` clicks against the panel's `aria-current="page"` link (`nav` source) and returns `{ source, direction }`. The router adds `nav-down` / `nav-up` to the `page` type only when the click is already a page swap, so moving from one session or project to another stays instant. globals.css slides only the page for `nav-*` (24px, 240 ms in, 144 ms out, no delay); the panel stays put.
+
+## Web: switching apps from the rail no longer swaps the panel early
+
+Date: 2026-11-23
+
+WHY: Clicking an app in the rail changed the side panel at once, while the page waited about 300 ms for the app's route to load. The rail slide then moved only the page, and the panel header flashed "eva / web" before "Eva".
+
+Architectural: `Sidebar` reads two locations. The rail (`RepoRail` props, `showSearch`) uses the pending `useLocation()`, so its pill still answers the click at once. The side panel and everything derived from it (flags, panel key, mode, repo data) use the router's `resolvedLocation`, so the panel changes with the page inside the same view transition.
+
+## Web: rail page switches slide in the rail's direction
+
+Date: 2026-11-23
+
+WHY: Switching pages from the vertical rail only faded the content; sliding the side panel and page up or down with the rail shows where you went, like the tab slide does sideways.
+
+Architectural: `lib/railNavDirection.ts` records a rail click's direction (the clicked `[data-rail-tile]` below or above the `[data-active]` one, by position). The router's `defaultViewTransition.types` adds `rail-down` / `rail-up` to the `page` type for that navigation, even between apps on the same leaf route. globals.css names the side panel (`.vt-panel` on `SidebarPanel`) `panel` for those types and slides both 24px: 240 ms in (the page 40 ms behind), 144 ms out. Other page swaps keep the plain rise. "Disable page animations" still stops it.
+
+## Web: view switchers slide (quick tasks, projects, testing arena)
+
+Date: 2026-11-23
+
+WHY: The quick tasks Kanban/List switch, the projects Kanban/Timeline/List switch and the testing arena Code/Browser tabs now slide from the side of the picked view, like the other tab sets.
+
+Architectural: `QuickTasksClient` and `ProjectsClient` replace their per-view `AnimatePresence` fade-ups with `TabsTransition`. Quick tasks keep one fade-up branch for entering from loading or empty, with the board/list slide inside it. The orders are `QUICK_TASK_VIEWS` (now also the toolbar's type guard), `PROJECT_VIEW_ORDER` (from `VIEW_OPTIONS`) and `ARENA_TABS`. Each project view keeps its own layout via `PROJECT_VIEW_PANEL_CLASS`. List filters (active/archived and the like) and the timeline range stay instant.
+
+## Web: quick task Task/Sandbox and project tabs slide (@vvedantb/ui 0.62.1)
+
+Date: 2026-11-23
+
+WHY: The quick task's Task/Sandbox switch and the project's Overview/Plan|Tasks/Sandbox tabs crossfaded; they now slide from the side of the picked tab, like the team page.
+
+Architectural: packages #340 adds `TabsTransition` `panelClassName`, so full-height panels keep their flex classes. `TaskDetailInline` and `ProjectDetailMainContent` replace their `AnimatePresence` fades with `TabsTransition`; the orders are the new `SANDBOX_SURFACES` and `PROJECT_MAIN_TABS` constants, which the tab components' type guards now use too. `@vvedantb/ui` 0.62.0 → 0.62.1 in every workspace.
+
+## Web: composer action cards match the composer footer width
+
+Date: 2026-11-23
+
+WHY: Matching the composer card still read too wide; the cards should line up with the narrower footer bar (branch, stash, model) under it.
+
+Architectural: The `ComposerActionCards` row inset goes from `px-3 md:px-4` to `px-6 md:px-8`: `ChatComposer`'s wrapper padding plus the footer's own inset. The cards are also compact: `xs` button (28px), 16px icon, `py-1.5 pr-1.5 pl-3` over the `tight` Surface's `p-3`, and an 8px gap between cards. Follow-up: the two numbers live in two files; a shared inset class would stop them drifting.
+
+## Web: composer action cards match the composer width
+
+Date: 2026-11-23
+
+WHY: The Today and last-session cards spanned the full landing column, wider than the composer card above them.
+
+Architectural: The row in `ComposerActionCards` takes `px-3 md:px-4`, the same inset `ChatComposer` puts around its card.
+
+## Web: action cards under the landing composer (Today + last session)
+
+Date: 2026-11-23
+
+WHY: The Today card sat above the greeting and could be dismissed, but it is a standing suggestion of what to do next, not a notice.
+
+Architectural: `TodayStandupCard` became `ComposerActionCards`, rendered under `ChatComposer` in `NewSessionComposer`. Today shows whenever `standupStatus.enabled` ("New standup · <day>" + "Open Today" while unread, else "Today" + "View Today"); the dismiss button and its `markStandupsRead` call are gone, so only opening Today marks standups read. The second card links the user's most recently updated session, from the cached `sessions.list` + `auth.me` through the shared `filterSessionsStartedBy` / `sortSessionsForSidebar`. Two cards sit side by side from `sm`, stacked below it; one card takes the full width.
+
+## Web: neutral greys no longer tint red (oklab colour mixing)
+
+Date: 2026-11-23
+
+WHY: In the dark neutral theme the sessions sidebar rendered faintly red (rgb 37 34 35) beside the page (34 35 37) after the full-colour token switch.
+
+Architectural: Tailwind's `v()` (and 47 other `color-mix(..., transparent)` sites in web and `@eva/ui`) mixed in oklch. Chrome sets a near-grey's hue to `none` there but keeps its small chroma, which then renders at hue 0. They now mix in oklab, which has no hue; the result is otherwise the same. Follow-up: five package token mixes (`--focus-ring`, `--danger-ring`, base.css) still use oklch.
+
+## Web: env variables, snapshots and PR recap tabs slide too
+
+Date: 2026-11-23
+
+WHY: Extends the team-page tab slide to the other pages whose tabs swap the page content.
+
+Architectural: `EnvVariablesPageClient` (Repo/Team) and `SnapshotsClient` (Configuration/Status/Builds) replace their own `AnimatePresence` opacity fades with `TabsTransition`, and `PrRecapPanel` (Recap/Summary) wraps its views. The orders are the exported `envVarScopes`, `snapshotSettingsTabs` and `PR_RECAP_VIEWS`. Left out: list filters (sessions, reviews, feedback, quick tasks, projects) and form toggles stay instant; the review panel keeps every tab mounted; route-outlet tabs (project, sandbox surface, review nav, logs) would slide the new route out with the old panel; the testing-arena panels need a full-height option in `TabsTransition`.
+
+
+## Recap on a revisit after 4 hours
+
+Date: 2026-11-23
+
+WHY: A recap started only when a reply finished while you were away, so reopening a session whose last reply you had seen showed nothing, however long you were gone.
+
+Architectural: `useChatReadState` now calls `markRead` on every open, not only when a reply is unread. `chatReads` rows gain `lastVisitedAt` (written at most once a minute). `maybeStartRecap` measures the absence from the later of the read and the visit: a missed turn after 30 minutes gives the "away" recap; nothing new after `RECAP_REVISIT_MS` (4 hours) gives a "full" ("Recap") one. One more mutation per chat open. While a chat is on screen, `touchVisit` moves `lastVisitedAt` every 5 minutes and once on leaving, so watching a long turn no longer reads as being away (the old rule measured from the open or the last read, so a watched 30-minute turn showed "Since you've been gone"). Recaps now start only on an open (`markRead({ opened: true })`), never when a reply lands on a watched chat, and an open deletes the recap from an earlier visit (`expireRecap`): prod held 5 recaps, one 73 hours old with nothing after it, shown again on every open.
+## Web: team tab content slides from the picked tab's side (@vvedantb/ui 0.62.0)
+
+Date: 2026-11-23
+
+WHY: Switching tabs on a team page swapped the content at once; a short slide from the side of the picked tab shows where the new content came from, as a phone swipe does.
+
+Architectural: packages #336 adds `TabsTransition` (`"none"`, `"slide"`, `"push"`; `value` plus `order`, built on Motion `AnimatePresence` with a custom direction) and `UiConfig.Tabs.transition`. `@eva/ui` `controlsConfig` sets `transition: "slide"` (32px plus fade, 240 ms in, 140 ms out). `TeamDetailClient` wraps its panels in `TabsTransition` with the exported `teamDetailTabs` order. Other tab pages opt in by wrapping their panels the same way. `@vvedantb/ui` is now 0.62.0 in every workspace (it was a mix of 0.55.0, 0.57.0 and ^0.60.0).
+
+## Callback tests: pruned, repaired, type-checked, security gaps covered
+
+Date: 2026-11-23
+
+WHY: Devs found the tests low-value. An audit of `callback-src/tests` showed 81% sound, but duplicates, assertions that could not fail, test-only seams, and no tests on secret redaction or the media-upload guard.
+
+Architectural: Duplicate and vacuous tests are merged into one keeper per contract or deleted; weak assertions now fail when behaviour breaks (each new or repaired test was proven by a deliberate code break). New tests cover redaction of tool output and turn completions, the symlink/hard-link media guard, non-Claude `extractResultEvent`, session resume after restart, `enforceTurnLease` and the deposition fence. Test-only seams and dead code are removed (`fetchFn`/`env` on `ensureGithubToken`, `isRival`, `waitMs`, `buildTurnCompletion`, `resolveResumeId`, `setActiveId`, `stopBranchWatcher`, background-shell test helpers, null-lease branches). `typecheck:callback` now also type-checks `callback-src/tests` (`callback-src/tests/tsconfig.json`).
 ## Web: `globals.css` imports `@vvedantb/ui/tokens` with full colours
 
 Date: 2026-11-22

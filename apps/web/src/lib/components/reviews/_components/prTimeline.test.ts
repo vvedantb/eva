@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { buildPrTimeline, groupTimelineRows } from "@eva/shared";
 import { overview } from "./prOverviewFixture";
 import type { PrComment, PrCommit, PrReviewEvent } from "./prOverviewMeta";

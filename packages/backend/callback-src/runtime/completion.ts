@@ -371,7 +371,7 @@ export function extractResultEvent(output: string): ResultEvent | null {
   return resultEvent;
 }
 
-export function buildErrorMessage(
+function buildErrorMessage(
   code: number,
   fatalHeartbeatError: string,
   toolStallError: string,

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import type { PROJECT_PHASES } from "@eva/backend";
 import {
   PROJECT_COLUMNS,

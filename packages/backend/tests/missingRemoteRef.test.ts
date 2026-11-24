@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { SandboxCommandFailedError } from "../convex/_sandbox_runtime/sandboxErrors";
 import {
   isMissingRemoteRefError,

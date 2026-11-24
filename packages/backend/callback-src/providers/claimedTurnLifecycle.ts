@@ -76,7 +76,7 @@ export function finishClaimedTurn(): void {
   resetTurnCheckpoint();
 }
 
-/** Test-only lifecycle view; carries no provider or prompt data. */
+/** Whether a claim (not a synthetic or boot turn) holds the ownership slot. */
 export function claimedTurnLifecycleStatus(): "idle" | "active" {
   const ownership = getTurnOwnership();
   return ownership.status === "owned" && ownership.owner === "claim"
@@ -96,7 +96,7 @@ export function claimedTurnLifecycleStatus(): "idle" | "active" {
  * parks it. Discarding it left the new lease with nobody heartbeating it: the
  * session-65 stall (exactly 2 minutes, generation 1, no result log).
  */
-export function shouldParkClaimedTurn(input: {
+function shouldParkClaimedTurn(input: {
   hasActiveRealTurn: boolean;
   isCancellationInFlight: boolean;
   currentLeaseTurnId: string | null;

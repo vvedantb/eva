@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import type { ChatBodyMessage } from "@/lib/components/chat/chatBodyUtils";
 import { splitAveFollowUps } from "@/lib/components/ave/aveFollowUps";
 

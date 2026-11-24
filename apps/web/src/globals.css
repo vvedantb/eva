@@ -52,7 +52,7 @@
     color: var(--muted);
   }
   .markdown-alert {
-    background: color-mix(in oklch, var(--alert) 6%, transparent);
+    background: color-mix(in oklab, var(--alert) 6%, transparent);
   }
   .markdown-alert[data-alert="important"] {
     --alert: var(--markdown-alert-important, var(--accent));
@@ -65,13 +65,13 @@
   }
   .markdown-link {
     color: var(--accent);
-    text-decoration-color: color-mix(in oklch, var(--accent) 30%, transparent);
+    text-decoration-color: color-mix(in oklab, var(--accent) 30%, transparent);
   }
   .markdown-inline-code {
-    background: color-mix(in oklch, var(--foreground) 6%, transparent);
+    background: color-mix(in oklab, var(--foreground) 6%, transparent);
   }
   .markdown tbody tr + tr {
-    border-top: 1px solid color-mix(in oklch, var(--border) 70%, transparent);
+    border-top: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
   }
 }
 
@@ -249,17 +249,17 @@
   background-image:
     radial-gradient(
       ellipse 70% 50% at 50% -8%,
-      color-mix(in oklch, var(--accent) 16%, transparent),
+      color-mix(in oklab, var(--accent) 16%, transparent),
       transparent 62%
     ),
     radial-gradient(
       ellipse 40% 40% at 88% 18%,
-      color-mix(in oklch, var(--chart-2) 8%, transparent),
+      color-mix(in oklab, var(--chart-2) 8%, transparent),
       transparent 60%
     ),
     radial-gradient(
       ellipse 40% 40% at 10% 30%,
-      color-mix(in oklch, var(--chart-3) 7%, transparent),
+      color-mix(in oklab, var(--chart-3) 7%, transparent),
       transparent 60%
     );
 
@@ -267,17 +267,17 @@
     background-image:
       radial-gradient(
         ellipse 70% 50% at 50% -8%,
-        color-mix(in oklch, var(--accent) 12%, transparent),
+        color-mix(in oklab, var(--accent) 12%, transparent),
         transparent 62%
       ),
       radial-gradient(
         ellipse 40% 40% at 88% 18%,
-        color-mix(in oklch, var(--chart-2) 6%, transparent),
+        color-mix(in oklab, var(--chart-2) 6%, transparent),
         transparent 60%
       ),
       radial-gradient(
         ellipse 40% 40% at 10% 30%,
-        color-mix(in oklch, var(--chart-3) 5%, transparent),
+        color-mix(in oklab, var(--chart-3) 5%, transparent),
         transparent 60%
       );
   }
@@ -290,8 +290,8 @@
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(color-mix(in oklch, var(--foreground) 6%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in oklch, var(--foreground) 6%, transparent) 1px, transparent 1px);
+    linear-gradient(color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px);
   background-size: 64px 64px;
   background-position: center top;
   mask-image: radial-gradient(
@@ -318,7 +318,7 @@
   position: absolute;
   background: radial-gradient(
     closest-side,
-    color-mix(in oklch, var(--accent) 22%, transparent),
+    color-mix(in oklab, var(--accent) 22%, transparent),
     transparent
   );
   filter: blur(40px);
@@ -592,7 +592,7 @@
     scroll-behavior: smooth;
   }
   ::selection {
-    background: color-mix(in oklch, var(--accent) 22%, transparent);
+    background: color-mix(in oklab, var(--accent) 22%, transparent);
     color: var(--foreground);
   }
 
@@ -690,10 +690,10 @@
    */
   * {
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in oklch, var(--muted) 35%, transparent) transparent;
+    scrollbar-color: color-mix(in oklab, var(--muted) 35%, transparent) transparent;
   }
   *:hover {
-    scrollbar-color: color-mix(in oklch, var(--muted) 55%, transparent) transparent;
+    scrollbar-color: color-mix(in oklab, var(--muted) 55%, transparent) transparent;
   }
   *::-webkit-scrollbar {
     width: 8px;
@@ -703,13 +703,13 @@
     background: transparent;
   }
   *::-webkit-scrollbar-thumb {
-    background: color-mix(in oklch, var(--muted) 32%, transparent);
+    background: color-mix(in oklab, var(--muted) 32%, transparent);
     border: 2px solid transparent;
     border-radius: 999px;
     background-clip: padding-box;
   }
   *::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in oklch, var(--muted) 52%, transparent);
+    background: color-mix(in oklab, var(--muted) 52%, transparent);
     background-clip: padding-box;
   }
 }
@@ -752,6 +752,48 @@
   }
 
   /*
+   * The tab slide for keep-alive tab panes (`useKeepAliveTabSlide`): every pane
+   * stays mounted and the inactive ones are `invisible`. The new pane slides
+   * in from the picked tab's side, the old one leaves the other way while it
+   * is still visible, as `TabsTransition` does. 32px, 240ms in, 140ms out.
+   */
+  [data-tab-dir="1"] {
+    --tab-dir: 1;
+  }
+
+  [data-tab-dir="-1"] {
+    --tab-dir: -1;
+  }
+
+  [data-tab-dir] > [data-tab-pane="active"] {
+    animation: t-tab-pane-in 240ms var(--motion-ease-out);
+  }
+
+  [data-tab-dir] > [data-tab-pane="leaving"] {
+    animation: t-tab-pane-out 140ms var(--motion-ease-out);
+  }
+
+  @keyframes t-tab-pane-in {
+    from {
+      transform: translateX(calc(var(--tab-dir) * 32px));
+      opacity: 0;
+    }
+  }
+
+  /* `visibility` holds the leaving pane on screen over its `invisible`. */
+  @keyframes t-tab-pane-out {
+    from {
+      visibility: visible;
+      opacity: 1;
+    }
+    to {
+      visibility: visible;
+      transform: translateX(calc(var(--tab-dir) * -32px));
+      opacity: 0;
+    }
+  }
+
+  /*
    * Experimental "Disable page animations" (`html[data-page-motion=off]`).
    * Page enter, panel height, modal scale, heatmap fade, tab pill travel.
    * Leave these alone: `.mq-*` (hover marquee), `.animate-spin` / `.shimmer-*`
@@ -767,7 +809,8 @@
   html[data-page-motion="off"] .t-heatmap-cell,
   html[data-page-motion="off"] .t-accordion-content,
   html[data-page-motion="off"] .t-collapsible-content,
-  html[data-page-motion="off"] .t-anchor-flash {
+  html[data-page-motion="off"] .t-anchor-flash,
+  html[data-page-motion="off"] [data-tab-pane] {
     animation: none !important;
   }
 
@@ -820,6 +863,93 @@
     animation: t-vt-rise-in var(--motion-base) var(--motion-ease-out) both;
   }
 
+  /*
+   * A rail click (`rail-down` / `rail-up`, `railNavDirection.ts`): the side
+   * panel and the page slide 24px in the rail's direction, like the tab slide
+   * (`TabsTransition`) turned vertical. A lower tile brings content up from
+   * below. The page follows the panel by 40ms so the two read as one move.
+   */
+  html:active-view-transition-type(rail-down) .vt-panel,
+  html:active-view-transition-type(rail-up) .vt-panel {
+    view-transition-name: panel;
+  }
+
+  ::view-transition-group(panel) {
+    animation: none;
+  }
+
+  html:active-view-transition-type(rail-down)::view-transition-old(panel),
+  html:active-view-transition-type(rail-down)::view-transition-old(page) {
+    animation: t-vt-rail-out-up 144ms var(--motion-ease-out) both;
+  }
+
+  html:active-view-transition-type(rail-up)::view-transition-old(panel),
+  html:active-view-transition-type(rail-up)::view-transition-old(page) {
+    animation: t-vt-rail-out-down 144ms var(--motion-ease-out) both;
+  }
+
+  html:active-view-transition-type(rail-down)::view-transition-new(panel) {
+    animation: t-vt-rail-in-from-below 240ms var(--motion-ease-out) both;
+  }
+
+  html:active-view-transition-type(rail-up)::view-transition-new(panel) {
+    animation: t-vt-rail-in-from-above 240ms var(--motion-ease-out) both;
+  }
+
+  html:active-view-transition-type(rail-down)::view-transition-new(page) {
+    animation: t-vt-rail-in-from-below 240ms var(--motion-ease-out) 40ms both;
+  }
+
+  html:active-view-transition-type(rail-up)::view-transition-new(page) {
+    animation: t-vt-rail-in-from-above 240ms var(--motion-ease-out) 40ms both;
+  }
+
+  /* A side-panel link (`nav-down` / `nav-up`): the same slide on the page
+   * only; the panel is the list that was clicked, so it stays put. */
+  html:active-view-transition-type(nav-down)::view-transition-old(page) {
+    animation: t-vt-rail-out-up 144ms var(--motion-ease-out) both;
+  }
+
+  html:active-view-transition-type(nav-up)::view-transition-old(page) {
+    animation: t-vt-rail-out-down 144ms var(--motion-ease-out) both;
+  }
+
+  html:active-view-transition-type(nav-down)::view-transition-new(page) {
+    animation: t-vt-rail-in-from-below 240ms var(--motion-ease-out) both;
+  }
+
+  html:active-view-transition-type(nav-up)::view-transition-new(page) {
+    animation: t-vt-rail-in-from-above 240ms var(--motion-ease-out) both;
+  }
+
+  @keyframes t-vt-rail-in-from-below {
+    from {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+  }
+
+  @keyframes t-vt-rail-in-from-above {
+    from {
+      opacity: 0;
+      transform: translateY(-24px);
+    }
+  }
+
+  @keyframes t-vt-rail-out-up {
+    to {
+      opacity: 0;
+      transform: translateY(-24px);
+    }
+  }
+
+  @keyframes t-vt-rail-out-down {
+    to {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+  }
+
   html[data-page-motion="off"]::view-transition-group(*),
   html[data-page-motion="off"]::view-transition-old(*),
   html[data-page-motion="off"]::view-transition-new(*) {
@@ -855,12 +985,12 @@
   @keyframes t-anchor-flash {
     0%,
     35% {
-      box-shadow: inset 0 0 0 2px color-mix(in oklch, var(--focus) 90%, transparent);
-      background-color: color-mix(in oklch, var(--accent-soft) 45%, transparent);
+      box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--focus) 90%, transparent);
+      background-color: color-mix(in oklab, var(--accent-soft) 45%, transparent);
     }
     100% {
-      box-shadow: inset 0 0 0 2px color-mix(in oklch, var(--focus) 0%, transparent);
-      background-color: color-mix(in oklch, var(--accent-soft) 0%, transparent);
+      box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--focus) 0%, transparent);
+      background-color: color-mix(in oklab, var(--accent-soft) 0%, transparent);
     }
   }
 }
@@ -970,8 +1100,8 @@ html[data-page-motion="off"] .t-side-panel-arrow {
  * No `.beam-halo`: a live `filter: blur()` on the spinning conic was the
  * leftover GPU floor and is banned (CLAUDE.md / animationContract.test.ts). */
 .beam-root {
-  --beam-color: color-mix(in oklch, var(--foreground) 75%, transparent);
-  --beam-progress-color: color-mix(in oklch, var(--status-progress-bar) 90%, transparent);
+  --beam-color: color-mix(in oklab, var(--foreground) 75%, transparent);
+  --beam-progress-color: color-mix(in oklab, var(--status-progress-bar) 90%, transparent);
 }
 
 /* Brand purple→blue, same as the spinners and the session-row Drive grid.
@@ -982,9 +1112,9 @@ html[data-page-motion="off"] .t-side-panel-arrow {
   --eva-blue: rgb(59 125 216);
   --beam-stops:
     transparent 0%,
-    color-mix(in oklch, var(--eva-purple) 90%, transparent) calc(var(--beam-spread) * 0.5),
+    color-mix(in oklab, var(--eva-purple) 90%, transparent) calc(var(--beam-spread) * 0.5),
     color-mix(in oklab, var(--eva-purple), var(--eva-blue)) var(--beam-spread),
-    color-mix(in oklch, var(--eva-blue) 95%, transparent) calc(var(--beam-spread) * 1.5),
+    color-mix(in oklab, var(--eva-blue) 95%, transparent) calc(var(--beam-spread) * 1.5),
     transparent calc(var(--beam-spread) * 2);
 }
 
@@ -1598,37 +1728,37 @@ html[data-page-hidden] .ave-face *,
  * decorations (data-node-*) from the suggest-changes plugin.
  * ─────────────────────────────────────────────────────────────────── */
 .tiptap ins[data-id] {
-  background-color: color-mix(in oklch, var(--success) 16%, transparent);
+  background-color: color-mix(in oklab, var(--success) 16%, transparent);
   color: var(--success);
   text-decoration: none;
   border-radius: 2px;
 }
 .tiptap del[data-id] {
   color: var(--danger);
-  background-color: color-mix(in oklch, var(--danger) 10%, transparent);
+  background-color: color-mix(in oklab, var(--danger) 10%, transparent);
   text-decoration: line-through;
 }
 .tiptap span[data-type="modification"] {
-  background-color: color-mix(in oklch, var(--warning) 16%, transparent);
+  background-color: color-mix(in oklab, var(--warning) 16%, transparent);
   text-decoration: underline dotted;
 }
 .tiptap [data-node-deletion="true"] {
-  background-color: color-mix(in oklch, var(--danger) 8%, transparent);
+  background-color: color-mix(in oklab, var(--danger) 8%, transparent);
 }
 .tiptap [data-node-insertion="true"] {
-  background-color: color-mix(in oklch, var(--success) 8%, transparent);
+  background-color: color-mix(in oklab, var(--success) 8%, transparent);
 }
 
 /* Anchored-comment highlights. Driven by DocCommentHighlight decorations, not
  * the mark itself, so resolved threads lose their tint without editing the doc.
  * Amber keeps them distinct from the green/red suggestion marks. */
 .doc-comment-highlight {
-  background-color: color-mix(in oklch, var(--warning) 18%, transparent);
-  border-bottom: 1.5px solid color-mix(in oklch, var(--warning) 55%, transparent);
+  background-color: color-mix(in oklab, var(--warning) 18%, transparent);
+  border-bottom: 1.5px solid color-mix(in oklab, var(--warning) 55%, transparent);
   cursor: pointer;
 }
 .doc-comment-highlight-active {
-  background-color: color-mix(in oklch, var(--warning) 34%, transparent);
+  background-color: color-mix(in oklab, var(--warning) 34%, transparent);
 }
 
 /* ───────────────────────────────────────────────────────────────────

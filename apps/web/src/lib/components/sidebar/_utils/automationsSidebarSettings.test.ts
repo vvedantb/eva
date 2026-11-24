@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import {
   AUTOMATION_APP_SORT_LABELS,
   AUTOMATION_SORT_LABELS,

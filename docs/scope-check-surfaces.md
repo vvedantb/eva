@@ -72,7 +72,7 @@ Order matters: persistence first, gate second, rebuild third. Steps 1-2 are safe
 
 ## Verification
 
-- `pnpm --filter @eva/backend typecheck`, `pnpm --filter @eva/backend typecheck:callback`.
+- `pnpm --filter @eva/backend typecheck` (convex, callback-src and preview-annotation-src).
 - `pnpm --filter @eva/backend test`. The tests that pin this behaviour:
   - `callback-src/tests/turnCheckpoint.test.ts:118` asserts task and project chat turns **are** stamped (it previously asserted the opposite), and `:137` asserts `docId`/`reportId`/`automationRunId` are still skipped. `:152` still covers the `eva/` branch condition.
   - `tests/scopeCheckHunks.test.ts`, `tests/scopeCheckVerdict.test.ts`, `tests/scopeCheckDescribe.test.ts`, `callback-src/tests/blockingQuestionsGate.test.ts`. Web: `apps/web/src/lib/components/chat/_components/scopeCheckSummary.test.ts`.

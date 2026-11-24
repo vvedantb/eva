@@ -100,12 +100,12 @@ export function getLeaseTerminalReason(): LeaseTerminalReason | null {
   return terminalReason;
 }
 
-/** Two legacy (lease-less) owners compare equal; otherwise id and generation must match. */
-export function isSameTurnLease(
-  a: TurnLeaseIdentity | null,
+/** A released lease never matches; otherwise id and generation must match. */
+function isSameTurnLease(
+  a: TurnLeaseIdentity,
   b: TurnLeaseIdentity | null,
 ): boolean {
-  if (a === null || b === null) return a === b;
+  if (b === null) return false;
   return a.turnId === b.turnId && a.leaseGeneration === b.leaseGeneration;
 }
 
@@ -154,7 +154,7 @@ function parseTerminalReason(value: JsonValue): LeaseTerminalReason | null {
  */
 export function noteHeartbeatResponse(
   response: string | JsonValue,
-  sentUnder: TurnLeaseIdentity | null,
+  sentUnder: TurnLeaseIdentity,
 ): boolean {
   if (terminalReason !== null) return true;
   let parsed: JsonValue;
@@ -189,7 +189,7 @@ export function noteHeartbeatResponse(
       "stale turn lease verdict ignored (" +
         reason +
         ") sentUnder=" +
-        String(sentUnder?.turnId) +
+        sentUnder.turnId +
         " current=" +
         String(current?.turnId),
     );

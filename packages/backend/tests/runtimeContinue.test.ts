@@ -4,11 +4,11 @@ import {
   TURN_MAX_RUNTIME_ERROR,
 } from "@eva/shared/agentTurnLimits";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { queueRuntimeContinue } from "../convex/_chat/runtimeContinue";
 import schema from "../convex/schema";
+import { modules } from "./_helpers/convexModules";
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 
 /** A session chat whose newest turn is `prompt` → `reply`; returns its queue after one continue pass. */

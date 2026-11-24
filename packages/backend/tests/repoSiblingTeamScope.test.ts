@@ -1,7 +1,8 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Rows with the same GitHub owner/name are "siblings" (monorepo apps) that
@@ -9,7 +10,6 @@ import schema from "../convex/schema";
  * must not join the group, or the stranger could see the victim's apps.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const VICTIM = "clerk|sibling-victim";
 const STRANGER = "clerk|sibling-stranger";
 

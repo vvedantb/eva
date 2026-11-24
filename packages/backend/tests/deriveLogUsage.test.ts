@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { deriveLogUsage } from "../convex/_logs/usage";
 
 const event = JSON.stringify({

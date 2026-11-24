@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "bun:test";
 import type {
   SandboxExecResult,
   SandboxHandle,
@@ -92,7 +92,7 @@ describe("execHandle marks a wedged VM as unresponsive", () => {
         caught = error;
       },
     );
-    await vi.advanceTimersByTimeAsync(5_000 + CLIENT_TIMEOUT_BUFFER_MS + 1);
+    vi.advanceTimersByTime(5_000 + CLIENT_TIMEOUT_BUFFER_MS + 1);
     await settled;
 
     expect(caught).toBeInstanceOf(SandboxExecTimeoutError);

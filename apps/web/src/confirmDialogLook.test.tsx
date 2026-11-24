@@ -1,7 +1,16 @@
-import { EvaUiProvider } from "@eva/ui";
-import { ConfirmDialog } from "@vvedantb/ui";
+import * as appUi from "@vvedantb/ui";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, mock } from "bun:test";
+
+// pnpm installs one @vvedantb/ui copy per peer set, so @eva/ui would get its
+// own copy with its own UiConfig context. Give it the app's copy, as Vite's
+// `resolve.dedupe` does for the bundle.
+mock.module(
+  Bun.resolveSync("@vvedantb/ui", Bun.resolveSync("@eva/ui", import.meta.dir)),
+  () => appUi,
+);
+const { EvaUiProvider } = await import("@eva/ui");
+const { ConfirmDialog } = appUi;
 
 /**
  * The swap to the library `ConfirmDialog` (`size="md"`) shipped its own md

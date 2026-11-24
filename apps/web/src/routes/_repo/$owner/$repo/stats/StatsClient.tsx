@@ -2,6 +2,7 @@ import { useQueryState } from "nuqs";
 import { timeRangeParser } from "@/lib/search-params";
 import { api } from "@eva/backend";
 import { useQuery } from "convex-helpers/react/cache/hooks";
+import { cn } from "@eva/ui";
 import { CenteredSpinner, tokenTransition } from "@vvedantb/ui";
 import { m } from "motion/react";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -31,6 +32,7 @@ import {
   IconTargetArrow,
   IconClockHour4,
 } from "@tabler/icons-react";
+import { useLoadedFade } from "@/lib/hooks/useLoadedFade";
 
 /** Stats aggregates by day, so the hourly "24h" range is not offered here. */
 const STATS_RANGES = ["7d", "30d", "90d", "all"] as const;
@@ -76,6 +78,7 @@ export function StatsClient() {
     timeline === undefined ||
     leaderboard === undefined ||
     heatmap === undefined;
+  const loadedFade = useLoadedFade(isLoading);
 
   return (
     <PageWrapper
@@ -93,7 +96,7 @@ export function StatsClient() {
       {isLoading ? (
         <CenteredSpinner label="Loading stats" className="min-h-144" />
       ) : (
-        <div className="space-y-8">
+        <div className={cn("space-y-8", loadedFade)}>
           <ActivityHeatmap data={heatmap} />
 
           <KpiGroup className="lg:grid-cols-3">

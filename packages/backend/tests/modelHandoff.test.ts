@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import schema from "../convex/schema";
 import {
   buildHandoffContextBlock,
@@ -7,8 +7,8 @@ import {
   readHandoffHistory,
   type HandoffMessage,
 } from "../convex/_shared/modelHandoff";
+import { modules } from "./_helpers/convexModules";
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 describe("model handoff context", () => {
   it("does not hand off between models from the same provider", () => {

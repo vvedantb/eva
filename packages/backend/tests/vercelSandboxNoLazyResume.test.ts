@@ -1,5 +1,5 @@
 import { Sandbox } from "@vercel/sandbox";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 
 /**
  * The unpatched SDK resumes a stopped sandbox on any exec (`withResume`). A

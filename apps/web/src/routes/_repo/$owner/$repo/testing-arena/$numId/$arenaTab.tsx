@@ -9,7 +9,13 @@ import { useRepo } from "@/lib/contexts/RepoContext";
 import { useDocByNumId } from "@/lib/useResolveByNumId";
 import { EntityNumIdGate } from "@/lib/components/EntityNumIdGate";
 import type { FunctionReturnType } from "convex/server";
-import { Button, Tabs, TabsList, TabsTrigger } from "@vvedantb/ui";
+import {
+  Button,
+  Tabs,
+  TabsList,
+  TabsTransition,
+  TabsTrigger,
+} from "@vvedantb/ui";
 import { IconPlayerPlay } from "@tabler/icons-react";
 import { BranchSelect } from "@/lib/components/BranchSelect";
 import { CodeTestingContent } from "../_components/CodeTestingContent";
@@ -21,8 +27,12 @@ export const Route = createFileRoute(
   component: TestingArenaDetailRoute,
 });
 
-/** Primary arena tabs. Unknown path segments fall back to `code`. */
-type ArenaTab = "code" | "browser";
+/**
+ * Primary arena tabs, in their on-screen order (the content slides by it).
+ * Unknown path segments fall back to `code`.
+ */
+const ARENA_TABS = ["code", "browser"] as const;
+type ArenaTab = (typeof ARENA_TABS)[number];
 
 function toArenaTab(value: string): ArenaTab {
   return value === "browser" ? "browser" : "code";
@@ -157,7 +167,12 @@ function TestingArenaDetail({ doc, tab }: { doc: ArenaDoc; tab: ArenaTab }) {
           </Button>
         </div>
       </div>
-      <div className="flex-1 min-h-0 overflow-hidden">
+      <TabsTransition
+        value={tab}
+        order={ARENA_TABS}
+        className="flex-1 min-h-0 overflow-hidden"
+        panelClassName="h-full"
+      >
         {tab === "code" ? (
           <CodeTestingContent
             reports={codeReports}
@@ -171,7 +186,7 @@ function TestingArenaDetail({ doc, tab }: { doc: ArenaDoc; tab: ArenaTab }) {
             streamingActivity={streaming?.currentActivity}
           />
         )}
-      </div>
+      </TabsTransition>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "bun:test";
 import {
   appendWebMcpToPrompt,
   formatWebMcpPrompt,
@@ -375,11 +375,11 @@ describe("requestWebMcp", () => {
     const { target, posted } = fakeTarget();
     const reply = requestWebMcp(target, { type: "list" }, 30_000, host);
     const requestId = onlyRequestId(posted);
-    const settled = expect(reply).rejects.toThrow(
-      "The preview did not answer within 30s",
-    );
+    // Catch before the timer fires so the rejection is never unhandled. Bun
+    // hangs on an `expect(...).rejects` built before fake time moves.
+    const settled = reply.catch((error: Error) => error.message);
     vi.advanceTimersByTime(30_000);
-    await settled;
+    expect(await settled).toBe("The preview did not answer within 30s");
     expect(listeners.size).toBe(0);
     // A late reply after the timeout has nowhere to go.
     deliver({

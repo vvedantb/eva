@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import {
   codexItemToStep,
   cursorSdkToolToStep,
@@ -172,11 +172,13 @@ describe("cursorSdkToolToStep", () => {
     ],
     ["delete", { path: LONG_PATH }, edit({ label: "Deleting file..." })],
     ["glob", { glob_pattern: "*.ts" }, searchFiles("*.ts")],
+    ["glob", { globPattern: "*.ts" }, searchFiles("*.ts")],
     ["grep", { pattern: "foo" }, searchCode("foo")],
     ["shell", { command: "ls" }, bash("ls", "ls")],
     ["task", { prompt: "explore" }, subtask("explore")],
     ["updateTodos", {}, tool("Updating tasks...")],
     ["mcp", { server: "linear" }, tool("Using MCP linear...")],
+    ["mcp", { serverName: "linear" }, tool("Using MCP linear...")],
     // Keyword fallback for renamed / unknown tools.
     ["readFileV2", { path: LONG_PATH }, read()],
     ["createFile", { path: LONG_PATH }, write()],
@@ -189,9 +191,13 @@ describe("cursorSdkToolToStep", () => {
     ["codebaseSearch", { query: "foo" }, searchCode("foo")],
     ["runTerminal", { cmd: "ls" }, bash("ls", "ls")],
     ["urlFetch", { url: "https://x.dev" }, webFetch("https://x.dev")],
+    ["webFetch", { url: "https://x.dev" }, webFetch("https://x.dev")],
+    // "webSearch" also contains "search"; it must not read as a code search.
+    ["webSearch", { query: "foo" }, webSearch("foo")],
     ["updatePlan", {}, tool("Updating tasks...")],
     ["mcpCall", {}, tool("Using MCP tool...")],
     ["mystery", {}, tool("Using mystery...")],
+    ["", {}, tool("Using tool...")],
   ];
   test.each(cases)("%s", (name, args, expected) => {
     expect(cursorSdkToolToStep(name, args)).toEqual(expected);

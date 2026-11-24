@@ -120,27 +120,29 @@ export function ReviewsSidebar({
                 </div>
               ) : (
                 <div className="px-2 pb-2">
-                  {pulls.map((pr) => (
-                    <ReviewsSidebarRow
-                      key={pr.number}
-                      pr={pr}
-                      href={`${basePath}/reviews/${pr.number}/summary`}
-                      githubUrl={pr.htmlUrl}
-                      isActive={activePrNumber === pr.number}
-                      onNavigate={onNavigate}
-                      onPrefetch={() =>
-                        prefetchPrReview(
-                          queryClient,
-                          runners,
-                          repoId,
-                          pr.number,
-                        )
-                      }
-                      onRename={() =>
-                        setRenaming({ number: pr.number, title: pr.title })
-                      }
-                    />
-                  ))}
+                  <AnimatePresence initial={false}>
+                    {pulls.map((pr) => (
+                      <ReviewsSidebarRow
+                        key={pr.number}
+                        pr={pr}
+                        href={`${basePath}/reviews/${pr.number}/summary`}
+                        githubUrl={pr.htmlUrl}
+                        isActive={activePrNumber === pr.number}
+                        onNavigate={onNavigate}
+                        onPrefetch={() =>
+                          prefetchPrReview(
+                            queryClient,
+                            runners,
+                            repoId,
+                            pr.number,
+                          )
+                        }
+                        onRename={() =>
+                          setRenaming({ number: pr.number, title: pr.title })
+                        }
+                      />
+                    ))}
+                  </AnimatePresence>
                 </div>
               )}
             </m.div>

@@ -1,7 +1,8 @@
 import { convexTest } from "convex-test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Manager Ave's run state machine (`_ave/threads.ts`, `_ave/run.ts`). One run
@@ -10,7 +11,6 @@ import schema from "../convex/schema";
  * Scheduled runs are never executed here — only the state they are fenced on.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 // Only `setTimeout` is faked, so the zero-delay run and watchdog convex-test
 // schedules never fire: the model call cannot succeed here, and its failure

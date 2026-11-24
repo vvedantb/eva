@@ -2,9 +2,13 @@ import tailwindcssAnimate from "tailwindcss-animate";
 import tailwindcssTypography from "@tailwindcss/typography";
 
 /** Colour with Tailwind's opacity modifier. The tokens are full colours
- * (oklch or rgb), so the alpha is mixed in rather than written as `/ <alpha>`. */
+ * (oklch or rgb), so the alpha is mixed in rather than written as `/ <alpha>`.
+ * Mixed in oklab, not oklch: Chrome drops a near-grey's hue to `none` in oklch
+ * but keeps its small chroma, so neutral greys (the `rgb()` tokens) rendered
+ * faintly red. oklab has no hue to lose. Mix with `transparent` in oklab
+ * everywhere for the same reason. */
 function v(name) {
-  return `color-mix(in oklch, var(--${name}) calc(<alpha-value> * 100%), transparent)`;
+  return `color-mix(in oklab, var(--${name}) calc(<alpha-value> * 100%), transparent)`;
 }
 
 /** Maps Tailwind Typography's colour variables onto the design tokens. */
@@ -25,7 +29,7 @@ function proseTokenCss() {
     // Used directly as a box-shadow colour, so the translucency is baked in
     // (upstream default is the heading colour at 10%).
     "--tw-prose-kbd-shadows":
-      "color-mix(in oklch, var(--foreground) 10%, transparent)",
+      "color-mix(in oklab, var(--foreground) 10%, transparent)",
     "--tw-prose-code": "var(--foreground)",
     "--tw-prose-pre-code": "var(--foreground)",
     "--tw-prose-pre-bg": "var(--surface-secondary)",

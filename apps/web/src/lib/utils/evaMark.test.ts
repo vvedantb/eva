@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { evaMarkDataUri } from "./evaMark";
 
 function runtimeSvg(badgeLabel: string | null): string {

@@ -1,5 +1,5 @@
 import { runInNewContext } from "node:vm";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { CHROME_PREFS_SCRIPT } from "../convex/_sandbox_runtime/desktop";
 
 /**

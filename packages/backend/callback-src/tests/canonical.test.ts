@@ -1,4 +1,4 @@
-import { test, expect } from "vitest";
+import { test, expect } from "bun:test";
 import {
   parseToCanonical,
   applyCanonicalEvents,
@@ -10,34 +10,9 @@ import type { ProgressStep } from "../types.js";
 import { buildStreamingPayload } from "../runtime/heartbeats.js";
 import {
   callbackState as S,
-  getPendingQuestionForTest,
   parsePriorStepForTest,
   resetStateForTests,
 } from "../runtime/state.js";
-
-test("parseToCanonical maps Claude tool_use to push_step", () => {
-  resetStateForTests();
-  const events = parseToCanonical(
-    {
-      type: "assistant",
-      message: {
-        content: [
-          {
-            type: "tool_use",
-            name: "Read",
-            input: { file_path: "/tmp/repo/src/index.ts" },
-          },
-        ],
-      },
-    },
-    "claude",
-  );
-  expect(events.length).toBe(1);
-  expect(events[0].kind).toBe("push_step");
-  if (events[0].kind === "push_step") {
-    expect(events[0].step.type).toBe("read");
-  }
-});
 
 test("applyCanonicalEvents sets pending question", () => {
   resetStateForTests();
@@ -45,7 +20,7 @@ test("applyCanonicalEvents sets pending question", () => {
     { kind: "set_pending_question", data: '{"questions":[]}' },
   ]);
   expect(changed).toBe(true);
-  expect(getPendingQuestionForTest()).toBe('{"questions":[]}');
+  expect(S.pendingQuestionData).toBe('{"questions":[]}');
 });
 
 test("Cursor assistant deltas concatenate without paragraph breaks", () => {
@@ -65,26 +40,6 @@ test("Cursor assistant deltas concatenate without paragraph breaks", () => {
   resetStateForTests();
 });
 
-test("tool_result clears in-flight tool by tool_use_id", () => {
-  resetStateForTests();
-  applyCanonicalEvents([
-    {
-      kind: "push_step",
-      trackingId: "toolu_abc",
-      step: {
-        type: "bash",
-        label: "Running command...",
-        toolUseId: "toolu_abc",
-        status: "active",
-      },
-    },
-  ]);
-  expect(S.inFlightToolUses).toBe(1);
-  applyCanonicalEvents([{ kind: "complete_tool", trackingId: "toolu_abc" }]);
-  expect(S.inFlightToolUses).toBe(0);
-  resetStateForTests();
-});
-
 test("complete_tool merges result onto matching step", () => {
   resetStateForTests();
   applyCanonicalEvents([
@@ -100,6 +55,7 @@ test("complete_tool merges result onto matching step", () => {
       },
     },
   ]);
+  expect(S.inFlightToolUses).toBe(1);
   applyCanonicalEvents([
     {
       kind: "complete_tool",
@@ -114,40 +70,7 @@ test("complete_tool merges result onto matching step", () => {
   expect(S.accumulatedSteps[0]?.output?.exitCode).toBe(0);
   expect(S.accumulatedSteps[0]?.status).toBe("complete");
   expect(typeof S.accumulatedSteps[0]?.durationMs).toBe("number");
-  resetStateForTests();
-});
-
-test("codex item.started sets toolUseId for id-matched completion", () => {
-  resetStateForTests();
-  const events = parseToCanonical(
-    {
-      type: "item.started",
-      item: {
-        id: "item_xyz",
-        type: "command_execution",
-        command: "echo hi",
-      },
-    },
-    "codex",
-  );
-  applyCanonicalEvents(events);
-  expect(S.accumulatedSteps[0]?.toolUseId).toBe("item_xyz");
-  applyCanonicalEvents(
-    parseToCanonical(
-      {
-        type: "item.completed",
-        item: {
-          id: "item_xyz",
-          type: "command_execution",
-          aggregated_output: "hi\n",
-          exit_code: 0,
-        },
-      },
-      "codex",
-    ),
-  );
-  expect(S.accumulatedSteps[0]?.status).toBe("complete");
-  expect(S.accumulatedSteps[0]?.output?.text).toContain("hi");
+  expect(S.inFlightToolUses).toBe(0);
   resetStateForTests();
 });
 
@@ -383,73 +306,6 @@ test("parsePriorStepForTest ignores transient activity rows", () => {
       status: "active",
     }),
   ).toBe(null);
-});
-
-test("parseToCanonical codex reasoning item routes to update_reasoning", () => {
-  resetStateForTests();
-  const started = parseToCanonical(
-    {
-      type: "item.started",
-      item: { id: "item_0", type: "reasoning" },
-    },
-    "codex",
-  );
-  expect(started.length).toBe(0);
-  const completed = parseToCanonical(
-    {
-      type: "item.completed",
-      item: { id: "item_0", type: "reasoning", text: "**Exploring repo**" },
-    },
-    "codex",
-  );
-  expect(completed.length).toBe(1);
-  expect(completed[0]).toEqual({
-    kind: "update_reasoning",
-    text: "**Exploring repo**",
-  });
-});
-
-test("parseToCanonical opencode reasoning part routes to update_reasoning", () => {
-  const events = parseToCanonical(
-    { type: "reasoning", part: { text: "weighing options" } },
-    "opencode",
-  );
-  expect(events.length).toBe(1);
-  expect(events[0]).toEqual({
-    kind: "update_reasoning",
-    text: "weighing options",
-  });
-});
-
-test("parseToCanonical cursor thinking event routes to update_reasoning", () => {
-  resetStateForTests();
-  const events = parseToCanonical(
-    { type: "thinking", text: "hmm let me see" },
-    "cursor",
-  );
-  expect(events.length).toBe(1);
-  expect(events[0]).toEqual({
-    kind: "update_reasoning",
-    text: "hmm let me see",
-  });
-});
-
-test("parseToCanonical claude thinking_delta routes to update_reasoning", () => {
-  resetStateForTests();
-  const events = parseToCanonical(
-    {
-      type: "stream_event",
-      event: {
-        type: "content_block_delta",
-        index: 0,
-        delta: { type: "thinking_delta", thinking: "Weighing the two fixes." },
-      },
-    },
-    "claude",
-  );
-  expect(events).toEqual([
-    { kind: "update_reasoning", text: "Weighing the two fixes." },
-  ]);
 });
 
 // With `thinking.display` omitted, current models stream thinking blocks with

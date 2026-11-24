@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
@@ -8,6 +8,7 @@ import {
   isHeldByUsageLimit,
   USAGE_LIMIT_QUEUE_RESUME_DELAY_MS,
 } from "../convex/_taskWorkflow/usageLimitReset";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * A chat's queue now waits for two things besides a running turn: a sleeping
@@ -16,7 +17,6 @@ import {
  * after the reset).
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 /** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;

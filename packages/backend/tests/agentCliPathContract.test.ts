@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import {
   AGENT_CLI_PATH_LINE,
   CLAUDE_CLI_INSTALL_DIR,

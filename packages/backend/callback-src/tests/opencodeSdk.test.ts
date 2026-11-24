@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { opencodeParseLine } from "../providers/opencode.js";
 import {
   createPartEmitState,
@@ -285,16 +285,22 @@ function mcpClientStub(known: Record<string, { status: string } | undefined>): {
     name: string;
     config: OpencodeMcpRemoteConfig | OpencodeMcpLocalConfig;
   }>;
+  calls: { status: number };
 } {
   const added: Array<{
     name: string;
     config: OpencodeMcpRemoteConfig | OpencodeMcpLocalConfig;
   }> = [];
+  const calls = { status: 0 };
   return {
     added,
+    calls,
     client: {
       mcp: {
-        status: () => Promise.resolve({ data: known }),
+        status: () => {
+          calls.status += 1;
+          return Promise.resolve({ data: known });
+        },
         add: (options) => {
           added.push(options.body);
           return Promise.resolve({
@@ -389,5 +395,6 @@ test("ensureEvaMcpServers skips servers the opencode server already knows", asyn
   // No MCP token in the environment means no status probe and no registration.
   const unconfigured = mcpClientStub({});
   await ensureEvaMcpServers(unconfigured.client, {});
+  expect(unconfigured.calls.status).toBe(0);
   expect(unconfigured.added).toEqual([]);
 });
