@@ -21,6 +21,7 @@ export { buildPrecedingUserTurns } from "@eva/shared";
 export { findStreamingTargetMessage } from "@eva/shared";
 // Moved to `@eva/shared` so the mobile chat draws a teammate's turn as the web.
 export {
+  findBubbleGroups,
   firstNameByUserId,
   firstNameFromUser,
   isOtherUserChatMessage,

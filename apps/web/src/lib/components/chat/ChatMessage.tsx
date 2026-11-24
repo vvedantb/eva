@@ -73,10 +73,13 @@ import { TurnErrorNotice } from "@/lib/components/chat/TurnErrorNotice";
 
 const EVA_ICON = <EvaIcon />;
 
-/** Squares the bottom-left corner against a teammate's side avatar. */
-function otherUserBubbleRadius(): string {
+/**
+ * A left-side bubble (a teammate, or Eva in the coordinator): the bottom-left
+ * corner squares against the avatar, so only the run's last bubble has it.
+ */
+function sideBubbleRadius(joinsNext: boolean): string {
   const r = "clamp(0.75rem, var(--radius), 1rem)";
-  return `${r} ${r} ${r} 0`;
+  return joinsNext ? r : `${r} ${r} ${r} 0`;
 }
 
 /** Provider mark under an assistant turn; tooltip lists model, effort, account. */
@@ -146,6 +149,11 @@ interface ChatMessageProps {
    * coordinator, which only talks and delegates).
    */
   assistantBubble?: boolean;
+  /**
+   * The next row is the same sender's bubble: this one leaves the avatar (and
+   * its square corner) to the last bubble of the run.
+   */
+  joinsNext?: boolean;
   /** This user turn switches to a different model provider. */
   isHandoffBoundary?: boolean;
   /**
@@ -232,6 +240,7 @@ export const ChatMessage = memo(function ChatMessage({
   isOtherUser = false,
   senderFirstName,
   assistantBubble = false,
+  joinsNext = false,
   isHandoffBoundary = false,
   turnModel,
   turnReasoningLevel,
@@ -306,6 +315,7 @@ export const ChatMessage = memo(function ChatMessage({
                 repo={repo}
                 isOtherUser={isOtherUser}
                 senderFirstName={senderFirstName}
+                joinsNext={joinsNext}
                 isHandoffBoundary={isHandoffBoundary}
                 belowContent={belowContent}
                 artifacts={artifacts}
@@ -322,6 +332,7 @@ export const ChatMessage = memo(function ChatMessage({
                 showTurnMeta={showTurnMeta}
                 showScopeCheck={showScopeCheck}
                 bubble={assistantBubble}
+                joinsNext={joinsNext}
                 changedFilesExpanded={changedFilesExpanded}
                 onChangedFilesExpandedChange={onChangedFilesExpandedChange}
                 turnModel={turnModel}
@@ -388,6 +399,7 @@ function UserTurn({
   repo,
   isOtherUser,
   senderFirstName,
+  joinsNext,
   isHandoffBoundary,
   belowContent,
   artifacts,
@@ -395,6 +407,7 @@ function UserTurn({
   copyPlain,
   userActions,
 }: {
+  joinsNext: boolean;
   message: ChatBodyMessage;
   repo?: ChatRepo;
   isOtherUser: boolean;
@@ -449,6 +462,7 @@ function UserTurn({
         message={message}
         repo={repo}
         isOtherUser={isOtherUser}
+        joinsNext={joinsNext}
         isMcpProvenance={isOrchestratorNotification || sentViaMcp}
       />
       {isHandoffBoundary && message.model !== undefined ? (
@@ -480,11 +494,13 @@ function UserTurnBubble({
   message,
   repo,
   isOtherUser,
+  joinsNext,
   isMcpProvenance,
 }: {
   message: ChatBodyMessage;
   repo?: ChatRepo;
   isOtherUser: boolean;
+  joinsNext: boolean;
   isMcpProvenance: boolean;
 }) {
   // min-w-0 stops the default `min-width: auto` on this flex item from letting
@@ -493,8 +509,8 @@ function UserTurnBubble({
   return (
     <div className="flex min-w-0 max-w-full items-end gap-2">
       {isOtherUser ? (
-        <div className="shrink-0">
-          <UserMessageAvatar userId={message.userId} />
+        <div className="size-4 shrink-0">
+          {joinsNext ? null : <UserMessageAvatar userId={message.userId} />}
         </div>
       ) : null}
       <MessageContent
@@ -509,7 +525,7 @@ function UserTurnBubble({
               : "rounded-surface bg-primary/10 group-[.is-user]:bg-primary/10",
         )}
         style={
-          isOtherUser ? { borderRadius: otherUserBubbleRadius() } : undefined
+          isOtherUser ? { borderRadius: sideBubbleRadius(joinsNext) } : undefined
         }
       >
         <UserMessageBody message={message} repo={repo} />
@@ -526,6 +542,7 @@ interface AssistantTurnProps {
   showTurnMeta: boolean;
   showScopeCheck: boolean;
   bubble: boolean;
+  joinsNext: boolean;
   changedFilesExpanded?: boolean;
   onChangedFilesExpandedChange: ChatMessageProps["onChangedFilesExpandedChange"];
   turnModel?: string;
@@ -557,6 +574,7 @@ function AssistantTurn({
   showTurnMeta,
   showScopeCheck,
   bubble,
+  joinsNext,
   changedFilesExpanded,
   onChangedFilesExpandedChange,
   turnModel,
@@ -596,6 +614,7 @@ function AssistantTurn({
     <>
       <AssistantTurnContent
         bubble={bubble}
+        joinsNext={joinsNext}
         message={message}
         turnState={turnState}
         isLatestAssistantTurn={isLatestAssistantTurn}
@@ -698,6 +717,7 @@ function AssistantTurnContent({
   turnErrorTitle,
   panelTabs,
   bubble,
+  joinsNext,
 }: Omit<
   AssistantTurnProps,
   | "showTurnMeta"
@@ -753,7 +773,7 @@ function AssistantTurnContent({
         // The teammate bubble, mirrored onto Eva's side.
         bubble ? "w-fit min-w-0 bg-secondary px-3 text-foreground" : "px-1",
       )}
-      style={bubble ? { borderRadius: otherUserBubbleRadius() } : undefined}
+      style={bubble ? { borderRadius: sideBubbleRadius(joinsNext) } : undefined}
     >
       {isStreamingPlaceholder ? (
         <>
@@ -821,7 +841,9 @@ function AssistantTurnContent({
 
   return bubble ? (
     <div className="flex min-w-0 max-w-[85%] items-end gap-2">
-      <EvaIcon size={16} disc={false} className="shrink-0" />
+      <div className="size-4 shrink-0">
+        {joinsNext ? null : <EvaIcon size={16} disc={false} />}
+      </div>
       {content}
     </div>
   ) : (

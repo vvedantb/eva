@@ -142,6 +142,7 @@ export {
   findStreamingTargetMessage,
 } from "./chatStreaming";
 export {
+  findBubbleGroups,
   firstNameByUserId,
   firstNameFromUser,
   isOtherUserChatMessage,

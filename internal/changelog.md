@@ -1,10 +1,10 @@
 # Changelog
 
-## Projects: coordinator replies in bubbles
+## Chat: coordinator replies in bubbles; grouped bubble runs
 
 Date: 2026-11-24
 
-In the project coordinator chat, Eva's replies sit in a left-side bubble with her mark, as a teammate's message (web `assistantBubbles` on `ChatBody`, phone `EvaBubble`); task and session chats keep the flat reply.
+In the project coordinator chat, Eva's replies sit in a left-side bubble with her mark, as a teammate's message (web `assistantBubbles` on `ChatBody`, phone `EvaBubble`); task and session chats keep the flat reply. In every chat, a run of bubbles from one sender groups (`findBubbleGroups` in `@eva/shared`): 4px apart, one name, the avatar and action row on the last bubble only.
 
 ## Projects: "+" replaces Feedback; no header status badge
 

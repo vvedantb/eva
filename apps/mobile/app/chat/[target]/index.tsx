@@ -25,6 +25,7 @@ import {
   toRepoRelativePath,
   turnErrorTitle,
   visibleChatMessages,
+  findBubbleGroups,
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { turnCheckpoint } from "@eva/shared/turnCheckpoint";
@@ -239,6 +240,12 @@ export default function ChatScreen() {
   const streamingEntityId = parentId ? chatStreamingEntityId(parentId) : undefined;
   const dayStarts = findDayBoundaryIds(visible);
   const newBoundaryId = findNewMessageIds(visible, newSinceAt, me ?? undefined)[0];
+  // Runs of one sender's bubbles, as the web: the coordinator's Eva bubbles, yours and a teammate's.
+  const bubbleGroups = findBubbleGroups(visible, {
+    currentUserId: me ?? undefined,
+    assistantBubbles: chat.project !== undefined,
+    breaksBefore: newBoundaryId === undefined ? dayStarts : new Set([...dayStarts, newBoundaryId]),
+  });
   // The inverted transcript draws its first row at the bottom. A copy, as `toReversed` is missing in some Hermes release builds.
   const newestFirst = [...visible].reverse();
   // The user turn before each reply holds the model it ran on (the footer mark), as the web.
@@ -487,7 +494,14 @@ export default function ChatScreen() {
                 findActive={message._id === findActiveId}
                 fromTeammate={fromTeammate}
                 evaBubble={chat.project !== undefined}
-                senderName={fromTeammate && message.userId ? teammateNames.get(message.userId) : undefined}
+                joinsPrevious={bubbleGroups.joinsPrevious.has(message._id)}
+                joinsNext={bubbleGroups.joinsNext.has(message._id)}
+                senderName={
+                  // One name over a run of a teammate's bubbles.
+                  fromTeammate && message.userId && !bubbleGroups.joinsPrevious.has(message._id)
+                    ? teammateNames.get(message.userId)
+                    : undefined
+                }
                 teammate={fromTeammate && message.userId ? teammateById.get(message.userId) : undefined}
                 live={message._id === liveReplyId ? streamingEntityId : undefined}
                 isLatestReply={message._id === latestReplyId}
@@ -830,6 +844,8 @@ function ChatMessageRow({
   findActive,
   fromTeammate,
   evaBubble,
+  joinsPrevious,
+  joinsNext,
   senderName,
   teammate,
   live,
@@ -854,6 +870,10 @@ function ChatMessageRow({
   fromTeammate: boolean;
   /** The project coordinator chat: Eva's replies sit in a bubble with her mark (the web `assistantBubbles`). */
   evaBubble: boolean;
+  /** This row continues the run of one sender's bubbles above it: it sits 4 under it, not 12. */
+  joinsPrevious: boolean;
+  /** The run goes on below: the avatar and the footer wait for its last bubble. */
+  joinsNext: boolean;
   senderName: string | undefined;
   teammate: ComponentProps<typeof TeammateBubble>["sender"];
   /** The streaming row's entity id while this is the live reply. */
@@ -929,7 +949,7 @@ function ChatMessageRow({
   // The coordinator chat: Eva's reply in a bubble on the left, as a teammate's.
   const evaReply = evaBubble && !isUser;
   return (
-              <View className={`gap-3 ${THREAD_INSET}`} style={findBand}>
+              <View className={`gap-3 ${THREAD_INSET}${joinsPrevious ? " -mt-2" : ""}`} style={findBand}>
                 {dayStart ? <DayDivider timestamp={message.timestamp} /> : null}
                 {newStart ? <NewDivider /> : null}
                 {/* Web: parts `gap-0.5`; a reply is full width, a user message at most 95%. */}
@@ -943,9 +963,11 @@ function ChatMessageRow({
                 >
                   {senderName ? <TeammateName name={senderName} /> : null}
                   {fromTeammate ? (
-                    <TeammateBubble sender={teammate}>{userBody}</TeammateBubble>
+                    <TeammateBubble sender={teammate} joinsNext={joinsNext}>
+                      {userBody}
+                    </TeammateBubble>
                   ) : evaReply ? (
-                    <EvaBubble>{replyBody}</EvaBubble>
+                    <EvaBubble joinsNext={joinsNext}>{replyBody}</EvaBubble>
                   ) : (
                     // Eva's web chat tints the user bubble (bg-primary/10), not the solid default. A reply is `px-1 py-2`.
                     // The web user text is markdown in `text-sm` (14 / 20), its tokens as chips.
@@ -958,7 +980,7 @@ function ChatMessageRow({
                   {outputList}
                   {!isUser && cardList && !tabbed ? <View className="mt-2">{cardList}</View> : null}
                   {changes ? <View className="mt-1 px-1">{changes}</View> : null}
-                  {message.content.trim() !== "" ? (
+                  {message.content.trim() !== "" && !joinsNext ? (
                     <MessageFooter
                       className={fromTeammate || evaReply ? TEAMMATE_FOOTER_INSET : undefined}
                       at={message.timestamp}
