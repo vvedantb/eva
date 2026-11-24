@@ -1,5 +1,13 @@
 # Changelog
 
+## Web: sandbox panel tabs slide like tab content
+
+Date: 2026-11-24
+
+WHY: Switching tabs in the sandbox panel (sessions, quick tasks, projects) played a small scale settle. It now slides the content in from the side of the picked tab, matching the tab-content and rail slides.
+
+Architectural: `@vvedantb/ui` 0.63.0 replaces `dockNudge` with `dockSwitch(panel, fromTab, toTab)`. `SidePanelTabs.Frame` calls it on a tab switch: each card child slides 24px with a fade over 240 ms, on the axis between the old and new tab (vertical on the rail, horizontal on the phone strip). Enter only: the panes are keep-alive (`hidden` / `<Activity>`), so the old pane cannot leave without remounting iframes and terminals. The card dispatches `DockMotionEvent`, so the preview iframe host steps aside during the slide.
+
 ## Web: side-panel links slide the page like the rail
 
 Date: 2026-11-23
