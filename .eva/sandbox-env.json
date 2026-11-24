@@ -45,14 +45,14 @@
     "SANDBOX_JWT_JWKS": { "generate": "es256-jwks", "pair": "sandbox-jwt" },
 
     "GITHUB_APP_ID": {
-      "from": "eva",
-      "why": "A dev GitHub app, so sandboxes cannot touch prod repos or PRs."
+      "from": "copy",
+      "why": "Reuses the source deployment's GitHub app."
     },
-    "GITHUB_APP_SLUG": "eva",
-    "GITHUB_BOT_USER_ID": "eva",
-    "GITHUB_CLIENT_ID": "eva",
-    "GITHUB_CLIENT_SECRET": "eva",
-    "GITHUB_PRIVATE_KEY": "eva",
-    "GITHUB_WEBHOOK_SECRET": "eva"
+    "GITHUB_APP_SLUG": "copy",
+    "GITHUB_BOT_USER_ID": "copy",
+    "GITHUB_CLIENT_ID": "copy",
+    "GITHUB_CLIENT_SECRET": "copy",
+    "GITHUB_PRIVATE_KEY": "copy",
+    "GITHUB_WEBHOOK_SECRET": "copy"
   }
 }
