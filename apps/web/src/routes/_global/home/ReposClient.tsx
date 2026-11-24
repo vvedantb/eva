@@ -29,7 +29,6 @@ import {
   IconDots,
   IconEyeOff,
   IconPlus,
-  IconSettings,
 } from "@tabler/icons-react";
 import { WelcomeBanner } from "./_components/WelcomeBanner";
 import { EmptyOnboarding } from "./_components/EmptyOnboarding";
@@ -120,12 +119,6 @@ export function ReposClient() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onClick={() => navigate({ to: "/settings/sync" })}
-                  >
-                    <IconSettings size={16} />
-                    Sync Settings
-                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setHiddenOpen(true)}>
                     <IconEyeOff size={16} />
                     Hidden Codebases

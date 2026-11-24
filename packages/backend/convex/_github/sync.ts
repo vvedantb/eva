@@ -36,15 +36,9 @@ export const syncRepos = action({
       throw new Error("Not authenticated");
     }
 
-    const [accessibleRepos, syncSettings] = await Promise.all([
-      ctx.runQuery(api.githubRepos.list, { includeRemoved: true }),
-      ctx.runQuery(api.syncSettings.list, {}),
-    ]);
-    const disabledRepos = new Set(
-      syncSettings
-        .filter((s: { enabled: boolean }) => !s.enabled)
-        .map((s: { owner: string; name: string }) => `${s.owner}/${s.name}`),
-    );
+    const accessibleRepos = await ctx.runQuery(api.githubRepos.list, {
+      includeRemoved: true,
+    });
 
     const detectedApps: Array<{
       owner: string;
@@ -57,7 +51,7 @@ export const syncRepos = action({
     const seenCodebases = new Set<string>();
     for (const existingRepo of accessibleRepos) {
       const codebaseKey = `${existingRepo.owner}/${existingRepo.name}`;
-      if (seenCodebases.has(codebaseKey) || disabledRepos.has(codebaseKey)) {
+      if (seenCodebases.has(codebaseKey)) {
         continue;
       }
       seenCodebases.add(codebaseKey);

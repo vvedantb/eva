@@ -40,7 +40,6 @@ import { Route as GlobalSettingsPersonalisationRouteImport } from './routes/_glo
 import { Route as GlobalSettingsSandboxStatusRouteImport } from './routes/_global/settings/sandbox-status'
 import { Route as GlobalSettingsSandboxesRouteImport } from './routes/_global/settings/sandboxes'
 import { Route as GlobalSettingsShortcutsRouteImport } from './routes/_global/settings/shortcuts'
-import { Route as GlobalSettingsSyncRouteImport } from './routes/_global/settings/sync'
 import { Route as GlobalSettingsThemeRouteImport } from './routes/_global/settings/theme'
 import { Route as GlobalSetupIdRouteImport } from './routes/_global/setup/$id'
 import { Route as GlobalTeamsIndexRouteImport } from './routes/_global/teams/index'
@@ -307,11 +306,6 @@ const GlobalSettingsSandboxesRoute = GlobalSettingsSandboxesRouteImport.update({
 const GlobalSettingsShortcutsRoute = GlobalSettingsShortcutsRouteImport.update({
   id: '/shortcuts',
   path: '/shortcuts',
-  getParentRoute: () => GlobalSettingsRouteRoute,
-} as any)
-const GlobalSettingsSyncRoute = GlobalSettingsSyncRouteImport.update({
-  id: '/sync',
-  path: '/sync',
   getParentRoute: () => GlobalSettingsRouteRoute,
 } as any)
 const GlobalSettingsThemeRoute = GlobalSettingsThemeRouteImport.update({
@@ -984,7 +978,6 @@ export interface FileRoutesByFullPath {
   '/settings/sandbox-status': typeof GlobalSettingsSandboxStatusRoute
   '/settings/sandboxes': typeof GlobalSettingsSandboxesRoute
   '/settings/shortcuts': typeof GlobalSettingsShortcutsRoute
-  '/settings/sync': typeof GlobalSettingsSyncRoute
   '/settings/theme': typeof GlobalSettingsThemeRoute
   '/setup/$id': typeof GlobalSetupIdRoute
   '/$owner/$repo': typeof RepoOwnerRepoRouteWithChildren
@@ -1122,7 +1115,6 @@ export interface FileRoutesByTo {
   '/settings/sandbox-status': typeof GlobalSettingsSandboxStatusRoute
   '/settings/sandboxes': typeof GlobalSettingsSandboxesRoute
   '/settings/shortcuts': typeof GlobalSettingsShortcutsRoute
-  '/settings/sync': typeof GlobalSettingsSyncRoute
   '/settings/theme': typeof GlobalSettingsThemeRoute
   '/setup/$id': typeof GlobalSetupIdRoute
   '/p/$kind/$id': typeof PKindIdRoute
@@ -1242,7 +1234,6 @@ export interface FileRoutesById {
   '/_global/settings/sandbox-status': typeof GlobalSettingsSandboxStatusRoute
   '/_global/settings/sandboxes': typeof GlobalSettingsSandboxesRoute
   '/_global/settings/shortcuts': typeof GlobalSettingsShortcutsRoute
-  '/_global/settings/sync': typeof GlobalSettingsSyncRoute
   '/_global/settings/theme': typeof GlobalSettingsThemeRoute
   '/_global/setup/$id': typeof GlobalSetupIdRoute
   '/_repo/$owner/$repo': typeof RepoOwnerRepoRouteWithChildren
@@ -1384,7 +1375,6 @@ export interface FileRouteTypes {
     | '/settings/sandbox-status'
     | '/settings/sandboxes'
     | '/settings/shortcuts'
-    | '/settings/sync'
     | '/settings/theme'
     | '/setup/$id'
     | '/$owner/$repo'
@@ -1522,7 +1512,6 @@ export interface FileRouteTypes {
     | '/settings/sandbox-status'
     | '/settings/sandboxes'
     | '/settings/shortcuts'
-    | '/settings/sync'
     | '/settings/theme'
     | '/setup/$id'
     | '/p/$kind/$id'
@@ -1641,7 +1630,6 @@ export interface FileRouteTypes {
     | '/_global/settings/sandbox-status'
     | '/_global/settings/sandboxes'
     | '/_global/settings/shortcuts'
-    | '/_global/settings/sync'
     | '/_global/settings/theme'
     | '/_global/setup/$id'
     | '/_repo/$owner/$repo'
@@ -1983,13 +1971,6 @@ declare module '@tanstack/react-router' {
       path: '/shortcuts'
       fullPath: '/settings/shortcuts'
       preLoaderRoute: typeof GlobalSettingsShortcutsRouteImport
-      parentRoute: typeof GlobalSettingsRouteRoute
-    }
-    '/_global/settings/sync': {
-      id: '/_global/settings/sync'
-      path: '/sync'
-      fullPath: '/settings/sync'
-      preLoaderRoute: typeof GlobalSettingsSyncRouteImport
       parentRoute: typeof GlobalSettingsRouteRoute
     }
     '/_global/settings/theme': {
@@ -2761,7 +2742,6 @@ interface GlobalSettingsRouteRouteChildren {
   GlobalSettingsSandboxStatusRoute: typeof GlobalSettingsSandboxStatusRoute
   GlobalSettingsSandboxesRoute: typeof GlobalSettingsSandboxesRoute
   GlobalSettingsShortcutsRoute: typeof GlobalSettingsShortcutsRoute
-  GlobalSettingsSyncRoute: typeof GlobalSettingsSyncRoute
   GlobalSettingsThemeRoute: typeof GlobalSettingsThemeRoute
   GlobalSettingsIndexRoute: typeof GlobalSettingsIndexRoute
 }
@@ -2776,7 +2756,6 @@ const GlobalSettingsRouteRouteChildren: GlobalSettingsRouteRouteChildren = {
   GlobalSettingsSandboxStatusRoute: GlobalSettingsSandboxStatusRoute,
   GlobalSettingsSandboxesRoute: GlobalSettingsSandboxesRoute,
   GlobalSettingsShortcutsRoute: GlobalSettingsShortcutsRoute,
-  GlobalSettingsSyncRoute: GlobalSettingsSyncRoute,
   GlobalSettingsThemeRoute: GlobalSettingsThemeRoute,
   GlobalSettingsIndexRoute: GlobalSettingsIndexRoute,
 }
