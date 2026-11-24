@@ -56,7 +56,7 @@ const CHILD_HIDDEN_TOOLS: ReadonlySet<string> = new Set([
 
 /**
  * Tools a coordinator never gets: its tasks start through the scheduler
- * (in task-number order, at most `MAX_PARALLEL_PROJECT_TASKS`), so no direct
+ * (all of them, in task-number order), so no direct
  * run or schedule.
  */
 const COORDINATOR_HIDDEN_TOOLS: ReadonlySet<string> = new Set([

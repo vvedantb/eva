@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
 import {
-  MAX_PARALLEL_PROJECT_TASKS,
   projectStatus,
   projectTaskDisplayStatus,
   projectTaskNeedsYou,
@@ -39,17 +38,15 @@ describe("tasksToStart", () => {
     expect(tasksToStart([task("b", 2), cFailed])).toEqual(["b"]);
   });
 
-  test("keeps at most the parallel limit in progress, in task number order", () => {
-    const running = Array.from({ length: MAX_PARALLEL_PROJECT_TASKS - 1 }, (_, i) =>
-      task(`run${i}`, i + 1, { status: "in_progress" }),
-    );
+  test("starts every ready task at once, in task number order", () => {
+    const running = [task("run1", 1, { status: "in_progress" })];
     const waiting = [task("w9", 9), task("w5", 5), task("w7", 7)];
-    expect(tasksToStart([...running, ...waiting])).toEqual(["w5"]);
-    // A second call on the state after that start picks nothing.
-    const started = task("w5", 5, { status: "in_progress" });
-    expect(
-      tasksToStart([...running, started, task("w9", 9), task("w7", 7)]),
-    ).toEqual([]);
+    expect(tasksToStart([...running, ...waiting])).toEqual(["w5", "w7", "w9"]);
+    // A second call on the state after those starts picks nothing.
+    const started = waiting.map((w) =>
+      task(w.id, w.taskNumber ?? 0, { status: "in_progress" }),
+    );
+    expect(tasksToStart([...running, ...started])).toEqual([]);
   });
 
   test("skips unapproved, halted, pending and usage-limited work", () => {

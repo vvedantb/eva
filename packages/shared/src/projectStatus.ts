@@ -3,9 +3,6 @@ import type { Doc } from "@eva/backend";
 // A project's status is derived, never stored: it is read from its child
 // tasks and their PRs. Web, phone and the backend scheduler share these rules.
 
-/** At most this many child tasks of one project are `in_progress` at once. */
-export const MAX_PARALLEL_PROJECT_TASKS = 3;
-
 type TaskStatus = Doc<"agentTasks">["status"];
 type PrState = NonNullable<Doc<"agentTasks">["prState"]>;
 
@@ -215,18 +212,13 @@ export function projectStatus(
 }
 
 /**
- * The tasks the scheduler starts now, in `taskNumber` order: approved `todo`
- * tasks with no run pending and not halted, up to
- * `MAX_PARALLEL_PROJECT_TASKS` in progress. Nothing starts while the
+ * The tasks the scheduler starts now, in `taskNumber` order: every approved
+ * `todo` task with no run pending and not halted. No cap on how many run at
+ * once (add one only when usage shows a need). Nothing starts while the
  * project's account is at its usage limit.
  */
 export function tasksToStart(tasks: readonly ProjectTaskFacts[]): string[] {
   if (tasks.some((task) => task.usageLimited)) return [];
-  const inProgress = tasks.filter(
-    (task) => task.status === "in_progress",
-  ).length;
-  const slots = MAX_PARALLEL_PROJECT_TASKS - inProgress;
-  if (slots <= 0) return [];
   return tasks
     .filter(
       (task) =>
@@ -236,6 +228,5 @@ export function tasksToStart(tasks: readonly ProjectTaskFacts[]): string[] {
         !task.runPending,
     )
     .sort((a, b) => (a.taskNumber ?? 0) - (b.taskNumber ?? 0))
-    .slice(0, slots)
     .map((task) => task.id);
 }

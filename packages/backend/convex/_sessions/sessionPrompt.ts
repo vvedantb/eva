@@ -13,7 +13,6 @@ import { listLiveSessionChats } from "../_sessionChats/helpers";
 import { buildSessionBranchName } from "../_git/branchNames";
 import { sandboxOwnerKey } from "@eva/shared";
 import { taskPrUrl } from "../_pullRequests/store";
-import { MAX_PARALLEL_PROJECT_TASKS } from "@eva/shared/projectStatus";
 import { chatOwner } from "./owner";
 import { getProjectGeneratedSpec } from "../_projects/helpers";
 import {
@@ -134,7 +133,7 @@ export const COORDINATOR_RULES = `You are this project's coordinator. You plan t
 - Split work into child tasks with create_tasks_batch (or create_task): one repo each, a short title, a full description and a phase label. Split by files, so tasks running at the same time do not touch the same code. When two tasks must touch the same area, create the second only after the first is merged.
 - A task runs in the project's home repo by default. Give it another repo (repoName) when the work needs it or the person asks; any repo the person can access is allowed.
 - Plan each task so its PR is safe to merge alone, or put the work behind a flag. If the repo has no flag method, ask the person.
-- Tasks you create start at once: the scheduler runs them in task-number order, at most ${MAX_PARALLEL_PROJECT_TASKS} at a time. Create them in the order they should run.
+- Tasks you create start at once: the scheduler starts them all, in task-number order. Create them in the order they should run.
 - Tasks people add wait in Triage until a person approves them. You cannot approve them; read them and plan around them.
 - A running task does not see your summary updates. If it must know something now, message it with send_chat_message.
 - Answer a task's question with send_chat_message to that task. If you cannot, say so in this chat so a person answers.

@@ -1,6 +1,5 @@
 import {
   MAX_COORDINATOR_RETRIES,
-  MAX_PARALLEL_PROJECT_TASKS,
   projectTaskStage,
   tasksToStart,
   type ProjectTaskFacts,
@@ -21,8 +20,7 @@ import { RUN_WAITING_FOR_ANSWER } from "../_taskWorkflow/helpers";
 /**
  * The project scheduler: it replaces the old one-at-a-time build. It starts
  * every approved `todo` child task that is not halted and has no run
- * pending, in `taskNumber` order, while fewer than
- * `MAX_PARALLEL_PROJECT_TASKS` are in progress. Each task runs like a quick
+ * pending, in `taskNumber` order, with no cap on how many run at once. Each task runs like a quick
  * task: its own session, sandbox, branch and PR to main. The rules are the
  * shared ones (`@eva/shared/projectStatus`); this module only loads the facts
  * and starts runs.
@@ -341,14 +339,6 @@ export async function retryFailedTask(
   );
   if (facts.halted !== "failed") {
     throw new Error("Only a task whose last run failed can be retried");
-  }
-  const running = (await listProjectTasks(ctx.db, project._id)).filter(
-    (other) => other.status === "in_progress",
-  ).length;
-  if (running >= MAX_PARALLEL_PROJECT_TASKS) {
-    throw new Error(
-      `${MAX_PARALLEL_PROJECT_TASKS} tasks already run in this project. Retry when one ends.`,
-    );
   }
   await ctx.db.patch(taskId, {
     coordinatorRetries: (task.coordinatorRetries ?? 0) + 1,

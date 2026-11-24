@@ -25,9 +25,6 @@ import {
  * `projectTaskBatches` row, anchored to the coordinator message it ran in.
  */
 
-/** Most tasks one coordinator call may create. */
-export const MAX_TASKS_PER_COORDINATOR_BATCH = 20;
-
 const coordinatorTaskInput = v.object({
   title: v.string(),
   description: v.optional(v.string()),
@@ -47,11 +44,6 @@ export async function createCoordinatorTasks(
 ): Promise<{ taskIds: Id<"agentTasks">[]; batchId: Id<"projectTaskBatches"> }> {
   const { projectId, userId, tasks } = params;
   if (tasks.length === 0) throw new Error("Create at least one task.");
-  if (tasks.length > MAX_TASKS_PER_COORDINATOR_BATCH) {
-    throw new Error(
-      `Create at most ${MAX_TASKS_PER_COORDINATOR_BATCH} tasks at once.`,
-    );
-  }
   const project = await getProjectWithAccess(
     ctx.db,
     projectId,

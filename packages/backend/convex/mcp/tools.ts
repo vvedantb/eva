@@ -17,7 +17,6 @@ import { defineTool, type EvaTool } from "./registry";
 import { applyProjectToolPolicy, projectCallerOf } from "./projectScope";
 import { projectTools, siblingRowRefusal } from "./projectTools";
 import { jsonValue } from "../_jev/jsonValue";
-import { MAX_PARALLEL_PROJECT_TASKS } from "@eva/shared/projectStatus";
 import { evaluateTool } from "../_mcp/evaluateTool";
 import { previewTools } from "../_mcp/previewTools";
 import { renderUiTool } from "../_mcp/renderUiTool";
@@ -778,7 +777,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
         batchId: created.batchId,
         taskCount: created.taskIds.length,
         status: "created",
-        note: `The scheduler starts them in task-number order, at most ${MAX_PARALLEL_PROJECT_TASKS} at once.`,
+        note: `The scheduler starts them all, in task-number order.`,
       });
     });
   }

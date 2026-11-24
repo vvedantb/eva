@@ -1,5 +1,11 @@
 # Changelog
 
+## Projects: no cap on running or created tasks
+
+Date: 2026-11-24
+
+The scheduler starts every approved project task at once (`MAX_PARALLEL_PROJECT_TASKS` is gone), and one coordinator call may create any number of tasks (`MAX_TASKS_PER_COORDINATOR_BATCH` is gone); the coordinator's prompt and `create_tasks_batch` note say so.
+
 ## Chat: coordinator replies in bubbles; grouped bubble runs
 
 Date: 2026-11-24

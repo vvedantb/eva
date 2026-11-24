@@ -27,7 +27,7 @@ The business team opens the project and sees what is launched, what is in progre
 | 6 | The coordinator sandbox is read-only. | Keeps the main thread free and cheap. |
 | 7 | **The coordinator starts tasks directly**: its tasks are created approved and the scheduler starts them at once. **Triage holds feedback** (and tasks a person adds without approving); a person approves them there. | The cap of 3 and the hourly wake-up cap bound the spend. |
 | 8 | A person merges each PR. The coordinator never merges in v1. | No unreviewed agent code on main. |
-| 9 | At most **3** child tasks run at the same time in one project. Hard-coded constant in v1. | 5 parallel agents cost about 5 times one agent (Cursor docs, cited in the eesel.ai review of 11 September 2026). |
+| 9 | **No cap** on how many child tasks run at once, or on how many one coordinator call creates (amended 24 November 2026: the 3-run and 20-task caps are removed). | Go unlimited first, measure usage, then add a limit only where data shows a need. |
 | 10 | Old projects are converted in place. | One code path. History is kept. |
 | 11 | Project context reuses Documents, Artifacts and the chat Log. No new store. | They already carry `chatSourceFields`. |
 | 12 | **Project roles are removed.** Project access is plain repo access. Anyone with access can chat, run tasks and file feedback. | Simplest rule. |
@@ -130,7 +130,7 @@ This is the core change. Do it alone, with no UI change.
 
 1. Replace `buildProjectWorkflow` with a small scheduler mutation, `scheduleReadyTasks(projectId)`:
    - ready = status `todo`, approved (see 3), and every `taskDependencies.dependsOnId` task is `done`;
-   - start ready tasks in `taskNumber` order until `MAX_PARALLEL_PROJECT_TASKS = 3` are `in_progress`;
+   - start every ready task, in `taskNumber` order (no cap);
    - a failed task is flagged and does not stop the others (422's decision). Tasks that depend on it wait;
    - retry (decision 17): add `agentTasks.coordinatorRetries` (number). The coordinator may restart a failed task while the count is 0; the restart sets it to 1. A second failure shows "needs you". A person's restart does not use the count. A retry is a new turn in the same task session, on the same branch.
 2. Call it from three events only: batch approval, a task status change, a child PR merge (webhook). It is idempotent: a second call with the same state starts nothing.
@@ -222,7 +222,7 @@ This is the core change. Do it alone, with no UI change.
    - **Pulled on demand:** sibling status, sibling docs and artifacts, the current summary doc (tools in step 3.4). Read-only.
    - **Up to the coordinator, report:** `report_to_coordinator` with `kind: "report"`. Use it for a finding other tasks need (for example "the API shape changed") or a status note. The task keeps working. The coordinator decides what to do: update the summary, message another task, change or add tasks.
    - **Up to the coordinator, ask (decided 19 November 2026):** `kind: "ask"`. Use it for a question or a blocker the task cannot solve.
-     1. The task's turn ends. The task shows **waiting for coordinator**. Its status stays `in_progress` and it keeps its place in the parallel limit of 3, so a waiting task cannot be starved by new starts.
+     1. The task's turn ends. The task shows **waiting for coordinator**. Its status stays `in_progress` (there is no parallel limit, so new starts never wait on it).
      2. An ask wakes the coordinator at once; it does not wait for the batched wake-up.
      3. The coordinator answers with `send_chat_message`, which starts the task's next turn. Or, when it cannot answer, it passes the question to a person: the task card shows **needs you** with the question, and a person's answer in the coordinator chat or in the task chat starts the task again.
      4. A person can always answer directly in the task chat. The first answer wins; the open ask is then closed, so a late coordinator answer does not start a second turn.

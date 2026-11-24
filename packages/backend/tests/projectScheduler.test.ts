@@ -5,7 +5,6 @@ import { api, internal } from "../convex/_generated/api";
 import type { Doc, Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import {
-  MAX_PARALLEL_PROJECT_TASKS,
   projectTaskDisplayStatus,
   projectTaskNeedsYou,
 } from "@eva/shared/projectStatus";
@@ -161,43 +160,25 @@ async function finishTask(
 
 describe("project scheduler", () => {
   test(
-    `starts at most ${MAX_PARALLEL_PROJECT_TASKS} approved tasks, in task number order, each on its own session`,
+    "starts every approved task at once, each on its own session",
     async () => {
       const f = await fixture(5);
       await schedule(f);
-      expect(await statuses(f, f.tasks)).toEqual([
-        "in_progress",
-        "in_progress",
-        "in_progress",
-        "todo",
-        "todo",
-      ]);
+      expect(await statuses(f, f.tasks)).toEqual(
+        Array.from({ length: 5 }, () => "in_progress"),
+      );
       const owners = await f.t.run(async (ctx) =>
         (await ctx.db.query("sessions").collect()).map((s) => s.owner),
       );
-      expect(owners).toHaveLength(MAX_PARALLEL_PROJECT_TASKS);
+      expect(owners).toHaveLength(5);
       expect(owners.every((owner) => owner.kind === "task")).toBe(true);
 
-      // A second call on the same state starts nothing.
+      // A second call on the same state starts nothing new.
       await schedule(f);
-      expect(await statuses(f, f.tasks)).toEqual([
-        "in_progress",
-        "in_progress",
-        "in_progress",
-        "todo",
-        "todo",
-      ]);
-
-      // One ends: the next by number takes its slot.
-      await finishTask(f, f.tasks[0], "open");
-      await schedule(f);
-      expect(await statuses(f, f.tasks)).toEqual([
-        "done",
-        "in_progress",
-        "in_progress",
-        "in_progress",
-        "todo",
-      ]);
+      const again = await f.t.run(async (ctx) =>
+        (await ctx.db.query("sessions").collect()).length,
+      );
+      expect(again).toBe(5);
     },
     TIMEOUT_MS,
   );

@@ -36,7 +36,7 @@ import {
 
 /**
  * Starts the project's ready child tasks: approved `todo` tasks, not halted
- * and with no run pending, up to `MAX_PARALLEL_PROJECT_TASKS` in progress.
+ * and with no run pending, with no cap on how many run.
  * Idempotent.
  */
 export const scheduleReadyTasks = internalMutation({
