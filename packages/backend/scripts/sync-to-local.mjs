@@ -710,11 +710,48 @@ function installComponents() {
   });
 }
 
-// Push the checked-out schema before any import. Import validates every row
-// against the schema the backend holds, and the daemon may not have pushed yet,
-// or may hold an older one: every new prod field then fails the import
-// (`queueHeldAt`, then `sandboxSize`, 20 to 24 Nov 2026). Env vars are set above,
-// so an auth.config.ts that reads one can push.
+// A sandbox's base image can hold an old local database: an old schema and old
+// rows. Import validates rows against the held schema, so new prod fields fail
+// (`sandboxSize`); a push validates the held rows against the new schema, so
+// removed fields fail (`sessions.summary`). So empty the backend first: the
+// snapshot's tables with no rows, imported with --replace-all (deployment-wide),
+// leave nothing to validate either way. 20 to 24 Nov 2026.
+const emptyZip = join(dirname(zipPath), `${appName}-empty.zip`);
+const EMPTY_PY = [
+  "import sys, zipfile",
+  "with zipfile.ZipFile(sys.argv[1]) as zin, zipfile.ZipFile(sys.argv[2], 'w') as zout:",
+  "    for info in zin.infolist():",
+  "        if info.filename.endswith('documents.jsonl'):",
+  "            zout.writestr(info.filename, '')",
+  "        elif not info.filename.startswith('_storage/'):",
+  "            zout.writestr(info, zin.read(info.filename))",
+].join("\n");
+let emptied = false;
+for (const python of ["python3", "python"]) {
+  const res = spawnSync(python, ["-c", EMPTY_PY, zipPath, emptyZip], {
+    stdio: ["ignore", "inherit", "inherit"],
+    shell: isWindows,
+  });
+  if (res.error) {
+    continue;
+  }
+  if (res.status !== 0) {
+    fail(`Building the empty snapshot failed under ${python} (exit ${res.status}).`);
+  }
+  emptied = true;
+  break;
+}
+if (!emptied) {
+  fail("python3 or python is required to build the empty snapshot.");
+}
+runConvex(["import", ...targetFlags, "--replace-all", "--yes", emptyZip], {
+  label: `empty ${target.name}`,
+  secrets: [target.adminKey],
+});
+rmSync(emptyZip, { force: true });
+
+// Push the checked-out schema before the real import, so the import validates
+// against it. Env vars are set above, so an auth.config.ts that reads one can push.
 installComponents();
 
 // Root tables first, and only here is --replace-all right: it clears tables the
