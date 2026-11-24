@@ -18,6 +18,13 @@ import {
   SettingsSection,
   SettingsEmptyState,
   ListEnter,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  skipConfirmTitle,
+  useRequestConfirm,
 } from "@vvedantb/ui";
 import {
   IconFolders,
@@ -37,6 +44,8 @@ import {
 type DetectedApp = FunctionReturnType<
   typeof api.github.detectMonorepoApps
 >[number];
+
+type ConnectedApp = FunctionReturnType<typeof api.githubRepos.list>[number];
 
 export function MonorepoClient() {
   const { repo } = useRepo();
@@ -66,6 +75,17 @@ export function MonorepoClient() {
     );
   });
   const allRepos = useQuery(api.githubRepos.list, { includeHidden: true });
+  const { request: requestConfirm } = useRequestConfirm();
+  const [removeTarget, setRemoveTarget] = useState<ConnectedApp | null>(null);
+
+  const confirmRemove = (app: ConnectedApp) => {
+    setRemoveTarget(null);
+    void catchMutationError(
+      removeApp({ repoId: app._id }),
+      "Couldn't remove app",
+      "monorepo-remove-app",
+    );
+  };
 
   const [detected, setDetected] = useState<ReadonlyArray<DetectedApp>>([]);
   const [loading, setLoading] = useState(true);
@@ -199,11 +219,12 @@ export function MonorepoClient() {
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() =>
-                    void catchMutationError(
-                      removeApp({ repoId: app._id }),
-                      "Couldn't remove app",
-                      "monorepo-remove-app",
+                  title={skipConfirmTitle("Remove")}
+                  onClick={(event) =>
+                    requestConfirm(
+                      () => setRemoveTarget(app),
+                      () => confirmRemove(app),
+                      event,
                     )
                   }
                   className="motion-press gap-1.5 text-muted-foreground hover:text-destructive"
@@ -307,6 +328,43 @@ export function MonorepoClient() {
           </div>
         )}
       </SettingsSection>
+
+      <Dialog
+        open={removeTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setRemoveTarget(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove App</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Remove{" "}
+            <span className="font-mono font-medium text-foreground">
+              {removeTarget?.rootDirectory}
+            </span>
+            ? Sync will not add it back. Its sessions and env vars are kept,
+            and adding it again restores them.
+          </p>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRemoveTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => removeTarget && confirmRemove(removeTarget)}
+            >
+              Remove
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <SettingsSection
         title="Custom root directory"
