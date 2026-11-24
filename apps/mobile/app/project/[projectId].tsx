@@ -92,7 +92,7 @@ export default function ProjectScreen() {
         <SegmentedTabs
           value={tab}
           options={[
-            { value: "overview", label: "Overview" },
+            { value: "overview", label: "Project" },
             { value: "coordinator", label: showPlan ? "Plan" : "Sandbox" },
             { value: "documents", label: "Documents" },
           ]}

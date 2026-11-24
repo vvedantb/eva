@@ -165,7 +165,7 @@ export function ProjectDetailClient({
       title={
         <ProjectBreadcrumb projectId={project._id} title={project.title} />
       }
-      /* Overview / Coordinator (Plan while drafting) live in the header. */
+      /* Project / Sandbox (Plan while drafting) live in the header. */
       titleAfter={
         projectPathSegment ? (
           <ProjectMainTabs

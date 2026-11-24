@@ -10,7 +10,7 @@ import {
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 /**
- * Primary project tabs: Overview, and the work tab — the coordinator (its
+ * Primary project tabs: Project (the overview), and the work tab — the coordinator (its
  * chat and rail, Tasks first) or, while a project still plans, its Plan.
  * `work` is the index route, so it owns every deep link.
  */
@@ -42,7 +42,7 @@ export function ProjectMainTabs({
   isSandboxStopping?: boolean;
   /**
    * The coordinator chat has an unseen reply. The chat lives on the work
-   * tab, so the dot shows only while Overview is open.
+   * tab, so the dot shows only while Project is open.
    */
   hasUnread?: boolean;
 }) {
@@ -78,7 +78,7 @@ export function ProjectMainTabs({
       {/* Centred in the page header — segmented so it matches other header
           switchers (sessions, quick tasks) and needs no hairline of its own. */}
       <TabsList size="sm" className="tabs-segmented" aria-label="Project view">
-        <TabsTrigger value="overview">Overview</TabsTrigger>
+        <TabsTrigger value="overview">Project</TabsTrigger>
         <TabsTrigger value="work" className="gap-1.5">
           {workTabLabel}
           {sandboxStatus ? (
