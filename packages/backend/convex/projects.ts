@@ -9,6 +9,7 @@ export {
   countBuilding,
   getProjectPrCreationData,
   listStatusesForRepo,
+  listAccessible,
 } from "./_projects/queries";
 
 export {

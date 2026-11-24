@@ -1,5 +1,6 @@
 "use client";
 
+import { projectHref } from "@eva/shared";
 import { useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation, useConvex } from "convex/react";
@@ -165,7 +166,7 @@ export function GroupTasksModal({
         const segment = entityPathSegment(created);
         if (segment) {
           navigate({
-            to: toInternalRepoHref(`${basePath}/projects/${segment}`),
+            to: toInternalRepoHref(projectHref(basePath, segment)),
           });
         }
       }

@@ -24,7 +24,6 @@ import type { GanttFeature, GanttStatus, GanttRange } from "@vvedantb/ui";
 import type { ProjectStage } from "@eva/shared/projectStatus";
 import type { ProjectListStatus } from "@eva/shared/projectView";
 import { projectStageConfig } from "@/lib/components/projects/ProjectPhaseBadge";
-import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
 import { TimelineBar } from "./_components/TimelineBar";
 import { TimelineSidebarMeta } from "./_components/TimelineSidebarMeta";
@@ -44,7 +43,8 @@ interface ProjectsTimelineProps {
   stageOf: (projectId: string) => ProjectStage;
   /** Derived status by project id (`useProjectListStatuses`). */
   statuses: ReadonlyMap<string, ProjectListStatus>;
-  basePath: string;
+  /** The project page (a public slash path). */
+  hrefOf: (project: Project) => string;
   range: GanttRange;
   zoom: number;
   onRangeChange: (range: GanttRange) => void;
@@ -79,14 +79,13 @@ export function ProjectsTimeline({
   projects,
   stageOf,
   statuses,
-  basePath,
+  hrefOf,
   range,
   zoom,
   onRangeChange,
   onZoomChange,
 }: ProjectsTimelineProps) {
   const navigate = useNavigate();
-  const { repo } = useRepo();
   const updateProject = useMutation(api.projects.update).withOptimisticUpdate(
     (localStore, args) => {
       const {
@@ -99,10 +98,11 @@ export function ProjectsTimeline({
       } = args;
       patchLoadedQuery(
         localStore,
-        api.projects.list,
-        { repoId: repo._id },
-        (currentList) =>
-          currentList.map((p) =>
+        api.projects.listAccessible,
+        {},
+        (current) => ({
+          ...current,
+          projects: current.projects.map((p) =>
             p._id === args.id
               ? {
                   ...p,
@@ -120,6 +120,7 @@ export function ProjectsTimeline({
                 }
               : p,
           ),
+        }),
       );
     },
   );
@@ -149,9 +150,8 @@ export function ProjectsTimeline({
 
   const handleSelectItem = (id: string) => {
     const project = scheduledProjectMap.get(id);
-    const segment = project ? entityPathSegment(project) : null;
-    if (!segment) return;
-    navigate({ to: toInternalRepoHref(`${basePath}/projects/${segment}`) });
+    if (!project || entityPathSegment(project) === null) return;
+    navigate({ to: toInternalRepoHref(hrefOf(project)) });
   };
 
   const handleMove = (id: string, startAt: Date, endAt: Date | null) => {
@@ -263,7 +263,7 @@ export function ProjectsTimeline({
       <UnscheduledProjectsSection
         projects={unscheduled}
         stageOf={stageOf}
-        basePath={basePath}
+        hrefOf={hrefOf}
         onSchedule={handleSchedule}
       />
     </div>

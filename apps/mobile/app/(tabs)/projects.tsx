@@ -28,11 +28,11 @@ function visibleSections(showsToday: boolean) {
 }
 
 /**
- * The Projects tab holds the web's per-repo pages that are not a place to
- * chat: Projects (`ProjectsClient`), Documents (the drawer's Documents
+ * The Projects tab holds the web's pages that are not a place to
+ * chat: Projects (the web root `ProjectsClient`, every repo), Documents (the drawer's Documents
  * panel), Automations (the web Automations sidebar) and Today, switched by pills under the title (`?section=`)
  * or a sideways swipe on the content (`Pager`), as the Sessions tab. All
- * of them share the repo (`?repo=`). Today shows while the repo's Daily
+ * of them share the repo (`?repo=`); Projects reads none as "All repos". Today shows while the repo's Daily
  * standup is on, as the web sidebar, or has history (`useShowsToday`). The
  * title follows the section; only Projects has the "+" (the web "New
  * Project").

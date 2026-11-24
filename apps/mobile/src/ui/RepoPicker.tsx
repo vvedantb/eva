@@ -15,6 +15,8 @@ import { useScheme, XS_TRACKING } from "@/ui/theme";
 
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 
+const ALL_REPOS = "All repos";
+
 const lastRepo = persistedStore<string | null>("repo", null, jsonParser(z.string().nullable()));
 
 /**
@@ -69,33 +71,40 @@ export function RepoPicker({
   repos,
   value,
   onChange,
+  onAll,
 }: {
   repos: Repo[];
-  value: Repo;
+  /** Undefined is "All repos" (with `onAll`). */
+  value: Repo | undefined;
   onChange: (repoId: Id<"githubRepos">) => void;
+  /** Offers "All repos" first in the sheet (the Projects filter). */
+  onAll?: () => void;
 }) {
   const theme = EVA_THEME[useScheme()];
   const [open, setOpen] = useState(false);
+  const label = value ? repoName(value) : ALL_REPOS;
   return (
     <>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`Repo: ${repoName(value)}`}
+        accessibilityLabel={`Repo: ${label}`}
         accessibilityState={{ expanded: open }}
         onPress={() => setOpen(true)}
         className="min-h-11 flex-row items-center gap-1.5 self-start active:opacity-70"
       >
-        <RepoLogo logoUrl={value.logoUrl} size={16} fallback={<IconBrandGithub size={16} color={theme.mutedForeground} />} />
+        {value ? (
+          <RepoLogo logoUrl={value.logoUrl} size={16} fallback={<IconBrandGithub size={16} color={theme.mutedForeground} />} />
+        ) : null}
         <Text
           numberOfLines={1}
           className="font-instrument-sans-medium shrink text-sm"
           style={{ color: theme.foreground, fontWeight: "500", letterSpacing: XS_TRACKING }}
         >
-          {repoName(value)}
+          {label}
         </Text>
         <IconChevronDown size={14} color={theme.mutedForeground} />
       </Pressable>
-      <RepoSheet open={open} onOpenChange={setOpen} repos={repos} value={value} onChange={onChange} />
+      <RepoSheet open={open} onOpenChange={setOpen} repos={repos} value={value} onChange={onChange} onAll={onAll} />
     </>
   );
 }
@@ -110,15 +119,29 @@ export function RepoSheet({
   repos,
   value,
   onChange,
+  onAll,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   repos: Repo[];
   value: Repo | undefined;
   onChange: (repoId: Id<"githubRepos">) => void;
+  /** Leads the sheet with "All repos", active while no repo is picked. */
+  onAll?: () => void;
 }) {
   return (
     <FooterSheet open={open} onOpenChange={onOpenChange} title="Repo">
+      {onAll ? (
+        <SheetRow
+          icon={IconBrandGithub}
+          title={ALL_REPOS}
+          active={value === undefined}
+          onPress={() => {
+            onAll();
+            onOpenChange(false);
+          }}
+        />
+      ) : null}
       {repos.map((repo) => (
         <SheetRow
           key={repo._id}

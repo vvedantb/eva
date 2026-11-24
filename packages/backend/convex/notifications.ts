@@ -5,7 +5,7 @@ import {
 } from "./_generated/server";
 import { v, type Infer } from "convex/values";
 import { isInternalAppHref } from "@eva/shared/safeUrl";
-import { entityHref, repoBasePath } from "@eva/shared";
+import { entityHref, projectHref, repoBasePath } from "@eva/shared";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import {
@@ -145,7 +145,7 @@ export async function createNotification(
       if (doc?.numId !== undefined) {
         href = `${baseHref}/docs/${doc.numId}/content`;
       } else if (project?.numId !== undefined && task?.numId !== undefined) {
-        href = `${baseHref}/projects/${project.numId}/${task.numId}/activity`;
+        href = `${projectHref(baseHref, project.numId)}/${task.numId}/activity`;
       } else if (task?.numId !== undefined) {
         href = entityHref("task", repo, task.numId);
       } else if (project?.numId !== undefined) {

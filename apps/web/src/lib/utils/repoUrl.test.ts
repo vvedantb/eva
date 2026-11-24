@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { entityHref, parseEvaEntityLink } from "@eva/shared";
 import {
   hrefToNavigateOptions,
   repoHref,
@@ -102,11 +103,41 @@ describe("repoUrl monorepo slash rewrite", () => {
     ).toBeNull();
   });
 
+  it("rewrites root project URLs, app folder included", () => {
+    const slash = "/projects/evalucom/carepulse-ts/web/12/sandbox/files";
+    const dash = "/projects/evalucom/carepulse-ts--web/12/sandbox/files";
+    expect(toInternalRepoHref(slash)).toBe(dash);
+    expect(toDisplayRepoHref(dash)).toBe(slash);
+    expect(toInternalRepoHref("/projects/evalucom/carepulse-ts/12/3")).toBe(
+      "/projects/evalucom/carepulse-ts/12/3",
+    );
+    expect(toInternalRepoHref("/projects?repo=evalucom/carepulse-ts")).toBe(
+      "/projects?repo=evalucom/carepulse-ts",
+    );
+    // A pre-numId link names the project by its Convex id, never an app.
+    const legacy = "/projects/evalucom/carepulse-ts/k57a2b3c4d5e6f7g8h9j0k1m2n3p4q5r/sandbox";
+    expect(toInternalRepoHref(legacy)).toBe(legacy);
+  });
+
+  it("reads entity links from root project URLs", () => {
+    const repo = { owner: "evalucom", name: "carepulse-ts", rootDirectory: "apps/web" };
+    const href = entityHref("project", repo, 12);
+    expect(href).toBe("/projects/evalucom/carepulse-ts/web/12");
+    expect(parseEvaEntityLink(`${href}/sandbox`, "https://eva.test")).toEqual({
+      owner: "evalucom",
+      name: "carepulse-ts",
+      appName: "web",
+      section: "projects",
+      numId: 12,
+    });
+  });
+
   it("has no section for repo roots or non-repo paths", () => {
     expect(repoSectionFromPath("/evalucom/carepulse-ts")).toBeNull();
     expect(repoSectionFromPath("/evalucom/carepulse-ts/web")).toBeNull();
     expect(repoSectionFromPath("/home")).toBeNull();
     expect(repoSectionFromPath("/settings/theme")).toBeNull();
+    expect(repoSectionFromPath("/projects/evalucom/carepulse-ts/12")).toBeNull();
   });
 
   it("repoSectionHref lands on the section, or the repo root without one", () => {

@@ -7,7 +7,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { useNavigate } from "@tanstack/react-router";
-import { parseProjectSpec } from "@eva/shared";
+import { parseProjectSpec, projectHref } from "@eva/shared";
 import {
   IconRocket,
   IconMessageQuestion,
@@ -69,7 +69,7 @@ export function ProjectPlanTab({
         const segment = entityPathSegment(project);
         if (segment) {
           navigate({
-            to: toInternalRepoHref(`${basePath}/projects/${segment}`),
+            to: toInternalRepoHref(projectHref(basePath, segment)),
           });
         }
       }

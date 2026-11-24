@@ -1,4 +1,4 @@
-import { ENTITY_SECTION, repoBasePath } from "@eva/shared";
+import { ENTITY_SECTION, projectHref, repoBasePath } from "@eva/shared";
 import { getEvaBaseUrl } from "../_env/webAppUrl";
 
 /** Absolute web URL of a repo: Eva's base URL plus `repoBasePath`. */
@@ -14,9 +14,10 @@ export function buildEvaTaskUrl(
   projectId?: string,
   rootDirectory?: string,
 ): string {
-  const base = repoUrl(repoOwner, repoName, rootDirectory);
-  if (projectId) return `${base}/${ENTITY_SECTION.project}/${projectId}`;
-  return `${base}/${ENTITY_SECTION.task}/${taskId}`;
+  if (projectId) {
+    return buildEvaProjectUrl(repoOwner, repoName, projectId, rootDirectory);
+  }
+  return `${repoUrl(repoOwner, repoName, rootDirectory)}/${ENTITY_SECTION.task}/${taskId}`;
 }
 
 /** Builds a link to view a session in the Eva web app. */
@@ -36,7 +37,7 @@ export function buildEvaProjectUrl(
   projectId: string,
   rootDirectory?: string,
 ): string {
-  return `${repoUrl(repoOwner, repoName, rootDirectory)}/${ENTITY_SECTION.project}/${projectId}`;
+  return `${getEvaBaseUrl()}${projectHref(repoBasePath({ owner: repoOwner, name: repoName, rootDirectory }), projectId)}`;
 }
 
 /** Builds a link to view a doc in the Eva web app (path uses per-repo numId). */

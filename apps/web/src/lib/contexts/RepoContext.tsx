@@ -174,6 +174,37 @@ export function RepoGate({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * RepoContext for one repo on a page outside the repo routes (the Projects
+ * overview's New Project): no URL canonicalisation, and nothing renders until
+ * the repo loads.
+ */
+export function RepoScope({
+  owner,
+  repoParam,
+  children,
+}: {
+  owner: string;
+  repoParam: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <RepoProvider owner={owner} repoParam={repoParam} passive>
+      <RepoScopeGate>{children}</RepoScopeGate>
+    </RepoProvider>
+  );
+}
+
+function RepoScopeGate({ children }: { children: React.ReactNode }) {
+  const loadState = useContext(RepoLoadStateContext);
+  if (loadState.status !== "ready") return null;
+  return (
+    <RepoContext.Provider value={loadState.value}>
+      {children}
+    </RepoContext.Provider>
+  );
+}
+
 export function useRepo() {
   const context = useContext(RepoContext);
   if (context === undefined) {

@@ -34,7 +34,7 @@ export function chatSourceRoute<Tab extends "documents" | "artifacts">(
   to:
     | "/$owner/$repo/sessions/$numId/$sandboxTab"
     | "/$owner/$repo/quick-tasks/$numId/sandbox/$sandboxTab"
-    | "/$owner/$repo/projects/$numId/sandbox/$sandboxTab";
+    | "/projects/$owner/$repo/$numId/sandbox/$sandboxTab";
   params: { owner: string; repo: string; numId: string; sandboxTab: Tab };
 } | null {
   if (source.numId === undefined) return null;
@@ -53,5 +53,5 @@ export function chatSourceRoute<Tab extends "documents" | "artifacts">(
       params,
     };
   }
-  return { to: "/$owner/$repo/projects/$numId/sandbox/$sandboxTab", params };
+  return { to: "/projects/$owner/$repo/$numId/sandbox/$sandboxTab", params };
 }

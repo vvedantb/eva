@@ -14,7 +14,7 @@ import { IconThumbUp } from "@tabler/icons-react";
 import { PageWrapper } from "@/lib/components/PageWrapper";
 import {
   feedbackAuthorParser,
-  feedbackRepoParser,
+  repoFilterParser,
   feedbackSentimentParser,
 } from "@/lib/search-params";
 import { FeedbackFilter } from "./_components/FeedbackFilter";
@@ -35,7 +35,7 @@ export function FeedbackClient() {
     feedbackSentimentParser,
   );
   const [author, setAuthor] = useQueryState("from", feedbackAuthorParser);
-  const [repo, setRepo] = useQueryState("repo", feedbackRepoParser);
+  const [repo, setRepo] = useQueryState("repo", repoFilterParser);
 
   const repos = [
     ...new Set(

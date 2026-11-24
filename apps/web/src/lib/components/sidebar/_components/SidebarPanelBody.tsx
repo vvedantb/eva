@@ -53,6 +53,12 @@ const GlobalSettingsSidebar = lazy(() =>
   })),
 );
 
+const ProjectsSidebar = lazy(() =>
+  import("@/lib/components/sidebar/ProjectsSidebar").then((mod) => ({
+    default: mod.ProjectsSidebar,
+  })),
+);
+
 const sidebarPanelFallback = (
   <div className="flex items-center justify-center py-8">
     <Spinner size="sm" />
@@ -100,6 +106,8 @@ export function SidebarPanelBody({
           <HomeSidebar pathname={pathname} onNavigate={onNavigate} />
         ) : flags.showGlobalSettingsPanel ? (
           <GlobalSettingsSidebar pathname={pathname} onNavigate={onNavigate} />
+        ) : flags.showProjectsPanel ? (
+          <ProjectsSidebar pathname={pathname} onNavigate={onNavigate} />
         ) : flags.showContextSidebar ? (
           <ContextSidebarBody
             contextSidebarMode={contextSidebarMode}

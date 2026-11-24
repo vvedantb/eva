@@ -61,12 +61,12 @@ const GLOBAL_PAGES: Array<{ title: string; href: string; keywords: string }> = [
   { title: "Home", href: "/home", keywords: "home dashboard" },
   { title: "Inbox", href: "/inbox", keywords: "inbox notifications" },
   { title: "Sessions", href: "/sessions", keywords: "sessions" },
+  { title: "Projects", href: "/projects", keywords: "projects ship build" },
   { title: "Artifacts", href: "/artifacts", keywords: "artifacts html" },
   { title: "Teams", href: "/teams", keywords: "teams" },
 ];
 
 const REPO_PAGES: Array<{ title: string; path: string; keywords: string }> = [
-  { title: "Projects", path: "/projects", keywords: "projects ship build" },
   {
     title: "Quick Tasks",
     path: "/quick-tasks",

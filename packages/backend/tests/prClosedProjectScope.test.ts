@@ -207,7 +207,7 @@ describe("a project pull request closing without merge", () => {
       expect(ada[0].title).toContain('project "Billing rewrite"');
       // No taskId is set, so the click-through lands on the project rather
       // than whichever task happened to open the PR.
-      expect(ada[0].href).toBe("/vvedantb/eva/projects/7");
+      expect(ada[0].href).toBe("/projects/vvedantb/eva/7");
 
       expect(await notificationsFor(t, ids.bo)).toHaveLength(1);
       expect(

@@ -8,7 +8,7 @@ import {
 
 type SimpleViewSandboxRedirectTo =
   | "/$owner/$repo/sessions/$numId/$sandboxTab"
-  | "/$owner/$repo/projects/$numId/sandbox/$sandboxTab"
+  | "/projects/$owner/$repo/$numId/sandbox/$sandboxTab"
   | "/$owner/$repo/quick-tasks/$numId/sandbox/$sandboxTab";
 
 interface SimpleViewSandboxRedirectProps {

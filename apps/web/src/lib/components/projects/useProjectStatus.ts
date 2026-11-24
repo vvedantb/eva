@@ -2,6 +2,7 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import type { FunctionReturnType } from "convex/server";
 import { api, type Id } from "@eva/backend";
 import type { ProjectStatus } from "@eva/shared/projectStatus";
+import { withHomeRepos } from "@eva/shared";
 import {
   projectStatusFromRows,
   projectTaskNotesByTask,
@@ -59,6 +60,21 @@ export function useProjectListStatuses(
   const rows = useQuery(api.projects.listStatusesForRepo, { repoId });
   if (rows === undefined) return undefined;
   return new Map(rows.map((row) => [String(row.projectId), row]));
+}
+
+/**
+ * Every project the caller can open, each with its home repo, and their
+ * derived statuses by project id (`listAccessible`): the root Projects pages.
+ * Undefined while either query loads.
+ */
+export function useAccessibleProjects() {
+  const data = useQuery(api.projects.listAccessible, {});
+  const repos = useQuery(api.githubRepos.list, {});
+  if (data === undefined || repos === undefined) return undefined;
+  const statuses: ReadonlyMap<string, ProjectListStatus> = new Map(
+    data.statuses.map((row) => [String(row.projectId), row]),
+  );
+  return { repos, rows: withHomeRepos(data.projects, repos), statuses };
 }
 
 /**

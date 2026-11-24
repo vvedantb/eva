@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { findLivePullRequestOnBranch } from "../_pullRequests/store";
 import { authQuery, hasRepoAccess } from "../functions";
+import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 import { internalQuery } from "../_generated/server";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { sessionStatusValidator } from "../_validators/enums";
@@ -73,31 +74,40 @@ function buildingProjectsForRepo(
     .collect();
 }
 
+/** A repo's live projects as list rows. The caller checks repo access. */
+async function listItemsForRepo(
+  db: GenericDatabaseReader<DataModel>,
+  userId: Id<"users">,
+  repoId: Id<"githubRepos">,
+) {
+  const [projects, awaitingAnswerIds] = await Promise.all([
+    liveProjectsForRepo(db, repoId),
+    awaitingAnswerEntityIdsForRepo(db, repoId),
+  ]);
+  const hasUnread = await unreadLookupForList(
+    db,
+    userId,
+    repoId,
+    projects.length,
+  );
+  return await Promise.all(
+    projects.map(async (project) => ({
+      ...clientProject(project),
+      // A project's sandbox lives on its session; the row shows that.
+      sandboxStatus: await projectSandboxStatus(db, project),
+      hasUnread: await hasUnread(project),
+      isAwaitingAnswer: awaitingAnswerIds.has(String(project._id)),
+    })),
+  );
+}
+
 /** Lists all projects for a repo. */
 export const list = authQuery({
   args: { repoId: v.id("githubRepos") },
   returns: v.array(projectListItemValidator),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const [projects, awaitingAnswerIds] = await Promise.all([
-      liveProjectsForRepo(ctx.db, args.repoId),
-      awaitingAnswerEntityIdsForRepo(ctx.db, args.repoId),
-    ]);
-    const hasUnread = await unreadLookupForList(
-      ctx.db,
-      ctx.userId,
-      args.repoId,
-      projects.length,
-    );
-    return await Promise.all(
-      projects.map(async (project) => ({
-        ...clientProject(project),
-        // A project's sandbox lives on its session; the row shows that.
-        sandboxStatus: await projectSandboxStatus(ctx.db, project),
-        hasUnread: await hasUnread(project),
-        isAwaitingAnswer: awaitingAnswerIds.has(String(project._id)),
-      })),
-    );
+    return await listItemsForRepo(ctx.db, ctx.userId, args.repoId);
   },
 });
 
@@ -110,6 +120,38 @@ const displayStatusCountsValidator = v.object({
   archived: v.number(),
 });
 
+const projectListStatusValidator = v.object({
+  projectId: v.id("projects"),
+  stage: v.union(v.literal("done"), v.literal("in_progress"), v.literal("todo")),
+  counts: displayStatusCountsValidator,
+  needsYouCount: v.number(),
+  coordinatorPaused: v.boolean(),
+});
+
+/** A repo's live projects with their derived status. The caller checks repo access. */
+async function statusesForRepo(
+  db: GenericDatabaseReader<DataModel>,
+  repoId: Id<"githubRepos">,
+) {
+  const projects = await liveProjectsForRepo(db, repoId);
+  return await Promise.all(
+    projects.map(async (project) => {
+      const [facts, coordinatorPaused] = await Promise.all([
+        loadProjectTaskFacts(db, project),
+        isCoordinatorPaused(db, project._id),
+      ]);
+      const status = projectStatus([...facts.values()]);
+      return {
+        projectId: project._id,
+        stage: status.stage,
+        counts: status.counts,
+        needsYouCount: status.needsYou.length,
+        coordinatorPaused,
+      };
+    }),
+  );
+}
+
 /**
  * Every live project of a repo with its derived status, in one call for the
  * projects list (`projectStatus` over each project's task facts): its stage,
@@ -119,38 +161,39 @@ const displayStatusCountsValidator = v.object({
  */
 export const listStatusesForRepo = authQuery({
   args: { repoId: v.id("githubRepos") },
-  returns: v.array(
-    v.object({
-      projectId: v.id("projects"),
-      stage: v.union(
-        v.literal("done"),
-        v.literal("in_progress"),
-        v.literal("todo"),
-      ),
-      counts: displayStatusCountsValidator,
-      needsYouCount: v.number(),
-      coordinatorPaused: v.boolean(),
-    }),
-  ),
+  returns: v.array(projectListStatusValidator),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    const projects = await liveProjectsForRepo(ctx.db, args.repoId);
-    return await Promise.all(
-      projects.map(async (project) => {
-        const [facts, coordinatorPaused] = await Promise.all([
-          loadProjectTaskFacts(ctx.db, project),
-          isCoordinatorPaused(ctx.db, project._id),
-        ]);
-        const status = projectStatus([...facts.values()]);
-        return {
-          projectId: project._id,
-          stage: status.stage,
-          counts: status.counts,
-          needsYouCount: status.needsYou.length,
-          coordinatorPaused,
-        };
-      }),
+    return await statusesForRepo(ctx.db, args.repoId);
+  },
+});
+
+/**
+ * The root Projects pages: every live project in every repo the caller can
+ * open (hidden repos excluded, as the rail), with the same rows and derived
+ * statuses as `list` and `listStatusesForRepo`. Each row carries its home
+ * `repoId`; the client joins the repo from `githubRepos.list`.
+ */
+export const listAccessible = authQuery({
+  args: {},
+  returns: v.object({
+    projects: v.array(projectListItemValidator),
+    statuses: v.array(projectListStatusValidator),
+  }),
+  handler: async (ctx) => {
+    const repos = await gatherAccessibleRepos(ctx.db, ctx.userId, false);
+    const perRepo = await Promise.all(
+      repos.map((repo) =>
+        Promise.all([
+          listItemsForRepo(ctx.db, ctx.userId, repo._id),
+          statusesForRepo(ctx.db, repo._id),
+        ]),
+      ),
     );
+    return {
+      projects: perRepo.flatMap(([projects]) => projects),
+      statuses: perRepo.flatMap(([, statuses]) => statuses),
+    };
   },
 });
 

@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { m } from "motion/react";
+import { Link } from "@tanstack/react-router";
 import { IconChevronLeft, IconX } from "@tabler/icons-react";
 import { RepoLogo } from "@/lib/components/RepoLogo";
 import { cn } from "@eva/ui";
@@ -111,6 +112,9 @@ export function SidebarPanelHeader({
   );
 }
 
+const FLAT_PANEL_TITLE_CLASS =
+  "min-w-0 flex-1 truncate text-base font-semibold tracking-[-0.02em] text-sidebar-primary";
+
 function FlatPanelHeaderContent({
   flags,
   onClose,
@@ -122,14 +126,28 @@ function FlatPanelHeaderContent({
     <>
       {/* Lines the title up with nav row icons: nav px-2 + row
           px-4, or the Sessions grid's tighter px-2.5. */}
-      <span
-        className={cn(
-          "min-w-0 flex-1 truncate text-base font-semibold tracking-[-0.02em] text-sidebar-primary",
-          flags.showGlobalSessionsPanel ? "pl-0.5" : "pl-2",
-        )}
-      >
-        {getFlatPanelTitle(flags)}
-      </span>
+      {flags.showProjectsPanel ? (
+        // The project page's list: its title goes back to the overview.
+        <Link
+          to="/projects"
+          onClick={onClose}
+          className={cn(
+            FLAT_PANEL_TITLE_CLASS,
+            "pl-2 transition-colors hover:text-primary",
+          )}
+        >
+          {getFlatPanelTitle(flags)}
+        </Link>
+      ) : (
+        <span
+          className={cn(
+            FLAT_PANEL_TITLE_CLASS,
+            flags.showGlobalSessionsPanel ? "pl-0.5" : "pl-2",
+          )}
+        >
+          {getFlatPanelTitle(flags)}
+        </span>
+      )}
       <div className="flex shrink-0 items-center gap-0.5">
         {flags.showGlobalSessionsPanel ? <SessionsSidebarOptionsMenu /> : null}
         {flags.showGlobalAutomationsPanel ? (

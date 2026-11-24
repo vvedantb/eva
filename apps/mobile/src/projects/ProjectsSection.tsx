@@ -20,18 +20,18 @@ import { SearchInput } from "@vvedantb/native-ui/search-input";
 import { useLargerText } from "@vvedantb/native-ui/theme";
 import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, SectionList, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { projectStageAppearance } from "@/projects/phaseAppearance";
 import { ProjectRow } from "@/projects/ProjectRow";
 import { useProjectActions } from "@/projects/useProjectActions";
-import { useProjectListStatuses } from "@/projects/useProjectStatus";
+import { useAccessibleProjects } from "@/projects/useProjectStatus";
 import { CardGap, FoldFooter, FoldHeader } from "@/ui/FoldHeader";
 import { FilterChipsBar } from "@/ui/FilterChipsBar";
 import { persistedIdSet } from "@/storage/persistedStore";
-import { RepoPicker, useRepoParam } from "@/ui/RepoPicker";
+import { rememberRepo, RepoPicker, repoName, useRepoParam } from "@/ui/RepoPicker";
 import { useScheme } from "@/ui/theme";
 import { LIST_WINDOW } from "@/ui/listWindow";
 
@@ -44,6 +44,12 @@ const STAGE_LIST_DEFAULTS: StageListFilters = { ...PROJECT_LIST_DEFAULTS, hidden
 const toggledProjectPhases = persistedIdSet("projectPhasesToggled");
 
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
+type AccessibleProjects = NonNullable<ReturnType<typeof useAccessibleProjects>>;
+
+/** A card's home repo, as the repo picker names it. */
+function repoLabelOf(repo: Repo | undefined): string | undefined {
+  return repo === undefined ? undefined : repoName(repo);
+}
 
 /** The Projects repo (`useRepoParam`), and the new-project screen on it. */
 export function useProjectRepo() {
@@ -59,50 +65,64 @@ export function useProjectRepo() {
 }
 
 /**
- * The web Projects list view at phone width, for one repo: the repo picker,
+ * The web Projects overview at phone width: every project in every repo the
+ * caller can open (`projects.listAccessible`), filtered to one with the repo
+ * picker ("All repos" when `?repo=` names none), then
  * the toolbar (search and the Options sheet: sort and stages, the web
  * `ProjectsClient` toolbar) and its "Filtered by" chips, then a collapsible
  * section per shown derived stage (`projectStatus`: To Do, In Progress,
- * Done; icon, label, count; `listStatusesForRepo`), each with its
- * project cards or "No projects". Sections with projects start open, as the
+ * Done; icon, label, count), each with its project cards (home repo muted)
+ * or "No projects". Sections with projects start open, as the
  * web. A long press on a card opens the web project menu as a sheet
- * (`useProjectActions`). A `SectionList`, as a repo's projects have no cap.
+ * (`useProjectActions`). A `SectionList`, as the projects have no cap.
  * Not here from the web: the kanban and timeline views, select mode and its
  * bulk bar.
  */
 export function ProjectsSection() {
-  const { repos, repo, setRepo } = useProjectRepo();
-  if (repos === undefined) return <ProjectPlaceholders />;
-  if (!repo) {
+  const router = useRouter();
+  const { repo: repoParam } = useLocalSearchParams<{ repo?: string }>();
+  const data = useAccessibleProjects();
+  if (data === undefined) return <ProjectPlaceholders />;
+  if (data.repos.length === 0) {
     return <EmptyState icon={IconLayoutKanban} title="No repos" description="Connect a repo on the web. It shows up here." />;
   }
+  const filterRepo = data.repos.find((candidate) => candidate._id === repoParam);
   return (
     <View className="flex-1">
       <View className="px-4">
-        <RepoPicker repos={repos} value={repo} onChange={setRepo} />
+        <RepoPicker
+          repos={data.repos}
+          value={filterRepo}
+          onChange={(repoId) => {
+            rememberRepo(repoId);
+            router.setParams({ repo: repoId });
+          }}
+          onAll={() => router.setParams({ repo: undefined })}
+        />
       </View>
-      {/* Keyed on the repo: its search, filters and open sections start fresh. */}
-      <ProjectList key={repo._id} repo={repo} />
+      {/* Keyed on the filter: its search, filters and open sections start fresh. */}
+      <ProjectList key={filterRepo?._id ?? "all"} data={data} filterRepo={filterRepo} />
     </View>
   );
 }
 
-function ProjectList({ repo }: { repo: Repo }) {
+function ProjectList({ data, filterRepo }: { data: AccessibleProjects; filterRepo: Repo | undefined }) {
   const { openNew } = useProjectRepo();
   const scheme = useScheme();
-  const projects = useQuery(api.projects.list, { repoId: repo._id });
+  const rows = data.rows.filter(({ repo }) => filterRepo === undefined || repo._id === filterRepo._id);
+  const repoOf = new Map(rows.map(({ project, repo }) => [project._id, repo]));
+  const projects = rows.map(({ project }) => project);
   // Each project's stage is derived from its child tasks, never stored.
-  const statuses = useProjectListStatuses(repo._id);
-  const stageOf = (projectId: string): ProjectStage => statuses?.get(projectId)?.stage ?? "todo";
+  const statuses = data.statuses;
+  const stageOf = (projectId: string): ProjectStage => statuses.get(projectId)?.stage ?? "todo";
   const users = useQuery(api.users.listAll, {});
   const [filters, setFilters] = useState<StageListFilters>(STAGE_LIST_DEFAULTS);
   // Columns the user folded or unfolded: as the web, a column starts open when it has projects.
   const [toggled, toggle] = toggledProjectPhases.useSet("all");
-  const actions = useProjectActions({ repo, users });
+  const actions = useProjectActions({ users });
   const largerText = useLargerText();
   const insets = useSafeAreaInsets();
 
-  if (projects === undefined) return <ProjectPlaceholders />;
   const changeFilters = (patch: Partial<StageListFilters>) => setFilters({ ...filters, ...patch });
   const shown = searchAndSortProjects(
     projects.filter((project) => !filters.hiddenPhases.includes(stageOf(project._id))),
@@ -183,9 +203,10 @@ function ProjectList({ repo }: { repo: Repo }) {
           renderItem={({ item: project }) => (
             <ProjectRow
               project={project}
-              status={statuses?.get(project._id)}
+              status={statuses.get(project._id)}
               users={users}
-              onLongPress={() => actions.openSheet(project)}
+              repoLabel={repoLabelOf(repoOf.get(project._id))}
+              onLongPress={() => actions.openSheet({ ...project, repo: repoOf.get(project._id) })}
             />
           )}
           renderSectionFooter={({ section }) => <FoldFooter open={section.open} count={section.count} empty="No projects" />}

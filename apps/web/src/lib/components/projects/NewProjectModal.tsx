@@ -17,7 +17,7 @@ import {
 } from "@vvedantb/ui";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
-import { newProjectSubmitBlocker } from "@eva/shared";
+import { newProjectSubmitBlocker, projectHref } from "@eva/shared";
 import type { Id } from "@eva/backend";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { useBaseBranchState } from "@/lib/hooks/useBaseBranchState";
@@ -121,7 +121,7 @@ export function NewProjectModal({
         // The coordinator chat is on the project's sandbox surface.
         navigate({
           to: toInternalRepoHref(
-            `${basePath}/projects/${projectId}/sandbox/documents`,
+            `${projectHref(basePath, projectId)}/sandbox/documents`,
           ),
         });
       }

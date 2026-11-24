@@ -1,7 +1,6 @@
 "use client";
 
 import { Link } from "@tanstack/react-router";
-import { cn } from "@eva/ui";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,10 +8,9 @@ import {
   DropdownMenuTrigger,
 } from "@vvedantb/ui";
 import { IconPlus } from "@tabler/icons-react";
-import { RepoLogo } from "@/lib/components/RepoLogo";
+import { RepoMenuLabel } from "@/lib/components/RepoMenuLabel";
 import { repoSessionsIndexPath } from "@/lib/components/sidebar/_utils/repoSessionPaths";
-import { repoDisplayLabel, type RepoWithLogo } from "@/lib/utils/repoGrouping";
-import { repoTileColor } from "@/lib/utils/repoTileColor";
+import type { RepoWithLogo } from "@/lib/utils/repoGrouping";
 
 interface SessionTabsNewMenuProps {
   /** Apps in strip order, so the menu reads in the same order as the tabs. */
@@ -42,38 +40,16 @@ export function SessionTabsNewMenu({ repos }: SessionTabsNewMenuProps) {
         align="start"
         className="max-h-80 w-64 overflow-y-auto"
       >
-        {repos.map((repo) => {
-          const displayName = repoDisplayLabel(repo);
-          const tile = repoTileColor(
-            `${repo.owner}/${repo.name}/${displayName}`,
-          );
-
-          return (
-            <DropdownMenuItem key={repo._id} asChild>
-              <Link
-                to={repoSessionsIndexPath(repo)}
-                className="flex items-center gap-2"
-              >
-                <RepoLogo
-                  logoUrl={repo.logoUrl}
-                  size={20}
-                  fallback={
-                    <span
-                      className={cn(
-                        "flex size-5 items-center justify-center rounded text-3xs font-semibold",
-                        tile.bg,
-                        tile.text,
-                      )}
-                    >
-                      {displayName.charAt(0).toUpperCase()}
-                    </span>
-                  }
-                />
-                <span className="truncate">{displayName}</span>
-              </Link>
-            </DropdownMenuItem>
-          );
-        })}
+        {repos.map((repo) => (
+          <DropdownMenuItem key={repo._id} asChild>
+            <Link
+              to={repoSessionsIndexPath(repo)}
+              className="flex items-center gap-2"
+            >
+              <RepoMenuLabel repo={repo} />
+            </Link>
+          </DropdownMenuItem>
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );

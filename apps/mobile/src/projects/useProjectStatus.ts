@@ -1,4 +1,5 @@
 import { api, type Id } from "@eva/backend";
+import { withHomeRepos } from "@eva/shared";
 import type { ProjectStatus } from "@eva/shared/projectStatus";
 import {
   projectStatusFromRows,
@@ -34,14 +35,16 @@ export function useProjectTaskStatus(projectId: Id<"projects">, repoId: Id<"gith
 }
 
 /**
- * Derived status for every project of a repo, keyed by project id: one
- * subscription for the whole list (`listStatusesForRepo`). Undefined while
- * it loads, so rows never jump between sections while the list fills in.
+ * Every project the caller can open, each with its home repo, and their
+ * derived statuses by project id (`listAccessible`), as the web root
+ * Projects pages. Undefined while either query loads.
  */
-export function useProjectListStatuses(repoId: Id<"githubRepos">): ReadonlyMap<string, ProjectListStatus> | undefined {
-  const rows = useQuery(api.projects.listStatusesForRepo, { repoId });
-  if (rows === undefined) return undefined;
-  return new Map(rows.map((row) => [String(row.projectId), row]));
+export function useAccessibleProjects() {
+  const data = useQuery(api.projects.listAccessible, {});
+  const repos = useQuery(api.githubRepos.list, {});
+  if (data === undefined || repos === undefined) return undefined;
+  const statuses: ReadonlyMap<string, ProjectListStatus> = new Map(data.statuses.map((row) => [String(row.projectId), row]));
+  return { repos, rows: withHomeRepos(data.projects, repos), statuses };
 }
 
 /**

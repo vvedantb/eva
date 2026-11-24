@@ -98,9 +98,12 @@ const router = createRouter({
   },
 });
 
-/** `/…/sessions/42`, `/…/reviews/884`, … — the entity a path is inside, if any. */
+/**
+ * `/projects/o/r/7`, `/…/sessions/42`, `/…/reviews/884`, … — the entity a path
+ * is inside, if any. Projects sit at the root (`/projects/$owner/$repo/$numId`).
+ */
 const ENTITY_PREFIX =
-  /^(.*?\/(?:sessions|quick-tasks|projects|reviews|docs|testing-arena)\/[^/]+)(?:\/|$)/;
+  /^(\/projects\/[^/]+\/[^/]+\/[^/]+|.*?\/(?:sessions|quick-tasks|reviews|docs|testing-arena)\/[^/]+)(?:\/|$)/;
 
 function isSameEntity(from: string, to: string): boolean {
   const entity = ENTITY_PREFIX.exec(from)?.[1];

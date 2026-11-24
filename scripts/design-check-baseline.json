@@ -154,7 +154,6 @@
   "apps/web/src/lib/components/sandbox/_components/RecapWalkthrough.tsx :: raw-button",
   "apps/web/src/lib/components/sandbox/_components/RecapWalkthrough.tsx :: raw-radius",
   "apps/web/src/lib/components/sandbox/previewIframeHost.tsx :: text-white-black",
-  "apps/web/src/lib/components/sidebar/BuildingProjectsBadge.tsx :: raw-radius",
   "apps/web/src/lib/components/sidebar/DocsSidebar.tsx :: raw-button",
   "apps/web/src/lib/components/sidebar/DraftsCountBadge.tsx :: raw-radius",
   "apps/web/src/lib/components/sidebar/RailSettingsMenu.tsx :: raw-radius",
@@ -237,8 +236,6 @@
   "apps/web/src/routes/_repo/$owner/$repo/automations/_components/RunAccordion.tsx :: raw-button",
   "apps/web/src/routes/_repo/$owner/$repo/automations/_components/SystemAutomationCard.tsx :: raw-radius",
   "apps/web/src/routes/_repo/$owner/$repo/drafts/_components/DraftCard.tsx :: raw-button",
-  "apps/web/src/routes/_repo/$owner/$repo/projects/_components/ActiveFiltersBar.tsx :: raw-button",
-  "apps/web/src/routes/_repo/$owner/$repo/projects/_components/ActiveFiltersBar.tsx :: raw-radius",
   "apps/web/src/routes/_repo/$owner/$repo/quick-tasks/_components/ActiveFiltersBar.tsx :: raw-button",
   "apps/web/src/routes/_repo/$owner/$repo/quick-tasks/_components/ActiveFiltersBar.tsx :: raw-radius",
   "apps/web/src/routes/_repo/$owner/$repo/quick-tasks/_components/QuickTaskDetailHeaderActions.tsx :: raw-button",
@@ -282,5 +279,7 @@
   "apps/web/src/routes/dev/_components/ui-gallery/KiboSection.tsx :: text-white-black",
   "apps/web/src/routes/dev/_components/ui-gallery/MenuSections.tsx :: raw-radius",
   "apps/web/src/routes/dev/feature-previews.tsx :: raw-button",
-  "apps/web/src/routes/dev/feature-previews.tsx :: raw-radius"
+  "apps/web/src/routes/dev/feature-previews.tsx :: raw-radius",
+  "apps/web/src/routes/projects/_components/ActiveFiltersBar.tsx :: raw-button",
+  "apps/web/src/routes/projects/_components/ActiveFiltersBar.tsx :: raw-radius"
 ]

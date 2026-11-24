@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useNavigate } from "@tanstack/react-router";
 import { api, type Id } from "@eva/backend";
-import { TASK_TAGS } from "@eva/shared";
+import { TASK_TAGS, projectHref } from "@eva/shared";
 import { projectStatusCountsLine } from "@eva/shared/projectView";
 import { Button } from "@vvedantb/ui";
 import { IconPlus } from "@tabler/icons-react";
@@ -49,7 +49,7 @@ export function ProjectTasksPanel({
     if (!projectSegment || !taskSegment) return;
     void navigate({
       to: toInternalRepoHref(
-        `${basePath}/projects/${projectSegment}/${taskSegment}`,
+        `${projectHref(basePath, projectSegment)}/${taskSegment}`,
       ),
     });
   };

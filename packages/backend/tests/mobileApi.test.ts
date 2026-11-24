@@ -171,7 +171,7 @@ describe("mobile api", () => {
       const archived = await asUser.query(api.chats.get, { target: ids.archivedChatId });
       expect(session).toMatchObject({ kind: "session", canReply: true, model: "codex:gpt-5.6-sol" });
       expect(task).toMatchObject({ kind: "task", canReply: true, model: "claude:opus" });
-      expect(project).toMatchObject({ kind: "project", canReply: true, webPath: "/vvedantb/eva/projects/3" });
+      expect(project).toMatchObject({ kind: "project", canReply: true, webPath: "/projects/vvedantb/eva/3" });
       expect(archived).toMatchObject({ canReply: false });
     },
     TIMEOUT_MS,

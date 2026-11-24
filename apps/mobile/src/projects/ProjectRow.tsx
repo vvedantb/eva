@@ -37,7 +37,7 @@ const NO_TASKS: ProjectListStatus = {
  * live mark (the question mark, else the needs-you triangle, else the
  * sandbox dot) and unread dot; the description (else the raw input, in
  * italics) on two lines; the task progress bar and the stage counts
- * (`projectStatus`); then the lead and members, and the Draft or Finalised badge (a To Do
+ * (`projectStatus`); then the lead and members, the home repo (muted), and the Draft or Finalised badge (a To Do
  * project) where the web kebab sits. Sized for a thumb: a 14
  * title, 12 secondary text, `py-3`, 8 apart. A tap opens the project; a long
  * press opens the project menu (`onLongPress`), as the web kebab and
@@ -48,12 +48,15 @@ export function ProjectRow({
   project,
   status,
   users,
+  repoLabel,
   onLongPress,
 }: {
   project: Project;
-  /** Derived from the child tasks (`useProjectListStatuses`); undefined while they load. */
+  /** Derived from the child tasks (`useAccessibleProjects`); undefined while they load. */
   status: ProjectListStatus | undefined;
   users: User[] | undefined;
+  /** The home repo on the cross-repo list, shown muted. */
+  repoLabel?: string;
   onLongPress: () => void;
 }) {
   const router = useRouter();
@@ -156,6 +159,11 @@ export function ProjectRow({
           {hiddenCount > 0 ? (
             <Text className="font-instrument-sans-medium" style={{ ...META_TEXT, fontWeight: "500", color: muted, fontVariant: ["tabular-nums"] }}>
               {`+${hiddenCount}`}
+            </Text>
+          ) : null}
+          {repoLabel ? (
+            <Text numberOfLines={1} className="font-instrument-sans min-w-0 shrink" style={{ ...META_TEXT, color: muted }}>
+              {repoLabel}
             </Text>
           ) : null}
           {/* The Draft or Finalised badge ends the footer, where the web kebab sits (the long press is the menu). */}

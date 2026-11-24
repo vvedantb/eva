@@ -1,5 +1,11 @@
 # Changelog
 
+## Projects move to the root
+
+Date: 2026-11-24
+
+Projects leave the app sidebar for a rail item: `/projects` lists every accessible repo's projects (`projects.listAccessible`, "All repos" filter), a project lives at `/projects/<owner>/<repo>[/<app>]/<numId>` beside a projects list column, and old `/<owner>/<repo>/projects/…` URLs redirect.
+
 ## Projects: "+" replaces Feedback; no header status badge
 
 Date: 2026-11-24

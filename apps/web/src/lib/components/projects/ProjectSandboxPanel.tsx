@@ -1,5 +1,6 @@
 "use client";
 
+import { projectHref } from "@eva/shared";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id, SandboxOwner } from "@eva/backend";
@@ -137,7 +138,7 @@ export function ProjectSandboxPanel({
     if (tab === "review") {
       void navigate({
         to: toInternalRepoHref(
-          `${basePath}/projects/${projectPathSegment}/sandbox/review/diffs/unified`,
+          `${projectHref(basePath, projectPathSegment)}/sandbox/review/diffs/unified`,
         ),
         search: true,
       });
@@ -145,7 +146,7 @@ export function ProjectSandboxPanel({
     }
     void navigate({
       to: toInternalRepoHref(
-        `${basePath}/projects/${projectPathSegment}/sandbox/${tab}`,
+        `${projectHref(basePath, projectPathSegment)}/sandbox/${tab}`,
       ),
       // Keep diffFile across sandbox tabs.
       search: true,
@@ -179,7 +180,7 @@ export function ProjectSandboxPanel({
       typeof repoParam === "string" ? (
         <SimpleViewSandboxRedirect
           activeTab={activeTab}
-          to="/$owner/$repo/projects/$numId/sandbox/$sandboxTab"
+          to="/projects/$owner/$repo/$numId/sandbox/$sandboxTab"
           params={{
             owner: ownerParam,
             repo: repoParam,
@@ -292,7 +293,7 @@ export function ProjectSandboxPanel({
                 projectPathSegment && !collapsed
                   ? {
                       owner,
-                      returnTo: `${basePath}/projects/${projectPathSegment}/sandbox/preview`,
+                      returnTo: `${projectHref(basePath, projectPathSegment)}/sandbox/preview`,
                       title,
                     }
                   : undefined

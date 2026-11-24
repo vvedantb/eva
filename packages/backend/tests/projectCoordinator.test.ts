@@ -424,6 +424,10 @@ describe("coordinator wake-ups", () => {
         repoId: f.repoId,
       });
       expect(listed[0]?.coordinatorPaused).toBe(true);
+      // The root Projects pages read the same row across every repo.
+      const accessible = await f.asUser.query(api.projects.listAccessible, {});
+      expect(accessible.projects.map((p) => p._id)).toEqual([f.projectId]);
+      expect(accessible.statuses).toEqual(listed);
 
       // A person writes in the coordinator chat.
       const { chatId } = await f.asUser.mutation(api.sessions.ensureOwned, {

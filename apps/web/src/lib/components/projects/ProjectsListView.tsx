@@ -14,9 +14,7 @@ import type { ProjectStage } from "@eva/shared/projectStatus";
 import type { ProjectListStatus } from "@eva/shared/projectView";
 import { PROJECT_STAGES } from "@eva/shared/projectView";
 import { projectStageConfig } from "@/lib/components/projects/ProjectPhaseBadge";
-import { entityPathSegment } from "@/lib/numId";
 import { ProjectCard } from "@/lib/components/projects/ProjectCard";
-import { useRepo } from "@/lib/contexts/RepoContext";
 import { usePersistedScrollParent } from "@/lib/hooks/usePersistedScrollParent";
 import type { SelectionToggleOptions } from "@/lib/components/quick-tasks/selectionRange";
 
@@ -27,6 +25,10 @@ interface ProjectsListViewProps {
   visiblePhases: Set<ProjectStage>;
   /** Derived status by project id (`useProjectListStatuses`). */
   statuses: ReadonlyMap<string, ProjectListStatus>;
+  /** The project page (a public slash path). */
+  hrefOf: (project: Project) => string;
+  /** The project's home repo, shown muted on its card. */
+  repoLabelOf: (project: Project) => string | undefined;
   onDelete: (id: Id<"projects">, title: string) => void;
   isSelecting?: boolean;
   selectedIds?: Set<Id<"projects">>;
@@ -40,14 +42,15 @@ export function ProjectsListView({
   projectsByPhase,
   visiblePhases,
   statuses,
+  hrefOf,
+  repoLabelOf,
   onDelete,
   isSelecting = false,
   selectedIds,
   onToggleSelect,
 }: ProjectsListViewProps) {
-  const { owner, name, basePath } = useRepo();
   const { scrollParent, scrollRef } = usePersistedScrollParent(
-    `${owner}/${name}/projects/list`,
+    "projects/list",
   );
   const firstPaint = useFirstPaintGate();
   const [openSections, setOpenSections] = useState<Set<ProjectStage>>(() => {
@@ -143,11 +146,8 @@ export function ProjectsListView({
                               sandboxStatus={project.sandboxStatus}
                               hasUnread={project.hasUnread}
                               isAwaitingAnswer={project.isAwaitingAnswer}
-                              href={
-                                entityPathSegment(project)
-                                  ? `${basePath}/projects/${entityPathSegment(project)}`
-                                  : `${basePath}/projects`
-                              }
+                              href={hrefOf(project)}
+                              repoLabel={repoLabelOf(project)}
                               onDelete={() =>
                                 onDelete(project._id, project.title)
                               }

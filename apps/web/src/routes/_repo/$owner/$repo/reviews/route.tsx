@@ -1,5 +1,6 @@
 import { createFileRoute, Navigate, Outlet } from "@tanstack/react-router";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { repoFilterKeyFromParams } from "@/lib/utils/repoUrl";
 
 export const Route = createFileRoute("/_repo/$owner/$repo/reviews")({
   component: ReviewsLayout,
@@ -12,8 +13,8 @@ function ReviewsLayout() {
   if (simpleView) {
     return (
       <Navigate
-        to="/$owner/$repo/projects"
-        params={{ owner, repo }}
+        to="/projects"
+        search={{ repo: repoFilterKeyFromParams({ owner, repo }) }}
         replace
       />
     );

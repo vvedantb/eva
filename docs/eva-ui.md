@@ -45,7 +45,7 @@ Groups of controls sit on a **track**: the segmented-tabs trough (`--default` li
 
 **App rail**
 
-- `RepoRail` uses `Sidebar.RailGroup` (`@vvedantb/ui`) with `railGroupThemeClass` (`rail-track` in `globals.css`, which also fixes the package's dark-mode pill). Three groups: Home / Inbox / Sessions, the repos (centred with `justify-center-safe`), and the bottom actions.
+- `RepoRail` uses `Sidebar.RailGroup` (`@vvedantb/ui`) with `railGroupThemeClass` (`rail-track` in `globals.css`, which also fixes the package's dark-mode pill). Three groups: Home / Inbox / Sessions / Projects, the repos (centred with `justify-center-safe`), and the bottom actions.
 - One pill per group slides to the active tile with the tabs motion (`--tabs-dur`, `--tabs-ease`); moving to another group snaps.
 - No rail edge, no `RailSeparator`. The sidebar panel beside it has no edge line either; its own nav highlight stays the grey `bg-sidebar-accent` (a list, not a tab group).
 - Rail icons are 22px. Home uses the package `IconEva`, with no disc, so its pill shows.

@@ -2,7 +2,6 @@
 
 import type { FunctionReturnType } from "convex/server";
 import type { api, Id } from "@eva/backend";
-import { entityPathSegment } from "@/lib/numId";
 import { useNavigate } from "@tanstack/react-router";
 import { IconChevronRight } from "@tabler/icons-react";
 import type { ProjectStage } from "@eva/shared/projectStatus";
@@ -15,7 +14,8 @@ type Project = FunctionReturnType<typeof api.projects.list>[number];
 interface UnscheduledProjectsSectionProps {
   projects: Project[];
   stageOf: (projectId: string) => ProjectStage;
-  basePath: string;
+  /** The project page (a public slash path). */
+  hrefOf: (project: Project) => string;
   onSchedule: (id: Id<"projects">, start: number, end: number) => void;
 }
 
@@ -25,7 +25,7 @@ interface UnscheduledProjectsSectionProps {
 export function UnscheduledProjectsSection({
   projects,
   stageOf,
-  basePath,
+  hrefOf,
   onSchedule,
 }: UnscheduledProjectsSectionProps) {
   const navigate = useNavigate();
@@ -55,11 +55,7 @@ export function UnscheduledProjectsSection({
               <button
                 type="button"
                 onClick={() =>
-                  navigate({
-                    to: toInternalRepoHref(
-                      `${basePath}/projects/${entityPathSegment(project) ?? ""}`,
-                    ),
-                  })
+                  navigate({ to: toInternalRepoHref(hrefOf(project)) })
                 }
                 className="max-sm:hit-target max-sm:min-w-0 flex-1 truncate text-left text-xs font-medium hover:text-primary"
               >

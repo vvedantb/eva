@@ -1,5 +1,5 @@
 import { api, type Id } from "@eva/backend";
-import { entityHref, readableServerError } from "@eva/shared";
+import { entityHref, readableServerError, type RepoPathFields } from "@eva/shared";
 import { projectDeleteNote } from "@eva/shared/projectView";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconClipboard, IconCopy, IconGitBranch, IconLink, IconTrash, IconUserPlus } from "@tabler/icons-react-native";
@@ -23,6 +23,8 @@ export interface ProjectMenuTarget {
   numId?: number;
   projectLead?: Id<"users">;
   branchName?: string;
+  /** The project's home repo, for Copy link when the list spans repos. */
+  repo?: RepoPathFields;
 }
 
 type Page = "root" | "lead" | "copy";
@@ -46,8 +48,8 @@ export function useProjectActions({
 }: {
   /** Rows that lead the menu (the project page's sandbox and git actions); given the menu's `close`. */
   extraRows?: (close: () => void) => ReactNode;
-  /** The repo's path fields, for Copy link. */
-  repo: { owner: string; name: string; rootDirectory?: string };
+  /** The repo's path fields, for Copy link (a target's own `repo` wins). */
+  repo?: RepoPathFields;
   users: User[] | undefined;
   onDeleted?: () => void;
 }) {
@@ -76,6 +78,7 @@ export function useProjectActions({
   };
 
   const body = (project: ProjectMenuTarget) => {
+    const linkRepo = project.repo ?? repo;
     switch (page) {
       case "root":
         return (
@@ -128,7 +131,9 @@ export function useProjectActions({
         return (
           <>
             <SheetRow icon={IconClipboard} title="Title" onPress={() => copy(project.title)} />
-            <SheetRow icon={IconLink} title="Link" onPress={() => copy(`${WEB_URL}${entityHref("project", repo, project.numId)}`)} />
+            {linkRepo ? (
+              <SheetRow icon={IconLink} title="Link" onPress={() => copy(`${WEB_URL}${entityHref("project", linkRepo, project.numId)}`)} />
+            ) : null}
             {project.branchName ? (
               <SheetRow icon={IconGitBranch} title="Branch name" onPress={() => copy(project.branchName ?? "", "Branch name copied")} />
             ) : null}

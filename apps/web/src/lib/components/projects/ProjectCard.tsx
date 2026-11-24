@@ -71,6 +71,8 @@ interface ProjectCardProps {
   onToggleSelect?: (event: { shiftKey: boolean }) => void;
   /** Public (slash) path; rendered via router Link so rewrites own the href. */
   href?: string;
+  /** The home repo on the cross-repo overview, shown muted. */
+  repoLabel?: string;
   /**
    * Plain-click handler. Call `event.preventDefault()` to cancel Link
    * navigation (e.g. while a dialog is open).
@@ -100,6 +102,7 @@ export function ProjectCard({
   isSelected,
   onToggleSelect,
   href,
+  repoLabel,
   onClick,
   onDelete,
 }: ProjectCardProps) {
@@ -250,6 +253,11 @@ export function ProjectCard({
               </span>
             ) : null}
           </div>
+          {repoLabel ? (
+            <span className="min-w-0 truncate text-2xs text-muted-foreground">
+              {repoLabel}
+            </span>
+          ) : null}
           {/* Touch has no right-click, so below `sm` the same items get a
               visible kebab. `LIST_ROW_CONTROL_CLASS` lifts it above the row's
               stretched link overlay, which is at z-1. */}

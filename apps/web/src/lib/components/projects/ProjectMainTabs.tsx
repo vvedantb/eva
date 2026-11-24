@@ -30,7 +30,7 @@ export function ProjectMainTabs({
   isSandboxStopping = false,
   hasUnread = false,
 }: {
-  /** Project base path, e.g. `/owner/repo/projects/3` (pre-internal form). */
+  /** Project base path, e.g. `/projects/owner/repo/3` (pre-internal form). */
   projectHref: string;
   activeTab: ProjectMainTab;
   /** "Sandbox" for active projects, "Plan" while drafting. */

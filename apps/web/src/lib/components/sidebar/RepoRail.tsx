@@ -9,6 +9,7 @@ import { cn } from "@eva/ui";
 import { IconPencil } from "@tabler/icons-react";
 import {
   AutomationIcon,
+  BoardIcon,
   IconEva,
   InboxArrowIcon,
   SearchIcon,
@@ -37,7 +38,10 @@ import { SidebarUserMenu } from "@/lib/components/sidebar/SidebarUserMenu";
 import { ShortcutKbd } from "@/lib/components/ui/Kbd";
 import { useSidebar } from "@/lib/contexts/SidebarContext";
 import { useSearch } from "@/lib/contexts/SearchContext";
-import { isHomePath } from "@/lib/components/sidebar/homePaths";
+import {
+  isHomePath,
+  isProjectsPath,
+} from "@/lib/components/sidebar/homePaths";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { repoSectionFromPath, repoSectionHref } from "@/lib/utils/repoUrl";
 import { repoTileColor } from "@/lib/utils/repoTileColor";
@@ -114,7 +118,7 @@ function RepoRailLiveData(props: RepoRailProps) {
 }
 
 /**
- * Far-left icon rail: global destinations (Eva, Inbox, Sessions), then repos,
+ * Far-left icon rail: global destinations (Eva, Inbox, Sessions, Projects), then repos,
  * then Automations / collapse / search / account / settings at the bottom.
  * Teams and Artifacts live in the workspace sidebar behind the Eva tile;
  * Testing (dev) lives in the Settings sidebar. The gear goes straight to the
@@ -167,6 +171,7 @@ function RepoRailView({
   const homeActive =
     pathname === "/" || pathname.startsWith("/setup") || isHomePath(pathname);
   const inboxActive = pathname === "/inbox" || pathname.startsWith("/inbox/");
+  const projectsActive = isProjectsPath(pathname);
   const pathParts = pathname.split("/").filter(Boolean);
   const onRepoSessionsPath =
     pathParts.includes("sessions") && pathParts[0] !== "sessions";
@@ -252,6 +257,11 @@ function RepoRailView({
                 label={sessionsLabel}
                 className={RAIL_BADGE_LIVE_CLASS}
               />
+            </Link>
+          </Sidebar.RailItem>
+          <Sidebar.RailItem asChild label="Projects" active={projectsActive}>
+            <Link to="/projects" onClick={onNavigate}>
+              <BoardIcon size={22} className="shrink-0" />
             </Link>
           </Sidebar.RailItem>
           {/* Manager Ave used to sit here. It now lives in the floating launcher

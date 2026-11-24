@@ -10,7 +10,7 @@ import { isSessionArchived } from "../_sessions/archive";
 import { chatOwnerEntityId, findWorkSession } from "../_sessions/owner";
 import { chatSeedSettings } from "../_sessions/ownedSession";
 import { findWorkChat } from "../_sessions/ownerState";
-import { entityHref, repoBasePath } from "@eva/shared";
+import { entityHref, projectHref, repoBasePath } from "@eva/shared";
 import { storedComposerTraits } from "../_shared/composerTraits";
 import {
   aiModelValidator,
@@ -197,7 +197,7 @@ export async function resolveMobileChat(
     const base = repoBasePath(repo);
     const taskWebPath =
       project?.numId !== undefined
-        ? `${base}/projects/${project.numId}/${task.numId ?? ""}/activity`
+        ? `${projectHref(base, project.numId)}/${task.numId ?? ""}/activity`
         : entityHref("task", repo, task.numId);
     // A task chats in the Main chat of its own session (also in a project).
     // Shown as the task (title, link, PR); read, sent and stopped as that session chat. A task with no

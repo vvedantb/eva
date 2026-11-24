@@ -5,6 +5,7 @@ import { type ContextSidebarMode } from "@/lib/components/sidebar/contextSidebar
 import {
   isGlobalSettingsPath,
   isHomePath,
+  isProjectPagePath,
 } from "@/lib/components/sidebar/homePaths";
 
 const KNOWN_SUB_PAGES = KNOWN_REPO_SUB_PAGES;
@@ -61,6 +62,7 @@ const NON_REPO_ROUTES = new Set([
   "api",
   "settings",
   "testing",
+  "projects",
 ]);
 
 /** Reads the repo (and optional app) the sidebar is scoped to from the URL. */
@@ -111,6 +113,8 @@ export interface SidebarPanelFlags {
   showGlobalAutomationsPanel: boolean;
   showHomePanel: boolean;
   showGlobalSettingsPanel: boolean;
+  /** A project page: the cross-repo projects list replaces the app sidebar. */
+  showProjectsPanel: boolean;
   showSidePanel: boolean;
   showContextSidebar: boolean;
   isFlatPanel: boolean;
@@ -148,7 +152,8 @@ export function routeHasSidePanel({
       !useChromeSessionTabs) ||
     isLandingPath(pathname, "/automations") ||
     isHomePath(pathname) ||
-    isGlobalSettingsPanelPath(pathname)
+    isGlobalSettingsPanelPath(pathname) ||
+    isProjectPagePath(pathname)
   );
 }
 
@@ -179,6 +184,7 @@ function getGlobalPanelFlags({
     showGlobalAutomationsPanel,
     showHomePanel: isHomePath(pathname),
     showGlobalSettingsPanel: isGlobalSettingsPanelPath(pathname),
+    showProjectsPanel: isProjectPagePath(pathname),
   };
 }
 
@@ -193,6 +199,7 @@ export function getSidebarPanelFlags(
     showGlobalAutomationsPanel,
     showHomePanel,
     showGlobalSettingsPanel,
+    showProjectsPanel,
   } = globalFlags;
   const showSidePanel = routeHasSidePanel(input);
   const showContextSidebar =
@@ -206,7 +213,8 @@ export function getSidebarPanelFlags(
     showGlobalSessionsPanel ||
     showGlobalAutomationsPanel ||
     showHomePanel ||
-    showGlobalSettingsPanel;
+    showGlobalSettingsPanel ||
+    showProjectsPanel;
   const isSourceListHeader = isFlatPanel || showContextSidebar;
   return {
     ...globalFlags,
@@ -224,7 +232,9 @@ export function getFlatPanelTitle(flags: SidebarPanelFlags): string {
       ? "Automations"
       : flags.showGlobalSettingsPanel
         ? "Settings"
-        : "Home";
+        : flags.showProjectsPanel
+          ? "Projects"
+          : "Home";
 }
 
 /** One key drives the header/nav enter animations and the header-action scope. */
@@ -238,11 +248,13 @@ export function getSidebarPanelKey(
       ? "global-automations"
       : flags.showGlobalSettingsPanel
         ? "global-settings"
-        : flags.showHomePanel
-          ? "home"
-          : flags.showContextSidebar
-            ? contextSidebarMode
-            : "main";
+        : flags.showProjectsPanel
+          ? "projects"
+          : flags.showHomePanel
+            ? "home"
+            : flags.showContextSidebar
+              ? contextSidebarMode
+              : "main";
 }
 
 export function getContextSidebarTitle(

@@ -1,5 +1,6 @@
 import { createFileRoute, Navigate, Outlet } from "@tanstack/react-router";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { repoFilterKeyFromParams } from "@/lib/utils/repoUrl";
 
 export const Route = createFileRoute("/_repo/$owner/$repo/automations")({
   component: AutomationsLayout,
@@ -11,7 +12,11 @@ function AutomationsLayout() {
 
   if (simpleView) {
     return (
-      <Navigate to="/$owner/$repo/projects" params={{ owner, repo }} replace />
+      <Navigate
+        to="/projects"
+        search={{ repo: repoFilterKeyFromParams({ owner, repo }) }}
+        replace
+      />
     );
   }
 

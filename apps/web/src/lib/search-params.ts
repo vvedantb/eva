@@ -375,12 +375,13 @@ export const chatLogKindParser =
   parseAsStringLiteral(CHAT_LOG_ENTRY_KINDS).withOptions(searchOptions);
 
 // Feedback page filters (`/feedback?sentiment=negative&from=agent&repo=o/r`).
-// Absent = all.
+// Absent = all. `repoFilterParser` is the Projects overview's repo filter too
+// (`/projects?repo=o/r[/app]`, `projectsRepoFilterKey`).
 export const feedbackSentimentParser =
   parseAsStringLiteral(FEEDBACK_SENTIMENTS).withOptions(searchOptions);
 export const feedbackAuthorParser =
   parseAsStringLiteral(FEEDBACK_AUTHORS).withOptions(searchOptions);
-export const feedbackRepoParser = parseAsString.withOptions(searchOptions);
+export const repoFilterParser = parseAsString.withOptions(searchOptions);
 
 // Which of a chat's pull requests the sandbox Review tab shows (`?pr=<id>`).
 // Absent means the chat's primary PR.

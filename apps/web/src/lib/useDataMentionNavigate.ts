@@ -1,5 +1,6 @@
 "use client";
 
+import { projectHref } from "@eva/shared";
 import { useNavigate } from "@tanstack/react-router";
 import { useConvex } from "convex/react";
 import { api } from "@eva/backend";
@@ -44,7 +45,7 @@ export function useDataMentionNavigate(
       return;
     }
     if (entity.kind === "project") {
-      navigate({ to: `${repoBasePath}/projects/${segment}` });
+      navigate({ to: projectHref(repoBasePath, segment) });
       return;
     }
     navigate({ to: `${repoBasePath}/quick-tasks/${segment}` });

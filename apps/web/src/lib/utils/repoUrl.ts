@@ -1,4 +1,4 @@
-import { repoBasePath } from "@eva/shared";
+import { PROJECTS_PATH, repoBasePath, splitProjectPath } from "@eva/shared";
 
 /**
  * Monorepo apps use one `$repo` path segment internally (`repo--app`). The
@@ -40,7 +40,13 @@ const NON_REPO_PATH_PREFIXES = new Set([
   "mcp",
   // Stable preview wake links: `/p/$kind/$id` (routes/p.$kind.$id.tsx).
   "p",
+  // Cross-repo projects: `/projects/$owner/$repo/$numId` (routes/projects).
+  "projects",
 ]);
+
+/** First segment of the root Projects pages. */
+const PROJECTS_SEGMENT = PROJECTS_PATH.slice(1);
+
 
 /**
  * Public href for a repo. Monorepo apps use `name/app` so the address bar and
@@ -86,6 +92,18 @@ export function decodeRepoParam(repoParam: string): {
 }
 
 /**
+ * The overview's repo filter for a `$owner/$repo` route param pair (`$repo` is
+ * the router's `name` or `name--app` form): `projectsRepoFilterKey` of that repo.
+ */
+export function repoFilterKeyFromParams(params: {
+  owner: string;
+  repo: string;
+}): string {
+  const { name, appName } = decodeRepoParam(params.repo);
+  return [params.owner, name, appName].filter(Boolean).join("/");
+}
+
+/**
  * Browser slash URL → router internal `--` URL.
  * `/owner/repo/app/…` → `/owner/repo--app/…`
  *
@@ -109,6 +127,13 @@ export function decodeRepoParam(repoParam: string): {
 export function toInternalRepoHref(href: string): string {
   const { pathname, suffix } = splitHref(href);
   const segments = pathname.split("/").filter(Boolean);
+  // `/projects/owner/repo/app/<numId>/…` → `/projects/owner/repo--app/<numId>/…`.
+  if (segments[0] === PROJECTS_SEGMENT) {
+    const split = splitProjectPath(pathname);
+    if (split === null || split.repo.length !== 3) return href;
+    const [owner, repo, app] = split.repo;
+    return `/${PROJECTS_SEGMENT}/${owner}/${repo}--${app}/${split.rest.join("/")}${suffix}`;
+  }
   if (
     segments.length >= 3 &&
     !NON_REPO_PATH_PREFIXES.has(segments[0]) &&
@@ -129,6 +154,13 @@ export function toInternalRepoHref(href: string): string {
 export function toDisplayRepoHref(href: string): string {
   const { pathname, suffix } = splitHref(href);
   const segments = pathname.split("/").filter(Boolean);
+  if (segments[0] === PROJECTS_SEGMENT) {
+    if (segments.length < 3 || !segments[2].includes("--")) return href;
+    const [root, owner, repoParam, ...rest] = segments;
+    const [name, appName] = repoParam.split("--", 2);
+    const tail = rest.length > 0 ? `/${rest.join("/")}` : "";
+    return `/${root}/${owner}/${name}/${appName}${tail}${suffix}`;
+  }
   if (segments.length >= 2 && segments[1].includes("--")) {
     const [name, appName] = segments[1].split("--", 2);
     if (appName) {
@@ -145,7 +177,7 @@ export function toDisplayRepoHref(href: string): string {
  * so these are never carried across — landing on them would leave the same
  * global panel open and never reveal the app sidebar.
  */
-const RAIL_GLOBAL_SECTIONS = new Set(["sessions", "automations"]);
+const RAIL_GLOBAL_SECTIONS = new Set(["sessions", "automations", "projects"]);
 
 /**
  * The repo section a path sits in (`quick-tasks`, `projects`, …), or null for a

@@ -204,10 +204,21 @@ export {
   type QuickTaskTimeRange,
 } from "./quickTaskFilters";
 export {
+  repoForProjectsFilter,
+  withHomeRepos,
+  type ProjectHomeRepo,
+} from "./projectRepos";
+export {
   ENTITY_SECTION,
+  PROJECTS_PATH,
   entityHref,
   parseEvaEntityLink,
+  projectHref,
+  projectsRepoFilterKey,
   repoBasePath,
+  repoScopedProjectPath,
+  splitProjectPath,
+  type RepoPathFields,
   type EvaEntityLink,
   type EvaLinkSection,
 } from "./repoPath";
