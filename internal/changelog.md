@@ -1,5 +1,18 @@
 # Changelog
 
+## Web: review tabs, logs views, sidebar rows, kanban cards and stats load motion
+
+Date: 2026-11-24
+
+WHY: The last places that still swapped at once now move: review tabs and logs views slide like other tabs, sidebar rows fold in and out, kanban cards glide to their new column, and Stats fades in after its spinner.
+
+Architectural:
+- `useKeepAliveTabSlide` + globals.css `data-tab-pane`: the tab slide for keep-alive panes (`ReviewTabsPanel` keeps Summary, Timeline and Code mounted with `invisible`). The new pane plays `t-tab-pane-in`; the old one plays `t-tab-pane-out`, whose `visibility: visible` keyframes hold it on screen over `invisible`. Gated on `data-tab-dir`, set only after the first switch, so mount does not slide.
+- Settings → Usage views (Overview, Type, Project) use `TabsTransition` (`LOG_VIEW_ORDER`) in place of an opacity fade.
+- `sidebarRowPresence`: session, automation and review rows open their height on arrive and fold it on archive or delete (220 ms). They clip only while moving (`transitionEnd: overflow visible`), so focus rings stay. Review rows gained an `AnimatePresence` (`initial={false}`).
+- `kanbanCardGlide`: quick task and project cards carry `layoutId`, so a status or phase change glides the card between columns (320 ms). The new column clips it while it travels. A card the user just dropped skips it (`droppedId`, cleared when the mutation resolves).
+- `useLoadedFade`: Stats fades its content in when it replaces the spinner; cached data shows at once. Lists, empty states (`EmptyState.enter`) and `PageWrapper animated` pages already animated in, so they are unchanged.
+
 ## Web: sandbox panel tabs slide like tab content
 
 Date: 2026-11-24
