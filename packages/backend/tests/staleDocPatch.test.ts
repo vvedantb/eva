@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { buildStaleDocPatch } from "../convex/_prRecapWorkflow/staleDoc";
 
 const NOW = 1_800_000_000_000;

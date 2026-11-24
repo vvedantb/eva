@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { FFMPEG_INSTALL_SCRIPT } from "../convex/_sandbox/ffmpegInstall";
 
 /** Every `dnf` attempt in the script, in source order. */

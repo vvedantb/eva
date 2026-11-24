@@ -1,25 +1,25 @@
 import { convexTest } from "convex-test";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, mock, test, vi } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
-import type * as StallWatchdog from "../convex/_chat/stallWatchdog";
+import * as StallWatchdog from "../convex/_chat/stallWatchdog";
 import { openSessionChatTurn } from "../convex/_chat/turnStore";
+import { modules } from "./_helpers/convexModules";
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 /** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 
-const poison = vi.hoisted(() => ({
+const poison = {
   workflowId: "poisoned-workflow",
   throws: 0,
-}));
+};
 
 // Stands in for any mutation-level failure (in prod: a 16 MB read limit on an
 // unbounded `backgroundAgents` array) on exactly one turn.
-vi.mock("../convex/_chat/stallWatchdog", async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof StallWatchdog>();
+// Copied before mock.module patches the namespace, so the wrapper calls the real one.
+const actual = { ...StallWatchdog };
+mock.module("../convex/_chat/stallWatchdog", () => {
   return {
     ...actual,
     finalizeStaleChatTurn: async (

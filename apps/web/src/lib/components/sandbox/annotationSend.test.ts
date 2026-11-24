@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { annotationSender } from "./annotationSend";
 
 function harness(isExecuting: boolean, sendFails = false) {

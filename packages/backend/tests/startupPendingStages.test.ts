@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { plannedStartupStages } from "../convex/_sandbox_runtime/prepareSandboxSteps";
 import { startupProgress } from "../convex/_sandbox_runtime/startupProgress";
 

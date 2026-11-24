@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import {
@@ -8,6 +8,7 @@ import {
   touchUserActivity,
 } from "../convex/_sandbox/activity";
 import { ACTIVITY_TOUCH_MIN_INTERVAL_MS } from "../convex/_sandbox/idlePolicy";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * `sandboxActivity` is the idle-pause sweep's memory of "someone touched this
@@ -15,7 +16,6 @@ import { ACTIVITY_TOUCH_MIN_INTERVAL_MS } from "../convex/_sandbox/idlePolicy";
  * poll), so the throttle and the sandbox-id reverse lookup both matter.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 
 async function fixture() {

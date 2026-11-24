@@ -1,9 +1,10 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { openSessionChatTurn } from "../convex/_chat/turnStore";
 import { TURN_RUNNING_LEASE_MS } from "../convex/_chat/turnLease";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * `claimPendingTurn` hands a staged prompt to the daemon AND takes the turn's
@@ -17,7 +18,6 @@ import { TURN_RUNNING_LEASE_MS } from "../convex/_chat/turnLease";
  * other channel for an interrupt — while the prompt stays staged.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 /** Loading the session-workflow module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;

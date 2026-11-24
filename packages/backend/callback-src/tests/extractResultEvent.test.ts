@@ -1,28 +1,25 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, describe, expect, test, vi } from "vitest";
-import type * as callbackConfig from "../config.js";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 import { tryParseJsonObject } from "../utils.js";
 
 // PROVIDER picks the stream format extractResultEvent reads; set per test.
-const runtime = vi.hoisted((): { provider: string } => ({ provider: "" }));
-
-vi.mock("../config.js", async (importOriginal) => {
-  const original = await importOriginal<typeof callbackConfig>();
-  return {
-    ...original,
-    get PROVIDER() {
-      return runtime.provider;
-    },
+// Bun copies a mocked module's exports once, so re-mock on every change.
+const originalConfig = { ...(await import("../config.js")) };
+function setProvider(provider: string): void {
+  mock.module("../config.js", () => ({
+    ...originalConfig,
+    PROVIDER: provider,
     normalizedCursorModel: "composer-2",
     normalizedOpencodeModel: "anthropic/claude-sonnet-4",
-  };
-});
+  }));
+}
+setProvider("");
 
 const { extractResultEvent } = await import("../runtime/completion.js");
 
 afterEach(() => {
-  runtime.provider = "";
+  setProvider("");
 });
 
 function lines(...events: object[]): string {
@@ -40,7 +37,7 @@ function assistantText(text: string): object {
  */
 describe("Cursor and OpenCode synthetic results", () => {
   test("a Cursor run reports its result and usage under the configured model", () => {
-    runtime.provider = "cursor";
+    setProvider("cursor");
     const output = readFileSync(
       join(import.meta.dirname, "fixtures", "cursor-sdk-events.jsonl"),
       "utf8",
@@ -65,7 +62,7 @@ describe("Cursor and OpenCode synthetic results", () => {
   });
 
   test("an OpenCode result is billed to the model the server served", () => {
-    runtime.provider = "opencode";
+    setProvider("opencode");
     const event = extractResultEvent(
       lines({
         type: "result",
@@ -92,7 +89,7 @@ describe("Cursor and OpenCode synthetic results", () => {
   test.each(["cursor", "opencode"])(
     "a %s error result carries the agent's own message",
     (provider) => {
-      runtime.provider = provider;
+      setProvider(provider);
       expect(
         extractResultEvent(
           lines({
@@ -109,7 +106,7 @@ describe("Cursor and OpenCode synthetic results", () => {
   );
 
   test("a Cursor result with no text falls back to the streamed answer", () => {
-    runtime.provider = "cursor";
+    setProvider("cursor");
     expect(
       extractResultEvent(
         lines(assistantText("Renamed "), assistantText("the button."), {
@@ -127,7 +124,7 @@ describe("Cursor and OpenCode synthetic results", () => {
    * kill or timeout overrides it.
    */
   test("a Cursor run without a result line reports its streamed text", () => {
-    runtime.provider = "cursor";
+    setProvider("cursor");
     expect(
       extractResultEvent(
         lines(assistantText("Renamed "), assistantText("the button.")),
@@ -140,7 +137,7 @@ describe("Cursor and OpenCode synthetic results", () => {
   });
 
   test("a Cursor run with neither a result nor text has no result", () => {
-    runtime.provider = "cursor";
+    setProvider("cursor");
     expect(
       extractResultEvent(
         lines({ type: "thinking", text: "planning" }) + "not json\n",
@@ -151,7 +148,7 @@ describe("Cursor and OpenCode synthetic results", () => {
 
 describe("Codex results", () => {
   test("the last agent message is the answer, billed with the last turn's usage", () => {
-    runtime.provider = "codex";
+    setProvider("codex");
     const event = extractResultEvent(
       lines(
         {
@@ -194,7 +191,7 @@ describe("Codex results", () => {
   });
 
   test("a turn with no agent message has no result", () => {
-    runtime.provider = "codex";
+    setProvider("codex");
     const output = readFileSync(
       join(import.meta.dirname, "fixtures", "codex-shell-filechange.jsonl"),
       "utf8",

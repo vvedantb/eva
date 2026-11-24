@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { buildReadableReposBlock } from "../convex/prompts";
 import { buildEditPrompt } from "../convex/_sessions/prompts";
 import { buildImplementationPrompt } from "../convex/_taskWorkflow/prompts";

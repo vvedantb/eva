@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import {
   CONVEX_LOCAL_BACKEND_HEALTH_URL,
   EXPECTED_LATEST_CONVEX_LOCAL_BACKEND_VERSION,

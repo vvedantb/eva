@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import {
   MASKED_ENV_VAR_VALUE,
   maskEnvVarEntries,

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { trimActivityLogForTranscript } from "../convex/_messages/activityLog";
 
 type ParsedStep = Record<string, string | boolean | object>;

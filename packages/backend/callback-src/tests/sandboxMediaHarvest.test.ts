@@ -2,41 +2,36 @@ import {
   existsSync,
   linkSync,
   mkdirSync,
+  mkdtempSync,
   rmSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, expect, test, vi } from "vitest";
-import type * as Config from "../config.js";
-import { WORK_DIR } from "../config.js";
-import type * as ConvexClient from "../http/convexClient.js";
-import { uploadAndAttachSandboxMedia } from "../runtime/completion.js";
+import { afterAll, expect, mock, test } from "bun:test";
 import type { ConvexCallType, JsonObject, JsonValue } from "../types.js";
 
 // The harvest scans `<WORK_DIR>/screenshots`; point it at a scratch checkout.
-vi.mock("../config.js", async (importOriginal) => {
-  const { mkdtempSync } = await import("node:fs");
-  const { tmpdir } = await import("node:os");
-  const path = await import("node:path");
-  return {
-    ...(await importOriginal<typeof Config>()),
-    WORK_DIR: mkdtempSync(path.join(tmpdir(), "eva-media-harvest-")),
-    ROOT_DIRECTORY: "",
-    RUN_ID: null,
-    ENTITY_ID: "s1",
-  };
-});
+const WORK_DIR = mkdtempSync(join(tmpdir(), "eva-media-harvest-"));
+const realConfig = { ...(await import("../config.js")) };
+mock.module("../config.js", () => ({
+  ...realConfig,
+  WORK_DIR,
+  ROOT_DIRECTORY: "",
+  RUN_ID: null,
+  ENTITY_ID: "s1",
+}));
 
-const network = vi.hoisted(() => {
-  const uploads: string[] = [];
-  const mutations: { path: string; args: JsonObject }[] = [];
-  return { uploads, mutations };
-});
+const network: {
+  uploads: string[];
+  mutations: { path: string; args: JsonObject }[];
+} = { uploads: [], mutations: [] };
 
 // Only the network is faked: the upload URL, the upload POST, the attach.
-vi.mock("../http/convexClient.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof ConvexClient>()),
+const realClient = { ...(await import("../http/convexClient.js")) };
+mock.module("../http/convexClient.js", () => ({
+  ...realClient,
   callConvexWithRetry: async (
     _type: ConvexCallType,
     path: string,
@@ -56,6 +51,9 @@ vi.mock("../http/convexClient.js", async (importOriginal) => ({
     return Response.json({ storageId: "storage-" + network.uploads.length });
   },
 }));
+
+const { uploadAndAttachSandboxMedia } =
+  await import("../runtime/completion.js");
 
 afterAll(() => {
   rmSync(WORK_DIR, { recursive: true, force: true });

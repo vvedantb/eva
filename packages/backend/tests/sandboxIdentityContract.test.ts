@@ -1,7 +1,7 @@
 import { decodeJwt, exportJWK, generateKeyPair } from "jose";
 import type { UserIdentity } from "convex/server";
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import {
@@ -12,6 +12,7 @@ import {
 } from "../convex/_auth/sandboxIdentity";
 import { SANDBOX_JWT_ISSUER } from "../convex/sandboxAuthConfig";
 import { signSandboxUserJwt } from "../convex/sandboxJwt";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * The in-VM daemon holds CONVEX_TOKEN, a JWT for the launching user, and agent
@@ -91,7 +92,6 @@ describe("token minting", () => {
 });
 
 describe("guards end to end", () => {
-  const modules = import.meta.glob("../convex/**/*.ts");
 
   async function fixture() {
     const t = convexTest(schema, modules);

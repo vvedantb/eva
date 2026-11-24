@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import {
   HTML_RENDER_MAX_BYTES,
   HTML_RENDER_MAX_HEIGHT,

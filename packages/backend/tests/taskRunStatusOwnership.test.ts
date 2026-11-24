@@ -1,8 +1,9 @@
 import { convexTest } from "convex-test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { api, internal } from "../convex/_generated/api";
 import type { Doc } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * A run owns its task's `in_progress` status and nothing else. A user who
@@ -11,7 +12,6 @@ import schema from "../convex/schema";
  * watchdog still times out the run instead of skipping the moved task.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 
 beforeEach(() => {

@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "bun:test";
 import { toRepoRelativePath } from "@eva/shared";
 import { openChangedFile } from "@/lib/components/chat/ChangedFilesCard";
 

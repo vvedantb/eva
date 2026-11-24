@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import {
   CONTEXT_OVERLOAD_RATIO,
   aggregateUsage,

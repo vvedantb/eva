@@ -1,21 +1,24 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
-import type * as ConvexClient from "../http/convexClient.js";
+import { afterEach, describe, expect, mock, spyOn, test, vi } from "bun:test";
 import type { LeaseTerminalReason } from "../runtime/turnLease.js";
+import { freshModules } from "./freshModules";
 
 // The heartbeat request is the network boundary; the verdict it carried is
 // recorded through the real `noteHeartbeatResponse` below.
-vi.mock("../http/convexClient.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof ConvexClient>()),
-  callStreamingHeartbeat: vi.fn(async () => null),
+const realClient = { ...(await import("../http/convexClient.js")) };
+mock.module("../http/convexClient.js", () => ({
+  ...realClient,
+  callStreamingHeartbeat: async () => null,
 }));
 
 // Persisting runs git in the worktree; only whether it runs matters here.
-vi.mock("../runtime/turnPersist.js", () => ({ persistTurnWork: vi.fn() }));
+const persistTurnWork = mock();
+mock.module("../runtime/turnPersist.js", () => ({ persistTurnWork }));
 
 afterEach(() => {
   vi.useRealTimers();
-  vi.restoreAllMocks();
-  vi.resetModules();
+  mock.restore();
+  persistTurnWork.mockReset();
+  freshModules();
 });
 
 /**
@@ -25,16 +28,15 @@ afterEach(() => {
  */
 describe("a terminal lease at finalize", () => {
   async function finalizeUnder(reason: LeaseTerminalReason) {
-    vi.resetModules();
+    freshModules();
     vi.useFakeTimers();
     const { beginTurnOwnership, noteHeartbeatResponse } =
       await import("../runtime/turnLease.js");
-    const { persistTurnWork } = await import("../runtime/turnPersist.js");
     const { setFinalizingState } = await import("../runtime/heartbeats.js");
     const lease = { turnId: "turn-1", leaseGeneration: 1 };
     beginTurnOwnership("claim", lease);
     noteHeartbeatResponse({ lease: { status: "terminal", reason } }, lease);
-    const exit = vi.spyOn(process, "exit").mockImplementation((code) => {
+    const exit = spyOn(process, "exit").mockImplementation((code) => {
       throw new Error("process.exit(" + String(code) + ")");
     });
     expect(await setFinalizingState()).toBe(true);

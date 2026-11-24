@@ -3,7 +3,9 @@ import { once } from "node:events";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "bun:test";
+import { stubEnv, unstubAllEnvs } from "../../tests/_helpers/env";
+import { freshModules } from "./freshModules";
 import {
   DAEMON_CLAIM_POLL_TIMING,
   buildEntityMutationArgs,
@@ -68,9 +70,9 @@ test("buildEntityMutationArgs prefixes the entity field", () => {
 
 test("entityMutationArgs prefixes the entity this daemon owns", async () => {
   // config.ts reads the entity env at import time, so load a fresh module graph.
-  vi.stubEnv("ENTITY_ID_FIELD", "taskId");
-  vi.stubEnv("ENTITY_ID", "t1");
-  vi.resetModules();
+  stubEnv("ENTITY_ID_FIELD", "taskId");
+  stubEnv("ENTITY_ID", "t1");
+  freshModules();
   try {
     const fresh = await import("../runtime/daemonProcess.js");
     expect(fresh.entityMutationArgs({ model: "claude:sonnet" })).toEqual({
@@ -78,8 +80,8 @@ test("entityMutationArgs prefixes the entity this daemon owns", async () => {
       model: "claude:sonnet",
     });
   } finally {
-    vi.unstubAllEnvs();
-    vi.resetModules();
+    unstubAllEnvs();
+    freshModules();
   }
 });
 
@@ -134,7 +136,7 @@ test.skipIf(process.platform !== "linux")(
       entity: join(dir, "d.entity"),
       opts: join(dir, "d.opts"),
     };
-    // The vitest worker: live, but its argv is not the callback runner.
+    // The test worker: live, but its argv is not the callback runner.
     writeFileSync(paths.pid, String(process.pid));
     const claim = claimDaemonPidfileBoot({
       paths,

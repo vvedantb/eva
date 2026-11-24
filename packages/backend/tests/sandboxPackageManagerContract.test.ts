@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import {
   CHROME_RUNTIME_LIBRARY_PACKAGES,
   CORE_TOOLCHAIN_PACKAGES,

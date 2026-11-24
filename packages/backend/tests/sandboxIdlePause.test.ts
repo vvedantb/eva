@@ -1,10 +1,11 @@
 import { convexTest } from "convex-test";
 import presenceTest from "@convex-dev/presence/test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { sandboxPausedAlertText } from "@eva/shared";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * The idle-pause sweep must be a strict no-op while the setting is off (every
@@ -13,7 +14,6 @@ import { sandboxPausedAlertText } from "@eva/shared";
  * at. Each guard is pinned here with real Convex rows.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const HOUR = 60 * 60 * 1000;
 
