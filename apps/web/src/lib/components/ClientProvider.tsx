@@ -2,6 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import {
+  useConvexAuth,
   useMutation,
   AuthLoading,
   Authenticated,
@@ -26,6 +27,7 @@ import { AuthLoadingScreen } from "./AuthLoadingScreen";
 import { MaintenanceGate } from "./MaintenanceScreen";
 import { WelcomeSetupDialog } from "./onboarding/WelcomeSetupDialog";
 import { convex } from "@/lib/convex";
+import { setConvexAuthenticated } from "@/lib/convexPrefetch";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 
@@ -33,6 +35,15 @@ ensureRuntimeVisibility();
 
 function EnsureUser() {
   useEnsureUser(api.auth.ensureUserExists);
+  return null;
+}
+
+/** Mirrors Convex auth into `convexPrefetch`, which route loaders read outside React. */
+function TrackConvexAuth() {
+  const { isAuthenticated } = useConvexAuth();
+  useEffect(() => {
+    setConvexAuthenticated(isAuthenticated);
+  }, [isAuthenticated]);
   return null;
 }
 
@@ -77,6 +88,7 @@ export function ClientProvider({ children }: { children: React.ReactNode }) {
         maxIdleEntries={QUERY_CACHE_MAX_IDLE_ENTRIES}
       >
         <EnsureUser />
+        <TrackConvexAuth />
         <ThemeModeProvider>
           <PageMotionProvider>
             <MaintenanceGate>{children}</MaintenanceGate>
