@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import {
   MENTION_ROUTES,
   MENTION_ROUTE_CRITERIA,

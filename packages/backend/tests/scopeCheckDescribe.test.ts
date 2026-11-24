@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import {
   CHANGE_KIND_LABELS,
   CHANGE_KIND_QUESTION,

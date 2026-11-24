@@ -1,23 +1,20 @@
-import { afterEach, expect, test, vi } from "vitest";
-import type * as callbackConfig from "../config.js";
+import { afterEach, expect, mock, test } from "bun:test";
 
-// The session reasoning-effort lever, set per test.
-const lever = vi.hoisted((): { effort: string } => ({ effort: "" }));
-
-vi.mock("../config.js", async (importOriginal) => {
-  const original = await importOriginal<typeof callbackConfig>();
-  return {
-    ...original,
-    get codexReasoningEffort() {
-      return lever.effort;
-    },
-  };
-});
+// The session reasoning-effort lever, set per test. Bun copies a mocked
+// module's exports once, so re-mock on every change.
+const originalConfig = { ...(await import("../config.js")) };
+function setEffort(effort: string): void {
+  mock.module("../config.js", () => ({
+    ...originalConfig,
+    codexReasoningEffort: effort,
+  }));
+}
+setEffort("");
 
 const { buildCodexRuntimeConfig } = await import("../session/codexSession.js");
 
 afterEach(() => {
-  lever.effort = "";
+  setEffort("");
 });
 
 test("Codex Fast mode is explicit and defaults to Standard", () => {
@@ -110,7 +107,7 @@ test("account approval and sandbox settings are replaced by Eva's", () => {
     ].join("\n"),
   );
 
-  lever.effort = "high";
+  setEffort("high");
   expect(buildCodexRuntimeConfig(account, "", false, {})).toBe(
     [
       'approval_policy = "never"',

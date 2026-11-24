@@ -1,6 +1,6 @@
 import { TURN_BACKSTOP_ERROR } from "@eva/shared/agentTurnLimits";
 import { convexTest } from "convex-test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import {
@@ -31,8 +31,8 @@ import {
   noteHeartbeatResponse,
 } from "../callback-src/runtime/turnLease";
 import type { JsonObject } from "../callback-src/types";
+import { modules } from "./_helpers/convexModules";
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 async function createSessionFixture() {
   const t = convexTest(schema, modules);

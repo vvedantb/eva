@@ -1,8 +1,9 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { openSessionChatTurn } from "../convex/_chat/turnStore";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Session turns write their transcript under a `sessionChats` id, and the
@@ -15,7 +16,6 @@ import { openSessionChatTurn } from "../convex/_chat/turnStore";
  * media to another team's chat.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|attach-media-session-chat";
 const STRANGER = "clerk|attach-media-stranger";

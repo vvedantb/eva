@@ -1,4 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  mock,
+  spyOn,
+} from "bun:test";
+import { stubEnv, unstubAllEnvs } from "../../tests/_helpers/env";
 import { ensureGithubToken } from "../providers/githubToken.js";
 
 const CREDENTIALS = {
@@ -8,20 +17,17 @@ const CREDENTIALS = {
 };
 
 function respondWith(body: string, status = 200): void {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () => new Response(body, { status })),
-  );
+  spyOn(globalThis, "fetch").mockResolvedValue(new Response(body, { status }));
 }
 
 beforeEach(() => {
-  vi.stubEnv("GITHUB_TOKEN", "old");
-  vi.stubEnv("GH_TOKEN", "old");
+  stubEnv("GITHUB_TOKEN", "old");
+  stubEnv("GH_TOKEN", "old");
 });
 
 afterEach(() => {
-  vi.unstubAllGlobals();
-  vi.unstubAllEnvs();
+  mock.restore();
+  unstubAllEnvs();
 });
 
 describe("ensureGithubToken", () => {
@@ -92,12 +98,7 @@ describe("ensureGithubToken", () => {
   });
 
   it("keeps the existing token when the network fails", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => {
-        throw new Error("socket closed");
-      }),
-    );
+    spyOn(globalThis, "fetch").mockRejectedValue(new Error("socket closed"));
 
     await expect(ensureGithubToken(CREDENTIALS)).resolves.toEqual({
       refreshed: false,

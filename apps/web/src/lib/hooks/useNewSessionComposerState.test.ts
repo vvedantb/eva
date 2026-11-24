@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
-import { beforeAll, expect, test, vi } from "vitest";
+import { beforeAll, expect, test } from "bun:test";
 import { z } from "zod";
 import type { Id } from "@eva/backend";
 import type { useNewSessionComposerState as UseComposerState } from "./useNewSessionComposerState";
@@ -20,11 +20,14 @@ let useComposerState: typeof UseComposerState;
 beforeAll(async () => {
   // usehooks-ts decides "server" once at import time, so the fake window must
   // exist before the hook module loads.
-  vi.stubGlobal("window", {
-    localStorage: {
-      getItem: (key: string) => storage.get(key) ?? null,
-      setItem: (key: string, value: string) => storage.set(key, value),
-      removeItem: (key: string) => storage.delete(key),
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      localStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => storage.set(key, value),
+        removeItem: (key: string) => storage.delete(key),
+      },
     },
   });
   ({ useNewSessionComposerState: useComposerState } = await import(

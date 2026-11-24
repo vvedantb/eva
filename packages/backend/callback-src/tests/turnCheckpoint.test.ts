@@ -2,47 +2,38 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { JsonObject } from "../types.js";
-import type * as callbackConfig from "../config.js";
 
 // A throwaway repo stands in for the sandbox workspace so the checkpoint reads
 // real shas without touching this checkout.
-const workspace = vi.hoisted((): {
+const workspace: {
   dir: string;
   entityIdField: string;
   checkoutDirs: string[];
-} => {
-  return {
-    dir: "",
-    entityIdField: "sessionId",
-    checkoutDirs: [],
-  };
-});
+} = {
+  dir: "",
+  entityIdField: "sessionId",
+  checkoutDirs: [],
+};
 
-vi.mock("../config.js", async (importOriginal) => {
-  const original = await importOriginal<typeof callbackConfig>();
-  return {
-    ...original,
+const originalConfig = { ...(await import("../config.js")) };
+// Bun copies a mocked module's exports once, so re-mock after each change.
+// Single-repo by default (no EVA_LINKED_REPOS): the primary is the only
+// checked-out repo, so REPO_CHECKOUT_DIRS tracks WORK_DIR rather than the real
+// module's own value (computed from the /tmp/repo checkout this suite runs
+// inside of). Multi-repo tests set workspace.checkoutDirs.
+function mockConfig(): void {
+  const { dir, entityIdField, checkoutDirs } = workspace;
+  mock.module("../config.js", () => ({
+    ...originalConfig,
     RUN_ID: null,
-    get ENTITY_ID_FIELD() {
-      return workspace.entityIdField;
-    },
-    get WORK_DIR() {
-      return workspace.dir;
-    },
-    // Single-repo by default (no EVA_LINKED_REPOS): the primary is the only
-    // checked-out repo, so this must track WORK_DIR above rather than the
-    // real module's own REPO_CHECKOUT_DIRS (computed from the real /tmp/repo
-    // checkout this test suite runs inside of). Multi-repo tests override
-    // workspace.checkoutDirs directly.
-    get REPO_CHECKOUT_DIRS() {
-      return workspace.checkoutDirs.length > 0
-        ? workspace.checkoutDirs
-        : [workspace.dir];
-    },
-  };
-});
+    ENTITY_ID_FIELD: entityIdField,
+    WORK_DIR: dir,
+    REPO_CHECKOUT_DIRS: checkoutDirs.length > 0 ? checkoutDirs : [dir],
+  }));
+}
+mockConfig();
 
 const { appendTurnCheckpoint, beginTurnCheckpoint, resetTurnCheckpoint } =
   await import("../runtime/turnCheckpoint.js");
@@ -71,6 +62,7 @@ function commit(message: string): string {
 
 beforeEach(() => {
   workspace.dir = mkdtempSync(join(tmpdir(), "turn-checkpoint-"));
+  mockConfig();
   git(["init", "-q", "-b", "eva/session-test"]);
 });
 
@@ -78,6 +70,7 @@ afterEach(() => {
   resetTurnCheckpoint();
   workspace.entityIdField = "sessionId";
   workspace.checkoutDirs = [];
+  mockConfig();
 });
 
 describe("appendTurnCheckpoint", () => {
@@ -118,6 +111,7 @@ describe("appendTurnCheckpoint", () => {
   test("stamps task and project chat turns", () => {
     for (const entityIdField of ["taskId", "projectId"]) {
       workspace.entityIdField = entityIdField;
+      mockConfig();
       const before = commit("start " + entityIdField);
       beginTurnCheckpoint();
       const after = commit("turn work " + entityIdField);
@@ -139,6 +133,7 @@ describe("appendTurnCheckpoint", () => {
     // payload rather than written and ignored.
     for (const entityIdField of ["docId", "reportId", "automationRunId"]) {
       workspace.entityIdField = entityIdField;
+      mockConfig();
       commit("start " + entityIdField);
       beginTurnCheckpoint();
       commit("turn work " + entityIdField);
@@ -182,6 +177,7 @@ describe("appendTurnCheckpoint", () => {
 
     const missingDir = join(tmpdir(), "turn-checkpoint-missing-does-not-exist");
     workspace.checkoutDirs = [workspace.dir, linkedDir, missingDir];
+    mockConfig();
 
     const before = commit("start");
     beginTurnCheckpoint();

@@ -1,10 +1,11 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { recordPullRequest } from "../convex/_pullRequests/store";
 import { findOpenTurn } from "../convex/_chat/turnStore";
 import { decideSandboxStartPlan } from "../convex/mcp/orchestratorDelivery";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * The entity tools an orchestrator drives between sends: what exists
@@ -12,7 +13,6 @@ import { decideSandboxStartPlan } from "../convex/mcp/orchestratorDelivery";
  * and what is still waiting behind a busy turn (cancel_queued_message).
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 const OWNER_CLERK_ID = "clerk|entity-tools-owner";
 const TASK_PR_URL = "https://github.com/vvedantb/eva/pull/701";

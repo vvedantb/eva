@@ -159,11 +159,10 @@ run("pnpm", ["install"], { inherit: true });
 console.log("Rebuilding the callback bundle…");
 run("pnpm", ["--filter", "@eva/backend", "build:callback"], { inherit: true });
 
-// Vitest directly, not `pnpm test --`: the pnpm passthrough hands the path to
-// the script rather than to vitest, which runs the whole 2200-test suite and
-// reports unrelated pre-existing failures as if this bump caused them.
+// One file only: the whole suite would report unrelated failures as if this
+// bump caused them.
 console.log("Running the pin contract tests…");
-run("npx", ["vitest", "run", "tests/providerSdkDependenciesContract.test.ts"], {
+run("bun", ["test", "tests/providerSdkDependenciesContract.test.ts"], {
   cwd: backendRoot,
   inherit: true,
 });

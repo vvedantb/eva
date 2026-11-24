@@ -1,9 +1,10 @@
 import { convexTest } from "convex-test";
 import actionCache from "@convex-dev/action-cache/test";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, mock, test, vi } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
-import type * as GithubAuth from "../convex/githubAuth";
+import * as GithubAuth from "../convex/githubAuth";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * The Reviews writes and reads that both the web and the phone review
@@ -12,7 +13,7 @@ import type * as GithubAuth from "../convex/githubAuth";
  * would be sent to GitHub, and that a caller without the repo sends nothing.
  */
 
-const github = vi.hoisted(() => ({
+const github = {
   list: vi.fn(),
   createReview: vi.fn(),
   merge: vi.fn(),
@@ -27,10 +28,11 @@ const github = vi.hoisted(() => ({
   listLabelsForRepo: vi.fn(),
   // No stack: the merge goes through `pulls.merge`.
   graphql: vi.fn(),
-}));
+};
 
-vi.mock("../convex/githubAuth", async (importOriginal) => ({
-  ...(await importOriginal<typeof GithubAuth>()),
+const actualGithubAuth = { ...GithubAuth };
+mock.module("../convex/githubAuth", () => ({
+  ...actualGithubAuth,
   getInstallationOctokit: async () => ({
     rest: {
       pulls: {
@@ -54,7 +56,6 @@ vi.mock("../convex/githubAuth", async (importOriginal) => ({
   }),
 }));
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const CLERK_ID = "clerk|pr-review";
 const TIMEOUT_MS = 30_000;
 

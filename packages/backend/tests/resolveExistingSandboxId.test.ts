@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { preferPersistedSandboxId } from "../convex/_sandbox/resolveExistingSandboxId";
 
 test("preferPersistedSandboxId returns sandboxId when set", () => {

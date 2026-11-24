@@ -1,10 +1,11 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { isFirstTaskOnBranch } from "../convex/functions";
 import { isSessionArchived } from "../convex/_sessions/archive";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Reported bug: closing a project's pull request wiped the project (fix
@@ -20,7 +21,6 @@ import { isSessionArchived } from "../convex/_sessions/archive";
  * to guard this path silently went stale when the handler was restructured.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 /** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;

@@ -1,9 +1,10 @@
 import { convexTest } from "convex-test";
 import presenceTest from "@convex-dev/presence/test";
 import type { SandboxIdlePauseMode } from "@eva/shared";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Team, user and app-wide settings boundaries (re-applied from #767):
@@ -14,7 +15,6 @@ import schema from "../convex/schema";
  *   followed path is always app-internal.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 
 /** Two tenants: Ann (owner) and Ben on team A; Zed alone on team Z. */

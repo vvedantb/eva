@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "bun:test";
 import { claudeParseLine } from "../providers/claude.js";
 import {
   callbackState as S,

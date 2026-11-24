@@ -1,16 +1,22 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import type * as callbackConfig from "../config.js";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+  vi,
+} from "bun:test";
 
 // Runtime homes live under /tmp and die with the sandbox; persist dirs survive
 // it. Both point into one throwaway root so the test never touches /home/eva.
-const sandbox = vi.hoisted((): { root: string } => ({ root: "" }));
-sandbox.root = mkdtempSync(join(tmpdir(), "session-resume-"));
+const sandbox = { root: mkdtempSync(join(tmpdir(), "session-resume-")) };
 
-vi.mock("../config.js", async (importOriginal) => {
-  const original = await importOriginal<typeof callbackConfig>();
+const original = { ...(await import("../config.js")) };
+mock.module("../config.js", () => {
   const runtime = (provider: string): string =>
     sandbox.root + "/runtime/" + provider;
   const persist = (provider: string): string =>
@@ -37,15 +43,12 @@ vi.mock("../config.js", async (importOriginal) => {
   };
 });
 
-const { callbackState: S, resetStateForTests } = await import(
-  "../runtime/state.js"
-);
-const { prepareCodexSessionState, syncCodexStateToPersist } = await import(
-  "../session/codexSession.js"
-);
-const { prepareCursorSessionState, syncCursorStateToPersist } = await import(
-  "../session/cursorSession.js"
-);
+const { callbackState: S, resetStateForTests } =
+  await import("../runtime/state.js");
+const { prepareCodexSessionState, syncCodexStateToPersist } =
+  await import("../session/codexSession.js");
+const { prepareCursorSessionState, syncCursorStateToPersist } =
+  await import("../session/cursorSession.js");
 const { prepareOpencodeSessionState, syncOpencodeStateToPersist } =
   await import("../session/opencodeSession.js");
 

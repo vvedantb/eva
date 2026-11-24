@@ -1,8 +1,9 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Nothing watches the dev server or the navigation proxy after launch. An OOM
@@ -21,7 +22,6 @@ import schema from "../convex/schema";
  * `null` means the guards bailed before it.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 /** Loading the sandbox module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;

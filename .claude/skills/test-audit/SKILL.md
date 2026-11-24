@@ -141,7 +141,7 @@ Never edit source or tests while Vitest is running in the checkout. Follow
 `$openclaw-testing`; route heavy proof through its `$crabbox` rules.
 
 1. Run the smallest owner and sibling tests with
-   `node scripts/run-vitest.mjs <path-or-filter>`.
+   `bun test <path-or-filter>` in the package.
 2. For removed source greps or plan assertions, run the executable script or
    dry-run that owns the real contract.
 3. Run targeted formatting, then `git diff --check`.

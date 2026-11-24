@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { condenseRunnerLogTail } from "../convex/_sandbox_runtime/launch";
 
 /** Mirrors RUNNER_LOG_TAIL_MAX_CHARS in launch.ts (module-private there). */

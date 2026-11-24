@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import {
   EVA_ENV_FILE,
   EVA_ENV_SOURCE_CMD,

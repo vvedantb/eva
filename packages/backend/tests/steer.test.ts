@@ -1,8 +1,9 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { decideSteerDelivery } from "../convex/_chat/steer";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Steer sends a queued message into the running turn. Claude and Codex take
@@ -11,7 +12,6 @@ import { decideSteerDelivery } from "../convex/_chat/steer";
  * queue so it runs as the next turn.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|steer-test";
 const MODEL = "claude:sonnet";

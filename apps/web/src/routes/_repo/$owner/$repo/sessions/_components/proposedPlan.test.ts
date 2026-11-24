@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import {
   buildPlanImplementationPrompt,
   findLatestProposedPlan,
@@ -39,7 +39,7 @@ describe("proposed plan selection", () => {
   };
 
   test("picks the most recently updated plan", () => {
-    expect(findLatestProposedPlan([older, newer])?._id).toBe("plan_new");
+    expect(findLatestProposedPlan([older, newer])?._id).toBe(newer._id);
   });
 
   test("actionable means not yet implemented", () => {

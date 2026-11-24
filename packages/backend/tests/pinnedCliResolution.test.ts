@@ -10,7 +10,8 @@ import {
 } from "fs";
 import { tmpdir } from "os";
 import { dirname, join } from "path";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test } from "bun:test";
+import { stubEnv, unstubAllEnvs } from "./_helpers/env";
 import { resolvePinnedCliBinary } from "../callback-src/providers/claudeSdk.js";
 import { pinnedCliInstallCommand } from "../convex/_sandbox_runtime/launch";
 
@@ -30,6 +31,9 @@ const PINNED = "2.1.283";
 
 let root = "";
 let npmLog = "";
+// The launch guard runs `node`. Under bun test, process.execPath is Bun, so
+// find node on the real PATH before the test replaces it.
+const nodeDir = dirname(Bun.which("node") ?? process.execPath);
 
 /** Lays out `<prefix>/bin/claude` plus its package manifest at `version`. */
 function installCli(prefix: string, version: string): string {
@@ -69,13 +73,13 @@ beforeEach(() => {
   chmodSync(join(stubs, "npm"), 0o755);
   // Image copy first on PATH, the user's `claude update` copy behind it, then
   // the stub npm ahead of the real node toolchain.
-  vi.stubEnv(
+  stubEnv(
     "PATH",
     [
       join(imagePrefix(), "bin"),
       join(userPrefix(), "bin"),
       stubs,
-      dirname(process.execPath),
+      nodeDir,
       "/usr/bin",
       "/bin",
     ].join(":"),
@@ -83,7 +87,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  vi.unstubAllEnvs();
+  unstubAllEnvs();
   rmSync(root, { recursive: true, force: true });
 });
 

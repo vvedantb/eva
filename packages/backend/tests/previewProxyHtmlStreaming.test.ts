@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import {
   extractFunctionSource,
   previewProxySource,

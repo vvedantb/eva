@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "bun:test";
 import {
   MAX_CHAT_ATTACHMENTS,
   PASTE_ATTACHMENT_THRESHOLD_CHARS,
@@ -60,7 +60,8 @@ describe("buildPastedTextFile", () => {
   test("names the file and marks it plain text", async () => {
     const file = buildPastedTextFile("hello world");
     expect(file.name).toBe("pasted-text.txt");
-    expect(file.type).toBe("text/plain");
+    // Bun appends ";charset=utf-8"; browsers keep the bare type.
+    expect(file.type).toStartWith("text/plain");
     expect(await file.text()).toBe("hello world");
   });
 });

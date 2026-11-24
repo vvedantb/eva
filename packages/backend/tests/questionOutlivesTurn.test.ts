@@ -1,8 +1,9 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { detachPendingQuestions } from "../convex/pendingQuestions";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Sessions 417 and 419 lost turns that asked a blocking question and then
@@ -12,7 +13,6 @@ import { detachPendingQuestions } from "../convex/pendingQuestions";
  * the after-turn question card renders and the answer resumes the agent.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|question-outlives-turn";
 const PAYLOAD = JSON.stringify({

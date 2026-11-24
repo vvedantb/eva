@@ -1,4 +1,6 @@
-import { describe, it, expect, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach, vi } from "bun:test";
+import { stubEnv, unstubAllEnvs } from "../../tests/_helpers/env";
+import { freshModules } from "./freshModules";
 import {
   decideGitStateReport,
   formatBranch,
@@ -102,15 +104,15 @@ describe("decideGitStateReport", () => {
 describe("startBranchWatcher", () => {
   afterEach(() => {
     vi.useRealTimers();
-    vi.unstubAllEnvs();
-    vi.resetModules();
+    unstubAllEnvs();
+    freshModules();
   });
 
   it("installs no poll without a reportable entity", async () => {
     // An arena run has no document to report the branch onto.
-    vi.stubEnv("ENTITY_ID_FIELD", "arenaId");
-    vi.stubEnv("ENTITY_ID", "a1");
-    vi.resetModules();
+    stubEnv("ENTITY_ID_FIELD", "arenaId");
+    stubEnv("ENTITY_ID", "a1");
+    freshModules();
     vi.useFakeTimers();
     const { startBranchWatcher } = await import("../runtime/branchWatcher.js");
     startBranchWatcher();

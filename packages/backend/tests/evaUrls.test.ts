@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test } from "vitest";
+import { afterEach, beforeEach, expect, test } from "bun:test";
 import {
   buildEvaDocUrl,
   buildEvaProjectUrl,

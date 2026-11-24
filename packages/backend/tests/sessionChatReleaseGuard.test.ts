@@ -1,8 +1,9 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import schema from "../convex/schema";
 import { sessionChatAdapter } from "../convex/_chat/surfaceAdapters";
 import type { Doc } from "../convex/_generated/dataModel";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * A turn torn down with `sandboxStopped` closes its session, because the VM
@@ -13,7 +14,6 @@ import type { Doc } from "../convex/_generated/dataModel";
  * chat panel keeps listing processes on a dead VM.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 
 type SessionStatus = Doc<"sessions">["status"];

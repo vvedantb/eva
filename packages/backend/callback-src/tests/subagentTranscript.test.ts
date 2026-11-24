@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test } from "bun:test";
 import { applyCanonicalEvents, parseToCanonical } from "../parse/canonical.js";
 import { toolCallToStep } from "../parse/toolSteps.js";
 import { callbackState as S, resetStateForTests } from "../runtime/state.js";

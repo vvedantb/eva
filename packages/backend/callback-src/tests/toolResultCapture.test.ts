@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { applyCanonicalEvents, parseToCanonical } from "../parse/canonical.js";
 import {
   extractClaudeEdits,
