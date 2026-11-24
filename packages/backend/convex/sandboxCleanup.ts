@@ -194,3 +194,18 @@ export const listGithubRepoIds = internalQuery({
     return repos.map((repo) => repo._id);
   },
 });
+
+/**
+ * Repo ids the leak sweep lists Vercel VMs for. Hidden apps are skipped: they
+ * start no sandboxes, and often have no Vercel project of their own, so the
+ * credential lookup only fails. A VM in a Vercel project a visible sibling
+ * shares is still found through that sibling.
+ */
+export const listVisibleGithubRepoIds = internalQuery({
+  args: {},
+  returns: v.array(v.id("githubRepos")),
+  handler: async (ctx) => {
+    const repos = await ctx.db.query("githubRepos").collect();
+    return repos.filter((repo) => repo.hidden !== true).map((repo) => repo._id);
+  },
+});
