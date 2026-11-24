@@ -66,9 +66,11 @@ jobs:
         pnpm typecheck
         pnpm lint
         pnpm build
-        # Each package's arguments are the workspace packages its tests import.
+        # Each package's arguments are the paths its tests reach but Bun's
+        # --changed cannot see: workspace packages, and for the backend the
+        # convex/ functions that convex-test loads through a runtime file scan.
         scripts/test-affected.sh apps/web packages/shared packages/backend packages/ui
-        scripts/test-affected.sh packages/backend packages/shared packages/backend/tests/_helpers/preload.ts
+        scripts/test-affected.sh packages/backend packages/shared packages/backend/convex packages/backend/tests/_helpers
         # sourceEncoding scans every git-tracked text file for control bytes. It
         # imports nothing from the repo, so --changed never selects it, and
         # narrowing would hide a bad byte added to any file. It runs on every PR.
