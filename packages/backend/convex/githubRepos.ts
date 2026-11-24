@@ -28,6 +28,7 @@ export {
   updateConfig,
   updateMcpRootPrompt,
   toggleHidden,
+  removeApp,
   generateLogoUploadUrl,
   setLogo,
   deleteInternal,
@@ -35,6 +36,7 @@ export {
 
 export {
   upsert,
+  syncDetectedApp,
   syncConnectedStatus,
   cleanupStaleSubApps,
   cleanupMonorepoRoots,

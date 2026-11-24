@@ -1,15 +1,35 @@
 "use node";
 
-import { v } from "convex/values";
+import { type Infer, v } from "convex/values";
 import { action } from "../_generated/server";
 import { api, internal } from "../_generated/api";
 import { getInstallationOctokit } from "../githubAuth";
 import { detectAppsForRepo } from "./helpers";
 
-/** Syncs all GitHub App installation repos into the database, detecting monorepo apps and updating connected status. */
+const newAppValidator = v.object({
+  owner: v.string(),
+  name: v.string(),
+  installationId: v.number(),
+  teamId: v.optional(v.id("teams")),
+  appName: v.string(),
+  path: v.string(),
+  hasDevScript: v.boolean(),
+});
+
+/**
+ * Syncs all GitHub App installation repos into the database, detecting monorepo
+ * apps and updating connected status. Apps already added are refreshed and
+ * removed apps stay removed. Apps seen for the first time are not added: they
+ * come back in `newApps`, and the user picks which to add
+ * (`github:importDetectedApps`).
+ */
 export const syncRepos = action({
   args: {},
-  returns: v.object({ success: v.boolean(), synced: v.number() }),
+  returns: v.object({
+    success: v.boolean(),
+    synced: v.number(),
+    newApps: v.array(newAppValidator),
+  }),
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
@@ -17,7 +37,7 @@ export const syncRepos = action({
     }
 
     const [accessibleRepos, syncSettings] = await Promise.all([
-      ctx.runQuery(api.githubRepos.list, { includeHidden: true }),
+      ctx.runQuery(api.githubRepos.list, { includeRemoved: true }),
       ctx.runQuery(api.syncSettings.list, {}),
     ]);
     const disabledRepos = new Set(
@@ -32,6 +52,7 @@ export const syncRepos = action({
       paths: string[];
     }> = [];
     const monorepos: Array<{ owner: string; name: string }> = [];
+    const newApps: Array<Infer<typeof newAppValidator>> = [];
     let totalAdded = 0;
     const seenCodebases = new Set<string>();
     for (const existingRepo of accessibleRepos) {
@@ -58,10 +79,11 @@ export const syncRepos = action({
         detectAppsForRepo(octokit, repo.owner.login, repo.name),
       ]);
       const appPaths: string[] = [];
+      let hasAddedApp = false;
       // Sequential on purpose: every app upsert reads and inserts into the same
       // `by_github_id` range, so parallel ones would only conflict and retry.
       for (const app of apps) {
-        await ctx.runMutation(internal.githubRepos.upsert, {
+        const state = await ctx.runMutation(internal.githubRepos.syncDetectedApp, {
           owner: repo.owner.login,
           name: repo.name,
           installationId: existingRepo.installationId,
@@ -71,13 +93,27 @@ export const syncRepos = action({
           parentRepoId: id,
         });
         appPaths.push(app.path);
+        if (state === "kept") hasAddedApp = true;
+        if (state === "new") {
+          newApps.push({
+            owner: repo.owner.login,
+            name: repo.name,
+            installationId: existingRepo.installationId,
+            teamId: existingRepo.teamId,
+            appName: app.name,
+            path: app.path,
+            hasDevScript: app.hasDevScript,
+          });
+        }
       }
       detectedApps.push({
         owner: repo.owner.login,
         name: repo.name,
         paths: appPaths,
       });
-      if (apps.length > 0) {
+      // The root row goes only once an app row replaces it; with only new or
+      // removed apps, it is the codebase's last row.
+      if (hasAddedApp) {
         monorepos.push({ owner: repo.owner.login, name: repo.name });
       }
       totalAdded++;
@@ -91,6 +127,6 @@ export const syncRepos = action({
       monorepos,
     });
 
-    return { success: true, synced: totalAdded };
+    return { success: true, synced: totalAdded, newApps };
   },
 });

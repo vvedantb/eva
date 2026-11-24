@@ -27,6 +27,7 @@ import {
   IconAlertCircle,
   IconEye,
   IconEyeOff,
+  IconTrash,
 } from "@tabler/icons-react";
 import {
   catchMutationError,
@@ -52,6 +53,16 @@ export function MonorepoClient() {
         repos.map((r) =>
           r._id === args.repoId ? { ...r, hidden: args.hidden } : r,
         ),
+    );
+  });
+  const removeApp = useMutation(
+    api.githubRepos.removeApp,
+  ).withOptimisticUpdate((localStore, args) => {
+    patchLoadedQuery(
+      localStore,
+      api.githubRepos.list,
+      { includeHidden: true },
+      (repos) => repos.filter((r) => r._id !== args.repoId),
     );
   });
   const allRepos = useQuery(api.githubRepos.list, { includeHidden: true });
@@ -184,6 +195,21 @@ export function MonorepoClient() {
                       Visible
                     </>
                   )}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    void catchMutationError(
+                      removeApp({ repoId: app._id }),
+                      "Couldn't remove app",
+                      "monorepo-remove-app",
+                    )
+                  }
+                  className="motion-press gap-1.5 text-muted-foreground hover:text-destructive"
+                >
+                  <IconTrash size={14} />
+                  Remove
                 </Button>
               </ListEnter>
             ))}

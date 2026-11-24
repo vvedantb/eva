@@ -35,6 +35,7 @@ import { WelcomeBanner } from "./_components/WelcomeBanner";
 import { EmptyOnboarding } from "./_components/EmptyOnboarding";
 import { RepoGroup } from "./_components/RepoGroup";
 import { HiddenReposSheet } from "./_components/HiddenReposSheet";
+import { NewAppsDialog, type NewApp } from "./_components/NewAppsDialog";
 
 const WELCOME_STORAGE_KEY = "eva-welcome-dismissed";
 
@@ -50,6 +51,7 @@ export function ReposClient() {
   const [syncing, setSyncing] = useState(false);
   const [hiddenOpen, setHiddenOpen] = useState(false);
   const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
+  const [newApps, setNewApps] = useState<ReadonlyArray<NewApp>>([]);
   const { request: requestConfirm } = useRequestConfirm();
   // Reads storage in the first render (initializeWithValue), so no banner flash.
   const [welcomeDismissed, setWelcomeDismissed] = useLocalStorage(
@@ -61,7 +63,8 @@ export function ReposClient() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      await syncRepos();
+      const { newApps: found } = await syncRepos();
+      if (found.length > 0) setNewApps(found);
     } catch (err) {
       console.error("Sync failed:", err);
       toast.error("Could not sync your repositories. Try again.");
@@ -149,6 +152,9 @@ export function ReposClient() {
                 open={hiddenOpen}
                 onOpenChange={setHiddenOpen}
               />
+              {newApps.length > 0 && (
+                <NewAppsDialog apps={newApps} onClose={() => setNewApps([])} />
+              )}
               <Dialog open={syncConfirmOpen} onOpenChange={setSyncConfirmOpen}>
                 <DialogContent>
                   <DialogHeader>
