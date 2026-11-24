@@ -77,6 +77,12 @@ Until both exist, the release APK works and shows no push.
 
 The script runs `expo prebuild --platform android --clean`, then `./gradlew assembleRelease` for `arm64-v8a` only (`@vvedantb/config` 0.12.0 dropped `x86_64` for release APKs). It then checks the APK with `aapt2` (package, `versionCode`, `versionName`) and `apksigner` (not the debug key). Only then does it write `release.json`.
 
+## APK size
+
+- The release APK is `arm64-v8a` only. `expo-build-properties` sets `buildArchs` in `app.config.ts`, so this holds even without the release script's `gradle.properties` edit. There is no `x86_64` build: CI does not install the release APK on an emulator.
+- `expo-build-properties` also turns on R8 minify and resource shrinking for release builds. The extra keep rules are `PROGUARD_RULES` in `app.config.ts`. If a release crashes at start with a missing class, add a keep rule there.
+- Most of `res/` is icon fonts from `@expo/vector-icons`. It is a peer dependency of `@vvedantb/native-ui`, so Eva cannot remove it. Resource shrinking may drop the fonts that nothing uses.
+
 ## Build locally
 
 ```sh
