@@ -25,13 +25,13 @@ import {
 } from "@vvedantb/ui";
 import {
   IconDots,
-  IconEyeOff,
+  IconEye,
   IconPlus,
 } from "@tabler/icons-react";
 import { WelcomeBanner } from "./_components/WelcomeBanner";
 import { EmptyOnboarding } from "./_components/EmptyOnboarding";
 import { RepoGroup } from "./_components/RepoGroup";
-import { HiddenReposSheet } from "./_components/HiddenReposSheet";
+import { VisibleReposDialog } from "./_components/VisibleReposDialog";
 import { NewAppsDialog, type NewApp } from "./_components/NewAppsDialog";
 
 const WELCOME_STORAGE_KEY = "eva-welcome-dismissed";
@@ -45,7 +45,7 @@ export function ReposClient() {
   const appSlug = useQuery(api.githubRepos.getAppSlug);
   const syncRepos = useAction(api.github.syncRepos);
   const [syncing, setSyncing] = useState(false);
-  const [hiddenOpen, setHiddenOpen] = useState(false);
+  const [visibleOpen, setVisibleOpen] = useState(false);
   const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
   const [newApps, setNewApps] = useState<ReadonlyArray<NewApp>>([]);
   const { request: requestConfirm } = useRequestConfirm();
@@ -116,9 +116,9 @@ export function ReposClient() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => setHiddenOpen(true)}>
-                    <IconEyeOff size={16} />
-                    Hidden Codebases
+                  <DropdownMenuItem onClick={() => setVisibleOpen(true)}>
+                    <IconEye size={16} />
+                    Visible Codebases
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={syncing}
@@ -138,9 +138,9 @@ export function ReposClient() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <HiddenReposSheet
-                open={hiddenOpen}
-                onOpenChange={setHiddenOpen}
+              <VisibleReposDialog
+                open={visibleOpen}
+                onOpenChange={setVisibleOpen}
               />
               {newApps.length > 0 && (
                 <NewAppsDialog apps={newApps} onClose={() => setNewApps([])} />

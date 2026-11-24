@@ -4,7 +4,6 @@ import { api } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
 import {
   Button,
-  Checkbox,
   Dialog,
   DialogContent,
   DialogFooter,
@@ -13,6 +12,7 @@ import {
   toast,
   userFacingErrorMessage,
 } from "@vvedantb/ui";
+import { CodebaseCheckList } from "./CodebaseCheckList";
 
 export type NewApp = FunctionReturnType<
   typeof api.github.syncRepos
@@ -42,10 +42,10 @@ export function NewAppsDialog({
     codebases.set(key, [...(codebases.get(key) ?? []), app]);
   }
 
-  const toggle = (app: NewApp, add: boolean) => {
+  const toggle = (key: string, add: boolean) => {
     const next = new Set(skipped);
-    if (add) next.delete(appKey(app));
-    else next.add(appKey(app));
+    if (add) next.delete(key);
+    else next.add(key);
     setSkipped(next);
   };
 
@@ -84,32 +84,18 @@ export function NewAppsDialog({
           <DialogTitle>New apps found</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          Unticked apps are hidden. Show them again from Hidden Codebases.
+          Unticked apps are hidden. Show them again from Visible Codebases.
         </p>
-        <div className="flex max-h-80 flex-col gap-4 overflow-y-auto">
-          {[...codebases].map(([codebase, group]) => (
-            <div key={codebase} className="flex flex-col gap-1">
-              <p className="text-xs font-medium text-muted-foreground">
-                {codebase}
-              </p>
-              {group.map((app) => (
-                <label
-                  key={app.path}
-                  title={app.path}
-                  className="flex cursor-pointer items-center gap-3 rounded-surface px-2 py-1.5 hover:bg-muted/40"
-                >
-                  <Checkbox
-                    checked={!skipped.has(appKey(app))}
-                    onCheckedChange={(checked) => toggle(app, checked === true)}
-                  />
-                  <span className="truncate text-sm text-foreground">
-                    {app.appName}
-                  </span>
-                </label>
-              ))}
-            </div>
-          ))}
-        </div>
+        <CodebaseCheckList
+          items={apps.map((app) => ({
+            key: appKey(app),
+            codebase: `${app.owner}/${app.name}`,
+            label: app.appName,
+            title: app.path,
+            checked: !skipped.has(appKey(app)),
+          }))}
+          onCheckedChange={(item, checked) => toggle(item.key, checked)}
+        />
         <DialogFooter>
           <Button variant="secondary" size="sm" onClick={onClose}>
             Later
