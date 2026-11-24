@@ -2,7 +2,7 @@
 
 import { v } from "convex/values";
 import { makeFunctionReference } from "convex/server";
-import { action } from "../_generated/server";
+import { type ActionCtx, action } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import { getInstallationOctokit, getInstallationToken } from "../githubAuth";
@@ -157,6 +157,39 @@ export const detectMonorepoApps = authAction({
  *   and supplies the stored id, owner and name. Client values are never stored,
  *   so a row cannot impersonate another tenant's repository.
  */
+/**
+ * Authorizes the caller on an installation repo and returns GitHub's own
+ * identity for it. Shared by every action that adds repo rows.
+ */
+async function authorizeInstallationRepo(
+  ctx: ActionCtx,
+  userId: Id<"users">,
+  args: { installationId: number; owner: string; name: string },
+) {
+  const accessState = await ctx.runQuery(installationAccessStateRef, {
+    installationId: args.installationId,
+  });
+  if (accessState === "denied") {
+    throw new Error(
+      "Not authorized to add repositories from this installation",
+    );
+  }
+  if (accessState === "unclaimed") {
+    await assertUserCanUseRepo(
+      ctx,
+      userId,
+      args.installationId,
+      args.owner,
+      args.name,
+    );
+  }
+  return await resolveInstallationRepo(
+    args.installationId,
+    args.owner,
+    args.name,
+  );
+}
+
 export const connectRepo = authAction({
   args: {
     owner: v.string(),
@@ -169,28 +202,7 @@ export const connectRepo = authAction({
   // Explicit annotation: the handler reaches back into `internal`, so inference
   // would have to resolve this action's own type to type itself.
   handler: async (ctx, args): Promise<Id<"githubRepos">> => {
-    const accessState = await ctx.runQuery(installationAccessStateRef, {
-      installationId: args.installationId,
-    });
-    if (accessState === "denied") {
-      throw new Error(
-        "Not authorized to add repositories from this installation",
-      );
-    }
-    if (accessState === "unclaimed") {
-      await assertUserCanUseRepo(
-        ctx,
-        ctx.userId,
-        args.installationId,
-        args.owner,
-        args.name,
-      );
-    }
-    const repo = await resolveInstallationRepo(
-      args.installationId,
-      args.owner,
-      args.name,
-    );
+    const repo = await authorizeInstallationRepo(ctx, ctx.userId, args);
     return await ctx.runMutation(
       internal._githubRepos.mutations.createForInstallation,
       {
@@ -203,6 +215,43 @@ export const connectRepo = authAction({
         userId: ctx.userId,
       },
     );
+  },
+});
+
+/**
+ * Saves the user's picks from the "New apps found" sync popup for one
+ * codebase: ticked apps are added, unticked ones are added hidden, so sync
+ * does not offer them again. Hidden Codebases can show them later.
+ */
+export const importDetectedApps = authAction({
+  args: {
+    owner: v.string(),
+    name: v.string(),
+    installationId: v.number(),
+    teamId: v.optional(v.id("teams")),
+    apps: v.array(v.object({ path: v.string(), add: v.boolean() })),
+  },
+  returns: v.null(),
+  handler: async (ctx, args): Promise<null> => {
+    const repo = await authorizeInstallationRepo(ctx, ctx.userId, args);
+    // Sequential: every insert reads the same `by_github_id` range.
+    for (const app of args.apps) {
+      await ctx.runMutation(
+        internal._githubRepos.mutations.createForInstallation,
+        {
+          owner: repo.owner,
+          name: repo.name,
+          githubId: repo.githubId,
+          installationId: args.installationId,
+          rootDirectory: app.path,
+          teamId: args.teamId,
+          userId: ctx.userId,
+          hidden: !app.add,
+          ifMissing: true,
+        },
+      );
+    }
+    return null;
   },
 });
 

@@ -2,17 +2,24 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useAuth, RedirectToSignIn } from "@clerk/clerk-react";
 import { useAction } from "convex/react";
 import { useEffect, useRef, useState } from "react";
+import { z } from "zod";
 import { api } from "@eva/backend";
 
-const validateSearch = (search: Record<string, string>) => ({
-  sandbox: typeof search.sandbox === "string" ? search.sandbox : "",
-  repo: typeof search.repo === "string" ? search.repo : "",
-  port: typeof search.port === "string" ? search.port : "",
-  return: typeof search.return === "string" ? search.return : "",
+// The router JSON-parses search values, so `port=3000` arrives as a number.
+// Each field falls back to empty so a bad link shows the error, not a crash.
+const idParam = z
+  .union([z.string(), z.number()])
+  .transform(String)
+  .catch("");
+const searchSchema = z.object({
+  sandbox: idParam,
+  repo: idParam,
+  port: z.coerce.number().int().min(1).max(65535).optional().catch(undefined),
+  return: z.string().catch(""),
 });
 
 export const Route = createFileRoute("/preview-auth")({
-  validateSearch,
+  validateSearch: searchSchema,
   component: PreviewAuth,
 });
 
@@ -45,13 +52,8 @@ function PreviewAuth() {
     if (!isLoaded || !isSignedIn || ran.current) return;
 
     const path = returnPath(search.return);
-    const port = Number(search.port);
-    if (
-      path === null ||
-      !search.repo ||
-      !search.sandbox ||
-      !Number.isFinite(port)
-    ) {
+    const port = search.port;
+    if (path === null || !search.repo || !search.sandbox || port === undefined) {
       setError("This preview link is invalid.");
       return;
     }

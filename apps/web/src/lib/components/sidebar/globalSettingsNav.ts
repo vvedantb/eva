@@ -3,7 +3,6 @@ import {
   IconBell,
   IconCode,
   IconFlask,
-  IconGitBranch,
   IconKey,
   IconKeyboard,
   IconPalette,
@@ -59,11 +58,6 @@ export const GLOBAL_SETTINGS_NAV = [
     name: "Sandbox status",
     href: "/settings/sandbox-status",
     icon: IconActivity,
-  },
-  {
-    name: "Sync",
-    href: "/settings/sync",
-    icon: IconGitBranch,
   },
   {
     name: "Experimental",

@@ -7,6 +7,7 @@ export {
   detectMonorepoApps,
   listAllAvailableRepos,
   connectRepo,
+  importDetectedApps,
 } from "./_github/api";
 
 export {

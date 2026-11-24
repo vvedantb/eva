@@ -6,11 +6,9 @@ import type { Repo } from "./RepoCard";
 export function RepoGroup({
   groupName,
   repos,
-  onManageApps,
 }: {
   groupName: string;
   repos: Repo[];
-  onManageApps: (repo: Repo) => void;
 }) {
   const byRepo = repos.reduce<Record<string, Repo[]>>((acc, repo) => {
     const key = `${repo.owner}/${repo.name}`;
@@ -56,7 +54,6 @@ export function RepoGroup({
                       key={repo._id}
                       repo={repo}
                       index={index}
-                      onManageApps={() => onManageApps(repo)}
                     />
                   ))}
                 </AnimatePresence>

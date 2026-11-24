@@ -39,7 +39,7 @@ const HEALTH_PATH = "/__eva_preview_proxy/health";
 export const PREVIEW_TAB_PREFIX = "/__tab";
 // Bump when the generated proxy script changes so already-running proxies from
 // an older deploy are detected as stale (via the health response) and relaunched.
-const SCRIPT_VERSION = "stream-v32";
+const SCRIPT_VERSION = "stream-v33";
 
 /** Minimum gap between two traffic heartbeats posted by one proxy process. */
 const ACTIVITY_HEARTBEAT_INTERVAL_MS = 60_000;
@@ -328,6 +328,8 @@ function verifyGrant(token) {
     const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
     if (aud.indexOf(EXPECTED_AUD) === -1) return null;
     if (payload.sandboxId !== SANDBOX_ID) return null;
+    // A grant opens only the port it was minted for.
+    if (payload.port !== AUTH_PORT) return null;
     return payload;
   } catch {
     return null;
