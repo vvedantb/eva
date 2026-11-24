@@ -64,22 +64,6 @@ ${message}`;
 }
 
 /**
- * The owner-context line a project's chat turn leads with: which project this
- * sandbox serves and its description.
- */
-export function withProjectContext(
-  project: Pick<Doc<"projects">, "title" | "description">,
-  message: string,
-): string {
-  const descriptionBlock = project.description
-    ? `\nProject description:\n${project.description}`
-    : "";
-  return `In the sandbox for project "${project.title}"${descriptionBlock}
-
-${message}`;
-}
-
-/**
  * Longest part of the project summary doc a turn's prompt carries. The agent
  * reads the rest with `get_eva_doc`.
  */
@@ -92,12 +76,12 @@ function joinBlocks(...blocks: string[]): string {
 
 /**
  * What every coordinator and child task turn knows of its project: the
- * project instructions and the summary doc, capped at
+ * project context (its description) and the summary doc, capped at
  * `PROJECT_SUMMARY_PROMPT_MAX_CHARS`. Empty when neither is set.
  */
 async function projectBriefBlock(
   ctx: QueryCtx,
-  project: Pick<Doc<"projects">, "instructions" | "summaryDocId">,
+  project: Pick<Doc<"projects">, "description" | "summaryDocId">,
 ): Promise<string> {
   const summary = project.summaryDocId
     ? entityVisible(await ctx.db.get(project.summaryDocId))
@@ -112,9 +96,9 @@ async function projectBriefBlock(
             : text
         }`
       : "";
-  const instructions = project.instructions?.trim();
+  const context = project.description?.trim();
   return joinBlocks(
-    instructions ? `Project instructions:\n${instructions}` : "",
+    context ? `Project context:\n${context}` : "",
     summaryBlock,
   );
 }
@@ -135,7 +119,7 @@ const CHILD_TASK_RULES = `This task is one part of a project. The project's coor
  */
 export async function childTaskProjectBlock(
   ctx: QueryCtx,
-  project: Pick<Doc<"projects">, "title" | "instructions" | "summaryDocId">,
+  project: Pick<Doc<"projects">, "title" | "description" | "summaryDocId">,
 ): Promise<string> {
   return joinBlocks(
     `This task is part of project "${project.title}".`,
@@ -191,16 +175,14 @@ async function ownerPromptContext(
   const project = projectId ? await ctx.db.get(projectId) : null;
   if (project) {
     return {
-      message: withProjectContext(
-        project,
-        joinBlocks(
-          COORDINATOR_RULES,
-          await projectBriefBlock(ctx, project),
-          formatProjectTaskTable(
-            await loadProjectTaskRows(ctx.db, project, session.userId),
-          ),
-          message,
+      message: joinBlocks(
+        `In the sandbox for project "${project.title}".`,
+        COORDINATOR_RULES,
+        await projectBriefBlock(ctx, project),
+        formatProjectTaskTable(
+          await loadProjectTaskRows(ctx.db, project, session.userId),
         ),
+        message,
       ),
       planContent: await getProjectGeneratedSpec(ctx.db, project._id),
       prUrl: project.prUrl,

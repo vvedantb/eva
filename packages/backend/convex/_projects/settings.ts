@@ -25,24 +25,6 @@ export function assertProjectRepo(
   }
 }
 
-/** Sets the text added to the coordinator's and every child task's prompt. Empty clears it. */
-export const setInstructions = authMutation({
-  args: { projectId: v.id("projects"), instructions: v.string() },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(
-      ctx.db,
-      args.projectId,
-      ctx.userId,
-    );
-    const instructions = args.instructions.trim();
-    await ctx.db.patch(args.projectId, {
-      instructions: instructions || undefined,
-    });
-    return null;
-  },
-});
-
 /**
  * Replaces the project's extra repos. A person can add only a repo they can
  * access; keeping or removing a repo already on the list needs none. The home

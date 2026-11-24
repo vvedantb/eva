@@ -34,9 +34,10 @@ import {
 
 /**
  * Creates a new project. It plans in its coordinator chat (decision 1): no
- * interview, no spec, no project branch. `rawInput` becomes the description,
- * which every coordinator turn carries with the title (`withProjectContext`),
- * so the person need not repeat it. The client opens the coordinator chat;
+ * interview, no spec, no project branch. `rawInput` becomes the description:
+ * the project context every coordinator and child task turn carries
+ * (`projectBriefBlock`), so the person need not repeat it. The client opens
+ * the coordinator chat;
  * nothing is sent for them. `skipPlanning` stays accepted for older clients
  * and is ignored: every project starts the same way, and nothing starts the
  * old interview for it.

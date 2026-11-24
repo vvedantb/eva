@@ -67,11 +67,7 @@ export const quickTaskTimeRangeParser = parseAsStringLiteral(
   .withOptions(searchOptions);
 
 // The defaults are the shared ones, so "cleared" (`clearedQuickTaskFilters`)
-// and "not filtered" cannot disagree: the project default is "none".
-export const quickTaskProjectParser = parseAsString
-  .withDefault(QUICK_TASK_FILTER_DEFAULTS.project)
-  .withOptions(searchOptions);
-
+// and "not filtered" cannot disagree.
 export const quickTaskUserParser = parseAsString
   .withDefault(QUICK_TASK_FILTER_DEFAULTS.user)
   .withOptions(searchOptions);

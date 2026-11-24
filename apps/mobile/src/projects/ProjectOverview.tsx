@@ -41,18 +41,18 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
 
 /**
  * The web project Overview tab (`ProjectOverviewTab`) in one column: the
- * title, "Project context" (the description, as Markdown), the status block
+ * title, "Project context" (the description, as Markdown; a tap edits it
+ * and it saves when the field loses focus, as the web), the status block
  * (`ProjectSummarySection`: live stage counts and the progress bar from the
  * derived status, then the coordinator's summary document, which opens in
  * full), then the web fields column (`ProjectFieldsPanel`): Properties,
- * Instructions and Repos (`ProjectCoordinatorFields`), Dates, Labels and
+ * Repos (`ProjectCoordinatorFields`), Dates, Labels and
  * Created. Status is the derived stage (an older project still planning
  * shows its phase) and reads only. Priority and Project Lead open a bottom
  * sheet each and write `projects.update`, as the web selects; the model
  * chip (hidden in simple view, as the web) writes the model and, for the
- * project's owner, its account; Instructions save when the field loses
- * focus; Repos toggles extra repos in a sheet. Field rows are 48 high (web
- * 40). Not here from the web: editing the context, the code reviewer,
+ * project's owner, its account; Repos toggles extra repos in a sheet. Field
+ * rows are 48 high (web 40). Not here from the web: the code reviewer,
  * members, dates and labels pickers.
  */
 export function ProjectOverview({
@@ -76,16 +76,18 @@ export function ProjectOverview({
   const ownAccounts = useQuery(api.userProviderAccounts.listSelectable, {});
   const simpleView = useSimpleView();
   const updateProject = useMutation(api.projects.update);
-  const setInstructions = useMutation(api.projects.setInstructions);
   const setExtraRepoIds = useMutation(api.projects.setExtraRepoIds);
+  const [editingContext, setEditingContext] = useState(false);
   const [sheet, setSheet] = useState<"priority" | "lead" | "repos" | null>(null);
   const openSheet = (next: "priority" | "lead" | "repos") => () => setSheet(next);
   const extraRepoIds = project.extraRepoIds ?? [];
   const repoChoices = (repos ?? []).filter((entry) => entry._id !== project.repoId);
   const extraRepos = repoChoices.filter((entry) => extraRepoIds.includes(entry._id));
-  const saveInstructions = (value: string) => {
-    if (value.trim() === (project.instructions ?? "")) return;
-    setInstructions({ projectId: project._id, instructions: value }).catch(() => toast.error("Couldn't save instructions"));
+  const saveContext = (value: string) => {
+    setEditingContext(false);
+    const description = value.trim();
+    if (description === (project.description ?? "")) return;
+    updateProject({ id: project._id, description }).catch(() => toast.error("Couldn't save project context"));
   };
   const toggleRepo = (repoId: Id<"githubRepos">) => {
     const next = extraRepoIds.includes(repoId) ? extraRepoIds.filter((id) => id !== repoId) : [...extraRepoIds, repoId];
@@ -124,7 +126,7 @@ export function ProjectOverview({
   const muted = theme.mutedForeground;
 
   return (
-    // The instructions field scrolls into view 16 above the keyboard.
+    // The project context field scrolls into view 16 above the keyboard.
     <KeyboardAwareScrollView
       bottomOffset={16}
       style={{ flex: 1 }}
@@ -138,12 +140,24 @@ export function ProjectOverview({
         <Text className="font-instrument-sans-medium text-xs uppercase" style={{ color: muted, fontWeight: "500", letterSpacing: 0.6 }}>
           Project context
         </Text>
-        {project.description ? (
-          <Markdown>{project.description}</Markdown>
+        {editingContext ? (
+          <Textarea
+            // Uncontrolled so typing never fights the live query; saves when it loses focus, as the web.
+            autoFocus
+            defaultValue={project.description ?? ""}
+            accessibilityLabel="Project context"
+            onEndEditing={(event) => saveContext(event.nativeEvent.text)}
+          />
         ) : (
-          <Text className="font-instrument-sans text-sm" style={{ color: muted }}>
-            No project context yet.
-          </Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Edit project context" onPress={() => setEditingContext(true)} className="active:opacity-70">
+            {project.description ? (
+              <Markdown>{project.description}</Markdown>
+            ) : (
+              <Text className="font-instrument-sans text-sm" style={{ color: muted }}>
+                No project context yet.
+              </Text>
+            )}
+          </Pressable>
         )}
       </View>
       {status ? (
@@ -222,15 +236,6 @@ export function ProjectOverview({
           </View>
         )}
         <FieldRow label="Base branch for all tasks in this project" icon={<IconGitBranch size={16} color={muted} />} value={baseBranch} />
-      </FieldGroup>
-      <FieldGroup title="Instructions">
-        <Textarea
-          // Uncontrolled so typing never fights the live query; saves when it loses focus, as the web.
-          key={project.instructions ?? ""}
-          defaultValue={project.instructions ?? ""}
-          accessibilityLabel="Project instructions"
-          onEndEditing={(event) => saveInstructions(event.nativeEvent.text)}
-        />
       </FieldGroup>
       <FieldGroup title="Repos">
         <FieldRow

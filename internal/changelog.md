@@ -1,5 +1,11 @@
 # Changelog
 
+## Projects: project context is the always-read text; project tasks leave Quick Tasks
+
+Date: 2026-11-24
+
+The project description ("Project context", now editable on phone) replaces the Instructions field in every coordinator and child-task prompt (`projects.setInstructions` and `projects.instructions` are gone), and `agentTasks.getAllTasks` drops project tasks, so Quick Tasks lose the Project filter and project badges (web and phone).
+
 ## Projects: flat Tasks list like Amp and Capy
 
 Date: 2026-11-23

@@ -307,7 +307,6 @@ export function ProjectFieldsPanel({
       <ProjectCoordinatorFields
         projectId={projectId}
         homeRepoId={project.repoId}
-        instructions={project.instructions}
         extraRepoIds={project.extraRepoIds ?? []}
       />
 

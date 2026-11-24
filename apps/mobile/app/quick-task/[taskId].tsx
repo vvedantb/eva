@@ -95,7 +95,8 @@ import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { useScheme } from "@/ui/theme";
 import { HeaderMoreButton } from "@/ui/HeaderRail";
 
-type QuickTask = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
+/** A quick-task row (`getAllTasks`) or a project task row (`listByProject`): one validator, the wider inferred type. */
+type QuickTask = FunctionReturnType<typeof api.agentTasks.listByProject>[number];
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 type Field = "status" | "priority" | "reviewer" | "tags" | "project";
@@ -110,12 +111,14 @@ type Field = "status" | "priority" | "reviewer" | "tags" | "project";
  * "…" is the row's long-press menu. The bottom bar opens the task chat (with
  * the unread dot) and, when the web shows it, Run Eva. The title and the
  * description edit in place while the web allows it (`canEditTaskText`).
- * Routes as `/quick-task/<taskId>?repo=<repoId>`; the task resolves through
- * the repo's list, so its id keeps its table type.
+ * Routes as `/quick-task/<taskId>?repo=<repoId>&numId=<numId>`; the task
+ * resolves through the repo's quick tasks, so its id keeps its table type. A
+ * project task is never a quick task: it resolves by its number
+ * (`getByNumId`), then through its project's list (`listByProject`).
  */
 export default function QuickTaskScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ taskId: string; repo?: string }>();
+  const params = useLocalSearchParams<{ taskId: string; repo?: string; numId?: string }>();
   const leave = () => goBackOrReplace(router, "/sessions");
   const repos = useQuery(api.githubRepos.list, {});
   const repo = repos?.find((candidate) => candidate._id === params.repo);
@@ -123,10 +126,19 @@ export default function QuickTaskScreen() {
     api.agentTasks.getAllTasks,
     repo ? { repoId: repo._id } : "skip",
   );
-  const task = tasks?.find((candidate) => candidate._id === params.taskId);
+  const quickTask = tasks?.find((candidate) => candidate._id === params.taskId);
+  const numId = Number(params.numId);
+  const byNumber = repo !== undefined && tasks !== undefined && quickTask === undefined && Number.isInteger(numId);
+  const numbered = useQuery(api.agentTasks.getByNumId, repo && byNumber ? { repoId: repo._id, numId } : "skip");
+  const projectId = numbered?._id === params.taskId ? numbered.projectId : undefined;
+  const projectTasks = useQuery(api.agentTasks.listByProject, projectId ? { projectId } : "skip");
+  const task = quickTask ?? projectTasks?.find((candidate) => candidate._id === params.taskId);
 
   const loading =
-    repos === undefined || (repo !== undefined && tasks === undefined);
+    repos === undefined ||
+    (repo !== undefined && tasks === undefined) ||
+    (byNumber && numbered === undefined) ||
+    (projectId !== undefined && projectTasks === undefined);
   if (loading || !repo || !task || !tasks) {
     return (
       <View className="flex-1">

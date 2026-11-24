@@ -30,7 +30,7 @@ export default function OpenLinkScreen() {
   const session = useQuery(api.sessions.getByNumId, args("session"));
   const doc = useQuery(api.docs.getByNumId, args("doc"));
 
-  if (repo && task) return <Redirect href={{ pathname: "/quick-task/[taskId]", params: { taskId: task._id, repo: repo._id } }} />;
+  if (repo && task) return <Redirect href={{ pathname: "/quick-task/[taskId]", params: { taskId: task._id, repo: repo._id, numId: task.numId } }} />;
   if (repo && project) return <Redirect href={{ pathname: "/project/[projectId]", params: { projectId: project._id, repo: repo._id } }} />;
   if (session) return <Redirect href={{ pathname: "/chat/[target]", params: { target: session._id } }} />;
   if (repo && doc) return <Redirect href={{ pathname: "/doc/[docId]", params: { docId: doc._id, repo: repo._id } }} />;

@@ -450,7 +450,11 @@ export const getActiveTasksSlim = authQuery({
   },
 });
 
-/** Returns all non-draft tasks for a repo, enriched with latest run time, sorted by creation date. */
+/**
+ * The repo's quick tasks: every non-draft task outside a project, enriched
+ * with latest run time, sorted by creation date. A project task lives only in
+ * its project (`listByProject`), even when it targets this repo.
+ */
 export const getAllTasks = authQuery({
   args: { repoId: v.id("githubRepos") },
   returns: v.array(agentTaskWithLastRunValidator),
@@ -470,7 +474,10 @@ export const getAllTasks = authQuery({
           .collect(),
       ),
     );
-    const tasks = taskArrays.flat().sort((a, b) => a.createdAt - b.createdAt);
+    const tasks = taskArrays
+      .flat()
+      .filter((task) => task.projectId === undefined)
+      .sort((a, b) => a.createdAt - b.createdAt);
     return enrichTasksWithLastRun(ctx.db, ctx.userId, tasks);
   },
 });

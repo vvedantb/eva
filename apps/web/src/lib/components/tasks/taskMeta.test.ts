@@ -33,11 +33,10 @@ describe("task meta", () => {
     ]);
   });
 
-  it("opens the quick-task list on tasks outside projects, newest update first", () => {
+  it("opens the quick-task list without drafts, newest update first", () => {
     const shown = applyQuickTaskFilters(
       [
         { id: "old", title: "Old", status: "todo" as const, createdAt: 1, updatedAt: 1 },
-        { id: "in-project", title: "P", status: "todo" as const, createdAt: 1, updatedAt: 3, projectId: "p1" },
         { id: "draft", title: "D", status: "draft" as const, createdAt: 1, updatedAt: 4 },
         { id: "new", title: "New", status: "todo" as const, createdAt: 1, updatedAt: 2 },
       ],
@@ -67,13 +66,12 @@ describe("task meta", () => {
   });
 
   it("names the active filters as chips and clears them back to the defaults", () => {
-    const filters = { ...QUICK_TASK_LIST_DEFAULTS, project: "all", assignee: "u1", statuses: toggleQuickTaskStatus(QUICK_TASK_LIST_DEFAULTS.statuses, "done") };
-    expect(quickTaskFilterChips(filters, { project: () => undefined, user: () => "Ada" })).toEqual([
-      { key: "project", text: "All Projects" },
+    const filters = { ...QUICK_TASK_LIST_DEFAULTS, assignee: "u1", statuses: toggleQuickTaskStatus(QUICK_TASK_LIST_DEFAULTS.statuses, "done") };
+    expect(quickTaskFilterChips(filters, { user: () => "Ada" })).toEqual([
       { key: "assignee", text: "Code reviewer: ", person: "Ada" },
       { key: "statuses", text: "5 Statuses" },
     ]);
-    expect(quickTaskFilterChips({ ...filters, ...clearedQuickTaskFilters() }, { project: () => undefined, user: () => undefined })).toEqual([]);
+    expect(quickTaskFilterChips({ ...filters, ...clearedQuickTaskFilters() }, { user: () => undefined })).toEqual([]);
     // The last status cannot be turned off: an empty filter would hide every task.
     expect(toggleQuickTaskStatus(["todo"], "todo")).toEqual(["todo"]);
   });

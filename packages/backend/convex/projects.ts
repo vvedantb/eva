@@ -26,7 +26,7 @@ export { resolveProjectConflicts } from "./_projects/conflicts";
 
 export { getInternal } from "./_projects/internal";
 
-export { setInstructions, setExtraRepoIds } from "./_projects/settings";
+export { setExtraRepoIds } from "./_projects/settings";
 
 export { getSummaryDoc } from "./_projects/summary";
 

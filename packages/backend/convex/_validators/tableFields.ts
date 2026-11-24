@@ -1231,8 +1231,6 @@ export const projectFields = {
   repoId: v.id("githubRepos"),
   /** More repos a task of this project may target (`assertProjectRepo`). Set by `projects.setExtraRepoIds`. */
   extraRepoIds: v.optional(v.array(v.id("githubRepos"))),
-  /** Text added to the coordinator's and every child task's prompt (`sessionPrompt.ts`). */
-  instructions: v.optional(v.string()),
   /** The project summary doc the coordinator keeps (`upsertProjectSummary`). */
   summaryDocId: v.optional(v.id("docs")),
   /** The order the project's phase labels (`agentTasks.phaseLabel`) show in. */

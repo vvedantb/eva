@@ -120,7 +120,7 @@ export function ProjectTaskRow({
             )
           }
           accessibilityLabel={displayTitle(task.title)}
-          onPress={() => router.push({ pathname: "/quick-task/[taskId]", params: { taskId: task._id, repo: task.repoId } })}
+          onPress={() => router.push({ pathname: "/quick-task/[taskId]", params: { taskId: task._id, repo: task.repoId, numId: task.numId } })}
           onLongPress={onLongPress}
         />
       </View>

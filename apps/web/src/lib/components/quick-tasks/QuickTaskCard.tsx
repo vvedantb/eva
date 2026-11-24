@@ -33,7 +33,6 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   IconClock,
   IconDots,
-  IconFolder,
   IconPencil,
   IconTag,
 } from "@tabler/icons-react";
@@ -71,12 +70,10 @@ interface QuickTaskCardProps {
   status: TaskStatus;
   priority?: Priority;
   numId?: number;
-  projectNumId?: number;
   scheduledAt?: number;
   tags?: string[];
   createdByUser?: User;
   createdAt: number;
-  projectName?: string;
   hasError?: boolean;
   deploymentStatus?: DeploymentStatus;
   sandboxStatus?: SandboxStatus;
@@ -119,12 +116,10 @@ export function QuickTaskCard({
   status,
   priority,
   numId,
-  projectNumId,
   scheduledAt,
   tags,
   createdByUser,
   createdAt,
-  projectName,
   hasError = false,
   deploymentStatus: _deploymentStatus,
   sandboxStatus,
@@ -179,7 +174,6 @@ export function QuickTaskCard({
   const hasDraftComment = draftMarks?.taskIds.includes(id) ?? false;
 
   const hasMetadata =
-    projectName !== undefined ||
     (tags !== undefined && tags.length > 0) ||
     hasDraftComment;
 
@@ -260,7 +254,7 @@ export function QuickTaskCard({
           />
         ) : null}
         <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
-          <EntityNumLabel numId={numId} projectNumId={projectNumId} />
+          <EntityNumLabel numId={numId} />
           <MarqueeOnHover className="min-w-0 flex-1 text-2sm font-medium leading-5 tracking-[-0.01em] text-foreground transition-colors duration-[var(--motion-base)] group-hover:text-primary">
             {title}
           </MarqueeOnHover>
@@ -341,22 +335,6 @@ export function QuickTaskCard({
 
       {hasMetadata ? (
         <div className="flex min-w-0 flex-wrap items-center gap-1">
-          {projectName ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Badge
-                  variant="default"
-                  className="max-w-full px-1.5 py-0 text-3xs font-medium leading-4"
-                >
-                  <span className="flex min-w-0 items-center gap-0.5">
-                    <IconFolder className="size-2.5 shrink-0" />
-                    <span className="truncate">{projectName}</span>
-                  </span>
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent>{projectName}</TooltipContent>
-            </Tooltip>
-          ) : null}
           {tags?.map((tag) => (
             <Badge
               key={tag}
