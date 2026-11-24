@@ -752,6 +752,48 @@
   }
 
   /*
+   * The tab slide for keep-alive tab panes (`useKeepAliveTabSlide`): every pane
+   * stays mounted and the inactive ones are `invisible`. The new pane slides
+   * in from the picked tab's side, the old one leaves the other way while it
+   * is still visible, as `TabsTransition` does. 32px, 240ms in, 140ms out.
+   */
+  [data-tab-dir="1"] {
+    --tab-dir: 1;
+  }
+
+  [data-tab-dir="-1"] {
+    --tab-dir: -1;
+  }
+
+  [data-tab-dir] > [data-tab-pane="active"] {
+    animation: t-tab-pane-in 240ms var(--motion-ease-out);
+  }
+
+  [data-tab-dir] > [data-tab-pane="leaving"] {
+    animation: t-tab-pane-out 140ms var(--motion-ease-out);
+  }
+
+  @keyframes t-tab-pane-in {
+    from {
+      transform: translateX(calc(var(--tab-dir) * 32px));
+      opacity: 0;
+    }
+  }
+
+  /* `visibility` holds the leaving pane on screen over its `invisible`. */
+  @keyframes t-tab-pane-out {
+    from {
+      visibility: visible;
+      opacity: 1;
+    }
+    to {
+      visibility: visible;
+      transform: translateX(calc(var(--tab-dir) * -32px));
+      opacity: 0;
+    }
+  }
+
+  /*
    * Experimental "Disable page animations" (`html[data-page-motion=off]`).
    * Page enter, panel height, modal scale, heatmap fade, tab pill travel.
    * Leave these alone: `.mq-*` (hover marquee), `.animate-spin` / `.shimmer-*`
@@ -767,7 +809,8 @@
   html[data-page-motion="off"] .t-heatmap-cell,
   html[data-page-motion="off"] .t-accordion-content,
   html[data-page-motion="off"] .t-collapsible-content,
-  html[data-page-motion="off"] .t-anchor-flash {
+  html[data-page-motion="off"] .t-anchor-flash,
+  html[data-page-motion="off"] [data-tab-pane] {
     animation: none !important;
   }
 
