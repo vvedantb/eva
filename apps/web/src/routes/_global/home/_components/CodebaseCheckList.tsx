@@ -31,11 +31,12 @@ export function CodebaseCheckList({
       {[...groups].map(([codebase, group]) => (
         <div key={codebase} className="flex flex-col gap-1">
           <p className="text-xs font-medium text-muted-foreground">{codebase}</p>
+          <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
           {group.map((item) => (
             <label
               key={item.key}
               title={item.title}
-              className="flex cursor-pointer items-center gap-3 rounded-surface px-2 py-1.5 hover:bg-muted/40"
+              className="flex min-w-0 cursor-pointer items-center gap-3 rounded-surface px-2 py-1.5 hover:bg-muted/40"
             >
               <Checkbox
                 checked={item.checked}
@@ -48,6 +49,7 @@ export function CodebaseCheckList({
               </span>
             </label>
           ))}
+          </div>
         </div>
       ))}
     </div>
