@@ -93,7 +93,7 @@ export default function ProjectScreen() {
           value={tab}
           options={[
             { value: "overview", label: "Overview" },
-            { value: "coordinator", label: showPlan ? "Plan" : "Coordinator" },
+            { value: "coordinator", label: showPlan ? "Plan" : "Sandbox" },
             { value: "documents", label: "Documents" },
           ]}
           onChange={(next) => router.setParams({ tab: next })}

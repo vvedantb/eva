@@ -293,7 +293,11 @@ export function TaskDetailInline({
         }
       />
     ) : (
-      <SandboxEmptyRailFrame collapsed={collapsed} onToggle={onToggle}>
+      <SandboxEmptyRailFrame
+        collapsed={collapsed}
+        onToggle={onToggle}
+        showToggle={routing?.mode !== "project-task"}
+      >
         <div className="flex flex-col items-center gap-3 text-center">
           <p className="text-sm text-muted-foreground">
             No sandbox for this task yet — it becomes available once the task
@@ -376,6 +380,7 @@ export function TaskDetailInline({
             collapsed={rightPanelCollapsed}
             onToggle={onToggleRightPanel}
             ownerLabel="task"
+            showToggle={routing?.mode !== "project-task"}
             isPending={sandbox.sessionPending}
             onStart={
               canStartSandbox && !isSandboxStopping

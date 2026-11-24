@@ -33,7 +33,7 @@ export function ProjectMainTabs({
   /** Project base path, e.g. `/owner/repo/projects/3` (pre-internal form). */
   projectHref: string;
   activeTab: ProjectMainTab;
-  /** "Coordinator" for active projects, "Plan" while drafting. */
+  /** "Sandbox" for active projects, "Plan" while drafting. */
   workTabLabel: string;
   /** The work tab is the coordinator: it carries its sandbox status dot. */
   showSandboxStatus?: boolean;

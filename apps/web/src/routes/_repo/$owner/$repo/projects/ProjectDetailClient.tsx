@@ -171,7 +171,7 @@ export function ProjectDetailClient({
           <ProjectMainTabs
             projectHref={`${basePath}/projects/${projectPathSegment}`}
             activeTab={mainTab}
-            workTabLabel={isDraftOrFinalized ? "Plan" : "Coordinator"}
+            workTabLabel={isDraftOrFinalized ? "Plan" : "Sandbox"}
             showSandboxStatus={!isDraftOrFinalized}
             isSandboxActive={isSandboxActive}
             isSandboxStarting={isSandboxStarting}
