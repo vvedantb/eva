@@ -1,5 +1,11 @@
 # Changelog
 
+## Projects: the coordinator groups and routes feedback
+
+Date: 2026-11-24
+
+`COORDINATOR_RULES` now tell the coordinator to sort a dump of items by area, put related small items in one task (one PR per area), send items to an open task that already covers the area (`send_chat_message`) instead of creating a new one, and reply with where each item went.
+
 ## Projects: no cap on running or created tasks
 
 Date: 2026-11-24
