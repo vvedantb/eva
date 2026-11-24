@@ -8,7 +8,6 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
-  tokenTransition,
   RelativeDateTime,
 } from "@vvedantb/ui";
 import { m } from "motion/react";
@@ -21,6 +20,7 @@ import {
   useOpenPrOnGithubClick,
   useOpenPrsOnGithub,
 } from "@/lib/hooks/useOpenPrsOnGithub";
+import { sidebarRowPresence } from "@/lib/components/sidebar/_utils/sidebarRowPresence";
 
 /** How long the pointer must rest on a row before it counts as intent. */
 const HOVER_INTENT_MS = 90;
@@ -72,11 +72,7 @@ export function ReviewsSidebarRow({
   };
 
   return (
-    <m.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={tokenTransition.fast}
-    >
+    <m.div {...sidebarRowPresence}>
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <SharedLayoutNavSurface

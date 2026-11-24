@@ -8,6 +8,9 @@ const VIEWS: ReadonlyArray<{ value: LogView; label: string }> = [
   { value: "project", label: "Project" },
 ];
 
+/** The views left to right; gives `TabsTransition` its direction. */
+export const LOG_VIEW_ORDER = VIEWS.map((view) => view.value);
+
 function isLogView(value: string): value is LogView {
   return VIEWS.some((view) => view.value === value);
 }
