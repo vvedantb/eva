@@ -1,5 +1,11 @@
 # Changelog
 
+## Projects: coordinator replies in bubbles
+
+Date: 2026-11-24
+
+In the project coordinator chat, Eva's replies sit in a left-side bubble with her mark, as a teammate's message (web `assistantBubbles` on `ChatBody`, phone `EvaBubble`); task and session chats keep the flat reply.
+
 ## Projects: "+" replaces Feedback; no header status badge
 
 Date: 2026-11-24

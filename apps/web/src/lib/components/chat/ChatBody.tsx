@@ -313,6 +313,8 @@ interface ChatBodyProps {
   }) => Promise<void>;
   /** Hides the left jump rail (Ave: one endless thread, too many ticks). */
   hideJumpRail?: boolean;
+  /** Eva's replies in a bubble with her mark (the project coordinator). */
+  assistantBubbles?: boolean;
 }
 
 export function ChatBody(props: ChatBodyProps) {
@@ -373,6 +375,7 @@ function ChatBodyInner({
   afterMessage,
   onForkTranscript,
   hideJumpRail = false,
+  assistantBubbles = false,
 }: ChatBodyProps) {
   const citations = usePendingCitations();
   const snapshots = usePendingPreviewSnapshots();
@@ -1019,6 +1022,7 @@ function ChatBodyInner({
           onChangedFilesExpandedChange={setMessageExpanded}
           isOtherUser={isOtherUser}
           senderFirstName={senderFirstName}
+          assistantBubble={assistantBubbles}
           isHandoffBoundary={handoffBoundaryIds.has(message._id)}
           turnModel={precedingUser?.model}
           turnReasoningLevel={precedingUser?.reasoningLevel}

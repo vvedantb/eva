@@ -67,7 +67,7 @@ import { AssistantMessage, LiveAssistantMessage } from "@/chat/AssistantMessage"
 import { DayDivider, NewDivider } from "@/chat/DayDivider";
 import { useAppActive } from "@/ui/appState";
 import { UserMessageText } from "@/chat/MentionChip";
-import { TEAMMATE_FOOTER_INSET, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
+import { EvaBubble, TEAMMATE_FOOTER_INSET, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
 import { InlineCards, TurnOutputs, useChatCards, type InlineCard, type TurnOutput } from "@/chat/cards/ChatCards";
 import { UserAttachments } from "@/chat/media/UserAttachments";
 import { createSeenRows, SeenRowsContext } from "@/chat/cards/seenRows";
@@ -486,6 +486,7 @@ export default function ChatScreen() {
                 newStart={message._id === newBoundaryId}
                 findActive={message._id === findActiveId}
                 fromTeammate={fromTeammate}
+                evaBubble={chat.project !== undefined}
                 senderName={fromTeammate && message.userId ? teammateNames.get(message.userId) : undefined}
                 teammate={fromTeammate && message.userId ? teammateById.get(message.userId) : undefined}
                 live={message._id === liveReplyId ? streamingEntityId : undefined}
@@ -828,6 +829,7 @@ function ChatMessageRow({
   newStart,
   findActive,
   fromTeammate,
+  evaBubble,
   senderName,
   teammate,
   live,
@@ -850,6 +852,8 @@ function ChatMessageRow({
   /** The message of Find's active match: a tinted band marks it. */
   findActive: boolean;
   fromTeammate: boolean;
+  /** The project coordinator chat: Eva's replies sit in a bubble with her mark (the web `assistantBubbles`). */
+  evaBubble: boolean;
   senderName: string | undefined;
   teammate: ComponentProps<typeof TeammateBubble>["sender"];
   /** The streaming row's entity id while this is the live reply. */
@@ -906,6 +910,24 @@ function ChatMessageRow({
       {message.content ? <UserMessageText content={message.content} /> : null}
     </>
   );
+  const replyBody = isUser ? null : live ? (
+    <LiveAssistantMessage streamingEntityId={live} messageId={message._id} />
+  ) : (
+    <AssistantMessage
+      messageId={message._id}
+      content={message.content}
+      activityLog={message.activityLog}
+      duration={message.finishedAt ? formatDuration(message.timestamp, message.finishedAt) : undefined}
+      isLatestAssistantTurn={isLatestReply}
+      onOpenDiff={onOpenDiff}
+      media={message.media}
+      tabPanels={tabbed ? cardList : undefined}
+      failure={failure ? { title: failure, onRetry: onRetryTurn } : undefined}
+      stopped={message.stopped === true}
+    />
+  );
+  // The coordinator chat: Eva's reply in a bubble on the left, as a teammate's.
+  const evaReply = evaBubble && !isUser;
   return (
               <View className={`gap-3 ${THREAD_INSET}`} style={findBand}>
                 {dayStart ? <DayDivider timestamp={message.timestamp} /> : null}
@@ -916,34 +938,19 @@ function ChatMessageRow({
                 <Message
                   from={message.role}
                   className={message.role === "user" ? "gap-0.5" : "max-w-full gap-0.5"}
-                  style={fromTeammate ? TEAMMATE_SIDE : undefined}
+                  style={fromTeammate || evaReply ? TEAMMATE_SIDE : undefined}
                   menu={() => menuFor(message._id)}
                 >
                   {senderName ? <TeammateName name={senderName} /> : null}
                   {fromTeammate ? (
                     <TeammateBubble sender={teammate}>{userBody}</TeammateBubble>
+                  ) : evaReply ? (
+                    <EvaBubble>{replyBody}</EvaBubble>
                   ) : (
                     // Eva's web chat tints the user bubble (bg-primary/10), not the solid default. A reply is `px-1 py-2`.
-                    <MessageContent bubble="tint" className={message.role === "user" ? undefined : "px-1 py-2"}>
-                      {isUser ? (
-                        // The web user text is markdown in `text-sm` (14 / 20), its tokens as chips.
-                        userBody
-                      ) : live ? (
-                        <LiveAssistantMessage streamingEntityId={live} messageId={message._id} />
-                      ) : (
-                        <AssistantMessage
-                          messageId={message._id}
-                          content={message.content}
-                          activityLog={message.activityLog}
-                          duration={message.finishedAt ? formatDuration(message.timestamp, message.finishedAt) : undefined}
-                          isLatestAssistantTurn={isLatestReply}
-                          onOpenDiff={onOpenDiff}
-                          media={message.media}
-                          tabPanels={tabbed ? cardList : undefined}
-                          failure={failure ? { title: failure, onRetry: onRetryTurn } : undefined}
-                          stopped={message.stopped === true}
-                        />
-                      )}
+                    // The web user text is markdown in `text-sm` (14 / 20), its tokens as chips.
+                    <MessageContent bubble="tint" className={isUser ? undefined : "px-1 py-2"}>
+                      {isUser ? userBody : replyBody}
                     </MessageContent>
                   )}
                   {/* The web user turn: its cards, then its outputs. A reply: outputs, then the cards the tabs did not take. */}
@@ -953,7 +960,7 @@ function ChatMessageRow({
                   {changes ? <View className="mt-1 px-1">{changes}</View> : null}
                   {message.content.trim() !== "" ? (
                     <MessageFooter
-                      className={fromTeammate ? TEAMMATE_FOOTER_INSET : undefined}
+                      className={fromTeammate || evaReply ? TEAMMATE_FOOTER_INSET : undefined}
                       at={message.timestamp}
                       finishedAt={message.role === "assistant" ? message.finishedAt : undefined}
                       turn={turn}

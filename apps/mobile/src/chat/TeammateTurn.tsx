@@ -2,6 +2,7 @@ import { EVA_THEME } from "@eva/shared/evaTheme";
 import { MessageContent } from "@vvedantb/native-ui/ai";
 import type { ReactNode } from "react";
 import { Text, View, type ViewStyle } from "react-native";
+import { EvaMark } from "@/ui/EvaMark";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { useScheme } from "@/ui/theme";
 
@@ -41,10 +42,23 @@ export function TeammateBubble({
   sender: { firstName?: string; lastName?: string; fullName?: string } | undefined;
   children: ReactNode;
 }) {
+  return <SideBubble avatar={<InitialsAvatar user={sender} size={16} />}>{children}</SideBubble>;
+}
+
+/** Eva's reply in the project coordinator chat, as the web `assistantBubble`: the teammate bubble with her mark. */
+export function EvaBubble({ children }: { children: ReactNode }) {
+  return (
+    <SideBubble avatar={<EvaMark size={16} />} className="max-w-[85%]">
+      {children}
+    </SideBubble>
+  );
+}
+
+function SideBubble({ avatar, className, children }: { avatar: ReactNode; className?: string; children: ReactNode }) {
   const theme = EVA_THEME[useScheme()];
   return (
-    <View className="min-w-0 max-w-full flex-row items-end gap-2">
-      <InitialsAvatar user={sender} size={16} />
+    <View className={`min-w-0 max-w-full flex-row items-end gap-2 ${className ?? ""}`}>
+      {avatar}
       <MessageContent bubble="tint" className="shrink" style={{ backgroundColor: theme.secondary, borderBottomLeftRadius: 0 }}>
         {children}
       </MessageContent>

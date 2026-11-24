@@ -61,10 +61,13 @@ export function SandboxChatPanel({
   onOpenAgentsTab,
   onSandboxToggle,
   preInputBanner,
+  assistantBubbles = false,
 }: SandboxChatPanelProps & {
   binding: SandboxChatBinding;
   /** Owner-specific notice above the composer (a paused coordinator). */
   preInputBanner?: ReactNode;
+  /** Eva's replies in a bubble with her mark (the project coordinator). */
+  assistantBubbles?: boolean;
 }) {
   const { repo, basePath } = useRepo();
   const { entity, doc, model, firstRun, ownerLabel } = binding;
@@ -258,6 +261,7 @@ export function SandboxChatPanel({
           onViewDiff={onViewDiff}
           hasPendingContext={hasPendingReviewComments}
           onOpenAgentsTab={onOpenAgentsTab}
+          assistantBubbles={assistantBubbles}
           backgroundAgents={doc?.backgroundAgents}
           sandboxRunning={isSandboxActive}
           transcriptTail={sandboxStartupTail(

@@ -141,6 +141,11 @@ interface ChatMessageProps {
   isOtherUser?: boolean;
   /** First name shown above teammate bubbles. */
   senderFirstName?: string;
+  /**
+   * Eva's reply sits in a teammate-style bubble with her mark (the project
+   * coordinator, which only talks and delegates).
+   */
+  assistantBubble?: boolean;
   /** This user turn switches to a different model provider. */
   isHandoffBoundary?: boolean;
   /**
@@ -226,6 +231,7 @@ export const ChatMessage = memo(function ChatMessage({
   onChangedFilesExpandedChange,
   isOtherUser = false,
   senderFirstName,
+  assistantBubble = false,
   isHandoffBoundary = false,
   turnModel,
   turnReasoningLevel,
@@ -315,6 +321,7 @@ export const ChatMessage = memo(function ChatMessage({
                 showChangedFiles={showChangedFiles}
                 showTurnMeta={showTurnMeta}
                 showScopeCheck={showScopeCheck}
+                bubble={assistantBubble}
                 changedFilesExpanded={changedFilesExpanded}
                 onChangedFilesExpandedChange={onChangedFilesExpandedChange}
                 turnModel={turnModel}
@@ -518,6 +525,7 @@ interface AssistantTurnProps {
   showChangedFiles: boolean;
   showTurnMeta: boolean;
   showScopeCheck: boolean;
+  bubble: boolean;
   changedFilesExpanded?: boolean;
   onChangedFilesExpandedChange: ChatMessageProps["onChangedFilesExpandedChange"];
   turnModel?: string;
@@ -548,6 +556,7 @@ function AssistantTurn({
   showChangedFiles,
   showTurnMeta,
   showScopeCheck,
+  bubble,
   changedFilesExpanded,
   onChangedFilesExpandedChange,
   turnModel,
@@ -586,6 +595,7 @@ function AssistantTurn({
   return (
     <>
       <AssistantTurnContent
+        bubble={bubble}
         message={message}
         turnState={turnState}
         isLatestAssistantTurn={isLatestAssistantTurn}
@@ -605,44 +615,61 @@ function AssistantTurn({
         turnErrorTitle={turnErrorTitle}
         panelTabs={panelTabs}
       />
-      {artifacts ? (
-        <div className="mt-1 flex flex-col gap-2">{artifacts}</div>
-      ) : null}
-      {/* Sits above `belowContent` so agent-composed panels keep
-          their promised slot directly over the meta row, and so the
-          chip stays next to the changed-files card it judges.
-          Deliberately not gated on `showChangedFiles`: the verdict is
-          a safety signal, and simple view hiding it is exactly the
-          reader who needs it. The hover card's per-hunk rows only
-          link out when the diff surface exists — simple view bounces
-          away from that tab, so they degrade to plain rows there. */}
-      {showScopeCheck && message.scopeCheck ? (
-        <div className="mt-1">
-          <ScopeCheckChip
-            check={message.scopeCheck}
-            {...(showChangedFiles && onViewDiff ? { onViewDiff } : {})}
+      <BubbleIndent bubble={bubble}>
+        {artifacts ? (
+          <div className="mt-1 flex flex-col gap-2">{artifacts}</div>
+        ) : null}
+        {/* Sits above `belowContent` so agent-composed panels keep
+            their promised slot directly over the meta row, and so the
+            chip stays next to the changed-files card it judges.
+            Deliberately not gated on `showChangedFiles`: the verdict is
+            a safety signal, and simple view hiding it is exactly the
+            reader who needs it. The hover card's per-hunk rows only
+            link out when the diff surface exists — simple view bounces
+            away from that tab, so they degrade to plain rows there. */}
+        {showScopeCheck && message.scopeCheck ? (
+          <div className="mt-1">
+            <ScopeCheckChip
+              check={message.scopeCheck}
+              {...(showChangedFiles && onViewDiff ? { onViewDiff } : {})}
+            />
+          </div>
+        ) : null}
+        {/* Only the panels the tab strip did not claim — a still-
+            streaming or failed turn has no prose to trade places with. */}
+        {belowContent && !panelTabs ? (
+          <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
+        ) : null}
+        {showTurnMeta ? (
+          <AssistantTurnMeta
+            message={message}
+            turnModel={turnModel}
+            turnReasoningLevel={turnReasoningLevel}
+            turnCredentialSourceLabel={turnCredentialSourceLabel}
+            copyPlain={copyPlain}
+            rowActions={rowActions}
+            canRate={canRate && !turnState.isStreamingPlaceholder}
+            feedbackSentiment={feedbackSentiment}
+            feedbackComment={feedbackComment}
           />
-        </div>
-      ) : null}
-      {/* Only the panels the tab strip did not claim — a still-
-          streaming or failed turn has no prose to trade places with. */}
-      {belowContent && !panelTabs ? (
-        <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
-      ) : null}
-      {showTurnMeta ? (
-        <AssistantTurnMeta
-          message={message}
-          turnModel={turnModel}
-          turnReasoningLevel={turnReasoningLevel}
-          turnCredentialSourceLabel={turnCredentialSourceLabel}
-          copyPlain={copyPlain}
-          rowActions={rowActions}
-          canRate={canRate && !turnState.isStreamingPlaceholder}
-          feedbackSentiment={feedbackSentiment}
-          feedbackComment={feedbackComment}
-        />
-      ) : null}
+        ) : null}
+      </BubbleIndent>
     </>
+  );
+}
+
+/** Lines the rows under a bubbled reply up with the bubble, past Eva's mark. */
+function BubbleIndent({
+  bubble,
+  children,
+}: {
+  bubble: boolean;
+  children: ReactNode;
+}) {
+  return bubble ? (
+    <div className="flex flex-col pl-6">{children}</div>
+  ) : (
+    <>{children}</>
   );
 }
 
@@ -670,6 +697,7 @@ function AssistantTurnContent({
   belowContent,
   turnErrorTitle,
   panelTabs,
+  bubble,
 }: Omit<
   AssistantTurnProps,
   | "showTurnMeta"
@@ -718,8 +746,15 @@ function AssistantTurnContent({
       <AgentSpawnCtaRow summary={agentSpawn} onOpen={onOpenAgentsTab} />
     ) : null;
 
-  return (
-    <MessageContent className="px-1 py-2">
+  const content = (
+    <MessageContent
+      className={cn(
+        "py-2",
+        // The teammate bubble, mirrored onto Eva's side.
+        bubble ? "w-fit min-w-0 bg-secondary px-3 text-foreground" : "px-1",
+      )}
+      style={bubble ? { borderRadius: otherUserBubbleRadius() } : undefined}
+    >
       {isStreamingPlaceholder ? (
         <>
           <StreamingActivityDisplay
@@ -782,6 +817,15 @@ function AssistantTurnContent({
         </>
       )}
     </MessageContent>
+  );
+
+  return bubble ? (
+    <div className="flex min-w-0 max-w-[85%] items-end gap-2">
+      <EvaIcon size={16} disc={false} className="shrink-0" />
+      {content}
+    </div>
+  ) : (
+    content
   );
 }
 
