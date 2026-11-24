@@ -674,7 +674,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       .string()
       .optional()
       .describe(
-        'Repo name (e.g. "eva" or "vvedantb/eva"). Resolved by matching against your connected repos. Required, except in a project coordinator chat, where it defaults to the project\'s home repo and must be one of the project\'s repos.',
+        'Repo name (e.g. "eva" or "vvedantb/eva"). Resolved by matching against your connected repos. Required, except in a project coordinator chat, where it defaults to the project\'s home repo and may name any repo you can access.',
       ),
     // No `model` here on purpose: a task runs on the repo's configured default
     // model (createQuickTask: `args.model ?? repo.defaultModel`). The picker
@@ -753,8 +753,8 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
   }
 
   /**
-   * The coordinator creates tasks in its project: `todo` and approved, in the
-   * project's repos, so the scheduler starts them at once. One call is one
+   * The coordinator creates tasks in its project: `todo` and approved, in any
+   * repo the user can access, so the scheduler starts them at once. One call is one
    * batch card in the coordinator chat.
    */
   async function createProjectTasks(
@@ -905,7 +905,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
       name: "create_tasks_batch",
       description: `Create multiple tasks at once, and optionally group them into a project. Each task in the array has a title and a description.
 
-In a project coordinator chat the batch joins this project (do not pass projectTitle): the scheduler starts the tasks in task-number order as slots free up, so list them in the order they should run. Each task may name its own repoName (one of the project's repos; default the home repo) and a phaseLabel.`,
+In a project coordinator chat the batch joins this project (do not pass projectTitle): the scheduler starts the tasks in task-number order as slots free up, so list them in the order they should run. Each task may name its own repoName (any repo you can access; default the home repo) and a phaseLabel.`,
       mutating: true,
       input: {
         repoName: z
@@ -926,7 +926,7 @@ In a project coordinator chat the batch joins this project (do not pass projectT
                 .string()
                 .optional()
                 .describe(
-                  "Project coordinator only: this task's repo, one of the project's repos. Defaults to the batch repoName, else the home repo.",
+                  "Project coordinator only: this task's repo, any repo you can access. Defaults to the batch repoName, else the home repo.",
                 ),
               phaseLabel: z
                 .string()

@@ -50,7 +50,6 @@ import {
   useProviderAccounts,
 } from "@/lib/hooks/useAvailableAiModels";
 import { ProjectTagsPopover } from "./_components/ProjectTagsPopover";
-import { ProjectCoordinatorFields } from "./_components/ProjectCoordinatorFields";
 import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { useUpdateProject } from "./useUpdateProject";
@@ -303,12 +302,6 @@ export function ProjectFieldsPanel({
           </Tooltip>
         </div>
       </FieldsSection>
-
-      <ProjectCoordinatorFields
-        projectId={projectId}
-        homeRepoId={project.repoId}
-        extraRepoIds={project.extraRepoIds ?? []}
-      />
 
       <FieldsSection title="Dates">
         <ProjectDateRangeField

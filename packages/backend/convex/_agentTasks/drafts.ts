@@ -12,7 +12,6 @@ import {
   recomputeProjectPhase,
 } from "../functions";
 import { allocateNumId } from "../numId";
-import { assertProjectRepo } from "../_projects/settings";
 import { createNotification } from "../notifications";
 import { ensureSubscribed } from "../taskSubscribers";
 import {
@@ -89,14 +88,9 @@ export const saveDraft = authMutation({
 
     const repo = await ctx.db.get(args.repoId);
     if (!repo) throw new Error("Repo not found");
-    const project = args.projectId
-      ? await getProjectWithAccess(
-          ctx.db,
-          args.projectId,
-          ctx.userId,
-        )
-      : null;
-    if (project) assertProjectRepo(project, args.repoId);
+    if (args.projectId) {
+      await getProjectWithAccess(ctx.db, args.projectId, ctx.userId);
+    }
 
     const now = Date.now();
 

@@ -1229,8 +1229,6 @@ export const projectFields = {
   ...entityNumIdFields,
   /** The home repo: the project's URL, number and sidebar place, and the default repo of its tasks. */
   repoId: v.id("githubRepos"),
-  /** More repos a task of this project may target (`assertProjectRepo`). Set by `projects.setExtraRepoIds`. */
-  extraRepoIds: v.optional(v.array(v.id("githubRepos"))),
   /** The project summary doc the coordinator keeps (`upsertProjectSummary`). */
   summaryDocId: v.optional(v.id("docs")),
   /** The order the project's phase labels (`agentTasks.phaseLabel`) show in. */

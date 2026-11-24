@@ -1,4 +1,4 @@
-import { v, type Infer } from "convex/values";
+import { ConvexError, v, type Infer } from "convex/values";
 import {
   internalMutation,
   type MutationCtx,
@@ -7,11 +7,11 @@ import type { Id } from "../_generated/dataModel";
 import {
   authQuery,
   getProjectWithAccess,
+  hasRepoAccess,
   normalizeIdOrThrow,
 } from "../functions";
 import { createTodoTask } from "../_agentTasks/mutations";
 import { latestChatMessageId, resolveChatParent } from "../_chat/chatParent";
-import { assertProjectRepo } from "./settings";
 import {
   coordinatorAutoTurnsInLastHour,
   isCoordinatorPaused,
@@ -20,8 +20,8 @@ import {
 
 /**
  * The tasks a project's coordinator creates (`create_task`,
- * `create_tasks_batch`): `todo` and approved, each in one of the project's
- * repos, so the scheduler starts them at once. One tool call is one
+ * `create_tasks_batch`): `todo` and approved, each in any repo the acting
+ * user can access (default the home repo), so the scheduler starts them at once. One tool call is one
  * `projectTaskBatches` row, anchored to the coordinator message it ran in.
  */
 
@@ -31,7 +31,7 @@ export const MAX_TASKS_PER_COORDINATOR_BATCH = 20;
 const coordinatorTaskInput = v.object({
   title: v.string(),
   description: v.optional(v.string()),
-  /** One of the project's repos; absent is the home repo. */
+  /** Any repo the acting user can access; absent is the home repo. */
   repoId: v.optional(v.id("githubRepos")),
   phaseLabel: v.optional(v.string()),
 });
@@ -57,8 +57,14 @@ export async function createCoordinatorTasks(
     projectId,
     userId,
   );
-  // Checked for every task before any is written.
-  for (const task of tasks) assertProjectRepo(project, task.repoId ?? project.repoId);
+  // Any repo the acting user can access; checked for every task before any is written.
+  for (const task of tasks) {
+    if (!(await hasRepoAccess(ctx.db, task.repoId ?? project.repoId, userId))) {
+      throw new ConvexError(
+        `Cannot create "${task.title}": the user has no access to its repository. Pick a repository they can access, or leave it out to use the project's home repository.`,
+      );
+    }
+  }
   const userCtx = { ...ctx, userId };
   const taskIds: Id<"agentTasks">[] = [];
   for (const task of tasks) {

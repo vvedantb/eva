@@ -26,8 +26,6 @@ export { resolveProjectConflicts } from "./_projects/conflicts";
 
 export { getInternal } from "./_projects/internal";
 
-export { setExtraRepoIds } from "./_projects/settings";
-
 export { getSummaryDoc } from "./_projects/summary";
 
 export { listTaskReports } from "./_projects/reports";

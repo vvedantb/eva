@@ -1,5 +1,11 @@
 # Changelog
 
+## Projects: no Extra repos setting
+
+Date: 2026-11-24
+
+The coordinator may create a project task in any repo the acting user can access (default the home repo); `projects.extraRepoIds`, `projects.setExtraRepoIds` and the Repos picker (web and phone) are gone.
+
 ## Projects: project context is the always-read text; project tasks leave Quick Tasks
 
 Date: 2026-11-24

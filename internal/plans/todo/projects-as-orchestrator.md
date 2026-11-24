@@ -31,7 +31,7 @@ The business team opens the project and sees what is launched, what is in progre
 | 10 | Old projects are converted in place. | One code path. History is kept. |
 | 11 | Project context reuses Documents, Artifacts and the chat Log. No new store. | They already carry `chatSourceFields`. |
 | 12 | **Project roles are removed.** Project access is plain repo access. Anyone with access can chat, run tasks and file feedback. | Simplest rule. |
-| 13 | A project has a home repo plus a list of extra repos. Each child task targets exactly **one** repo and opens its PR there. A dependency can cross repos. | Real case: a carepulse-ts project that needs a change in carepulse_v2. Cheap, because each task already has its own session and `agentTasks.repoId`. Amp does the same: its Space agent starts a thread "in the project you named" (Amp docs, "Spaces", read 19 November 2026). |
+| 13 | A project has a home repo; the coordinator may create a child task in any repo the acting user can access (no per-project list). Each child task targets exactly **one** repo and opens its PR there. A dependency can cross repos. | Real case: a carepulse-ts project that needs a change in carepulse_v2. Cheap, because each task already has its own session and `agentTasks.repoId`. Amp does the same: its Space agent starts a thread "in the project you named" (Amp docs, "Spaces", read 19 November 2026). |
 | 14 | Hub model with a read-only view. Child tasks never message each other. A task can read sibling status and docs, and can report to the coordinator. The coordinator can message any child task. | Easy to follow, cannot loop. Amp documents the same shape: threads report to the Space, no thread-to-thread chat, files move only when asked (Amp docs, "Spaces" and "Agent to Agent", read 19 November 2026). |
 | 15 | No parallel tool set. Reuse and extend the existing MCP tools; add only the tools listed in step 3. | The fleet tools (`mcp/orchestratorTools.ts`) and task tools already cover most needs. |
 | 16 | The coordinator wakes by itself only when it has a job: a child's ask (at once), a failed task, the end of an approved batch. Not for each finished task or merged PR. Cap: 10 automatic turns an hour for each project. | Starting the next task is plain code (the scheduler) and needs no agent turn. Keeps the idle cost of a project low. Amp's docs do not say when a Space agent wakes. |
@@ -182,18 +182,18 @@ This is the core change. Do it alone, with no UI change.
 
 ### Step 3b — Cross-repo child tasks (decision 13)
 
-1. Add `projects.extraRepoIds` (list of `githubRepos` ids). `projects.repoId` stays as the home repo: it sets the project's URL, number and place in the sidebar.
-2. A contributor adds or removes extra repos in project settings. A person can add only a repo they have access to. The coordinator cannot add a repo; it asks the user.
+1. `projects.repoId` is the home repo: it sets the project's URL, number and place in the sidebar. There is no per-project repo list (removed 24 November 2026).
+2. The coordinator may create a task in any repo the acting user can access (`hasRepoAccess`); default is the home repo.
 3. `create_task` / `create_tasks_batch` take `repo`. Default = home repo. Refuse a repo that is not on the project's list.
 4. The child task's session, sandbox, snapshot, env vars, start-up commands, branch and PR all come from **its own** repo, exactly like a quick task in that repo. No project value overrides them.
 5. Access: a user sees a child task only with access to that task's repo (`hasTaskAccess`). In the project view, a task in a repo the viewer cannot access shows as a locked row with title hidden. Derived project status still counts it.
 6. Dependencies across repos work with rule 2.4 unchanged: "done" means the PR merged in its own repo. Note the limit in the UI text of the dependency: merged is not deployed. A task that needs the other repo's change **live** must say so; the coordinator then asks a person to confirm the deploy before it approves that task. No deploy detection in v1.
-7. Coordinator sandbox: it clones the home repo only. For another repo it reads through the child task's results, PR diff and docs. Reading extra repos in the coordinator sandbox (the `sessionRepos` linked-repo path) is v2.
+7. Coordinator sandbox: it clones the home repo only. For another repo it reads through the child task's results, PR diff and docs. Reading other repos in the coordinator sandbox (the `sessionRepos` linked-repo path) is v2.
 8. Different GitHub App installations: resolve the installation from the task's repo, never from the project. Check `startTaskRun` and the scheduler for any `installationId` passed down from the project (today `buildProjectWorkflow` takes one `installationId` for the whole build).
 9. Project instructions apply to every child task. Repo `systemPrompt` and repo memory come from the task's own repo.
 10. **Not in v1:** one task that edits two repos in one sandbox; adopting a session that has linked repos; session groups in projects.
 
-**Check:** a project in repo A with extra repo B. Task 1 in B, task 2 in A depends on 1. Task 2 starts only after task 1's PR merges in B.
+**Check:** a project in repo A creates task 1 in repo B the user can access; task 1 opens its PR in B. A repo the user cannot access is refused.
 
 ### Step 4 — Live task cards in the coordinator chat
 

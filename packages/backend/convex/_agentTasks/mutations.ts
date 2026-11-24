@@ -7,7 +7,6 @@ import {
   aiModelValidator,
   priorityValidator,
 } from "../validators";
-import { assertProjectRepo } from "../_projects/settings";
 import { createNotification } from "../notifications";
 import { ensureSubscribed, notifySubscribers } from "../taskSubscribers";
 import {
@@ -91,15 +90,6 @@ export const update = authMutation({
       );
     }
     const updates = await buildTaskUpdates(ctx, task, args);
-    const moved = { ...task, ...updates };
-    if (
-      (args.repoId !== undefined || args.projectId !== undefined) &&
-      moved.projectId &&
-      moved.repoId
-    ) {
-      const project = await ctx.db.get(moved.projectId);
-      if (project) assertProjectRepo(project, moved.repoId);
-    }
     // A task moved to another repo gets a fresh session there; moving into
     // a project keeps its own session (`workSessionOwner`).
     if (taskMoveDetachesSession(task, args)) {
@@ -349,7 +339,7 @@ const createQuickTaskArgs = {
 
 /**
  * Creates one `todo` task, in a project when `projectId` is set (next
- * `taskNumber`; the repo must be one of the project's, `assertProjectRepo`).
+ * `taskNumber`; the repo may be any the user can access).
  * `origin` marks why the task exists. The one insert for `createQuickTask`,
  * `createFeedbackTask` and the coordinator's tasks (`_projects/batches.ts`).
  */
@@ -367,10 +357,9 @@ export async function createTodoTask(
   const repo = await ctx.db.get(args.repoId);
   if (!repo) throw new Error("Repo not found");
   const now = Date.now();
-  const project = args.projectId
-    ? await getProjectWithAccess(ctx.db, args.projectId, ctx.userId)
-    : null;
-  if (project) assertProjectRepo(project, args.repoId);
+  if (args.projectId) {
+    await getProjectWithAccess(ctx.db, args.projectId, ctx.userId);
+  }
   let taskNumber: number | undefined;
   if (args.projectId) {
     const existingTasks = await ctx.db
@@ -557,11 +546,7 @@ export const assignToProject = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await getProjectWithAccess(
-      ctx.db,
-      args.projectId,
-      ctx.userId,
-    );
+    await getProjectWithAccess(ctx.db, args.projectId, ctx.userId);
     if (args.taskIds.length === 0) {
       throw new Error("At least one task is required");
     }
@@ -583,7 +568,6 @@ export const assignToProject = authMutation({
       const task = await ctx.db.get(taskId);
       if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
         throw new Error(`Task ${taskId} not found`);
-      if (task.repoId) assertProjectRepo(project, task.repoId);
       assigned++;
       await ctx.db.patch(taskId, {
         projectId: args.projectId,

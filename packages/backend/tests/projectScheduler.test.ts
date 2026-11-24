@@ -16,7 +16,7 @@ import { COORDINATOR_VCPUS } from "../convex/_sandbox/provider";
  * The project as an orchestrator, through the real Convex functions: the
  * scheduler and its cap, the coordinator's tasks (start at once) against
  * feedback (waits in Triage), the coordinator's one retry and its wake-ups,
- * the project's repo list, locked rows, the roll-up of docs, artifacts and
+ * the repos the coordinator may use, locked rows, the roll-up of docs, artifacts and
  * log, the copy of the project's model and account, the coordinator's
  * delete rule, project delete, and the coordinator's sandbox.
  */
@@ -46,14 +46,14 @@ async function fixture(taskCount: number) {
       installationId: 1,
       connectedBy: userId,
     });
-    // A repo the user can open that is not on the project's list.
+    // A repo the user can open that is not the project's home repo.
     const outsideRepoId = await ctx.db.insert("githubRepos", {
       owner: "vvedantb",
       name: "outside",
       installationId: 1,
       connectedBy: userId,
     });
-    // On the project's list, but only the other user can open it.
+    // Only the other user can open it.
     const lockedRepoId = await ctx.db.insert("githubRepos", {
       owner: "someone",
       name: "private",
@@ -66,7 +66,6 @@ async function fixture(taskCount: number) {
       title: "Project",
       rawInput: "Project",
       phase: "business_review",
-      extraRepoIds: [lockedRepoId],
       numId: 1,
     });
     const tasks: Id<"agentTasks">[] = [];
@@ -284,19 +283,39 @@ describe("who starts project tasks", () => {
   );
 
   test(
-    "the coordinator cannot create a task in a repo that is not on the project's list",
+    "the coordinator cannot create a task in a repo the user has no access to",
     async () => {
       const f = await fixture(0);
       await expect(
         f.t.mutation(internal._projects.batches.createTasksFromCoordinator, {
           projectId: f.projectId,
           userId: f.userId,
-          tasks: [{ title: "Home" }, { title: "Elsewhere", repoId: f.outsideRepoId }],
+          tasks: [{ title: "Home" }, { title: "Elsewhere", repoId: f.lockedRepoId }],
         }),
-      ).rejects.toThrow("not part of the project");
+      ).rejects.toThrow("has no access to its repository");
       // Checked before any task is written.
       const tasks = await f.t.run((ctx) => ctx.db.query("agentTasks").collect());
       expect(tasks).toEqual([]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "the coordinator may create a task in another repo the user can access",
+    async () => {
+      const f = await fixture(0);
+      const { taskIds } = await f.t.mutation(
+        internal._projects.batches.createTasksFromCoordinator,
+        {
+          projectId: f.projectId,
+          userId: f.userId,
+          tasks: [{ title: "Home" }, { title: "Elsewhere", repoId: f.outsideRepoId }],
+        },
+      );
+      const repos = await Promise.all(
+        taskIds.map(async (id) => (await taskDoc(f, id)).repoId),
+      );
+      expect(repos).toEqual([f.repoId, f.outsideRepoId]);
     },
     TIMEOUT_MS,
   );

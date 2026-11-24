@@ -224,7 +224,6 @@ import type * as _projects_queries from "../_projects/queries.js";
 import type * as _projects_reports from "../_projects/reports.js";
 import type * as _projects_runSettings from "../_projects/runSettings.js";
 import type * as _projects_scheduler from "../_projects/scheduler.js";
-import type * as _projects_settings from "../_projects/settings.js";
 import type * as _projects_summary from "../_projects/summary.js";
 import type * as _projects_taskTable from "../_projects/taskTable.js";
 import type * as _pty_consoleSessionName from "../_pty/consoleSessionName.js";
@@ -822,7 +821,6 @@ declare const fullApi: ApiFromModules<{
   "_projects/reports": typeof _projects_reports;
   "_projects/runSettings": typeof _projects_runSettings;
   "_projects/scheduler": typeof _projects_scheduler;
-  "_projects/settings": typeof _projects_settings;
   "_projects/summary": typeof _projects_summary;
   "_projects/taskTable": typeof _projects_taskTable;
   "_pty/consoleSessionName": typeof _pty_consoleSessionName;
