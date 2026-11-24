@@ -771,7 +771,11 @@ function AssistantTurnContent({
       className={cn(
         "py-2",
         // The teammate bubble, mirrored onto Eva's side.
-        bubble ? "w-fit min-w-0 bg-secondary px-3 text-foreground" : "px-1",
+        // `group-[.is-assistant]:w-fit` outranks the kit's own
+        // `group-[.is-assistant]:w-full`; a plain `w-fit` loses to it.
+        bubble
+          ? "min-w-0 bg-secondary px-3 text-foreground group-[.is-assistant]:w-fit"
+          : "px-1",
       )}
       style={bubble ? { borderRadius: sideBubbleRadius(joinsNext) } : undefined}
     >

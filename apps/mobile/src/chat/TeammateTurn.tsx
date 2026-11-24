@@ -79,7 +79,8 @@ function SideBubble({
       <View className="size-4">{joinsNext ? null : avatar}</View>
       <MessageContent
         bubble="tint"
-        className="shrink"
+        // The kit pads only a user message (`px-4 py-3`); Eva's reply needs the same.
+        className="shrink px-4 py-3"
         style={joinsNext ? { backgroundColor: theme.secondary } : { backgroundColor: theme.secondary, borderBottomLeftRadius: 0 }}
       >
         {children}
