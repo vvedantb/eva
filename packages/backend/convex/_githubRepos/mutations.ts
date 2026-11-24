@@ -83,8 +83,8 @@ interface CreateRepoArgs {
   githubId: number;
   rootDirectory?: string;
   teamId?: Id<"teams">;
-  /** Record a detected app the user chose not to add, so sync never offers it again. */
-  removed?: boolean;
+  /** Add the row hidden: a detected app the user chose not to show. */
+  hidden?: boolean;
   /** Return the existing row instead of throwing "already exists". */
   ifMissing?: boolean;
 }
@@ -113,9 +113,6 @@ async function insertRepo(
   );
   if (match) {
     await getRepoWithAccess(ctx.db, match._id, userId);
-    if (match.removed === true && args.removed !== true) {
-      return await restoreRemovedApp(ctx, match._id);
-    }
     if (args.ifMissing === true) return match._id;
     throw new Error("Repository already exists");
   }
@@ -129,9 +126,6 @@ async function insertRepo(
     await getRepoWithAccess(ctx.db, duplicate._id, userId);
     if (duplicate.githubId === undefined) {
       await ctx.db.patch(duplicate._id, { githubId: args.githubId });
-    }
-    if (duplicate.removed === true && args.removed !== true) {
-      return await restoreRemovedApp(ctx, duplicate._id);
     }
     if (args.ifMissing === true) return duplicate._id;
     throw new Error("Repository already exists");
@@ -150,7 +144,7 @@ async function insertRepo(
     teamId = personalTeam?._id;
   }
 
-  if (normalizedRoot && args.removed !== true) {
+  if (normalizedRoot && args.hidden !== true) {
     // An app row replaces its own team's root row, never another team's.
     const rootEntry = candidates.find(
       (r) =>
@@ -172,22 +166,13 @@ async function insertRepo(
     teamId,
     rootDirectory: normalizedRoot,
     defaultBaseBranch: "staging",
-    ...(args.removed === true ? { removed: true, hidden: true } : {}),
+    ...(args.hidden === true ? { hidden: true } : {}),
   });
-  if (args.removed === true) return repoId;
+  if (args.hidden === true) return repoId;
   // A repo that already commits `.eva/config.json` is ready without setup.
   await ctx.scheduler.runAfter(0, internal._evaConfig.sync.syncEvaConfig, {
     repoId,
   });
-  return repoId;
-}
-
-/** Adds a removed app back, with its sessions, tasks and env vars. */
-async function restoreRemovedApp(
-  ctx: Pick<MutationCtx, "db">,
-  repoId: Id<"githubRepos">,
-): Promise<Id<"githubRepos">> {
-  await ctx.db.patch(repoId, { removed: undefined, hidden: undefined });
   return repoId;
 }
 
@@ -204,7 +189,7 @@ export const createForInstallation = internalMutation({
     rootDirectory: v.optional(v.string()),
     teamId: v.optional(v.id("teams")),
     userId: v.id("users"),
-    removed: v.optional(v.boolean()),
+    hidden: v.optional(v.boolean()),
     ifMissing: v.optional(v.boolean()),
   },
   returns: v.id("githubRepos"),
@@ -357,24 +342,6 @@ export const toggleHidden = authMutation({
     await ctx.db.patch(args.repoId, {
       hidden: args.hidden || undefined,
     });
-    return null;
-  },
-});
-
-/**
- * Removes a monorepo app from Eva. It leaves every list, and GitHub sync never
- * adds it back. Its sessions, tasks and env vars stay; adding the app again
- * from Settings → Monorepo restores it.
- */
-export const removeApp = authMutation({
-  args: { repoId: v.id("githubRepos") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const repo = await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
-    if (repo.rootDirectory === undefined) {
-      throw new Error("Only monorepo apps can be removed");
-    }
-    await ctx.db.patch(args.repoId, { removed: true, hidden: true });
     return null;
   },
 });

@@ -21,9 +21,9 @@ export type NewApp = FunctionReturnType<
 const appKey = (app: NewApp) => `${app.owner}/${app.name}:${app.path}`;
 
 /**
- * Shown after "Sync Repos" finds monorepo apps never added or removed before.
- * Ticked apps are added; unticked ones are saved as removed, so sync does not
- * offer them again. Closing without saving changes nothing.
+ * Shown after "Sync Repos" finds monorepo apps Eva has never seen. Ticked apps
+ * are added; unticked ones are added hidden, so sync does not offer them
+ * again. Closing without saving changes nothing.
  */
 export function NewAppsDialog({
   apps,
@@ -84,7 +84,7 @@ export function NewAppsDialog({
           <DialogTitle>New apps found</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          Unticked apps are not added, and sync will not offer them again.
+          Unticked apps are hidden. Show them again from Hidden Codebases.
         </p>
         <div className="flex max-h-80 flex-col gap-4 overflow-y-auto">
           {[...codebases].map(([codebase, group]) => (

@@ -1,4 +1,3 @@
-import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useAction } from "convex/react";
 import { useState } from "react";
@@ -6,7 +5,6 @@ import { useLocalStorage } from "usehooks-ts";
 import { AnimatePresence } from "motion/react";
 import { api } from "@eva/backend";
 import { PageWrapper } from "@/lib/components/PageWrapper";
-import { repoHref } from "@/lib/utils/repoUrl";
 import {
   Button,
   DropdownMenu,
@@ -42,7 +40,6 @@ const buildConnectUrl = (slug: string) =>
   `https://github.com/apps/${slug}/installations/new`;
 
 export function ReposClient() {
-  const navigate = useNavigate();
   const repos = useQuery(api.githubRepos.list, {});
   const teams = useQuery(api.teams.list) ?? [];
   const appSlug = useQuery(api.githubRepos.getAppSlug);
@@ -225,13 +222,6 @@ export function ReposClient() {
                 key={groupName}
                 groupName={groupName}
                 repos={groupedRepos[groupName]}
-                onManageApps={(repo) =>
-                  navigate({
-                    to:
-                      repoHref(repo.owner, repo.name, repo.rootDirectory) +
-                      "/settings/monorepo",
-                  })
-                }
               />
             ))}
           </div>

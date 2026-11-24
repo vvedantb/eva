@@ -18,8 +18,8 @@ const newAppValidator = v.object({
 
 /**
  * Syncs all GitHub App installation repos into the database, detecting monorepo
- * apps and updating connected status. Apps already added are refreshed and
- * removed apps stay removed. Apps seen for the first time are not added: they
+ * apps and updating connected status. Apps already in Eva are refreshed (a
+ * hidden app stays hidden). Apps seen for the first time are not added: they
  * come back in `newApps`, and the user picks which to add
  * (`github:importDetectedApps`).
  */
@@ -37,7 +37,7 @@ export const syncRepos = action({
     }
 
     const accessibleRepos = await ctx.runQuery(api.githubRepos.list, {
-      includeRemoved: true,
+      includeHidden: true,
     });
 
     const detectedApps: Array<{
@@ -105,8 +105,8 @@ export const syncRepos = action({
         name: repo.name,
         paths: appPaths,
       });
-      // The root row goes only once an app row replaces it; with only new or
-      // removed apps, it is the codebase's last row.
+      // The root row goes only once an app row replaces it; with only new
+      // apps, it is the codebase's last row.
       if (hasAddedApp) {
         monorepos.push({ owner: repo.owner.login, name: repo.name });
       }

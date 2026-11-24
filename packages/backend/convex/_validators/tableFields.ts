@@ -1078,10 +1078,6 @@ export const githubRepoFields = {
   // Per-app: apps of one monorepo need different sizes. Absent = large.
   sandboxSize: v.optional(sandboxSizeValidator),
   hidden: v.optional(v.boolean()),
-  // Removed monorepo app: out of every list, and GitHub sync never re-adds it.
-  // Always set with `hidden`, so hidden-aware jobs skip it too. The row (and
-  // its sessions, tasks and env vars) stays; adding the app again restores it.
-  removed: v.optional(v.boolean()),
   deploymentProjectName: v.optional(v.string()),
   domains: v.optional(v.array(v.string())),
   mcpRootPrompt: v.optional(v.string()),

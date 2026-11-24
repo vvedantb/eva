@@ -220,8 +220,8 @@ export const connectRepo = authAction({
 
 /**
  * Saves the user's picks from the "New apps found" sync popup for one
- * codebase: ticked apps are added, unticked ones are recorded as removed so
- * sync never offers them again (Settings → Monorepo can still add them).
+ * codebase: ticked apps are added, unticked ones are added hidden, so sync
+ * does not offer them again. Hidden Codebases can show them later.
  */
 export const importDetectedApps = authAction({
   args: {
@@ -246,7 +246,7 @@ export const importDetectedApps = authAction({
           rootDirectory: app.path,
           teamId: args.teamId,
           userId: ctx.userId,
-          removed: !app.add,
+          hidden: !app.add,
           ifMissing: true,
         },
       );

@@ -64,21 +64,15 @@ async function attachLogoUrls(
 export const list = authQuery({
   args: {
     includeHidden: v.optional(v.boolean()),
-    /** Removed apps too; only GitHub sync needs them. */
-    includeRemoved: v.optional(v.boolean()),
   },
   returns: v.array(githubRepoWithLogoValidator),
   handler: async (ctx, args) => {
     const repos = await gatherAccessibleRepos(
       ctx.db,
       ctx.userId,
-      args.includeHidden === true || args.includeRemoved === true,
+      args.includeHidden === true,
     );
-    const listed =
-      args.includeRemoved === true
-        ? repos
-        : repos.filter((repo) => repo.removed !== true);
-    return await attachLogoUrls(ctx.storage, listed);
+    return await attachLogoUrls(ctx.storage, repos);
   },
 });
 

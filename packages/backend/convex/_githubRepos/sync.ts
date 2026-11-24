@@ -65,17 +65,16 @@ export const upsert = internalMutation({
 });
 
 /**
- * Sync step for one detected monorepo app. Refreshes a row that exists. A
- * removed app stays removed, and an app with no row is not inserted: sync
- * returns it as new, and the user picks whether to add it.
+ * Sync step for one detected monorepo app. Refreshes a row that exists (a
+ * hidden app stays hidden). An app with no row is not inserted: sync returns
+ * it as new, and the user picks whether to show it.
  */
 export const syncDetectedApp = internalMutation({
   args: upsertArgs,
-  returns: v.union(v.literal("kept"), v.literal("removed"), v.literal("new")),
+  returns: v.union(v.literal("kept"), v.literal("new")),
   handler: async (ctx, args) => {
     const existing = await findExistingRow(ctx, args);
     if (!existing) return "new";
-    if (existing.removed === true) return "removed";
     await refreshRow(ctx, existing, args);
     return "kept";
   },

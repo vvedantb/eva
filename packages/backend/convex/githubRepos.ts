@@ -28,7 +28,6 @@ export {
   updateConfig,
   updateMcpRootPrompt,
   toggleHidden,
-  removeApp,
   generateLogoUploadUrl,
   setLogo,
   deleteInternal,

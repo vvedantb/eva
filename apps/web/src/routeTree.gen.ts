@@ -74,7 +74,6 @@ import { Route as RepoOwnerRepoSettingsAppRouteImport } from './routes/_repo/$ow
 import { Route as RepoOwnerRepoSettingsConfigRouteImport } from './routes/_repo/$owner/$repo/settings/config'
 import { Route as RepoOwnerRepoSettingsLogsRouteImport } from './routes/_repo/$owner/$repo/settings/logs'
 import { Route as RepoOwnerRepoSettingsMcpConfigRouteImport } from './routes/_repo/$owner/$repo/settings/mcp-config'
-import { Route as RepoOwnerRepoSettingsMonorepoRouteImport } from './routes/_repo/$owner/$repo/settings/monorepo'
 import { Route as RepoOwnerRepoSettingsPersonalisationRouteImport } from './routes/_repo/$owner/$repo/settings/personalisation'
 import { Route as RepoOwnerRepoSettingsSkillsRouteImport } from './routes/_repo/$owner/$repo/settings/skills'
 import { Route as RepoOwnerRepoSettingsSnapshotsRouteRouteImport } from './routes/_repo/$owner/$repo/settings/snapshots/route'
@@ -498,12 +497,6 @@ const RepoOwnerRepoSettingsMcpConfigRoute =
   RepoOwnerRepoSettingsMcpConfigRouteImport.update({
     id: '/mcp-config',
     path: '/mcp-config',
-    getParentRoute: () => RepoOwnerRepoSettingsRouteRoute,
-  } as any)
-const RepoOwnerRepoSettingsMonorepoRoute =
-  RepoOwnerRepoSettingsMonorepoRouteImport.update({
-    id: '/monorepo',
-    path: '/monorepo',
     getParentRoute: () => RepoOwnerRepoSettingsRouteRoute,
   } as any)
 const RepoOwnerRepoSettingsPersonalisationRoute =
@@ -1008,7 +1001,6 @@ export interface FileRoutesByFullPath {
   '/$owner/$repo/settings/config': typeof RepoOwnerRepoSettingsConfigRoute
   '/$owner/$repo/settings/logs': typeof RepoOwnerRepoSettingsLogsRoute
   '/$owner/$repo/settings/mcp-config': typeof RepoOwnerRepoSettingsMcpConfigRoute
-  '/$owner/$repo/settings/monorepo': typeof RepoOwnerRepoSettingsMonorepoRoute
   '/$owner/$repo/settings/personalisation': typeof RepoOwnerRepoSettingsPersonalisationRoute
   '/$owner/$repo/settings/skills': typeof RepoOwnerRepoSettingsSkillsRoute
   '/$owner/$repo/settings/tabs': typeof RepoOwnerRepoSettingsTabsRoute
@@ -1131,7 +1123,6 @@ export interface FileRoutesByTo {
   '/$owner/$repo/settings/config': typeof RepoOwnerRepoSettingsConfigRoute
   '/$owner/$repo/settings/logs': typeof RepoOwnerRepoSettingsLogsRoute
   '/$owner/$repo/settings/mcp-config': typeof RepoOwnerRepoSettingsMcpConfigRoute
-  '/$owner/$repo/settings/monorepo': typeof RepoOwnerRepoSettingsMonorepoRoute
   '/$owner/$repo/settings/personalisation': typeof RepoOwnerRepoSettingsPersonalisationRoute
   '/$owner/$repo/settings/skills': typeof RepoOwnerRepoSettingsSkillsRoute
   '/$owner/$repo/settings/tabs': typeof RepoOwnerRepoSettingsTabsRoute
@@ -1264,7 +1255,6 @@ export interface FileRoutesById {
   '/_repo/$owner/$repo/settings/config': typeof RepoOwnerRepoSettingsConfigRoute
   '/_repo/$owner/$repo/settings/logs': typeof RepoOwnerRepoSettingsLogsRoute
   '/_repo/$owner/$repo/settings/mcp-config': typeof RepoOwnerRepoSettingsMcpConfigRoute
-  '/_repo/$owner/$repo/settings/monorepo': typeof RepoOwnerRepoSettingsMonorepoRoute
   '/_repo/$owner/$repo/settings/personalisation': typeof RepoOwnerRepoSettingsPersonalisationRoute
   '/_repo/$owner/$repo/settings/skills': typeof RepoOwnerRepoSettingsSkillsRoute
   '/_repo/$owner/$repo/settings/tabs': typeof RepoOwnerRepoSettingsTabsRoute
@@ -1405,7 +1395,6 @@ export interface FileRouteTypes {
     | '/$owner/$repo/settings/config'
     | '/$owner/$repo/settings/logs'
     | '/$owner/$repo/settings/mcp-config'
-    | '/$owner/$repo/settings/monorepo'
     | '/$owner/$repo/settings/personalisation'
     | '/$owner/$repo/settings/skills'
     | '/$owner/$repo/settings/tabs'
@@ -1528,7 +1517,6 @@ export interface FileRouteTypes {
     | '/$owner/$repo/settings/config'
     | '/$owner/$repo/settings/logs'
     | '/$owner/$repo/settings/mcp-config'
-    | '/$owner/$repo/settings/monorepo'
     | '/$owner/$repo/settings/personalisation'
     | '/$owner/$repo/settings/skills'
     | '/$owner/$repo/settings/tabs'
@@ -1660,7 +1648,6 @@ export interface FileRouteTypes {
     | '/_repo/$owner/$repo/settings/config'
     | '/_repo/$owner/$repo/settings/logs'
     | '/_repo/$owner/$repo/settings/mcp-config'
-    | '/_repo/$owner/$repo/settings/monorepo'
     | '/_repo/$owner/$repo/settings/personalisation'
     | '/_repo/$owner/$repo/settings/skills'
     | '/_repo/$owner/$repo/settings/tabs'
@@ -2209,13 +2196,6 @@ declare module '@tanstack/react-router' {
       path: '/mcp-config'
       fullPath: '/$owner/$repo/settings/mcp-config'
       preLoaderRoute: typeof RepoOwnerRepoSettingsMcpConfigRouteImport
-      parentRoute: typeof RepoOwnerRepoSettingsRouteRoute
-    }
-    '/_repo/$owner/$repo/settings/monorepo': {
-      id: '/_repo/$owner/$repo/settings/monorepo'
-      path: '/monorepo'
-      fullPath: '/$owner/$repo/settings/monorepo'
-      preLoaderRoute: typeof RepoOwnerRepoSettingsMonorepoRouteImport
       parentRoute: typeof RepoOwnerRepoSettingsRouteRoute
     }
     '/_repo/$owner/$repo/settings/personalisation': {
@@ -3146,7 +3126,6 @@ interface RepoOwnerRepoSettingsRouteRouteChildren {
   RepoOwnerRepoSettingsConfigRoute: typeof RepoOwnerRepoSettingsConfigRoute
   RepoOwnerRepoSettingsLogsRoute: typeof RepoOwnerRepoSettingsLogsRoute
   RepoOwnerRepoSettingsMcpConfigRoute: typeof RepoOwnerRepoSettingsMcpConfigRoute
-  RepoOwnerRepoSettingsMonorepoRoute: typeof RepoOwnerRepoSettingsMonorepoRoute
   RepoOwnerRepoSettingsPersonalisationRoute: typeof RepoOwnerRepoSettingsPersonalisationRoute
   RepoOwnerRepoSettingsSkillsRoute: typeof RepoOwnerRepoSettingsSkillsRoute
   RepoOwnerRepoSettingsTabsRoute: typeof RepoOwnerRepoSettingsTabsRoute
@@ -3164,7 +3143,6 @@ const RepoOwnerRepoSettingsRouteRouteChildren: RepoOwnerRepoSettingsRouteRouteCh
     RepoOwnerRepoSettingsConfigRoute: RepoOwnerRepoSettingsConfigRoute,
     RepoOwnerRepoSettingsLogsRoute: RepoOwnerRepoSettingsLogsRoute,
     RepoOwnerRepoSettingsMcpConfigRoute: RepoOwnerRepoSettingsMcpConfigRoute,
-    RepoOwnerRepoSettingsMonorepoRoute: RepoOwnerRepoSettingsMonorepoRoute,
     RepoOwnerRepoSettingsPersonalisationRoute:
       RepoOwnerRepoSettingsPersonalisationRoute,
     RepoOwnerRepoSettingsSkillsRoute: RepoOwnerRepoSettingsSkillsRoute,
