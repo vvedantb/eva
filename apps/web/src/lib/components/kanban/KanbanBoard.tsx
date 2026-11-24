@@ -129,9 +129,11 @@ export function KanbanBoard<T extends BaseTask>({
     } catch (err) {
       console.error("Failed to update status:", err);
       toast.error("Could not move the card. Try again.");
-    } finally {
-      setDroppedId(null);
     }
+    // Clear after the try/catch instead of using `finally`: React Compiler
+    // bails on the whole file when it meets a `finally` clause. The catch
+    // swallows, so this runs on success and on error.
+    setDroppedId(null);
   };
 
   const handleDragCancel = (_event: DragCancelEvent) => {
