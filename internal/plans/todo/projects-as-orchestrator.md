@@ -318,4 +318,6 @@ The conversion is `convertProjects` (`packages/backend/convex/_migrations/conver
 4. Delete `convertProjects` and the clearing migration.
 5. UI (web and phone agents): remove `ProjectTabs`, `ProjectChatTab`, the Interview and Plan tabs and mobile `ProjectPlan`, and read the derived status only.
 
+**Code Reviewer removed (2026-11-24).** Run `dataMigrations:clearProjectCodeReviewer` on dev then production, then drop `projects.codeReviewer` from the schema.
+
 Not done by the conversion: step 9.1's "map `members` to roles". Roles come from `users.role` (decision 12), so nothing is mapped.

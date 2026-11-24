@@ -22,18 +22,15 @@ import {
 import {
   IconUsers,
   IconUser,
-  IconUserPlus,
   IconGitBranch,
   IconInfoCircle,
 } from "@tabler/icons-react";
 import dayjs from "@eva/shared/dates";
 import {
   FALLBACK_GIT_BASE_BRANCH,
-  getUserInitials,
   projectPickerAccounts,
 } from "@eva/shared";
 import { UserInitials } from "@eva/shared/user-initials";
-import { Facehash } from "facehash";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
   FieldsSection,
@@ -98,10 +95,6 @@ export function ProjectFieldsPanel({
   });
   const displayBaseBranch =
     project.baseBranch ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
-  const reviewers = (users ?? []).filter((u) => u.role === "dev");
-  const reviewerUser = project.codeReviewer
-    ? users?.find((u) => u._id === project.codeReviewer)
-    : undefined;
   const lead = project.projectLead
     ? (users ?? []).find((u) => u._id === project.projectLead)
     : undefined;
@@ -166,58 +159,6 @@ export function ProjectFieldsPanel({
               {(users ?? []).map((user) => (
                 <SelectItem data-pii key={user._id} value={user._id}>
                   {displayName(user)}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={project.codeReviewer ?? "none"}
-          onValueChange={(val) =>
-            updateProject({
-              id: projectId,
-              codeReviewer:
-                val === "none"
-                  ? null
-                  : ((users ?? []).find((u) => u._id === val)?._id ?? null),
-            })
-          }
-        >
-          <SelectTrigger className={FIELD_TRIGGER_CLASS}>
-            <SelectValue>
-              <div
-                className={`flex items-center gap-1.5 ${!project.codeReviewer ? "text-muted-foreground" : ""}`}
-              >
-                {reviewerUser ? (
-                  <Facehash
-                    size={16}
-                    name={getUserInitials(reviewerUser)}
-                    enableBlink
-                  />
-                ) : (
-                  <IconUserPlus size={14} className="text-muted-foreground" />
-                )}
-                <span data-pii={Boolean(reviewerUser) || undefined}>
-                  {reviewerUser ? displayName(reviewerUser) : "Code Reviewer"}
-                </span>
-              </div>
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectLabel>Code Reviewer</SelectLabel>
-              <SelectItem value="none">Unassigned</SelectItem>
-              {reviewers.map((user) => (
-                <SelectItem key={user._id} value={user._id}>
-                  <div className="flex items-center gap-1.5">
-                    <Facehash
-                      size={16}
-                      name={getUserInitials(user)}
-                      enableBlink
-                    />
-                    <span data-pii>{displayName(user)}</span>
-                  </div>
                 </SelectItem>
               ))}
             </SelectGroup>

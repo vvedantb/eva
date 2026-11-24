@@ -12,7 +12,7 @@ import {
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import type { ProjectStatus } from "@eva/shared/projectStatus";
 import { PROJECT_STAGE_LABELS } from "@eva/shared/projectView";
-import { IconArrowUpRight, IconCalendar, IconGitBranch, IconTag, IconUser, IconUserPlus, IconUsers } from "@tabler/icons-react-native";
+import { IconArrowUpRight, IconCalendar, IconGitBranch, IconTag, IconUser, IconUsers } from "@tabler/icons-react-native";
 import { Markdown } from "@vvedantb/native-ui/markdown";
 import { SheetRow, Textarea } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
@@ -49,7 +49,7 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
  * open a bottom sheet each and write `projects.update`, as the web selects;
  * the model chip (hidden in simple view, as the web) writes the model and,
  * for the project's owner, its account. Field
- * rows are 48 high (web 40). Not here from the web: the code reviewer,
+ * rows are 48 high (web 40). Not here from the web: the
  * members, dates and labels pickers.
  */
 export function ProjectOverview({
@@ -87,7 +87,6 @@ export function ProjectOverview({
   };
   const userById = (id: Id<"users"> | undefined) => (id ? users?.find((user) => user._id === id) : undefined);
   const lead = userById(project.projectLead);
-  const reviewer = userById(project.codeReviewer);
   const creator = userById(project.userId);
   const model = normalizeAIModel(project.model);
   // As the web field: only the owner changes the account; anyone else sees the owner's.
@@ -194,12 +193,6 @@ export function ProjectOverview({
           value={lead ? (userLabel(lead) ?? "Unknown") : project.projectLead ? "Unknown" : "Project Lead"}
           color={project.projectLead ? undefined : muted}
           onPress={openSheet("lead")}
-        />
-        <FieldRow
-          label="Code Reviewer"
-          icon={reviewer ? <InitialsAvatar user={reviewer} size={16} /> : <IconUserPlus size={16} color={muted} />}
-          value={reviewer ? (userLabel(reviewer) ?? "Unknown") : "Code Reviewer"}
-          color={reviewer ? undefined : muted}
         />
         <FieldRow
           label="Members"

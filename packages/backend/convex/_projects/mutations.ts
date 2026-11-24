@@ -105,7 +105,6 @@ export const update = authMutation({
     members: v.optional(v.array(v.id("users"))),
     projectStartDate: v.optional(v.number()),
     projectEndDate: v.optional(v.number()),
-    codeReviewer: v.optional(v.union(v.id("users"), v.null())),
     tags: v.optional(v.array(v.string())),
     model: v.optional(v.union(aiModelValidator, v.null())),
     // null = clear to team credentials. undefined = no change.
@@ -130,7 +129,6 @@ export const update = authMutation({
       generatedSpec,
       projectLead,
       priority,
-      codeReviewer,
       model,
       providerAccountId,
       ...fields
@@ -147,8 +145,6 @@ export const update = authMutation({
     if (projectLead !== undefined)
       updates.projectLead = projectLead ?? undefined;
     if (priority !== undefined) updates.priority = priority ?? undefined;
-    if (codeReviewer !== undefined)
-      updates.codeReviewer = codeReviewer ?? undefined;
     if (model !== undefined) updates.model = model ?? undefined;
     let nextProviderAccountId = project.providerAccountId;
     if (providerAccountId !== undefined) {

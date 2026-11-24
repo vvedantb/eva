@@ -93,7 +93,6 @@ export function ProjectsTimeline({
         id: _id,
         priority,
         projectLead,
-        codeReviewer,
         model,
         providerAccountId,
         ...safeFields
@@ -113,9 +112,6 @@ export function ProjectsTimeline({
                     : {}),
                   ...(projectLead !== undefined
                     ? { projectLead: projectLead ?? undefined }
-                    : {}),
-                  ...(codeReviewer !== undefined
-                    ? { codeReviewer: codeReviewer ?? undefined }
                     : {}),
                   ...(model !== undefined ? { model: model ?? undefined } : {}),
                   ...(providerAccountId !== undefined

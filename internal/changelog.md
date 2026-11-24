@@ -1,5 +1,11 @@
 # Changelog
 
+## Projects: no Code Reviewer field
+
+Date: 2026-11-24
+
+The project Code Reviewer field is gone (web and phone) and `projects.update` drops its `codeReviewer` arg; `dataMigrations:clearProjectCodeReviewer` clears stored values before the field leaves the schema.
+
 ## Projects: no Extra repos setting
 
 Date: 2026-11-24

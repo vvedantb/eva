@@ -366,3 +366,16 @@ export const clearTaskDependencies = dataMigrations.define({
     await ctx.db.delete(doc._id);
   },
 });
+
+/**
+ * The project Code Reviewer field is gone: clears `projects.codeReviewer` so
+ * the field can leave the schema.
+ * `npx convex run --prod dataMigrations:run '{fn: "dataMigrations:clearProjectCodeReviewer"}'`
+ */
+export const clearProjectCodeReviewer = dataMigrations.define({
+  table: "projects",
+  migrateOne: async (_ctx, project) => {
+    if (project.codeReviewer === undefined) return;
+    return { codeReviewer: undefined };
+  },
+});
