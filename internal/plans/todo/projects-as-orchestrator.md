@@ -310,7 +310,7 @@ The conversion is `convertProjects` (`packages/backend/convex/_migrations/conver
 
 **3. Leftovers a person decides on.** A listed task with no `branchName` shares the old branch with an earlier task of its project and starts fresh on `eva/task-<id>`. A task with `projectPrLive: true` pushes into the project's still-open PR on that branch. Review-stage tasks keep their work in the project PR (step 9.3). `orphanChats` rows still carry `sessionChats.taskId`: delete them or clear the field before step 4.
 
-**PR 3a (built 25 November 2026, deploys after step 2 ran on production).** Items 1 and 5 below are done; item 2 is `dataMigrations:clearLegacyProjectFields`. It keeps `branchName` and `branchVersion` (they name the coordinator session's branch), `members` (still edited on the web) and the PR summary fields (`syncOwnerPrSummary` still mirrors them). `projects.phase` is optional and no longer written. `convertProjects` is deleted with it, as it must already have run. Run the clearing migration on dev, then production, before PR 3b.
+**PR 3a (built 25 November 2026, deploys after step 2 ran on production).** Items 1 and 5 below are done; item 2 is three migrations: `dataMigrations:clearLegacyProjectFields`, `deleteProjectDetails` and `clearSessionChatTaskIds`. It keeps `branchName` and `branchVersion` (they name the coordinator session's branch), `members` (still edited on the web) and the PR summary fields (`syncOwnerPrSummary` still mirrors them). `projects.phase` is optional and no longer written. `convertProjects` is deleted with it, as it must already have run. Run the three clearing migrations on dev, then production, before PR 3b.
 
 **PR 3b.** Items 3 and 4.
 
