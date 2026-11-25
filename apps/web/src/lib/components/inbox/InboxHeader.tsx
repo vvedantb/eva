@@ -51,27 +51,34 @@ export function InboxHeader({
 }: InboxHeaderProps) {
   return (
     <PageHeader
-      title="Inbox"
-      titleAfter={
-        // Segmented, as the other header switchers (projects, quick tasks).
-        <Tabs
-          value={view}
-          onValueChange={(value) => {
-            if (isInboxView(value)) onViewChange(value);
-          }}
-        >
-          <TabsList
-            size="sm"
-            className="tabs-segmented"
-            aria-label="Inbox view"
+      title={
+        // The switch sits right after the title, so it keeps its place when
+        // Updates narrows the header to its list pane.
+        <span className="flex items-center gap-3">
+          Inbox
+          {/* Segmented, as the other header switchers (projects, quick tasks). */}
+          <Tabs
+            value={view}
+            onValueChange={(value) => {
+              if (isInboxView(value)) onViewChange(value);
+            }}
           >
-            <TabsTrigger value="needs">Needs you</TabsTrigger>
-            <TabsTrigger value="updates">Updates</TabsTrigger>
-          </TabsList>
-        </Tabs>
+            <TabsList
+              size="sm"
+              className="tabs-segmented"
+              aria-label="Inbox view"
+            >
+              <TabsTrigger value="needs">Needs you</TabsTrigger>
+              <TabsTrigger value="updates">Updates</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </span>
       }
       headerRight={
-        view === "needs" ? undefined : (
+        // Needs you has no actions; the spacer keeps the row as tall as Updates'.
+        view === "needs" ? (
+          <div className="h-7" aria-hidden />
+        ) : (
           <>
             <AnimatePresence>
               {unreadCount > 0 ? (
