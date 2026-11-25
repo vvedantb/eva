@@ -1481,11 +1481,36 @@ server.listen(proxyPort, "0.0.0.0", function handleListen() {
 `.trim();
 }
 
+/**
+ * Proxy health read through the port's public URL. On Vercel this takes about
+ * 35 ms; the in-sandbox `curl` exec below takes about 410 ms. Null when the
+ * port has no public route or the request fails.
+ */
+async function publicProxyHealth(
+  sandbox: SandboxHandle,
+  proxyPort: number,
+): Promise<string | null> {
+  try {
+    const { url } = await sandbox.previewUrl(proxyPort);
+    const res = await fetch(new URL(HEALTH_PATH, url), {
+      signal: AbortSignal.timeout(2_000),
+    });
+    return res.ok ? (await res.text()).trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 async function proxyAlreadyRunning(
   sandbox: SandboxHandle,
   targetPort: number,
   proxyPort: number,
 ): Promise<boolean> {
+  const expected = `target=${targetPort};${SCRIPT_VERSION}`;
+  // Fast path only: any other answer (old version, other target, edge error)
+  // falls through to the exec check, so a wrong public reply costs time, not
+  // correctness.
+  if ((await publicProxyHealth(sandbox, proxyPort)) === expected) return true;
   try {
     const health = await execHandle(
       sandbox,
@@ -1494,7 +1519,7 @@ async function proxyAlreadyRunning(
       "/tmp",
     );
     // Version suffix forces a relaunch when the script changes across deploys.
-    return health.trim() === `target=${targetPort};${SCRIPT_VERSION}`;
+    return health.trim() === expected;
   } catch {
     return false;
   }
