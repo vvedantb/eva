@@ -21,7 +21,10 @@ interface Provider {
   models: readonly string[];
 }
 
-/** The shipped catalogue, provider by provider, legacy entries excluded. */
+/**
+ * The shipped catalogue, provider by provider, legacy entries excluded.
+ * Source: Eva repository model catalogue, 16 September 2026.
+ */
 const PROVIDERS: readonly Provider[] = [
   {
     name: "Claude",

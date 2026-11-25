@@ -15,20 +15,21 @@ Detail: authorship comes from the author field on each change, so a change Eva w
 Figures: 346 changes authored by Eva; 33 bundles finished alone since August; 10 in August against 23 in 1 to 10 September.
 Next: Those cloud workspaces used to be slow to start, and that one wait shaped how the whole tool felt.`,
 
-  "04-sessions": `A session is one running conversation about one codebase, and over the summer it gained the tools of a real workspace.
-→ Step 1: July. The workspace fills out: a queue, a browser, files, tabs and plan mode.
-→ Step 2: August. Being told what is happening: notifications, mobile, limits, archiving.
-→ Step 3: September. Recovering by itself rather than stalling.
-Detail: twelve milestones is too many to read aloud; name the three themes and let the axis carry the detail.
-Figures: dates are when each change landed in Eva's main branch, 9 July to 10 September 2026.
-Next: the whole story on one line, before we look at who used it.`,
+  "04-sessions": `So a session's one running conversation about one codebase, and over the summer it grew into a proper workspace.
+There's twelve changes on here, so I won't read them all out, I'll just give you the three themes.
+→ In July, the workspace filled out: a follow-up queue, a built-in browser, a files explorer, tabs and plan mode.
+→ In August, it got much better at telling you what's going on: an inbox badge and chime, working on mobile, usage limits shown up front, and auto-archive notices.
+→ And in September, it got better at recovering by itself, like switching account when a limit hits, and fewer stuck turns, instead of just stalling.
+So by the end of the summer, a session had gone from a chat box to a proper place to work.
+Now let me put the whole story on one line.`,
 
-  "05-simple-mode": `Most people opening Eva are not engineers, so the answer was to remove machinery rather than add explanation.
-→ Step 1: the picker becomes the five-step slider. The trimmed list was still the advanced surface, which is why it became one control.
-Detail: the picker on the right is the real shipped component. Simple Mode is an optional setting, not a separate product; it hides files, consoles, settings and meters and leaves the conversation. Choosing a model went from a long list to one slider. On the slider, cheaper and faster models sit on the left and the strongest on the right; there is nothing to configure.
-Figures: Simple Mode landed 14 August 2026; the slider replaced the list on 24 August 2026.
-Framework: business and user empathy.
-Next: the same idea for checking work: what is done shows as ticks.`,
+  "05-simple-mode": `So the answer for non-engineers was to take machinery away, not add more explanation.
+Simple Mode is just a setting, not a separate product, and it hides the files, consoles, settings and meters, so you're left with the conversation.
+This picker on the right is the real component we ship.
+Before, choosing a model meant going through a long list, and even the trimmed version was still the advanced bit.
+→ So it became one five-step slider: cheaper, faster models on the left, the strongest on the right, and nothing else to configure.
+Simple Mode landed on 14 August, and the slider replaced the list on 24 August.
+And it's the same idea for checking work, where what's done just shows as ticks.`,
 
   "friday-b24-abstracted": `In Simple Mode, the only things that matter are what you ask for and what you get back. Everything in between is Eva's job.
 → Step 1: the machinery is tucked away. Which model to use, how hard it should think, its thinking, how much it can hold in memory at once, which connected tools it can reach, and which skills to load: all of it goes inside Eva.
@@ -44,28 +45,28 @@ Detail: always-on checks were retired in August because the agent had already ch
 Figures: auto-merge landed 3 September 2026. Six nightly routines: critical bugs, test coverage, docs, code structure, code quality and an 08:00 standup.
 Next: Those overnight routines are the next story: work that starts itself.`,
 
-  "07-sandbox": `Starting a workspace used to be a coffee break; now it is under a second.
-→ Step 1: both lanes race, then the closing line arrives after the slow lane finishes. Let the four seconds run in silence; the wait is the argument.
-Detail: every job gets its own cloud workspace. Nothing was given up in the move. The same workspace still has a terminal, live preview, desktop and snapshots.
-Figures: about 40 seconds before on Daytona against under one second now on Vercel Sandbox, more than 40 times faster. Timings are the product owner's own measurements before and after the move; the migration landed 6 to 8 July 2026.
-Framework: understands trade-offs, measured before and after the move.
-Next: speed is half of it; the other half is cost.`,
+  "07-sandbox": `So every job in Eva gets its own cloud workspace, and starting one used to be basically a coffee break.
+→ On top's the old provider, Daytona, and underneath is what we use now, Vercel Sandbox, and I'll just let it run.
+So before, it took about forty seconds, and now it's under one, so more than forty times faster.
+Those timings were measured before and after the move, which landed in early July.
+And we didn't give anything up: the same workspace still has a terminal, a live preview, a desktop and snapshots.
+So speed's half of it, and the other half is cost.`,
 
   "08-more": `A deliberate flood: eight more things from the same three months, none with its own slide.
 Detail: do not read the grid. Pick two the room will care about and move on. If asked: suggested edits, where a document change waits for someone to accept it; Claude's built-in skills in the same slash picker; previews that stay put after you leave a session; rebindable keyboard shortcuts; rich link previews, where Figma, Linear, Sentry and PostHog links become chips; editing files in the browser; and reading sibling repos, so Eva can look across your other codebases. The 94% is the loading shimmer's main-thread cost after the September animation work; it has its own slide in the annual deck.
 Figures: suggestion mode 10 June 2026; Claude's skills 22 August 2026; lasting previews 14 August 2026; shortcuts 6 August 2026. All eight shipped June to September 2026.
 Next: Which leaves the last step of the loop: checking the work, and that is where the bottleneck now sits.`,
 
-  "09-team": `Colleagues raised the work themselves, not just the developer.
-→ Step 1: Matt, referral portal, since May. The AQP list map, the referral dashboard, and referral tabs with cancellation reasons.
-→ Step 2: Zuza, design and admin, since March, the heaviest user after the developer. User management, admin KPI dashboards, and polish on cards, badges and tables.
-→ Step 3: Kezia, referral portal and domiciliary care, since May. Exports and audit trails, broker and borough filters, and automated decline and expiry emails.
-→ Step 4: Krzys, since July. eProcurement evaluation and moderation, KPI fixes, and a planned move of the backend to Effect.
-→ Step 5: George, testing, since September. Checking assessment outcomes, auto-archiving and new emails in their own sandboxes, and speeding up Referral Portal loads.
-→ Step 6: Vedant, product, since January, and the total underneath. The domiciliary care and nursing home SUPA archives, and eProcurement fixes.
-Detail: say roles, months and projects aloud. The shape never changes: someone described the need, Eva built it, they reviewed it.
-Figures: Matt 27, Zuza 250, Kezia 68, Krzys 37, George 18, Vedant 1,182; 400 pieces of work raised by colleagues. Sessions and quick tasks created in Eva, 11 January to 30 October 2026, including those later cancelled.
-Next: what changed for the organisation as a whole.`,
+  "09-team": `So it's not just me raising work in Eva; colleagues raise it themselves.
+And the pattern's always the same: someone describes what they need, Eva builds it, and they review it.
+→ Matt's been on it since May, on the referral portal: the AQP list map, the referral dashboard, and referral tabs with cancellation reasons.
+→ Zuza's been on it since March, on design and admin, and is the heaviest user after me: user management, admin KPI dashboards, and polish on cards, badges and tables.
+→ Kezia's been on it since May, on the referral portal and domiciliary care: exports and audit trails, broker and borough filters, and automated decline and expiry emails.
+→ Krzys has been on it since July: eProcurement evaluation and moderation, KPI fixes, and a planned move of the backend to Effect, which is a TypeScript framework.
+→ George started in September, on testing: checking assessment outcomes, auto-archiving and new emails in their own sandboxes, and speeding up Referral Portal loads.
+→ And that's me, on product since January: the domiciliary care and nursing home SUPA archives, and eProcurement fixes.
+So that's 400 pieces of work raised by colleagues, not by a developer, up to the end of October.
+So what did all that actually change for the organisation?`,
 
   "10-code-reviews": `Reading every change by hand was the slowest step, so it moved to the model and people kept the part that matters.
 → Step 1: the strike draws through all five old habits and the old lane fades back.
@@ -81,14 +82,17 @@ Detail: cancelled work is shown rather than hidden, because a queue that quietly
 Figures: 141 quick tasks: 29 done, 43 waiting in code review, 14 in business check, 25 not started, 30 cancelled. CarePulse quick tasks created in Eva, 1 June to 10 September 2026, by status on 11 September 2026.
 Next: Eva already has the answer to that queue; here is how it works, and the goal for CarePulse.`,
 
-  "friday-b19-pipeline": `On Eva, dragging a task into code review is the last thing a person does; the goal is the same for CarePulse.
-→ Step 1: the drag. The task moves from In Progress to Code Review, and that single move wakes the Grok bot.
-→ Step 2: the bot works. It applies the database migrations, deploys the backend, then merges the pull request. The task moves itself to Merged and the new button is live on the page.
-→ Step 3: the goal. Eva works like this today; next, the moment a CarePulse task moves to code review, it is on the CarePulse repository a few minutes later.
-Detail: you saw the short version of this on the auto-merge slide; this is the whole route. Under the hood a GitHub workflow sends the Grok bot a message when a pull request leaves draft or gets a new push. The order matters: backend and migrations go first, so merged code never runs against a database that is not ready. Be clear that CarePulse is a goal, not a date; it needs the model checks and the human sign-off for risky changes from the next slide first. The board, task and page are an illustration, not a recording.
-Figures: Eva auto-merge landed 3 September 2026. 43 CarePulse quick tasks in code review on 11 September 2026. "A few minutes" is the target, not a measured time.
-Framework: improves the process.
-Next: and every chat on Eva now feeds back into making it better.`,
+  "friday-b19-pipeline": `So on Eva, dragging a task into code review is now the last thing a person does.
+Normally, after someone says a change looks good, a developer still has to update the database, deploy the server side, and merge the code by hand.
+→ So here's the drag: the task moves from In Progress to Code Review, and that one move wakes up the Grok bot.
+→ Then the bot does the rest on its own: it applies the database changes, deploys the backend, then merges the pull request, which is just the proposed change going into the main code.
+The order matters, cos the database goes first, so new code never runs against a database that isn't ready yet.
+And the task moves itself to Merged, and the new button is live on the page.
+The board and the page here are an illustration, not a recording, but Eva's worked like this since September.
+→ So that's Eva today, and the goal is the same for CarePulse: the moment a task goes to code review, it's on the CarePulse repo a few minutes later.
+I'll be honest, that's a goal, not a date, and "a few minutes" is the target, not something I've measured.
+It needs the model checks first, and a person signing off anything risky.
+And to make those checks good, every chat on Eva now feeds back in, so every chat teaches Eva.`,
 
   "12-future": `Three shifts to expect, each already true inside Eva rather than predicted.
 → Step 1: more automations. Routine work runs on a schedule or a trigger, and people set direction rather than tasks.
@@ -120,9 +124,10 @@ Detail: name the six competitors without disparaging them; they are all good, th
 Figures: comparison reflects our own use, September 2026. Product names are their owners' trademarks.
 Next: So what should you do with any of this on Monday?`,
 
-  "15-closing": `Close on the one fact that carries the whole argument: this deck was built the way everything else was.
-Detail: hold here rather than rushing to questions. If the room takes one thing away, it is that the tool was good enough to build its own presentation. Do not add new material; the numbers have already been made.
-Next: Thank the room and open the floor for questions.`,
+  "15-closing": `So one last thing: this whole deck was built in Eva, by Eva, the same way everything else this year was.
+If you take one thing away, it's that the tool got good enough to build its own presentation.
+So yeah, that's pretty much it, thank you all for listening.
+Happy to take any questions.`,
 
   "friday-b01-ask": `This is the tool in use: a sentence in, working software out.
 → Step 1: the cloud workspace. Eva builds it somewhere that is not anyone's laptop, so nothing is installed and nothing can break locally.
@@ -201,13 +206,13 @@ Detail: it started as a master chat that could also write code, and that was the
 Figures: the master chat landed 18 August 2026; it became Manager Ave, restricted to supervising, on 24 August 2026.
 Next: Once the work is finished, getting it live now takes one click.`,
 
-  "friday-b13-reliability": `Things still go wrong; what changed is how long you are left not knowing.
-→ Step 1: the hanging spinner gives up. A dead agent used to show Working for up to two hours. A watchdog now closes the turn within minutes and keeps what was written.
-→ Step 2: the retry card. A turn that stalls with nothing written tries once more on its own before anyone is told.
-→ Step 3: the usage-limit card. The chat says a limit was reached, when it resets, and offers a teammate's shared account in one click.
-Detail: let the first card sit before clicking; the spinner is the argument.
-Figures: watchdog 30 July 2026; stalled empty turns retry once, 26 August 2026; usage-limit card and account switch 4 September 2026 for sessions, extended to quick tasks and projects 10 September 2026.
-Next: reliability is one kind of trust; the other is who can see what.`,
+  "friday-b13-reliability": `So things still go wrong, what's changed is how long you're left not knowing.
+Just look at this first card for a sec, cos before, a dead agent would sit there showing Working for up to two hours.
+→ Now a watchdog, which is just a timer that checks the agent's still alive, closes the turn within minutes and keeps whatever was already written.
+→ And if a turn stalls before it's written anything, it just tries once more on its own before anyone's told.
+→ And if you hit your usage limit, the chat tells you, says when it resets, and lets you switch to a teammate's shared account in one click.
+That came in for sessions first, then quick tasks and projects.
+So reliability is one kind of trust, and the other is who can see what.`,
 
   "friday-b14-mobile": `Work gets raised when you think of it, which is usually not at a desk.
 → Step 1: the desktop frame folds into a phone and the content reflows into one pane. Pinch-zoom is back, and controls sit where a thumb can reach.
@@ -236,15 +241,16 @@ Detail: the Eva Weekly Changelog is an ordinary automation, the same kind anyone
 Figures: 39 runs, 35 successful, first run 11 April 2026, latest 12 October 2026; schedule Monday 03:00 UTC. Source: Eva production records, read 15 October 2026.
 Next: Underneath much of this, one small model makes the small decisions.`,
 
-  "friday-b20-jev-what": `Most AI models write; Jev is the opposite kind of model. It never writes anything, it only judges.
-→ Step 1: a typical model. You ask a question and it writes new text back. That is useful, but the wording changes every time and it is hard to act on automatically.
-→ Step 2: Jev. You give it a set of items and one condition, here "is this urgent?", and it gives each item a score. You set the line; above it, Eva acts.
-→ Step 3: the recipe. Your data, plus a condition, gives a score for each item. That is the whole idea.
-→ Step 4: why it matters. Because Jev is so small, each check costs fractions of a penny and comes back in under a second. That is what lets Eva run it on every item, every time, rather than on a sample.
-Detail: Jev is TypeSafe's decision model, reached through Vercel's AI Gateway with zero data retention requested. It answers three kinds of question: yes or no, pick one from a list, or a score on a scale. Because the questions are fixed, the same item gets the same judgement every time, which is what makes it safe to automate. It is small and fast, so it can run on every item rather than a sample. The four items and their scores are an illustration, not a real call.
-Figures: "fractions of a penny" is the product owner's own estimate per check, not a billed figure from this deck. "Under a second" matches the note in Eva's Jev client that Jev answers in well under a second.
-Framework: a skill beyond coding.
-Next: here is what it does for CarePulse.`,
+  "friday-b20-jev-what": `So most AI models write, and Jev is the opposite kind of model: it never writes anything, it only judges.
+→ A typical model, like ChatGPT, you ask a question and it writes new text back, which is useful, but the wording changes every time, so it's hard for software to act on automatically.
+→ Jev's different: you give it a set of items and one condition, here "is this urgent?", and it gives each item a score.
+You set the line, and anything above it, Eva acts on.
+→ So the recipe's just your data, plus a condition, gives you a score for each item, and that's the whole idea.
+Cos the question's fixed, the same item gets the same judgement every time, which is what makes it safe to automate.
+→ And cos Jev's so small, each check costs fractions of a penny, by our own estimate, and comes back in under a second.
+That's what lets Eva run it on every item, every time, rather than on a sample.
+The items and scores here are just an illustration, not a real call.
+So here's Jev inside CarePulse.`,
 
   "friday-b17-jev": `Ten small decisions inside Eva, all made by the same model.
 → Step 1: the three you will notice. Before a quick task runs, Jev checks the prompt says where the change goes, what should happen, and what is wrong today, and nudges you if not. As you type, it picks the skill that fits. And when an agent has a question for the team, Jev picks who should answer it, one yes or no per teammate.
@@ -253,21 +259,26 @@ Detail: each card shows the question Jev is given, shortened from the code. Real
 Figures: evaluate tool, task tags, findings triage, draft readiness, mention urgency and skill suggestions, 21 September 2026; scope check and chat panels, 22 September 2026; emoji reactions, 26 September 2026; teammate routing, 12 October 2026. Source: Eva git history.
 Next: And it has started to appear in CarePulse too.`,
 
-  "friday-b21-jev-carepulse": `CarePulse's first use of Jev is a PID checker: it reads what a broker types and flags personal details in the form straight away.
-→ Step 1: the broker types a note that names someone and gives a phone number. As soon as they stop typing, Jev scores the field against one question, "could this text identify a specific person?", and the field turns orange with "May contain personal details". The step is marked in the progress bar too.
-→ Step 2: the safeguards. It only warns and never blocks posting; zero data retention is requested; and if Jev is unavailable, fixed pattern rules for things like NHS numbers and phone numbers still run.
-Detail: the fields checked are the free-text ones a broker fills in: the unique ID, care needs, equipment, additional care, cultural and language notes, and the reasons for unselected homes or an area search. ICB contact fields are not sent. Abbreviations are spelled out first, the text is not logged or stored, and the check runs 1.5 seconds after typing stops. The 50% line is our own assumption and should be reviewed if brokers report false alarms or misses. Whether production calls Jev depends on the AI Gateway key being set there; without it only the pattern rules run. The example text is invented and identifies no one.
-Figures: merged to main 14 October 2026 (carepulse-ts pull request 2487); first built 6 October 2026. Flag line 50%; at most 120 checks an hour per user.
-Framework: business and user empathy.
-Next: outside work, four side projects, starting with vmem.`,
+  "friday-b21-jev-carepulse": `So CarePulse's first use of Jev is a PID checker, which flags personal details as a broker types them into a referral form.
+Normally, if someone types a name or phone number into a free-text box, nobody notices until much later, if at all.
+→ So say the broker types a note that names someone and gives a phone number.
+About a second and a half after they stop typing, Jev scores the field against one question, "could this text identify a specific person?", and if it's over the line the field turns orange with "May contain personal details".
+The example's made up, it doesn't identify anyone.
+→ And the safeguards: it only warns, it never blocks posting, zero data retention is requested, so the text isn't kept, and if Jev's unavailable, fixed pattern rules for things like NHS numbers and phone numbers still run.
+The 50% line is our own assumption, so we'll review it if brokers report false alarms or misses.
+It went into CarePulse in October.
+Now, outside work, four side projects, starting with vmem.`,
 
-  "friday-b18-limits": `This is my view, not a measured law: the models keep getting better, yet the problems we wrote about in February are still the ones we write about in September.
-→ Step 1: the ladder climbs. Each step is a new model added to Eva, ten from April to September, from Anthropic, OpenAI and xAI.
-→ Step 2: the four problems light up, each drawn from its first mention to its latest. Three were on record before the first model on the ladder arrived, and all four were still being fixed in late summer.
-→ Step 3: the closing line. If better models alone fixed these, the lines would end; they do not. That suggests fully automating software development is nearing a limit, and the work left is judgement, review and the systems around the model.
-Detail: loses the thread: 26 February 2026 (context lost when a workspace was recreated) to 28 August 2026 (a restarted agent still starts without the conversation). Gets stuck: 3 March 2026 (a quick task hanging on "Generating response") to 21 September 2026 (a turn left stalled). Needs a human guard: 4 March 2026 ("never push to main" written into the prompts) to 2 September 2026 (Eva refusing to force-push after an agent rewrote its branch). Waits for review: 28 April 2026 (only ping reviewers when work is ready) to 11 September 2026 (43 waiting against 29 merged). A fifth, changes nobody asked for, is newer on the record: Manager Ave doing the work itself on 24 August 2026, and the Jev scope check built for it on 22 September 2026, so it is left off the chart. The project's own design notes, first written 8 February 2026, say: "Most failures are not model failures. They are system design failures." Be fair about the limits of the picture: the ladder shows when models arrived in Eva, not a capability score, and the lanes show what was written about, not how often it happened.
-Figures: models by the day each first appeared in Eva's model picker, from git history: Opus 4.5 14 April, Opus 4.6 17 April, GPT-5.5 11 May, Fable 5 10 June, Grok 4.5 10 July, GPT-5.6 10 August, Grok 4.6 12 August, Fable 5.1 1 September, GPT-6 Astra 11 September, Grok 4.7 21 September 2026. Problems from Eva's changelog, February to September 2026; the review figures are CarePulse quick tasks by status on 11 September 2026.
-Next: two lessons from the year, in the project's own words.`,
+  "friday-b18-limits": `So this is my view, not a measured law: the models keep getting better, but the problems we wrote about in February were still the ones we wrote about in September.
+→ So each step on this ladder is a new model added to Eva, ten of them from April to September, from Anthropic, OpenAI and xAI.
+To be fair, it shows when each model arrived in Eva, not how good it is.
+→ And these are four problems, each line drawn from its first mention in our changelog to its latest: it loses the thread, it gets stuck, it needs a human guard, and work waits for review.
+Three of them were on record before the first model on the ladder even arrived, and all four were still being fixed in late summer.
+Like in March, a quick task hung on "Generating response", and in September we still had a turn left stalled.
+And the lanes show what got written about, not how often it happened.
+→ So if better models alone fixed these, the lines would end, and they don't.
+To me that suggests fully automating software development is nearing a limit, and the work left is judgement, review and the systems around the model.
+So here are two lessons from the year, in the project's own words.`,
 
   // ---------------------------------------------------------------------------
   // Bee deck
@@ -395,417 +406,480 @@ Bee's still in progress, but what do we think — would you use Bee?
   // ---------------------------------------------------------------------------
   // Annual CDM deck
   // ---------------------------------------------------------------------------
-  "a01-title": `Open on the year, not one product: most of it is Eva, but it also covers CarePulse, vmem, flowtape, Redline and Bee.
-Detail: an assessor reads this deck as well as a room watching it, so say early that every claim is evidenced from the repository or Eva's own records. Signpost the sections, each in its own colours: Eva, CarePulse, then four side projects (vmem, flowtape, Redline and Bee), then the framework map on slide 65.
-Figures: the window is 11 January to 16 September 2026.
-Next: Eva first, the biggest section.`,
+  "a01-title": `So, this is my annual CDM review.
+Most of it's about Eva, the platform I've been building since January, but it also covers CarePulse and four side projects: vmem, flowtape, Redline and Bee.
+Everything I show you comes from the code history or Eva's own records, so you can check any of it.
+Each section has its own colours, so you'll always know where we are.
+And right at the end, I'll map it all back to the senior engineer framework.
+So let's start with Eva, cos it's the biggest bit.`,
 
-  "a02-origin": `The recap: eight months as five moments, so the story is held in one picture.
-→ Step 1: first use. The first session on 24 January and the first quick task on 1 February, two weeks from empty to usable.
-→ Step 2: work moves to the cloud in July, and in August Eva starts opening its own work.
-→ Step 3: the line runs on to today.
-Detail: eight months took us from an empty repository to most of how we build software. These dates come from Eva's own records of the first session and quick task created; the week-one dates are when the code landed, which is why they differ.
-Figures: empty repository 11 January 2026; first session 24 January, first quick task 1 February, from Eva's own records.
-Next: what the year has produced so far.`,
+  "a02-origin": `So here's the story so far on one line: ten months, from January to now, as five moments.
+It starts with an empty repository on 11 January.
+→ The first session was on 24 January, and the first quick task on 1 February, so about two weeks from nothing to something usable.
+These dates come from Eva's own records of the first ones actually created, which is why they're later than the week-one dates, cos those are when the code landed.
+→ Then in July the work moves to the cloud, and in August Eva starts opening its own work.
+→ And the line just keeps running on to today, cos it's still going.
+So that's how we got from an empty repository to most of how we build software.
+And here's what it's actually produced.`,
 
-  "a03-numbers": `The total is one number; the rest of the ledger shows the tool was used, not just built.
-→ Step 1: the secondary card. This answers whether anyone else uses it: sixteen accounts, nineteen automations and 613 automation runs.
-Detail: the headline row is output, the secondary card is use. Say the rate aloud, because it is no longer on the slide: about seventeen changes a day, every day, since January. It is deliberately unglamorous; a pace sustained that long matters more than any single peak.
-Figures: 4,989 changes on main, 981 quick tasks raised, 606 sessions, 1,542 sets of release notes; 16 people with accounts, 19 automations, 613 automation runs, 117 documents. Eva's own records and project history, 11 January to 30 October 2026.
-Next: those sixteen accounts did not arrive at once, and the timing matters.`,
+  "a03-numbers": `So this is what the year's produced, from Eva's own records and the project history, up to this week.
+The top row is output: 5,673 changes shipped, 1,015 quick tasks raised, 767 sessions and 1,891 sets of release notes.
+That works out at about eighteen changes a day, every day, since January.
+It's not glamorous, but keeping a pace like that going for that long matters more than any one big week.
+→ But the real question is whether anyone else uses it, and that's this second row.
+16 people have accounts, there's 19 automations running, they've run 706 times, and 125 documents have been written in it.
+So it's not just been built, it's actually being used.
+But those sixteen people didn't all turn up at once, and the timing's interesting.`,
 
-  "a04-adoption": `Adoption was not announced; it followed the tool becoming easy enough to use.
-→ Step 1: July onward lights and the earlier months dim. The step change is July, when work moved to the cloud.
-Detail: from July, monthly sessions roughly tripled and stayed there. June is genuinely zero, not missing data, and the footnote says so. Volunteer the gap, because that is what makes the rest credible.
-Figures: sessions per month in 2026: Jan 13, Feb 11, Mar 31, Apr 28, May 9, Jun 0, Jul 75, Aug 109, Sep 91. To 16 September 2026.
-Next: and it is not one codebase: every work repo is on Eva.`,
+  "a04-adoption": `So nobody announced Eva to the team; people just started using it once it got easy enough.
+This is how many sessions were started each month this year.
+The early months are small, and June's a genuine zero, not missing data.
+→ Then from July it lights up, and that's when the work moved to the cloud.
+From July, monthly sessions roughly tripled, and they've kept climbing since.
+November only runs up to this week, and it leaves out the old quick tasks we moved into sessions on 11 November, cos counting those would make the bar look much bigger than it really is.
+And I'm pointing out the June gap on purpose, cos being upfront about it is what makes the rest believable.
+And it's not just one codebase either: every work codebase now runs on Eva.`,
 
-  "a06-impact": `Three things changed, and none of them is typing speed.
-→ Step 1: who can ask. A request, a queue and a developer became anyone describing what they need in their own words.
-→ Step 2: where work runs. One laptop at a time became cloud workspaces running many jobs at once.
-→ Step 3: what a person does. Writing every line became directing the work and guarding what is hard to undo.
-Detail: the rows carry no category label, so name each as it lands. Eva was built to remove the wait between someone needing something and it being built. Dwell on the third row: it is the change that makes the others safe.
-Next: what that looks like for the person using it.`,
+  "a06-impact": `So the easy answer is that AI makes developers type faster, but that's not really what changed.
+Three things changed, and none of them's typing speed.
+→ First, who can ask: before, it was a request, a queue and waiting on a developer, and now anyone can just describe what they need in their own words.
+→ Second, where the work runs: before, it was one laptop doing one thing at a time, and now it's cloud workspaces running loads of jobs at once.
+→ And third, what a person actually does: before, you wrote every line yourself, and now you direct the work and guard the bits that are hard to undo.
+That third one's the one that matters most, cos it's what makes the other two safe.
+So Eva was built to remove the wait between someone needing something and it being built.
+So what does that look like for the person actually using it?`,
 
-  "a07-how": `The whole loop in one pass, so nobody has to guess what using the tool looks like.
-→ Step 1: the flow line runs and lights each stage. The whole loop happens in a browser tab: no install, no ticket, no handover.
-→ Step 2: the four ways to ask, as names only. A session is a running conversation; a quick task is one job start to finish; a project is several jobs in order; an automation is a job that runs itself. The choice is about the size of the job, not the type of user.
-Detail: the cards are headings only, so describe each stage. You describe it in plain English in a chat. Eva builds it in its own cloud workspace, with a live preview you can click through. You try it, ask for changes, then it goes live. The preview matters most to non-technical colleagues: it is the first point they can judge the work themselves.
-Next: behind that loop sits the first platform decision: never depend on one supplier.`,
+  "a07-how": `So here's the whole loop in one go, so nobody has to guess what using it looks like.
+→ You describe what you want in plain English, in a chat.
+Eva builds it in its own cloud workspace, with a live preview you can click through.
+Then you try it, ask for changes, and when you're happy it goes live.
+It all happens in a browser tab, so there's nothing to install, no ticket and no handover.
+The preview's the bit that matters most for non-technical people, cos it's the first point you can judge the work yourself.
+→ And there's four ways to ask: a session's a running conversation, a quick task is one job start to finish, a project is several jobs in order, and an automation's a job that runs by itself.
+So you pick based on the size of the job, not on whether you're technical.
+And behind all that sits the first big platform decision: never depend on one supplier.`,
 
-  "annual-e02-carepulse": `Eva was built to serve CarePulse, and CarePulse kept shipping all year, most of it raised and built through Eva.
-→ Step 1: December to February. Notes on the AQP list, including Sussex; eProcurement evaluation and the moderation view, with a run of fixes for evaluators; and the sandbox setup so the team could work in the cloud.
-→ Step 2: March to May. Mobilisation status on the provider homepage; CQC notifications filtered to AQP homes only and soft-deleted on dismiss; and a tidy-up of the resource centre.
-→ Step 3: June to August. The domiciliary care quality dashboards, with tabs, an admin page for responses, a location breakdown and metric exports; SUPA archives for nursing homes and domiciliary care; and the referral portal dashboard and filters.
-→ Step 4: September to November, the busiest stretch. The provider homepage redesign; the central contact overview, one page that brings the homepage and overview together; the SUPA tracker; the Jev PID checker on the care package finder and the referral portal; and comments on the nursing home quality dashboard, mirroring the domiciliary care side.
-Detail: each item is a change on CarePulse's main branch. The point for the assessor is that the tooling on the surrounding slides was in service of this work, not instead of it.
-Figures: carepulse-ts main branch, December 2025 to November 2026, checked 16 November 2026.
-Framework: delivers large well-defined tasks; understands the business; business and user empathy.
-Next: behind that work, skills that teach the agent how CarePulse is written.`,
+  "annual-e02-carepulse": `So Eva was built to serve CarePulse, and CarePulse kept shipping all year, most of it raised and built through Eva.
+Every item here is a change that went into CarePulse's main branch, quarter by quarter.
+→ December to February: notes on the AQP list, including Sussex, eProcurement evaluation and the moderation view, with a run of fixes for evaluators, and the sandbox setup so the team could work in the cloud.
+→ March to May: mobilisation status on the provider homepage, CQC notifications filtered to AQP homes only and cleared when you dismiss them, and a tidy-up of the resource centre.
+→ June to August: the domiciliary care quality dashboards, with tabs, an admin page for responses, a location breakdown and exports, plus SUPA archives for nursing homes and domiciliary care, and the referral portal dashboard and filters.
+→ And September to November was the busiest stretch: the provider homepage redesign, the central contact overview, the SUPA tracker, the Jev PID checker on the care package finder and the referral portal, and comments on the nursing home quality dashboard.
+So the point is, all the tooling I've shown you was in service of this work, not instead of it.
+And behind a lot of it is teaching the agent our codebase.`,
 
-  "a09-design": `Technical design happened on paper first, and replacing the engine every workspace runs on is the proof.
-→ Step 1: the six phases. A spike, a provider-neutral contract with no consumer, the old provider moved behind it, the new provider, the switch-over, then the old code deleted.
-→ Step 2: the restore figure, which the spike was written to test. An explicit go or no-go; the answer was go.
-→ Step 3: the options put down. Seven abandoned plans are kept in writing, and two rejected animation options carry the measurement that ruled them out.
-Detail: interactive terminal, desktop and named volumes were deliberately deferred, and that was said at the time.
-Figures: 6 to 29 July 2026, switch-over 25 July, old code removed 29 July; a 6GB workspace restores in about 0.33 seconds against minutes before; 11% worse compositor time, five times more painting. Rejected options 5 September 2026.
-Framework: owns technical design; understands trade-offs; breaks down large problems.
-Next: design reduces faults but does not remove them.`,
+  "a09-design": `So this slide's about doing the design on paper before writing any code.
+The proof is the biggest change of the year: swapping out the engine that every workspace in Eva runs on.
+Normally you'd just rip the old thing out and hope, and if it goes wrong, everyone's stuck mid-job.
+→ So instead it went in six phases, all in July, starting with a spike, which is just a quick throwaway test to see if the idea works at all.
+Then a neutral contract, a plug shape any provider could fit, with nothing using it yet.
+Then the old provider moved behind it, then the new provider, then the switch-over on 25 July, and the old code deleted on 29 July.
+→ And this is the number the spike was written to test: a 6GB workspace restores in about a third of a second, where before it took minutes.
+It was an explicit go or no-go, and the answer was go.
+→ And the options I put down are kept too: seven shelved plans are still written up, and two rejected animation options carry the measurement that ruled them out, one 11% worse and one doing five times more painting.
+I also said at the time that the terminal, desktop and named volumes were deferred on purpose, not forgotten.
+But design cuts down faults, it doesn't remove them, so here's what I do when something breaks.`,
 
-  "a10-debugging": `Three production faults, each taken to a cause and pinned by a test, not patched and forgotten.
-→ Step 1: 2 September. Messages unanswered for two hours. Three defects: a liveness check matching its own wrapper, a kill leaving an orphan holding a file lock, and a launch racing its own ready marker. Each has a named contract test.
-→ Step 2: 24 August. A three-minute wait, though resume took eight seconds. A prewarm on a stale model setting held the launch lease; losers now wait, re-probe and respawn.
-→ Step 3: the closing figure, found by searching live traffic, not from a report.
-Detail: the resting state is 10 September. Under CHIPS, partitioned and unpartitioned cookies of one name are two cookies; the browser sent both, so signing out left you signed in. The fix deletes the unpartitioned one first.
-Figures: 65 respawn events against 146 daemon launches in 24 hours. Release notes, August to September 2026.
-Framework: debugs production issues without flailing.
-Next: the same habit of searching live traffic found a larger problem.`,
+  "a10-debugging": `So these are three real production faults, and each time the rule was the same: find the symptom, find the actual cause, then pin it with a test so it can't quietly come back.
+The first one's from 10 September: you signed out, and you were still signed in.
+The cause was two cookies with the same name, cos under the newer browser cookie rules a partitioned and an unpartitioned cookie count as two, and the browser sent both.
+So the fix just deletes the old one first.
+→ Then on 2 September a colleague's messages went unanswered for two hours.
+That turned out to be three defects: a check for whether the agent was alive that matched its own wrapper, a kill that left a stuck process holding a file lock, and a launch racing its own ready marker.
+So three defects, three tests, each with its own name.
+→ Then on 24 August there was a three-minute wait, even though the workspace itself resumed in eight seconds.
+It wasn't the workspace at all, it was a warm-up running on a stale model setting that held the launch lock, so now anything waiting just waits, re-checks and restarts.
+→ And nobody reported this last one: 65 restarts against 146 launches in 24 hours, which I found by searching live traffic.
+And that same habit of searching live traffic found a bigger problem, where the database was fighting itself.`,
 
-  "a11-craft": `The skill built outside programming this year is measurement; the bars are its output, not its point.
-→ Step 1: the habits behind the numbers. Live traffic is searchable, decisions are written down, there is one design system, and accessibility defects get fixed.
-→ Step 2: the honest gap. A Lighthouse harness exists but no scores are recorded in the release notes: set up, not yet a habit.
-Detail: defend the method, not the reduction. A fresh tab per run, tracing over timeline, compositor and viz categories, busy time merged per thread, interleaved rounds, medians of three, and visual parity proved by diffing paused frames at 0.9998. The write-up states its own limit: the test machine has no GPU, so only main-thread figures transfer.
-Figures: shimmer 32.6 to 1.9 ms/s, repaints 240 to 0 per second, spinner recalculations 420 to 49 per second, a realistic chat mix 64 to 45.5 ms/s. 5 September 2026.
-Framework: a major skill outside programming.
-Next: the same method, applied to the waits everyone pays.`,
+  "a11-craft": `So the skill I've built most outside programming this year is measuring things instead of guessing.
+These bars are just what came out of it, from the animation work in September.
+The loading shimmer went from 32.6 milliseconds of work every second to 1.9, its repaints from 240 a second to none, and a realistic chat screen from 64 to 45.5.
+But the method's the bit I'd defend: a fresh tab for every run, medians of three, and I proved it still looked the same by comparing paused frames.
+And I'll be honest about the limit: the test machine had no GPU, so only the main-thread figures carry over.
+→ So these are the habits behind the numbers: live traffic is searchable, decisions are written down, there's one design system, and accessibility problems get fixed.
+→ And the honest gap is page scores: there's a Lighthouse setup, which is Google's page speed checker, but no scores are recorded in the release notes yet, so it's set up, not a habit.
+So next is the same method, applied to the waits everyone pays.`,
 
-  "a12-quality": `The standard is enforced by the machine, because a standard that relies on remembering is not a standard.
-→ Step 1: the written rules. Unsafe type escapes and certain React patterns are banned, parsing happens at the edge, and every change needs a type check and release notes.
-→ Step 2: the closing line. A permanently red test is a defect in the test, because a suite people stop reading protects nothing.
-Detail: the contract tests matter most: they fail when two parts of the system drift apart, and one asserts the three chat surfaces stay unified. The four hand-written lint rules exist only where an off-the-shelf rule could not express the standard: no hand-rolled narrowing, no bare JSON.parse, no double casts, no value blocks in try.
-Figures: 303 test files across app, backend and shared components; 79 contract tests; 46 nightly runs that back-filled tests; 4 custom rules. Repository at 16 September 2026.
-Framework: improves the development process.
-Next: why enforcement matters: the size of what it now protects.`,
+  "a12-quality": `So the standard here is enforced by the machine, cos a standard that relies on people remembering isn't really a standard.
+These numbers are from the repo in mid-September: 303 test files, 79 contract tests, 46 nightly runs that went back and filled in tests, and 4 custom rules.
+The contract tests matter most, cos they fail when two parts of the system drift apart, and one of them checks that the three chat surfaces stay the same.
+The four custom rules only exist where an off-the-shelf rule couldn't say what I wanted, like no unchecked JSON parsing and no double casts.
+→ And these are the written rules: unsafe type shortcuts and certain React patterns are banned, data's checked at the edge as it comes in, and every change needs a type check and release notes.
+→ So a test that's permanently red is a broken test, cos once people stop reading the results, the tests protect nothing.
+And the reason enforcement matters is the size of what it now protects.`,
 
-  "a13-people": `Every incident here was found by a colleague, not a test, and each changed how the work is done.
-→ Step 1: September. Two of a colleague's messages were dropped because a fix landed on sessions only. The rule that chat is one surface is now written into the repository.
-→ Step 2: August. Design tooling did not survive a workspace resume, found in a colleague's own session.
-→ Step 3: the cards recede and the closing line lands. Each was fixed, pinned by a test and written down.
-Detail: the resting state is the August stall, two hours on Working with a colleague's messages unanswered: a zombie runner holding the spawn lock while the watchdog extended its own deadline. Standards are written for people and agents: repository rules, guides for the interface, data layer and security, ready-made commands, release notes on every change.
-Figures: release notes, August and September 2026.
-Framework: mentors and onboards, through written standards others can work to.
-Next: most of those colleagues are not engineers, and that shaped the product.`,
+  "a13-people": `So every incident on this slide was found by a colleague, not by a test, and each one changed how I work.
+This first one's from August: a colleague's session sat on Working for two hours with their messages unanswered.
+Underneath, a stuck runner was holding the lock to start a new one, while the watchdog kept extending its own deadline.
+→ Then in September two of a colleague's messages were dropped, cos a fix had landed on sessions only and not on the other chat screens.
+So the rule that chat is one surface, where sessions, quick tasks and projects all share the same chat, is now written into the repository.
+→ And also in August, the design tooling didn't survive a workspace resume, and that was found in a colleague's own session.
+→ So each one got fixed, pinned with a test, and written down.
+And those standards are written for people and for agents: repo rules, guides for the interface, the data layer and security, and release notes on every change.
+And most of those colleagues aren't engineers, which shaped the product a lot.`,
 
-  "a14-users": `Most people opening Eva are not engineers, and almost every decision on this slide follows from that.
-→ Step 1: the three chips. Every screen made usable on a phone across two audits; shortcuts made visible and rebindable; and pages saying pick something from the sidebar removed, because on a phone the sidebar is a closed drawer.
-→ Step 2: the closing line. None of this made the tool cleverer.
-Detail: the rows in order. Simple Mode hid reviews, differences, token meters and consoles, leaving the conversation and a preview; the model list became a five-step slider because the trimmed list was still the advanced surface; PRD was renamed Plan because that is what people meant; the daily summary was rewritten for a non-technical reader, with a hard ban on file names and hashes.
-Figures: Simple Mode 14 August 2026, slider 24 August 2026, mobile audits August and September 2026.
-Framework: business and user empathy.
-Next: here is the slider those choices produced.`,
+  "a14-users": `So most people opening Eva aren't engineers, and nearly every decision on this slide comes from that.
+Simple Mode hid the reviews, diffs and token meters, so you're left with the conversation and a preview.
+The long list of models became one slider, cos even the trimmed list was still the advanced bit.
+PRD got renamed to Plan, cos that's what people actually meant, and the daily summary got rewritten in plain language, with a hard ban on file names and commit hashes.
+→ And then three more: every screen made usable on a phone across two audits, shortcuts made visible and rebindable, and pages that just said "pick something from the sidebar" removed, cos on a phone the sidebar's a closed drawer.
+→ So none of this made the tool cleverer, it just made it usable.
+So here's the slider those choices produced.`,
 
-  "a08-ahead": `The constraint has moved from building to deciding, and the next year is about the steps either side of the build.
-→ Step 1: the first strand lights: automate the release. Marking work ready should be the last human step, as it already is for Eva itself.
-→ Step 2: the closing question. How fast can we build it becomes how fast can we decide.
-Detail: Eva now finishes work faster than we can check it in. The three strands are headings only. Automate the release. Guard the irreversible, so people concentrate on data, permissions and anything hard to undo. Software that fits us: tools shaped around how we work rather than the other way round. None of the three is a dated commitment.
-Framework: identifies work to do.
-Next: and alongside Eva, the product it was built for kept moving.`,
+  "a08-ahead": `So Eva now finishes work faster than we can check it in, and that changes where the hard part is.
+It used to be building the thing; now it's deciding, and checking, either side of the build.
+So these are the three things for next year: automate the release, guard the irreversible, and software that fits us.
+→ First, automate the release, which is the one lighting up: marking work ready should be the last human step, like it already is for Eva itself.
+Then guard the irreversible, so people spend their attention on data, permissions and anything that's hard to undo.
+And software that fits us, meaning tools shaped around how we work, not the other way round.
+None of these are dated commitments, they're the direction.
+→ So the question stops being how fast can we build it, and becomes how fast can we decide.
+And alongside Eva, the product it was built for kept moving: CarePulse.`,
 
-  "annual-s01-eva": `The first and biggest section: Eva, the platform the team now builds with.
-Detail: every Eva slide keeps Eva's purple and blue; each later section takes its own project's colours, so the room always knows where it is.
-Next: it starts on a single evening in January.`,
+  "annual-s01-eva": `So, first up, Eva.
+Normally, if someone in the business needs a change to one of our apps, they write a request, it goes in a queue, and they wait for a developer.
+Eva's the platform I built so you can just describe what you need and have it built, and it's now what the team builds with.
+Every Eva slide stays in this purple and blue, and each later section gets its own colours.
+And it all started on one evening in January.`,
 
-  "annual-s02-carepulse": `The second section: CarePulse, the product Eva was built to serve, on a light stage in CarePulse's own blues.
-Next: what shipped on CarePulse this year, quarter by quarter.`,
+  "annual-s02-carepulse": `So that's Eva, and now the second section: CarePulse.
+It's the product Eva was built to serve in the first place.
+So let's look at CarePulse this year.`,
 
-  "annual-s03-vmem": `The side projects start here. Say it plainly: all four were built in my own time, alongside Eva, with no company time spent on them.
-Detail: vmem is my BSc final-year project at City St George's, University of London.
-Next: what vmem is.`,
+  "annual-s03-vmem": `So the side projects start here, and I want to say it plainly: all four were built in my own time, alongside Eva, with no company time spent on them.
+The first one, vmem, is my BSc final-year project at City St George's, University of London.
+So what is vmem?`,
 
-  "annual-f01-vmem": `vmem is a memory layer for AI: you tell it something once, and any AI tool can recall it.
-→ Step 1: what I built. It saves chats, files and notes in one place; it links the people and projects they mention into a graph; and any AI tool can read it over MCP.
-→ Step 2: what it changed. It is live and hosted, with a Chrome extension; Jev, the judging model from the CarePulse section, ranks what it recalls; and it is my final-year degree project, which got 80%. I did that alongside full-time work on Eva, so it took a lot of time management.
-Detail: hosted at vmem.projectv.uk. Built in my own time, alongside Eva.
-Figures: repository from 2 December 2025 (GitHub, checked 22 November 2026).
-Framework: industry awareness; a skill outside the day job; owns the solution end to end.
-Next: flowtape.`,
+  "annual-f01-vmem": `So normally every AI tool you use starts from scratch, you tell ChatGPT something, then Claude has no idea, and you end up explaining yourself again and again.
+vmem's a memory layer for AI: you tell it something once, and any AI tool can recall it.
+→ So what I built saves chats, files and notes in one place, links the people and projects they mention into a graph, so it knows how things connect, and any AI tool can read it over MCP, which is just a standard way for AI tools to plug into other tools.
+→ And what it changed: it's live and hosted, with a Chrome extension, and Jev, the judging model from the CarePulse section, ranks what it recalls.
+It was my final-year degree project, and it got 80%.
+I did that alongside full-time work on Eva, so it took a lot of time management.
+Next side project, flowtape.`,
 
-  "annual-s04-flowtape": `Next side project: flowtape.
-Next: what it does.`,
+  "annual-s04-flowtape": `So the next side project is flowtape.
+Let's look at what it does.`,
 
-  "annual-f02-flowtape": `flowtape turns a journey you click through into a test an agent can run.
-→ Step 1: what I built. It records a journey through an app, turns it into a prompt an agent can replay and explore, and hides passwords and personal details such as NHS numbers before anything is saved.
-→ Step 2: what it changed. Tests come from clicking, not writing code, and it is published on npm.
-Figures: on npm from 5 October 2026 (npm, checked 15 November 2026).
-Framework: improves the development process; data protection by design.
-Next: Redline.`,
+  "annual-f02-flowtape": `So normally, to get an automated test of a journey through an app, someone has to sit down and write it as code, which takes ages, so most journeys never get one.
+flowtape turns a journey you click through into a test an agent can run.
+→ So what I built records a journey through an app, turns it into a prompt an agent can replay and explore, and hides passwords and personal details like NHS numbers before anything's saved.
+→ And what it changed: tests come from clicking, not writing code, and it's published on npm, the public place JavaScript packages live, so anyone can install it.
+Next side project, Redline.`,
 
-  "annual-s05-redline": `Next side project: Redline.
-Next: what it does.`,
+  "annual-s05-redline": `So the next side project is Redline.
+Let's look at what it does.`,
 
-  "annual-f03-redline": `Redline shows what a change did to every page of an app.
-→ Step 1: what I built. It builds the app before and after a change, screenshots every page at both, and points to the files most likely responsible for what changed.
-→ Step 2: what it changed. Visual checks are done by a tool, not by eye; it is used in Eva's own development; and it is published on npm.
-Detail: Redline is the answer to the page-scores gap on the framework slide: checking quality with a tool rather than by eye.
-Figures: on npm from 5 October 2026 (npm, checked 15 November 2026).
-Framework: uses services to check quality levels; improves the development process.
-Next: Bee.`,
+  "annual-f03-redline": `So normally, after a change, someone clicks through the app by eye to check nothing's broken, and it's easy to miss a page.
+Redline shows what a change did to every page of an app.
+→ So what I built builds the app before and after a change, screenshots every page at both, and points to the files most likely responsible for what changed.
+→ And what it changed: visual checks are done by a tool, not by eye, it's used in Eva's own development, and it's published on npm.
+The last side project is Bee.`,
 
-  "annual-s06-bee": `The last side project: Bee.
-Next: what it does.`,
+  "annual-s06-bee": `So the last side project is Bee.
+Let's look at what it does.`,
 
-  "annual-f04-bee": `Bee answers questions during a meeting, from your own notes and the web.
-→ Step 1: what I built. A desktop app for Windows and Mac that listens in a meeting and finds your own notes and short answers in a small bar at the top of the screen.
-→ Step 2: what it changed. I presented it to the company in November, and it is still in progress, open to anyone who wants to test it.
-Figures: Bee releases from 26 September 2026 (GitHub, checked 15 November 2026).
-Framework: identifies problems to solve; communicates clearly; gets buy-in.
-Next: before the framework, what all of this has meant for me.`,
+  "annual-f04-bee": `So we've all been in a meeting where someone asks something and you're stuck searching your notes while everyone waits.
+Bee answers questions during the meeting, from your own notes and the web.
+→ So what I built is a desktop app for Windows and Mac that listens in a meeting, and finds your own notes and short answers, in a small bar at the top of the screen.
+→ And what it changed: I presented it to the company this month, and it's still in progress, so it's open to anyone who wants to test it.
+And before the framework, one personal bit: what AI unlocked for me.`,
 
-  "annual-g02-checks": `The business team should not need to read code to know a piece of work is ready, so the checks show as ticks.
-→ Step 1: proof. Screenshots of the change and a walkthrough video, so anyone can see what changed.
-→ Step 2: audits. Security, code review and code clean-up, each ticked when it has run.
-Detail: this is the same idea as Simple Mode: remove the machinery, keep the answer.
-Framework: business and user empathy.
-Next: simple by default, but configurable for the people who want more.`,
+  "annual-g02-checks": `So the business team shouldn't have to read code to know if a piece of work is ready.
+Otherwise you're asking a developer, or trying to read the changes yourself, just to find out if it's done.
+→ So first there's proof: screenshots of the change and a walkthrough video, so anyone can see what actually changed.
+→ And then the audits, security, code review and code clean-up, and each one just gets a tick once it's run.
+It's the same idea as Simple Mode: take the machinery away and keep the answer.
+But simple by default doesn't mean everyone's stuck with it.`,
 
-  "annual-g01-parked": `Not everything built in Eva was kept, and knowing when to park something is a lesson in itself.
-→ Step 1: Testing Arena. It works on two sides: one agent tries to break the interface, and another examines the code for issues. The lesson: it needs heavy AI usage, so it was not feasible at the time. It can be looked at again when there is spare AI usage to run these heavy tests.
-→ Step 2: Documents, one place in Eva for PRDs and docs. The lesson: it needs more work before it pays off.
-→ Step 3: the closing line. Parked is not dropped; the idea waits for the right time.
-Framework: understands trade-offs; identifies work to do.
-Next: part of that system already works: on Eva, marking work ready is the last human step.`,
+  "annual-g01-parked": `So not everything built in Eva was kept, and knowing when to park something is a lesson in itself.
+→ First, Testing Arena, which works on two sides: one agent tries to break the interface, and another examines the code for issues.
+The lesson was that it needs heavy AI usage, so it wasn't feasible at the time, and it can be looked at again when there's spare usage to run those heavy tests.
+→ Second, Documents, one place in Eva for PRDs, which are the written plans for a feature, and other docs, kept beside the work.
+The lesson there was that it needs more work before it pays off.
+→ So parked isn't dropped, the idea just waits for the right time.
+And part of that bigger system already works, cos on Eva, marking work ready is the last human step.`,
 
-  "annual-g03-skills": `An agent writes better code when it knows how the team writes code, so I wrote skills for the CarePulse codebase that the agent follows.
-→ Step 1: my skills, one per part of our design: Effect, tables, permissions, filters, RPC and backend calls. Each matches how the codebase is built, so the agent does not invent its own way.
-→ Step 2: design review. I got Zuza to write a skill for design review, so the agent follows CarePulse's design standards.
-→ Step 3: the closing line. The agent writes code the way the team would.
-Detail: the skills live in the carepulse-ts repository under .agents/skills (for example carepulse-forms, carepulse-data-tables, carepulse-rpc, carepulse-domain-modules and eprocurement-convex).
-Framework: contributes to common code and standards; mentors others.
-Next: skills help the agent write the code, but the understanding is still mine.`,
+  "annual-g03-skills": `So an AI agent writes much better code when it knows how the team writes code.
+Without that, it just invents its own way every time, and you end up with five different styles in one codebase.
+So I wrote skills for CarePulse, which are basically written instructions the agent reads before it touches that part of the code.
+→ These are mine, one per part of how CarePulse is designed: Effect, tables, permissions, filters, RPC and backend calls.
+Each one matches how the codebase is actually built, so the agent follows that instead of making it up.
+→ And for design review, I got Zuza to write a skill, so the agent follows CarePulse's design standards too.
+→ So the agent writes code the way the team would.
+But skills help it write the code, the understanding still has to come from me: AI writes the code, not the understanding.`,
 
-  "annual-g04-feedback": `Eva now learns from how people react to it, and because we own the data, we can act on it.
-→ Step 1: captured. Eva leaves feedback on its own: when someone is clearly frustrated or clearly happy in a chat, it records that, and anyone can give a thumbs up or down on a reply.
-→ Step 2: reviewed. All of it lands on one Feedback page, so we can see what went wrong, what we need to add, and what to simplify in the codebase.
-→ Step 3: next. Use all of that data to generate new lints, and checks with Jev, so the agent writes code we are happy to just merge.
-Detail: capture and review are live; the lints and Jev checks are the plan, which is why that card says Next.
-Figures: feedback shipped on Eva on 3 November 2026 (thumbs on every turn, the submit_feedback tool and the Feedback page).
-Framework: identifies work to do; improves the development process.
-Next: the same data, shown to the business team: the Today page.`,
+  "annual-g04-feedback": `So Eva now learns from how people react to it, and cos we own the data, we can actually act on it.
+→ First, it's captured: Eva leaves feedback on its own when someone's clearly frustrated or clearly happy in a chat, and anyone can give a thumbs up or down on a reply.
+→ Then it's reviewed: all of it lands on one Feedback page, so we can see what went wrong, what we need to add, and what to simplify in the codebase.
+Those two parts went live at the start of November.
+→ And next, the plan is to use all that data to generate new lints, which are automatic code rules, and checks with Jev, so the agent writes code we're happy to just merge.
+That last card says Next cos it's the plan, it's not built yet.
+And the same kind of data, shown to the business team, is the Today page.`,
 
-  "annual-g05-today": `The Today page is where the business team can see what changed, without reading code.
-→ Step 1: today, now. Every day an automation writes a stand-up for each app: what merged into main and what is new in the app.
-→ Step 2: next. We can evolve it to be live, and show the status of each project, so the business team has a better view of where every project is at.
-Detail: the live statuses are an idea, not a commitment, which is why that card says Next.
-Figures: the Today page and the daily stand-up automation shipped on 20 August 2026.
-Framework: business and user empathy; identifies work to do.
-Next: if the system is the hard part, here is where the system goes next.`,
+  "annual-g05-today": `So normally, if you're on the business team and want to know what changed in an app, you'd have to ask a developer or read the code.
+The Today page is where you can just see it, in plain words.
+→ So today, every day an automation writes a stand-up for each app: what merged into main, so what actually went live, and what's new in the app.
+That's been running since August.
+→ And next, we can evolve it to be live, not once a day, and show the status of each project, so the business team gets a better view of where every project's at.
+That one's an idea, not a commitment, which is why it says Next.
+And if building is getting this fast, it's worth asking where the hard part is now: the bottleneck has moved.`,
 
-  "annual-g06-understanding": `AI has taken away the coding, but it has not taken away the understanding, and it should not.
-→ Step 1: the provider homepage. You'd expect it to be a few prompts, cos it's just a redesign with a few new features like per-contract suspension. But no: I had to keep questioning the AI to understand every part of how it was built, and what I was actually trying to do.
-→ Step 2: the central contact pages. Same again: I was asking Matt questions the whole way through.
-→ Step 3: never events. It looked like one more graph. But the number wasn't in the backend's data at all, and an old view read it by fixed position, so it needed a Django change merged first. When the AI missed that, I asked "why did you not do this in the first place?", and we saved the lesson as a rule.
-→ Step 4: the Jev PID checker. Now that it exists, the end result could probably be built in one prompt. But the questions, the trade-offs, the decisions along the way, and knowing why we got here, could not.
-→ Step 5: the closing line. That understanding is why those pull requests got to a state where I only skimmed the code. Different AIs find different things, Amp and Codex both found issues, and the next step is checks good enough that we don't need to read it at all.
-Detail: the provider homepage session ran from 5 October to 12 November, with around 250 of my messages and about 96 questions, and needed changes in both the Next.js and Django codebases. On the PID checker, one of my questions, "so this entire time you weren't using Jev?", exposed a silent fallback; after the fix Jev was right on 59 of 59 test cases, where the pattern rules missed 22 of 39.
-Two more from the same months. On the central contact page, the AI filtered homes by role; I reversed that as a product decision, so everyone sees all of their homes, because the point of the page is to centralise. On the nursing home quality dashboard, Krzys's review blocked my change because the London overview grew from 0.36 MB to 1.10 MB; I changed the design so comments only load when the feature is on.
-The same happened on Eva itself. The travel-time session got so long that Eva's chat lagged, so I used Eva sessions to fix Eva: only the last 25 turns render and older ones page in, and the longest freeze on opening a chat fell from 1.4 seconds to 0.16 seconds.
-Framework: understands trade-offs; owns the implementation; communicates and asks for input.
-Next: and the understanding is where the judgement calls come from.`,
+  "annual-g06-understanding": `So AI has taken away the coding, but it hasn't taken away the understanding, and it shouldn't.
+Here are four CarePulse changes from the last few months, and what each one looked like versus what it actually took.
+→ The provider homepage: you'd expect it to be a few prompts, cos it's just a redesign with a few new features like per-contract suspension.
+But no, that session ran for over a month, with around 250 of my messages and about 96 questions, cos I had to keep questioning the AI to understand how every part was built, and what I was actually trying to do.
+→ The central contact pages: same again, I was asking Matt questions the whole way through.
+And at one point the AI filtered homes by role, and I reversed that as a product decision, so everyone sees all their homes, cos the whole point of the page is to centralise.
+→ Never events: it looked like one more graph, but the number wasn't in the backend's data at all, and an old view read it by fixed position, so it needed a backend change merged first.
+When the AI missed that, I asked "why did you not do this in the first place?", and we saved the lesson as a rule.
+→ The Jev PID checker: now it exists, the end result could probably be built in one prompt, but the questions, the trade-offs and the decisions along the way couldn't.
+One of my questions was "so this entire time you weren't using Jev?", which exposed a silent fallback, and after the fix Jev got 59 out of 59 test cases right, where the old pattern rules missed 22 of 39.
+→ So that understanding is why those pull requests got to a state where I only skimmed the code, and different AIs find different things, Amp and Codex both found issues, so the next step is checks good enough that we don't need to read it at all.
+And understanding is where the judgement calls come from, cos the judgement is still ours.`,
 
-  "annual-g07-live-data": `Eva's connector opened up database access to everyone, so people no longer wait on a developer for data.
-→ Step 1: anyone, with Claude. Connect Claude to Eva and you can ask about live data: build your own dashboards, get your own KPIs, and get help with your own work.
-→ Step 2: Matt's dashboard. Matt designed a dashboard with Claude, uploaded it to Eva, and it is now live in CarePulse as the referral activity page.
-→ Step 3: the closing line. Read-only, live, and no developer in the way.
-Detail: access is read-only, through the connector's query tools and a read-only Postgres replica, and every request is scoped to the person asking, which the next slide explains.
-Figures: Claude connector sign-in 19 February 2026; read-only Postgres replica 10 June 2026.
-Framework: business and user empathy; improves the process.
-Next: opening data to everyone is only safe if the locks are designed in.`,
+  "annual-g07-live-data": `So normally, if you want numbers out of the database, you ask a developer and wait for them to pull it.
+Eva's connector opened that up to everyone.
+→ Anyone can connect Claude to Eva and ask about live data, so you can build your own dashboards, get your own KPIs, and get help with your own work.
+→ Matt's a good example: Matt designed a dashboard with Claude, uploaded it to Eva, and it's now live in CarePulse as the referral activity page.
+→ So it's read-only, it's live, and there's no developer in the way.
+Read-only means you can look at the data but you can't change anything, cos it goes through a read-only copy of the database.
+And every request is scoped to the person asking.
+Cos opening data up to everyone is only safe if the locks are designed in from the start.`,
 
-  "annual-g08-judgement": `Another one that looks simple on the surface: travel-time search on the referral portal.
-→ Step 1: Google's APIs. When I asked, the AI sized it at about 685 to 1,330 dollars a month, and its first recommendation was still to keep Google. I said it seemed quite expensive and pushed for alternatives.
-→ Step 2: one TfL API key. That's 500 requests a minute, shared by everyone, so if several people searched at the same time they'd hit the limit. TfL's own developers told me several keys can be used at once, so we use two, paced.
-→ Step 3: Mapbox for driving, which sits inside its free tier for the volumes we expect.
-→ Step 4: the closing line. The AI never raised either problem on its own. Cost and rate limits only came up because I put them in the brief and kept pushing, so it's still up to a person to think through these edge cases and make the call.
-Detail: the code for Google is kept, and the provider can be swapped. The figures are the session's own estimates in US dollars, sized against real referral volumes, not billing data.
-Figures: Eva session "Time travel search feature", 30 September to 14 October 2026; cost sizing 2 October 2026; Mapbox free for the first 100,000 elements a month against about 73,450 expected; TfL 500 requests a minute per key, capped at 450; shipped 12 October 2026.
-Framework: understands trade-offs; identifies risks and communicates them.
-Next: one tool from that work, used in Eva and in CarePulse.`,
+  "annual-g08-judgement": `So here's another one that looks simple on the surface: travel-time search on the referral portal, so you can find homes by how long it takes to get there.
+→ First option, Google's APIs: when I asked, the AI sized it at about 685 to 1,330 dollars a month, and its first recommendation was still to keep Google.
+Those are the session's own estimates against real referral volumes, not a bill, but I said it seemed quite expensive and pushed for alternatives.
+→ Then one TfL API key, for public transport: that's 500 requests a minute, shared by everyone, so if several people searched at the same time they'd hit the limit.
+TfL's own developers told me several keys can be used at once, so we use two, paced.
+→ And Mapbox for driving, which sits inside its free tier: the first 100,000 lookups a month are free, and we expect about 73,450.
+The Google code's still there too, so we can swap provider if we need to, and it shipped in October.
+→ So the AI never raised either problem on its own, cost and rate limits only came up cos I put them in the brief and kept pushing.
+It's still up to a person to think through these edge cases and make the call.
+And one tool from that work gets used in both Eva and CarePulse, so what Jev is.`,
 
-  "annual-g09-catching": `A lot of my job now is asking the AI the question it didn't ask itself. Here are three, in my own words from the chats.
-→ Step 1: a production database error on CarePulse. The AI wanted to change how connections are shared. I asked if that was really right, cos Prisma's own example does what we already had. It admitted it had no evidence, and the next question found the real cause: about 22 database calls for every page view.
-→ Step 2: our tests on Eva. I asked, honestly, had they ever stopped a regression. Hundreds of test files had never run in CI at all. We deleted the fake ones, 21,708 lines, kept real testing, and the CI check went from 83.6 seconds to 16.6.
-→ Step 3: home care tiers on CarePulse. The AI said no backend change was needed. I asked whether it actually saved in the backend or was just the frontend, and had it tested against staging before I believed it.
-→ Step 4: the closing line. The right question is still the human's job.
-Figures: CarePulse session 19 October 2026 (Sentry, 24 hours, sampled); Eva test audit 9 November 2026, CI timings 20 November 2026; CarePulse home care tiers 19 November 2026. All from the Eva session chats.
-Framework: debugs without flailing; makes well-reasoned decisions; improves the process.
-Next: one lesson from the last few months: the system includes the packages we depend on.`,
+  "annual-g09-catching": `So a lot of my job now is asking the AI the question it didn't ask itself.
+Here are three, in my own words from the chats.
+→ First, a production database error on CarePulse, back in October.
+The AI wanted to change how database connections are shared, and I asked if that was really right, cos Prisma's own example does what we already had.
+It admitted it had no evidence, and the next question found the real cause: about 22 database calls for every page view.
+→ Second, our tests on Eva, where I asked, honestly, had they ever stopped a regression, which is something that worked breaking again.
+Hundreds of test files had never run in CI at all, and CI's just the automatic checks on every change.
+So we deleted the fake ones, 21,708 lines, kept the real testing, and the CI check went from 83.6 seconds to 16.6.
+→ Third, home care tiers on CarePulse, where the AI said no backend change was needed.
+I asked whether it actually saved in the backend or was just the frontend, and had it tested against staging, the copy of the app we test on, before I believed it.
+→ So the right question is still the human's job.
+Now, one lesson from the last few months is that the system includes the packages we depend on.`,
 
-  "annual-g10-repos": `Eva isn't just used for itself: every codebase we work on is set up in it.
-→ Step 1: the five. Eva itself, CarePulse v3, the current web app, CarePulse v2, the Django backend, eProcurement, and the cost model. So anyone can open a session or a quick task on any of them, with the setup already done.
-Figures: repositories connected in Eva, checked 22 November 2026.
-Framework: improves the development process; contributes to common standards.
-Next: four of the people behind those numbers, and what they built.`,
+  "annual-g10-repos": `So Eva isn't just used to build Eva.
+Normally, before you can touch a codebase, someone has to get it set up and running on their own laptop.
+→ Every codebase we work on is set up in Eva: Eva itself, CarePulse v3, which is the current web app, CarePulse v2, the Django backend, eProcurement, and the cost model.
+So anyone can open a session or a quick task on any of them, and the setup's already done.
+I checked that list on 22 November.
+Now let me show you the people behind those numbers, and what they built.`,
 
-  "annual-g11-configurable": `Eva isn't like Amp or Cursor, where the audience is only developers. The business team uses it too, so it had to be simple by default and configurable for those who want more.
-→ Step 1: done for you. To keep the flow as simple as possible, Eva does a lot on its own: one checkbox to record proof, audits that run in the background, pull requests that open themselves and keep their status up to date, titles, tags and PR descriptions written for you, and quick tasks and sessions that close and archive themselves when the work is done.
-→ Step 2: switches for developers. Not everyone wants all of that, so each person can turn things off or on under Experimental settings. A lot of these came from changes Krzys wanted: turning off auto-archiving, choosing whether pull requests open automatically, and Claude-style activity steps. There are 19 switches in all.
-Figures: 19 experimental flags on main, checked 22 November 2026; disable auto-archive 12 October 2026; Claude-style activity 17 October 2026.
-Framework: business and user empathy; considers the opinions of others.
-Next: the models kept improving, but the problems stayed the same.`,
+  "annual-g11-configurable": `So Eva isn't like Amp or Cursor, where the audience is only developers.
+The business team uses it too, so it had to be simple by default and configurable for the people who want more.
+→ So first, what's done for you, cos to keep the flow as simple as possible, Eva does a lot on its own.
+That's one checkbox to record proof, audits that run in the background, pull requests that open themselves and keep their status up to date, and titles, tags and PR descriptions written for you.
+And quick tasks and sessions close and archive themselves when the work's done.
+→ But not everyone wants all of that, so each person can turn things off or on under Experimental settings.
+A lot of these came from changes Krzys wanted: turning off auto-archiving, choosing whether pull requests open automatically, and Claude-style activity steps.
+There are 19 switches in all.
+Now, the models kept improving this year, but the problems stayed the same.`,
 
-  "annual-g12-unlocked": `So before the framework, one personal bit. The switch to AI has honestly been amazing for me.
-→ Step 1: before. Pre-AI, I had an ideas list of everything I wanted to build, over 40 things on it. Most of it I had to scrap, cos one person can't build all of that, so I just kept filtering it down.
-→ Step 2: now. I can work on several things at the same time, and keep going wider: Eva, CarePulse, and these four side projects. It's a huge productivity gain. And I've learned a lot of how to stay on top of this from people on X, and from Krzys.
-→ Step 3: the closing line. I enjoy coding, but I think I enjoy product building and solving problems through it even more now, and AI has let me push that side to the max. I still pick which ideas actually ship, that's what the parked slide was about, but the list doesn't have to shrink any more. Hopefully that shows through all of this work.
-Framework: maintains awareness of industry trends and tools; seeks learning from the people around them.
-Next: how all of this maps to the framework.`,
+  "annual-g12-unlocked": `So before the framework, one personal bit, cos the switch to AI has honestly been amazing for me.
+→ Before AI, I had an ideas list of everything I wanted to build, over 40 things on it, and most of it I had to scrap, cos one person can't build all that, so I just kept filtering it down.
+→ Now I can work on several things at the same time and keep going wider: Eva, CarePulse, and these four side projects, which is a huge productivity gain.
+And I've learned a lot about how to stay on top of it from people on X, and from Krzys.
+→ I enjoy coding, but I think I enjoy product building and solving problems through it even more now, and AI's let me push that side to the max.
+I still pick which ideas actually ship, that's what the parked slide was about, but the list doesn't have to shrink any more.
+Hopefully that shows through all of this work.
+So here's how all of it maps to the framework: senior engineer, mapped.`,
 
-  "a15-framework": `This is the map an assessor reads: the framework's three sections, Technical, Impact and Collaboration, with the proof for each underneath.
-→ Step 1: the proof lands, column by column. Technical: design and trade-offs, slide 23, with 21, 26 and 34; debugging, slides 24, 25 and 43; beyond coding, coming up with ideas, finding problems to solve, measured performance work (slide 29) and user experience and animation. Impact: breaking down large problems, slide 23; improving the process, Eva running many agents in parallel without conflicts, vmem as a company brain, the Redline and flowtape experiments, work to make CI quicker, a Mantine linter, and the Jev score on every message, which was Zuza's idea; identifying work, slides 28 and 46 to 48; business and user empathy, slides 36 to 38, 50 and 54 to 55. Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and the weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, the decision log being Zuza's idea; getting buy-in, Vercel Sandbox for Eva and Claude usage for Bee; mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
-Next: one last fact about how this deck was made.`,
+  "a15-framework": `So this is the map: the senior engineer framework's three sections, Technical, Impact and Collaboration, with the proof for each underneath.
+→ So the proof lands under every one.
+On Technical: design and trade-offs, like the sandbox move planned in six phases, workspaces going from 40 seconds to under one, and seven dropped plans kept in writing.
+Debugging, like write clashes going from 6.7 a second to one a minute, and patching Vercel Sandbox and Convex, plus beyond coding: coming up with ideas, finding problems to solve, measured performance work, and user experience and animation.
+On Impact: breaking down large problems, like the sandbox move from spike to switch in three weeks, and fixing stuck turns once, at the cause.
+Improving the process, with Eva running many agents in parallel without conflicts, vmem as a company brain, the Redline and flowtape experiments, work to make CI quicker, a Mantine linter, and the Jev score on every message, which was Zuza's idea.
+Identifying work, like taking critical warnings from 2 to 0 and high from 48 to 2, and next, automating the release, and business and user empathy, with Simple Mode's five-step slider and the PID checker for referral brokers.
+And on Collaboration: communicating clearly, demoing Eva at every dev stand-up for the first two quarters, daily summaries and a weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, which was Zuza's idea too.
+Getting buy-in, for Vercel Sandbox for Eva and Claude usage for Bee, and mentoring and onboarding, setting everyone up on Eva and answering their quick task, session and MCP questions.
+And one last thing about how this deck was made: built in Eva, by Eva.`,
 
-  "annual-b01-day-one": `The data layer the product still runs on was settled on the first day, not migrated to later.
-→ Step 1: the three commits stack in. The first commit, then the schema for projects and tasks, then the queries and mutations behind it.
-→ Step 2: the closing line. Nothing that follows required that decision to be unpicked.
-Detail: the hashes are shown because anyone can check them. The same schema, extended many times, still stores every session, quick task and project. If pressed on wording: the first commit was at 16:36 and the schema commit at 20:15 the same evening, about three and a half hours apart, so "day one" is exact.
-Figures: 5468954a6 Initial commit, 317b85cd5 projects and tasks schema, 5467d4ca2 Convex queries and mutations, all on 11 January 2026.
-Next: within four days, the two ideas the product still rests on were in place.`,
+  "annual-b01-day-one": `So this is day one, 11 January.
+→ These are the first three commits: the very first one, then the schema for projects and tasks, then the queries and mutations behind it.
+A schema's just the shape of the data, so what gets stored and how it links up, and the queries and mutations are how the app reads it and changes it.
+The first commit went in at 16:36, and the schema at 20:15 the same evening, so it really was day one.
+I've put the commit hashes up cos anyone can look them up and check.
+→ So the foundation Eva still runs on was chosen that first day.
+That same schema, extended loads of times since, still stores every session, quick task and project, and nothing since has made me unpick it.
+And within four days, the two ideas the whole product rests on were in place.`,
 
-  "annual-b02-first-week": `Both ideas the product is built from arrived inside the first week.
-→ Step 1: quick tasks land on 12 January, one day after the first commit. One prompt, one result, start to finish.
-→ Step 2: sessions land on 14 January, and the closing line follows. A session is a running conversation about one codebase, and everything since has built on those two shapes.
-Detail: projects and automations came later, but both are built out of quick tasks and sessions rather than alongside them. The point is stability of concept: eight months on, nobody has needed a third primitive.
-Figures: quick tasks appear in the code on 12 January 2026 and sessions on 14 January 2026, within four days of the first commit on 11 January 2026.
-Next: the quarter the tool stopped being single-player.`,
+  "annual-b02-first-week": `So the whole product rests on two ideas, and both turned up in the first four days.
+→ Quick tasks landed on 12 January, one day after the first commit.
+A quick task is one job, start to finish: you give it one prompt and you get one result back.
+→ Then sessions landed on 14 January.
+A session's a running conversation about one codebase, so you can keep going back and forth with it, like you would with a colleague.
+Projects and automations came later, but they're built out of quick tasks and sessions, not alongside them.
+So we've never needed a third idea, and everything since has built on these two.
+Then in the second quarter, Eva stopped being a one-person tool.`,
 
-  "annual-b05-q2": `The quietest quarter was not a slow one; it was the quarter the tool stopped being single-player.
-→ Step 1: documents. Comments anchored to a passage, suggestion mode and version history, all on the same day.
-→ Step 2: the projects roadmap, where several pieces of work in order become one thing a person can see.
-→ Step 3: Testing Arena opened to everyone, so trying a change stopped being a developer-only act.
-Detail: the quieter months went on making existing work solid and shared. If asked whether momentum was lost, the next chapter was the busiest of the three.
-Figures: documents with comments, suggestions and version history 10 June 2026; projects roadmap 17 June 2026; Testing Arena opened to everyone 17 June 2026.
-Next: the last chapter, where the product was made safe to depend on.`,
+  "annual-b05-q2": `So chapter two was the quietest quarter, but it wasn't a slow one.
+It's the quarter Eva stopped being single-player, so something the whole team could work in together.
+→ First, documents, on 10 June: you can comment on a specific passage, suggest edits, and see the version history, and all three landed the same day.
+→ Then on 17 June, the projects roadmap, so several pieces of work in order become one thing you can actually see.
+→ And that same day, Testing Arena opened up to everyone, so trying out a change stopped being something only developers did.
+So these months went on making the existing work solid and shared, rather than piling on new things.
+And the next chapter was the busiest of the three, cos that's where we made it dependable.`,
 
-  "annual-b06-q3": `The last quarter was about dependability: the same product, made to survive being relied on.
-→ Step 1: July, almost all of it the sandbox cutover. The engine every workspace runs on was replaced, and slide 23 takes that apart phase by phase.
-→ Step 2: August. Durable turns, so a long run survives an interruption instead of stalling; security work; and the design system the interface now sits on.
-→ Step 3: September. Multi-repo sessions, so one conversation can span several codebases, and decision models for classifying work at scale.
-Detail: nothing here adds a new thing to do; it makes the existing things safe to depend on.
-Next: the same quarter, seen from inside one session.`,
+  "annual-b06-q3": `So chapter three, July to September, was all about dependability: the same product, made safe to rely on.
+→ July was almost all the sandbox cutover.
+A sandbox is the cloud workspace every job runs in, and we swapped out the engine underneath all of them, which I'll take apart phase by phase a bit later.
+→ Then August: durable turns, so a long run survives an interruption instead of just stalling, plus security work, and the design system the interface now sits on.
+→ And September: multi-repo sessions, so one conversation can span several codebases, and decision models for classifying work at scale.
+So none of this adds a new thing to do, it just makes the existing things safe to depend on.
+Now let's look at that same stretch from inside one session.`,
 
-  "annual-d01-security": `Signing in was never the problem; knowing whose data you were seeing once inside was, so everything built was audited.
-→ Step 1: the guards land and the rail draws. Checks moved into shared helpers, so a new surface inherits the boundary.
-→ Step 2: the two counts fall. Production dependency warnings went from 2 critical and 48 high to 0 critical and 2 high.
-→ Step 3: the closing line. The boundary was exercised against real production data, not only against tests.
-Detail: slide 20 designed security into a new interface; this hardens the old ones. The audit found ownership checked unevenly across codebases, sessions, tasks, teams, workspaces, snapshots and integrations. Sign-in was hardened too: explicit consent, stronger proof-key exchange, registered return addresses, client-bound refresh tokens.
-Figures: 2 critical and 48 high down to 0 critical and 2 high. Audit 8 August 2026; verified against production data 19 August 2026.
-Framework: identifies work to do; understands trade-offs.
-Next: all of this rests on measurement, the skill built most this year outside programming.`,
+  "annual-d01-security": `So signing in was never the problem, the problem was knowing whose data you were seeing once you were in.
+The Locked down by design slide built security into a new interface, and this one's about hardening the old ones.
+In August I audited everything that was built, and ownership was checked unevenly across codebases, sessions, tasks, teams, workspaces, snapshots and integrations.
+→ So the checks moved into shared helpers, one guard on every door, which means any new screen gets that protection for free.
+→ And the production dependency warnings, which are security alerts on the packages we use, went from 2 critical and 48 high down to 0 critical and 2 high.
+I hardened sign-in itself too, like asking for explicit consent and tying refresh tokens to the app they were issued to.
+→ And then on 19 August I checked it all against real production data, not just against tests.
+And all of this rests on measuring things, which is the skill I've built most this year outside programming.`,
 
-  "annual-d02-design-system": `A shared component library stops every new screen being a fresh argument about how things should look.
-→ Step 1: the two figures count up. 110 files and 18,197 lines, the size of what every screen is assembled from.
-→ Step 2: the closing line. Consistency is now the starting condition rather than a clean-up job.
-Detail: the conventions are written down, not folklore: surfaces separated by tone rather than decorative lines, one shadow system, and motion on shared tokens. Two moves made it possible: Tailwind v4 across the web app and the browser extension on 5 August 2026, and a single icon library on 2 August 2026. The tiles are the library in miniature: four colours, four surface tones and four of the shapes every screen uses.
-Figures: 110 files and 18,197 lines in the shared component library. Measured 23 September 2026.
-Framework: improves the development process.
-Detail: the same components now ship as the shared packages (@vvedantb/ui), one set used across every app; Eva moved onto them in October.
-Figures: @vvedantb/ui on npm from 5 October 2026, checked 15 November 2026.
-Next: a house style only lasts if a machine enforces it.`,
+  "annual-d02-design-system": `So without a shared set of components, every new screen turns into a fresh argument about how things should look.
+These tiles are the library in miniature: four colours, four surface tones and four of the shapes every screen uses.
+And the rules are written down, not just in someone's head: surfaces separated by tone instead of decorative lines, one shadow system, and animations on shared timings.
+Two moves made it possible in August: the web app and the browser extension moved to Tailwind v4, and everything switched to a single icon library.
+→ So that's 110 files and 18,197 lines, which is what every screen is built from, measured in September.
+And since October those same components ship as shared packages, so one set is used across every app, and Eva moved onto them too.
+→ So consistency is now where you start, not a clean-up job afterwards.
+But a house style only lasts if a machine enforces it.`,
 
-  "annual-d04-frontend-perf": `Waiting is the tax everyone pays on every change, so three separate waits were measured and cut.
-→ Step 1: the local build falls from 28 to 2.6 seconds: the wait between making a change and seeing it.
-→ Step 2: the landing page's first download falls from 516 kB to 362 kB: the wait a visitor pays.
-→ Step 3: the code checker's false warnings fall from 8,862 to none. A checker nobody reads is a checker that is not running.
-Detail: the icon and first-load savings sit in the footnote, because three falling figures is the limit a room will hold.
-Figures: build 28 s to 2.6 s and 8,862 false warnings to 0, both 20 August 2026; landing page 516 kB to 362 kB, 8 August 2026; 489 kB of icons and a further 1.2 MB off the first load, 4 August 2026.
-Framework: improves the development process.
-Next: speed is one kind of polish; looking the same everywhere is another.`,
+  "annual-d04-frontend-perf": `So waiting is the tax everyone pays on every single change, and I measured three separate waits and cut them.
+→ The local build went from 28 seconds to 2.6, and that's the wait between making a change and seeing it.
+→ The landing page's first download went from 516 kB to 362, and that's the wait a visitor pays before anything shows up.
+→ And the code checker's false warnings went from 8,862 to none.
+Cos honestly, a checker nobody reads is a checker that isn't running.
+There were smaller savings too, like 489 kB of icons, but three numbers is about all a room can hold.
+So speed is one kind of polish, and looking the same everywhere is another.`,
 
-  "annual-d05-scale": `The size of what now exists, in units a non-engineer can weigh rather than lines of code.
-→ Step 1: the two supporting figures. 2,151 TypeScript files, and 18,197 lines in the shared component library alone.
-→ Step 2: the closing line. Eight months, one codebase, one person directing the work.
-Detail: 363 screens usually lands hardest, because most people can picture what one screen costs to build by hand. 71 data tables is the shape of the business the product models, and 976 backend functions sit behind them. The release notes matter differently: written at the time, they make every other figure checkable.
-Figures: 2,936 tracked files, 2,151 TypeScript files, 363 screens, 71 data tables, 976 backend functions, 18,197 lines in the shared component library, 9,854 lines of written release notes. Measured 23 September 2026.
-Framework: breaks down large problems, with the whole scope held by one owner.
-Next: at this size, what you stop matters as much as what you build.`,
+  "annual-d05-scale": `So this is the size of what exists now, in things you can picture rather than lines of code.
+When I measured it in September, it was 2,936 tracked files, 976 backend functions, 363 screens, 71 data tables and 9,854 lines of release notes.
+The 363 screens is the one I'd look at, cos most people can picture what it costs to build one screen by hand.
+The 71 tables are the shape of the business the product models, and the release notes matter cos they were written at the time, so every other figure here can be checked.
+→ And for the engineers, that's 2,151 TypeScript files, and 18,197 lines in the shared component library alone.
+→ So ten months in, it's still one codebase, and one person directing the work.
+And at this size, what you stop matters as much as what you build.`,
 
-  "annual-d06-abandoned": `Deciding not to do something is design work, and it only counts if it is written down.
-→ Step 1: the framework evaluation. A formal assessment on 17 July 2026, with the verdict recorded verbatim as do not adopt.
-→ Step 2: unifying design sessions, cancelled on 29 July 2026 and replaced by a mode that was itself removed on 23 August: the same question answered, reversed, and reversed again.
-→ Step 3: the closing line. Written plans stop the argument being re-run from memory.
-Detail: the resting state is the plan to move background workers to another host, dropped because the new architecture removed the problem: the cheapest cancellation. The third card is the honest one: volunteering a double reversal is what makes the other two credible. All seven cancelled plans are kept in full.
-Figures: framework evaluation 17 July 2026; design sessions cancelled 29 July 2026, replacement mode removed 23 August 2026; seven cancelled plans in total.
-Framework: understands trade-offs.
-Next: many of the right calls came from listening to colleagues.`,
+  "annual-d06-abandoned": `So deciding not to do something is design work too, but it only counts if it's written down.
+This first one was a plan to move the background workers to another host, and it got dropped cos the new architecture just removed the problem, which is the cheapest kind of cancellation.
+→ Then a new framework, which I formally assessed on 17 July, and the verdict's written down word for word: do not adopt.
+→ And this one's the honest one: unifying design sessions was cancelled on 29 July and replaced by a mode that was itself removed on 23 August.
+So that's the same question answered, reversed, and reversed again, and I'm showing it cos owning that is what makes the other two believable.
+→ So all seven cancelled plans are kept in full, and nobody has to re-argue them from memory.
+And a lot of the right calls came from listening to colleagues.`,
 
-  "annual-d07-lessons": `Two sentences from the project's own notes, and both say the difficulty lives in the system, not the model.
-→ Step 1: cross-fade to the second quote. Autonomy is an infrastructure decision: how far an agent can be trusted to run is set by what surrounds it, not by which model is chosen.
-→ Step 2: both sit together and the closing line lands. Read them once, then stop talking.
-Detail: dwell on the first quote, because it is the opposite of the usual conversation. Much of this deck is evidence for it: durable turns, the security boundary, the enforced quality bar. None of those are about the model. Both lines are verbatim from notes written during the year, not composed for this deck.
-Figures: from the project's own written notes.
-Next: and a lot of the job now is asking the AI the right question.`,
+  "annual-d07-lessons": `So these are two sentences from the project's own notes, written during the year, not made up for this deck.
+The first one: "Most failures are not model failures. They are system design failures."
+That's kinda the opposite of the usual conversation, where everyone's arguing about which model is best.
+And a lot of this deck is evidence for it: turns that finish what they start, one guard on every door, the enforced quality bar, and none of those are about the model.
+→ And the second: "Autonomy is an infrastructure decision", meaning how far you can trust an agent to run on its own depends on what's built around it, not which model you pick.
+→ So both point the same way: build the system.
+And that's why a lot of my job now is catching the AI.`,
 
-  "annual-e03-patch-packages": `A newer lesson: when a package we depend on is wrong, we no longer work around it. We patch it, the same day.
-→ Step 1: Vercel Sandbox. Any command sent to a stopped sandbox woke it up again, and the package had no way to turn that off. I want sandboxes to start and stop when I say so, not as a side effect of a user's command. So I asked the AI to patch the package: it added a switch to turn auto-resume off, and a way to attach only to a sandbox that is already running.
-→ Step 2: Convex presence. When a heartbeat timed out, the clean-up job tried to cancel itself, Convex refused, and every timeout threw an error that filled the logs. The patch skips the cancel on that path and still deletes the record.
-→ Step 3: the closing line. A dependency is code we can change, not a wall we wait behind.
-Detail: both are pnpm patches kept in the repository, so they are reviewed like any other change and re-applied on every install. Upstream fixes can replace them later; until then the product does not wait.
-Figures: Vercel Sandbox patch 17 October 2026; Convex presence patch 16 June 2026. Repository patches folder.
-Framework: debugs production issues; modifies and improves code and reasons about the improvement.
-Next: not everything built was kept, and that is a lesson too.`,
+  "annual-e03-patch-packages": `So here's a newer lesson: when a package we depend on is wrong, we don't work around it any more, we patch it, the same day.
+A package is just code someone else wrote that we pull in, and normally you'd work around the problem or wait for them to fix it.
+→ First, Vercel Sandbox, where any command sent to a stopped sandbox woke it back up, and the package had no way to turn that off.
+I want sandboxes to start and stop when I say so, not as a side effect of a user's command.
+So I asked the AI to patch the package, and it added a switch to turn auto-resume off, and a way to attach only to a sandbox that's already running.
+→ Second, Convex presence, where a heartbeat timing out made the clean-up job try to cancel itself, Convex refused, and every timeout threw an error that filled the logs.
+The patch skips the cancel on that path and still deletes the record.
+Both patches live in the repo, so they're reviewed like any other change and re-applied on every install, and if an upstream fix lands we can swap them out.
+→ So a dependency is code we can change, not a wall we wait behind.
+But not everything we built was kept either, and that's a lesson too.`,
 
-  "annual-d08-durable": `Most reports of the tool being stuck were one structural fault, and it was fixed once rather than patched repeatedly.
-→ Step 1: the same turn runs again, is interrupted at the same point, survives and finishes: the lifecycle is durable and fenced, not held in one process's memory.
-→ Step 2: the closing line. Interrupted stopped meaning lost.
-Detail: the resting state is what used to happen: a turn breaks part-way and the interface sits on Working with nothing behind it. Fencing is the part that matters: a superseded turn cannot come back and write over the one that replaced it. The debugging slide chased this symptom case by case; this addresses the cause once.
-Figures: one durable lifecycle for every turn, 19 August 2026; remaining gaps closed 23 August 2026.
-Framework: owns technical design, fixing the class of fault, not each instance.
-Next: when something still goes wrong, you are told within minutes.`,
+  "annual-d08-durable": `So here's what used to happen: a turn, which is one reply from the agent, breaks part-way, and the screen just sits on Working with nothing behind it.
+Most of the "Eva's stuck" reports were actually this one fault.
+The debugging slide chased this symptom case by case, but this fixes the cause once.
+→ So now the same turn runs again, gets interrupted at the same point, and this time it survives and finishes.
+That's cos every turn now saves its place as it goes, instead of living in one process's memory.
+And it's fenced, so an old turn can't come back and write over the one that replaced it.
+That went in on 19 August, and the remaining gaps were closed on 23 August.
+→ So interrupted doesn't mean lost any more.
+But things still go wrong sometimes, so the next question is what you see when it breaks.`,
 
   // ---------------------------------------------------------------------------
   // Intro to Eva deck
   // ---------------------------------------------------------------------------
-  "annual-c01-providers": `Nothing here depends on one supplier staying cheap, fast or available.
-→ Step 1: the model count. Four providers, twenty-one models, one picker inside Eva.
-→ Step 2: the point. If a supplier raises its prices, falls behind or goes down, the work moves to another without anyone changing how they work.
-Detail: the columns are the shipped catalogue, not a wish list; legacy entries kept only so old sessions still load are excluded. Each provider needs an account behind it, which comes three slides on. A session remembers its last model, so nobody chooses every time.
-Figures: Claude 7, Codex 4, OpenCode 4, Cursor 6, 21 models in all. Repository catalogue at 16 September 2026.
-Next: a choice of supplier is only worth having if you can change your mind mid-job.`,
+  "annual-c01-providers": `So Eva doesn't run on just one AI company.
+Normally, if you build on one supplier and they put their prices up, fall behind or go down, you're stuck.
+On screen is every model you can pick in Eva, grouped by provider: Claude, Codex, OpenCode and Cursor.
+→ That's four providers and twenty-one models, all in one picker.
+And it's the real list that ships, as of mid-September, not a wish list.
+A session remembers the last model you used, so you're not choosing every time.
+→ So if one supplier stalls, the work just moves to another, and nobody has to change how they work.
+But having a choice is only worth it if you can change your mind halfway through a job.`,
 
-  "annual-c03-handoff": `A choice of supplier is worth little if changing your mind means starting again.
-→ Step 1: the conversation card lifts off Claude and lands on Cursor, word for word, and a handed-over badge appears on it.
-Detail: each provider keeps its own private record of the conversation inside the workspace, so before this a mid-conversation switch started the new provider blind. Replies are now stamped with the model that produced them, and on a switch only the turns the incoming provider has not seen are passed across, capped in size and clearly marked. The badge on the handover turn keeps the transcript honest about who wrote what.
-Figures: cross-provider handoffs landed 24 August 2026.
-Next: suppliers are paid per person, so the next question is whether that capacity can be shared.`,
+  "annual-c03-handoff": `So switching provider is only useful if you don't have to start again.
+Each provider keeps its own private record of the conversation, so before this, if you switched halfway through, the new one started blind.
+→ Now the whole conversation moves across word for word, here from Claude to Cursor, and it gets a handed-over badge.
+Behind the scenes, every reply's stamped with the model that wrote it, and on a switch only the turns the new provider hasn't seen get passed across, capped in size and clearly marked.
+And the badge keeps the transcript honest about who wrote what.
+That landed on 24 August.
+Now, provider capacity is paid for per person, so the next question is whether you can share it.`,
 
-  "annual-c04-accounts": `Provider capacity is bought per person, so the useful question is whether it can be shared.
-→ Step 1: each colleague attaches their own provider account, so their work spends their own allowance.
-→ Step 2: one account is shared with the team, a second person draws from it, and the closing line lands.
-Detail: an account is attached once and then stays with that person's sessions, tasks and projects. Sharing is deliberate and controlled by the owner, not automatic: a new session does not quietly pick up a teammate's account. Switching account mid-conversation keeps the conversation and rotates the running process, so the next reply is charged to the right place.
-Figures: per-user provider accounts 17 July 2026; sharing an account with the team 7 August 2026.
-Next: people are not the only ones who use Eva.`,
+  "annual-c04-accounts": `So with AI providers, you pay for capacity per person, so the useful question is whether it can be shared.
+→ First, each colleague attaches their own provider account, so their work spends their own allowance.
+You attach it once, and it just stays with your sessions, tasks and projects.
+→ Then one person shares their account with the team, and someone else can draw from it, so capacity's pooled, not bought twice.
+Sharing's a deliberate choice by the owner, so a new session won't quietly start using a teammate's account.
+And if you switch account halfway through a conversation, you keep the conversation, and the next reply's charged to the right place.
+Own accounts landed on 17 July, and sharing on 7 August.
+Now, people aren't the only ones who use Eva.`,
 
-  "annual-c05-mcp": `Eva is not only something people open; other tools and agents can drive it.
-→ Step 1: reading. Anything connected can list the work in flight and see what each piece is doing.
-→ Step 2: acting. It can send a message into an existing session, task or project, start and stop workspaces, and run code across several tools in one pass.
-→ Step 3: the newest ring. Typed judgements, a calibrated score or category applied the same way every time, and interactive panels drawn straight into a chat.
-Detail: this is how one agent supervises others, as Manager Ave does. For a stakeholder, Eva plugs into what the organisation already runs rather than being a closed box.
-Figures: chat into an existing session, task or project 27 August 2026; drive sandboxes 28 August 2026; run code across tools 3 September 2026; typed judgements 17 September 2026; interactive panels in chat 21 September 2026.
-Next: the same connector gives everyone live data.`,
+  "annual-c05-mcp": `So Eva isn't just something people open; other tools and AI agents can drive it too.
+That works through MCP, which is just a standard way for AI tools to plug into other apps.
+→ The inner ring's reading: anything connected can list the work that's in flight and see what each piece is doing.
+→ The next ring's acting: it can send a message into an existing session, task or project, start and stop workspaces, and run code across several tools in one go.
+→ And the newest ring: typed judgements, so a calibrated score or category applied the same way every time, and interactive panels drawn straight into a chat.
+That's how one agent can supervise others, which is what Manager Ave does.
+For the business, it means Eva plugs into what we already run, rather than being a closed box.
+Most of that landed between late August and late September.
+And that same connector gives everyone live data.`,
 
-  "annual-c06-mcp-security": `Opening Eva to other tools is only safe if who is asking is enforced, not assumed, so the locks were designed in.
-→ Step 1: the three lifetimes drain. A sign-in code lasts five minutes, a working pass one hour, and a renewal thirty days.
-→ Step 2: the two gates close. Every request is scoped to one person, and that scope is checked twice: at the interface and again at the data layer.
-Detail: sign-in uses the standard flow with proof-key exchange, so an intercepted code is useless without the matching secret. Two independent secrets, one for the passes and one for the data layer, mean one leak does not compromise the other. Every request re-checks the user still exists; secret comparisons are constant-time; errors give nothing away; endpoints are rate limited. Slide 28 audits what came before.
-Figures: authorisation code 5 minutes, access token 1 hour, refresh token 30 days. Security model documented in the repository.
-Next: the workspaces themselves: first how fast they start, then how they stay cheap.`,
+  "annual-c06-mcp-security": `So letting other tools into Eva is only safe if we actually check who's asking, rather than just assuming.
+The risk is that another tool could act as you, so the fix is short-lived passes, checked twice.
+→ Every pass runs out: a sign-in code lasts five minutes, an access pass one hour, and a renewal thirty days.
+So even if something did leak, it wouldn't be useful for long.
+→ And every request is tied to one person, and that's checked twice: once at the door, and again at the data itself.
+Sign-in uses the standard flow with an extra proof step, so a stolen code's useless without the matching secret.
+And there's two separate secrets, so one leak doesn't give away the other.
+Now, the workspaces themselves: first how fast they start, then how they stay cheap.`,
 
-  "annual-c07-sandbox-economics": `Every piece of work gets its own cloud workspace, so they must not quietly pile up.
-→ Step 1: while the work is alive its snapshot never expires, and only the most recent one is kept.
-→ Step 2: the hours count down and the bar drains. When a session or task ends, the workspace is deleted after a 48-hour grace period; reopening the work inside that window cancels the deletion.
-→ Step 3: the beam circles the calendar. A weekly sweep clears anything the ordinary path missed.
-Detail: nothing keeps billing once the work is finished. Short-lived workspaces expire after a day. This is partly why the provider changed: the old provider's snapshots could not capture running processes or a seeded database, so every start re-ran the setup. Deleting a workspace now purges its snapshots rather than trusting the provider to cascade.
-Figures: one snapshot retained per workspace, 48-hour grace period, weekly sweep, one-day expiry for short-lived workspaces. Snapshot lifecycle documented in the repository.
-Next: that is what was built; now, how the decisions were made, starting with the biggest.`,
+  "annual-c07-sandbox-economics": `So every piece of work gets its own cloud workspace, which is great, but it means they can't just quietly pile up.
+→ While the work's still going, its snapshot never expires, and we only keep the latest one.
+A snapshot's just a saved copy of the workspace, so it can pick up exactly where it left off.
+→ When a session or task finishes, the workspace gets deleted after 48 hours, and if you reopen the work inside that window, the deletion's cancelled.
+→ And a weekly sweep clears up anything the normal path missed.
+So nothing keeps billing once the work's finished.
+That's partly why we changed provider, cos the old one's snapshots couldn't capture running processes or a seeded database, so every start had to redo the whole setup.
+So that's what was built, and now I'll show you how the decisions were made, starting with the biggest one.`,
 
-  "annual-c08-occ": `A slow product looked like a capacity problem and was the system arguing with itself.
-→ Step 1: the symptom. Three days of live traffic: almost all the load was writes colliding, not expensive reads.
-→ Step 2: the cause. Two parts of the system were writing the same row at the same moment, so each made the other retry.
-→ Step 3: the fix, in two figures. Lease renewals fell from about 6.7 writes a second while streaming to roughly one a minute, and live cursor writes from 20 a second to at most 6.7.
-Detail: the last slide was things breaking; this is things being slow. Renewals now write only on a phase change or when less than half the lease remains; cursor writes are throttled and ignore movement too small to see.
-Figures: retries over three days: presence heartbeats 30, streaming touches 24, lease renewals 18, stall watchdog 17. Fixes landed 24 August 2026.
-Framework: debugs production issues; understands trade-offs.
-Next: beneath many stuck reports sat one structural fault, fixed once.`,
+  "annual-c08-occ": `So the last slide was things breaking, and this one's things being slow.
+When a product gets slow, the normal assumption is you need a bigger database, but here the system was arguing with itself.
+→ So I looked at three days of live traffic, and almost all the load was writes colliding, not expensive reads.
+These bars are retries, where a write fails cos something else changed the same data at the same time, so it has to go again.
+→ And this is the cause: two parts of the system were writing the same row at the same moment, so each one made the other retry.
+→ So the fix comes down to two figures, and both landed on 24 August.
+Lease renewals, which is a running job saying "I'm still here", went from about 6.7 writes a second while streaming to roughly one a minute, cos now they only write when something changes or less than half the lease is left.
+And live cursor writes went from 20 a second to at most 6.7, cos they're throttled and ignore movement too small to see.
+And under a lot of the "it's stuck" reports there was one more structural fault, which is the next slide, Finishing what it starts.`,
 
   "intro-01-title": `Welcome, and the one line to open on: Eva is a platform for AI agents that actually ship code.
 Detail: Eva is an open-source AI dev platform. Say what it is not before what it is. Not a chatbot that suggests diffs, and not an autocomplete. These are agents that clone your repo, run your tests, and open real pull requests. The word lands out of a blur, so let it settle before speaking.`,

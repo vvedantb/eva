@@ -12,8 +12,8 @@ const LINE_Y = 164;
 const BOX_H = 256;
 /** Room either side of the span so the end dots sit inside the box. */
 const INSET = 24;
-/** 11 January to 16 September 2026, the span the axis maps. */
-const SPAN_DAYS = 248;
+/** 11 January to 25 November 2026, the span the axis maps. */
+const SPAN_DAYS = 318;
 /**
  * A label is its name at `text-base leading-snug`, then `mt-1` and the date
  * at `text-sm`. The stem runs the full height of the label, like a flag pole,
@@ -47,6 +47,10 @@ interface Milestone {
  * own lane: the repository high above, the quick task low above, the session
  * below. Each label hangs to one side of its stem, so no stem crosses a label.
  */
+/**
+ * Sources: empty repository from Eva git history (11 January 2026); first
+ * session and first quick task from Eva's own records of the first created.
+ */
 // One row per milestone reads as the table it is.
 // prettier-ignore
 const MILESTONES: readonly Milestone[] = [
@@ -67,7 +71,7 @@ function gapFor(lane: number): number {
 }
 
 /** First day of each month from February, as days after 11 January. */
-const MONTH_STARTS = [21, 49, 80, 110, 141, 171, 202, 233];
+const MONTH_STARTS = [21, 49, 80, 110, 141, 171, 202, 233, 263, 294];
 /** Where the lit run rests on each step: 11 Jan, 1 Feb, August, then the end. */
 const STOPS = [0, 21, 202, SPAN_DAYS].map((day) => xFor(day) / TRACK_W);
 /** The light travels first; each milestone lands as it arrives. */

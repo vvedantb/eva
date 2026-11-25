@@ -2,7 +2,10 @@ import { Reveal, Shell, Title } from "../../_components/DeckPrimitives";
 import { AnnABeats } from "../_parts/AnnABeats";
 import type { AnnABeat } from "../_parts/AnnABeats";
 
-/** One beat per month, with what it was for. */
+/**
+ * One beat per month, with what it was for.
+ * Source: Eva git history, July to September 2026.
+ */
 const BEATS: readonly AnnABeat[] = [
   { heading: "July", label: "The sandbox cutover", accent: true },
   { heading: "August", label: "Durable turns and security" },

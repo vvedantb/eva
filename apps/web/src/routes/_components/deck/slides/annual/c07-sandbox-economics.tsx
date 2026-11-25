@@ -15,6 +15,7 @@ import {
 import { GraceBar, SnapshotStack } from "../_parts/AnnCLifecycleBeats";
 import { MoA3WeeklySweep } from "../_parts/MoA3WeeklySweep";
 
+/** Source: snapshot lifecycle documented in the Eva repository. */
 const STAGES: readonly { label: string; step: number }[] = [
   { label: "One snapshot kept", step: 1 },
   { label: "48-hour grace", step: 2 },

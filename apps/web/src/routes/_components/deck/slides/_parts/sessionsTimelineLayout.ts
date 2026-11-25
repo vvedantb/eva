@@ -46,6 +46,7 @@ interface Milestone {
   step: number;
 }
 
+/** Source: dates each change landed on Eva's main branch, 9 July to 10 September 2026. */
 // One row per milestone reads as the table it is.
 // prettier-ignore
 const MILESTONES: readonly Milestone[] = [

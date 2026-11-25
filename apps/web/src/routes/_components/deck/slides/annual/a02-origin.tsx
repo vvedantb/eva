@@ -19,7 +19,7 @@ export function AnnualOrigin() {
   return (
     <Shell className="py-12">
       <Reveal delay={0.1}>
-        <Title size="md">Eight months, five moments</Title>
+        <Title size="md">Ten months, five moments</Title>
       </Reveal>
 
       {/* The axis takes the free height, so it sits centred between the

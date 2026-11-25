@@ -15,7 +15,12 @@ interface MonthBar {
   sessions: number;
 }
 
-/** Sessions created per calendar month, 2026. June is genuinely zero. */
+/**
+ * Sessions created per calendar month, 2026. June is genuinely zero.
+ * Source: Eva's own records, measured to 24 November 2026 (November is partial).
+ * November excludes the 772 quick tasks and projects moved into sessions on
+ * 11 November 2026, which carry that date rather than their real one.
+ */
 const MONTHS: readonly MonthBar[] = [
   { month: "Jan", sessions: 13 },
   { month: "Feb", sessions: 11 },
@@ -25,15 +30,17 @@ const MONTHS: readonly MonthBar[] = [
   { month: "Jun", sessions: 0 },
   { month: "Jul", sessions: 75 },
   { month: "Aug", sessions: 109 },
-  { month: "Sep", sessions: 91 },
+  { month: "Sep", sessions: 143 },
+  { month: "Oct", sessions: 191 },
+  { month: "Nov", sessions: 157 },
 ];
 
-const COL_W = 96;
+const COL_W = 72;
 const GAP = 16;
 /** Height of the plot area, including the value label above each bar. */
 const PLOT_H = 230;
 const BAR_MAX_H = 196;
-const PEAK = 109;
+const PEAK = Math.max(...MONTHS.map((bar) => bar.sessions));
 /** A zero month still gets a visible stub rather than disappearing. */
 const STUB_H = 3;
 /** Index of the first highlighted month (July). */

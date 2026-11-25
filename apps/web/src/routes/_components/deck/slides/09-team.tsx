@@ -29,7 +29,11 @@ interface Person {
   countLabel: string;
 }
 
-/** Spotlight order, left to right. */
+/**
+ * Spotlight order, left to right.
+ * Source: sessions and quick tasks created in Eva, 11 January to 30 October 2026,
+ * including those later cancelled. The 400 total is colleagues only.
+ */
 const PEOPLE: Person[] = [
   { name: "Matt", count: 27, countLabel: "sessions and tasks" },
   { name: "Zuza", count: 250, countLabel: "sessions and tasks" },

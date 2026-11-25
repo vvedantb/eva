@@ -24,19 +24,22 @@ interface Stat {
   accent?: boolean;
 }
 
-/** Left to right; the lead figure rolls first and the rest trail it. */
+/**
+ * Sources: Eva's own records and project history, 11 January to 25 November 2026; sessions exclude the quick tasks and projects moved into sessions on 11 November 2026.
+ * Left to right; the lead figure rolls first and the rest trail it.
+ */
 const HEADLINE: Stat[] = [
-  { value: 4989, label: "changes shipped", delay: 0.55, accent: true },
-  { value: 981, label: "quick tasks raised", delay: 0.75 },
-  { value: 606, label: "sessions", delay: 0.87 },
-  { value: 1542, label: "release notes written", delay: 0.99 },
+  { value: 5673, label: "changes shipped", delay: 0.55, accent: true },
+  { value: 1015, label: "quick tasks raised", delay: 0.75 },
+  { value: 767, label: "sessions", delay: 0.87 },
+  { value: 1891, label: "release notes written", delay: 0.99 },
 ];
 
 const SECONDARY: Stat[] = [
   { value: 16, label: "people with accounts", delay: 0 },
   { value: 19, label: "automations running", delay: 0.08 },
-  { value: 613, label: "automation runs", delay: 0.16 },
-  { value: 117, label: "documents written", delay: 0.24 },
+  { value: 706, label: "automation runs", delay: 0.16 },
+  { value: 125, label: "documents written", delay: 0.24 },
 ];
 
 const NUMBER_CLASS =

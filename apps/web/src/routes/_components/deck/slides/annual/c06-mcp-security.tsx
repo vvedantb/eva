@@ -18,7 +18,11 @@ import { AnnBExpiryDial } from "../_parts/AnnBDials";
 import { MOA3_GATES_SHUT, MoA3Gates } from "../_parts/MoA3Gates";
 import { ProblemFix } from "../_parts/ProblemFix";
 
-/** Shortest first: nothing on this slide lives longer than it needs to. */
+/**
+ * Shortest first: nothing on this slide lives longer than it needs to.
+ * Source: authorisation code, access token and refresh token lifetimes in the
+ * security model documented in the Eva repository.
+ */
 const LIFETIMES: readonly { value: number; unit: string; label: string }[] = [
   { value: 5, unit: "minutes", label: "Sign-in code" },
   { value: 1, unit: "hour", label: "Access pass" },

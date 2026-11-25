@@ -21,7 +21,10 @@ interface CommitRow {
   label: string;
 }
 
-/** The first commit, then the two that set the data layer, in order. */
+/**
+ * The first commit, then the two that set the data layer, in order.
+ * Source: Eva git history, 11 January 2026 (16:36 first commit, 20:15 schema).
+ */
 const COMMITS: readonly CommitRow[] = [
   { hash: "5468954a6", label: "The first commit" },
   { hash: "317b85cd5", label: "Projects and tasks schema" },

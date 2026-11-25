@@ -13,6 +13,11 @@ import { EASE, LEAVE, MaskedText, Sheen } from "../_components/motion";
 import { LinearCount, RaceLane } from "./_parts/BootRace";
 
 /**
+ * Sources: about 40 s on Daytona against under 1 s on Vercel Sandbox, measured
+ * before and after the migration (6 to 8 July 2026).
+ */
+
+/**
  * The lanes tilt away like a track once the race starts. The angle is kept low
  * on purpose: the timing readouts have to stay readable from the back of the
  * room, and anything past about 8 degrees starts to thin the digits out.

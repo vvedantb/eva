@@ -17,6 +17,7 @@ const WEEK_SHOTS: readonly CameraShot[] = [
 
 const DAYS: readonly string[] = ["11 Jan", "12 Jan", "13 Jan", "14 Jan"];
 
+/** Source: Eva git history, 11 to 14 January 2026 (when each landed in code). */
 const MARKS: readonly AnnADayMark[] = [
   { day: 1, title: "Quick tasks", date: "12 January 2026", step: 1 },
   { day: 3, title: "Sessions", date: "14 January 2026", step: 2 },
