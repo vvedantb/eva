@@ -2332,6 +2332,7 @@ export const repoEnvVarFields = {
 
 export const repoSnapshotFields = {
   repoId: v.id("githubRepos"),
+  // snapshotName removed with Daytona. schema-narrowing-ok: removeDaytonaSnapshotFields
   schedule: snapshotScheduleValidator,
   enabled: v.optional(v.boolean()),
   cronJobId: v.optional(v.string()),

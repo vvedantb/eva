@@ -58,7 +58,6 @@ async function fixture() {
     });
     const snapshot = await ctx.db.insert("repoSnapshots", {
       repoId: web,
-      snapshotName: "snapshot-web",
       schedule: "manual",
       buildCommands: ["old-build"],
       createdAt: 0,
