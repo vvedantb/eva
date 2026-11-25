@@ -19,7 +19,6 @@ import {
 } from "@vvedantb/ui";
 import { cn } from "@eva/ui";
 import { ActiveTasksBadge } from "@/lib/components/sidebar/ActiveTasksBadge";
-import { BuildingProjectsBadge } from "@/lib/components/sidebar/BuildingProjectsBadge";
 import {
   SharedLayoutNav,
   SharedLayoutNavSurface,
@@ -242,9 +241,6 @@ export function RepoNavSections({
           {/* Awake-sandbox count; simple view wakes from Preview, so no count. */}
           {item.name === "Quick Tasks" && !collapsed && !simpleView && repo && (
             <ActiveTasksBadge repoId={repo._id} />
-          )}
-          {item.name === "Projects" && !collapsed && repo && (
-            <BuildingProjectsBadge repoId={repo._id} basePath={repoBasePath} />
           )}
         </Link>
       </SharedLayoutNavSurface>

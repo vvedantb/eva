@@ -6,8 +6,6 @@ import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import { hasRepoAccess } from "../functions";
 import { getAIModelProvider } from "../validators";
 import { sessionChatFields } from "../_validators/tableFields";
-import { sessionOwnerProjectId } from "../_sessions/owner";
-import { isProjectBuilding } from "../_projects/buildState";
 
 /** Title of the chat every session starts with. */
 export const MAIN_CHAT_TITLE = "Main";
@@ -143,24 +141,18 @@ export async function findChatByNumber(
  * A task's run is filed under its session too (a project task's under the
  * project's), and it holds the whole sandbox: while one is open no chat may
  * start, so a message sent mid-run queues behind it (the run's `closeTurn`
- * drains the queue). A project's build holds it from start to finish, gaps
- * between its tasks included (`finishProjectBuild` drains the queue).
+ * drains the queue).
  */
 export async function sessionChatHasFreeSlot(
   db: DatabaseReader,
   context: SessionChatContext,
 ): Promise<boolean> {
-  const projectId = sessionOwnerProjectId(context.session);
-  const [project, openTurns] = await Promise.all([
-    projectId ? db.get(projectId) : null,
-    db
-      .query("turns")
-      .withIndex("by_session_open", (q) =>
-        q.eq("sessionId", context.session._id).eq("open", true),
-      )
-      .collect(),
-  ]);
-  if (project && isProjectBuilding(project)) return false;
+  const openTurns = await db
+    .query("turns")
+    .withIndex("by_session_open", (q) =>
+      q.eq("sessionId", context.session._id).eq("open", true),
+    )
+    .collect();
   if (openTurns.some((turn) => db.normalizeId("agentRuns", turn.entityId))) {
     return false;
   }

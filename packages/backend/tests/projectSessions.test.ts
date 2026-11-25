@@ -39,7 +39,6 @@ async function fixture() {
       userId,
       title: "Project",
       rawInput: "Project",
-      phase: "business_review",
       numId: 1,
     });
     const now = Date.now();
@@ -167,21 +166,16 @@ describe("projects on sessions", () => {
   );
 
   test(
-    "a project's coordinator session ignores the stored phase: an old client's phase write changes nothing, and only a delete retires it",
+    "a project's coordinator session stays open through edits; only a delete retires it",
     async () => {
       const f = await fixture();
       const { sessionId } = await ensureProjectSession(f);
-      const before = await f.t.run((ctx) => ctx.db.get(f.projectId));
       await f.asUser.mutation(api.projects.update, {
         id: f.projectId,
-        phase: "completed",
+        title: "Renamed",
       });
-      const after = await f.t.run(async (ctx) => ({
-        project: await ctx.db.get(f.projectId),
-        session: await ctx.db.get(sessionId),
-      }));
-      expect(after.project?.phase).toBe(before?.phase);
-      expect(after.session?.archive).toBeUndefined();
+      const after = await f.t.run((ctx) => ctx.db.get(sessionId));
+      expect(after?.archive).toBeUndefined();
       await f.asUser.mutation(api.projects.remove, { id: f.projectId });
       const removed = await f.t.run((ctx) => ctx.db.get(sessionId));
       expect(removed?.archive).toBeDefined();
@@ -190,17 +184,14 @@ describe("projects on sessions", () => {
   );
 
   test(
-    "a contributor reaches the coordinator whatever the stored phase: a new or finished project's sandbox starts",
+    "a contributor reaches the coordinator: the project's sandbox starts",
     async () => {
-      for (const phase of ["draft", "completed", "cancelled"] as const) {
-        const f = await fixture();
-        workflow.register(f.t);
-        await f.t.run((ctx) => ctx.db.patch(f.projectId, { phase }));
-        const { sessionId } = await ensureProjectSession(f);
-        await f.asUser.mutation(api.sessions.startSandbox, { sessionId });
-        const session = await f.t.run((ctx) => ctx.db.get(sessionId));
-        expect(session?.status).toBe("starting");
-      }
+      const f = await fixture();
+      workflow.register(f.t);
+      const { sessionId } = await ensureProjectSession(f);
+      await f.asUser.mutation(api.sessions.startSandbox, { sessionId });
+      const session = await f.t.run((ctx) => ctx.db.get(sessionId));
+      expect(session?.status).toBe("starting");
     },
     TIMEOUT_MS,
   );

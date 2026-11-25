@@ -88,21 +88,6 @@ export async function findWorkSession(
 }
 
 /**
- * A project task's old chat in its project's session (`sessionChats.taskId`),
- * if it has one. Read-only legacy: new project tasks chat in the Main chat of
- * their own session. Step 9's migration removes these rows.
- */
-export async function findProjectTaskChat(
-  db: DatabaseReader,
-  taskId: Id<"agentTasks">,
-): Promise<Doc<"sessionChats"> | null> {
-  return await db
-    .query("sessionChats")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .first();
-}
-
-/**
  * The session that holds the sandbox of a session, task or project named by
  * a bare id (an MCP token's entity): the session itself, a task's own, or a
  * project's. Null for a malformed id or before the session exists.
@@ -242,30 +227,4 @@ export type OwnerChat = {
   session: Doc<"sessions">;
   chat: Doc<"sessionChats">;
 };
-
-/**
- * Who one chat speaks for: a project task's legacy chat in its project's
- * session (`sessionChats.taskId`) for that task, any other chat for its
- * session's owner. Attribution, unread,
- * mentions, watches and the busy light all resolve through here.
- */
-export function chatOwner(
-  chat: Pick<Doc<"sessionChats">, "taskId">,
-  session: OwnerFields,
-): SessionOwner {
-  return chat.taskId !== undefined
-    ? { kind: "task", taskId: chat.taskId }
-    : sessionOwner(session);
-}
-
-/** `chatOwner`'s task or project id; undefined for a standalone session. */
-export function chatOwnerEntityId(
-  chat: Pick<Doc<"sessionChats">, "taskId">,
-  session: OwnerFields,
-): Id<"agentTasks"> | Id<"projects"> | undefined {
-  const owner = chatOwner(chat, session);
-  if (owner.kind === "task") return owner.taskId;
-  if (owner.kind === "project") return owner.projectId;
-  return undefined;
-}
 

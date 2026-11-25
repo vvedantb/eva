@@ -25,19 +25,10 @@ import type {
   Id,
   TableNames,
 } from "./_generated/dataModel";
-import { scheduleProjectPrSync } from "./_projects/prSync";
 import { isEntityDeleted } from "./numId";
 import { taskBranchName } from "./_git/branchNames";
 import { cancelTaskRunSchedule } from "./_agentTasks/runState";
-import {
-  projectStatus,
-  type ProjectStage,
-} from "@eva/shared/projectStatus";
-import {
-  allPullRequestsTerminal,
-  findLivePullRequestOnBranch,
-  listOwnerPullRequests,
-} from "./_pullRequests/store";
+import { findLivePullRequestOnBranch } from "./_pullRequests/store";
 
 /** Checks a loaded repo against connector ownership or team membership. */
 export async function userCanAccessRepo(
@@ -274,92 +265,19 @@ export async function assertMessageParentAccess(
 }
 
 /**
- * `projects.phase` for a project with no tasks: what `recomputeProjectPhase`
- * derives for it. The value a new project is inserted with.
+ * The hook every child task status change, run end and child PR merge calls:
+ * it schedules the project's next ready tasks (`scheduleReadyTasks`).
+ * Scheduled, as this module stays a leaf; idempotent, so a call with nothing
+ * new starts nothing. A project's status is derived from its tasks
+ * (`projectStatus`), never stored.
  */
-export const EMPTY_PROJECT_PHASE: Doc<"projects">["phase"] = "business_review";
-
-/**
- * The stored phase for a derived project stage (`projectStatus`). Only older
- * phone builds read it; nothing in the backend decides on it.
- */
-function phaseForStage(stage: ProjectStage): Doc<"projects">["phase"] {
-  switch (stage) {
-    case "done":
-      return "completed";
-    case "in_progress":
-      return "in_progress";
-    case "todo":
-      return EMPTY_PROJECT_PHASE;
-  }
-}
-
-/**
- * The one writer of `projects.phase` from task state, and the hook every
- * child task status change, run end and child PR merge calls.
- *
- * It schedules the project's next ready tasks (`scheduleReadyTasks`, the
- * real work), then writes a best-effort phase derived from the shared
- * `projectStatus` so older phone builds that still read `phase` show
- * something sensible. The phase is never a source of truth: no gate reads it
- * (decision 19). Two legacy states are left alone: an old project still in
- * its interview or spec with no tasks (`draft` / `finalized`), and an old
- * project whose own PRs all merged or closed (`applyProjectPrEvent` set its
- * final phase) until one of its tasks runs again.
- */
-export async function recomputeProjectPhase(
+export async function onProjectTasksChanged(
   ctx: MutationCtx,
   projectId: Id<"projects">,
 ): Promise<void> {
-  const db = ctx.db;
-  const project = await db.get(projectId);
-  if (!project) return;
-  // Scheduled, as this module stays a leaf; idempotent, so a call with
-  // nothing new starts nothing.
   await ctx.scheduler.runAfter(0, internal.buildWorkflow.scheduleReadyTasks, {
     projectId,
   });
-  const tasks = (
-    await db
-      .query("agentTasks")
-      .withIndex("by_project", (q) => q.eq("projectId", projectId))
-      .collect()
-  ).filter((task) => !isEntityDeleted(task));
-  if (
-    tasks.length === 0 &&
-    (project.phase === "draft" || project.phase === "finalized")
-  ) {
-    return;
-  }
-  const { stage } = projectStatus(
-    tasks.map((task) => ({
-      id: String(task._id),
-      status: task.status,
-      prState: task.prState,
-      // The stage reads status and PR state only.
-      approved: task.approvedAt !== undefined,
-      usageLimited: false,
-      runPending: false,
-    })),
-  );
-  if (
-    !tasks.some((task) => task.status === "in_progress") &&
-    (project.phase === "completed" || project.phase === "cancelled")
-  ) {
-    const projectPrs = await listOwnerPullRequests(db, {
-      kind: "project",
-      projectId,
-    });
-    if (projectPrs.length > 0 && allPullRequestsTerminal(projectPrs)) return;
-  }
-  const next = phaseForStage(stage);
-  if (next === project.phase) return;
-  await ctx.db.patch(project._id, { phase: next });
-  const updated = await ctx.db.get(project._id);
-  if (updated) {
-    // A legacy project PR follows the review phases (draft / ready).
-    await scheduleProjectPrSync(ctx, updated, project.phase, next);
-  }
 }
 
 /** Fetches a project by ID, throwing if not found or the user lacks repo access. */

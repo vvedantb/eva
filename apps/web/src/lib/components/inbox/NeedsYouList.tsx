@@ -68,6 +68,7 @@ function NeedsYouRowItem({ row }: { row: NeedsYouRow }) {
   };
   return (
     <div className="group flex items-center gap-3 px-4 hover:bg-muted/40">
+      {/* design-check-ignore-next-line — a full-width two-line row; Button would force control height and padding */}
       <button
         onClick={open}
         className="motion-press flex min-w-0 flex-1 flex-col py-3 text-left active:scale-[0.99] focus-visible:outline-hidden"

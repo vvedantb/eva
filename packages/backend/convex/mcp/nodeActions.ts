@@ -755,16 +755,8 @@ const projectDocSchema = z.object({
   numId: z.number().optional(),
   title: z.string(),
   updatedAt: z.number().optional(),
-  build: z.object({ state: z.enum(["scheduled", "running"]) }).optional(),
   model: z.string().optional(),
 });
-
-/** `isProjectBuilding` for a parsed doc. */
-function projectDocBuildRunning(
-  project: z.infer<typeof projectDocSchema>,
-): boolean {
-  return project.build?.state === "running";
-}
 
 /** `sessionChats:resolveDeliveryChat` — the chat a session message lands in. */
 const deliveryChatSchema = z.object({
@@ -1030,8 +1022,6 @@ const orchestratorAgentStateValidator = v.object({
   currentContent: v.optional(v.string()),
   pendingQuestion: v.optional(v.string()),
   queuedMessageCount: v.number(),
-  /** Projects only: a build runs apart from the chat and stop_agent leaves it. */
-  buildRunning: v.optional(v.boolean()),
   transcript: v.array(
     v.object({
       role: v.string(),
@@ -1174,7 +1164,6 @@ export const orchestratorGetAgentState = internalAction({
         updatedAt: project.updatedAt ?? project._creationTime,
         deploymentUrl: undefined,
         deploymentStatus: undefined,
-        buildRunning: projectDocBuildRunning(project),
       };
     }
 
@@ -1508,7 +1497,7 @@ export const orchestratorStopAgent = internalAction({
     kind: chatEntityKindValidator,
     id: v.string(),
   },
-  returns: v.object({ buildRunning: v.boolean() }),
+  returns: v.null(),
   handler: async (_ctx, { clerkUserId, kind, id }) => {
     if (kind === "session") {
       // Every chat of the session: a stop means the whole agent goes quiet.
@@ -1518,16 +1507,15 @@ export const orchestratorStopAgent = internalAction({
         "_sessions/execution:cancelSessionExecution",
         { sessionId: id },
       );
-      return { buildRunning: false };
+      return null;
     }
     // The app's chat Stop (`sessions.stopChatTurn`): a task's run and chat,
-    // a project's own chat. A legacy project build is its own workflow and is
-    // reported back rather than cancelled; it ends on its own.
+    // a project's own chat.
     if (kind === "task") {
       await runAsUser("mutation", clerkUserId, "sessions:stopChatTurn", {
         target: { taskId: id },
       });
-      return { buildRunning: false };
+      return null;
     }
     const owned = (await readOwnedChatAsUser(clerkUserId, kind, id))?.session;
     if (owned?.chatId !== undefined) {
@@ -1535,10 +1523,7 @@ export const orchestratorStopAgent = internalAction({
         target: { chatId: owned.chatId },
       });
     }
-    const project = projectDocSchema.parse(
-      await readChatDocAsUser(clerkUserId, "project", id),
-    );
-    return { buildRunning: projectDocBuildRunning(project) };
+    return null;
   },
 });
 
@@ -1600,7 +1585,7 @@ export const mcpStopEntitySandbox = internalAction({
     }
 
     // The app's sandbox Stop: refused while an agent works in the sandbox
-    // (a turn, run, build or interview). Stop it first with stop_agent.
+    // (a turn or a run). Stop it first with stop_agent.
     await runAsUser("mutation", clerkUserId, "sessions:stopWorkSandbox", {
       target: { sessionId: id },
     });

@@ -21,7 +21,6 @@ import {
   notificationUrgencyValidator,
   evaluationKindValidator,
   evaluationTriggerValidator,
-  phaseValidator,
   prRecapOriginValidator,
   prRecapStatusValidator,
   priorityValidator,
@@ -53,7 +52,6 @@ import {
 } from "./enums";
 import {
   automationFindingValidator,
-  conversationMessageValidator,
   customThemeValidator,
   envVarEntryValidator,
   evalIssueValidator,
@@ -581,12 +579,7 @@ export const sessionChatFields = {
   claudePersistenceSeed: v.optional(
     v.union(v.id("sessions"), v.id("agentTasks"), v.id("projects")),
   ),
-  /**
-   * Legacy: an old project task's own chat inside its project's session
-   * (never Main). Nothing writes it now (a project task chats in its own
-   * session's Main chat); read for old rows until step 9's migration.
-   */
-  taskId: v.optional(v.id("agentTasks")),
+  // Legacy taskId removed. schema-narrowing-ok: clearSessionChatTaskIds
   ...chatDaemonEntityFields,
 };
 
@@ -1172,53 +1165,6 @@ export const teamFields = {
   backgroundStorageId: v.optional(v.id("_storage")),
 };
 
-/** A build waiting on its scheduled job. */
-const scheduledBuildValidator = v.object({
-  at: v.number(),
-  jobId: v.id("_scheduled_functions"),
-});
-
-/**
- * A project build: waiting on a scheduled job, or running the build
- * workflow. Transitions live in `_projects/buildState.ts`.
- */
-export const projectBuildValidator = v.union(
-  v.object({ state: v.literal("scheduled"), ...scheduledBuildValidator.fields }),
-  v.object({
-    state: v.literal("running"),
-    workflowId: v.string(),
-    /**
-     * A schedule waiting behind this build (a usage-limit retry, or one set
-     * before or during it). Its job is live; when the build ends the project
-     * becomes `scheduled` with it.
-     */
-    scheduled: v.optional(scheduledBuildValidator),
-  }),
-);
-
-/**
- * A project interview or spec workflow, from start to sandbox release
- * (`_projects/interviewState.ts`). `sessionStartAttempt` is the session start
- * the interview claimed (`closed` → `starting`): a cancel before the attach
- * fails exactly that start (`abandonTaskRunSandbox`), as
- * `agentRuns.sessionStartAttempt` does for runs. `sandboxId` is the VM it
- * prepared on that claim, recorded before the attach so none goes unrecorded.
- */
-export const projectInterviewValidator = v.union(
-  v.object({ state: v.literal("started"), workflowId: v.string() }),
-  v.object({
-    state: v.literal("claimed"),
-    workflowId: v.string(),
-    sessionStartAttempt: v.number(),
-  }),
-  v.object({
-    state: v.literal("prepared"),
-    workflowId: v.string(),
-    sessionStartAttempt: v.number(),
-    sandboxId: v.string(),
-  }),
-);
-
 export const projectFields = {
   ...entityNumIdFields,
   /** The home repo: the project's URL, number and sidebar place, and the default repo of its tasks. */
@@ -1233,30 +1179,21 @@ export const projectFields = {
   branchName: v.optional(v.string()),
   baseBranch: v.optional(v.string()),
   ...prSummaryFields,
-  phase: phaseValidator,
-  /** How the project was created: AI interview/plan vs tasks-only container. */
-  planningMode: v.optional(
-    v.union(v.literal("interview"), v.literal("tasks_only")),
-  ),
+  // Legacy phase, planningMode, build, interview, lastBuildError and
+  // codeReviewer removed. schema-narrowing-ok: clearLegacyProjectFields
   priority: v.optional(priorityValidator),
   rawInput: v.string(),
   projectLead: v.optional(v.id("users")),
   members: v.optional(v.array(v.id("users"))),
   projectStartDate: v.optional(v.number()),
   projectEndDate: v.optional(v.number()),
-  /** The project build lifecycle; absent = idle. Written only by `_projects/buildState.ts`. */
-  build: v.optional(projectBuildValidator),
-  /** The interview / spec agent lifecycle; absent = idle. Written only by `_projects/interviewState.ts`. */
-  interview: v.optional(projectInterviewValidator),
   // Legacy build fields removed. schema-narrowing-ok: migrateProjectBuildState
   // Legacy interview fields removed. schema-narrowing-ok: migrateProjectInterviewState
-  lastBuildError: v.optional(v.string()),
   branchVersion: v.optional(v.number()),
   // Set when chat or other queue helpers touch the project. Mirrors
   // `sessions.updatedAt` so the same queue/list helpers work uniformly.
   updatedAt: v.optional(v.number()),
-  // Drop after clearProjectCodeReviewer runs.
-  codeReviewer: v.optional(v.id("users")),
+  // codeReviewer removed. schema-narrowing-ok: clearProjectCodeReviewer
   tags: v.optional(v.array(v.string())),
   model: v.optional(aiModelValidator),
   // Whose credential this project's model preference is tied to (null/absent =
@@ -1269,12 +1206,6 @@ export const projectFields = {
   // Manager Ave thread watching this project's chat for completion
   // notifications (mirrors sessions.watchedByAve).
   watchedByAve: v.optional(v.id("aveThreads")),
-};
-
-export const projectDetailsFields = {
-  projectId: v.id("projects"),
-  conversationHistory: v.array(conversationMessageValidator),
-  generatedSpec: v.optional(v.string()),
 };
 
 /**
@@ -2328,11 +2259,6 @@ export const projectCoordinatorWakeFields = {
   createdAt: v.number(),
   sentAt: v.optional(v.number()),
   heldAt: v.optional(v.number()),
-};
-
-export const taskDependencyFields = {
-  taskId: v.id("agentTasks"),
-  dependsOnId: v.id("agentTasks"),
 };
 
 export const notificationFields = {

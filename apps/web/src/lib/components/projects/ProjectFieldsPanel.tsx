@@ -38,7 +38,7 @@ import {
   FIELD_TEXT_CLASS,
   FIELD_TRIGGER_CLASS,
 } from "@/lib/components/fields/FieldsSection";
-import { ProjectPhaseBadge, ProjectStageBadge } from "./ProjectPhaseBadge";
+import { ProjectStageBadge } from "./ProjectPhaseBadge";
 import { useProjectTaskStatus } from "./useProjectStatus";
 import { ProjectDateRangeField } from "./_components/ProjectDateRangeField";
 import { PriorityPicker } from "@/lib/components/priority/PriorityPicker";
@@ -102,13 +102,8 @@ export function ProjectFieldsPanel({
   return (
     <div className="space-y-4">
       <FieldsSection title="Properties">
-        {/* Stage is derived from the child tasks; only the old planning
-            phases (interview and plan tabs) still read the stored phase. */}
-        {project.phase === "draft" || project.phase === "finalized" ? (
-          <div className={FIELD_ROW_CLASS}>
-            <ProjectPhaseBadge phase={project.phase} />
-          </div>
-        ) : status ? (
+        {/* Stage is derived from the child tasks. */}
+        {status ? (
           <div className={FIELD_ROW_CLASS}>
             <ProjectStageBadge stage={status.stage} />
           </div>

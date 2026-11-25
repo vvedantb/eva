@@ -84,47 +84,6 @@ export async function notifySubscribers(
   );
 }
 
-/**
- * Fans a single project-level notification out to everyone subscribed to any of
- * the project's tasks. Used for events that belong to the project as a whole (a
- * project PR merging or closing) so subscribers get one notification about the
- * project instead of one per task. No `taskId` is set, so the click-through
- * lands on the project rather than an arbitrary task inside it.
- */
-export async function notifyProjectSubscribers(
-  ctx: MutationCtx,
-  params: {
-    projectId: Id<"projects">;
-    type: Infer<typeof notificationTypeValidator>;
-    title: string;
-    message?: string;
-    repoId?: Id<"githubRepos">;
-  },
-): Promise<void> {
-  const tasks = await ctx.db
-    .query("agentTasks")
-    .withIndex("by_project", (q) => q.eq("projectId", params.projectId))
-    .collect();
-
-  const subscriberIds = new Set<Id<"users">>();
-  for (const task of tasks) {
-    const subscribers = await ctx.db
-      .query("taskSubscribers")
-      .withIndex("by_task", (q) => q.eq("taskId", task._id))
-      .collect();
-    for (const sub of subscribers) {
-      if (sub.subscribed) subscriberIds.add(sub.userId);
-    }
-  }
-  await notifyUsers(ctx, subscriberIds, {
-    type: params.type,
-    title: params.title,
-    message: params.message,
-    repoId: params.repoId,
-    projectId: params.projectId,
-  });
-}
-
 /** Lists the active subscribers (subscribed = true) of a task for the UI. */
 export const listByTask = authQuery({
   args: { taskId: v.id("agentTasks") },

@@ -9,7 +9,7 @@ import {
   getProjectWithAccess,
   hasRepoAccess,
   hasTaskAccess,
-  recomputeProjectPhase,
+  onProjectTasksChanged,
 } from "../functions";
 import { allocateNumId } from "../numId";
 import { createNotification } from "../notifications";
@@ -221,7 +221,7 @@ export const activateDraft = authMutation({
       );
     }
     if (task.projectId) {
-      await recomputeProjectPhase(ctx, task.projectId);
+      await onProjectTasksChanged(ctx, task.projectId);
     }
     return null;
   },

@@ -5,7 +5,7 @@ import { runModeValidator } from "../validators";
 import {
   hasActiveRun,
   isSupersededTaskRun,
-  recomputeProjectPhase,
+  onProjectTasksChanged,
 } from "../functions";
 import { RUN_TIMEOUT_MS } from "../workflowWatchdog";
 import { closeOpenTurn } from "../_chat/turnStore";
@@ -257,7 +257,7 @@ export const completeRun = internalMutation({
       await finishTaskRun(ctx, args.taskId, args.runId);
       // Also schedules the project's next ready tasks (`scheduleReadyTasks`).
       if (task.projectId) {
-        await recomputeProjectPhase(ctx, task.projectId);
+        await onProjectTasksChanged(ctx, task.projectId);
       }
     }
 

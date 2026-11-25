@@ -179,7 +179,7 @@ export function fleetTools(
     defineTool({
       name: "get_agent_state",
       description:
-        'Inspect one agent in depth: status, whether a turn is in flight, what it is doing right now (live activity), the tail of its transcript, how many messages are queued behind it, its preview deployment, and every pull request it holds ("pullRequests", primary first). Long messages are truncated. For a project, "status" is its derived stage (todo, in_progress, done), the transcript is its sandbox chat, "isExecuting" also counts a running build or spec workflow, and "buildRunning" says whether a build is in flight. A session in a linked-session group also returns "sessionGroup": its name and every member across repos.',
+        'Inspect one agent in depth: status, whether a turn is in flight, what it is doing right now (live activity), the tail of its transcript, how many messages are queued behind it, its preview deployment, and every pull request it holds ("pullRequests", primary first). Long messages are truncated. For a project, "status" is its derived stage (todo, in_progress, done), and the transcript is its sandbox chat. A session in a linked-session group also returns "sessionGroup": its name and every member across repos.',
       mutating: false,
       input: {
         kind: agentKindArg,
@@ -210,7 +210,7 @@ export function fleetTools(
     defineTool({
       name: "stop_agent",
       description:
-        'Cancel the agent\'s in-flight turn. WARNING: cancelling a session immediately starts its next queued message, so stopping a session with a backlog does not leave it idle — check get_agent_state first and expect to stop it again. For a project this stops only its sandbox chat; a legacy project build keeps going and the reply says so with "buildRunning". Project child tasks are their own agents: stop each with kind "task".',
+        'Cancel the agent\'s in-flight turn. WARNING: cancelling a session immediately starts its next queued message, so stopping a session with a backlog does not leave it idle — check get_agent_state first and expect to stop it again. For a project this stops its sandbox chat. Project child tasks are their own agents: stop each with kind "task".',
       mutating: true,
       input: {
         kind: agentKindArg,
@@ -232,21 +232,12 @@ export function fleetTools(
             );
           }
         }
-        const { buildRunning } = await ctx.runAction(
-          internal.mcp.nodeActions.orchestratorStopAgent,
-          { clerkUserId, kind, id },
-        );
-        return toolJsonResult({
+        await ctx.runAction(internal.mcp.nodeActions.orchestratorStopAgent, {
+          clerkUserId,
           kind,
           id,
-          status: "cancel_requested",
-          ...(buildRunning
-            ? {
-                buildRunning,
-                note: "A legacy project build is still running. Only its sandbox chat was cancelled; the build ends on its own.",
-              }
-            : {}),
         });
+        return toolJsonResult({ kind, id, status: "cancel_requested" });
       },
     }),
   );

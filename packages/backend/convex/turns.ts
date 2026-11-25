@@ -22,9 +22,7 @@ import {
 import {
   tearDownStaleDocWorkflow,
   tearDownStaleEvaluationWorkflow,
-  stopProjectInterview,
 } from "./workflowWatchdog";
-import { interviewTurnProjectId } from "./_projects/interviewState";
 import { tearDownStaleAutomationRun } from "./_automations/runs";
 import { finalizeStalledRun, stalledRunStop } from "./_taskWorkflow/recovery";
 import { clearStreamingActivity } from "./_taskWorkflow/helpers";
@@ -519,16 +517,9 @@ async function finalizeExpiredAgentTurn(
         await tearDownStaleEvaluationWorkflow(ctx, owner.id, workflowId);
       }
       break;
-    case "interview": {
-      const projectId = await interviewTurnProjectId(ctx.db, owner.id);
-      if (workflowId !== undefined && projectId !== undefined) {
-        await stopProjectInterview(ctx, projectId, workflowId, {
-          state: "error",
-          error,
-        });
-      }
+    case "interview":
+      // The project interview is gone; a leftover turn only closes.
       break;
-    }
   }
   await clearStreamingActivity(ctx, turn.streamingEntityId);
   await closeTurn(ctx, turn, "error", { error });

@@ -7,7 +7,7 @@ import {
   type SessionChatContext,
 } from "../_sessionChats/helpers";
 import { isSessionArchived } from "../_sessions/archive";
-import { chatOwnerEntityId, findWorkSession } from "../_sessions/owner";
+import { sessionOwnerEntityId, findWorkSession } from "../_sessions/owner";
 import { chatSeedSettings } from "../_sessions/ownedSession";
 import { findWorkChat } from "../_sessions/ownerState";
 import { entityHref, repoBasePath } from "@eva/shared";
@@ -157,7 +157,7 @@ export async function resolveMobileChat(
     const { chat, session } = context;
     // A task's or project's session chat is that owner's chat (`parentId`
     // round-trips here); a project task's chat is the task's.
-    const ownerId = chatOwnerEntityId(chat, session);
+    const ownerId = sessionOwnerEntityId(session);
     if (ownerId) return await resolveMobileChat(db, ownerId);
     const repo = await db.get(session.repoId);
     if (!repo) return null;

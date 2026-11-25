@@ -9,9 +9,8 @@ import {
 } from "../functions";
 import { isEntityDeleted } from "../numId";
 import {
-  chatOwnerEntityId,
-  sessionOwner,
   sessionOwnerEntityId,
+  sessionOwner,
 } from "../_sessions/owner";
 import {
   chatEntityKindValidator,
@@ -65,11 +64,11 @@ export async function chatSourceFieldsForEntityId(
     const chat = await db.get(sessionChatId);
     const session = chat ? await db.get(chat.sessionId) : null;
     if (!chat || !session) return null;
-    // An owned session's chat files under its owner (`chatOwner`; a project
+    // An owned session's chat files under its owner (`sessionOwner`; a project
     // task's own chat under that task).
     return chatSourceFieldsForEntityId(
       db,
-      String(chatOwnerEntityId(chat, session) ?? session._id),
+      String(sessionOwnerEntityId(session) ?? session._id),
     );
   }
   const sessionId = db.normalizeId("sessions", entityId);

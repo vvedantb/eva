@@ -213,8 +213,7 @@ interface RecapChat {
 /**
  * The chats a recap covers. A project's coordinator (its Main chat) reads
  * the project session's chats and each child task's Main chat: every task
- * owns its own session (`workSessionOwner`); a legacy task chat still in the
- * project session (`sessionChats.taskId`) is read there instead.
+ * owns its own session (`workSessionOwner`).
  */
 async function recapChats(
   ctx: QueryCtx,
@@ -230,27 +229,14 @@ async function recapChats(
     .query("sessionChats")
     .withIndex("by_session", (q) => q.eq("sessionId", session._id))
     .collect();
-  const chats: RecapChat[] = [];
+  const chats: RecapChat[] = sessionChats
+    .filter((row) => row.archived !== true)
+    .map((row) => ({
+      parentId: row._id,
+      label: row.isMain ? "Project chat" : row.title,
+    }));
   const taskIds: Id<"agentTasks">[] = [];
-  const openChats = sessionChats.filter((row) => row.archived !== true);
-  const rowTasks = await Promise.all(
-    openChats.map((row) => (row.taskId ? ctx.db.get(row.taskId) : null)),
-  );
-  for (const [index, row] of openChats.entries()) {
-    const task = rowTasks[index];
-    if (task) {
-      taskIds.push(task._id);
-      chats.push({ parentId: row._id, label: `@[${task.title}](${task._id})` });
-    } else {
-      chats.push({
-        parentId: row._id,
-        label: row.isMain ? "Project chat" : row.title,
-      });
-    }
-  }
-  const childTasks = (
-    await listProjectTasks(ctx.db, session.owner.projectId)
-  ).filter((task) => !taskIds.includes(task._id));
+  const childTasks = await listProjectTasks(ctx.db, session.owner.projectId);
   const childChats = await Promise.all(
     childTasks.map(async (task) => {
       const taskSession = await findWorkSession(ctx.db, task);
