@@ -167,21 +167,16 @@ describe("projects on sessions", () => {
   );
 
   test(
-    "a project's coordinator session ignores the stored phase: an old client's phase write changes nothing, and only a delete retires it",
+    "a project's coordinator session stays open through edits; only a delete retires it",
     async () => {
       const f = await fixture();
       const { sessionId } = await ensureProjectSession(f);
-      const before = await f.t.run((ctx) => ctx.db.get(f.projectId));
       await f.asUser.mutation(api.projects.update, {
         id: f.projectId,
-        phase: "completed",
+        title: "Renamed",
       });
-      const after = await f.t.run(async (ctx) => ({
-        project: await ctx.db.get(f.projectId),
-        session: await ctx.db.get(sessionId),
-      }));
-      expect(after.project?.phase).toBe(before?.phase);
-      expect(after.session?.archive).toBeUndefined();
+      const after = await f.t.run((ctx) => ctx.db.get(sessionId));
+      expect(after?.archive).toBeUndefined();
       await f.asUser.mutation(api.projects.remove, { id: f.projectId });
       const removed = await f.t.run((ctx) => ctx.db.get(sessionId));
       expect(removed?.archive).toBeDefined();

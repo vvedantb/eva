@@ -1233,7 +1233,12 @@ export const projectFields = {
   branchName: v.optional(v.string()),
   baseBranch: v.optional(v.string()),
   ...prSummaryFields,
-  phase: phaseValidator,
+  /**
+   * Legacy stored lifecycle, nothing writes it: a project's status is derived
+   * from its tasks. Cleared by `dataMigrations:clearLegacyProjectFields`,
+   * then dropped.
+   */
+  phase: v.optional(phaseValidator),
   /** How the project was created: AI interview/plan vs tasks-only container. */
   planningMode: v.optional(
     v.union(v.literal("interview"), v.literal("tasks_only")),
@@ -1244,9 +1249,9 @@ export const projectFields = {
   members: v.optional(v.array(v.id("users"))),
   projectStartDate: v.optional(v.number()),
   projectEndDate: v.optional(v.number()),
-  /** The project build lifecycle; absent = idle. Written only by `_projects/buildState.ts`. */
+  /** Legacy build lifecycle; nothing writes it. Cleared by `dataMigrations:clearLegacyProjectFields`, then dropped. */
   build: v.optional(projectBuildValidator),
-  /** The interview / spec agent lifecycle; absent = idle. Written only by `_projects/interviewState.ts`. */
+  /** Legacy interview / spec lifecycle; nothing writes it. Cleared by `dataMigrations:clearLegacyProjectFields`, then dropped. */
   interview: v.optional(projectInterviewValidator),
   // Legacy build fields removed. schema-narrowing-ok: migrateProjectBuildState
   // Legacy interview fields removed. schema-narrowing-ok: migrateProjectInterviewState

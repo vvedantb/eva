@@ -1,5 +1,4 @@
 import { api } from "@eva/backend";
-import { isProjectPlanning } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconLayoutKanban, IconMessage } from "@tabler/icons-react-native";
 import { goBackOrReplace } from "@vvedantb/native-ui/expo-router";
@@ -13,7 +12,6 @@ import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ProjectDocuments } from "@/projects/ProjectDocuments";
 import { ProjectOverview } from "@/projects/ProjectOverview";
-import { ProjectPlan } from "@/projects/ProjectPlan";
 import { ProjectTasks } from "@/projects/ProjectTasks";
 import { useProjectActions } from "@/projects/useProjectActions";
 import { useProjectTaskStatus } from "@/projects/useProjectStatus";
@@ -30,15 +28,13 @@ type Tab = "overview" | "coordinator" | "documents";
  * web Overview | Coordinator switch under it with Documents (the web
  * sandbox Documents and Artifacts tabs, `ProjectDocuments`), kept in
  * `?tab=` and set in place (no history), Coordinator by default, and the
- * tab below. An older
- * project still in planning with an interview or a plan shows "Plan" in
- * place of Coordinator; a new project has no planning step. Coordinator is
+ * tab below. Coordinator is
  * the project's task list (`ProjectTasks`); the coordinator chat itself is
  * the phone chat screen (`/chat/<projectId>`), as embedding it would fork
  * the chat screen: "Chat" in the bottom bar opens it, with the web unread
  * dot; a project has no closed state, so it always shows. The task list's
- * "+" adds a task to Triage, or starts it now. Outside
- * planning the "…" sheet is led by the web's sandbox actions
+ * "+" adds a task to Triage, or starts it now. The "…" sheet is led by the
+ * web's sandbox actions
  * (`useProjectGitActions`); the coordinator starts approved tasks. Not here
  * from the web: the sandbox preview, files and review panes.
  */
@@ -73,18 +69,13 @@ export default function ProjectScreen() {
     );
   }
 
-  const planning = isProjectPlanning(project.phase);
-  // Only an older project still planning, with an interview or a plan to show, keeps the Plan view.
-  const showPlan = planning && (project.conversationHistory.length > 0 || project.generatedSpec !== undefined);
   return (
     <Screen
       title={project.title}
       onBack={leave}
       headerRight={
-        // The web header "…" (`ProjectDetailHeaderActions`), shown outside planning as the web.
-        planning ? undefined : (
-          <HeaderMoreButton label="More" onPress={() => actions.openSheet(project)} />
-        )
+        // The web header "…" (`ProjectDetailHeaderActions`).
+        <HeaderMoreButton label="More" onPress={() => actions.openSheet(project)} />
       }
     >
       <View className="px-4 pb-2">
@@ -92,7 +83,7 @@ export default function ProjectScreen() {
           value={tab}
           options={[
             { value: "overview", label: "Project" },
-            { value: "coordinator", label: showPlan ? "Plan" : "Sandbox" },
+            { value: "coordinator", label: "Sandbox" },
             { value: "documents", label: "Documents" },
           ]}
           onChange={(next) => router.setParams({ tab: next })}
@@ -103,9 +94,8 @@ export default function ProjectScreen() {
         project={project}
         repo={repo}
         users={users}
-        showPlan={showPlan}
       />
-      {showPlan ? null : <ProjectDock project={project} />}
+      <ProjectDock project={project} />
       {actions.dialogs}
       {git.dialogs}
     </Screen>
@@ -121,20 +111,17 @@ function ProjectTab({
   project,
   repo,
   users,
-  showPlan,
 }: {
   tab: Tab;
   project: Project;
   repo: Repo;
   users: User[] | undefined;
-  showPlan: boolean;
 }) {
   const { tasks, failedTaskIds, status } = useProjectTaskStatus(project._id, repo._id);
   if (tab === "overview") {
     return <ProjectOverview project={project} repo={repo} users={users} status={status} />;
   }
   if (tab === "documents") return <ProjectDocuments projectId={project._id} repoId={repo._id} tasks={tasks} />;
-  if (showPlan) return <ProjectPlan project={project} />;
   return (
     <ProjectTasks
       project={project}

@@ -2,24 +2,17 @@ import { findPrimaryPullRequest } from "../_pullRequests/store";
 import { internal } from "../_generated/api";
 import { ConvexError, v } from "convex/values";
 import {
-  phaseValidator,
   priorityValidator,
   aiModelValidator,
 } from "../validators";
 import {
   authMutation,
-  EMPTY_PROJECT_PHASE,
   hasRepoAccess,
   getProjectWithAccess,
   taskRunPending,
 } from "../functions";
 import { listProjectTasks, taskLabel } from "./scheduler";
 import { allocateNumId } from "../numId";
-import {
-  getProjectConversation,
-  setProjectConversation,
-  setProjectGeneratedSpec,
-} from "./helpers";
 import {
   mirrorOwnerIntoSession,
   syncProjectSession,
@@ -80,7 +73,6 @@ export const create = authMutation({
       rawInput: args.rawInput,
       ...(description ? { description } : {}),
       baseBranch: args.baseBranch,
-      phase: EMPTY_PROJECT_PHASE,
       projectStartDate: Date.now(),
       priority: args.priority,
       numId,
@@ -90,16 +82,13 @@ export const create = authMutation({
   },
 });
 
-/** Updates editable fields on a project, including its generated spec. */
+/** Updates editable fields on a project. */
 export const update = authMutation({
   args: {
     id: v.id("projects"),
     title: v.optional(v.string()),
     description: v.optional(v.string()),
     branchName: v.optional(v.string()),
-    generatedSpec: v.optional(v.string()),
-    /** Ignored: the phase is derived. Kept for older clients. */
-    phase: v.optional(phaseValidator),
     priority: v.optional(v.union(priorityValidator, v.null())),
     projectLead: v.optional(v.union(v.id("users"), v.null())),
     members: v.optional(v.array(v.id("users"))),
@@ -121,12 +110,8 @@ export const update = authMutation({
     );
     // `id` must be omitted — leaving it in the rest-spread patches a stray
     // `id` field onto the document and breaks projects:list return validation.
-    // `phase` is derived (`recomputeProjectPhase`): an older client's write is
-    // ignored.
     const {
       id: _projectId,
-      phase: _phase,
-      generatedSpec,
       projectLead,
       priority,
       model,
@@ -134,7 +119,6 @@ export const update = authMutation({
       ...fields
     } = args;
     void _projectId;
-    void _phase;
     const updates: Record<
       string,
       string | number | boolean | Array<string> | undefined
@@ -205,36 +189,6 @@ export const update = authMutation({
         });
       }
     }
-    if (generatedSpec !== undefined) {
-      await setProjectGeneratedSpec(ctx.db, args.id, generatedSpec);
-    }
-    return null;
-  },
-});
-
-/**
- * Appends the caller's own answer to the project interview. Assistant turns
- * are written only by the interview workflow (internal mutations).
- */
-export const addMessage = authMutation({
-  args: {
-    id: v.id("projects"),
-    role: v.literal("user"),
-    content: v.string(),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    const conversation = await getProjectConversation(ctx.db, args.id);
-    await setProjectConversation(ctx.db, args.id, [
-      ...conversation,
-      {
-        role: args.role,
-        content: args.content,
-        userId: ctx.userId,
-        startedAt: Date.now(),
-      },
-    ]);
     return null;
   },
 });
@@ -272,37 +226,6 @@ export const remove = authMutation({
     }
     await ctx.db.patch(args.id, { deletedAt: now });
     await syncProjectSession(ctx, args.id);
-    return null;
-  },
-});
-
-/** Clears all conversation messages from a project. */
-export const clearMessages = authMutation({
-  args: { id: v.id("projects") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    await setProjectConversation(ctx.db, args.id, []);
-    return null;
-  },
-});
-
-/** Updates the content or activity log of the last conversation message in a project. */
-export const updateLastConversationMessage = authMutation({
-  args: {
-    id: v.id("projects"),
-    content: v.optional(v.string()),
-    activityLog: v.optional(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    const messages = [...(await getProjectConversation(ctx.db, args.id))];
-    const last = messages[messages.length - 1];
-    if (!last) return null;
-    if (args.content !== undefined) last.content = args.content;
-    if (args.activityLog !== undefined) last.activityLog = args.activityLog;
-    await setProjectConversation(ctx.db, args.id, messages);
     return null;
   },
 });

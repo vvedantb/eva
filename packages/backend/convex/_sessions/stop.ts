@@ -17,11 +17,11 @@ import { cancelTaskRun } from "../_taskWorkflow/publicMutations";
 import { findOpenAsk } from "../_projects/reports";
 import { cancelChatExecution } from "./execution";
 import {
-  chatOwner,
+  sessionOwner,
   findWorkSession,
   sessionOwnerTaskId,
 } from "./owner";
-import { findWorkChat, ownerHoldsSession } from "./ownerState";
+import { findWorkChat } from "./ownerState";
 import { requestSessionSandboxStop } from "./sandbox";
 
 /**
@@ -30,11 +30,10 @@ import { requestSessionSandboxStop } from "./sandbox";
  *
  *   stopChatTurn     stops the agent in one chat: the chat's open turn, and
  *                    the task run shown in it (a quick task's or project
- *                    task's run). A project build or interview is left alone;
- *                    Cancel build owns it. Queued messages then start.
+ *                    task's run). Queued messages then start.
  *   stopWorkSandbox  sleeps the sandbox of a session, task or project. It is
  *                    refused while the agent works on that sandbox (any chat
- *                    turn, a task run, a build or an interview): stop the
+ *                    turn or a task run): stop the
  *                    agent first, or wait.
  *
  * Neither creates a session: no session means there is nothing to stop.
@@ -65,7 +64,7 @@ export async function stopChat(
   ctx: MutationCtx,
   context: SessionChatContext,
 ): Promise<void> {
-  const owner = chatOwner(context.chat, context.session);
+  const owner = sessionOwner(context.session);
   const task = owner.kind === "task" ? await ctx.db.get(owner.taskId) : null;
   await stopOwnerTurn(ctx, task, context);
 }
@@ -119,7 +118,6 @@ async function sessionIsHeld(
   const ownerTask = ownerTaskId ? await db.get(ownerTaskId) : null;
   return (
     (ownerTask !== null && isTaskRunning(ownerTask)) ||
-    (await ownerHoldsSession(db, session)) ||
     (await hasOpenChatTurn(db, session._id))
   );
 }

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FunctionReturnType } from "convex/server";
-import { isProjectBuilding, type Id, type api } from "@eva/backend";
+import type { Id, api } from "@eva/backend";
 import { Virtuoso } from "react-virtuoso";
 import {
   Collapsible,
@@ -139,7 +139,6 @@ export function ProjectsListView({
                               members={project.members}
                               projectLead={project.projectLead}
                               status={statuses.get(project._id)}
-                              isBuilding={isProjectBuilding(project)}
                               sandboxStatus={project.sandboxStatus}
                               hasUnread={project.hasUnread}
                               isAwaitingAnswer={project.isAwaitingAnswer}

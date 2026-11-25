@@ -35,7 +35,6 @@ import {
   type OwnerEntity,
 } from "./owner";
 import { requestSessionSandboxStop } from "./sandbox";
-import { ownerHoldsSession, projectHoldsSession } from "./ownerState";
 import { hasOpenChatTurn } from "../_chat/turnProjection";
 import { markAllRunningExited } from "../backgroundProcesses";
 import { nextSandboxStartAttempt } from "../_sandbox/transitions";
@@ -276,8 +275,7 @@ function ownedSessionSeed(entity: OwnerEntity) {
 
 /**
  * True while an owned session holds its sandbox for something else: a turn
- * open (a chat reply or a run), a start/stop in flight, or a project's build
- * or interview (`ownerHoldsSession`). A new run or build waits (user starts
+ * open (a chat reply or a run) or a start/stop in flight. A new run waits (user starts
  * are refused, scheduled ones retry): the same one-agent-per-sandbox rule
  * the chat queue applies to runs and builds.
  */
@@ -290,7 +288,6 @@ export async function ownedSessionBusy(
   if (session.status === "starting" || session.status === "stopping") {
     return true;
   }
-  if (await ownerHoldsSession(db, session)) return true;
   return await hasOpenChatTurn(db, session._id);
 }
 
@@ -327,7 +324,7 @@ const BRANCH_SYNC_RETRY_MS = 60_000;
  * branch, so it is deleted, a start in flight is fenced off by the bumped
  * start attempt (and so is a run's or interview's attach), and the next
  * start boots a fresh checkout — all in one write. While the session is busy
- * (a turn, a run, a build, an interview, a start or stop) the move waits and
+ * (a turn, a run, a start or stop) the move waits and
  * retries, so nothing running loses its VM.
  */
 export async function syncProjectSessionBranch(
@@ -571,15 +568,6 @@ export async function syncProjectSession(
   ]);
   if (!project || !session) return;
   const retired = project.deletedAt !== undefined;
-  // The build or interview stops first; that mutation retires the session.
-  if (retired && !isSessionArchived(session) && projectHoldsSession(project)) {
-    await ctx.scheduler.runAfter(
-      0,
-      internal.buildWorkflow.releaseProjectSessionForRetire,
-      { projectId },
-    );
-    return;
-  }
   await syncOwnedSessionWithTerminal(
     ctx,
     { kind: "project", projectId },

@@ -13,8 +13,7 @@ import { listLiveSessionChats } from "../_sessionChats/helpers";
 import { buildSessionBranchName } from "../_git/branchNames";
 import { sandboxOwnerKey } from "@eva/shared";
 import { taskPrUrl } from "../_pullRequests/store";
-import { chatOwner } from "./owner";
-import { getProjectGeneratedSpec } from "../_projects/helpers";
+import { sessionOwner } from "./owner";
 import {
   formatProjectTaskTable,
   loadProjectTaskRows,
@@ -155,10 +154,9 @@ export const COORDINATOR_RULES = `You are this project's coordinator. You plan t
 async function ownerPromptContext(
   ctx: QueryCtx,
   session: Doc<"sessions">,
-  chat: Doc<"sessionChats">,
   message: string,
 ): Promise<{ message: string; planContent?: string; prUrl?: string }> {
-  const owner = chatOwner(chat, session);
+  const owner = sessionOwner(session);
   const taskId = owner.kind === "task" ? owner.taskId : undefined;
   const task = taskId ? await ctx.db.get(taskId) : null;
   if (task) {
@@ -187,7 +185,6 @@ async function ownerPromptContext(
         ),
         message,
       ),
-      planContent: await getProjectGeneratedSpec(ctx.db, project._id),
       prUrl: project.prUrl,
     };
   }
@@ -245,7 +242,7 @@ export async function buildSessionPrompt(
       .query("sessionRepos")
       .withIndex("by_session", (q) => q.eq("sessionId", session._id))
       .collect(),
-    ownerPromptContext(ctx, session, chat, resolvedMessage),
+    ownerPromptContext(ctx, session, resolvedMessage),
   ]);
   const linkedRepos = linkedRepoRows.map((row) => ({
     owner: row.owner,

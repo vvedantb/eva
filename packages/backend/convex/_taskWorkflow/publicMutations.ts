@@ -5,7 +5,7 @@ import { cancelTrackedWorkflow, toWorkflowId } from "../workflowManager";
 import {
   authMutation,
   getActiveTaskRun,
-  recomputeProjectPhase,
+  onProjectTasksChanged,
 } from "../functions";
 import {
   advanceTurn,
@@ -232,7 +232,7 @@ export async function cancelTaskRun(
   // open question to its coordinator.
   if (task.projectId !== undefined) {
     await closeTaskReports(ctx, task._id);
-    await recomputeProjectPhase(ctx, task.projectId);
+    await onProjectTasksChanged(ctx, task.projectId);
   }
 }
 

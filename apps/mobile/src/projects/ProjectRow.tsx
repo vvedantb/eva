@@ -1,5 +1,5 @@
-import { isProjectBuilding, type api, type Id } from "@eva/backend";
-import { formatEntityNumLabel, PROJECT_PHASE_LABELS, projectPlanningPhase } from "@eva/shared";
+import type { api, Id } from "@eva/backend";
+import { formatEntityNumLabel } from "@eva/shared";
 import { PROJECT_STAGE_LABELS, projectListNeedsYouLabel, type ProjectListStatus } from "@eva/shared/projectView";
 import { projectStatus } from "@eva/shared/projectStatus";
 import { EVA_THEME } from "@eva/shared/evaTheme";
@@ -9,9 +9,9 @@ import type { FunctionReturnType } from "convex/server";
 import { useRouter } from "expo-router";
 import { Text, View } from "react-native";
 import { useSimpleView } from "@/chat/ComposerFooter";
-import { phaseAppearance, projectStageAppearance } from "@/projects/phaseAppearance";
+import { projectStageAppearance } from "@/projects/phaseAppearance";
 import { ProjectProgress, ProjectStageCounts } from "@/projects/ProjectProgress";
-import { META_TEXT, MetaPill, SANDBOX_DOT } from "@/quickTasks/QuickTaskRow";
+import { META_TEXT, SANDBOX_DOT } from "@/quickTasks/QuickTaskRow";
 import { displayTitle } from "@/ui/format";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { AwaitingAnswerMark, NeedsYouMark } from "@/ui/RowStatus";
@@ -61,24 +61,19 @@ export function ProjectRow({
   const theme = EVA_THEME[scheme];
   const muted = theme.mutedForeground;
   const simpleView = useSimpleView();
-  const appearance = phaseAppearance(project.phase, scheme);
   const shownStatus = status ?? NO_TASKS;
   // A paused coordinator, or tasks that wait for a person.
   const needsYouLabel = projectListNeedsYouLabel(shownStatus);
-  // Draft and finalized share To Do: the badge tells them apart.
-  const planningPhase = projectPlanningPhase(project.phase);
   const numLabel = formatEntityNumLabel({ numId: project.numId });
   const preview = project.description ?? project.rawInput;
   const sandbox = project.sandboxStatus ? SANDBOX_DOT[project.sandboxStatus] : undefined;
   // The web `showsSandboxStatusDot`: simple view shows none.
   const showSandbox = sandbox !== undefined && !simpleView;
-  const isBuilding = isProjectBuilding(project);
   const memberIds = [...new Set([project.projectLead, ...(project.members ?? [])].filter((id): id is Id<"users"> => id !== undefined))];
   const avatarIds = memberIds.length > 0 ? memberIds : [project.userId];
   const hiddenCount = avatarIds.length - MAX_AVATARS;
   const hint = [
     PROJECT_STAGE_LABELS[shownStatus.stage],
-    isBuilding ? "Building" : undefined,
     project.isAwaitingAnswer ? "Eva asked you a question" : (needsYouLabel ?? (showSandbox ? sandbox.label : undefined)),
     project.hasUnread ? "Unread" : undefined,
   ]
@@ -158,10 +153,6 @@ export function ProjectRow({
               {`+${hiddenCount}`}
             </Text>
           ) : null}
-          {/* The Draft or Finalised badge ends the footer, where the web kebab sits (the long press is the menu). */}
-          <View className="ml-auto flex-row items-center gap-1.5">
-            {planningPhase ? <MetaPill icon={appearance.icon} label={PROJECT_PHASE_LABELS[planningPhase]} /> : null}
-          </View>
         </View>
       </View>
     </SurfaceRow>

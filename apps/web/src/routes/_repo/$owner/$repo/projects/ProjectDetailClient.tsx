@@ -24,17 +24,9 @@ import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
 import type { EntityResolveStatus } from "@/lib/numId";
 import type { ProjectSandboxTab } from "@/lib/components/projects/projectSandboxTabs";
-import {
-  isProjectDraftOrFinalized,
-  parseProjectSpec,
-} from "./_components/projectDetailHelpers";
 import { ProjectDetailHeaderActions } from "./_components/ProjectDetailHeaderActions";
 import { ProjectDetailMainContent } from "./_components/ProjectDetailMainContent";
 import { ProjectDetailSandboxContent } from "./_components/ProjectDetailSandboxContent";
-import {
-  ProjectInterviewHistoryDialog,
-  ProjectPlanDialog,
-} from "./_components/ProjectDetailDialogs";
 
 export function ProjectDetailClient({
   projectId,
@@ -58,19 +50,15 @@ export function ProjectDetailClient({
   const { basePath, repo } = useRepo();
   const simpleView = useSimpleView();
   const sandboxRailWidthPx = useSandboxRailWidthPx();
-  const [showPlanModal, setShowPlanModal] = useState(false);
-  const [showChatModal, setShowChatModal] = useState(false);
 
   const project = useQuery(api.projects.get, { id: projectId });
   useEntityDocumentTitle(project?.title);
-  const streaming = useQuery(api.streaming.get, { entityId: projectId });
 
   const sandbox = useProjectSandbox(projectId);
   const {
     isSandboxActive,
     isSandboxStarting,
     isSandboxStopping,
-    sandboxStartupActivity,
     sandboxId: projectSandboxId,
   } = sandbox;
   // The project chats in its session's Main chat; nothing before it exists.
@@ -150,23 +138,17 @@ export function ProjectDetailClient({
     );
   }
 
-  const isDraftOrFinalized = isProjectDraftOrFinalized(project);
-  const parsedSpec = parseProjectSpec(project.generatedSpec);
-  const hasPlanContext = Boolean(parsedSpec);
-
   return (
     <PageWrapper
       title={
         <ProjectBreadcrumb projectId={project._id} title={project.title} />
       }
-      /* Project / Sandbox (Plan while drafting) live in the header. */
+      /* Project / Sandbox live in the header. */
       titleAfter={
         projectPathSegment ? (
           <ProjectMainTabs
             projectHref={`${basePath}/projects/${projectPathSegment}`}
             activeTab={mainTab}
-            workTabLabel={isDraftOrFinalized ? "Plan" : "Sandbox"}
-            showSandboxStatus={!isDraftOrFinalized}
             isSandboxActive={isSandboxActive}
             isSandboxStarting={isSandboxStarting}
             isSandboxStopping={isSandboxStopping}
@@ -177,26 +159,20 @@ export function ProjectDetailClient({
       fillHeight
       childPadding={false}
       headerRight={
-        isDraftOrFinalized ? null : (
-          <ProjectDetailHeaderActions
-            projectId={projectId}
-            project={project}
-            repoId={repo._id}
-            sandbox={sandbox}
-            chatId={chatId}
-            chatTurnOpen={chatTurnOpen}
-            hasPlanContext={hasPlanContext}
-            setShowPlanModal={setShowPlanModal}
-            setShowChatModal={setShowChatModal}
-          />
-        )
+        <ProjectDetailHeaderActions
+          projectId={projectId}
+          project={project}
+          repoId={repo._id}
+          sandbox={sandbox}
+          chatId={chatId}
+          chatTurnOpen={chatTurnOpen}
+        />
       }
     >
       <ProjectDetailMainContent
         projectId={projectId}
         project={project}
         mainTab={mainTab}
-        isDraftOrFinalized={isDraftOrFinalized}
         coordinatorContent={
           <ProjectDetailSandboxContent
             projectId={projectId}
@@ -214,27 +190,10 @@ export function ProjectDetailClient({
             openAgentsTab={openAgentsTab}
           />
         }
-        streamingActivity={streaming?.currentActivity}
-        sandboxStartupActivity={sandboxStartupActivity}
         basePath={basePath}
-        repoId={repo._id}
         isTaskOpen={selectedTaskStatus !== undefined}
         selectedTaskId={selectedTaskId}
         selectedTaskStatus={selectedTaskStatus}
-      />
-
-      {parsedSpec && (
-        <ProjectPlanDialog
-          parsedSpec={parsedSpec}
-          open={showPlanModal}
-          onOpenChange={setShowPlanModal}
-        />
-      )}
-
-      <ProjectInterviewHistoryDialog
-        conversationHistory={project.conversationHistory}
-        open={showChatModal}
-        onOpenChange={setShowChatModal}
       />
     </PageWrapper>
   );

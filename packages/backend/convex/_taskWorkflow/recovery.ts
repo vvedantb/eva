@@ -6,7 +6,7 @@ import type { TurnState } from "../validators";
 import { closeOpenTurn } from "../_chat/turnStore";
 import { clearTaskRunStreaming } from "./helpers";
 import { finishTaskRun, taskRunWorkflowId } from "../_agentTasks/runState";
-import { recomputeProjectPhase } from "../functions";
+import { onProjectTasksChanged } from "../functions";
 
 const QUICK_TASK_AUTO_RETRY_BASE_DELAY_MS = 20_000;
 const QUICK_TASK_AUTO_RETRY_JITTER_MS = 20_000;
@@ -184,7 +184,7 @@ export async function cleanUpStaleRun(
   // The task left `in_progress`: its project may start the next ones.
   const task = await ctx.db.get(params.taskId);
   if (task?.projectId !== undefined) {
-    await recomputeProjectPhase(ctx, task.projectId);
+    await onProjectTasksChanged(ctx, task.projectId);
   }
 
   // Every stop path ends here: the old chain, the lease reconciler and the

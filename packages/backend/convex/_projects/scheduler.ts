@@ -26,7 +26,7 @@ import { RUN_WAITING_FOR_ANSWER } from "../_taskWorkflow/helpers";
  * and starts runs.
  *
  * It runs on these events: the coordinator creates tasks, a person approves
- * or creates one, a child task's status changes (`recomputeProjectPhase`),
+ * or creates one, a child task's status changes (`onProjectTasksChanged`),
  * and a child PR merges (the PR webhook). It is
  * idempotent: a second call on the same state starts nothing.
  */
@@ -300,16 +300,6 @@ export async function approveTasks(
       await ctx.db.patch(taskId, { approvedAt: now, updatedAt: now });
     }
   }
-}
-
-/** Every `todo` task of the project: what a build scheduled before the scheduler approves when it fires. */
-export async function projectTodoTaskIds(
-  db: DatabaseReader,
-  projectId: Id<"projects">,
-): Promise<Id<"agentTasks">[]> {
-  return (await listProjectTasks(db, projectId))
-    .filter((task) => task.status === "todo")
-    .map((task) => task._id);
 }
 
 /**
