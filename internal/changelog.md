@@ -6,6 +6,14 @@ Date: 2026-11-25
 
 `projectTaskNeedsYou` returns `review` only when the task's stage is in review and its own PR is open. Tasks from before the coordinator sit in `code_review` with no PR of their own (their work went into the project PR), so 166 of them filled the Inbox's To review on production; they no longer show there or as "Needs you" in the project task list.
 
+## Mobile: compress native libs in the release APK
+
+Date: 2026-11-25
+
+The sideload APK is smaller because JNI `.so` files are stored zip-compressed instead of page-aligned (legacy packaging). Android extracts them at install; runtime is unchanged.
+
+`expo-build-properties` now sets `android.useLegacyPackaging: true` (maps to Gradle's `jniLibs.useLegacyPackaging`). The existing arm64-only arch, R8 minify and resource shrinking stay as before. `@vvedantb/config` 0.14.2 does not ship a legacy-packaging default yet, so Eva sets it locally.
+
 ## Inbox: Needs you and Updates
 
 Date: 2026-11-25
