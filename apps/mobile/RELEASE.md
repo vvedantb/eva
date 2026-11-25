@@ -81,6 +81,7 @@ The script runs `expo prebuild --platform android --clean`, then `./gradlew asse
 
 - The release APK is `arm64-v8a` only. `expo-build-properties` sets `buildArchs` in `app.config.ts`, so this holds even without the release script's `gradle.properties` edit. There is no `x86_64` build: CI does not install the release APK on an emulator.
 - `expo-build-properties` also turns on R8 minify and resource shrinking for release builds. The extra keep rules are `PROGUARD_RULES` in `app.config.ts`. If a release crashes at start with a missing class, add a keep rule there.
+- Native libs are zip-compressed in the APK via `useLegacyPackaging: true` in `expo-build-properties`. Android extracts them at install, so the sideload download is smaller.
 - Most of `res/` is icon fonts from `@expo/vector-icons`. It is a peer dependency of `@vvedantb/native-ui`, so Eva cannot remove it. Resource shrinking may drop the fonts that nothing uses.
 
 ## Build locally

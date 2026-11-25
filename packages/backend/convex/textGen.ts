@@ -19,8 +19,11 @@ import { evaluateDecision } from "./_jev/client";
 import { buildTitleDigest } from "./_sessions/prompts";
 import { chatTurnEntityIdValidator } from "./validators";
 
-/** Cheap gateway model for session titles — one-line change later. */
-const TEXT_GEN_MODEL = "openai/gpt-5-nano";
+/** Cheap gateway model for titles, tags, completions and polish. Same as Ave. */
+const TEXT_GEN_MODEL = "openai/gpt-6-luna";
+
+/** Luna's lowest effort; it rejects gpt-5's "minimal". */
+const NO_REASONING = { reasoningEffort: "none", textVerbosity: "low" };
 
 /** Trims, then strips one pair of wrapping quotes the model sometimes adds. */
 function stripWrappingQuotes(raw: string): string {
@@ -255,14 +258,9 @@ Continue the partial text below from exactly where it stops. Reply with the cont
 
 Partial text:
 ${args.text.slice(-MAX_COMPLETION_INPUT)}`,
-        // gpt-5 counts reasoning tokens against maxOutputTokens, so a tight cap
+        // Reasoning tokens count against maxOutputTokens, so a tight cap
         // returns an empty string. Keep reasoning off and clip in cleanCompletion.
-        providerOptions: {
-          openai: {
-            reasoningEffort: "minimal",
-            textVerbosity: "low",
-          },
-        },
+        providerOptions: { openai: NO_REASONING },
         maxOutputTokens: 256,
         stopSequences: ["\n"],
       });
@@ -352,12 +350,7 @@ Conversation:
 ${digest}`,
         // Same trade-off as completeTextInternal: the user is looking at an
         // empty composer, so latency beats depth.
-        providerOptions: {
-          openai: {
-            reasoningEffort: "minimal",
-            textVerbosity: "low",
-          },
-        },
+        providerOptions: { openai: NO_REASONING },
         maxOutputTokens: 256,
       });
       return cleanPrediction(text);
@@ -438,14 +431,9 @@ Rewrite the transcript so it reads as if it were typed, following every rule:
 
 Transcript:
 ${args.transcript.slice(0, MAX_TRANSCRIPT_INPUT)}`,
-        // gpt-5 counts reasoning tokens against maxOutputTokens, and the output
+        // Reasoning tokens count against maxOutputTokens, and the output
         // roughly mirrors the input length, so keep reasoning off and the cap high.
-        providerOptions: {
-          openai: {
-            reasoningEffort: "minimal",
-            textVerbosity: "low",
-          },
-        },
+        providerOptions: { openai: NO_REASONING },
         maxOutputTokens: 2048,
       });
       return stripWrappingQuotes(text);

@@ -8,7 +8,7 @@ This file is separate from the v1 plan because the v1 plan moves to `internal/pl
 
 ## v1 follow-ups (separate PRs, before v2)
 
-- **PR 2: Inbox.** One place for "Needs you" (questions, PRs to review, Triage, failed tasks) and "Updates" (today's notifications), across projects, quick tasks and sessions. Mockup agreed 24 November 2026.
+- **PR 2: Inbox (built 25 November 2026).** The Inbox has "Needs you" (default: Questions, To review, Triage, Failed, from `needsYou.list` and `@eva/shared/needsYou`) and "Updates" (the notification feed), on web and phone. Not done: a repo picker inside the global Inbox; a Needs you count on the nav badge.
 - **PR 3: Legacy cleanup.** Delete the old project interview and plan tabs and their code, after `migrations:convertProjects` has run on production.
 
 ## v2

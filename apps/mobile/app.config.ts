@@ -96,6 +96,7 @@ export default (_context: ConfigContext): ExpoConfig => ({
           enableMinifyInReleaseBuilds: true,
           enableShrinkResourcesInReleaseBuilds: true,
           extraProguardRules: PROGUARD_RULES,
+          useLegacyPackaging: true,
         },
       },
     ],
