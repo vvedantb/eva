@@ -1100,8 +1100,7 @@ function rewriteHtml(html, injects, tabPrefix, pings) {
   return out;
 }
 
-// Vercel exposes each sandbox port on its OWN "*.vercel.run" subdomain (unlike
-// Daytona's single host + port-prefix scheme). The proxy has no way to learn
+// Vercel exposes each sandbox port on its OWN "*.vercel.run" subdomain. The proxy has no way to learn
 // its own external hostname (Vercel's edge terminates TLS before this
 // process), so it cannot rewrite a redirect to "the current host, new path" —
 // it can only strip the host entirely and rely on the browser resolving a

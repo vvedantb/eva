@@ -142,8 +142,8 @@ export async function ensureDockerDaemon(
     // Not running (or docker not installed) — try to start it below.
   }
 
-  // Prefer the shared bootstrap first. On Vercel resume the older Daytona-style
-  // restart below often fails (wasting ~1s) before this same bootstrap succeeds.
+  // Prefer the shared bootstrap first. On Vercel resume the plain restart
+  // below often fails (wasting ~1s) before this same bootstrap succeeds.
   if (await bootstrapVercelDocker(sandbox)) {
     return true;
   }

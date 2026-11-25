@@ -1768,22 +1768,15 @@ export async function forcePushBranchToOrigin(
  * True when a create failed because the requested snapshot itself is unusable,
  * so the caller can retry without it (bare sandbox + fresh clone).
  *
- * Two shapes, because repos configured before the Vercel migration may still
- * carry a Daytona-era snapshot name (e.g. `seeded-<repoId>`) that Vercel has
- * never heard of:
- *
- * - Daytona-era state errors ("Snapshot X is error"), still matched so legacy
- *   messages surfacing from stored data keep working.
- * - Vercel not-found. `VercelSandboxClient.create` wraps failures as
- *   `vercel create failed (snapshot=<name>, ...): <API body>`, so we require
- *   that prefix with a real snapshot name before treating a 404 as a snapshot
- *   problem. Without that scoping, an unrelated not-found (a missing repo, say)
- *   would be silently downgraded to "clone instead" and hide the real fault.
+ * The signal is Vercel not-found (also what a stale or unknown snapshot name
+ * gives). `VercelSandboxClient.create` wraps failures as
+ * `vercel create failed (snapshot=<name>, ...): <API body>`, so we require
+ * that prefix with a real snapshot name before treating a 404 as a snapshot
+ * problem. Without that scoping, an unrelated not-found (a missing repo, say)
+ * would be silently downgraded to "clone instead" and hide the real fault.
  */
 function isSnapshotUnusableError(err: unknown): boolean {
   const msg = errorMessage(err);
-  if (/Snapshot\s+\S+\s+is\s+(error|build_failed)/i.test(msg)) return true;
-
   const requestedASnapshot =
     msg.includes("vercel create failed (snapshot=") &&
     !msg.includes("vercel create failed (snapshot=none");

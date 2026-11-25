@@ -8,7 +8,7 @@ import {
 } from "../functions";
 import {
   buildQuickTaskRetryDelayMs,
-  isDaytonaNetworkIssue,
+  isSandboxNetworkIssue,
   isRetryableWatchdogExit,
   TASK_CHAT_BUSY_ERROR,
   TASK_CHAT_BUSY_RETRY_MS,
@@ -45,7 +45,7 @@ export const maybeScheduleQuickTaskRetry = internalMutation({
     const retryableFailure =
       chatBusy ||
       isRetryableWatchdogExit(run.exitReason) ||
-      (errorMessage.length > 0 && isDaytonaNetworkIssue(errorMessage));
+      (errorMessage.length > 0 && isSandboxNetworkIssue(errorMessage));
     if (!retryableFailure) return null;
 
     const runs = await ctx.db

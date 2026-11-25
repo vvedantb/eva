@@ -834,7 +834,6 @@ async function prepareSessionSandboxInternal(
                     ctx,
                     args.sessionId,
                     completedSteps,
-                    // Vercel resume is snapshot wake, not Daytona cold storage.
                     "Resuming sandbox...",
                   ),
                 onEarlyReady: async () => {

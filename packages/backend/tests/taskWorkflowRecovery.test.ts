@@ -1,31 +1,31 @@
 import { expect, test } from "bun:test";
 import {
-  isDaytonaNetworkIssue,
+  isSandboxNetworkIssue,
   isUsageLimitError,
   parseUsageLimitResetTime,
 } from "../convex/_taskWorkflow/recovery";
 
-test("isDaytonaNetworkIssue requires daytona/sandbox marker plus network/status", () => {
+test("isSandboxNetworkIssue requires sandbox/snapshot marker plus network/status", () => {
+  expect(isSandboxNetworkIssue("Sandbox timed out: status code 503")).toBe(
+    true,
+  );
   expect(
-    isDaytonaNetworkIssue("Daytona sandbox timed out: status code 503"),
-  ).toBe(true);
-  expect(
-    isDaytonaNetworkIssue(
+    isSandboxNetworkIssue(
       "sandbox failed to become ready within the timeout period",
     ),
   ).toBe(true);
-  expect(isDaytonaNetworkIssue("plain fetch failed with econnreset")).toBe(
+  expect(isSandboxNetworkIssue("plain fetch failed with econnreset")).toBe(
     false,
   );
 });
 
-test("isDaytonaNetworkIssue ignores sandbox exec failures and base-branch fetch", () => {
+test("isSandboxNetworkIssue ignores sandbox exec failures and base-branch fetch", () => {
   // Agent command failures must not trigger infrastructure auto-retry.
-  expect(isDaytonaNetworkIssue("sandbox exec failed: command not found")).toBe(
+  expect(isSandboxNetworkIssue("sandbox exec failed: command not found")).toBe(
     false,
   );
   expect(
-    isDaytonaNetworkIssue("Failed to fetch latest base branch from remote"),
+    isSandboxNetworkIssue("Failed to fetch latest base branch from remote"),
   ).toBe(false);
 });
 
