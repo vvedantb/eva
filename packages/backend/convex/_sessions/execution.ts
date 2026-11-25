@@ -414,7 +414,11 @@ export const startExecute = authMutation({
     ...turnSettingsArgs,
     sourceProposedPlanId: v.optional(v.id("proposedPlans")),
   },
-  returns: v.union(v.literal("started"), v.literal("queued")),
+  returns: v.union(
+    v.literal("started"),
+    v.literal("queued"),
+    v.literal("posted"),
+  ),
   handler: async (ctx, args) => {
     const context = await getSessionChatWithAccess(
       ctx.db,
@@ -441,16 +445,16 @@ export const startExecute = authMutation({
     // In a project task waiting on its question, this message is the answer
     // and starts the task's next run (`routePersonChatMessage`). The user row
     // is already stored (the client sends addMessage first).
-    if (
-      await routePersonChatMessage(ctx, {
-        context,
-        userId: ctx.userId,
-        message: args.message,
-        insertUserRow: false,
-      })
-    ) {
-      return "started";
-    }
+    // In a coordinator chat, a message for teammates only is a quiet
+    // comment: stored, no turn ("posted").
+    const routed = await routePersonChatMessage(ctx, {
+      context,
+      userId: ctx.userId,
+      message: args.message,
+      insertUserRow: false,
+    });
+    if (routed === "answered") return "started";
+    if (routed === "posted") return "posted";
 
     const { chatId, message, sourceProposedPlanId, ...settings } = args;
     void chatId;
@@ -728,17 +732,15 @@ export async function sendSessionChatMessage(
     authorUserId: params.userId,
     surface: { kind: "session", session, chat },
   });
-  // A project task waiting on its question takes this as the answer.
-  if (
-    await routePersonChatMessage(ctx, {
-      context: params.context,
-      userId: params.userId,
-      message: params.content,
-      insertUserRow: true,
-    })
-  ) {
-    return;
-  }
+  // A project task waiting on its question takes this as the answer; a
+  // coordinator-chat message for teammates only is stored as a quiet comment.
+  const routed = await routePersonChatMessage(ctx, {
+    context: params.context,
+    userId: params.userId,
+    message: params.content,
+    insertUserRow: true,
+  });
+  if (routed !== "continue") return;
   await enqueueChatMessage(ctx, params);
   // Sends at once when the chat is idle. Otherwise the queue waits: behind
   // the running turn, for a usage-limit reset, for a free parallel-chat

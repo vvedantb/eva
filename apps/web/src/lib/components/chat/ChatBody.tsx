@@ -1260,6 +1260,7 @@ function ChatBodyInner({
             >
               <ChatComposer
                 repo={repo}
+                mentionEva={assistantBubbles}
                 conversationId={conversationId}
                 queuedMessages={queuedMessages}
                 queueLabel={queueLabel}
