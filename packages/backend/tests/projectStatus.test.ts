@@ -137,6 +137,19 @@ describe("project status", () => {
     ).toBe("failed");
   });
 
+  test("review needs the task's own open PR", () => {
+    expect(
+      projectTaskNeedsYou(
+        task("a", 1, { status: "code_review", prState: "open" }),
+      ),
+    ).toBe("review");
+    // A task from before the coordinator: in review, but its work went into
+    // the project's PR, so it has none of its own.
+    expect(
+      projectTaskNeedsYou(task("a", 1, { status: "code_review" })),
+    ).toBeUndefined();
+  });
+
   test("an open ask waits for the coordinator, then for a person", () => {
     const waiting = task("a", 1, {
       status: "in_progress",
@@ -162,9 +175,11 @@ describe("project status", () => {
         task("a", 1, { status: "business_review", prState: "closed" }),
       ),
     ).toBe("pr_closed");
-    expect(projectTaskNeedsYou(task("a", 1, { status: "code_review" }))).toBe(
-      "review",
-    );
+    expect(
+      projectTaskNeedsYou(
+        task("a", 1, { status: "code_review", prState: "open" }),
+      ),
+    ).toBe("review");
     expect(projectTaskNeedsYou(task("a", 1, { usageLimited: true }))).toBe(
       "usage_limit",
     );
