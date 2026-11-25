@@ -45,12 +45,12 @@ export function AnnualUnlocked() {
       </div>
 
       <Reveal step={2} delay={0.4}>
-        <p className="mt-6 text-xl text-white/55">
-          Learned from people on X, and from Krzys
+        <p className="mt-6 text-2xl text-white/80">
+          Most of my AI learning came from people on X, and from Krzys
         </p>
       </Reveal>
       <Reveal step={2} delay={0.7}>
-        <p className="mt-2 text-xl text-white/55">
+        <p className="mt-3 text-2xl text-white/80">
           My presentations too: built with AI, and well received
         </p>
       </Reveal>

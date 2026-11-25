@@ -695,7 +695,7 @@ Now, the models kept improving this year, but the problems stayed the same.`,
   "annual-g12-unlocked": `So before the framework, one personal bit, cos the switch to AI has honestly been amazing for me.
 → Before AI, I had an ideas list of everything I wanted to build, over 40 things on it, and most of it I had to scrap, cos one person can't build all that, so I just kept filtering it down.
 → Now I can work on several things at the same time and keep going wider: Eva, CarePulse, and these four side projects, which is a huge productivity gain.
-And I've learned a lot about how to stay on top of it from people on X, and from Krzys.
+And honestly, most of what I've learned about AI has come from people on X, that's been my biggest source of inspiration, plus Krzys.
 And I keep experimenting with it: my last few presentations, this one included, were all built with AI.
 That's honestly raised the quality, cos animations I'd never have had time to hand-build, I can now just prompt for.
 And they've been well received: people said they understood what I was showing, they liked how it was presented, and the animations helped get the point across.
