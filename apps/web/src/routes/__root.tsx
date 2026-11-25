@@ -53,9 +53,7 @@ function RootComponent() {
   // The anonymous landing is the one route that needs no Convex. Skipping the
   // provider there keeps marketing visitors from opening a WebSocket to the
   // production deployment (ClientProvider's presence/user bootstrapping and
-  // ChangelogDialogGate each subscribe immediately on mount). Every other
-  // public route (preview-auth) calls Convex hooks
-  // unconditionally, so they keep the provider even when signed out.
+  // ChangelogDialogGate each subscribe immediately on mount).
   const anonymousLanding = pathname === "/" && isSignedIn !== true;
 
   const app = (
@@ -91,7 +89,7 @@ function RootComponent() {
 
   // One provider above everything, including the layers outside the app shell:
   // the preview mini player, the What's New dialog and the routes without
-  // chrome (preview-auth) all render tooltips, and Radix throws
+  // chrome all render tooltips, and Radix throws
   // outright when a Tooltip has no Provider above it. Context only — no DOM,
   // so the anonymous landing pays nothing for it.
   return (
