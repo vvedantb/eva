@@ -2,13 +2,18 @@ import type { QueryCtx } from "../_generated/server";
 import type { Doc } from "../_generated/dataModel";
 import { entityVisible } from "../numId";
 import { resolveSessionBaseBranch } from "./baseBranch";
-import { buildEditPrompt } from "./prompts";
+import { buildEditPrompt, chatSystemPrompt } from "./prompts";
 import { resolveMessageTokens } from "../_mentions/resolveMessageTokens";
 import { bareHarnessCommandPrompt } from "../_mentions/bareHarnessCommand";
 import { resolveExperimentalFlags } from "../_auth/experimentalFlags";
 import { buildCustomInstructionsBlock } from "../prompts";
 import { listReadableSiblingRepos } from "../_githubRepos/sandboxRead";
-import { prependModelHandoffContext } from "../_shared/modelHandoff";
+import {
+  detectModelHandoffFromMessages,
+  hasDeliveredTurn,
+  prependModelHandoffContext,
+  readHandoffHistory,
+} from "../_shared/modelHandoff";
 import { listLiveSessionChats } from "../_sessionChats/helpers";
 import { buildSessionBranchName } from "../_git/branchNames";
 import { sandboxOwnerKey } from "@eva/shared";
@@ -129,6 +134,7 @@ export async function childTaskProjectBlock(
 /** How a coordinator works; leads every coordinator turn. */
 export const COORDINATOR_RULES = `You are this project's coordinator. You plan the project and keep it moving; child tasks do the work.
 - Never edit, commit or push code. Your sandbox is read-only: read code to plan, nothing more.
+- Reply like a teammate in a chat: 1-3 short lines in plain words. No headings. Use a list only when you list tasks.
 - Split work into child tasks with create_tasks_batch (or create_task): one repo each, a short title, a full description and a phase label. Split by files, so tasks running at the same time do not touch the same code. When two tasks must touch the same area, create the second only after the first is merged.
 - Group work before you create tasks. When a person sends many items (a feedback list, review notes), sort them by area first. Put related small items in one task, so each task is one PR for one area (for example "Checkout copy fixes: 6 items"). Give a large or risky item its own task. List every item in the task description, so none is lost.
 - Route new items to an existing task when one already covers that area and its PR is not merged: send them to that task with send_chat_message instead of creating a new task. Create a new task only when no open task fits.
@@ -136,7 +142,8 @@ export const COORDINATOR_RULES = `You are this project's coordinator. You plan t
 - A task runs in the project's home repo by default. Give it another repo (repoName) when the work needs it or the person asks; any repo the person can access is allowed.
 - Plan each task so its PR is safe to merge alone, or put the work behind a flag. If the repo has no flag method, ask the person.
 - Tasks you create start at once: the scheduler starts them all, in task-number order. Create them in the order they should run.
-- Tasks people add wait in Triage until a person approves them. You cannot approve them; read them and plan around them.
+- Tasks people add wait in Triage until a person approves them. You cannot approve them. An approved Triage item comes to you and never starts by itself: group the handed items by area, add each one to an open task that covers its area (send_chat_message to that task, then merge_task_into), or start it as its own task with start_task. Then reply with where each one went.
+- Messages between people that @mention someone else are not for you; leave them to that person. When a message @mentions you and others, answer only your part.
 - A running task does not see your summary updates. If it must know something now, message it with send_chat_message.
 - Answer a task's question with send_chat_message to that task. If you cannot, say so in this chat so a person answers.
 - A failed task: read its state with get_agent_state, then retry it once with retry_task and a note on what to change, or tell the person.
@@ -236,14 +243,23 @@ export async function buildSessionPrompt(
   // Cursor resumes the saved SDK agent; the Eva transcript is not stuffed
   // in as a rotation handoff. Session plan.md / planContent is not injected —
   // that was the old Plan/Build mode contract.
-  const [readableRepos, linkedRepoRows, owner] = await Promise.all([
+  const [readableRepos, linkedRepoRows, owner, history] = await Promise.all([
     listReadableSiblingRepos(ctx.db, session.userId, repo._id),
     ctx.db
       .query("sessionRepos")
       .withIndex("by_session", (q) => q.eq("sessionId", session._id))
       .collect(),
     ownerPromptContext(ctx, session, resolvedMessage),
+    readHandoffHistory(ctx, chat._id),
   ]);
+  const handoff = detectModelHandoffFromMessages(
+    history,
+    args.model,
+    chat.provider,
+  );
+  // A resumed provider session already holds the full instructions from an
+  // earlier turn. Re-sending ~3k tokens each message only slows the reply.
+  const followUp = handoff.kind === "none" && hasDeliveredTurn(history);
   const linkedRepos = linkedRepoRows.map((row) => ({
     owner: row.owner,
     name: row.name,
@@ -266,6 +282,8 @@ export async function buildSessionPrompt(
     devPort: session.devPort ?? repo.devPort,
     readableRepos,
     linkedRepos,
+    followUp,
+    staticInSystemPrompt: chatSystemPrompt(args.model) !== undefined,
     runtime: {
       ownerKey: sandboxOwnerKey({ kind: "session", sessionId: session._id }),
       prUrl: owner.prUrl,
@@ -282,12 +300,6 @@ export async function buildSessionPrompt(
     prompt = `${prefixBlock}\n\n${prompt}`;
   }
   // Last, so the catch-up block leads the whole prompt.
-  prompt = await prependModelHandoffContext(
-    ctx,
-    chat._id,
-    args.model,
-    chat.provider,
-    prompt,
-  );
+  prompt = await prependModelHandoffContext(ctx, chat._id, handoff, prompt);
   return { prompt, branchName };
 }

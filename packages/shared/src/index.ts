@@ -65,6 +65,13 @@ export {
   type SlashItem,
 } from "./mentionComposer";
 export {
+  chatMessageRoute,
+  EVA_MENTION_ID,
+  EVA_MENTION_ITEM,
+  mentionsEva,
+  type ChatMessageRoute,
+} from "./chatMessageRoute";
+export {
   SANDBOX_STOPPED_ALERT,
   isSandboxPausedAlert,
   sandboxPausedAlertText,
@@ -86,6 +93,7 @@ export {
   DEFAULT_PREVIEW_PORT,
   DESKTOP_PORT,
   EDITOR_PORT,
+  previewProxyPort,
 } from "./sandboxPorts";
 export { MAX_PARALLEL_CHATS } from "./sessionChats";
 export { terminalHistoryTail } from "./terminalHistory";
@@ -141,6 +149,12 @@ export {
   chatStreamingEntityId,
   findStreamingTargetMessage,
 } from "./chatStreaming";
+export {
+  threadAnswerContent,
+  threadPendingQuestion,
+  threadRootPreview,
+  threadTurnStatusText,
+} from "./replyThreads";
 export {
   findBubbleGroups,
   firstNameByUserId,

@@ -7,6 +7,7 @@ import {
   IconGitCompare,
   IconGitFork,
   IconLink,
+  IconMessages,
   IconRefresh,
   IconThumbDown,
   IconThumbDownFilled,
@@ -35,6 +36,8 @@ export type HeldMessage = {
   turn?: TurnChangesTarget;
   /** An Eva reply: opens it as selectable text, to quote a part of it. */
   onSelectText?: () => void;
+  /** The coordinator chat: opens this message's reply thread. */
+  onReply?: () => void;
 };
 
 /**
@@ -60,10 +63,10 @@ export function useMessageMenu(onRestore: (turn: TurnChangesTarget) => void): (m
   ];
 
   return (message) => {
-    const { rating, onFork, onRetry, turn, onSelectText } = message;
-    const actions: MessageSheetAction[] = [
-      { key: "copy", label: "Copy text", icon: IconClipboard, onPress: () => copy(message.text, "Copied") },
-    ];
+    const { rating, onFork, onRetry, turn, onSelectText, onReply } = message;
+    const actions: MessageSheetAction[] = [];
+    if (onReply) actions.push({ key: "reply", label: "Reply in thread", icon: IconMessages, onPress: onReply });
+    actions.push({ key: "copy", label: "Copy text", icon: IconClipboard, onPress: () => copy(message.text, "Copied") });
     if (onSelectText) actions.push({ key: "select", label: "Select text", icon: IconCursorText, onPress: onSelectText });
     actions.push({ key: "link", label: "Copy link", icon: IconLink, onPress: () => copy(message.link, "Link copied") });
     if (onFork) actions.push({ key: "fork", label: "Fork from here", icon: IconGitFork, onPress: onFork });

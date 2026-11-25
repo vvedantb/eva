@@ -1,10 +1,47 @@
 # Changelog
 
+## Session follow-ups send only the guard rails
+
+Date: 2026-11-25
+
+`buildEditPrompt` takes `followUp`. When an earlier assistant turn in the chat finished and there is no model handoff (`hasDeliveredTurn`), the turn sends the message, branch and commit guard rails, linked repos, custom and repo instructions only. The dev server, preview, browser, recording, runtime, chat log and style sections ride the first turn and stay in the resumed provider session. Measured with the default runtime facts: 12,734 → 705 characters per follow-up (about 3,180 → 175 tokens). After 20 turns the repeated instructions in history drop from about 254,700 to 26,100 characters. `prependModelHandoffContext` now takes the detected handoff, so the history is read once.
+
+Claude chats also get Eva's static chat rules (`CHAT_STATIC_INSTRUCTIONS`: browser, recordings, chat log, panels, reply length, style, visual rules) as the launch-time system prompt (`chatSystemPrompt`), passed by `prewarmSessionDaemon`. Then `buildEditPrompt({ staticInSystemPrompt })` leaves them out of every message, and a fresh provider session still has them. Codex, Cursor and OpenCode prepend `SYSTEM_PROMPT` to each turn, so they keep the first-turn path. The daemon options signature carries a hash of the system prompt, so a daemon started with other text respawns. Claude first turn: 14,175 → 6,033 characters in the message, plus 8,140 cached system-prompt characters. Readable repos go back after the repo system prompt (fixes `readableReposPrompt.test.ts`).
+## Inbox badge counts Needs you; no hourly coordinator cap
+
+Date: 2026-11-25
+
+The Inbox rail badge, the favicon count and the tab title count now show how many rows wait in Inbox → Needs you (`needsYou.list`, the same cached subscription as that view), not unread notifications, which are often only for information. The unread count stays on the Unread filter.
+
+The coordinator's cap of 10 automatic turns an hour is gone, with its "Coordinator paused" chat banner (web and phone), list label, `getCoordinatorState` and the "a person's message releases held wakes" path. Key dedupe and the 2-minute batch window stay. Each delivery logs `coordinator_wake project=… reasons=…`, so the turn rate is measured before any limit is set. The one coordinator retry of a failed task stays: it ends the failed → retry → failed loop. After deploy run `npx convex run --prod dataMigrations:clearCoordinatorWakeHeldAt` (it delivers any held rows); a later PR drops `projectCoordinatorWakes.heldAt`.
+
 ## Text generation: gpt-5-nano → gpt-6-luna
 
 Date: 2026-11-25
 
 `textGen` (session titles, title regeneration, inline completion, next-message prediction, transcript polish) now uses `openai/gpt-6-luna`, the same model as Ave and arena drafts. Luna rejects gpt-5's `reasoningEffort: "minimal"`, so the three low-latency calls send `"none"` through one shared `NO_REASONING` option. Gateway list price, standard tier: input $0.05 → $0.10, output $0.40 → $0.50 per 1M tokens. Task tags (Jev) and chat recaps (Haiku) are unchanged.
+## Projects v2 D: reply threads in the coordinator chat
+
+Date: 2026-11-25
+
+Any message in a project's coordinator chat takes replies (web + phone). A reply is a `messages` row of the same chat with `replyTo` = the root; the root carries `replyCount`, `lastReplyAt` and up to 3 `replierIds`. The transcript reads `by_parent_and_reply_to` with `replyTo` unset (also `hasMessagesBefore`, the jump rail and find), and `messages.listReplies` reads a thread through `by_reply_to`. `sessionWorkflow.addReply` stores the reply, notifies the thread's people (`comment_reply`) and @mentions, and wakes Eva only when it @mentions her: the reply goes through the chat queue with `queuedMessages.replyTo`, the dequeue skips the user row, and her placeholder row carries `replyTo`, so her answer lands in the thread. Web: Reply in the message actions, "N replies" with the latest repliers' avatars, and the thread as a Replies tab in the coordinator's sandbox rail (only while `?thread=` is set; opening selects it and expands the rail; ✕ or Escape anywhere drops it and returns to the tab before it; ↑/↓ between threads via `messages.listThreadRoots` on the new `by_parent_and_last_reply_at` index). In the coordinator chat (and its threads) the footer row is gone: a floating toolbar sits on each bubble's top-right corner on hover or focus (`MessageToolbar`: 👍 👎 on Eva's replies via `TurnFeedbackActions`, then Reply, Copy, and a ⋯ menu with link, fork and checkpoints), the clock time is the bubble's tooltip, and "N replies" sits under the bubble. Phone: "N replies" in the message footer line. Other chats keep their footer. Phone: Reply in the hold menu, "N replies" under a message, and a pushed `chat/[target]/thread/[rootId]` screen. A thread turn stores `turns.replyTo`, so what follows it lands in the thread too (`insertTurnFollowUp`: stall and system alerts, the retry placeholder, `/loop` continuations; queue start errors, handoff alerts, the empty-stall retry and the usage-limit retry carry it as well). `queuedMessages.listByParent` reads the new `by_parent_and_reply_to_and_order` index with `replyTo` unset, so a queued thread reply stays out of the chat's queue panel on web and phone. While Eva's open turn answers in a thread (`messages.openThreadTurn`), the main chat shows no running state for it: a muted line over the composer says "Eva is replying in a thread on …" with the root's first words (`threadRootPreview` in `@eva/shared`) as a link that opens the thread (web: with the typing dots); Stop and queued sends work as before. The thread shows her turn streaming like a chat turn (web `ReplyThreadView`, phone thread screen). Her question in a thread turn (blocking `pendingQuestions` or streamed) docks in the thread in place of its composer, not in the chat; the chat's line then reads "Eva has a question in a thread on …" (`openThreadTurn.hasQuestion`, no dots). A blocking answer resumes her turn; a saved question's answer goes as an `@Eva` reply (`threadAnswerContent`).
+
+## Projects v2 (A): quiet comments, @Eva, mentions in Needs you
+
+Date: 2026-11-25
+
+In a project's coordinator chat, a message that `@`-mentions only teammates is a quiet comment: it is stored and the teammates are notified, but no Eva turn starts (`routePersonChatMessage` returns `posted`; `startExecute` returns `"posted"`; `sendSessionChatMessage` does not queue). `@Eva` (new picker row "Eva · Coordinator", token id `eva_coordinator_mention`, web and phone) or no mention still wakes Eva; `@Eva` with teammates wakes her and the coordinator rules tell her to answer only her part. Rule: `chatMessageRoute` in `@eva/shared`. Inbox → Needs you now lists your unread chat `@`-mentions under Questions; posting in that chat marks them read (`notifyChatMentions`). Plan: `internal/plans/todo/projects-v2-chat.md`.
+## Projects v2 B: the coordinator chats in short lines and shows "Eva is typing"
+
+Date: 2026-11-25
+
+`COORDINATOR_RULES` ask for 1-3 short plain lines, no headings, lists only for tasks. In the coordinator chat a running turn shows "Eva is typing" with the dots of the teammate `TypingIndicator` inside Eva's bubble (web `EvaTypingLine`, phone `EvaTypingText`) instead of the live activity timeline and streamed text; a blocking question card still shows, and the finished message keeps its steps. Other chats are unchanged.
+## Projects v2 C: approved Triage goes to the coordinator
+
+Date: 2026-11-25
+
+Approving Triage items (web, phone, Inbox) no longer starts them. `approveProjectTasks` stamps `approvedAt` and new `agentTasks.handedToCoordinatorAt`, and requests one coordinator wake (new reason `triage`, delivered at once) listing the items and who added them. The scheduler never starts a handed task (`ProjectTaskFacts.withCoordinator`). New coordinator-only MCP tools: `start_task` (starts a handed item as its own task) and `merge_task_into` (cancels a handed item into an open task of the same project, stored in new `agentTasks.mergedIntoTaskId`; refuses itself, a finished or merged target and other projects). `COORDINATOR_RULES` tell the coordinator to group handed items by area, add each to an open task or start it, and reply with where each went. Task rows show "With Eva" while handed and "Added to #N" once merged.
+
 ## Projects: old project PRs become threads
 
 Date: 2026-11-25

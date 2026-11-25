@@ -87,6 +87,25 @@ function agentLoginPlugin(): Plugin {
   };
 }
 
+/**
+ * `/preview-auth` is its own small entry (`preview-auth.html`), not a route of
+ * the main app. Vercel rewrites the path in production (`vercel.json`); this
+ * does the same for the dev server.
+ */
+function previewAuthEntryPlugin(): Plugin {
+  return {
+    name: "preview-auth-entry",
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        if (req.url === "/preview-auth" || req.url?.startsWith("/preview-auth?")) {
+          req.url = req.url.replace("/preview-auth", "/preview-auth.html");
+        }
+        next();
+      });
+    },
+  };
+}
+
 /** All of node_modules (@vvedantb/ui ships React Compiler output in `dist`), plus vendored code. */
 const COMPILER_EXCLUDE = [
   /\/node_modules\//,
@@ -125,6 +144,7 @@ export default defineConfig({
     originHints(),
     convexDevProxy(),
     agentLoginPlugin(),
+    previewAuthEntryPlugin(),
     process.env.ANALYZE === "true" &&
       visualizer({
         filename: "stats.html",
@@ -234,6 +254,10 @@ export default defineConfig({
   },
   build: {
     rolldownOptions: {
+      input: {
+        main: path.resolve(__dirname, "index.html"),
+        previewAuth: path.resolve(__dirname, "preview-auth.html"),
+      },
       output: {
         codeSplitting: {
           // Only group packages whose whole cost we are happy to load eagerly.

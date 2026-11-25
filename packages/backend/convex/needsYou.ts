@@ -21,7 +21,9 @@ import { isSessionArchived } from "./_sessions/archive";
  * sessions show to the person who made them.
  *
  * - Questions: a project task's open ask the coordinator handed to a person,
- *   and any blocking agent question (`pendingQuestions`) on an open turn.
+ *   any blocking agent question (`pendingQuestions`) on an open turn, and a
+ *   teammate's `@`-mention of the caller in a chat they have not posted in
+ *   since (an unread `mention` notification; posting there reads it).
  * - To review: an open (not draft) PR of a project task, quick task or session.
  * - Triage: a project task no one approved yet.
  * - Failed: a project task whose retries are spent, or a quick task whose
@@ -73,10 +75,11 @@ export const list = authQuery({
         : (await hasRepoAccess(ctx.db, args.repoId, ctx.userId))
           ? [await ctx.db.get(args.repoId)].filter((repo) => repo !== null)
           : [];
-    const perRepo = await Promise.all(
-      repos.map((repo) => repoRows(ctx.db, repo, ctx.userId)),
-    );
-    return perRepo.flat();
+    const [perRepo, mentions] = await Promise.all([
+      Promise.all(repos.map((repo) => repoRows(ctx.db, repo, ctx.userId))),
+      mentionRows(ctx.db, ctx.userId, new Set(repos.map((repo) => repo._id))),
+    ]);
+    return [...perRepo.flat(), ...mentions];
   },
 });
 
@@ -92,6 +95,90 @@ async function repoRows(
     questionRows(db, repo, userId),
   ]);
   return [...projects, ...quickTasks, ...sessions, ...questions];
+}
+
+/** Most unread notifications the mention rows look through. */
+const MENTION_SCAN_LIMIT = 100;
+
+/**
+ * The caller's unread chat `@`-mentions, as Questions. A mention row leaves
+ * once the caller posts in that chat (`notifyChatMentions` reads it) or reads
+ * or archives it in Updates.
+ */
+async function mentionRows(
+  db: DatabaseReader,
+  userId: Id<"users">,
+  repoIds: ReadonlySet<Id<"githubRepos">>,
+): Promise<NeedsYouRow[]> {
+  const unread = (
+    await db
+      .query("notifications")
+      .withIndex("by_user_and_read", (q) =>
+        q.eq("userId", userId).eq("read", false),
+      )
+      .order("desc")
+      .take(MENTION_SCAN_LIMIT)
+  ).filter(
+    (row) =>
+      row.type === "mention" &&
+      row.archivedAt === undefined &&
+      row.chatTarget !== undefined &&
+      row.repoId !== undefined &&
+      repoIds.has(row.repoId),
+  );
+  const rows = await Promise.all(
+    unread.map(async (row): Promise<NeedsYouRow | null> => {
+      const { chatTarget, repoId } = row;
+      if (chatTarget === undefined || repoId === undefined) return null;
+      const source = await mentionSource(db, chatTarget);
+      if (!source) return null;
+      return {
+        key: `mention:${row._id}`,
+        group: "question",
+        title: row.title,
+        detail: row.message,
+        source: source.kind,
+        projectTitle: source.projectTitle,
+        projectId: source.projectId,
+        href: row.href,
+        chatTarget,
+        repoId,
+        at: row.createdAt,
+      };
+    }),
+  );
+  return rows.filter((row) => row !== null);
+}
+
+/** Which kind of chat a mention's `chatTarget` names. */
+async function mentionSource(
+  db: DatabaseReader,
+  chatTarget: string,
+): Promise<{
+  kind: NeedsYouRow["source"];
+  projectId?: Id<"projects">;
+  projectTitle?: string;
+} | null> {
+  const projectId = db.normalizeId("projects", chatTarget);
+  if (projectId) {
+    const project = await db.get(projectId);
+    return project
+      ? { kind: "project", projectId, projectTitle: project.title }
+      : null;
+  }
+  const taskId = db.normalizeId("agentTasks", chatTarget);
+  if (taskId) {
+    const task = await db.get(taskId);
+    if (!task) return null;
+    if (task.projectId === undefined) return { kind: "quick_task" };
+    const project = await db.get(task.projectId);
+    return {
+      kind: "project",
+      projectId: task.projectId,
+      projectTitle: project?.title,
+    };
+  }
+  return db.normalizeId("sessions", chatTarget) ? { kind: "session" } : null;
 }
 
 /** Each live project's child tasks that wait for a person. */

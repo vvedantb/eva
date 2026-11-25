@@ -40,6 +40,8 @@ export function projectCallerOf(
 const COORDINATOR_ONLY_TOOLS: ReadonlySet<string> = new Set([
   "update_project_summary",
   "retry_task",
+  "start_task",
+  "merge_task_into",
 ]);
 
 /** Tools only a child task gets. */

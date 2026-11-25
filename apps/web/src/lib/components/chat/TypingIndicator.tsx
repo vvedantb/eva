@@ -27,7 +27,8 @@ function TypingAvatar({ firstName }: { firstName: string }) {
   );
 }
 
-function TypingDots() {
+/** Three bouncing dots: someone (a teammate, or Eva in a thread) is writing. */
+export function TypingDots() {
   return (
     <span className="inline-flex items-center gap-0.5" aria-hidden>
       {[0, 1, 2].map((i) => (
@@ -37,6 +38,19 @@ function TypingDots() {
           style={{ animationDelay: `${i * 150}ms` }}
         />
       ))}
+    </span>
+  );
+}
+
+/** The coordinator's live turn in its bubble: "Eva is typing" and the dots. */
+export function EvaTypingLine() {
+  return (
+    <span
+      aria-live="polite"
+      className="flex items-center gap-2 text-xs text-muted-foreground"
+    >
+      Eva is typing
+      <TypingDots />
     </span>
   );
 }

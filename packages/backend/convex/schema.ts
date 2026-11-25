@@ -220,6 +220,12 @@ const schema = defineSchema({
     .index("by_parent", ["parentId"])
     // User rows only: the jump rail and up-arrow recall (listUserMessagesByParent).
     .index("by_parent_and_role", ["parentId", "role"])
+    // The transcript: rows that are not thread replies (`replyTo` unset).
+    .index("by_parent_and_reply_to", ["parentId", "replyTo"])
+    // A thread's replies, oldest first.
+    .index("by_reply_to", ["replyTo"])
+    // A chat's thread roots (only roots carry `lastReplyAt`).
+    .index("by_parent_and_last_reply_at", ["parentId", "lastReplyAt"])
     // Find-in-chat above the loaded history (searchOlderByParent).
     .searchIndex("search_content", {
       searchField: "content",
@@ -232,7 +238,10 @@ const schema = defineSchema({
   aveMessages: defineTable(aveMessageFields).index("by_thread", ["threadId"]),
   queuedMessages: defineTable(queuedMessageFields)
     .index("by_parent_and_created", ["parentId", "createdAt"])
-    .index("by_parent_and_order", ["parentId", "order"]),
+    .index("by_parent_and_order", ["parentId", "order"])
+    // The main queue panel lists rows without `replyTo`: a queued thread
+    // reply waits in its thread, not in the chat's queue.
+    .index("by_parent_and_reply_to_and_order", ["parentId", "replyTo", "order"]),
   sessions: defineTable(sessionFields)
     .index("by_repo", ["repoId"])
     .index("by_repo_and_deleted", ["repoId", "deletedAt"])

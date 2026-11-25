@@ -1147,11 +1147,12 @@ class VercelSandboxHandle implements SandboxHandle {
     );
   }
 
+  /**
+   * Reads the route from the handle we already hold. Only a sandbox that lacks
+   * the route (an old one created with fewer ports) pays for the port update
+   * and refetch: two Vercel API calls that sat on every preview open before.
+   */
   async previewUrl(port: number): Promise<PreviewUrl> {
-    if (VERCEL_DEFAULT_EXPOSED_PORTS.includes(port)) {
-      await this.sandbox.update({ ports: [...VERCEL_DEFAULT_EXPOSED_PORTS] });
-      await this.refresh();
-    }
     try {
       return { url: this.sandbox.domain(port), port };
     } catch (error) {

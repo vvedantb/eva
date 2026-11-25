@@ -7,8 +7,10 @@ import {
 } from "./functions";
 import {
   approveTasks,
+  mergeHandedTask,
   retryFailedTask,
   scheduleReadyProjectTasks,
+  startHandedTask,
 } from "./_projects/scheduler";
 
 // A project's child tasks run in parallel, each like a quick task, started by
@@ -32,7 +34,11 @@ export const scheduleReadyTasks = internalMutation({
   },
 });
 
-/** A person approves tasks waiting in Triage; the scheduler then starts what is ready. */
+/**
+ * A person approves tasks waiting in Triage: they go to the coordinator,
+ * which starts each or adds it to an open task (`approveTasks`). Nothing
+ * starts here.
+ */
 export const approveProjectTasks = authMutation({
   args: {
     projectId: v.id("projects"),
@@ -46,7 +52,6 @@ export const approveProjectTasks = authMutation({
       ctx.userId,
     );
     await approveTasks(ctx, args.projectId, args.taskIds);
-    await scheduleReadyProjectTasks(ctx, args.projectId);
     return null;
   },
 });
@@ -73,5 +78,37 @@ export const retryFailedTaskAsCoordinator = internalMutation({
     }
     await retryFailedTask(ctx, taskId, args.note);
     return null;
+  },
+});
+
+/** The coordinator's `start_task`: starts a handed Triage item (`startHandedTask`). */
+export const startTaskAsCoordinator = internalMutation({
+  args: { projectId: v.string(), taskId: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await startHandedTask(
+      ctx,
+      normalizeIdOrThrow(ctx.db, "projects", args.projectId, "Project"),
+      normalizeIdOrThrow(ctx.db, "agentTasks", args.taskId, "Task"),
+    );
+    return null;
+  },
+});
+
+/**
+ * The coordinator's `merge_task_into`: closes a handed Triage item as added
+ * to an open task (`mergeHandedTask`). Returns the target's task number.
+ */
+export const mergeTaskIntoAsCoordinator = internalMutation({
+  args: { projectId: v.string(), taskId: v.string(), intoTaskId: v.string() },
+  returns: v.object({ intoTaskNumber: v.optional(v.number()) }),
+  handler: async (ctx, args) => {
+    const into = await mergeHandedTask(
+      ctx,
+      normalizeIdOrThrow(ctx.db, "projects", args.projectId, "Project"),
+      normalizeIdOrThrow(ctx.db, "agentTasks", args.taskId, "Task"),
+      normalizeIdOrThrow(ctx.db, "agentTasks", args.intoTaskId, "Task"),
+    );
+    return { intoTaskNumber: into.taskNumber };
   },
 });

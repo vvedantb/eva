@@ -28,7 +28,6 @@ const NO_TASKS: ProjectListStatus = {
   stage: "todo",
   counts: projectStatus([]).counts,
   needsYouCount: 0,
-  coordinatorPaused: false,
 };
 
 /**
@@ -62,7 +61,7 @@ export function ProjectRow({
   const muted = theme.mutedForeground;
   const simpleView = useSimpleView();
   const shownStatus = status ?? NO_TASKS;
-  // A paused coordinator, or tasks that wait for a person.
+  // Tasks that wait for a person.
   const needsYouLabel = projectListNeedsYouLabel(shownStatus);
   const numLabel = formatEntityNumLabel({ numId: project.numId });
   const preview = project.description ?? project.rawInput;

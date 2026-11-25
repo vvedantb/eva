@@ -26,6 +26,7 @@ import {
   turnErrorTitle,
   visibleChatMessages,
   findBubbleGroups,
+  EVA_MENTION_ITEM,
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { turnCheckpoint } from "@eva/shared/turnCheckpoint";
@@ -66,6 +67,7 @@ import { AttachButton } from "@/chat/AttachButton";
 import { formatDuration } from "@eva/shared/duration";
 import { AssistantMessage, LiveAssistantMessage } from "@/chat/AssistantMessage";
 import { DayDivider, NewDivider } from "@/chat/DayDivider";
+import { ThreadSummary } from "@/chat/ThreadSummary";
 import { useAppActive } from "@/ui/appState";
 import { UserMessageText } from "@/chat/MentionChip";
 import { EvaBubble, TEAMMATE_FOOTER_INSET, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
@@ -102,13 +104,13 @@ import { useSkillSuggestions } from "@/chat/useSkillSuggestions";
 import { toReviewComment, usePendingLineComments } from "@/diff/prDiffStore";
 import { useAttachments } from "@/chat/useAttachments";
 import { type Chat, useChatModelPick } from "@/chat/useChatModelPick";
-import { TypingIndicator } from "@/chat/TypingIndicator";
+import { EvaTypingText, TypingIndicator } from "@/chat/TypingIndicator";
+import { ThreadTurnStatus } from "@/chat/ThreadTurnStatus";
 import { useDraftSync } from "@/chat/useDraftSync";
 import { useTypingPresence } from "@/chat/useTypingPresence";
 import { useMentionComposer } from "@/chat/useMentionComposer";
 import { WEB_URL } from "@/config";
 import { useSessionActions } from "@/sessions/useSessionActions";
-import { CoordinatorPausedBanner } from "@/projects/CoordinatorPausedBanner";
 import { textColor, useScheme } from "@/ui/theme";
 import { useChatTranscript } from "@/chat/useChatTranscript";
 
@@ -141,7 +143,7 @@ export default function ChatScreen() {
   const messages: ChatMessage[] | undefined = transcript.messages;
   const convex = useConvex();
   const turn = useQuery(api.turns.getChatStatus, parentId ? { entityId: parentId } : "skip");
-  const pending = useQuery(api.pendingQuestions.getActive, parentId ? { entityId: parentId } : "skip");
+  const chatQuestion = useQuery(api.pendingQuestions.getActive, parentId ? { entityId: parentId } : "skip");
   // A session chat's session row: its PR state (Send for Review) and the sandbox's unpushed work (Commit & push).
   const sessionRow = useQuery(api.sessions.get, chat?.session ? { id: chat.session.id } : "skip");
   const feedbackRows = useQuery(api.feedback.listForChat, parentId ? { parentId } : "skip");
@@ -163,6 +165,13 @@ export default function ChatScreen() {
   // The session's running chats and this chat's queue: a send parked while every run slot is taken.
   const runningChats = useQuery(api.turns.listSessionChatStatuses, chat?.session ? { sessionId: chat.session.id } : "skip");
   const queued = useQuery(api.queuedMessages.listByParent, parentId ? { parentId } : "skip");
+  // Eva's open turn answers in a reply thread: no running state here, a status line opens the thread.
+  const threadTurn = useQuery(
+    api.messages.openThreadTurn,
+    parentId && chat?.project !== undefined ? { parentId } : "skip",
+  );
+  // A thread turn's question is answered in its thread screen, not here.
+  const pending = threadTurn ? null : chatQuestion;
   // A teammate's turn shows their avatar and first name, from the same lookup as the web `ChatBody`.
   const teammateIds = otherUserIdsInChat(messages ?? [], me ?? undefined);
   const teammates = useQuery(api.users.getMany, teammateIds.length > 0 ? { ids: teammateIds } : "skip");
@@ -237,7 +246,7 @@ export default function ChatScreen() {
   const closedReason = chat.session
     ? getSessionReadOnlyMessage({ isArchived: chat.session.archived, prState: sessionRow?.prState })
     : undefined;
-  const streamingEntityId = parentId ? chatStreamingEntityId(parentId) : undefined;
+  const streamingEntityId = parentId && !threadTurn ? chatStreamingEntityId(parentId) : undefined;
   const dayStarts = findDayBoundaryIds(visible);
   const newBoundaryId = findNewMessageIds(visible, newSinceAt, me ?? undefined)[0];
   // Runs of one sender's bubbles, as the web: the coordinator's Eva bubbles, yours and a teammate's.
@@ -342,6 +351,11 @@ export default function ChatScreen() {
       );
     };
   };
+  // Reply threads, in the project coordinator chat only (the web `replyThreads`).
+  const canOpenThread = (message: { isSystemAlert?: boolean; content: string }) =>
+    chat.project !== undefined && message.isSystemAlert !== true && message.content.trim() !== "";
+  const openThread = (rootId: string) =>
+    router.push({ pathname: "/chat/[target]/thread/[rootId]", params: { target, rootId } });
   // The message footer's actions, behind a press and hold (user choice): built when a message is held.
   const menuFor = (messageId: string) => {
     const message = visible.find((entry) => entry._id === messageId);
@@ -362,6 +376,7 @@ export default function ChatScreen() {
         message.role === "assistant" && canReply && !pending && !savedQuestion && message.content.trim() !== ""
           ? () => quotes.select(message._id, message.content)
           : undefined,
+      onReply: canOpenThread(message) ? () => openThread(message._id) : undefined,
     });
   };
   // What Find searches, as the web: each message's text as it reads (mention tokens as names), no system rows.
@@ -516,6 +531,7 @@ export default function ChatScreen() {
                 // Only a failed turn gets one, so the rest keep their props (the web `onRetryTurn`).
                 onRetryTurn={message.errorType !== undefined ? retryFor(message._id) : undefined}
                 onOpenWebChat={openWebChat}
+                onOpenThread={chat.project !== undefined ? openThread : undefined}
               />
             );
           }}
@@ -545,7 +561,6 @@ export default function ChatScreen() {
               <>
                 {/* Not gated by simple view, as the web: the user set this goal and can clear it. */}
                 <GoalBanner chatId={chat.session?.chatId ?? chat.task?.sessionChatId ?? chat.project?.sessionChatId} target={chat.target} />
-                {chat.project ? <CoordinatorPausedBanner projectId={chat.project.id} /> : null}
                 {chat.session && canReply ? (
                   <PublishRecoveryBanner sessionId={chat.session.id} newest={newestMessage} isSandboxActive={chat.sandboxActive} />
                 ) : null}
@@ -553,6 +568,13 @@ export default function ChatScreen() {
             }
             panels={
               <>
+                {threadTurn ? (
+                  <ThreadTurnStatus
+                    preview={threadTurn.preview}
+                    hasQuestion={threadTurn.hasQuestion}
+                    onOpen={() => openThread(threadTurn.rootId)}
+                  />
+                ) : null}
                 <ComposerTasksPanel streamingEntityId={streamingEntityId} turnId={liveReplyId} />
                 <QueuedMessagesPanel parentId={parentId} isExecuting={working} isSandboxActive={chat.sandboxActive} />
               </>
@@ -635,10 +657,16 @@ function ChatDock({
   // "Someone is typing", as the web chat composer: the room is the session chat (`parentId`), as the web's;
   // before a task or project chats it has none, so this chat's own target stands in.
   const typing = useTypingPresence(chatTypingRoom(chat.parentId ?? target), me);
-  const composer = useMentionComposer(chat.repoId, getAIModelProvider(normalizeAIModel(chat.model)), (tokenized) => {
-    draft.save(tokenized);
-    if (tokenized) typing.onActivity();
-  });
+  const composer = useMentionComposer(
+    chat.repoId,
+    getAIModelProvider(normalizeAIModel(chat.model)),
+    (tokenized) => {
+      draft.save(tokenized);
+      if (tokenized) typing.onActivity();
+    },
+    // The coordinator chat: `@Eva` says a message is for her (`chatMessageRoute`).
+    chat.project !== undefined ? [EVA_MENTION_ITEM] : [],
+  );
   draft.pull(composer);
   const suggestions = useSkillSuggestions(composer.skills, composer.text);
   const modelPick = useChatModelPick(target, chat, me);
@@ -858,6 +886,7 @@ function ChatMessageRow({
   onPanelReply,
   onRetryTurn,
   onOpenWebChat,
+  onOpenThread,
   after,
   changes,
 }: {
@@ -892,6 +921,8 @@ function ChatMessageRow({
   /** Sends a panel button's text; undefined disables the buttons. */
   onPanelReply: ((message: string) => void) | undefined;
   onOpenWebChat: () => void;
+  /** The coordinator chat: opens a message's reply thread ("N replies"). */
+  onOpenThread?: (rootId: string) => void;
   /** Under the whole message, as the web `afterMessage`: a proposed plan's card. */
   after?: ReactNode;
   /** A reply that changed code: its Changes chip, over the footer. */
@@ -930,7 +961,10 @@ function ChatMessageRow({
       {message.content ? <UserMessageText content={message.content} /> : null}
     </>
   );
-  const replyBody = isUser ? null : live ? (
+  // The coordinator chats like a person: "Eva is typing…" while it works, the steps only once it is done.
+  const replyBody = isUser ? null : live && evaBubble ? (
+    <EvaTypingText />
+  ) : live ? (
     <LiveAssistantMessage streamingEntityId={live} messageId={message._id} />
   ) : (
     <AssistantMessage
@@ -948,6 +982,11 @@ function ChatMessageRow({
   );
   // The coordinator chat: Eva's reply in a bubble on the left, as a teammate's.
   const evaReply = evaBubble && !isUser;
+  // "N replies" in the footer line, always shown (the web footer's thread control).
+  const threadControl =
+    onOpenThread && (message.replyCount ?? 0) > 0 ? (
+      <ThreadSummary replyCount={message.replyCount ?? 0} onPress={() => onOpenThread(message._id)} />
+    ) : null;
   return (
               <View className={`gap-3 ${THREAD_INSET}${joinsPrevious ? " -mt-2" : ""}`} style={findBand}>
                 {dayStart ? <DayDivider timestamp={message.timestamp} /> : null}
@@ -986,7 +1025,11 @@ function ChatMessageRow({
                       at={message.timestamp}
                       finishedAt={message.role === "assistant" ? message.finishedAt : undefined}
                       turn={turn}
+                      leading={threadControl}
                     />
+                  ) : threadControl ? (
+                    // A grouped bubble has no footer: the replies keep their own line.
+                    <View className={fromTeammate || evaReply ? TEAMMATE_FOOTER_INSET : "self-end"}>{threadControl}</View>
                   ) : null}
                 </Message>
                 {after}
