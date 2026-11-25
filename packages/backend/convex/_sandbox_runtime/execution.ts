@@ -2,7 +2,7 @@
 
 import { ConvexError, v, type Infer } from "convex/values";
 import { quote } from "shell-quote";
-import { DESKTOP_PORT, EDITOR_PORT } from "@eva/shared";
+import { DESKTOP_PORT, EDITOR_PORT, previewProxyPort } from "@eva/shared";
 import { redactSecrets } from "@eva/shared/redactSecrets";
 import { SandboxProviderError, type SandboxHandle } from "../_sandbox/provider";
 import type { ActionCtx } from "../_generated/server";
@@ -959,22 +959,17 @@ async function buildPreviewUrl(
   //   editor  → proxy on 8080  (upstream 18080)
   //   desktop → proxy on 6080  (upstream 16080)
   const previewPublicJwk = getPreviewGrantPublicJwk();
-  const isVercelDesktopOrEditor =
-    args.port === DESKTOP_PORT || args.port === EDITOR_PORT;
-  const fixedVercelProxyPort = isVercelDesktopOrEditor
-    ? args.port
-    : VERCEL_PREVIEW_PROXY_PORT;
+  const fixedVercelProxyPort = previewProxyPort(args.port);
   // Public route port: on Vercel app/dev previews this is always 3000, never
   // the upstream listen port (e.g. Next 13000 / 3001, Vite 5173).
-  let previewPort = fixedVercelProxyPort ?? args.port;
+  let previewPort = fixedVercelProxyPort;
   // Same upstream mapping used for the readiness probe above.
   const proxyTargetPort = upstreamPort;
-  const shouldStartPreviewProxy = fixedVercelProxyPort !== undefined;
   // The proxy fronts the app, so a custom tab gates it on the sandbox being
   // up rather than on `ready` (which describes the tab's own port).
   const proxyUsable =
     customTabPort === undefined ? ready : handle.state === "running";
-  if (proxyUsable && shouldStartPreviewProxy) {
+  if (proxyUsable) {
     try {
       previewPort = await ensurePreviewNavigationProxy(
         handle,
@@ -986,7 +981,7 @@ async function buildPreviewUrl(
           webAppUrl: tryGetEvaBaseUrl() ?? "",
           inject: args.navigationSync === true,
           // Browser-facing port for /preview-auth (public proxy, not listen).
-          authPort: fixedVercelProxyPort ?? args.port,
+          authPort: fixedVercelProxyPort,
           ...previewActivityParams(args.sandboxId),
         },
         fixedVercelProxyPort,
@@ -1000,7 +995,7 @@ async function buildPreviewUrl(
       // If the reserved proxy port fails to start while a preview grant
       // key is configured, silently falling back to the unproxied service
       // port would serve with no auth gate at all. Fail loudly instead.
-      if (fixedVercelProxyPort !== undefined && previewPublicJwk) {
+      if (previewPublicJwk) {
         throw new Error(
           `Vercel preview proxy failed to start on port ${fixedVercelProxyPort}: ${proxyErrorMessage}`,
         );
@@ -1020,7 +1015,7 @@ async function buildPreviewUrl(
     const grant = await signPreviewGrant({
       sandboxId: args.sandboxId,
       // Grant must match AUTH_PORT (public proxy on Vercel app previews).
-      port: fixedVercelProxyPort ?? args.port,
+      port: fixedVercelProxyPort,
       sub: subject,
     });
     parsedUrl.searchParams.set(PREVIEW_GRANT_PARAM, grant);

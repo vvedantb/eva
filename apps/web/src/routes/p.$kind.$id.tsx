@@ -7,6 +7,7 @@ import { Button, Spinner } from "@vvedantb/ui";
 import {
   DEFAULT_PREVIEW_PORT,
   PREVIEW_WAKE_KINDS,
+  previewProxyPort,
   previewWakeSearchSchema,
   type PreviewWakeKind,
 } from "@eva/shared";
@@ -24,7 +25,8 @@ function isWakeKind(value: string): value is PreviewWakeKind {
 /**
  * Stable preview link: `/p/session/<id>?port=3000&path=/foo`. Unlike the raw
  * sandbox domain this survives the sandbox being paused (idle pause) or even
- * recreated, because it is keyed by the chat entity. The route brings the
+ * recreated, because it is keyed by the chat entity. An active sandbox goes
+ * straight to its domain with a fresh grant. Otherwise the route brings the
  * sandbox up through the same Start mutation the UI button uses, waits for the
  * dev server to answer, then hands off to the sandbox's own domain with a fresh
  * preview grant — the handshake `/preview-auth` does for cold links.
@@ -44,6 +46,7 @@ export const Route = createFileRoute("/p/$kind/$id")({
 });
 
 type Phase =
+  | { kind: "opening" }
   | { kind: "waking" }
   | { kind: "serving" }
   | { kind: "error"; message: string };
@@ -55,8 +58,9 @@ function PreviewWake() {
   const wakeKind: PreviewWakeKind = isWakeKind(kind) ? kind : "session";
   const ensureActive = useAction(api.sandboxWake.ensureEntitySandboxActive);
   const getPreviewUrl = useAction(api.sandbox.getPreviewUrl);
+  const mintPreviewGrant = useAction(api.previewGrant.mintPreviewGrant);
   const convex = useConvex();
-  const [phase, setPhase] = useState<Phase>({ kind: "waking" });
+  const [phase, setPhase] = useState<Phase>({ kind: "opening" });
   const [attempt, setAttempt] = useState(0);
   const ran = useRef<number>(-1);
 
@@ -137,11 +141,38 @@ function PreviewWake() {
       }
     };
 
-    ensureActive({ kind: wakeKind, id })
-      .then(async () => {
-        if (cancelled) return;
-        await waitForDevServer();
-      })
+    // Fast path: a sandbox that is already up needs no wake and no readiness
+    // probe. Mint the grant and go; if the dev server is down the preview page
+    // says so itself. Retries skip this and run the full wake.
+    const openActive = async (): Promise<boolean> => {
+      if (attempt > 0) return false;
+      const fresh = await readTarget();
+      if (cancelled || fresh?.status !== "active" || !fresh.sandboxId) {
+        return false;
+      }
+      const port = search.port ?? fresh.devPort ?? DEFAULT_PREVIEW_PORT;
+      const url = await mintPreviewGrant({
+        sandboxId: fresh.sandboxId,
+        repoId: fresh.repoId,
+        port: previewProxyPort(port),
+        path: search.path ?? "/",
+      });
+      if (cancelled) return true;
+      setPhase({ kind: "serving" });
+      window.location.replace(url);
+      return true;
+    };
+
+    const wake = async () => {
+      setPhase({ kind: "waking" });
+      await ensureActive({ kind: wakeKind, id });
+      if (cancelled) return;
+      await waitForDevServer();
+    };
+
+    openActive()
+      .catch(() => false)
+      .then((opened) => (opened || cancelled ? undefined : wake()))
       .catch((err: Error) => {
         if (cancelled) return;
         setPhase({
@@ -164,6 +195,7 @@ function PreviewWake() {
     search.path,
     ensureActive,
     getPreviewUrl,
+    mintPreviewGrant,
     convex,
   ]);
   /* eslint-enable no-effect/no-event-handler */
@@ -181,7 +213,7 @@ function PreviewWake() {
   const statusText =
     phase.kind === "error"
       ? phase.message
-      : phase.kind === "serving"
+      : phase.kind !== "waking"
         ? "Opening the preview…"
         : sandboxStatus === "active"
           ? "Starting the dev server…"

@@ -11,3 +11,13 @@ export const DESKTOP_PORT = 6080;
 
 /** Editor pane (code-server). */
 export const EDITOR_PORT = 8080;
+
+/**
+ * Public auth-proxy port for a logical port. Desktop and editor keep their own
+ * slot; every app/dev port is served by the proxy on the Preview slot.
+ */
+export function previewProxyPort(port: number): number {
+  return port === DESKTOP_PORT || port === EDITOR_PORT
+    ? port
+    : DEFAULT_PREVIEW_PORT;
+}
