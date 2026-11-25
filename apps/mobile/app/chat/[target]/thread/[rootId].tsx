@@ -1,7 +1,7 @@
 import { api, DEFAULT_AI_MODEL } from "@eva/backend";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { formatDuration } from "@eva/shared/duration";
-import type { MentionItem } from "@eva/shared";
+import { EVA_MENTION_ITEM } from "@eva/shared";
 import { MessageContent, PromptInput } from "@vvedantb/native-ui/ai";
 import { RouterStackPageHeader } from "@vvedantb/native-ui/expo-router";
 import { CenteredSpinner, EmptyState, KeyboardAvoidingView } from "@vvedantb/native-ui/primitives";
@@ -20,13 +20,6 @@ import { useMentionComposer } from "@/chat/useMentionComposer";
 import { useScheme } from "@/ui/theme";
 
 /**
- * The mention id the coordinator chat's picker gives Eva; a reply wakes her
- * only when it @mentions her (projects v2, decision 2).
- * TODO(v2 PR A): use `EVA_MENTION_ITEM` from `@eva/shared` once it lands.
- */
-const EVA_MENTION_ITEMS: MentionItem[] = [{ id: "eva_coordinator_mention", label: "Eva", badge: "Coordinator" }];
-
-/**
  * A reply thread in the project coordinator chat, as the web `ReplyThreadView`:
  * the message on top, its replies below in the chat's bubbles, and a composer
  * (people, data and @Eva). Pushed from "N replies" or the hold menu's Reply.
@@ -40,7 +33,7 @@ export default function ReplyThreadScreen() {
   const me = useQuery(api.auth.me, {});
   const users = useQuery(api.users.listAll, {});
   const addReply = useMutation(api.sessionWorkflow.addReply);
-  const composer = useMentionComposer(chat?.repoId, undefined, undefined, EVA_MENTION_ITEMS);
+  const composer = useMentionComposer(chat?.repoId, undefined, undefined, [EVA_MENTION_ITEM]);
   const [sending, setSending] = useState(false);
 
   const header = (

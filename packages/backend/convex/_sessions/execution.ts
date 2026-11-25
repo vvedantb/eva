@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { mentionsEva } from "@eva/shared";
 import { internal } from "../_generated/api";
 import {
   internalMutation,
@@ -46,7 +47,6 @@ import {
 } from "../_mentions/notifyChatMentions";
 import {
   bumpThreadRoot,
-  replyMentionsEva,
   threadReplyPrompt,
 } from "../_messages/replies";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
@@ -801,7 +801,9 @@ export const addReply = authMutation({
       surface,
     });
 
-    if (replyMentionsEva(content)) {
+    // A reply wakes Eva only when it @mentions her: replies are between
+    // people by default (projects v2, decision 2).
+    if (mentionsEva(content)) {
       const { rootId, content: omitted, ...settings } = args;
       void rootId;
       void omitted;

@@ -11,7 +11,7 @@ import {
 } from "@tabler/icons-react";
 import { Button, ConversationEmptyState, toast } from "@vvedantb/ui";
 import { api, type AIModel } from "@eva/backend";
-import { isOtherUserChatMessage, type MentionItem } from "@eva/shared";
+import { EVA_MENTION_ITEM, isOtherUserChatMessage } from "@eva/shared";
 import { ChatMessage } from "@/lib/components/chat/ChatMessage";
 import type {
   ChatParentId,
@@ -22,15 +22,6 @@ import {
   type CommentMentionInputHandle,
 } from "@/lib/components/tasks/_components/CommentMentionInput";
 import { CommentSendButton } from "@/lib/components/tasks/_components/CommentSendButton";
-
-/**
- * The mention id the coordinator chat's picker gives Eva. A reply wakes her
- * only when it @mentions her (projects v2, decision 2).
- * TODO(v2 PR A): use `EVA_MENTION_ITEM` from `@eva/shared` once it lands.
- */
-const EVA_MENTION_ITEMS: MentionItem[] = [
-  { id: "eva_coordinator_mention", label: "Eva", badge: "Coordinator" },
-];
 
 /** Rows in a thread never expand a changed-files card; one shared no-op. */
 function ignoreExpand(): void {}
@@ -198,7 +189,8 @@ function ReplyComposer({
         onValueChange={setText}
         onEnterSubmit={handleSubmit}
         placeholder="Reply…"
-        extraPeopleItems={EVA_MENTION_ITEMS}
+        // A reply wakes Eva only when it @mentions her (projects v2, decision 2).
+        extraPeopleItems={[EVA_MENTION_ITEM]}
         className="min-h-8 max-h-36 min-w-0 flex-1 rounded-none border-0 bg-transparent px-0 py-1.5 shadow-none focus-visible:ring-0"
       />
       <CommentSendButton

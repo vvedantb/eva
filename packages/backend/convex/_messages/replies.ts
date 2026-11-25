@@ -10,21 +10,6 @@ export const MAX_THREAD_REPLIERS = 3;
 export const MAX_THREAD_REPLIES = 500;
 
 /**
- * The mention id the coordinator chat's picker gives Eva (`@[Eva](id)`).
- * TODO(v2 PR A): import `EVA_MENTION_ID` / `mentionsEva` from `@eva/shared`
- * once that lands, and delete these two.
- */
-const EVA_MENTION_ID = "eva_coordinator_mention";
-
-/**
- * A reply wakes Eva only when it @mentions her: replies are between people by
- * default (projects v2, decision 2).
- */
-export function replyMentionsEva(content: string): boolean {
-  return content.includes(`](${EVA_MENTION_ID})`);
-}
-
-/**
  * The prompt Eva gets for a reply: the thread's root message and the reply,
  * so she answers in that context. Her answer row lands in the same thread.
  */

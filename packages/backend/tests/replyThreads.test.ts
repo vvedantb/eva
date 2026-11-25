@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
+import { EVA_MENTION_ID } from "@eva/shared";
 import { modules } from "./_helpers/convexModules";
 
 /**
@@ -14,7 +15,7 @@ import { modules } from "./_helpers/convexModules";
 
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|reply-threads";
-const EVA = "@[Eva](eva_coordinator_mention)";
+const EVA = `@[Eva](${EVA_MENTION_ID})`;
 
 // Started workflows must not run their steps after the test.
 beforeEach(() => {

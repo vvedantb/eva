@@ -26,11 +26,11 @@ import {
   turnErrorTitle,
   visibleChatMessages,
   findBubbleGroups,
+  EVA_MENTION_ITEM,
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { turnCheckpoint } from "@eva/shared/turnCheckpoint";
 import { chatTypingRoom } from "@eva/shared/typingPresence";
-import { EVA_MENTION_ITEM } from "@eva/shared/chatMessageRoute";
 import { isUsageLimitFailure } from "@eva/shared/usageLimitRecovery";
 import { messageLinkHref } from "@eva/shared/messageLink";
 import { appendCitationsToPrompt } from "@eva/shared/assistantCitation";
