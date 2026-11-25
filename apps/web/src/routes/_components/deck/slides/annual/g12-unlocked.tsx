@@ -9,7 +9,10 @@ import { MaskedText } from "../../_components/motion";
 
 const LABEL = "text-sm font-semibold tracking-[0.14em] text-white/45 uppercase";
 
-/** The presenter's own reflection. The 40+ ideas list is their own count. */
+/**
+ * The presenter's own reflection. The 40+ ideas list is their own count, and
+ * "well received" is their own account of audience feedback.
+ */
 const CARDS: readonly { label: string; text: string }[] = [
   { label: "Before", text: "40+ ideas, filtered down to a few" },
   {
@@ -44,6 +47,11 @@ export function AnnualUnlocked() {
       <Reveal step={2} delay={0.4}>
         <p className="mt-6 text-xl text-white/55">
           Learned from people on X, and from Krzys
+        </p>
+      </Reveal>
+      <Reveal step={2} delay={0.7}>
+        <p className="mt-2 text-xl text-white/55">
+          My presentations too: built with AI, and well received
         </p>
       </Reveal>
 
