@@ -47,6 +47,7 @@ import { SystemAlertMessage } from "@/lib/components/SystemAlertMessage";
 import { UserMessageAttachments } from "@/lib/components/chat/imageAttachments";
 import { ChangedFilesCard } from "@/lib/components/chat/ChangedFilesCard";
 import { EvaIcon } from "@/lib/components/EvaIcon";
+import { EvaTypingLine } from "@/lib/components/chat/TypingIndicator";
 import {
   IconGitFork,
   IconLink,
@@ -779,7 +780,14 @@ function AssistantTurnContent({
       )}
       style={bubble ? { borderRadius: sideBubbleRadius(joinsNext) } : undefined}
     >
-      {isStreamingPlaceholder ? (
+      {isStreamingPlaceholder && bubble ? (
+        // The coordinator chats like a person: dots while it works, the steps
+        // only on the finished message. A blocking question still shows.
+        <>
+          <EvaTypingLine />
+          <AssistantQuestionCards steps={streamingQuestionSteps} />
+        </>
+      ) : isStreamingPlaceholder ? (
         <>
           <StreamingActivityDisplay
             activity={streamingActivity}

@@ -25,6 +25,11 @@ Date: 2026-11-25
 Date: 2026-11-25
 
 In a project's coordinator chat, a message that `@`-mentions only teammates is a quiet comment: it is stored and the teammates are notified, but no Eva turn starts (`routePersonChatMessage` returns `posted`; `startExecute` returns `"posted"`; `sendSessionChatMessage` does not queue). `@Eva` (new picker row "Eva · Coordinator", token id `eva_coordinator_mention`, web and phone) or no mention still wakes Eva; `@Eva` with teammates wakes her and the coordinator rules tell her to answer only her part. Rule: `chatMessageRoute` in `@eva/shared`. Inbox → Needs you now lists your unread chat `@`-mentions under Questions; posting in that chat marks them read (`notifyChatMentions`). Plan: `internal/plans/todo/projects-v2-chat.md`.
+## Projects v2 B: the coordinator chats in short lines and shows "Eva is typing"
+
+Date: 2026-11-25
+
+`COORDINATOR_RULES` ask for 1-3 short plain lines, no headings, lists only for tasks. In the coordinator chat a running turn shows "Eva is typing" with the dots of the teammate `TypingIndicator` inside Eva's bubble (web `EvaTypingLine`, phone `EvaTypingText`) instead of the live activity timeline and streamed text; a blocking question card still shows, and the finished message keeps its steps. Other chats are unchanged.
 
 ## Projects: old project PRs become threads
 
