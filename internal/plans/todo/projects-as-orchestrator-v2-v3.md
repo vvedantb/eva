@@ -20,6 +20,7 @@ This file is separate from the v1 plan because the v1 plan moves to `internal/pl
 
 - **Schedules that the agent sets itself.** The coordinator sets its own recurring checks from plain language, for example for monitoring after a launch.
 - **Separate models for the coordinator and its tasks.** One model setting for the coordinator and one for the child tasks it starts.
+- **Filters and labels on the Tasks list** (added 25 November 2026). Filter chips above the list: Added by, Repo, Phase (data that exists today) and Label. The coordinator tags each task with labels (copy, ui, checkout...) when it creates or groups it; people can add labels too. Idea from Vercel Board threads. Outside agents (Board's CLI claims) are out: projects stay Eva only.
 
 ## Candidates, not agreed
 
