@@ -26,6 +26,7 @@ import {
 import { normalizeAIModel } from "../_validators/aiModels";
 import { scheduleScopeCheck } from "../_scopeCheck/mutations";
 import { recordTurnChange } from "../chatLog";
+import { insertTurnFollowUp } from "../_messages/replies";
 
 export type ChatResultParentId = Id<"sessionChats"> | Id<"sessions">;
 
@@ -47,7 +48,7 @@ export async function recordDelayedPublishFailure(
 ): Promise<boolean> {
   const publishError = delayedPublishFailureError(args.result, args.error);
   if (publishError === undefined) return false;
-  await ctx.db.insert("messages", {
+  await insertTurnFollowUp(ctx, {
     parentId: args.parentId,
     role: "assistant",
     content: args.alertTitle,
@@ -277,9 +278,14 @@ export async function insertAssistantPlaceholderIfNeeded(
     .withIndex("by_parent", (q) => q.eq("parentId", args.parentId))
     .order("desc")
     .take(args.recentLimit);
+  // People's thread replies can land while a thread turn runs; they are
+  // never the turn's own bubble.
+  const turnRows = recent.filter(
+    (message) => !(message.role === "user" && message.replyTo !== undefined),
+  );
   const lastTurnMessage = args.skipSystemAlerts
-    ? recent.find((message) => message.isSystemAlert !== true)
-    : recent[0];
+    ? turnRows.find((message) => message.isSystemAlert !== true)
+    : turnRows[0];
   if (
     lastTurnMessage &&
     lastTurnMessage.role === "assistant" &&
@@ -289,7 +295,7 @@ export async function insertAssistantPlaceholderIfNeeded(
   ) {
     return "existing";
   }
-  await ctx.db.insert("messages", {
+  await insertTurnFollowUp(ctx, {
     parentId: args.parentId,
     role: "assistant",
     content: "",

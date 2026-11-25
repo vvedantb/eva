@@ -208,3 +208,42 @@ export async function notifyChatMentions(
     entityTitle: surfaceTitle(surface),
   });
 }
+
+/**
+ * Tells the people already in a reply thread (the root's author and earlier
+ * repliers) that someone replied. Those @-mentioned in the reply are skipped:
+ * `notifyChatMentions` already told them.
+ */
+export async function notifyThreadReply(
+  ctx: MutationCtx,
+  args: {
+    content: string;
+    authorUserId: Id<"users">;
+    participantIds: readonly Id<"users">[];
+    surface: ChatMentionSurface;
+  },
+): Promise<void> {
+  const target = notificationTarget(args.surface);
+  const mentioned = new Set(
+    await teamMentionRecipients(ctx, args.content, target.repoId, new Set()),
+  );
+  const recipients = [...new Set(args.participantIds)].filter(
+    (userId) => userId !== args.authorUserId && !mentioned.has(userId),
+  );
+  if (recipients.length === 0) return;
+  const [surface, authorName] = await Promise.all([
+    ownerSurface(ctx, args.surface),
+    authorDisplayName(ctx, args.authorUserId),
+  ]);
+  const title = `${authorName} replied in a thread`;
+  const message = formatMessagePreview(args.content);
+  for (const userId of recipients) {
+    await createNotification(ctx, {
+      userId,
+      type: "comment_reply",
+      title,
+      message,
+      ...notificationTarget(surface),
+    });
+  }
+}

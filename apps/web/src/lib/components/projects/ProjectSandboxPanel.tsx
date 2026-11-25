@@ -3,7 +3,10 @@
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id, SandboxOwner } from "@eva/backend";
-import { IconChecklist } from "@tabler/icons-react";
+import { IconChecklist, IconMessages } from "@tabler/icons-react";
+import { useQueryState } from "nuqs";
+import { ReplyThreadView } from "@/lib/components/chat/replies/ReplyThreadView";
+import { replyThreadParser } from "@/lib/search-params";
 import { KeepAlivePane } from "@/lib/components/sandbox/KeepAlivePane";
 import type { SandboxTabDescriptor } from "@/routes/_repo/$owner/$repo/sessions/_components/SandboxTabTrigger";
 import { useNavigate, useParams } from "@tanstack/react-router";
@@ -50,6 +53,13 @@ const COORDINATOR_HIDDEN_TABS: ReadonlySet<string> = new Set([
   "files",
 ]);
 
+/** The rail tab of an open reply thread; same descriptor shape as Tasks. */
+const REPLIES_TAB: SandboxTabDescriptor = {
+  value: "replies",
+  label: "Replies",
+  icon: { kind: "component", Icon: IconMessages },
+};
+
 interface ProjectSandboxPanelProps {
   projectId: Id<"projects">;
   /** The project's session: its chat feeds the Agents tab and annotations. */
@@ -77,6 +87,8 @@ interface ProjectSandboxPanelProps {
   onToggle?: () => void;
   /** Mini-player title; Expand returns to this project's Preview tab. */
   title: string;
+  /** ✕ on the Replies tab: drops the tab and returns to the tab before it. */
+  onCloseThread: () => void;
 }
 
 export function ProjectSandboxPanel({
@@ -99,7 +111,10 @@ export function ProjectSandboxPanel({
   collapsed = false,
   onToggle,
   title,
+  onCloseThread,
 }: ProjectSandboxPanelProps) {
+  // An open reply thread adds the Replies tab (projects v2, PR D).
+  const [threadId, setThreadId] = useQueryState("thread", replyThreadParser);
   const simpleView = useSimpleView();
   const navigate = useNavigate();
   const { basePath } = useRepo();
@@ -114,9 +129,12 @@ export function ProjectSandboxPanel({
   // The coordinator only reads code and delegates: no dev server, no edits,
   // so no Preview, Browser, Review, Computer, Editor or Files. An old link to one of
   // those lands on Tasks; a task's own sandbox keeps them all.
-  const activeTab: ProjectSandboxTab = COORDINATOR_HIDDEN_TABS.has(sandboxTab)
-    ? "tasks"
-    : sandboxTab;
+  // Replies without an open thread (an old link) lands on Tasks too.
+  const activeTab: ProjectSandboxTab =
+    COORDINATOR_HIDDEN_TABS.has(sandboxTab) ||
+    (sandboxTab === "replies" && !threadId)
+      ? "tasks"
+      : sandboxTab;
   const projectDocuments = useProjectDocuments(projectId, repoId);
   const { status: taskStatus } = useProjectTaskStatus(projectId, repoId);
   const triageCount = taskStatus?.counts.triage ?? 0;
@@ -208,7 +226,7 @@ export function ProjectSandboxPanel({
             onToggle={onToggle}
             newPreviewDisabled={panes.newPreviewDisabled}
             enabledTabs={enabledTabs}
-            leadingTabs={[tasksTab]}
+            leadingTabs={threadId ? [tasksTab, REPLIES_TAB] : [tasksTab]}
             showAgentsTab={hasAgents}
             hasRunningAgents={hasRunningAgents}
             artifactCount={artifactCount}
@@ -232,6 +250,25 @@ export function ProjectSandboxPanel({
               basePath={basePath}
             />
           </KeepAlivePane>
+          <div
+            className={
+              activeTab === "replies"
+                ? "flex h-full min-h-0 flex-col overflow-hidden"
+                : "hidden"
+            }
+          >
+            {threadId && chatKeys.parentId ? (
+              <ReplyThreadView
+                rootId={threadId}
+                chatParentId={chatKeys.parentId}
+                repo={{ id: repoId, basePath }}
+                model={chatBinding.model}
+                isOpen={activeTab === "replies"}
+                onOpen={(rootId) => void setThreadId(rootId)}
+                onClose={onCloseThread}
+              />
+            ) : null}
+          </div>
           <div
             className={
               activeTab === "artifacts"

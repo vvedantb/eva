@@ -14,10 +14,13 @@ import { useProjectOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModel
 export function ProjectSandboxChatPanel({
   projectId,
   projectSession,
+  onThreadOpen,
   ...panel
 }: SandboxChatPanelProps & {
   projectId: Id<"projects">;
   projectSession: OwnedSession;
+  /** Opens a reply thread in the rail's Replies tab. */
+  onThreadOpen?: (messageId: string) => void;
 }) {
   const binding = useProjectChatBinding(projectId, projectSession);
   // The coordinator chat only: Eva's replies as bubbles (it only talks and
@@ -27,6 +30,8 @@ export function ProjectSandboxChatPanel({
       binding={binding}
       {...panel}
       assistantBubbles
+      replyThreads
+      onThreadOpen={onThreadOpen}
     />
   );
 }

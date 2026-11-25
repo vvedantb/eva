@@ -1,0 +1,135 @@
+"use client";
+
+import { cn } from "@eva/ui";
+import type { FeedbackSentiment } from "@eva/shared/chatFeedback";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  toast,
+} from "@vvedantb/ui";
+import { IconCopy, IconDots, IconMessages } from "@tabler/icons-react";
+import { TurnFeedbackActions } from "@/lib/components/chat/feedback/TurnFeedbackActions";
+import type { ChatMessageActionItem } from "@/lib/components/chat/ChatMessageActions";
+
+const BUTTON_CLASS =
+  "flex size-7 items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-accent-soft hover:text-foreground";
+
+/**
+ * The coordinator chat's message toolbar (Teams / Amp style): a small card on
+ * the bubble's top-right corner, shown on hover or focus only and laid over
+ * the bubble, so it takes no space. On Eva's finished replies: 👍 👎 (the
+ * footer's `TurnFeedbackActions`, with its comment box), then Reply, Copy, and
+ * the rest (Copy link; a ⋯ menu once there are two or more, as fork and
+ * checkpoints elsewhere). Stays up while its comment
+ * box or menu is open.
+ */
+export function MessageToolbar({
+  onReply,
+  copyText,
+  menuItems,
+  rating,
+}: {
+  onReply?: () => void;
+  copyText?: string;
+  menuItems: ChatMessageActionItem[];
+  /** Eva's finished turns: the rating buttons and their saved state. */
+  rating?: {
+    messageId: string;
+    sentiment: FeedbackSentiment | undefined;
+    comment: string | undefined;
+  };
+}) {
+  // One remaining action (Copy link in a project chat) is a direct button;
+  // the ⋯ menu only appears when there are two or more.
+  const hasMenu = menuItems.length > 1;
+  const directItems = hasMenu ? [] : menuItems;
+  if (!rating && !onReply && !copyText && menuItems.length === 0) return null;
+  return (
+    <div
+      className={cn(
+        "absolute -top-4 right-2 z-10 flex items-center gap-0.5 rounded-control bg-popover p-0.5 smooth-shadow-ring-md",
+        // Hover or keyboard focus on the message shows it; an open comment
+        // box or menu keeps it up while the pointer is inside the popup.
+        "pointer-events-none opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100",
+      )}
+    >
+      {rating ? (
+        <>
+          <TurnFeedbackActions
+            messageId={rating.messageId}
+            sentiment={rating.sentiment}
+            comment={rating.comment}
+          />
+          <span aria-hidden className="mx-0.5 h-4 w-px bg-border" />
+        </>
+      ) : null}
+      {onReply ? (
+        <button
+          type="button"
+          aria-label="Reply in thread"
+          title="Reply in thread"
+          onClick={onReply}
+          className={BUTTON_CLASS}
+        >
+          <IconMessages className="size-4" />
+        </button>
+      ) : null}
+      {copyText ? (
+        <button
+          type="button"
+          aria-label="Copy message"
+          title="Copy"
+          onClick={() =>
+            void navigator.clipboard.writeText(copyText).then(
+              () => toast.success("Copied"),
+              () => toast.error("Could not copy"),
+            )
+          }
+          className={BUTTON_CLASS}
+        >
+          <IconCopy className="size-4" />
+        </button>
+      ) : null}
+      {directItems.map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          aria-label={item.label}
+          title={item.label}
+          disabled={item.disabled}
+          onClick={item.onClick}
+          className={BUTTON_CLASS}
+        >
+          {item.icon}
+        </button>
+      ))}
+      {hasMenu ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="More actions"
+              className={cn(BUTTON_CLASS, "data-[state=open]:bg-accent-soft")}
+            >
+              <IconDots className="size-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {menuItems.map((item) => (
+              <DropdownMenuItem
+                key={item.key}
+                disabled={item.disabled}
+                onSelect={item.onClick}
+              >
+                {item.icon}
+                {item.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
+    </div>
+  );
+}

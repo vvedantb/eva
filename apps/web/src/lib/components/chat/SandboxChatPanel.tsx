@@ -26,6 +26,9 @@ import {
 } from "./sandboxChatSurface";
 import { sandboxChatKeys } from "./sandboxChatTurn";
 import { SubagentThreadLayer } from "./SubagentThreadLayer";
+import { useQueryState } from "nuqs";
+import { replyThreadParser } from "@/lib/search-params";
+import { ThreadTurnStatus } from "@/lib/components/chat/replies/ThreadTurnStatus";
 import { useChatQueueGate } from "./useChatQueueGate";
 import { useChatSend } from "./useChatSend";
 import { useSandboxChatDraft } from "./useSandboxChatDraft";
@@ -60,12 +63,25 @@ export function SandboxChatPanel({
   onOpenAgentsTab,
   onSandboxToggle,
   assistantBubbles = false,
+  replyThreads = false,
+  onThreadOpen,
 }: SandboxChatPanelProps & {
   binding: SandboxChatBinding;
   /** Eva's replies in a bubble with her mark (the project coordinator). */
   assistantBubbles?: boolean;
+  /**
+   * Messages take replies in threads (the project coordinator). The open
+   * thread is the `?thread=` param; the page shows it beside the chat.
+   */
+  replyThreads?: boolean;
+  /**
+   * Opens a thread the page's way (the project rail's Replies tab). Without
+   * it, opening only sets `?thread=`.
+   */
+  onThreadOpen?: (messageId: string) => void;
 }) {
   const { repo, basePath } = useRepo();
+  const [, setThreadId] = useQueryState("thread", replyThreadParser);
   const { entity, doc, model, firstRun, ownerLabel } = binding;
   // All undefined until the owner's session exists: nothing to read yet, and
   // the first send creates it.
@@ -86,8 +102,22 @@ export function SandboxChatPanel({
     api.streaming.get,
     streamingEntityId ? { entityId: streamingEntityId } : "skip",
   );
+  // Eva's open turn answers in a reply thread: the main chat shows no running
+  // bubble for it, only a status line that opens the thread.
+  const threadTurn = useQuery(
+    api.messages.openThreadTurn,
+    replyThreads && parentId ? { parentId } : "skip",
+  );
   // The first run streams to its own row while it owns the bubble.
-  const streaming = firstRun?.isInProgress ? firstRun.streaming : chatStreaming;
+  const streaming = threadTurn
+    ? undefined
+    : firstRun?.isInProgress
+      ? firstRun.streaming
+      : chatStreaming;
+  const openThread = (messageId: string) => {
+    if (onThreadOpen) onThreadOpen(messageId);
+    else void setThreadId(messageId);
+  };
   // Same entityId the sandbox posts with (the entity id, not the stream key).
   const blockingQuestion = useQuery(
     api.pendingQuestions.getActive,
@@ -204,7 +234,8 @@ export function SandboxChatPanel({
           streamingActivity={streaming?.currentActivity}
           streamingContent={streaming?.currentContent}
           streamingPendingQuestion={streaming?.pendingQuestion}
-          blockingQuestion={blockingQuestion ?? undefined}
+          // A thread turn's question is answered in its thread.
+          blockingQuestion={threadTurn ? undefined : (blockingQuestion ?? undefined)}
           onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
           isExecuting={isExecuting}
           isInputDisabled={composer.isInputDisabled}
@@ -238,7 +269,16 @@ export function SandboxChatPanel({
           onSend={handleSend}
           onCancel={handleCancel}
           preInputContent={
-            <SandboxChatPreInput surface={chatSurface} />
+            <>
+              {threadTurn ? (
+                <ThreadTurnStatus
+                  preview={threadTurn.preview}
+                  hasQuestion={threadTurn.hasQuestion}
+                  onOpen={() => openThread(threadTurn.rootId)}
+                />
+              ) : null}
+              <SandboxChatPreInput surface={chatSurface} />
+            </>
           }
           composerChips={<SandboxChatStatusChips surface={chatSurface} />}
           underCardLeading={
@@ -255,6 +295,7 @@ export function SandboxChatPanel({
           hasPendingContext={hasPendingReviewComments}
           onOpenAgentsTab={onOpenAgentsTab}
           assistantBubbles={assistantBubbles}
+          onOpenThread={replyThreads ? openThread : undefined}
           backgroundAgents={doc?.backgroundAgents}
           sandboxRunning={isSandboxActive}
           transcriptTail={sandboxStartupTail(

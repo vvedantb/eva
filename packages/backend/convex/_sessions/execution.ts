@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { mentionsEva } from "@eva/shared";
 import { internal } from "../_generated/api";
 import {
   internalMutation,
@@ -32,12 +33,22 @@ import {
 } from "./daemonTurn";
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
-import { selectUsageLimitRetryUserMessage } from "./resultTarget";
+import {
+  resultTargetMessage,
+  selectUsageLimitRetryUserMessage,
+} from "./resultTarget";
 import { routePersonChatMessage } from "../_projects/reports";
 import { reviveCoordinatorSession } from "./ownedSession";
 import { sessionAccountHolder } from "../_projects/runSettings";
 import type { Doc, Id } from "../_generated/dataModel";
-import { notifyChatMentions } from "../_mentions/notifyChatMentions";
+import {
+  notifyChatMentions,
+  notifyThreadReply,
+} from "../_mentions/notifyChatMentions";
+import {
+  bumpThreadRoot,
+  threadReplyPrompt,
+} from "../_messages/replies";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { composerTraitFields } from "../_shared/composerTraits";
 import { cancelChatTurn } from "../_chat/cancelRace";
@@ -96,6 +107,8 @@ async function stageAndStartChatTurn(
     actingUserId: Id<"users">;
     message: string;
     settings: TurnSettings;
+    /** A retry of a thread turn: Eva answers in that thread again. */
+    replyTo?: Id<"messages">;
   },
 ): Promise<void> {
   const { chat, session } = params.context;
@@ -128,7 +141,11 @@ async function stageAndStartChatTurn(
     content: "",
     timestamp: Date.now(),
     activityLog: "",
+    replyTo: params.replyTo,
   });
+  if (params.replyTo !== undefined) {
+    await bumpThreadRoot(ctx, params.replyTo, undefined);
+  }
 
   const { prompt } = await buildSessionPrompt(ctx, {
     session,
@@ -157,6 +174,7 @@ async function stageAndStartChatTurn(
     sessionId: session._id,
     streamingEntityId,
     placeholderMessageId,
+    replyTo: params.replyTo,
     prompt,
     attachmentStorageIds: settings.attachmentStorageIds,
     model: normalizedModel,
@@ -214,6 +232,20 @@ async function stageAndStartChatTurn(
   await trackSessionChatWorkflow(ctx, chat._id, workflowId);
 }
 
+/**
+ * The message a retried turn sends. A thread turn's retry wraps the reply in
+ * the thread prompt again and answers in the same thread.
+ */
+async function threadTurnMessage(
+  ctx: MutationCtx,
+  replyTo: Id<"messages"> | undefined,
+  content: string,
+): Promise<{ message: string; replyTo?: Id<"messages"> }> {
+  const root = replyTo === undefined ? null : await ctx.db.get(replyTo);
+  if (!root) return { message: content };
+  return { message: threadReplyPrompt(root, content), replyTo: root._id };
+}
+
 /** Parks a message on the chat's queue; the next drain starts it. */
 async function enqueueChatMessage(
   ctx: MutationCtx,
@@ -224,6 +256,8 @@ async function enqueueChatMessage(
     displayContent?: string;
     settings: TurnSettings;
     sentViaOrchestrator?: boolean;
+    /** A thread reply for Eva: her answer joins this root's thread. */
+    replyTo?: Id<"messages">;
   },
 ): Promise<void> {
   const { chat, session } = params.context;
@@ -254,6 +288,7 @@ async function enqueueChatMessage(
     providerAccountId,
     attachmentStorageIds: settings.attachmentStorageIds,
     sentViaOrchestrator: params.sentViaOrchestrator,
+    replyTo: params.replyTo,
   });
   await ctx.db.patch(chat._id, {
     lastModel: settings.model,
@@ -301,7 +336,7 @@ export const retryEmptyStalledSessionTurn = internalMutation({
       context,
       repo,
       actingUserId,
-      message: lastUserContent,
+      ...(await threadTurnMessage(ctx, turn.replyTo, lastUserContent)),
       // Raw sticky traits: `stageAndStartChatTurn` normalises them through
       // `launchTraitsFromStored` before they reach any daemon launch, so this
       // restaged turn's opts sig matches a warm daemon's instead of killing it.
@@ -361,6 +396,8 @@ export const retryLastTurnWithAccount = authMutation({
       .order("desc")
       .take(20);
     const userMessage = selectUsageLimitRetryUserMessage(recent);
+    // A failed thread turn retries in its thread.
+    const failedReplyTo = resultTargetMessage(recent)?.replyTo;
 
     const repo = await ctx.db.get(session.repoId);
     if (!repo) throw new Error("Repository not found");
@@ -383,7 +420,7 @@ export const retryLastTurnWithAccount = authMutation({
       context,
       repo,
       actingUserId: ctx.userId,
-      message: userMessage.content,
+      ...(await threadTurnMessage(ctx, failedReplyTo, userMessage.content)),
       settings: {
         model: userMessage.model ?? normalizeAIModel(chat.lastModel),
         reasoningLevel: userMessage.reasoningLevel ?? chat.lastReasoningLevel,
@@ -701,6 +738,87 @@ export const enqueueMessage = authMutation({
       sentViaOrchestrator,
     });
     return null;
+  },
+});
+
+/**
+ * Replies in a thread on a chat message (projects v2, PR D). The reply is a
+ * row of the same chat with `replyTo` set, so it shows in the thread panel
+ * only. It notifies the thread's people and anyone @-mentioned, and wakes Eva
+ * only when it @mentions her: her answer then lands in this thread.
+ */
+export const addReply = authMutation({
+  args: {
+    // A plain string: the chat renders optimistic rows under client-minted ids.
+    rootId: v.string(),
+    content: v.string(),
+    ...turnSettingsArgs,
+  },
+  returns: v.id("messages"),
+  handler: async (ctx, args) => {
+    const content = args.content.trim();
+    if (!content) throw new Error("A reply needs text");
+    const targetId = ctx.db.normalizeId("messages", args.rootId);
+    const target = targetId ? await ctx.db.get(targetId) : null;
+    if (!target) throw new Error("This message cannot take replies yet");
+    // A reply to a reply joins the same thread.
+    const root =
+      target.replyTo === undefined ? target : await ctx.db.get(target.replyTo);
+    if (!root) throw new Error("Message not found");
+    const chatId = ctx.db.normalizeId("sessionChats", root.parentId);
+    if (!chatId) throw new Error("Replies work in session chats only");
+    const context = await getSessionChatWithAccess(ctx.db, chatId, ctx.userId);
+    const { chat, session } = context;
+    if (chat.archived === true) throw new Error("This chat is closed");
+
+    const replyId = await ctx.db.insert("messages", {
+      parentId: root.parentId,
+      role: "user",
+      content,
+      timestamp: Date.now(),
+      userId: ctx.userId,
+      replyTo: root._id,
+    });
+    await bumpThreadRoot(ctx, root._id, ctx.userId);
+    await touchUserActivity(ctx, sessionActivityRef(session), {
+      source: "chat",
+      userId: ctx.userId,
+    });
+
+    const surface = { kind: "session" as const, session, chat };
+    await notifyChatMentions(ctx, {
+      content,
+      authorUserId: ctx.userId,
+      surface,
+    });
+    await notifyThreadReply(ctx, {
+      content,
+      authorUserId: ctx.userId,
+      participantIds: [
+        ...(root.role === "user" && root.userId ? [root.userId] : []),
+        ...(root.replierIds ?? []),
+      ],
+      surface,
+    });
+
+    // A reply wakes Eva only when it @mentions her: replies are between
+    // people by default (projects v2, decision 2).
+    if (mentionsEva(content)) {
+      const { rootId, content: omitted, ...settings } = args;
+      void rootId;
+      void omitted;
+      await enqueueChatMessage(ctx, {
+        context,
+        userId: ctx.userId,
+        content: threadReplyPrompt(root, content),
+        // The queue panel shows the reply, not the whole thread prompt.
+        displayContent: content,
+        settings,
+        replyTo: root._id,
+      });
+      await drainChatQueueQuietly(ctx, chat._id);
+    }
+    return replyId;
   },
 });
 

@@ -473,6 +473,9 @@ export const chatParser = parseAsInteger.withOptions(tabOptions);
  */
 export const subagentParser = parseAsString.withOptions(tabOptions);
 
+/** The open reply thread in a coordinator chat: its root message id. */
+export const replyThreadParser = parseAsString.withOptions(tabOptions);
+
 export const branchParser = parseAsString
   .withDefault("main")
   .withOptions(searchOptions);
