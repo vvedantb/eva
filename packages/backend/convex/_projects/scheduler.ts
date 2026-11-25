@@ -187,8 +187,10 @@ export async function scheduleReadyProjectTasks(
 ): Promise<Id<"agentTasks">[]> {
   const project = await ctx.db.get(projectId);
   if (!project || isEntityDeleted(project)) return [];
-  const tasks = await listProjectTasks(ctx.db, projectId);
-  const context = await loadProjectFactsContext(ctx.db, project, Date.now());
+  const [tasks, context] = await Promise.all([
+    listProjectTasks(ctx.db, projectId),
+    loadProjectFactsContext(ctx.db, project, Date.now()),
+  ]);
   const facts = await Promise.all(
     tasks.map((task) => projectTaskFacts(ctx.db, context, task)),
   );

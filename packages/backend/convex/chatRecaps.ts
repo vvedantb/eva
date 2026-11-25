@@ -228,9 +228,12 @@ async function recapChats(
     .collect();
   const chats: RecapChat[] = [];
   const taskIds: Id<"agentTasks">[] = [];
-  for (const row of sessionChats) {
-    if (row.archived === true) continue;
-    const task = row.taskId ? await ctx.db.get(row.taskId) : null;
+  const openChats = sessionChats.filter((row) => row.archived !== true);
+  const rowTasks = await Promise.all(
+    openChats.map((row) => (row.taskId ? ctx.db.get(row.taskId) : null)),
+  );
+  for (const [index, row] of openChats.entries()) {
+    const task = rowTasks[index];
     if (task) {
       taskIds.push(task._id);
       chats.push({ parentId: row._id, label: `@[${task.title}](${task._id})` });
@@ -241,12 +244,17 @@ async function recapChats(
       });
     }
   }
-  for (const task of await listProjectTasks(ctx.db, session.owner.projectId)) {
-    if (taskIds.includes(task._id)) continue;
-    const taskSession = await findWorkSession(ctx.db, task);
-    const taskChat = taskSession
-      ? await findMainChat(ctx.db, taskSession._id)
-      : null;
+  const childTasks = (
+    await listProjectTasks(ctx.db, session.owner.projectId)
+  ).filter((task) => !taskIds.includes(task._id));
+  const childChats = await Promise.all(
+    childTasks.map(async (task) => {
+      const taskSession = await findWorkSession(ctx.db, task);
+      return taskSession ? findMainChat(ctx.db, taskSession._id) : null;
+    }),
+  );
+  for (const [index, task] of childTasks.entries()) {
+    const taskChat = childChats[index];
     if (!taskChat) continue;
     taskIds.push(task._id);
     chats.push({
@@ -284,12 +292,17 @@ export const recapContext = internalQuery({
     if (!recap) return null;
     const { chats, taskIds } = await recapChats(ctx, recap.parentId);
     const lines: { at: number; text: string }[] = [];
-    for (const chat of chats) {
-      const rows = await ctx.db
-        .query("messages")
-        .withIndex("by_parent", (q) => q.eq("parentId", chat.parentId))
-        .order("desc")
-        .take(MESSAGES_PER_CHAT);
+    const chatRows = await Promise.all(
+      chats.map((chat) =>
+        ctx.db
+          .query("messages")
+          .withIndex("by_parent", (q) => q.eq("parentId", chat.parentId))
+          .order("desc")
+          .take(MESSAGES_PER_CHAT),
+      ),
+    );
+    for (const [index, chat] of chats.entries()) {
+      const rows = chatRows[index] ?? [];
       for (const row of rows) {
         const at = row.finishedAt ?? row.timestamp;
         if (at <= recap.since || row.isSystemAlert === true) continue;

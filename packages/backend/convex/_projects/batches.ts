@@ -50,8 +50,13 @@ export async function createCoordinatorTasks(
     userId,
   );
   // Any repo the acting user can access; checked for every task before any is written.
-  for (const task of tasks) {
-    if (!(await hasRepoAccess(ctx.db, task.repoId ?? project.repoId, userId))) {
+  const access = await Promise.all(
+    tasks.map((task) =>
+      hasRepoAccess(ctx.db, task.repoId ?? project.repoId, userId),
+    ),
+  );
+  for (const [index, task] of tasks.entries()) {
+    if (!access[index]) {
       throw new ConvexError(
         `Cannot create "${task.title}": the user has no access to its repository. Pick a repository they can access, or leave it out to use the project's home repository.`,
       );

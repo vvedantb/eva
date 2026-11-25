@@ -669,22 +669,28 @@ export const listEntitiesForUser = internalQuery({
             }
 
             const docs = await scanProjects(ctx, repoId, args.status, take);
-            for (const doc of docs) {
-              rows.push({
-                kind,
-                id: doc._id,
-                numId: doc.numId,
-                title: doc.title,
-                status: await derivedProjectStage(ctx.db, doc),
-                sandboxStatus:
-                  (await projectSandboxStatus(ctx.db, doc)) ?? "closed",
-                isExecuting: projectIsExecuting(doc, openChatEntityIds),
-                prUrl: doc.prUrl,
-                branchName: doc.branchName,
-                updatedAt: doc.updatedAt ?? doc._creationTime,
-                ...columns,
-              });
-            }
+            const projectRows = await Promise.all(
+              docs.map(async (doc) => {
+                const [stage, sandboxStatus] = await Promise.all([
+                  derivedProjectStage(ctx.db, doc),
+                  projectSandboxStatus(ctx.db, doc),
+                ]);
+                return {
+                  kind,
+                  id: doc._id,
+                  numId: doc.numId,
+                  title: doc.title,
+                  status: stage,
+                  sandboxStatus: sandboxStatus ?? "closed",
+                  isExecuting: projectIsExecuting(doc, openChatEntityIds),
+                  prUrl: doc.prUrl,
+                  branchName: doc.branchName,
+                  updatedAt: doc.updatedAt ?? doc._creationTime,
+                  ...columns,
+                };
+              }),
+            );
+            rows.push(...projectRows);
           }),
         );
       }),
