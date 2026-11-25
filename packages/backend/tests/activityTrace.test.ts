@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { collectChangedFiles } from "@eva/shared";
 import { parseActivityLog } from "@eva/shared/activityTrace";
 

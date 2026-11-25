@@ -6,9 +6,11 @@ import {
   describe,
   expect,
   test,
+  mock,
   vi,
-  type MockInstance,
-} from "vitest";
+  type Mock,
+} from "bun:test";
+import { stubEnv, unstubAllEnvs } from "./_helpers/env";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import {
@@ -16,6 +18,7 @@ import {
   isInternalToken,
   type McpPrincipal,
 } from "../convex/mcp/authenticate";
+import { modules } from "./_helpers/convexModules";
 
 type FakeAuth = {
   isAuthenticated: boolean;
@@ -27,16 +30,16 @@ type FakeState =
   | { isAuthenticated: true; toAuth: () => FakeAuth }
   | { isAuthenticated: false; reason: string | null; message: string | null };
 
-const clerk = vi.hoisted(() => {
+const clerk = (() => {
   const created: Array<{ secretKey: string; publishableKey: string }> = [];
   const acceptsToken: string[][] = [];
   const state: { next: () => Promise<FakeState> } = {
     next: () => Promise.reject(new Error("no fake state set")),
   };
   return { created, acceptsToken, state };
-});
+})();
 
-vi.mock("@clerk/backend", () => ({
+mock.module("@clerk/backend", () => ({
   createClerkClient: (options: {
     secretKey: string;
     publishableKey: string;
@@ -54,7 +57,6 @@ vi.mock("@clerk/backend", () => ({
   },
 }));
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const INTERNAL_SECRET = "internal-test-secret-0123456789abcdef";
 
@@ -77,20 +79,20 @@ function signToken(audience: string, claims: Record<string, string>) {
     .sign(new TextEncoder().encode(INTERNAL_SECRET));
 }
 
-let errors: MockInstance<typeof console.error>;
+let errors: Mock<typeof console.error>;
 
 beforeEach(() => {
   clerk.created.length = 0;
   clerk.acceptsToken.length = 0;
-  vi.stubEnv("CLERK_SECRET_KEY", "sk_test_fake");
-  vi.stubEnv("CLERK_PUBLISHABLE_KEY", "pk_test_fake");
-  vi.stubEnv("CLERK_JWT_ISSUER_DOMAIN", "https://clerk.test");
-  vi.stubEnv("MCP_INTERNAL_SECRET", INTERNAL_SECRET);
+  stubEnv("CLERK_SECRET_KEY", "sk_test_fake");
+  stubEnv("CLERK_PUBLISHABLE_KEY", "pk_test_fake");
+  stubEnv("CLERK_JWT_ISSUER_DOMAIN", "https://clerk.test");
+  stubEnv("MCP_INTERNAL_SECRET", INTERNAL_SECRET);
   errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 
 afterEach(() => {
-  vi.unstubAllEnvs();
+  unstubAllEnvs();
   vi.restoreAllMocks();
 });
 
@@ -152,7 +154,7 @@ describe("verifyAccessToken: Clerk tokens", () => {
   test(
     "returns null when CLERK_SECRET_KEY is missing",
     async () => {
-      vi.stubEnv("CLERK_SECRET_KEY", "");
+      stubEnv("CLERK_SECRET_KEY", "");
       expect(await verify("opaque_token")).toBeNull();
       expect(clerk.created).toEqual([]);
     },
@@ -162,7 +164,7 @@ describe("verifyAccessToken: Clerk tokens", () => {
   test(
     "returns null and logs when CLERK_PUBLISHABLE_KEY is missing",
     async () => {
-      vi.stubEnv("CLERK_PUBLISHABLE_KEY", "");
+      stubEnv("CLERK_PUBLISHABLE_KEY", "");
       clerk.state.next = signedIn({
         isAuthenticated: true,
         tokenType: "oauth_token",
@@ -217,7 +219,7 @@ describe("verifyAccessToken: mcp-internal tokens", () => {
   test(
     "rejects a sandbox token signed with another secret",
     async () => {
-      vi.stubEnv("MCP_INTERNAL_SECRET", "a-different-secret-0123456789abcdef");
+      stubEnv("MCP_INTERNAL_SECRET", "a-different-secret-0123456789abcdef");
       clerk.state.next = () =>
         Promise.resolve({
           isAuthenticated: false,

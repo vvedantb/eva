@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { rangeBetween } from "./useInboxSelection";
 
 const ids = ["a", "b", "c", "d"];

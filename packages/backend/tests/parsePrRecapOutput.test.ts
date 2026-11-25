@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import {
   parsePrRecapOutput,
   PR_RECAP_WALKTHROUGH_MARKER,

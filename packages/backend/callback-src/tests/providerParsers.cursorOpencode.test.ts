@@ -1,6 +1,6 @@
 import { readFileSync } from "fs";
 import { join } from "path";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { callbackState as S, resetStateForTests } from "../runtime/state.js";
 import type {
   CanonicalEvent,
@@ -11,22 +11,15 @@ import type {
 import { cursorAdapter, cursorParseLine } from "../providers/cursor.js";
 import { opencodeAdapter, opencodeParseLine } from "../providers/opencode.js";
 
-/**
- * Session-store writes the stream hooks fire, captured instead of persisted.
- * Hoisted so the `vi.mock` factories below (which run before the imports) can
- * reach them.
- */
-const sessionCalls = vi.hoisted(() => {
-  const calls: string[] = [];
-  return calls;
-});
+/** Session-store writes the stream hooks fire, captured instead of persisted. */
+const sessionCalls: string[] = [];
 
-vi.mock("../session/cursorSession.js", () => ({
+mock.module("../session/cursorSession.js", () => ({
   writeCursorSessionState: () => sessionCalls.push("cursor:write"),
   syncCursorStateToPersist: () => sessionCalls.push("cursor:sync"),
 }));
 
-vi.mock("../session/opencodeSession.js", () => ({
+mock.module("../session/opencodeSession.js", () => ({
   writeOpencodeSessionState: () => sessionCalls.push("opencode:write"),
   syncOpencodeStateToPersist: () => sessionCalls.push("opencode:sync"),
 }));

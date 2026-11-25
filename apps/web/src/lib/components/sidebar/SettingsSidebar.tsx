@@ -4,7 +4,6 @@ import { Link } from "@tanstack/react-router";
 import {
   IconKey,
   IconCamera,
-  IconFolders,
   IconSettings2,
   IconChartBar,
   IconPlug,
@@ -39,7 +38,6 @@ export function SettingsSidebar({
       items: [
         { name: "Repository", href: `${baseUrl}/config`, icon: IconSettings2 },
         { name: "Skills", href: `${baseUrl}/skills`, icon: IconSparkles },
-        { name: "Monorepo", href: `${baseUrl}/monorepo`, icon: IconFolders },
       ],
     },
     {

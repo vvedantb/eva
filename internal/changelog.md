@@ -138,6 +138,92 @@ What users see:
 - A project's stage is derived from its tasks: the Change Phase bulk action and the card's Phase menu are gone, and the timeline shows launched tasks out of all tasks.
 
 Architectural: `ProjectTaskBatchCard` (rows are `ProjectTaskRow`, data from `listByProject` plus `listTaskBatches` for grouping) reaches `ChatBody` through a new `inlineCards` prop and the existing `placeChatUiPanels` placement; only `ProjectSandboxChatPanel` passes it, so session and quick task chats are unchanged. `CoordinatorPausedBanner` (`getCoordinatorState`) sits in `SandboxChatPreInput`. The projects list reads `listStatusesForRepo` in one subscription (`useProjectListStatuses`) instead of one `listByProject` per project. Task rows read the server's `facts` (`projectTaskFactsFromRow`), so usage limit, cancelled dependency and question reasons show; open asks and reports come from `listTaskReports` (`projectTaskNotesByTask`). `@eva/shared/projectView` gains the copy and helpers (additive). A viewer's child-task pane disables text edits, properties, file removal and sandbox start.
+## Sandboxes get an allowlist of env vars, not prod's secrets
+
+Date: 2026-11-24
+
+WHY: The Eva seed copied every prod env var into each sandbox. Sandboxes then sent real email (`EMAIL_ENV=production`), held the prod GitHub app key, and rejected the dev Clerk sign-in.
+
+Architectural: `.eva/sandbox-env.json` lists, per Convex app, every env var a sandbox gets, each with one rule: `copy` from the source, `eva` (the sandbox's Eva env var of the same name, for test keys), a fixed `value`, or a `generate`d secret or ES256 key pair. `sync-to-local.mjs --sandbox-env` sets those, removes every other var on the local backend, and reports source vars not in the file and `eva` vars Eva does not provide. The loader, `scripts/sandbox-env.mjs`, and the env block of `sync-to-local.mjs` are shared word for word with carepulse-ts. Name listing now asks for `--names-only` on Convex CLI 1.42+, as carepulse-ts already did. `.eva/config.json` seeds with `--sandbox-env`.
+
+## Mobile: smaller release APK (R8, shrink resources, arm64 only)
+
+Date: 2026-11-24
+
+WHY: The release APK was about 62 MB. About 50 MB of the contents was unminified dex, and a large part of `res/` was unused icon fonts.
+
+Architectural: `expo-build-properties` in `app.config.ts` sets `buildArchs: ["arm64-v8a"]`, `enableMinifyInReleaseBuilds` and `enableShrinkResourcesInReleaseBuilds`, with keep rules in `PROGUARD_RULES` for Hermes, React Native, Expo modules, Reanimated, worklets and Clerk. `x86_64` stays out because CI never runs the release APK on an emulator. The first release with R8 needs a device smoke test.
+
+## Web: fix main CI, React Compiler bailout in KanbanBoard
+
+Date: 2026-11-24
+
+WHY: `compiler-check` failed because React Compiler cannot compile a `finally` clause, and the kanban drop glide added one.
+
+Architectural: `KanbanBoard.handleDragEnd` clears `droppedId` once after the try/catch (the catch swallows), so it runs on success and error with no `finally`.
+
+
+## Web: review tabs, logs views, sidebar rows, kanban cards and stats load motion
+
+Date: 2026-11-24
+
+WHY: The last places that still swapped at once now move: review tabs and logs views slide like other tabs, sidebar rows fold in and out, kanban cards glide to their new column, and Stats fades in after its spinner.
+
+Architectural:
+- `useKeepAliveTabSlide` + globals.css `data-tab-pane`: the tab slide for keep-alive panes (`ReviewTabsPanel` keeps Summary, Timeline and Code mounted with `invisible`). The new pane plays `t-tab-pane-in`; the old one plays `t-tab-pane-out`, whose `visibility: visible` keyframes hold it on screen over `invisible`. Gated on `data-tab-dir`, set only after the first switch, so mount does not slide.
+- Settings → Usage views (Overview, Type, Project) use `TabsTransition` (`LOG_VIEW_ORDER`) in place of an opacity fade.
+- `sidebarRowPresence`: session, automation and review rows open their height on arrive and fold it on archive or delete (220 ms). They clip only while moving (`transitionEnd: overflow visible`), so focus rings stay. Review rows gained an `AnimatePresence` (`initial={false}`).
+- `kanbanCardGlide`: quick task and project cards carry `layoutId`, so a status or phase change glides the card between columns (320 ms). The new column clips it while it travels. A card the user just dropped skips it (`droppedId`, cleared when the mutation resolves).
+- `useLoadedFade`: Stats fades its content in when it replaces the spinner; cached data shows at once. Lists, empty states (`EmptyState.enter`) and `PageWrapper animated` pages already animated in, so they are unchanged.
+
+## Web: sandbox panel tabs slide like tab content
+
+Date: 2026-11-24
+
+WHY: Switching tabs in the sandbox panel (sessions, quick tasks, projects) played a small scale settle. It now slides the content in from the side of the picked tab, matching the tab-content and rail slides.
+
+Architectural: `@vvedantb/ui` 0.63.0 replaces `dockNudge` with `dockSwitch(panel, fromTab, toTab)`. `SidePanelTabs.Frame` calls it on a tab switch: each card child slides 24px with a fade over 240 ms, on the axis between the old and new tab (vertical on the rail, horizontal on the phone strip). Enter only: the panes are keep-alive (`hidden` / `<Activity>`), so the old pane cannot leave without remounting iframes and terminals. The card dispatches `DockMotionEvent`, so the preview iframe host steps aside during the slide.
+
+
+## Web: side-panel links slide the page like the rail
+
+Date: 2026-11-23
+
+WHY: The side panel's links (Projects, Quick Tasks, Stats and so on) are a vertical list like the rail, so moving between them now slides the page up or down the same way.
+
+Architectural: `railNavDirection.ts` also tracks `.vt-panel a[href]` clicks against the panel's `aria-current="page"` link (`nav` source) and returns `{ source, direction }`. The router adds `nav-down` / `nav-up` to the `page` type only when the click is already a page swap, so moving from one session or project to another stays instant. globals.css slides only the page for `nav-*` (24px, 240 ms in, 144 ms out, no delay); the panel stays put.
+
+## Web: switching apps from the rail no longer swaps the panel early
+
+Date: 2026-11-23
+
+WHY: Clicking an app in the rail changed the side panel at once, while the page waited about 300 ms for the app's route to load. The rail slide then moved only the page, and the panel header flashed "eva / web" before "Eva".
+
+Architectural: `Sidebar` reads two locations. The rail (`RepoRail` props, `showSearch`) uses the pending `useLocation()`, so its pill still answers the click at once. The side panel and everything derived from it (flags, panel key, mode, repo data) use the router's `resolvedLocation`, so the panel changes with the page inside the same view transition.
+
+## Web: rail page switches slide in the rail's direction
+
+Date: 2026-11-23
+
+WHY: Switching pages from the vertical rail only faded the content; sliding the side panel and page up or down with the rail shows where you went, like the tab slide does sideways.
+
+Architectural: `lib/railNavDirection.ts` records a rail click's direction (the clicked `[data-rail-tile]` below or above the `[data-active]` one, by position). The router's `defaultViewTransition.types` adds `rail-down` / `rail-up` to the `page` type for that navigation, even between apps on the same leaf route. globals.css names the side panel (`.vt-panel` on `SidebarPanel`) `panel` for those types and slides both 24px: 240 ms in (the page 40 ms behind), 144 ms out. Other page swaps keep the plain rise. "Disable page animations" still stops it.
+
+## Web: view switchers slide (quick tasks, projects, testing arena)
+
+Date: 2026-11-23
+
+WHY: The quick tasks Kanban/List switch, the projects Kanban/Timeline/List switch and the testing arena Code/Browser tabs now slide from the side of the picked view, like the other tab sets.
+
+Architectural: `QuickTasksClient` and `ProjectsClient` replace their per-view `AnimatePresence` fade-ups with `TabsTransition`. Quick tasks keep one fade-up branch for entering from loading or empty, with the board/list slide inside it. The orders are `QUICK_TASK_VIEWS` (now also the toolbar's type guard), `PROJECT_VIEW_ORDER` (from `VIEW_OPTIONS`) and `ARENA_TABS`. Each project view keeps its own layout via `PROJECT_VIEW_PANEL_CLASS`. List filters (active/archived and the like) and the timeline range stay instant.
+
+## Web: quick task Task/Sandbox and project tabs slide (@vvedantb/ui 0.62.1)
+
+Date: 2026-11-23
+
+WHY: The quick task's Task/Sandbox switch and the project's Overview/Plan|Tasks/Sandbox tabs crossfaded; they now slide from the side of the picked tab, like the team page.
+
+Architectural: packages #340 adds `TabsTransition` `panelClassName`, so full-height panels keep their flex classes. `TaskDetailInline` and `ProjectDetailMainContent` replace their `AnimatePresence` fades with `TabsTransition`; the orders are the new `SANDBOX_SURFACES` and `PROJECT_MAIN_TABS` constants, which the tab components' type guards now use too. `@vvedantb/ui` 0.62.0 → 0.62.1 in every workspace.
 
 ## Web: composer action cards match the composer footer width
 

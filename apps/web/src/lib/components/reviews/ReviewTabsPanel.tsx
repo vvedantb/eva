@@ -8,6 +8,7 @@ import { Button, Spinner } from "@vvedantb/ui";
 import { WorkerPoolContextProvider } from "@pierre/diffs/react";
 import { IconAlertTriangle, IconGitPullRequest } from "@tabler/icons-react";
 import type { ReviewTab } from "@/lib/search-params";
+import { useKeepAliveTabSlide } from "@/lib/hooks/useKeepAliveTabSlide";
 import { DiffsPanel } from "@/lib/components/sandbox/DiffsPanel";
 import {
   DIFF_HIGHLIGHTER_OPTIONS,
@@ -84,6 +85,7 @@ export function ReviewTabsPanel({
 }: ReviewTabsPanelProps) {
   const tabs =
     pullRequests === undefined ? SINGLE_PR_REVIEW_TABS : REVIEW_TAB_ORDER;
+  const slide = useKeepAliveTabSlide(activeTab, tabs);
   const recapDoc = useQuery(
     api.docs.getRecapByPrUrl,
     prUrl ? { repoId, prUrl } : "skip",
@@ -143,10 +145,14 @@ export function ReviewTabsPanel({
           />
         )}
 
-        <div className="relative min-h-0 flex-1 overflow-hidden">
+        <div
+          className="relative min-h-0 flex-1 overflow-hidden"
+          {...slide.container}
+        >
           {tabs.map((tab) => (
             <div
               key={tab}
+              {...slide.pane(tab)}
               className={cn(
                 "absolute inset-0",
                 activeTab !== tab && "invisible",

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { PACKAGE_HELPER_SCRIPT } from "../convex/_sandbox_runtime/packageManager";
 
 /**

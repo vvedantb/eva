@@ -1,0 +1,58 @@
+{
+  "packages/backend": {
+    "AI_GATEWAY_API_KEY": {
+      "from": "eva",
+      "why": "Test key with its own spend limit."
+    },
+
+    "CLERK_JWT_ISSUER_DOMAIN": {
+      "value": "https://powerful-hedgehog-79.clerk.accounts.dev",
+      "why": "Dev Clerk; must match the publishable key the Eva startup command writes."
+    },
+    "CLERK_PUBLISHABLE_KEY": {
+      "value": "pk_test_cG93ZXJmdWwtaGVkZ2Vob2ctNzkuY2xlcmsuYWNjb3VudHMuZGV2JA"
+    },
+    "CLERK_SECRET_KEY": "eva",
+
+    "EMAIL_ENV": {
+      "value": "development",
+      "why": "Anything but production sends every email to SENDGRID_DEV_TEST_EMAIL."
+    },
+    "SENDGRID_API_KEY": "eva",
+    "SENDGRID_DEV_TEST_EMAIL": "eva",
+    "SENDGRID_FROM_EMAIL": "copy",
+
+    "ENVIRONMENT": { "value": "development" },
+    "WEB_APP_URL": { "value": "http://localhost:5173" },
+
+    "ENCRYPTION_KEY": {
+      "generate": "secret",
+      "why": "A fresh key leaves the source's encrypted credentials unreadable."
+    },
+    "EVA_DEPLOY_KEY": { "generate": "secret" },
+    "EXTENSION_ADMIN_KEY": { "generate": "secret" },
+    "MCP_INTERNAL_SECRET": { "generate": "secret" },
+    "MCP_JWT_SECRET": { "generate": "secret" },
+    "PREVIEW_GRANT_PRIVATE_KEY": {
+      "generate": "es256-private-jwk",
+      "kid": "preview-1"
+    },
+    "SANDBOX_JWT_PRIVATE_KEY": {
+      "generate": "es256-private-jwk",
+      "kid": "sandbox-1",
+      "pair": "sandbox-jwt"
+    },
+    "SANDBOX_JWT_JWKS": { "generate": "es256-jwks", "pair": "sandbox-jwt" },
+
+    "GITHUB_APP_ID": {
+      "from": "copy",
+      "why": "Reuses the source deployment's GitHub app."
+    },
+    "GITHUB_APP_SLUG": "copy",
+    "GITHUB_BOT_USER_ID": "copy",
+    "GITHUB_CLIENT_ID": "copy",
+    "GITHUB_CLIENT_SECRET": "copy",
+    "GITHUB_PRIVATE_KEY": "copy",
+    "GITHUB_WEBHOOK_SECRET": "copy"
+  }
+}

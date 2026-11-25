@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { isZeroWorkTaskNotificationResult } from "../providers/claudeResult.js";
 
 describe("Claude task-notification results", () => {

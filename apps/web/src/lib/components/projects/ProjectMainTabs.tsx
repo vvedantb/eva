@@ -10,14 +10,16 @@ import {
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 /**
- * Primary project tabs: Project (the overview), and the work tab — the coordinator (its
- * chat and rail, Tasks first) or, while a project still plans, its Plan.
+ * Primary project tabs, in their on-screen order (the content slides by it):
+ * Project (the overview), and the work tab — the coordinator (its chat and
+ * rail, Tasks first) or, while a project still plans, its Plan.
  * `work` is the index route, so it owns every deep link.
  */
-export type ProjectMainTab = "overview" | "work";
+export const PROJECT_MAIN_TABS = ["overview", "work"] as const;
+export type ProjectMainTab = (typeof PROJECT_MAIN_TABS)[number];
 
 function isProjectMainTab(value: string): value is ProjectMainTab {
-  return value === "overview" || value === "work";
+  return PROJECT_MAIN_TABS.some((tab) => tab === value);
 }
 
 export function ProjectMainTabs({

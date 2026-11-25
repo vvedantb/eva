@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import {
   SANDBOX_FAILOVER_REGIONS,
   SANDBOX_REGION,

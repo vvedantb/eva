@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
-import { tokenTransition } from "@vvedantb/ui";
-import { AnimatePresence, m } from "motion/react";
+import { TabsTransition } from "@vvedantb/ui";
 import type { Id } from "@eva/backend";
 import { ProjectTabs } from "@/lib/components/projects/ProjectTabs";
-import type { ProjectMainTab } from "@/lib/components/projects/ProjectMainTabs";
+import {
+  PROJECT_MAIN_TABS,
+  type ProjectMainTab,
+} from "@/lib/components/projects/ProjectMainTabs";
 import { ProjectOverviewTab } from "@/lib/components/projects/ProjectOverviewTab";
 import { ProjectTaskView } from "@/lib/components/projects/ProjectTaskView";
 import { entityPathSegment, type EntityResolveStatus } from "@/lib/numId";
@@ -60,59 +62,55 @@ export function ProjectDetailMainContent({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <AnimatePresence mode="wait" initial={false}>
-        <m.div
-          key={view === "task" ? `task:${selectedTaskId ?? ""}` : view}
-          className="flex min-h-0 flex-1 flex-col overflow-hidden"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={tokenTransition.fast}
-        >
-          {view === "overview" ? (
-            <ProjectOverviewTab
-              projectId={projectId}
-              repoId={repoId}
-              title={project.title}
-              description={project.description}
-              documentsHref={
-                projectSegment
-                  ? `${projectHref}/sandbox/documents`
-                  : undefined
-              }
-            />
-          ) : view === "plan" ? (
-            <ProjectTabs
-              projectId={projectId}
-              projectPhase={project.phase}
-              interviewRunning={project.interview !== undefined}
-              rawInput={project.rawInput}
-              generatedSpec={project.generatedSpec}
-              conversationHistory={project.conversationHistory}
-              streamingActivity={streamingActivity}
-              sandboxStartupActivity={sandboxStartupActivity}
-              basePath={basePath}
-              repoId={repoId}
-            />
-          ) : view === "task" ? (
-            <ProjectTaskView
-              projectId={projectId}
-              repoId={project.repoId}
-              projectNumId={project.numId}
-              coordinatorHref={`${projectHref}/sandbox/tasks`}
-              documentsHref={
-                projectSegment
-                  ? `${projectHref}/sandbox/documents`
-                  : undefined
-              }
-              taskId={selectedTaskId}
-              taskStatus={selectedTaskStatus}
-            />
-          ) : (
-            coordinatorContent
-          )}
-        </m.div>
-      </AnimatePresence>
+      <TabsTransition
+        value={mainTab}
+        order={PROJECT_MAIN_TABS}
+        className="flex min-h-0 flex-1 flex-col"
+        panelClassName="flex min-h-0 flex-1 flex-col overflow-hidden"
+      >
+        {view === "overview" ? (
+          <ProjectOverviewTab
+            projectId={projectId}
+            repoId={repoId}
+            title={project.title}
+            description={project.description}
+            documentsHref={
+              projectSegment
+                ? `${projectHref}/sandbox/documents`
+                : undefined
+            }
+          />
+        ) : view === "plan" ? (
+          <ProjectTabs
+            projectId={projectId}
+            projectPhase={project.phase}
+            interviewRunning={project.interview !== undefined}
+            rawInput={project.rawInput}
+            generatedSpec={project.generatedSpec}
+            conversationHistory={project.conversationHistory}
+            streamingActivity={streamingActivity}
+            sandboxStartupActivity={sandboxStartupActivity}
+            basePath={basePath}
+            repoId={repoId}
+          />
+        ) : view === "task" ? (
+          <ProjectTaskView
+            projectId={projectId}
+            repoId={project.repoId}
+            projectNumId={project.numId}
+            coordinatorHref={`${projectHref}/sandbox/tasks`}
+            documentsHref={
+              projectSegment
+                ? `${projectHref}/sandbox/documents`
+                : undefined
+            }
+            taskId={selectedTaskId}
+            taskStatus={selectedTaskStatus}
+          />
+        ) : (
+          coordinatorContent
+        )}
+      </TabsTransition>
     </div>
   );
 }

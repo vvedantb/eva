@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { recordPullRequest } from "../convex/_pullRequests/store";
@@ -11,8 +11,8 @@ import {
 } from "../convex/mcp/orchestratorDelivery";
 import { normalizeAIModel } from "../convex/_validators/aiModels";
 import { z } from "zod";
+import { modules } from "./_helpers/convexModules";
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 const PR_URL = "https://github.com/vvedantb/eva/pull/664";
 const TASK_PR_URL = "https://github.com/vvedantb/eva/pull/665";

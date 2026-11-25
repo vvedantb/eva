@@ -40,7 +40,6 @@ import { Route as GlobalSettingsPersonalisationRouteImport } from './routes/_glo
 import { Route as GlobalSettingsSandboxStatusRouteImport } from './routes/_global/settings/sandbox-status'
 import { Route as GlobalSettingsSandboxesRouteImport } from './routes/_global/settings/sandboxes'
 import { Route as GlobalSettingsShortcutsRouteImport } from './routes/_global/settings/shortcuts'
-import { Route as GlobalSettingsSyncRouteImport } from './routes/_global/settings/sync'
 import { Route as GlobalSettingsThemeRouteImport } from './routes/_global/settings/theme'
 import { Route as GlobalSetupIdRouteImport } from './routes/_global/setup/$id'
 import { Route as GlobalTeamsIndexRouteImport } from './routes/_global/teams/index'
@@ -75,7 +74,6 @@ import { Route as RepoOwnerRepoSettingsAppRouteImport } from './routes/_repo/$ow
 import { Route as RepoOwnerRepoSettingsConfigRouteImport } from './routes/_repo/$owner/$repo/settings/config'
 import { Route as RepoOwnerRepoSettingsLogsRouteImport } from './routes/_repo/$owner/$repo/settings/logs'
 import { Route as RepoOwnerRepoSettingsMcpConfigRouteImport } from './routes/_repo/$owner/$repo/settings/mcp-config'
-import { Route as RepoOwnerRepoSettingsMonorepoRouteImport } from './routes/_repo/$owner/$repo/settings/monorepo'
 import { Route as RepoOwnerRepoSettingsPersonalisationRouteImport } from './routes/_repo/$owner/$repo/settings/personalisation'
 import { Route as RepoOwnerRepoSettingsSkillsRouteImport } from './routes/_repo/$owner/$repo/settings/skills'
 import { Route as RepoOwnerRepoSettingsSnapshotsRouteRouteImport } from './routes/_repo/$owner/$repo/settings/snapshots/route'
@@ -309,11 +307,6 @@ const GlobalSettingsShortcutsRoute = GlobalSettingsShortcutsRouteImport.update({
   path: '/shortcuts',
   getParentRoute: () => GlobalSettingsRouteRoute,
 } as any)
-const GlobalSettingsSyncRoute = GlobalSettingsSyncRouteImport.update({
-  id: '/sync',
-  path: '/sync',
-  getParentRoute: () => GlobalSettingsRouteRoute,
-} as any)
 const GlobalSettingsThemeRoute = GlobalSettingsThemeRouteImport.update({
   id: '/theme',
   path: '/theme',
@@ -504,12 +497,6 @@ const RepoOwnerRepoSettingsMcpConfigRoute =
   RepoOwnerRepoSettingsMcpConfigRouteImport.update({
     id: '/mcp-config',
     path: '/mcp-config',
-    getParentRoute: () => RepoOwnerRepoSettingsRouteRoute,
-  } as any)
-const RepoOwnerRepoSettingsMonorepoRoute =
-  RepoOwnerRepoSettingsMonorepoRouteImport.update({
-    id: '/monorepo',
-    path: '/monorepo',
     getParentRoute: () => RepoOwnerRepoSettingsRouteRoute,
   } as any)
 const RepoOwnerRepoSettingsPersonalisationRoute =
@@ -984,7 +971,6 @@ export interface FileRoutesByFullPath {
   '/settings/sandbox-status': typeof GlobalSettingsSandboxStatusRoute
   '/settings/sandboxes': typeof GlobalSettingsSandboxesRoute
   '/settings/shortcuts': typeof GlobalSettingsShortcutsRoute
-  '/settings/sync': typeof GlobalSettingsSyncRoute
   '/settings/theme': typeof GlobalSettingsThemeRoute
   '/setup/$id': typeof GlobalSetupIdRoute
   '/$owner/$repo': typeof RepoOwnerRepoRouteWithChildren
@@ -1015,7 +1001,6 @@ export interface FileRoutesByFullPath {
   '/$owner/$repo/settings/config': typeof RepoOwnerRepoSettingsConfigRoute
   '/$owner/$repo/settings/logs': typeof RepoOwnerRepoSettingsLogsRoute
   '/$owner/$repo/settings/mcp-config': typeof RepoOwnerRepoSettingsMcpConfigRoute
-  '/$owner/$repo/settings/monorepo': typeof RepoOwnerRepoSettingsMonorepoRoute
   '/$owner/$repo/settings/personalisation': typeof RepoOwnerRepoSettingsPersonalisationRoute
   '/$owner/$repo/settings/skills': typeof RepoOwnerRepoSettingsSkillsRoute
   '/$owner/$repo/settings/tabs': typeof RepoOwnerRepoSettingsTabsRoute
@@ -1122,7 +1107,6 @@ export interface FileRoutesByTo {
   '/settings/sandbox-status': typeof GlobalSettingsSandboxStatusRoute
   '/settings/sandboxes': typeof GlobalSettingsSandboxesRoute
   '/settings/shortcuts': typeof GlobalSettingsShortcutsRoute
-  '/settings/sync': typeof GlobalSettingsSyncRoute
   '/settings/theme': typeof GlobalSettingsThemeRoute
   '/setup/$id': typeof GlobalSetupIdRoute
   '/p/$kind/$id': typeof PKindIdRoute
@@ -1139,7 +1123,6 @@ export interface FileRoutesByTo {
   '/$owner/$repo/settings/config': typeof RepoOwnerRepoSettingsConfigRoute
   '/$owner/$repo/settings/logs': typeof RepoOwnerRepoSettingsLogsRoute
   '/$owner/$repo/settings/mcp-config': typeof RepoOwnerRepoSettingsMcpConfigRoute
-  '/$owner/$repo/settings/monorepo': typeof RepoOwnerRepoSettingsMonorepoRoute
   '/$owner/$repo/settings/personalisation': typeof RepoOwnerRepoSettingsPersonalisationRoute
   '/$owner/$repo/settings/skills': typeof RepoOwnerRepoSettingsSkillsRoute
   '/$owner/$repo/settings/tabs': typeof RepoOwnerRepoSettingsTabsRoute
@@ -1242,7 +1225,6 @@ export interface FileRoutesById {
   '/_global/settings/sandbox-status': typeof GlobalSettingsSandboxStatusRoute
   '/_global/settings/sandboxes': typeof GlobalSettingsSandboxesRoute
   '/_global/settings/shortcuts': typeof GlobalSettingsShortcutsRoute
-  '/_global/settings/sync': typeof GlobalSettingsSyncRoute
   '/_global/settings/theme': typeof GlobalSettingsThemeRoute
   '/_global/setup/$id': typeof GlobalSetupIdRoute
   '/_repo/$owner/$repo': typeof RepoOwnerRepoRouteWithChildren
@@ -1273,7 +1255,6 @@ export interface FileRoutesById {
   '/_repo/$owner/$repo/settings/config': typeof RepoOwnerRepoSettingsConfigRoute
   '/_repo/$owner/$repo/settings/logs': typeof RepoOwnerRepoSettingsLogsRoute
   '/_repo/$owner/$repo/settings/mcp-config': typeof RepoOwnerRepoSettingsMcpConfigRoute
-  '/_repo/$owner/$repo/settings/monorepo': typeof RepoOwnerRepoSettingsMonorepoRoute
   '/_repo/$owner/$repo/settings/personalisation': typeof RepoOwnerRepoSettingsPersonalisationRoute
   '/_repo/$owner/$repo/settings/skills': typeof RepoOwnerRepoSettingsSkillsRoute
   '/_repo/$owner/$repo/settings/tabs': typeof RepoOwnerRepoSettingsTabsRoute
@@ -1384,7 +1365,6 @@ export interface FileRouteTypes {
     | '/settings/sandbox-status'
     | '/settings/sandboxes'
     | '/settings/shortcuts'
-    | '/settings/sync'
     | '/settings/theme'
     | '/setup/$id'
     | '/$owner/$repo'
@@ -1415,7 +1395,6 @@ export interface FileRouteTypes {
     | '/$owner/$repo/settings/config'
     | '/$owner/$repo/settings/logs'
     | '/$owner/$repo/settings/mcp-config'
-    | '/$owner/$repo/settings/monorepo'
     | '/$owner/$repo/settings/personalisation'
     | '/$owner/$repo/settings/skills'
     | '/$owner/$repo/settings/tabs'
@@ -1522,7 +1501,6 @@ export interface FileRouteTypes {
     | '/settings/sandbox-status'
     | '/settings/sandboxes'
     | '/settings/shortcuts'
-    | '/settings/sync'
     | '/settings/theme'
     | '/setup/$id'
     | '/p/$kind/$id'
@@ -1539,7 +1517,6 @@ export interface FileRouteTypes {
     | '/$owner/$repo/settings/config'
     | '/$owner/$repo/settings/logs'
     | '/$owner/$repo/settings/mcp-config'
-    | '/$owner/$repo/settings/monorepo'
     | '/$owner/$repo/settings/personalisation'
     | '/$owner/$repo/settings/skills'
     | '/$owner/$repo/settings/tabs'
@@ -1641,7 +1618,6 @@ export interface FileRouteTypes {
     | '/_global/settings/sandbox-status'
     | '/_global/settings/sandboxes'
     | '/_global/settings/shortcuts'
-    | '/_global/settings/sync'
     | '/_global/settings/theme'
     | '/_global/setup/$id'
     | '/_repo/$owner/$repo'
@@ -1672,7 +1648,6 @@ export interface FileRouteTypes {
     | '/_repo/$owner/$repo/settings/config'
     | '/_repo/$owner/$repo/settings/logs'
     | '/_repo/$owner/$repo/settings/mcp-config'
-    | '/_repo/$owner/$repo/settings/monorepo'
     | '/_repo/$owner/$repo/settings/personalisation'
     | '/_repo/$owner/$repo/settings/skills'
     | '/_repo/$owner/$repo/settings/tabs'
@@ -1985,13 +1960,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GlobalSettingsShortcutsRouteImport
       parentRoute: typeof GlobalSettingsRouteRoute
     }
-    '/_global/settings/sync': {
-      id: '/_global/settings/sync'
-      path: '/sync'
-      fullPath: '/settings/sync'
-      preLoaderRoute: typeof GlobalSettingsSyncRouteImport
-      parentRoute: typeof GlobalSettingsRouteRoute
-    }
     '/_global/settings/theme': {
       id: '/_global/settings/theme'
       path: '/theme'
@@ -2228,13 +2196,6 @@ declare module '@tanstack/react-router' {
       path: '/mcp-config'
       fullPath: '/$owner/$repo/settings/mcp-config'
       preLoaderRoute: typeof RepoOwnerRepoSettingsMcpConfigRouteImport
-      parentRoute: typeof RepoOwnerRepoSettingsRouteRoute
-    }
-    '/_repo/$owner/$repo/settings/monorepo': {
-      id: '/_repo/$owner/$repo/settings/monorepo'
-      path: '/monorepo'
-      fullPath: '/$owner/$repo/settings/monorepo'
-      preLoaderRoute: typeof RepoOwnerRepoSettingsMonorepoRouteImport
       parentRoute: typeof RepoOwnerRepoSettingsRouteRoute
     }
     '/_repo/$owner/$repo/settings/personalisation': {
@@ -2761,7 +2722,6 @@ interface GlobalSettingsRouteRouteChildren {
   GlobalSettingsSandboxStatusRoute: typeof GlobalSettingsSandboxStatusRoute
   GlobalSettingsSandboxesRoute: typeof GlobalSettingsSandboxesRoute
   GlobalSettingsShortcutsRoute: typeof GlobalSettingsShortcutsRoute
-  GlobalSettingsSyncRoute: typeof GlobalSettingsSyncRoute
   GlobalSettingsThemeRoute: typeof GlobalSettingsThemeRoute
   GlobalSettingsIndexRoute: typeof GlobalSettingsIndexRoute
 }
@@ -2776,7 +2736,6 @@ const GlobalSettingsRouteRouteChildren: GlobalSettingsRouteRouteChildren = {
   GlobalSettingsSandboxStatusRoute: GlobalSettingsSandboxStatusRoute,
   GlobalSettingsSandboxesRoute: GlobalSettingsSandboxesRoute,
   GlobalSettingsShortcutsRoute: GlobalSettingsShortcutsRoute,
-  GlobalSettingsSyncRoute: GlobalSettingsSyncRoute,
   GlobalSettingsThemeRoute: GlobalSettingsThemeRoute,
   GlobalSettingsIndexRoute: GlobalSettingsIndexRoute,
 }
@@ -3167,7 +3126,6 @@ interface RepoOwnerRepoSettingsRouteRouteChildren {
   RepoOwnerRepoSettingsConfigRoute: typeof RepoOwnerRepoSettingsConfigRoute
   RepoOwnerRepoSettingsLogsRoute: typeof RepoOwnerRepoSettingsLogsRoute
   RepoOwnerRepoSettingsMcpConfigRoute: typeof RepoOwnerRepoSettingsMcpConfigRoute
-  RepoOwnerRepoSettingsMonorepoRoute: typeof RepoOwnerRepoSettingsMonorepoRoute
   RepoOwnerRepoSettingsPersonalisationRoute: typeof RepoOwnerRepoSettingsPersonalisationRoute
   RepoOwnerRepoSettingsSkillsRoute: typeof RepoOwnerRepoSettingsSkillsRoute
   RepoOwnerRepoSettingsTabsRoute: typeof RepoOwnerRepoSettingsTabsRoute
@@ -3185,7 +3143,6 @@ const RepoOwnerRepoSettingsRouteRouteChildren: RepoOwnerRepoSettingsRouteRouteCh
     RepoOwnerRepoSettingsConfigRoute: RepoOwnerRepoSettingsConfigRoute,
     RepoOwnerRepoSettingsLogsRoute: RepoOwnerRepoSettingsLogsRoute,
     RepoOwnerRepoSettingsMcpConfigRoute: RepoOwnerRepoSettingsMcpConfigRoute,
-    RepoOwnerRepoSettingsMonorepoRoute: RepoOwnerRepoSettingsMonorepoRoute,
     RepoOwnerRepoSettingsPersonalisationRoute:
       RepoOwnerRepoSettingsPersonalisationRoute,
     RepoOwnerRepoSettingsSkillsRoute: RepoOwnerRepoSettingsSkillsRoute,

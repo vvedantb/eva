@@ -1,4 +1,4 @@
-import { test, expect, beforeEach } from "vitest";
+import { test, expect, beforeEach } from "bun:test";
 import { callbackState as S, resetStateForTests } from "../runtime/state.js";
 import {
   parseClaudeSdkTaxonomy,

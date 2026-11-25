@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import workflow from "@convex-dev/workflow/test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
@@ -25,6 +25,7 @@ import {
 } from "../convex/mcp/projectScope";
 import { defineTool, type EvaTool } from "../convex/mcp/registry";
 import { toolJsonResult } from "@vvedantb/server";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * A project's coordinator and its child tasks (plan step 3 and 6.6): the ask
@@ -32,7 +33,6 @@ import { toolJsonResult } from "@vvedantb/server";
  * which MCP tools each side may use.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|project-coordinator";
 

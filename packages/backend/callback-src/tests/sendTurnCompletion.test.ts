@@ -1,7 +1,4 @@
-import { afterEach, expect, test, vi } from "vitest";
-import type * as ConvexClient from "../http/convexClient.js";
-import { callConvexWithRetry } from "../http/convexClient.js";
-import { sendTurnCompletion } from "../runtime/completion.js";
+import { afterEach, expect, mock, test } from "bun:test";
 import {
   beginTurnOwnership,
   endTurnOwnership,
@@ -11,14 +8,17 @@ import {
 import type { JsonObject } from "../types.js";
 
 // Only the network call is faked.
-vi.mock("../http/convexClient.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof ConvexClient>()),
-  callConvexWithRetry: vi.fn(),
+const realClient = { ...(await import("../http/convexClient.js")) };
+const callConvexWithRetry = mock<typeof realClient.callConvexWithRetry>();
+mock.module("../http/convexClient.js", () => ({
+  ...realClient,
+  callConvexWithRetry,
 }));
+const { sendTurnCompletion } = await import("../runtime/completion.js");
 
 afterEach(() => {
   endTurnOwnership();
-  vi.mocked(callConvexWithRetry).mockReset();
+  callConvexWithRetry.mockReset();
 });
 
 test("sends a redacted completion after the lease is released", async () => {
@@ -27,16 +27,14 @@ test("sends a redacted completion after the lease is released", async () => {
     args: JsonObject;
     leaseAtSend: TurnLeaseIdentity | null;
   }[] = [];
-  vi.mocked(callConvexWithRetry).mockImplementation(
-    async (_type, path, args) => {
-      sent.push({
-        path,
-        args: { ...args },
-        leaseAtSend: getCurrentTurnLease(),
-      });
-      return null;
-    },
-  );
+  callConvexWithRetry.mockImplementation(async (_type, path, args) => {
+    sent.push({
+      path,
+      args: { ...args },
+      leaseAtSend: getCurrentTurnLease(),
+    });
+    return null;
+  });
   beginTurnOwnership("claim", { turnId: "turn-1", leaseGeneration: 2 });
   // Built at runtime so secret scanners do not flag a fake token in the source.
   const token = ["ghs", "A1b2C3d4E5f6G7h8I9j0"].join("_");

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { buildAveInstructions } from "../convex/_ave/prompt";
 
 const instructions = buildAveInstructions({

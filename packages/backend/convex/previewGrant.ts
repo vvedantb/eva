@@ -86,6 +86,9 @@ export const mintPreviewGrant = action({
   returns: v.string(),
   handler: async (ctx, args): Promise<string> => {
     await rejectSandboxCaller(ctx);
+    if (!Number.isInteger(args.port) || args.port < 1 || args.port > 65535) {
+      throw new Error(`Invalid preview port: ${args.port}`);
+    }
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("Not authenticated");

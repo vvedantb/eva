@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { escapeHtml } from "@eva/shared/escapeHtml";
 import { isHttpUrl, isInternalAppHref } from "@eva/shared/safeUrl";
 import { buildNotificationDigestHtml } from "../convex/emailTemplates";

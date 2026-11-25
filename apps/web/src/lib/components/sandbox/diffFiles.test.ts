@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import {
   applyIgnoreWhitespace,
   buildDiffFileEntries,
   diffFileKind,
+  type DiffFileKind,
   ignoreWhitespaceInPatch,
   lineCommentTarget,
   lineRangeCommentTarget,
@@ -11,7 +12,7 @@ import {
 } from "@eva/shared";
 
 describe("diffFileKind", () => {
-  it.each([
+  it.each<[string, DiffFileKind]>([
     ["apps/web/src/lib/diffFiles.ts", "code"],
     ["apps/web/src/lib/diffFiles.test.ts", "tests"],
     ["packages/backend/tests/prDescription.test.ts", "tests"],
@@ -254,7 +255,7 @@ describe("ignoreWhitespaceInPatch", () => {
     const headers = hunkHeaderCounts(ignoreWhitespaceInPatch(source));
     expect(headers).toHaveLength(1);
     for (const { declared, actual } of headers) {
-      expect(actual).toEqual(declared);
+      expect(declared).toEqual(actual);
     }
   });
 });

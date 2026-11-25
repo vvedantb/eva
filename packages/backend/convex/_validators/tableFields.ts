@@ -963,12 +963,6 @@ export const repoGroupFields = {
   updatedAt: v.optional(v.number()),
 };
 
-export const syncSettingFields = {
-  owner: v.string(),
-  name: v.string(),
-  enabled: v.boolean(),
-};
-
 /** One built-in slash command reported by a harness CLI's init handshake. */
 export const harnessSkillValidator = v.object({
   name: v.string(),

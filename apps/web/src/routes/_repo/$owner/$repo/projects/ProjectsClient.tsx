@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { m, AnimatePresence } from "motion/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -18,7 +17,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-  tokenTransition,
+  TabsTransition,
   Tabs,
   TabsList,
   TabsTrigger,
@@ -73,8 +72,18 @@ const VIEW_OPTIONS: {
   { key: "list", icon: IconList, label: "List view" },
 ];
 
+/** The views in their toolbar order (the content slides by it). */
+const PROJECT_VIEW_ORDER = VIEW_OPTIONS.map((opt) => opt.key);
+
+/** Each view's own layout, kept on its sliding panel. */
+const PROJECT_VIEW_PANEL_CLASS: Record<ProjectView, string> = {
+  kanban: "flex min-h-0 min-w-0 flex-1 flex-col",
+  timeline: "flex flex-1 min-h-0 min-w-0",
+  list: "flex flex-1 min-h-0",
+};
+
 function isProjectView(value: string): value is ProjectView {
-  return value === "kanban" || value === "timeline" || value === "list";
+  return VIEW_OPTIONS.some((opt) => opt.key === value);
 }
 
 export function ProjectsClient() {
@@ -348,72 +357,50 @@ export function ProjectsClient() {
               </EmptyState.Root>
             </div>
           ) : (
-            <AnimatePresence initial={false} mode="wait">
+            <TabsTransition
+              value={view}
+              order={PROJECT_VIEW_ORDER}
+              className="flex min-h-0 min-w-0 flex-1"
+              panelClassName={PROJECT_VIEW_PANEL_CLASS[view]}
+            >
               {view === "kanban" ? (
-                <m.div
-                  key="projects-kanban-view"
-                  className="flex min-h-0 min-w-0 flex-1 flex-col"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 8 }}
-                  transition={tokenTransition.base}
-                >
-                  <div className="flex h-full min-h-0 min-w-0 flex-1 items-stretch gap-2 overflow-x-auto overflow-y-hidden scrollbar scroll-fade-x snap-x snap-mandatory sm:gap-3 sm:snap-none">
-                    <ProjectsKanbanView
-                      projectsByPhase={projectsByPhase}
-                      visiblePhases={visiblePhases}
-                      statuses={statuses}
-                      owner={owner}
-                      name={name}
-                      basePath={basePath}
-                      onDelete={projectDelete.requestSingle}
-                      isSelecting={selection.isSelecting}
-                      selectedIds={selection.selectedIds}
-                      onToggleSelect={selection.toggle}
-                    />
-                  </div>
-                </m.div>
-              ) : view === "timeline" ? (
-                <m.div
-                  key="projects-timeline-view"
-                  className="flex flex-1 min-h-0 min-w-0"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 8 }}
-                  transition={tokenTransition.base}
-                >
-                  <ProjectsTimeline
-                    projects={filteredSorted}
-                    stageOf={stageOf}
-                    statuses={statuses}
-                    basePath={basePath}
-                    range={timelineRange}
-                    zoom={timelineZoom}
-                    onRangeChange={(r) => setParams({ timelineRange: r })}
-                    onZoomChange={(z) => setParams({ timelineZoom: z })}
-                  />
-                </m.div>
-              ) : (
-                <m.div
-                  key="projects-list-view"
-                  className="flex flex-1 min-h-0"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 8 }}
-                  transition={tokenTransition.base}
-                >
-                  <ProjectsListView
+                <div className="flex h-full min-h-0 min-w-0 flex-1 items-stretch gap-2 overflow-x-auto overflow-y-hidden scrollbar scroll-fade-x snap-x snap-mandatory sm:gap-3 sm:snap-none">
+                  <ProjectsKanbanView
                     projectsByPhase={projectsByPhase}
                     visiblePhases={visiblePhases}
                     statuses={statuses}
+                    owner={owner}
+                    name={name}
+                    basePath={basePath}
                     onDelete={projectDelete.requestSingle}
                     isSelecting={selection.isSelecting}
                     selectedIds={selection.selectedIds}
                     onToggleSelect={selection.toggle}
                   />
-                </m.div>
+                </div>
+              ) : view === "timeline" ? (
+                <ProjectsTimeline
+                  projects={filteredSorted}
+                  stageOf={stageOf}
+                  statuses={statuses}
+                  basePath={basePath}
+                  range={timelineRange}
+                  zoom={timelineZoom}
+                  onRangeChange={(r) => setParams({ timelineRange: r })}
+                  onZoomChange={(z) => setParams({ timelineZoom: z })}
+                />
+              ) : (
+                <ProjectsListView
+                  projectsByPhase={projectsByPhase}
+                  visiblePhases={visiblePhases}
+                  statuses={statuses}
+                  onDelete={projectDelete.requestSingle}
+                  isSelecting={selection.isSelecting}
+                  selectedIds={selection.selectedIds}
+                  onToggleSelect={selection.toggle}
+                />
               )}
-            </AnimatePresence>
+            </TabsTransition>
           )}
           {hasProjects && (
             <ProjectsBulkBar

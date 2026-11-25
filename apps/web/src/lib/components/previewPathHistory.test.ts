@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import {
   PREVIEW_PATH_HISTORY_STORED_LIMIT,
   PREVIEW_PATH_HISTORY_VISIBLE_LIMIT,

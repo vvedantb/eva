@@ -10,7 +10,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
   Spinner,
-  tokenTransition,
   CountPop,
   countLabel,
 } from "@vvedantb/ui";
@@ -32,6 +31,7 @@ import { sortSessionsForSidebar } from "@/lib/components/sidebar/_utils/sessions
 import type { AutomationSortOrder } from "@/lib/components/sidebar/_utils/automationsSidebarSettings";
 import { entityPathSegment } from "@/lib/numId";
 import { repoDisplayLabel, type RepoWithLogo } from "@/lib/utils/repoGrouping";
+import { sidebarRowPresence } from "@/lib/components/sidebar/_utils/sidebarRowPresence";
 
 type AutomationListItem = FunctionReturnType<
   typeof api.automations.list
@@ -166,10 +166,7 @@ export function GlobalAutomationGroup({
                   return (
                     <m.div
                       key={automation._id}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 8 }}
-                      transition={tokenTransition.fast}
+                      {...sidebarRowPresence}
                     >
                       <SharedLayoutNavSurface
                         itemId={automation._id}

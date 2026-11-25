@@ -569,7 +569,6 @@ import type * as snapshotActions from "../snapshotActions.js";
 import type * as snapshotWorkflow from "../snapshotWorkflow.js";
 import type * as spotlight from "../spotlight.js";
 import type * as streaming from "../streaming.js";
-import type * as syncSettings from "../syncSettings.js";
 import type * as taskActivity from "../taskActivity.js";
 import type * as taskActivityCoalesce from "../taskActivityCoalesce.js";
 import type * as taskComments from "../taskComments.js";
@@ -1166,7 +1165,6 @@ declare const fullApi: ApiFromModules<{
   snapshotWorkflow: typeof snapshotWorkflow;
   spotlight: typeof spotlight;
   streaming: typeof streaming;
-  syncSettings: typeof syncSettings;
   taskActivity: typeof taskActivity;
   taskActivityCoalesce: typeof taskActivityCoalesce;
   taskComments: typeof taskComments;

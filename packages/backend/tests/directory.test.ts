@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { collectDirectoryUserIds } from "../convex/_users/directory";
 
 describe("collectDirectoryUserIds", () => {

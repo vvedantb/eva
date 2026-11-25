@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import workflow from "@convex-dev/workflow/test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { DEFAULT_AI_MODEL } from "../convex/validators";
@@ -12,6 +12,7 @@ import {
   buildProjectBranchName,
   buildTaskBranchName,
 } from "../convex/_git/branchNames";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * A project owns one hidden session (its coordinator's), and each of its
@@ -20,7 +21,6 @@ import {
  * other or the project.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|project-sessions";
 

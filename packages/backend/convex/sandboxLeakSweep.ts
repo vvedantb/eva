@@ -34,7 +34,7 @@ export const run = internalAction({
     if (mode === "off") return null;
 
     const repoIds = await ctx.runQuery(
-      internal.sandboxCleanup.listGithubRepoIds,
+      internal.sandboxCleanup.listVisibleGithubRepoIds,
       {},
     );
     const now = Date.now();

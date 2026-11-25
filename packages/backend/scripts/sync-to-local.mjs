@@ -16,7 +16,8 @@
 // must be loopback, and the backend must already answer on /instance_name.
 //
 // A snapshot carries documents, plus file storage with --include-storage. It does
-// not carry env vars (hence --include-env), pending scheduled functions, or code.
+// not carry env vars (hence --include-env, or --sandbox-env for an Eva sandbox),
+// pending scheduled functions, or code.
 //
 // It also carries every installed component's tables, nested under `_components/`
 // (checked 11 August 2026 against a dev export: actionCache, actionRetrier, crons,
@@ -40,6 +41,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { loadSandboxEnv, resolveSandboxEnv } from "./sandbox-env.mjs";
 
 // Apps this script can sync, as paths relative to the directory above `scripts/`.
 // Cross-repo sharing would need a published package, so this file is a deliberate
@@ -66,6 +68,8 @@ Sync a cloud Convex deployment into the local Convex backend.
   --deploy-key <key>        Same key inline. Falls back to CONVEX_SOURCE_DEPLOY_KEY.
   --include-storage         Also export file storage. Off by default: slow and large.
   --include-env             Copy the source deployment's env vars onto the local one.
+  --sandbox-env             Set only the vars .eva/sandbox-env.json allows for this
+                            app, and remove every other one (an Eva sandbox).
   --skip-components         Do not import component data at all. Off by default:
                             each component subtree is imported with --component.
   --local-url <url>         Override the target URL (must be loopback).
@@ -88,6 +92,7 @@ try {
       "deploy-key-file": { type: "string" },
       "include-storage": { type: "boolean", default: false },
       "include-env": { type: "boolean", default: false },
+      "sandbox-env": { type: "boolean", default: false },
       "skip-components": { type: "boolean", default: false },
       "local-url": { type: "string" },
       "local-admin-key": { type: "string" },
@@ -104,6 +109,9 @@ try {
 if (values.help) {
   console.log(USAGE);
   process.exit(0);
+}
+if (values["include-env"] && values["sandbox-env"]) {
+  fail("Pass --include-env or --sandbox-env, not both.");
 }
 
 // --- app ---------------------------------------------------------------------
@@ -521,7 +529,9 @@ console.log(`  target: ${target.url} — ${target.name} (${target.from})`);
 console.log(
   `  file storage: ${values["include-storage"] ? "included" : "skipped"}`,
 );
-console.log(`  env vars: ${values["include-env"] ? "copied" : "left alone"}`);
+console.log(
+  `  env vars: ${values["include-env"] ? "copied" : values["sandbox-env"] ? "sandbox allowlist" : "left alone"}`,
+);
 console.log(
   `  components: ${values["skip-components"] ? "skipped" : "imported one at a time, with --component"}`,
 );
@@ -548,73 +558,132 @@ const componentZips = splitComponents(
 
 const targetFlags = ["--url", target.url, "--admin-key", target.adminKey];
 
-// Root tables first, and only here is --replace-all right: it clears tables the
-// snapshot omits, which is what makes the local deployment a mirror rather than a
-// merge. The component imports below must not repeat the flag — see there.
-runConvex(["import", ...targetFlags, "--replace-all", "--yes", zipPath], {
-  label: `import into ${target.name}`,
-  secrets: [target.adminKey],
-});
-
 // Env vars before the component imports: a repo whose auth.config.ts reads one
 // cannot be pushed until they exist, and pushing is how the components get
 // installed (see installComponents).
-if (values["include-env"]) {
-  // There is no bulk env import: `env set` takes one `<name>` and reads its value
-  // from stdin (convex/src/cli/env.ts). `env list` prints `NAME=value` with values
-  // raw and unquoted, so a multi-line value — a PEM key — spans lines and cannot be
-  // split back out of that dump reliably. Take only the names from it, then read
-  // each value with `env get`, whose entire stdout is the value.
-  // Values move over stdin, so none is written to disk, logged, or put in argv.
-  const dump = runConvex(["env", "list"], {
-    label: `env list ${sourceName}`,
-    env: { CONVEX_DEPLOY_KEY: sourceKey },
-    secrets: [sourceKey],
-    capture: true,
-  });
-  const names = [
+//
+// There is no bulk env import: `env set` takes one `<name>` and reads its value
+// from stdin (convex/src/cli/env.ts). A multi-line value — a PEM key — cannot be
+// split back out of an `env list` dump reliably, so take only the names, then
+// read each value with `env get`, whose entire stdout is the value.
+// Values move over stdin, so none is written to disk, logged, or put in argv.
+//
+// How to get names depends on the app's locked CLI. From 1.48 a plain
+// `env list` prints bare names when it detects an AI agent (or
+// CONVEX_AGENT_MODE), so ask for `--names-only` explicitly; that flag arrived
+// in 1.42.0. Older CLIs reject it, and they always print `NAME=value`.
+const sourceAuth = {
+  env: { CONVEX_DEPLOY_KEY: sourceKey },
+  secrets: [sourceKey],
+};
+const targetAuth = { secrets: [target.adminKey] };
+
+let namesOnlyFlag;
+function supportsNamesOnly() {
+  if (namesOnlyFlag === undefined) {
+    const cliVersion = runConvex(["--version"], {
+      label: "convex CLI version",
+      capture: true,
+    }).trim();
+    const versionMatch = /(\d+)\.(\d+)\.(\d+)/.exec(cliVersion);
+    if (versionMatch === null) {
+      fail(`Could not read the Convex CLI version from: ${cliVersion}`);
+    }
+    const [major, minor] = versionMatch.slice(1).map(Number);
+    namesOnlyFlag = major > 1 || (major === 1 && minor >= 42);
+  }
+  return namesOnlyFlag;
+}
+
+/** Env var names on a deployment, minus the backend-managed CONVEX_*. */
+function listEnvNames(label, flags, auth) {
+  const namesOnly = supportsNamesOnly();
+  const dump = runConvex(
+    ["env", "list", ...flags, ...(namesOnly ? ["--names-only"] : [])],
+    { label, ...auth, capture: true },
+  );
+  const nameLine = namesOnly
+    ? /^([A-Z_][A-Za-z0-9_]*)$/
+    : /^([A-Z_][A-Za-z0-9_]*)=/;
+  return [
     ...new Set(
       dump.split(/\r?\n/).flatMap((line) => {
-        const match = /^([A-Z_][A-Za-z0-9_]*)=/.exec(line);
-        // CONVEX_* are backend-managed and cannot be set.
+        const match = nameLine.exec(namesOnly ? line.trim() : line);
         return match === null || match[1].startsWith("CONVEX_")
           ? []
           : [match[1]];
       }),
     ),
   ];
+}
+
+function readSourceEnv(name) {
+  // `env get` prints the value then a newline, so one trailing newline is the
+  // CLI's, not the value's. A value that genuinely ends in a newline loses it.
+  return runConvex(["env", "get", name], {
+    label: `env get ${name}`,
+    ...sourceAuth,
+    capture: true,
+  }).replace(/\r?\n$/, "");
+}
+
+function setTargetEnv(name, value) {
+  runConvex(["env", "set", ...targetFlags, name], {
+    label: `env set ${name} on ${target.name}`,
+    ...targetAuth,
+    input: value,
+  });
+}
+
+if (values["include-env"]) {
+  const names = listEnvNames(`env list ${sourceName}`, [], sourceAuth);
   if (names.length === 0) {
     console.log("\nSource has no environment variables; nothing to copy.");
   } else {
-    for (const name of names) {
-      // `env get` prints the value then a newline, so one trailing newline is the
-      // CLI's, not the value's. A value that genuinely ends in a newline loses it.
-      const value = runConvex(["env", "get", name], {
-        label: `env get ${name}`,
-        env: { CONVEX_DEPLOY_KEY: sourceKey },
-        secrets: [sourceKey],
-        capture: true,
-      }).replace(/\r?\n$/, "");
-      runConvex(
-        [
-          "env",
-          "set",
-          "--url",
-          target.url,
-          "--admin-key",
-          target.adminKey,
-          name,
-        ],
-        {
-          label: `env set ${name} on ${target.name}`,
-          secrets: [target.adminKey],
-          input: value,
-        },
-      );
-    }
+    for (const name of names) setTargetEnv(name, readSourceEnv(name));
     console.log(`\nCopied ${names.length} env var(s): ${names.join(", ")}`);
     console.log(
       "These are the source deployment's secrets; they now live on this machine.",
+    );
+  }
+}
+
+if (values["sandbox-env"]) {
+  const rules = loadSandboxEnv(appDir);
+  const { values: env, missing } = await resolveSandboxEnv(
+    rules,
+    readSourceEnv,
+  );
+  for (const [name, value] of env) setTargetEnv(name, value);
+  // Clear what an older seed copied: a stale source secret must not survive.
+  const stale = listEnvNames(
+    `env list ${target.name}`,
+    targetFlags,
+    targetAuth,
+  ).filter((name) => !env.has(name));
+  for (const name of stale) {
+    runConvex(["env", "remove", ...targetFlags, name], {
+      label: `env remove ${name} on ${target.name}`,
+      ...targetAuth,
+    });
+  }
+  const unlisted = listEnvNames(
+    `env list ${sourceName}`,
+    [],
+    sourceAuth,
+  ).filter((name) => !Object.hasOwn(rules, name));
+  console.log(
+    `\nSet ${env.size} sandbox env var(s): ${[...env.keys()].join(", ")}`,
+  );
+  if (stale.length > 0) console.log(`Removed: ${stale.join(", ")}`);
+  if (missing.length > 0) {
+    console.warn(
+      `\nUNSET: add a test value as an Eva env var (Seed only), then reseed: ${missing.join(", ")}`,
+    );
+  }
+  if (unlisted.length > 0) {
+    console.warn(
+      `\nNOT COPIED: source vars missing from .eva/sandbox-env.json: ${unlisted.join(", ")}`,
     );
   }
 }
@@ -640,6 +709,58 @@ function installComponents() {
     unset: ["CONVEX_AGENT_MODE"],
   });
 }
+
+// A sandbox's base image can hold an old local database: an old schema and old
+// rows. Import validates rows against the held schema, so new prod fields fail
+// (`sandboxSize`); a push validates the held rows against the new schema, so
+// removed fields fail (`sessions.summary`). So empty the backend first: the
+// snapshot's tables with no rows, imported with --replace-all (deployment-wide),
+// leave nothing to validate either way. 20 to 24 Nov 2026.
+const emptyZip = join(dirname(zipPath), `${appName}-empty.zip`);
+const EMPTY_PY = [
+  "import sys, zipfile",
+  "with zipfile.ZipFile(sys.argv[1]) as zin, zipfile.ZipFile(sys.argv[2], 'w') as zout:",
+  "    for info in zin.infolist():",
+  "        if info.filename.endswith('documents.jsonl'):",
+  "            zout.writestr(info.filename, '')",
+  "        elif not info.filename.startswith('_storage/'):",
+  "            zout.writestr(info, zin.read(info.filename))",
+].join("\n");
+let emptied = false;
+for (const python of ["python3", "python"]) {
+  const res = spawnSync(python, ["-c", EMPTY_PY, zipPath, emptyZip], {
+    stdio: ["ignore", "inherit", "inherit"],
+    shell: isWindows,
+  });
+  if (res.error) {
+    continue;
+  }
+  if (res.status !== 0) {
+    fail(`Building the empty snapshot failed under ${python} (exit ${res.status}).`);
+  }
+  emptied = true;
+  break;
+}
+if (!emptied) {
+  fail("python3 or python is required to build the empty snapshot.");
+}
+runConvex(["import", ...targetFlags, "--replace-all", "--yes", emptyZip], {
+  label: `empty ${target.name}`,
+  secrets: [target.adminKey],
+});
+rmSync(emptyZip, { force: true });
+
+// Push the checked-out schema before the real import, so the import validates
+// against it. Env vars are set above, so an auth.config.ts that reads one can push.
+installComponents();
+
+// Root tables first, and only here is --replace-all right: it clears tables the
+// snapshot omits, which is what makes the local deployment a mirror rather than a
+// merge. The component imports below must not repeat the flag — see there.
+runConvex(["import", ...targetFlags, "--replace-all", "--yes", zipPath], {
+  label: `import into ${target.name}`,
+  secrets: [target.adminKey],
+});
 
 // --replace, not --replace-all: --replace-all is deployment-wide even alongside
 // --component, so it also clears every ROOT table not present in the component's

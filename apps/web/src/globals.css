@@ -752,6 +752,48 @@
   }
 
   /*
+   * The tab slide for keep-alive tab panes (`useKeepAliveTabSlide`): every pane
+   * stays mounted and the inactive ones are `invisible`. The new pane slides
+   * in from the picked tab's side, the old one leaves the other way while it
+   * is still visible, as `TabsTransition` does. 32px, 240ms in, 140ms out.
+   */
+  [data-tab-dir="1"] {
+    --tab-dir: 1;
+  }
+
+  [data-tab-dir="-1"] {
+    --tab-dir: -1;
+  }
+
+  [data-tab-dir] > [data-tab-pane="active"] {
+    animation: t-tab-pane-in 240ms var(--motion-ease-out);
+  }
+
+  [data-tab-dir] > [data-tab-pane="leaving"] {
+    animation: t-tab-pane-out 140ms var(--motion-ease-out);
+  }
+
+  @keyframes t-tab-pane-in {
+    from {
+      transform: translateX(calc(var(--tab-dir) * 32px));
+      opacity: 0;
+    }
+  }
+
+  /* `visibility` holds the leaving pane on screen over its `invisible`. */
+  @keyframes t-tab-pane-out {
+    from {
+      visibility: visible;
+      opacity: 1;
+    }
+    to {
+      visibility: visible;
+      transform: translateX(calc(var(--tab-dir) * -32px));
+      opacity: 0;
+    }
+  }
+
+  /*
    * Experimental "Disable page animations" (`html[data-page-motion=off]`).
    * Page enter, panel height, modal scale, heatmap fade, tab pill travel.
    * Leave these alone: `.mq-*` (hover marquee), `.animate-spin` / `.shimmer-*`
@@ -767,7 +809,8 @@
   html[data-page-motion="off"] .t-heatmap-cell,
   html[data-page-motion="off"] .t-accordion-content,
   html[data-page-motion="off"] .t-collapsible-content,
-  html[data-page-motion="off"] .t-anchor-flash {
+  html[data-page-motion="off"] .t-anchor-flash,
+  html[data-page-motion="off"] [data-tab-pane] {
     animation: none !important;
   }
 
@@ -818,6 +861,93 @@
   ::view-transition-new(.vt-enter),
   ::view-transition-new(page) {
     animation: t-vt-rise-in var(--motion-base) var(--motion-ease-out) both;
+  }
+
+  /*
+   * A rail click (`rail-down` / `rail-up`, `railNavDirection.ts`): the side
+   * panel and the page slide 24px in the rail's direction, like the tab slide
+   * (`TabsTransition`) turned vertical. A lower tile brings content up from
+   * below. The page follows the panel by 40ms so the two read as one move.
+   */
+  html:active-view-transition-type(rail-down) .vt-panel,
+  html:active-view-transition-type(rail-up) .vt-panel {
+    view-transition-name: panel;
+  }
+
+  ::view-transition-group(panel) {
+    animation: none;
+  }
+
+  html:active-view-transition-type(rail-down)::view-transition-old(panel),
+  html:active-view-transition-type(rail-down)::view-transition-old(page) {
+    animation: t-vt-rail-out-up 144ms var(--motion-ease-out) both;
+  }
+
+  html:active-view-transition-type(rail-up)::view-transition-old(panel),
+  html:active-view-transition-type(rail-up)::view-transition-old(page) {
+    animation: t-vt-rail-out-down 144ms var(--motion-ease-out) both;
+  }
+
+  html:active-view-transition-type(rail-down)::view-transition-new(panel) {
+    animation: t-vt-rail-in-from-below 240ms var(--motion-ease-out) both;
+  }
+
+  html:active-view-transition-type(rail-up)::view-transition-new(panel) {
+    animation: t-vt-rail-in-from-above 240ms var(--motion-ease-out) both;
+  }
+
+  html:active-view-transition-type(rail-down)::view-transition-new(page) {
+    animation: t-vt-rail-in-from-below 240ms var(--motion-ease-out) 40ms both;
+  }
+
+  html:active-view-transition-type(rail-up)::view-transition-new(page) {
+    animation: t-vt-rail-in-from-above 240ms var(--motion-ease-out) 40ms both;
+  }
+
+  /* A side-panel link (`nav-down` / `nav-up`): the same slide on the page
+   * only; the panel is the list that was clicked, so it stays put. */
+  html:active-view-transition-type(nav-down)::view-transition-old(page) {
+    animation: t-vt-rail-out-up 144ms var(--motion-ease-out) both;
+  }
+
+  html:active-view-transition-type(nav-up)::view-transition-old(page) {
+    animation: t-vt-rail-out-down 144ms var(--motion-ease-out) both;
+  }
+
+  html:active-view-transition-type(nav-down)::view-transition-new(page) {
+    animation: t-vt-rail-in-from-below 240ms var(--motion-ease-out) both;
+  }
+
+  html:active-view-transition-type(nav-up)::view-transition-new(page) {
+    animation: t-vt-rail-in-from-above 240ms var(--motion-ease-out) both;
+  }
+
+  @keyframes t-vt-rail-in-from-below {
+    from {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+  }
+
+  @keyframes t-vt-rail-in-from-above {
+    from {
+      opacity: 0;
+      transform: translateY(-24px);
+    }
+  }
+
+  @keyframes t-vt-rail-out-up {
+    to {
+      opacity: 0;
+      transform: translateY(-24px);
+    }
+  }
+
+  @keyframes t-vt-rail-out-down {
+    to {
+      opacity: 0;
+      transform: translateY(24px);
+    }
   }
 
   html[data-page-motion="off"]::view-transition-group(*),

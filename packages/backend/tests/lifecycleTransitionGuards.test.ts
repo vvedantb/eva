@@ -1,10 +1,11 @@
 import { convexTest } from "convex-test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import type { Doc } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { recomputeProjectPhase } from "../convex/functions";
 import { requestSessionSandboxStart } from "../convex/_sessions/sandbox";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Behaviour of the implicit lifecycles that were tightened together:
@@ -14,7 +15,6 @@ import { requestSessionSandboxStart } from "../convex/_sessions/sandbox";
  *   only closes a sandbox that is still `starting`.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 
 type TaskStatus = Doc<"agentTasks">["status"];

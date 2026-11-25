@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { extractFunctionSource } from "./_helpers/previewProxySource";
 
 type Req = { headers: Record<string, string>; socket: { remoteAddress: string } };

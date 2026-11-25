@@ -26,7 +26,6 @@ export function isSimpleViewHiddenSandboxTab(tab: string): boolean {
 const SIMPLE_VIEW_HIDDEN_GLOBAL_SETTINGS_HREFS = [
   "/settings/sandboxes",
   "/settings/sandbox-status",
-  "/settings/sync",
 ] as const;
 
 /** Global Settings pages that simple view does not show (bounce to Theme). */

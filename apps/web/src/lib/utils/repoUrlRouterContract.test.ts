@@ -4,7 +4,7 @@ import {
   createRoute,
   createRouter,
 } from "@tanstack/react-router";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { toDisplayRepoHref, toInternalRepoHref } from "./repoUrl";
 
 /**

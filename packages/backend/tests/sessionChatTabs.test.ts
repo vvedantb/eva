@@ -1,7 +1,8 @@
 import { convexTest } from "convex-test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Deleting a parallel chat and opening another must read "Chat 2" again (not
@@ -9,7 +10,6 @@ import schema from "../convex/schema";
  * the new tab. A link to a deleted chat opens Main, and its messages go.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|session-chat-tabs";
 

@@ -15,6 +15,7 @@ import { ProjectCard } from "@/lib/components/projects/ProjectCard";
 import type { SelectionToggleOptions } from "@/lib/components/quick-tasks/selectionRange";
 import { usePersistedScrollParent } from "@/lib/hooks/usePersistedScrollParent";
 import { tokenTransition } from "@vvedantb/ui";
+import { kanbanCardGlide } from "@/lib/components/kanban/kanbanCardGlide";
 
 type Project = FunctionReturnType<typeof api.projects.list>[number];
 
@@ -127,7 +128,7 @@ function VirtualProjectColumn({
           itemContent={(index) => {
             const project = projects[index];
             return (
-              <div className="pb-1.5">
+              <m.div className="pb-1.5" {...kanbanCardGlide(project._id)}>
                 <ProjectCard
                   projectId={project._id}
                   userId={project.userId}
@@ -160,7 +161,7 @@ function VirtualProjectColumn({
                     })
                   }
                 />
-              </div>
+              </m.div>
             );
           }}
         />

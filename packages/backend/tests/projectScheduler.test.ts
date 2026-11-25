@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import workflow from "@convex-dev/workflow/test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { api, internal } from "../convex/_generated/api";
 import type { Doc, Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
@@ -10,6 +10,7 @@ import {
 } from "@eva/shared/projectStatus";
 import { sessionSandboxProfile } from "../convex/_sessions/owner";
 import { COORDINATOR_VCPUS } from "../convex/_sandbox/provider";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * The project as an orchestrator, through the real Convex functions: the
@@ -20,7 +21,6 @@ import { COORDINATOR_VCPUS } from "../convex/_sandbox/provider";
  * delete rule, project delete, and the coordinator's sandbox.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|project-scheduler";
 const OTHER_CLERK_ID = "clerk|project-scheduler-other";

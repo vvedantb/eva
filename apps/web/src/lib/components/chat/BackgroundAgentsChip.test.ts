@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { isVisibleBackgroundAgent } from "@eva/shared/backgroundAgents";
 
 describe("isVisibleBackgroundAgent", () => {

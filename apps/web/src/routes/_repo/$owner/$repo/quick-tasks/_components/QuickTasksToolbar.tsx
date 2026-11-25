@@ -43,7 +43,11 @@ import {
 } from "@/lib/components/tasks/TaskStatusBadge";
 import type { FunctionReturnType } from "convex/server";
 import type { api } from "@eva/backend";
-import { useQuickTaskFilters } from "../_utils";
+import {
+  QUICK_TASK_VIEWS,
+  useQuickTaskFilters,
+  type QuickTaskView,
+} from "../_utils";
 import {
   QUICK_TASK_SORT_FIELDS,
   QUICK_TASK_SORT_FIELD_LABELS,
@@ -57,11 +61,10 @@ import {
   type QuickTaskTimeRange,
 } from "@eva/shared";
 
-type QuickTaskView = "kanban" | "list";
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 
 function isQuickTaskView(value: string): value is QuickTaskView {
-  return value === "kanban" || value === "list";
+  return QUICK_TASK_VIEWS.some((view) => view === value);
 }
 
 const isSortField = (v: string): v is QuickTaskSortField =>

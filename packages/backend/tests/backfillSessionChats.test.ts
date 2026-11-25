@@ -1,9 +1,10 @@
 import { convexTest } from "convex-test";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { ensureMainChat } from "../convex/_sessionChats/helpers";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Heavy sessions hold transcripts over the 16 MiB per-function read limit.
@@ -11,7 +12,6 @@ import { ensureMainChat } from "../convex/_sessionChats/helpers";
  * sessions one at a time, and costs little on a rerun.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 
 /** ~0.9 MB per message, so a few of them exceed one 2 MiB page. */

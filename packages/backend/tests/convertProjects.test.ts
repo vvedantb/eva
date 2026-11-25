@@ -1,7 +1,7 @@
 import { convexTest } from "convex-test";
 import workflow from "@convex-dev/workflow/test";
 import prosemirrorSync from "@convex-dev/prosemirror-sync/test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import type { Doc, Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
@@ -9,6 +9,7 @@ import { ensureWorkSession } from "../convex/_sessions/ownedSession";
 import { findOwnedSession } from "../convex/_sessions/owner";
 import { PLANNING_INTERVIEW_DOC_TITLE } from "../convex/_migrations/convertProjects";
 import { buildProjectBranchName } from "../convex/_git/branchNames";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Step 9's conversion of old projects (`_migrations/convertProjects.ts`): a
@@ -16,7 +17,6 @@ import { buildProjectBranchName } from "../convex/_git/branchNames";
  * nothing.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 
 beforeEach(() => {

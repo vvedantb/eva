@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { claudeParseLine } from "../providers/claude.js";
 import { codexParseLine } from "../providers/codex.js";
 import { callbackState as S, resetStateForTests } from "../runtime/state.js";

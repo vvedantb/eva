@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { placeChatUiPanels } from "@eva/shared";
 
 const panel = (id: string, createdAt: number, messageId?: string) => ({

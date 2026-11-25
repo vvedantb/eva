@@ -1,9 +1,10 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { listReadableSiblingRepos } from "../convex/_githubRepos/sandboxRead";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * A sandbox's git credential helper sends the repository git asked about, so
@@ -12,7 +13,6 @@ import { listReadableSiblingRepos } from "../convex/_githubRepos/sandboxRead";
  * gets a token, who gets 403, and that the home repo keeps its full token.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 const SECRET = "sandbox-secret-abc";
 const SANDBOX_ID = "sbx_home";

@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import {
   buildEvaMcpServers,
   consumeEvaMcpEnvironment,
@@ -38,7 +38,7 @@ test("consumeEvaMcpEnvironment removes credentials but hands them to trusted wor
   const { servers, workerHandoffEnv } = consumeEvaMcpEnvironment(env);
 
   expect(Object.keys(servers)).toEqual(["eva"]);
-  expect(env).toEqual({});
+  expect(Object.keys(env)).toEqual([]);
   expect(workerHandoffEnv).toEqual({
     EVA_MCP_AUTH: "token-123",
     EVA_MCP_BASE_URL: "https://example.convex.site",
@@ -71,7 +71,10 @@ test("consumeEvaMcpEnvironment merges Linear MCP from a bearer token", () => {
 });
 
 test("consumeEvaMcpEnvironment merges Figma MCP only when a bearer is set", () => {
-  const env = { FIGMA_MCP_AUTH: "fig-oauth", FIGMA_MCP_URL: "https://mcp.figma.com/mcp" };
+  const env = {
+    FIGMA_MCP_AUTH: "fig-oauth",
+    FIGMA_MCP_URL: "https://mcp.figma.com/mcp",
+  };
   const { servers } = consumeEvaMcpEnvironment(env);
   expect(servers.figma).toEqual({
     type: "http",

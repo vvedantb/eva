@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import {
   EPHEMERAL_SNAPSHOT_TTL_MS,
   KEEP_LAST_SNAPSHOTS,

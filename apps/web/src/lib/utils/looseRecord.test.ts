@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { asRecord } from "./looseRecord";
 
 test("asRecord returns the record for a plain object", () => {

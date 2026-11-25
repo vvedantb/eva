@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { findNewMessageIds } from "@eva/shared/chatReadState";
 import { z } from "zod";
 import type { api, Id } from "@eva/backend";

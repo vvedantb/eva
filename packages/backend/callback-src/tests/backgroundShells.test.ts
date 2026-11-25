@@ -1,12 +1,11 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, mock } from "bun:test";
+import { stubEnv, unstubAllEnvs } from "../../tests/_helpers/env";
+import { freshModules } from "./freshModules";
 import type { ConvexCallType, JsonObject, JsonValue } from "../types.js";
 
-const convexCalls = vi.hoisted(() => {
-  const calls: { path: string; args: JsonObject }[] = [];
-  return calls;
-});
+const convexCalls: { path: string; args: JsonObject }[] = [];
 
-vi.mock("../http/convexClient.js", () => ({
+mock.module("../http/convexClient.js", () => ({
   callConvexWithRetry: async (
     _type: ConvexCallType,
     path: string,
@@ -19,17 +18,17 @@ vi.mock("../http/convexClient.js", () => ({
 
 /** A fresh module per test: config reads the entity env at import time. */
 async function loadForSession() {
-  vi.stubEnv("AI_PROVIDER", "claude");
-  vi.stubEnv("ENTITY_ID_FIELD", "sessionId");
-  vi.stubEnv("ENTITY_ID", "s1");
-  vi.resetModules();
+  stubEnv("AI_PROVIDER", "claude");
+  stubEnv("ENTITY_ID_FIELD", "sessionId");
+  stubEnv("ENTITY_ID", "s1");
+  freshModules();
   return import("../runtime/backgroundShells.js");
 }
 
 afterEach(() => {
   convexCalls.length = 0;
-  vi.unstubAllEnvs();
-  vi.resetModules();
+  unstubAllEnvs();
+  freshModules();
 });
 
 describe("backgroundShells", () => {

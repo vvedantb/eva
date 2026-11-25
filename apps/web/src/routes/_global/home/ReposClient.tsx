@@ -1,4 +1,3 @@
-import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useAction } from "convex/react";
 import { useState } from "react";
@@ -6,7 +5,6 @@ import { useLocalStorage } from "usehooks-ts";
 import { AnimatePresence } from "motion/react";
 import { api } from "@eva/backend";
 import { PageWrapper } from "@/lib/components/PageWrapper";
-import { repoHref } from "@/lib/utils/repoUrl";
 import {
   Button,
   DropdownMenu,
@@ -27,14 +25,14 @@ import {
 } from "@vvedantb/ui";
 import {
   IconDots,
-  IconEyeOff,
+  IconEye,
   IconPlus,
-  IconSettings,
 } from "@tabler/icons-react";
 import { WelcomeBanner } from "./_components/WelcomeBanner";
 import { EmptyOnboarding } from "./_components/EmptyOnboarding";
 import { RepoGroup } from "./_components/RepoGroup";
-import { HiddenReposSheet } from "./_components/HiddenReposSheet";
+import { VisibleReposDialog } from "./_components/VisibleReposDialog";
+import { NewAppsDialog, type NewApp } from "./_components/NewAppsDialog";
 
 const WELCOME_STORAGE_KEY = "eva-welcome-dismissed";
 
@@ -42,14 +40,14 @@ const buildConnectUrl = (slug: string) =>
   `https://github.com/apps/${slug}/installations/new`;
 
 export function ReposClient() {
-  const navigate = useNavigate();
   const repos = useQuery(api.githubRepos.list, {});
   const teams = useQuery(api.teams.list) ?? [];
   const appSlug = useQuery(api.githubRepos.getAppSlug);
   const syncRepos = useAction(api.github.syncRepos);
   const [syncing, setSyncing] = useState(false);
-  const [hiddenOpen, setHiddenOpen] = useState(false);
+  const [visibleOpen, setVisibleOpen] = useState(false);
   const [syncConfirmOpen, setSyncConfirmOpen] = useState(false);
+  const [newApps, setNewApps] = useState<ReadonlyArray<NewApp>>([]);
   const { request: requestConfirm } = useRequestConfirm();
   // Reads storage in the first render (initializeWithValue), so no banner flash.
   const [welcomeDismissed, setWelcomeDismissed] = useLocalStorage(
@@ -61,7 +59,9 @@ export function ReposClient() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      await syncRepos();
+      const { newApps: found } = await syncRepos();
+      if (found.length > 0) setNewApps(found);
+      else toast.success("Repos synced. No new apps found.");
     } catch (err) {
       console.error("Sync failed:", err);
       toast.error("Could not sync your repositories. Try again.");
@@ -117,15 +117,9 @@ export function ReposClient() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onClick={() => navigate({ to: "/settings/sync" })}
-                  >
-                    <IconSettings size={16} />
-                    Sync Settings
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setHiddenOpen(true)}>
-                    <IconEyeOff size={16} />
-                    Hidden Codebases
+                  <DropdownMenuItem onClick={() => setVisibleOpen(true)}>
+                    <IconEye size={16} />
+                    Visible Codebases
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={syncing}
@@ -145,10 +139,13 @@ export function ReposClient() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <HiddenReposSheet
-                open={hiddenOpen}
-                onOpenChange={setHiddenOpen}
+              <VisibleReposDialog
+                open={visibleOpen}
+                onOpenChange={setVisibleOpen}
               />
+              {newApps.length > 0 && (
+                <NewAppsDialog apps={newApps} onClose={() => setNewApps([])} />
+              )}
               <Dialog open={syncConfirmOpen} onOpenChange={setSyncConfirmOpen}>
                 <DialogContent>
                   <DialogHeader>
@@ -226,13 +223,6 @@ export function ReposClient() {
                 key={groupName}
                 groupName={groupName}
                 repos={groupedRepos[groupName]}
-                onManageApps={(repo) =>
-                  navigate({
-                    to:
-                      repoHref(repo.owner, repo.name, repo.rootDirectory) +
-                      "/settings/monorepo",
-                  })
-                }
               />
             ))}
           </div>
