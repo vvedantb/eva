@@ -953,6 +953,19 @@ async function buildPreviewUrl(
       return { url: "", port: responsePort, ready: false };
     }
     ready = poll.ready;
+  } else if (customTabPort === undefined && handle.state === "running") {
+    // No readiness wait (the `/p` link's fast path), so nothing would notice a
+    // dead dev server. Queue the same recovery the readiness poll uses; it
+    // does nothing when the port already answers, and never delays the link.
+    await ctx.scheduler.runAfter(
+      0,
+      internal.sandbox.ensureSessionPreviewServices,
+      {
+        sandboxId: args.sandboxId,
+        repoId: args.repoId,
+        expectedPort: upstreamPort,
+      },
+    );
   }
 
   // Always front the service with the in-sandbox auth proxy so open-in-new-tab
