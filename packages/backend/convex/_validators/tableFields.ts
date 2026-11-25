@@ -32,7 +32,6 @@ import {
   routedThreadStatusValidator,
   runModeValidator,
   runStatusValidator,
-  sandboxProviderKindValidator,
   sessionStatusValidator,
   interactionModeValidator,
   snapshotBuildKindValidator,
@@ -1067,9 +1066,6 @@ export const snapshotBuildFields = {
   // "base" (image only) vs "seeded" (boots + seeds DB before capture).
   // Optional: legacy rows predate this field and render without a type.
   kind: v.optional(snapshotBuildKindValidator),
-  // Legacy: always "vercel". No longer written; cleared by
-  // `_migrations/removeDaytonaSnapshotFields`, then dropped.
-  provider: v.optional(sandboxProviderKindValidator),
   logs: v.string(),
   error: v.optional(v.string()),
   workflowRunId: v.optional(v.number()),
@@ -2335,9 +2331,7 @@ export const repoEnvVarFields = {
 
 export const repoSnapshotFields = {
   repoId: v.id("githubRepos"),
-  // Legacy Daytona image label (`snapshot-<repoId>`). No longer written or
-  // read; cleared by `_migrations/removeDaytonaSnapshotFields`, then dropped.
-  snapshotName: v.optional(v.string()),
+  // snapshotName removed with Daytona. schema-narrowing-ok: removeDaytonaSnapshotFields
   schedule: snapshotScheduleValidator,
   enabled: v.optional(v.boolean()),
   cronJobId: v.optional(v.string()),
