@@ -210,14 +210,16 @@ function PreviewWake() {
     );
   }
 
+  // Opening an active sandbox is a quick handoff: keep the page blank. Only a
+  // real wake (seconds to minutes) or an error shows anything.
+  if (phase.kind === "opening" || phase.kind === "serving") return null;
+
   const statusText =
     phase.kind === "error"
       ? phase.message
-      : phase.kind !== "waking"
-        ? "Opening the preview…"
-        : sandboxStatus === "active"
-          ? "Starting the dev server…"
-          : "Waking Eva up…";
+      : sandboxStatus === "active"
+        ? "Starting the dev server…"
+        : "Waking Eva up…";
 
   return (
     <div className="flex h-dvh flex-col items-center justify-center gap-4 p-6 text-center">

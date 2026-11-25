@@ -85,11 +85,12 @@ function PreviewAuth() {
     );
   }
 
+  // The handoff takes well under a second, so the page stays blank until it
+  // has something to say.
+  if (error === null) return null;
   return (
     <div className="flex h-dvh items-center justify-center p-6 text-center">
-      <p className="text-sm text-muted-foreground">
-        {error ?? "Authorising preview access…"}
-      </p>
+      <p className="text-sm text-muted-foreground">{error}</p>
     </div>
   );
 }
