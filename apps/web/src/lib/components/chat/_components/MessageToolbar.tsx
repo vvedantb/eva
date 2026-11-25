@@ -1,26 +1,16 @@
 "use client";
 
-import { useMutation } from "convex/react";
-import { api } from "@eva/backend";
 import { cn } from "@eva/ui";
-import { CHAT_QUICK_REACTIONS } from "@eva/shared/taskDetail";
 import type { FeedbackSentiment } from "@eva/shared/chatFeedback";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
   toast,
 } from "@vvedantb/ui";
-import {
-  IconCopy,
-  IconDots,
-  IconMessages,
-  IconThumbDown,
-  IconThumbUp,
-} from "@tabler/icons-react";
-import { EmojiReactionPicker } from "@/lib/components/tasks/_components/EmojiReactionPicker";
+import { IconCopy, IconDots, IconMessages } from "@tabler/icons-react";
+import { TurnFeedbackActions } from "@/lib/components/chat/feedback/TurnFeedbackActions";
 import type { ChatMessageActionItem } from "@/lib/components/chat/ChatMessageActions";
 
 const BUTTON_CLASS =
@@ -29,56 +19,45 @@ const BUTTON_CLASS =
 /**
  * The coordinator chat's message toolbar (Teams / Amp style): a small card on
  * the bubble's top-right corner, shown on hover or focus only and laid over
- * the bubble, so it takes no space. Quick reactions, the full emoji picker,
- * Reply, Copy, and a ⋯ menu with the rest (link, fork, rating, checkpoints).
- * Stays up while its picker or menu is open.
+ * the bubble, so it takes no space. On Eva's finished replies: 👍 👎 (the
+ * footer's `TurnFeedbackActions`, with its comment box), then Reply, Copy, and
+ * a ⋯ menu with the rest (link, fork, checkpoints). Stays up while its comment
+ * box or menu is open.
  */
 export function MessageToolbar({
-  onReact,
   onReply,
   copyText,
   menuItems,
   rating,
 }: {
-  onReact?: (emoji: string) => void;
   onReply?: () => void;
   copyText?: string;
   menuItems: ChatMessageActionItem[];
-  /** Eva's finished turns: thumbs up / down in the ⋯ menu (`feedback.rateTurn`). */
-  rating?: { messageId: string; sentiment: FeedbackSentiment | undefined };
-}) {
-  const rateTurn = useMutation(api.feedback.rateTurn);
-  const rate = (sentiment: FeedbackSentiment | null) => {
-    if (!rating) return;
-    void rateTurn({ messageId: rating.messageId, sentiment }).catch(() =>
-      toast.error("Could not save feedback"),
-    );
+  /** Eva's finished turns: the rating buttons and their saved state. */
+  rating?: {
+    messageId: string;
+    sentiment: FeedbackSentiment | undefined;
+    comment: string | undefined;
   };
-  const hasMenu = menuItems.length > 0 || rating !== undefined;
-  if (!onReact && !onReply && !copyText && !hasMenu) return null;
+}) {
+  const hasMenu = menuItems.length > 0;
+  if (!rating && !onReply && !copyText && !hasMenu) return null;
   return (
     <div
       className={cn(
         "absolute -top-4 right-2 z-10 flex items-center gap-0.5 rounded-control bg-popover p-0.5 smooth-shadow-ring-md",
-        // Hover or keyboard focus on the message shows it; an open picker or
-        // menu keeps it up while the pointer is inside the popup.
+        // Hover or keyboard focus on the message shows it; an open comment
+        // box or menu keeps it up while the pointer is inside the popup.
         "pointer-events-none opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100",
       )}
     >
-      {onReact ? (
+      {rating ? (
         <>
-          {CHAT_QUICK_REACTIONS.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              aria-label={`React with ${emoji}`}
-              onClick={() => onReact(emoji)}
-              className={cn(BUTTON_CLASS, "text-base")}
-            >
-              {emoji}
-            </button>
-          ))}
-          <EmojiReactionPicker onSelect={onReact} variant="ghost" alwaysVisible />
+          <TurnFeedbackActions
+            messageId={rating.messageId}
+            sentiment={rating.sentiment}
+            comment={rating.comment}
+          />
           <span aria-hidden className="mx-0.5 h-4 w-px bg-border" />
         </>
       ) : null}
@@ -131,35 +110,6 @@ export function MessageToolbar({
                 {item.label}
               </DropdownMenuItem>
             ))}
-            {rating ? (
-              <>
-                {menuItems.length > 0 ? <DropdownMenuSeparator /> : null}
-                <DropdownMenuItem
-                  onSelect={() =>
-                    rate(
-                      rating.sentiment === "positive" ? null : "positive",
-                    )
-                  }
-                >
-                  <IconThumbUp className="size-4" />
-                  {rating.sentiment === "positive"
-                    ? "Remove good rating"
-                    : "Good response"}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={() =>
-                    rate(
-                      rating.sentiment === "negative" ? null : "negative",
-                    )
-                  }
-                >
-                  <IconThumbDown className="size-4" />
-                  {rating.sentiment === "negative"
-                    ? "Remove bad rating"
-                    : "Bad response"}
-                </DropdownMenuItem>
-              </>
-            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}

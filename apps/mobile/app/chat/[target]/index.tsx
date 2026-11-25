@@ -68,8 +68,6 @@ import { formatDuration } from "@eva/shared/duration";
 import { AssistantMessage, LiveAssistantMessage } from "@/chat/AssistantMessage";
 import { DayDivider, NewDivider } from "@/chat/DayDivider";
 import { ThreadSummary } from "@/chat/ThreadSummary";
-import { ReactionChips } from "@/quickTasks/TaskActivity";
-import { CHAT_QUICK_REACTIONS, groupMessageReactions, type ReactionGroup } from "@eva/shared/taskDetail";
 import { useAppActive } from "@/ui/appState";
 import { UserMessageText } from "@/chat/MentionChip";
 import { EvaBubble, TEAMMATE_FOOTER_INSET, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
@@ -168,17 +166,7 @@ export default function ChatScreen() {
   const runningChats = useQuery(api.turns.listSessionChatStatuses, chat?.session ? { sessionId: chat.session.id } : "skip");
   const queued = useQuery(api.queuedMessages.listByParent, parentId ? { parentId } : "skip");
   // A teammate's turn shows their avatar and first name, from the same lookup as the web `ChatBody`.
-  // Reactions (the coordinator chat, the web `listReactions`): one subscription for the loaded rows.
-  const reactionTargets =
-    chat?.project !== undefined ? (messages ?? []).filter((message) => message.isSystemAlert !== true).map((message) => message._id) : [];
-  const reactionRows = useQuery(api.messages.listReactions, reactionTargets.length > 0 ? { messageIds: reactionTargets } : "skip");
-  const toggleReactionMutation = useMutation(api.messages.toggleReaction);
-  const teammateIds = [
-    ...new Set([
-      ...otherUserIdsInChat(messages ?? [], me ?? undefined),
-      ...(reactionRows ?? []).map((row) => row.userId).filter((userId) => userId !== me),
-    ]),
-  ].sort();
+  const teammateIds = otherUserIdsInChat(messages ?? [], me ?? undefined);
   const teammates = useQuery(api.users.getMany, teammateIds.length > 0 ? { ids: teammateIds } : "skip");
   const stop = useMutation(api.chats.stop);
   const startSession = useMutation(api.chats.start);
@@ -272,9 +260,6 @@ export default function ChatScreen() {
   const savedQuestion = savedRaw && savedQuestions ? { raw: savedRaw, questions: savedQuestions } : null;
   const teammateNames = firstNameByUserId(teammates ?? []);
   const teammateById = new Map((teammates ?? []).map((user) => [user._id, user]));
-  const reactionGroups = groupMessageReactions(reactionRows, (userId) => teammateNames.get(userId), me);
-  const toggleReaction = (messageId: string, emoji: string) =>
-    void toggleReactionMutation({ messageId, emoji }).catch(() => toast.error("Couldn't save the reaction"));
   const latestReplyId = visible.findLast((message) => message.role === "assistant")?._id;
   // The web recovery card reads every message, so a later system alert also hides it.
   const newestMessage = messages?.[messages.length - 1];
@@ -385,13 +370,6 @@ export default function ChatScreen() {
           ? () => quotes.select(message._id, message.content)
           : undefined,
       onReply: canOpenThread(message) ? () => openThread(message._id) : undefined,
-      reactions: canOpenThread(message)
-        ? {
-            quick: CHAT_QUICK_REACTIONS,
-            mine: new Set((reactionGroups.get(message._id) ?? []).filter((group) => group.reactedByMe).map((group) => group.emoji)),
-            onReact: (emoji) => toggleReaction(message._id, emoji),
-          }
-        : undefined,
     });
   };
   // What Find searches, as the web: each message's text as it reads (mention tokens as names), no system rows.
@@ -547,8 +525,6 @@ export default function ChatScreen() {
                 onRetryTurn={message.errorType !== undefined ? retryFor(message._id) : undefined}
                 onOpenWebChat={openWebChat}
                 onOpenThread={chat.project !== undefined ? openThread : undefined}
-                reactions={reactionGroups.get(message._id)}
-                onToggleReaction={chat.project !== undefined ? toggleReaction : undefined}
               />
             );
           }}
@@ -898,8 +874,6 @@ function ChatMessageRow({
   onRetryTurn,
   onOpenWebChat,
   onOpenThread,
-  reactions,
-  onToggleReaction,
   after,
   changes,
 }: {
@@ -936,9 +910,6 @@ function ChatMessageRow({
   onOpenWebChat: () => void;
   /** The coordinator chat: opens a message's reply thread ("N replies"). */
   onOpenThread?: (rootId: string) => void;
-  /** The coordinator chat: this message's reactions, as chips under it. */
-  reactions?: ReactionGroup[];
-  onToggleReaction?: (messageId: string, emoji: string) => void;
   /** Under the whole message, as the web `afterMessage`: a proposed plan's card. */
   after?: ReactNode;
   /** A reply that changed code: its Changes chip, over the footer. */
@@ -1032,12 +1003,6 @@ function ChatMessageRow({
                   {outputList}
                   {!isUser && cardList && !tabbed ? <View className="mt-2">{cardList}</View> : null}
                   {changes ? <View className="mt-1 px-1">{changes}</View> : null}
-                  {onToggleReaction && reactions && reactions.length > 0 ? (
-                    // The task comments' chips (`ReactionChips`), under the bubble on its side.
-                    <View className={`mt-1 ${fromTeammate || evaReply ? TEAMMATE_FOOTER_INSET : "self-end"}`}>
-                      <ReactionChips groups={reactions} onToggle={(emoji) => onToggleReaction(message._id, emoji)} />
-                    </View>
-                  ) : null}
                   {message.content.trim() !== "" && !joinsNext ? (
                     <MessageFooter
                       className={fromTeammate || evaReply ? TEAMMATE_FOOTER_INSET : undefined}

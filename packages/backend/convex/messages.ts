@@ -17,7 +17,6 @@ import { trimActivityLogForTranscript } from "./_messages/activityLog";
 import { resolveStorageEntries } from "./_chat/storageUrls";
 import { collectForkPrefix } from "@eva/shared";
 import { MAX_THREAD_REPLIES } from "./_messages/replies";
-import { getSessionChatWithAccess } from "./_sessionChats/helpers";
 
 const parentIdValidator = messageFields.parentId;
 
@@ -281,109 +280,6 @@ export const listReplies = authQuery({
         : Object.assign({}, message, { activityLog });
     };
     return { root: trim(root), replies: replies.map(trim) };
-  },
-});
-
-/** Longest reaction accepted: one emoji, with skin tone and joiners. */
-const MAX_REACTION_LENGTH = 32;
-/** Most messages one `listReactions` call reads (one transcript window). */
-const MAX_REACTION_MESSAGES = 300;
-
-const messageReactionValidator = v.object({
-  messageId: v.id("messages"),
-  userId: v.id("users"),
-  emoji: v.string(),
-});
-
-/**
- * Adds or removes the caller's emoji reaction on a chat message (projects v2,
- * PR D): reacting again with the same emoji removes it, and one person may
- * hold several emoji on a message. Same access check as a reply.
- */
-export const toggleReaction = authMutation({
-  // A plain string: the chat renders optimistic rows under client-minted ids.
-  args: { messageId: v.string(), emoji: v.string() },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const emoji = args.emoji.trim();
-    if (!emoji || emoji.length > MAX_REACTION_LENGTH) {
-      throw new Error("A reaction is one emoji");
-    }
-    const messageId = ctx.db.normalizeId("messages", args.messageId);
-    const message = messageId ? await ctx.db.get(messageId) : null;
-    if (!message) throw new Error("This message cannot take reactions yet");
-    const chatId = ctx.db.normalizeId("sessionChats", message.parentId);
-    if (!chatId) throw new Error("Reactions work in session chats only");
-    await getSessionChatWithAccess(ctx.db, chatId, ctx.userId);
-
-    const existing = await ctx.db
-      .query("messageReactions")
-      .withIndex("by_message_user_emoji", (q) =>
-        q
-          .eq("messageId", message._id)
-          .eq("userId", ctx.userId)
-          .eq("emoji", emoji),
-      )
-      .first();
-    if (existing) {
-      await ctx.db.delete(existing._id);
-    } else {
-      await ctx.db.insert("messageReactions", {
-        messageId: message._id,
-        userId: ctx.userId,
-        emoji,
-        createdAt: Date.now(),
-      });
-    }
-    return null;
-  },
-});
-
-/**
- * Every reaction on a list of messages, in one subscription (the visible
- * transcript, or a thread), oldest first. Ids the caller cannot read, or that
- * are not real messages yet, are skipped.
- */
-export const listReactions = authQuery({
-  args: { messageIds: v.array(v.string()) },
-  returns: v.array(messageReactionValidator),
-  handler: async (ctx, args) => {
-    const ids = [...new Set(args.messageIds)]
-      .slice(0, MAX_REACTION_MESSAGES)
-      .flatMap((id) => {
-        const messageId = ctx.db.normalizeId("messages", id);
-        return messageId ? [messageId] : [];
-      });
-    const messages = await Promise.all(ids.map((id) => ctx.db.get(id)));
-    const parents = [
-      ...new Set(messages.flatMap((message) => (message ? [message.parentId] : []))),
-    ];
-    const readable = new Set<string>();
-    await Promise.all(
-      parents.map(async (parentId) => {
-        try {
-          await assertMessageParentAccess(ctx.db, parentId, ctx.userId);
-          readable.add(parentId);
-        } catch {
-          // Not this caller's chat: its messages' reactions stay hidden.
-        }
-      }),
-    );
-    const rows = await Promise.all(
-      messages.map((message) =>
-        message && readable.has(message.parentId)
-          ? ctx.db
-              .query("messageReactions")
-              .withIndex("by_message", (q) => q.eq("messageId", message._id))
-              .collect()
-          : [],
-      ),
-    );
-    return rows.flat().map((row) => ({
-      messageId: row.messageId,
-      userId: row.userId,
-      emoji: row.emoji,
-    }));
   },
 });
 

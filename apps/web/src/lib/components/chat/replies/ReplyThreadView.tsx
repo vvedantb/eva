@@ -11,12 +11,7 @@ import {
 } from "@tabler/icons-react";
 import { Button, ConversationEmptyState, toast } from "@vvedantb/ui";
 import { api, type AIModel } from "@eva/backend";
-import {
-  firstNameByUserId,
-  isOtherUserChatMessage,
-  type MentionItem,
-} from "@eva/shared";
-import { groupMessageReactions } from "@eva/shared/taskDetail";
+import { isOtherUserChatMessage, type MentionItem } from "@eva/shared";
 import { ChatMessage } from "@/lib/components/chat/ChatMessage";
 import type {
   ChatParentId,
@@ -81,33 +76,6 @@ export function ReplyThreadView({
   const roots = useQuery(api.messages.listThreadRoots, {
     parentId: chatParentId,
   });
-  // Reactions work in a thread too: one subscription for its rows.
-  const threadIds = thread
-    ? [thread.root, ...thread.replies].map((message) => message._id)
-    : [];
-  const reactionRows = useQuery(
-    api.messages.listReactions,
-    threadIds.length > 0 ? { messageIds: threadIds } : "skip",
-  );
-  const reactorIds = [
-    ...new Set((reactionRows ?? []).map((row) => row.userId)),
-  ].sort();
-  const reactors = useQuery(
-    api.users.getMany,
-    reactorIds.length > 0 ? { ids: reactorIds } : "skip",
-  );
-  const reactorNames = firstNameByUserId(reactors ?? []);
-  const reactionGroups = groupMessageReactions(
-    reactionRows,
-    (userId) => reactorNames.get(userId),
-    currentUserId,
-  );
-  const toggleReactionMutation = useMutation(api.messages.toggleReaction);
-  const toggleReaction = (messageId: string, emoji: string) => {
-    void toggleReactionMutation({ messageId, emoji }).catch(() =>
-      toast.error("Could not save the reaction"),
-    );
-  };
   const index = roots ? roots.findIndex((id) => id === rootId) : -1;
   const previousRootId = index > 0 && roots ? roots[index - 1] : undefined;
   const nextRootId =
@@ -177,8 +145,6 @@ export function ReplyThreadView({
                         currentUserId ?? undefined,
                       )}
                       assistantBubble
-                      reactions={reactionGroups.get(message._id)}
-                      onToggleReaction={toggleReaction}
                     />
                   </div>
                 ))

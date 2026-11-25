@@ -73,8 +73,6 @@ import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { TurnErrorNotice } from "@/lib/components/chat/TurnErrorNotice";
 import { ThreadSummary } from "@/lib/components/chat/replies/ThreadSummary";
 import { MessageToolbar } from "@/lib/components/chat/_components/MessageToolbar";
-import { ReactionBar } from "@/lib/components/tasks/_components/ReactionBar";
-import type { ReactionGroup } from "@eva/shared/taskDetail";
 
 const EVA_ICON = <EvaIcon />;
 
@@ -202,10 +200,6 @@ interface ChatMessageProps {
    * Takes the id so one stable handler serves every row, like `onFork`.
    */
   onReply?: (messageId: string) => void;
-  /** The coordinator chat: this message's reactions, grouped by emoji. */
-  reactions?: ReactionGroup[];
-  /** The coordinator chat: toggles the viewer's reaction. One stable handler. */
-  onToggleReaction?: (messageId: string, emoji: string) => void;
   /**
    * Re-sends the turn's prompt. Undefined while a turn is executing or the chat
    * is read-only, which is what hides the Retry action on a failed turn.
@@ -272,8 +266,6 @@ export const ChatMessage = memo(function ChatMessage({
   linkHighlight = false,
   onFork,
   onReply,
-  reactions,
-  onToggleReaction,
   onRetryTurn,
   precedingUser,
   belowContent,
@@ -311,23 +303,21 @@ export const ChatMessage = memo(function ChatMessage({
   ].filter((action): action is ChatMessageActionItem => action !== undefined);
   const rowActions = [...userActions, ...checkpoint.items];
   // The coordinator chat swaps the footer row for a floating toolbar and
-  // keeps "N replies" and the reaction chips on their own line under the
-  // bubble (projects v2, PR D).
+  // keeps "N replies" on its own line under the bubble (projects v2, PR D).
   const toolbarMode = assistantBubble;
   const toolbar =
     toolbarMode && !turnState.isStreamingPlaceholder ? (
       <MessageToolbar
-        onReact={
-          onToggleReaction
-            ? (emoji) => onToggleReaction(message._id, emoji)
-            : undefined
-        }
         onReply={onReply ? () => onReply(message._id) : undefined}
         copyText={copyPlain}
         menuItems={rowActions.filter((action) => action.key !== "reply")}
         rating={
           message.role === "assistant" && canRate
-            ? { messageId: message._id, sentiment: feedbackSentiment }
+            ? {
+                messageId: message._id,
+                sentiment: feedbackSentiment,
+                comment: feedbackComment,
+              }
             : undefined
         }
       />
@@ -340,22 +330,10 @@ export const ChatMessage = memo(function ChatMessage({
         onOpen={() => onReply(message._id)}
       />
     ) : null;
-  const reactionBar =
-    toolbarMode && onToggleReaction && reactions && reactions.length > 0 ? (
-      <ReactionBar
-        groups={reactions}
-        toggle={(emoji) => onToggleReaction(message._id, emoji)}
-      />
-    ) : null;
+  // Under the bubble: "N replies", in the coordinator chat (no footer row
+  // there) or wherever the footer row is hidden.
   const underLine =
-    toolbarMode && (threadControl || reactionBar) ? (
-      <>
-        {threadControl}
-        {reactionBar}
-      </>
-    ) : threadControl && !showTurnMeta ? (
-      threadControl
-    ) : null;
+    threadControl && (toolbarMode || !showTurnMeta) ? threadControl : null;
 
   return (
     <>
@@ -429,9 +407,7 @@ export const ChatMessage = memo(function ChatMessage({
             )}
           </AIMessage>
           {underLine ? (
-            // Under the bubble: the coordinator chat's "N replies" and
-            // reaction chips, or the thread control when there is no footer
-            // row (a grouped bubble, simple view).
+            // Under the bubble: "N replies" (see `underLine`).
             <div
               className={cn(
                 "mt-1 flex flex-wrap items-center gap-2",
