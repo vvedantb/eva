@@ -4,7 +4,7 @@
 
 Date: 2026-11-25
 
-The coordinator's sandbox rail (web) no longer shows Preview, Browser, Review, Computer or Files (`COORDINATOR_HIDDEN_TABS` in `ProjectSandboxPanel`); an old link to one lands on Tasks. A task's own sandbox keeps every tab. The phone coordinator screen never had them.
+The coordinator's sandbox rail (web) no longer shows Preview, Browser, Review, Computer, Editor or Files (`COORDINATOR_HIDDEN_TABS` in `ProjectSandboxPanel`); an old link to one lands on Tasks. A task's own sandbox keeps every tab. The phone coordinator screen never had them.
 
 ## Projects: the coordinator groups and routes feedback
 

@@ -46,6 +46,7 @@ const COORDINATOR_HIDDEN_TABS: ReadonlySet<string> = new Set([
   "browser",
   "review",
   "computer",
+  "editor",
   "files",
 ]);
 
@@ -111,7 +112,7 @@ export function ProjectSandboxPanel({
   const releaseBrowserLock = useMutation(api.sandboxPanes.releaseBrowserLock);
 
   // The coordinator only reads code and delegates: no dev server, no edits,
-  // so no Preview, Browser, Review, Computer or Files. An old link to one of
+  // so no Preview, Browser, Review, Computer, Editor or Files. An old link to one of
   // those lands on Tasks; a task's own sandbox keeps them all.
   const activeTab: ProjectSandboxTab = COORDINATOR_HIDDEN_TABS.has(sandboxTab)
     ? "tasks"
