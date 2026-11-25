@@ -507,6 +507,7 @@ import type * as mentions from "../mentions.js";
 import type * as messages from "../messages.js";
 import type * as migrations from "../migrations.js";
 import type * as mobile from "../mobile.js";
+import type * as needsYou from "../needsYou.js";
 import type * as notificationDigest from "../notificationDigest.js";
 import type * as notificationEmail from "../notificationEmail.js";
 import type * as notifications from "../notifications.js";
@@ -1103,6 +1104,7 @@ declare const fullApi: ApiFromModules<{
   messages: typeof messages;
   migrations: typeof migrations;
   mobile: typeof mobile;
+  needsYou: typeof needsYou;
   notificationDigest: typeof notificationDigest;
   notificationEmail: typeof notificationEmail;
   notifications: typeof notifications;

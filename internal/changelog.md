@@ -1,5 +1,11 @@
 # Changelog
 
+## Inbox: Needs you and Updates
+
+Date: 2026-11-25
+
+The Inbox (web and phone) opens on "Needs you": what waits for a person, derived from live state, so a row leaves when someone acts on it. Groups: Questions (a project task's ask the coordinator handed to a person; a blocking agent question on an open turn), To review (an open, non-draft PR of a project task, your quick task or your session), Triage (unapproved project tasks), Failed (a project task out of retries; your quick task whose last run failed). Each row has a source chip and one action (Reply, Open PR, Reject/Approve, Retry). "Updates" is the notification feed as before. New `needsYou.list` (optional `repoId`: a repo's inbox shows that repo) and `@eva/shared/needsYou`; web view in the `view` URL param.
+
 ## Projects: parallel reads on hot project paths
 
 Date: 2026-11-25

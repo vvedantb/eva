@@ -24,13 +24,16 @@ import { BackHandler, SectionList, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { openAppLink } from "@/push/openLink";
 import { InboxHeaderActions, type InboxFilter } from "@/inbox/InboxHeaderActions";
+import { NeedsYouList } from "@/inbox/NeedsYouList";
 import { NotificationRow, type NotificationRepo } from "@/inbox/NotificationRow";
+import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 import { LIST_WINDOW } from "@/ui/listWindow";
 
 /**
- * The web inbox at phone width: All / Unread / Archived, grouped by day,
+ * The web inbox at phone width, in its two views. Needs you (the default):
+ * what waits for a person (`NeedsYouList`). Updates: All / Unread / Archived, grouped by day,
  * repo, type or urgency (`@eva/shared/notificationGroups`), sticky group
  * headers, and select mode with the web bulk bar. The web row menu is a
  * swipe on each row (`NotificationRow`). A `SectionList`: the inbox holds up
@@ -43,6 +46,8 @@ import { LIST_WINDOW } from "@/ui/listWindow";
  * action leaves it.
  */
 export default function InboxScreen() {
+  const [view, setView] = useState<"needs" | "updates">("needs");
+  const needsYou = useQuery(api.needsYou.list, view === "needs" ? {} : "skip");
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [group, setGroup] = useState<InboxGroup>("day");
   const [selecting, setSelecting] = useState(false);
@@ -157,6 +162,7 @@ export default function InboxScreen() {
         <PageHeader
           title="Inbox"
           action={
+            view === "needs" ? undefined : (
             <InboxHeaderActions
               filter={filter}
               onFilterChange={(next) => {
@@ -172,10 +178,26 @@ export default function InboxScreen() {
                 setSelecting(true);
               }}
             />
+            )
           }
         />
       )}
-      {notifications === undefined ? (
+      {selecting ? null : (
+        <View className="px-4 pb-2">
+          {/* The web Needs you / Updates switch. */}
+          <SegmentedTabs
+            value={view}
+            options={[
+              { value: "needs", label: "Needs you" },
+              { value: "updates", label: "Updates" },
+            ]}
+            onChange={setView}
+          />
+        </View>
+      )}
+      {view === "needs" ? (
+        <NeedsYouList rows={needsYou} />
+      ) : notifications === undefined ? (
         // Rows shaped as `NotificationRow`: the 28 mark, subject over event line, the time.
         <SkeletonList
           label="Loading notifications"

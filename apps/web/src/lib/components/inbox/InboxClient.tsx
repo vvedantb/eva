@@ -10,12 +10,14 @@ import {
   inboxFilterParser,
   inboxGroupParser,
   inboxSelectedParser,
+  inboxViewParser,
 } from "@/lib/search-params";
 import { type Notification } from "@/lib/components/notifications/notification-config";
 import { InboxHeader } from "@/lib/components/inbox/InboxHeader";
 import { InboxBulkBar } from "@/lib/components/inbox/InboxBulkBar";
 import { InboxListPane } from "@/lib/components/inbox/InboxListPane";
 import { NotificationDetailPane } from "@/lib/components/inbox/NotificationDetailPane";
+import { NeedsYouList } from "@/lib/components/inbox/NeedsYouList";
 import { useInboxActions } from "@/lib/components/inbox/useInboxActions";
 import { useInboxSelection } from "@/lib/components/inbox/useInboxSelection";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
@@ -24,15 +26,27 @@ import { isInternalAppHref } from "@eva/shared/safeUrl";
 import type { RepoWithLogo } from "@/lib/utils/repoGrouping";
 
 /**
- * Two-pane inbox (Linear-style): the notification list on the left, the
- * selected notification's full content on the right. Clicking a row selects
- * it (and marks it read) instead of navigating away; the detail pane owns
- * the jump to the linked entity. Archive is reversible — archived rows move to
- * their own filter rather than leaving.
+ * The Inbox, in two views. Needs you (the default): what waits for a person,
+ * derived from live state (`NeedsYouList`), scoped to `repoId` on a repo's
+ * inbox. Updates: the notification feed, two-pane (Linear-style) — the list
+ * on the left, the selected notification's full content on the right.
+ * Clicking a row selects it (and marks it read) instead of navigating away;
+ * the detail pane owns the jump to the linked entity. Archive is reversible —
+ * archived rows move to their own filter rather than leaving.
  */
-export function InboxClient() {
+export function InboxClient({
+  repoId,
+}: {
+  /** A repo's inbox: Needs you shows that repo only. */
+  repoId?: Id<"githubRepos">;
+} = {}) {
   const navigate = useNavigate();
   usePageTitleSync("Inbox");
+  const [view, setView] = useQueryState("view", inboxViewParser);
+  const needsYou = useQuery(
+    api.needsYou.list,
+    view === "needs" ? (repoId === undefined ? {} : { repoId }) : "skip",
+  );
   const [filter, setFilter] = useQueryState("filter", inboxFilterParser);
   const [group, setGroup] = useQueryState("group", inboxGroupParser);
   const [selectedId, setSelectedId] = useQueryState(
@@ -114,6 +128,7 @@ export function InboxClient() {
   // selection mode first and the selected row second. Skipped while typing.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (view !== "updates") return;
       if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
       const target = e.target;
       if (target instanceof HTMLElement) {
@@ -149,6 +164,7 @@ export function InboxClient() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
+    view,
     filtered,
     selected,
     selectedId,
@@ -159,6 +175,32 @@ export function InboxClient() {
     toggle,
     exit,
   ]);
+
+  const header = (
+    <InboxHeader
+      view={view}
+      onViewChange={setView}
+      filter={filter}
+      group={group}
+      unreadCount={unreadCount}
+      isSelecting={isSelecting}
+      onFilterChange={setFilter}
+      onGroupChange={setGroup}
+      onToggleSelecting={() => (isSelecting ? exit() : start())}
+      onMarkAllRead={markAllRead}
+    />
+  );
+
+  if (view === "needs") {
+    return (
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden animate-in fade-in duration-300">
+        {header}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-border">
+          <NeedsYouList rows={needsYou} />
+        </div>
+      </div>
+    );
+  }
 
   // The header sits inside the left pane rather than above both panes, so the
   // detail pane (and the divider between them) runs the full viewport height.
@@ -174,16 +216,7 @@ export function InboxClient() {
         leftPanel={() => (
           // `relative`: the floating bulk bar anchors to this pane, not the page.
           <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
-            <InboxHeader
-              filter={filter}
-              group={group}
-              unreadCount={unreadCount}
-              isSelecting={isSelecting}
-              onFilterChange={setFilter}
-              onGroupChange={setGroup}
-              onToggleSelecting={() => (isSelecting ? exit() : start())}
-              onMarkAllRead={markAllRead}
-            />
+            {header}
             {/* Region divider between the header and the notification list. */}
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-border">
               <InboxListPane
