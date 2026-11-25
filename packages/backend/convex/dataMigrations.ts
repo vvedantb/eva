@@ -347,25 +347,3 @@ export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionChatBackgroundAgents,
   internal.dataMigrations.pruneSessionBackgroundAgents,
 ]);
-
-/**
- * The hourly coordinator wake cap is gone. Clears `heldAt`; a row the cap held
- * and never sent is delivered now (the delivery folds a project's rows into
- * one turn, so a second schedule finds nothing).
- *
- *   npx convex run --prod dataMigrations:clearCoordinatorWakeHeldAt
- */
-export const clearCoordinatorWakeHeldAt = dataMigrations.define({
-  table: "projectCoordinatorWakes",
-  migrateOne: async (ctx, row) => {
-    if (row.heldAt === undefined) return;
-    if (row.sentAt === undefined) {
-      await ctx.scheduler.runAfter(
-        0,
-        internal._projects.coordinatorWakeDelivery.deliverCoordinatorWakes,
-        { projectId: row.projectId },
-      );
-    }
-    return { heldAt: undefined };
-  },
-});

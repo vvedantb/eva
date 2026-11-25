@@ -2287,8 +2287,7 @@ export const projectCoordinatorWakeFields = {
   text: v.string(),
   createdAt: v.number(),
   sentAt: v.optional(v.number()),
-  /** Legacy: the removed hourly cap. `clearCoordinatorWakeHeldAt` clears it; drop it after that runs. */
-  heldAt: v.optional(v.number()),
+  // heldAt removed with the hourly cap. schema-narrowing-ok: clearCoordinatorWakeHeldAt
 };
 
 export const notificationFields = {
