@@ -2243,8 +2243,7 @@ export const projectTaskBatchFields = {
 
 /**
  * One reason to wake a project's coordinator (decision 16). `key` makes a
- * request idempotent; `sentAt` marks it delivered in a turn; `heldAt` marks a
- * request the hourly cap held back (it waits for a person).
+ * request idempotent; `sentAt` marks it delivered in a turn.
  */
 export const projectCoordinatorWakeFields = {
   projectId: v.id("projects"),
@@ -2258,6 +2257,7 @@ export const projectCoordinatorWakeFields = {
   text: v.string(),
   createdAt: v.number(),
   sentAt: v.optional(v.number()),
+  /** Legacy: the removed hourly cap. `clearCoordinatorWakeHeldAt` clears it; drop it after that runs. */
   heldAt: v.optional(v.number()),
 };
 

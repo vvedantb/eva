@@ -13,7 +13,7 @@ import { latestTaskRun } from "./runSettings";
 import { resolveTaskWorkflowBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { findOwnedSession, type OwnedSessionOwner } from "../_sessions/owner";
 import { ownedSessionBusy } from "../_sessions/ownedSession";
-import { isCoordinatorPaused, requestCoordinatorWake } from "./coordinatorWake";
+import { requestCoordinatorWake } from "./coordinatorWake";
 import { findOpenAsk } from "./reports";
 import { RUN_WAITING_FOR_ANSWER } from "../_taskWorkflow/helpers";
 
@@ -50,8 +50,6 @@ export interface ProjectFactsContext {
   now: number;
   /** When the coordinator last finished a turn while it is idle now; undefined while it is busy or never ran. */
   coordinatorIdleSince?: number;
-  /** The hourly cap holds a wake-up back (`isCoordinatorPaused`). */
-  coordinatorPaused: boolean;
 }
 
 /** Loads the project half of the facts (`ProjectFactsContext`). */
@@ -61,23 +59,20 @@ export async function loadProjectFactsContext(
   now: number,
 ): Promise<ProjectFactsContext> {
   const owner: OwnedSessionOwner = { kind: "project", projectId: project._id };
-  const [session, busy, coordinatorPaused] = await Promise.all([
+  const [session, busy] = await Promise.all([
     findOwnedSession(db, owner),
     ownedSessionBusy(db, owner),
-    isCoordinatorPaused(db, project._id),
   ]);
   return {
     project,
     now,
     coordinatorIdleSince: busy ? undefined : session?.lastTurnFinishedAt,
-    coordinatorPaused,
   };
 }
 
 /**
  * Who must answer the task's open ask now: the coordinator, until it had a
- * turn after the ask and is idle again without answering, or its wake-ups
- * are paused; then a person.
+ * turn after the ask and is idle again without answering; then a person.
  */
 function openAskHolder(
   ask: Pick<Doc<"projectTaskReports">, "createdAt"> | null,
@@ -85,9 +80,8 @@ function openAskHolder(
 ): ProjectTaskFacts["openAsk"] {
   if (!ask) return undefined;
   const passed =
-    context.coordinatorPaused ||
-    (context.coordinatorIdleSince !== undefined &&
-      context.coordinatorIdleSince > ask.createdAt);
+    context.coordinatorIdleSince !== undefined &&
+    context.coordinatorIdleSince > ask.createdAt;
   return passed ? "person" : "coordinator";
 }
 

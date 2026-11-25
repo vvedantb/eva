@@ -1,5 +1,13 @@
 # Changelog
 
+## Inbox badge counts Needs you; no hourly coordinator cap
+
+Date: 2026-11-25
+
+The Inbox rail badge, the favicon count and the tab title count now show how many rows wait in Inbox → Needs you (`needsYou.list`, the same cached subscription as that view), not unread notifications, which are often only for information. The unread count stays on the Unread filter.
+
+The coordinator's cap of 10 automatic turns an hour is gone, with its "Coordinator paused" chat banner (web and phone), list label, `getCoordinatorState` and the "a person's message releases held wakes" path. Key dedupe and the 2-minute batch window stay. Each delivery logs `coordinator_wake project=… reasons=…`, so the turn rate is measured before any limit is set. The one coordinator retry of a failed task stays: it ends the failed → retry → failed loop. After deploy run `npx convex run --prod dataMigrations:clearCoordinatorWakeHeldAt` (it delivers any held rows); a later PR drops `projectCoordinatorWakes.heldAt`.
+
 ## Text generation: gpt-5-nano → gpt-6-luna
 
 Date: 2026-11-25

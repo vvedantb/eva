@@ -81,17 +81,6 @@ export function projectDeleteNote(count: number): string {
   return `${count === 1 ? "Its" : "Their"} tasks stay as quick tasks.`;
 }
 
-/** The project's coordinator hit its hourly cap of automatic turns. */
-export const COORDINATOR_PAUSED_LABEL = "Coordinator paused";
-
-/**
- * The coordinator chat's one-line notice while the hourly cap holds its
- * wake-ups back. A person's message releases them, so the line asks for one.
- */
-export function coordinatorPausedTitle(maxAutoTurnsPerHour: number): string {
-  return `${COORDINATOR_PAUSED_LABEL} after ${maxAutoTurnsPerHour} automatic turns this hour. Send a message to continue.`;
-}
-
 /** The fields of an `agentTasks.listByProject` row the status rules read. */
 export interface ProjectTaskRow {
   _id: string;
@@ -205,25 +194,22 @@ export function projectTaskNotesByTask(
 
 /**
  * What the projects list reads for each project (`listStatusesForRepo`):
- * the derived stage and task counts by display status, how many tasks need a
- * person, and whether the coordinator is paused at its hourly cap.
+ * the derived stage and task counts by display status, and how many tasks
+ * need a person.
  */
 export interface ProjectListStatus {
   stage: ProjectStage;
   counts: ProjectStatus["counts"];
   needsYouCount: number;
-  coordinatorPaused: boolean;
 }
 
 /**
  * Why a project on the list needs a person, in a few words, or undefined
- * when it does not. A paused coordinator comes first: nothing moves until a
- * person writes to it.
+ * when it does not.
  */
 export function projectListNeedsYouLabel(
   status: ProjectListStatus,
 ): string | undefined {
-  if (status.coordinatorPaused) return COORDINATOR_PAUSED_LABEL;
   if (status.needsYouCount === 0) return undefined;
   return status.needsYouCount === 1
     ? "1 task needs you"

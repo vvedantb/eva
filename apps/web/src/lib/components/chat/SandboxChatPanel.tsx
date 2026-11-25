@@ -2,7 +2,6 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
-import type { ReactNode } from "react";
 import { api } from "@eva/backend";
 import { sandboxComposerState, SANDBOX_CHAT_COPY } from "@eva/shared";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
@@ -60,12 +59,9 @@ export function SandboxChatPanel({
   onViewDiff,
   onOpenAgentsTab,
   onSandboxToggle,
-  preInputBanner,
   assistantBubbles = false,
 }: SandboxChatPanelProps & {
   binding: SandboxChatBinding;
-  /** Owner-specific notice above the composer (a paused coordinator). */
-  preInputBanner?: ReactNode;
   /** Eva's replies in a bubble with her mark (the project coordinator). */
   assistantBubbles?: boolean;
 }) {
@@ -242,10 +238,7 @@ export function SandboxChatPanel({
           onSend={handleSend}
           onCancel={handleCancel}
           preInputContent={
-            <SandboxChatPreInput
-              surface={chatSurface}
-              beforeBanner={preInputBanner}
-            />
+            <SandboxChatPreInput surface={chatSurface} />
           }
           composerChips={<SandboxChatStatusChips surface={chatSurface} />}
           underCardLeading={

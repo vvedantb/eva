@@ -5,10 +5,7 @@ import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { DEFAULT_AI_MODEL } from "../convex/validators";
-import {
-  MAX_COORDINATOR_AUTO_TURNS_PER_HOUR,
-  requestCoordinatorWake,
-} from "../convex/_projects/coordinatorWake";
+import { requestCoordinatorWake } from "../convex/_projects/coordinatorWake";
 import { fileTaskReport } from "../convex/_projects/reports";
 import { RUN_WAITING_FOR_ANSWER } from "../convex/_taskWorkflow/helpers";
 import { acquireTurnLease, openTurn } from "../convex/_chat/turnStore";
@@ -385,12 +382,12 @@ describe("coordinator wake-ups", () => {
   );
 
   test(
-    "at the hourly cap the wake-up is held and the project needs a person; a person's message releases it without counting",
+    "there is no hourly cap: a wake-up after many automatic turns is still sent",
     async () => {
       const f = await fixture();
       await f.t.run(async (ctx) => {
         const now = Date.now();
-        for (let i = 0; i < MAX_COORDINATOR_AUTO_TURNS_PER_HOUR; i += 1) {
+        for (let i = 0; i < 20; i += 1) {
           await ctx.db.insert("projectCoordinatorWakes", {
             projectId: f.projectId,
             reason: "failed",
@@ -410,33 +407,8 @@ describe("coordinator wake-ups", () => {
       await f.t.mutation(internal._projects.coordinatorWakeDelivery.deliverCoordinatorWakes, {
         projectId: f.projectId,
       });
-      const state = await f.asUser.query(api.projects.getCoordinatorState, {
-        projectId: f.projectId,
-      });
-      expect(state).toEqual({
-        paused: true,
-        autoTurnsLastHour: MAX_COORDINATOR_AUTO_TURNS_PER_HOUR,
-        maxAutoTurnsPerHour: MAX_COORDINATOR_AUTO_TURNS_PER_HOUR,
-      });
-      const listed = await f.asUser.query(api.projects.listStatusesForRepo, {
-        repoId: f.repoId,
-      });
-      expect(listed[0]?.coordinatorPaused).toBe(true);
-
-      // A person writes in the coordinator chat.
-      const { chatId } = await f.asUser.mutation(api.sessions.ensureOwned, {
-        owner: { kind: "project", projectId: f.projectId },
-      });
-      await f.asUser.mutation(api._sessions.execution.enqueueMessage, {
-        chatId,
-        message: "Go on",
-        model: DEFAULT_AI_MODEL,
-      });
-      const after = await f.asUser.query(api.projects.getCoordinatorState, {
-        projectId: f.projectId,
-      });
-      expect(after.paused).toBe(false);
-      expect(after.autoTurnsLastHour).toBe(MAX_COORDINATOR_AUTO_TURNS_PER_HOUR);
+      const fresh = (await wakes(f)).find((row) => row.key === "ask:new");
+      expect(fresh?.sentAt).toBeDefined();
     },
     TIMEOUT_MS,
   );

@@ -19,7 +19,6 @@ import { unreadLookupForList } from "../chatReads";
 import { awaitingAnswerEntityIdsForRepo } from "../_chat/turnProjection";
 import { projectStatus } from "@eva/shared/projectStatus";
 import { loadProjectTaskFacts } from "./taskTable";
-import { isCoordinatorPaused } from "./coordinatorWake";
 import {
   projectSandboxStatus,
 } from "../_sessions/ownedSession";
@@ -93,7 +92,6 @@ export const listStatusesForRepo = authQuery({
       ),
       counts: displayStatusCountsValidator,
       needsYouCount: v.number(),
-      coordinatorPaused: v.boolean(),
     }),
   ),
   handler: async (ctx, args) => {
@@ -101,17 +99,13 @@ export const listStatusesForRepo = authQuery({
     const projects = await liveProjectsForRepo(ctx.db, args.repoId);
     return await Promise.all(
       projects.map(async (project) => {
-        const [facts, coordinatorPaused] = await Promise.all([
-          loadProjectTaskFacts(ctx.db, project),
-          isCoordinatorPaused(ctx.db, project._id),
-        ]);
+        const facts = await loadProjectTaskFacts(ctx.db, project);
         const status = projectStatus([...facts.values()]);
         return {
           projectId: project._id,
           stage: status.stage,
           counts: status.counts,
           needsYouCount: status.needsYou.length,
-          coordinatorPaused,
         };
       }),
     );
