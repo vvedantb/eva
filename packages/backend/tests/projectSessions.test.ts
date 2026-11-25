@@ -39,7 +39,6 @@ async function fixture() {
       userId,
       title: "Project",
       rawInput: "Project",
-      phase: "business_review",
       numId: 1,
     });
     const now = Date.now();
@@ -185,17 +184,14 @@ describe("projects on sessions", () => {
   );
 
   test(
-    "a contributor reaches the coordinator whatever the stored phase: a new or finished project's sandbox starts",
+    "a contributor reaches the coordinator: the project's sandbox starts",
     async () => {
-      for (const phase of ["draft", "completed", "cancelled"] as const) {
-        const f = await fixture();
-        workflow.register(f.t);
-        await f.t.run((ctx) => ctx.db.patch(f.projectId, { phase }));
-        const { sessionId } = await ensureProjectSession(f);
-        await f.asUser.mutation(api.sessions.startSandbox, { sessionId });
-        const session = await f.t.run((ctx) => ctx.db.get(sessionId));
-        expect(session?.status).toBe("starting");
-      }
+      const f = await fixture();
+      workflow.register(f.t);
+      const { sessionId } = await ensureProjectSession(f);
+      await f.asUser.mutation(api.sessions.startSandbox, { sessionId });
+      const session = await f.t.run((ctx) => ctx.db.get(sessionId));
+      expect(session?.status).toBe("starting");
     },
     TIMEOUT_MS,
   );

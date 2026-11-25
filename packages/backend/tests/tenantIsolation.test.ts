@@ -68,7 +68,6 @@ async function fixture() {
       userId: ownerId,
       title: "Billing",
       rawInput: "billing",
-      phase: "business_review",
       numId: 1,
     });
     const strangerProjectId = await ctx.db.insert("projects", {
@@ -76,7 +75,6 @@ async function fixture() {
       userId: strangerId,
       title: "Grab",
       rawInput: "grab",
-      phase: "business_review",
       numId: 1,
     });
     const task = (numId: number, status: "todo" | "draft") => ({

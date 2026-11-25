@@ -49,7 +49,6 @@ async function fixture() {
       userId: ada,
       title: "Billing rewrite",
       rawInput: "rewrite billing",
-      phase: "code_review",
       numId: 7,
       branchVersion: 2,
       branchName: "eva/project-billing-v2",
@@ -185,9 +184,6 @@ describe("a project's own (legacy) pull request ending", () => {
           await statuses(t, [ids.shipped, ids.building, ids.queued]),
           "a project PR is not a verdict on what each task did",
         ).toEqual(["done", "in_progress", "todo"]);
-        // A project's status is derived from its tasks: nothing stores an end.
-        const project = await t.run((ctx) => ctx.db.get(ids.projectId));
-        expect(project?.phase).toBe("code_review");
         expect(await notificationsFor(t, ids.ada)).toHaveLength(0);
       },
       TIMEOUT_MS,

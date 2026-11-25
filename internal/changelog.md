@@ -1,5 +1,11 @@
 # Changelog
 
+## Projects: legacy schema dropped (PR 3b)
+
+Date: 2026-11-25
+
+Drops what the clearing migrations emptied: `projects.phase`, `planningMode`, `build`, `interview`, `lastBuildError`, `codeReviewer`, `sessionChats.taskId`, the `projectDetails` and `taskDependencies` tables, and the `by_repo_and_phase`, `by_repo_and_build_state` and `sessionChats.by_task` indexes; `projectBuildValidator`, `projectInterviewValidator` and `clientProject` go with them. Deletes `clearLegacyProjectFields`, `clearTaskDependencies` and `clearProjectCodeReviewer`. Deploy only after `clearLegacyProjectFields` ran on production.
+
 ## Projects: legacy interview, plan and build code removed (PR 3a)
 
 Date: 2026-11-25

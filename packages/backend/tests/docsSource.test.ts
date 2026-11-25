@@ -50,7 +50,6 @@ async function fixture() {
       repoId,
       userId,
       title: "Docs project",
-      phase: "in_progress",
       rawInput: "docs",
       numId: 3,
       updatedAt: now,

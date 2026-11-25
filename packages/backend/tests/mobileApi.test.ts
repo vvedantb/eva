@@ -95,7 +95,6 @@ async function fixture() {
       repoId,
       userId,
       title: "Billing revamp",
-      phase: "in_progress",
       rawInput: "revamp billing",
       numId: 3,
     });

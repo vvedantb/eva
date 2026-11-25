@@ -12,7 +12,6 @@ import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import {
   projectValidator,
   projectListItemValidator,
-  clientProject,
 } from "./helpers";
 import { resolveProjectBranchName } from "../_git/branchNames";
 import { resolveProjectBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
@@ -56,7 +55,7 @@ export const list = authQuery({
     );
     return await Promise.all(
       projects.map(async (project) => ({
-        ...clientProject(project),
+        ...project,
         // A project's sandbox lives on its session; the row shows that.
         sandboxStatus: await projectSandboxStatus(ctx.db, project),
         hasUnread: await hasUnread(project),
@@ -131,7 +130,7 @@ export const get = authQuery({
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) return null;
     const visible = entityVisible(project);
     if (!visible) return null;
-    return clientProject(visible);
+    return visible;
   },
 });
 
@@ -152,7 +151,7 @@ export const getByNumId = authQuery({
       .first();
     const visible = entityVisible(project);
     if (!visible) return null;
-    return clientProject(visible);
+    return visible;
   },
 });
 

@@ -85,7 +85,6 @@ async function fixture() {
       repoId,
       userId: ownerUserId,
       title: "Billing revamp",
-      phase: "in_progress",
       rawInput: "revamp billing",
       numId: 42,
       branchName: "eva/project-billing",
