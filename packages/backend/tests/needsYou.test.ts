@@ -80,7 +80,6 @@ describe("needsYou.list", () => {
         userId,
         title: "Checkout",
         rawInput: "Checkout",
-        phase: "business_review",
         numId: 1,
       });
       const task = {
