@@ -102,6 +102,8 @@ export interface ChatModelPicker {
 interface ChatComposerProps {
   /** Absent (Manager Ave): no skills, stash or repo mentions. */
   repo?: ChatRepo;
+  /** A project coordinator chat: `@Eva` is in the mention picker. */
+  mentionEva?: boolean;
   conversationId: string;
   queuedMessages: ChatBodyQueuedMessage[];
   /** Queue panel heading when the queue waits on something; default "Queued". */
@@ -147,6 +149,7 @@ interface ChatComposerProps {
 
 export function ChatComposer({
   repo,
+  mentionEva,
   conversationId,
   queuedMessages,
   queueLabel,
@@ -344,6 +347,7 @@ export function ChatComposer({
   const inputChrome = (
     <ComposerInputChrome
       repo={repo}
+      mentionEva={mentionEva}
       mentionRef={mentionRef}
       skillItems={skillItems}
       plusDataItems={plusDataItems}

@@ -89,6 +89,40 @@ async function ownerSurface(
   return surface;
 }
 
+/** Most unread notifications one send looks through for this chat's mentions. */
+const OWN_MENTIONS_SCAN = 100;
+
+/**
+ * Posting in a chat answers the mentions you had there: your unread
+ * `mention` notifications for this chat are marked read, so they leave
+ * Inbox → Needs you (plan `projects-v2-chat.md`, decision 3). The chat id is
+ * the one `createNotification` stores (`chatTarget`: task, else session,
+ * else project).
+ */
+async function answerOwnChatMentions(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  surface: ChatMentionSurface,
+): Promise<void> {
+  const unread = (
+    await ctx.db
+      .query("notifications")
+      .withIndex("by_user_and_read", (q) =>
+        q.eq("userId", userId).eq("read", false),
+      )
+      .order("desc")
+      .take(OWN_MENTIONS_SCAN)
+  ).filter((row) => row.type === "mention" && row.chatTarget !== undefined);
+  if (unread.length === 0) return;
+  const target = notificationTarget(await ownerSurface(ctx, surface));
+  const chatTarget = target.taskId ?? target.sessionId ?? target.projectId;
+  for (const row of unread) {
+    if (row.chatTarget === chatTarget) {
+      await ctx.db.patch(row._id, { read: true });
+    }
+  }
+}
+
 /** How much of the message routing is shown. Long enough for the ask, short
  * enough that a pasted log does not dominate the judgement. */
 const ROUTING_MESSAGE_LIMIT = 4000;
@@ -114,6 +148,7 @@ export async function notifyChatMentions(
     surface: ChatMentionSurface;
   },
 ): Promise<void> {
+  await answerOwnChatMentions(ctx, args.authorUserId, args.surface);
   // A task and its session share the repo, so the recipients need no owner
   // read; it only runs once someone is mentioned.
   const recipients = await teamMentionRecipients(

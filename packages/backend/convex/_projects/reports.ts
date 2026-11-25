@@ -20,6 +20,8 @@ import type { SessionChatContext } from "../_sessionChats/helpers";
 import { requestCoordinatorWake } from "./coordinatorWake";
 import { startProjectTask, taskLabel } from "./scheduler";
 import { taskWorkSessionBusy } from "../_taskWorkflow/startRun";
+import { chatMessageRoute, mentionsEva } from "@eva/shared";
+import { extractMentionedUserIds } from "../_mentions/extractMentionedUserIds";
 
 /**
  * Hub awareness between a project's coordinator and its child tasks
@@ -177,10 +179,21 @@ async function canResumeAskingTask(
 }
 
 /**
+ * What happened to a person's chat message (`routePersonChatMessage`).
+ * - `answered`: it answered a project task's open ask; that task's next run
+ *   starts with it.
+ * - `posted`: a quiet comment in a coordinator chat (it `@`-mentions only
+ *   teammates): stored, no Eva turn.
+ * - `continue`: neither; the caller runs or queues the turn as usual.
+ */
+export type PersonChatRoute = "answered" | "posted" | "continue";
+
+/**
  * A person sent `message` in a session chat. In a child task's chat with an
  * open ask, the message is the answer: the ask closes and the task's next run
- * starts with it (true; the caller sends nothing more). Otherwise nothing
- * (false). `insertUserRow`: the caller has not stored the message.
+ * starts with it. In a coordinator's chat, a message for teammates only stays
+ * a quiet comment (`chatMessageRoute`); any other message wakes Eva.
+ * `insertUserRow`: the caller has not stored the message.
  */
 export async function routePersonChatMessage(
   ctx: MutationCtx,
@@ -190,16 +203,11 @@ export async function routePersonChatMessage(
     message: string;
     insertUserRow: boolean;
   },
-): Promise<boolean> {
+): Promise<PersonChatRoute> {
   const { chat, session } = params.context;
   const owner = sessionOwner(session);
-  if (owner.kind !== "task") return false;
-  const task = await ctx.db.get(owner.taskId);
-  if (!task?.projectId) return false;
-  const ask = await findOpenAsk(ctx.db, task._id);
-  if (!ask || !(await canResumeAskingTask(ctx, task))) return false;
-  await answerOpenAsk(ctx, task._id, params.userId);
-  if (params.insertUserRow) {
+  const insertUserRow = async () => {
+    if (!params.insertUserRow) return;
     await ctx.db.insert("messages", {
       parentId: chat._id,
       role: "user",
@@ -207,10 +215,32 @@ export async function routePersonChatMessage(
       timestamp: Date.now(),
       userId: params.userId,
     });
+  };
+  if (owner.kind === "project") {
+    const mentionedPeople = extractMentionedUserIds(
+      ctx,
+      params.message,
+    ).filter((id) => id !== params.userId).length;
+    const route = chatMessageRoute({
+      mentionsEva: mentionsEva(params.message),
+      mentionedPeople,
+    });
+    if (route === "quiet") {
+      await insertUserRow();
+      return "posted";
+    }
+    return "continue";
   }
+  if (owner.kind !== "task") return "continue";
+  const task = await ctx.db.get(owner.taskId);
+  if (!task?.projectId) return "continue";
+  const ask = await findOpenAsk(ctx.db, task._id);
+  if (!ask || !(await canResumeAskingTask(ctx, task))) return "continue";
+  await answerOpenAsk(ctx, task._id, params.userId);
+  await insertUserRow();
   // A failed start shows on the task as a failed run (`startTaskRun`).
   await startProjectTask(ctx, task, answerNote(ask, "a person", params.message));
-  return true;
+  return "answered";
 }
 
 /**

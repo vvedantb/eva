@@ -65,6 +65,13 @@ export {
   type SlashItem,
 } from "./mentionComposer";
 export {
+  chatMessageRoute,
+  EVA_MENTION_ID,
+  EVA_MENTION_ITEM,
+  mentionsEva,
+  type ChatMessageRoute,
+} from "./chatMessageRoute";
+export {
   SANDBOX_STOPPED_ALERT,
   isSandboxPausedAlert,
   sandboxPausedAlertText,

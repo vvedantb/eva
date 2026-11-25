@@ -18,6 +18,7 @@ import {
   type MentionChipKind,
   type MentionItem,
   type MentionTrigger,
+  EVA_MENTION_ITEM,
 } from "@eva/shared";
 import { useQuery } from "convex/react";
 import { useState } from "react";
@@ -71,6 +72,8 @@ export function useMentionComposer(
   provider: AIProvider | undefined,
   /** Called with the wire text after each edit by the person (typing, a pick, a restore, the clear after a send); not after `load`. */
   onChange?: (tokenized: string) => void,
+  /** A project coordinator chat: `@Eva` joins the people in the picker (`chatMessageRoute`), as the web. */
+  mentionEva = false,
 ) {
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   /** An edit by the person: the new draft, and `onChange` when its text changed. */
@@ -89,7 +92,8 @@ export function useMentionComposer(
     catalogProvider && repoId ? { provider: catalogProvider } : "skip",
   );
 
-  const { items, peopleIds } = mergeMentionItems(peopleMentionItems(members ?? []), dataMentionItems(data ?? []));
+  const teammates = peopleMentionItems(members ?? []);
+  const { items, peopleIds } = mergeMentionItems(mentionEva ? [EVA_MENTION_ITEM, ...teammates] : teammates, dataMentionItems(data ?? []));
   const skills = repoId ? skillSlashItems(repoSkills ?? [], systemSkills ?? [], provider, harnessCatalog?.skills) : [];
 
   // The web chat composer always has a `/` empty state ("No available skills."), so `/` always opens.

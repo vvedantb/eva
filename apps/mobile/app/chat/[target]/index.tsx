@@ -633,10 +633,16 @@ function ChatDock({
   // "Someone is typing", as the web chat composer: the room is the session chat (`parentId`), as the web's;
   // before a task or project chats it has none, so this chat's own target stands in.
   const typing = useTypingPresence(chatTypingRoom(chat.parentId ?? target), me);
-  const composer = useMentionComposer(chat.repoId, getAIModelProvider(normalizeAIModel(chat.model)), (tokenized) => {
-    draft.save(tokenized);
-    if (tokenized) typing.onActivity();
-  });
+  const composer = useMentionComposer(
+    chat.repoId,
+    getAIModelProvider(normalizeAIModel(chat.model)),
+    (tokenized) => {
+      draft.save(tokenized);
+      if (tokenized) typing.onActivity();
+    },
+    // The coordinator chat: `@Eva` says a message is for her (`chatMessageRoute`).
+    chat.project !== undefined,
+  );
   draft.pull(composer);
   const suggestions = useSkillSuggestions(composer.skills, composer.text);
   const modelPick = useChatModelPick(target, chat, me);
