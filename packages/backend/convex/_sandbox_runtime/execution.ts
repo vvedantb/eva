@@ -120,7 +120,11 @@ import {
   VERCEL_EDITOR_INTERNAL_PORT,
 } from "./previewProxy";
 import { vercelAppListenPort } from "./vercelAppPorts";
-import { getPreviewGrantPublicJwk, signPreviewGrant } from "../previewGrant";
+import {
+  getPreviewGrantPublicJwk,
+  previewSessionSecret,
+  signPreviewGrant,
+} from "../previewGrant";
 import { PREVIEW_GRANT_PARAM } from "../previewGrantConfig";
 import { createHmac } from "node:crypto";
 import { previewActivityHmacMessage } from "./callbackAuth";
@@ -982,6 +986,10 @@ async function buildPreviewUrl(
           inject: args.navigationSync === true,
           // Browser-facing port for /preview-auth (public proxy, not listen).
           authPort: fixedVercelProxyPort,
+          sessionSecret: previewSessionSecret(
+            args.sandboxId,
+            fixedVercelProxyPort,
+          ),
           ...previewActivityParams(args.sandboxId),
         },
         fixedVercelProxyPort,

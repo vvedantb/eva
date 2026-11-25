@@ -39,7 +39,7 @@ const HEALTH_PATH = "/__eva_preview_proxy/health";
 export const PREVIEW_TAB_PREFIX = "/__tab";
 // Bump when the generated proxy script changes so already-running proxies from
 // an older deploy are detected as stale (via the health response) and relaunched.
-const SCRIPT_VERSION = "stream-v33";
+const SCRIPT_VERSION = "stream-v34";
 
 /** Minimum gap between two traffic heartbeats posted by one proxy process. */
 const ACTIVITY_HEARTBEAT_INTERVAL_MS = 60_000;
@@ -61,6 +61,11 @@ interface PreviewProxyAuthParams {
    * pass the exposed port here so grants and /preview-auth stay aligned.
    */
   authPort?: number;
+  /**
+   * Hex HMAC key for the session cookie (`previewSessionSecret`). Stable per
+   * sandbox port, so cookies survive a proxy restart.
+   */
+  sessionSecret: string;
   /**
    * Activity heartbeat for the idle-pause sweep: the proxy POSTs
    * `sandboxId` + `hmac` (+ the session's Clerk `subject`) to `activityUrl`
@@ -273,11 +278,11 @@ if (GATE_ENABLED) {
     console.error("Eva preview proxy: invalid grant public key", e);
   }
 }
-// Random per-process secret for the proxy's own session cookie. The proxy only
-// holds the grant's public key (cannot mint long-lived grants), so it exchanges
-// a validated short-lived grant for an HMAC session cookie it can verify itself.
-// A proxy restart invalidates sessions, which just forces a fast re-auth.
-const SESSION_SECRET = crypto.randomBytes(32);
+// Secret for the proxy's own session cookie. The proxy only holds the grant's
+// public key (cannot mint long-lived grants), so it exchanges a validated
+// short-lived grant for an HMAC session cookie it can verify itself. Convex
+// derives the secret per sandbox port, so a proxy restart keeps cookies valid.
+const SESSION_SECRET = Buffer.from(${JSON.stringify(params.sessionSecret)}, "hex");
 
 function b64urlToBuf(s) {
   let v = String(s).replace(/-/g, "+").replace(/_/g, "/");
