@@ -224,6 +224,8 @@ const schema = defineSchema({
     .index("by_parent_and_reply_to", ["parentId", "replyTo"])
     // A thread's replies, oldest first.
     .index("by_reply_to", ["replyTo"])
+    // A chat's thread roots (only roots carry `lastReplyAt`).
+    .index("by_parent_and_last_reply_at", ["parentId", "lastReplyAt"])
     // Find-in-chat above the loaded history (searchOlderByParent).
     .searchIndex("search_content", {
       searchField: "content",

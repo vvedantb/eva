@@ -15,10 +15,13 @@ import { CoordinatorPausedBanner } from "./CoordinatorPausedBanner";
 export function ProjectSandboxChatPanel({
   projectId,
   projectSession,
+  onThreadOpen,
   ...panel
 }: SandboxChatPanelProps & {
   projectId: Id<"projects">;
   projectSession: OwnedSession;
+  /** A reply thread opened: the page shows it in the side panel. */
+  onThreadOpen?: () => void;
 }) {
   const binding = useProjectChatBinding(projectId, projectSession);
   // The coordinator chat only: its paused line, and Eva's replies as
@@ -30,6 +33,7 @@ export function ProjectSandboxChatPanel({
       preInputBanner={<CoordinatorPausedBanner projectId={projectId} />}
       assistantBubbles
       replyThreads
+      onThreadOpen={onThreadOpen}
     />
   );
 }

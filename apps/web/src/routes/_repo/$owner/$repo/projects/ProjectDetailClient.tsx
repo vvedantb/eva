@@ -185,6 +185,7 @@ export function ProjectDetailClient({
             chatTurnOpen={chatTurnOpen}
             sandboxRailWidthPx={sandboxRailWidthPx}
             expandRightSignal={expandRightSignal}
+            onThreadOpen={() => setExpandRightSignal((n) => n + 1)}
             openFile={openFile}
             openDiffs={openDiffs}
             openAgentsTab={openAgentsTab}

@@ -5,6 +5,10 @@ import { ProjectSandboxChatPanel } from "@/lib/components/projects/ProjectSandbo
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { SandboxSurfaceProviders } from "@/lib/components/sandbox/SandboxSurfaceProviders";
 import { ProjectTasksPanel } from "@/lib/components/projects/ProjectTasksPanel";
+import {
+  ProjectReplyThreadPanel,
+  useOpenReplyThread,
+} from "@/lib/components/projects/ProjectReplyThreadPanel";
 import type { ProjectSandboxTab } from "@/lib/components/projects/projectSandboxTabs";
 import {
   SandboxWorkspace,
@@ -32,6 +36,8 @@ interface ProjectDetailSandboxContentProps {
   chatTurnOpen: boolean | undefined;
   sandboxRailWidthPx: number;
   expandRightSignal: number;
+  /** A reply thread opened in the chat: expand the right panel that shows it. */
+  onThreadOpen: () => void;
   openFile: (path: string) => void;
   openDiffs: (repoRelativePath?: string) => void;
   openAgentsTab: () => void;
@@ -48,10 +54,13 @@ export function ProjectDetailSandboxContent({
   chatTurnOpen,
   sandboxRailWidthPx,
   expandRightSignal,
+  onThreadOpen,
   openFile,
   openDiffs,
   openAgentsTab,
 }: ProjectDetailSandboxContentProps) {
+  // An open reply thread takes the right panel, beside the chat (Slack style).
+  const threadId = useOpenReplyThread();
   // The coordinator can always wake: a project has no closed state.
   const {
     isSandboxActive,
@@ -124,13 +133,24 @@ export function ProjectDetailSandboxContent({
           onOpenFile={openFile}
           onViewDiff={openDiffs}
           onOpenAgentsTab={openAgentsTab}
+          onThreadOpen={onThreadOpen}
           onSandboxToggle={(action) => {
             if (action === "start") void handleStartSandbox();
             else void handleStopSandbox();
           }}
         />
       )}
-      rightPanel={rightPanel}
+      rightPanel={(ctx) =>
+        threadId ? (
+          <ProjectReplyThreadPanel
+            projectId={projectId}
+            projectSession={sandbox.projectSession}
+            threadId={threadId}
+          />
+        ) : (
+          rightPanel(ctx)
+        )
+      }
     />
   );
 

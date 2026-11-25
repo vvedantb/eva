@@ -9,17 +9,14 @@ import {
   IconMessages,
   IconX,
 } from "@tabler/icons-react";
-import {
-  Button,
-  Conversation,
-  ConversationContent,
-  ConversationEmptyState,
-  toast,
-} from "@vvedantb/ui";
+import { Button, ConversationEmptyState, toast } from "@vvedantb/ui";
 import { api, type AIModel } from "@eva/backend";
 import { isOtherUserChatMessage, type MentionItem } from "@eva/shared";
 import { ChatMessage } from "@/lib/components/chat/ChatMessage";
-import type { ChatRepo } from "@/lib/components/chat/chatBodyUtils";
+import type {
+  ChatParentId,
+  ChatRepo,
+} from "@/lib/components/chat/chatBodyUtils";
 import {
   CommentMentionInput,
   type CommentMentionInputHandle,
@@ -39,34 +36,41 @@ const EVA_MENTION_ITEMS: MentionItem[] = [
 function ignoreExpand(): void {}
 
 /**
- * A reply thread opened over the coordinator chat, Slack style: the message
- * on top, its replies below in the chat's own bubbles, and a composer. ↑ and
- * ↓ step to the previous and next thread in the chat; ✕ or Escape closes.
+ * A reply thread in the side panel beside the coordinator chat, Slack style:
+ * the message on top, its replies below in the chat's own bubbles, and a
+ * composer pinned at the bottom. ↑ and ↓ step to the previous and next thread
+ * in the chat; ✕ or Escape closes.
  */
 export function ReplyThreadView({
   rootId,
+  chatParentId,
   repo,
   model,
-  previousRootId,
-  nextRootId,
   onOpen,
   onClose,
 }: {
   rootId: string;
+  /** The chat the thread belongs to: its other threads for ↑ and ↓. */
+  chatParentId: ChatParentId;
   repo: ChatRepo;
   /** The chat's composer model: a reply that wakes Eva runs on it. */
   model: AIModel;
-  previousRootId: string | undefined;
-  nextRootId: string | undefined;
   onOpen: (rootId: string) => void;
   onClose: () => void;
 }) {
   const thread = useQuery(api.messages.listReplies, { rootId });
   const currentUserId = useQuery(api.auth.me);
+  const roots = useQuery(api.messages.listThreadRoots, {
+    parentId: chatParentId,
+  });
+  const index = roots ? roots.findIndex((id) => id === rootId) : -1;
+  const previousRootId = index > 0 && roots ? roots[index - 1] : undefined;
+  const nextRootId =
+    index !== -1 && roots ? roots[index + 1] : undefined;
 
   return (
     <div
-      className="absolute inset-0 z-10 flex flex-col bg-background"
+      className="flex h-full min-h-0 flex-col"
       onKeyDown={(event) => {
         if (event.key === "Escape") onClose();
       }}
@@ -111,8 +115,10 @@ export function ReplyThreadView({
           title="This message is gone."
         />
       ) : (
-        <Conversation className="min-h-0 flex-1">
-          <ConversationContent className="mx-auto w-full max-w-3xl gap-3 p-3">
+        // A plain scroll area: a thread is short, and the chat's stick-to-
+        // bottom container showed "Scroll to end" over three replies.
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="flex flex-col gap-3 p-3">
             {thread
               ? [thread.root, ...thread.replies].map((message, index) => (
                   <div
@@ -135,10 +141,10 @@ export function ReplyThreadView({
                   </div>
                 ))
               : null}
-          </ConversationContent>
-        </Conversation>
+          </div>
+        </div>
       )}
-      <div className="shrink-0 px-3 pb-3">
+      <div className="shrink-0 p-3 pt-0">
         <ReplyComposer key={rootId} rootId={rootId} model={model} />
       </div>
     </div>

@@ -284,6 +284,27 @@ export const listReplies = authQuery({
 });
 
 /**
+ * A chat's thread roots in transcript order, for the thread panel's previous
+ * and next: only roots carry `lastReplyAt`, so the index skips every other row.
+ */
+export const listThreadRoots = authQuery({
+  args: { parentId: parentIdValidator },
+  returns: v.array(v.id("messages")),
+  handler: async (ctx, args) => {
+    await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
+    const roots = await ctx.db
+      .query("messages")
+      .withIndex("by_parent_and_last_reply_at", (q) =>
+        q.eq("parentId", args.parentId).gt("lastReplyAt", 0),
+      )
+      .take(MAX_THREAD_REPLIES);
+    return roots
+      .sort((a, b) => a._creationTime - b._creationTime)
+      .map((root) => root._id);
+  },
+});
+
+/**
  * Whether a chat has any message created before `before`: tells the web app
  * if history sits above its live rows. Reads at most one row.
  */
