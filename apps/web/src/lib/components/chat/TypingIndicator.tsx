@@ -41,6 +41,19 @@ function TypingDots() {
   );
 }
 
+/** The coordinator's live turn in its bubble: "Eva is typing" and the dots. */
+export function EvaTypingLine() {
+  return (
+    <span
+      aria-live="polite"
+      className="flex items-center gap-2 text-xs text-muted-foreground"
+    >
+      Eva is typing
+      <TypingDots />
+    </span>
+  );
+}
+
 /**
  * Shows which teammates are typing in the current conversation: a stack of
  * initial avatars, a name label, and an animated dot pulse. Renders nothing

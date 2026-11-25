@@ -102,7 +102,7 @@ import { useSkillSuggestions } from "@/chat/useSkillSuggestions";
 import { toReviewComment, usePendingLineComments } from "@/diff/prDiffStore";
 import { useAttachments } from "@/chat/useAttachments";
 import { type Chat, useChatModelPick } from "@/chat/useChatModelPick";
-import { TypingIndicator } from "@/chat/TypingIndicator";
+import { EvaTypingText, TypingIndicator } from "@/chat/TypingIndicator";
 import { useDraftSync } from "@/chat/useDraftSync";
 import { useTypingPresence } from "@/chat/useTypingPresence";
 import { useMentionComposer } from "@/chat/useMentionComposer";
@@ -930,7 +930,10 @@ function ChatMessageRow({
       {message.content ? <UserMessageText content={message.content} /> : null}
     </>
   );
-  const replyBody = isUser ? null : live ? (
+  // The coordinator chats like a person: "Eva is typing…" while it works, the steps only once it is done.
+  const replyBody = isUser ? null : live && evaBubble ? (
+    <EvaTypingText />
+  ) : live ? (
     <LiveAssistantMessage streamingEntityId={live} messageId={message._id} />
   ) : (
     <AssistantMessage
