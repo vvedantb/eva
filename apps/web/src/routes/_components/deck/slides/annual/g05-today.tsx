@@ -16,7 +16,8 @@ interface Column {
 
 /**
  * The Today page: a daily stand-up written by an automation, per app, since
- * 20 August 2026. The second card is the plan, so it is labelled Next.
+ * 20 August 2026. The second card is being built now: a personal live
+ * dashboard (Eva session #1042, draft PR #1469, 23 November 2026).
  */
 const COLUMNS: readonly Column[] = [
   {
@@ -28,11 +29,11 @@ const COLUMNS: readonly Column[] = [
     ],
   },
   {
-    label: "Next",
+    label: "In progress",
     items: [
       "Live, not once a day",
-      "The status of each project",
-      "Where we are, for the business team",
+      "Needs you, in progress, merged",
+      "Where every project is, for the business team",
     ],
   },
 ];

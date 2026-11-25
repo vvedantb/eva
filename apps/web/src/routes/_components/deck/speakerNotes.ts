@@ -529,10 +529,12 @@ So here's the slider those choices produced.`,
 
   "a08-ahead": `So Eva now finishes work faster than we can check it in, and that changes where the hard part is.
 It used to be building the thing; now it's deciding, and checking, either side of the build.
-So these are the three things for next year: automate the release, guard the irreversible, and software that fits us.
+So these are the four things for next year: automate the release, guard the irreversible, software that fits us, and many agents with one coordinator.
 → First, automate the release, which is the one lighting up: marking work ready should be the last human step, like it already is for Eva itself.
 Then guard the irreversible, so people spend their attention on data, permissions and anything that's hard to undo.
 And software that fits us, meaning tools shaped around how we work, not the other way round.
+And the last one I've literally just started planning: each thread gets its own agent, its own branch and its own workspace, and the main chat becomes the coordinator.
+The hard bits there are deciding the merge order, keeping the cost down when five threads means five workspaces, and stopping the main chat drowning in updates.
 None of these are dated commitments, they're the direction.
 → So the question stops being how fast can we build it, and becomes how fast can we decide.
 And alongside Eva, the product it was built for kept moving: CarePulse.`,
@@ -616,14 +618,15 @@ But skills help it write the code, the understanding still has to come from me: 
 Those two parts went live at the start of November.
 → And next, the plan is to use all that data to generate new lints, which are automatic code rules, and checks with Jev, so the agent writes code we're happy to just merge.
 That last card says Next cos it's the plan, it's not built yet.
+But the first one's already queued up: Lauren's "no comments" skill, which we'll apply across CarePulse and then turn into a lint rule, so it's enforced automatically.
 And the same kind of data, shown to the business team, is the Today page.`,
 
   "annual-g05-today": `So normally, if you're on the business team and want to know what changed in an app, you'd have to ask a developer or read the code.
 The Today page is where you can just see it, in plain words.
 → So today, every day an automation writes a stand-up for each app: what merged into main, so what actually went live, and what's new in the app.
 That's been running since August.
-→ And next, we can evolve it to be live, not once a day, and show the status of each project, so the business team gets a better view of where every project's at.
-That one's an idea, not a commitment, which is why it says Next.
+→ And that's already in progress: I'm rebuilding it as a live dashboard, not once a day, with what needs you, what's in progress, and what's merged.
+So the business team gets a much better view of where every project's at, without having to ask anyone.
 And if building is getting this fast, it's worth asking where the hard part is now: the bottleneck has moved.`,
 
   "annual-g06-understanding": `So AI has taken away the coding, but it hasn't taken away the understanding, and it shouldn't.
