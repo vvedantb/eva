@@ -85,7 +85,7 @@ function badgeGroup(label: string, fill: string, fg: string): string {
   );
 }
 
-/** `countUnread` saturates at 100, so anything above 99 is reported as "99+". */
+/** Counts above 99 show as "99+". */
 export function formatBadgeLabel(count: number): string {
   return count > 99 ? "99+" : String(count);
 }

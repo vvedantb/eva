@@ -2,18 +2,12 @@ import { ConvexError, v, type Infer } from "convex/values";
 import { internalMutation, type MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import {
-  authQuery,
   getProjectWithAccess,
   hasRepoAccess,
   normalizeIdOrThrow,
 } from "../functions";
 import { createTodoTask } from "../_agentTasks/mutations";
 import { latestChatMessageId, resolveChatParent } from "../_chat/chatParent";
-import {
-  coordinatorAutoTurnsInLastHour,
-  isCoordinatorPaused,
-  MAX_COORDINATOR_AUTO_TURNS_PER_HOUR,
-} from "./coordinatorWake";
 
 /**
  * The tasks a project's coordinator creates (`create_task`,
@@ -119,30 +113,4 @@ export const createTasksFromCoordinator = internalMutation({
           : {}),
       })),
     }),
-});
-
-/**
- * The coordinator's automatic turns: whether the hourly cap holds a wake-up
- * back (the project then needs a person), and how many it had in the last
- * hour.
- */
-export const getCoordinatorState = authQuery({
-  args: { projectId: v.id("projects") },
-  returns: v.object({
-    paused: v.boolean(),
-    autoTurnsLastHour: v.number(),
-    maxAutoTurnsPerHour: v.number(),
-  }),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.projectId, ctx.userId);
-    const [paused, autoTurnsLastHour] = await Promise.all([
-      isCoordinatorPaused(ctx.db, args.projectId),
-      coordinatorAutoTurnsInLastHour(ctx.db, args.projectId, Date.now()),
-    ]);
-    return {
-      paused,
-      autoTurnsLastHour,
-      maxAutoTurnsPerHour: MAX_COORDINATOR_AUTO_TURNS_PER_HOUR,
-    };
-  },
 });

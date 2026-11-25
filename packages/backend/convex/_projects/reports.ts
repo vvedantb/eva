@@ -17,10 +17,7 @@ import { isEntityDeleted } from "../numId";
 import { sessionOwner, findOwnedSession } from "../_sessions/owner";
 import { ensureTaskChat } from "../_sessions/ownedSession";
 import type { SessionChatContext } from "../_sessionChats/helpers";
-import {
-  releaseHeldCoordinatorWakes,
-  requestCoordinatorWake,
-} from "./coordinatorWake";
+import { requestCoordinatorWake } from "./coordinatorWake";
 import { startProjectTask, taskLabel } from "./scheduler";
 import { taskWorkSessionBusy } from "../_taskWorkflow/startRun";
 
@@ -182,9 +179,8 @@ async function canResumeAskingTask(
 /**
  * A person sent `message` in a session chat. In a child task's chat with an
  * open ask, the message is the answer: the ask closes and the task's next run
- * starts with it (true; the caller sends nothing more). In a coordinator's
- * chat, wake-ups the hourly cap held are folded into this turn. Otherwise
- * nothing (false). `insertUserRow`: the caller has not stored the message.
+ * starts with it (true; the caller sends nothing more). Otherwise nothing
+ * (false). `insertUserRow`: the caller has not stored the message.
  */
 export async function routePersonChatMessage(
   ctx: MutationCtx,
@@ -197,10 +193,6 @@ export async function routePersonChatMessage(
 ): Promise<boolean> {
   const { chat, session } = params.context;
   const owner = sessionOwner(session);
-  if (owner.kind === "project") {
-    await releaseHeldCoordinatorWakes(ctx, owner.projectId);
-    return false;
-  }
   if (owner.kind !== "task") return false;
   const task = await ctx.db.get(owner.taskId);
   if (!task?.projectId) return false;

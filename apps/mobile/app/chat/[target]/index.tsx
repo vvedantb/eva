@@ -108,7 +108,6 @@ import { useTypingPresence } from "@/chat/useTypingPresence";
 import { useMentionComposer } from "@/chat/useMentionComposer";
 import { WEB_URL } from "@/config";
 import { useSessionActions } from "@/sessions/useSessionActions";
-import { CoordinatorPausedBanner } from "@/projects/CoordinatorPausedBanner";
 import { textColor, useScheme } from "@/ui/theme";
 import { useChatTranscript } from "@/chat/useChatTranscript";
 
@@ -545,7 +544,6 @@ export default function ChatScreen() {
               <>
                 {/* Not gated by simple view, as the web: the user set this goal and can clear it. */}
                 <GoalBanner chatId={chat.session?.chatId ?? chat.task?.sessionChatId ?? chat.project?.sessionChatId} target={chat.target} />
-                {chat.project ? <CoordinatorPausedBanner projectId={chat.project.id} /> : null}
                 {chat.session && canReply ? (
                   <PublishRecoveryBanner sessionId={chat.session.id} newest={newestMessage} isSandboxActive={chat.sandboxActive} />
                 ) : null}
