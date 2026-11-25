@@ -7,7 +7,6 @@ import { Button, Spinner } from "@vvedantb/ui";
 import {
   DEFAULT_PREVIEW_PORT,
   PREVIEW_WAKE_KINDS,
-  previewProxyPort,
   previewWakeSearchSchema,
   type PreviewWakeKind,
 } from "@eva/shared";
@@ -58,7 +57,6 @@ function PreviewWake() {
   const wakeKind: PreviewWakeKind = isWakeKind(kind) ? kind : "session";
   const ensureActive = useAction(api.sandboxWake.ensureEntitySandboxActive);
   const getPreviewUrl = useAction(api.sandbox.getPreviewUrl);
-  const mintPreviewGrant = useAction(api.previewGrant.mintPreviewGrant);
   const convex = useConvex();
   const [phase, setPhase] = useState<Phase>({ kind: "opening" });
   const [attempt, setAttempt] = useState(0);
@@ -142,7 +140,9 @@ function PreviewWake() {
     };
 
     // Fast path: a sandbox that is already up needs no wake and no readiness
-    // probe. Mint the grant and go; if the dev server is down the preview page
+    // probe. `getPreviewUrl` without `checkReady` still starts the auth proxy
+    // when it is not running (nothing else does after a resume), then returns
+    // the URL with a fresh grant. If the dev server is down the preview page
     // says so itself. Retries skip this and run the full wake.
     const openActive = async (): Promise<boolean> => {
       if (attempt > 0) return false;
@@ -150,16 +150,15 @@ function PreviewWake() {
       if (cancelled || fresh?.status !== "active" || !fresh.sandboxId) {
         return false;
       }
-      const port = search.port ?? fresh.devPort ?? DEFAULT_PREVIEW_PORT;
-      const url = await mintPreviewGrant({
+      const preview = await getPreviewUrl({
         sandboxId: fresh.sandboxId,
         repoId: fresh.repoId,
-        port: previewProxyPort(port),
-        path: search.path ?? "/",
+        port: search.port ?? fresh.devPort ?? DEFAULT_PREVIEW_PORT,
       });
       if (cancelled) return true;
+      if (preview.url.length === 0) return false;
       setPhase({ kind: "serving" });
-      window.location.replace(url);
+      window.location.replace(buildUrlWithPath(preview.url, search.path ?? "/"));
       return true;
     };
 
@@ -195,7 +194,6 @@ function PreviewWake() {
     search.path,
     ensureActive,
     getPreviewUrl,
-    mintPreviewGrant,
     convex,
   ]);
   /* eslint-enable no-effect/no-event-handler */
