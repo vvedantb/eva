@@ -220,6 +220,7 @@ import type * as _projects_internal from "../_projects/internal.js";
 import type * as _projects_interviewState from "../_projects/interviewState.js";
 import type * as _projects_mutations from "../_projects/mutations.js";
 import type * as _projects_prSync from "../_projects/prSync.js";
+import type * as _projects_previewGate from "../_projects/previewGate.js";
 import type * as _projects_queries from "../_projects/queries.js";
 import type * as _projects_reports from "../_projects/reports.js";
 import type * as _projects_runSettings from "../_projects/runSettings.js";
@@ -816,6 +817,7 @@ declare const fullApi: ApiFromModules<{
   "_projects/interviewState": typeof _projects_interviewState;
   "_projects/mutations": typeof _projects_mutations;
   "_projects/prSync": typeof _projects_prSync;
+  "_projects/previewGate": typeof _projects_previewGate;
   "_projects/queries": typeof _projects_queries;
   "_projects/reports": typeof _projects_reports;
   "_projects/runSettings": typeof _projects_runSettings;
