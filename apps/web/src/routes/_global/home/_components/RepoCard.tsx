@@ -37,11 +37,9 @@ export type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 export function RepoCard({
   repo,
   index,
-  onManageApps,
 }: {
   repo: Repo;
   index: number;
-  onManageApps: () => void;
 }) {
   const [renameOpen, setRenameOpen] = useState(false);
   const toggleHidden = useMutation(
@@ -64,7 +62,6 @@ export function RepoCard({
   const menuProps = {
     hasLogo: Boolean(repo.logoUrl),
     onRename: () => setRenameOpen(true),
-    onManageApps,
     onPickLogo: () => fileInputRef.current?.click(),
     onRemoveLogo: () => removeLogo(repo._id),
     onHide: () =>

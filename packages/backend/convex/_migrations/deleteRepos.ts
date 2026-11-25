@@ -68,14 +68,6 @@ export const deleteRepoStep = internalMutation({
           .withIndex("by_repo", (q) => q.eq("repoId", repoId))
           .collect();
         for (const project of projects) {
-          const details = await ctx.db
-            .query("projectDetails")
-            .withIndex("by_project", (q) => q.eq("projectId", project._id))
-            .collect();
-          for (const d of details) {
-            await ctx.db.delete(d._id);
-            deleted++;
-          }
           deleted += await deleteChatLogEntries(ctx, {
             kind: "project",
             projectId: project._id,
@@ -115,15 +107,6 @@ export const deleteRepoStep = internalMutation({
             .collect();
           for (const c of comments) {
             await ctx.db.delete(c._id);
-            deleted++;
-          }
-
-          const deps = await ctx.db
-            .query("taskDependencies")
-            .withIndex("by_task", (q) => q.eq("taskId", task._id))
-            .collect();
-          for (const d of deps) {
-            await ctx.db.delete(d._id);
             deleted++;
           }
 

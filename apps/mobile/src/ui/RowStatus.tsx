@@ -1,5 +1,5 @@
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconHelpCircle } from "@tabler/icons-react-native";
+import { IconAlertTriangle, IconHelpCircle } from "@tabler/icons-react-native";
 import { LoadingState, StatusDot, type StatusTone } from "@vvedantb/native-ui/primitives";
 import { useIsFocused } from "expo-router";
 import { View } from "react-native";
@@ -19,6 +19,15 @@ export function AwaitingAnswerMark() {
       accessibilityLabel="Waiting for your answer"
     />
   );
+}
+
+/**
+ * "Needs you": the web `NeedsYouMark` (a warning-coloured triangle), on a
+ * project or project task that waits for a person.
+ */
+export function NeedsYouMark({ size = 14 }: { size?: number }) {
+  const scheme = useScheme();
+  return <IconAlertTriangle size={size} strokeWidth={2} color={EVA_THEME[scheme].warning} accessibilityLabel="Needs you" />;
 }
 
 /**

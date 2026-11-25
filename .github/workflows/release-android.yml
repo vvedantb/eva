@@ -32,7 +32,7 @@ concurrency:
 
 jobs:
   release:
-    uses: vvedantb/packages/.github/workflows/release-android-apk.yml@main
+    uses: vvedantb/workflows/.github/workflows/release-android-apk.yml@main
     with:
       app_name: eva
       release_title: Eva

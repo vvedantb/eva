@@ -18,14 +18,9 @@ import {
 /** The static icon shipped in public/, restored when this unmounts. */
 const PLAIN_ICON_HREF = "/favicon.svg";
 
-/** Theme tokens are space-separated sRGB channels — SVG fill needs `rgb()`. */
-function rgbChannels(channels: string): string {
-  return `rgb(${channels})`;
-}
-
 /**
  * Badge fill/fg from the chosen accent (Settings → Theme), matching how
- * `applyCustomThemeVars` paints `--primary` / `--primary-foreground`.
+ * `applyCustomThemeVars` paints `--accent` / `--accent-foreground`.
  */
 function badgeAccentColors(
   appearance: "light" | "neutral" | "dark",
@@ -34,8 +29,8 @@ function badgeAccentColors(
   const colors = lookupAccent(accentColor) ?? ACCENT_COLORS.zinc;
   const tone = appearance === "light" ? colors.light : colors.dark;
   return {
-    fill: rgbChannels(tone.primary),
-    fg: rgbChannels(tone.foreground),
+    fill: tone.primary,
+    fg: tone.foreground,
   };
 }
 

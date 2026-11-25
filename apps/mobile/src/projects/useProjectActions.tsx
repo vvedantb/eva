@@ -1,5 +1,6 @@
-import { PROJECT_PHASES, api, type Id } from "@eva/backend";
-import { PROJECT_PHASE_LABELS, entityHref, type ProjectPhase } from "@eva/shared";
+import { api, type Id } from "@eva/backend";
+import { entityHref, readableServerError } from "@eva/shared";
+import { projectDeleteNote } from "@eva/shared/projectView";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconClipboard, IconCopy, IconGitBranch, IconLink, IconTrash, IconUserPlus } from "@tabler/icons-react-native";
 import { ConfirmDialog, SheetRow, MenuDivider, MenuSheet, SubmenuRow } from "@vvedantb/native-ui/primitives";
@@ -10,7 +11,6 @@ import * as Clipboard from "expo-clipboard";
 import { useState, type ReactNode } from "react";
 import { Text } from "react-native";
 import { WEB_URL } from "@/config";
-import { phaseAppearance } from "@/projects/phaseAppearance";
 import { userLabel } from "@/quickTasks/QuickTaskListOptions";
 import { useScheme } from "@/ui/theme";
 
@@ -20,21 +20,21 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
 export interface ProjectMenuTarget {
   _id: Id<"projects">;
   title: string;
-  phase: ProjectPhase;
   numId?: number;
   projectLead?: Id<"users">;
   branchName?: string;
 }
 
-type Page = "root" | "phase" | "lead" | "copy";
+type Page = "root" | "lead" | "copy";
 
 /**
  * The web project menu (`ProjectCardMenuItems`) on the phone: a long press
  * on a row, or the project header "…", opens it as a bottom sheet
- * (`openSheet`), with a page per web submenu: Phase, Project Lead and Copy
+ * (`openSheet`), with a page per web submenu: Project Lead and Copy
  * (Title, Link, Branch name), then Delete. Delete asks first, with the web
- * `ProjectDeleteDialog`, and has no Undo, as the web (`deleteCascade`
- * deletes the tasks too and nothing restores them); `onDeleted` runs after.
+ * `ProjectDeleteDialog`, and has no Undo, as the web (nothing restores a
+ * deleted project); `onDeleted` runs after. A refusal (a child task runs)
+ * toasts its reason.
  * The rest act at once. Writes are the web mutations. Render `dialogs` once.
  * Not here from the web menu: Edit details, Open in new tab and the PR submenus.
  */
@@ -58,7 +58,7 @@ export function useProjectActions({
   const [deleteTarget, setDeleteTarget] = useState<ProjectMenuTarget | null>(null);
   const currentUserId = useQuery(api.auth.me, {});
   const updateProject = useMutation(api.projects.update);
-  const deleteProject = useMutation(api.projects.deleteCascade);
+  const deleteProject = useMutation(api.projects.remove);
 
   const close = () => {
     setTarget(null);
@@ -81,7 +81,6 @@ export function useProjectActions({
         return (
           <>
             {extraRows?.(close)}
-            <SubmenuRow icon={phaseAppearance(project.phase, scheme).icon} title="Phase" onPress={() => setPage("phase")} />
             <SubmenuRow icon={IconUserPlus} title="Project Lead" onPress={() => setPage("lead")} />
             <MenuDivider />
             <SubmenuRow icon={IconCopy} title="Copy" onPress={() => setPage("copy")} />
@@ -97,19 +96,6 @@ export function useProjectActions({
             />
           </>
         );
-      case "phase":
-        return PROJECT_PHASES.map((phase) => {
-          const { icon: Icon, text } = phaseAppearance(phase, scheme);
-          return (
-            <SheetRow
-              key={phase}
-              leading={<Icon size={20} color={text} />}
-              title={PROJECT_PHASE_LABELS[phase]}
-              active={project.phase === phase}
-              onPress={() => act(() => updateProject({ id: project._id, phase }), "Couldn't change the phase")}
-            />
-          );
-        });
       case "lead":
         return (
           <>
@@ -153,7 +139,6 @@ export function useProjectActions({
 
   const titles: Record<Page, string> = {
     root: target?.title ?? "",
-    phase: "Phase",
     lead: "Project Lead",
     copy: "Copy",
   };
@@ -186,7 +171,7 @@ export function useProjectActions({
             </Text>
             ?
             <Text style={{ color: theme.warning }}>
-              {"\n\nThis will permanently delete the project and all associated tasks, agent runs, and dependencies."}
+              {`\n\n${projectDeleteNote(1)}`}
             </Text>
             {"\n\nThis action cannot be undone."}
           </>
@@ -200,7 +185,8 @@ export function useProjectActions({
               toast.success("Project deleted");
               onDeleted?.();
             })
-            .catch(() => toast.error("Couldn't delete project"));
+            // It refuses while a child task runs: say why.
+            .catch((error: Error) => toast.error(readableServerError(error, "Couldn't delete project")));
         }}
       />
     </>

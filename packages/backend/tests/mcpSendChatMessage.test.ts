@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { recordPullRequest } from "../convex/_pullRequests/store";
@@ -11,8 +11,8 @@ import {
 } from "../convex/mcp/orchestratorDelivery";
 import { normalizeAIModel } from "../convex/_validators/aiModels";
 import { z } from "zod";
+import { modules } from "./_helpers/convexModules";
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 const PR_URL = "https://github.com/vvedantb/eva/pull/664";
 const TASK_PR_URL = "https://github.com/vvedantb/eva/pull/665";
@@ -85,7 +85,6 @@ async function fixture() {
       repoId,
       userId: ownerUserId,
       title: "Billing revamp",
-      phase: "in_progress",
       rawInput: "revamp billing",
       numId: 42,
       branchName: "eva/project-billing",
@@ -195,8 +194,8 @@ describe("resolving the chat an MCP caller named", () => {
       );
       expect(resolved?.kind).toBe("project");
       expect(resolved?.targetId).toBe(f.projectId);
-      // A project tracks a phase where a session tracks a status.
-      expect(resolved?.status).toBe("in_progress");
+      // A project reports its derived stage: no tasks yet, so todo.
+      expect(resolved?.status).toBe("todo");
     }
   });
 

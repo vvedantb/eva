@@ -51,7 +51,7 @@ export const get = authQuery({
   },
 });
 
-/** Resolves a target the caller may write to, or throws. */
+/** Resolves a target the caller may write to (repo access), or throws. */
 async function resolveWritableChat(ctx: AuthMutationCtx, target: string) {
   const resolved = await resolveMobileChat(ctx.db, target);
   if (!resolved) throw new Error("Chat not found");

@@ -23,7 +23,6 @@ import {
 import { listLiveSessionChats } from "./_sessionChats/helpers";
 import { requestSessionSandboxStop } from "./_sessions/sandbox";
 import { usageLimitHoldFor } from "./_queues/helpers";
-import { ownerHoldsSession } from "./_sessions/ownerState";
 import { sessionOwner } from "./_sessions/owner";
 import {
   getSandboxActivity,
@@ -362,9 +361,6 @@ async function inspectSession(
       await openChatEntityIdsFor(ctx.db, sessionId),
     ) ||
     chatBusy ||
-    // A project's build or interview holds its session's VM between turns
-    // (`ownerHoldsSession`), e.g. between two build tasks: not idle.
-    (await ownerHoldsSession(ctx.db, session)) ||
     // Streaming rows keyed by the session itself: a session that predates
     // chats and has not been opened (so has no Main chat row) yet.
     (await hasPendingWork(ctx, String(sessionId)));

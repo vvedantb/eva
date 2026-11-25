@@ -243,13 +243,7 @@ export const setup = internalMutation({
       userId,
       title: "Focal project",
       rawInput: filler(1, 400),
-      phase: "in_progress",
-      planningMode: "interview",
       lastTurnFinishedAt: now - DAY,
-    });
-    await db.insert("projectDetails", {
-      projectId,
-      conversationHistory: [{ role: "user", content: filler(2, 600) }],
     });
     const taskId = await db.insert("agentTasks", {
       title: "Focal task",
@@ -603,17 +597,8 @@ const SEEDERS: Record<SeedChunkKind, Seeder> = {
       userId,
       title: `Project ${i}`,
       rawInput: filler(i, 400),
-      phase: i % 4 === 0 ? "completed" : "in_progress",
-      planningMode: i % 2 === 0 ? "interview" : "tasks_only",
       lastTurnFinishedAt: ago(now, i, total) + DAY,
       ...(i % 10 === 9 ? { deletedAt: ago(now, i, total) } : {}),
-    });
-    await db.insert("projectDetails", {
-      projectId,
-      conversationHistory: [
-        { role: "user", content: filler(i, 600) },
-        { role: "assistant", content: filler(i + 1, 1200) },
-      ],
     });
     for (let t = 0; t < 3; t++) {
       await insertTaskWithChildren(db, refs, i * 3 + t, total * 3, projectId);

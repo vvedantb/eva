@@ -15,12 +15,10 @@ import {
 } from "../validators";
 import { storedComposerTraits } from "../_shared/composerTraits";
 import {
-  buildProjectBranchName,
-  buildTaskBranchName,
   resolveProjectBranchName,
+  taskBranchName,
 } from "../_git/branchNames";
 import {
-  createSessionChat,
   ensureMainChat,
   type ChatSettingsSource,
 } from "../_sessionChats/helpers";
@@ -28,30 +26,29 @@ import { resolveSessionBaseBranch } from "./baseBranch";
 import { archiveSession, isSessionArchived, unarchiveSession } from "./archive";
 import {
   findOwnedSession,
-  findProjectTaskChat,
   findWorkSession,
-  isTerminalProjectPhase,
   sessionOwnerEntityId,
+  sessionOwnerProjectId,
   workSessionOwner,
   type OwnedSessionOwner,
   type OwnerChat,
   type OwnerEntity,
 } from "./owner";
 import { requestSessionSandboxStop } from "./sandbox";
-import { ownerHoldsSession, projectHoldsSession } from "./ownerState";
 import { hasOpenChatTurn } from "../_chat/turnProjection";
 import { markAllRunningExited } from "../backgroundProcesses";
 import { nextSandboxStartAttempt } from "../_sandbox/transitions";
+import { taskRunSettings } from "../_projects/runSettings";
 
 /**
- * The hidden session behind a quick task (`owner: { kind: "task" }`) or a
- * project (`owner: { kind: "project" }`). The owner stays the product
- * surface; its session runs the sandbox and the chat. A project's tasks have
- * no session of their own: they work on the project's.
+ * The hidden session behind a task (`owner: { kind: "task" }`, a quick task
+ * or a project's child task) or a project's coordinator
+ * (`owner: { kind: "project" }`). The owner stays the product surface; its
+ * session runs the sandbox and the chat.
  *
  *   owner created ──first need──▶ ensureWorkSession (one session, never two)
  *   task done / cancelled / deleted,
- *   project completed / cancelled / deleted ──▶ retireOwnedSession (stop + archive)
+ *   project deleted ──▶ retireOwnedSession (stop + archive)
  *   reopened / restored ──▶ reviveOwnedSession (unarchive)
  */
 
@@ -80,9 +77,8 @@ export async function loadOwnerEntity(
 
 /**
  * Returns the session the task or project works on (`workSessionOwner`),
- * inserting it (and its Main chat) the first time anything needs it. A
- * project task gets its project's session. The lookup and the insert run in
- * the caller's mutation, so `findOwnedSession`'s `.unique()` never sees two
+ * inserting it (and its Main chat) the first time anything needs it. The
+ * lookup and the insert run in the caller's mutation, so `findOwnedSession`'s `.unique()` never sees two
  * rows. Starts no sandbox and generates no title: the session borrows its
  * owner's title and stays `closed` until something starts it. It takes a
  * normal session `numId`; the visible session numbers may skip it.
@@ -91,13 +87,45 @@ export async function ensureWorkSession(
   ctx: MutationCtx,
   target: OwnerEntity,
 ): Promise<OwnedSessionContext> {
-  const owner = workSessionOwner(target);
-  const existing = await findOwnedSession(ctx.db, owner);
+  const found = await findWorkSession(ctx.db, target);
+  const existing = found && (await reviveCoordinatorSession(ctx, found));
   if (existing) {
     return { session: existing, mainChat: await ensureMainChat(ctx, existing) };
   }
-  const entity = await workSessionEntity(ctx.db, target);
-  const seed = ownedSessionSeed(entity);
+  const session = await insertWorkSession(ctx, target);
+  return { session, mainChat: await ensureMainChat(ctx, session) };
+}
+
+/**
+ * A coordinator (project-owned) session that an old phase-based close
+ * archived comes back live on use: a project has no closed state (decision
+ * 19). `ensureWorkSession` and every chat send call it, until the
+ * `convertProjects` migration revives the rest. Idempotent; leaves other
+ * sessions and a deleted project's session as they are.
+ */
+export async function reviveCoordinatorSession(
+  ctx: MutationCtx,
+  session: Doc<"sessions">,
+): Promise<Doc<"sessions">> {
+  const projectId = sessionOwnerProjectId(session);
+  if (projectId === undefined || !isSessionArchived(session)) return session;
+  const project = await ctx.db.get(projectId);
+  if (!project || project.deletedAt !== undefined) return session;
+  await unarchiveSession(ctx, session._id, { touch: false });
+  return { ...session, archive: undefined };
+}
+
+/**
+ * Inserts the session the task or project works on, without its Main chat.
+ * `ensureWorkSession` adds a new Main chat; Step 9's conversion instead moves
+ * a task's old chat in as Main. The caller checks that none exists.
+ */
+export async function insertWorkSession(
+  ctx: MutationCtx,
+  target: OwnerEntity,
+): Promise<Doc<"sessions">> {
+  const owner = workSessionOwner(target);
+  const seed = ownedSessionSeed(target);
   const repo = await ctx.db.get(seed.repoId);
   if (!repo) throw new Error("Repository not found");
   const sessionId = await ctx.db.insert("sessions", {
@@ -111,32 +139,17 @@ export async function ensureWorkSession(
     branchName: seed.branchName,
     baseBranch: resolveSessionBaseBranch({ baseBranch: seed.baseBranch }, repo),
     // Its Main chat copies these (`insertMainChat`).
-    ...chatSeedFields(await chatSeedSettings(ctx.db, entity)),
+    ...chatSeedFields(await chatSeedSettings(ctx.db, target)),
     updatedAt: Date.now(),
   });
   const session = await ctx.db.get(sessionId);
   if (!session) throw new Error("Owned session was not created");
-  return { session, mainChat: await ensureMainChat(ctx, session) };
-}
-
-/** The entity that owns `target`'s work session: a project task's project. */
-async function workSessionEntity(
-  db: DatabaseReader,
-  target: OwnerEntity,
-): Promise<OwnerEntity> {
-  if (target.kind === "project" || target.task.projectId === undefined) {
-    return target;
-  }
-  const project = await db.get(target.task.projectId);
-  if (!project) throw new Error("Project not found");
-  return { kind: "project", project };
+  return session;
 }
 
 /**
- * The chat a task talks in: a quick task's Main chat, or a project task's own
- * chat in its project's session (`sessionChats.taskId`). A project task keeps
- * a chat apart from the project's, as before projects ran on sessions; it is
- * the one extra chat an owned session holds, and only this function opens it.
+ * The chat a task talks in: the Main chat of its own session, for a quick
+ * task and a project's child task alike.
  */
 export async function ensureTaskChat(
   ctx: MutationCtx,
@@ -146,19 +159,7 @@ export async function ensureTaskChat(
     kind: "task",
     task,
   });
-  if (task.projectId === undefined) return { session, chat: mainChat };
-  const existing = await findProjectTaskChat(ctx.db, task._id);
-  if (existing) return { session, chat: existing };
-  const chat = await createSessionChat(ctx, {
-    session,
-    createdBy: task.createdBy,
-    title: task.title,
-    inheritFrom: chatSeedFields(
-      await chatSeedSettings(ctx.db, { kind: "task", task }),
-    ),
-    taskId: task._id,
-  });
-  return { session, chat };
+  return { session, chat: mainChat };
 }
 
 /**
@@ -195,20 +196,24 @@ export type ChatSeed = typeof chatSeedValidator.type;
  * exists (and for a chat with no sticky `lastModel`). From then on the chat
  * keeps its own sticky picks, apart from the owner's run settings.
  *
- * Model: the owner's run model, else (a project task) its project's, else
- * the repo default, else `DEFAULT_AI_MODEL`. Traits: the model's defaults.
- * Account: the owner's.
+ * Model and account: the owner's run settings — a project's own, a task's
+ * `taskRunSettings` (a project task takes its project's until its first run,
+ * decision 20) — with the model falling back to the project's, then the repo
+ * default, then `DEFAULT_AI_MODEL`. Traits: the model's defaults.
  */
 export async function chatSeedSettings(
   db: DatabaseReader,
   entity: OwnerEntity,
 ): Promise<ChatSeed> {
-  const doc = entity.kind === "task" ? entity.task : entity.project;
+  const run =
+    entity.kind === "task"
+      ? await taskRunSettings(db, entity.task)
+      : entity.project;
   return {
-    model: normalizeAIModel(doc.model ?? (await ownerFallbackModel(db, entity))),
+    model: normalizeAIModel(run.model ?? (await ownerFallbackModel(db, entity))),
     traits: storedComposerTraits(null),
-    ...(doc.providerAccountId !== undefined
-      ? { providerAccountId: doc.providerAccountId }
+    ...(run.providerAccountId !== undefined
+      ? { providerAccountId: run.providerAccountId }
       : {}),
   };
 }
@@ -253,7 +258,7 @@ function ownedSessionSeed(entity: OwnerEntity) {
       title: task.title,
       // The task's own branch: its PRs stay owned by the task
       // (`resolvePrOwnerFromBranch`).
-      branchName: buildTaskBranchName(task._id),
+      branchName: taskBranchName(task),
       baseBranch: task.baseBranch,
     };
   }
@@ -270,8 +275,7 @@ function ownedSessionSeed(entity: OwnerEntity) {
 
 /**
  * True while an owned session holds its sandbox for something else: a turn
- * open (a chat reply or a run), a start/stop in flight, or a project's build
- * or interview (`ownerHoldsSession`). A new run or build waits (user starts
+ * open (a chat reply or a run) or a start/stop in flight. A new run waits (user starts
  * are refused, scheduled ones retry): the same one-agent-per-sandbox rule
  * the chat queue applies to runs and builds.
  */
@@ -284,7 +288,6 @@ export async function ownedSessionBusy(
   if (session.status === "starting" || session.status === "stopping") {
     return true;
   }
-  if (await ownerHoldsSession(db, session)) return true;
   return await hasOpenChatTurn(db, session._id);
 }
 
@@ -298,8 +301,6 @@ export async function mirrorOwnerIntoSession(
   ctx: MutationCtx,
   entity: OwnerEntity,
 ): Promise<void> {
-  // A project task's session is its project's: the project mirrors into it.
-  if (workSessionOwner(entity).kind !== entity.kind) return;
   const session = await findWorkSession(ctx.db, entity);
   if (!session) return;
   const seed = ownedSessionSeed(entity);
@@ -318,29 +319,12 @@ export async function mirrorOwnerIntoSession(
 const BRANCH_SYNC_RETRY_MS = 60_000;
 
 /**
- * A project's PR merged, so the next cycle works on a fresh branch version:
- * bumps `branchVersion` and the branch on the project, then moves the session
- * (`syncProjectSessionBranch`).
- */
-export async function rotateProjectBranch(
-  ctx: MutationCtx,
-  project: Doc<"projects">,
-): Promise<void> {
-  const nextVersion = (project.branchVersion ?? 1) + 1;
-  await ctx.db.patch(project._id, {
-    branchVersion: nextVersion,
-    branchName: buildProjectBranchName(project._id, nextVersion),
-  });
-  await syncProjectSessionBranch(ctx, project._id);
-}
-
-/**
- * The one writer of a project session's branch after insert (a merged PR's
- * rotation, a branch edit). The session's VM is checked out on the old
+ * The one writer of a project session's branch after insert (a branch
+ * edit). The session's VM is checked out on the old
  * branch, so it is deleted, a start in flight is fenced off by the bumped
  * start attempt (and so is a run's or interview's attach), and the next
  * start boots a fresh checkout — all in one write. While the session is busy
- * (a turn, a run, a build, an interview, a start or stop) the move waits and
+ * (a turn, a run, a start or stop) the move waits and
  * retries, so nothing running loses its VM.
  */
 export async function syncProjectSessionBranch(
@@ -404,12 +388,11 @@ export async function projectSandboxStatus(
   return session?.status;
 }
 
-type TaskStatusSource = Pick<Doc<"agentTasks">, "_id" | "projectId">;
+type TaskStatusSource = Pick<Doc<"agentTasks">, "_id">;
 
 /**
  * A task's sandbox status, the one rule the task page, lists and MCP share:
- * the status of the session it works on (`workSessionOwner`), or
- * undefined before that session exists.
+ * the status of its own session, or undefined before that session exists.
  */
 export async function taskSandboxStatus(
   db: DatabaseReader,
@@ -419,25 +402,16 @@ export async function taskSandboxStatus(
 }
 
 /**
- * `taskSandboxStatus` for a list: one indexed read per repo and owner kind
- * for live sessions, never one session read per row. A task absent from the
- * live map has a closed (or no) sandbox.
+ * `taskSandboxStatus` for a list: one indexed read per repo for live task
+ * sessions, never one session read per row. A task absent from the live map
+ * has a closed (or no) sandbox.
  */
 export async function liveTaskSandboxStatuses(
   db: DatabaseReader,
   repoIds: Iterable<Id<"githubRepos">>,
 ): Promise<(task: TaskStatusSource) => Doc<"sessions">["status"] | undefined> {
-  const ids = [...repoIds];
-  const [byTask, byProject] = await Promise.all([
-    liveOwnedSessionStatuses(db, ids, "task"),
-    liveOwnedSessionStatuses(db, ids, "project"),
-  ]);
-  return (task) => {
-    const owner = workSessionOwner(task);
-    return owner.kind === "project"
-      ? byProject.get(String(owner.projectId))
-      : byTask.get(String(owner.taskId));
-  };
+  const byTask = await liveOwnedSessionStatuses(db, repoIds, "task");
+  return (task) => byTask.get(String(task._id));
 }
 
 const LIVE_SANDBOX_STATUSES = ["active", "starting", "stopping"] as const;
@@ -481,7 +455,7 @@ export async function liveOwnedSessionStatuses(
 
 /**
  * The owner left the board (a task done/cancelled/deleted, a project
- * completed/cancelled/deleted): stop its sandbox, archive its session and
+ * deleted): stop its sandbox, archive its session and
  * start the 48h sandbox delete grace.
  */
 export async function retireOwnedSession(
@@ -503,12 +477,11 @@ export async function retireOwnedSession(
 }
 
 /**
- * The task moved to another repo or into a project: its session (sandbox,
- * branch checkout and chat are bound to the old repo / the quick-task path)
- * retires and stops belonging to the task (soft delete), so the next use
- * creates a fresh session where the task now lives (a project task works on
- * its project's session). The one place a task move touches its session;
- * called by every move mutation.
+ * The task moved to another repo: its session (sandbox, branch checkout and
+ * chat are bound to the old repo) retires and stops belonging to the task
+ * (soft delete), so the next use creates a fresh session in the new repo.
+ * The one place a task move touches its session; called by every move
+ * mutation.
  */
 export async function detachOwnedSession(
   ctx: MutationCtx,
@@ -521,18 +494,12 @@ export async function detachOwnedSession(
   await ctx.db.patch(session._id, { deletedAt: Date.now() });
 }
 
-/** Whether an edit moves a task off its session: new repo, or into a project. */
+/** Whether an edit moves a task off its session: a new repo. */
 export function taskMoveDetachesSession(
-  task: Pick<Doc<"agentTasks">, "repoId" | "projectId">,
-  next: { repoId?: Id<"githubRepos">; projectId?: Id<"projects"> | null },
+  task: Pick<Doc<"agentTasks">, "repoId">,
+  next: { repoId?: Id<"githubRepos"> },
 ): boolean {
-  const changesRepo =
-    next.repoId !== undefined && next.repoId !== task.repoId;
-  const entersProject =
-    task.projectId === undefined &&
-    next.projectId !== undefined &&
-    next.projectId !== null;
-  return changesRepo || entersProject;
+  return next.repoId !== undefined && next.repoId !== task.repoId;
 }
 
 /**
@@ -556,7 +523,7 @@ export function isTerminalTaskStatus(status: Doc<"agentTasks">["status"]) {
 /**
  * The one lifecycle mapping: an owner entering a terminal state retires its
  * session, one leaving it revives it. A task: done/cancelled. A project:
- * completed/cancelled. A project task has no session of its own.
+ * deleted.
  */
 async function syncOwnedSessionWithTerminal(
   ctx: MutationCtx,
@@ -571,26 +538,25 @@ async function syncOwnedSessionWithTerminal(
 /** Task status change → its session (`syncOwnedSessionWithTerminal`). */
 export async function syncOwnedSessionWithTaskStatus(
   ctx: MutationCtx,
-  task: Pick<Doc<"agentTasks">, "_id" | "projectId">,
+  task: Pick<Doc<"agentTasks">, "_id">,
   previous: Doc<"agentTasks">["status"],
   next: Doc<"agentTasks">["status"],
 ): Promise<void> {
-  // A project task's status does not touch its project's session.
-  const owner = workSessionOwner(task);
-  if (owner.kind !== "task") return;
   await syncOwnedSessionWithTerminal(
     ctx,
-    owner,
+    { kind: "task", taskId: task._id },
     isTerminalTaskStatus(previous),
     isTerminalTaskStatus(next),
   );
 }
 
 /**
- * Project phase (or delete) → its session. Reads the project's current
- * state rather than a transition, so it is safe to call after any write and
- * to run late (`syncProjectSessionLifecycle`): a completed, cancelled or
- * deleted project's session is retired, any other is live.
+ * Project delete → its session. Reads the project's current state rather
+ * than a transition, so it is safe to call after any write and to run late
+ * (`syncProjectSessionLifecycle`): a deleted project's session is retired,
+ * any other is live. The stored phase plays no part: a project has no closed
+ * state (decision 19), so its coordinator chat stays reachable when every
+ * task is done, and a session an old phase-based close archived revives.
  */
 export async function syncProjectSession(
   ctx: MutationCtx,
@@ -601,17 +567,7 @@ export async function syncProjectSession(
     findOwnedSession(ctx.db, { kind: "project", projectId }),
   ]);
   if (!project || !session) return;
-  const retired =
-    isTerminalProjectPhase(project.phase) || project.deletedAt !== undefined;
-  // The build or interview stops first; that mutation retires the session.
-  if (retired && !isSessionArchived(session) && projectHoldsSession(project)) {
-    await ctx.scheduler.runAfter(
-      0,
-      internal.buildWorkflow.releaseProjectSessionForRetire,
-      { projectId },
-    );
-    return;
-  }
+  const retired = project.deletedAt !== undefined;
   await syncOwnedSessionWithTerminal(
     ctx,
     { kind: "project", projectId },
@@ -620,10 +576,7 @@ export async function syncProjectSession(
   );
 }
 
-/**
- * `syncProjectSession` for phase writers that cannot import this module
- * (`functions.ts` stays a leaf): scheduled right after the write.
- */
+/** `syncProjectSession`, scheduled (callers that cannot import this module). */
 export const syncProjectSessionLifecycle = internalMutation({
   args: { projectId: v.id("projects") },
   returns: v.null(),

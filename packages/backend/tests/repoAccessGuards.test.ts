@@ -1,9 +1,10 @@
 import { convexTest } from "convex-test";
 import workflow from "@convex-dev/workflow/test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { cancelTrackedWorkflow } from "../convex/workflowManager";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * `authMutation` / `authQuery` only authenticate. Each public function below
@@ -12,7 +13,6 @@ import { cancelTrackedWorkflow } from "../convex/workflowManager";
  * team's doc, project, session or task. A stranger must now be refused.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const OWNER = "clerk|access-owner";
 const STRANGER = "clerk|access-stranger";
@@ -56,7 +56,6 @@ async function fixture() {
       userId: ownerUserId,
       title: "Billing",
       rawInput: "billing",
-      phase: "finalized",
       numId: 1,
     });
     const sessionId = await ctx.db.insert("sessions", {
@@ -141,22 +140,13 @@ describe("public functions refuse callers without repo access", () => {
     async () => {
       const f = await fixture();
       await expect(
-        f.stranger.mutation(api.projects.startDevelopment, {
-          projectId: f.projectId,
+        f.stranger.mutation(api.projects.update, {
+          id: f.projectId,
+          title: "x",
         }),
       ).rejects.toThrow("Not authorized");
       await expect(
-        f.stranger.mutation(api.projectInterviewWorkflow.startInterview, {
-          projectId: f.projectId,
-          featureDescription: "x",
-          previousAnswers: [],
-        }),
-      ).rejects.toThrow("Not authorized");
-      await expect(
-        f.stranger.mutation(api.projectInterviewWorkflow.startSpec, {
-          projectId: f.projectId,
-          featureDescription: "x",
-        }),
+        f.stranger.mutation(api.projects.remove, { id: f.projectId }),
       ).rejects.toThrow("Not authorized");
     },
     TIMEOUT_MS,

@@ -3,7 +3,6 @@ import { findLivePullRequestOnBranch } from "../_pullRequests/store";
 import { authQuery, hasRepoAccess } from "../functions";
 import { internalQuery } from "../_generated/server";
 import { entityVisible, filterActiveEntities } from "../numId";
-import { sessionStatusValidator } from "../_validators/enums";
 import {
   taskProgressValidator,
   taskProgressFields,
@@ -11,38 +10,19 @@ import {
 import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import {
-  projectWithDetailsValidator,
+  projectValidator,
   projectListItemValidator,
-  resolveProjectPlanningMode,
-  getProjectDetails,
 } from "./helpers";
 import { resolveProjectBranchName } from "../_git/branchNames";
 import { resolveProjectBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { unreadLookupForList } from "../chatReads";
 import { awaitingAnswerEntityIdsForRepo } from "../_chat/turnProjection";
-import { isProjectBuilding } from "./buildState";
+import { projectStatus } from "@eva/shared/projectStatus";
+import { loadProjectTaskFacts } from "./taskTable";
+import { isCoordinatorPaused } from "./coordinatorWake";
 import {
-  liveOwnedSessionStatuses,
   projectSandboxStatus,
 } from "../_sessions/ownedSession";
-
-/** Builds a project's detail payload (conversation history + optional generated
- *  spec) from a single projectDetails read, matching projectWithDetailsValidator.
- *  Shared by `get` and `getByNumId` so both stay in sync and avoid reading the
- *  projectDetails row twice. */
-async function buildProjectWithDetails(
-  db: GenericDatabaseReader<DataModel>,
-  project: Doc<"projects">,
-) {
-  const details = await getProjectDetails(db, project._id);
-  return {
-    ...project,
-    conversationHistory: details?.conversationHistory ?? [],
-    ...(details?.generatedSpec !== undefined
-      ? { generatedSpec: details.generatedSpec }
-      : {}),
-  };
-}
 
 /** A repo's projects that are not soft-deleted, in creation order. */
 function liveProjectsForRepo(
@@ -53,19 +33,6 @@ function liveProjectsForRepo(
     .query("projects")
     .withIndex("by_repo_and_deleted", (q) =>
       q.eq("repoId", repoId).eq("deletedAt", undefined),
-    )
-    .collect();
-}
-
-/** A repo's projects with a build workflow running (deleted rows included). */
-function buildingProjectsForRepo(
-  db: GenericDatabaseReader<DataModel>,
-  repoId: Id<"githubRepos">,
-) {
-  return db
-    .query("projects")
-    .withIndex("by_repo_and_build_state", (q) =>
-      q.eq("repoId", repoId).eq("build.state", "running"),
     )
     .collect();
 }
@@ -91,7 +58,6 @@ export const list = authQuery({
         ...project,
         // A project's sandbox lives on its session; the row shows that.
         sandboxStatus: await projectSandboxStatus(ctx.db, project),
-        planningMode: await resolveProjectPlanningMode(ctx.db, project),
         hasUnread: await hasUnread(project),
         isAwaitingAnswer: awaitingAnswerIds.has(String(project._id)),
       })),
@@ -99,10 +65,63 @@ export const list = authQuery({
   },
 });
 
-/** Retrieves a project by ID with its conversation history and generated spec. */
+/** A project's tasks by display status (`projectTaskDisplayStatus`). */
+const displayStatusCountsValidator = v.object({
+  triage: v.number(),
+  working: v.number(),
+  blocked: v.number(),
+  idle: v.number(),
+  archived: v.number(),
+});
+
+/**
+ * Every live project of a repo with its derived status, in one call for the
+ * projects list (`projectStatus` over each project's task facts): its stage,
+ * task counts by display status, how many tasks need a person, and whether its
+ * coordinator's automatic turns are paused at the hourly cap (that needs a
+ * person too). Tasks in repos the caller cannot open still count.
+ */
+export const listStatusesForRepo = authQuery({
+  args: { repoId: v.id("githubRepos") },
+  returns: v.array(
+    v.object({
+      projectId: v.id("projects"),
+      stage: v.union(
+        v.literal("done"),
+        v.literal("in_progress"),
+        v.literal("todo"),
+      ),
+      counts: displayStatusCountsValidator,
+      needsYouCount: v.number(),
+      coordinatorPaused: v.boolean(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
+    const projects = await liveProjectsForRepo(ctx.db, args.repoId);
+    return await Promise.all(
+      projects.map(async (project) => {
+        const [facts, coordinatorPaused] = await Promise.all([
+          loadProjectTaskFacts(ctx.db, project),
+          isCoordinatorPaused(ctx.db, project._id),
+        ]);
+        const status = projectStatus([...facts.values()]);
+        return {
+          projectId: project._id,
+          stage: status.stage,
+          counts: status.counts,
+          needsYouCount: status.needsYou.length,
+          coordinatorPaused,
+        };
+      }),
+    );
+  },
+});
+
+/** Retrieves a project by ID. */
 export const get = authQuery({
   args: { id: v.id("projects") },
-  returns: v.union(projectWithDetailsValidator, v.null()),
+  returns: v.union(projectValidator, v.null()),
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.id);
     if (!project) {
@@ -111,7 +130,7 @@ export const get = authQuery({
     if (!(await hasRepoAccess(ctx.db, project.repoId, ctx.userId))) return null;
     const visible = entityVisible(project);
     if (!visible) return null;
-    return await buildProjectWithDetails(ctx.db, visible);
+    return visible;
   },
 });
 
@@ -121,7 +140,7 @@ export const getByNumId = authQuery({
     repoId: v.id("githubRepos"),
     numId: v.number(),
   },
-  returns: v.union(projectWithDetailsValidator, v.null()),
+  returns: v.union(projectValidator, v.null()),
   handler: async (ctx, args) => {
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return null;
     const project = await ctx.db
@@ -132,7 +151,7 @@ export const getByNumId = authQuery({
       .first();
     const visible = entityVisible(project);
     if (!visible) return null;
-    return await buildProjectWithDetails(ctx.db, visible);
+    return visible;
   },
 });
 
@@ -151,70 +170,6 @@ export const getTaskCount = authQuery({
         .collect(),
     );
     return tasks.length;
-  },
-});
-
-/** Counts projects that currently have an active build workflow running. */
-export const countBuilding = authQuery({
-  args: { repoId: v.id("githubRepos") },
-  returns: v.number(),
-  handler: async (ctx, args) => {
-    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return 0;
-    return filterActiveEntities(
-      await buildingProjectsForRepo(ctx.db, args.repoId),
-    ).length;
-  },
-});
-
-/** Returns projects with an active build workflow or an active/starting preview sandbox. */
-export const getActive = authQuery({
-  args: { repoId: v.id("githubRepos") },
-  returns: v.array(
-    v.object({
-      _id: v.id("projects"),
-      numId: v.optional(v.number()),
-      title: v.string(),
-      isBuilding: v.boolean(),
-      sandboxStatus: v.optional(sessionStatusValidator),
-    }),
-  ),
-  handler: async (ctx, args) => {
-    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
-    // Building, or a session sandbox that is active or starting, then
-    // deduped back into `by_repo` (creation) order.
-    const [sessionStatuses, building] = await Promise.all([
-      liveOwnedSessionStatuses(ctx.db, [args.repoId], "project"),
-      buildingProjectsForRepo(ctx.db, args.repoId),
-    ]);
-    const sessionProjects = await Promise.all(
-      [...sessionStatuses]
-        .filter(([, status]) => status === "active" || status === "starting")
-        .map(([projectId]) => {
-          const id = ctx.db.normalizeId("projects", projectId);
-          return id ? ctx.db.get(id) : null;
-        }),
-    );
-    const byId = new Map(
-      [...building, ...sessionProjects.filter((p) => p !== null)].map((p) => [
-        String(p._id),
-        p,
-      ]),
-    );
-    const rows = filterActiveEntities([...byId.values()])
-      .sort((a, b) => a._creationTime - b._creationTime)
-      .map((p) => ({
-        _id: p._id,
-        numId: p.numId,
-        title: p.title,
-        isBuilding: isProjectBuilding(p),
-        sandboxStatus: sessionStatuses.get(String(p._id)),
-      }));
-    return rows.filter(
-      (row) =>
-        row.isBuilding ||
-        row.sandboxStatus === "active" ||
-        row.sandboxStatus === "starting",
-    );
   },
 });
 

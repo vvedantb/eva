@@ -1,7 +1,8 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * The `.eva/config.json` sync writes the file into the existing command fields
@@ -10,7 +11,6 @@ import schema from "../convex/schema";
  * commands, and a deleted file hands the repo back to Convex.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 
 const CONFIG = JSON.stringify({

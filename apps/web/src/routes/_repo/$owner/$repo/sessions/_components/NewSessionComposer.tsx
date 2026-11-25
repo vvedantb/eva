@@ -31,6 +31,7 @@ import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { stackBaseParser, stackOnPrParser } from "@/lib/search-params";
 import { CodebasesPicker, useCodebasesSelection } from "./CodebasesPicker";
 import { EvaSetupCard } from "./EvaSetupCard";
+import { ComposerActionCards } from "./ComposerActionCards";
 
 /**
  * Shared landing composer for repo home and `/sessions`: branding + prompt,
@@ -216,6 +217,7 @@ export function NewSessionComposer() {
             </span>
           }
         />
+        <ComposerActionCards />
       </div>
     </div>
   );

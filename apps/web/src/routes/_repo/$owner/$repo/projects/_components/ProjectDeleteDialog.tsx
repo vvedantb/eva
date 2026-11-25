@@ -1,4 +1,5 @@
 import type { Id } from "@eva/backend";
+import { projectDeleteNote } from "@eva/shared/projectView";
 import {
   Button,
   Dialog,
@@ -65,10 +66,7 @@ export function ProjectDeleteDialog({
             )}
           </p>
           <div className="mt-3 p-3 bg-warning-bg rounded-surface">
-            <p className="text-sm text-warning">
-              This will permanently delete the project{plural} and all
-              associated tasks, agent runs, and dependencies.
-            </p>
+            <p className="text-sm text-warning">{projectDeleteNote(count)}</p>
           </div>
           <p className="text-sm text-muted-foreground mt-3">
             This action cannot be undone.

@@ -8,15 +8,21 @@ import { isOtherUserChatMessage, type ChatUserAttribution } from "./teammateMess
 // is on screen, and remembers where unseen replies began for the "NEW" divider.
 // A subpath (`@eva/shared/chatReadState`), not the root: it is React.
 
+/** How often an on-screen chat reports presence; well under the 30-minute away recap. */
+const VISIT_HEARTBEAT_MS = 5 * 60 * 1000;
+
 /** A chat whose read state is kept (a session chat, task or project). */
 export type ChatReadParentId = FunctionArgs<typeof api.chatReads.markRead>["parentId"];
 
 /**
  * Read state of the open chat.
  *
- * - Marks the chat read while it is on screen (`active`: the web's route and
- *   tab visibility, the phone's screen focus and app foreground), and again
- *   when a reply lands while it is.
+ * - Marks the chat read each time it comes on screen (`active`: the web's
+ *   route and tab visibility, the phone's screen focus and app foreground),
+ *   and again when a reply lands while it is. The server also records the
+ *   visit and may start a recap. While on screen it reports presence every
+ *   `VISIT_HEARTBEAT_MS`, and once on leaving, so an absence starts when the
+ *   user leaves.
  * - Returns `newSinceAt`, the read time from before `markRead` moved it, which
  *   the "NEW" divider anchors on. It is captured from the first `isUnread`
  *   result after the chat becomes active and held until it goes inactive or
@@ -34,6 +40,7 @@ export function useChatReadState({
   const isActive = active && parentId !== undefined;
   const read = useQuery(api.chatReads.isUnread, isActive && parentId !== undefined ? { parentId } : "skip");
   const markRead = useMutation(api.chatReads.markRead);
+  const touchVisit = useMutation(api.chatReads.touchVisit);
 
   // State, not a ref: the anchor drives render (the divider must appear once
   // it is captured). Adjusted during render, React's "store information from
@@ -48,9 +55,23 @@ export function useChatReadState({
 
   const hasUnread = read?.hasUnread;
   /* eslint-disable no-effect/no-event-handler --
-     The trigger is a turn finishing on the server, which arrives as a
-     live-query change to `isUnread`; there is no local event to mark read
-     from. */
+     The triggers are the chat coming on screen (web route and tab, phone
+     focus and foreground: no single event across both apps) and a turn
+     finishing on the server, which arrives as a live-query change to
+     `isUnread`. Every open marks, read or not: the server decides on it
+     whether to write a recap (`chatRecaps.maybeStartRecap`). */
+  useEffect(() => {
+    if (!isActive || parentId === undefined) return;
+    void markRead({ parentId, opened: true });
+    // Present while on screen, and once on leaving: the next recap measures
+    // the absence from here, not from the open.
+    const timer = setInterval(() => touchVisit({ parentId }).catch(() => undefined), VISIT_HEARTBEAT_MS);
+    return () => {
+      clearInterval(timer);
+      // Best effort: signing out or closing the app can drop it.
+      touchVisit({ parentId }).catch(() => undefined);
+    };
+  }, [parentId, isActive, markRead, touchVisit]);
   useEffect(() => {
     if (!isActive || parentId === undefined || hasUnread !== true) return;
     void markRead({ parentId });
@@ -80,3 +101,41 @@ export function findNewMessageIds<TId extends string>(
     )
     .map((message) => message._id);
 }
+
+/**
+ * The open chat's recap, web and phone (`chatRecaps`): "away" when `markRead`
+ * saw the user come back after a long absence, "full" from "Recap chat". `text` is undefined while the model writes it. The card
+ * goes once the user sends a message after it: the recap is about the past,
+ * and the chat has moved on. `dismiss` deletes it for good.
+ */
+export function useChatRecap({
+  parentId,
+  active,
+  messages,
+  currentUserId,
+}: {
+  parentId: ChatReadParentId | undefined;
+  active: boolean;
+  messages: ReadonlyArray<{ timestamp: number } & ChatUserAttribution>;
+  currentUserId: string | undefined;
+}): { recap: { kind: "away" | "full"; text: string | undefined } | null; dismiss: () => void } {
+  const row = useQuery(api.chatRecaps.forChat, active && parentId !== undefined ? { parentId } : "skip");
+  const dismissRecap = useMutation(api.chatRecaps.dismiss);
+  const answered =
+    row != null &&
+    messages.some(
+      (message) =>
+        message.role === "user" && message.timestamp > row.createdAt && !isOtherUserChatMessage(message, currentUserId),
+    );
+  const recap = row == null || answered ? null : { kind: row.kind, text: row.text };
+  const dismiss = () => {
+    if (row) void dismissRecap({ recapId: row._id });
+  };
+  return { recap, dismiss };
+}
+
+/** The recap card's title for each kind. */
+export const RECAP_TITLE: Record<"away" | "full", string> = {
+  away: "Since you've been gone",
+  full: "Recap",
+};

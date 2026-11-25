@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { materializeTurnAttachments } from "../callback-src/runtime/turnAttachments.js";
 import {
   attachmentExtensionForMimeType,
@@ -25,8 +25,8 @@ type StubReply =
 function stubFetch(replies: readonly StubReply[]): string[] {
   const requested: string[] = [];
   let next = 0;
-  vi.stubGlobal("fetch", (input: string | URL): Promise<Response> => {
-    requested.push(String(input));
+  spyOn(globalThis, "fetch").mockImplementation((input) => {
+    requested.push(input instanceof Request ? input.url : String(input));
     const reply = replies[next] ?? { status: 404 };
     next += 1;
     if (reply === "network-error") {
@@ -55,7 +55,7 @@ function clearWrittenAttachments(): void {
 }
 
 afterEach(() => {
-  vi.unstubAllGlobals();
+  mock.restore();
   clearWrittenAttachments();
 });
 

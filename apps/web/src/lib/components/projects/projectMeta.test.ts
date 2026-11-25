@@ -1,64 +1,51 @@
-import { describe, expect, it } from "vitest";
-import type { PROJECT_PHASES } from "@eva/backend";
+import { describe, expect, it } from "bun:test";
 import {
-  PROJECT_COLUMNS,
   PROJECT_LIST_DEFAULTS,
-  filterAndSortProjects,
-  interviewTurnText,
+  searchAndSortProjects,
   newProjectSubmitBlocker,
-  parseProjectSpec,
   projectFilterChips,
   projectProgressSegments,
   projectTaskSections,
   toggleHiddenProjectPhase,
 } from "@eva/shared";
+import { PROJECT_STAGES } from "@eva/shared/projectView";
 
 // The project list, task list and new-project helpers the web and the phone share.
 
 const project = (
   title: string,
-  phase: (typeof PROJECT_PHASES)[number],
   created: number,
   extra: { priority?: "urgent" | "low"; rawInput?: string } = {},
-) => ({ title, phase, _creationTime: created, ...extra });
+) => ({ title, _creationTime: created, ...extra });
 
 describe("project meta", () => {
-  it("hides blocked phases, searches title and raw input, and sorts newest first by default", () => {
+  it("searches title and raw input, and sorts newest first by default", () => {
     const projects = [
-      project("Billing", "in_progress", 1),
-      project("Offline drafts", "draft", 3, { rawInput: "keep a reply when the network drops" }),
-      project("Old idea", "cancelled", 2),
+      project("Billing", 1),
+      project("Offline drafts", 3, { rawInput: "keep a reply when the network drops" }),
+      project("Old idea", 2),
     ];
-    expect(filterAndSortProjects(projects, PROJECT_LIST_DEFAULTS).map((p) => p.title)).toEqual([
+    expect(searchAndSortProjects(projects, PROJECT_LIST_DEFAULTS).map((p) => p.title)).toEqual([
       "Offline drafts",
       "Old idea",
       "Billing",
     ]);
-    expect(
-      filterAndSortProjects(projects, { ...PROJECT_LIST_DEFAULTS, hiddenPhases: ["cancelled"] }).map((p) => p.title),
-    ).toEqual(["Offline drafts", "Billing"]);
-    expect(
-      filterAndSortProjects([...projects, project("Spec ready", "finalized", 4)], {
-        ...PROJECT_LIST_DEFAULTS,
-        hiddenPhases: ["todo"],
-      }).map((p) => p.title),
-    ).toEqual(["Old idea", "Billing"]);
-    expect(filterAndSortProjects(projects, { ...PROJECT_LIST_DEFAULTS, q: "NETWORK" }).map((p) => p.title)).toEqual([
+    expect(searchAndSortProjects(projects, { ...PROJECT_LIST_DEFAULTS, q: "NETWORK" }).map((p) => p.title)).toEqual([
       "Offline drafts",
     ]);
     expect(
-      filterAndSortProjects(projects, { ...PROJECT_LIST_DEFAULTS, sortField: "title", sortDir: "asc" }).map((p) => p.title),
+      searchAndSortProjects(projects, { ...PROJECT_LIST_DEFAULTS, sortField: "title", sortDir: "asc" }).map((p) => p.title),
     ).toEqual(["Billing", "Offline drafts", "Old idea"]);
   });
 
   it("keeps the last visible column and names the active filters", () => {
-    const allButOne = PROJECT_COLUMNS.filter((column) => column !== "todo");
-    expect(toggleHiddenProjectPhase(allButOne, "todo", PROJECT_COLUMNS)).toEqual(allButOne);
-    expect(toggleHiddenProjectPhase(["todo"], "todo", PROJECT_COLUMNS)).toEqual([]);
+    const allButOne = PROJECT_STAGES.filter((stage) => stage !== "todo");
+    expect(toggleHiddenProjectPhase(allButOne, "todo", PROJECT_STAGES)).toEqual(allButOne);
+    expect(toggleHiddenProjectPhase(["todo"], "todo", PROJECT_STAGES)).toEqual([]);
     expect(
-      projectFilterChips({ ...PROJECT_LIST_DEFAULTS, hiddenPhases: ["todo"], sortField: "priority", sortDir: "asc" }, PROJECT_COLUMNS),
+      projectFilterChips({ ...PROJECT_LIST_DEFAULTS, hiddenPhases: ["todo"], sortField: "priority", sortDir: "asc" }, PROJECT_STAGES),
     ).toEqual([
-      { key: "phases", label: `${PROJECT_COLUMNS.length - 1} Phases` },
+      { key: "phases", label: `${PROJECT_STAGES.length - 1} Phases` },
       { key: "sortField", label: "Sort: Priority" },
       { key: "sortDir", label: "Ascending" },
     ]);
@@ -96,26 +83,5 @@ describe("project meta", () => {
     expect(newProjectSubmitBlocker(false, " ", "")).toBe("Enter a project title and description");
     expect(newProjectSubmitBlocker(false, "Title", " ")).toBe("Enter a description");
     expect(newProjectSubmitBlocker(false, "Title", "Body")).toBeUndefined();
-  });
-
-  it("reads a generated plan and rejects text that is not one", () => {
-    expect(parseProjectSpec('{"title":"Plan","tasks":[{"title":"One","dependencies":[0]},{"description":null}]}')).toEqual({
-      title: "Plan",
-      description: "",
-      tasks: [
-        { title: "One", description: "", dependencies: [0] },
-        { title: "", description: "", dependencies: [] },
-      ],
-    });
-    expect(parseProjectSpec("not json")).toBeNull();
-    expect(parseProjectSpec('{"tasks":"many"}')).toBeNull();
-  });
-
-  it("reads an interview turn as the web shows it", () => {
-    expect(interviewTurnText('{"question":"Which screens?","options":[{"label":"All","description":"Every one"}]}')).toBe("Which screens?");
-    expect(interviewTurnText('{"title":"Copy pass","tasks":[{},{}]}')).toBe("Plan ready: Copy pass (2 tasks)");
-    expect(interviewTurnText('{"interviewComplete":true}')).toBeNull();
-    expect(interviewTurnText("  ")).toBeNull();
-    expect(interviewTurnText("Plain answer")).toBe("Plain answer");
   });
 });

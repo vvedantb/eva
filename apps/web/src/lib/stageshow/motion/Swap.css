@@ -41,8 +41,4 @@
   @keyframes ss-swap-out { to { opacity: 0; filter: blur(2px); } }
 
   @keyframes ss-swap-in { 0%, 30% { opacity: 0; filter: blur(2px); } 100% { opacity: 1; filter: none; } }
-
-  @media (prefers-reduced-motion: reduce) {
-    .ss-swap__in, .ss-swap__out { animation-duration: 1ms !important; }
-  }
 }

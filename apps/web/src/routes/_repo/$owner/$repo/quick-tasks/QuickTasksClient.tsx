@@ -5,6 +5,7 @@ import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import {
   CenteredSpinner,
+  TabsTransition,
   tokenTransition,
   EmptyState,
   Button,
@@ -37,6 +38,7 @@ import {
 } from "./_components/QuickTasksBulkBar";
 import { QuickTasksBulkModals } from "./_components/QuickTasksBulkModals";
 import {
+  QUICK_TASK_VIEWS,
   useFilteredQuickTasks,
   useQuickTaskFilters,
   useQuickTaskTodoDrafts,
@@ -94,20 +96,10 @@ export function QuickTasksClient() {
   const deleteSelected = useBulkDeleteTasks();
   const runSelected = useBulkRunTasks();
   const [filters, setParams] = useQuickTaskFilters();
-  const { q, view, project, user } = filters;
+  const { q, view, user } = filters;
 
   const projects = useQuery(api.projects.list, { repoId: repo._id });
   const users = useQuery(api.users.listAll);
-
-  const projectNames = (() => {
-    const map = new Map<string, string>();
-    if (projects) {
-      for (const p of projects) {
-        map.set(p._id, p.title);
-      }
-    }
-    return map;
-  })();
 
   const allTags = (() => {
     const tagSet = new Set<string>(TASK_TAGS);
@@ -221,7 +213,6 @@ export function QuickTasksClient() {
     return match?.fullName ?? match?.firstName;
   };
   const activeFilterLabels = quickTaskFilterChips(filters, {
-    project: (id) => projects?.find((p) => p._id === id)?.title,
     user: userName,
   }).map((chip) => ({
     key: chip.key,
@@ -369,9 +360,6 @@ export function QuickTasksClient() {
             onStartSelecting={() => setIsSelecting(true)}
             onCreateTask={() => setIsCreating(true)}
             onImport={() => setIsImporting(true)}
-            projects={projects}
-            projectFilter={project}
-            onProjectFilterChange={(v) => setParams({ project: v })}
             users={users}
             userFilter={user}
             onUserFilterChange={(v) => setParams({ user: v })}
@@ -435,50 +423,48 @@ export function QuickTasksClient() {
                   </EmptyState.Actions>
                 </EmptyState.Root>
               </m.div>
-            ) : view === "kanban" ? (
-              <m.div
-                key="quick-tasks-board"
-                className="flex min-w-0 flex-1 min-h-0"
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 8 }}
-                transition={tokenTransition.base}
-              >
-                <QuickTasksKanbanBoard
-                  tasks={quickTasks}
-                  projectNames={projectNames}
-                  isSelecting={isSelecting}
-                  selectedIds={selectedIds}
-                  onToggleSelect={toggleSelect}
-                />
-              </m.div>
             ) : (
               <m.div
-                key="quick-tasks-list"
+                key="quick-tasks-views"
                 className="flex min-w-0 flex-1 min-h-0"
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 8 }}
                 transition={tokenTransition.base}
               >
-                <QuickTasksListSplit
-                  tasks={quickTasks}
-                  projectNames={projectNames}
-                  isSelecting={isSelecting}
-                  selectedIds={selectedIds}
-                  onToggleSelect={toggleSelect}
-                  selectedTaskId={selectedTaskId}
-                  selectedTaskStatus={
-                    numIdParam !== undefined ? taskResolve.status : undefined
-                  }
-                  detailTab={routeState?.detailTab}
-                  sandboxTab={
-                    routeState?.surface === "sandbox"
-                      ? routeState.sandboxTab
-                      : undefined
-                  }
-                  navSurface={routeState?.surface ?? "detail"}
-                />
+                <TabsTransition
+                  value={view}
+                  order={QUICK_TASK_VIEWS}
+                  className="flex min-w-0 flex-1 min-h-0"
+                  panelClassName="flex min-w-0 flex-1 min-h-0"
+                >
+                  {view === "kanban" ? (
+                    <QuickTasksKanbanBoard
+                      tasks={quickTasks}
+                      isSelecting={isSelecting}
+                      selectedIds={selectedIds}
+                      onToggleSelect={toggleSelect}
+                    />
+                  ) : (
+                    <QuickTasksListSplit
+                      tasks={quickTasks}
+                      isSelecting={isSelecting}
+                      selectedIds={selectedIds}
+                      onToggleSelect={toggleSelect}
+                      selectedTaskId={selectedTaskId}
+                      selectedTaskStatus={
+                        numIdParam !== undefined ? taskResolve.status : undefined
+                      }
+                      detailTab={routeState?.detailTab}
+                      sandboxTab={
+                        routeState?.surface === "sandbox"
+                          ? routeState.sandboxTab
+                          : undefined
+                      }
+                      navSurface={routeState?.surface ?? "detail"}
+                    />
+                  )}
+                </TabsTransition>
               </m.div>
             )}
           </AnimatePresence>

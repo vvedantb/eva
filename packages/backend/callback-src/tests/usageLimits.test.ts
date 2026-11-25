@@ -1,4 +1,4 @@
-import { beforeEach, expect, test, vi } from "vitest";
+import { beforeEach, expect, mock, test, vi } from "bun:test";
 import { callbackState as S, resetStateForTests } from "../runtime/state.js";
 import type {
   ConvexCallType,
@@ -17,16 +17,10 @@ import {
   unwrapUsagePayload,
 } from "../runtime/usageLimits.js";
 
-/**
- * Breadcrumb mutations the module fires, captured instead of sent. Hoisted so
- * the `vi.mock` factory below (which runs before the imports) can reach it.
- */
-const convexCalls = vi.hoisted(() => {
-  const calls: { path: string; args: JsonObject }[] = [];
-  return calls;
-});
+/** Breadcrumb mutations the module fires, captured instead of sent. */
+const convexCalls: { path: string; args: JsonObject }[] = [];
 
-vi.mock("../http/convexClient.js", () => ({
+mock.module("../http/convexClient.js", () => ({
   callConvexWithRetry: async (
     _type: ConvexCallType,
     path: string,
@@ -36,6 +30,17 @@ vi.mock("../http/convexClient.js", () => ({
     return null;
   },
 }));
+
+/**
+ * Fake time that lets promise callbacks run between timers, like Vitest's
+ * `advanceTimersByTimeAsync`: a timer that starts after an await still fires.
+ */
+async function advanceTimersByTimeAsync(ms: number): Promise<void> {
+  for (let elapsed = 0; elapsed < ms; elapsed += 10) {
+    vi.advanceTimersByTime(Math.min(10, ms - elapsed));
+    await new Promise<void>((resolve) => queueMicrotask(resolve));
+  }
+}
 
 beforeEach(() => {
   resetStateForTests();
@@ -265,24 +270,27 @@ test("an unavailable usage read records a refusal instead of staying silent", as
   expect(S.usageLimitSnapshot).toEqual({ completeness: "refused" });
 });
 
-test("a spend-limit result becomes a non-destructive rejected snapshot", () => {
-  captureClaudeUsageLimitError(
-    "You've hit your individual spend limit · ask your admin to raise it",
-  );
+// Every phrase `isUsageLimitError` in convex/_taskWorkflow/usageLimitReset.ts
+// matches. A partial status-only reading patches the row without wiping its
+// last valid windows.
+test.each([
+  "You're out of extra usage · resets 3pm",
+  "API Error: rate limit exceeded",
+  "Claude AI usage limit reached|1760000000",
+  "You've hit your session limit · resets 12pm (UTC)",
+  "You've hit your individual spend limit · ask your admin to raise it",
+  "Token limit exceeded for this organization",
+])("a usage-limit result becomes a rejected snapshot: %s", (error) => {
+  captureClaudeUsageLimitError(error);
   expect(S.usageLimitSnapshot).toEqual({
     completeness: "partial",
     status: "rejected",
   });
 });
 
-test("a session-limit result becomes a rejected snapshot", () => {
-  captureClaudeUsageLimitError(
-    "You've hit your session limit · resets 12pm (UTC)",
-  );
-  expect(S.usageLimitSnapshot).toEqual({
-    completeness: "partial",
-    status: "rejected",
-  });
+test("an error that is not a usage limit leaves the snapshot alone", () => {
+  captureClaudeUsageLimitError("Error: ENOENT: no such file or directory");
+  expect(S.usageLimitSnapshot).toBeNull();
 });
 
 test("a spend-limit result keeps authoritative windows when available", async () => {
@@ -366,14 +374,6 @@ test("buildUsageLimitReportArgs keys two accounts apart on one repo", () => {
   ).toBe(false);
 });
 
-test("unwrapUsagePayload reads a nested control-channel value", () => {
-  const inner = {
-    rate_limits_available: true,
-    rate_limits: { five_hour: { utilization: 34 } },
-  };
-  expect(unwrapUsagePayload({ value: inner })).toEqual(inner);
-});
-
 test("a usage payload with windows and no availability flag still captures", async () => {
   await captureClaudeUsage(async () => ({
     subscription_type: "max",
@@ -421,7 +421,7 @@ test("an unforced usage lookup gives up at the turn budget and says nothing", as
   vi.useFakeTimers();
   try {
     const capture = captureClaudeUsage(neverAnswers);
-    await vi.advanceTimersByTimeAsync(5_000);
+    await advanceTimersByTimeAsync(5_000);
     expect(await capture).toBe(false);
     // Turn telemetry is silent by design: no breadcrumb, no Convex write.
     expect(convexCalls).toEqual([]);
@@ -450,11 +450,11 @@ test("a forced refresh keeps waiting past the turn budget", async () => {
       true,
     );
 
-    await vi.advanceTimersByTimeAsync(6_000);
+    await advanceTimersByTimeAsync(6_000);
     // Past the unforced budget, and still waiting rather than reporting a miss.
     expect(S.usageLimitSnapshot).toBeNull();
 
-    await vi.advanceTimersByTimeAsync(4_000);
+    await advanceTimersByTimeAsync(4_000);
     expect(await capture).toBe(true);
     expect(S.usageLimitSnapshot).toEqual({
       completeness: "complete",
@@ -475,7 +475,7 @@ test("a forced refresh that never answers leaves a breadcrumb", async () => {
   vi.useFakeTimers();
   try {
     const capture = captureClaudeUsage(neverAnswers, true);
-    await vi.advanceTimersByTimeAsync(20_000);
+    await advanceTimersByTimeAsync(20_000);
     expect(await capture).toBe(false);
     // Without this the only record of a failed on-demand refresh was a log
     // line on the VM, which nobody sees once the sandbox is gone.

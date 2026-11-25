@@ -93,15 +93,15 @@ async function ownerFields(
     const taskId = ctx.db.normalizeId("agentTasks", id);
     const task = taskId ? await ctx.db.get(taskId) : null;
     if (!task) return null;
-    // A task's sandbox (preview port, path, owner key) is its session's (a
-    // project task's: the project's); its PRs stay the task's.
+    // A task's sandbox (preview port, path, owner key) is its own session's;
+    // its PRs stay the task's.
     const session = await findWorkSession(ctx.db, task);
     if (!session) return null;
     return {
       owner: { kind: "task", taskId: task._id },
       ownerKey: sandboxOwnerKey({ kind: "session", sessionId: session._id }),
       baseBranch: task.baseBranch,
-      prUrl: await taskPrUrl(ctx.db, task),
+      prUrl: taskPrUrl(task),
       prState: task.prState,
       devPort: session.devPort,
       devCommand: session.devCommand,

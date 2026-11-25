@@ -70,8 +70,8 @@ export function useQuickTaskRepo() {
  * (`QuickTaskDraftRow`, counted in its header): a tap opens the draft in the
  * new-task screen; drafts take no menu, select or Run All. To Do carries
  * the web "Run" (Run All) when it has tasks; a long press on a row opens the web row menu as a sheet
- * (`useQuickTaskActions`). It opens as the web does: tasks outside projects,
- * recently updated first (`QUICK_TASK_LIST_DEFAULTS`). A `SectionList`, as a
+ * (`useQuickTaskActions`). It opens as the web does: the repo's quick tasks
+ * (never a project's), recently updated first (`QUICK_TASK_LIST_DEFAULTS`). A `SectionList`, as a
  * repo's tasks have no cap. "Select" in a row's menu starts the web select
  * mode with its bulk bar (`QuickTaskBulkBar`). The web kanban, drag between
  * sections and "Import from Linear" are not here.
@@ -87,7 +87,7 @@ export function QuickTasksSection() {
       <View className="px-4">
         <RepoPicker repos={repos} value={repo} onChange={setRepo} />
       </View>
-      {/* Keyed on the repo: its search, filters and open sections start fresh, as a project id belongs to one repo. */}
+      {/* Keyed on the repo: its search, filters and open sections start fresh. */}
       <QuickTaskList key={repo._id} repo={repo} />
     </View>
   );
@@ -192,8 +192,8 @@ function QuickTaskList({ repo }: { repo: Repo }) {
 
   return (
     <View className="flex-1">
-      <QuickTaskToolbar filters={filters} onChange={changeFilters} projects={projects} users={users} allTags={allTags} />
-      <ActiveFiltersBar filters={filters} onChange={changeFilters} projects={projects} users={users} />
+      <QuickTaskToolbar filters={filters} onChange={changeFilters} users={users} allTags={allTags} />
+      <ActiveFiltersBar filters={filters} onChange={changeFilters} users={users} />
       {shown.length === 0 && shownDrafts.length === 0 ? (
         <EmptyState
           icon={IconChecklist}

@@ -26,6 +26,7 @@ import {
   IconChecklist,
   IconCalendarClock,
   IconClock,
+  IconFileText,
   IconFolder,
   IconMessage,
   IconPlayerPlay,
@@ -94,7 +95,8 @@ import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { useScheme } from "@/ui/theme";
 import { HeaderMoreButton } from "@/ui/HeaderRail";
 
-type QuickTask = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
+/** A quick-task row (`getAllTasks`) or a project task row (`listByProject`): one validator, the wider inferred type. */
+type QuickTask = FunctionReturnType<typeof api.agentTasks.listByProject>[number];
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 type Field = "status" | "priority" | "reviewer" | "tags" | "project";
@@ -109,12 +111,14 @@ type Field = "status" | "priority" | "reviewer" | "tags" | "project";
  * "…" is the row's long-press menu. The bottom bar opens the task chat (with
  * the unread dot) and, when the web shows it, Run Eva. The title and the
  * description edit in place while the web allows it (`canEditTaskText`).
- * Routes as `/quick-task/<taskId>?repo=<repoId>`; the task resolves through
- * the repo's list, so its id keeps its table type.
+ * Routes as `/quick-task/<taskId>?repo=<repoId>&numId=<numId>`; the task
+ * resolves through the repo's quick tasks, so its id keeps its table type. A
+ * project task is never a quick task: it resolves by its number
+ * (`getByNumId`), then through its project's list (`listByProject`).
  */
 export default function QuickTaskScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ taskId: string; repo?: string }>();
+  const params = useLocalSearchParams<{ taskId: string; repo?: string; numId?: string }>();
   const leave = () => goBackOrReplace(router, "/sessions");
   const repos = useQuery(api.githubRepos.list, {});
   const repo = repos?.find((candidate) => candidate._id === params.repo);
@@ -122,10 +126,19 @@ export default function QuickTaskScreen() {
     api.agentTasks.getAllTasks,
     repo ? { repoId: repo._id } : "skip",
   );
-  const task = tasks?.find((candidate) => candidate._id === params.taskId);
+  const quickTask = tasks?.find((candidate) => candidate._id === params.taskId);
+  const numId = Number(params.numId);
+  const byNumber = repo !== undefined && tasks !== undefined && quickTask === undefined && Number.isInteger(numId);
+  const numbered = useQuery(api.agentTasks.getByNumId, repo && byNumber ? { repoId: repo._id, numId } : "skip");
+  const projectId = numbered?._id === params.taskId ? numbered.projectId : undefined;
+  const projectTasks = useQuery(api.agentTasks.listByProject, projectId ? { projectId } : "skip");
+  const task = quickTask ?? projectTasks?.find((candidate) => candidate._id === params.taskId);
 
   const loading =
-    repos === undefined || (repo !== undefined && tasks === undefined);
+    repos === undefined ||
+    (repo !== undefined && tasks === undefined) ||
+    (byNumber && numbered === undefined) ||
+    (projectId !== undefined && projectTasks === undefined);
   if (loading || !repo || !task || !tasks) {
     return (
       <View className="flex-1">
@@ -185,8 +198,7 @@ function TaskOverview({
   const updateTask = useMutation(api.agentTasks.update);
   const reactionsFor = useTaskReactions(task._id, users, currentUserId);
 
-  const editable =
-    runs !== undefined && canEditTaskText(task.status, hasActiveRun);
+  const editable = runs !== undefined && canEditTaskText(task.status, hasActiveRun);
   const update: UpdateTask = (fields, failure) => {
     updateTask({ id: task._id, ...fields }).catch(() => toast.error(failure));
   };
@@ -304,9 +316,7 @@ function TaskOverview({
               reactionsFor={reactionsFor}
               isProjectTask={task.projectId !== undefined}
               currentUserId={currentUserId}
-              onReply={(comment) =>
-                changeCommentMode({ kind: "reply", comment })
-              }
+              onReply={(comment) => changeCommentMode({ kind: "reply", comment })}
               onEdit={(comment) => changeCommentMode({ kind: "edit", comment })}
               onDelete={(id) => {
                 comments.remove(id);
@@ -346,8 +356,7 @@ function TaskOverview({
         }
         onRemove={() => writeSchedule(cancelSchedule({ id: task._id }), "Schedule removed", "Couldn't remove schedule")}
       />
-      <TaskDock
-        onSchedule={() => setScheduling(true)} task={task} runs={runs} hasActiveRun={hasActiveRun} />
+      <TaskDock onSchedule={() => setScheduling(true)} task={task} runs={runs} hasActiveRun={hasActiveRun} />
 
       {actions.dialogs}
       {git.dialogs}
@@ -378,6 +387,7 @@ function TaskProperties({
   const muted = EVA_THEME[scheme].mutedForeground;
   const updateStatus = useMutation(api.agentTasks.updateStatus);
   const [field, setField] = useState<Field | null>(null);
+  const openField = (next: Field) => () => setField(next);
   const reviewer = task.assignedTo
     ? users?.find((user) => user._id === task.assignedTo)
     : undefined;
@@ -395,7 +405,7 @@ function TaskProperties({
             icon={<status.icon size={16} color={status.text} />}
             value={TASK_STATUS_LABELS[task.status]}
             color={status.text}
-            onPress={() => setField("status")}
+            onPress={openField("status")}
           />
         ) : null}
         <FieldRow
@@ -403,7 +413,7 @@ function TaskProperties({
           icon={<PriorityIcon level={task.priority} />}
           value={task.priority ? PRIORITY_LABELS[task.priority] : "Priority"}
           color={task.priority ? undefined : muted}
-          onPress={() => setField("priority")}
+          onPress={openField("priority")}
         />
         <FieldRow
           label="Code Reviewer"
@@ -416,7 +426,7 @@ function TaskProperties({
           }
           value={reviewer ? getUserDisplayName(reviewer) : "Code Reviewer"}
           color={reviewer ? undefined : muted}
-          onPress={() => setField("reviewer")}
+          onPress={openField("reviewer")}
         />
         <FieldRow
           label="Labels"
@@ -425,15 +435,16 @@ function TaskProperties({
             task.tags && task.tags.length > 0 ? task.tags.join(", ") : "Labels"
           }
           color={task.tags && task.tags.length > 0 ? undefined : muted}
-          onPress={() => setField("tags")}
+          onPress={openField("tags")}
         />
         <FieldRow
           label="Project"
           icon={<IconFolder size={16} color={muted} />}
           value={project ? project.title : "Project"}
           color={project ? undefined : muted}
-          onPress={() => setField("project")}
+          onPress={openField("project")}
         />
+        {task.projectId ? <ProjectSummaryRow projectId={task.projectId} /> : null}
       </FieldGroup>
       <FooterSheet
         open={field === "status"}
@@ -487,6 +498,22 @@ function TaskProperties({
         }
       />
     </>
+  );
+}
+
+/** A project task's link to its project's summary document, once the coordinator wrote one. */
+function ProjectSummaryRow({ projectId }: { projectId: Id<"projects"> }) {
+  const router = useRouter();
+  const muted = EVA_THEME[useScheme()].mutedForeground;
+  const summaryDoc = useQuery(api.projects.getSummaryDoc, { projectId });
+  if (!summaryDoc) return null;
+  return (
+    <FieldRow
+      label="Project summary"
+      icon={<IconFileText size={16} color={muted} />}
+      value={summaryDoc.title}
+      onPress={() => router.push({ pathname: "/doc/[docId]", params: { docId: summaryDoc._id, repo: summaryDoc.repoId } })}
+    />
   );
 }
 

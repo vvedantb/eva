@@ -10,7 +10,11 @@ import {
   requireTeamOwner,
 } from "../functions";
 import { normalizePath } from "../repoUtils";
-import { aiModelValidator, reasoningLevelValidator } from "../validators";
+import {
+  aiModelValidator,
+  reasoningLevelValidator,
+  sandboxSizeValidator,
+} from "../validators";
 import {
   findAllSiblingRepoIds,
   findReposByOwnerAndName,
@@ -79,6 +83,10 @@ interface CreateRepoArgs {
   githubId: number;
   rootDirectory?: string;
   teamId?: Id<"teams">;
+  /** Add the row hidden: a detected app the user chose not to show. */
+  hidden?: boolean;
+  /** Return the existing row instead of throwing "already exists". */
+  ifMissing?: boolean;
 }
 
 /**
@@ -105,6 +113,7 @@ async function insertRepo(
   );
   if (match) {
     await getRepoWithAccess(ctx.db, match._id, userId);
+    if (args.ifMissing === true) return match._id;
     throw new Error("Repository already exists");
   }
 
@@ -118,6 +127,7 @@ async function insertRepo(
     if (duplicate.githubId === undefined) {
       await ctx.db.patch(duplicate._id, { githubId: args.githubId });
     }
+    if (args.ifMissing === true) return duplicate._id;
     throw new Error("Repository already exists");
   }
 
@@ -134,7 +144,7 @@ async function insertRepo(
     teamId = personalTeam?._id;
   }
 
-  if (normalizedRoot) {
+  if (normalizedRoot && args.hidden !== true) {
     // An app row replaces its own team's root row, never another team's.
     const rootEntry = candidates.find(
       (r) =>
@@ -156,7 +166,9 @@ async function insertRepo(
     teamId,
     rootDirectory: normalizedRoot,
     defaultBaseBranch: "staging",
+    ...(args.hidden === true ? { hidden: true } : {}),
   });
+  if (args.hidden === true) return repoId;
   // A repo that already commits `.eva/config.json` is ready without setup.
   await ctx.scheduler.runAfter(0, internal._evaConfig.sync.syncEvaConfig, {
     repoId,
@@ -177,6 +189,8 @@ export const createForInstallation = internalMutation({
     rootDirectory: v.optional(v.string()),
     teamId: v.optional(v.id("teams")),
     userId: v.id("users"),
+    hidden: v.optional(v.boolean()),
+    ifMissing: v.optional(v.boolean()),
   },
   returns: v.id("githubRepos"),
   handler: async (ctx, args) => {
@@ -199,6 +213,7 @@ export const updateConfig = authMutation({
     sessionsVscodeEnabled: v.optional(v.boolean()),
     sandboxReadExcluded: v.optional(v.boolean()),
     agentMemoryEnabled: v.optional(v.boolean()),
+    sandboxSize: v.optional(sandboxSizeValidator),
     deploymentProjectName: v.optional(v.string()),
     domains: v.optional(v.array(v.string())),
     systemPrompt: v.optional(v.string()),
@@ -242,6 +257,11 @@ export const updateConfig = authMutation({
       await ctx.scheduler.runAfter(0, internal._evaConfig.sync.syncEvaConfig, {
         repoId: args.repoId,
       });
+    }
+
+    // Per-app, never siblings: apps of one monorepo need different sizes.
+    if (args.sandboxSize !== undefined) {
+      await ctx.db.patch(args.repoId, { sandboxSize: args.sandboxSize });
     }
 
     if (args.deploymentProjectName !== undefined) {

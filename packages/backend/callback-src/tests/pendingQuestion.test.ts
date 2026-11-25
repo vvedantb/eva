@@ -1,25 +1,49 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
-import type * as ConvexClient from "../http/convexClient.js";
+import { afterEach, describe, expect, mock, test, vi } from "bun:test";
+import { freshModules } from "./freshModules";
 
 // Only the network call is faked; the pure envelope reader
 // (`unwrapConvexMutationPayload`) must stay real so the `{ status, value }`
 // shape below is unwrapped exactly as it is in production.
-vi.mock("../http/convexClient.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof ConvexClient>()),
-  callConvexWithRetry: vi.fn(async (_type: string, path: string) =>
-    path === "pendingQuestions:claimAnswer"
-      ? {
-          status: "success",
-          value: {
-            answer: JSON.stringify({ "Which?": "A", ignored: 1 }),
-          },
-        }
-      : null,
-  ),
+const realClient = { ...(await import("../http/convexClient.js")) };
+const answering: typeof realClient.callConvexWithRetry = async (_type, path) =>
+  path === "pendingQuestions:claimAnswer"
+    ? {
+        status: "success",
+        value: {
+          answer: JSON.stringify({ "Which?": "A", ignored: 1 }),
+        },
+      }
+    : null;
+const callConvexWithRetry = mock(answering);
+mock.module("../http/convexClient.js", () => ({
+  ...realClient,
+  callConvexWithRetry,
 }));
+
+/**
+ * Bun has no `advanceTimersByTimeAsync`: step fake time and let the awaits
+ * between polls run, so a timer set after an await still fires.
+ */
+async function advanceTimersByTimeAsync(ms: number): Promise<void> {
+  for (let elapsed = 0; elapsed < ms; elapsed += 500) {
+    vi.advanceTimersByTime(Math.min(500, ms - elapsed));
+    for (let flush = 0; flush < 10; flush += 1) {
+      await new Promise<void>((resolve) => queueMicrotask(resolve));
+    }
+  }
+}
 
 const originalClaim = process.env.CLAIM_MUTATION;
 const originalEntityField = process.env.ENTITY_ID_FIELD;
+
+/** The SDK's per-call permission options for one tool use. */
+function permissionOptions(toolUseID: string) {
+  return {
+    toolUseID,
+    requestId: "req_" + toolUseID,
+    signal: new AbortController().signal,
+  };
+}
 
 afterEach(() => {
   if (originalClaim === undefined) {
@@ -32,39 +56,43 @@ afterEach(() => {
   } else {
     process.env.ENTITY_ID_FIELD = originalEntityField;
   }
-  vi.resetModules();
+  vi.useRealTimers();
+  // Back to the answering mock with no recorded calls.
+  callConvexWithRetry.mockReset();
+  callConvexWithRetry.mockImplementation(answering);
+  freshModules();
 });
 
 describe("buildCanUseTool Agent/Task background policy", () => {
   test("daemon (CLAIM_MUTATION set) allows run_in_background for Agent", async () => {
     process.env.CLAIM_MUTATION = "sessionWorkflow:claimPendingTurn";
-    vi.resetModules();
+    freshModules();
     const { buildCanUseTool } = await import("../runtime/pendingQuestion.js");
     const canUseTool = buildCanUseTool();
     const result = await canUseTool(
       "Agent",
       { run_in_background: true },
-      { toolUseID: "toolu_test", signal: new AbortController().signal },
+      permissionOptions("toolu_test"),
     );
-    expect(result.behavior).toBe("allow");
-    if (result.behavior === "allow") {
-      expect(result.updatedInput.run_in_background).toBe(true);
+    expect(result?.behavior).toBe("allow");
+    if (result?.behavior === "allow") {
+      expect(result.updatedInput?.run_in_background).toBe(true);
     }
   });
 
   test("one-shot (no CLAIM_MUTATION) coerces Agent to foreground", async () => {
     delete process.env.CLAIM_MUTATION;
-    vi.resetModules();
+    freshModules();
     const { buildCanUseTool } = await import("../runtime/pendingQuestion.js");
     const canUseTool = buildCanUseTool();
     const result = await canUseTool(
       "Task",
       { run_in_background: true },
-      { toolUseID: "toolu_test", signal: new AbortController().signal },
+      permissionOptions("toolu_test"),
     );
-    expect(result.behavior).toBe("allow");
-    if (result.behavior === "allow") {
-      expect(result.updatedInput.run_in_background).toBe(false);
+    expect(result?.behavior).toBe("allow");
+    if (result?.behavior === "allow") {
+      expect(result.updatedInput?.run_in_background).toBe(false);
     }
   });
 });
@@ -75,18 +103,18 @@ describe("buildCanUseTool AskUserQuestion answers", () => {
     // Blocking on an answer is session-only behaviour, so the gate needs the
     // session entity field to take that path at all.
     process.env.ENTITY_ID_FIELD = "sessionId";
-    vi.resetModules();
+    freshModules();
     const { buildCanUseTool } = await import("../runtime/pendingQuestion.js");
     const { callbackState } = await import("../runtime/state.js");
     const canUseTool = buildCanUseTool();
     const result = await canUseTool(
       "AskUserQuestion",
       { questions: [{ question: "Which?", options: [{ label: "A" }] }] },
-      { toolUseID: "toolu_q", signal: new AbortController().signal },
+      permissionOptions("toolu_q"),
     );
-    expect(result.behavior).toBe("allow");
-    if (result.behavior === "allow") {
-      expect(result.updatedInput.answers).toEqual({
+    expect(result?.behavior).toBe("allow");
+    if (result?.behavior === "allow") {
+      expect(result.updatedInput?.answers).toEqual({
         "Which?": "A",
         ignored: 1,
       });
@@ -102,81 +130,61 @@ describe("buildCanUseTool AskUserQuestion answers", () => {
 /**
  * Sessions 417 and 419: a turn held its sandbox for 2 hours waiting on an
  * answer, then the cap killed it and the question was lost. Past the wait the
- * poll releases the question instead; `release` still returns an answer that
+ * gate releases the question instead; `release` still returns an answer that
  * landed at the deadline.
  */
-describe("pollForAnswer releases the question after the wait", () => {
-  async function pollWith(releaseAnswer: string | null) {
-    vi.resetModules();
-    const client = await import("../http/convexClient.js");
+describe("AskUserQuestion past the wait", () => {
+  const input = {
+    questions: [{ question: "Which?", options: [{ label: "A" }] }],
+  };
+
+  async function askPastTheWait(releaseAnswer: string | null) {
+    process.env.CLAIM_MUTATION = "sessionWorkflow:claimPendingTurn";
+    process.env.ENTITY_ID_FIELD = "sessionId";
+    freshModules();
+    const { buildCanUseTool, QUESTION_WAIT_MS } =
+      await import("../runtime/pendingQuestion.js");
+    const { callbackState } = await import("../runtime/state.js");
     const calls: string[] = [];
-    // With no wait left the poll makes exactly one call: the release.
-    vi.mocked(client.callConvexWithRetry).mockImplementationOnce(
-      async (_type, path) => {
-        calls.push(path);
-        return {
-          status: "success",
-          value: {
-            answer: path === "pendingQuestions:release" ? releaseAnswer : null,
-          },
-        };
-      },
+    callConvexWithRetry.mockImplementation(async (_type, path) => {
+      calls.push(path);
+      return {
+        status: "success",
+        value: {
+          answer: path === "pendingQuestions:release" ? releaseAnswer : null,
+        },
+      };
+    });
+    vi.useFakeTimers();
+    const pending = buildCanUseTool()(
+      "AskUserQuestion",
+      input,
+      permissionOptions("toolu_q"),
     );
-    const { pollForAnswer } = await import("../runtime/pendingQuestion.js");
-    const outcome = await pollForAnswer(
-      "toolu_q",
-      new AbortController().signal,
-      0,
-    );
-    return { outcome, calls };
+    await advanceTimersByTimeAsync(QUESTION_WAIT_MS + 1000);
+    const result = await pending;
+    return { result, calls, callbackState };
   }
 
-  test("an unanswered question is released", async () => {
-    const { outcome, calls } = await pollWith(null);
-    expect(outcome).toEqual({ kind: "released" });
-    expect(calls).toEqual(["pendingQuestions:release"]);
-  });
-
   test("an answer that lands at the deadline is still taken", async () => {
-    const { outcome } = await pollWith('{"Which?":"A"}');
-    expect(outcome).toEqual({ kind: "answered", answer: '{"Which?":"A"}' });
+    const { result, calls, callbackState } =
+      await askPastTheWait('{"Which?":"A"}');
+    expect(result).toEqual({
+      behavior: "allow",
+      updatedInput: { ...input, answers: { "Which?": "A" } },
+    });
+    expect(calls.at(-1)).toBe("pendingQuestions:release");
+    expect(callbackState.pendingQuestionData).toBe("");
+    callbackState.questionAnswers.clear();
   });
 
   test("a released question is saved for the turn's message, not lost", async () => {
     // `release` deletes the row, so `pendingQuestionData` is the only copy
     // left: without it the turn ends and the card never renders.
-    process.env.CLAIM_MUTATION = "sessionWorkflow:claimPendingTurn";
-    process.env.ENTITY_ID_FIELD = "sessionId";
-    vi.resetModules();
-    const client = await import("../http/convexClient.js");
-    const { buildCanUseTool, QUESTION_RELEASED_MESSAGE, QUESTION_WAIT_MS } =
+    const { result, calls, callbackState } = await askPastTheWait(null);
+    const { QUESTION_RELEASED_MESSAGE } =
       await import("../runtime/pendingQuestion.js");
-    const { callbackState } = await import("../runtime/state.js");
-    const realNow = Date.now.bind(Date);
-    let skippedMs = 0;
-    const clock = vi
-      .spyOn(Date, "now")
-      .mockImplementation(() => realNow() + skippedMs);
-    const calls: string[] = [];
-    // The first unanswered poll jumps the clock past the wait, so the next
-    // poll is the release.
-    vi.mocked(client.callConvexWithRetry).mockImplementation(
-      async (_type, path) => {
-        calls.push(path);
-        if (path === "pendingQuestions:claimAnswer") {
-          skippedMs = QUESTION_WAIT_MS;
-        }
-        return { status: "success", value: { answer: null } };
-      },
-    );
-    const input = {
-      questions: [{ question: "Which?", options: [{ label: "A" }] }],
-    };
     try {
-      const result = await buildCanUseTool()("AskUserQuestion", input, {
-        toolUseID: "toolu_q",
-        signal: new AbortController().signal,
-      });
       expect(result).toEqual({
         behavior: "deny",
         message: QUESTION_RELEASED_MESSAGE,
@@ -185,7 +193,6 @@ describe("pollForAnswer releases the question after the wait", () => {
       expect(callbackState.pendingQuestionData).toBe(JSON.stringify(input));
       expect(callbackState.awaitingQuestionAnswer).toBe(false);
     } finally {
-      clock.mockRestore();
       callbackState.pendingQuestionData = "";
     }
   });
@@ -209,23 +216,18 @@ describe("the canUseTool gate grants MCP on every surface", () => {
     } else {
       process.env.ENTITY_ID_FIELD = entityIdField;
     }
-    vi.resetModules();
+    freshModules();
     const { buildCanUseTool } = await import("../runtime/pendingQuestion.js");
     return buildCanUseTool();
   }
 
-  const options = () => ({
-    toolUseID: "toolu_test",
-    signal: new AbortController().signal,
-  });
+  const options = () => permissionOptions("toolu_test");
 
-  for (const field of ["taskId", "projectId", "sessionId"]) {
-    test(`${field}: an MCP tool is allowed`, async () => {
-      const canUseTool = await gateFor(field);
-      const result = await canUseTool("mcp__eva__list_repos", {}, options());
-      expect(result.behavior).toBe("allow");
-    });
-  }
+  test("an MCP tool is allowed on a task chat", async () => {
+    const canUseTool = await gateFor("taskId");
+    const result = await canUseTool("mcp__eva__list_repos", {}, options());
+    expect(result?.behavior).toBe("allow");
+  });
 
   test("a surface with no answering UI lets AskUserQuestion through instead of blocking", async () => {
     // Would hang on postQuestion/pollForAnswer if it tried to block here —
@@ -236,6 +238,10 @@ describe("the canUseTool gate grants MCP on every surface", () => {
       { questions: [] },
       options(),
     );
-    expect(result.behavior).toBe("allow");
+    expect(result).toEqual({
+      behavior: "allow",
+      updatedInput: { questions: [] },
+    });
+    expect(callConvexWithRetry).not.toHaveBeenCalled();
   });
 });

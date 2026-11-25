@@ -85,4 +85,4 @@ Follow `fix-in-split-prs.md`. Short form:
 - The dev server serves one checkout. Fix agents in worktrees cannot verify in the running app; say so.
 - Tightening a guard can break a caller that relied on the loose rule. Grep every caller first.
 - A copy that is "the same fact" sometimes intentionally differs (UI label vs LLM prompt text). Keep both values co-located rather than unify the text, and ask.
-- Do not edit vendored skills (`skills-lock.json` entries); they are overwritten on update.
+- Do not edit lock-pinned skills (`skills-lock.json` entries); they are overwritten on update. `commit`, `push` and `ship` are local vendored copies, not in `skills-lock.json`, and may be edited in this repo.

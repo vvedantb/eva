@@ -37,6 +37,8 @@
     "./parseActivitySteps": "./src/utils/parseActivitySteps.ts",
     "./pendingQuestion": "./src/pendingQuestion.ts",
     "./previewFrameMessages": "./src/previewFrameMessages.ts",
+    "./projectStatus": "./src/projectStatus.ts",
+    "./projectView": "./src/projectView.ts",
     "./publishRecovery": "./src/publishRecovery.ts",
     "./proposedPlan": "./src/proposedPlan.ts",
     "./threadFind": "./src/threadFind.ts",
@@ -70,7 +72,7 @@
     "@json-render/core": "0.21.0",
     "@json-render/react": "0.21.0",
     "@types/react": "^19.0.0",
-    "@vvedantb/ui": "0.51.0",
+    "@vvedantb/ui": "0.63.0",
     "cronstrue": "^3.13.0",
     "tailwind-merge": "^2.6.1",
     "zod": "4.6.7"

@@ -1,13 +1,12 @@
 import { v } from "convex/values";
 import { internalMutation } from "../_generated/server";
 import { cancelTrackedWorkflow } from "../workflowManager";
-import { buildTaskDoneEvent } from "./events";
 import { closeOpenTurn } from "../_chat/turnStore";
 import { cleanUpStaleRun } from "./recovery";
-import { clearTaskRunStreaming, sendCompletionEvent } from "./helpers";
+import { clearTaskRunStreaming } from "./helpers";
 import { RUN_TIMEOUT_MS } from "./staleness";
 import { finishTaskRun, taskRunWorkflowId } from "../_agentTasks/runState";
-import { projectBuildWorkflowId } from "../_projects/buildState";
+import { onProjectTasksChanged } from "../functions";
 
 const RUN_TIMEOUT_MESSAGE = `Run timed out after ${RUN_TIMEOUT_MS / 3_600_000} hours`;
 
@@ -46,7 +45,6 @@ export const handleStaleRun = internalMutation({
         runId: args.runId,
         sandboxId: run.sandboxId,
         repoId: run.repoId,
-        isProjectTask: !!task.projectId,
         errorMessage: RUN_TIMEOUT_MESSAGE,
         exitReason: "run_timeout",
         taskStatus: task.status,
@@ -62,26 +60,15 @@ export const handleStaleRun = internalMutation({
         updatedAt: Date.now(),
       });
       await finishTaskRun(ctx, args.taskId, undefined);
+      // The task left `in_progress`: its project may start the next ones.
+      if (task.projectId !== undefined) {
+        await onProjectTasksChanged(ctx, task.projectId);
+      }
     }
 
     await clearTaskRunStreaming(ctx, args.taskId, args.runId, {
       snapshot: true,
     });
-
-    if (task.projectId) {
-      const project = await ctx.db.get(task.projectId);
-      const buildWorkflowId = project && projectBuildWorkflowId(project);
-      if (buildWorkflowId) {
-        try {
-          await sendCompletionEvent(
-            ctx,
-            buildTaskDoneEvent,
-            buildWorkflowId,
-            { taskId: args.taskId, success: false },
-          );
-        } catch {}
-      }
-    }
 
     return null;
   },

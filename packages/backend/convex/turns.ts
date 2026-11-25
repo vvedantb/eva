@@ -13,7 +13,6 @@ import {
   scheduleTurnEndedDrain,
 } from "./_chat/stallWatchdog";
 import {
-  stalledAlert,
   turnAdapterForEntity,
   type AgentTurnOwner,
   type ChatEntityId,
@@ -23,10 +22,7 @@ import {
 import {
   tearDownStaleDocWorkflow,
   tearDownStaleEvaluationWorkflow,
-  stopProjectInterview,
-  tearDownStaleSessionWorkflow,
 } from "./workflowWatchdog";
-import { interviewTurnProjectId } from "./_projects/interviewState";
 import { tearDownStaleAutomationRun } from "./_automations/runs";
 import { finalizeStalledRun, stalledRunStop } from "./_taskWorkflow/recovery";
 import { clearStreamingActivity } from "./_taskWorkflow/helpers";
@@ -521,30 +517,9 @@ async function finalizeExpiredAgentTurn(
         await tearDownStaleEvaluationWorkflow(ctx, owner.id, workflowId);
       }
       break;
-    case "summary":
-      if (workflowId !== undefined) {
-        await tearDownStaleSessionWorkflow(
-          ctx,
-          owner.id,
-          workflowId,
-          stalledAlert(
-            staleSeconds,
-            turn.state,
-            Math.round(leaseDurationMs / 1000),
-          ),
-        );
-      }
+    case "interview":
+      // The project interview is gone; a leftover turn only closes.
       break;
-    case "interview": {
-      const projectId = await interviewTurnProjectId(ctx.db, owner.id);
-      if (workflowId !== undefined && projectId !== undefined) {
-        await stopProjectInterview(ctx, projectId, workflowId, {
-          state: "error",
-          error,
-        });
-      }
-      break;
-    }
   }
   await clearStreamingActivity(ctx, turn.streamingEntityId);
   await closeTurn(ctx, turn, "error", { error });

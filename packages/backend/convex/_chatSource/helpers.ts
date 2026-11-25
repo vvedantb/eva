@@ -2,12 +2,15 @@ import { v, type Infer } from "convex/values";
 import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
-import { hasRepoAccess, hasTaskAccess } from "../functions";
+import {
+  hasRepoAccess,
+  hasTaskAccess,
+  listProjectTasksForUser,
+} from "../functions";
 import { isEntityDeleted } from "../numId";
 import {
-  chatOwnerEntityId,
-  sessionOwner,
   sessionOwnerEntityId,
+  sessionOwner,
 } from "../_sessions/owner";
 import {
   chatEntityKindValidator,
@@ -61,11 +64,11 @@ export async function chatSourceFieldsForEntityId(
     const chat = await db.get(sessionChatId);
     const session = chat ? await db.get(chat.sessionId) : null;
     if (!chat || !session) return null;
-    // An owned session's chat files under its owner (`chatOwner`; a project
+    // An owned session's chat files under its owner (`sessionOwner`; a project
     // task's own chat under that task).
     return chatSourceFieldsForEntityId(
       db,
-      String(chatOwnerEntityId(chat, session) ?? session._id),
+      String(sessionOwnerEntityId(session) ?? session._id),
     );
   }
   const sessionId = db.normalizeId("sessions", entityId);
@@ -280,6 +283,8 @@ export async function resolveChatSource(
   return null;
 }
 
+type ChatSourceTable = "docs" | "artifacts" | "chatLogEntries";
+
 /** Rows of `table` created from one chat, via its `by_source_*` index. */
 export function listRowsForChatSource(
   ctx: QueryCtx,
@@ -298,9 +303,18 @@ export function listRowsForChatSource(
 ): Promise<Doc<"chatLogEntries">[]>;
 export async function listRowsForChatSource(
   ctx: QueryCtx,
-  table: "docs" | "artifacts" | "chatLogEntries",
+  table: ChatSourceTable,
   source: ChatSourceArg,
-): Promise<Doc<"docs" | "artifacts" | "chatLogEntries">[]> {
+): Promise<Doc<ChatSourceTable>[]> {
+  return sourceRows(ctx, table, source);
+}
+
+/** `listRowsForChatSource` without the overloads, for callers holding any table. */
+async function sourceRows(
+  ctx: QueryCtx,
+  table: ChatSourceTable,
+  source: ChatSourceArg,
+): Promise<Doc<ChatSourceTable>[]> {
   const query = ctx.db.query(table);
   if (source.kind === "session") {
     return query
@@ -322,4 +336,49 @@ export async function listRowsForChatSource(
     )
     .order("desc")
     .collect();
+}
+
+/**
+ * Rows for a chat's Documents, Artifacts and Log panels. A session or task
+ * reads its own rows (`listRowsForChatSource`). A project rolls up: its own
+ * rows plus the rows of every child task the user can open
+ * (`listProjectTasksForUser`), newest first. Rows are read in place, never
+ * copied; a child task's row names it in `sourceTaskId`. The caller checks
+ * the user can see `source`.
+ */
+export function listRowsForChatRollUp(
+  ctx: QueryCtx & { userId: Id<"users"> },
+  table: "docs",
+  source: ChatSourceArg,
+): Promise<Doc<"docs">[]>;
+export function listRowsForChatRollUp(
+  ctx: QueryCtx & { userId: Id<"users"> },
+  table: "artifacts",
+  source: ChatSourceArg,
+): Promise<Doc<"artifacts">[]>;
+export function listRowsForChatRollUp(
+  ctx: QueryCtx & { userId: Id<"users"> },
+  table: "chatLogEntries",
+  source: ChatSourceArg,
+): Promise<Doc<"chatLogEntries">[]>;
+export async function listRowsForChatRollUp(
+  ctx: QueryCtx & { userId: Id<"users"> },
+  table: ChatSourceTable,
+  source: ChatSourceArg,
+): Promise<Doc<ChatSourceTable>[]> {
+  if (source.kind !== "project") return sourceRows(ctx, table, source);
+  const tasks = await listProjectTasksForUser(
+    ctx.db,
+    source.projectId,
+    ctx.userId,
+  );
+  const groups = await Promise.all([
+    sourceRows(ctx, table, source),
+    ...tasks
+      .filter((row) => row.canAccess)
+      .map(({ task }) =>
+        sourceRows(ctx, table, { kind: "task", taskId: task._id }),
+      ),
+  ]);
+  return groups.flat().sort((a, b) => b._creationTime - a._creationTime);
 }

@@ -1,5 +1,6 @@
 import type { QueryCtx } from "../_generated/server";
 import type { Doc } from "../_generated/dataModel";
+import { entityVisible } from "../numId";
 import { resolveSessionBaseBranch } from "./baseBranch";
 import { buildEditPrompt } from "./prompts";
 import { resolveMessageTokens } from "../_mentions/resolveMessageTokens";
@@ -12,8 +13,11 @@ import { listLiveSessionChats } from "../_sessionChats/helpers";
 import { buildSessionBranchName } from "../_git/branchNames";
 import { sandboxOwnerKey } from "@eva/shared";
 import { taskPrUrl } from "../_pullRequests/store";
-import { chatOwner } from "./owner";
-import { getProjectGeneratedSpec } from "../_projects/helpers";
+import { sessionOwner } from "./owner";
+import {
+  formatProjectTaskTable,
+  loadProjectTaskRows,
+} from "../_projects/taskTable";
 
 // --- Turn config ---
 
@@ -58,49 +62,129 @@ ${message}`;
 }
 
 /**
- * The owner-context line a project's chat turn leads with: which project this
- * sandbox serves and its description.
+ * Longest part of the project summary doc a turn's prompt carries. The agent
+ * reads the rest with `get_eva_doc`.
  */
-export function withProjectContext(
-  project: Pick<Doc<"projects">, "title" | "description">,
-  message: string,
-): string {
-  const descriptionBlock = project.description
-    ? `\nProject description:\n${project.description}`
-    : "";
-  return `In the sandbox for project "${project.title}"${descriptionBlock}
+export const PROJECT_SUMMARY_PROMPT_MAX_CHARS = 6_000;
 
-${message}`;
+/** Joins the non-empty prompt blocks with a blank line. */
+function joinBlocks(...blocks: string[]): string {
+  return blocks.filter((block) => block.trim() !== "").join("\n\n");
 }
 
 /**
+ * What every coordinator and child task turn knows of its project: the
+ * project context (its description) and the summary doc, capped at
+ * `PROJECT_SUMMARY_PROMPT_MAX_CHARS`. Empty when neither is set.
+ */
+async function projectBriefBlock(
+  ctx: QueryCtx,
+  project: Pick<Doc<"projects">, "description" | "summaryDocId">,
+): Promise<string> {
+  const summary = project.summaryDocId
+    ? entityVisible(await ctx.db.get(project.summaryDocId))
+    : null;
+  const text = summary?.content.trim() ?? "";
+  const max = PROJECT_SUMMARY_PROMPT_MAX_CHARS;
+  const summaryBlock =
+    summary && text
+      ? `Project summary (Eva doc ${summary._id}; it can be out of date):\n${
+          text.length > max
+            ? `${text.slice(0, max)}\n[Cut at ${max} characters. Read the whole doc with get_eva_doc.]`
+            : text
+        }`
+      : "";
+  const context = project.description?.trim();
+  return joinBlocks(
+    context ? `Project context:\n${context}` : "",
+    summaryBlock,
+  );
+}
+
+/** What a child task knows of its place in the project and how it reports up. */
+const CHILD_TASK_RULES = `This task is one part of a project. The project's coordinator plans the work and other tasks run beside this one, each on its own branch and PR to main.
+- Do only this task. Keep your change safe to merge alone.
+- Read sibling tasks, docs and the summary with list_agents (scope "project"), list_eva_docs and list_artifacts (scope "project") and read_chat_log. Never change a sibling's work.
+- report_to_coordinator with kind "report" tells the coordinator something other tasks need (for example a changed API). Keep working after it.
+- report_to_coordinator with kind "ask" asks a question you cannot answer yourself. After an ask, stop and end your turn: the answer starts your next run.
+- If main moved and your branch conflicts, rebase and fix the conflicts yourself.`;
+
+/**
+ * The project half of a child task's prompt: its place in the project and
+ * the project brief (`projectBriefBlock`). A snapshot when
+ * the turn or run starts. Shared by the task's chat turns (`ownerPromptContext`)
+ * and its runs (`taskWorkflow.getTaskData`).
+ */
+export async function childTaskProjectBlock(
+  ctx: QueryCtx,
+  project: Pick<Doc<"projects">, "title" | "description" | "summaryDocId">,
+): Promise<string> {
+  return joinBlocks(
+    `This task is part of project "${project.title}".`,
+    CHILD_TASK_RULES,
+    await projectBriefBlock(ctx, project),
+  );
+}
+
+/** How a coordinator works; leads every coordinator turn. */
+export const COORDINATOR_RULES = `You are this project's coordinator. You plan the project and keep it moving; child tasks do the work.
+- Never edit, commit or push code. Your sandbox is read-only: read code to plan, nothing more.
+- Split work into child tasks with create_tasks_batch (or create_task): one repo each, a short title, a full description and a phase label. Split by files, so tasks running at the same time do not touch the same code. When two tasks must touch the same area, create the second only after the first is merged.
+- Group work before you create tasks. When a person sends many items (a feedback list, review notes), sort them by area first. Put related small items in one task, so each task is one PR for one area (for example "Checkout copy fixes: 6 items"). Give a large or risky item its own task. List every item in the task description, so none is lost.
+- Route new items to an existing task when one already covers that area and its PR is not merged: send them to that task with send_chat_message instead of creating a new task. Create a new task only when no open task fits.
+- After you sort a batch, reply with each item and where it went (which task, or why you left it out).
+- A task runs in the project's home repo by default. Give it another repo (repoName) when the work needs it or the person asks; any repo the person can access is allowed.
+- Plan each task so its PR is safe to merge alone, or put the work behind a flag. If the repo has no flag method, ask the person.
+- Tasks you create start at once: the scheduler starts them all, in task-number order. Create them in the order they should run.
+- Tasks people add wait in Triage until a person approves them. You cannot approve them; read them and plan around them.
+- A running task does not see your summary updates. If it must know something now, message it with send_chat_message.
+- Answer a task's question with send_chat_message to that task. If you cannot, say so in this chat so a person answers.
+- A failed task: read its state with get_agent_state, then retry it once with retry_task and a note on what to change, or tell the person.
+- Keep the project summary current with update_project_summary: goal, launched, in progress, next, decisions, risks.`;
+
+/**
  * What the session's owner adds to a turn. A standalone session adds nothing.
- * A task's session leads with the task; a project's leads with the project
- * (its spec as the plan), and a project task's own chat in it with the task.
- * The owner's PR is used: the owner owns it, the session has none.
+ * A task's session leads with the task; a project child task's also carries
+ * the project (`childTaskProjectBlock`). A project's session is its
+ * coordinator: it leads with the coordinator rules, the project brief and the
+ * live task table (`formatProjectTaskTable`). This is a snapshot when the
+ * turn starts. The owner's PR is used: the owner owns it, the session has
+ * none.
  */
 async function ownerPromptContext(
   ctx: QueryCtx,
   session: Doc<"sessions">,
-  chat: Doc<"sessionChats">,
   message: string,
 ): Promise<{ message: string; planContent?: string; prUrl?: string }> {
-  const owner = chatOwner(chat, session);
+  const owner = sessionOwner(session);
   const taskId = owner.kind === "task" ? owner.taskId : undefined;
   const task = taskId ? await ctx.db.get(taskId) : null;
   if (task) {
+    const project = task.projectId ? await ctx.db.get(task.projectId) : null;
     return {
-      message: withTaskContext(task, message),
+      message: project
+        ? joinBlocks(
+            await childTaskProjectBlock(ctx, project),
+            withTaskContext(task, message),
+          )
+        : withTaskContext(task, message),
       planContent: task.description,
-      prUrl: await taskPrUrl(ctx.db, task),
+      prUrl: taskPrUrl(task),
     };
   }
   const projectId = owner.kind === "project" ? owner.projectId : undefined;
   const project = projectId ? await ctx.db.get(projectId) : null;
   if (project) {
     return {
-      message: withProjectContext(project, message),
-      planContent: await getProjectGeneratedSpec(ctx.db, project._id),
+      message: joinBlocks(
+        `In the sandbox for project "${project.title}".`,
+        COORDINATOR_RULES,
+        await projectBriefBlock(ctx, project),
+        formatProjectTaskTable(
+          await loadProjectTaskRows(ctx.db, project, session.userId),
+        ),
+        message,
+      ),
       prUrl: project.prUrl,
     };
   }
@@ -158,7 +242,7 @@ export async function buildSessionPrompt(
       .query("sessionRepos")
       .withIndex("by_session", (q) => q.eq("sessionId", session._id))
       .collect(),
-    ownerPromptContext(ctx, session, chat, resolvedMessage),
+    ownerPromptContext(ctx, session, resolvedMessage),
   ]);
   const linkedRepos = linkedRepoRows.map((row) => ({
     owner: row.owner,

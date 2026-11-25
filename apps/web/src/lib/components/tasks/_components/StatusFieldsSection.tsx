@@ -35,7 +35,6 @@ interface StatusFieldsSectionProps {
   taskId: Id<"agentTasks">;
   task: Doc<"agentTasks"> | undefined;
   status: TaskStatus | undefined;
-  isBlocked: boolean | undefined;
   users: FunctionReturnType<typeof api.users.listAll> | undefined;
   projects: FunctionReturnType<typeof api.projects.list> | undefined;
   /** Derived from the task row, not mirrored state — see `useTaskDetail`. */
@@ -53,7 +52,6 @@ export function StatusFieldsSection({
   taskId,
   task,
   status,
-  isBlocked,
   users,
   projects,
   baseBranch,
@@ -144,7 +142,6 @@ export function StatusFieldsSection({
         <StatusSelectField
           taskId={taskId}
           status={status}
-          isBlocked={isBlocked}
           updateStatus={updateStatus}
         />
 
@@ -209,7 +206,6 @@ export function StatusFieldsSection({
           isOpen={isCreatingProject}
           onClose={() => setIsCreatingProject(false)}
           onCreated={(id) => updateTask({ id: taskId, projectId: id })}
-          defaultSkipPlanning
         />
       </FieldsSection>
     </div>

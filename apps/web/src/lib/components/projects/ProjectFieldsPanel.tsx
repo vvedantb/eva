@@ -22,14 +22,15 @@ import {
 import {
   IconUsers,
   IconUser,
-  IconUserPlus,
   IconGitBranch,
   IconInfoCircle,
 } from "@tabler/icons-react";
 import dayjs from "@eva/shared/dates";
-import { FALLBACK_GIT_BASE_BRANCH, getUserInitials } from "@eva/shared";
+import {
+  FALLBACK_GIT_BASE_BRANCH,
+  projectPickerAccounts,
+} from "@eva/shared";
 import { UserInitials } from "@eva/shared/user-initials";
-import { Facehash } from "facehash";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import {
   FieldsSection,
@@ -37,8 +38,8 @@ import {
   FIELD_TEXT_CLASS,
   FIELD_TRIGGER_CLASS,
 } from "@/lib/components/fields/FieldsSection";
-import { ProjectPhaseBadge } from "./ProjectPhaseBadge";
-import { ProjectPhaseSelect } from "./_components/ProjectPhaseSelect";
+import { ProjectStageBadge } from "./ProjectPhaseBadge";
+import { useProjectTaskStatus } from "./useProjectStatus";
 import { ProjectDateRangeField } from "./_components/ProjectDateRangeField";
 import { PriorityPicker } from "@/lib/components/priority/PriorityPicker";
 import {
@@ -65,6 +66,7 @@ export function ProjectFieldsPanel({
   const users = useQuery(api.users.listAll);
   const currentUserId = useQuery(api.auth.me);
   const updateProject = useUpdateProject(projectId);
+  const { status } = useProjectTaskStatus(projectId, repo._id);
 
   const displayName = (user: NonNullable<typeof users>[number]) =>
     user.fullName ||
@@ -84,28 +86,15 @@ export function ProjectFieldsPanel({
   const isOwner =
     currentUserId !== undefined && currentUserId === project.userId;
   const creator = (users ?? []).find((user) => user._id === project.userId);
-  const ownerAccountLabel =
-    creator?.firstName?.trim() || creator?.fullName?.trim() || "Personal";
-  const displayAccounts =
-    isOwner || !project.providerAccountId
-      ? accounts
-      : [
-          {
-            id: project.providerAccountId,
-            provider: getAIModelProvider(currentModel),
-            label: ownerAccountLabel,
-            // The project owner's account, shown to a collaborator: theirs, not
-            // the viewer's, so it must never be defaulted to.
-            isOwn: false,
-          },
-          ...accounts,
-        ];
+  const displayAccounts = projectPickerAccounts(accounts, {
+    isOwner,
+    providerAccountId: project.providerAccountId,
+    provider: getAIModelProvider(currentModel),
+    ownerLabel:
+      creator?.firstName?.trim() || creator?.fullName?.trim() || "Personal",
+  });
   const displayBaseBranch =
     project.baseBranch ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
-  const reviewers = (users ?? []).filter((u) => u.role === "dev");
-  const reviewerUser = project.codeReviewer
-    ? users?.find((u) => u._id === project.codeReviewer)
-    : undefined;
   const lead = project.projectLead
     ? (users ?? []).find((u) => u._id === project.projectLead)
     : undefined;
@@ -113,16 +102,12 @@ export function ProjectFieldsPanel({
   return (
     <div className="space-y-4">
       <FieldsSection title="Properties">
-        {project.phase === "draft" || project.phase === "finalized" ? (
+        {/* Stage is derived from the child tasks. */}
+        {status ? (
           <div className={FIELD_ROW_CLASS}>
-            <ProjectPhaseBadge phase={project.phase} />
+            <ProjectStageBadge stage={status.stage} />
           </div>
-        ) : (
-          <ProjectPhaseSelect
-            value={project.phase}
-            onChange={(phase) => updateProject({ id: projectId, phase })}
-          />
-        )}
+        ) : null}
 
         <div className={FIELD_ROW_CLASS}>
           <PriorityPicker
@@ -169,58 +154,6 @@ export function ProjectFieldsPanel({
               {(users ?? []).map((user) => (
                 <SelectItem data-pii key={user._id} value={user._id}>
                   {displayName(user)}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={project.codeReviewer ?? "none"}
-          onValueChange={(val) =>
-            updateProject({
-              id: projectId,
-              codeReviewer:
-                val === "none"
-                  ? null
-                  : ((users ?? []).find((u) => u._id === val)?._id ?? null),
-            })
-          }
-        >
-          <SelectTrigger className={FIELD_TRIGGER_CLASS}>
-            <SelectValue>
-              <div
-                className={`flex items-center gap-1.5 ${!project.codeReviewer ? "text-muted-foreground" : ""}`}
-              >
-                {reviewerUser ? (
-                  <Facehash
-                    size={16}
-                    name={getUserInitials(reviewerUser)}
-                    enableBlink
-                  />
-                ) : (
-                  <IconUserPlus size={14} className="text-muted-foreground" />
-                )}
-                <span data-pii={Boolean(reviewerUser) || undefined}>
-                  {reviewerUser ? displayName(reviewerUser) : "Code Reviewer"}
-                </span>
-              </div>
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectLabel>Code Reviewer</SelectLabel>
-              <SelectItem value="none">Unassigned</SelectItem>
-              {reviewers.map((user) => (
-                <SelectItem key={user._id} value={user._id}>
-                  <div className="flex items-center gap-1.5">
-                    <Facehash
-                      size={16}
-                      name={getUserInitials(user)}
-                      enableBlink
-                    />
-                    <span data-pii>{displayName(user)}</span>
-                  </div>
                 </SelectItem>
               ))}
             </SelectGroup>

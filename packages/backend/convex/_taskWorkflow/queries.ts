@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internalQuery } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { buildTaskBranchName } from "../_git/branchNames";
+import { taskBranchName } from "../_git/branchNames";
 import { findLivePullRequestOnBranch } from "../_pullRequests/store";
 import { taskStatusValidator } from "../_validators/enums";
 import {
@@ -10,16 +10,14 @@ import {
   reasoningLevelValidator,
   runModeValidator,
 } from "../validators";
-import {
-  resolveTaskWorkflowBaseBranch,
-  resolveTaskWorkflowBaseBranchForTask,
-} from "./resolveBaseBranch";
+import { resolveTaskWorkflowBaseBranch } from "./resolveBaseBranch";
 import {
   buildImplementationPrompt,
   buildConflictResolutionPrompt,
 } from "./prompts";
 import { resolveMessageTokens } from "../_mentions/resolveMessageTokens";
 import { listReadableSiblingRepos } from "../_githubRepos/sandboxRead";
+import { childTaskProjectBlock } from "../_sessions/sessionPrompt";
 
 const MONTH_NAMES = [
   "January",
@@ -72,7 +70,7 @@ export const getTaskData = internalQuery({
     repoId: v.id("githubRepos"),
     runId: v.id("agentRuns"),
     projectId: v.optional(v.id("projects")),
-    /** The task's session (a project task's: the project's): its sandbox is the one the run reuses. */
+    /** The task's own session: its sandbox is the one the run reuses. */
     ownedSessionId: v.optional(v.id("sessions")),
     branchName: v.optional(v.string()),
     mode: v.optional(runModeValidator),
@@ -137,9 +135,11 @@ export const getTaskData = internalQuery({
     };
 
     let projectContext: { title: string; description?: string } | undefined;
-    let project = null;
+    // A child task's run carries the same project half its chat turns do:
+    // its place in the project and the brief.
+    let projectBlock = "";
     if (args.projectId) {
-      project = await ctx.db.get(args.projectId);
+      const project = await ctx.db.get(args.projectId);
       if (project) {
         projectContext = {
           title: project.title,
@@ -147,8 +147,11 @@ export const getTaskData = internalQuery({
             project.description ?? undefined,
           ),
         };
+        projectBlock = await childTaskProjectBlock(ctx, project);
       }
     }
+    // The coordinator's retry note or the answer to the task's question.
+    const runNote = (await ctx.db.get(args.runId))?.note?.trim() ?? "";
 
     const resolvedTaskDescription = await resolveDescriptionForPrompt(
       task.description ?? undefined,
@@ -221,7 +224,7 @@ export const getTaskData = internalQuery({
       }),
     );
 
-    const branchName = args.branchName || buildTaskBranchName(args.taskId);
+    const branchName = args.branchName || taskBranchName(task);
 
     const rootDirectory = repo.rootDirectory ?? "";
 
@@ -237,7 +240,7 @@ export const getTaskData = internalQuery({
       args.mode === "resolve_conflicts"
         ? buildConflictResolutionPrompt(
             branchName,
-            resolveTaskWorkflowBaseBranch(task, repo, project ?? undefined),
+            resolveTaskWorkflowBaseBranch(task, repo),
             rootDirectory,
             repo.owner,
             repo.name,
@@ -263,7 +266,9 @@ export const getTaskData = internalQuery({
           );
 
     return {
-      prompt,
+      prompt: [prompt, projectBlock, runNote]
+        .filter((block) => block !== "")
+        .join("\n\n"),
       repoOwner: repo.owner,
       repoName: repo.name,
       branchName,
@@ -328,7 +333,7 @@ export const getTaskPrCreationData = internalQuery({
         (b.startedAt ?? b._creationTime) - (a.startedAt ?? a._creationTime),
     );
     const latestRun = sortedRuns[0] ?? null;
-    const branchName = buildTaskBranchName(args.taskId);
+    const branchName = taskBranchName(task);
     // Only a live PR blocks a new one: after a merge or close, new commits on
     // the branch need a fresh PR.
     const livePr = await findLivePullRequestOnBranch(
@@ -343,11 +348,7 @@ export const getTaskPrCreationData = internalQuery({
       repoOwner: repo.owner,
       repoName: repo.name,
       branchName,
-      baseBranch: await resolveTaskWorkflowBaseBranchForTask(
-        ctx.db,
-        task,
-        repo,
-      ),
+      baseBranch: resolveTaskWorkflowBaseBranch(task, repo),
       taskTitle: task.title,
       taskDescription: task.description,
       rootDirectory: repo.rootDirectory ?? "",

@@ -62,3 +62,60 @@ export function firstNameByUserId<TUserId extends string>(
   }
   return names;
 }
+
+/**
+ * Who a bubble belongs to, for grouping: you, one teammate, or Eva when her
+ * replies are bubbles (the project coordinator). Undefined: never groups (a
+ * system row, or a flat Eva reply).
+ */
+function bubbleSender(
+  message: ChatUserAttribution,
+  currentUserId: string | undefined,
+  assistantBubbles: boolean,
+): string | undefined {
+  if (message.isSystemAlert) return undefined;
+  if (message.role === "assistant") return assistantBubbles ? "eva" : undefined;
+  return isOtherUserChatMessage(message, currentUserId)
+    ? `user:${message.userId}`
+    : "me";
+}
+
+/**
+ * Runs of bubbles from one sender, as a messaging app groups them: a row that
+ * `joinsNext` drops its avatar and action row; a row that `joinsPrevious`
+ * drops the sender name and sits close under the one above. A divider above a
+ * row (`breaksBefore`: a new day, the "NEW" line) ends the run.
+ */
+export function findBubbleGroups<TId extends string>(
+  messages: ReadonlyArray<ChatUserAttribution & { _id: TId }>,
+  options: {
+    currentUserId: string | undefined;
+    assistantBubbles: boolean;
+    breaksBefore: ReadonlySet<TId>;
+  },
+): { joinsPrevious: Set<TId>; joinsNext: Set<TId> } {
+  const joinsPrevious = new Set<TId>();
+  const joinsNext = new Set<TId>();
+  for (let i = 1; i < messages.length; i++) {
+    const previous = messages[i - 1];
+    const message = messages[i];
+    if (!previous || !message || options.breaksBefore.has(message._id)) {
+      continue;
+    }
+    const sender = bubbleSender(
+      message,
+      options.currentUserId,
+      options.assistantBubbles,
+    );
+    if (
+      sender === undefined ||
+      sender !==
+        bubbleSender(previous, options.currentUserId, options.assistantBubbles)
+    ) {
+      continue;
+    }
+    joinsPrevious.add(message._id);
+    joinsNext.add(previous._id);
+  }
+  return { joinsPrevious, joinsNext };
+}

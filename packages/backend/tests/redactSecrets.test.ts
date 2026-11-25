@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { redactSecrets } from "@eva/shared/redactSecrets";
 
 test("redacts GitHub tokens, API keys, JWTs and URL userinfo", () => {

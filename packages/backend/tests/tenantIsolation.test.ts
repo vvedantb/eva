@@ -1,8 +1,9 @@
 import { convexTest } from "convex-test";
 import workflow from "@convex-dev/workflow/test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Tenant isolation for tasks, projects, runs and chats. Each public function
@@ -11,7 +12,6 @@ import schema from "../convex/schema";
  * or a teammate could read another member's private draft.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const OWNER = "clerk|tenant-owner";
 const MATE = "clerk|tenant-mate";
@@ -68,7 +68,6 @@ async function fixture() {
       userId: ownerId,
       title: "Billing",
       rawInput: "billing",
-      phase: "business_review",
       numId: 1,
     });
     const strangerProjectId = await ctx.db.insert("projects", {
@@ -76,7 +75,6 @@ async function fixture() {
       userId: strangerId,
       title: "Grab",
       rawInput: "grab",
-      phase: "business_review",
       numId: 1,
     });
     const task = (numId: number, status: "todo" | "draft") => ({
@@ -155,7 +153,7 @@ async function fixture() {
 
 describe("a draft is private to its creator", () => {
   test(
-    "a teammate cannot read or list it, and a project delete still removes it",
+    "a teammate cannot read or list it, and a project delete still detaches it",
     async () => {
       const f = await fixture();
       expect(await f.mate.query(api.agentTasks.get, { id: f.draftId })).toBeNull();
@@ -171,9 +169,10 @@ describe("a draft is private to its creator", () => {
       });
       expect(ownerList.map((task) => task._id)).toEqual([f.taskId, f.draftId]);
 
-      await f.mate.mutation(api.projects.deleteCascade, { id: f.projectId });
+      await f.mate.mutation(api.projects.remove, { id: f.projectId });
       const draft = await f.t.run((ctx) => ctx.db.get(f.draftId));
-      expect(draft?.deletedAt).toBeDefined();
+      expect(draft?.projectId).toBeUndefined();
+      expect(draft?.deletedAt).toBeUndefined();
     },
     TIMEOUT_MS,
   );
@@ -181,7 +180,7 @@ describe("a draft is private to its creator", () => {
 
 describe("tasks cannot cross into another tenant", () => {
   test(
-    "assign, update, create and reorder need access to every row",
+    "assign, update and create need access to every row",
     async () => {
       const f = await fixture();
       await expect(
@@ -209,36 +208,9 @@ describe("tasks cannot cross into another tenant", () => {
           projectId: f.strangerProjectId,
         }),
       ).rejects.toThrow("Not authorized");
-      await expect(
-        f.stranger.mutation(api.agentTasks.reorderProjectTasks, {
-          projectId: f.strangerProjectId,
-          taskIds: [f.taskId],
-        }),
-      ).rejects.toThrow("Task not found");
       const task = await f.t.run((ctx) => ctx.db.get(f.taskId));
       expect(task?.projectId).toBe(f.projectId);
       expect(task?.repoId).toBe(f.repoId);
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "a cascade delete leaves a dependent the caller cannot see",
-    async () => {
-      const f = await fixture();
-      await f.t.run((ctx) =>
-        ctx.db.insert("taskDependencies", {
-          taskId: f.strangerTaskId,
-          dependsOnId: f.taskId,
-        }),
-      );
-      await f.owner.mutation(api.agentTasks.deleteCascade, { id: f.taskId });
-      const [task, foreign] = await f.t.run(async (ctx) => [
-        await ctx.db.get(f.taskId),
-        await ctx.db.get(f.strangerTaskId),
-      ]);
-      expect(task?.deletedAt).toBeDefined();
-      expect(foreign?.deletedAt).toBeUndefined();
     },
     TIMEOUT_MS,
   );

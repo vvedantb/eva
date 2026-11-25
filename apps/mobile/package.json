@@ -15,7 +15,7 @@
     "web:export": "expo export --platform web"
   },
   "dependencies": {
-    "@clerk/clerk-expo": "^2.20.2",
+    "@clerk/expo": "^4.16.0",
     "@convex-dev/presence": "^0.3.0",
     "@eva/backend": "workspace:*",
     "@eva/shared": "workspace:*",
@@ -29,7 +29,7 @@
     "@rn-primitives/slot": "^1.5.2",
     "@rn-primitives/switch": "^1.5.2",
     "@tabler/icons-react-native": "^3.49.0",
-    "@vvedantb/native-ui": "0.29.0",
+    "@vvedantb/native-ui": "0.34.0",
     "@vvedantb/server": "0.17.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -39,6 +39,7 @@
     "expo": "~57.0.31",
     "expo-auth-session": "~57.0.16",
     "expo-blur": "~57.0.3",
+    "expo-build-properties": "~57.0.23",
     "expo-clipboard": "~57.0.0",
     "expo-constants": "~57.0.22",
     "expo-crypto": "~57.0.4",
@@ -83,7 +84,7 @@
     "@babel/plugin-transform-react-jsx": "^7.29.7",
     "@types/node": "^22.18.5",
     "@types/react": "19.3.0",
-    "@vvedantb/config": "^0.11.0",
+    "@vvedantb/config": "^0.14.0",
     "babel-preset-expo": "~57.0.16",
     "tailwindcss": "^3.4.19",
     "typescript": "^5.9.0"

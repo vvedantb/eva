@@ -1,8 +1,5 @@
 import { BulkActionBar, type BulkBarAction } from "@vvedantb/ui";
-import { IconRefresh, IconTrash } from "@tabler/icons-react";
-
-/** Bulk actions that open their own dialog. Delete owns its confirm elsewhere. */
-export type ProjectBulkAction = "phase";
+import { IconTrash } from "@tabler/icons-react";
 
 interface ProjectsBulkBarProps {
   isSelecting: boolean;
@@ -11,14 +8,14 @@ interface ProjectsBulkBarProps {
   onExitSelect: () => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
-  onSetBulkAction: (action: ProjectBulkAction | null) => void;
   /** Runs the delete flow, which owns its own confirm and Alt-to-skip. */
   onDelete: () => void;
 }
 
 /**
- * The projects board's selection bar. Same shell as quick tasks — only the two
- * actions projects have differ: move the selection to a phase, or delete it.
+ * The projects board's selection bar. Same shell as quick tasks; the one
+ * action projects have is delete (a project's stage is derived from its
+ * tasks, so there is no phase to set).
  */
 export function ProjectsBulkBar({
   isSelecting,
@@ -27,17 +24,8 @@ export function ProjectsBulkBar({
   onExitSelect,
   onSelectAll,
   onClearSelection,
-  onSetBulkAction,
   onDelete,
 }: ProjectsBulkBarProps) {
-  const phaseAction: BulkBarAction = {
-    key: "phase",
-    label: "Change Phase",
-    shortLabel: "Phase",
-    icon: IconRefresh,
-    onClick: () => onSetBulkAction("phase"),
-  };
-
   const deleteAction: BulkBarAction = {
     key: "delete",
     label: "Delete All",
@@ -57,7 +45,7 @@ export function ProjectsBulkBar({
       onExitSelect={onExitSelect}
       onSelectAll={onSelectAll}
       onClearSelection={onClearSelection}
-      primaryActions={[phaseAction]}
+      primaryActions={[]}
       destructiveAction={deleteAction}
     />
   );

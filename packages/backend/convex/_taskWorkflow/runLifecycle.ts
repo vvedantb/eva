@@ -5,16 +5,11 @@ import { runModeValidator } from "../validators";
 import {
   hasActiveRun,
   isSupersededTaskRun,
-  recomputeProjectPhase,
+  onProjectTasksChanged,
 } from "../functions";
 import { RUN_TIMEOUT_MS } from "../workflowWatchdog";
-import { buildTaskDoneEvent } from "./events";
 import { closeOpenTurn } from "../_chat/turnStore";
 import { isUsageLimitError, parseUsageLimitResetTime } from "./recovery";
-import {
-  projectBuildWorkflowId,
-  scheduleProjectBuild,
-} from "../_projects/buildState";
 import { finishTaskRun, scheduleTaskRun } from "../_agentTasks/runState";
 import {
   clearTaskRunStreaming,
@@ -23,8 +18,9 @@ import {
   upsertActivityLog,
   finalizeRunStatus,
   recordRunPullRequest,
-  sendCompletionEvent,
+  RUN_WAITING_FOR_ANSWER,
 } from "./helpers";
+import { findOpenAsk, runEndedOnAsk } from "../_projects/reports";
 
 /**
  * Transitions a queued run to running, sets streaming activity, and schedules
@@ -194,7 +190,7 @@ export const scheduleDeploymentTracking = internalMutation({
   },
 });
 
-/** Completes a run: finalizes status, updates task, sends notifications, and signals build workflow. */
+/** Completes a run: finalizes status, updates the task, and lets its project schedule the next tasks. */
 export const completeRun = internalMutation({
   args: {
     runId: v.id("agentRuns"),
@@ -212,15 +208,19 @@ export const completeRun = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const now = Date.now();
+    const run = await ctx.db.get(args.runId);
+    // The completion of a run that ended on its ask came in as a success
+    // (`handleCompletion`); it is recorded as waiting, not as done.
+    const endedOnAsk =
+      args.success && run !== null && (await runEndedOnAsk(ctx.db, run));
 
     await finalizeRunStatus(ctx, {
       runId: args.runId,
-      projectId: args.projectId,
       success: args.success,
       error: args.error,
       prError: args.prError,
       prUrl: args.prUrl,
-      exitReason: args.exitReason,
+      exitReason: endedOnAsk ? RUN_WAITING_FOR_ANSWER : args.exitReason,
       claudeResult: args.claudeResult,
     });
 
@@ -232,11 +232,17 @@ export const completeRun = internalMutation({
     const staleCompletion =
       (await hasActiveRun(ctx.db, args.taskId)) ||
       (await isSupersededTaskRun(ctx.db, args.taskId, args.runId));
+    // A project task that asked its coordinator a question ended its turn on
+    // purpose: it stays `in_progress` (keeping its parallel slot) until the
+    // answer starts its next run (`_projects/reports.ts`).
+    const waitingForAnswer =
+      task?.projectId !== undefined &&
+      (await findOpenAsk(ctx.db, args.taskId)) !== null;
     if (task && !staleCompletion) {
       await ctx.db.patch(args.taskId, {
         // The run owns `in_progress` only. A status the user picked mid-run
         // (done, cancelled, a review column) is theirs and stays.
-        ...(task.status === "in_progress"
+        ...(task.status === "in_progress" && !waitingForAnswer
           ? { status: args.success ? "business_review" : "todo" }
           : {}),
         updatedAt: now,
@@ -249,8 +255,9 @@ export const completeRun = internalMutation({
       // reach here. Guarded by `staleCompletion`, so a queued or superseding
       // run keeps its own state.
       await finishTaskRun(ctx, args.taskId, args.runId);
+      // Also schedules the project's next ready tasks (`scheduleReadyTasks`).
       if (task.projectId) {
-        await recomputeProjectPhase(ctx, task.projectId);
+        await onProjectTasksChanged(ctx, task.projectId);
       }
     }
 
@@ -264,13 +271,13 @@ export const completeRun = internalMutation({
       const resetAt = parseUsageLimitResetTime(args.error);
       if (resetAt && resetAt > Date.now()) {
         if (task?.projectId) {
-          // Project task: schedule the build to retry at the reset time,
-          // unless a build is already scheduled.
-          await scheduleProjectBuild(
-            ctx,
-            task.projectId,
-            "scheduleRetry",
+          // Project task: the project's scheduler starts nothing while its
+          // account is at the limit, and looks again at the reset time (or
+          // sooner, when a person changes the project's account).
+          await ctx.scheduler.runAt(
             resetAt,
+            internal.buildWorkflow.scheduleReadyTasks,
+            { projectId: task.projectId },
           );
         } else if (task) {
           // Quick task: retry at the reset time, unless a schedule or a
@@ -288,20 +295,6 @@ export const completeRun = internalMutation({
           }
         }
       }
-    }
-
-    const project = args.projectId ? await ctx.db.get(args.projectId) : null;
-    const buildWorkflowId = project && projectBuildWorkflowId(project);
-    if (buildWorkflowId && !staleCompletion) {
-      await sendCompletionEvent(
-        ctx,
-        buildTaskDoneEvent,
-        buildWorkflowId,
-        {
-          taskId: args.taskId,
-          success: args.success,
-        },
-      );
     }
 
     return null;

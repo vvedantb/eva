@@ -60,7 +60,6 @@ function parseDragEvent(event: SortableListDragEndEvent) {
 
 interface QuickTasksListViewProps {
   tasks: Task[];
-  projectNames: Map<string, string>;
   isSelecting: boolean;
   selectedIds: Set<Id<"agentTasks">>;
   onToggleSelect: (
@@ -78,7 +77,6 @@ interface QuickTasksListViewProps {
 
 export function QuickTasksListView({
   tasks: externalTasks,
-  projectNames,
   isSelecting,
   selectedIds,
   onToggleSelect,
@@ -91,13 +89,6 @@ export function QuickTasksListView({
   const groupedCodebases = useQuery(api.githubRepos.listGroupedByCodebase);
   const users = useQuery(api.users.listAll);
   const projectsList = useQuery(api.projects.list, { repoId });
-  const projectNumIds = new Map(
-    (projectsList ?? []).flatMap((project) =>
-      project.numId === undefined
-        ? []
-        : [[project._id, project.numId] as const],
-    ),
-  );
   const updateStatus = useMutation(
     api.agentTasks.updateStatus,
   ).withOptimisticUpdate((localStore, args) => {
@@ -330,11 +321,6 @@ export function QuickTasksListView({
                                       isAwaitingAnswer={task.isAwaitingAnswer}
                                       priority={task.priority}
                                       numId={task.numId}
-                                      projectNumId={
-                                        task.projectId
-                                          ? projectNumIds.get(task.projectId)
-                                          : undefined
-                                      }
                                       hasError={errorTaskIdSet.has(task._id)}
                                       sandboxStatus={
                                         task.sandboxStatus
@@ -345,11 +331,6 @@ export function QuickTasksListView({
                                         (u) => u._id === task.createdBy,
                                       )}
                                       createdAt={task.createdAt}
-                                      projectName={
-                                        task.projectId
-                                          ? projectNames.get(task.projectId)
-                                          : undefined
-                                      }
                                       href={
                                         entityPathSegment(task)
                                           ? `${basePath}/quick-tasks/${entityPathSegment(task)}`

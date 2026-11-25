@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { buildAveInstructions } from "../convex/_ave/prompt";
 
 const instructions = buildAveInstructions({
@@ -22,7 +22,6 @@ describe("Manager Ave instructions", () => {
       "send_email",
       "create_automation",
       "schedule_task",
-      "start_project_build",
     ]) {
       expect(instructions).not.toContain(`\`${excluded}\``);
     }

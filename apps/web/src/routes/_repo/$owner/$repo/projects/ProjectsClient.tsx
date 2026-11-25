@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { m, AnimatePresence } from "motion/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -18,7 +17,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-  tokenTransition,
+  TabsTransition,
   Tabs,
   TabsList,
   TabsTrigger,
@@ -39,29 +38,25 @@ import {
   IconSortDescending,
   IconX,
 } from "@tabler/icons-react";
-import { columnConfig } from "@/lib/components/projects/ProjectPhaseBadge";
+import { projectStageConfig } from "@/lib/components/projects/ProjectPhaseBadge";
+import { useProjectListStatuses } from "@/lib/components/projects/useProjectStatus";
 import {
-  PROJECT_COLUMNS,
   PROJECT_SORT_FIELDS,
   PROJECT_SORT_FIELD_LABELS,
   clearedProjectFilter,
   clearedProjectFilters,
-  filterAndSortProjects,
-  projectColumn,
+  searchAndSortProjects,
   projectFilterChips,
   toggleHiddenProjectPhase,
-  type ProjectColumn,
 } from "@eva/shared";
+import type { ProjectStage } from "@eva/shared/projectStatus";
+import { PROJECT_STAGES } from "@eva/shared/projectView";
 import { ProjectsTimeline } from "@/lib/components/projects/ProjectsTimeline";
 import { ProjectsListView } from "@/lib/components/projects/ProjectsListView";
 import { ProjectsKanbanView } from "./_components/ProjectsKanbanView";
 import { ProjectDeleteDialog } from "./_components/ProjectDeleteDialog";
 import { ProjectsSelectButton } from "./_components/ProjectsSelectButton";
-import {
-  ProjectsBulkBar,
-  type ProjectBulkAction,
-} from "./_components/ProjectsBulkBar";
-import { ProjectsChangePhaseDialog } from "./_components/ProjectsChangePhaseDialog";
+import { ProjectsBulkBar } from "./_components/ProjectsBulkBar";
 import { useProjectsSelection } from "./_components/useProjectsSelection";
 import { useProjectDelete } from "./_components/useProjectDelete";
 import { ActiveFiltersBar } from "./_components/ActiveFiltersBar";
@@ -77,13 +72,27 @@ const VIEW_OPTIONS: {
   { key: "list", icon: IconList, label: "List view" },
 ];
 
+/** The views in their toolbar order (the content slides by it). */
+const PROJECT_VIEW_ORDER = VIEW_OPTIONS.map((opt) => opt.key);
+
+/** Each view's own layout, kept on its sliding panel. */
+const PROJECT_VIEW_PANEL_CLASS: Record<ProjectView, string> = {
+  kanban: "flex min-h-0 min-w-0 flex-1 flex-col",
+  timeline: "flex flex-1 min-h-0 min-w-0",
+  list: "flex flex-1 min-h-0",
+};
+
 function isProjectView(value: string): value is ProjectView {
-  return value === "kanban" || value === "timeline" || value === "list";
+  return VIEW_OPTIONS.some((opt) => opt.key === value);
 }
 
 export function ProjectsClient() {
   const { repo, basePath, owner, name } = useRepo();
   const projects = useQuery(api.projects.list, { repoId: repo._id });
+  // Each project's stage is derived from its child tasks, never stored.
+  const statuses = useProjectListStatuses(repo._id);
+  const stageOf = (projectId: string): ProjectStage =>
+    statuses?.get(projectId)?.stage ?? "todo";
   const [isCreating, setIsCreating] = useState(false);
   const [
     { q, view, hiddenPhases, sortField, sortDir, timelineRange, timelineZoom },
@@ -92,45 +101,43 @@ export function ProjectsClient() {
   const searchQuery = q;
   // Derive the visible set from the persisted blocklist so new columns show
   // by default and "all visible" is independent of how many columns exist.
-  const hiddenPhaseSet = new Set<ProjectColumn>(hiddenPhases);
-  const visiblePhases = new Set<ProjectColumn>(
-    PROJECT_COLUMNS.filter((c) => !hiddenPhaseSet.has(c)),
+  const hiddenPhaseSet = new Set<ProjectStage>(hiddenPhases);
+  const visiblePhases = new Set<ProjectStage>(
+    PROJECT_STAGES.filter((c) => !hiddenPhaseSet.has(c)),
   );
   const selection = useProjectsSelection(
     (projects ?? []).map((project) => project._id),
   );
-  const [activeBulkAction, setActiveBulkAction] =
-    useState<ProjectBulkAction | null>(null);
   const exitSelectMode = () => {
     selection.exit();
-    setActiveBulkAction(null);
   };
   const projectDelete = useProjectDelete(repo._id, exitSelectMode);
   const hasProjects = projects !== undefined && projects.length > 0;
 
-  const filteredSorted = filterAndSortProjects(projects ?? [], {
-    q: searchQuery,
-    hiddenPhases,
-    sortField,
-    sortDir,
-  });
+  const filteredSorted = searchAndSortProjects(
+    (projects ?? []).filter(
+      (project) => !hiddenPhaseSet.has(stageOf(project._id)),
+    ),
+    { q: searchQuery, sortField, sortDir },
+  );
 
-  const projectsByPhaseInitial: Record<ProjectColumn, typeof filteredSorted> = {
+  const projectsByPhaseInitial: Record<ProjectStage, typeof filteredSorted> = {
     todo: [],
     in_progress: [],
-    business_review: [],
-    code_review: [],
-    completed: [],
-    cancelled: [],
+    done: [],
   };
-  const projectsByPhase = PROJECT_COLUMNS.reduce((acc, column) => {
-    acc[column] = filteredSorted.filter((p) => projectColumn(p.phase) === column);
+  const projectsByPhase = PROJECT_STAGES.reduce((acc, stage) => {
+    acc[stage] = filteredSorted.filter((p) => stageOf(p._id) === stage);
     return acc;
   }, projectsByPhaseInitial);
 
-  const handlePhaseToggle = (column: ProjectColumn) => {
+  const handlePhaseToggle = (stage: ProjectStage) => {
     setParams({
-      hiddenPhases: toggleHiddenProjectPhase(hiddenPhases, column, PROJECT_COLUMNS),
+      hiddenPhases: toggleHiddenProjectPhase(
+        hiddenPhases,
+        stage,
+        PROJECT_STAGES,
+      ),
     });
   };
 
@@ -143,7 +150,7 @@ export function ProjectsClient() {
 
   const activeFilterLabels = projectFilterChips(
     { q, hiddenPhases, sortField, sortDir },
-    PROJECT_COLUMNS,
+    PROJECT_STAGES,
   );
 
   const clearFilter = (key: string) => {
@@ -249,13 +256,13 @@ export function ProjectsClient() {
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <IconFilter size={16} className="mr-2" />
-                {visiblePhases.size === PROJECT_COLUMNS.length
+                {visiblePhases.size === PROJECT_STAGES.length
                   ? "All Phases"
                   : `${visiblePhases.size} Phases`}
               </DropdownMenuSubTrigger>
               <DropdownMenuSubContent>
-                {PROJECT_COLUMNS.map((p) => {
-                  const cfg = columnConfig[p];
+                {PROJECT_STAGES.map((p) => {
+                  const cfg = projectStageConfig[p];
                   return (
                     <DropdownMenuCheckboxItem
                       key={p}
@@ -310,7 +317,7 @@ export function ProjectsClient() {
               onClearAll={clearAllFilters}
             />
           )}
-          {projects === undefined ? (
+          {projects === undefined || statuses === undefined ? (
             <CenteredSpinner label="Loading projects" />
           ) : projects.length === 0 ? (
             <div className="flex min-h-0 flex-1 items-center justify-center">
@@ -350,68 +357,50 @@ export function ProjectsClient() {
               </EmptyState.Root>
             </div>
           ) : (
-            <AnimatePresence initial={false} mode="wait">
+            <TabsTransition
+              value={view}
+              order={PROJECT_VIEW_ORDER}
+              className="flex min-h-0 min-w-0 flex-1"
+              panelClassName={PROJECT_VIEW_PANEL_CLASS[view]}
+            >
               {view === "kanban" ? (
-                <m.div
-                  key="projects-kanban-view"
-                  className="flex min-h-0 min-w-0 flex-1 flex-col"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 8 }}
-                  transition={tokenTransition.base}
-                >
-                  <div className="flex h-full min-h-0 min-w-0 flex-1 items-stretch gap-2 overflow-x-auto overflow-y-hidden scrollbar scroll-fade-x snap-x snap-mandatory sm:gap-3 sm:snap-none">
-                    <ProjectsKanbanView
-                      projectsByPhase={projectsByPhase}
-                      visiblePhases={visiblePhases}
-                      owner={owner}
-                      name={name}
-                      basePath={basePath}
-                      onDelete={projectDelete.requestSingle}
-                      isSelecting={selection.isSelecting}
-                      selectedIds={selection.selectedIds}
-                      onToggleSelect={selection.toggle}
-                    />
-                  </div>
-                </m.div>
-              ) : view === "timeline" ? (
-                <m.div
-                  key="projects-timeline-view"
-                  className="flex flex-1 min-h-0 min-w-0"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 8 }}
-                  transition={tokenTransition.base}
-                >
-                  <ProjectsTimeline
-                    projects={filteredSorted}
-                    basePath={basePath}
-                    range={timelineRange}
-                    zoom={timelineZoom}
-                    onRangeChange={(r) => setParams({ timelineRange: r })}
-                    onZoomChange={(z) => setParams({ timelineZoom: z })}
-                  />
-                </m.div>
-              ) : (
-                <m.div
-                  key="projects-list-view"
-                  className="flex flex-1 min-h-0"
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 8 }}
-                  transition={tokenTransition.base}
-                >
-                  <ProjectsListView
+                <div className="flex h-full min-h-0 min-w-0 flex-1 items-stretch gap-2 overflow-x-auto overflow-y-hidden scrollbar scroll-fade-x snap-x snap-mandatory sm:gap-3 sm:snap-none">
+                  <ProjectsKanbanView
                     projectsByPhase={projectsByPhase}
                     visiblePhases={visiblePhases}
+                    statuses={statuses}
+                    owner={owner}
+                    name={name}
+                    basePath={basePath}
                     onDelete={projectDelete.requestSingle}
                     isSelecting={selection.isSelecting}
                     selectedIds={selection.selectedIds}
                     onToggleSelect={selection.toggle}
                   />
-                </m.div>
+                </div>
+              ) : view === "timeline" ? (
+                <ProjectsTimeline
+                  projects={filteredSorted}
+                  stageOf={stageOf}
+                  statuses={statuses}
+                  basePath={basePath}
+                  range={timelineRange}
+                  zoom={timelineZoom}
+                  onRangeChange={(r) => setParams({ timelineRange: r })}
+                  onZoomChange={(z) => setParams({ timelineZoom: z })}
+                />
+              ) : (
+                <ProjectsListView
+                  projectsByPhase={projectsByPhase}
+                  visiblePhases={visiblePhases}
+                  statuses={statuses}
+                  onDelete={projectDelete.requestSingle}
+                  isSelecting={selection.isSelecting}
+                  selectedIds={selection.selectedIds}
+                  onToggleSelect={selection.toggle}
+                />
               )}
-            </AnimatePresence>
+            </TabsTransition>
           )}
           {hasProjects && (
             <ProjectsBulkBar
@@ -423,7 +412,6 @@ export function ProjectsClient() {
                 selection.selectAll(filteredSorted.map((p) => p._id))
               }
               onClearSelection={selection.clear}
-              onSetBulkAction={setActiveBulkAction}
               onDelete={() =>
                 projectDelete.requestBulk([...selection.selectedIds])
               }
@@ -434,12 +422,6 @@ export function ProjectsClient() {
       <NewProjectModal
         isOpen={isCreating}
         onClose={() => setIsCreating(false)}
-      />
-      <ProjectsChangePhaseDialog
-        isOpen={activeBulkAction === "phase"}
-        onClose={() => setActiveBulkAction(null)}
-        selectedProjectIds={selection.selectedIds}
-        onSuccess={exitSelectMode}
       />
       <ProjectDeleteDialog
         target={projectDelete.target}

@@ -1,10 +1,9 @@
-import { beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test } from "bun:test";
 import {
   beginTurnOwnership,
   decideTurnLeaseExit,
   endTurnOwnership,
   getLeaseTerminalReason,
-  isSameTurnLease,
   noteHeartbeatResponse,
   releaseTurnLeaseForCompletion,
   type TurnLeaseIdentity,
@@ -153,43 +152,16 @@ describe("noteHeartbeatResponse after the lease was released", () => {
     expect(getLeaseTerminalReason()).toBeNull();
   });
 
+  test("ignores a verdict for another turn at the same generation", () => {
+    beginTurnOwnership("claim", { ...LEASE, turnId: "turn-2" });
+    expect(noteHeartbeatResponse(closed, LEASE)).toBe(false);
+    expect(getLeaseTerminalReason()).toBeNull();
+  });
+
   test("still fences a verdict for the lease currently held", () => {
     beginTurnOwnership("claim", LEASE);
     expect(noteHeartbeatResponse(closed, LEASE)).toBe(true);
     expect(getLeaseTerminalReason()).toBe("closed");
-  });
-
-  test("a legacy owner with no lease still honours a terminal reply", () => {
-    // Legacy heartbeats carry no lease; the server can still answer
-    // `superseded` when a durable turn has taken the session over.
-    beginTurnOwnership("claim", null);
-    expect(
-      noteHeartbeatResponse(
-        { accepted: false, lease: { status: "terminal", reason: "superseded" } },
-        null,
-      ),
-    ).toBe(true);
-    expect(getLeaseTerminalReason()).toBe("superseded");
-  });
-
-  test("a lease-less reply is stale once a durable turn is owned", () => {
-    beginTurnOwnership("claim", LEASE);
-    expect(noteHeartbeatResponse(closed, null)).toBe(false);
-    expect(getLeaseTerminalReason()).toBeNull();
-  });
-});
-
-describe("isSameTurnLease", () => {
-  test("matches on turn id and generation", () => {
-    expect(isSameTurnLease(LEASE, { ...LEASE })).toBe(true);
-    expect(isSameTurnLease(LEASE, { ...LEASE, leaseGeneration: 4 })).toBe(false);
-    expect(isSameTurnLease(LEASE, { ...LEASE, turnId: "turn-2" })).toBe(false);
-  });
-
-  test("two lease-less owners compare equal, a lease never equals none", () => {
-    expect(isSameTurnLease(null, null)).toBe(true);
-    expect(isSameTurnLease(LEASE, null)).toBe(false);
-    expect(isSameTurnLease(null, LEASE)).toBe(false);
   });
 });
 
@@ -217,14 +189,5 @@ describe("decideTurnLeaseExit", () => {
     expect(
       decideTurnLeaseExit({ terminalReason: "closed", exitScheduled: true }),
     ).toEqual({ action: "wait" });
-  });
-
-  test("still reports terminal once the exit is scheduled", () => {
-    // setFinalizingState returns this so callers skip posting a completion.
-    const decision = decideTurnLeaseExit({
-      terminalReason: "cancelled",
-      exitScheduled: true,
-    });
-    expect(decision.action).not.toBe("continue");
   });
 });

@@ -30,6 +30,7 @@ import {
   type DisplayTaskStatus,
 } from "@/lib/components/tasks/TaskStatusBadge";
 import { useRepo } from "@/lib/contexts/RepoContext";
+import { kanbanCardGlide } from "./kanbanCardGlide";
 import { usePersistedScrollParent } from "@/lib/hooks/usePersistedScrollParent";
 
 interface BaseTask {
@@ -70,6 +71,11 @@ export function KanbanBoard<T extends BaseTask>({
   const [activeOverlayWidth, setActiveOverlayWidth] = useState<number | null>(
     null,
   );
+  // The card a drop is moving. It must not glide: the user already carried it
+  // to its column, and a glide would fly it back from where the drag began.
+  // Cleared once the move commits (a Convex mutation resolves after the query
+  // shows it).
+  const [droppedId, setDroppedId] = useState<string | null>(null);
 
   const itemsById = new Map(items.map((item) => [item._id, item]));
 
@@ -115,27 +121,19 @@ export function KanbanBoard<T extends BaseTask>({
     if (!activeItemData) return;
 
     const targetStatus = KANBAN_STATUSES.find((s) => s === overId);
-    if (targetStatus) {
-      if (activeItemData.status !== targetStatus) {
-        try {
-          await onStatusChange(activeId, targetStatus);
-        } catch (err) {
-          console.error("Failed to update status:", err);
-          toast.error("Could not move the card. Try again.");
-        }
-      }
-      return;
+    const status = targetStatus ?? itemsById.get(overId)?.status;
+    if (status === undefined || status === activeItemData.status) return;
+    setDroppedId(activeId);
+    try {
+      await onStatusChange(activeId, status);
+    } catch (err) {
+      console.error("Failed to update status:", err);
+      toast.error("Could not move the card. Try again.");
     }
-
-    const overItemData = itemsById.get(overId);
-    if (overItemData && activeItemData.status !== overItemData.status) {
-      try {
-        await onStatusChange(activeId, overItemData.status);
-      } catch (err) {
-        console.error("Failed to update status:", err);
-        toast.error("Could not move the card. Try again.");
-      }
-    }
+    // Clear after the try/catch instead of using `finally`: React Compiler
+    // bails on the whole file when it meets a `finally` clause. The catch
+    // swallows, so this runs on success and on error.
+    setDroppedId(null);
   };
 
   const handleDragCancel = (_event: DragCancelEvent) => {
@@ -200,6 +198,7 @@ export function KanbanBoard<T extends BaseTask>({
                         headerExtra={columnExtra?.(status)}
                         lead={columnLead?.(status) ?? []}
                         renderCard={renderCard}
+                        droppedId={droppedId}
                       />
                     </m.div>,
                   ]
@@ -219,6 +218,7 @@ function VirtualKanbanColumn<T extends BaseTask>({
   headerExtra,
   lead,
   renderCard,
+  droppedId,
 }: {
   status: TaskStatus;
   items: T[];
@@ -226,6 +226,7 @@ function VirtualKanbanColumn<T extends BaseTask>({
   headerExtra?: ReactNode;
   lead: ReactNode[];
   renderCard: (item: T) => ReactNode;
+  droppedId: string | null;
 }) {
   const { owner, name } = useRepo();
   const { scrollParent, scrollRef } = usePersistedScrollParent(
@@ -252,9 +253,14 @@ function VirtualKanbanColumn<T extends BaseTask>({
             itemContent={(index) => {
               const task = items[index];
               return (
-                <div className="pb-1.5">
+                <m.div
+                  className="pb-1.5"
+                  {...kanbanCardGlide(
+                    task._id === droppedId ? null : task._id,
+                  )}
+                >
                   <KanbanCard id={task._id}>{renderCard(task)}</KanbanCard>
-                </div>
+                </m.div>
               );
             }}
           />

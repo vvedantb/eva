@@ -95,7 +95,7 @@ export function DocCommentThread({
       data-comment-id={root._id}
       className={cn(
         "relative border-b border-border p-3 transition-colors",
-        isActive && "bg-accent/50 ring-1 ring-inset ring-ring",
+        isActive && "bg-accent-soft/50 ring-1 ring-inset ring-ring",
         isAnchored && "t-anchor-flash",
       )}
     >

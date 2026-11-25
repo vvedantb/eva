@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import {
   READ_ONLY_DELIVERABLE_MARKER,
   extractReadOnlyDeliverable,

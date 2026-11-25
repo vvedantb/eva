@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import {
   canMergePr,
   canSubmitReview,
@@ -12,6 +12,8 @@ import {
   type PrOverview,
 } from "@eva/shared";
 import { overview } from "./prOverviewFixture";
+
+type BlockerKind = NonNullable<ReturnType<typeof headerBlocker>>["kind"];
 
 const BASE_CHECK: PrCheck = {
   kind: "check",
@@ -128,7 +130,7 @@ describe("headerBlocker", () => {
     },
   );
 
-  test.each([
+  test.each<[string, BlockerKind]>([
     ["dirty", "conflicts"],
     ["unstable", "unmergeable"],
   ])("a %s branch keeps its header badge", (mergeableState, kind) => {
@@ -137,7 +139,7 @@ describe("headerBlocker", () => {
     ).toBe(kind);
   });
 
-  test.each([
+  test.each<[string, BlockerKind]>([
     ["blocked", "protected"],
     ["behind", "behind"],
   ])("a %s branch keeps its header badge", (mergeableState, kind) => {

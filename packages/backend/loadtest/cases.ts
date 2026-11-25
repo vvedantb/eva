@@ -95,7 +95,6 @@ export const CASES: ReadonlyArray<QueryCase> = [
   q("pullRequests.listForOwner", "session PR chrome", api.pullRequests.listForOwner, (r) => ({ owner: sessionOwner(r.sessionId) })),
   q("projects.list", "projects page", api.projects.list, (r) => ({ repoId: r.repoId })),
   q("projects.listTaskProgress", "projects page", api.projects.listTaskProgress, (r) => ({ repoId: r.repoId })),
-  q("projects.getActive", "repo home", api.projects.getActive, (r) => ({ repoId: r.repoId })),
   q("agentTasks.getAllTasks", "tasks board", api.agentTasks.getAllTasks, (r) => ({ repoId: r.repoId })),
   q("agentTasks.countSandboxTasks", "sidebar badge", api.agentTasks.countSandboxTasks, (r) => ({ repoId: r.repoId })),
   q("agentTasks.listDrafts", "tasks board", api.agentTasks.listDrafts, (r) => ({ repoId: r.repoId })),

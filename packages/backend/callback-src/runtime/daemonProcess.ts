@@ -166,13 +166,14 @@ export function claimDaemonPidfileBoot(params: {
   entityId: string;
   optsSig: string;
   currentPid?: number;
-  /** Seam for tests; production always identifies the rival by its argv. */
-  isRival?: (pid: number) => boolean;
 }): DaemonPidfileClaim {
   const currentPid = params.currentPid ?? process.pid;
-  const isRival = params.isRival ?? isCallbackRunnerPid;
   const rivalPid = readPidFromFile(params.paths.pid);
-  if (!Number.isNaN(rivalPid) && rivalPid !== currentPid && isRival(rivalPid)) {
+  if (
+    !Number.isNaN(rivalPid) &&
+    rivalPid !== currentPid &&
+    isCallbackRunnerPid(rivalPid)
+  ) {
     return { status: "rival_alive", rivalPid };
   }
   writeFileSync(params.paths.pid, String(currentPid));

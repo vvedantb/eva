@@ -18,9 +18,7 @@ import {
   repoGroupFields,
   githubRepoFields,
   teamFields,
-  syncSettingFields,
   projectFields,
-  projectDetailsFields,
   queuedMessageFields,
   taskSandboxEventFields,
   taskActivityFields,
@@ -28,6 +26,8 @@ import {
   taskReactionFields,
   taskSubscriberFields,
   chatReadFields,
+  standupReadFields,
+  chatRecapFields,
   repoSkillFields,
   repoSkillContentFields,
   repoSystemSkillFields,
@@ -73,7 +73,9 @@ import {
   agentUsageLimitFields,
   logFields,
   workProfileFields,
-  taskDependencyFields,
+  projectTaskReportFields,
+  projectTaskBatchFields,
+  projectCoordinatorWakeFields,
   notificationFields,
   repoEnvVarFields,
   repoSnapshotFields,
@@ -109,13 +111,8 @@ const schema = defineSchema({
     .index("by_repo", ["repoId"])
     .index("by_repo_and_deleted", ["repoId", "deletedAt"])
     .index("by_user", ["userId"])
-    .index("by_repo_and_phase", ["repoId", "phase"])
-    .index("by_repo_and_numId", ["repoId", "numId"])
-    .index("by_repo_and_build_state", ["repoId", "build.state"]),
-
-  projectDetails: defineTable(projectDetailsFields).index("by_project", [
-    "projectId",
-  ]),
+    .index("by_repo_and_numId", ["repoId", "numId"]),
+  // projectDetails table removed. schema-narrowing-ok: deleteProjectDetails
 
   agentTasks: defineTable(agentTaskFields)
     .index("by_repo", ["repoId"])
@@ -196,11 +193,25 @@ const schema = defineSchema({
   chatReads: defineTable(chatReadFields)
     .index("by_user_parent", ["userId", "parentId"])
     .index("by_user_repo", ["userId", "repoId"]),
+  standupReads: defineTable(standupReadFields).index("by_user_repo", [
+    "userId",
+    "repoId",
+  ]),
+  chatRecaps: defineTable(chatRecapFields).index("by_user_parent", [
+    "userId",
+    "parentId",
+  ]),
 
-  taskDependencies: defineTable(taskDependencyFields)
-    .index("by_task", ["taskId"])
-    .index("by_task_and_depends_on", ["taskId", "dependsOnId"])
-    .index("by_dependency", ["dependsOnId"]),
+  projectTaskReports: defineTable(projectTaskReportFields)
+    .index("by_project", ["projectId"])
+    .index("by_task_and_state", ["taskId", "state"]),
+  projectTaskBatches: defineTable(projectTaskBatchFields).index("by_project", [
+    "projectId",
+  ]),
+  projectCoordinatorWakes: defineTable(projectCoordinatorWakeFields)
+    .index("by_project_and_key", ["projectId", "key"])
+    .index("by_project_and_sent", ["projectId", "sentAt"]),
+  // taskDependencies table removed. schema-narrowing-ok: clearTaskDependencies
   taskSandboxEvents: defineTable(taskSandboxEventFields).index("by_task", [
     "taskId",
   ]),
@@ -249,9 +260,7 @@ const schema = defineSchema({
   sessionChats: defineTable(sessionChatFields)
     .index("by_session", ["sessionId"])
     .index("by_session_and_number", ["sessionId", "number"])
-    .index("by_repo", ["repoId"])
-    // A project task's chat in its project's session.
-    .index("by_task", ["taskId"]),
+    .index("by_repo", ["repoId"]),
   // Legacy daemon-poll mirror. Chat daemons poll their `sessionChats` row
   // directly; `backfillSessionChats` empties this table and it can then be
   // dropped from the schema.
@@ -525,11 +534,6 @@ const schema = defineSchema({
     .index("by_entity_type", ["entityType"])
     .index("by_repo_and_entity", ["repoId", "entityId"])
     .index("by_project", ["projectId"]),
-
-  syncSettings: defineTable(syncSettingFields).index("by_owner_and_name", [
-    "owner",
-    "name",
-  ]),
 
   repoEntityCounters: defineTable(repoEntityCounterFields).index(
     "by_repo_and_type",

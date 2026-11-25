@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { prErrorMessage, toPrDiffData } from "./prReviewQueries";
 
 /** Two files, so the transform has to split rather than pass the text through. */

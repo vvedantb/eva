@@ -21,7 +21,6 @@ import {
   notificationUrgencyValidator,
   evaluationKindValidator,
   evaluationTriggerValidator,
-  phaseValidator,
   prRecapOriginValidator,
   prRecapStatusValidator,
   priorityValidator,
@@ -41,6 +40,7 @@ import {
   snapshotBuildTriggerValidator,
   snapshotScheduleValidator,
   taskActivityFieldValidator,
+  taskOriginValidator,
   taskSandboxEventValidator,
   taskStatusValidator,
   teamMemberRoleValidator,
@@ -52,7 +52,6 @@ import {
 } from "./enums";
 import {
   automationFindingValidator,
-  conversationMessageValidator,
   customThemeValidator,
   envVarEntryValidator,
   evalIssueValidator,
@@ -320,10 +319,8 @@ export const turnEntityIdValidator = v.union(
  * A one-shot agent that works on a row which also owns chat turns. The lane
  * keeps its turn apart from the chat's: chat turns leave it unset.
  */
-export const turnLaneValidator = v.union(
-  v.literal("summary"),
-  v.literal("interview"),
-);
+// Session summary turns removed. schema-narrowing-ok: retireSessionSummaries
+export const turnLaneValidator = v.literal("interview");
 
 export type TurnLane = Infer<typeof turnLaneValidator>;
 
@@ -582,13 +579,7 @@ export const sessionChatFields = {
   claudePersistenceSeed: v.optional(
     v.union(v.id("sessions"), v.id("agentTasks"), v.id("projects")),
   ),
-  /**
-   * A project task's own chat inside its project's session (never Main). The
-   * one kind of extra chat an owned session holds: it keeps the task's chat
-   * apart from the project's, as before projects ran on sessions. Set at
-   * insert, never changed.
-   */
-  taskId: v.optional(v.id("agentTasks")),
+  // Legacy taskId removed. schema-narrowing-ok: clearSessionChatTaskIds
   ...chatDaemonEntityFields,
 };
 
@@ -625,6 +616,8 @@ export const agentTaskFields = {
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   repoId: v.optional(v.id("githubRepos")),
   projectId: v.optional(v.id("projects")),
+  /** Why the task exists (`taskOriginValidator`); absent when made by hand or by an agent. */
+  origin: v.optional(taskOriginValidator),
   tags: v.optional(v.array(v.string())),
   taskNumber: v.optional(v.number()),
   status: taskStatusValidator,
@@ -646,12 +639,19 @@ export const agentTaskFields = {
   use1mContext: v.optional(v.boolean()),
   fastMode: v.optional(v.boolean()),
   baseBranch: v.optional(v.string()),
+  /**
+   * The task's own branch when it is not `eva/task-<id>` (`taskBranchName`).
+   * Only Step 9's conversion writes it: a project task that was in progress
+   * on its project's old branch keeps that branch, so its work goes on in its
+   * own PR.
+   */
+  branchName: v.optional(v.string()),
   /** The task's own run lifecycle; absent = idle. Written only by `_agentTasks/runState.ts`. */
   run: v.optional(taskRunValidator),
   // Legacy run fields removed. schema-narrowing-ok: migrateTaskRunState
   // The change-request comment that put this task back to "todo" via "Make
-  // changes". Project-task change runs start later (Build Project), decoupled
-  // from the comment, so the id is parked here and copied onto the run's
+  // changes". A project task's change run starts later (the project
+  // scheduler), decoupled from the comment, so the id is parked here and copied onto the run's
   // `triggeringCommentId` when the run is created, then cleared. Lets the
   // timeline label project re-runs "made changes" like quick-task re-runs.
   pendingChangeRequestCommentId: v.optional(v.id("taskComments")),
@@ -662,6 +662,20 @@ export const agentTaskFields = {
   // Manager Ave thread watching this task for completion notifications
   // (mirrors sessions.watchedByAve).
   watchedByAve: v.optional(v.id("aveThreads")),
+  /**
+   * When this project task was approved to run: at creation for the
+   * coordinator's tasks, from Triage by a person for feedback. The project
+   * scheduler (`scheduleReadyTasks`) starts only approved `todo` tasks.
+   * Absent on quick tasks and on project tasks waiting in Triage.
+   */
+  approvedAt: v.optional(v.number()),
+  /** Restarts the coordinator spent on this failed task (at most 1). */
+  coordinatorRetries: v.optional(v.number()),
+  /**
+   * A project task's phase: a label that groups tasks for status, never a
+   * branch. Ordered by `projects.phaseLabels`.
+   */
+  phaseLabel: v.optional(v.string()),
   ...prSummaryFields,
 };
 
@@ -673,6 +687,12 @@ export const agentRunFields = {
   finishedAt: v.optional(v.number()),
   finalizingAt: v.optional(v.number()),
   resultSummary: v.optional(v.string()),
+  /**
+   * Text this run's prompt carries from whoever started it: the
+   * coordinator's note on a retry, or the answer to the task's question
+   * (`_projects/scheduler.ts` `startProjectTask`).
+   */
+  note: v.optional(v.string()),
   /** @deprecated Moved to `pullRequests` (`owner.runId`); cleared by `backfillPullRequests`. */
   prUrl: v.optional(v.string()),
   error: v.optional(v.string()),
@@ -772,7 +792,7 @@ export const sessionFields = {
    * project. Owned by `_sessions/owner.ts`; set at insert, never changed.
    */
   owner: sessionOwnerValidator,
-  summary: v.optional(v.array(v.string())),
+  // `summary` removed. schema-narrowing-ok: retireSessionSummaries
   createdBy: v.optional(v.id("users")),
   planContent: v.optional(v.string()),
   /** Sticky Plan/Build toggle. Absent sessions are Build. */
@@ -936,12 +956,6 @@ export const repoGroupFields = {
   updatedAt: v.optional(v.number()),
 };
 
-export const syncSettingFields = {
-  owner: v.string(),
-  name: v.string(),
-  enabled: v.boolean(),
-};
-
 /** One built-in slash command reported by a harness CLI's init handshake. */
 export const harnessSkillValidator = v.object({
   name: v.string(),
@@ -1051,6 +1065,13 @@ export const snapshotBuildFields = {
   seededApps: v.optional(v.array(seededAppResultValidator)),
 };
 
+/** Keys of `SANDBOX_SIZES` in @eva/shared. */
+export const sandboxSizeValidator = v.union(
+  v.literal("small"),
+  v.literal("medium"),
+  v.literal("large"),
+);
+
 export const githubRepoFields = {
   owner: v.string(),
   name: v.string(),
@@ -1075,6 +1096,9 @@ export const githubRepoFields = {
   // Opt-in: agents read and update `.eva/memory/` in the repo (Agent Memory
   // Repo spec). Shared across sibling app rows.
   agentMemoryEnabled: v.optional(v.boolean()),
+  // vCPUs / memory of this app's sandboxes (`SANDBOX_SIZES` in @eva/shared).
+  // Per-app: apps of one monorepo need different sizes. Absent = large.
+  sandboxSize: v.optional(sandboxSizeValidator),
   hidden: v.optional(v.boolean()),
   deploymentProjectName: v.optional(v.string()),
   domains: v.optional(v.array(v.string())),
@@ -1141,85 +1165,35 @@ export const teamFields = {
   backgroundStorageId: v.optional(v.id("_storage")),
 };
 
-/** A build waiting on its scheduled job. */
-const scheduledBuildValidator = v.object({
-  at: v.number(),
-  jobId: v.id("_scheduled_functions"),
-});
-
-/**
- * A project build: waiting on a scheduled job, or running the build
- * workflow. Transitions live in `_projects/buildState.ts`.
- */
-export const projectBuildValidator = v.union(
-  v.object({ state: v.literal("scheduled"), ...scheduledBuildValidator.fields }),
-  v.object({
-    state: v.literal("running"),
-    workflowId: v.string(),
-    /**
-     * A schedule waiting behind this build (a usage-limit retry, or one set
-     * before or during it). Its job is live; when the build ends the project
-     * becomes `scheduled` with it.
-     */
-    scheduled: v.optional(scheduledBuildValidator),
-  }),
-);
-
-/**
- * A project interview or spec workflow, from start to sandbox release
- * (`_projects/interviewState.ts`). `sessionStartAttempt` is the session start
- * the interview claimed (`closed` → `starting`): a cancel before the attach
- * fails exactly that start (`abandonTaskRunSandbox`), as
- * `agentRuns.sessionStartAttempt` does for runs. `sandboxId` is the VM it
- * prepared on that claim, recorded before the attach so none goes unrecorded.
- */
-export const projectInterviewValidator = v.union(
-  v.object({ state: v.literal("started"), workflowId: v.string() }),
-  v.object({
-    state: v.literal("claimed"),
-    workflowId: v.string(),
-    sessionStartAttempt: v.number(),
-  }),
-  v.object({
-    state: v.literal("prepared"),
-    workflowId: v.string(),
-    sessionStartAttempt: v.number(),
-    sandboxId: v.string(),
-  }),
-);
-
 export const projectFields = {
   ...entityNumIdFields,
+  /** The home repo: the project's URL, number and sidebar place, and the default repo of its tasks. */
   repoId: v.id("githubRepos"),
+  /** The project summary doc the coordinator keeps (`upsertProjectSummary`). */
+  summaryDocId: v.optional(v.id("docs")),
+  /** The order the project's phase labels (`agentTasks.phaseLabel`) show in. */
+  phaseLabels: v.optional(v.array(v.string())),
   userId: v.id("users"),
   title: v.string(),
   description: v.optional(v.string()),
   branchName: v.optional(v.string()),
   baseBranch: v.optional(v.string()),
   ...prSummaryFields,
-  phase: phaseValidator,
-  /** How the project was created: AI interview/plan vs tasks-only container. */
-  planningMode: v.optional(
-    v.union(v.literal("interview"), v.literal("tasks_only")),
-  ),
+  // Legacy phase, planningMode, build, interview, lastBuildError and
+  // codeReviewer removed. schema-narrowing-ok: clearLegacyProjectFields
   priority: v.optional(priorityValidator),
   rawInput: v.string(),
   projectLead: v.optional(v.id("users")),
   members: v.optional(v.array(v.id("users"))),
   projectStartDate: v.optional(v.number()),
   projectEndDate: v.optional(v.number()),
-  /** The project build lifecycle; absent = idle. Written only by `_projects/buildState.ts`. */
-  build: v.optional(projectBuildValidator),
-  /** The interview / spec agent lifecycle; absent = idle. Written only by `_projects/interviewState.ts`. */
-  interview: v.optional(projectInterviewValidator),
   // Legacy build fields removed. schema-narrowing-ok: migrateProjectBuildState
   // Legacy interview fields removed. schema-narrowing-ok: migrateProjectInterviewState
-  lastBuildError: v.optional(v.string()),
   branchVersion: v.optional(v.number()),
   // Set when chat or other queue helpers touch the project. Mirrors
   // `sessions.updatedAt` so the same queue/list helpers work uniformly.
   updatedAt: v.optional(v.number()),
-  codeReviewer: v.optional(v.id("users")),
+  // codeReviewer removed. schema-narrowing-ok: clearProjectCodeReviewer
   tags: v.optional(v.array(v.string())),
   model: v.optional(aiModelValidator),
   // Whose credential this project's model preference is tied to (null/absent =
@@ -1232,12 +1206,6 @@ export const projectFields = {
   // Manager Ave thread watching this project's chat for completion
   // notifications (mirrors sessions.watchedByAve).
   watchedByAve: v.optional(v.id("aveThreads")),
-};
-
-export const projectDetailsFields = {
-  projectId: v.id("projects"),
-  conversationHistory: v.array(conversationMessageValidator),
-  generatedSpec: v.optional(v.string()),
 };
 
 /**
@@ -1613,6 +1581,33 @@ export const chatReadFields = {
   parentId: chatReadParentIdValidator,
   repoId: v.id("githubRepos"),
   lastReadAt: v.number(),
+  /** Last time the chat was on screen, read or not (chat rows only; recaps). */
+  lastVisitedAt: v.optional(v.number()),
+};
+
+// One row per (user, repo): when the user last opened the repo's Today page,
+// so a standup published after that shows as unread to them alone.
+export const standupReadFields = {
+  userId: v.id("users"),
+  repoId: v.id("githubRepos"),
+  lastReadAt: v.number(),
+};
+
+// One row per (user, chat): a recap only that user sees (see chatRecaps).
+// "away" covers what happened since they left; "full" is the whole chat, asked
+// for from the chat menu. `text` is unset while the model writes it.
+export const chatRecapKindValidator = v.union(
+  v.literal("away"),
+  v.literal("full"),
+);
+export const chatRecapFields = {
+  userId: v.id("users"),
+  parentId: chatParentIdValidator,
+  kind: chatRecapKindValidator,
+  /** The read time the recap covers activity after. */
+  since: v.number(),
+  createdAt: v.number(),
+  text: v.optional(v.string()),
 };
 
 // Per-sandbox bearer secret the in-sandbox git credential helper presents to
@@ -2212,9 +2207,58 @@ export const proposedPlanFields = {
   updatedAt: v.number(),
 };
 
-export const taskDependencyFields = {
+/**
+ * A child task's message up to its project's coordinator
+ * (`report_to_coordinator`). A `report` is a note; an `ask` is a question that
+ * ends the task's turn and waits for an answer (`_projects/reports.ts`).
+ */
+export const projectTaskReportFields = {
+  projectId: v.id("projects"),
   taskId: v.id("agentTasks"),
-  dependsOnId: v.id("agentTasks"),
+  kind: v.union(v.literal("report"), v.literal("ask")),
+  text: v.string(),
+  /**
+   * An ask is `open` until the first answer (the coordinator's or a
+   * person's) makes it `answered`, or its task stops (`closed`). A report
+   * stays `open` until its task stops; the coordinator sees the reports newer
+   * than its last turn.
+   */
+  state: v.union(v.literal("open"), v.literal("answered"), v.literal("closed")),
+  /** Who answered an ask: the coordinator, or the person who wrote in the task chat. */
+  answeredBy: v.optional(v.union(v.literal("coordinator"), v.id("users"))),
+  answeredAt: v.optional(v.number()),
+  createdAt: v.number(),
+};
+
+/**
+ * Tasks the coordinator created in one tool call, for the task card in its
+ * chat. `messageId` is the coordinator turn the call ran in.
+ */
+export const projectTaskBatchFields = {
+  projectId: v.id("projects"),
+  messageId: v.optional(v.id("messages")),
+  taskIds: v.array(v.id("agentTasks")),
+  createdAt: v.number(),
+};
+
+/**
+ * One reason to wake a project's coordinator (decision 16). `key` makes a
+ * request idempotent; `sentAt` marks it delivered in a turn; `heldAt` marks a
+ * request the hourly cap held back (it waits for a person).
+ */
+export const projectCoordinatorWakeFields = {
+  projectId: v.id("projects"),
+  reason: v.union(
+    v.literal("ask"),
+    v.literal("failed"),
+    v.literal("batch_done"),
+  ),
+  key: v.string(),
+  /** One line for the coordinator's wake-up message. */
+  text: v.string(),
+  createdAt: v.number(),
+  sentAt: v.optional(v.number()),
+  heldAt: v.optional(v.number()),
 };
 
 export const notificationFields = {

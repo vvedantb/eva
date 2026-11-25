@@ -1,9 +1,10 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { listReadableSiblingRepos } from "../convex/_githubRepos/sandboxRead";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * A sandbox's git credential helper sends the repository git asked about, so
@@ -12,7 +13,6 @@ import { listReadableSiblingRepos } from "../convex/_githubRepos/sandboxRead";
  * gets a token, who gets 403, and that the home repo keeps its full token.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 const SECRET = "sandbox-secret-abc";
 const SANDBOX_ID = "sbx_home";
@@ -103,7 +103,6 @@ async function fixture(options: {
                 repoId: homeRepoId,
                 userId: ownerUserId,
                 title: "Sibling read project",
-                phase: "in_progress",
                 rawInput: "build it",
               }),
             }
@@ -358,7 +357,7 @@ describe("resolveCredentialRequest — sandboxes bound to no entity", () => {
 });
 
 describe("resolveCredentialRequest — entity kinds", () => {
-  test.each(["session", "task", "project"] as const)(
+  test.each(["session", "task"] as const)(
     "sandbox bound via a %s's session resolves its owner",
     async (entity) => {
       const { t, ids } = await fixture({ entity });
@@ -370,6 +369,18 @@ describe("resolveCredentialRequest — entity kinds", () => {
       });
     },
   );
+
+  test("a project coordinator's sandbox only ever gets read-only tokens", async () => {
+    const { t } = await fixture({ entity: "project" });
+    expect(await resolve(t, "AcmeOrg/design-system.git")).toMatchObject({
+      kind: "read_only",
+      installationId: 2,
+      owner: "AcmeOrg",
+      name: "design-system",
+    });
+    // Its home repo too: GitHub refuses a push with this token.
+    expect(await resolve(t, undefined)).toMatchObject({ kind: "read_only" });
+  });
 });
 
 describe("listReadableSiblingRepos", () => {

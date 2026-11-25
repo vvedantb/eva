@@ -1,12 +1,13 @@
 import type { WorkflowCtx } from "@convex-dev/workflow";
 import { getFunctionName } from "convex/server";
 import { convexTest } from "convex-test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { z } from "zod";
 import type { Id } from "../convex/_generated/dataModel";
 import { prepareSandboxSteps } from "../convex/_sandbox_runtime/prepareSandboxSteps";
 import schema from "../convex/schema";
 import { toWorkflowId } from "../convex/workflowManager";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * #1064: `prepareSandboxSteps` only hands the sandbox id back on success. When
@@ -16,7 +17,6 @@ import { toWorkflowId } from "../convex/workflowManager";
  * one: a reused or entity-owned sandbox is not its to delete.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const FRESH_SANDBOX = "sbx_fresh";
 
 type Fake = {

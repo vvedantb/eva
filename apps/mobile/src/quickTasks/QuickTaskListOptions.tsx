@@ -17,7 +17,6 @@ import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
   IconClock,
   IconFilter,
-  IconFolder,
   IconSettings,
   IconSortDescending,
   IconTag,
@@ -35,19 +34,18 @@ import { statusAppearance } from "@/quickTasks/statusAppearance";
 import { useScheme } from "@/ui/theme";
 
 type User = FunctionReturnType<typeof api.users.listAll>[number];
-type Project = FunctionReturnType<typeof api.projects.list>[number];
 
 /** The web menus' name for a teammate: the full name, else the first name. */
 export function userLabel(user: User | undefined): string | undefined {
   return user?.fullName ?? user?.firstName;
 }
 
-type Page = "root" | "sort" | "project" | "user" | "assignee" | "statuses" | "tags" | "timeRange";
+type Page = "root" | "sort" | "user" | "assignee" | "statuses" | "tags" | "timeRange";
 
 /**
  * The web Quick Tasks toolbar at phone width: the search field ("Search
  * tasks...") and the Options menu, as a bottom sheet with a page per web
- * submenu: Sort, Project, Created by, Code reviewer, Statuses, Tags (when
+ * submenu: Sort, Created by, Code reviewer, Statuses, Tags (when
  * there are any) and the time range, then "Clear all filters" when a filter
  * is on. A radio pick closes the sheet, as the web menu closes; a status or
  * tag toggle keeps it open. "Import from Linear" stays on the web.
@@ -55,13 +53,11 @@ type Page = "root" | "sort" | "project" | "user" | "assignee" | "statuses" | "ta
 export function QuickTaskToolbar({
   filters,
   onChange,
-  projects,
   users,
   allTags,
 }: {
   filters: QuickTaskListFilters;
   onChange: (patch: Partial<QuickTaskListFilters>) => void;
-  projects: Project[] | undefined;
   users: User[] | undefined;
   allTags: string[];
 }) {
@@ -75,12 +71,6 @@ export function QuickTaskToolbar({
   const userName = (id: string) => userLabel(users?.find((user) => user._id === id));
   const reviewers = (users ?? []).filter((user) => user.role === "dev");
 
-  const projectLabel =
-    filters.project === "all"
-      ? "All Tasks"
-      : filters.project === "none"
-        ? "No Project"
-        : (projects?.find((project) => project._id === filters.project)?.title ?? "Project");
   const userFilterLabel = filters.user === "all" ? "All Users" : (userName(filters.user) ?? "User");
   const assigneeLabel =
     filters.assignee === "all"
@@ -97,7 +87,6 @@ export function QuickTaskToolbar({
   const titles: Record<Page, string> = {
     root: "Options",
     sort: sortLabel,
-    project: projectLabel,
     user: userFilterLabel,
     assignee: assigneeLabel,
     statuses: statusesLabel,
@@ -113,7 +102,6 @@ export function QuickTaskToolbar({
           <>
             <SubmenuRow icon={IconSortDescending} title={sortLabel} onPress={() => setPage("sort")} />
             <MenuDivider />
-            <SubmenuRow icon={IconFolder} title={projectLabel} onPress={() => setPage("project")} />
             <SubmenuRow icon={IconUser} title={userFilterLabel} onPress={() => setPage("user")} />
             <SubmenuRow icon={IconUserCheck} title={assigneeLabel} onPress={() => setPage("assignee")} />
             <SubmenuRow icon={IconFilter} title={statusesLabel} onPress={() => setPage("statuses")} />
@@ -145,22 +133,6 @@ export function QuickTaskToolbar({
             <MenuDivider />
             <SheetRow title="Descending ↓" active={filters.sortDir === "desc"} onPress={() => pick({ sortDir: "desc" })} />
             <SheetRow title="Ascending ↑" active={filters.sortDir === "asc"} onPress={() => pick({ sortDir: "asc" })} />
-          </>
-        );
-      case "project":
-        return (
-          <>
-            <SheetRow title="All Tasks" active={filters.project === "all"} onPress={() => pick({ project: "all" })} />
-            <SheetRow title="No Project" active={filters.project === "none"} onPress={() => pick({ project: "none" })} />
-            {projects && projects.length > 0 ? <MenuDivider /> : null}
-            {(projects ?? []).map((project) => (
-              <SheetRow
-                key={project._id}
-                title={project.title}
-                active={filters.project === project._id}
-                onPress={() => pick({ project: project._id })}
-              />
-            ))}
           </>
         );
       case "user":
@@ -282,16 +254,13 @@ export function QuickTaskToolbar({
 export function ActiveFiltersBar({
   filters,
   onChange,
-  projects,
   users,
 }: {
   filters: QuickTaskListFilters;
   onChange: (patch: Partial<QuickTaskListFilters>) => void;
-  projects: Project[] | undefined;
   users: User[] | undefined;
 }) {
   const chips = quickTaskFilterChips(filters, {
-    project: (id) => projects?.find((project) => project._id === id)?.title,
     user: (id) => userLabel(users?.find((user) => user._id === id)),
   });
   return (

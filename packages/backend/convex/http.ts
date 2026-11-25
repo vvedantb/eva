@@ -311,6 +311,18 @@ http.route({
       console.warn(`[git-credentials][denied] ${resolved.reason}`);
       return new Response("Forbidden", { status: 403 });
     }
+    if (resolved.kind === "read_only") {
+      // A project coordinator's sandbox: it reads, it never pushes.
+      const readOnly = await ctx.runAction(
+        internal.githubAuth.mintReadOnlyRepoToken,
+        {
+          installationId: resolved.installationId,
+          githubId: resolved.githubId,
+          name: resolved.name,
+        },
+      );
+      return Response.json({ username: "x-access-token", ...readOnly });
+    }
     if (resolved.kind === "sibling") {
       console.log(
         `[git-credentials][sibling] sandbox=${resolved.sandboxId} user=${resolved.userId} repo=${resolved.owner}/${resolved.name} installation=${resolved.installationId}`,

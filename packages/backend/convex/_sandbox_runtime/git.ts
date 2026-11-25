@@ -8,7 +8,11 @@ import {
   AUTO_PUBLISH_BRANCH_GIT_CONFIG,
   COMMIT_EXCLUDE_PATHSPECS,
 } from "@eva/shared/gitDefaults";
-import { getInstallationToken } from "../githubAuth";
+import {
+  mintSandboxGitToken,
+  SANDBOX_GIT_WRITE,
+  type SandboxGitAccess,
+} from "../githubAuth";
 import type { DataModel } from "../_generated/dataModel";
 import type {
   SandboxClient,
@@ -400,6 +404,10 @@ export async function createSandbox(
    * See ../_sandbox/driveCache.ts.
    */
   driveCacheRole: DriveCacheRole = DRIVE_CACHE_READER,
+  /** vCPUs; omit for the provider default (see `SandboxCreateParams.vcpus`). */
+  vcpus?: number,
+  /** The GitHub token written into the env file (`mintSandboxGitToken`). */
+  gitAccess: SandboxGitAccess = SANDBOX_GIT_WRITE,
 ): Promise<SandboxHandle> {
   // Keyed on the repo, so every sandbox for a repo shares one cache. Absent
   // only on paths that never resolve a repo, which then get no mount at all.
@@ -424,7 +432,7 @@ export async function createSandbox(
     // post-create file write). Overlap token fetch with Sandbox.create, then
     // write the env file AFTER onSandboxAcquired so the UI goes active before
     // the first-command boot penalty.
-    const tokenPromise = getInstallationToken(installationId);
+    const tokenPromise = mintSandboxGitToken(installationId, gitAccess);
 
     const sandbox = await client.create({
       snapshot: snapshotName,
@@ -453,6 +461,7 @@ export async function createSandbox(
         }),
       },
       readyTimeoutSeconds: timeoutSeconds,
+      ...(vcpus !== undefined ? { vcpus } : {}),
       mounts: repoId
         ? [
             {
@@ -473,7 +482,7 @@ export async function createSandbox(
       // Env file first: early-ready below lets the session start its agent
       // daemon, and the runner sources this file once at spawn — the snapshot's
       // copy carries a stale token and stale repo env vars.
-      const token = await tokenPromise;
+      const { token } = await tokenPromise;
       await runLoggedGitStep("createSandbox.writeEvaEnv", sandbox.id, () =>
         writeSandboxFile(
           sandbox,
@@ -1128,9 +1137,13 @@ export async function cloneRepoInto(
   name: string,
   destDir: string,
   onProgress?: (label: string) => Promise<void>,
+  gitAccess: SandboxGitAccess = SANDBOX_GIT_WRITE,
 ): Promise<void> {
   if (onProgress) await onProgress("Cloning repository...");
-  const githubToken = await getInstallationToken(installationId);
+  const { token: githubToken } = await mintSandboxGitToken(
+    installationId,
+    gitAccess,
+  );
   const repoUrl = `https://github.com/${owner}/${name}.git`;
 
   await execHandle(sandbox, `rm -rf ${quote([destDir])}`, 30);
@@ -1165,6 +1178,7 @@ export async function cloneAndSetupRepo(
   name: string,
   shouldInstallDeps: boolean,
   onProgress?: (label: string) => Promise<void>,
+  gitAccess: SandboxGitAccess = SANDBOX_GIT_WRITE,
 ): Promise<void> {
   const details = `${owner}/${name}, installDeps=${shouldInstallDeps}`;
   await runLoggedGitStep("cloneAndSetupRepo", details, async () => {
@@ -1177,6 +1191,7 @@ export async function cloneAndSetupRepo(
       name,
       WORKSPACE_DIR,
       onProgress,
+      gitAccess,
     );
 
     // Install the credential helper after the clone so subsequent fetches /
@@ -1825,6 +1840,10 @@ export async function createSandboxAndPrepareRepo(
   // `dockerReady` before anything that needs Docker. Docker takes 2.8s at p50
   // and 14.6s at p90, which a new session's repo prep should not wait on.
   deferDocker = false,
+  /** vCPUs for the new sandbox; omit for the provider default. */
+  vcpus?: number,
+  /** The GitHub access of every token this sandbox gets at create and clone. */
+  gitAccess: SandboxGitAccess = SANDBOX_GIT_WRITE,
 ): Promise<PreparedSandbox> {
   let sandbox: SandboxHandle | undefined;
   try {
@@ -1846,6 +1865,8 @@ export async function createSandboxAndPrepareRepo(
             onSandboxAcquired,
             forkFrom,
             driveCacheRole,
+            vcpus,
+            gitAccess,
           );
         } catch (err) {
           if (!forkFrom && effectiveSnapshot && isSnapshotUnusableError(err)) {
@@ -1865,6 +1886,8 @@ export async function createSandboxAndPrepareRepo(
               onSandboxAcquired,
               undefined, // forkFrom — the fallback is a fresh boot
               driveCacheRole,
+              vcpus,
+              gitAccess,
             );
           } else {
             throw err;
@@ -1911,6 +1934,7 @@ export async function createSandboxAndPrepareRepo(
             name,
             false,
             onProgress,
+            gitAccess,
           );
           return { sandbox, usedSnapshot: false, dockerReady };
         }
@@ -1922,6 +1946,7 @@ export async function createSandboxAndPrepareRepo(
           name,
           !lifecycle.ephemeral && !skipInstallDeps,
           onProgress,
+          gitAccess,
         );
         if (syncStrategy.mode !== "none") {
           if (onProgress) await onProgress("Syncing repository...");

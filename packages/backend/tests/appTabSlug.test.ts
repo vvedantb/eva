@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { RESERVED_APP_TAB_SLUGS, slugifyAppTabName } from "@eva/shared/appTabSlug";
 
 test("RESERVED_APP_TAB_SLUGS keeps computer, legacy desktop, pr, and legacy diffs reserved", () => {

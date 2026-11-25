@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import workflow from "@convex-dev/workflow/test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import type { FunctionArgs } from "convex/server";
@@ -23,6 +23,7 @@ import {
 import { MENTION_TOKEN_REGEX } from "../convex/_mentions/mentionToken";
 import { SKILL_TOKEN_REGEX } from "../convex/_mentions/skillToken";
 import { openTurn } from "../convex/_chat/turnStore";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * The mobile app's writes (apps/mobile): replies in every chat kind, Stop and
@@ -30,7 +31,6 @@ import { openTurn } from "../convex/_chat/turnStore";
  * scheduled sandbox and push actions queued instead of running.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 /** Loading the chat-workflow module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|mobile-api";
@@ -95,7 +95,6 @@ async function fixture() {
       repoId,
       userId,
       title: "Billing revamp",
-      phase: "in_progress",
       rawInput: "revamp billing",
       numId: 3,
     });
@@ -411,9 +410,9 @@ describe("mobile api", () => {
       expect(await asUser.query(api.chats.get, { target: ids.sessionId })).toMatchObject({ prUrl });
       expect(await asUser.query(api.chats.get, { target: ids.taskId })).toMatchObject({ prUrl });
       expect(await asUser.query(api.chats.get, { target: ids.projectId })).toMatchObject({ prUrl: projectPr });
-      // A task in a project ships through the project's pull request.
+      // A task in a project ships through its own pull request, not the project's.
       await t.run((ctx) => ctx.db.patch(ids.taskId, { projectId: ids.projectId }));
-      expect(await asUser.query(api.chats.get, { target: ids.taskId })).toMatchObject({ prUrl: projectPr });
+      expect(await asUser.query(api.chats.get, { target: ids.taskId })).toMatchObject({ prUrl });
     },
     TIMEOUT_MS,
   );
@@ -775,7 +774,7 @@ describe("mobile api", () => {
   );
 
   test(
-    "projects.create makes the phone's new project: tasks only goes to Business Review with a branch, an interview starts as a draft",
+    "projects.create makes one kind of project whatever skipPlanning an old phone sends: it plans in its coordinator chat, with no interview",
     async () => {
       const { t, ids, asUser } = await fixture();
       const tasksOnly = await asUser.mutation(api.projects.create, {
@@ -796,19 +795,18 @@ describe("mobile api", () => {
       const listed = await asUser.query(api.projects.list, { repoId: ids.repoId });
       const byId = new Map(listed.map((project) => [project._id, project]));
       expect(byId.get(tasksOnly)).toMatchObject({
-        phase: "business_review",
-        planningMode: "tasks_only",
         description: "Keep a draft when the network drops.",
         priority: "high",
         baseBranch: "main",
         userId: ids.userId,
       });
-      expect(byId.get(tasksOnly)?.branchName).toBeTruthy();
-      expect(byId.get(interview)).toMatchObject({ phase: "draft", planningMode: "interview" });
-      expect(byId.get(interview)).not.toHaveProperty("description");
-      // The interview opens on the user's own description, which the phone Plan tab shows.
-      const detail = await asUser.query(api.projects.get, { id: interview });
-      expect(detail?.conversationHistory.map((turn) => [turn.role, turn.content])).toEqual([["user", "Shorter onboarding copy."]]);
+      // The description is what the coordinator's first turn carries.
+      expect(byId.get(interview)).toMatchObject({
+        description: "Shorter onboarding copy.",
+      });
+      // No stored phase and no project branch: the status is derived.
+      expect(byId.get(tasksOnly)).not.toHaveProperty("phase");
+      expect(byId.get(tasksOnly)).not.toHaveProperty("branchName");
       // Each takes the repo's next project number.
       const numbers = await t.run(async (ctx) => [(await ctx.db.get(tasksOnly))?.numId, (await ctx.db.get(interview))?.numId]);
       expect(new Set(numbers).size).toBe(2);

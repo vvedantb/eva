@@ -48,7 +48,9 @@ export function SidebarPanel({
   const { repoBasePath, repoName, appName, isRepoRoute } = route;
   const { showGlobalSessionsPanel, showGlobalAutomationsPanel } = flags;
   return (
-    <Sidebar.Panel className="border-r border-sidebar-border bg-sidebar">
+    // No edge line: the panel shares the page tone, and the gap to the
+    // content divides them, as on the rail (docs/eva-ui.md).
+    <Sidebar.Panel className="vt-panel bg-sidebar">
       <ContextSidebarHeaderActionProvider key={panelKey}>
         {(headerAction) => (
           <>

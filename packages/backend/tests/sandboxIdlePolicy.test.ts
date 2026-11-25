@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import {
   ACTIVITY_TOUCH_MIN_INTERVAL_MS,
   IDLE_PAUSE_DEFAULTS,

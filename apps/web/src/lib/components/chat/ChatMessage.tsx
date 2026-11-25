@@ -73,10 +73,13 @@ import { TurnErrorNotice } from "@/lib/components/chat/TurnErrorNotice";
 
 const EVA_ICON = <EvaIcon />;
 
-/** Squares the bottom-left corner against a teammate's side avatar. */
-function otherUserBubbleRadius(): string {
+/**
+ * A left-side bubble (a teammate, or Eva in the coordinator): the bottom-left
+ * corner squares against the avatar, so only the run's last bubble has it.
+ */
+function sideBubbleRadius(joinsNext: boolean): string {
   const r = "clamp(0.75rem, var(--radius), 1rem)";
-  return `${r} ${r} ${r} 0`;
+  return joinsNext ? r : `${r} ${r} ${r} 0`;
 }
 
 /** Provider mark under an assistant turn; tooltip lists model, effort, account. */
@@ -141,6 +144,16 @@ interface ChatMessageProps {
   isOtherUser?: boolean;
   /** First name shown above teammate bubbles. */
   senderFirstName?: string;
+  /**
+   * Eva's reply sits in a teammate-style bubble with her mark (the project
+   * coordinator, which only talks and delegates).
+   */
+  assistantBubble?: boolean;
+  /**
+   * The next row is the same sender's bubble: this one leaves the avatar (and
+   * its square corner) to the last bubble of the run.
+   */
+  joinsNext?: boolean;
   /** This user turn switches to a different model provider. */
   isHandoffBoundary?: boolean;
   /**
@@ -226,6 +239,8 @@ export const ChatMessage = memo(function ChatMessage({
   onChangedFilesExpandedChange,
   isOtherUser = false,
   senderFirstName,
+  assistantBubble = false,
+  joinsNext = false,
   isHandoffBoundary = false,
   turnModel,
   turnReasoningLevel,
@@ -300,6 +315,7 @@ export const ChatMessage = memo(function ChatMessage({
                 repo={repo}
                 isOtherUser={isOtherUser}
                 senderFirstName={senderFirstName}
+                joinsNext={joinsNext}
                 isHandoffBoundary={isHandoffBoundary}
                 belowContent={belowContent}
                 artifacts={artifacts}
@@ -315,6 +331,8 @@ export const ChatMessage = memo(function ChatMessage({
                 showChangedFiles={showChangedFiles}
                 showTurnMeta={showTurnMeta}
                 showScopeCheck={showScopeCheck}
+                bubble={assistantBubble}
+                joinsNext={joinsNext}
                 changedFilesExpanded={changedFilesExpanded}
                 onChangedFilesExpandedChange={onChangedFilesExpandedChange}
                 turnModel={turnModel}
@@ -381,6 +399,7 @@ function UserTurn({
   repo,
   isOtherUser,
   senderFirstName,
+  joinsNext,
   isHandoffBoundary,
   belowContent,
   artifacts,
@@ -388,6 +407,7 @@ function UserTurn({
   copyPlain,
   userActions,
 }: {
+  joinsNext: boolean;
   message: ChatBodyMessage;
   repo?: ChatRepo;
   isOtherUser: boolean;
@@ -442,6 +462,7 @@ function UserTurn({
         message={message}
         repo={repo}
         isOtherUser={isOtherUser}
+        joinsNext={joinsNext}
         isMcpProvenance={isOrchestratorNotification || sentViaMcp}
       />
       {isHandoffBoundary && message.model !== undefined ? (
@@ -473,11 +494,13 @@ function UserTurnBubble({
   message,
   repo,
   isOtherUser,
+  joinsNext,
   isMcpProvenance,
 }: {
   message: ChatBodyMessage;
   repo?: ChatRepo;
   isOtherUser: boolean;
+  joinsNext: boolean;
   isMcpProvenance: boolean;
 }) {
   // min-w-0 stops the default `min-width: auto` on this flex item from letting
@@ -486,8 +509,8 @@ function UserTurnBubble({
   return (
     <div className="flex min-w-0 max-w-full items-end gap-2">
       {isOtherUser ? (
-        <div className="shrink-0">
-          <UserMessageAvatar userId={message.userId} />
+        <div className="size-4 shrink-0">
+          {joinsNext ? null : <UserMessageAvatar userId={message.userId} />}
         </div>
       ) : null}
       <MessageContent
@@ -502,7 +525,7 @@ function UserTurnBubble({
               : "rounded-surface bg-primary/10 group-[.is-user]:bg-primary/10",
         )}
         style={
-          isOtherUser ? { borderRadius: otherUserBubbleRadius() } : undefined
+          isOtherUser ? { borderRadius: sideBubbleRadius(joinsNext) } : undefined
         }
       >
         <UserMessageBody message={message} repo={repo} />
@@ -518,6 +541,8 @@ interface AssistantTurnProps {
   showChangedFiles: boolean;
   showTurnMeta: boolean;
   showScopeCheck: boolean;
+  bubble: boolean;
+  joinsNext: boolean;
   changedFilesExpanded?: boolean;
   onChangedFilesExpandedChange: ChatMessageProps["onChangedFilesExpandedChange"];
   turnModel?: string;
@@ -548,6 +573,8 @@ function AssistantTurn({
   showChangedFiles,
   showTurnMeta,
   showScopeCheck,
+  bubble,
+  joinsNext,
   changedFilesExpanded,
   onChangedFilesExpandedChange,
   turnModel,
@@ -586,6 +613,8 @@ function AssistantTurn({
   return (
     <>
       <AssistantTurnContent
+        bubble={bubble}
+        joinsNext={joinsNext}
         message={message}
         turnState={turnState}
         isLatestAssistantTurn={isLatestAssistantTurn}
@@ -605,44 +634,61 @@ function AssistantTurn({
         turnErrorTitle={turnErrorTitle}
         panelTabs={panelTabs}
       />
-      {artifacts ? (
-        <div className="mt-1 flex flex-col gap-2">{artifacts}</div>
-      ) : null}
-      {/* Sits above `belowContent` so agent-composed panels keep
-          their promised slot directly over the meta row, and so the
-          chip stays next to the changed-files card it judges.
-          Deliberately not gated on `showChangedFiles`: the verdict is
-          a safety signal, and simple view hiding it is exactly the
-          reader who needs it. The hover card's per-hunk rows only
-          link out when the diff surface exists — simple view bounces
-          away from that tab, so they degrade to plain rows there. */}
-      {showScopeCheck && message.scopeCheck ? (
-        <div className="mt-1">
-          <ScopeCheckChip
-            check={message.scopeCheck}
-            {...(showChangedFiles && onViewDiff ? { onViewDiff } : {})}
+      <BubbleIndent bubble={bubble}>
+        {artifacts ? (
+          <div className="mt-1 flex flex-col gap-2">{artifacts}</div>
+        ) : null}
+        {/* Sits above `belowContent` so agent-composed panels keep
+            their promised slot directly over the meta row, and so the
+            chip stays next to the changed-files card it judges.
+            Deliberately not gated on `showChangedFiles`: the verdict is
+            a safety signal, and simple view hiding it is exactly the
+            reader who needs it. The hover card's per-hunk rows only
+            link out when the diff surface exists — simple view bounces
+            away from that tab, so they degrade to plain rows there. */}
+        {showScopeCheck && message.scopeCheck ? (
+          <div className="mt-1">
+            <ScopeCheckChip
+              check={message.scopeCheck}
+              {...(showChangedFiles && onViewDiff ? { onViewDiff } : {})}
+            />
+          </div>
+        ) : null}
+        {/* Only the panels the tab strip did not claim — a still-
+            streaming or failed turn has no prose to trade places with. */}
+        {belowContent && !panelTabs ? (
+          <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
+        ) : null}
+        {showTurnMeta ? (
+          <AssistantTurnMeta
+            message={message}
+            turnModel={turnModel}
+            turnReasoningLevel={turnReasoningLevel}
+            turnCredentialSourceLabel={turnCredentialSourceLabel}
+            copyPlain={copyPlain}
+            rowActions={rowActions}
+            canRate={canRate && !turnState.isStreamingPlaceholder}
+            feedbackSentiment={feedbackSentiment}
+            feedbackComment={feedbackComment}
           />
-        </div>
-      ) : null}
-      {/* Only the panels the tab strip did not claim — a still-
-          streaming or failed turn has no prose to trade places with. */}
-      {belowContent && !panelTabs ? (
-        <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
-      ) : null}
-      {showTurnMeta ? (
-        <AssistantTurnMeta
-          message={message}
-          turnModel={turnModel}
-          turnReasoningLevel={turnReasoningLevel}
-          turnCredentialSourceLabel={turnCredentialSourceLabel}
-          copyPlain={copyPlain}
-          rowActions={rowActions}
-          canRate={canRate && !turnState.isStreamingPlaceholder}
-          feedbackSentiment={feedbackSentiment}
-          feedbackComment={feedbackComment}
-        />
-      ) : null}
+        ) : null}
+      </BubbleIndent>
     </>
+  );
+}
+
+/** Lines the rows under a bubbled reply up with the bubble, past Eva's mark. */
+function BubbleIndent({
+  bubble,
+  children,
+}: {
+  bubble: boolean;
+  children: ReactNode;
+}) {
+  return bubble ? (
+    <div className="flex flex-col pl-6">{children}</div>
+  ) : (
+    <>{children}</>
   );
 }
 
@@ -670,6 +716,8 @@ function AssistantTurnContent({
   belowContent,
   turnErrorTitle,
   panelTabs,
+  bubble,
+  joinsNext,
 }: Omit<
   AssistantTurnProps,
   | "showTurnMeta"
@@ -718,8 +766,19 @@ function AssistantTurnContent({
       <AgentSpawnCtaRow summary={agentSpawn} onOpen={onOpenAgentsTab} />
     ) : null;
 
-  return (
-    <MessageContent className="px-1 py-2">
+  const content = (
+    <MessageContent
+      className={cn(
+        "py-2",
+        // The teammate bubble, mirrored onto Eva's side.
+        // `group-[.is-assistant]:w-fit` outranks the kit's own
+        // `group-[.is-assistant]:w-full`; a plain `w-fit` loses to it.
+        bubble
+          ? "min-w-0 bg-secondary px-3 text-foreground group-[.is-assistant]:w-fit"
+          : "px-1",
+      )}
+      style={bubble ? { borderRadius: sideBubbleRadius(joinsNext) } : undefined}
+    >
       {isStreamingPlaceholder ? (
         <>
           <StreamingActivityDisplay
@@ -782,6 +841,17 @@ function AssistantTurnContent({
         </>
       )}
     </MessageContent>
+  );
+
+  return bubble ? (
+    <div className="flex min-w-0 max-w-[85%] items-end gap-2">
+      <div className="size-4 shrink-0">
+        {joinsNext ? null : <EvaIcon size={16} disc={false} />}
+      </div>
+      {content}
+    </div>
+  ) : (
+    content
   );
 }
 

@@ -8,6 +8,7 @@ import {
   getSessionWithAccess,
   hasRepoAccess,
 } from "../functions";
+import { findWorkChat } from "./ownerState";
 import { allocateNumId } from "../numId";
 import {
   aiModelValidator,
@@ -19,6 +20,7 @@ import { workflow } from "../workflowManager";
 import { resolveSessionBaseBranch } from "./baseBranch";
 import { scheduleStuckStartExpiry } from "../_sandbox/transitions";
 import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
+import { sessionAccountHolder } from "../_projects/runSettings";
 import {
   assertProviderAccountUsableBy,
   resolveDefaultProviderAccountId,
@@ -349,7 +351,11 @@ export const addMessage = authMutation({
         ? await resolveMessageCredential(
             ctx.db,
             args.providerAccountId ?? chat.providerAccountId,
-            session.createdBy ?? session.userId,
+            await sessionAccountHolder(
+              ctx.db,
+              session,
+              args.providerAccountId ?? chat.providerAccountId,
+            ),
           )
         : undefined;
     await ctx.db.insert("messages", {
@@ -509,7 +515,8 @@ export const archive = authMutation({
 /**
  * A task's or project's session and the chat it talks in (`getOwnedWithSeed`),
  * created on first use. The owner's chat and sandbox panels call this before
- * their first send or Start when `getOwnedWithSeed` is still null.
+ * their first send or Start when `getOwnedWithSeed` is still null. Anyone
+ * with access to the owner may create it.
  */
 export const ensureOwned = authMutation({
   args: { owner: ownedSessionOwnerValidator },
@@ -521,6 +528,10 @@ export const ensureOwned = authMutation({
       ctx.userId,
     );
     if (!entity) throw new Error(`${args.owner.kind} not found`);
+    const existing = await findWorkChat(ctx.db, entity);
+    if (existing) {
+      return { sessionId: existing.session._id, chatId: existing.chat._id };
+    }
     const { session, chat } = await ensureOwnerChat(ctx, entity);
     return { sessionId: session._id, chatId: chat._id };
   },

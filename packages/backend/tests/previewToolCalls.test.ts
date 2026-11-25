@@ -1,5 +1,5 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { api, internal } from "../convex/_generated/api";
 import type { Doc } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
@@ -12,6 +12,7 @@ import {
   awaitPreviewToolCall,
   type PreviewToolRelay,
 } from "../convex/_mcp/previewTools";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * The agent → live-preview WebMCP relay. Several Eva tabs can have one chat
@@ -21,7 +22,6 @@ import {
  * because the properties are behavioural (serialised status transitions).
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 /** Loading the whole convex module graph costs seconds on a cold worker. */
 const TIMEOUT_MS = 30_000;

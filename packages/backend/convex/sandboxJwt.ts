@@ -7,7 +7,10 @@ import { internal } from "./_generated/api";
 import { importJWK, SignJWT } from "jose";
 import { z } from "zod";
 import { SANDBOX_JWT_ISSUER } from "./sandboxAuthConfig";
-import { EVA_MCP_CLAIM } from "./_auth/sandboxIdentity";
+import {
+  EVA_MCP_CLAIM,
+  EVA_READ_ONLY_GIT_CLAIM,
+} from "./_auth/sandboxIdentity";
 
 const sandboxPrivateJwkSchema = z
   .object({ kid: z.string().optional() })
@@ -28,14 +31,19 @@ export type SandboxJwtPurpose = "vm" | "mcp";
 export async function signSandboxUserJwt(
   clerkId: string,
   purpose: SandboxJwtPurpose,
+  /** A project coordinator's VM: its GitHub token refresh stays read-only. */
+  readOnlyGit = false,
 ): Promise<string> {
   const privateKeyJwk = sandboxPrivateJwkSchema.parse(
     JSON.parse(requiredEnv("SANDBOX_JWT_PRIVATE_KEY")),
   );
   const kid = privateKeyJwk.kid ?? "sandbox-1";
   const key = await importJWK(privateKeyJwk, "ES256");
-  const claims =
-    purpose === "mcp" ? { sub: clerkId, [EVA_MCP_CLAIM]: true } : { sub: clerkId };
+  const claims = {
+    sub: clerkId,
+    ...(purpose === "mcp" ? { [EVA_MCP_CLAIM]: true } : {}),
+    ...(readOnlyGit ? { [EVA_READ_ONLY_GIT_CLAIM]: true } : {}),
+  };
   return await new SignJWT(claims)
     .setProtectedHeader({ alg: "ES256", kid })
     .setIssuer(SANDBOX_JWT_ISSUER)
@@ -73,6 +81,8 @@ export const mintSandboxSessionTokens = internalAction({
     // session-level tools (dev server, browser, PRs) keep resolving; chat
     // content (panels, questions, env var cards) lands on this row instead.
     chatId: v.optional(v.string()),
+    /** The VM belongs to a read-only sandbox (`isReadOnlySandboxOwner`). */
+    readOnlyGit: v.optional(v.boolean()),
   },
   returns: v.object({
     sandboxToken: v.string(),
@@ -96,7 +106,11 @@ export const mintSandboxSessionTokens = internalAction({
     }
 
     // Sandbox auth token (ES256) — required.
-    const sandboxToken = await signSandboxUserJwt(clerkId, "vm");
+    const sandboxToken = await signSandboxUserJwt(
+      clerkId,
+      "vm",
+      args.readOnlyGit === true,
+    );
 
     // MCP-internal token (HS256) — best-effort.
     let mcpToken: { token: string; expiresIn: number } | null = null;

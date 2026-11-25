@@ -1,7 +1,8 @@
 import { convexTest } from "convex-test";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { api } from "../convex/_generated/api";
 import schema from "../convex/schema";
+import { modules } from "./_helpers/convexModules";
 
 /**
  * Artifacts created from a sandbox token are stored against that session /
@@ -10,7 +11,6 @@ import schema from "../convex/schema";
  * check would miss a list that still ranged over by_team.
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 const CLERK_ID = "clerk|artifact-source";
 const STRANGER_CLERK_ID = "clerk|artifact-source-stranger";
@@ -61,7 +61,6 @@ async function fixture() {
       repoId,
       userId,
       title: "Artifacts project",
-      phase: "in_progress",
       rawInput: "artifacts",
       numId: 3,
       updatedAt: now,

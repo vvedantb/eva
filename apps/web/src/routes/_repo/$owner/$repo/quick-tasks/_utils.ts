@@ -16,13 +16,14 @@ import {
   quickTaskSortDirParser,
   quickTaskSortFieldParser,
   quickTaskTimeRangeParser,
-  quickTaskProjectParser,
   quickTaskUserParser,
   quickTaskAssigneeParser,
   quickTaskTagsParser,
 } from "@/lib/search-params";
 
-type QuickTaskView = "kanban" | "list";
+/** Quick task views in their toolbar order (the content slides by it). */
+export const QUICK_TASK_VIEWS = ["kanban", "list"] as const;
+export type QuickTaskView = (typeof QUICK_TASK_VIEWS)[number];
 
 interface QuickTaskFilters extends QuickTaskListFilters {
   view: QuickTaskView;
@@ -54,7 +55,6 @@ export function useQuickTaskFilters(): [
 
   const [urlFilters, setUrlFilters] = useQueryStates({
     q: searchParser,
-    project: quickTaskProjectParser,
     user: quickTaskUserParser,
     assignee: quickTaskAssigneeParser,
     tags: quickTaskTagsParser,

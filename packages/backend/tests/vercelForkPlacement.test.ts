@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { SANDBOX_REGION } from "../convex/_sandbox/vercelRegion";
 
 /**
@@ -14,7 +14,7 @@ interface ForkOpts {
   mounts?: object;
 }
 
-const sdk = vi.hoisted(() => {
+const sdk = (() => {
   const state: {
     sourceSnapshotId: string | undefined;
     sourceLookupFails: boolean;
@@ -27,9 +27,9 @@ const sdk = vi.hoisted(() => {
     forkOpts: [],
   };
   return state;
-});
+})();
 
-vi.mock("@vercel/sandbox", () => ({
+mock.module("@vercel/sandbox", () => ({
   Sandbox: {
     get: async () => {
       if (sdk.sourceLookupFails) throw new Error("404");
@@ -61,7 +61,10 @@ const { createVercelClient } = await import(
 );
 
 const forkOnce = async () => {
-  const client = createVercelClient({ token: "t", teamId: "team", projectId: "prj" });
+  const client = createVercelClient(
+    { token: "t", teamId: "team", projectId: "prj" },
+    8,
+  );
   await expect(
     client.create({
       forkFrom: "source-sbx",

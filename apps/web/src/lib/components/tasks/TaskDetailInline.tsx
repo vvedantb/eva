@@ -15,10 +15,9 @@ import { cn } from "@eva/ui";
 import {
   Badge,
   Spinner,
-  tokenTransition,
+  TabsTransition,
   useRequestConfirm,
 } from "@vvedantb/ui";
-import { AnimatePresence, m } from "motion/react";
 import { MobilePaneSwitcher } from "@/lib/components/MobilePaneSwitcher";
 import { IconClock } from "@tabler/icons-react";
 import dayjs from "@eva/shared/dates";
@@ -51,7 +50,10 @@ import {
 } from "@/lib/components/sandbox/SandboxPanelFrame";
 import { SandboxSurfaceProviders } from "@/lib/components/sandbox/SandboxSurfaceProviders";
 import type { SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
-import { SandboxSurfaceTabs } from "@/lib/components/sandbox/SandboxSurfaceTabs";
+import {
+  SANDBOX_SURFACES,
+  SandboxSurfaceTabs,
+} from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import { useChatUnread } from "@/lib/components/sandbox/useChatUnread";
 import { useDiffSearchParams } from "@/lib/components/sandbox/useDiffSearchParams";
 import {
@@ -118,11 +120,10 @@ export function TaskDetailInline({
     creatorUser,
     projects,
     isOwner,
-    isBlocked,
     hasActiveRun,
     isProjectTask,
     hasRuns,
-    canEditTaskText,
+    canEditTaskText: canEditText,
     latestPrUrl,
     latestPrError,
     latestDeployment,
@@ -294,7 +295,11 @@ export function TaskDetailInline({
         }
       />
     ) : (
-      <SandboxEmptyRailFrame collapsed={collapsed} onToggle={onToggle}>
+      <SandboxEmptyRailFrame
+        collapsed={collapsed}
+        onToggle={onToggle}
+        showToggle={routing?.mode !== "project-task"}
+      >
         <div className="flex flex-col items-center gap-3 text-center">
           <p className="text-sm text-muted-foreground">
             No sandbox for this task yet — it becomes available once the task
@@ -377,6 +382,7 @@ export function TaskDetailInline({
             collapsed={rightPanelCollapsed}
             onToggle={onToggleRightPanel}
             ownerLabel="task"
+            showToggle={routing?.mode !== "project-task"}
             isPending={sandbox.sessionPending}
             onStart={
               canStartSandbox && !isSandboxStopping
@@ -425,7 +431,7 @@ export function TaskDetailInline({
                       <TaskHeader
                         taskNumber={task?.taskNumber}
                         title={task?.title}
-                        canEditTaskText={canEditTaskText}
+                        canEditTaskText={canEditText}
                         hasActiveRun={hasActiveRun}
                         taskId={taskId}
                       />
@@ -446,7 +452,7 @@ export function TaskDetailInline({
                     </div>
                     <TaskDescription
                       description={task?.description}
-                      canEditTaskText={canEditTaskText}
+                      canEditTaskText={canEditText}
                       hasActiveRun={hasActiveRun}
                       taskId={taskId}
                       inline={true}
@@ -487,7 +493,6 @@ export function TaskDetailInline({
                 taskId={taskId}
                 task={task}
                 status={status}
-                isBlocked={isBlocked}
                 users={users}
                 projects={projects}
                 baseBranch={baseBranch}
@@ -512,6 +517,7 @@ export function TaskDetailInline({
         variant="header"
         taskId={taskId}
         task={task}
+        chatId={chatId}
         isAgentActive={isAgentActive}
         status={status}
         hasActiveRun={hasActiveRun}
@@ -575,31 +581,14 @@ export function TaskDetailInline({
         ? createPortal(quickTaskSurfaceTabs, titleSlotElement)
         : null}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <AnimatePresence mode="wait" initial={false}>
-          {isSandboxViewActive ? (
-            <m.div
-              key="sandbox"
-              className="flex min-h-0 flex-1 flex-col overflow-hidden"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={tokenTransition.fast}
-            >
-              {sandboxContent}
-            </m.div>
-          ) : (
-            <m.div
-              key="task"
-              className="flex min-h-0 flex-1 flex-col overflow-hidden"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={tokenTransition.fast}
-            >
-              {detailContent}
-            </m.div>
-          )}
-        </AnimatePresence>
+        <TabsTransition
+          value={isSandboxViewActive ? "sandbox" : "main"}
+          order={SANDBOX_SURFACES}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          panelClassName="flex min-h-0 flex-1 flex-col overflow-hidden"
+        >
+          {isSandboxViewActive ? sandboxContent : detailContent}
+        </TabsTransition>
       </div>
       <ResolveConfirmDialog
         open={showResolveConfirm}

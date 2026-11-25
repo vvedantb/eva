@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FunctionReturnType } from "convex/server";
-import { isProjectBuilding, type Id, type api } from "@eva/backend";
+import type { Id, api } from "@eva/backend";
 import { Virtuoso } from "react-virtuoso";
 import {
   Collapsible,
@@ -10,11 +10,10 @@ import {
   useFirstPaintGate,
 } from "@vvedantb/ui";
 import { IconChevronRight } from "@tabler/icons-react";
-import { PROJECT_COLUMNS, type ProjectColumn } from "@eva/shared";
-import {
-  columnConfig,
-  phaseConfig,
-} from "@/lib/components/projects/ProjectPhaseBadge";
+import type { ProjectStage } from "@eva/shared/projectStatus";
+import type { ProjectListStatus } from "@eva/shared/projectView";
+import { PROJECT_STAGES } from "@eva/shared/projectView";
+import { projectStageConfig } from "@/lib/components/projects/ProjectPhaseBadge";
 import { entityPathSegment } from "@/lib/numId";
 import { ProjectCard } from "@/lib/components/projects/ProjectCard";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -24,8 +23,10 @@ import type { SelectionToggleOptions } from "@/lib/components/quick-tasks/select
 type Project = FunctionReturnType<typeof api.projects.list>[number];
 
 interface ProjectsListViewProps {
-  projectsByPhase: Record<ProjectColumn, Project[]>;
-  visiblePhases: Set<ProjectColumn>;
+  projectsByPhase: Record<ProjectStage, Project[]>;
+  visiblePhases: Set<ProjectStage>;
+  /** Derived status by project id (`useProjectListStatuses`). */
+  statuses: ReadonlyMap<string, ProjectListStatus>;
   onDelete: (id: Id<"projects">, title: string) => void;
   isSelecting?: boolean;
   selectedIds?: Set<Id<"projects">>;
@@ -38,6 +39,7 @@ interface ProjectsListViewProps {
 export function ProjectsListView({
   projectsByPhase,
   visiblePhases,
+  statuses,
   onDelete,
   isSelecting = false,
   selectedIds,
@@ -48,14 +50,14 @@ export function ProjectsListView({
     `${owner}/${name}/projects/list`,
   );
   const firstPaint = useFirstPaintGate();
-  const [openSections, setOpenSections] = useState<Set<ProjectColumn>>(() => {
+  const [openSections, setOpenSections] = useState<Set<ProjectStage>>(() => {
     const nonEmpty = new Set(
-      PROJECT_COLUMNS.filter((p) => (projectsByPhase[p] ?? []).length > 0),
+      PROJECT_STAGES.filter((p) => (projectsByPhase[p] ?? []).length > 0),
     );
-    return nonEmpty.size > 0 ? nonEmpty : new Set(PROJECT_COLUMNS);
+    return nonEmpty.size > 0 ? nonEmpty : new Set(PROJECT_STAGES);
   });
 
-  const toggleSection = (phase: ProjectColumn) => {
+  const toggleSection = (phase: ProjectStage) => {
     setOpenSections((prev) => {
       const next = new Set(prev);
       if (next.has(phase)) {
@@ -72,9 +74,9 @@ export function ProjectsListView({
       ref={scrollRef}
       className="flex-1 w-full overflow-y-auto scrollbar space-y-1"
     >
-      {PROJECT_COLUMNS.flatMap((phase) => {
+      {PROJECT_STAGES.flatMap((phase) => {
         if (!visiblePhases.has(phase)) return [];
-        const cfg = columnConfig[phase];
+        const cfg = projectStageConfig[phase];
         const items = projectsByPhase[phase] ?? [];
         // Shift-click spans this section only — the visible order of the group
         // the click landed in, not the whole flattened list.
@@ -133,12 +135,10 @@ export function ProjectsListView({
                               branchName={project.branchName}
                               numId={project.numId}
                               createdAt={project._creationTime}
-                              accentColor={phaseConfig[project.phase].bar}
+                              accentColor={projectStageConfig[phase].bar}
                               members={project.members}
                               projectLead={project.projectLead}
-                              phase={project.phase}
-                              planningMode={project.planningMode}
-                              isBuilding={isProjectBuilding(project)}
+                              status={statuses.get(project._id)}
                               sandboxStatus={project.sandboxStatus}
                               hasUnread={project.hasUnread}
                               isAwaitingAnswer={project.isAwaitingAnswer}

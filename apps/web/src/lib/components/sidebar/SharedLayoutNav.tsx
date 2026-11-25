@@ -36,12 +36,6 @@ function useSharedLayoutNav() {
   return context;
 }
 
-/**
- * Eva's tones on a package `Sidebar.RailGroup`: `rail-track` (globals.css)
- * gives the trough and its sliding pill the segmented-tabs colours per theme.
- */
-export const railGroupThemeClass = "rail-track";
-
 const sidebarNavPillClass =
   "pointer-events-none absolute inset-0 rounded-menu-item bg-sidebar-accent";
 

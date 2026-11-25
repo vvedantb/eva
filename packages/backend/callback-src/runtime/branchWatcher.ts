@@ -1,4 +1,4 @@
-import { statSync, watch, type FSWatcher } from "fs";
+import { statSync, watch } from "fs";
 import { COMMIT_EXCLUDE_PATHSPECS } from "@eva/shared/gitDefaults";
 import { ENTITY_ID, ENTITY_ID_FIELD, WORK_DIR } from "../config.js";
 import { callConvexWithRetry } from "../http/convexClient.js";
@@ -122,9 +122,7 @@ function readGitState(): GitState | null {
 
 let target: BranchTarget | null = null;
 let lastReported: GitState | null = null;
-let pollInterval: NodeJS.Timeout | null = null;
 let debounceTimer: NodeJS.Timeout | null = null;
-let headWatcher: FSWatcher | null = null;
 let checkInFlight = false;
 let recheckQueued = false;
 let started = false;
@@ -186,7 +184,7 @@ function watchHeadIn(gitDir: string): void {
   try {
     // Watch the directory, not `.git/HEAD`: git replaces HEAD by writing a temp
     // file and renaming it, so a watcher on the file follows the dead inode.
-    headWatcher = watch(gitDir, (_event, filename) => {
+    const headWatcher = watch(gitDir, (_event, filename) => {
       if (filename !== "HEAD") return;
       scheduleCheck();
     });
@@ -235,7 +233,7 @@ export function startBranchWatcher(): void {
     log("branchWatcher: " + gitDir + " is not a directory; polling only");
   }
 
-  pollInterval = setInterval(() => {
+  const pollInterval = setInterval(() => {
     void runCheckLoop();
   }, POLL_INTERVAL_MS);
   // Never keep the process alive: a one-shot run exits as soon as its turn
@@ -243,23 +241,4 @@ export function startBranchWatcher(): void {
   pollInterval.unref();
 
   void runCheckLoop();
-}
-
-/** Releases the timers and the inotify handle. */
-export function stopBranchWatcher(): void {
-  if (pollInterval) {
-    clearInterval(pollInterval);
-    pollInterval = null;
-  }
-  if (debounceTimer) {
-    clearTimeout(debounceTimer);
-    debounceTimer = null;
-  }
-  if (headWatcher) {
-    headWatcher.close();
-    headWatcher = null;
-  }
-  target = null;
-  lastReported = null;
-  started = false;
 }

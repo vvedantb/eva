@@ -1,14 +1,14 @@
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { IconPlus } from "@tabler/icons-react-native";
 import { PageHeader } from "@vvedantb/native-ui/layout";
-import { Pager, PillTabs } from "@vvedantb/native-ui/primitives";
+import { HeaderIconButton, Pager, PillTabs } from "@vvedantb/native-ui/primitives";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
 import { DocsSection } from "@/docs/DocsSection";
 import { AutomationsSection } from "@/automations/AutomationsSection";
 import { ProjectsSection, useProjectRepo } from "@/projects/ProjectsSection";
-import { TodaySection, useShowsToday } from "@/today/TodaySection";
+import { TodaySection, useMarkStandupsRead, useShowsToday } from "@/today/TodaySection";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme } from "@/ui/theme";
 import { lastTabSection, sectionIndex } from "@/ui/sectionIndex";
@@ -50,25 +50,20 @@ export default function ProjectsScreen() {
     router.setParams({ section: next });
   };
   const section = sections[index] ?? { id: "projects", label: "Projects" };
+  useMarkStandupsRead(section.id === "today");
   // Where the pages are, shared by the pager and the pill indicator.
   const progress = useSharedValue(index);
-  const muted = EVA_THEME[useScheme()].mutedForeground;
+  const foreground = EVA_THEME[useScheme()].foreground;
   return (
     <TabScreen>
       <PageHeader
         title={section.label}
         action={
           section.id === "projects" ? (
-            // As the Sessions "+": a 40 ghost square, radius 8, muted 14 plus.
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="New project"
-              onPress={openNew}
-              hitSlop={2}
-              className="h-10 w-10 items-center justify-center rounded-lg active:opacity-70"
-            >
-              <IconPlus size={14} color={muted} />
-            </Pressable>
+            // As the Sessions "+": a round header button, as Back.
+            <HeaderIconButton label="New project" onPress={openNew}>
+              <IconPlus size={18} color={foreground} />
+            </HeaderIconButton>
           ) : undefined
         }
       />

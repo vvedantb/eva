@@ -30,11 +30,6 @@ import {
   IconTrash,
   IconUserPlus,
 } from "@tabler/icons-react";
-import {
-  phaseConfig,
-  PROJECT_PHASES,
-  type ProjectPhase,
-} from "@/lib/components/projects/ProjectPhaseBadge";
 import { PrActionsSubmenus } from "@/lib/components/pr-menu/PrActionsSubmenus";
 import { useOwnerPullRequests } from "@/lib/components/pr-menu/useOwnerPullRequests";
 
@@ -50,7 +45,6 @@ export interface ProjectCardMenuItemsProps {
   variant: "context" | "dropdown";
   projectId: Id<"projects">;
   title: string;
-  phase: ProjectPhase;
   projectLead?: Id<"users">;
   currentUserId?: Id<"users">;
   users?: User[];
@@ -61,9 +55,6 @@ export interface ProjectCardMenuItemsProps {
   branchName?: string;
   /** Project header only: its sandbox and PR commands, above the shared items. */
   leading?: ReactNode;
-  /** Project header only: View Plan and View Interview History, after the PRs. */
-  planItems?: ReactNode;
-  onPhaseChange: (phase: ProjectPhase) => void;
   onLeadChange: (value: string) => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -73,7 +64,6 @@ export function ProjectCardMenuItems({
   variant,
   projectId,
   title,
-  phase,
   projectLead,
   currentUserId,
   users,
@@ -81,8 +71,6 @@ export function ProjectCardMenuItems({
   showOpenInNewTab = false,
   branchName,
   leading,
-  planItems,
-  onPhaseChange,
   onLeadChange,
   onEdit,
   onDelete,
@@ -102,8 +90,7 @@ export function ProjectCardMenuItems({
     variant === "context" ? ContextMenuSeparator : DropdownMenuSeparator;
   const iconSize = variant === "context" ? 16 : 14;
 
-  const PhaseIcon = phaseConfig[phase].icon;
-  const hasPrGroup = prs.length > 0 || planItems !== undefined;
+  const hasPrGroup = prs.length > 0;
 
   return (
     <>
@@ -113,33 +100,6 @@ export function ProjectCardMenuItems({
           <MenuSeparator />
         </>
       ) : null}
-      <Sub>
-        <SubTrigger>
-          <PhaseIcon size={iconSize} className={phaseConfig[phase].text} />
-          Phase
-        </SubTrigger>
-        <SubContent>
-          <RadioGroup
-            value={phase}
-            onValueChange={(value) => {
-              const matched = PROJECT_PHASES.find((p) => p === value);
-              if (!matched) return;
-              onPhaseChange(matched);
-            }}
-          >
-            {PROJECT_PHASES.map((p) => {
-              const cfg = phaseConfig[p];
-              const Icon = cfg.icon;
-              return (
-                <RadioItem key={p} value={p}>
-                  <Icon size={iconSize} className={cfg.text} />
-                  {cfg.label}
-                </RadioItem>
-              );
-            })}
-          </RadioGroup>
-        </SubContent>
-      </Sub>
       <Sub>
         <SubTrigger>
           <IconUserPlus size={iconSize} />
@@ -224,7 +184,6 @@ export function ProjectCardMenuItems({
         <>
           <MenuSeparator />
           <PrActionsSubmenus variant={variant} prs={prs} />
-          {planItems}
         </>
       ) : null}
       <MenuSeparator />

@@ -3,7 +3,11 @@ import { useMutation } from "convex/react";
 import { patchLoadedQuery } from "@vvedantb/server";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
-import { withMutationToast } from "@/lib/utils/mutationToast";
+import { readableServerError } from "@eva/shared";
+import {
+  mutationError,
+  mutationSuccess,
+} from "@/lib/utils/mutationToast";
 import {
   useRequestConfirm,
 } from "@vvedantb/ui";
@@ -27,16 +31,16 @@ export interface ProjectDeleteController {
 /**
  * Deleting projects from the board — one card or a whole selection.
  *
- * `deleteCascade` also soft-deletes the project's tasks and there is no restore
- * mutation, so both paths keep their confirm dialog (Alt still skips it) and
- * neither offers an Undo.
+ * `projects.remove` has no restore mutation, so both paths keep their
+ * confirm dialog (Alt still skips it) and neither offers an Undo. It refuses
+ * while a child task runs: the toast shows its reason and the dialog stays.
  */
 export function useProjectDelete(
   repoId: Id<"githubRepos">,
   onDeleted: () => void,
 ): ProjectDeleteController {
   const deleteProject = useMutation(
-    api.projects.deleteCascade,
+    api.projects.remove,
   ).withOptimisticUpdate((localStore, args) => {
     patchLoadedQuery(localStore, api.projects.list, { repoId }, (list) =>
       list.filter((p) => p._id !== args.id),
@@ -48,8 +52,6 @@ export function useProjectDelete(
 
   const run = async (next: PendingDelete) => {
     setIsDeleting(true);
-    // Built out here: a ternary inside the `try` bails the React Compiler out
-    // of this whole file. See CLAUDE.md.
     const count = next.ids.length;
     const isSingle = next.target.kind === "single";
     const success = isSingle
@@ -59,20 +61,20 @@ export function useProjectDelete(
       ? "Couldn't delete project"
       : "Couldn't delete projects";
     const toastId = isSingle ? "project-delete" : "projects-bulk-delete";
-    try {
-      await withMutationToast(
-        Promise.all(next.ids.map((id) => deleteProject({ id }))),
-        success,
-        failure,
-        toastId,
-      );
-      setPending(null);
-      onDeleted();
-    } catch {
-      setIsDeleting(false);
-      return;
-    }
+    const deleted = await Promise.all(
+      next.ids.map((id) => deleteProject({ id })),
+    ).then(
+      () => true,
+      (error: Error) => {
+        mutationError(readableServerError(error, failure), toastId);
+        return false;
+      },
+    );
     setIsDeleting(false);
+    if (!deleted) return;
+    mutationSuccess(success, toastId);
+    setPending(null);
+    onDeleted();
   };
 
   const request = (next: PendingDelete) => {

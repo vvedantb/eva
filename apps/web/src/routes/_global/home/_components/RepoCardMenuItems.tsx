@@ -1,7 +1,6 @@
 import { ContextMenuItem, DropdownMenuItem } from "@vvedantb/ui";
 import {
   IconEyeOff,
-  IconFolders,
   IconPencil,
   IconPhoto,
   IconPhotoOff,
@@ -19,7 +18,6 @@ export interface RepoCardMenuItemsProps {
   variant: "context" | "dropdown";
   hasLogo: boolean;
   onRename: () => void;
-  onManageApps: () => void;
   onPickLogo: () => void;
   onRemoveLogo: () => void;
   onHide: () => void;
@@ -29,7 +27,6 @@ export function RepoCardMenuItems({
   variant,
   hasLogo,
   onRename,
-  onManageApps,
   onPickLogo,
   onRemoveLogo,
   onHide,
@@ -41,10 +38,6 @@ export function RepoCardMenuItems({
       <Item onClick={onRename}>
         <IconPencil size={16} />
         Rename
-      </Item>
-      <Item onClick={onManageApps}>
-        <IconFolders size={16} />
-        Manage apps
       </Item>
       <Item onClick={onPickLogo}>
         <IconPhoto size={16} />

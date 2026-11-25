@@ -1,4 +1,4 @@
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth } from "@clerk/expo";
 import { Button } from "@vvedantb/native-ui/button";
 import { Spinner } from "@vvedantb/native-ui/primitives";
 import { Redirect, useRouter } from "expo-router";

@@ -1,21 +1,11 @@
 import type { DatabaseReader, QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { isTaskRunning, type TaskRunSource } from "../_agentTasks/runState";
-import {
-  isProjectBuilding,
-  type ProjectBuildSource,
-} from "../_projects/buildState";
-import {
-  isProjectInterviewing,
-  type ProjectInterviewSource,
-} from "../_projects/interviewState";
 import type { TurnLane } from "../validators";
 import { findOpenTurn, type TurnEntityId } from "./turnStore";
 import {
-  chatOwnerEntityId,
-  findOwnedSession,
-  findProjectTaskChat,
   sessionOwnerEntityId,
+  findOwnedSession,
 } from "../_sessions/owner";
 
 /**
@@ -123,25 +113,16 @@ async function idsOfTurns(
       .filter((session) => session !== null)
       .map((session) => [String(session._id), session]),
   );
-  // Only an owned session's chats can speak for an owner (`chatOwner`).
+  // Only an owned session's chats can speak for an owner (`sessionOwner`).
   const ownedTurns = turns.filter((turn) => {
     const session = sessions.get(String(turn.sessionId));
     return session !== undefined && sessionOwnerEntityId(session) !== undefined;
   });
-  const chats = await Promise.all(
-    ownedTurns.map((turn) => {
-      const chatId = db.normalizeId("sessionChats", turn.entityId);
-      return chatId ? db.get(chatId) : null;
-    }),
-  );
-  ownedTurns.forEach((turn, index) => {
+  ownedTurns.forEach((turn) => {
     const session = sessions.get(String(turn.sessionId));
     if (!session) return;
-    const chat = chats[index];
-    // A run's turn (no chat) lights up the session's owner.
-    const ownerId = chat
-      ? chatOwnerEntityId(chat, session)
-      : sessionOwnerEntityId(session);
+    // A chat's or a run's turn lights up the session's owner.
+    const ownerId = sessionOwnerEntityId(session);
     if (ownerId) ids.add(String(ownerId));
   });
   return ids;
@@ -152,16 +133,10 @@ export async function hasOpenChatTurn(
   db: DatabaseReader,
   entityId: Doc<"turns">["entityId"] | Id<"agentTasks"> | Id<"projects">,
 ): Promise<boolean> {
-  // A quick task or a project chats (and runs) through its session: those
-  // turns count too. A project task chats in its own chat of the project's
-  // session: that chat's turn counts.
+  // A task or a project chats (and runs) through its own session: those
+  // turns count too.
   const taskId = db.normalizeId("agentTasks", entityId);
   const projectId = db.normalizeId("projects", entityId);
-  const task = taskId ? await db.get(taskId) : null;
-  if (task?.projectId !== undefined) {
-    const taskChat = await findProjectTaskChat(db, task._id);
-    if (taskChat && (await hasOpenChatTurn(db, taskChat._id))) return true;
-  }
   const ownedSession = taskId
     ? await findOwnedSession(db, { kind: "task", taskId })
     : projectId
@@ -252,16 +227,10 @@ export function taskIsExecuting(
   return isTaskRunning(task) || openChatEntityIds.has(String(task._id));
 }
 
-/** A project adds a build workflow to the same pair of slots. */
+/** A project is busy while its coordinator chat has a turn open. */
 export function projectIsExecuting(
-  project: Pick<Doc<"projects">, "_id"> &
-    ProjectBuildSource &
-    ProjectInterviewSource,
+  project: Pick<Doc<"projects">, "_id">,
   openChatEntityIds: ReadonlySet<string>,
 ): boolean {
-  return (
-    isProjectInterviewing(project) ||
-    isProjectBuilding(project) ||
-    openChatEntityIds.has(String(project._id))
-  );
+  return openChatEntityIds.has(String(project._id));
 }

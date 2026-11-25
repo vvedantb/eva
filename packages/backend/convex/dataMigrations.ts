@@ -267,19 +267,12 @@ export const backfillProjectPullRequests = dataMigrations.define({
   table: "projects",
   migrateOne: async (ctx, project) => {
     if (project.prUrl === undefined || project.prCount !== undefined) return;
-    const state =
-      project.phase === "completed"
-        ? "merged"
-        : project.phase === "cancelled"
-          ? "closed"
-          : project.phase === "business_review"
-            ? "draft"
-            : "open";
+    // The stored phase is gone; the GitHub refresh below sets the real state.
     const row = await recordPullRequest(ctx, {
       owner: { kind: "project", projectId: project._id },
       repoId: project.repoId,
       prUrl: project.prUrl,
-      state,
+      state: "open",
       primary: true,
       origin: "eva",
       headBranch:
@@ -354,4 +347,3 @@ export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionChatBackgroundAgents,
   internal.dataMigrations.pruneSessionBackgroundAgents,
 ]);
-

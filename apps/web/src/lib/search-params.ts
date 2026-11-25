@@ -4,7 +4,6 @@ import {
   FEEDBACK_SENTIMENTS,
 } from "@eva/backend";
 import {
-  PROJECT_COLUMNS,
   PROJECT_SORT_FIELDS,
   PR_LIST_STATES,
   QUICK_TASK_FILTER_DEFAULTS,
@@ -13,6 +12,7 @@ import {
   TASK_STATUSES,
 } from "@eva/shared";
 import { SANDBOX_TABS, type SandboxTab } from "@eva/shared/appTabSlug";
+import { PROJECT_STAGES } from "@eva/shared/projectView";
 import {
   parseAsString,
   parseAsStringLiteral,
@@ -27,7 +27,9 @@ export const searchParser = parseAsString
   .withDefault("")
   .withOptions(searchOptions);
 
-export const statusesParser = parseAsArrayOf(parseAsStringLiteral(TASK_STATUSES))
+export const statusesParser = parseAsArrayOf(
+  parseAsStringLiteral(TASK_STATUSES),
+)
   .withDefault([...TASK_STATUSES])
   .withOptions(searchOptions);
 
@@ -46,8 +48,9 @@ export const timeRangeParser = parseAsStringLiteral(timeRanges)
 // see quick-tasks/_utils.ts.
 // No default here (unlike most parsers): the fallback depends on the active
 // view, so quick-tasks/_utils.ts resolves null against a per-view default.
-export const quickTaskSortFieldParser =
-  parseAsStringLiteral(QUICK_TASK_SORT_FIELDS).withOptions(searchOptions);
+export const quickTaskSortFieldParser = parseAsStringLiteral(
+  QUICK_TASK_SORT_FIELDS,
+).withOptions(searchOptions);
 
 // Same reason as quickTaskSortFieldParser — the default direction pairs with
 // the per-view default field, so it cannot be baked in here.
@@ -64,11 +67,7 @@ export const quickTaskTimeRangeParser = parseAsStringLiteral(
   .withOptions(searchOptions);
 
 // The defaults are the shared ones, so "cleared" (`clearedQuickTaskFilters`)
-// and "not filtered" cannot disagree: the project default is "none".
-export const quickTaskProjectParser = parseAsString
-  .withDefault(QUICK_TASK_FILTER_DEFAULTS.project)
-  .withOptions(searchOptions);
-
+// and "not filtered" cannot disagree.
 export const quickTaskUserParser = parseAsString
   .withDefault(QUICK_TASK_FILTER_DEFAULTS.user)
   .withOptions(searchOptions);
@@ -84,10 +83,11 @@ export const quickTaskTagsParser = parseAsArrayOf(parseAsString)
 // Projects list filters (shareable "what you're looking at" state). View,
 // timelineRange, and timelineZoom are per-user presentation preferences and
 // stay in localStorage — see projects/_utils.ts.
-// hiddenPhases stores exclusions (blocklist) of list columns, so the default
-// is empty. Old links naming "draft" / "finalized" drop those values.
-export const hiddenProjectPhasesParser = parseAsArrayOf(
-  parseAsStringLiteral(PROJECT_COLUMNS),
+// hiddenPhases stores exclusions (blocklist) of the derived project stages
+// (`PROJECT_STAGES`), so the default is empty. Old links naming a stored
+// phase ("code_review", "completed") drop those values.
+export const hiddenProjectStagesParser = parseAsArrayOf(
+  parseAsStringLiteral(PROJECT_STAGES),
 )
   .withDefault([])
   .withOptions(searchOptions);
@@ -115,8 +115,12 @@ export function isSessionSandboxTab(s: string): s is SandboxTab {
   return SANDBOX_TABS.some((tab) => tab === s);
 }
 
-/** Tabs that only mean anything while the VM is up: Review, Agents, PRD, … do not. */
+/**
+ * Tabs that do not talk to the VM: Review, Agents, PRD, … and a project
+ * coordinator's Tasks.
+ */
 const NON_VM_SANDBOX_TABS = new Set([
+  "tasks",
   "review",
   "agents",
   "prd",
@@ -197,12 +201,7 @@ export function isReviewTab(s: string): s is ReviewTab {
 /** Slugs a tab used to answer to, or is labelled as, mapped to canonical. */
 export function canonicalReviewTab(s: string): ReviewTab | undefined {
   if (s === "diff" || s === "changes" || s === "code") return "diffs";
-  if (
-    s === "overview" ||
-    s === "activity" ||
-    s === "checks" ||
-    s === "recap"
-  ) {
+  if (s === "overview" || s === "activity" || s === "checks" || s === "recap") {
     return "summary";
   }
   if (s === "commits") return "timeline";
@@ -332,7 +331,8 @@ export const viewModeParser = parseAsStringLiteral(viewModes)
   .withDefault("desktop")
   .withOptions(tabOptions);
 
-const snapshotSettingsTabs = ["configuration", "status", "builds"] as const;
+/** Snapshot settings tabs in their on-screen order (the content slides by it). */
+export const snapshotSettingsTabs = ["configuration", "status", "builds"] as const;
 export type SnapshotSettingsTab = (typeof snapshotSettingsTabs)[number];
 
 export function isSnapshotSettingsTab(s: string): s is SnapshotSettingsTab {
@@ -465,14 +465,16 @@ export const branchParser = parseAsString
   .withDefault("main")
   .withOptions(searchOptions);
 
-const envVarScopes = ["repo", "team"] as const;
+/** Env variable scope tabs in their on-screen order (the content slides by it). */
+export const envVarScopes = ["repo", "team"] as const;
 export type EnvVarScope = (typeof envVarScopes)[number];
 
 export function isEnvVarScope(s: string): s is EnvVarScope {
   return envVarScopes.some((scope) => scope === s);
 }
 
-const teamDetailTabs = [
+/** Team page tabs in their on-screen order (the tab content slides by it). */
+export const teamDetailTabs = [
   "activity",
   "members",
   "codebases",

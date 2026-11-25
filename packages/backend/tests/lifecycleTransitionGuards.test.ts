@@ -1,144 +1,21 @@
 import { convexTest } from "convex-test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import type { Doc } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
-import { recomputeProjectPhase } from "../convex/functions";
 import { requestSessionSandboxStart } from "../convex/_sessions/sandbox";
+import { modules } from "./_helpers/convexModules";
 
 /**
- * Behaviour of the implicit lifecycles that were tightened together:
- * - a project is only `completed` when every task is done, and task edits
- *   never reopen a project the PR webhook already settled;
- * - a sandbox start never overrides a stop in flight, and a start failure
- *   only closes a sandbox that is still `starting`.
+ * Behaviour of the sandbox lifecycle: a start never overrides a stop in
+ * flight, and a start failure only closes a sandbox that is still
+ * `starting`. (A project's status is derived from its tasks; see
+ * `projectStatus.test.ts`.)
  */
 
-const modules = import.meta.glob("../convex/**/*.ts");
 const TIMEOUT_MS = 30_000;
 
-type TaskStatus = Doc<"agentTasks">["status"];
-type ProjectPhase = Doc<"projects">["phase"];
 type SandboxStatus = Doc<"sessions">["status"];
-
-async function projectWithTasks(
-  phase: ProjectPhase,
-  statuses: TaskStatus[],
-  prState?: Doc<"pullRequests">["state"],
-) {
-  const t = convexTest(schema, modules);
-  const projectId = await t.run(async (ctx) => {
-    const userId = await ctx.db.insert("users", { clerkId: "clerk|ada" });
-    const repoId = await ctx.db.insert("githubRepos", {
-      owner: "vvedantb",
-      name: "eva",
-      installationId: 1,
-      connectedBy: userId,
-    });
-    const projectId = await ctx.db.insert("projects", {
-      repoId,
-      userId,
-      title: "Billing rewrite",
-      rawInput: "rewrite billing",
-      phase,
-      numId: 1,
-    });
-    for (const [i, status] of statuses.entries()) {
-      await ctx.db.insert("agentTasks", {
-        title: `Task ${i}`,
-        status,
-        numId: i + 1,
-        repoId,
-        projectId,
-        createdAt: 0,
-        updatedAt: 0,
-        createdBy: userId,
-      });
-    }
-    if (prState !== undefined) {
-      await ctx.db.insert("pullRequests", {
-        repoId,
-        prUrl: "https://github.com/vvedantb/eva/pull/1",
-        prNumber: 1,
-        headBranch: "eva/project-billing",
-        state: prState,
-        primary: true,
-        origin: "eva",
-        owner: { kind: "project", projectId },
-        createdAt: 0,
-        updatedAt: 0,
-      });
-    }
-    return projectId;
-  });
-  const recompute = () =>
-    t.run(async (ctx) => {
-      await recomputeProjectPhase(ctx, projectId);
-      return (await ctx.db.get(projectId))?.phase;
-    });
-  return { recompute };
-}
-
-describe("recomputeProjectPhase", () => {
-  test(
-    "unstarted or running tasks block completion",
-    async () => {
-      for (const blocker of ["todo", "in_progress"] as const) {
-        const { recompute } = await projectWithTasks("business_review", [
-          "done",
-          blocker,
-        ]);
-        expect(await recompute()).toBe("business_review");
-      }
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "every task done completes the project",
-    async () => {
-      const { recompute } = await projectWithTasks("business_review", [
-        "done",
-        "done",
-      ]);
-      expect(await recompute()).toBe("completed");
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "task edits do not reopen a project whose PR merged or closed",
-    async () => {
-      for (const [phase, prState] of [
-        ["completed", "merged"],
-        ["cancelled", "closed"],
-      ] as const) {
-        const { recompute } = await projectWithTasks(
-          phase,
-          ["business_review"],
-          prState,
-        );
-        expect(await recompute()).toBe(phase);
-      }
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
-    "a completed project with its PR still open reopens when a task does",
-    async () => {
-      for (const prState of [undefined, "open"] as const) {
-        const { recompute } = await projectWithTasks(
-          "completed",
-          ["done", "business_review"],
-          prState,
-        );
-        expect(await recompute()).toBe("business_review");
-      }
-    },
-    TIMEOUT_MS,
-  );
-});
 
 async function sessionWithStatus(
   status: SandboxStatus,

@@ -39,6 +39,7 @@ import { ensureSwapFile } from "./swap";
 import { sleep } from "../_shared/async";
 import { PACKAGE_HELPER_SCRIPT, pkgInstall } from "./packageManager";
 import { getAIModelProvider, normalizeAIModel } from "../validators";
+import { isReadOnlySandboxOwner } from "../_sessions/owner";
 
 export const WORKSPACE_DIR = "/tmp/repo";
 export const LEGACY_WORKSPACE_DIR = "/workspace/repo";
@@ -762,6 +763,10 @@ export async function signAndLaunchScript(
       // tool keeps resolving; the chat rides along as its own claim.
       entityId: launchSession ? String(launchSession._id) : entityId,
       ...(launchChat ? { chatId: entityId } : {}),
+      // A project launch (the old interview) runs on the coordinator's VM too.
+      readOnlyGit:
+        entityIdField === "projectId" ||
+        (launchSession !== null && isReadOnlySandboxOwner(launchSession.owner)),
       ...(launchSession
         ? { entityKind: "session" as const }
         : entityIdField === "taskId"

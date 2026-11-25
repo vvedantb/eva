@@ -1,20 +1,16 @@
 import type { ReactNode } from "react";
-import { isProjectBuilding, type Id, type SandboxOwner } from "@eva/backend";
-import { IconTerminal2 } from "@tabler/icons-react";
+import type { Id, SandboxOwner } from "@eva/backend";
 import { ProjectSandboxPanel } from "@/lib/components/projects/ProjectSandboxPanel";
 import { ProjectSandboxChatPanel } from "@/lib/components/projects/ProjectSandboxChatPanel";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { SandboxSurfaceProviders } from "@/lib/components/sandbox/SandboxSurfaceProviders";
-import {
-  SandboxEmptyRailFrame,
-  SandboxNotStartedRail,
-} from "@/lib/components/sandbox/SandboxPanelFrame";
+import { ProjectTasksPanel } from "@/lib/components/projects/ProjectTasksPanel";
+import type { ProjectSandboxTab } from "@/lib/components/projects/projectSandboxTabs";
 import {
   SandboxWorkspace,
   type TerminalPanelApi,
 } from "@/lib/components/sandbox/SandboxWorkspace";
 import type { SandboxPanesApi } from "@/lib/components/sandbox/useSandboxPanes";
-import type { TaskRouteSandboxTab } from "@/lib/search-params";
 import type {
   ProjectDetailProject,
   ProjectSandboxState,
@@ -30,7 +26,8 @@ interface ProjectDetailSandboxContentProps {
   projectNumId?: number;
   project: ProjectDetailProject;
   repoId: Id<"githubRepos">;
-  sandboxTab?: TaskRouteSandboxTab;
+  basePath: string;
+  sandboxTab: ProjectSandboxTab;
   sandbox: ProjectSandboxState;
   chatTurnOpen: boolean | undefined;
   sandboxRailWidthPx: number;
@@ -45,6 +42,7 @@ export function ProjectDetailSandboxContent({
   projectNumId,
   project,
   repoId,
+  basePath,
   sandboxTab,
   sandbox,
   chatTurnOpen,
@@ -54,8 +52,8 @@ export function ProjectDetailSandboxContent({
   openDiffs,
   openAgentsTab,
 }: ProjectDetailSandboxContentProps) {
+  // The coordinator can always wake: a project has no closed state.
   const {
-    canStartSandbox,
     isSandboxActive,
     isSandboxStarting,
     isSandboxStopping,
@@ -65,61 +63,42 @@ export function ProjectDetailSandboxContent({
     handleStopSandbox,
   } = sandbox;
 
-  const tab = sandboxTab ?? "preview";
-  // Always mount the sandbox panel when the project can have one so tabs
-  // stay reachable while stopped — same as sessions. Panes self-gate.
+  // Always mount the sandbox panel so tabs stay reachable while stopped —
+  // same as sessions. Panes self-gate.
   const projectSandboxPanel = (
     panes: SandboxPanesApi,
     owner: SandboxOwner,
     terminalPanel: TerminalPanelApi,
     collapsed: boolean,
     onToggle: () => void,
-  ) =>
-    canStartSandbox ||
-    projectSandboxId ||
-    isSandboxActive ||
-    isSandboxStarting ||
-    isSandboxStopping ? (
-      <ProjectSandboxPanel
-        projectId={projectId}
-        projectSession={sandbox.projectSession}
-        projectNumId={projectNumId}
-        title={project.title}
-        sandboxId={projectSandboxId}
-        isActive={isSandboxActive}
-        repoId={repoId}
-        prUrl={project.prUrl}
-        devPort={sandbox.sandbox.devPort}
-        devCommand={sandbox.sandbox.devCommand}
-        owner={owner}
-        panes={panes}
-        terminalPanel={terminalPanel}
-        sandboxTab={tab}
-        onStartSandbox={
-          canStartSandbox && !isSandboxStopping ? handleStartSandbox : undefined
-        }
-        isSandboxStarting={isSandboxStarting}
-        autoWakeEligible={
-          sandbox.sandbox.status === "closed" &&
-          projectSandboxId !== undefined &&
-          canStartSandbox &&
-          !isProjectBuilding(project) &&
-          // Still loading counts as busy: never wake under a live turn.
-          chatTurnOpen === false
-        }
-        collapsed={collapsed}
-        onToggle={onToggle}
-      />
-    ) : (
-      <SandboxEmptyRailFrame collapsed={collapsed} onToggle={onToggle}>
-        <div className="flex flex-col items-center gap-3 text-center">
-          <IconTerminal2 size={32} className="text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            Sandbox is not available for this project yet
-          </p>
-        </div>
-      </SandboxEmptyRailFrame>
-    );
+  ) => (
+    <ProjectSandboxPanel
+      projectId={projectId}
+      projectSession={sandbox.projectSession}
+      projectNumId={projectNumId}
+      title={project.title}
+      sandboxId={projectSandboxId}
+      isActive={isSandboxActive}
+      repoId={repoId}
+      prUrl={project.prUrl}
+      devPort={sandbox.sandbox.devPort}
+      devCommand={sandbox.sandbox.devCommand}
+      owner={owner}
+      panes={panes}
+      terminalPanel={terminalPanel}
+      sandboxTab={sandboxTab}
+      onStartSandbox={isSandboxStopping ? undefined : handleStartSandbox}
+      isSandboxStarting={isSandboxStarting}
+      autoWakeEligible={
+        sandbox.sandbox.status === "closed" &&
+        projectSandboxId !== undefined &&
+        // Still loading counts as busy: never wake under a live turn.
+        chatTurnOpen === false
+      }
+      collapsed={collapsed}
+      onToggle={onToggle}
+    />
+  );
 
   const layout = (rightPanel: (ctx: SandboxPanelContext) => ReactNode) => (
     <ResizablePanelLayout
@@ -145,14 +124,10 @@ export function ProjectDetailSandboxContent({
           onOpenFile={openFile}
           onViewDiff={openDiffs}
           onOpenAgentsTab={openAgentsTab}
-          onSandboxToggle={
-            canStartSandbox || isSandboxActive
-              ? (action) => {
-                  if (action === "start") void handleStartSandbox();
-                  else void handleStopSandbox();
-                }
-              : undefined
-          }
+          onSandboxToggle={(action) => {
+            if (action === "start") void handleStartSandbox();
+            else void handleStopSandbox();
+          }}
         />
       )}
       rightPanel={rightPanel}
@@ -186,15 +161,17 @@ export function ProjectDetailSandboxContent({
           }
         </SandboxWorkspace>
       ) : (
-        layout(({ rightPanelCollapsed, onToggleRightPanel }) => (
-          <SandboxNotStartedRail
-            collapsed={rightPanelCollapsed}
-            onToggle={onToggleRightPanel}
-            ownerLabel="project"
-            isPending={sandbox.sandbox.sessionPending}
-            onStart={canStartSandbox ? handleStartSandbox : undefined}
-            isStarting={isSandboxStarting}
-          />
+        // No session yet, so no sandbox tabs: the card holds only the Tasks
+        // list (feedback can wait in Triage before the coordinator ever ran).
+        layout(() => (
+          <div className="flex h-full min-h-0 flex-col">
+            <ProjectTasksPanel
+              projectId={projectId}
+              projectNumId={projectNumId}
+              repoId={repoId}
+              basePath={basePath}
+            />
+          </div>
         ))
       )}
     </SandboxSurfaceProviders>

@@ -59,6 +59,53 @@ export function FoldHeader({
   );
 }
 
+/**
+ * A quiet section header on a soft band (a project's task groups, as the
+ * web `GroupHeader`): the muted label, the count and a chevron that turns
+ * open. `trailing` sits at the band's end, outside the button.
+ */
+export function FoldBandHeader({
+  label,
+  count,
+  noun,
+  open,
+  onToggle,
+  trailing,
+}: {
+  label: string;
+  count: number;
+  /** What the count counts, for the screen reader: "task" or "PR". */
+  noun: string;
+  open: boolean;
+  onToggle: () => void;
+  trailing?: ReactNode;
+}) {
+  const theme = EVA_THEME[useScheme()];
+  const muted = theme.mutedForeground;
+  return (
+    <View className="flex-row items-center rounded-lg" style={{ backgroundColor: withAlpha(theme.muted, 0.6) }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${label}, ${count} ${count === 1 ? noun : `${noun}s`}`}
+        accessibilityState={{ expanded: open }}
+        onPress={onToggle}
+        className="min-h-11 flex-1 flex-row items-center gap-1.5 px-2 active:opacity-70"
+      >
+        <Text className="font-instrument-sans text-xs" style={{ color: muted }}>
+          {label}
+        </Text>
+        <Text className="font-instrument-sans text-xs" style={{ color: withAlpha(muted, 0.6), fontVariant: ["tabular-nums"] }}>
+          {count}
+        </Text>
+        <View style={open ? { transform: [{ rotate: "90deg" }] } : undefined}>
+          <IconChevronRight size={12} color={muted} />
+        </View>
+      </Pressable>
+      {trailing}
+    </View>
+  );
+}
+
 /** Under a section: `empty` ("No tasks") when it is open and has no rows, the rows' `pb-1.5` when it has rows, then the web `space-y-1` to the next section. */
 export function FoldFooter({ open, count, empty }: { open: boolean; count: number; empty: string }) {
   const muted = EVA_THEME[useScheme()].mutedForeground;

@@ -301,7 +301,7 @@ ${DECISION_RULE}`,
         const { userId } = await mcpGetContext(ctx, clerkUserId);
         let entityId: string | undefined;
         if (namesChat(ref)) {
-          const resolved = await resolveEntityTarget(ref, userId);
+          const resolved = await resolveEntityTarget(ref, userId, "read");
           if ("content" in resolved) return resolved;
           entityId = resolved.target.targetId;
         }

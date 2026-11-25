@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   CUSTOM_THEME_HINT_KEY,
   readThemeHintSeed,
@@ -32,7 +32,7 @@ function fakeStorage(seed?: string) {
 }
 
 function install(storage: { getItem: unknown; setItem: unknown }) {
-  vi.stubGlobal("localStorage", storage);
+  Object.defineProperty(globalThis, "localStorage", { value: storage, configurable: true });
 }
 
 beforeEach(() => {
@@ -40,7 +40,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  vi.unstubAllGlobals();
+  Reflect.deleteProperty(globalThis, "localStorage");
 });
 
 describe("theme FOUC hint", () => {

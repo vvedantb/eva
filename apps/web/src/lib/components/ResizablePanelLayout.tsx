@@ -34,7 +34,12 @@ import {
   usableExpandedPanelSize,
   usePersistentPanelSize,
 } from "@/lib/hooks/usePersistentPanelSize";
-import { motionEase, useMediaQuery } from "@vvedantb/ui";
+import {
+  motionEase,
+  popOutSidePanel,
+  slideNextResize,
+  useMediaQuery,
+} from "@vvedantb/ui";
 
 interface PanelContext {
   rightPanelCollapsed: boolean;
@@ -118,6 +123,8 @@ export function ResizablePanelLayout({
 }: ResizablePanelLayoutProps) {
   "use no memo";
   const rightPanelRef = usePanelRef();
+  const rightPanelElementRef = useRef<HTMLDivElement>(null);
+  const groupElementRef = useRef<HTMLDivElement>(null);
   const [savedCollapsed, setSavedCollapsed] = useLocalStorage(
     collapsedStorageKey,
     defaultRightCollapsed,
@@ -195,6 +202,7 @@ export function ResizablePanelLayout({
       ? isCollapsedPanelSize(size, rightCollapsedSizePx, railMinSizePx)
       : desktopCollapsed;
     if (collapsed) {
+      slideNextResize(groupElementRef.current, "open");
       panel.resize(
         usableExpandedPanelSize(
           lastExpandedSize.current,
@@ -205,7 +213,12 @@ export function ResizablePanelLayout({
       );
       return;
     }
-    panel.collapse();
+    // A sandbox card shrinks back into its rail tab first; other right
+    // panels have no card, so they collapse at once.
+    popOutSidePanel(rightPanelElementRef.current, () => {
+      slideNextResize(groupElementRef.current, "close");
+      panel.collapse();
+    });
   }, [
     defaultRightSize,
     isMobile,
@@ -233,6 +246,7 @@ export function ResizablePanelLayout({
       setMobileShowsRight(true);
       return;
     }
+    slideNextResize(groupElementRef.current, "open");
     rightPanelRef.current?.resize(
       usableExpandedPanelSize(
         lastExpandedSize.current,
@@ -376,6 +390,7 @@ export function ResizablePanelLayout({
     <Group
       orientation="horizontal"
       className="h-full"
+      elementRef={groupElementRef}
       onLayoutChanged={handleLayoutChanged}
     >
       <Panel
@@ -419,6 +434,7 @@ export function ResizablePanelLayout({
           rightCollapsedSizePx > 0 ? "preserve-pixel-size" : undefined
         }
         panelRef={rightPanelRef}
+        elementRef={rightPanelElementRef}
         onResize={handleResize}
       >
         {rightPanel(ctx)}

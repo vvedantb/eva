@@ -31,15 +31,15 @@ type QuickTaskSandboxRouting = {
   onViewDiff: (repoRelativePath?: string) => void;
 };
 
-type ProjectTaskDetailRouting = {
-  detailTab: TaskDetailTab;
-  onDetailTabChange: (tab: TaskDetailTab) => void;
-};
-
+/**
+ * `project-task`: a project task opened from its coordinator's Tasks tab. It
+ * shows only its chat and sandbox; the sandbox tab is local (`?file=` /
+ * `?diffFile=` still pick Files / Review on load).
+ */
 export type UseTaskDetailRouting =
   | { mode: "quick-detail"; quick: QuickTaskDetailRouting }
   | { mode: "quick-sandbox"; quick: QuickTaskSandboxRouting }
-  | { mode: "project-detail"; project: ProjectTaskDetailRouting };
+  | { mode: "project-task" };
 
 type TaskDetailTask = FunctionReturnType<typeof api.agentTasks.get> | undefined;
 
@@ -51,15 +51,11 @@ export function useTaskDetailTab(routing: UseTaskDetailRouting | undefined) {
   const activeTab: TaskDetailTab =
     routing?.mode === "quick-detail"
       ? routing.quick.detailTab
-      : routing?.mode === "project-detail"
-        ? routing.project.detailTab
-        : internalActiveTab;
+      : internalActiveTab;
 
   const setActiveTab = (tab: TaskDetailTab) => {
     if (routing?.mode === "quick-detail") {
       routing.quick.onDetailTabChange(tab);
-    } else if (routing?.mode === "project-detail") {
-      routing.project.onDetailTabChange(tab);
     } else {
       setInternalActiveTab(tab);
     }
@@ -161,7 +157,7 @@ function resolveShowSandbox(
   routing: UseTaskDetailRouting | undefined,
   embeddedShowSandbox: boolean,
 ) {
-  return routing?.mode === "quick-sandbox"
+  return routing?.mode === "quick-sandbox" || routing?.mode === "project-task"
     ? true
     : routing?.mode === "quick-detail"
       ? false
@@ -173,6 +169,7 @@ function createSurfaceSelector(
   setEmbeddedShowSandbox: (show: boolean) => void,
 ) {
   return (surface: SandboxSurface) => {
+    if (routing?.mode === "project-task") return;
     if (surface === "sandbox") {
       if (routing?.mode === "quick-sandbox") return;
       if (routing?.mode === "quick-detail") {

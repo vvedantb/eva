@@ -8,6 +8,23 @@ import { SANDBOX_JWT_ISSUER } from "../sandboxAuthConfig";
  */
 export const EVA_MCP_CLAIM = "evaMcp";
 
+/**
+ * Custom claim on the VM token of a read-only sandbox (a project
+ * coordinator's, `isReadOnlySandboxOwner`). `github:getInstallationTokenAction`
+ * then mints a read-only token, so the runner's refresh never hands the VM a
+ * push token. Tokens signed before the claim existed carry none.
+ */
+export const EVA_READ_ONLY_GIT_CLAIM = "evaReadOnlyGit";
+
+/** True for a token from a read-only sandbox's VM (`EVA_READ_ONLY_GIT_CLAIM`). */
+export function isReadOnlyGitIdentity(identity: UserIdentity | null): boolean {
+  return (
+    identity !== null &&
+    isSandboxIdentity(identity) &&
+    identity[EVA_READ_ONLY_GIT_CLAIM] === true
+  );
+}
+
 /** True when the identity came from Eva's sandbox issuer (VM or MCP), not Clerk. */
 export function isSandboxIdentity(
   identity: Pick<UserIdentity, "issuer"> | null,

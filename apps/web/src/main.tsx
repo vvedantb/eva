@@ -22,6 +22,7 @@ import {
 import { STALE_DEPLOY_RELOAD_PARAM } from "./lib/utils/staleDeployReloadParam";
 import { readSignedInHint } from "./lib/authHint";
 import { migrateLegacyStorageKeys } from "./lib/migrateLegacyStorageKeys";
+import { takeNavDirection } from "./lib/railNavDirection";
 import { InnerApp } from "./InnerApp";
 import "./fonts";
 import "./globals.css";
@@ -76,13 +77,24 @@ const router = createRouter({
   // search filters — stay instant. Moves inside one entity (a session's
   // sandbox tabs, its Review sub-tabs) cross leaf routes too, but are tab
   // switches, not page swaps. Returning `false` skips the transition.
+  //
+  // A vertical nav click also tags the swap with its direction
+  // (`railNavDirection`): `rail-down` / `rail-up` slide the side panel and the
+  // page, `nav-down` / `nav-up` (a side-panel link) slide the page only. Every
+  // rail click is a page swap, even between two apps on the same leaf route; a
+  // panel link only when it is one anyway, so picking another session stays
+  // instant.
   defaultViewTransition: {
-    types: ({ fromLocation, toLocation }) =>
-      fromLocation !== undefined &&
-      !isSameEntity(fromLocation.pathname, toLocation.pathname) &&
-      leafRouteId(fromLocation.pathname) !== leafRouteId(toLocation.pathname)
-        ? ["page"]
-        : false,
+    types: ({ fromLocation, toLocation }) => {
+      if (fromLocation === undefined) return false;
+      const nav = takeNavDirection();
+      if (nav?.source === "rail") return ["page", `rail-${nav.direction}`];
+      const pageSwap =
+        !isSameEntity(fromLocation.pathname, toLocation.pathname) &&
+        leafRouteId(fromLocation.pathname) !== leafRouteId(toLocation.pathname);
+      if (!pageSwap) return false;
+      return nav ? ["page", `nav-${nav.direction}`] : ["page"];
+    },
   },
   // Monorepo apps: address bar + link hrefs use /owner/repo/app/… while the
   // route tree matches /owner/repo--app/… (single $repo segment).
@@ -143,8 +155,10 @@ if (rootElement) {
     <StrictMode>
       <QueryClientProvider client={queryClient}>
         {/* Eva always animates: the animation contract forbids following the
-            OS reduced-motion setting. Signed-in users turn page motion off
-            with the `disablePageMotion` flag (PageMotionProvider). */}
+            OS reduced-motion setting. `reducedMotion` covers the whole
+            @vvedantb/ui package (dialogs, sheets, `motion-reduce:`), not only
+            `m.*`. Signed-in users turn page motion off with the
+            `disablePageMotion` flag (PageMotionProvider). */}
         <MotionProvider reducedMotion="never">
           <EvaUiProvider>
             <ClerkProvider

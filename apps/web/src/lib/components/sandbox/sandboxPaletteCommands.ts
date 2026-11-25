@@ -43,7 +43,8 @@ interface BuildSandboxPaletteCommandsArgs {
   consoleDock: ConsoleDockApi;
   terminalPanel: TerminalPanelApi;
   onTabChange: (tab: string) => void;
-  onNewPreview: () => void;
+  /** Absent where the sandbox runs no dev server (a project coordinator). */
+  onNewPreview?: () => void;
   newPreviewDisabled: boolean;
   simpleView?: boolean;
   /** Desktop rail: tab labels under the icons. */
@@ -173,7 +174,7 @@ export function buildSandboxPaletteCommands({
     run: onToggleRailLabels,
   });
 
-  if (!simpleView) {
+  if (!simpleView && onNewPreview) {
     commands.push({
       id: "new-preview",
       label: "New Preview",
@@ -182,21 +183,24 @@ export function buildSandboxPaletteCommands({
       run: onNewPreview,
       disabled: newPreviewDisabled,
     });
-    commands.push(
-      {
-        id: "toggle-console",
-        label: "Toggle Preview Console",
-        keywords: "show hide logs dev server",
-        icon: IconTerminal2,
-        run: () => {
-          if (activeTab !== "preview") {
-            onTabChange("preview");
-            consoleDock.expand();
-            return;
-          }
-          consoleDock.toggle();
-        },
+    commands.push({
+      id: "toggle-console",
+      label: "Toggle Preview Console",
+      keywords: "show hide logs dev server",
+      icon: IconTerminal2,
+      run: () => {
+        if (activeTab !== "preview") {
+          onTabChange("preview");
+          consoleDock.expand();
+          return;
+        }
+        consoleDock.toggle();
       },
+    });
+  }
+
+  if (!simpleView) {
+    commands.push(
       {
         id: "toggle-terminal-panel",
         label: "Toggle Terminal Panel",

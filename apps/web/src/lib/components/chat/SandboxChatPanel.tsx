@@ -2,6 +2,7 @@
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
+import type { ReactNode } from "react";
 import { api } from "@eva/backend";
 import { sandboxComposerState, SANDBOX_CHAT_COPY } from "@eva/shared";
 import { sandboxStartupTail } from "@/lib/components/StreamingActivityDisplay";
@@ -59,7 +60,15 @@ export function SandboxChatPanel({
   onViewDiff,
   onOpenAgentsTab,
   onSandboxToggle,
-}: SandboxChatPanelProps & { binding: SandboxChatBinding }) {
+  preInputBanner,
+  assistantBubbles = false,
+}: SandboxChatPanelProps & {
+  binding: SandboxChatBinding;
+  /** Owner-specific notice above the composer (a paused coordinator). */
+  preInputBanner?: ReactNode;
+  /** Eva's replies in a bubble with her mark (the project coordinator). */
+  assistantBubbles?: boolean;
+}) {
   const { repo, basePath } = useRepo();
   const { entity, doc, model, firstRun, ownerLabel } = binding;
   // All undefined until the owner's session exists: nothing to read yet, and
@@ -178,9 +187,7 @@ export function SandboxChatPanel({
       />
       <SubagentThreadLayer
         surface={chatSurface}
-        parentTitle={
-          doc?.title ?? (ownerLabel === "task" ? "Task" : "Project")
-        }
+        parentTitle={doc?.title ?? (ownerLabel === "task" ? "Task" : "Project")}
         messages={chatMessages}
         streamingActivity={streaming?.currentActivity}
         sandboxRunning={isSandboxActive}
@@ -234,7 +241,12 @@ export function SandboxChatPanel({
           }}
           onSend={handleSend}
           onCancel={handleCancel}
-          preInputContent={<SandboxChatPreInput surface={chatSurface} />}
+          preInputContent={
+            <SandboxChatPreInput
+              surface={chatSurface}
+              beforeBanner={preInputBanner}
+            />
+          }
           composerChips={<SandboxChatStatusChips surface={chatSurface} />}
           underCardLeading={
             <SandboxBranchChip
@@ -249,6 +261,7 @@ export function SandboxChatPanel({
           onViewDiff={onViewDiff}
           hasPendingContext={hasPendingReviewComments}
           onOpenAgentsTab={onOpenAgentsTab}
+          assistantBubbles={assistantBubbles}
           backgroundAgents={doc?.backgroundAgents}
           sandboxRunning={isSandboxActive}
           transcriptTail={sandboxStartupTail(

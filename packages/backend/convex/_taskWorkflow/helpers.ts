@@ -1,55 +1,20 @@
 import type { MutationCtx } from "../_generated/server";
-import type { GenericDatabaseReader } from "convex/server";
-import type { DataModel, Doc, Id } from "../_generated/dataModel";
+import type { Id } from "../_generated/dataModel";
 import type { Infer, Validator } from "convex/values";
 import { LlmJson } from "@solvers-hub/llm-json";
 import { toWorkflowId, workflow } from "../workflowManager";
-import {
-  buildTaskBranchName,
-  resolveProjectBranchName,
-} from "../_git/branchNames";
+import { taskBranchName } from "../_git/branchNames";
 import {
   findPullRequestByUrl,
   recordPullRequest,
   type PrState,
 } from "../_pullRequests/store";
-import { preferPersistedSandboxId } from "../_sandbox/resolveExistingSandboxId";
 import { isUsageLimitError, parseUsageLimitResetTime } from "./recovery";
 import { scheduleTaskOrchestratorNotify } from "../orchestratorShared";
 import { deriveLogUsage } from "../_logs/usage";
 import { TASK_RUN_STREAM_PREFIX } from "../_chat/agentStreamIds";
-import { findWorkSession } from "../_sessions/owner";
 
 export const llmJson = new LlmJson({ attemptCorrection: true });
-
-export async function resolveTaskBranchName(
-  db: GenericDatabaseReader<DataModel>,
-  task: Doc<"agentTasks">,
-): Promise<string> {
-  if (task.projectId) {
-    return resolveProjectBranchName(
-      task.projectId,
-      await db.get(task.projectId),
-    );
-  }
-  return buildTaskBranchName(task._id);
-}
-
-/** Resolves the sandbox id to use for a task run (push). */
-export async function resolveTaskSandboxIdForRun(
-  db: GenericDatabaseReader<DataModel>,
-  task: Doc<"agentTasks">,
-  run: Doc<"agentRuns">,
-): Promise<string | undefined> {
-  // A task's sandbox lives on its session (a project task's on the
-  // project's).
-  const session = await findWorkSession(db, task);
-  return preferPersistedSandboxId({
-    sandboxId: task.projectId
-      ? (session?.sandboxId ?? run.sandboxId)
-      : (run.sandboxId ?? session?.sandboxId),
-  });
-}
 
 /** Returns the streaming entity ID used for a task run's activity stream. */
 export function getTaskRunStreamingEntityId(runId: Id<"agentRuns">): string {
@@ -152,23 +117,26 @@ export async function clearTaskRunStreaming(
 export function buildRunResultSummary(
   success: boolean,
   prUrl: string | null,
-  projectId: Id<"projects"> | undefined,
   claudeResult?: string,
 ): string | undefined {
   if (!success) return undefined;
   if (claudeResult) return claudeResult;
-  if (prUrl) return projectId ? "Created project PR" : "Created task PR";
-  return projectId
-    ? "Pushed commit to project branch"
-    : "Pushed commit to task branch";
+  return prUrl ? "Created task PR" : "Pushed commit to task branch";
 }
+
+/**
+ * `exitReason` of a project task's run that ended on its own open ask
+ * (`report_to_coordinator` with `kind: "ask"`, `runEndedOnAsk`): a normal
+ * outcome, not an error. The task stays `in_progress` and waits for the
+ * answer, which starts its next run.
+ */
+export const RUN_WAITING_FOR_ANSWER = "waiting_for_answer";
 
 /** Patches the run document with final status, error, PR URL, and result summary. */
 export async function finalizeRunStatus(
   ctx: MutationCtx,
   params: {
     runId: Id<"agentRuns">;
-    projectId: Id<"projects"> | undefined;
     success: boolean;
     error: string | null;
     prError: string | null;
@@ -196,7 +164,6 @@ export async function finalizeRunStatus(
     resultSummary: buildRunResultSummary(
       params.success,
       params.prUrl,
-      params.projectId,
       params.claudeResult,
     ),
     error: errorMessage,
@@ -218,16 +185,20 @@ export async function finalizeRunStatus(
   await scheduleTaskOrchestratorNotify(
     ctx,
     run.taskId,
-    params.success ? "success" : "error",
+    params.exitReason === RUN_WAITING_FOR_ANSWER
+      ? "waiting"
+      : params.success
+        ? "success"
+        : "error",
   );
 }
 
 /**
- * Links the PR a task run opened or refreshed. A quick task owns its PR; a
- * project task's PR is the project's, tagged with the task and run that opened
- * it. Either way it becomes the owner's primary: it is the PR of the branch Eva
- * is working on now. Task-workflow PRs open as drafts; when the PR is already
- * tracked its state is kept, and the webhook corrects it within seconds.
+ * Links the PR a task run opened or refreshed. Every task (a quick task or a
+ * project's child task) owns its PR, and it becomes the task's primary: it is
+ * the PR of the branch Eva is working on now. Task-workflow PRs open as
+ * drafts; when the PR is already tracked its state is kept, and the webhook
+ * corrects it within seconds.
  */
 export async function recordRunPullRequest(
   ctx: MutationCtx,
@@ -242,27 +213,6 @@ export async function recordRunPullRequest(
   const task = await ctx.db.get(args.taskId);
   if (!task) return;
   const existing = await findPullRequestByUrl(ctx.db, args.prUrl);
-  if (task.projectId !== undefined) {
-    const project = await ctx.db.get(task.projectId);
-    if (!project) return;
-    await recordPullRequest(ctx, {
-      owner: {
-        kind: "project",
-        projectId: project._id,
-        taskId: task._id,
-        ...(args.runId !== undefined ? { runId: args.runId } : {}),
-      },
-      repoId: project.repoId,
-      prUrl: args.prUrl,
-      state: existing?.state ?? args.state ?? "draft",
-      primary: true,
-      origin: "eva",
-      headBranch: resolveProjectBranchName(project._id, project),
-      baseBranch: project.baseBranch,
-      title: project.title,
-    });
-    return;
-  }
   if (task.repoId === undefined) return;
   await recordPullRequest(ctx, {
     owner: {
@@ -275,7 +225,7 @@ export async function recordRunPullRequest(
     state: existing?.state ?? args.state ?? "draft",
     primary: true,
     origin: "eva",
-    headBranch: buildTaskBranchName(task._id),
+    headBranch: taskBranchName(task),
     baseBranch: task.baseBranch,
     title: task.title,
   });

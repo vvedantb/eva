@@ -1,19 +1,20 @@
-import { isProjectBuilding, type api, type Id } from "@eva/backend";
-import { formatEntityNumLabel, PROJECT_PHASE_LABELS, projectPlanningPhase, type ProjectTaskProgress } from "@eva/shared";
+import type { api, Id } from "@eva/backend";
+import { formatEntityNumLabel } from "@eva/shared";
+import { PROJECT_STAGE_LABELS, projectListNeedsYouLabel, type ProjectListStatus } from "@eva/shared/projectView";
+import { projectStatus } from "@eva/shared/projectStatus";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconListCheck, IconSparkles } from "@tabler/icons-react-native";
 import { SurfaceRow } from "@vvedantb/native-ui/primitives";
 import { withAlpha } from "@vvedantb/native-ui/theme";
 import type { FunctionReturnType } from "convex/server";
 import { useRouter } from "expo-router";
 import { Text, View } from "react-native";
 import { useSimpleView } from "@/chat/ComposerFooter";
-import { phaseAppearance } from "@/projects/phaseAppearance";
-import { ProjectProgress } from "@/projects/ProjectProgress";
-import { META_TEXT, MetaPill, SANDBOX_DOT } from "@/quickTasks/QuickTaskRow";
+import { projectStageAppearance } from "@/projects/phaseAppearance";
+import { ProjectProgress, ProjectStageCounts } from "@/projects/ProjectProgress";
+import { META_TEXT, SANDBOX_DOT } from "@/quickTasks/QuickTaskRow";
 import { displayTitle } from "@/ui/format";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
-import { AwaitingAnswerMark } from "@/ui/RowStatus";
+import { AwaitingAnswerMark, NeedsYouMark } from "@/ui/RowStatus";
 import { useScheme } from "@/ui/theme";
 
 type Project = FunctionReturnType<typeof api.projects.list>[number];
@@ -22,29 +23,22 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
 /** Avatars drawn on a card; the rest are a "+N", as the web. */
 const MAX_AVATARS = 3;
 
-/** A project with no tasks yet, until `listTaskProgress` has its counts. */
-const NO_PROGRESS: ProjectTaskProgress = {
-  total: 0,
-  todo: 0,
-  in_progress: 0,
-  business_review: 0,
-  code_review: 0,
-  done: 0,
-  cancelled: 0,
+/** A project with no tasks yet, until its tasks load. */
+const NO_TASKS: ProjectListStatus = {
+  stage: "todo",
+  counts: projectStatus([]).counts,
+  needsYouCount: 0,
+  coordinatorPaused: false,
 };
-
-/** The planning-mode badge: the web `Badge variant="secondary"` with its sparkles or checklist icon. */
-export function PlanningModeBadge({ mode }: { mode: Project["planningMode"] }) {
-  return <MetaPill icon={mode === "interview" ? IconSparkles : IconListCheck} label={mode === "interview" ? "Interview" : "Tasks only"} />;
-}
 
 /**
  * One project, as the web `ProjectCard` in the list view at phone width: a
- * card with the phase stripe, then the number and title with the live mark
- * (the question mark, else the sandbox dot) and unread dot; the description
- * (else the raw input, in italics) on two lines; the task progress bar;
- * then the lead and members, and the Draft or Finalised badge (a To Do
- * project) and the planning-mode badge where the web kebab sits. Sized for a thumb: a 14
+ * card with its derived stage's stripe, then the number and title with the
+ * live mark (the question mark, else the needs-you triangle, else the
+ * sandbox dot) and unread dot; the description (else the raw input, in
+ * italics) on two lines; the task progress bar and the stage counts
+ * (`projectStatus`); then the lead and members, and the Draft or Finalised badge (a To Do
+ * project) where the web kebab sits. Sized for a thumb: a 14
  * title, 12 secondary text, `py-3`, 8 apart. A tap opens the project; a long
  * press opens the project menu (`onLongPress`), as the web kebab and
  * right-click. The web border beam on a building project is not drawn: the
@@ -52,12 +46,13 @@ export function PlanningModeBadge({ mode }: { mode: Project["planningMode"] }) {
  */
 export function ProjectRow({
   project,
-  progress,
+  status,
   users,
   onLongPress,
 }: {
   project: Project;
-  progress: ProjectTaskProgress | undefined;
+  /** Derived from the child tasks (`useProjectListStatuses`); undefined while they load. */
+  status: ProjectListStatus | undefined;
   users: User[] | undefined;
   onLongPress: () => void;
 }) {
@@ -66,22 +61,20 @@ export function ProjectRow({
   const theme = EVA_THEME[scheme];
   const muted = theme.mutedForeground;
   const simpleView = useSimpleView();
-  const appearance = phaseAppearance(project.phase, scheme);
-  // Draft and finalized share To Do: the badge tells them apart.
-  const planningPhase = projectPlanningPhase(project.phase);
+  const shownStatus = status ?? NO_TASKS;
+  // A paused coordinator, or tasks that wait for a person.
+  const needsYouLabel = projectListNeedsYouLabel(shownStatus);
   const numLabel = formatEntityNumLabel({ numId: project.numId });
   const preview = project.description ?? project.rawInput;
   const sandbox = project.sandboxStatus ? SANDBOX_DOT[project.sandboxStatus] : undefined;
   // The web `showsSandboxStatusDot`: simple view shows none.
   const showSandbox = sandbox !== undefined && !simpleView;
-  const isBuilding = isProjectBuilding(project);
   const memberIds = [...new Set([project.projectLead, ...(project.members ?? [])].filter((id): id is Id<"users"> => id !== undefined))];
   const avatarIds = memberIds.length > 0 ? memberIds : [project.userId];
   const hiddenCount = avatarIds.length - MAX_AVATARS;
   const hint = [
-    PROJECT_PHASE_LABELS[project.phase],
-    isBuilding ? "Building" : undefined,
-    project.isAwaitingAnswer ? "Eva asked you a question" : showSandbox ? sandbox.label : undefined,
+    PROJECT_STAGE_LABELS[shownStatus.stage],
+    project.isAwaitingAnswer ? "Eva asked you a question" : (needsYouLabel ?? (showSandbox ? sandbox.label : undefined)),
     project.hasUnread ? "Unread" : undefined,
   ]
     .filter(Boolean)
@@ -91,7 +84,7 @@ export function ProjectRow({
     <SurfaceRow
       accessibilityLabel={displayTitle(project.title)}
       accessibilityHint={hint}
-      accentColor={appearance.bar}
+      accentColor={projectStageAppearance(shownStatus.stage, scheme).bar}
       backgroundColor={theme.card}
       // The web `px-3 py-2.5 pl-3.5` and `gap-1.5`; `py-3` for a thumb.
       className="min-h-[72px] gap-1.5 px-3 py-3 pl-3.5"
@@ -133,6 +126,8 @@ export function ProjectRow({
         <View className="shrink-0 flex-row items-center gap-1.5 pt-0.5">
           {project.isAwaitingAnswer ? (
             <AwaitingAnswerMark />
+          ) : needsYouLabel !== undefined ? (
+            <NeedsYouMark />
           ) : showSandbox ? (
             <View className="size-2 rounded-full" style={{ backgroundColor: sandbox.color ?? withAlpha(muted, 0.4) }} />
           ) : null}
@@ -141,7 +136,10 @@ export function ProjectRow({
       </View>
 
       <View className="mt-0.5 pt-0.5">
-        <ProjectProgress progress={progress ?? NO_PROGRESS} thin />
+        <ProjectProgress status={shownStatus} thin />
+        <View className="mt-1.5">
+          <ProjectStageCounts status={shownStatus} />
+        </View>
         <View className="mt-2 flex-row items-center gap-1.5">
           <View className="flex-row">
             {avatarIds.slice(0, MAX_AVATARS).map((id, index) => (
@@ -155,11 +153,6 @@ export function ProjectRow({
               {`+${hiddenCount}`}
             </Text>
           ) : null}
-          {/* The planning badge ends the footer, where the web kebab sits (the long press is the menu), so a card is a line shorter. */}
-          <View className="ml-auto flex-row items-center gap-1.5">
-            {planningPhase ? <MetaPill icon={appearance.icon} label={PROJECT_PHASE_LABELS[planningPhase]} /> : null}
-            <PlanningModeBadge mode={project.planningMode} />
-          </View>
         </View>
       </View>
     </SurfaceRow>

@@ -1,9 +1,6 @@
 import { api, type Id } from "@eva/backend";
 import {
-  isProjectPreviewPhase,
   MID_TURN_SLEEP_HINT,
-  projectCanCreatePr,
-  projectCanResolveConflicts,
   SLEEP_EVA_LABEL,
   taskCanCreatePr,
   taskCanResolveConflicts,
@@ -91,7 +88,7 @@ function useOwnedSandbox(owner: Owner | null) {
 }
 
 /** Opens a PR on the phone's PR screen in `repoId` when the URL names one, else in the browser. */
-/** The sandbox rows both pages share: wake (or retry) or sleep, then Commit & push while there is work. */
+/** The sandbox rows both pages share: wake (or retry) or sleep. */
 function SandboxRows({
   sandbox,
   canWake,
@@ -103,7 +100,6 @@ function SandboxRows({
   agentActive: boolean;
   close: () => void;
 }) {
-  const simpleView = useSimpleView();
   return (
     <>
       {sandbox.isActive ? (
@@ -126,16 +122,6 @@ function SandboxRows({
           onPress={() => {
             close();
             void sandbox.wake();
-          }}
-        />
-      ) : null}
-      {sandbox.hasUnpushedWork ? (
-        <SheetRow
-          icon={IconCloudUpload}
-          title={simpleView ? "Save to GitHub" : "Commit & push"}
-          onPress={() => {
-            close();
-            sandbox.commitPush();
           }}
         />
       ) : null}
@@ -205,6 +191,16 @@ export function useTaskGitActions({
         agentActive={hasActiveRun}
         close={close}
       />
+      {sandbox.hasUnpushedWork ? (
+        <SheetRow
+          icon={IconCloudUpload}
+          title={simpleView ? "Save to GitHub" : "Commit & push"}
+          onPress={() => {
+            close();
+            sandbox.commitPush();
+          }}
+        />
+      ) : null}
       {canCreatePr ? (
         <SheetRow
           icon={IconGitPullRequest}
@@ -250,70 +246,22 @@ export function useTaskGitActions({
 }
 
 /**
- * The web project page's sandbox and git actions
- * (`ProjectDetailHeaderActions`) as rows for its "…" sheet: Wake or Sleep
- * Eva (in the preview phases), Commit & push, Create PR, Resolve Conflicts
- * and View PR, under the web's rules. `dialogs` holds the Resolve confirm.
+ * The web project page's sandbox actions (`ProjectDetailHeaderActions`) as
+ * rows for its "…" sheet: Wake or Sleep Eva, then View PR. The coordinator
+ * is read-only, so it has no Commit & push, Create PR or Resolve Conflicts;
+ * a project has no closed state, so it can always wake.
  */
 export function useProjectGitActions(project: Project | null | undefined) {
-  const sandbox = useOwnedSandbox(
-    project ? { kind: "project", projectId: project._id } : null,
-  );
-  const simpleView = useSimpleView();
-  const prRow = useOwnerPrRow(project ? { kind: "project", projectId: project._id } : undefined, project?.prUrl, project?.repoId);
-  const createProjectPr = useAction(api.taskWorkflowActions.createProjectPr);
-  const resolveConflicts = useMutation(api.projects.resolveProjectConflicts);
-  const [resolving, setResolving] = useState(false);
+  const owner: Owner | null = project ? { kind: "project", projectId: project._id } : null;
+  const sandbox = useOwnedSandbox(owner);
+  const prRow = useOwnerPrRow(owner ?? undefined, project?.prUrl, project?.repoId);
   const rows = (close: () => void) =>
     project ? (
       <>
-        <SandboxRows
-          sandbox={sandbox}
-          canWake={isProjectPreviewPhase(project.phase)}
-          agentActive={false}
-          close={close}
-        />
-        {projectCanCreatePr(project) ? (
-          <SheetRow
-            icon={IconGitPullRequest}
-            title="Create PR"
-            onPress={() => {
-              close();
-              createProjectPr({ projectId: project._id }).then(
-                () => toast.success("PR created"),
-                () => toast.error("Failed to create PR"),
-              );
-            }}
-          />
-        ) : null}
-        {projectCanResolveConflicts(project) ? (
-          <SheetRow
-            icon={IconGitMerge}
-            title="Resolve Conflicts"
-            onPress={() => {
-              close();
-              setResolving(true);
-            }}
-          />
-        ) : null}
+        <SandboxRows sandbox={sandbox} canWake agentActive={false} close={close} />
         {prRow.row(close)}
         <MenuDivider />
       </>
     ) : null;
-  const dialogs = (
-    <>
-      <ResolveDialog
-        open={resolving}
-        onOpenChange={setResolving}
-        onConfirm={() => {
-          if (project)
-            resolveConflicts({ projectId: project._id }).catch(() =>
-              toast.error("Couldn't resolve conflicts"),
-            );
-        }}
-      />
-      {prRow.sheet}
-    </>
-  );
-  return { rows, dialogs };
+  return { rows, dialogs: prRow.sheet };
 }

@@ -50,7 +50,7 @@ async function resolveWakeTarget(
     const normalized = ctx.db.normalizeId("agentTasks", id);
     const task = normalized ? await ctx.db.get(normalized) : null;
     if (!task) return null;
-    // A task's sandbox is its session's (a project task's: the project's).
+    // A task's sandbox is its own session's.
     return await wakeOwnerTarget(ctx, workSessionOwner(task));
   }
   const normalized = ctx.db.normalizeId("projects", id);

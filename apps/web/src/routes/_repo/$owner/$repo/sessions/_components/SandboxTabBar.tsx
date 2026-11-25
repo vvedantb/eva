@@ -10,7 +10,8 @@ import type { Doc } from "@eva/backend";
 import { isAgentBrowsingActive } from "@eva/shared";
 import { useCycleSandboxTabHotkey } from "@/lib/components/sandbox/useCycleSandboxTabHotkey";
 import { useSandboxViewHotkeys } from "@/lib/components/sandbox/useSandboxViewHotkeys";
-import { SandboxPanelToggleButton } from "@/lib/components/sandbox/SandboxPanelToggleButton";
+import { formatForDisplay } from "@tanstack/react-hotkeys";
+import { useShortcutBinding } from "@/lib/hotkeys/useShortcut";
 import { slugifyAppTabName } from "@eva/shared/appTabSlug";
 import type { SandboxTab } from "@/lib/search-params";
 import type { SandboxFileListApi } from "@/lib/components/sandbox/useSandboxFileList";
@@ -26,43 +27,19 @@ import {
   useSimpleView,
 } from "@/lib/hooks/useSimpleView";
 import { useSandboxRailLabels } from "@/lib/components/sandbox/useSandboxRailLabels";
-import { SANDBOX_RAIL_GROUP_CLASS } from "@/lib/components/sandbox/sandboxRail";
 import { cn } from "@eva/ui";
-import { Tabs, TabsList, useMediaQuery, ListEnter } from "@vvedantb/ui";
-import { SandboxTabTrigger, type SandboxTabLayout } from "./SandboxTabTrigger";
+import {
+  ListEnter,
+  SidePanelTabs,
+  useMediaQuery,
+  type SidePanelTabLayout,
+} from "@vvedantb/ui";
+import {
+  SandboxTabTrigger,
+  type SandboxTabDescriptor,
+} from "./SandboxTabTrigger";
 import { buildSandboxTabDescriptors } from "./sandboxTabDescriptors";
 import { SandboxTabBarTools } from "./SandboxTabBarTools";
-
-/* Chips on the canvas, not folder tabs. Desktop becomes a vertical icon rail
-   (`md:flex-col`); mobile keeps this horizontal strip. The pane is `bg-card`
-   and the bar sits on `--background`, so the tone step separates them.
-   `md:z-20` stacks the rail above the splitter's overlapping hit target so the
-   collapse button still receives clicks when the panel is snapped to 44px. */
-/* `md:pt-3` centres the panel toggle on the chat header's 32px actions (12px
-   from the top), so the rail's first icon lines up with the header row. */
-const TAB_BAR_CLASS =
-  "flex shrink-0 items-center gap-1 px-1.5 py-1 md:relative md:z-20 md:h-full md:w-11 md:flex-col md:items-center md:overflow-hidden md:px-1 md:pb-1.5 md:pt-3";
-
-/* `SANDBOX_RAIL_LABELLED_WIDTH_PX` as a class — Tailwind needs the literal, and
-   the panel this bar sits in collapses to that same number. The list goes
-   `w-full` with it: it is `inline-flex`, so it would otherwise size itself to
-   the widest label and overflow the rail instead of truncating inside it. */
-const LABELLED_TAB_BAR_CLASS = "md:w-[76px]";
-const LABELLED_TAB_LIST_CLASS = "md:w-full";
-
-/* `justify-start` matters: the primitive centres its list, and centred content
-   that overflows spills past *both* edges while `scrollLeft` cannot go
-   negative. Desktop is a column; the same sliding pill marks the active tab.
-   `tabs-segmented` puts the tabs on the shared trough, like the app rail
-   groups. `p-0.5` keeps the 32px tabs inside the 44px rail. */
-const TAB_LIST_CLASS =
-  "tabs-segmented h-auto max-w-full justify-start gap-1 overflow-x-auto rounded-xl border-0 p-0.5 shadow-none scrollbar-none max-sm:justify-start md:max-w-none md:flex-col md:overflow-x-hidden md:overflow-y-auto";
-
-/* Desktop: centre the tab group in the rail between the panel toggle and the
-   tools. `-safe` keeps a long list at the top so its first tabs stay
-   reachable. */
-const TABS_ROOT_CLASS =
-  "min-w-0 flex-1 md:flex md:min-h-0 md:w-full md:flex-col md:items-center md:justify-center-safe";
 
 /**
  * Past this many tabs the inactive mobile labels collapse to icon-only (label
@@ -88,7 +65,8 @@ interface SandboxTabBarProps {
   /** Builtin tab id (SandboxTab) or a custom tab's name slug. */
   activeTab: string;
   onTabChange: (tab: string) => void;
-  onNewPreview: () => void;
+  /** Absent where the sandbox runs no dev server (a project coordinator). */
+  onNewPreview?: () => void;
   newPreviewDisabled?: boolean;
   showPrdTab?: boolean;
   /** When true, shows a content indicator on the Plan tab. */
@@ -114,6 +92,8 @@ interface SandboxTabBarProps {
   enabledTabs?: ReadonlyArray<SandboxTab>;
   /** User-defined tabs for this app; expected pre-filtered to enabled ones. */
   customTabs?: ReadonlyArray<Doc<"appTabs">>;
+  /** Owner-only tabs ahead of the sandbox tabs (a project's Tasks). */
+  leadingTabs?: ReadonlyArray<SandboxTabDescriptor>;
   /** When set (and fresh), shows a pulse on the Browser tab. */
   agentBrowsingAt?: number;
   /** When false, view hotkeys are inert (inactive cached session shells). */
@@ -149,6 +129,7 @@ export function SandboxTabBar({
   hasRunningAgents = false,
   enabledTabs,
   customTabs,
+  leadingTabs = [],
   agentBrowsingAt,
   hotkeysEnabled = true,
   className,
@@ -180,7 +161,9 @@ export function SandboxTabBar({
     slugifyAppTabName(tab.name),
   );
 
-  const tabDescriptors = buildSandboxTabDescriptors({
+  const tabDescriptors = [
+    ...leadingTabs,
+    ...buildSandboxTabDescriptors({
     baseTabs: tabs,
     showBrowserActivity: isAgentBrowsingActive(agentBrowsingAt),
     showEditorTab: showEditorItem,
@@ -196,17 +179,28 @@ export function SandboxTabBar({
     artifactCount,
     showDocumentsTab,
     documentCount,
-    customTabs: visibleCustomTabs,
-  });
+      customTabs: visibleCustomTabs,
+    }),
+  ];
   // Desktop is icon-only unless the reader has asked for the labelled rail.
   const iconOnly = !isMobile && !showLabels;
   // Phone-only rule: the desktop rail decides its own labels above.
   const collapseLabels = isMobile && tabDescriptors.length > MAX_LABELLED_TABS;
 
-  const tabLayout = (value: string): SandboxTabLayout => {
+  const tabLayout = (value: string): SidePanelTabLayout => {
     if (!isMobile) return iconOnly ? "icon" : "stacked";
     return collapseLabels && value !== resolvedTab ? "icon" : "row";
   };
+
+  const hotkeyLabel = formatForDisplay(
+    useShortcutBinding("toggleSandboxPanel"),
+  );
+  // Desktop only: the active tab shows and hides the card (there is no
+  // separate toggle). The phone's pane switcher owns show and hide.
+  const onActiveTabClick = isMobile ? undefined : onToggle;
+  const activeTabHint = onActiveTabClick
+    ? `${collapsed ? "Show" : "Hide"} panel (${hotkeyLabel})`
+    : undefined;
 
   const expandIfCollapsed = () => {
     if (collapsed && onToggle) onToggle();
@@ -217,10 +211,12 @@ export function SandboxTabBar({
     expandIfCollapsed();
   };
 
-  const handleNewPreview = () => {
-    onNewPreview();
-    expandIfCollapsed();
-  };
+  const handleNewPreview = onNewPreview
+    ? () => {
+        onNewPreview();
+        expandIfCollapsed();
+      }
+    : undefined;
 
   useCycleSandboxTabHotkey({
     activeTab: resolvedTab,
@@ -233,6 +229,7 @@ export function SandboxTabBar({
     showFilesTab: showFiles,
     showAgentsTab: showAgents,
     customTabSlugs,
+    leadingTabSlugs: leadingTabs.map((tab) => tab.value),
     showComputerTab: showDesktopItem,
     showEditorTab: showEditorItem,
     enabled: hotkeysEnabled,
@@ -271,57 +268,35 @@ export function SandboxTabBar({
 
   return (
     <>
-      <div
-        className={cn(
-          TAB_BAR_CLASS,
-          showLabels ? LABELLED_TAB_BAR_CLASS : undefined,
-          className,
-        )}
-      >
-        {onToggle ? (
-          <div className={cn(SANDBOX_RAIL_GROUP_CLASS, "hidden md:flex")}>
-            <SandboxPanelToggleButton
-              collapsed={collapsed}
-              onToggle={onToggle}
-            />
-          </div>
-        ) : null}
-        <Tabs
-          className={TABS_ROOT_CLASS}
+      <SidePanelTabs.Rail labelled={showLabels} className={className}>
+        <SidePanelTabs.List
           value={resolvedTab}
           onValueChange={handleTabChange}
+          labelled={showLabels}
         >
-          <TabsList
-            className={cn(
-              TAB_LIST_CLASS,
-              showLabels ? LABELLED_TAB_LIST_CLASS : undefined,
-            )}
-          >
-            {tabDescriptors.map((tab, index) => (
-              <ListEnter
-                key={tab.value}
-                index={index}
-                fast
-                /* The stacked chip fills the rail, so its wrapper has to as
-                   well — an `inline-flex` box is content-sized. */
-                className={cn(
-                  "inline-flex",
-                  showLabels ? "md:w-full" : undefined,
-                )}
-              >
-                <SandboxTabTrigger
-                  tab={tab}
-                  onReselect={
-                    collapsed && tab.value === resolvedTab
-                      ? expandIfCollapsed
-                      : undefined
-                  }
-                  layout={tabLayout(tab.value)}
-                />
-              </ListEnter>
-            ))}
-          </TabsList>
-        </Tabs>
+          {tabDescriptors.map((tab, index) => (
+            <ListEnter
+              key={tab.value}
+              index={index}
+              fast
+              /* The stacked chip fills the rail, so its wrapper has to as
+                 well — an `inline-flex` box is content-sized. */
+              className={cn(
+                "inline-flex",
+                showLabels ? "md:w-full" : undefined,
+              )}
+            >
+              <SandboxTabTrigger
+                tab={tab}
+                onReselect={onActiveTabClick}
+                reselectHint={
+                  tab.value === resolvedTab ? activeTabHint : undefined
+                }
+                layout={tabLayout(tab.value)}
+              />
+            </ListEnter>
+          ))}
+        </SidePanelTabs.List>
         {simpleView ? null : (
           <SandboxTabBarTools
             onNewPreview={handleNewPreview}
@@ -331,7 +306,7 @@ export function SandboxTabBar({
             onToggleLabels={toggleRailLabels}
           />
         )}
-      </div>
+      </SidePanelTabs.Rail>
       <SandboxQuickOpenDialogs
         fileList={fileList}
         commands={commands}

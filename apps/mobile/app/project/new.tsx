@@ -1,10 +1,9 @@
 import { api, type Id } from "@eva/backend";
 import { FALLBACK_GIT_BASE_BRANCH, newProjectSubmitBlocker, type Priority } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconListCheck, IconSparkles } from "@tabler/icons-react-native";
 import { goBackOrReplace } from "@vvedantb/native-ui/expo-router";
 import { StackPageHeader } from "@vvedantb/native-ui/layout";
-import { Button, CenteredSpinner, EmptyState, KeyboardAvoidingView, SheetRow } from "@vvedantb/native-ui/primitives";
+import { Button, CenteredSpinner, EmptyState, KeyboardAvoidingView } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
@@ -13,8 +12,7 @@ import { useRef, useState, type ReactNode } from "react";
 import { ScrollView, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BaseBranchChip } from "@/chat/BranchChips";
-import { FooterSheet } from "@/chat/ComposerFooter";
-import { OptionPill, OptionPillFrame, PriorityChip } from "@/quickTasks/OptionChips";
+import { OptionPillFrame, PriorityChip } from "@/quickTasks/OptionChips";
 import { rememberRepo, RepoPicker, useLastRepoId } from "@/ui/RepoPicker";
 import { useScheme } from "@/ui/theme";
 
@@ -24,12 +22,13 @@ type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
  * A new project, as the web `NewProjectModal` on a phone: a full screen in
  * place of the dialog. The repo (the web takes it from the page), the title
  * and the description ("Describe the feature…"), then the web option chips,
- * each opening a bottom sheet: base branch, priority and planning mode
- * ("With interview/plan" or "Tasks only"). "Create Project" sits at the
- * bottom in thumb reach; it is off until there is a title and a
- * description, and says why to a screen reader (`newProjectSubmitBlocker`,
- * the web tooltip). It calls the web's `projects.create`, then replaces this
- * screen with the new project, so back does not return to the spent form.
+ * each opening a bottom sheet: base branch and priority. A project has no
+ * interview or plan step: its coordinator chat plans it, so the project is
+ * created without one (`skipPlanning`). "Create Project" sits at the bottom
+ * in thumb reach; it is off until there is a title and a description, and
+ * says why to a screen reader (`newProjectSubmitBlocker`, the web tooltip).
+ * It calls the web's `projects.create`, then replaces this screen with the
+ * project's coordinator chat, so back does not return to the spent form.
  * Return on the title moves to the description. Not here from the web: the
  * rich-text editor (plain text here) and the keyboard shortcut.
  */
@@ -71,8 +70,6 @@ function NewProjectForm({ repos, initialRepo, onLeave: leave }: { repos: Repo[];
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<Priority | undefined>(undefined);
-  const [skipPlanning, setSkipPlanning] = useState(false);
-  const [planningOpen, setPlanningOpen] = useState(false);
   // The base branch is kept with its repo; a new repo starts on its default (web `useBaseBranchState`).
   const [pickedBranch, setPickedBranch] = useState<{ repoId: Id<"githubRepos">; branch: string } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -90,22 +87,17 @@ function NewProjectForm({ repos, initialRepo, onLeave: leave }: { repos: Repo[];
         rawInput: description.trim(),
         baseBranch,
         priority,
-        skipPlanning,
+        // No interview or plan: the coordinator chat plans the project.
+        skipPlanning: true,
       });
       toast.success("Project created");
-      router.replace({ pathname: "/project/[projectId]", params: { projectId, repo: repo._id } });
+      router.replace({ pathname: "/chat/[target]", params: { target: projectId } });
     } catch {
       toast.error("Couldn't create project");
       setSaving(false);
     }
   };
 
-  const pickPlanning = (next: boolean) => {
-    setSkipPlanning(next);
-    setPlanningOpen(false);
-  };
-  const PlanningIcon = skipPlanning ? IconListCheck : IconSparkles;
-  const planningLabel = skipPlanning ? "Tasks only" : "With interview/plan";
 
   return (
     <Screen onBack={leave}>
@@ -146,20 +138,12 @@ function NewProjectForm({ repos, initialRepo, onLeave: leave }: { repos: Repo[];
             className="font-instrument-sans min-h-40 py-2 text-base"
             style={{ color: theme.foreground }}
           />
-          {/* Web: the chips wrap, in its order: base branch, priority, planning mode. */}
+          {/* Web: the chips wrap, in its order: base branch, priority. */}
           <View className="flex-row flex-wrap gap-1.5 pt-2">
             <OptionPillFrame>
               <BaseBranchChip repoId={repo._id} value={baseBranch} onChange={(branch) => setPickedBranch({ repoId: repo._id, branch })} />
             </OptionPillFrame>
             <PriorityChip value={priority} onChange={setPriority} />
-            <OptionPill
-              icon={<PlanningIcon size={14} color={theme.mutedForeground} />}
-              label={planningLabel}
-              set
-              accessibilityLabel={`Planning: ${planningLabel}`}
-              expanded={planningOpen}
-              onPress={() => setPlanningOpen(true)}
-            />
           </View>
         </ScrollView>
         {/* Web footer: Create Project (Cancel is the header back). */}
@@ -169,10 +153,6 @@ function NewProjectForm({ repos, initialRepo, onLeave: leave }: { repos: Repo[];
           </Button>
         </View>
       </KeyboardAvoidingView>
-      <FooterSheet open={planningOpen} onOpenChange={setPlanningOpen} title="Planning">
-        <SheetRow icon={IconSparkles} title="With interview/plan" active={!skipPlanning} onPress={() => pickPlanning(false)} />
-        <SheetRow icon={IconListCheck} title="Tasks only" active={skipPlanning} onPress={() => pickPlanning(true)} />
-      </FooterSheet>
     </Screen>
   );
 }

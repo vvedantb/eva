@@ -51,12 +51,15 @@ export function SidebarPanelHeader({
       className={cn(
         "relative flex items-center overflow-hidden",
         // Repo identity keeps a reserved tall slot so team art
-        // resolving later does not shift the nav list (CLS).
-        isSourceListHeader ? "px-2 pt-3" : "h-24 px-3",
+        // resolving later does not shift the nav list (CLS). 128px: the
+        // inset banner then ends near the rail's first track.
+        isSourceListHeader ? "px-2 pt-3" : "h-32 px-3",
       )}
     >
       {teamBackgroundUrl && !showContextSidebar && !isFlatPanel ? (
-        <>
+        // Inset and rounded like the rail tracks: the top lines up with the
+        // rail's first track (12px); ~8px gap to the rail track and the edge.
+        <div className="absolute top-3 right-2 bottom-0 left-1 overflow-hidden rounded-t-surface">
           <img
             src={teamBackgroundUrl}
             alt=""
@@ -69,7 +72,7 @@ export function SidebarPanelHeader({
             }}
           />
           <div className="absolute inset-0 bg-linear-to-b from-sidebar/40 via-sidebar/55 to-transparent" />
-        </>
+        </div>
       ) : null}
       <m.div
         key={`${panelKey}-header`}

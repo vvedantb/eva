@@ -2,7 +2,6 @@
 
 import type { JWK } from "jose";
 import {
-  SANDBOX_ENGAGED_WINDOW_MS,
   SANDBOX_ENGAGEMENT_INPUT_EVENTS,
 } from "@eva/shared";
 import { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
@@ -40,7 +39,7 @@ const HEALTH_PATH = "/__eva_preview_proxy/health";
 export const PREVIEW_TAB_PREFIX = "/__tab";
 // Bump when the generated proxy script changes so already-running proxies from
 // an older deploy are detected as stale (via the health response) and relaunched.
-const SCRIPT_VERSION = "stream-v31";
+const SCRIPT_VERSION = "stream-v33";
 
 /** Minimum gap between two traffic heartbeats posted by one proxy process. */
 const ACTIVITY_HEARTBEAT_INTERVAL_MS = 60_000;
@@ -329,6 +328,8 @@ function verifyGrant(token) {
     const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
     if (aud.indexOf(EXPECTED_AUD) === -1) return null;
     if (payload.sandboxId !== SANDBOX_ID) return null;
+    // A grant opens only the port it was minted for.
+    if (payload.port !== AUTH_PORT) return null;
     return payload;
   } catch {
     return null;
@@ -921,10 +922,13 @@ const PARENT_ORIGIN_SCRIPT =
   JSON.stringify(annotationParentOrigin()) +
   ";";
 
-// On-screen ping (idle pause): while the page is visible AND had input in the
-// engaged window, POST to the proxy at most once per heartbeat interval. A
-// hidden tab, or a visible one nobody touches, sends nothing, so it no longer
-// keeps the sandbox awake. Loopback pages are the agent's own browser.
+// On-screen ping (idle pause): while the page is visible, POST to the proxy at
+// most once per heartbeat interval, and only when there was input since the
+// last ping. Each ping therefore reports real input no older than one interval,
+// so the idle-pause grace is the only timer between the last input and the
+// pause. (The ping used to continue for 10 minutes after the last input, which
+// put that window in front of the grace.) A hidden tab, or a visible one nobody
+// touches, sends nothing. Loopback pages are the agent's own browser.
 const visibilityPingScript = "(" + function () {
   const flag = "__evaPreviewVisibilityPing";
   if (window[flag]) return;
@@ -934,23 +938,24 @@ const visibilityPingScript = "(" + function () {
 
   let lastSentAt = 0;
   // Page load counts as input: someone just opened or navigated the page.
-  let lastInputAt = Date.now();
+  let inputSinceLastPing = true;
   function ping() {
+    if (!inputSinceLastPing) return;
     if (document.visibilityState !== "visible") return;
     const now = Date.now();
-    if (now - lastInputAt >= ${SANDBOX_ENGAGED_WINDOW_MS}) return;
     if (now - lastSentAt < ${ACTIVITY_HEARTBEAT_INTERVAL_MS}) return;
     lastSentAt = now;
+    inputSinceLastPing = false;
     fetch("/__eva_preview_proxy/active", {
       method: "POST",
       credentials: "include",
       keepalive: true,
     }).catch(function () {});
   }
+  // Sends at once after a quiet interval; otherwise the interval tick sends it.
   function onInput() {
-    const wasIdle = Date.now() - lastInputAt >= ${SANDBOX_ENGAGED_WINDOW_MS};
-    lastInputAt = Date.now();
-    if (wasIdle) ping();
+    inputSinceLastPing = true;
+    ping();
   }
   ${JSON.stringify(SANDBOX_ENGAGEMENT_INPUT_EVENTS)}.forEach(function (type) {
     window.addEventListener(type, onInput, { capture: true, passive: true });

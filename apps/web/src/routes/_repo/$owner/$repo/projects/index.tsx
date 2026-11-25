@@ -13,11 +13,11 @@ export const Route = createFileRoute("/_repo/$owner/$repo/projects/")({
   component: ProjectsClient,
 });
 
-/** Same queries and args as `ProjectsClient` and `ProjectsTimeline`. */
+/** Same queries and args as `ProjectsClient` (`useProjectListStatuses`). */
 async function prefetchProjects(params: { owner: string; repo: string }) {
   const repo = await prefetchRepo(params);
   if (!repo) return;
   const byRepo = { repoId: repo._id };
   prewarm(api.projects.list, byRepo);
-  prewarm(api.projects.listTaskProgress, byRepo);
+  prewarm(api.projects.listStatusesForRepo, byRepo);
 }

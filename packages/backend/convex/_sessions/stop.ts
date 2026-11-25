@@ -6,22 +6,22 @@ import {
   getProjectWithAccess,
   getSessionWithAccess,
   getTaskWithAccess,
-  hasRepoAccess,
 } from "../functions";
 import { isTaskRunning } from "../_agentTasks/runState";
 import { hasOpenChatTurn } from "../_chat/turnProjection";
 import {
-  getSessionChatOrThrow,
+  getSessionChatWithAccess,
   type SessionChatContext,
 } from "../_sessionChats/helpers";
 import { cancelTaskRun } from "../_taskWorkflow/publicMutations";
+import { findOpenAsk } from "../_projects/reports";
 import { cancelChatExecution } from "./execution";
 import {
-  chatOwner,
+  sessionOwner,
   findWorkSession,
   sessionOwnerTaskId,
 } from "./owner";
-import { findWorkChat, ownerHoldsSession } from "./ownerState";
+import { findWorkChat } from "./ownerState";
 import { requestSessionSandboxStop } from "./sandbox";
 
 /**
@@ -30,26 +30,32 @@ import { requestSessionSandboxStop } from "./sandbox";
  *
  *   stopChatTurn     stops the agent in one chat: the chat's open turn, and
  *                    the task run shown in it (a quick task's or project
- *                    task's run). A project build or interview is left alone;
- *                    Cancel build owns it. Queued messages then start.
+ *                    task's run). Queued messages then start.
  *   stopWorkSandbox  sleeps the sandbox of a session, task or project. It is
  *                    refused while the agent works on that sandbox (any chat
- *                    turn, a task run, a build or an interview): stop the
+ *                    turn or a task run): stop the
  *                    agent first, or wait.
  *
  * Neither creates a session: no session means there is nothing to stop.
  */
 
 /**
- * Stops what holds one chat: the owner task's run when one runs, and the
- * chat's own turn. Each half is a no-op when idle. The caller checks access.
+ * Stops what holds one chat: the owner task's run when one runs, or a project
+ * task's wait for the answer to its ask (no run is open then; the stop
+ * closes the ask, rule 7 in `_projects/reports.ts`), and the chat's own turn.
+ * Each half is a no-op when idle. The caller checks access.
  */
 async function stopOwnerTurn(
   ctx: MutationCtx,
   task: Doc<"agentTasks"> | null,
   chat: SessionChatContext | null,
 ): Promise<void> {
-  if (task && isTaskRunning(task)) await cancelTaskRun(ctx, task);
+  if (
+    task &&
+    (isTaskRunning(task) || (await findOpenAsk(ctx.db, task._id)) !== null)
+  ) {
+    await cancelTaskRun(ctx, task);
+  }
   if (chat) await cancelChatExecution(ctx, chat, { holdQueue: true });
 }
 
@@ -58,7 +64,7 @@ export async function stopChat(
   ctx: MutationCtx,
   context: SessionChatContext,
 ): Promise<void> {
-  const owner = chatOwner(context.chat, context.session);
+  const owner = sessionOwner(context.session);
   const task = owner.kind === "task" ? await ctx.db.get(owner.taskId) : null;
   await stopOwnerTurn(ctx, task, context);
 }
@@ -89,11 +95,10 @@ export const stopChatTurn = authMutation({
   returns: v.null(),
   handler: async (ctx, { target }) => {
     if ("chatId" in target) {
-      const chat = await getSessionChatOrThrow(ctx.db, target.chatId);
-      if (!(await hasRepoAccess(ctx.db, chat.session.repoId, ctx.userId))) {
-        throw new Error("Not authorized");
-      }
-      await stopChat(ctx, chat);
+      await stopChat(
+        ctx,
+        await getSessionChatWithAccess(ctx.db, target.chatId, ctx.userId),
+      );
       return null;
     }
     await stopTask(
@@ -113,7 +118,6 @@ async function sessionIsHeld(
   const ownerTask = ownerTaskId ? await db.get(ownerTaskId) : null;
   return (
     (ownerTask !== null && isTaskRunning(ownerTask)) ||
-    (await ownerHoldsSession(db, session)) ||
     (await hasOpenChatTurn(db, session._id))
   );
 }

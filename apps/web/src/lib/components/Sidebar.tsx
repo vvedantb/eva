@@ -1,6 +1,6 @@
 "use client";
 
-import { useLocation, useMatches } from "@tanstack/react-router";
+import { useLocation, useMatches, useRouterState } from "@tanstack/react-router";
 import { useShortcut } from "@/lib/hotkeys/useShortcut";
 import { useUser } from "@clerk/clerk-react";
 import { useEffect, useState, type ReactNode } from "react";
@@ -37,7 +37,15 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
  * rail tiles, the panel content and the mobile header content.
  */
 export function Sidebar({ children }: { children: ReactNode }) {
-  const { pathname } = useLocation();
+  // The rail follows the pending location, so its pill answers a click at
+  // once. The side panel follows the resolved one: it changes with the page
+  // when the route has loaded, inside the same view transition, rather than
+  // ahead of it (the panel used to swap before the rail slide started).
+  const { pathname: pendingPathname } = useLocation();
+  const pathname = useRouterState({
+    select: (s) => s.resolvedLocation?.pathname ?? s.location.pathname,
+  });
+  const railRoute = parseSidebarRepoRoute(pendingPathname);
   const { user } = useUser();
   const {
     collapsed,
@@ -133,6 +141,7 @@ export function Sidebar({ children }: { children: ReactNode }) {
 
   return (
     <AppShell.Root
+      variant="rail"
       scroll="document"
       resizable={SIDEBAR_RESIZE}
       // Collapsed, or a route with no side panel: the content sits next to the rail.
@@ -157,13 +166,13 @@ export function Sidebar({ children }: { children: ReactNode }) {
         <ShellSidebar.Aside>
           <RepoRail
             repos={repos ?? []}
-            currentOwner={owner}
-            currentName={repoName}
-            currentAppName={appName}
-            pathname={pathname}
+            currentOwner={railRoute.owner}
+            currentName={railRoute.repoName}
+            currentAppName={railRoute.appName}
+            pathname={pendingPathname}
             onNavigate={closeMobileSidebar}
             userName={user?.fullName || user?.firstName || "User"}
-            showSearch={isRepoRoute}
+            showSearch={railRoute.isRepoRoute}
           />
           {showSidePanel ? (
             <SidebarPanel

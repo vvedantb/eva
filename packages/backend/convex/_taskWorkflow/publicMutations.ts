@@ -2,7 +2,11 @@ import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import type { WorkflowId } from "@convex-dev/workflow";
 import { cancelTrackedWorkflow, toWorkflowId } from "../workflowManager";
-import { authMutation, getActiveTaskRun } from "../functions";
+import {
+  authMutation,
+  getActiveTaskRun,
+  onProjectTasksChanged,
+} from "../functions";
 import {
   advanceTurn,
   closeOpenTurn,
@@ -24,6 +28,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import { errorMessage } from "@vvedantb/server";
 import { findWorkSession } from "../_sessions/owner";
 import { abandonTaskRunSandbox } from "../_sessions/sandbox";
+import { closeTaskReports, runEndedOnAsk } from "../_projects/reports";
 
 /** Retrieves the active workflow ID for a task, or null if none exists. */
 async function getActiveWorkflowId(
@@ -139,11 +144,14 @@ export const handleCompletion = authMutation({
       finalizingAt: Date.now(),
     });
 
+    // A project task that asked its coordinator ended its turn on purpose:
+    // a clean outcome, even when the commit gate failed the turn.
+    const endedOnAsk = await runEndedOnAsk(ctx.db, latestRunningRun);
     try {
       await sendCompletionEvent(ctx, taskCompleteEvent, workflowId, {
-        success: args.success,
+        success: endedOnAsk || args.success,
         result: args.result,
-        error: args.error,
+        error: endedOnAsk ? null : args.error,
         activityLog: args.activityLog,
       });
     } catch (error) {
@@ -198,14 +206,11 @@ export async function cancelTaskRun(
 
     // workflow.cancel() aborts execution before the workflow's own sandbox
     // cleanup step runs, so we stop the execution sandbox here.
-    // A run borrowed its session's sandbox (a project task's: the project's):
-    // fail the start it claimed (or finish the VM it attached) through the
-    // session lifecycle. A project's VM stays up for its chat and builds.
+    // A run borrowed its own session's sandbox: fail the start it claimed (or
+    // finish the VM it attached) through the session lifecycle.
     const session = await findWorkSession(ctx.db, task);
     if (session) {
-      await abandonTaskRunSandbox(ctx, session._id, run, {
-        keepActive: task.projectId !== undefined,
-      });
+      await abandonTaskRunSandbox(ctx, session._id, run);
     } else if (run.sandboxId && run.repoId) {
       await ctx.scheduler.runAfter(0, internal.sandbox.stopSandbox, {
         sandboxId: run.sandboxId,
@@ -222,5 +227,12 @@ export async function cancelTaskRun(
     updatedAt: Date.now(),
   });
   await finishTaskRun(ctx, task._id, undefined);
+  // The task left `in_progress`: its project may start the next ones (the
+  // stopped task itself waits for a person). A stop also closes the task's
+  // open question to its coordinator.
+  if (task.projectId !== undefined) {
+    await closeTaskReports(ctx, task._id);
+    await onProjectTasksChanged(ctx, task.projectId);
+  }
 }
 

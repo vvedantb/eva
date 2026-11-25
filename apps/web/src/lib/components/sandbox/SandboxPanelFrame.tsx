@@ -1,13 +1,11 @@
 import type { ReactNode } from "react";
 import { cn } from "@eva/ui";
-import { Button } from "@vvedantb/ui";
+import { Button, ButtonTrack, SidePanelTabs } from "@vvedantb/ui";
 import { SandboxPanelToggleButton } from "./SandboxPanelToggleButton";
-import { SANDBOX_RAIL_GROUP_CLASS } from "./sandboxRail";
 
 /**
- * Desktop: tab rail on the right edge of the pane. Collapsed hides the
- * content (`md:hidden`) so the rail stays. Mobile: column, tab strip on top,
- * content always shown — the pane switcher owns show/hide.
+ * The sandbox pane: the package side panel (`SidePanelTabs.Frame`). `tabBar` is the `SandboxTabBar`, a `SidePanelTabs.Rail`. The
+ * frame owns the arrow and the card's dock motion; `popOutSidePanel` closes it.
  */
 export function SandboxPanelFrame({
   collapsed,
@@ -19,17 +17,12 @@ export function SandboxPanelFrame({
   children: ReactNode;
 }) {
   return (
-    <div className="flex h-full min-h-0 flex-col md:flex-row-reverse">
-      {tabBar}
-      <div
-        className={cn(
-          "min-h-0 min-w-0 flex-1 overflow-hidden bg-card",
-          collapsed && "md:hidden",
-        )}
-      >
-        {children}
-      </div>
-    </div>
+    <SidePanelTabs.Frame
+      collapsed={collapsed}
+      rail={tabBar}
+    >
+      {children}
+    </SidePanelTabs.Frame>
   );
 }
 
@@ -37,19 +30,24 @@ export function SandboxPanelFrame({
 export function SandboxEmptyRailFrame({
   collapsed,
   onToggle,
+  showToggle = true,
   children,
 }: {
   collapsed: boolean;
   onToggle: () => void;
+  /** False drops the lone collapse control (a project's task view). */
+  showToggle?: boolean;
   children: ReactNode;
 }) {
   return (
     <div className="flex h-full min-h-0 flex-col md:flex-row-reverse">
-      <div className="relative z-20 hidden h-full w-11 shrink-0 flex-col items-center pb-1.5 pt-3 md:flex">
-        <div className={SANDBOX_RAIL_GROUP_CLASS}>
-          <SandboxPanelToggleButton collapsed={collapsed} onToggle={onToggle} />
+      {showToggle ? (
+        <div className="relative z-20 hidden h-full w-11 shrink-0 flex-col items-center pb-1.5 pt-3 md:flex">
+          <ButtonTrack direction="column">
+            <SandboxPanelToggleButton collapsed={collapsed} onToggle={onToggle} />
+          </ButtonTrack>
         </div>
-      </div>
+      ) : null}
       <div
         className={cn(
           "flex min-h-0 min-w-0 flex-1 items-center justify-center p-8",
@@ -74,6 +72,7 @@ export function SandboxNotStartedRail({
   onStart,
   isStarting,
   isPending,
+  showToggle = true,
 }: {
   collapsed: boolean;
   onToggle: () => void;
@@ -83,9 +82,14 @@ export function SandboxNotStartedRail({
   isStarting: boolean;
   /** The session lookup is loading: show nothing rather than a false "none". */
   isPending: boolean;
+  showToggle?: boolean;
 }) {
   return (
-    <SandboxEmptyRailFrame collapsed={collapsed} onToggle={onToggle}>
+    <SandboxEmptyRailFrame
+      collapsed={collapsed}
+      onToggle={onToggle}
+      showToggle={showToggle}
+    >
       {isPending ? null : (
         <div className="flex flex-col items-center gap-3 text-center">
           <p className="text-sm text-muted-foreground">

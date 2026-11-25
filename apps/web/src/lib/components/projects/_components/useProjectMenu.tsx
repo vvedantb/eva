@@ -14,7 +14,6 @@ import {
   Textarea,
 } from "@vvedantb/ui";
 import { useUpdateProject } from "@/lib/components/projects/useUpdateProject";
-import type { ProjectPhase } from "@/lib/components/projects/ProjectPhaseBadge";
 import type { ProjectCardMenuItemsProps } from "./ProjectCardMenuItems";
 
 type ProjectMenuArgs = Omit<
@@ -22,7 +21,6 @@ type ProjectMenuArgs = Omit<
   | "variant"
   | "users"
   | "currentUserId"
-  | "onPhaseChange"
   | "onLeadChange"
   | "onEdit"
 > & {
@@ -47,9 +45,6 @@ export function useProjectMenu({ description, ...args }: ProjectMenuArgs) {
     ...args,
     users: users ?? undefined,
     currentUserId: currentUserId ?? undefined,
-    onPhaseChange: (nextPhase: ProjectPhase) => {
-      void updateProject({ id: projectId, phase: nextPhase });
-    },
     onLeadChange: (value: string) => {
       if (value === "none") {
         void updateProject({ id: projectId, projectLead: null });

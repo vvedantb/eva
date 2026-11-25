@@ -8,7 +8,6 @@ export type SessionStoreConfig = {
   persistStateFile: string;
   resumeField: "resumeThreadId" | "resumeSessionId";
   getActiveId: () => string;
-  setActiveId: (id: string) => void;
 };
 
 export type PersistedSessionState = {
@@ -79,20 +78,10 @@ export function createSessionStore(config: SessionStoreConfig) {
     );
   };
 
-  const resolveResumeId = (): string | null => {
-    const persisted = readSessionState();
-    if (!persisted) return null;
-    if (config.resumeField === "resumeThreadId") {
-      return persisted.resumeThreadId ?? null;
-    }
-    return persisted.resumeSessionId ?? null;
-  };
-
   return {
     readSessionState,
     writeSessionState,
     hydratePersistedState,
     syncStateToPersist,
-    resolveResumeId,
   };
 }

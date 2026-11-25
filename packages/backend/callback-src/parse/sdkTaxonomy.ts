@@ -125,7 +125,7 @@ function readBackgroundTaskDescriptions(
 }
 
 /** Returns newly seen background task ids from a `background_tasks_changed` payload. */
-export function diffNewBackgroundTaskIds(taskIds: string[]): string[] {
+function diffNewBackgroundTaskIds(taskIds: string[]): string[] {
   const newly: string[] = [];
   for (const id of taskIds) {
     if (!knownBackgroundTaskIds.has(id)) {

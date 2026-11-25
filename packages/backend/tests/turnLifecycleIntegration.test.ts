@@ -1,6 +1,6 @@
 import { TURN_BACKSTOP_ERROR } from "@eva/shared/agentTurnLimits";
 import { convexTest } from "convex-test";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import {
@@ -17,7 +17,6 @@ import {
 } from "../convex/_chat/surfaceAdapters";
 import { loadSessionChat } from "../convex/_sessionChats/helpers";
 import { getTaskRunStreamingEntityId } from "../convex/_taskWorkflow/helpers";
-import { sessionSummaryStreamingEntityId } from "../convex/_chat/agentStreamIds";
 import { hasOpenChatTurn } from "../convex/_chat/turnProjection";
 import { finalizeStaleChatTurn } from "../convex/_chat/stallWatchdog";
 import { shouldWriteTurnLeaseRenewal } from "../convex/_chat/turnLease";
@@ -32,8 +31,8 @@ import {
   noteHeartbeatResponse,
 } from "../callback-src/runtime/turnLease";
 import type { JsonObject } from "../callback-src/types";
+import { modules } from "./_helpers/convexModules";
 
-const modules = import.meta.glob("../convex/**/*.ts");
 
 async function createSessionFixture() {
   const t = convexTest(schema, modules);
@@ -503,7 +502,6 @@ describe("a stale session chat turn torn down by the backstop", () => {
         repoId: session.repoId,
         userId: session.userId,
         title: "Pick",
-        phase: "in_progress",
         rawInput: "pick",
         updatedAt: now,
       });
@@ -519,11 +517,6 @@ describe("a stale session chat turn torn down by the backstop", () => {
       return [
         ...[f.chatId, taskId, projectId, runId, "not-an-id"].map((entityId) =>
           turnAdapterForEntity(ctx.db, { entityId }, visit),
-        ),
-        turnAdapterForEntity(
-          ctx.db,
-          { entityId: f.sessionId, lane: "summary" },
-          visit,
         ),
         turnAdapterForEntity(
           ctx.db,
@@ -545,7 +538,6 @@ describe("a stale session chat turn torn down by the backstop", () => {
       null,
       "run",
       null,
-      "summary",
       "interview",
       null,
     ]);
@@ -673,35 +665,35 @@ describe("expired turns with no owning surface", () => {
 });
 
 /**
- * A one-shot agent on a chat row (session summary, project interview) has a
+ * A one-shot agent on a chat row (the project interview) has a
  * lane, so its turn never reads as, or is superseded by, the chat's turn.
  */
 describe("lane turns stay apart from chat turns", () => {
-  test("a summary turn is not the session's chat turn", async () => {
+  test("an interview turn is not the session's chat turn", async () => {
     const { t, sessionId, chatId } = await createSessionFixture();
     const result = await t.run(async (ctx) => {
       const session = await ctx.db.get(sessionId);
       if (!session) throw new Error("missing session");
       const chatTurn = await findOpenTurn(ctx, chatId);
-      const summaryTurnId = await openTurn(ctx, {
+      const laneTurnId = await openTurn(ctx, {
         entityId: sessionId,
-        lane: "summary",
-        streamingEntityId: sessionSummaryStreamingEntityId(sessionId),
+        lane: "interview",
+        streamingEntityId: String(sessionId),
         model: "claude:sonnet",
         repoId: session.repoId,
       });
       return {
         chatTurnId: chatTurn?._id,
         chatTurnAfter: (await findOpenTurn(ctx, chatId))?._id,
-        summaryTurn: await findOpenTurn(ctx, sessionId, "summary"),
-        summaryTurnId,
+        laneTurn: await findOpenTurn(ctx, sessionId, "interview"),
+        laneTurnId,
         hasChatTurn: await hasOpenChatTurn(ctx.db, sessionId),
       };
     });
-    // Opening the summary turn did not supersede the chat turn.
+    // Opening the lane turn did not supersede the chat turn.
     expect(result.chatTurnAfter).toBe(result.chatTurnId);
-    expect(result.summaryTurn?._id).toBe(result.summaryTurnId);
-    expect(result.summaryTurn?.lane).toBe("summary");
+    expect(result.laneTurn?._id).toBe(result.laneTurnId);
+    expect(result.laneTurn?.lane).toBe("interview");
     expect(result.hasChatTurn).toBe(result.chatTurnId !== undefined);
   });
 });

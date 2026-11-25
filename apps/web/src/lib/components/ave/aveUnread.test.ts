@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { aveHasUnread } from "@/lib/components/ave/aveUnread";
 
 const reply = { role: "assistant" as const, timestamp: 100, finishedAt: 200 };

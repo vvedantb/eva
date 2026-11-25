@@ -61,8 +61,8 @@ export function DocHistoryPanel({
                 onSelectVersion(ver._id === selectedVersionId ? null : ver._id)
               }
               className={cn(
-                "group w-full border-b border-border px-3 py-2.5 text-left transition-colors hover:bg-accent/50",
-                ver._id === selectedVersionId && "bg-accent",
+                "group w-full border-b border-border px-3 py-2.5 text-left transition-colors hover:bg-accent-soft/50",
+                ver._id === selectedVersionId && "bg-accent-soft",
               )}
             >
               <div className="flex items-center justify-between gap-2">

@@ -3,6 +3,8 @@ import { v, type Infer } from "convex/values";
 import type { Doc, Id } from "../_generated/dataModel";
 import { gatherAccessibleRepos } from "../_githubRepos/helpers";
 import { hasRepoAccess } from "../functions";
+import type { ProjectStage } from "@eva/shared/projectStatus";
+import { derivedProjectStage } from "../_projects/taskTable";
 import { entityVisible, filterActiveEntities } from "../numId";
 import { isSessionArchived } from "../_sessions/archive";
 import {
@@ -17,7 +19,6 @@ import {
 import { listSelectableAccountsFor } from "../_userProviderAccounts/listing";
 import {
   ALL_TASK_STATUSES,
-  PROJECT_PHASES,
   SANDBOX_STATUSES,
   getAIModelProvider,
   prOriginValidator,
@@ -311,6 +312,8 @@ export const resolveChatTargetForUser = internalQuery({
       devPort: v.optional(v.number()),
       /** A task or project on its session: the session that holds its sandbox. */
       sandboxSessionId: v.optional(v.id("sessions")),
+      /** A project's own id, or a project task's project. */
+      projectId: v.optional(v.id("projects")),
     }),
   ),
   handler: async (ctx, args) => {
@@ -328,8 +331,8 @@ export const resolveChatTargetForUser = internalQuery({
     if (!repo) return null;
 
     const doc = hit.doc;
-    // A task's or project's sandbox lives on its session (a project task's
-    // on the project's); none before that session exists.
+    // A task's or project's sandbox lives on its own session; none before
+    // that session exists.
     const ownerSession =
       hit.kind === "task"
         ? await findWorkSession(ctx.db, hit.doc)
@@ -345,9 +348,11 @@ export const resolveChatTargetForUser = internalQuery({
       targetId: doc._id,
       numId: doc.numId,
       title: doc.title,
-      // A project tracks a phase where the other two track a status; both
-      // answer the same "where is this up to" question for the caller.
-      status: hit.kind === "project" ? hit.doc.phase : hit.doc.status,
+      // A project's status is derived from its tasks (`projectStatus`).
+      status:
+        hit.kind === "project"
+          ? await derivedProjectStage(ctx.db, hit.doc)
+          : hit.doc.status,
       prUrl: hit.doc.prUrl,
       branchName: hit.kind === "task" ? undefined : hit.doc.branchName,
       repoId,
@@ -360,6 +365,12 @@ export const resolveChatTargetForUser = internalQuery({
       sandboxId: sandboxRow?.sandboxId,
       devPort: sandboxRow?.devPort ?? repo.devPort,
       sandboxSessionId: ownerSession?._id,
+      projectId:
+        hit.kind === "project"
+          ? hit.doc._id
+          : hit.kind === "task"
+            ? hit.doc.projectId
+            : undefined,
     };
   },
 });
@@ -389,7 +400,7 @@ const listedEntityValidator = v.object({
   id: v.string(),
   numId: v.optional(v.number()),
   title: v.string(),
-  /** Lifecycle: a session's sandbox status, a task's status, a project's phase. */
+  /** Lifecycle: a session's sandbox status, a task's status, a project's derived stage. */
   status: v.string(),
   /** Preview VM state, `"closed"` when the entity has never started one. */
   sandboxStatus: v.string(),
@@ -428,10 +439,10 @@ function asTaskStatus(
   return ALL_TASK_STATUSES.find((candidate) => candidate === status);
 }
 
-function asProjectPhase(
-  status: string,
-): (typeof PROJECT_PHASES)[number] | undefined {
-  return PROJECT_PHASES.find((candidate) => candidate === status);
+const PROJECT_STAGES: readonly ProjectStage[] = ["todo", "in_progress", "done"];
+
+function asProjectStage(status: string): ProjectStage | undefined {
+  return PROJECT_STAGES.find((candidate) => candidate === status);
 }
 
 /**
@@ -516,16 +527,20 @@ async function scanProjects(
   take: number,
 ): Promise<Doc<"projects">[]> {
   if (status !== undefined) {
-    const narrowed = asProjectPhase(status);
+    // The stage is derived, so it filters a repo's live projects (few).
+    const narrowed = asProjectStage(status);
     if (narrowed === undefined) return [];
     const rows = await ctx.db
       .query("projects")
-      .withIndex("by_repo_and_phase", (q) =>
-        q.eq("repoId", repoId).eq("phase", narrowed),
+      .withIndex("by_repo_and_deleted", (q) =>
+        q.eq("repoId", repoId).eq("deletedAt", undefined),
       )
       .order("desc")
-      .take(take);
-    return filterActiveEntities(rows);
+      .collect();
+    const stages = await Promise.all(
+      rows.map((row) => derivedProjectStage(ctx.db, row)),
+    );
+    return rows.filter((_, index) => stages[index] === narrowed).slice(0, take);
   }
   return ctx.db
     .query("projects")
@@ -654,22 +669,28 @@ export const listEntitiesForUser = internalQuery({
             }
 
             const docs = await scanProjects(ctx, repoId, args.status, take);
-            for (const doc of docs) {
-              rows.push({
-                kind,
-                id: doc._id,
-                numId: doc.numId,
-                title: doc.title,
-                status: doc.phase,
-                sandboxStatus:
-                  (await projectSandboxStatus(ctx.db, doc)) ?? "closed",
-                isExecuting: projectIsExecuting(doc, openChatEntityIds),
-                prUrl: doc.prUrl,
-                branchName: doc.branchName,
-                updatedAt: doc.updatedAt ?? doc._creationTime,
-                ...columns,
-              });
-            }
+            const projectRows = await Promise.all(
+              docs.map(async (doc) => {
+                const [stage, sandboxStatus] = await Promise.all([
+                  derivedProjectStage(ctx.db, doc),
+                  projectSandboxStatus(ctx.db, doc),
+                ]);
+                return {
+                  kind,
+                  id: doc._id,
+                  numId: doc.numId,
+                  title: doc.title,
+                  status: stage,
+                  sandboxStatus: sandboxStatus ?? "closed",
+                  isExecuting: projectIsExecuting(doc, openChatEntityIds),
+                  prUrl: doc.prUrl,
+                  branchName: doc.branchName,
+                  updatedAt: doc.updatedAt ?? doc._creationTime,
+                  ...columns,
+                };
+              }),
+            );
+            rows.push(...projectRows);
           }),
         );
       }),
@@ -701,6 +722,25 @@ export const listEntitiesForUser = internalQuery({
     // repo, so "more exists" is true even when fewer than `limit` rows came
     // back. Saying so beats a short page that reads as the whole picture.
     return { entities, truncated: rows.length > limit || take < limit };
+  },
+});
+
+/**
+ * A project's derived stage (`projectStatus`), for `get_agent_state`. The
+ * caller has already proven access by reading the project as the user.
+ */
+export const projectStage = internalQuery({
+  args: { projectId: v.string() },
+  returns: v.union(
+    v.literal("todo"),
+    v.literal("in_progress"),
+    v.literal("done"),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const projectId = ctx.db.normalizeId("projects", args.projectId);
+    const project = projectId ? await ctx.db.get(projectId) : null;
+    return project ? await derivedProjectStage(ctx.db, project) : null;
   },
 });
 
@@ -826,13 +866,13 @@ function chatTargetOwner(
   return projectId ? { kind, projectId } : null;
 }
 
-/** A task's PR: its own summary, or its project's for a project task. */
+/** A task's own PR summary (every task owns its PR). */
 async function taskPrUrlById(
   ctx: QueryCtx,
   taskId: Id<"agentTasks">,
 ): Promise<string | undefined> {
   const task = await ctx.db.get(taskId);
-  return task ? await taskPrUrl(ctx.db, task) : undefined;
+  return task ? taskPrUrl(task) : undefined;
 }
 
 /** One pull request linked to a chat, as reported over MCP. */

@@ -1,117 +1,92 @@
 import type { ReactNode } from "react";
-import { tokenTransition } from "@vvedantb/ui";
-import { AnimatePresence, m } from "motion/react";
+import { TabsTransition } from "@vvedantb/ui";
 import type { Id } from "@eva/backend";
-import { ProjectTabs } from "@/lib/components/projects/ProjectTabs";
-import { ProjectActiveLayout } from "@/lib/components/projects/ProjectActiveLayout";
-import type { ProjectMainTab } from "@/lib/components/projects/ProjectMainTabs";
+import {
+  PROJECT_MAIN_TABS,
+  type ProjectMainTab,
+} from "@/lib/components/projects/ProjectMainTabs";
 import { ProjectOverviewTab } from "@/lib/components/projects/ProjectOverviewTab";
-import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
-import type { EntityResolveStatus } from "@/lib/numId";
+import { ProjectTaskView } from "@/lib/components/projects/ProjectTaskView";
+import { entityPathSegment, type EntityResolveStatus } from "@/lib/numId";
 import type { ProjectDetailProject } from "./projectDetailHelpers";
 
 interface ProjectDetailMainContentProps {
   projectId: Id<"projects">;
   project: ProjectDetailProject;
-  isSandboxSurface: boolean;
   mainTab: ProjectMainTab;
-  isDraftOrFinalized: boolean;
-  sandboxContent: ReactNode;
-  streamingActivity: string | undefined;
-  sandboxStartupActivity: string | undefined;
+  /** The coordinator: its chat and rail (Tasks first). */
+  coordinatorContent: ReactNode;
   basePath: string;
-  repoId: Id<"githubRepos">;
+  /** A task is open (`$taskNumId`): it replaces the coordinator. */
+  isTaskOpen: boolean;
   selectedTaskId?: Id<"agentTasks">;
+  /** Resolve status of selectedTaskId's numId; undefined when no task is selected. */
   selectedTaskStatus?: EntityResolveStatus;
-  detailTab?: TaskDetailTab;
 }
 
+/**
+ * The project body: Overview, else the coordinator — or, with a task open,
+ * that task's own chat and sandbox.
+ */
 export function ProjectDetailMainContent({
   projectId,
   project,
-  isSandboxSurface,
   mainTab,
-  isDraftOrFinalized,
-  sandboxContent,
-  streamingActivity,
-  sandboxStartupActivity,
+  coordinatorContent,
   basePath,
-  repoId,
+  isTaskOpen,
   selectedTaskId,
   selectedTaskStatus,
-  detailTab,
 }: ProjectDetailMainContentProps) {
+  const projectSegment = entityPathSegment(project);
+  const projectHref = projectSegment
+    ? `${basePath}/projects/${projectSegment}`
+    : `${basePath}/projects`;
+  const view =
+    mainTab === "overview"
+      ? "overview"
+      : isTaskOpen
+        ? "task"
+        : "coordinator";
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <AnimatePresence mode="wait" initial={false}>
-        {isSandboxSurface ? (
-          <m.div
-            key="sandbox"
-            className="min-h-0 flex-1 overflow-hidden"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={tokenTransition.fast}
-          >
-            {sandboxContent}
-          </m.div>
-        ) : mainTab === "overview" ? (
-          <m.div
-            key="overview"
-            className="flex min-h-0 flex-1 flex-col"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={tokenTransition.fast}
-          >
-            <ProjectOverviewTab
-              projectId={projectId}
-              title={project.title}
-              description={project.description}
-            />
-          </m.div>
-        ) : isDraftOrFinalized ? (
-          <m.div
-            key="plan"
-            className="flex min-h-0 flex-1 flex-col"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={tokenTransition.fast}
-          >
-            <ProjectTabs
-              projectId={projectId}
-              projectPhase={project.phase}
-              interviewRunning={project.interview !== undefined}
-              rawInput={project.rawInput}
-              generatedSpec={project.generatedSpec}
-              conversationHistory={project.conversationHistory}
-              streamingActivity={streamingActivity}
-              sandboxStartupActivity={sandboxStartupActivity}
-              basePath={basePath}
-              repoId={repoId}
-            />
-          </m.div>
+      <TabsTransition
+        value={mainTab}
+        order={PROJECT_MAIN_TABS}
+        className="flex min-h-0 flex-1 flex-col"
+        panelClassName="flex min-h-0 flex-1 flex-col overflow-hidden"
+      >
+        {view === "overview" ? (
+          <ProjectOverviewTab
+            projectId={projectId}
+            repoId={project.repoId}
+            title={project.title}
+            description={project.description}
+            documentsHref={
+              projectSegment
+                ? `${projectHref}/sandbox/documents`
+                : undefined
+            }
+          />
+        ) : view === "task" ? (
+          <ProjectTaskView
+            projectId={projectId}
+            repoId={project.repoId}
+            projectNumId={project.numId}
+            coordinatorHref={`${projectHref}/sandbox/tasks`}
+            documentsHref={
+              projectSegment
+                ? `${projectHref}/sandbox/documents`
+                : undefined
+            }
+            taskId={selectedTaskId}
+            taskStatus={selectedTaskStatus}
+          />
         ) : (
-          <m.div
-            key="tasks"
-            className="flex min-h-0 flex-1 flex-col"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={tokenTransition.fast}
-          >
-            <ProjectActiveLayout
-              projectId={projectId}
-              project={project}
-              basePath={basePath}
-              selectedTaskId={selectedTaskId}
-              selectedTaskStatus={selectedTaskStatus}
-              detailTab={detailTab}
-            />
-          </m.div>
+          coordinatorContent
         )}
-      </AnimatePresence>
+      </TabsTransition>
     </div>
   );
 }

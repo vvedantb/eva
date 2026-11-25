@@ -15,6 +15,40 @@ const DEFAULT_VERSION_NAME = "0.1.0";
 const DEFAULT_VERSION_CODE = 1;
 const GOOGLE_SERVICES_FILE = "./google-services.json";
 
+/**
+ * Extra R8 keep rules for release builds. RN and Expo modules ship their own
+ * consumer rules; these only cover reflection and JNI that those miss.
+ * Convex is pure JS and needs no rule.
+ */
+const PROGUARD_RULES = `
+# Hermes and React Native: JNI looks these up by name.
+-keep class com.facebook.hermes.** { *; }
+-keep class com.facebook.jni.** { *; }
+-keep class com.facebook.react.bridge.** { *; }
+-keep class com.facebook.react.turbomodule.** { *; }
+-keep @com.facebook.proguard.annotations.DoNotStrip class * { *; }
+-keepclassmembers class * { @com.facebook.proguard.annotations.DoNotStrip *; }
+-keepclassmembers class * { @com.facebook.react.bridge.ReactMethod *; }
+
+# Expo modules: the runtime finds modules and their members by reflection.
+-keep class expo.modules.** { *; }
+-keep class * extends expo.modules.kotlin.modules.Module { *; }
+-keep @expo.modules.core.interfaces.DoNotStrip class * { *; }
+
+# Reanimated and worklets: native code calls into these classes.
+-keep class com.swmansion.reanimated.** { *; }
+-keep class com.swmansion.worklets.** { *; }
+
+# Clerk (@clerk/expo): native SDK classes are loaded through the Expo bridge.
+-keep class com.clerk.** { *; }
+
+# Networking: optional TLS providers are not on the classpath.
+-dontwarn okhttp3.internal.platform.**
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**
+`;
+
 function versionCode(): number {
   const raw = process.env["VERSION_CODE"];
   const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN;
@@ -53,6 +87,18 @@ export default (_context: ConfigContext): ExpoConfig => ({
     "expo-notifications",
     // Inline players for the agent's screen recordings (`@vvedantb/native-ui/video`).
     "expo-video",
+    [
+      "expo-build-properties",
+      {
+        android: {
+          // Survive prebuild even without the release bin's gradle.properties edit.
+          buildArchs: ["arm64-v8a"],
+          enableMinifyInReleaseBuilds: true,
+          enableShrinkResourcesInReleaseBuilds: true,
+          extraProguardRules: PROGUARD_RULES,
+        },
+      },
+    ],
     "./plugins/withReleaseSigning.js",
   ],
   experiments: {

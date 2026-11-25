@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { pickDefaultVisibleAppRepo } from "../convex/_githubRepos/sandboxRepoPick";
 
 type Repo = {

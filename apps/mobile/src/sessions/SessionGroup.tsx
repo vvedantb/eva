@@ -374,10 +374,10 @@ export function SessionListRow({
 }
 
 /** The web `SessionPrIcon`: a pull-request icon in the PR state's tone, at 14 to sit with the 14 title. */
-function PrIcon({ state, scheme }: { state: PrState | undefined; scheme: Scheme }) {
+export function PrIcon({ state, scheme, size = 14 }: { state: PrState | undefined; scheme: Scheme; size?: number }) {
   return (
     <IconGitPullRequest
-      size={14}
+      size={size}
       color={EVA_THEME[scheme][PR_TONE_COLOUR[prStateTone(state)]]}
       accessibilityLabel={`PR: ${prStateLabel(state)}`}
     />
@@ -389,7 +389,7 @@ function PrIcon({ state, scheme }: { state: PrState | undefined; scheme: Scheme 
  * else its initial on its web tile colour (`repoTileSlot`, a 12% tint).
  * 16 rather than the web 14, to sit with the 14 title, as the chat header tile.
  */
-function RepoAppMark({ repo, scheme }: { repo: RepoRow; scheme: Scheme }) {
+export function RepoAppMark({ repo, scheme }: { repo: RepoRow; scheme: Scheme }) {
   const label = repoDisplayLabel(repo);
   const tile = EVA_THEME[scheme][`cat${repoTileSlot(`${repo.owner}/${repo.name}/${label}`)}`];
   return (

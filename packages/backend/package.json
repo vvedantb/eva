@@ -10,15 +10,13 @@
     "dev:personal": "cross-env CONVEX_DEPLOYMENT=dev:elegant-snail-639 convex dev",
     "dev:evalucom": "cross-env CONVEX_DEPLOYMENT=dev:good-mule-506 convex dev",
     "dev:all": "concurrently -n personal,evalucom -c blue,green \"pnpm dev:personal\" \"pnpm dev:evalucom\"",
-    "typecheck": "tsrs --noEmit --fast -p convex/tsconfig.json",
-    "typecheck:callback": "tsrs --noEmit --fast -p callback-src/tsconfig.json",
-    "typecheck:annotation": "tsrs --noEmit --fast -p preview-annotation-src/tsconfig.json",
+    "typecheck": "tsrs --noEmit --fast -p convex/tsconfig.json && tsrs --noEmit --fast -p callback-src/tsconfig.json && tsrs --noEmit --fast -p callback-src/tests/tsconfig.json && tsrs --noEmit --fast -p preview-annotation-src/tsconfig.json",
     "build:callback": "node scripts/build-callback-script.mjs",
     "build:annotation": "node scripts/build-annotation-script.mjs",
     "sync:prod-to-dev": "node scripts/sync-prod-to-dev.mjs",
     "sync:prod-to-local": "node scripts/sync-to-local.mjs",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "bun test --parallel --timings=test-timings.json",
+    "test:watch": "bun test --watch",
     "predeploy": "pnpm run build:callback && pnpm run build:annotation",
     "deploy": "convex deploy"
   },
@@ -64,6 +62,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@types/bun": "^1.4.4",
     "@types/node": "^22.18.5",
     "@types/pg": "^8.20.0",
     "concurrently": "^9.1.2",
@@ -71,7 +70,6 @@
     "cross-env": "^7.0.3",
     "esbuild": "^0.25.0",
     "html2canvas": "^1.4.1",
-    "typescript": "7.0.1-rc",
-    "vitest": "^3.2.4"
+    "typescript": "7.0.1-rc"
   }
 }

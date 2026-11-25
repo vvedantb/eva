@@ -45,14 +45,12 @@ const TIME_RANGE_MS: Record<Exclude<QuickTaskTimeRange, "all">, number> = {
 };
 
 /**
- * What the list shows. `project` is "all", "none" (no project, the default:
- * quick tasks are the ones outside projects) or a project id; `user` (the
- * creator) is "all" or a user id; `assignee` (the code reviewer) is "all",
- * "unassigned" or a user id.
+ * What the list shows. `user` (the creator) is "all" or a user id; `assignee`
+ * (the code reviewer) is "all", "unassigned" or a user id. Project tasks never
+ * reach the list (`agentTasks.getAllTasks`), so there is no project filter.
  */
 export interface QuickTaskListFilters {
   q: string;
-  project: string;
   user: string;
   assignee: string;
   tags: string[];
@@ -62,11 +60,10 @@ export interface QuickTaskListFilters {
   sortDir: QuickTaskSortDir;
 }
 
-export type QuickTaskFilterKey = "project" | "user" | "assignee" | "statuses" | "tags" | "timeRange";
+export type QuickTaskFilterKey = "user" | "assignee" | "statuses" | "tags" | "timeRange";
 
 /** The filters "no filters applied" means. Read-only: spread or copy before handing the arrays on. */
 export const QUICK_TASK_FILTER_DEFAULTS: Readonly<Pick<QuickTaskListFilters, QuickTaskFilterKey>> = {
-  project: "none",
   user: "all",
   assignee: "all",
   tags: [],
@@ -120,9 +117,6 @@ export function applyQuickTaskFilters<T extends FilterableQuickTask>(
     if (query && !task.title.toLowerCase().includes(query) && !task.description?.toLowerCase().includes(query)) {
       return false;
     }
-    if (filters.project === "none" ? task.projectId !== undefined : filters.project !== "all" && task.projectId !== filters.project) {
-      return false;
-    }
     if (filters.user !== "all" && task.createdBy !== filters.user) return false;
     if (filters.assignee === "unassigned" ? task.assignedTo !== undefined : filters.assignee !== "all" && task.assignedTo !== filters.assignee) {
       return false;
@@ -156,8 +150,9 @@ export function applyQuickTaskFilters<T extends FilterableQuickTask>(
 
 /**
  * The user's quick-task drafts the To Do group shows above its tasks: none
- * when To Do is filtered out, else the ones every other filter keeps, in the
- * list's sort order (a draft is filtered as if it were a To Do task).
+ * when To Do is filtered out, else the ones outside a project that every
+ * filter keeps, in the list's sort order (a draft is filtered as if it were a
+ * To Do task).
  */
 export function quickTaskTodoDrafts<T extends FilterableQuickTask>(
   drafts: readonly T[],
@@ -165,7 +160,7 @@ export function quickTaskTodoDrafts<T extends FilterableQuickTask>(
   now = Date.now(),
 ): T[] {
   if (!filters.statuses.includes("todo")) return [];
-  const asTodo = drafts.map((draft) => ({ ...draft, status: "todo" as const, draft }));
+  const asTodo = drafts.filter((draft) => draft.projectId === undefined).map((draft) => ({ ...draft, status: "todo" as const, draft }));
   return applyQuickTaskFilters(asTodo, filters, now).map((row) => row.draft);
 }
 
@@ -177,7 +172,6 @@ export function hasActiveQuickTaskFilters(filters: QuickTaskListFilters): boolea
 /** The filters that differ from their defaults, in the web chip order. */
 export function activeQuickTaskFilterKeys(filters: QuickTaskListFilters): QuickTaskFilterKey[] {
   const keys: QuickTaskFilterKey[] = [];
-  if (filters.project !== QUICK_TASK_FILTER_DEFAULTS.project) keys.push("project");
   if (filters.user !== QUICK_TASK_FILTER_DEFAULTS.user) keys.push("user");
   if (filters.assignee !== QUICK_TASK_FILTER_DEFAULTS.assignee) keys.push("assignee");
   if (filters.statuses.length !== TASK_STATUSES.length) keys.push("statuses");
@@ -189,8 +183,6 @@ export function activeQuickTaskFilterKeys(filters: QuickTaskListFilters): QuickT
 /** The patch that clears one filter back to its default. */
 export function clearedQuickTaskFilter(key: QuickTaskFilterKey): Partial<QuickTaskListFilters> {
   switch (key) {
-    case "project":
-      return { project: QUICK_TASK_FILTER_DEFAULTS.project };
     case "user":
       return { user: QUICK_TASK_FILTER_DEFAULTS.user };
     case "assignee":
@@ -218,15 +210,10 @@ export type QuickTaskFilterChip = { key: QuickTaskFilterKey; text: string; perso
 /** The active filters as the web chips name them. */
 export function quickTaskFilterChips(
   filters: QuickTaskListFilters,
-  names: { project: (id: string) => string | undefined; user: (id: string) => string | undefined },
+  names: { user: (id: string) => string | undefined },
 ): QuickTaskFilterChip[] {
   return activeQuickTaskFilterKeys(filters).map((key): QuickTaskFilterChip => {
     switch (key) {
-      case "project":
-        return {
-          key,
-          text: filters.project === "all" ? "All Projects" : `Project: ${names.project(filters.project) ?? "Project"}`,
-        };
       case "user":
         return { key, text: "Created by: ", person: names.user(filters.user) ?? "User" };
       case "assignee":

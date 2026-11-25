@@ -8,7 +8,6 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuTrigger,
-  tokenTransition,
   toast,
   useRequestConfirm,
 } from "@vvedantb/ui";
@@ -30,6 +29,7 @@ import {
   useSendSessionForReview,
 } from "@/routes/_repo/$owner/$repo/sessions/_components/SessionReviewModal";
 import { canSendSessionForReview } from "@/routes/_repo/$owner/$repo/sessions/_utils/sessionReadOnly";
+import { sidebarRowPresence } from "@/lib/components/sidebar/_utils/sidebarRowPresence";
 
 interface SessionItem {
   _id: Id<"sessions">;
@@ -121,10 +121,7 @@ export function SidebarSessionRow<T extends SessionItem>({
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <m.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={tokenTransition.fast}
+            {...sidebarRowPresence}
           >
             <SharedLayoutNavSurface
               itemId={session._id}

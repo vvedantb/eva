@@ -10,6 +10,7 @@ import type { SandboxChatBinding } from "@/lib/components/chat/sandboxChatBindin
 import { useOwnedChatBinding } from "@/lib/components/chat/useOwnedChatBinding";
 import type { OwnedSession } from "@/lib/components/sandbox/useOwnedSession";
 import { useProjectOwnerProviderAccounts } from "@/lib/hooks/useAvailableAiModels";
+import { CoordinatorPausedBanner } from "./CoordinatorPausedBanner";
 
 export function ProjectSandboxChatPanel({
   projectId,
@@ -20,7 +21,16 @@ export function ProjectSandboxChatPanel({
   projectSession: OwnedSession;
 }) {
   const binding = useProjectChatBinding(projectId, projectSession);
-  return <SandboxChatPanel binding={binding} {...panel} />;
+  // The coordinator chat only: its paused line, and Eva's replies as
+  // bubbles (it only talks and delegates, so there are no diffs to frame).
+  return (
+    <SandboxChatPanel
+      binding={binding}
+      {...panel}
+      preInputBanner={<CoordinatorPausedBanner projectId={projectId} />}
+      assistantBubbles
+    />
+  );
 }
 
 /**

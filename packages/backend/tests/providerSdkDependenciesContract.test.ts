@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { CURSOR_SDK_LOCAL_MODEL_CATALOG_ENV } from "../callback-src/providers/cursorSdk.js";
 
 // The published bundle Eva actually imports (`dist/esm` next to the resolved

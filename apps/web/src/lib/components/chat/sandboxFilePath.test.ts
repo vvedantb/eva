@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "bun:test";
 import { toRepoRelativePath, toSandboxFilePath } from "@eva/shared";
 
 test("toSandboxFilePath prefixes repo-relative paths for ?file=", () => {
