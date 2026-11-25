@@ -5,6 +5,11 @@
 Date: 2026-11-25
 
 In a project's coordinator chat, a message that `@`-mentions only teammates is a quiet comment: it is stored and the teammates are notified, but no Eva turn starts (`routePersonChatMessage` returns `posted`; `startExecute` returns `"posted"`; `sendSessionChatMessage` does not queue). `@Eva` (new picker row "Eva · Coordinator", token id `eva_coordinator_mention`, web and phone) or no mention still wakes Eva; `@Eva` with teammates wakes her and the coordinator rules tell her to answer only her part. Rule: `chatMessageRoute` in `@eva/shared`. Inbox → Needs you now lists your unread chat `@`-mentions under Questions; posting in that chat marks them read (`notifyChatMentions`). Plan: `internal/plans/todo/projects-v2-chat.md`.
+## Projects v2 C: approved Triage goes to the coordinator
+
+Date: 2026-11-25
+
+Approving Triage items (web, phone, Inbox) no longer starts them. `approveProjectTasks` stamps `approvedAt` and new `agentTasks.handedToCoordinatorAt`, and requests one coordinator wake (new reason `triage`, delivered at once) listing the items and who added them. The scheduler never starts a handed task (`ProjectTaskFacts.withCoordinator`). New coordinator-only MCP tools: `start_task` (starts a handed item as its own task) and `merge_task_into` (cancels a handed item into an open task of the same project, stored in new `agentTasks.mergedIntoTaskId`; refuses itself, a finished or merged target and other projects). `COORDINATOR_RULES` tell the coordinator to group handed items by area, add each to an open task or start it, and reply with where each went. Task rows show "With Eva" while handed and "Added to #N" once merged.
 
 ## Projects: old project PRs become threads
 

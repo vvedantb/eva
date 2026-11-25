@@ -12,7 +12,10 @@ import { startTaskRun } from "../_taskWorkflow/startRun";
 import { latestTaskRun } from "./runSettings";
 import { resolveTaskWorkflowBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { findOwnedSession, type OwnedSessionOwner } from "../_sessions/owner";
-import { ownedSessionBusy } from "../_sessions/ownedSession";
+import {
+  ownedSessionBusy,
+  syncOwnedSessionWithTaskStatus,
+} from "../_sessions/ownedSession";
 import { isCoordinatorPaused, requestCoordinatorWake } from "./coordinatorWake";
 import { findOpenAsk } from "./reports";
 import { RUN_WAITING_FOR_ANSWER } from "../_taskWorkflow/helpers";
@@ -137,6 +140,8 @@ export async function projectTaskFacts(
     status: task.status,
     prState: task.prState,
     approved: task.approvedAt !== undefined,
+    withCoordinator:
+      task.status === "todo" && task.handedToCoordinatorAt !== undefined,
     halted,
     usageLimited,
     runPending,
@@ -282,24 +287,129 @@ export function isBatchFinished(tasks: readonly ProjectTaskFacts[]): boolean {
 }
 
 /**
- * Marks `taskIds` (todo tasks of this project) approved; the ones already
- * approved keep their time. Refuses a task of another project.
+ * A person approves `taskIds` (todo tasks of this project waiting in Triage)
+ * and hands them to the coordinator (decision 4, v2): each is approved and
+ * marked `handedToCoordinatorAt`, so the scheduler never starts it; one
+ * coordinator wake lists the handed tasks, and the coordinator starts each
+ * (`start_task`) or adds it to an open task (`merge_task_into`). Tasks
+ * already approved keep their state. Refuses a task of another project.
+ * Returns the tasks it handed over.
  */
 export async function approveTasks(
   ctx: MutationCtx,
   projectId: Id<"projects">,
   taskIds: readonly Id<"agentTasks">[],
-): Promise<void> {
+): Promise<Doc<"agentTasks">[]> {
   const now = Date.now();
-  for (const taskId of taskIds) {
-    const task = await ctx.db.get(taskId);
+  const tasks = await Promise.all(taskIds.map((taskId) => ctx.db.get(taskId)));
+  const handed: Doc<"agentTasks">[] = [];
+  for (const task of tasks) {
     if (!task || task.projectId !== projectId || isEntityDeleted(task)) {
       throw new Error("Task not found in this project");
     }
     if (task.status === "todo" && task.approvedAt === undefined) {
-      await ctx.db.patch(taskId, { approvedAt: now, updatedAt: now });
+      await ctx.db.patch(task._id, {
+        approvedAt: now,
+        handedToCoordinatorAt: now,
+        updatedAt: now,
+      });
+      handed.push(task);
     }
   }
+  if (handed.length === 0) return handed;
+  const authors = await Promise.all(
+    handed.map((task) => ctx.db.get(task.createdBy)),
+  );
+  const lines = handed.map((task, index) => {
+    const author = authors[index];
+    const by = author?.firstName ?? author?.fullName;
+    return `- ${taskLabel(task)}${by ? ` (added by ${by})` : ""}`;
+  });
+  await requestCoordinatorWake(ctx, {
+    projectId,
+    reason: "triage",
+    key: `triage:${now}:${handed.map((task) => task._id).join(",")}`,
+    text: `A person approved ${handed.length === 1 ? "this Triage item" : `these ${handed.length} Triage items`} and handed ${handed.length === 1 ? "it" : "them"} to you. Group them by area: add each to an open task that covers its area (send_chat_message to that task, then merge_task_into), or start it as its own task (start_task). Then reply with where each one went.\n${lines.join("\n")}`,
+  });
+  return handed;
+}
+
+/** A todo task of `projectId`, or an error the coordinator can read. */
+async function coordinatorTodoTask(
+  ctx: MutationCtx,
+  projectId: Id<"projects">,
+  taskId: Id<"agentTasks">,
+): Promise<Doc<"agentTasks">> {
+  const task = await ctx.db.get(taskId);
+  if (!task || task.projectId !== projectId || isEntityDeleted(task)) {
+    throw new Error("That task is not part of this project.");
+  }
+  if (task.status !== "todo" || task.approvedAt === undefined) {
+    throw new Error(
+      "Only an approved task that has not started yet can be started or merged.",
+    );
+  }
+  return task;
+}
+
+/**
+ * The coordinator starts a Triage item a person handed to it (`start_task`):
+ * it stops being held, so the scheduler starts it like any approved task.
+ */
+export async function startHandedTask(
+  ctx: MutationCtx,
+  projectId: Id<"projects">,
+  taskId: Id<"agentTasks">,
+): Promise<void> {
+  const task = await coordinatorTodoTask(ctx, projectId, taskId);
+  if (task.handedToCoordinatorAt !== undefined) {
+    await ctx.db.patch(task._id, {
+      handedToCoordinatorAt: undefined,
+      updatedAt: Date.now(),
+    });
+  }
+  await scheduleReadyProjectTasks(ctx, projectId);
+}
+
+/**
+ * The coordinator adds a handed Triage item to an open task of the same
+ * project (`merge_task_into`): the item is cancelled and remembers the task
+ * it went to ("Added to #N"). The coordinator gives the target task the item
+ * itself (`send_chat_message`). Refuses a finished, cancelled or merged
+ * target, the item itself, and a task of another project.
+ */
+export async function mergeHandedTask(
+  ctx: MutationCtx,
+  projectId: Id<"projects">,
+  taskId: Id<"agentTasks">,
+  intoTaskId: Id<"agentTasks">,
+): Promise<Doc<"agentTasks">> {
+  const task = await coordinatorTodoTask(ctx, projectId, taskId);
+  if (intoTaskId === taskId) {
+    throw new Error("A task cannot be merged into itself.");
+  }
+  const into = await ctx.db.get(intoTaskId);
+  if (!into || into.projectId !== projectId || isEntityDeleted(into)) {
+    throw new Error("The target task is not part of this project.");
+  }
+  if (
+    into.status === "done" ||
+    into.status === "cancelled" ||
+    into.prState === "merged" ||
+    into.prState === "closed"
+  ) {
+    throw new Error(
+      "The target task is finished. Pick an open task, or start this one with start_task.",
+    );
+  }
+  await ctx.db.patch(task._id, {
+    status: "cancelled",
+    mergedIntoTaskId: into._id,
+    handedToCoordinatorAt: undefined,
+    updatedAt: Date.now(),
+  });
+  await syncOwnedSessionWithTaskStatus(ctx, task, task.status, "cancelled");
+  return into;
 }
 
 /**

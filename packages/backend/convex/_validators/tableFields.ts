@@ -669,6 +669,18 @@ export const agentTaskFields = {
    * Absent on quick tasks and on project tasks waiting in Triage.
    */
   approvedAt: v.optional(v.number()),
+  /**
+   * When a person's Triage approval handed this task to the coordinator
+   * (v2 PR C). While set, the scheduler never starts the task: the
+   * coordinator starts it (`start_task`) or adds it to an open task
+   * (`merge_task_into`). Cleared when the coordinator starts it.
+   */
+  handedToCoordinatorAt: v.optional(v.number()),
+  /**
+   * The open task the coordinator added this Triage item to
+   * (`merge_task_into`). The item itself is cancelled ("Added to #N").
+   */
+  mergedIntoTaskId: v.optional(v.id("agentTasks")),
   /** Restarts the coordinator spent on this failed task (at most 1). */
   coordinatorRetries: v.optional(v.number()),
   /**
@@ -2252,6 +2264,7 @@ export const projectCoordinatorWakeFields = {
     v.literal("ask"),
     v.literal("failed"),
     v.literal("batch_done"),
+    v.literal("triage"),
   ),
   key: v.string(),
   /** One line for the coordinator's wake-up message. */

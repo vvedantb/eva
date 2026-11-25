@@ -73,6 +73,9 @@ export const NEEDS_YOU_LABELS: Record<NeedsYouReason, string> = {
 /** A task that asked its coordinator a question and waits for the answer. */
 export const WAITING_FOR_COORDINATOR_LABEL = "Waiting for coordinator";
 
+/** An approved Triage item the coordinator has not placed yet. */
+export const WITH_COORDINATOR_LABEL = "With Eva";
+
 /**
  * The delete confirm's note: `projects.remove` keeps a project's child tasks
  * as quick tasks (it refuses while one runs, and says so).
@@ -99,6 +102,8 @@ export interface ProjectTaskRow {
   status: Doc<"agentTasks">["status"];
   prState?: Doc<"agentTasks">["prState"];
   approvedAt?: number;
+  /** A Triage approval handed it to the coordinator (`withCoordinator`). */
+  handedToCoordinatorAt?: number;
   run?: Doc<"agentTasks">["run"];
   coordinatorRetries?: number;
   /** A task in a repo the caller cannot access: only status fields are set. */
@@ -128,6 +133,8 @@ export function projectTaskFactsFromRow(
     status: row.status,
     prState: row.prState,
     approved: row.locked === true || row.approvedAt !== undefined,
+    withCoordinator:
+      row.status === "todo" && row.handedToCoordinatorAt !== undefined,
     halted: failed && !runPending ? "failed" : undefined,
     usageLimited: false,
     runPending,
@@ -159,6 +166,7 @@ export function projectTaskView(
     displayStatus: projectTaskDisplayStatus(facts),
     needsYou: projectTaskNeedsYou(facts),
     waitingForCoordinator: projectTaskWaitsForCoordinator(facts),
+    withCoordinator: facts.withCoordinator === true,
   };
 }
 
@@ -167,6 +175,8 @@ export interface ProjectTaskView {
   displayStatus: ProjectTaskDisplayStatus;
   needsYou: NeedsYouReason | undefined;
   waitingForCoordinator: boolean;
+  /** Handed to the coordinator by a Triage approval; not started yet. */
+  withCoordinator?: boolean;
 }
 
 /** What `listTaskReports` returns for one report or ask. */
@@ -276,6 +286,8 @@ export interface SummarizableProjectTaskRow {
   phaseLabel?: string;
   prUrl?: string;
   prState?: Doc<"agentTasks">["prState"];
+  /** The open task the coordinator added this Triage item to. */
+  mergedIntoTaskId?: string;
 }
 
 /** "#9003" from a GitHub PR URL, else the URL's last path part. */
@@ -289,7 +301,12 @@ export function prShortLabel(prUrl: string): string {
 function projectTaskReason(
   row: SummarizableProjectTaskRow,
   view: ProjectTaskView,
-  facts: { ask: string | undefined; failed: boolean; authorName: string | undefined },
+  facts: {
+    ask: string | undefined;
+    failed: boolean;
+    authorName: string | undefined;
+    mergedIntoNumId: number | undefined;
+  },
 ): string {
   switch (view.displayStatus) {
     case "triage":
@@ -301,9 +318,15 @@ function projectTaskReason(
         ? WAITING_FOR_COORDINATOR_LABEL
         : PROJECT_TASK_DISPLAY_STATUS_LABELS.working;
     case "idle":
-      return "Waiting for a free slot";
+      return view.withCoordinator === true
+        ? WITH_COORDINATOR_LABEL
+        : "Waiting for a free slot";
     case "archived":
-      if (row.status === "cancelled") return "Cancelled";
+      if (row.status === "cancelled") {
+        return facts.mergedIntoNumId !== undefined
+          ? `Added to #${facts.mergedIntoNumId}`
+          : "Cancelled";
+      }
       return row.prState === "merged" ? "Merged" : "Done";
     case "blocked":
       break;
@@ -334,6 +357,8 @@ export function projectTaskSummaryLine(
     authorName: string | undefined;
     /** Set only when the task's repo differs from the project's home repo. */
     otherRepoLabel: string | undefined;
+    /** The task number of a task, by id: names a merged item's target. */
+    numIdOf?: (taskId: string) => number | undefined;
   },
 ): string {
   const reports = extra.notes?.reports.length ?? 0;
@@ -343,6 +368,10 @@ export function projectTaskSummaryLine(
       ask: extra.notes?.ask,
       failed: extra.failed,
       authorName: extra.authorName,
+      mergedIntoNumId:
+        row.mergedIntoTaskId !== undefined
+          ? extra.numIdOf?.(row.mergedIntoTaskId)
+          : undefined,
     }),
     extra.otherRepoLabel,
     row.phaseLabel,
