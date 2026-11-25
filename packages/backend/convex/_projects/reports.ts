@@ -14,7 +14,7 @@ import {
 } from "../functions";
 import { projectTaskReportFields } from "../validators";
 import { isEntityDeleted } from "../numId";
-import { chatOwner, findOwnedSession } from "../_sessions/owner";
+import { sessionOwner, findOwnedSession } from "../_sessions/owner";
 import { ensureTaskChat } from "../_sessions/ownedSession";
 import type { SessionChatContext } from "../_sessionChats/helpers";
 import {
@@ -196,7 +196,7 @@ export async function routePersonChatMessage(
   },
 ): Promise<boolean> {
   const { chat, session } = params.context;
-  const owner = chatOwner(chat, session);
+  const owner = sessionOwner(session);
   if (owner.kind === "project") {
     await releaseHeldCoordinatorWakes(ctx, owner.projectId);
     return false;

@@ -6,7 +6,7 @@ import { cleanUpStaleRun } from "./recovery";
 import { clearTaskRunStreaming } from "./helpers";
 import { RUN_TIMEOUT_MS } from "./staleness";
 import { finishTaskRun, taskRunWorkflowId } from "../_agentTasks/runState";
-import { recomputeProjectPhase } from "../functions";
+import { onProjectTasksChanged } from "../functions";
 
 const RUN_TIMEOUT_MESSAGE = `Run timed out after ${RUN_TIMEOUT_MS / 3_600_000} hours`;
 
@@ -62,7 +62,7 @@ export const handleStaleRun = internalMutation({
       await finishTaskRun(ctx, args.taskId, undefined);
       // The task left `in_progress`: its project may start the next ones.
       if (task.projectId !== undefined) {
-        await recomputeProjectPhase(ctx, task.projectId);
+        await onProjectTasksChanged(ctx, task.projectId);
       }
     }
 

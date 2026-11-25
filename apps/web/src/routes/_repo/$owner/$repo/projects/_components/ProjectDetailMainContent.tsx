@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { TabsTransition } from "@vvedantb/ui";
 import type { Id } from "@eva/backend";
-import { ProjectTabs } from "@/lib/components/projects/ProjectTabs";
 import {
   PROJECT_MAIN_TABS,
   type ProjectMainTab,
@@ -15,13 +14,9 @@ interface ProjectDetailMainContentProps {
   projectId: Id<"projects">;
   project: ProjectDetailProject;
   mainTab: ProjectMainTab;
-  isDraftOrFinalized: boolean;
   /** The coordinator: its chat and rail (Tasks first). */
   coordinatorContent: ReactNode;
-  streamingActivity: string | undefined;
-  sandboxStartupActivity: string | undefined;
   basePath: string;
-  repoId: Id<"githubRepos">;
   /** A task is open (`$taskNumId`): it replaces the coordinator. */
   isTaskOpen: boolean;
   selectedTaskId?: Id<"agentTasks">;
@@ -30,19 +25,15 @@ interface ProjectDetailMainContentProps {
 }
 
 /**
- * The project body: Overview, the Plan while a project still plans, else the
- * coordinator — or, with a task open, that task's own chat and sandbox.
+ * The project body: Overview, else the coordinator — or, with a task open,
+ * that task's own chat and sandbox.
  */
 export function ProjectDetailMainContent({
   projectId,
   project,
   mainTab,
-  isDraftOrFinalized,
   coordinatorContent,
-  streamingActivity,
-  sandboxStartupActivity,
   basePath,
-  repoId,
   isTaskOpen,
   selectedTaskId,
   selectedTaskStatus,
@@ -54,11 +45,9 @@ export function ProjectDetailMainContent({
   const view =
     mainTab === "overview"
       ? "overview"
-      : isDraftOrFinalized
-        ? "plan"
-        : isTaskOpen
-          ? "task"
-          : "coordinator";
+      : isTaskOpen
+        ? "task"
+        : "coordinator";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -71,7 +60,7 @@ export function ProjectDetailMainContent({
         {view === "overview" ? (
           <ProjectOverviewTab
             projectId={projectId}
-            repoId={repoId}
+            repoId={project.repoId}
             title={project.title}
             description={project.description}
             documentsHref={
@@ -79,19 +68,6 @@ export function ProjectDetailMainContent({
                 ? `${projectHref}/sandbox/documents`
                 : undefined
             }
-          />
-        ) : view === "plan" ? (
-          <ProjectTabs
-            projectId={projectId}
-            projectPhase={project.phase}
-            interviewRunning={project.interview !== undefined}
-            rawInput={project.rawInput}
-            generatedSpec={project.generatedSpec}
-            conversationHistory={project.conversationHistory}
-            streamingActivity={streamingActivity}
-            sandboxStartupActivity={sandboxStartupActivity}
-            basePath={basePath}
-            repoId={repoId}
           />
         ) : view === "task" ? (
           <ProjectTaskView

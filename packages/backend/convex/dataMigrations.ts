@@ -379,3 +379,60 @@ export const clearProjectCodeReviewer = dataMigrations.define({
     return { codeReviewer: undefined };
   },
 });
+
+/**
+ * Clears what the old project interview, spec, build and stored phase left
+ * on a project, so those fields can leave the schema (PR 3b). Per project:
+ * its `projectDetails` row (interview transcript and spec) is deleted, the
+ * legacy fields are cleared, and its coordinator session's chats drop the
+ * old `sessionChats.taskId` link. Kept: `branchName` and `branchVersion`
+ * (they name the coordinator session's branch), `members` (still edited on
+ * the web) and the PR summary (`syncOwnerPrSummary` still mirrors it).
+ * Idempotent.
+ * `npx convex run --prod dataMigrations:run '{fn: "dataMigrations:clearLegacyProjectFields"}'`
+ */
+export const clearLegacyProjectFields = dataMigrations.define({
+  table: "projects",
+  migrateOne: async (ctx, project) => {
+    const details = await ctx.db
+      .query("projectDetails")
+      .withIndex("by_project", (q) => q.eq("projectId", project._id))
+      .collect();
+    for (const row of details) await ctx.db.delete(row._id);
+    const session = await ctx.db
+      .query("sessions")
+      .withIndex("by_owner_project", (q) =>
+        q.eq("owner.projectId", project._id),
+      )
+      .unique();
+    if (session) {
+      const chats = await ctx.db
+        .query("sessionChats")
+        .withIndex("by_session", (q) => q.eq("sessionId", session._id))
+        .collect();
+      for (const chat of chats) {
+        if (chat.taskId !== undefined) {
+          await ctx.db.patch(chat._id, { taskId: undefined });
+        }
+      }
+    }
+    if (
+      project.phase === undefined &&
+      project.planningMode === undefined &&
+      project.interview === undefined &&
+      project.build === undefined &&
+      project.lastBuildError === undefined &&
+      project.codeReviewer === undefined
+    ) {
+      return;
+    }
+    return {
+      phase: undefined,
+      planningMode: undefined,
+      interview: undefined,
+      build: undefined,
+      lastBuildError: undefined,
+      codeReviewer: undefined,
+    };
+  },
+});

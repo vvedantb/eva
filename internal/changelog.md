@@ -1,5 +1,11 @@
 # Changelog
 
+## Projects: legacy interview, plan and build code removed (PR 3a)
+
+Date: 2026-11-25
+
+Removed the old project interview and spec workflows (`projectInterviewWorkflow`, `_projects/interviewState`), the project build (`_projects/buildState`, the build wrappers in `buildWorkflow`, `executeScheduledBuild`, `releaseProjectSessionForRetire`), the project PR phase sync (`_projects/prSync`, `applyProjectPrEvent`), `projects.startDevelopment`/`addMessage`/`clearMessages`/`updateLastConversationMessage`/`countBuilding`/`getActive`, the legacy task chat in a project session (`findProjectTaskChat`, `chatOwner`'s task branch; callers use `sessionOwner`), `convertProjects` and the old phase/interview migrations. `recomputeProjectPhase` is now `onProjectTasksChanged`: it only schedules ready tasks; nothing writes `projects.phase` (now optional). `projects.get` drops `conversationHistory`/`generatedSpec`; `projects.update` drops `phase`/`generatedSpec`; MCP `stop_agent` and `get_agent_state` drop `buildRunning`. Web and phone: the Plan/Interview views (`ProjectTabs`, `ProjectChatTab`, `ProjectPlanTab`, phone `ProjectPlan`), View Plan / Interview History, the building badge and beam, and every stored-phase badge are gone; projects show the derived stage only. New `dataMigrations:clearLegacyProjectFields` deletes `projectDetails` rows, clears the legacy project fields and `sessionChats.taskId`; PR 3b narrows the schema after it runs on production.
+
 ## Projects: parallel reads on hot project paths
 
 Date: 2026-11-25

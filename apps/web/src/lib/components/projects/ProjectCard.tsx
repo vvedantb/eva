@@ -10,7 +10,6 @@ import {
   ContextMenu,
   ContextMenuTrigger,
   ContextMenuContent,
-  BorderBeam,
   Checkbox,
   DropdownMenu,
   DropdownMenuContent,
@@ -58,7 +57,6 @@ interface ProjectCardProps {
   projectLead?: Id<"users">;
   /** Derived from the child tasks (`useProjectListStatuses`). */
   status?: ProjectListStatus;
-  isBuilding?: boolean;
   sandboxStatus?: SandboxStatus;
   /** Finished project chat reply the user has not seen (`api.projects.list`). */
   hasUnread?: boolean;
@@ -91,7 +89,6 @@ export function ProjectCard({
   members,
   projectLead,
   status,
-  isBuilding = false,
   sandboxStatus,
   hasUnread = false,
   isAwaitingAnswer = false,
@@ -282,17 +279,9 @@ export function ProjectCard({
     </ListRow>
   );
 
-  const wrappedCard = isBuilding ? (
-    <BorderBeam active colorVariant="progress" className="rounded-surface">
-      {cardContent}
-    </BorderBeam>
-  ) : (
-    cardContent
-  );
-
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>{wrappedCard}</ContextMenuTrigger>
+      <ContextMenuTrigger asChild>{cardContent}</ContextMenuTrigger>
       <ContextMenuContent onClick={(e) => e.stopPropagation()}>
         <ProjectCardMenuItems variant="context" {...menuProps} />
       </ContextMenuContent>

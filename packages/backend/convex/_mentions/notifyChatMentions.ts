@@ -6,7 +6,7 @@ import { formatMessagePreview } from "../_messages/preview";
 import { authorDisplayName, teamMentionRecipients } from "./mentionRecipients";
 import { stripMentionTokens } from "./resolveDocMentions";
 import { stripSkillTokens } from "./skillToken";
-import { chatOwner, sessionOwner } from "../_sessions/owner";
+import { sessionOwner } from "../_sessions/owner";
 
 /**
  * Which chat a message was posted in. Carries the whole document because the
@@ -76,7 +76,7 @@ async function ownerSurface(
 ): Promise<ChatMentionSurface> {
   if (surface.kind !== "session") return surface;
   const owner = surface.chat
-    ? chatOwner(surface.chat, surface.session)
+    ? sessionOwner(surface.session)
     : sessionOwner(surface.session);
   if (owner.kind === "task") {
     const task = await ctx.db.get(owner.taskId);

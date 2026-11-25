@@ -4,10 +4,9 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
-  DropdownMenuItem,
 } from "@vvedantb/ui";
 import type { Id } from "@eva/backend";
-import { IconDots, IconFileText, IconMessage } from "@tabler/icons-react";
+import { IconDots } from "@tabler/icons-react";
 import { ProjectContextUsage } from "@/lib/components/context-usage";
 import { SandboxStartStopButton } from "@/lib/components/sandbox/SandboxStartStopButton";
 import { PrMergeConfetti } from "@/lib/components/celebration/PrMergeConfetti";
@@ -34,9 +33,6 @@ interface ProjectDetailHeaderActionsProps {
   /** The project's main chat, once it exists: Recap chat recaps it. */
   chatId: Id<"sessionChats"> | undefined;
   chatTurnOpen: boolean | undefined;
-  hasPlanContext: boolean;
-  setShowPlanModal: (open: boolean) => void;
-  setShowChatModal: (open: boolean) => void;
 }
 
 export function ProjectDetailHeaderActions({
@@ -46,9 +42,6 @@ export function ProjectDetailHeaderActions({
   sandbox,
   chatId,
   chatTurnOpen,
-  hasPlanContext,
-  setShowPlanModal,
-  setShowChatModal,
 }: ProjectDetailHeaderActionsProps) {
   const {
     isSandboxActive,
@@ -97,20 +90,6 @@ export function ProjectDetailHeaderActions({
                 leading={
                   recapChat ? (
                     <RecapChatMenuItem onSelect={recapChat} />
-                  ) : undefined
-                }
-                planItems={
-                  hasPlanContext ? (
-                    <>
-                      <DropdownMenuItem onSelect={() => setShowPlanModal(true)}>
-                        <IconFileText size={14} />
-                        View Plan
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => setShowChatModal(true)}>
-                        <IconMessage size={14} />
-                        View Interview History
-                      </DropdownMenuItem>
-                    </>
                   ) : undefined
                 }
               />

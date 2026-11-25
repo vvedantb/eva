@@ -18,7 +18,6 @@ import {
 } from "../_sandbox/activity";
 import { chatParentIdOf } from "./chatParent";
 import {
-  chatOwnerEntityId,
   sessionOwnerEntityId,
 } from "../_sessions/owner";
 
@@ -444,14 +443,10 @@ export async function closeTurn(
   const runId = ctx.db.normalizeId("agentRuns", turn.entityId);
   if (session && chatParentId) {
     await ctx.db.patch(session._id, { lastTurnFinishedAt: finishedAt });
-    // A task's or project's session reads unread on its owner's card (an old
-    // project task's legacy chat on the task's), so the owner gets the
-    // watermark too (`chatReads.markRead` reads it with the chat).
-    const chatId = ctx.db.normalizeId("sessionChats", chatParentId);
-    const chat = chatId ? await ctx.db.get(chatId) : null;
-    const ownerId = chat
-      ? chatOwnerEntityId(chat, session)
-      : sessionOwnerEntityId(session);
+    // A task's or project's session reads unread on its owner's card, so the
+    // owner gets the watermark too (`chatReads.markRead` reads it with the
+    // chat).
+    const ownerId = sessionOwnerEntityId(session);
     if (ownerId && (await ctx.db.get(ownerId))) {
       await ctx.db.patch(ownerId, { lastTurnFinishedAt: finishedAt });
     }

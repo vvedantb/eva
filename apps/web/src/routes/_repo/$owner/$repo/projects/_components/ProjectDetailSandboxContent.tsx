@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { isProjectBuilding, type Id, type SandboxOwner } from "@eva/backend";
+import type { Id, SandboxOwner } from "@eva/backend";
 import { ProjectSandboxPanel } from "@/lib/components/projects/ProjectSandboxPanel";
 import { ProjectSandboxChatPanel } from "@/lib/components/projects/ProjectSandboxChatPanel";
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
@@ -92,7 +92,6 @@ export function ProjectDetailSandboxContent({
       autoWakeEligible={
         sandbox.sandbox.status === "closed" &&
         projectSandboxId !== undefined &&
-        !isProjectBuilding(project) &&
         // Still loading counts as busy: never wake under a live turn.
         chatTurnOpen === false
       }
