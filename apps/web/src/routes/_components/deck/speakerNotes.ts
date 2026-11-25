@@ -704,6 +704,8 @@ So that's the kind of thing I enjoy doing too.
 I still pick which ideas actually ship, that's what the parked slide was about, but the list doesn't have to shrink any more.
 I know "10x engineer" is just a saying for a really productive engineer, but compared to last year, it honestly feels like I've become that.
 Things that used to take me weeks now take days, and I'm putting out far more than I could before.
+I haven't opened an IDE in about eight months, and I haven't written a line of code by hand in about six.
+I still read the plans, ask the questions and make the calls, that's the job now, but the typing is the AI's.
 So I definitely love AI, and I can't imagine going back.
 Hopefully that shows through all of this work.
 So here's how all of it maps to the framework: senior engineer, mapped.`,

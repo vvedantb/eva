@@ -11,7 +11,8 @@ const LABEL = "text-sm font-semibold tracking-[0.14em] text-white/45 uppercase";
 
 /**
  * The presenter's own reflection. The 40+ ideas list is their own count, and
- * "well received" is their own account of audience feedback.
+ * "well received" is their own account of audience feedback. The IDE and
+ * hand-written code figures are their own account, as of November 2026.
  */
 const CARDS: readonly { label: string; text: string }[] = [
   { label: "Before", text: "40+ ideas, filtered down to a few" },
@@ -44,8 +45,13 @@ export function AnnualUnlocked() {
         ))}
       </div>
 
-      <Reveal step={2} delay={0.4}>
+      <Reveal step={2} delay={0.3}>
         <p className="mt-6 text-2xl text-white/80">
+          No IDE in 8 months, no hand-written code in 6
+        </p>
+      </Reveal>
+      <Reveal step={2} delay={0.5}>
+        <p className="mt-3 text-2xl text-white/80">
           Most of my AI learning came from people on X, and from Krzys
         </p>
       </Reveal>
