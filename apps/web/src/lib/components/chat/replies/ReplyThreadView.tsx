@@ -11,7 +11,12 @@ import {
 } from "@tabler/icons-react";
 import { Button, ConversationEmptyState, toast } from "@vvedantb/ui";
 import { api, type AIModel } from "@eva/backend";
-import { EVA_MENTION_ITEM, isOtherUserChatMessage } from "@eva/shared";
+import {
+  chatStreamingEntityId,
+  EVA_MENTION_ITEM,
+  findStreamingTargetMessage,
+  isOtherUserChatMessage,
+} from "@eva/shared";
 import { ChatMessage } from "@/lib/components/chat/ChatMessage";
 import type {
   ChatParentId,
@@ -53,6 +58,14 @@ export function ReplyThreadView({
   onClose: () => void;
 }) {
   const thread = useQuery(api.messages.listReplies, { rootId });
+  // Eva's turn in this thread streams on the chat's row: her open bubble here
+  // shows it, as the chat shows a turn of its own.
+  const streaming = useQuery(api.streaming.get, {
+    entityId: chatStreamingEntityId(chatParentId),
+  });
+  const streamingTargetId = thread
+    ? findStreamingTargetMessage(thread.replies)?._id
+    : undefined;
   // Escape from anywhere (focus often stays on the "N replies" link in the
   // chat), unless something on top already took it (a menu, a dialog).
   useEffect(() => {
@@ -136,6 +149,16 @@ export function ReplyThreadView({
                         currentUserId ?? undefined,
                       )}
                       assistantBubble
+                      streamingActivity={
+                        message._id === streamingTargetId
+                          ? streaming?.currentActivity
+                          : undefined
+                      }
+                      streamingContent={
+                        message._id === streamingTargetId
+                          ? streaming?.currentContent
+                          : undefined
+                      }
                     />
                   </div>
                 ))

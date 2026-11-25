@@ -1,7 +1,6 @@
 import { api, DEFAULT_AI_MODEL } from "@eva/backend";
-import { EVA_THEME } from "@eva/shared/evaTheme";
 import { formatDuration } from "@eva/shared/duration";
-import { EVA_MENTION_ITEM } from "@eva/shared";
+import { chatStreamingEntityId, EVA_MENTION_ITEM, findStreamingTargetMessage } from "@eva/shared";
 import { MessageContent, PromptInput } from "@vvedantb/native-ui/ai";
 import { RouterStackPageHeader } from "@vvedantb/native-ui/expo-router";
 import { CenteredSpinner, EmptyState, KeyboardAvoidingView } from "@vvedantb/native-ui/primitives";
@@ -10,14 +9,13 @@ import { IconMessages } from "@tabler/icons-react-native";
 import { useMutation, useQuery } from "convex/react";
 import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AssistantMessage } from "@/chat/AssistantMessage";
+import { AssistantMessage, LiveAssistantMessage } from "@/chat/AssistantMessage";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { UserMessageText } from "@/chat/MentionChip";
 import { EvaBubble, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
 import { useMentionComposer } from "@/chat/useMentionComposer";
-import { useScheme } from "@/ui/theme";
 
 /**
  * A reply thread in the project coordinator chat, as the web `ReplyThreadView`:
@@ -27,7 +25,6 @@ import { useScheme } from "@/ui/theme";
 export default function ReplyThreadScreen() {
   const { target, rootId } = useLocalSearchParams<{ target: string; rootId: string }>();
   const insets = useSafeAreaInsets();
-  const theme = EVA_THEME[useScheme()];
   const chat = useQuery(api.chats.get, { target });
   const thread = useQuery(api.messages.listReplies, { rootId });
   const me = useQuery(api.auth.me, {});
@@ -56,6 +53,10 @@ export default function ReplyThreadScreen() {
     );
   }
 
+  // Eva's turn in this thread streams on the chat's row, as a turn of the chat itself.
+  const liveId = findStreamingTargetMessage(thread.replies)?._id;
+  const streamingEntityId = chat.parentId ? chatStreamingEntityId(chat.parentId) : undefined;
+
   const send = (text: string) => {
     const content = composer.tokenize(text).trim();
     if (!content || sending) return;
@@ -72,14 +73,11 @@ export default function ReplyThreadScreen() {
       <ScrollView className="flex-1" contentContainerClassName="gap-3 px-4 py-3">
         {[thread.root, ...thread.replies].map((message) => {
           if (message.role === "assistant") {
-            const live = message.finishedAt === undefined && message.content.trim() === "";
             return (
               <View key={message._id} style={TEAMMATE_SIDE}>
                 <EvaBubble joinsNext={false}>
-                  {live ? (
-                    <Text className="font-instrument-sans text-sm" style={{ color: theme.mutedForeground }}>
-                      Eva is typing…
-                    </Text>
+                  {message._id === liveId && streamingEntityId ? (
+                    <LiveAssistantMessage streamingEntityId={streamingEntityId} messageId={message._id} />
                   ) : (
                     <AssistantMessage
                       messageId={message._id}

@@ -27,7 +27,8 @@ function TypingAvatar({ firstName }: { firstName: string }) {
   );
 }
 
-function TypingDots() {
+/** Three bouncing dots: someone (a teammate, or Eva in a thread) is writing. */
+export function TypingDots() {
   return (
     <span className="inline-flex items-center gap-0.5" aria-hidden>
       {[0, 1, 2].map((i) => (

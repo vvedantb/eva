@@ -29,6 +29,7 @@ import { sandboxChatKeys } from "./sandboxChatTurn";
 import { SubagentThreadLayer } from "./SubagentThreadLayer";
 import { useQueryState } from "nuqs";
 import { replyThreadParser } from "@/lib/search-params";
+import { ThreadTurnStatus } from "@/lib/components/chat/replies/ThreadTurnStatus";
 import { useChatQueueGate } from "./useChatQueueGate";
 import { useChatSend } from "./useChatSend";
 import { useSandboxChatDraft } from "./useSandboxChatDraft";
@@ -105,8 +106,22 @@ export function SandboxChatPanel({
     api.streaming.get,
     streamingEntityId ? { entityId: streamingEntityId } : "skip",
   );
+  // Eva's open turn answers in a reply thread: the main chat shows no running
+  // bubble for it, only a status line that opens the thread.
+  const threadTurn = useQuery(
+    api.messages.openThreadTurn,
+    replyThreads && parentId ? { parentId } : "skip",
+  );
   // The first run streams to its own row while it owns the bubble.
-  const streaming = firstRun?.isInProgress ? firstRun.streaming : chatStreaming;
+  const streaming = threadTurn
+    ? undefined
+    : firstRun?.isInProgress
+      ? firstRun.streaming
+      : chatStreaming;
+  const openThread = (messageId: string) => {
+    if (onThreadOpen) onThreadOpen(messageId);
+    else void setThreadId(messageId);
+  };
   // Same entityId the sandbox posts with (the entity id, not the stream key).
   const blockingQuestion = useQuery(
     api.pendingQuestions.getActive,
@@ -257,10 +272,18 @@ export function SandboxChatPanel({
           onSend={handleSend}
           onCancel={handleCancel}
           preInputContent={
-            <SandboxChatPreInput
-              surface={chatSurface}
-              beforeBanner={preInputBanner}
-            />
+            <>
+              {threadTurn ? (
+                <ThreadTurnStatus
+                  preview={threadTurn.preview}
+                  onOpen={() => openThread(threadTurn.rootId)}
+                />
+              ) : null}
+              <SandboxChatPreInput
+                surface={chatSurface}
+                beforeBanner={preInputBanner}
+              />
+            </>
           }
           composerChips={<SandboxChatStatusChips surface={chatSurface} />}
           underCardLeading={
@@ -277,14 +300,7 @@ export function SandboxChatPanel({
           hasPendingContext={hasPendingReviewComments}
           onOpenAgentsTab={onOpenAgentsTab}
           assistantBubbles={assistantBubbles}
-          onOpenThread={
-            replyThreads
-              ? (messageId) => {
-                  if (onThreadOpen) onThreadOpen(messageId);
-                  else void setThreadId(messageId);
-                }
-              : undefined
-          }
+          onOpenThread={replyThreads ? openThread : undefined}
           backgroundAgents={doc?.backgroundAgents}
           sandboxRunning={isSandboxActive}
           transcriptTail={sandboxStartupTail(

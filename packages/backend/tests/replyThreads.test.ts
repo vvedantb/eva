@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
-import { EVA_MENTION_ID } from "@eva/shared";
+import { EVA_MENTION_ID, threadRootPreview } from "@eva/shared";
 import { modules } from "./_helpers/convexModules";
 
 /**
@@ -223,4 +223,43 @@ describe("reply threads", () => {
     },
     TIMEOUT_MS,
   );
+
+  test(
+    "the chat knows when Eva's open turn answers in a thread",
+    async () => {
+      const f = await fixture();
+      const openThreadTurn = () =>
+        f.asUser.query(api.messages.openThreadTurn, { parentId: f.chatId });
+      expect(await openThreadTurn()).toBeNull();
+
+      await f.asUser.mutation(api.sessionWorkflow.addReply, {
+        rootId: f.rootId,
+        content: `${EVA} can you split it in two?`,
+        model: "claude:sonnet",
+      });
+      expect(await openThreadTurn()).toEqual({
+        rootId: f.rootId,
+        preview: "I created #904.",
+      });
+
+      // Her turn closes: the chat has no thread turn again.
+      await f.t.run(async (ctx) => {
+        const turn = await ctx.db.query("turns").first();
+        if (turn) await ctx.db.patch(turn._id, { open: false });
+      });
+      expect(await openThreadTurn()).toBeNull();
+    },
+    TIMEOUT_MS,
+  );
+});
+
+describe("threadRootPreview", () => {
+  test("keeps the first six words as plain text", () => {
+    expect(
+      threadRootPreview(
+        `## Plan\n**Split** \`#904\` for @[Eva](${EVA_MENTION_ID}) into two smaller tasks today`,
+      ),
+    ).toBe("Plan Split #904 for @Eva into…");
+    expect(threadRootPreview("Short one")).toBe("Short one");
+  });
 });

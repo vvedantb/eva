@@ -105,6 +105,7 @@ import { toReviewComment, usePendingLineComments } from "@/diff/prDiffStore";
 import { useAttachments } from "@/chat/useAttachments";
 import { type Chat, useChatModelPick } from "@/chat/useChatModelPick";
 import { TypingIndicator } from "@/chat/TypingIndicator";
+import { ThreadTurnStatus } from "@/chat/ThreadTurnStatus";
 import { useDraftSync } from "@/chat/useDraftSync";
 import { useTypingPresence } from "@/chat/useTypingPresence";
 import { useMentionComposer } from "@/chat/useMentionComposer";
@@ -165,6 +166,11 @@ export default function ChatScreen() {
   // The session's running chats and this chat's queue: a send parked while every run slot is taken.
   const runningChats = useQuery(api.turns.listSessionChatStatuses, chat?.session ? { sessionId: chat.session.id } : "skip");
   const queued = useQuery(api.queuedMessages.listByParent, parentId ? { parentId } : "skip");
+  // Eva's open turn answers in a reply thread: no running state here, a status line opens the thread.
+  const threadTurn = useQuery(
+    api.messages.openThreadTurn,
+    parentId && chat?.project !== undefined ? { parentId } : "skip",
+  );
   // A teammate's turn shows their avatar and first name, from the same lookup as the web `ChatBody`.
   const teammateIds = otherUserIdsInChat(messages ?? [], me ?? undefined);
   const teammates = useQuery(api.users.getMany, teammateIds.length > 0 ? { ids: teammateIds } : "skip");
@@ -239,7 +245,7 @@ export default function ChatScreen() {
   const closedReason = chat.session
     ? getSessionReadOnlyMessage({ isArchived: chat.session.archived, prState: sessionRow?.prState })
     : undefined;
-  const streamingEntityId = parentId ? chatStreamingEntityId(parentId) : undefined;
+  const streamingEntityId = parentId && !threadTurn ? chatStreamingEntityId(parentId) : undefined;
   const dayStarts = findDayBoundaryIds(visible);
   const newBoundaryId = findNewMessageIds(visible, newSinceAt, me ?? undefined)[0];
   // Runs of one sender's bubbles, as the web: the coordinator's Eva bubbles, yours and a teammate's.
@@ -562,6 +568,9 @@ export default function ChatScreen() {
             }
             panels={
               <>
+                {threadTurn ? (
+                  <ThreadTurnStatus preview={threadTurn.preview} onOpen={() => openThread(threadTurn.rootId)} />
+                ) : null}
                 <ComposerTasksPanel streamingEntityId={streamingEntityId} turnId={liveReplyId} />
                 <QueuedMessagesPanel parentId={parentId} isExecuting={working} isSandboxActive={chat.sandboxActive} />
               </>

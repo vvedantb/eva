@@ -15,8 +15,9 @@ import {
 } from "./_messages/media";
 import { trimActivityLogForTranscript } from "./_messages/activityLog";
 import { resolveStorageEntries } from "./_chat/storageUrls";
-import { collectForkPrefix } from "@eva/shared";
+import { collectForkPrefix, threadRootPreview } from "@eva/shared";
 import { MAX_THREAD_REPLIES } from "./_messages/replies";
+import { findOpenTurn } from "./_chat/turnStore";
 
 const parentIdValidator = messageFields.parentId;
 
@@ -301,6 +302,26 @@ export const listThreadRoots = authQuery({
     return roots
       .sort((a, b) => a._creationTime - b._creationTime)
       .map((root) => root._id);
+  },
+});
+
+/**
+ * The thread Eva's open turn answers in, or null when no turn is open or it
+ * answers in the chat itself. The chat then shows "Eva is replying in a
+ * thread" with the root's first words instead of a running bubble.
+ */
+export const openThreadTurn = authQuery({
+  args: { parentId: parentIdValidator },
+  returns: v.union(
+    v.null(),
+    v.object({ rootId: v.id("messages"), preview: v.string() }),
+  ),
+  handler: async (ctx, args) => {
+    await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
+    const replyTo = (await findOpenTurn(ctx, args.parentId))?.replyTo;
+    const root = replyTo === undefined ? null : await ctx.db.get(replyTo);
+    if (!root) return null;
+    return { rootId: root._id, preview: threadRootPreview(root.content) };
   },
 });
 
