@@ -28,9 +28,8 @@ import { CALLBACK_SCRIPT_FINGERPRINT } from "./callbackScriptFingerprint";
 import { buildLinkedReposEnv, type LinkedRepoEnvRow } from "./linkedReposEnv";
 
 // Paths baked into the callback script env for each CLI's config directory.
-// These originated as Daytona persistence-volume mount paths; the *_RUNTIME_*
-// paths are still where the callback script looks regardless of whether a
-// volume is mounted there, so they stay here now that Daytona volumes are gone.
+// The callback script reads and writes these on the sandbox disk; no volume is
+// mounted there.
 export const CLAUDE_BASE_CONFIG_DIR = "/home/eva/.claude";
 export const CLAUDE_RUNTIME_CONFIG_DIR = "/tmp/claude-config";
 export const CLAUDE_PERSIST_VOLUME_MOUNT_PATH = "/home/eva/.claude-persist";

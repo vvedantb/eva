@@ -80,7 +80,7 @@ agent-browser screenshot .../captures/task-input.png
 ## 4. Footage strategy: finished states, staged inputs
 
 - **Outputs** (agent work, diff, merged/deployed, PR) → record _existing completed_ tasks. Live
-  agent runs need a running Daytona sandbox (slow, flaky) — don't wait on them.
+  agent runs need a running sandbox (slow, flaky) — don't wait on them.
 - **Inputs** (describe a task) → stage a clean, relatable prompt yourself (e.g. "Add a dark mode
   toggle"). It reads better than real, messy task titles.
 - **Stage inputs, never submit them.** Type the prompt, open the mention/model picker, then

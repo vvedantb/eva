@@ -24,12 +24,14 @@ export const TASK_CHAT_BUSY_ERROR =
 /** How long a run held back by a busy task chat waits before trying again. */
 export const TASK_CHAT_BUSY_RETRY_MS = 60_000;
 
-export function isDaytonaNetworkIssue(errorMsg: string): boolean {
+/**
+ * True for a transient sandbox/snapshot failure (network error or a 408/429/5xx
+ * status) that is worth retrying. Base-branch fetch failures and failed
+ * commands inside the sandbox are real errors, not transient ones.
+ */
+export function isSandboxNetworkIssue(errorMsg: string): boolean {
   const message = errorMsg.toLowerCase();
-  if (
-    message.includes("failed to fetch latest base branch") ||
-    message.includes("daytona:fetchbasebranch")
-  ) {
+  if (message.includes("failed to fetch latest base branch")) {
     return false;
   }
   const networkMarkers = [
@@ -45,8 +47,8 @@ export function isDaytonaNetworkIssue(errorMsg: string): boolean {
     "timed out",
     "aborted",
   ];
-  const daytonaMarkers = ["daytona", "daytonaerror", "sandbox", "snapshot"];
-  const daytonaStatusMarkers = [
+  const sandboxMarkers = ["sandbox", "snapshot"];
+  const transientStatusMarkers = [
     "status code 408",
     "status code 429",
     "status code 500",
@@ -55,10 +57,10 @@ export function isDaytonaNetworkIssue(errorMsg: string): boolean {
     "status code 504",
   ];
 
-  const hasDaytonaMarker = daytonaMarkers.some((marker) =>
+  const hasSandboxMarker = sandboxMarkers.some((marker) =>
     message.includes(marker),
   );
-  if (!hasDaytonaMarker) {
+  if (!hasSandboxMarker) {
     return false;
   }
 
@@ -72,7 +74,7 @@ export function isDaytonaNetworkIssue(errorMsg: string): boolean {
   const hasNetworkMarker = networkMarkers.some((marker) =>
     message.includes(marker),
   );
-  const hasDaytonaStatusMarker = daytonaStatusMarkers.some((marker) =>
+  const hasTransientStatusMarker = transientStatusMarkers.some((marker) =>
     message.includes(marker),
   );
 
@@ -82,7 +84,7 @@ export function isDaytonaNetworkIssue(errorMsg: string): boolean {
     return true;
   }
 
-  return hasNetworkMarker || hasDaytonaStatusMarker;
+  return hasNetworkMarker || hasTransientStatusMarker;
 }
 
 /**
@@ -202,7 +204,7 @@ export async function cleanUpStaleRun(
 /**
  * The stop text and `exitReason` for a run whose lease expired, by the turn's
  * phase. The texts are the ones the old `checkStaleRuns` chain wrote, so the
- * retry rule (`isDaytonaNetworkIssue`) and the UI see no change.
+ * retry rule (`isSandboxNetworkIssue`) and the UI see no change.
  */
 export function stalledRunStop(input: {
   state: TurnState;

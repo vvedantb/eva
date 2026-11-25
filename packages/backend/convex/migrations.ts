@@ -24,3 +24,4 @@ export { backfillEvaPrRecapOrigin } from "./_migrations/backfillEvaPrRecapOrigin
 export { excludeConvexUrlFromSandbox } from "./_migrations/excludeConvexUrlFromSandbox";
 export { backfillExperimentalFlags } from "./_migrations/backfillExperimentalFlags";
 export { convertLegacyProjectThreads } from "./_migrations/legacyProjectThreads";
+export { removeDaytonaSnapshotFields } from "./_migrations/removeDaytonaSnapshotFields";

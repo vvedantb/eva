@@ -59,7 +59,7 @@ import {
 } from "./convexLocalBackend";
 import { ensureSwapFile } from "./swap";
 import { restoreSeededRuntimeState as restoreSeededRuntimeStateInSandbox } from "./devServer";
-import { isDaytonaNetworkIssue } from "../_taskWorkflow/recovery";
+import { isSandboxNetworkIssue } from "../_taskWorkflow/recovery";
 import { assertActionSandboxAccess } from "../functions";
 import { sandboxGitTargetValidator } from "../sandboxGit";
 import {
@@ -1077,7 +1077,7 @@ const MAX_SETUP_ELAPSED_MS = 8 * 60 * 1000;
 /** Checks if a sandbox setup error is transient and worth retrying. */
 function isSandboxSetupRetryable(message: string): boolean {
   return (
-    isDaytonaNetworkIssue(message) ||
+    isSandboxNetworkIssue(message) ||
     // Transport only: setup deletes and recreates the VM, so a permanent auth
     // failure or a bare "network" substring must not trigger it.
     isTransientTransportError(message) ||

@@ -1050,7 +1050,8 @@ export const snapshotBuildFields = {
   // "base" (image only) vs "seeded" (boots + seeds DB before capture).
   // Optional: legacy rows predate this field and render without a type.
   kind: v.optional(snapshotBuildKindValidator),
-  // Sandbox provider used for this build (set at workflow start).
+  // Legacy: always "vercel". No longer written; cleared by
+  // `_migrations/removeDaytonaSnapshotFields`, then dropped.
   provider: v.optional(sandboxProviderKindValidator),
   logs: v.string(),
   error: v.optional(v.string()),
@@ -2305,7 +2306,9 @@ export const repoEnvVarFields = {
 
 export const repoSnapshotFields = {
   repoId: v.id("githubRepos"),
-  snapshotName: v.string(),
+  // Legacy Daytona image label (`snapshot-<repoId>`). No longer written or
+  // read; cleared by `_migrations/removeDaytonaSnapshotFields`, then dropped.
+  snapshotName: v.optional(v.string()),
   schedule: snapshotScheduleValidator,
   enabled: v.optional(v.boolean()),
   cronJobId: v.optional(v.string()),
@@ -2316,7 +2319,7 @@ export const repoSnapshotFields = {
   // unlike githubRepos.startupCommands. Not part of the image fingerprint.
   seedCommands: v.optional(v.array(v.string())),
   // Vercel base Image capture (`snap_*`) from a running sandbox — separate
-  // from `snapshotName` and per-app `seededSnapshotName`.
+  // from per-app `seededSnapshotName`.
   baseSnapshotId: v.optional(v.string()),
   createdAt: v.number(),
   updatedAt: v.number(),

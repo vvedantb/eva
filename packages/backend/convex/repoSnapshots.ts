@@ -22,7 +22,6 @@ export {
   cancelBuild,
   appendLogs,
   recordSeededApp,
-  setBuildProvider,
   listReferencedSandboxIds,
 } from "./_repoSnapshots/builds";
 
