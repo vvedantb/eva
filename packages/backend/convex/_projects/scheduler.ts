@@ -350,7 +350,9 @@ export async function retryFailedTask(
     !(await startProjectTask(
       ctx,
       task,
-      trimmed ? `The project coordinator retried this task after its last run failed. Its note:\n${trimmed}` : undefined,
+      trimmed
+        ? `The project coordinator retried this task after its last run failed. Its note:\n${trimmed}`
+        : undefined,
     ))
   ) {
     throw new Error("The task did not start. Try again in a moment.");

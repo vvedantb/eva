@@ -1,5 +1,11 @@
 # Changelog
 
+## Projects: parallel reads on hot project paths
+
+Date: 2026-11-25
+
+`/parallel-awaits` on this branch: the scheduler loads tasks and facts context together; `createCoordinatorTasks` checks repo access for all tasks at once; chat recaps read task chats and messages in parallel; `list_entities` derives each project's stage and sandbox status in parallel.
+
 ## Projects: coordinator sandbox drops task-only tabs
 
 Date: 2026-11-25

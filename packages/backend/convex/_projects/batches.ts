@@ -1,8 +1,5 @@
 import { ConvexError, v, type Infer } from "convex/values";
-import {
-  internalMutation,
-  type MutationCtx,
-} from "../_generated/server";
+import { internalMutation, type MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import {
   authQuery,
@@ -44,11 +41,7 @@ export async function createCoordinatorTasks(
 ): Promise<{ taskIds: Id<"agentTasks">[]; batchId: Id<"projectTaskBatches"> }> {
   const { projectId, userId, tasks } = params;
   if (tasks.length === 0) throw new Error("Create at least one task.");
-  const project = await getProjectWithAccess(
-    ctx.db,
-    projectId,
-    userId,
-  );
+  const project = await getProjectWithAccess(ctx.db, projectId, userId);
   // Any repo the acting user can access; checked for every task before any is written.
   const access = await Promise.all(
     tasks.map((task) =>
@@ -110,12 +103,19 @@ export const createTasksFromCoordinator = internalMutation({
   }),
   handler: async (ctx, args) =>
     await createCoordinatorTasks(ctx, {
-      projectId: normalizeIdOrThrow(ctx.db, "projects", args.projectId, "Project"),
+      projectId: normalizeIdOrThrow(
+        ctx.db,
+        "projects",
+        args.projectId,
+        "Project",
+      ),
       userId: normalizeIdOrThrow(ctx.db, "users", args.userId, "User"),
       tasks: args.tasks.map(({ repoId, ...task }) => ({
         ...task,
         ...(repoId !== undefined
-          ? { repoId: normalizeIdOrThrow(ctx.db, "githubRepos", repoId, "Repo") }
+          ? {
+              repoId: normalizeIdOrThrow(ctx.db, "githubRepos", repoId, "Repo"),
+            }
           : {}),
       })),
     }),

@@ -7,7 +7,11 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
-import { assertMessageParentAccess, authMutation, authQuery } from "./functions";
+import {
+  assertMessageParentAccess,
+  authMutation,
+  authQuery,
+} from "./functions";
 import {
   chatParentIdValidator,
   chatRecapKindValidator,
