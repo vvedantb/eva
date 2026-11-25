@@ -3,9 +3,9 @@
 /**
  * Vercel Sandbox implementation of the provider-neutral contract (./provider.ts),
  * targeting `@vercel/sandbox` v2 (persistent sandboxes, sub-second snapshot
- * restore — see the Phase 0 spike results).
+ * restore).
  *
- * Design notes / provider deltas vs Daytona (the original, now-removed provider):
+ * Design notes:
  * - Identity: Vercel addresses sandboxes by `name`, not a separate id. We expose
  *   `handle.id === sandbox.name` and resolve `get(sandboxId)` via `Sandbox.get({ name })`.
  * - Resources: the client is built with the app's vCPU count (its sandbox
@@ -831,8 +831,7 @@ class VercelSandboxHandle implements SandboxHandle {
 
   async execDetached(cmd: string, opts?: SandboxExecOptions): Promise<void> {
     // Native detached exec: returns a Command handle immediately without holding
-    // the stream. This is the analogue of eva's `setsid nohup … &` on Daytona —
-    // a shell `&` inside a synchronous runCommand would keep the stream open
+    // the stream. A shell `&` inside a synchronous runCommand would keep the stream open
     // until it times out (StreamError). The command itself still backgrounds its
     // long-runner with setsid so it survives this launcher process exiting.
     await this.sandbox.runCommand({
@@ -1332,7 +1331,7 @@ class VercelSandboxClient implements SandboxClient {
       onResume: rewireDriveCacheOnResume,
       region,
       failoverRegions,
-      // Vercel `timeout` is a HARD session cap, not Daytona's idle-stop timer.
+      // Vercel `timeout` is a HARD session cap, not an idle-stop timer.
       // Mapping a small autoStop (e.g. WARMING's 10 min) straight through would
       // hard-kill a long seed build or agent turn mid-run. Floor it to the Pro
       // plan max (24h) so Start/Stop own the lifecycle; this cap is only a leak

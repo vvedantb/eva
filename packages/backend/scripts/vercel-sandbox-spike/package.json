@@ -3,9 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Standalone go/no-go benchmarks for eva's sandbox layer: Phase 0 (Daytona -> Vercel Sandbox) and Phase 1 (AL2023 runtime -> Vercel Managed Images). Isolated from the backend package so it does not perturb Convex deps.",
+  "description": "Standalone go/no-go benchmark for eva's sandbox layer: AL2023 runtime -> Vercel Managed Images. Isolated from the backend package so it does not perturb Convex deps.",
   "scripts": {
-    "spike": "node spike.mjs",
     "managed-image-spike": "node managed-image-spike.mjs"
   },
   "dependencies": {

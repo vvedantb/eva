@@ -2,18 +2,13 @@
  * Provider-neutral sandbox contract.
  *
  * WHY: eva runs managed codebases in remote sandboxes. The only backend today
- * is Vercel Sandbox (sub-second snapshot restores — Phase 0 spike proved
- * ~0.3s regardless of size). Daytona was the original provider and has been
- * fully removed; this contract stays provider-neutral in shape so a future
- * provider swap does not require touching every `_sandbox_runtime/` consumer again.
+ * is Vercel Sandbox (sub-second snapshot restores). This contract stays
+ * provider-neutral in shape so a future provider swap does not require
+ * touching every `_sandbox_runtime/` consumer.
  *
  * These types are a hand-written contract, NOT Convex documents — they describe
  * an external SDK surface, so they are defined here rather than imported from
  * generated Convex types.
- *
- * Note: `_sandbox_runtime/` and the `internal.sandbox.*` action namespace keep their
- * names even though Daytona itself is gone — renaming them is tracked as a
- * separate follow-up, not part of the provider removal.
  */
 
 /** Which backend fulfils sandbox operations. Vercel is the only implementation. */

@@ -32,7 +32,6 @@ import {
   routedThreadStatusValidator,
   runModeValidator,
   runStatusValidator,
-  sandboxProviderKindValidator,
   sessionStatusValidator,
   interactionModeValidator,
   snapshotBuildKindValidator,
@@ -1067,8 +1066,6 @@ export const snapshotBuildFields = {
   // "base" (image only) vs "seeded" (boots + seeds DB before capture).
   // Optional: legacy rows predate this field and render without a type.
   kind: v.optional(snapshotBuildKindValidator),
-  // Sandbox provider used for this build (set at workflow start).
-  provider: v.optional(sandboxProviderKindValidator),
   logs: v.string(),
   error: v.optional(v.string()),
   workflowRunId: v.optional(v.number()),
@@ -2287,8 +2284,7 @@ export const projectCoordinatorWakeFields = {
   text: v.string(),
   createdAt: v.number(),
   sentAt: v.optional(v.number()),
-  /** Legacy: the removed hourly cap. `clearCoordinatorWakeHeldAt` clears it; drop it after that runs. */
-  heldAt: v.optional(v.number()),
+  // heldAt removed with the hourly cap. schema-narrowing-ok: clearCoordinatorWakeHeldAt
 };
 
 export const notificationFields = {
@@ -2335,7 +2331,7 @@ export const repoEnvVarFields = {
 
 export const repoSnapshotFields = {
   repoId: v.id("githubRepos"),
-  snapshotName: v.string(),
+  // snapshotName removed with Daytona. schema-narrowing-ok: removeDaytonaSnapshotFields
   schedule: snapshotScheduleValidator,
   enabled: v.optional(v.boolean()),
   cronJobId: v.optional(v.string()),
@@ -2346,7 +2342,7 @@ export const repoSnapshotFields = {
   // unlike githubRepos.startupCommands. Not part of the image fingerprint.
   seedCommands: v.optional(v.array(v.string())),
   // Vercel base Image capture (`snap_*`) from a running sandbox — separate
-  // from `snapshotName` and per-app `seededSnapshotName`.
+  // from per-app `seededSnapshotName`.
   baseSnapshotId: v.optional(v.string()),
   createdAt: v.number(),
   updatedAt: v.number(),

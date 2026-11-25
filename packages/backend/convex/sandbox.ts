@@ -8,8 +8,6 @@ export {
   archiveSandbox,
   verifySandboxLiveness,
   captureStalledTurnDiagnostics,
-  getSandboxProviderKind,
-  getSnapshotSandboxProviderKind,
 } from "./_sandbox_runtime/lifecycle";
 
 export {

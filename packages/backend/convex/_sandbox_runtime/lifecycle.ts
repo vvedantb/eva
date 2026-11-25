@@ -435,21 +435,3 @@ export const archiveSandbox = internalAction({
     return null;
   },
 });
-
-/** Returns the active sandbox provider for a repo (for workflow thaw id selection). Vercel is the only provider. */
-export const getSandboxProviderKind = internalAction({
-  args: { repoId: v.id("githubRepos") },
-  returns: v.literal("vercel"),
-  handler: async () => "vercel" as const,
-});
-
-/**
- * Provider for a snapshot config. Vercel is the only provider, so this
- * always resolves "vercel"; kept as an internalAction (name unchanged) since
- * it is still part of the public `internal.sandbox.*` surface.
- */
-export const getSnapshotSandboxProviderKind = internalAction({
-  args: { repoSnapshotId: v.id("repoSnapshots") },
-  returns: v.literal("vercel"),
-  handler: async () => "vercel" as const,
-});
