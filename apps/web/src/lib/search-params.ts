@@ -400,6 +400,18 @@ export function isAutomationTab(s: string): s is AutomationTab {
 
 export const AUTOMATION_DEFAULT_TAB: AutomationTab = "latest";
 
+// The Inbox's two views: what waits for you (derived, no read state) and the
+// notification feed. Needs you is the default.
+export const inboxViews = ["needs", "updates"] as const;
+export type InboxView = (typeof inboxViews)[number];
+export const inboxViewParser = parseAsStringLiteral(inboxViews)
+  .withDefault("needs")
+  .withOptions(searchOptions);
+
+export function isInboxView(s: string): s is InboxView {
+  return inboxViews.some((view) => view === s);
+}
+
 // "archived" is a separate list rather than a third state of the same one: the
 // backend splits the 100-row window on `archivedAt`, so Unread only ever means
 // "unread and not archived".
