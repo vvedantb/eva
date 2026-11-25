@@ -86,6 +86,7 @@ export {
   DEFAULT_PREVIEW_PORT,
   DESKTOP_PORT,
   EDITOR_PORT,
+  previewProxyPort,
 } from "./sandboxPorts";
 export { MAX_PARALLEL_CHATS } from "./sessionChats";
 export { terminalHistoryTail } from "./terminalHistory";
