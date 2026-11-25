@@ -1,7 +1,7 @@
 import { convexTest } from "convex-test";
 import workflow from "@convex-dev/workflow/test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
-import { api } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
 import { modules } from "./_helpers/convexModules";
@@ -134,6 +134,91 @@ describe("reply threads", () => {
         "user",
         "assistant",
       ]);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a thread turn's alerts and retry bubble stay in the thread",
+    async () => {
+      const f = await fixture();
+      await f.asUser.mutation(api.sessionWorkflow.addReply, {
+        rootId: f.rootId,
+        content: `${EVA} can you split it in two?`,
+        model: "claude:sonnet",
+      });
+      // A person replies while Eva works: her bubble is still the turn's own.
+      await f.asUser.mutation(api.sessionWorkflow.addReply, {
+        rootId: f.rootId,
+        content: "Thanks!",
+        model: "claude:sonnet",
+      });
+      await f.t.mutation(internal.sessionWorkflow.addAssistantPlaceholder, {
+        chatId: f.chatId,
+      });
+      await f.t.mutation(internal.sessionWorkflow.postSystemAlert, {
+        chatId: f.chatId,
+        content: "Failed to create draft PR",
+      });
+
+      const turn = await f.t.run(async (ctx) =>
+        ctx.db.query("turns").first(),
+      );
+      expect(turn?.replyTo).toBe(f.rootId);
+      const rows = await transcript(f, f.chatId);
+      expect(rows.map((row) => row._id)).toEqual([f.rootId]);
+      const thread = await f.asUser.query(api.messages.listReplies, {
+        rootId: f.rootId,
+      });
+      expect(
+        thread?.replies.map((row) => [row.role, row.isSystemAlert ?? false]),
+      ).toEqual([
+        ["user", false],
+        ["assistant", false],
+        ["user", false],
+        ["assistant", true],
+      ]);
+      expect(rows[0]?.replyCount).toBe(4);
+
+      // A session-level alert is not the turn's: it stays in Main.
+      const { sessionId } = await f.t.run(async (ctx) => {
+        const chat = await ctx.db.get(f.chatId);
+        if (!chat) throw new Error("chat missing");
+        return { sessionId: chat.sessionId };
+      });
+      await f.t.mutation(internal.sessionWorkflow.postSystemAlert, {
+        sessionId,
+        content: "Failed to prepare linked repo",
+      });
+      expect(await transcript(f, f.chatId)).toHaveLength(2);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a queued thread reply stays out of the chat's queue panel",
+    async () => {
+      const f = await fixture();
+      await f.asUser.mutation(api.sessionWorkflow.addReply, {
+        rootId: f.rootId,
+        content: `${EVA} first`,
+        model: "claude:sonnet",
+      });
+      // Eva is busy with the first one, so the second waits in the queue.
+      await f.asUser.mutation(api.sessionWorkflow.addReply, {
+        rootId: f.rootId,
+        content: `${EVA} second`,
+        model: "claude:sonnet",
+      });
+
+      const queued = await f.t.run(async (ctx) =>
+        ctx.db.query("queuedMessages").collect(),
+      );
+      expect(queued.map((row) => row.replyTo)).toEqual([f.rootId]);
+      const panel = await f.asUser.query(api.queuedMessages.listByParent, {
+        parentId: f.chatId,
+      });
+      expect(panel).toHaveLength(0);
     },
     TIMEOUT_MS,
   );

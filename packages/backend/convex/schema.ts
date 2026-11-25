@@ -238,7 +238,10 @@ const schema = defineSchema({
   aveMessages: defineTable(aveMessageFields).index("by_thread", ["threadId"]),
   queuedMessages: defineTable(queuedMessageFields)
     .index("by_parent_and_created", ["parentId", "createdAt"])
-    .index("by_parent_and_order", ["parentId", "order"]),
+    .index("by_parent_and_order", ["parentId", "order"])
+    // The main queue panel lists rows without `replyTo`: a queued thread
+    // reply waits in its thread, not in the chat's queue.
+    .index("by_parent_and_reply_to_and_order", ["parentId", "replyTo", "order"]),
   sessions: defineTable(sessionFields)
     .index("by_repo", ["repoId"])
     .index("by_repo_and_deleted", ["repoId", "deletedAt"])

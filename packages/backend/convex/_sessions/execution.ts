@@ -32,7 +32,10 @@ import {
 } from "./daemonTurn";
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
-import { selectUsageLimitRetryUserMessage } from "./resultTarget";
+import {
+  resultTargetMessage,
+  selectUsageLimitRetryUserMessage,
+} from "./resultTarget";
 import { routePersonChatMessage } from "../_projects/reports";
 import { reviveCoordinatorSession } from "./ownedSession";
 import { sessionAccountHolder } from "../_projects/runSettings";
@@ -104,6 +107,8 @@ async function stageAndStartChatTurn(
     actingUserId: Id<"users">;
     message: string;
     settings: TurnSettings;
+    /** A retry of a thread turn: Eva answers in that thread again. */
+    replyTo?: Id<"messages">;
   },
 ): Promise<void> {
   const { chat, session } = params.context;
@@ -136,7 +141,11 @@ async function stageAndStartChatTurn(
     content: "",
     timestamp: Date.now(),
     activityLog: "",
+    replyTo: params.replyTo,
   });
+  if (params.replyTo !== undefined) {
+    await bumpThreadRoot(ctx, params.replyTo, undefined);
+  }
 
   const { prompt } = await buildSessionPrompt(ctx, {
     session,
@@ -165,6 +174,7 @@ async function stageAndStartChatTurn(
     sessionId: session._id,
     streamingEntityId,
     placeholderMessageId,
+    replyTo: params.replyTo,
     prompt,
     attachmentStorageIds: settings.attachmentStorageIds,
     model: normalizedModel,
@@ -220,6 +230,20 @@ async function stageAndStartChatTurn(
 
   await bindTurnWorkflow(ctx, turnId, String(workflowId));
   await trackSessionChatWorkflow(ctx, chat._id, workflowId);
+}
+
+/**
+ * The message a retried turn sends. A thread turn's retry wraps the reply in
+ * the thread prompt again and answers in the same thread.
+ */
+async function threadTurnMessage(
+  ctx: MutationCtx,
+  replyTo: Id<"messages"> | undefined,
+  content: string,
+): Promise<{ message: string; replyTo?: Id<"messages"> }> {
+  const root = replyTo === undefined ? null : await ctx.db.get(replyTo);
+  if (!root) return { message: content };
+  return { message: threadReplyPrompt(root, content), replyTo: root._id };
 }
 
 /** Parks a message on the chat's queue; the next drain starts it. */
@@ -312,7 +336,7 @@ export const retryEmptyStalledSessionTurn = internalMutation({
       context,
       repo,
       actingUserId,
-      message: lastUserContent,
+      ...(await threadTurnMessage(ctx, turn.replyTo, lastUserContent)),
       // Raw sticky traits: `stageAndStartChatTurn` normalises them through
       // `launchTraitsFromStored` before they reach any daemon launch, so this
       // restaged turn's opts sig matches a warm daemon's instead of killing it.
@@ -372,6 +396,8 @@ export const retryLastTurnWithAccount = authMutation({
       .order("desc")
       .take(20);
     const userMessage = selectUsageLimitRetryUserMessage(recent);
+    // A failed thread turn retries in its thread.
+    const failedReplyTo = resultTargetMessage(recent)?.replyTo;
 
     const repo = await ctx.db.get(session.repoId);
     if (!repo) throw new Error("Repository not found");
@@ -394,7 +420,7 @@ export const retryLastTurnWithAccount = authMutation({
       context,
       repo,
       actingUserId: ctx.userId,
-      message: userMessage.content,
+      ...(await threadTurnMessage(ctx, failedReplyTo, userMessage.content)),
       settings: {
         model: userMessage.model ?? normalizeAIModel(chat.lastModel),
         reasoningLevel: userMessage.reasoningLevel ?? chat.lastReasoningLevel,

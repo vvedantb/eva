@@ -78,6 +78,7 @@ import {
   sessionChatStreamingEntityId,
 } from "../_sessionChats/helpers";
 import { errorMessage } from "@vvedantb/server";
+import { insertTurnFollowUp } from "../_messages/replies";
 import { isStandaloneSession, sessionOwnerTaskId } from "./owner";
 
 // --- Completion event ---
@@ -701,14 +702,19 @@ export const postSystemAlert = internalMutation({
     }
     const context = await loadSessionChat(ctx.db, chatId);
     if (!context) return null;
-    await ctx.db.insert("messages", {
-      parentId: chatId,
-      role: "assistant",
+    const alert = {
       content: args.content,
       timestamp: Date.now(),
       isSystemAlert: true,
       ...(args.errorDetail !== undefined && { errorDetail: args.errorDetail }),
-    });
+    };
+    // A turn-level alert follows its turn into a thread; a session-level one
+    // stays in Main.
+    if (args.chatId === undefined) {
+      await ctx.db.insert("messages", { parentId: chatId, role: "assistant", ...alert });
+    } else {
+      await insertTurnFollowUp(ctx, { parentId: chatId, role: "assistant", ...alert });
+    }
     await ctx.db.patch(chatId, { updatedAt: Date.now() });
     await ctx.db.patch(context.session._id, { updatedAt: Date.now() });
     return null;
@@ -1461,7 +1467,8 @@ export const openSyntheticTurn = authMutation({
       throw new Error("Not authorized");
 
     const turnModel = normalizeAIModel(args.model ?? chat.lastModel);
-    const messageId = await ctx.db.insert("messages", {
+    // A continuation of a thread turn answers in the same thread.
+    const { messageId, replyTo } = await insertTurnFollowUp(ctx, {
       parentId: chat._id,
       role: "assistant",
       content: "",
@@ -1478,6 +1485,7 @@ export const openSyntheticTurn = authMutation({
       sessionId: session._id,
       streamingEntityId: sessionChatStreamingEntityId(chat._id),
       placeholderMessageId: messageId,
+      replyTo,
       prompt: "[synthetic continuation]",
       model: turnModel,
       sandboxId: session.sandboxId,

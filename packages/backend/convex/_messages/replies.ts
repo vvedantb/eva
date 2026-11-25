@@ -1,5 +1,7 @@
+import type { WithoutSystemFields } from "convex/server";
 import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
+import { findLatestTurn } from "../_chat/turnStore";
 
 /** Avatars under a thread root: its most recent distinct repliers. */
 export const MAX_THREAD_REPLIERS = 3;
@@ -67,4 +69,19 @@ export async function bumpThreadRoot(
     lastReplyAt: Date.now(),
     ...(repliers ? { replierIds: repliers } : {}),
   });
+}
+
+/**
+ * Inserts an Eva row that follows the chat's latest turn: an alert, a retry
+ * placeholder or a continuation. When that turn answered in a thread, the row
+ * joins the thread too, so it does not land in the main chat.
+ */
+export async function insertTurnFollowUp(
+  ctx: MutationCtx,
+  row: Omit<WithoutSystemFields<Doc<"messages">>, "replyTo">,
+): Promise<{ messageId: Id<"messages">; replyTo?: Id<"messages"> }> {
+  const replyTo = (await findLatestTurn(ctx, row.parentId))?.replyTo;
+  const messageId = await ctx.db.insert("messages", { ...row, replyTo });
+  if (replyTo !== undefined) await bumpThreadRoot(ctx, replyTo, undefined);
+  return { messageId, replyTo };
 }

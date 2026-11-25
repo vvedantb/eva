@@ -343,6 +343,11 @@ export const turnFields = {
   error: v.optional(v.string()),
   workflowId: v.optional(v.string()),
   placeholderMessageId: v.optional(v.id("messages")),
+  /**
+   * The thread root a chat turn answers in (a reply that @mentioned Eva).
+   * Its retries, alerts and continuations join the same thread.
+   */
+  replyTo: v.optional(v.id("messages")),
   prompt: v.optional(v.string()),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   model: aiModelValidator,

@@ -6,6 +6,7 @@ import { clearStreamingActivity } from "../_taskWorkflow/helpers";
 import { finalizeCancelledAssistantMessage } from "../streaming";
 import type { ChatAlert, ChatSurfaceAdapter } from "./surfaceAdapters";
 import { closeTurnForWorkflow } from "./turnStore";
+import { insertTurnFollowUp } from "../_messages/replies";
 import {
   detachPendingQuestions,
   findOpenChatQuestion,
@@ -73,11 +74,15 @@ export async function finalizeStaleChatTurn<TId extends ChatId, TEntity>(
     }
   }
 
-  const last = await ctx.db
+  // Skip people's thread replies: they can land after a thread turn's bubble.
+  const recent = await ctx.db
     .query("messages")
     .withIndex("by_parent", (q) => q.eq("parentId", id))
     .order("desc")
-    .first();
+    .take(20);
+  const last = recent.find(
+    (message) => !(message.role === "user" && message.replyTo !== undefined),
+  );
   if (
     last &&
     last.role === "assistant" &&
@@ -93,7 +98,7 @@ export async function finalizeStaleChatTurn<TId extends ChatId, TEntity>(
   // turn was waiting on the user, not failing.
   await detachPendingQuestions(ctx.db, String(id));
   if ((await findOpenChatQuestion(ctx.db, id)) === null) {
-    await ctx.db.insert("messages", {
+    await insertTurnFollowUp(ctx, {
       parentId: id,
       role: "assistant",
       content: alert.text,
