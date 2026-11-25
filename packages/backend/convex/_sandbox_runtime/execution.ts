@@ -122,7 +122,8 @@ import {
 import { vercelAppListenPort } from "./vercelAppPorts";
 import { getPreviewGrantPublicJwk, signPreviewGrant } from "../previewGrant";
 import { PREVIEW_GRANT_PARAM } from "../previewGrantConfig";
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
+import { chatSystemPrompt } from "../_sessions/prompts";
 import { previewActivityHmacMessage } from "./callbackAuth";
 import { resolvePublicConvexSiteUrl } from "../_env/publicConvexUrls";
 import { tryGetEvaBaseUrl } from "../_env/webAppUrl";
@@ -1555,10 +1556,16 @@ function buildDaemonOptsSig(
   providerAccountCredentialRevision: number | undefined,
   streamingEntityId: string,
   traits: TraitEnvInput,
+  systemPrompt: string | undefined,
 ): string {
   const fastMode =
     traits.fastMode === undefined ? "" : traits.fastMode ? "1" : "0";
-  return `${normalizedModel}|${allowedTools ?? ""}|${traits.reasoningLevel ?? ""}|${traits.thinkingEnabled === false ? "0" : ""}|${traits.use1mContext === true ? "1" : ""}|${fastMode}|${providerAccountId ?? ""}|${providerAccountCredentialRevision ?? ""}|${streamingEntityId}`;
+  // A daemon started with other system prompt text must respawn, or the turn
+  // would leave out instructions the prompt expects the system prompt to hold.
+  const systemPromptSig = systemPrompt
+    ? createHash("sha256").update(systemPrompt).digest("hex").slice(0, 12)
+    : "";
+  return `${normalizedModel}|${allowedTools ?? ""}|${traits.reasoningLevel ?? ""}|${traits.thinkingEnabled === false ? "0" : ""}|${traits.use1mContext === true ? "1" : ""}|${fastMode}|${providerAccountId ?? ""}|${providerAccountCredentialRevision ?? ""}|${streamingEntityId}|${systemPromptSig}`;
 }
 
 function buildTraitEnvVars(traits: TraitEnvInput): Record<string, string> {
@@ -1655,6 +1662,9 @@ async function runPrewarmEntityDaemon(
       );
       return { prewarmed: false };
     }
+    // Every caller is a session chat (`entityTable: "sessionChats"`), whose
+    // turn prompt `buildSessionPrompt` shapes for this system prompt.
+    const systemPrompt = chatSystemPrompt(normalizedModel);
     const providerAccountCredentialRevision = args.providerAccountId
       ? await resolveProviderAccountCredentialRevision(
           ctx,
@@ -1675,6 +1685,7 @@ async function runPrewarmEntityDaemon(
         use1mContext: args.use1mContext,
         fastMode: args.fastMode,
       },
+      systemPrompt,
     );
     const probeAliveState = async (): Promise<string> => {
       const alive = await execHandle(
@@ -1893,6 +1904,7 @@ async function runPrewarmEntityDaemon(
         {
           model: normalizedModel,
           allowedTools: args.allowedTools,
+          systemPrompt,
           claimMutation: args.claimMutation,
           openSyntheticTurnMutation: args.openSyntheticTurnMutation,
           completeSyntheticTurnMutation: args.completeSyntheticTurnMutation,
