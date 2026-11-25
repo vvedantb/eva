@@ -11,7 +11,12 @@ import {
 } from "@tabler/icons-react";
 import { Button, ConversationEmptyState, toast } from "@vvedantb/ui";
 import { api, type AIModel } from "@eva/backend";
-import { isOtherUserChatMessage, type MentionItem } from "@eva/shared";
+import {
+  firstNameByUserId,
+  isOtherUserChatMessage,
+  type MentionItem,
+} from "@eva/shared";
+import { groupMessageReactions } from "@eva/shared/taskDetail";
 import { ChatMessage } from "@/lib/components/chat/ChatMessage";
 import type {
   ChatParentId,
@@ -76,6 +81,33 @@ export function ReplyThreadView({
   const roots = useQuery(api.messages.listThreadRoots, {
     parentId: chatParentId,
   });
+  // Reactions work in a thread too: one subscription for its rows.
+  const threadIds = thread
+    ? [thread.root, ...thread.replies].map((message) => message._id)
+    : [];
+  const reactionRows = useQuery(
+    api.messages.listReactions,
+    threadIds.length > 0 ? { messageIds: threadIds } : "skip",
+  );
+  const reactorIds = [
+    ...new Set((reactionRows ?? []).map((row) => row.userId)),
+  ].sort();
+  const reactors = useQuery(
+    api.users.getMany,
+    reactorIds.length > 0 ? { ids: reactorIds } : "skip",
+  );
+  const reactorNames = firstNameByUserId(reactors ?? []);
+  const reactionGroups = groupMessageReactions(
+    reactionRows,
+    (userId) => reactorNames.get(userId),
+    currentUserId,
+  );
+  const toggleReactionMutation = useMutation(api.messages.toggleReaction);
+  const toggleReaction = (messageId: string, emoji: string) => {
+    void toggleReactionMutation({ messageId, emoji }).catch(() =>
+      toast.error("Could not save the reaction"),
+    );
+  };
   const index = roots ? roots.findIndex((id) => id === rootId) : -1;
   const previousRootId = index > 0 && roots ? roots[index - 1] : undefined;
   const nextRootId =
@@ -126,7 +158,7 @@ export function ReplyThreadView({
         // A plain scroll area: a thread is short, and the chat's stick-to-
         // bottom container showed "Scroll to end" over three replies.
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="flex flex-col gap-3 p-3">
+          <div className="flex flex-col gap-3 p-3 pt-6">
             {thread
               ? [thread.root, ...thread.replies].map((message, index) => (
                   <div
@@ -145,6 +177,8 @@ export function ReplyThreadView({
                         currentUserId ?? undefined,
                       )}
                       assistantBubble
+                      reactions={reactionGroups.get(message._id)}
+                      onToggleReaction={toggleReaction}
                     />
                   </div>
                 ))

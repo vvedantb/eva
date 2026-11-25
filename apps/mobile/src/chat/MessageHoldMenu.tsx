@@ -18,6 +18,7 @@ import type { MessageMenu, MessageSheetAction } from "@vvedantb/native-ui/ai";
 import { toast } from "@vvedantb/native-ui/toast";
 import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
+import { Text } from "react-native";
 import type { Sentiment } from "@/chat/MessageFooter";
 import type { TurnChangesTarget } from "@/chat/TurnChangesChip";
 import { useScheme } from "@/ui/theme";
@@ -38,6 +39,11 @@ export type HeldMessage = {
   onSelectText?: () => void;
   /** The coordinator chat: opens this message's reply thread. */
   onReply?: () => void;
+  /**
+   * The coordinator chat: the quick reactions take the thumbs' place above the
+   * message; `mine` marks the ones the viewer already gave.
+   */
+  reactions?: { quick: readonly string[]; mine: ReadonlySet<string>; onReact: (emoji: string) => void };
 };
 
 /**
@@ -63,7 +69,7 @@ export function useMessageMenu(onRestore: (turn: TurnChangesTarget) => void): (m
   ];
 
   return (message) => {
-    const { rating, onFork, onRetry, turn, onSelectText, onReply } = message;
+    const { rating, onFork, onRetry, turn, onSelectText, onReply, reactions } = message;
     const actions: MessageSheetAction[] = [];
     if (onReply) actions.push({ key: "reply", label: "Reply in thread", icon: IconMessages, onPress: onReply });
     actions.push({ key: "copy", label: "Copy text", icon: IconClipboard, onPress: () => copy(message.text, "Copied") });
@@ -90,6 +96,20 @@ export function useMessageMenu(onRestore: (turn: TurnChangesTarget) => void): (m
         disabled: !turn.sandboxRunning,
         onPress: () => onRestore(turn),
       });
+    }
+    if (reactions) {
+      return {
+        reactions: {
+          items: reactions.quick.map((emoji) => ({
+            key: emoji,
+            label: `React with ${emoji}`,
+            selected: reactions.mine.has(emoji),
+            render: () => <Text style={{ fontSize: 22 }}>{emoji}</Text>,
+          })),
+          onPress: reactions.onReact,
+        },
+        actions,
+      };
     }
     return {
       reactions: rating

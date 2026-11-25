@@ -252,6 +252,43 @@ export function groupReactions(
   return map;
 }
 
+/** The coordinator chat's one-tap reactions, on its message toolbar and hold menu. */
+export const CHAT_QUICK_REACTIONS = ["👍", "❤️", "😆", "😮"];
+
+/**
+ * Chat message reactions (`messages.listReactions`) grouped by message, then by
+ * emoji in first-seen order, as `groupReactions` does for task comments.
+ * `nameOf` gives a reactor's display name; the current person reads "You".
+ */
+export function groupMessageReactions(
+  reactions: readonly { messageId: string; userId: Id<"users">; emoji: string }[] | undefined,
+  nameOf: (userId: Id<"users">) => string | undefined,
+  currentUserId: Id<"users"> | null | undefined,
+): Map<string, ReactionGroup[]> {
+  const byMessage = new Map<string, Map<string, Id<"users">[]>>();
+  for (const reaction of reactions ?? []) {
+    const emojiMap = byMessage.get(reaction.messageId) ?? new Map<string, Id<"users">[]>();
+    byMessage.set(reaction.messageId, emojiMap);
+    emojiMap.set(reaction.emoji, [...(emojiMap.get(reaction.emoji) ?? []), reaction.userId]);
+  }
+  const map = new Map<string, ReactionGroup[]>();
+  for (const [messageId, emojiMap] of byMessage) {
+    map.set(
+      messageId,
+      [...emojiMap.entries()].map(([emoji, ids]) => ({
+        emoji,
+        count: ids.length,
+        reactedByMe: currentUserId ? ids.includes(currentUserId) : false,
+        reactors: ids.map((id) => ({
+          userId: id,
+          name: id === currentUserId ? "You" : (nameOf(id) ?? "Someone"),
+        })),
+      })),
+    );
+  }
+  return map;
+}
+
 /** The reactions list with one person's reaction toggled (the optimistic update). */
 export function toggleReaction(
   reactions: readonly TaskReaction[],

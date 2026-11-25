@@ -72,6 +72,9 @@ import { ScopeCheckChip } from "@/lib/components/chat/_components/ScopeCheckChip
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { TurnErrorNotice } from "@/lib/components/chat/TurnErrorNotice";
 import { ThreadSummary } from "@/lib/components/chat/replies/ThreadSummary";
+import { MessageToolbar } from "@/lib/components/chat/_components/MessageToolbar";
+import { ReactionBar } from "@/lib/components/tasks/_components/ReactionBar";
+import type { ReactionGroup } from "@eva/shared/taskDetail";
 
 const EVA_ICON = <EvaIcon />;
 
@@ -199,6 +202,10 @@ interface ChatMessageProps {
    * Takes the id so one stable handler serves every row, like `onFork`.
    */
   onReply?: (messageId: string) => void;
+  /** The coordinator chat: this message's reactions, grouped by emoji. */
+  reactions?: ReactionGroup[];
+  /** The coordinator chat: toggles the viewer's reaction. One stable handler. */
+  onToggleReaction?: (messageId: string, emoji: string) => void;
   /**
    * Re-sends the turn's prompt. Undefined while a turn is executing or the chat
    * is read-only, which is what hides the Retry action on a failed turn.
@@ -265,6 +272,8 @@ export const ChatMessage = memo(function ChatMessage({
   linkHighlight = false,
   onFork,
   onReply,
+  reactions,
+  onToggleReaction,
   onRetryTurn,
   precedingUser,
   belowContent,
@@ -301,6 +310,28 @@ export const ChatMessage = memo(function ChatMessage({
       : buildReplyAction(onReply, message._id),
   ].filter((action): action is ChatMessageActionItem => action !== undefined);
   const rowActions = [...userActions, ...checkpoint.items];
+  // The coordinator chat swaps the footer row for a floating toolbar and
+  // keeps "N replies" and the reaction chips on their own line under the
+  // bubble (projects v2, PR D).
+  const toolbarMode = assistantBubble;
+  const toolbar =
+    toolbarMode && !turnState.isStreamingPlaceholder ? (
+      <MessageToolbar
+        onReact={
+          onToggleReaction
+            ? (emoji) => onToggleReaction(message._id, emoji)
+            : undefined
+        }
+        onReply={onReply ? () => onReply(message._id) : undefined}
+        copyText={copyPlain}
+        menuItems={rowActions.filter((action) => action.key !== "reply")}
+        rating={
+          message.role === "assistant" && canRate
+            ? { messageId: message._id, sentiment: feedbackSentiment }
+            : undefined
+        }
+      />
+    ) : null;
   const threadControl =
     onReply && (message.replyCount ?? 0) > 0 ? (
       <ThreadSummary
@@ -308,6 +339,22 @@ export const ChatMessage = memo(function ChatMessage({
         replierIds={message.replierIds ?? []}
         onOpen={() => onReply(message._id)}
       />
+    ) : null;
+  const reactionBar =
+    toolbarMode && onToggleReaction && reactions && reactions.length > 0 ? (
+      <ReactionBar
+        groups={reactions}
+        toggle={(emoji) => onToggleReaction(message._id, emoji)}
+      />
+    ) : null;
+  const underLine =
+    toolbarMode && (threadControl || reactionBar) ? (
+      <>
+        {threadControl}
+        {reactionBar}
+      </>
+    ) : threadControl && !showTurnMeta ? (
+      threadControl
     ) : null;
 
   return (
@@ -339,10 +386,11 @@ export const ChatMessage = memo(function ChatMessage({
                 isHandoffBoundary={isHandoffBoundary}
                 belowContent={belowContent}
                 artifacts={artifacts}
-                showTurnMeta={showTurnMeta}
+                showTurnMeta={showTurnMeta && !toolbarMode}
                 copyPlain={copyPlain}
                 userActions={userActions}
                 threadControl={threadControl}
+                toolbar={toolbar}
               />
             ) : (
               <AssistantTurn
@@ -350,7 +398,7 @@ export const ChatMessage = memo(function ChatMessage({
                 turnState={turnState}
                 isLatestAssistantTurn={isLatestAssistantTurn}
                 showChangedFiles={showChangedFiles}
-                showTurnMeta={showTurnMeta}
+                showTurnMeta={showTurnMeta && !toolbarMode}
                 showScopeCheck={showScopeCheck}
                 bubble={assistantBubble}
                 joinsNext={joinsNext}
@@ -373,24 +421,26 @@ export const ChatMessage = memo(function ChatMessage({
                 copyPlain={copyPlain}
                 rowActions={rowActions}
                 threadControl={threadControl}
+                toolbar={toolbar}
                 canRate={canRate}
                 feedbackSentiment={feedbackSentiment}
                 feedbackComment={feedbackComment}
               />
             )}
           </AIMessage>
-          {threadControl && !showTurnMeta ? (
-            // No footer row here (a grouped bubble, simple view): the thread
-            // control keeps its own line so the replies stay reachable.
+          {underLine ? (
+            // Under the bubble: the coordinator chat's "N replies" and
+            // reaction chips, or the thread control when there is no footer
+            // row (a grouped bubble, simple view).
             <div
               className={cn(
-                "mt-1 flex",
+                "mt-1 flex flex-wrap items-center gap-2",
                 message.role === "user" && !isOtherUser
                   ? "justify-end"
                   : "justify-start pl-6",
               )}
             >
-              {threadControl}
+              {underLine}
             </div>
           ) : null}
         </m.div>
@@ -457,9 +507,12 @@ function UserTurn({
   copyPlain,
   userActions,
   threadControl,
+  toolbar,
 }: {
   /** "N replies", always visible in the footer row. */
   threadControl: ReactNode;
+  /** The coordinator chat's floating toolbar, on the bubble's top-right. */
+  toolbar?: ReactNode;
   joinsNext: boolean;
   message: ChatBodyMessage;
   repo?: ChatRepo;
@@ -517,6 +570,7 @@ function UserTurn({
         isOtherUser={isOtherUser}
         joinsNext={joinsNext}
         isMcpProvenance={isOrchestratorNotification || sentViaMcp}
+        toolbar={toolbar}
       />
       {isHandoffBoundary && message.model !== undefined ? (
         <HandoffModelChip
@@ -550,17 +604,20 @@ function UserTurnBubble({
   isOtherUser,
   joinsNext,
   isMcpProvenance,
+  toolbar,
 }: {
   message: ChatBodyMessage;
   repo?: ChatRepo;
   isOtherUser: boolean;
   joinsNext: boolean;
   isMcpProvenance: boolean;
+  /** The coordinator chat's floating toolbar, on the bubble's top-right. */
+  toolbar?: ReactNode;
 }) {
   // min-w-0 stops the default `min-width: auto` on this flex item from letting
   // one unbreakable token (a JWT, a long URL) stretch the bubble past the
   // message column.
-  return (
+  const bubble = (
     <div className="flex min-w-0 max-w-full items-end gap-2">
       {isOtherUser ? (
         <div className="size-4 shrink-0">
@@ -584,6 +641,35 @@ function UserTurnBubble({
       >
         <UserMessageBody message={message} repo={repo} />
       </MessageContent>
+    </div>
+  );
+  return toolbar ? (
+    <BubbleWithToolbar toolbar={toolbar} timestamp={message.timestamp}>
+      {bubble}
+    </BubbleWithToolbar>
+  ) : (
+    bubble
+  );
+}
+
+/**
+ * The coordinator chat's bubble frame: the floating toolbar sits on its
+ * top-right corner, and the clock time is the bubble's tooltip (the footer
+ * row that showed it is gone there).
+ */
+function BubbleWithToolbar({
+  toolbar,
+  timestamp,
+  children,
+}: {
+  toolbar: ReactNode;
+  timestamp: number;
+  children: ReactNode;
+}) {
+  return (
+    <div className="relative min-w-0 max-w-full" title={formatClockTime(timestamp)}>
+      {children}
+      {toolbar}
     </div>
   );
 }
@@ -617,6 +703,8 @@ interface AssistantTurnProps {
   rowActions: ChatMessageActionItem[];
   /** "N replies", always visible in the footer row. */
   threadControl: ReactNode;
+  /** The coordinator chat's floating toolbar, on the bubble's top-right. */
+  toolbar?: ReactNode;
   canRate: boolean;
   feedbackSentiment?: FeedbackSentiment;
   feedbackComment?: string;
@@ -650,6 +738,7 @@ function AssistantTurn({
   copyPlain,
   rowActions,
   threadControl,
+  toolbar,
   canRate,
   feedbackSentiment,
   feedbackComment,
@@ -672,6 +761,7 @@ function AssistantTurn({
       <AssistantTurnContent
         bubble={bubble}
         joinsNext={joinsNext}
+        toolbar={toolbar}
         message={message}
         turnState={turnState}
         isLatestAssistantTurn={isLatestAssistantTurn}
@@ -776,6 +866,7 @@ function AssistantTurnContent({
   panelTabs,
   bubble,
   joinsNext,
+  toolbar,
 }: Omit<
   AssistantTurnProps,
   | "showTurnMeta"
@@ -907,7 +998,13 @@ function AssistantTurnContent({
       <div className="size-4 shrink-0">
         {joinsNext ? null : <EvaIcon size={16} disc={false} />}
       </div>
-      {content}
+      {toolbar ? (
+        <BubbleWithToolbar toolbar={toolbar} timestamp={message.timestamp}>
+          {content}
+        </BubbleWithToolbar>
+      ) : (
+        content
+      )}
     </div>
   ) : (
     content

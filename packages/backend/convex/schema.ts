@@ -24,6 +24,7 @@ import {
   taskActivityFields,
   taskCommentFields,
   taskReactionFields,
+  messageReactionFields,
   taskSubscriberFields,
   chatReadFields,
   standupReadFields,
@@ -185,6 +186,10 @@ const schema = defineSchema({
       "userId",
       "emoji",
     ]),
+
+  messageReactions: defineTable(messageReactionFields)
+    .index("by_message", ["messageId"])
+    .index("by_message_user_emoji", ["messageId", "userId", "emoji"]),
 
   taskSubscribers: defineTable(taskSubscriberFields)
     .index("by_task", ["taskId"])

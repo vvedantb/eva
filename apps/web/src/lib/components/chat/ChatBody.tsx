@@ -7,6 +7,7 @@ import {
   ConversationContent,
   ConversationScrollButton,
   buildChatJumpRailTicks,
+  toast,
   tokenTransition,
 } from "@vvedantb/ui";
 import { findNewMessageIds, useChatRecap } from "@eva/shared/chatReadState";
@@ -84,6 +85,8 @@ import {
   type ReactNode,
 } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
+import { useMutation } from "convex/react";
+import { groupMessageReactions } from "@eva/shared/taskDetail";
 import { useHeldQuery } from "@/lib/hooks/useHeldQuery";
 import type { TranscriptReach } from "@/lib/hooks/useChatTranscript";
 import {
@@ -922,12 +925,42 @@ function ChatBodyInner({
     return outputs ? outputs.map((output) => output.node) : undefined;
   };
 
-  const otherUserIds = otherUserIdsInChat(displayMessages, currentUserId);
+  // Reactions (the coordinator chat): one subscription for the rows on screen.
+  const reactionTargets = assistantBubbles
+    ? displayMessages
+        .filter((message) => message.isSystemAlert !== true)
+        .map((message) => message._id)
+    : [];
+  const reactionRows = useQuery(
+    api.messages.listReactions,
+    reactionTargets.length > 0 ? { messageIds: reactionTargets } : "skip",
+  );
+  const toggleReactionMutation = useMutation(api.messages.toggleReaction);
+  const toggleReaction = (messageId: string, emoji: string) => {
+    void toggleReactionMutation({ messageId, emoji }).catch(() =>
+      toast.error("Could not save the reaction"),
+    );
+  };
+
+  // Names for teammates' bubbles and for the reaction chips' tooltips.
+  const otherUserIds = [
+    ...new Set([
+      ...otherUserIdsInChat(displayMessages, currentUserId),
+      ...(reactionRows ?? [])
+        .map((row) => row.userId)
+        .filter((userId) => userId !== currentUserId),
+    ]),
+  ].sort();
   const users = useQuery(
     api.users.getMany,
     otherUserIds.length > 0 ? { ids: otherUserIds } : "skip",
   );
   const firstNames = firstNameByUserId(users ?? []);
+  const reactionGroups = groupMessageReactions(
+    reactionRows,
+    (userId) => firstNames.get(userId),
+    currentUserId,
+  );
 
   // Retry re-sends the failed turn's prompt through the normal send path. It is
   // withheld while a turn is running (the send would only queue behind it) and
@@ -1079,6 +1112,8 @@ function ChatBodyInner({
           onReply={
             onOpenThread && canForkMessage(message) ? onOpenThread : undefined
           }
+          reactions={reactionGroups.get(message._id)}
+          onToggleReaction={assistantBubbles ? toggleReaction : undefined}
           belowContent={renderChatUiPanels(
             panelPlacement.byMessageId.get(message._id) ?? [],
           )}

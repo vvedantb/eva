@@ -1574,6 +1574,15 @@ export const taskReactionFields = {
   createdAt: v.number(),
 };
 
+// One row per (chat message, user, emoji): emoji reactions in the project
+// coordinator chat and its reply threads. Access follows the message's chat.
+export const messageReactionFields = {
+  messageId: v.id("messages"),
+  userId: v.id("users"),
+  emoji: v.string(),
+  createdAt: v.number(),
+};
+
 // One row per (task, user). `subscribed: false` is a sticky opt-out tombstone —
 // it stops auto-subscribe triggers (commenting, being mentioned) from silently
 // re-adding a user who explicitly unsubscribed. Absence of a row = never involved.
