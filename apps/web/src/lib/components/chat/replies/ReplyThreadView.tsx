@@ -35,9 +35,6 @@ import {
 } from "@/lib/components/tasks/_components/CommentMentionInput";
 import { CommentSendButton } from "@/lib/components/tasks/_components/CommentSendButton";
 
-/** Rows in a thread never expand a changed-files card; one shared no-op. */
-function ignoreExpand(): void {}
-
 /**
  * A reply thread in the side panel beside the coordinator chat, Slack style:
  * the message on top, its replies below in the chat's own bubbles, and a
@@ -165,9 +162,6 @@ export function ReplyThreadView({
                       message={message}
                       animateIn={false}
                       repo={repo}
-                      isLatestAssistantTurn={false}
-                      showChangedFiles={false}
-                      onChangedFilesExpandedChange={ignoreExpand}
                       isOtherUser={isOtherUserChatMessage(
                         message,
                         currentUserId ?? undefined,

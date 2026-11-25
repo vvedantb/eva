@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { collectChangedFiles } from "@eva/shared";
 import { parseActivityLog } from "@eva/shared/activityTrace";
 
 /** The mobile chat reads `messages.activityLog` with Zod, then draws it with the native-ui copy of the web timeline. */
@@ -39,19 +38,6 @@ describe("activity log", () => {
     expect(agent?.toolUseId).toBe("toolu_1");
     expect(child).toMatchObject({ parentToolUseId: "toolu_1", hasHiddenDetail: true });
     expect(command).toMatchObject({ output: { text: "1 failed", exitCode: 1 }, isError: true, durationMs: 5400 });
-  });
-
-  test("keeps an edited file's path for the phone's Changed files card", () => {
-    const steps = parseActivityLog(
-      JSON.stringify([
-        { type: "write", label: "Created file", path: "/tmp/repo/src/toCsv.ts", status: "complete" },
-        { type: "read", label: "Read file", path: "/tmp/repo/src/App.tsx", status: "complete" },
-        { type: "edit", label: "Edited file", path: "/tmp/repo/src/toCsv.ts", status: "complete" },
-      ]),
-    );
-    expect(collectChangedFiles(steps)).toEqual([
-      { path: "/tmp/repo/src/toCsv.ts", name: "toCsv.ts", dir: "src", repoName: null },
-    ]);
   });
 
   test("legacy plain text, a non-list, empty and missing logs give no steps", () => {

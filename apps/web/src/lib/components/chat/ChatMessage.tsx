@@ -45,7 +45,6 @@ import {
 } from "@/lib/components/StreamingActivityDisplay";
 import { SystemAlertMessage } from "@/lib/components/SystemAlertMessage";
 import { UserMessageAttachments } from "@/lib/components/chat/imageAttachments";
-import { ChangedFilesCard } from "@/lib/components/chat/ChangedFilesCard";
 import { EvaIcon } from "@/lib/components/EvaIcon";
 import { EvaTypingLine } from "@/lib/components/chat/TypingIndicator";
 import {
@@ -131,9 +130,6 @@ interface ChatMessageProps {
   animateIn?: boolean;
   /** Absent (Manager Ave): user turns render as plain markdown. */
   repo?: ChatRepo;
-  isLatestAssistantTurn: boolean;
-  /** False in simple view, which hides diff surfaces entirely. */
-  showChangedFiles?: boolean;
   /**
    * False in simple view: drops the meta row under every turn (user: time,
    * copy, fork; assistant: model, copy, fork, time · duration). Copy and fork
@@ -142,8 +138,6 @@ interface ChatMessageProps {
   showTurnMeta?: boolean;
   /** The viewer's `scopeCheck` experimental flag. */
   showScopeCheck?: boolean;
-  changedFilesExpanded?: boolean;
-  onChangedFilesExpandedChange: (messageId: string, expanded: boolean) => void;
   /** True when this user turn belongs to a teammate (left-aligned). */
   isOtherUser?: boolean;
   /** First name shown above teammate bubbles. */
@@ -241,12 +235,8 @@ export const ChatMessage = memo(function ChatMessage({
   message,
   animateIn = true,
   repo,
-  isLatestAssistantTurn,
-  showChangedFiles = true,
   showTurnMeta = true,
   showScopeCheck = false,
-  changedFilesExpanded,
-  onChangedFilesExpandedChange,
   isOtherUser = false,
   senderFirstName,
   assistantBubble = false,
@@ -375,14 +365,10 @@ export const ChatMessage = memo(function ChatMessage({
               <AssistantTurn
                 message={message}
                 turnState={turnState}
-                isLatestAssistantTurn={isLatestAssistantTurn}
-                showChangedFiles={showChangedFiles}
                 showTurnMeta={showTurnMeta && !toolbarMode}
                 showScopeCheck={showScopeCheck}
                 bubble={assistantBubble}
                 joinsNext={joinsNext}
-                changedFilesExpanded={changedFilesExpanded}
-                onChangedFilesExpandedChange={onChangedFilesExpandedChange}
                 turnModel={turnModel}
                 turnReasoningLevel={turnReasoningLevel}
                 turnCredentialSourceLabel={turnCredentialSourceLabel}
@@ -654,14 +640,10 @@ function BubbleWithToolbar({
 interface AssistantTurnProps {
   message: ChatBodyMessage;
   turnState: ReturnType<typeof getAssistantTurnState>;
-  isLatestAssistantTurn: boolean;
-  showChangedFiles: boolean;
   showTurnMeta: boolean;
   showScopeCheck: boolean;
   bubble: boolean;
   joinsNext: boolean;
-  changedFilesExpanded?: boolean;
-  onChangedFilesExpandedChange: ChatMessageProps["onChangedFilesExpandedChange"];
   turnModel?: string;
   turnReasoningLevel?: string;
   turnCredentialSourceLabel?: string;
@@ -690,14 +672,10 @@ interface AssistantTurnProps {
 function AssistantTurn({
   message,
   turnState,
-  isLatestAssistantTurn,
-  showChangedFiles,
   showTurnMeta,
   showScopeCheck,
   bubble,
   joinsNext,
-  changedFilesExpanded,
-  onChangedFilesExpandedChange,
   turnModel,
   turnReasoningLevel,
   turnCredentialSourceLabel,
@@ -720,6 +698,7 @@ function AssistantTurn({
   feedbackSentiment,
   feedbackComment,
 }: AssistantTurnProps) {
+  const simpleView = useSimpleView();
   const turnErrorTitle = getTurnErrorTitle({
     errorType: message.errorType,
     turnModel,
@@ -741,14 +720,9 @@ function AssistantTurn({
         toolbar={toolbar}
         message={message}
         turnState={turnState}
-        isLatestAssistantTurn={isLatestAssistantTurn}
-        showChangedFiles={showChangedFiles}
-        changedFilesExpanded={changedFilesExpanded}
-        onChangedFilesExpandedChange={onChangedFilesExpandedChange}
         streamingActivity={streamingActivity}
         streamingContent={streamingContent}
         onOpenFile={onOpenFile}
-        onViewDiff={onViewDiff}
         onOpenAgentsTab={onOpenAgentsTab}
         backgroundAgents={backgroundAgents}
         sandboxRunning={sandboxRunning}
@@ -763,18 +737,16 @@ function AssistantTurn({
           <div className="mt-1 flex flex-col gap-2">{artifacts}</div>
         ) : null}
         {/* Sits above `belowContent` so agent-composed panels keep
-            their promised slot directly over the meta row, and so the
-            chip stays next to the changed-files card it judges.
-            Deliberately not gated on `showChangedFiles`: the verdict is
-            a safety signal, and simple view hiding it is exactly the
-            reader who needs it. The hover card's per-hunk rows only
+            their promised slot directly over the meta row. Shown in
+            simple view too: the verdict is a safety signal, and simple
+            view hiding it is exactly the reader who needs it. The hover card's per-hunk rows only
             link out when the diff surface exists — simple view bounces
             away from that tab, so they degrade to plain rows there. */}
         {showScopeCheck && message.scopeCheck ? (
           <div className="mt-1">
             <ScopeCheckChip
               check={message.scopeCheck}
-              {...(showChangedFiles && onViewDiff ? { onViewDiff } : {})}
+              {...(!simpleView && onViewDiff ? { onViewDiff } : {})}
             />
           </div>
         ) : null}
@@ -825,14 +797,9 @@ function BubbleIndent({
 function AssistantTurnContent({
   message,
   turnState,
-  isLatestAssistantTurn,
-  showChangedFiles,
-  changedFilesExpanded,
-  onChangedFilesExpandedChange,
   streamingActivity,
   streamingContent,
   onOpenFile,
-  onViewDiff,
   onOpenAgentsTab,
   backgroundAgents,
   sandboxRunning,
@@ -863,7 +830,7 @@ function AssistantTurnContent({
   panelTabs: boolean;
 }) {
   const simpleView = useSimpleView();
-  const { isStreamingPlaceholder, changedFiles, questionSteps } = turnState;
+  const { isStreamingPlaceholder, questionSteps } = turnState;
   // While the turn is live the settled activityLog is not written yet, so the
   // just-answered question comes off the streaming payload instead — that is
   // what makes the record appear the moment the user submits.
@@ -937,7 +904,9 @@ function AssistantTurnContent({
         </>
       ) : (
         <>
-          {message.activityLog && (
+          {/* The coordinator chats like a person: its bubble is the reply
+              only, with no "Worked for" steps. */}
+          {message.activityLog && !bubble && (
             <ActivityLogDisplay
               activityLog={message.activityLog}
               messageId={message._id}
@@ -959,18 +928,6 @@ function AssistantTurnContent({
             onRetryTurn={onRetryTurn}
             precedingUser={precedingUser}
           />
-          {showChangedFiles && changedFiles.length > 0 ? (
-            <ChangedFilesCard
-              files={changedFiles}
-              isLatestAssistantTurn={isLatestAssistantTurn}
-              expanded={changedFilesExpanded}
-              onExpandedChange={(nextExpanded) =>
-                onChangedFilesExpandedChange(message._id, nextExpanded)
-              }
-              onOpenFile={onOpenFile}
-              onViewDiff={onViewDiff}
-            />
-          ) : null}
           <AgentMedia entries={mediaEntries} />
         </>
       )}

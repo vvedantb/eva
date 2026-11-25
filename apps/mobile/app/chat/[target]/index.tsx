@@ -22,7 +22,6 @@ import {
   sandboxComposerState,
   type SessionMenuAction,
   tokenizedToDisplayText,
-  toRepoRelativePath,
   turnErrorTitle,
   visibleChatMessages,
   findBubbleGroups,
@@ -267,14 +266,8 @@ export default function ChatScreen() {
   const savedQuestion = savedRaw && savedQuestions ? { raw: savedRaw, questions: savedQuestions } : null;
   const teammateNames = firstNameByUserId(teammates ?? []);
   const teammateById = new Map((teammates ?? []).map((user) => [user._id, user]));
-  const latestReplyId = visible.findLast((message) => message.role === "assistant")?._id;
   // The web recovery card reads every message, so a later system alert also hides it.
   const newestMessage = messages?.[messages.length - 1];
-  // A changed file opens the PR diff, as the web Review pane; simple view has no card, as the web.
-  const openDiff = simpleView
-    ? undefined
-    : (path: string | undefined) =>
-        router.push({ pathname: "/chat/[target]/diff", params: path ? { target, file: toRepoRelativePath(path) } : { target } });
   const webUrl = (path: string) => `${WEB_URL}${path}`;
   const sessionTarget = chat.session
     ? {
@@ -519,9 +512,7 @@ export default function ChatScreen() {
                 }
                 teammate={fromTeammate && message.userId ? teammateById.get(message.userId) : undefined}
                 live={message._id === liveReplyId ? streamingEntityId : undefined}
-                isLatestReply={message._id === latestReplyId}
                 turn={message.role === "assistant" ? precedingUserTurns.get(message._id) : undefined}
-                onOpenDiff={openDiff}
                 menuFor={menuFor}
                 cards={cards.byMessageId.get(message._id)}
                 outputs={outputs.byMessageId.get(message._id)}
@@ -877,9 +868,7 @@ function ChatMessageRow({
   senderName,
   teammate,
   live,
-  isLatestReply,
   turn,
-  onOpenDiff,
   menuFor,
   cards,
   outputs,
@@ -907,11 +896,9 @@ function ChatMessageRow({
   teammate: ComponentProps<typeof TeammateBubble>["sender"];
   /** The streaming row's entity id while this is the live reply. */
   live: string | undefined;
-  isLatestReply: boolean;
   /** Re-sends the prompt a failed turn answered; set only on a failed turn that can be retried. */
   onRetryTurn?: () => void;
   turn: ComponentProps<typeof MessageFooter>["turn"];
-  onOpenDiff: ComponentProps<typeof AssistantMessage>["onOpenDiff"];
   /** A press and hold on the message opens its menu (thumbs, copy, link, fork, retry, the turn's changes). */
   menuFor: (messageId: string) => MessageMenu;
   /** The agent's cards placed under this message (`render_ui`, `render_html`). */
@@ -961,7 +948,7 @@ function ChatMessageRow({
       {message.content ? <UserMessageText content={message.content} /> : null}
     </>
   );
-  // The coordinator chats like a person: "Eva is typing…" while it works, the steps only once it is done.
+  // The coordinator chats like a person: "Eva is typing…" while it works, then the reply only.
   const replyBody = isUser ? null : live && evaBubble ? (
     <EvaTypingText />
   ) : live ? (
@@ -972,8 +959,7 @@ function ChatMessageRow({
       content={message.content}
       activityLog={message.activityLog}
       duration={message.finishedAt ? formatDuration(message.timestamp, message.finishedAt) : undefined}
-      isLatestAssistantTurn={isLatestReply}
-      onOpenDiff={onOpenDiff}
+      hideTrace={evaBubble}
       media={message.media}
       tabPanels={tabbed ? cardList : undefined}
       failure={failure ? { title: failure, onRetry: onRetryTurn } : undefined}
