@@ -1,7 +1,14 @@
 import { api, DEFAULT_AI_MODEL } from "@eva/backend";
 import { formatDuration } from "@eva/shared/duration";
-import { chatStreamingEntityId, EVA_MENTION_ITEM, findStreamingTargetMessage } from "@eva/shared";
-import { MessageContent, PromptInput } from "@vvedantb/native-ui/ai";
+import {
+  chatStreamingEntityId,
+  EVA_MENTION_ITEM,
+  findStreamingTargetMessage,
+  threadAnswerContent,
+  threadPendingQuestion,
+} from "@eva/shared";
+import { formatQuestionAnswers, parsePendingQuestion } from "@eva/shared/pendingQuestion";
+import { ChoiceQuestion, MessageContent, PromptInput } from "@vvedantb/native-ui/ai";
 import { RouterStackPageHeader } from "@vvedantb/native-ui/expo-router";
 import { CenteredSpinner, EmptyState, KeyboardAvoidingView } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
@@ -30,6 +37,18 @@ export default function ReplyThreadScreen() {
   const me = useQuery(api.auth.me, {});
   const users = useQuery(api.users.listAll, {});
   const addReply = useMutation(api.sessionWorkflow.addReply);
+  const answerBlocking = useMutation(api.pendingQuestions.answer);
+  // Eva's question from a turn in this thread is answered here, not in the chat (the web `ThreadDock`).
+  const parentId = chat?.parentId;
+  const threadTurn = useQuery(api.messages.openThreadTurn, parentId ? { parentId } : "skip");
+  const isTurnThread = threadTurn?.rootId === rootId;
+  const blocking = useQuery(api.pendingQuestions.getActive, parentId && isTurnThread ? { entityId: parentId } : "skip");
+  const streaming = useQuery(
+    api.streaming.get,
+    parentId && isTurnThread ? { entityId: chatStreamingEntityId(parentId) } : "skip",
+  );
+  // The saved question just answered: hidden until Eva's reply moves on.
+  const [answeredSaved, setAnsweredSaved] = useState<string | null>(null);
   const composer = useMentionComposer(chat?.repoId, undefined, undefined, [EVA_MENTION_ITEM]);
   const [sending, setSending] = useState(false);
 
@@ -56,6 +75,14 @@ export default function ReplyThreadScreen() {
   // Eva's turn in this thread streams on the chat's row, as a turn of the chat itself.
   const liveId = findStreamingTargetMessage(thread.replies)?._id;
   const streamingEntityId = chat.parentId ? chatStreamingEntityId(chat.parentId) : undefined;
+
+  const blockingQuestions = blocking ? parsePendingQuestion(blocking.payload) : null;
+  const savedRaw = threadPendingQuestion({
+    isTurnThread,
+    streamingQuestion: streaming?.pendingQuestion,
+    replies: thread.replies,
+  });
+  const savedQuestions = savedRaw !== undefined && savedRaw !== answeredSaved ? parsePendingQuestion(savedRaw) : null;
 
   const send = (text: string) => {
     const content = composer.tokenize(text).trim();
@@ -112,19 +139,59 @@ export default function ReplyThreadScreen() {
           );
         })}
       </ScrollView>
-      <View className="px-3 pt-2" style={{ paddingBottom: Math.max(insets.bottom, 8) }}>
-        <PromptInput
-          layout="inline"
-          shape="pill"
-          disabled={sending}
-          status={sending ? "submitted" : "ready"}
-          value={composer.text}
-          onChangeText={composer.setText}
-          onSubmit={send}
-          menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} onDismiss={composer.dismiss} /> : null}
-          placeholder="Reply…"
-        />
-      </View>
+      {/* The chat's question dock: a blocking question wins and resumes her turn; a saved one goes as an @Eva reply. */}
+      {blocking && blockingQuestions ? (
+        <View className="p-3" style={{ paddingBottom: insets.bottom + 12 }}>
+          <ChoiceQuestion
+            key={blocking.toolUseId}
+            questions={blockingQuestions}
+            buttonWeight="semibold"
+            onSubmit={async (answers) => {
+              if (!parentId) return;
+              try {
+                await answerBlocking({ entityId: parentId, toolUseId: blocking.toolUseId, answer: JSON.stringify(answers) });
+              } catch {
+                toast.error("Couldn't submit answer");
+              }
+            }}
+          />
+        </View>
+      ) : savedRaw !== undefined && savedQuestions ? (
+        <View className="p-3" style={{ paddingBottom: insets.bottom + 12 }}>
+          <ChoiceQuestion
+            key={savedRaw}
+            questions={savedQuestions}
+            buttonWeight="semibold"
+            onSubmit={async (answers) => {
+              setAnsweredSaved(savedRaw);
+              try {
+                await addReply({
+                  rootId,
+                  content: threadAnswerContent(formatQuestionAnswers(savedQuestions, answers)),
+                  model: chat.model ?? DEFAULT_AI_MODEL,
+                });
+              } catch {
+                setAnsweredSaved(null);
+                toast.error("Couldn't send your answer");
+              }
+            }}
+          />
+        </View>
+      ) : (
+        <View className="px-3 pt-2" style={{ paddingBottom: Math.max(insets.bottom, 8) }}>
+          <PromptInput
+            layout="inline"
+            shape="pill"
+            disabled={sending}
+            status={sending ? "submitted" : "ready"}
+            value={composer.text}
+            onChangeText={composer.setText}
+            onSubmit={send}
+            menu={composer.menu ? <MentionMenu menu={composer.menu} onPick={composer.pick} onDismiss={composer.dismiss} /> : null}
+            placeholder="Reply…"
+          />
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 }

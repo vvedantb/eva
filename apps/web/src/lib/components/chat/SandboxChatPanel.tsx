@@ -238,7 +238,8 @@ export function SandboxChatPanel({
           streamingActivity={streaming?.currentActivity}
           streamingContent={streaming?.currentContent}
           streamingPendingQuestion={streaming?.pendingQuestion}
-          blockingQuestion={blockingQuestion ?? undefined}
+          // A thread turn's question is answered in its thread.
+          blockingQuestion={threadTurn ? undefined : (blockingQuestion ?? undefined)}
           onAnswerBlockingQuestion={handleAnswerBlockingQuestion}
           isExecuting={isExecuting}
           isInputDisabled={composer.isInputDisabled}
@@ -276,6 +277,7 @@ export function SandboxChatPanel({
               {threadTurn ? (
                 <ThreadTurnStatus
                   preview={threadTurn.preview}
+                  hasQuestion={threadTurn.hasQuestion}
                   onOpen={() => openThread(threadTurn.rootId)}
                 />
               ) : null}

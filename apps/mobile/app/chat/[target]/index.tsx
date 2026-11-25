@@ -144,7 +144,7 @@ export default function ChatScreen() {
   const messages: ChatMessage[] | undefined = transcript.messages;
   const convex = useConvex();
   const turn = useQuery(api.turns.getChatStatus, parentId ? { entityId: parentId } : "skip");
-  const pending = useQuery(api.pendingQuestions.getActive, parentId ? { entityId: parentId } : "skip");
+  const chatQuestion = useQuery(api.pendingQuestions.getActive, parentId ? { entityId: parentId } : "skip");
   // A session chat's session row: its PR state (Send for Review) and the sandbox's unpushed work (Commit & push).
   const sessionRow = useQuery(api.sessions.get, chat?.session ? { id: chat.session.id } : "skip");
   const feedbackRows = useQuery(api.feedback.listForChat, parentId ? { parentId } : "skip");
@@ -171,6 +171,8 @@ export default function ChatScreen() {
     api.messages.openThreadTurn,
     parentId && chat?.project !== undefined ? { parentId } : "skip",
   );
+  // A thread turn's question is answered in its thread screen, not here.
+  const pending = threadTurn ? null : chatQuestion;
   // A teammate's turn shows their avatar and first name, from the same lookup as the web `ChatBody`.
   const teammateIds = otherUserIdsInChat(messages ?? [], me ?? undefined);
   const teammates = useQuery(api.users.getMany, teammateIds.length > 0 ? { ids: teammateIds } : "skip");
@@ -569,7 +571,11 @@ export default function ChatScreen() {
             panels={
               <>
                 {threadTurn ? (
-                  <ThreadTurnStatus preview={threadTurn.preview} onOpen={() => openThread(threadTurn.rootId)} />
+                  <ThreadTurnStatus
+                    preview={threadTurn.preview}
+                    hasQuestion={threadTurn.hasQuestion}
+                    onOpen={() => openThread(threadTurn.rootId)}
+                  />
                 ) : null}
                 <ComposerTasksPanel streamingEntityId={streamingEntityId} turnId={liveReplyId} />
                 <QueuedMessagesPanel parentId={parentId} isExecuting={working} isSandboxActive={chat.sandboxActive} />

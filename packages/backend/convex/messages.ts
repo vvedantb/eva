@@ -308,20 +308,43 @@ export const listThreadRoots = authQuery({
 /**
  * The thread Eva's open turn answers in, or null when no turn is open or it
  * answers in the chat itself. The chat then shows "Eva is replying in a
- * thread" with the root's first words instead of a running bubble.
+ * thread" (or "has a question") with the root's first words instead of a
+ * running bubble, and her question card moves to the thread.
  */
 export const openThreadTurn = authQuery({
   args: { parentId: parentIdValidator },
   returns: v.union(
     v.null(),
-    v.object({ rootId: v.id("messages"), preview: v.string() }),
+    v.object({
+      rootId: v.id("messages"),
+      preview: v.string(),
+      /** She is waiting on a question, asked in that thread. */
+      hasQuestion: v.boolean(),
+    }),
   ),
   handler: async (ctx, args) => {
     await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
     const replyTo = (await findOpenTurn(ctx, args.parentId))?.replyTo;
     const root = replyTo === undefined ? null : await ctx.db.get(replyTo);
     if (!root) return null;
-    return { rootId: root._id, preview: threadRootPreview(root.content) };
+    const entityId = String(args.parentId);
+    const [questions, streaming] = await Promise.all([
+      ctx.db
+        .query("pendingQuestions")
+        .withIndex("by_entity", (q) => q.eq("entityId", entityId))
+        .collect(),
+      ctx.db
+        .query("streamingActivity")
+        .withIndex("by_entity", (q) => q.eq("entityId", entityId))
+        .first(),
+    ]);
+    return {
+      rootId: root._id,
+      preview: threadRootPreview(root.content),
+      hasQuestion:
+        questions.some((row) => row.answer === undefined) ||
+        Boolean(streaming?.pendingQuestion),
+    };
   },
 });
 

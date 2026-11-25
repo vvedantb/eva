@@ -4,7 +4,14 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import schema from "../convex/schema";
-import { EVA_MENTION_ID, threadRootPreview } from "@eva/shared";
+import {
+  EVA_MENTION_ID,
+  mentionsEva,
+  threadAnswerContent,
+  threadPendingQuestion,
+  threadRootPreview,
+  threadTurnStatusText,
+} from "@eva/shared";
 import { modules } from "./_helpers/convexModules";
 
 /**
@@ -240,7 +247,19 @@ describe("reply threads", () => {
       expect(await openThreadTurn()).toEqual({
         rootId: f.rootId,
         preview: "I created #904.",
+        hasQuestion: false,
       });
+
+      // She asks a blocking question: the chat's line says so.
+      await f.t.run(async (ctx) => {
+        await ctx.db.insert("pendingQuestions", {
+          entityId: String(f.chatId),
+          toolUseId: "tool_1",
+          payload: "[]",
+          createdAt: Date.now(),
+        });
+      });
+      expect((await openThreadTurn())?.hasQuestion).toBe(true);
 
       // Her turn closes: the chat has no thread turn again.
       await f.t.run(async (ctx) => {
@@ -261,5 +280,45 @@ describe("threadRootPreview", () => {
       ),
     ).toBe("Plan Split #904 for @Eva into…");
     expect(threadRootPreview("Short one")).toBe("Short one");
+  });
+});
+
+describe("thread questions", () => {
+  const ask = JSON.stringify([{ question: "Which?" }]);
+
+  test("the status line names a question", () => {
+    expect(threadTurnStatusText(false)).toBe("Eva is replying in a thread on");
+    expect(threadTurnStatusText(true)).toBe("Eva has a question in a thread on");
+  });
+
+  test("a thread shows its own turn's streamed question, not the chat's", () => {
+    const replies = [{ role: "user" }, { role: "assistant" }];
+    expect(
+      threadPendingQuestion({ isTurnThread: true, streamingQuestion: ask, replies }),
+    ).toBe(ask);
+    expect(
+      threadPendingQuestion({ isTurnThread: false, streamingQuestion: ask, replies }),
+    ).toBeUndefined();
+  });
+
+  test("a question saved on the thread's last reply stays to answer", () => {
+    expect(
+      threadPendingQuestion({
+        isTurnThread: false,
+        streamingQuestion: undefined,
+        replies: [{ role: "user" }, { role: "assistant", pendingQuestion: ask }],
+      }),
+    ).toBe(ask);
+    expect(
+      threadPendingQuestion({
+        isTurnThread: false,
+        streamingQuestion: undefined,
+        replies: [{ role: "assistant", pendingQuestion: ask }, { role: "user" }],
+      }),
+    ).toBeUndefined();
+  });
+
+  test("an answer in a thread wakes Eva", () => {
+    expect(mentionsEva(threadAnswerContent("The first one"))).toBe(true);
   });
 });

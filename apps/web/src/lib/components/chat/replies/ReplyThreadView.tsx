@@ -16,8 +16,15 @@ import {
   EVA_MENTION_ITEM,
   findStreamingTargetMessage,
   isOtherUserChatMessage,
+  threadAnswerContent,
+  threadPendingQuestion,
 } from "@eva/shared";
+import {
+  parsePendingQuestion,
+  type ParsedQuestion,
+} from "@eva/shared/pendingQuestion";
 import { ChatMessage } from "@/lib/components/chat/ChatMessage";
+import { ChatQuestionDock } from "@/lib/components/chat/ChatQuestionDock";
 import type {
   ChatParentId,
   ChatRepo,
@@ -65,6 +72,23 @@ export function ReplyThreadView({
   });
   const streamingTargetId = thread
     ? findStreamingTargetMessage(thread.replies)?._id
+    : undefined;
+  // Eva's question from a turn in this thread is answered here, not in the
+  // chat: a blocking one resumes her turn, a saved one goes as an @Eva reply.
+  const threadTurn = useQuery(api.messages.openThreadTurn, {
+    parentId: chatParentId,
+  });
+  const isTurnThread = threadTurn?.rootId === rootId;
+  const blocking = useQuery(
+    api.pendingQuestions.getActive,
+    isTurnThread ? { entityId: chatParentId } : "skip",
+  );
+  const savedQuestionRaw = thread
+    ? threadPendingQuestion({
+        isTurnThread,
+        streamingQuestion: streaming?.pendingQuestion,
+        replies: thread.replies,
+      })
     : undefined;
   // Escape from anywhere (focus often stays on the "N replies" link in the
   // chat), unless something on top already took it (a menu, a dialog).
@@ -166,9 +190,91 @@ export function ReplyThreadView({
           </div>
         </div>
       )}
-      <div className="shrink-0 p-3 pt-0">
-        <ReplyComposer key={rootId} rootId={rootId} model={model} />
-      </div>
+      <ThreadDock
+        key={rootId}
+        rootId={rootId}
+        chatParentId={chatParentId}
+        model={model}
+        blocking={blocking ?? null}
+        savedQuestionRaw={savedQuestionRaw}
+      />
+    </div>
+  );
+}
+
+/**
+ * The thread's bottom slot, as the chat's: Eva's open question takes the
+ * composer's place until it is answered. A blocking one wins, as in the chat.
+ */
+function ThreadDock({
+  rootId,
+  chatParentId,
+  model,
+  blocking,
+  savedQuestionRaw,
+}: {
+  rootId: string;
+  chatParentId: ChatParentId;
+  model: AIModel;
+  blocking: { toolUseId: string; payload: string } | null;
+  savedQuestionRaw: string | undefined;
+}) {
+  // The saved question just answered: hidden until Eva's reply moves on.
+  const [answeredKey, setAnsweredKey] = useState<string | null>(null);
+  const [isAnswering, setIsAnswering] = useState(false);
+  const addReply = useMutation(api.sessionWorkflow.addReply);
+  const answerBlocking = useMutation(api.pendingQuestions.answer);
+  const blockingQuestions = blocking
+    ? parsePendingQuestion(blocking.payload)
+    : null;
+  const savedQuestions =
+    savedQuestionRaw !== undefined && savedQuestionRaw !== answeredKey
+      ? parsePendingQuestion(savedQuestionRaw)
+      : null;
+  const questions: ParsedQuestion[] | null = blockingQuestions ?? savedQuestions;
+
+  const answerAsReply = async (answer: string) => {
+    if (savedQuestionRaw !== undefined) setAnsweredKey(savedQuestionRaw);
+    setIsAnswering(true);
+    try {
+      await addReply({ rootId, content: threadAnswerContent(answer), model });
+    } catch (error) {
+      setAnsweredKey(null);
+      setIsAnswering(false);
+      throw error;
+    }
+    setIsAnswering(false);
+  };
+
+  const answerStructured = async (answers: Record<string, string>) => {
+    if (!blocking) return;
+    setIsAnswering(true);
+    try {
+      await answerBlocking({
+        entityId: chatParentId,
+        toolUseId: blocking.toolUseId,
+        answer: JSON.stringify(answers),
+      });
+    } catch (error) {
+      setIsAnswering(false);
+      throw error;
+    }
+    setIsAnswering(false);
+  };
+
+  if (questions) {
+    return (
+      <ChatQuestionDock
+        questions={questions}
+        onAnswer={answerAsReply}
+        {...(blockingQuestions ? { onAnswerStructured: answerStructured } : {})}
+        isLoading={isAnswering}
+      />
+    );
+  }
+  return (
+    <div className="shrink-0 p-3 pt-0">
+      <ReplyComposer rootId={rootId} model={model} />
     </div>
   );
 }

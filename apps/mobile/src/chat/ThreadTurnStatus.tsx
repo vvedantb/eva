@@ -1,17 +1,27 @@
+import { threadTurnStatusText } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { Pressable, Text, View } from "react-native";
 import { useScheme } from "@/ui/theme";
 
 /**
  * The web `ThreadTurnStatus` on the phone: above the coordinator chat's composer while Eva's turn answers
- * in a reply thread, in the typing indicator's muted 12. The root's first words open that thread.
+ * in a reply thread (or waits on a question there), in the typing indicator's muted 12. The root's first
+ * words open that thread.
  */
-export function ThreadTurnStatus({ preview, onOpen }: { preview: string; onOpen: () => void }) {
+export function ThreadTurnStatus({
+  preview,
+  hasQuestion,
+  onOpen,
+}: {
+  preview: string;
+  hasQuestion: boolean;
+  onOpen: () => void;
+}) {
   const theme = EVA_THEME[useScheme()];
   return (
     <View accessibilityLiveRegion="polite" className="flex-row items-center gap-1 px-4 pb-1.5">
       <Text className="font-instrument-sans" style={{ fontSize: 12, lineHeight: 16, color: theme.mutedForeground }}>
-        Eva is replying in a thread on
+        {threadTurnStatusText(hasQuestion)}
       </Text>
       <Pressable
         accessibilityRole="link"

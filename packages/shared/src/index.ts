@@ -148,7 +148,12 @@ export {
   chatStreamingEntityId,
   findStreamingTargetMessage,
 } from "./chatStreaming";
-export { threadRootPreview } from "./replyThreads";
+export {
+  threadAnswerContent,
+  threadPendingQuestion,
+  threadRootPreview,
+  threadTurnStatusText,
+} from "./replyThreads";
 export {
   findBubbleGroups,
   firstNameByUserId,
