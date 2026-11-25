@@ -100,8 +100,8 @@ export function firstRunAssistantContent({
  * assistant reply. While the run is still in flight the assistant row is an
  * empty, unfinished bubble instead — that is the shape `findStreamingTargetMessage`
  * looks for, so the run's live activity streams into it exactly like a session
- * turn. Ids are synthetic but stable so React keys and the changed-files
- * expansion map behave like real messages.
+ * turn. Ids are synthetic but stable so React keys behave like real
+ * messages.
  */
 export function buildFirstRunChatTurn({
   task,

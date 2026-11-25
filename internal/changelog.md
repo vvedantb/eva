@@ -6,6 +6,14 @@ Date: 2026-11-25
 
 The hourly coordinator wake cap is gone (#1494), and `dataMigrations:clearCoordinatorWakeHeldAt` cleared `heldAt` on prod. This drops the field and that migration. Deploy only after the migration has finished on prod.
 
+## Chat: no Changed files card; coordinator replies without "Worked for"
+
+Date: 2026-11-25
+
+The "Changed files" card under an agent reply is gone on web and phone, everywhere: the PR, Diffs tab and Review pane already show what changed. Removed with it: web and phone `ChangedFilesCard`, `useChangedFilesExpansion` (its localStorage state), `findLastAssistantMessageId`, the `showChangedFiles` / `isLatestAssistantTurn` / `onOpenDiff` props, and the shared `collectChangedFiles` and its grouping helpers. The path helpers stay, renamed `@eva/shared` `sandboxFilePath.ts`. The phone diff screen stays (the hold menu and the branch row open it).
+
+In the coordinator chat (Eva's bubbles, main chat and reply threads, web and phone) a finished reply shows its text only, with no "Worked for" fold of steps.
+
 ## Session follow-ups send only the guard rails
 
 Date: 2026-11-25

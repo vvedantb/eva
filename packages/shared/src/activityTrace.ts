@@ -39,7 +39,7 @@ const activityLogStepSchema = z.object({
   label: z.string(),
   detail: z.string().optional(),
   status: z.enum(["complete", "active", "pending"]),
-  /** The file a read, edit, write or notebook step touched (file chips, the "Changed files" card). */
+  /** The file a read, edit, write or notebook step touched (file chips). */
   path: z.string().optional(),
   /** The tool call's id; a subagent's own steps name it in `parentToolUseId`, and nest under it. */
   toolUseId: z.string().optional(),

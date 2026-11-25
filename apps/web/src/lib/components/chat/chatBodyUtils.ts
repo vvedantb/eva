@@ -4,13 +4,11 @@ import { getProviderLabel } from "@vvedantb/ui";
 import type { ActivityStep } from "@vvedantb/ui";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import {
-  collectChangedFiles,
   collectQuestionSteps,
   otherUserIdsInChat,
   readableErrorMessage,
   stripReviewCommentBlocks,
   turnErrorTitle as sharedTurnErrorTitle,
-  type ChangedFile,
   type ChatUserAttribution,
 } from "@eva/shared";
 import { tokenizedToEditable } from "@/lib/components/mentions";
@@ -110,10 +108,9 @@ export function chatNeedsOtherUserDirectory(
   return otherUserIdsInChat(messages, currentUserId).length > 0;
 }
 
-/** Streaming / changed-files / question-record flags for an assistant row. */
+/** Streaming and question-record flags for an assistant row. */
 export function getAssistantTurnState(message: ChatBodyMessage): {
   isStreamingPlaceholder: boolean;
-  changedFiles: ChangedFile[];
   questionSteps: ActivityStep[];
 } {
   const isStreamingPlaceholder =
@@ -128,7 +125,6 @@ export function getAssistantTurnState(message: ChatBodyMessage): {
       : [];
   return {
     isStreamingPlaceholder,
-    changedFiles: collectChangedFiles(steps),
     questionSteps: collectQuestionSteps(steps),
   };
 }
@@ -176,20 +172,6 @@ export function findLastUserMessageIndex(messages: ChatBodyMessage[]): number {
     }
   }
   return -1;
-}
-
-/** Latest non-alert assistant turn, used for adaptive changed-file disclosure. */
-export function findLastAssistantMessageId(
-  messages: ReadonlyArray<
-    Pick<ChatBodyMessage, "_id" | "role" | "isSystemAlert">
-  >,
-): string | undefined {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i];
-    if (!message || message.isSystemAlert) continue;
-    if (message.role === "assistant") return message._id;
-  }
-  return undefined;
 }
 
 /** User turns a chat renders when it opens; older turns load on scroll. */

@@ -1,5 +1,5 @@
 import { api } from "@eva/backend";
-import { collectChangedFiles, collectQuestionSteps, stripErrorPrefix } from "@eva/shared";
+import { collectQuestionSteps, stripErrorPrefix } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { parseActivityLog, type ActivityLogStep } from "@eva/shared/activityTrace";
 import {
@@ -65,7 +65,6 @@ import { Pressable, View } from "react-native";
 import { copyText } from "@/ui/copyText";
 import { textColor, useScheme } from "@/ui/theme";
 import { ChatUiPanelTabs } from "./cards/ChatUiPanelTabs";
-import { ChangedFilesCard } from "./ChangedFilesCard";
 import { AgentMedia } from "./media/AgentMedia";
 import { StepDetail } from "./StepDetail";
 
@@ -382,10 +381,9 @@ export function LiveActivityStatus({ activityLog }: { activityLog: string | unde
 /**
  * An agent reply: its trace as the web's folded `ActivityTasks` (reasoning as
  * prose, each run of tool steps behind a summary line, to-dos and notices on
- * their own lines), all behind "Worked for …" once the turn finished, then
- * the reply as markdown (native-ui `/markdown`, the web `markdown.css` scale),
- * then the files the turn changed (the web `ChangedFilesCard`) once it has
- * text or has finished, then the screenshots and recordings the agent posted
+ * their own lines), all behind "Worked for …" once the turn finished (none
+ * with `hideTrace`), then the reply as markdown (native-ui `/markdown`, the
+ * web `markdown.css` scale), then the screenshots and recordings the agent posted
  * (the web `AgentMedia`). With `tabPanels` (the turn's agent-composed cards)
  * the reply is behind a "Text" tab and the cards in front ("UI"), as the web.
  */
@@ -394,8 +392,7 @@ export function AssistantMessage({
   content,
   activityLog,
   duration,
-  isLatestAssistantTurn,
-  onOpenDiff,
+  hideTrace = false,
   media,
   tabPanels,
   live = false,
@@ -408,10 +405,8 @@ export function AssistantMessage({
   activityLog?: string;
   /** How long the turn ran ("2m", the web `formatDuration`), once it finished. Folds the trace behind "Worked for …". */
   duration?: string;
-  /** The latest reply opens its changed files, as the web. */
-  isLatestAssistantTurn: boolean;
-  /** Opens the diff screen at a changed file. Without it (simple view, as the web) there is no card. */
-  onOpenDiff?: (path: string | undefined) => void;
+  /** The coordinator chat: the reply only, no "Worked for" steps (the web bubble). */
+  hideTrace?: boolean;
   /** The agent's captures on this reply (`message.media`). */
   media?: ResolvedMediaEntry[];
   /** The turn's cards, when they take the prose's slot behind tabs (the web `panelTabs`). */
@@ -427,7 +422,6 @@ export function AssistantMessage({
   const segments = foldedActivitySegments(steps);
   // The web skips a reply still streaming its first text (`getAssistantTurnState`).
   const settled = content !== "" || duration !== undefined;
-  const changedFiles = onOpenDiff && settled ? collectChangedFiles(steps) : [];
   // What the agent asked and what was picked, kept in the reply once answered (the web `AssistantQuestionCards`).
   const questionSteps = settled ? collectQuestionSteps(steps) : [];
   const trace = <SegmentList segments={segments} steps={steps} messageId={messageId} live={duration === undefined} />;
@@ -438,7 +432,7 @@ export function AssistantMessage({
   );
   return (
     <>
-      {segments.length === 0 ? (
+      {hideTrace ? null : segments.length === 0 ? (
         live ? (
           <AgentTrace>
             <LiveStatus steps={steps} />
@@ -462,9 +456,6 @@ export function AssistantMessage({
         )
       ) : null}
       {stopped ? <StoppedLine /> : null}
-      {onOpenDiff ? (
-        <ChangedFilesCard messageId={messageId} files={changedFiles} isLatestAssistantTurn={isLatestAssistantTurn} onOpenDiff={onOpenDiff} />
-      ) : null}
       {media ? <AgentMedia entries={media} /> : null}
     </>
   );
@@ -489,14 +480,13 @@ function StoppedLine() {
  * timeline, then the streamed text. Only this row reads the stream, so a token
  * re-renders it and not the transcript. The activity is deferred, as the web:
  * the text the user reads commits first, and the timeline (a large JSON
- * payload) re-renders at transition priority. No changed-files card until the
- * turn settles, as the web.
+ * payload) re-renders at transition priority.
  */
 export function LiveAssistantMessage({ streamingEntityId, messageId }: { streamingEntityId: string; messageId: string }) {
   const streaming = useQuery(api.streaming.get, { entityId: streamingEntityId });
   const activity = useDeferredValue(streaming?.currentActivity);
   return (
-    <AssistantMessage messageId={messageId} content={streaming?.currentContent ?? ""} activityLog={activity} isLatestAssistantTurn={false} live />
+    <AssistantMessage messageId={messageId} content={streaming?.currentContent ?? ""} activityLog={activity} live />
   );
 }
 

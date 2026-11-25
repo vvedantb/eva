@@ -13,8 +13,7 @@ import { usePrDiff } from "@/diff/prDiffStore";
 /**
  * The web Review pane's Code tab for one file: the chat's pull request diff
  * (`github.getPrDiff`, what is pushed to GitHub, so a sleeping sandbox does
- * not matter), opened at the file a "Changed files" row named, or the first
- * file, drawn by `PrFileDiff` as the review Code tab draws it, Viewed ticks
+ * not matter), opened at the file the caller named, or the first file, drawn by `PrFileDiff` as the review Code tab draws it, Viewed ticks
  * included. A tap on a line drafts a review comment, as the web sandbox
  * diff: it waits as a chip on the chat composer and goes with the next
  * prompt (or with a review from the review screen, which shares them). The

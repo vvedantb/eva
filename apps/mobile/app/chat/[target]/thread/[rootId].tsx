@@ -111,7 +111,7 @@ export default function ReplyThreadScreen() {
                       content={message.content}
                       activityLog={message.activityLog}
                       duration={message.finishedAt ? formatDuration(message.timestamp, message.finishedAt) : undefined}
-                      isLatestAssistantTurn={false}
+                      hideTrace
                     />
                   )}
                 </EvaBubble>

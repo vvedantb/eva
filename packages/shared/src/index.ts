@@ -246,19 +246,11 @@ export {
   type NotificationTone,
 } from "./notificationAppearance";
 export {
-  collectChangedFiles,
-  groupChangedFilesByRepo,
-  selectChangedFilePreview,
-  shouldAutoExpandChangedFiles,
-  shouldPreviewChangedFiles,
   toRepoRelativePath,
   toSandboxFilePath,
   workspaceRepoName,
   workspaceRootPath,
-  type ChangedFile,
-  type ChangedFileGroup,
-  type ChangedFileStep,
-} from "./changedFiles";
+} from "./sandboxFilePath";
 export {
   DIFF_FILE_KINDS,
   applyIgnoreWhitespace,

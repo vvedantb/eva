@@ -67,7 +67,6 @@ import {
 } from "@/lib/contexts/PendingPullRequestsContext";
 import type { TurnCheckpointContext } from "@/lib/components/chat/_components/useTurnCheckpointActions";
 import { ChatQuestionDock } from "@/lib/components/chat/ChatQuestionDock";
-import { useChangedFilesExpansion } from "@/lib/components/chat/useChangedFilesExpansion";
 import { useAgentReplyChime } from "@/lib/components/chat/useAgentReplyChime";
 import { useChatReadState } from "@/lib/components/chat/useChatReadState";
 import { ChatHtmlFrame } from "@/lib/components/chat/generativeHtml/ChatHtmlFrame";
@@ -101,7 +100,6 @@ import {
   findHandoffBoundaryIds,
   findLastUserMessageIndex,
   findBubbleGroups,
-  findLastAssistantMessageId,
   findStreamingTargetMessage,
   findTurnWindowStart,
   firstNameByUserId,
@@ -520,9 +518,6 @@ function ChatBodyInner({
   // still-streaming older turn's tokens (see findStreamingTargetMessage).
   const streamingTarget = findStreamingTargetMessage(displayMessages);
   const streamingTargetId = streamingTarget?._id;
-  const latestAssistantMessageId = findLastAssistantMessageId(displayMessages);
-  const { expandedByMessageId, setMessageExpanded } =
-    useChangedFilesExpansion(conversationId);
 
   const [dismissedQuestionKey, setDismissedQuestionKey] = useState<
     string | null
@@ -1035,16 +1030,10 @@ function ChatBodyInner({
           message={message}
           animateIn={!isBacklog && rowsAnimateIn}
           repo={repo}
-          isLatestAssistantTurn={message._id === latestAssistantMessageId}
-          showChangedFiles={!simpleView}
           // The run's action row sits under its last bubble only.
           showTurnMeta={!simpleView && !joinsNext}
           joinsNext={joinsNext}
           showScopeCheck={showScopeCheck}
-          {...(expandedByMessageId[message._id] !== undefined
-            ? { changedFilesExpanded: expandedByMessageId[message._id] }
-            : {})}
-          onChangedFilesExpandedChange={setMessageExpanded}
           isOtherUser={isOtherUser}
           senderFirstName={senderFirstName}
           assistantBubble={assistantBubbles}
