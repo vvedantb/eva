@@ -1,5 +1,10 @@
 # Changelog
 
+## Text generation: gpt-5-nano → gpt-6-luna
+
+Date: 2026-11-25
+
+`textGen` (session titles, title regeneration, inline completion, next-message prediction, transcript polish) now uses `openai/gpt-6-luna`, the same model as Ave and arena drafts. Luna rejects gpt-5's `reasoningEffort: "minimal"`, so the three low-latency calls send `"none"` through one shared `NO_REASONING` option. Gateway list price, standard tier: input $0.05 → $0.10, output $0.40 → $0.50 per 1M tokens. Task tags (Jev) and chat recaps (Haiku) are unchanged.
 ## Projects: old project PRs become threads
 
 Date: 2026-11-25
