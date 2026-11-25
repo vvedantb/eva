@@ -37,8 +37,7 @@ function getSnapshotBuildStatus(
     seededApps?.find((app) => app.seededSnapshotName !== null)
       ?.seededSnapshotName ?? null;
   const hasSeedableApps = (seededApps?.length ?? 0) > 0;
-  const activeBaseSnapshotId =
-    snapshot.baseSnapshotId ?? snapshot.snapshotName ?? null;
+  const activeBaseSnapshotId = snapshot.baseSnapshotId ?? null;
   const baseImageReady =
     lastBuild?.status === "success" && !isRunning && !isSeeding;
   return {
@@ -168,12 +167,6 @@ function CurrentStatusGrid({
   const { repo } = useRepo();
   return (
     <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2 sm:gap-4">
-      <div>
-        <span className="text-muted-foreground">Snapshot Name</span>
-        <p className="font-mono mt-0.5 max-sm:break-all">
-          {snapshot.snapshotName}
-        </p>
-      </div>
       <div>
         <span className="text-muted-foreground">Schedule</span>
         <p className="mt-0.5">{formatSchedule(snapshot.schedule)}</p>
@@ -307,13 +300,9 @@ function BaseImageStatus({
           {" — "}
         </>
       ) : null}
-      Config name:{" "}
-      <span className="font-mono max-sm:break-all">
-        {snapshot.snapshotName}
-      </span>
       {lastBuild?.status === "error"
-        ? " — last build failed; click Rebuild Now to retry."
-        : " — not built yet; click Rebuild Now."}
+        ? "Last build failed; click Rebuild Now to retry."
+        : "Not built yet; click Rebuild Now."}
     </p>
   );
 }
