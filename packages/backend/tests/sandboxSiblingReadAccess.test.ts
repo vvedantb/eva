@@ -103,7 +103,6 @@ async function fixture(options: {
                 repoId: homeRepoId,
                 userId: ownerUserId,
                 title: "Sibling read project",
-                phase: "in_progress",
                 rawInput: "build it",
               }),
             }

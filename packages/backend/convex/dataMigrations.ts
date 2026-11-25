@@ -267,19 +267,12 @@ export const backfillProjectPullRequests = dataMigrations.define({
   table: "projects",
   migrateOne: async (ctx, project) => {
     if (project.prUrl === undefined || project.prCount !== undefined) return;
-    const state =
-      project.phase === "completed"
-        ? "merged"
-        : project.phase === "cancelled"
-          ? "closed"
-          : project.phase === "business_review"
-            ? "draft"
-            : "open";
+    // The stored phase is gone; the GitHub refresh below sets the real state.
     const row = await recordPullRequest(ctx, {
       owner: { kind: "project", projectId: project._id },
       repoId: project.repoId,
       prUrl: project.prUrl,
-      state,
+      state: "open",
       primary: true,
       origin: "eva",
       headBranch:
@@ -354,87 +347,3 @@ export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionChatBackgroundAgents,
   internal.dataMigrations.pruneSessionBackgroundAgents,
 ]);
-
-/**
- * Task dependencies are gone: deletes every `taskDependencies` row so the
- * table can leave the schema.
- * `npx convex run --prod dataMigrations:run '{fn: "dataMigrations:clearTaskDependencies"}'`
- */
-export const clearTaskDependencies = dataMigrations.define({
-  table: "taskDependencies",
-  migrateOne: async (ctx, doc) => {
-    await ctx.db.delete(doc._id);
-  },
-});
-
-/**
- * The project Code Reviewer field is gone: clears `projects.codeReviewer` so
- * the field can leave the schema.
- * `npx convex run --prod dataMigrations:run '{fn: "dataMigrations:clearProjectCodeReviewer"}'`
- */
-export const clearProjectCodeReviewer = dataMigrations.define({
-  table: "projects",
-  migrateOne: async (_ctx, project) => {
-    if (project.codeReviewer === undefined) return;
-    return { codeReviewer: undefined };
-  },
-});
-
-/**
- * Clears what the old project interview, build and stored phase left on a
- * project, so those fields can leave the schema (PR 3b). Kept: `branchName`
- * and `branchVersion` (they name the coordinator session's branch), `members`
- * (still edited on the web) and the PR summary (`syncOwnerPrSummary` still
- * mirrors it). Run with `deleteProjectDetails` and `clearSessionChatTaskIds`.
- * Idempotent.
- * `npx convex run --prod dataMigrations:run '{fn: "dataMigrations:clearLegacyProjectFields"}'`
- */
-export const clearLegacyProjectFields = dataMigrations.define({
-  table: "projects",
-  migrateOne: async (_ctx, project) => {
-    if (
-      project.phase === undefined &&
-      project.planningMode === undefined &&
-      project.interview === undefined &&
-      project.build === undefined &&
-      project.lastBuildError === undefined &&
-      project.codeReviewer === undefined
-    ) {
-      return;
-    }
-    return {
-      phase: undefined,
-      planningMode: undefined,
-      interview: undefined,
-      build: undefined,
-      lastBuildError: undefined,
-      codeReviewer: undefined,
-    };
-  },
-});
-
-/**
- * Deletes every `projectDetails` row (the old interview transcript and spec),
- * including rows of projects that no longer exist, so the table can leave the
- * schema (PR 3b).
- * `npx convex run --prod dataMigrations:run '{fn: "dataMigrations:deleteProjectDetails"}'`
- */
-export const deleteProjectDetails = dataMigrations.define({
-  table: "projectDetails",
-  migrateOne: async (ctx, row) => {
-    await ctx.db.delete(row._id);
-  },
-});
-
-/**
- * Clears the old `sessionChats.taskId` link on every chat, not only the
- * coordinator's, so the field and its index can leave the schema (PR 3b).
- * `npx convex run --prod dataMigrations:run '{fn: "dataMigrations:clearSessionChatTaskIds"}'`
- */
-export const clearSessionChatTaskIds = dataMigrations.define({
-  table: "sessionChats",
-  migrateOne: async (_ctx, chat) => {
-    if (chat.taskId === undefined) return;
-    return { taskId: undefined };
-  },
-});

@@ -19,7 +19,6 @@ import {
   githubRepoFields,
   teamFields,
   projectFields,
-  projectDetailsFields,
   queuedMessageFields,
   taskSandboxEventFields,
   taskActivityFields,
@@ -74,7 +73,6 @@ import {
   agentUsageLimitFields,
   logFields,
   workProfileFields,
-  taskDependencyFields,
   projectTaskReportFields,
   projectTaskBatchFields,
   projectCoordinatorWakeFields,
@@ -113,13 +111,8 @@ const schema = defineSchema({
     .index("by_repo", ["repoId"])
     .index("by_repo_and_deleted", ["repoId", "deletedAt"])
     .index("by_user", ["userId"])
-    .index("by_repo_and_phase", ["repoId", "phase"])
-    .index("by_repo_and_numId", ["repoId", "numId"])
-    .index("by_repo_and_build_state", ["repoId", "build.state"]),
-
-  projectDetails: defineTable(projectDetailsFields).index("by_project", [
-    "projectId",
-  ]),
+    .index("by_repo_and_numId", ["repoId", "numId"]),
+  // projectDetails table removed. schema-narrowing-ok: deleteProjectDetails
 
   agentTasks: defineTable(agentTaskFields)
     .index("by_repo", ["repoId"])
@@ -218,8 +211,7 @@ const schema = defineSchema({
   projectCoordinatorWakes: defineTable(projectCoordinatorWakeFields)
     .index("by_project_and_key", ["projectId", "key"])
     .index("by_project_and_sent", ["projectId", "sentAt"]),
-  // drop after dataMigrations:clearTaskDependencies runs
-  taskDependencies: defineTable(taskDependencyFields),
+  // taskDependencies table removed. schema-narrowing-ok: clearTaskDependencies
   taskSandboxEvents: defineTable(taskSandboxEventFields).index("by_task", [
     "taskId",
   ]),
@@ -268,9 +260,7 @@ const schema = defineSchema({
   sessionChats: defineTable(sessionChatFields)
     .index("by_session", ["sessionId"])
     .index("by_session_and_number", ["sessionId", "number"])
-    .index("by_repo", ["repoId"])
-    // Legacy: an old project task's chat in its project's session.
-    .index("by_task", ["taskId"]),
+    .index("by_repo", ["repoId"]),
   // Legacy daemon-poll mirror. Chat daemons poll their `sessionChats` row
   // directly; `backfillSessionChats` empties this table and it can then be
   // dropped from the schema.

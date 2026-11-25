@@ -312,7 +312,7 @@ The conversion is `convertProjects` (`packages/backend/convex/_migrations/conver
 
 **PR 3a (built 25 November 2026, deploys after step 2 ran on production).** Items 1 and 5 below are done; item 2 is three migrations: `dataMigrations:clearLegacyProjectFields`, `deleteProjectDetails` and `clearSessionChatTaskIds`. It keeps `branchName` and `branchVersion` (they name the coordinator session's branch), `members` (still edited on the web) and the PR summary fields (`syncOwnerPrSummary` still mirrors them). `projects.phase` is optional and no longer written. `convertProjects` is deleted with it, as it must already have run. Run the three clearing migrations on dev, then production, before PR 3b.
 
-**PR 3b.** Items 3 and 4.
+**PR 3b (built 25 November 2026, deploys after `clearLegacyProjectFields` ran on production).** Items 3 and 4 are done: dropped `projects.phase`, `planningMode`, `build`, `interview`, `lastBuildError`, `codeReviewer`, `sessionChats.taskId`, the `projectDetails` and `taskDependencies` tables, and the `projects.by_repo_and_phase`, `projects.by_repo_and_build_state` and `sessionChats.by_task` indexes; deleted `clearLegacyProjectFields`, `clearTaskDependencies` and `clearProjectCodeReviewer`. Item 5 shipped in PR 3a.
 
 **4. Narrow (a later deploy, only after step 2 ran on production and `scripts/check-apk-compat.sh` passes without the old names).** Follow `docs/eva-convex.md`, in this order:
 

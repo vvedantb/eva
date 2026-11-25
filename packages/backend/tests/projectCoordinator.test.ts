@@ -60,7 +60,6 @@ async function fixture() {
       userId,
       title: "Project",
       rawInput: "Project",
-      phase: "business_review",
       numId: 1,
     });
     const insertTask = (title: string, taskNumber: number) =>
@@ -217,7 +216,6 @@ describe("a child task's ask", () => {
           userId: f.userId,
           title: "Other",
           rawInput: "Other",
-          phase: "business_review",
           numId: 2,
         }),
       );

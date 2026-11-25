@@ -56,7 +56,6 @@ async function fixture() {
       userId: ownerUserId,
       title: "Billing",
       rawInput: "billing",
-      phase: "finalized",
       numId: 1,
     });
     const sessionId = await ctx.db.insert("sessions", {

@@ -108,7 +108,6 @@ async function fixture() {
       repoId,
       userId: ownerUserId,
       title: "Billing revamp",
-      phase: "in_progress",
       rawInput: "revamp billing",
       numId: 31,
       updatedAt: now - 3_000,
@@ -381,10 +380,6 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
     await f.t.run(async (ctx) => {
       await ctx.db.patch(f.taskId, {
         run: { state: "running", workflowId: "wf_task_run" },
-      });
-      // A build stored before the scheduler no longer holds the project.
-      await ctx.db.patch(f.projectId, {
-        build: { state: "running", workflowId: "wf_project_build" },
       });
     });
 
