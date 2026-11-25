@@ -12,11 +12,25 @@ type ConversationMessage = Doc<"projectDetails">["conversationHistory"][number];
 
 export { buildProjectBranchName } from "../_git/branchNames";
 
+// `planningMode` is a legacy stored field (old interview projects); clients
+// never read it.
+const { planningMode: _planningMode, ...clientProjectFields } = projectFields;
+void _planningMode;
+
+/** A project doc as clients read it: without the legacy `planningMode`. */
+export function clientProject(
+  project: Doc<"projects">,
+): Omit<Doc<"projects">, "planningMode"> {
+  const { planningMode: _mode, ...rest } = project;
+  void _mode;
+  return rest;
+}
+
 /** Convex validator for a project document with its conversation history and generated spec. */
 export const projectWithDetailsValidator = v.object({
   _id: v.id("projects"),
   _creationTime: v.number(),
-  ...projectFields,
+  ...clientProjectFields,
   generatedSpec: v.optional(v.string()),
   conversationHistory: v.array(conversationMessageValidator),
   /**
@@ -35,18 +49,9 @@ const {
 /** Convex validator for a project summary (excludes conversation history and generated spec). */
 export const projectSummaryValidator = v.object(projectSummaryFields);
 
-export const projectPlanningModeValidator = v.union(
-  v.literal("interview"),
-  v.literal("tasks_only"),
-);
-
-/**
- * List rows always include a resolved planning mode (stored or inferred) and
- * the project session's sandbox status.
- */
+/** List rows include the project session's sandbox status. */
 export const projectListItemValidator = v.object({
   ...projectSummaryFields,
-  planningMode: projectPlanningModeValidator,
   /** The project session's sandbox status (`projectSandboxStatus`). */
   sandboxStatus: v.optional(sessionStatusValidator),
   /** Unread project chat reply for this user (`chatReads.ts`). */
@@ -54,19 +59,6 @@ export const projectListItemValidator = v.object({
   /** The project chat is paused on a blocking question for the user. */
   isAwaitingAnswer: v.boolean(),
 });
-
-/** Infers interview vs tasks-only for projects created before `planningMode` existed. */
-export async function resolveProjectPlanningMode(
-  db: GenericDatabaseReader<DataModel>,
-  project: Doc<"projects">,
-): Promise<"interview" | "tasks_only"> {
-  if (project.planningMode) return project.planningMode;
-  const details = await getProjectDetails(db, project._id);
-  if (!details) return "tasks_only";
-  if (details.generatedSpec) return "interview";
-  if (details.conversationHistory.length > 0) return "interview";
-  return "tasks_only";
-}
 
 /** Fetches the projectDetails document for a given project. */
 export async function getProjectDetails(
@@ -153,9 +145,8 @@ const parsedTaskSchema = z
   .object({
     title: z.string().catch(""),
     description: z.string().catch(""),
-    dependencies: z.array(z.number()).catch([]),
   })
-  .catch({ title: "", description: "", dependencies: [] });
+  .catch({ title: "", description: "" });
 
 const parsedSpecSchema = z
   .object({

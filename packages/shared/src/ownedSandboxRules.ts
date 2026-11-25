@@ -1,9 +1,8 @@
-import { isProjectBuilding, type Doc } from "@eva/backend";
-import { isLivePrState } from "./prState";
 import type { TaskStatus } from "./taskMeta";
 
-// When a task's or a project's sandbox and git actions are offered, web and
-// phone: the task page footer and menu, the project page header.
+// When a task's sandbox and git actions are offered, web and phone: the task
+// page footer and menu. A project's coordinator is read-only: it offers no
+// git actions.
 
 /** Task statuses whose review sandbox can be woken at any time (the preview of the work). */
 export const PREVIEW_SANDBOX_ALLOWED_STATUSES: TaskStatus[] = [
@@ -45,25 +44,4 @@ export function taskCanCreatePr({
   hasActiveRun: boolean;
 }): boolean {
   return !latestPrUrl && runCount > 0 && !hasActiveRun;
-}
-
-type ProjectGitFields = Pick<Doc<"projects">, "phase" | "prState"> &
-  Parameters<typeof isProjectBuilding>[0];
-
-/** Create PR for a project: no live PR (a merged one stays as history), no build running, in progress or business review. */
-export function projectCanCreatePr(project: ProjectGitFields): boolean {
-  return (
-    !isLivePrState(project.prState) &&
-    !isProjectBuilding(project) &&
-    (project.phase === "business_review" || project.phase === "in_progress")
-  );
-}
-
-/** Resolve Conflicts for a project: a live PR, no build running, in business or code review. */
-export function projectCanResolveConflicts(project: ProjectGitFields): boolean {
-  return (
-    isLivePrState(project.prState) &&
-    !isProjectBuilding(project) &&
-    (project.phase === "business_review" || project.phase === "code_review")
-  );
 }

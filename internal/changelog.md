@@ -1,5 +1,143 @@
 # Changelog
 
+## Projects: parallel reads on hot project paths
+
+Date: 2026-11-25
+
+`/parallel-awaits` on this branch: the scheduler loads tasks and facts context together; `createCoordinatorTasks` checks repo access for all tasks at once; chat recaps read task chats and messages in parallel; `list_entities` derives each project's stage and sandbox status in parallel.
+
+## Projects: coordinator sandbox drops task-only tabs
+
+Date: 2026-11-25
+
+The coordinator's sandbox rail (web) no longer shows Preview, Browser, Review, Computer, Editor or Files (`COORDINATOR_HIDDEN_TABS` in `ProjectSandboxPanel`); an old link to one lands on Tasks. A task's own sandbox keeps every tab. The phone coordinator screen never had them.
+
+## Projects: the coordinator groups and routes feedback
+
+Date: 2026-11-24
+
+`COORDINATOR_RULES` now tell the coordinator to sort a dump of items by area, put related small items in one task (one PR per area), send items to an open task that already covers the area (`send_chat_message`) instead of creating a new one, and reply with where each item went.
+
+## Projects: no cap on running or created tasks
+
+Date: 2026-11-24
+
+The scheduler starts every approved project task at once (`MAX_PARALLEL_PROJECT_TASKS` is gone), and one coordinator call may create any number of tasks (`MAX_TASKS_PER_COORDINATOR_BATCH` is gone); the coordinator's prompt and `create_tasks_batch` note say so.
+
+## Chat: coordinator replies in bubbles; grouped bubble runs
+
+Date: 2026-11-24
+
+In the project coordinator chat, Eva's replies sit in a left-side bubble with her mark, as a teammate's message (web `assistantBubbles` on `ChatBody`, phone `EvaBubble`); task and session chats keep the flat reply. In every chat, a run of bubbles from one sender groups (`findBubbleGroups` in `@eva/shared`): 4px apart, one name, the avatar and action row on the last bubble only.
+
+## Projects: "+" replaces Feedback; no header status badge
+
+Date: 2026-11-24
+
+The project header loses its status badge and Feedback button (web and phone; `agentTasks.createFeedbackTask` and the phone feedback screen are gone); a project task added with "+" waits in Triage ("Added by <name>") unless "Start now" approves it, and the phone composer gains attachments.
+
+## Projects: no Code Reviewer field
+
+Date: 2026-11-24
+
+The project Code Reviewer field is gone (web and phone) and `projects.update` drops its `codeReviewer` arg; `dataMigrations:clearProjectCodeReviewer` clears stored values before the field leaves the schema.
+
+## Projects: no Extra repos setting
+
+Date: 2026-11-24
+
+The coordinator may create a project task in any repo the acting user can access (default the home repo); `projects.extraRepoIds`, `projects.setExtraRepoIds` and the Repos picker (web and phone) are gone.
+
+## Projects: project context is the always-read text; project tasks leave Quick Tasks
+
+Date: 2026-11-24
+
+The project description ("Project context", now editable on phone) replaces the Instructions field in every coordinator and child-task prompt (`projects.setInstructions` and `projects.instructions` are gone), and `agentTasks.getAllTasks` drops project tasks, so Quick Tasks lose the Project filter and project badges (web and phone).
+
+## Projects: flat Tasks list like Amp and Capy
+
+Date: 2026-11-23
+
+The project Tasks list has flat rows (status icon, title, one plain line from `projectTaskSummaryLine`, age), muted group headers on a soft band, a thin bar with one counts line, hover-only Approve / Reject, and a Pull requests group; the task badges are gone (web and phone).
+
+## Projects UI: role and dependency gates removed, phone Documents tab and model picker
+
+Date: 2026-11-23
+
+Everyone gets the full project UI plus Feedback; the Blocked badge is gone; phone projects gain a Documents tab and a model/account picker; a child task links to the project summary; a refused delete toasts its reason (web and phone).
+
+## Projects: no roles, no dependencies, the coordinator starts its tasks
+
+Date: 2026-11-23
+
+Project roles and task dependencies are gone, the coordinator's tasks start at once (Triage holds feedback), `delete_task` refuses a started task, and a project delete is refused while a task runs and keeps its tasks as quick tasks (`projects.remove`; `projects.deleteCascade` and `agentTasks.deleteCascade` are gone).
+
+## Projects: Overview | Coordinator, Tasks on the rail, Triage
+
+Date: 2026-11-23
+
+Projects open on the Coordinator (Sandbox renamed; the Tasks tab moved to the coordinator rail's first item), unapproved tasks sit in a new Triage group with Approve / Reject / Approve all, a task opens its own chat and sandbox in place, and the chat's proposed-task cards and `projects.listTaskBatches` are gone (web and phone).
+
+## Projects: three stages, task counts by display status
+
+Date: 2026-11-23
+
+Projects show To Do, In Progress and Done only (In Review is gone), and project task counts and progress bars use Working / Blocked / Idle / Archived (web, phone, `listStatusesForRepo`).
+
+## Project tasks: Working / Blocked / Idle / Archived, compact rows, no build controls
+
+Date: 2026-11-23
+
+Project task lists group child tasks as Working, Blocked, Idle and Archived (`projectTaskDisplayStatus`) in compact rows, and drag-to-reorder, Run Eva, Stop Build, Schedule build and the five `*_project_build` MCP tools are gone (web and phone).
+
+## Projects UI: coordinator always open, read-only menus, viewer gaps
+
+Date: 2026-11-23
+
+WHY: The UI still tied the coordinator chat to the stored phase and offered git actions the read-only coordinator cannot do.
+
+What users see:
+
+- A contributor can always open, wake and message a project's coordinator chat, whatever the old phase (web Sandbox tab and Start, phone Chat and Wake).
+- The project page has no Commit & push, Create PR or Resolve Conflicts (web and phone). Child tasks keep them.
+- A child task's or coordinator's account picker lists the project's account first.
+- Viewers: no long-press menu on the phone projects list, no comment or reply composer on a project's tasks (web and phone), and they see the "Coordinator paused" line without "Send a message to continue".
+
+Architectural: `isProjectPreviewPhase`, `projectCanCreatePr` and `projectCanResolveConflicts` are gone from `@eva/shared`. `reviveCoordinatorSession` (`_sessions/ownedSession.ts`) un-archives a live project's session on `ensureWorkSession` and on every person's chat send. `withProjectAccountFirst` backs `listForSessionOwner`, `listForTaskOwner` and `listForProjectOwner`. `projects.list` rows carry `callerRole`.
+
+## Projects backend: read-only coordinator, clean asks, old project conversion
+
+Date: 2026-11-23
+
+WHY: The coordinator must not be able to push, a task that asks a question must not look failed, and old projects must move to the new model without losing work.
+
+What users see:
+
+- A task that asks its coordinator a question now waits quietly: no error row, no failed state, no retry. Stop on a waiting task closes its question.
+- Chatting directly in a project's task runs on the project's model and account, like its runs.
+- The coordinator chat is always reachable: a new project, or one whose tasks are all done, no longer loses its chat or sandbox.
+- New projects skip the interview whatever an older phone sends.
+
+Architectural: every GitHub token a coordinator sandbox gets is read-only (`mintSandboxGitToken`, `isReadOnlySandboxOwner`, the `evaReadOnlyGit` VM token claim). A run that ended on its ask is recorded as `RUN_WAITING_FOR_ANSWER`. `_projects/runSettings.ts` holds the decision 20 rules for runs and chat turns. `projects.phase` is written only by `recomputeProjectPhase` (derived) and the legacy project PR webhook. `agentTasks.branchName` (new, optional) keeps an old project branch. `migrations:convertProjects` converts old projects (runbook in the plan). A coordinator's Recap reads each child task's Main chat in the task's own session (`chatRecaps.recapChats`), and a coordinator sandbox stays at `COORDINATOR_VCPUS` whatever the app's sandbox size.
+
+## Projects run by a coordinator chat, with parallel child tasks
+
+Date: 2026-11-23
+
+WHY: Big work does not fit in one session or one quick task. A project now holds it: one coordinator chat plans the work and proposes tasks, and each task runs on its own like a quick task, so people see what is launched, in progress and still to do.
+
+What users see:
+
+- A new project opens straight on its coordinator chat. There is no interview or plan step; the New Project dialog no longer asks for one. Old projects that still have an interview or a plan keep those tabs.
+- The coordinator never edits code. It proposes tasks in batches; each batch is a live card in its chat with the task's number, title, stage, repo (when it is not the home repo), PR, phase label and why it needs you. One Approve starts the batch; a task's ✕ rejects it. A click opens the task in the project's task pane.
+- Child tasks run in parallel (at most 3 at a time), each with its own sandbox, branch and PR to main, and they wait for their dependencies to launch. A task can target another repo of the project.
+- A task can report to the coordinator or ask it a question. The task list and the card show the open question and the task's reports; "Waiting for coordinator" shows until the coordinator answers, "Question for you" once it passes the question on. Answer in the task's own chat.
+- The coordinator wakes by itself at most 10 times an hour. At the cap its chat shows one line and the project needs you until someone sends a message.
+- Roles: devs are contributors (chat, approve, run, change settings); everyone else is a viewer who reads everything, including child tasks, and files feedback tasks.
+- The project Overview shows the summary document the coordinator keeps, with live task counts above it.
+- A project's stage is derived from its tasks: the Change Phase bulk action and the card's Phase menu are gone, and the timeline shows launched tasks out of all tasks.
+
+Architectural: `ProjectTaskBatchCard` (rows are `ProjectTaskRow`, data from `listByProject` plus `listTaskBatches` for grouping) reaches `ChatBody` through a new `inlineCards` prop and the existing `placeChatUiPanels` placement; only `ProjectSandboxChatPanel` passes it, so session and quick task chats are unchanged. `CoordinatorPausedBanner` (`getCoordinatorState`) sits in `SandboxChatPreInput`. The projects list reads `listStatusesForRepo` in one subscription (`useProjectListStatuses`) instead of one `listByProject` per project. Task rows read the server's `facts` (`projectTaskFactsFromRow`), so usage limit, cancelled dependency and question reasons show; open asks and reports come from `listTaskReports` (`projectTaskNotesByTask`). `@eva/shared/projectView` gains the copy and helpers (additive). A viewer's child-task pane disables text edits, properties, file removal and sandbox start.
 ## Sandboxes get an allowlist of env vars, not prod's secrets
 
 Date: 2026-11-24

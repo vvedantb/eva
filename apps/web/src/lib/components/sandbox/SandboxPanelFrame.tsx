@@ -30,19 +30,24 @@ export function SandboxPanelFrame({
 export function SandboxEmptyRailFrame({
   collapsed,
   onToggle,
+  showToggle = true,
   children,
 }: {
   collapsed: boolean;
   onToggle: () => void;
+  /** False drops the lone collapse control (a project's task view). */
+  showToggle?: boolean;
   children: ReactNode;
 }) {
   return (
     <div className="flex h-full min-h-0 flex-col md:flex-row-reverse">
-      <div className="relative z-20 hidden h-full w-11 shrink-0 flex-col items-center pb-1.5 pt-3 md:flex">
-        <ButtonTrack direction="column">
-          <SandboxPanelToggleButton collapsed={collapsed} onToggle={onToggle} />
-        </ButtonTrack>
-      </div>
+      {showToggle ? (
+        <div className="relative z-20 hidden h-full w-11 shrink-0 flex-col items-center pb-1.5 pt-3 md:flex">
+          <ButtonTrack direction="column">
+            <SandboxPanelToggleButton collapsed={collapsed} onToggle={onToggle} />
+          </ButtonTrack>
+        </div>
+      ) : null}
       <div
         className={cn(
           "flex min-h-0 min-w-0 flex-1 items-center justify-center p-8",
@@ -67,6 +72,7 @@ export function SandboxNotStartedRail({
   onStart,
   isStarting,
   isPending,
+  showToggle = true,
 }: {
   collapsed: boolean;
   onToggle: () => void;
@@ -76,9 +82,14 @@ export function SandboxNotStartedRail({
   isStarting: boolean;
   /** The session lookup is loading: show nothing rather than a false "none". */
   isPending: boolean;
+  showToggle?: boolean;
 }) {
   return (
-    <SandboxEmptyRailFrame collapsed={collapsed} onToggle={onToggle}>
+    <SandboxEmptyRailFrame
+      collapsed={collapsed}
+      onToggle={onToggle}
+      showToggle={showToggle}
+    >
       {isPending ? null : (
         <div className="flex flex-col items-center gap-3 text-center">
           <p className="text-sm text-muted-foreground">

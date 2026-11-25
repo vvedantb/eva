@@ -41,6 +41,7 @@ import {
   snapshotBuildTriggerValidator,
   snapshotScheduleValidator,
   taskActivityFieldValidator,
+  taskOriginValidator,
   taskSandboxEventValidator,
   taskStatusValidator,
   teamMemberRoleValidator,
@@ -581,10 +582,9 @@ export const sessionChatFields = {
     v.union(v.id("sessions"), v.id("agentTasks"), v.id("projects")),
   ),
   /**
-   * A project task's own chat inside its project's session (never Main). The
-   * one kind of extra chat an owned session holds: it keeps the task's chat
-   * apart from the project's, as before projects ran on sessions. Set at
-   * insert, never changed.
+   * Legacy: an old project task's own chat inside its project's session
+   * (never Main). Nothing writes it now (a project task chats in its own
+   * session's Main chat); read for old rows until step 9's migration.
    */
   taskId: v.optional(v.id("agentTasks")),
   ...chatDaemonEntityFields,
@@ -623,6 +623,8 @@ export const agentTaskFields = {
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   repoId: v.optional(v.id("githubRepos")),
   projectId: v.optional(v.id("projects")),
+  /** Why the task exists (`taskOriginValidator`); absent when made by hand or by an agent. */
+  origin: v.optional(taskOriginValidator),
   tags: v.optional(v.array(v.string())),
   taskNumber: v.optional(v.number()),
   status: taskStatusValidator,
@@ -644,12 +646,19 @@ export const agentTaskFields = {
   use1mContext: v.optional(v.boolean()),
   fastMode: v.optional(v.boolean()),
   baseBranch: v.optional(v.string()),
+  /**
+   * The task's own branch when it is not `eva/task-<id>` (`taskBranchName`).
+   * Only Step 9's conversion writes it: a project task that was in progress
+   * on its project's old branch keeps that branch, so its work goes on in its
+   * own PR.
+   */
+  branchName: v.optional(v.string()),
   /** The task's own run lifecycle; absent = idle. Written only by `_agentTasks/runState.ts`. */
   run: v.optional(taskRunValidator),
   // Legacy run fields removed. schema-narrowing-ok: migrateTaskRunState
   // The change-request comment that put this task back to "todo" via "Make
-  // changes". Project-task change runs start later (Build Project), decoupled
-  // from the comment, so the id is parked here and copied onto the run's
+  // changes". A project task's change run starts later (the project
+  // scheduler), decoupled from the comment, so the id is parked here and copied onto the run's
   // `triggeringCommentId` when the run is created, then cleared. Lets the
   // timeline label project re-runs "made changes" like quick-task re-runs.
   pendingChangeRequestCommentId: v.optional(v.id("taskComments")),
@@ -660,6 +669,20 @@ export const agentTaskFields = {
   // Manager Ave thread watching this task for completion notifications
   // (mirrors sessions.watchedByAve).
   watchedByAve: v.optional(v.id("aveThreads")),
+  /**
+   * When this project task was approved to run: at creation for the
+   * coordinator's tasks, from Triage by a person for feedback. The project
+   * scheduler (`scheduleReadyTasks`) starts only approved `todo` tasks.
+   * Absent on quick tasks and on project tasks waiting in Triage.
+   */
+  approvedAt: v.optional(v.number()),
+  /** Restarts the coordinator spent on this failed task (at most 1). */
+  coordinatorRetries: v.optional(v.number()),
+  /**
+   * A project task's phase: a label that groups tasks for status, never a
+   * branch. Ordered by `projects.phaseLabels`.
+   */
+  phaseLabel: v.optional(v.string()),
   ...prSummaryFields,
 };
 
@@ -671,6 +694,12 @@ export const agentRunFields = {
   finishedAt: v.optional(v.number()),
   finalizingAt: v.optional(v.number()),
   resultSummary: v.optional(v.string()),
+  /**
+   * Text this run's prompt carries from whoever started it: the
+   * coordinator's note on a retry, or the answer to the task's question
+   * (`_projects/scheduler.ts` `startProjectTask`).
+   */
+  note: v.optional(v.string()),
   /** @deprecated Moved to `pullRequests` (`owner.runId`); cleared by `backfillPullRequests`. */
   prUrl: v.optional(v.string()),
   error: v.optional(v.string()),
@@ -1192,7 +1221,12 @@ export const projectInterviewValidator = v.union(
 
 export const projectFields = {
   ...entityNumIdFields,
+  /** The home repo: the project's URL, number and sidebar place, and the default repo of its tasks. */
   repoId: v.id("githubRepos"),
+  /** The project summary doc the coordinator keeps (`upsertProjectSummary`). */
+  summaryDocId: v.optional(v.id("docs")),
+  /** The order the project's phase labels (`agentTasks.phaseLabel`) show in. */
+  phaseLabels: v.optional(v.array(v.string())),
   userId: v.id("users"),
   title: v.string(),
   description: v.optional(v.string()),
@@ -1221,6 +1255,7 @@ export const projectFields = {
   // Set when chat or other queue helpers touch the project. Mirrors
   // `sessions.updatedAt` so the same queue/list helpers work uniformly.
   updatedAt: v.optional(v.number()),
+  // Drop after clearProjectCodeReviewer runs.
   codeReviewer: v.optional(v.id("users")),
   tags: v.optional(v.array(v.string())),
   model: v.optional(aiModelValidator),
@@ -2239,6 +2274,60 @@ export const proposedPlanFields = {
   implementationSessionId: v.optional(v.id("sessions")),
   createdAt: v.number(),
   updatedAt: v.number(),
+};
+
+/**
+ * A child task's message up to its project's coordinator
+ * (`report_to_coordinator`). A `report` is a note; an `ask` is a question that
+ * ends the task's turn and waits for an answer (`_projects/reports.ts`).
+ */
+export const projectTaskReportFields = {
+  projectId: v.id("projects"),
+  taskId: v.id("agentTasks"),
+  kind: v.union(v.literal("report"), v.literal("ask")),
+  text: v.string(),
+  /**
+   * An ask is `open` until the first answer (the coordinator's or a
+   * person's) makes it `answered`, or its task stops (`closed`). A report
+   * stays `open` until its task stops; the coordinator sees the reports newer
+   * than its last turn.
+   */
+  state: v.union(v.literal("open"), v.literal("answered"), v.literal("closed")),
+  /** Who answered an ask: the coordinator, or the person who wrote in the task chat. */
+  answeredBy: v.optional(v.union(v.literal("coordinator"), v.id("users"))),
+  answeredAt: v.optional(v.number()),
+  createdAt: v.number(),
+};
+
+/**
+ * Tasks the coordinator created in one tool call, for the task card in its
+ * chat. `messageId` is the coordinator turn the call ran in.
+ */
+export const projectTaskBatchFields = {
+  projectId: v.id("projects"),
+  messageId: v.optional(v.id("messages")),
+  taskIds: v.array(v.id("agentTasks")),
+  createdAt: v.number(),
+};
+
+/**
+ * One reason to wake a project's coordinator (decision 16). `key` makes a
+ * request idempotent; `sentAt` marks it delivered in a turn; `heldAt` marks a
+ * request the hourly cap held back (it waits for a person).
+ */
+export const projectCoordinatorWakeFields = {
+  projectId: v.id("projects"),
+  reason: v.union(
+    v.literal("ask"),
+    v.literal("failed"),
+    v.literal("batch_done"),
+  ),
+  key: v.string(),
+  /** One line for the coordinator's wake-up message. */
+  text: v.string(),
+  createdAt: v.number(),
+  sentAt: v.optional(v.number()),
+  heldAt: v.optional(v.number()),
 };
 
 export const taskDependencyFields = {

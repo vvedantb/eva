@@ -22,7 +22,6 @@ describe("Manager Ave instructions", () => {
       "send_email",
       "create_automation",
       "schedule_task",
-      "start_project_build",
     ]) {
       expect(instructions).not.toContain(`\`${excluded}\``);
     }

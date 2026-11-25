@@ -11,10 +11,11 @@ import type { prOwnerRefValidator } from "../_validators/tableFields";
 import {
   buildProjectBranchName,
   buildSessionBranchName,
-  buildTaskBranchName,
   EVA_BRANCH_PREFIX,
+  taskBranchName,
 } from "../_git/branchNames";
 import { extractPrNumber } from "../_github/prUrl";
+import { isEntityDeleted } from "../numId";
 import {
   schedulePrLifecycleActions,
   type PrLifecycleTransition,
@@ -532,13 +533,11 @@ export async function resolvePrOwnerFromBranch(
     const task = taskId ? await db.get(taskId) : null;
     if (!task || task.repoId === undefined) return null;
     if (!(await repoMatches(db, task.repoId, repo))) return null;
-    // A project task works on the project branch; its own branch name is
-    // never pushed, so a task id always means a quick task here.
-    if (task.projectId !== undefined) return null;
+    // Every task (a quick task or a project's child task) owns its branch.
     return {
       owner: { kind: "task", taskId: task._id },
       repoId: task.repoId,
-      isMainBranch: args.branch === buildTaskBranchName(task._id),
+      isMainBranch: args.branch === taskBranchName(task),
     };
   }
 
@@ -546,6 +545,21 @@ export async function resolvePrOwnerFromBranch(
   const project = projectId ? await db.get(projectId) : null;
   if (!project) return null;
   if (!(await repoMatches(db, project.repoId, repo))) return null;
+  // A project task converted from the old project branch kept that branch
+  // (`agentTasks.branchName`): a new PR there is the task's own.
+  const keeper = (
+    await db
+      .query("agentTasks")
+      .withIndex("by_project", (q) => q.eq("projectId", project._id))
+      .collect()
+  ).find((task) => task.branchName === args.branch && !isEntityDeleted(task));
+  if (keeper?.repoId !== undefined) {
+    return {
+      owner: { kind: "task", taskId: keeper._id },
+      repoId: keeper.repoId,
+      isMainBranch: true,
+    };
+  }
   return {
     owner: { kind: "project", projectId: project._id },
     repoId: project.repoId,
@@ -575,11 +589,12 @@ export function sessionRepoPullRequest(
     : (forRepo.find((row) => row.origin === "eva") ?? forRepo[0]);
 }
 
-/** The owning project's or quick task's PR summary for a task. */
-export async function taskPrUrl(
-  db: DatabaseReader,
-  task: Doc<"agentTasks">,
-): Promise<string | undefined> {
-  if (task.projectId === undefined) return task.prUrl;
-  return (await db.get(task.projectId))?.prUrl;
+/**
+ * A task's own PR summary. Every task owns its PR; an old project task's PR
+ * on the project branch stays with the project (`projects.prUrl`).
+ */
+export function taskPrUrl(
+  task: Pick<Doc<"agentTasks">, "prUrl">,
+): string | undefined {
+  return task.prUrl;
 }

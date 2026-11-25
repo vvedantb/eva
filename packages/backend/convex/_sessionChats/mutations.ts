@@ -29,6 +29,7 @@ import {
 } from "./helpers";
 import { deleteQueuedMessages } from "./purge";
 import { findOpenTurn } from "../_chat/turnStore";
+import { sessionAccountHolder } from "../_projects/runSettings";
 
 /**
  * Continuation of `ensureMainChat`: moves the next bounded page of a heavy
@@ -198,7 +199,7 @@ export async function setSessionChatModel(
 ): Promise<void> {
   const providerAccountId = await reconcileProviderAccountForModel(
     ctx.db,
-    session.createdBy ?? session.userId,
+    await sessionAccountHolder(ctx.db, session, chat.providerAccountId),
     model,
     chat.providerAccountId,
   );
@@ -229,7 +230,11 @@ export const setProviderAccountId = authMutation({
     const providerAccountId = await assertProviderAccountUsableBy(
       ctx.db,
       args.providerAccountId,
-      session.createdBy ?? session.userId,
+      await sessionAccountHolder(
+        ctx.db,
+        session,
+        args.providerAccountId ?? undefined,
+      ),
     );
     await ctx.db.patch(chat._id, { providerAccountId });
     return null;

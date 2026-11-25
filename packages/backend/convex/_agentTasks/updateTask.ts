@@ -173,13 +173,11 @@ async function logTitleChange(
     task.title,
     args.title,
   );
-  // A project task's PR carries the project's title, not the task's.
-  const primaryPr = task.projectId
-    ? null
-    : await findPrimaryPullRequest(ctx.db, {
-        kind: "task",
-        taskId: args.id,
-      });
+  // Every task owns its PR, so the PR follows the task's title.
+  const primaryPr = await findPrimaryPullRequest(ctx.db, {
+    kind: "task",
+    taskId: args.id,
+  });
   if (primaryPr) {
     await schedulePrTitleSync(ctx, {
       repoId: primaryPr.repoId,

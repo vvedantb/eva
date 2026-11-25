@@ -14,10 +14,7 @@ export {
   taskScheduledAt,
   type TaskRunSource,
 } from "./convex/_agentTasks/runState";
-export {
-  isProjectBuilding,
-  projectScheduledBuildAt,
-} from "./convex/_projects/buildState";
+export { isProjectBuilding } from "./convex/_projects/buildState";
 export {
   findUsageLimitHold,
   isHeldByUsageLimit,

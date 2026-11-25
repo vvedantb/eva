@@ -9,9 +9,10 @@ import {
 import { TASK_TAGS, visibleDrafts, type Priority } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared/gitDefaults";
+import { Attachment, Attachments } from "@vvedantb/native-ui/ai";
 import { goBackOrReplace } from "@vvedantb/native-ui/expo-router";
 import { StackPageHeader } from "@vvedantb/native-ui/layout";
-import { Button, CenteredSpinner, EmptyState, KeyboardAvoidingView } from "@vvedantb/native-ui/primitives";
+import { Button, CenteredSpinner, Checkbox, EmptyState, KeyboardAvoidingView, Text } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
 import { useMutation, useQuery } from "convex/react";
 import { useLocalSearchParams, useNavigation, useRouter } from "expo-router";
@@ -19,8 +20,10 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ScrollView, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { FunctionReturnType } from "convex/server";
+import { AttachButton } from "@/chat/AttachButton";
 import { BaseBranchChip } from "@/chat/BranchChips";
 import { useSimpleView } from "@/chat/ComposerFooter";
+import { useAttachments } from "@/chat/useAttachments";
 import { ModelChip } from "@/chat/ModelChip";
 import { DraftsMenu, type QuickTaskDraft } from "@/quickTasks/DraftsMenu";
 import { OptionPillFrame, PriorityChip, ProjectChip, ReviewerChip, TagsChip } from "@/quickTasks/OptionChips";
@@ -39,7 +42,9 @@ type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
  * `agentTasks.createQuickTask`, which files the task in To Do without
  * running it; the screen then goes back to the list, as the dialog closes
  * (to Quick Tasks after a deep link). Return on the title moves to the
- * description.
+ * description. Files attach with the chat's picker (`AttachButton`). A task
+ * in a project waits in Triage unless "Start now" is checked (it is then
+ * approved, so the project's scheduler runs it).
  *
  * Drafts are the web's: leaving with a title or description saves one
  * (`agentTasks.saveDraft`, as the dialog's close), and "Drafts (N)" beside
@@ -48,7 +53,7 @@ type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
  * link with `draftId` (a Drafts card) opens with that draft loaded, as the
  * web Drafts page opens the dialog with `?draft=`.
  *
- * Not here from the web dialog: attachments, voice input, @ mentions and /
+ * Not here from the web dialog: voice input, @ mentions and /
  * skills, the readiness check, the provider account (the server picks the
  * creator's own, as the web default) and "New project...".
  */
@@ -119,6 +124,8 @@ function NewQuickTaskForm({
   const [priority, setPriority] = useState<Priority | undefined>(undefined);
   const [assignedTo, setAssignedTo] = useState<Id<"users"> | undefined>(undefined);
   const [tags, setTags] = useState<string[]>(initialDraft?.tags ?? []);
+  const [startNow, setStartNow] = useState(false);
+  const attachments = useAttachments();
   // A pick wins; until then, the link's project once the repo's projects resolve it (route params are strings).
   const [pickedProject, setPickedProject] = useState<{ id: Id<"projects"> | undefined } | null>(
     initialDraft ? { id: initialDraft.projectId } : null,
@@ -200,10 +207,16 @@ function NewQuickTaskForm({
     setPickedTraits({});
     setPickedBranch(null);
     setActiveDraftId(null);
+    setStartNow(false);
+    attachments.clear();
   };
 
   const submit = async () => {
     if (!canSubmit) return;
+    if (attachments.uploading) {
+      toast.error("Wait for the attachments to upload");
+      return;
+    }
     setSaving(true);
     const fields = {
       title: title.trim(),
@@ -216,6 +229,8 @@ function NewQuickTaskForm({
       fastMode: traits.fastMode,
       tags: tags.length > 0 ? tags : undefined,
       assignedTo,
+      attachmentStorageIds: attachments.storageIds.length > 0 ? attachments.storageIds : undefined,
+      approved: startNow,
     };
     try {
       // As the web: a loaded draft becomes the task (the draft keeps its project; priority is not a draft field).
@@ -260,8 +275,16 @@ function NewQuickTaskForm({
             className="font-instrument-sans min-h-40 py-2 text-base"
             style={{ color: theme.foreground }}
           />
+          {attachments.items.length > 0 ? (
+            <Attachments>
+              {attachments.items.map((item) => (
+                <Attachment key={item.id} data={item} onRemove={() => attachments.remove(item.id)} />
+              ))}
+            </Attachments>
+          ) : null}
           {/* Web: the chips wrap `gap-1.5`, in its order. */}
-          <View className="flex-row flex-wrap gap-1.5 pt-2">
+          <View className="flex-row flex-wrap items-center gap-1.5 pt-2">
+            <AttachButton attachments={attachments} />
             <PriorityChip value={priority} onChange={setPriority} />
             <ReviewerChip users={users} value={assignedTo} onChange={setAssignedTo} />
             {simpleView ? null : (
@@ -296,6 +319,14 @@ function NewQuickTaskForm({
               if (draftId === activeDraftId) resetForm();
             }}
           />
+          {projectId ? (
+            <View className="flex-row items-center gap-2">
+              <Checkbox checked={startNow} onCheckedChange={setStartNow} accessibilityLabel="Start now" />
+              <Text variant="muted" onPress={() => setStartNow(!startNow)}>
+                Start now
+              </Text>
+            </View>
+          ) : null}
           <View className="min-w-0 flex-1">
             <Button onPress={() => void submit()} disabled={!canSubmit} loading={saving}>
               Create Task

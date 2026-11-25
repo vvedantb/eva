@@ -11,10 +11,6 @@ export {
   type ThemeMode,
 } from "./themeMode";
 export {
-  isProjectPreviewPhase,
-  PROJECT_PREVIEW_PHASES,
-} from "./projectPreview";
-export {
   CONVEX_ID_PATTERN,
   MENTION_HREF_REGEX,
   MENTION_TOKEN_REGEX,
@@ -41,6 +37,7 @@ export {
 export {
   carriedAccountForProvider,
   defaultAccountForProvider,
+  projectPickerAccounts,
   toPickerAccounts,
   type PickerAccount,
 } from "./providerAccounts";
@@ -145,6 +142,7 @@ export {
   findStreamingTargetMessage,
 } from "./chatStreaming";
 export {
+  findBubbleGroups,
   firstNameByUserId,
   firstNameFromUser,
   isOtherUserChatMessage,
@@ -161,7 +159,12 @@ export {
   type PrState,
   type PrStateTone,
 } from "./prState";
-export { canSendSessionForReview, sessionCountLabel, sessionMenuActions, type SessionMenuAction } from "./sessionMenu";
+export {
+  canSendSessionForReview,
+  sessionCountLabel,
+  sessionMenuActions,
+  type SessionMenuAction,
+} from "./sessionMenu";
 export {
   draftCountAfterRemove,
   draftsAfterRemove,
@@ -333,7 +336,6 @@ export {
 } from "./reviewCommentBlocks";
 export {
   ACTIVE_PROJECT_PHASES,
-  BUILDABLE_PROJECT_PHASES,
   PROJECT_COLUMNS,
   PROJECT_COLUMN_LABELS,
   PROJECT_LIST_DEFAULTS,
@@ -343,6 +345,7 @@ export {
   clearedProjectFilter,
   clearedProjectFilters,
   filterAndSortProjects,
+  searchAndSortProjects,
   currentInterviewQuestion,
   formatInterviewAnswer,
   interviewTurnText,
@@ -371,6 +374,7 @@ export {
   type SectionableProjectTask,
 } from "./projectMeta";
 export { MAINTENANCE_ERROR, isMaintenanceError } from "./maintenance";
+export { readableErrorMessage, readableServerError } from "./serverError";
 export {
   APP_SORT_LABELS,
   APP_SORT_ORDERS,
@@ -400,7 +404,12 @@ export {
   transcriptLiveArgs,
   transcriptTailArgs,
 } from "./chatTranscript";
-export { placeChatUiPanels, type PanelPlacement, type PlaceablePanel, type PlacementMessage } from "./chatUiPanelPlacement";
+export {
+  placeChatUiPanels,
+  type PanelPlacement,
+  type PlaceablePanel,
+  type PlacementMessage,
+} from "./chatUiPanelPlacement";
 export {
   attachmentFileKind,
   chatAttachmentErrorMessage,
@@ -418,7 +427,12 @@ export {
   type AttachmentFileKind,
   type ResolvedMediaEntry,
 } from "./attachmentLabels";
-export { ECHO_HISTORY_LIMIT, decideDraftPull, rememberOwnSave, type DraftPullDecision } from "./chatDraftPull";
+export {
+  ECHO_HISTORY_LIMIT,
+  decideDraftPull,
+  rememberOwnSave,
+  type DraftPullDecision,
+} from "./chatDraftPull";
 export {
   MID_TURN_SLEEP_HINT,
   sandboxDisplayStatus,
@@ -431,8 +445,6 @@ export {
 export { stripErrorPrefix, turnErrorTitle } from "./turnError";
 export {
   PREVIEW_SANDBOX_ALLOWED_STATUSES,
-  projectCanCreatePr,
-  projectCanResolveConflicts,
   taskCanCreatePr,
   taskCanResolveConflicts,
   taskCanStartSandbox,

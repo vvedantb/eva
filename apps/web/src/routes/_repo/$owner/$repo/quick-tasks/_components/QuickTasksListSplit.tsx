@@ -21,7 +21,6 @@ type Task = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
 
 interface QuickTasksListSplitProps {
   tasks: Task[];
-  projectNames: Map<string, string>;
   isSelecting: boolean;
   selectedIds: Set<Id<"agentTasks">>;
   onToggleSelect: (
@@ -65,7 +64,6 @@ interface QuickTasksListSplitProps {
  */
 export function QuickTasksListSplit({
   tasks,
-  projectNames,
   isSelecting,
   selectedIds,
   onToggleSelect,
@@ -96,7 +94,6 @@ export function QuickTasksListSplit({
             <div className="flex h-full min-h-0 flex-col overflow-hidden">
               <QuickTasksListView
                 tasks={tasks}
-                projectNames={projectNames}
                 isSelecting={isSelecting}
                 selectedIds={selectedIds}
                 onToggleSelect={onToggleSelect}

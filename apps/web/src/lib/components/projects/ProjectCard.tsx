@@ -3,11 +3,10 @@
 import type { Id } from "@eva/backend";
 import type { MouseEvent } from "react";
 import { UserInitials } from "@eva/shared/user-initials";
-import { IconDots, IconListCheck, IconSparkles } from "@tabler/icons-react";
+import { IconDots } from "@tabler/icons-react";
 import { cn } from "@eva/ui";
 import {
   AvatarStack,
-  Badge,
   ContextMenu,
   ContextMenuTrigger,
   ContextMenuContent,
@@ -26,11 +25,10 @@ import {
 } from "@vvedantb/ui";
 import { DynamicLink } from "@/lib/components/DynamicLink";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
-import { projectPlanningPhase } from "@eva/shared";
 import {
-  phaseConfig,
-  type ProjectPhase,
-} from "@/lib/components/projects/ProjectPhaseBadge";
+  projectListNeedsYouLabel,
+  type ProjectListStatus,
+} from "@eva/shared/projectView";
 import { ProjectCardMenuItems } from "./_components/ProjectCardMenuItems";
 import { useProjectMenu } from "./_components/useProjectMenu";
 import {
@@ -40,8 +38,10 @@ import {
 } from "@/lib/components/sandbox/sandboxStatusStyles";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { AwaitingAnswerMark } from "@/lib/components/ui/AwaitingAnswerMark";
+import { NeedsYouMark } from "@/lib/components/ui/NeedsYouMark";
 import { EntityNumLabel } from "@/lib/components/ui/EntityNumLabel";
 import { ProjectProgressBar } from "./ProjectProgressBar";
+import { ProjectStageCounts } from "./ProjectStageCounts";
 import { CARD_KEBAB_CLASS } from "@/lib/components/ui/cardKebab";
 
 interface ProjectCardProps {
@@ -56,8 +56,8 @@ interface ProjectCardProps {
   accentColor: string;
   members?: Array<Id<"users">>;
   projectLead?: Id<"users">;
-  phase: ProjectPhase;
-  planningMode: "interview" | "tasks_only";
+  /** Derived from the child tasks (`useProjectListStatuses`). */
+  status?: ProjectListStatus;
   isBuilding?: boolean;
   sandboxStatus?: SandboxStatus;
   /** Finished project chat reply the user has not seen (`api.projects.list`). */
@@ -90,8 +90,7 @@ export function ProjectCard({
   accentColor,
   members,
   projectLead,
-  phase,
-  planningMode,
+  status,
   isBuilding = false,
   sandboxStatus,
   hasUnread = false,
@@ -109,7 +108,6 @@ export function ProjectCard({
     projectId,
     title,
     description,
-    phase,
     projectLead,
     href,
     showOpenInNewTab: true,
@@ -124,15 +122,12 @@ export function ProjectCard({
     ),
   ];
   const previewText = description ?? rawInput;
-  // Draft and finalized share the To Do column; this badge tells them apart.
-  const planningPhase = projectPlanningPhase(phase);
-  const PlanningIcon = planningPhase ? phaseConfig[planningPhase].icon : null;
+  const needsYouLabel = status ? projectListNeedsYouLabel(status) : undefined;
 
   const MAX_AVATARS = 3;
   const allAvatarIds = memberIds.length > 0 ? memberIds : [userId];
   const shownAvatarIds = allAvatarIds.slice(0, MAX_AVATARS);
   const hiddenCount = allAvatarIds.length - MAX_AVATARS;
-
 
   const cardContent = (
     <ListRow
@@ -210,6 +205,15 @@ export function ProjectCard({
             </TooltipTrigger>
             <TooltipContent>Eva asked you a question</TooltipContent>
           </Tooltip>
+        ) : needsYouLabel !== undefined ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="relative mt-[3px] flex items-center hit-target">
+                <NeedsYouMark />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{needsYouLabel}</TooltipContent>
+          </Tooltip>
         ) : sandboxStatus &&
           showsSandboxStatusDot(sandboxStatus, simpleView) ? (
           <Tooltip>
@@ -230,46 +234,9 @@ export function ProjectCard({
         <UnreadDot show={hasUnread} className="mt-[7px]" />
       </div>
 
-      <div className="flex flex-wrap items-center gap-1">
-        {planningPhase && PlanningIcon ? (
-          <Badge
-            className={cn(
-              "gap-0.5 border-transparent px-1.5 py-0 text-3xs font-medium leading-4",
-              phaseConfig[planningPhase].bg,
-              phaseConfig[planningPhase].text,
-            )}
-          >
-            <PlanningIcon className="size-2.5 shrink-0" />
-            {phaseConfig[planningPhase].label}
-          </Badge>
-        ) : null}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Badge
-              variant="secondary"
-              className="gap-0.5 px-1.5 py-0 text-3xs font-medium leading-4"
-            >
-              {planningMode === "interview" ? (
-                <IconSparkles className="size-2.5 shrink-0" />
-              ) : (
-                <IconListCheck className="size-2.5 shrink-0" />
-              )}
-              {planningMode === "interview" ? "Interview" : "Tasks only"}
-            </Badge>
-          </TooltipTrigger>
-          <TooltipContent>
-            {planningMode === "interview"
-              ? "Created with AI interview and generated plan"
-              : "Created as a tasks-only container"}
-          </TooltipContent>
-        </Tooltip>
-      </div>
-
       <div className="mt-0.5 pt-0.5">
-        <ProjectProgressBar
-          projectId={projectId}
-          className="h-1 bg-secondary/80"
-        />
+        <ProjectProgressBar status={status} className="h-1 bg-secondary/80" />
+        <ProjectStageCounts status={status} className="mt-1.5" />
         <div className="mt-2 flex items-center gap-2">
           <div className="flex min-w-0 items-center gap-1.5">
             <AvatarStack size={18} className="-space-x-0.5">

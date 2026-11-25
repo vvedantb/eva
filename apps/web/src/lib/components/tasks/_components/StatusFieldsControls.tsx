@@ -14,7 +14,6 @@ import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
-  Badge,
   tokenTransition,
 } from "@vvedantb/ui";
 import { AnimatePresence, m } from "motion/react";
@@ -69,13 +68,7 @@ type TaskDoc = Doc<"agentTasks"> | undefined;
 type UpdateTask = ReactMutation<typeof api.agentTasks.update>;
 type UpdateStatus = ReactMutation<typeof api.agentTasks.updateStatus>;
 
-function StatusValue({
-  status,
-  isBlocked,
-}: {
-  status: TaskStatus;
-  isBlocked: boolean | undefined;
-}) {
+function StatusValue({ status }: { status: TaskStatus }) {
   const config = statusConfig[status];
   const Icon = config.icon;
   return (
@@ -93,22 +86,6 @@ function StatusValue({
           <span>{config.label}</span>
         </m.span>
       </AnimatePresence>
-      <AnimatePresence initial={false}>
-        {isBlocked ? (
-          <m.span
-            key="blocked"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={tokenTransition.fast}
-            className="inline-flex"
-          >
-            <Badge variant="warning" className="ml-0.5">
-              Blocked
-            </Badge>
-          </m.span>
-        ) : null}
-      </AnimatePresence>
     </div>
   );
 }
@@ -116,12 +93,10 @@ function StatusValue({
 export function StatusSelectField({
   taskId,
   status,
-  isBlocked,
   updateStatus,
 }: {
   taskId: Id<"agentTasks">;
   status: TaskStatus | undefined;
-  isBlocked: boolean | undefined;
   updateStatus: UpdateStatus;
 }) {
   return (
@@ -136,7 +111,7 @@ export function StatusSelectField({
     >
       <SelectTrigger className={FIELD_TRIGGER_CLASS}>
         <SelectValue placeholder="Status">
-          {status ? <StatusValue status={status} isBlocked={isBlocked} /> : null}
+          {status ? <StatusValue status={status} /> : null}
         </SelectValue>
       </SelectTrigger>
       <SelectContent>

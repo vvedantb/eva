@@ -27,7 +27,6 @@ import {
   IconLayoutKanban,
   IconList,
   IconFileImport,
-  IconFolder,
   IconSettings,
   IconFilter,
   IconUser,
@@ -62,7 +61,6 @@ import {
   type QuickTaskTimeRange,
 } from "@eva/shared";
 
-type Project = FunctionReturnType<typeof api.projects.list>[number];
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 
 function isQuickTaskView(value: string): value is QuickTaskView {
@@ -89,9 +87,6 @@ interface QuickTasksToolbarProps {
   onStartSelecting: () => void;
   onCreateTask: () => void;
   onImport: () => void;
-  projects: Project[] | undefined;
-  projectFilter: string;
-  onProjectFilterChange: (v: string) => void;
   users: User[] | undefined;
   userFilter: string;
   onUserFilterChange: (v: string) => void;
@@ -108,21 +103,11 @@ export function QuickTasksToolbar({
   onStartSelecting,
   onCreateTask,
   onImport,
-  projects,
-  projectFilter,
-  onProjectFilterChange,
   users,
   userFilter,
   onUserFilterChange,
   allTags,
 }: QuickTasksToolbarProps) {
-  const filterLabel =
-    projectFilter === "all"
-      ? "All Tasks"
-      : projectFilter === "none"
-        ? "No Project"
-        : (projects?.find((p) => p._id === projectFilter)?.title ?? "Project");
-
   const userFilterLabel =
     userFilter === "all" ? (
       "All Users"
@@ -300,35 +285,6 @@ export function QuickTasksToolbar({
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuSeparator />
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <IconFolder size={16} className="mr-2" />
-                {filterLabel}
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
-                <DropdownMenuRadioGroup
-                  value={projectFilter}
-                  onValueChange={onProjectFilterChange}
-                >
-                  <DropdownMenuRadioItem value="all">
-                    All Tasks
-                  </DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem value="none">
-                    No Project
-                  </DropdownMenuRadioItem>
-                  {projects && projects.length > 0 && (
-                    <>
-                      <DropdownMenuSeparator />
-                      {projects.map((p) => (
-                        <DropdownMenuRadioItem key={p._id} value={p._id}>
-                          {p.title}
-                        </DropdownMenuRadioItem>
-                      ))}
-                    </>
-                  )}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <IconUser size={16} className="mr-2" />

@@ -33,7 +33,8 @@ import {
   useDragSensors,
   MarqueeOnHover,
 } from "@vvedantb/ui";
-import { ProjectPhaseBadge } from "@/lib/components/projects/ProjectPhaseBadge";
+import { ProjectStageBadge } from "@/lib/components/projects/ProjectPhaseBadge";
+import { useProjectListStatuses } from "@/lib/components/projects/useProjectStatus";
 import { entityPathSegment } from "@/lib/numId";
 import { IconGripVertical } from "@tabler/icons-react";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
@@ -117,6 +118,9 @@ export function GroupTasksModal({
   }
 
   const projects = useQuery(api.projects.list, { repoId: repo._id });
+  // A project's stage is derived from its tasks; any project takes new tasks
+  // (a done project opens again).
+  const statuses = useProjectListStatuses(repo._id);
   const createFromTasks = useMutation(api.projects.createFromTasks);
   const assignToProject = useMutation(api.agentTasks.assignToProject);
 
@@ -257,48 +261,38 @@ export function GroupTasksModal({
           </TabsContent>
           <TabsContent value="existing">
             <div className="pt-2 space-y-2 max-h-80 overflow-y-auto">
-              {projects?.filter(
-                (p) =>
-                  p.phase === "in_progress" ||
-                  p.phase === "business_review" ||
-                  p.phase === "code_review" ||
-                  p.phase === "completed",
-              ).length === 0 && (
+              {projects?.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-4">
-                  No active projects
+                  No projects
                 </p>
               )}
-              {projects?.flatMap((project) =>
-                project.phase === "in_progress" ||
-                project.phase === "business_review" ||
-                project.phase === "code_review" ||
-                project.phase === "completed"
-                  ? [
-                      <button
-                        key={project._id}
-                        type="button"
-                        onClick={() => setSelectedProjectId(project._id)}
-                        className={`w-full rounded-lg p-3 text-left transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/35 ${
-                          selectedProjectId === project._id
-                            ? "ring-2 ring-primary bg-accent-soft"
-                            : "bg-muted hover:bg-muted/70"
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 justify-between">
-                          <span className="text-sm font-medium truncate">
-                            {project.title}
-                          </span>
-                          <ProjectPhaseBadge phase={project.phase} />
-                        </div>
-                        {project.description && (
-                          <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
-                            {project.description}
-                          </p>
-                        )}
-                      </button>,
-                    ]
-                  : [],
-              )}
+              {projects?.map((project) => {
+                const stage = statuses?.get(project._id)?.stage;
+                return (
+                  <button
+                    key={project._id}
+                    type="button"
+                    onClick={() => setSelectedProjectId(project._id)}
+                    className={`w-full rounded-lg p-3 text-left transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/35 ${
+                      selectedProjectId === project._id
+                        ? "ring-2 ring-primary bg-accent-soft"
+                        : "bg-muted hover:bg-muted/70"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 justify-between">
+                      <span className="text-sm font-medium truncate">
+                        {project.title}
+                      </span>
+                      {stage ? <ProjectStageBadge stage={stage} /> : null}
+                    </div>
+                    {project.description && (
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
+                        {project.description}
+                      </p>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </TabsContent>
         </Tabs>

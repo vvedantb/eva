@@ -2,7 +2,7 @@ import type { DatabaseReader } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { findMainChat } from "../_sessionChats/helpers";
 import type { ChatEntityKind } from "../_validators/enums";
-import { findOwnedSession, findWorkSession } from "../_sessions/owner";
+import { findOwnedSession } from "../_sessions/owner";
 import { findWorkChat } from "../_sessions/ownerState";
 
 type ChatParentId = Id<"sessionChats"> | Id<"sessions">;
@@ -43,13 +43,10 @@ export async function resolveChatParent(
     const taskId = db.normalizeId("agentTasks", entityId);
     const task = taskId ? await db.get(taskId) : null;
     if (!task) return null;
-    // The chat the task talks in (`findWorkChat`), once it has one; else the
-    // Main chat of the session it works on: a project task that has not
-    // chatted yet lands on its project's. A run's cards land there too.
+    // The chat the task talks in (`findWorkChat`): the Main chat of its own
+    // session. A run's cards land there too.
     const taskChat = await findWorkChat(db, { kind: "task", task });
-    if (taskChat) return taskChat.chat._id;
-    const session = await findWorkSession(db, task);
-    return session ? ((await findMainChat(db, session._id))?._id ?? null) : null;
+    return taskChat?.chat._id ?? null;
   }
   const projectId = db.normalizeId("projects", entityId);
   if (!projectId) return null;

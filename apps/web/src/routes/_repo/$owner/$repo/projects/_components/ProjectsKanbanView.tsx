@@ -7,11 +7,10 @@ import {
   KanbanColumn,
   KANBAN_COLUMN_WIDTH_CLASS,
 } from "@/lib/components/kanban/KanbanColumn";
-import { PROJECT_COLUMNS, type ProjectColumn } from "@eva/shared";
-import {
-  columnConfig,
-  phaseConfig,
-} from "@/lib/components/projects/ProjectPhaseBadge";
+import type { ProjectStage } from "@eva/shared/projectStatus";
+import type { ProjectListStatus } from "@eva/shared/projectView";
+import { PROJECT_STAGES } from "@eva/shared/projectView";
+import { projectStageConfig } from "@/lib/components/projects/ProjectPhaseBadge";
 import { ProjectCard } from "@/lib/components/projects/ProjectCard";
 import type { SelectionToggleOptions } from "@/lib/components/quick-tasks/selectionRange";
 import { usePersistedScrollParent } from "@/lib/hooks/usePersistedScrollParent";
@@ -30,8 +29,10 @@ interface ProjectsSelectionProps {
 }
 
 interface ProjectsKanbanViewProps extends ProjectsSelectionProps {
-  projectsByPhase: Record<ProjectColumn, Project[]>;
-  visiblePhases: Set<ProjectColumn>;
+  projectsByPhase: Record<ProjectStage, Project[]>;
+  visiblePhases: Set<ProjectStage>;
+  /** Derived status by project id (`useProjectListStatuses`). */
+  statuses: ReadonlyMap<string, ProjectListStatus>;
   owner: string;
   name: string;
   basePath: string;
@@ -41,6 +42,7 @@ interface ProjectsKanbanViewProps extends ProjectsSelectionProps {
 export function ProjectsKanbanView({
   projectsByPhase,
   visiblePhases,
+  statuses,
   owner,
   name,
   basePath,
@@ -51,7 +53,7 @@ export function ProjectsKanbanView({
 }: ProjectsKanbanViewProps) {
   return (
     <AnimatePresence initial={false}>
-      {PROJECT_COLUMNS.flatMap((phase) =>
+      {PROJECT_STAGES.flatMap((phase) =>
         visiblePhases.has(phase)
           ? [
               <m.div
@@ -66,6 +68,7 @@ export function ProjectsKanbanView({
                 <VirtualProjectColumn
                   phase={phase}
                   projects={projectsByPhase[phase]}
+                  statuses={statuses}
                   owner={owner}
                   name={name}
                   basePath={basePath}
@@ -85,6 +88,7 @@ export function ProjectsKanbanView({
 function VirtualProjectColumn({
   phase,
   projects,
+  statuses,
   owner,
   name,
   basePath,
@@ -93,8 +97,9 @@ function VirtualProjectColumn({
   selectedIds,
   onToggleSelect,
 }: ProjectsSelectionProps & {
-  phase: ProjectColumn;
+  phase: ProjectStage;
   projects: Project[];
+  statuses: ReadonlyMap<string, ProjectListStatus>;
   owner: string;
   name: string;
   basePath: string;
@@ -109,7 +114,7 @@ function VirtualProjectColumn({
   return (
     <KanbanColumn
       id={phase}
-      config={columnConfig[phase]}
+      config={projectStageConfig[phase]}
       count={projects.length}
       droppable={false}
       emptyLabel="No projects"
@@ -133,11 +138,10 @@ function VirtualProjectColumn({
                   branchName={project.branchName}
                   numId={project.numId}
                   createdAt={project._creationTime}
-                  accentColor={phaseConfig[project.phase].bar}
+                  accentColor={projectStageConfig[phase].bar}
                   members={project.members}
                   projectLead={project.projectLead}
-                  phase={project.phase}
-                  planningMode={project.planningMode}
+                  status={statuses.get(project._id)}
                   isBuilding={isProjectBuilding(project)}
                   sandboxStatus={project.sandboxStatus}
                   hasUnread={project.hasUnread}

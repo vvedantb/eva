@@ -6,8 +6,12 @@ import {
   IconTerminal2,
   type Icon,
 } from "@tabler/icons-react";
+import { Link } from "@tanstack/react-router";
+import { cn } from "@eva/ui";
+import { LIST_ROW_CONTROL_CLASS } from "@vvedantb/ui";
 import {
   chatSourceLabel,
+  chatSourceRoute,
   chatSourceShortLabel,
   type ChatSource,
   type ChatSourceKind,
@@ -31,5 +35,30 @@ export function ChatSourceBadge({ source }: { source: ChatSource }) {
       <SourceIcon size={11} aria-hidden className="shrink-0" />
       <span className="truncate">{chatSourceShortLabel(source)}</span>
     </span>
+  );
+}
+
+/**
+ * The source pill as a link into that chat's sandbox tab, for rows a project
+ * rolls up from its child tasks. Sits above a row's stretched link.
+ */
+export function ChatSourceLink({
+  source,
+  sandboxTab,
+}: {
+  source: ChatSource;
+  sandboxTab: "documents" | "artifacts";
+}) {
+  const route = chatSourceRoute(source, sandboxTab);
+  if (!route) return <ChatSourceBadge source={source} />;
+  return (
+    <Link
+      to={route.to}
+      params={route.params}
+      onClick={(event) => event.stopPropagation()}
+      className={cn("min-w-0 hover:opacity-80", LIST_ROW_CONTROL_CLASS)}
+    >
+      <ChatSourceBadge source={source} />
+    </Link>
   );
 }

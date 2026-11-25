@@ -49,22 +49,28 @@ export function NewAppsDialog({
     setSkipped(next);
   };
 
+  // One codebase at a time. Kept out of `save`'s `try`: the React Compiler
+  // cannot compile this loop inside a `try` and would skip the whole file.
+  const importAll = async () => {
+    for (const group of codebases.values()) {
+      const [first] = group;
+      await importDetectedApps({
+        owner: first.owner,
+        name: first.name,
+        installationId: first.installationId,
+        teamId: first.teamId,
+        apps: group.map((app) => ({
+          path: app.path,
+          add: !skipped.has(appKey(app)),
+        })),
+      });
+    }
+  };
+
   const save = async () => {
     setSaving(true);
     try {
-      for (const group of codebases.values()) {
-        const [first] = group;
-        await importDetectedApps({
-          owner: first.owner,
-          name: first.name,
-          installationId: first.installationId,
-          teamId: first.teamId,
-          apps: group.map((app) => ({
-            path: app.path,
-            add: !skipped.has(appKey(app)),
-          })),
-        });
-      }
+      await importAll();
       onClose();
     } catch (err) {
       toast.error(

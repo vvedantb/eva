@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQueryState } from "nuqs";
 import { cn } from "@eva/ui";
 import { IconDownload, IconPlus } from "@tabler/icons-react";
@@ -72,10 +72,13 @@ export function ChatLogView({
   source,
   entries,
   onBack,
+  entrySource,
 }: {
   source: ChatSourceArg;
   entries: ChatLogEntry[];
   onBack: () => void;
+  /** A project's Log: names the child task that wrote an entry. */
+  entrySource?: (entry: ChatLogEntry) => ReactNode;
 }) {
   const [kindFilter, setKindFilter] = useQueryState(
     "logKind",
@@ -177,6 +180,7 @@ export function ChatLogView({
                     key={entry._id}
                     entry={entry}
                     history={history}
+                    source={entrySource?.(entry)}
                   />
                 ))}
               </section>

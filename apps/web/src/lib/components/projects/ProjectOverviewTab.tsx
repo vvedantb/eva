@@ -3,7 +3,8 @@
 import type { Id } from "@eva/backend";
 import { ProjectDescription } from "./ProjectDescription";
 import { ProjectFieldsPanel } from "./ProjectFieldsPanel";
-import { ProjectProgressBar } from "./ProjectProgressBar";
+import { ProjectSummarySection } from "./ProjectSummarySection";
+import { useProjectTaskStatus } from "./useProjectStatus";
 
 /**
  * Overview tab: title + project context on the left, every project field in a
@@ -11,13 +12,18 @@ import { ProjectProgressBar } from "./ProjectProgressBar";
  */
 export function ProjectOverviewTab({
   projectId,
+  repoId,
   title,
   description,
+  documentsHref,
 }: {
   projectId: Id<"projects">;
+  repoId: Id<"githubRepos">;
   title: string;
   description: string | undefined;
+  documentsHref: string | undefined;
 }) {
+  const { status } = useProjectTaskStatus(projectId, repoId);
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto scrollbar md:overflow-hidden">
       <div className="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-[14fr_6fr] md:grid-rows-1 md:overflow-hidden">
@@ -31,7 +37,11 @@ export function ProjectOverviewTab({
             className="px-0 pt-0 pb-0"
             clamp={false}
           />
-          <ProjectProgressBar projectId={projectId} />
+          <ProjectSummarySection
+            projectId={projectId}
+            status={status}
+            documentsHref={documentsHref}
+          />
         </div>
         <div className="mt-6 flex shrink-0 flex-col px-4 pb-4 md:mt-0 md:overflow-y-auto md:scrollbar md:px-0 md:pb-6 md:pl-8 md:pr-6 md:pt-5">
           <ProjectFieldsPanel projectId={projectId} />

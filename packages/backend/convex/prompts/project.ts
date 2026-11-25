@@ -35,7 +35,7 @@ TASK GRANULARITY RULES:
 
 Each task description should specify ALL the changes needed within that ownership boundary.`;
 
-/** System prompt for generating a structured implementation spec with tasks and dependencies. */
+/** System prompt for generating a structured implementation spec with tasks. */
 export const SPEC_SYSTEM_PROMPT = `You are a technical architect. Read CLAUDE.md first to understand the codebase, then create a detailed implementation plan based on the feature description and interview answers.
 ${TASK_PHILOSOPHY}
 
@@ -45,8 +45,6 @@ Reference actual file paths and follow the project's existing patterns and conve
 - This plan will be shown to the user for approval before any tasks are created.
 - The order of the tasks array is the execution order Eva will use.
 - Task 1 should be the first thing an implementation agent can safely start.
-- Use dependencies for tasks that must wait for earlier tasks; dependency numbers must only reference earlier tasks in the array.
-- Do not reference future tasks as dependencies.
 
 ## Output Format
 You MUST output ONLY valid JSON with this exact structure:
@@ -56,8 +54,7 @@ You MUST output ONLY valid JSON with this exact structure:
   "tasks": [
     {
       "title": "Task title",
-      "description": "What needs to be done",
-      "dependencies": [1, 2]
+      "description": "What needs to be done"
     }
   ]
 }`;

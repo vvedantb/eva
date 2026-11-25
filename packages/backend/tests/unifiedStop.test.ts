@@ -20,7 +20,10 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/** A project with an active session, and a project task running in its own chat. */
+/**
+ * A project with an active session, and a project task running, with an old
+ * chat of its own in the project's session (`sessionChats.taskId`, legacy).
+ */
 async function fixture() {
   const t = convexTest(schema, modules);
   const ids = await t.run(async (ctx) => {
@@ -87,7 +90,15 @@ async function fixture() {
       updatedAt: 0,
       createdBy: userId,
     });
-    return { projectId, sessionId, taskId, taskChatId, runId, quickTaskId };
+    return {
+      userId,
+      projectId,
+      sessionId,
+      taskId,
+      taskChatId,
+      runId,
+      quickTaskId,
+    };
   });
   return { t, asUser: t.withIdentity({ subject: CLERK_ID }), ...ids };
 }
@@ -152,9 +163,18 @@ describe("stopWorkSandbox", () => {
       await f.t.run(async (ctx) => {
         const repoId = (await ctx.db.get(f.sessionId))?.repoId;
         if (!repoId) throw new Error("fixture session missing");
+        // A project task runs on its own session, like a quick task.
+        const taskSessionId = await ctx.db.insert("sessions", {
+          owner: { kind: "task", taskId: f.taskId },
+          repoId,
+          userId: f.userId,
+          title: "Split invoices",
+          status: "active",
+          sandboxId: "sbx_task",
+        });
         await ctx.db.insert("turns", {
           entityId: f.runId,
-          sessionId: f.sessionId,
+          sessionId: taskSessionId,
           streamingEntityId: String(f.runId),
           state: "running",
           open: true,

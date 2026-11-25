@@ -8,6 +8,7 @@ import {
   hasRepoAccess,
 } from "./functions";
 import { findDocWithAccess, getDocWithAccess } from "./_docs/access";
+import { replaceDocBody } from "./_docs/body";
 import { allocateNumId, entityVisible, isEntityDeleted } from "./numId";
 import {
   internalMutation,
@@ -52,13 +53,14 @@ import {
   chatSourceArgValidator,
   chatSourceFieldsFromArg,
   chatSourceSummaryValidator,
+  listRowsForChatRollUp,
   listRowsForChatSource,
   resolveChatSource,
   type ChatSourceArg,
   type RepoCache,
 } from "./_chatSource/helpers";
 
-const docValidator = v.object({
+export const docValidator = v.object({
   _id: v.id("docs"),
   _creationTime: v.number(),
   ...docFields,
@@ -215,7 +217,11 @@ export const list = authQuery({
   },
 });
 
-/** Docs created from one session, quick task, or project sandbox. */
+/**
+ * Docs created from one session, quick task, or project sandbox. A project
+ * rolls up its child tasks' docs (`listRowsForChatRollUp`); each row's
+ * `source` names the task that made it.
+ */
 export const listForSource = authQuery({
   args: { source: chatSourceArgValidator },
   returns: v.array(docListItemValidator),
@@ -238,11 +244,11 @@ export const listForSource = authQuery({
  * document (`sessionId`); `getBySession` still reads only `sessionId`.
  */
 async function listDocsForSource(
-  ctx: QueryCtx,
+  ctx: QueryCtx & { userId: Id<"users"> },
   source: ChatSourceArg,
 ): Promise<Doc<"docs">[]> {
   if (source.kind !== "session") {
-    return listRowsForChatSource(ctx, "docs", source);
+    return listRowsForChatRollUp(ctx, "docs", source);
   }
   const sessionId = source.sessionId;
   const [fromSource, fromPlan] = await Promise.all([
@@ -447,25 +453,9 @@ export const createFromSession = authMutation({
 
     if (existing) {
       // "Update Document": overwrite the live synced doc with the latest plan.
-      // We reset the sync component's data and recreate it (rather than a
-      // server-side transform, which would need the full editor schema in the
-      // isolate). This is an explicit, infrequent overwrite, so clobbering any
-      // in-flight collaborative edits on this doc is acceptable.
-      const snapshot = await ctx.runQuery(
-        components.prosemirrorSync.lib.getSnapshot,
-        { id: existing._id },
-      );
-      if (snapshot.content !== null) {
-        await ctx.runMutation(components.prosemirrorSync.lib.deleteDocument, {
-          id: existing._id,
-        });
-      }
-      await prosemirrorSync.create(ctx, existing._id, planJson);
-      await ctx.db.patch(existing._id, {
-        content: session.planContent ?? "",
-        contentUpdatedAt: now,
-        updatedAt: now,
-      });
+      // An explicit, infrequent overwrite, so clobbering in-flight edits is
+      // acceptable.
+      await replaceDocBody(ctx, existing._id, session.planContent ?? "");
       return existing._id;
     }
 

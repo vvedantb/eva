@@ -11,12 +11,12 @@ import {
   useAgentTaskByNumId,
   useProjectByNumId,
 } from "@/lib/useResolveByNumId";
+import { sandboxTabIdFromParam } from "@/lib/search-params";
 import {
-  isTaskRouteSandboxTab,
-  sandboxTabIdFromParam,
-  type TaskRouteSandboxTab,
-} from "@/lib/search-params";
-import { isTaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
+  isProjectSandboxTab,
+  PROJECT_DEFAULT_SANDBOX_TAB,
+  type ProjectSandboxTab,
+} from "@/lib/components/projects/projectSandboxTabs";
 import type { ProjectMainTab } from "@/lib/components/projects/ProjectMainTabs";
 import { ProjectDetailClient } from "../ProjectDetailClient";
 
@@ -27,9 +27,9 @@ const OVERVIEW_ROUTE_ID = "/_repo/$owner/$repo/projects/$numId/overview";
 
 /**
  * Project shell. Owns the whole detail page — header tabs and body — so
- * switching Overview/Tasks/Sandbox, opening a task or crossing into the
- * sandbox swaps the body only and leaves the header mounted. Every child
- * route renders `null`; they exist for their params and `beforeLoad` redirects.
+ * switching Overview/Coordinator, a coordinator rail tab, or opening a task
+ * swaps the body only and leaves the header mounted. Every child route
+ * renders `null`; they exist for their params and `beforeLoad` redirects.
  */
 export const Route = createFileRoute("/_repo/$owner/$repo/projects/$numId")({
   staticData: { title: "Projects" },
@@ -39,7 +39,7 @@ export const Route = createFileRoute("/_repo/$owner/$repo/projects/$numId")({
 function ProjectDetailShell() {
   const { numId } = Route.useParams();
   const { basePath, repoId } = useRepo();
-  // Child params (`taskNumId`, `detailTab`, `sandboxTab`) belong to routes this
+  // Child params (`taskNumId`, `sandboxTab`) belong to routes this
   // layout renders in place of an Outlet, so read them loosely.
   const params = useParams({ strict: false });
   const isSandboxSurface = useRouterState({
@@ -60,10 +60,6 @@ function ProjectDetailShell() {
     typeof params.sandboxTab === "string" ? params.sandboxTab : undefined;
 
   const mainTab: ProjectMainTab = isOverviewTab ? "overview" : "work";
-  const detailTab =
-    typeof params.detailTab === "string" && isTaskDetailTab(params.detailTab)
-      ? params.detailTab
-      : undefined;
 
   // A legacy `$taskNumId` redirects on its own once the project segment is
   // canonical — `replaceRouteIdSegment` only touches its own segment, so the two
@@ -82,20 +78,18 @@ function ProjectDetailShell() {
         <ProjectDetailClient
           projectId={projectDoc._id}
           projectNumId={project.numId ?? undefined}
-          surface={isSandboxSurface ? "sandbox" : "main"}
           mainTab={mainTab}
+          // The project index is the coordinator on its Tasks tab.
           sandboxTab={
             isSandboxSurface
               ? sandboxTabFrom(sandboxTabParam, isSandboxReview)
-              : undefined
+              : PROJECT_DEFAULT_SANDBOX_TAB
           }
-          // The task pane owns its own loading / not-found states so the task
-          // list never unmounts while switching between tasks.
+          // The task view owns its own loading / not-found states.
           selectedTaskId={
             taskNumId === undefined ? undefined : (task.convexId ?? undefined)
           }
           selectedTaskStatus={taskNumId === undefined ? undefined : task.status}
-          detailTab={detailTab}
         />
       )}
     </EntityNumIdGate>
@@ -105,11 +99,11 @@ function ProjectDetailShell() {
 function sandboxTabFrom(
   sandboxTabParam: string | undefined,
   isReview: boolean,
-): TaskRouteSandboxTab {
+): ProjectSandboxTab {
   if (isReview) return "review";
   if (sandboxTabParam !== undefined) {
     const tabId = sandboxTabIdFromParam(sandboxTabParam);
-    if (isTaskRouteSandboxTab(tabId)) return tabId;
+    if (isProjectSandboxTab(tabId)) return tabId;
   }
-  return "preview";
+  return PROJECT_DEFAULT_SANDBOX_TAB;
 }

@@ -56,7 +56,6 @@ function useTaskDetailQueries(taskId: Id<"agentTasks">) {
   const taskSession = useTaskSession(taskId, task);
   const currentUserId = useQuery(api.auth.me);
   const isOwner = currentUserId === task?.createdBy;
-  const isBlocked = useQuery(api.taskDependencies.isBlocked, { taskId });
   const runs = useQuery(api.agentRuns.listByTask, { taskId });
   const hasActiveRun = Boolean(
     runs?.some((run) => run.status === "queued" || run.status === "running"),
@@ -81,7 +80,6 @@ function useTaskDetailQueries(taskId: Id<"agentTasks">) {
     isNotFound: taskResult === null,
     task,
     isOwner,
-    isBlocked,
     runs,
     hasActiveRun,
     hasRuns,

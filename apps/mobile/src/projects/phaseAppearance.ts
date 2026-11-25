@@ -1,12 +1,15 @@
 import type { ProjectColumn, ProjectPhase } from "@eva/shared";
+import type { ProjectStage, ProjectTaskDisplayStatus } from "@eva/shared/projectStatus";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import {
+  IconAlertTriangle,
   IconCheck,
   IconCircleCheck,
   IconCircleX,
   IconClipboardCheck,
   IconClock,
   IconEye,
+  IconInbox,
   IconNotes,
   type IconProps,
 } from "@tabler/icons-react-native";
@@ -49,4 +52,32 @@ export function phaseAppearance(phase: ProjectPhase, scheme: Scheme) {
 /** A list section's icon and colour: To Do as the quick-task To Do, the rest as their phase. */
 export function columnAppearance(column: ProjectColumn, scheme: Scheme) {
   return column === "todo" ? statusAppearance("todo", scheme) : phaseAppearance(column, scheme);
+}
+
+/** A project stage's icon and colours, as the web `projectStageConfig`: Done looks as Completed. */
+export function projectStageAppearance(stage: ProjectStage, scheme: Scheme) {
+  return columnAppearance(stage === "done" ? "completed" : stage, scheme);
+}
+
+/**
+ * A child task's display status, as the web `projectTaskDisplayStatusConfig`:
+ * Triage in the code-review purple, Working as In Progress, Blocked as the
+ * needs-you warning, Idle as To Do, Archived as Cancelled. The task list groups, a project's task counts and
+ * its progress bar.
+ */
+export function taskDisplayStatusAppearance(status: ProjectTaskDisplayStatus, scheme: Scheme) {
+  if (status === "triage") {
+    const theme = EVA_THEME[scheme];
+    return { icon: IconInbox, text: theme.statusCodeReview, bar: theme.statusCodeReviewBar };
+  }
+  if (status === "blocked") {
+    const warning = EVA_THEME[scheme].warning;
+    return { icon: IconAlertTriangle, text: warning, bar: warning };
+  }
+  const column: Record<Exclude<ProjectTaskDisplayStatus, "triage" | "blocked">, ProjectColumn> = {
+    working: "in_progress",
+    idle: "todo",
+    archived: "cancelled",
+  };
+  return columnAppearance(column[status], scheme);
 }

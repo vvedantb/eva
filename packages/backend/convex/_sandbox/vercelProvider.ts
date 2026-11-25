@@ -9,7 +9,8 @@
  * - Identity: Vercel addresses sandboxes by `name`, not a separate id. We expose
  *   `handle.id === sandbox.name` and resolve `get(sandboxId)` via `Sandbox.get({ name })`.
  * - Resources: the client is built with the app's vCPU count (its sandbox
- *   size setting); Vercel gives 2 GB RAM per vCPU.
+ *   size setting); `SandboxCreateParams.vcpus` overrides it for one sandbox
+ *   (the project coordinator). Vercel gives 2 GB RAM per vCPU.
  * - Lifecycle: Vercel is persistent-by-default and the SDK auto-resumes on
  *   `get` and on any exec. Eva turns both off (`resume: false`,
  *   `withoutLazyResume`), so only `start()` wakes a stopped sandbox.
@@ -1242,7 +1243,7 @@ class VercelSandboxClient implements SandboxClient {
 
   constructor(
     private readonly creds: VercelCredentials,
-    /** vCPUs for every sandbox this client creates (the app's size setting). */
+    /** vCPUs for a sandbox whose create params set none (the app's size setting). */
     private readonly vcpus: number,
   ) {}
 
@@ -1323,6 +1324,8 @@ class VercelSandboxClient implements SandboxClient {
       params.mounts?.length && mountDrives
         ? await this.resolveMounts(params.mounts)
         : undefined;
+    // A per-sandbox size (the project coordinator) beats the app's setting.
+    const vcpus = params.vcpus ?? this.vcpus;
     const base = {
       ...this.creds,
       onResume: rewireDriveCacheOnResume,
@@ -1336,7 +1339,7 @@ class VercelSandboxClient implements SandboxClient {
       timeout: Math.max(params.lifecycle.autoStopMinutes, 24 * 60) * 60 * 1000,
       persistent,
       ...vercelSnapshotCreateOptions(persistent),
-      resources: { vcpus: this.vcpus },
+      resources: { vcpus },
       ports: (params.ports ?? VERCEL_DEFAULT_EXPOSED_PORTS).slice(0, MAX_PORTS),
       ...(params.lifecycle.labels ? { tags: params.lifecycle.labels } : {}),
     };
@@ -1379,7 +1382,7 @@ class VercelSandboxClient implements SandboxClient {
         throw lastError;
       });
       console.log(
-        `[vercel] created sandbox=${sandbox.name} region=${region} persistent=${persistent} vcpus=${this.vcpus} forkFrom=${params.forkFrom ?? "none"} sourceSnapshot=${params.snapshot ?? "none"} image=${image} mounts=${describeMounts(used)}`,
+        `[vercel] created sandbox=${sandbox.name} region=${region} persistent=${persistent} vcpus=${vcpus} forkFrom=${params.forkFrom ?? "none"} sourceSnapshot=${params.snapshot ?? "none"} image=${image} mounts=${describeMounts(used)}`,
       );
       // Env is NOT written here. writeFiles is the first sandbox I/O and absorbs
       // Vercel's first-command boot penalty (seconds–tens of seconds). Callers
@@ -1402,7 +1405,7 @@ class VercelSandboxClient implements SandboxClient {
         // requestedMounts is what the ladder STARTED from: by the time this
         // throws every weaker stage (including no mounts at all) has already
         // failed too, so mounts are never the remaining suspect.
-        `vercel create failed (region=${region}, forkFrom=${params.forkFrom ?? "none"}, snapshot=${params.snapshot ?? "none"}, image=${image}, timeout=${base.timeout}, persistent=${base.persistent}, vcpus=${this.vcpus}, envKeys=[${Object.keys(params.envVars ?? {}).join(",")}], hasTags=${Boolean(params.lifecycle.labels)}, requestedMounts=${describeMounts(mounts)}): ${detail}`,
+        `vercel create failed (region=${region}, forkFrom=${params.forkFrom ?? "none"}, snapshot=${params.snapshot ?? "none"}, image=${image}, timeout=${base.timeout}, persistent=${base.persistent}, vcpus=${vcpus}, envKeys=[${Object.keys(params.envVars ?? {}).join(",")}], hasTags=${Boolean(params.lifecycle.labels)}, requestedMounts=${describeMounts(mounts)}): ${detail}`,
       );
     }
   }

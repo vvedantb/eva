@@ -62,3 +62,30 @@ export function carriedAccountForProvider<T extends SelectableAccount>(
   if (current && current.provider === provider) return current.id;
   return defaultAccountForProvider(accounts, provider);
 }
+
+/**
+ * A project's model picker accounts: the reader's own, and for anyone but the
+ * project's owner, the owner's chosen account first, named for the owner. It
+ * is theirs, so it is never a default for the reader, and only the owner
+ * changes the project's account.
+ */
+export function projectPickerAccounts<Account extends { isOwn: boolean }>(
+  accounts: ReadonlyArray<Account>,
+  project: {
+    isOwner: boolean;
+    providerAccountId: Id<"userProviderAccounts"> | undefined;
+    provider: AIProvider;
+    ownerLabel: string;
+  },
+): Array<Account | PickerAccount> {
+  if (project.isOwner || !project.providerAccountId) return [...accounts];
+  return [
+    {
+      id: project.providerAccountId,
+      provider: project.provider,
+      label: project.ownerLabel,
+      isOwn: false,
+    },
+    ...accounts,
+  ];
+}

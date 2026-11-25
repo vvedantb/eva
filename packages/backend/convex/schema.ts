@@ -75,6 +75,9 @@ import {
   logFields,
   workProfileFields,
   taskDependencyFields,
+  projectTaskReportFields,
+  projectTaskBatchFields,
+  projectCoordinatorWakeFields,
   notificationFields,
   repoEnvVarFields,
   repoSnapshotFields,
@@ -206,10 +209,17 @@ const schema = defineSchema({
     "parentId",
   ]),
 
-  taskDependencies: defineTable(taskDependencyFields)
-    .index("by_task", ["taskId"])
-    .index("by_task_and_depends_on", ["taskId", "dependsOnId"])
-    .index("by_dependency", ["dependsOnId"]),
+  projectTaskReports: defineTable(projectTaskReportFields)
+    .index("by_project", ["projectId"])
+    .index("by_task_and_state", ["taskId", "state"]),
+  projectTaskBatches: defineTable(projectTaskBatchFields).index("by_project", [
+    "projectId",
+  ]),
+  projectCoordinatorWakes: defineTable(projectCoordinatorWakeFields)
+    .index("by_project_and_key", ["projectId", "key"])
+    .index("by_project_and_sent", ["projectId", "sentAt"]),
+  // drop after dataMigrations:clearTaskDependencies runs
+  taskDependencies: defineTable(taskDependencyFields),
   taskSandboxEvents: defineTable(taskSandboxEventFields).index("by_task", [
     "taskId",
   ]),
@@ -259,7 +269,7 @@ const schema = defineSchema({
     .index("by_session", ["sessionId"])
     .index("by_session_and_number", ["sessionId", "number"])
     .index("by_repo", ["repoId"])
-    // A project task's chat in its project's session.
+    // Legacy: an old project task's chat in its project's session.
     .index("by_task", ["taskId"]),
   // Legacy daemon-poll mirror. Chat daemons poll their `sessionChats` row
   // directly; `backfillSessionChats` empties this table and it can then be

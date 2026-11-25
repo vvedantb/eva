@@ -23,7 +23,7 @@ import {
   chatSourceArgValidator,
   chatSourceFieldsFromArg,
   chatSourceSummaryValidator,
-  listRowsForChatSource,
+  listRowsForChatRollUp,
   resolveChatSource,
   type RepoCache,
 } from "./_chatSource/helpers";
@@ -204,13 +204,16 @@ export const listAll = authQuery({
   },
 });
 
-/** Artifacts created from one session, quick task, or project sandbox. */
+/**
+ * Artifacts created from one session, quick task, or project sandbox. A
+ * project rolls up its child tasks' artifacts (`listRowsForChatRollUp`).
+ */
 export const listForSource = authQuery({
   args: { source: chatSourceArgValidator },
   returns: v.array(artifactDoc),
   handler: async (ctx, args) => {
     if (!(await callerCanSeeChatSource(ctx, args.source))) return [];
-    const rows = await listRowsForChatSource(ctx, "artifacts", args.source);
+    const rows = await listRowsForChatRollUp(ctx, "artifacts", args.source);
     const access = await Promise.all(
       rows.map((row) => hasTeamAccess(ctx.db, row.boundTeamId, ctx.userId)),
     );

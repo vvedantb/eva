@@ -96,20 +96,10 @@ export function QuickTasksClient() {
   const deleteSelected = useBulkDeleteTasks();
   const runSelected = useBulkRunTasks();
   const [filters, setParams] = useQuickTaskFilters();
-  const { q, view, project, user } = filters;
+  const { q, view, user } = filters;
 
   const projects = useQuery(api.projects.list, { repoId: repo._id });
   const users = useQuery(api.users.listAll);
-
-  const projectNames = (() => {
-    const map = new Map<string, string>();
-    if (projects) {
-      for (const p of projects) {
-        map.set(p._id, p.title);
-      }
-    }
-    return map;
-  })();
 
   const allTags = (() => {
     const tagSet = new Set<string>(TASK_TAGS);
@@ -223,7 +213,6 @@ export function QuickTasksClient() {
     return match?.fullName ?? match?.firstName;
   };
   const activeFilterLabels = quickTaskFilterChips(filters, {
-    project: (id) => projects?.find((p) => p._id === id)?.title,
     user: userName,
   }).map((chip) => ({
     key: chip.key,
@@ -371,9 +360,6 @@ export function QuickTasksClient() {
             onStartSelecting={() => setIsSelecting(true)}
             onCreateTask={() => setIsCreating(true)}
             onImport={() => setIsImporting(true)}
-            projects={projects}
-            projectFilter={project}
-            onProjectFilterChange={(v) => setParams({ project: v })}
             users={users}
             userFilter={user}
             onUserFilterChange={(v) => setParams({ user: v })}
@@ -455,7 +441,6 @@ export function QuickTasksClient() {
                   {view === "kanban" ? (
                     <QuickTasksKanbanBoard
                       tasks={quickTasks}
-                      projectNames={projectNames}
                       isSelecting={isSelecting}
                       selectedIds={selectedIds}
                       onToggleSelect={toggleSelect}
@@ -463,7 +448,6 @@ export function QuickTasksClient() {
                   ) : (
                     <QuickTasksListSplit
                       tasks={quickTasks}
-                      projectNames={projectNames}
                       isSelecting={isSelecting}
                       selectedIds={selectedIds}
                       onToggleSelect={toggleSelect}

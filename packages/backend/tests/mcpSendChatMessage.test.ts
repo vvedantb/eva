@@ -195,8 +195,8 @@ describe("resolving the chat an MCP caller named", () => {
       );
       expect(resolved?.kind).toBe("project");
       expect(resolved?.targetId).toBe(f.projectId);
-      // A project tracks a phase where a session tracks a status.
-      expect(resolved?.status).toBe("in_progress");
+      // A project reports its derived stage: no tasks yet, so todo.
+      expect(resolved?.status).toBe("todo");
     }
   });
 

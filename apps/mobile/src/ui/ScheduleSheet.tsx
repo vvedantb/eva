@@ -26,7 +26,6 @@ export function ScheduleSheet({
   onOpenChange,
   title,
   scheduledAt,
-  scheduleLabel = "Schedule",
   onSchedule,
   onRemove,
 }: {
@@ -35,8 +34,6 @@ export function ScheduleSheet({
   title: string;
   /** The current schedule: the sheet edits it, with Remove. */
   scheduledAt: number | undefined;
-  /** "Schedule" by default (the web's), "Schedule build" for a project. */
-  scheduleLabel?: string;
   /** Called with the picked time (a new schedule or an update). */
   onSchedule: (timestamp: number) => void;
   onRemove?: () => void;
@@ -66,7 +63,7 @@ export function ScheduleSheet({
           ) : null}
           <View className="flex-1">
             <Button disabled={!future} onPress={() => onSchedule(seed.getTime())}>
-              {isScheduled ? "Update" : scheduleLabel}
+              {isScheduled ? "Update" : "Schedule"}
             </Button>
           </View>
         </View>

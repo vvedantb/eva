@@ -10,7 +10,9 @@ import { aiProviderValidator } from "./validators";
 import {
   listAccountsFor,
   listSelectableAccountsFor,
+  withProjectAccountFirst,
 } from "./_userProviderAccounts/listing";
+import { sessionProject } from "./_projects/runSettings";
 import { isAccountUsableBy } from "./_userProviderAccounts/sharing";
 import { rejectSandboxCaller } from "./_auth/sandboxIdentity";
 
@@ -58,7 +60,8 @@ export const listSelectable = authQuery({
 /**
  * Lists the accounts the task owner can run on (masked) for the model picker.
  * The task chat runs on the owner's credentials whoever sends the turn, so
- * collaborators pick from the owner's accounts.
+ * collaborators pick from the owner's accounts. A project's child task lists
+ * its project's account first (`withProjectAccountFirst`).
  */
 export const listForTaskOwner = authQuery({
   args: { taskId: v.id("agentTasks") },
@@ -68,14 +71,21 @@ export const listForTaskOwner = authQuery({
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId))) {
       return [];
     }
-    return await listSelectableAccountsFor(ctx, task.createdBy);
+    const project =
+      task.projectId !== undefined ? await ctx.db.get(task.projectId) : null;
+    return await withProjectAccountFirst(
+      ctx,
+      await listSelectableAccountsFor(ctx, task.createdBy),
+      project,
+    );
   },
 });
 
 /**
  * Lists the accounts the project owner can run on (masked) for the project
  * chat's model picker. The chat runs on the owner's credentials whoever sends
- * the turn, so collaborators pick from the owner's accounts.
+ * the turn, so collaborators pick from the owner's accounts; the project's
+ * own account comes first.
  */
 export const listForProjectOwner = authQuery({
   args: { projectId: v.id("projects") },
@@ -88,7 +98,11 @@ export const listForProjectOwner = authQuery({
     ) {
       return [];
     }
-    return await listSelectableAccountsFor(ctx, project.userId);
+    return await withProjectAccountFirst(
+      ctx,
+      await listSelectableAccountsFor(ctx, project.userId),
+      project,
+    );
   },
 });
 
@@ -96,6 +110,8 @@ export const listForProjectOwner = authQuery({
  * Lists the accounts the session owner can run on (masked) for the model
  * picker. A session runs on its owner's credentials whoever sends the turn, so
  * collaborators see — and pick from — the owner's accounts, never their own.
+ * A project's coordinator or child task session lists the project's account
+ * first (`withProjectAccountFirst`).
  */
 export const listForSessionOwner = authQuery({
   args: { sessionId: v.id("sessions") },
@@ -108,9 +124,10 @@ export const listForSessionOwner = authQuery({
     ) {
       return [];
     }
-    return await listSelectableAccountsFor(
+    return await withProjectAccountFirst(
       ctx,
-      session.createdBy ?? session.userId,
+      await listSelectableAccountsFor(ctx, session.createdBy ?? session.userId),
+      await sessionProject(ctx.db, session),
     );
   },
 });

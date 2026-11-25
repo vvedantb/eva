@@ -135,7 +135,7 @@ Only entities you could already open in Eva are returned. The page is capped; "t
           .string()
           .optional()
           .describe(
-            'Exact lifecycle value to filter on: a session\'s sandbox status ("active", "starting", "stopping", "closed"), a task\'s status ("draft", "todo", "in_progress", "code_review", "business_review", "done", "cancelled"), or a project\'s phase ("draft", "finalized", "in_progress", "business_review", "code_review", "completed", "cancelled"). A value that belongs to another surface simply matches nothing there.',
+            'Exact lifecycle value to filter on: a session\'s sandbox status ("active", "starting", "stopping", "closed"), a task\'s status ("draft", "todo", "in_progress", "code_review", "business_review", "done", "cancelled"), or a project\'s stage ("todo", "in_progress", "done"). A value that belongs to another surface simply matches nothing there.',
           ),
         limit: z
           .number()
@@ -237,7 +237,7 @@ Already-active sandboxes are left alone. Each surface has its own gate: a quick 
       name: "stop_sandbox",
       description: `Tear down the preview sandbox for a session, quick task or project — the same Stop button the Eva UI has. Call this when you are finished with a chat you woke up, so the VM does not keep running after send_chat_message.
 
-If an agent is working in the sandbox (a turn in flight, a task run, a project build or interview) this is REJECTED rather than killing that work: wait for it to finish and stop again, or cancel it deliberately first (stop_agent, cancel_project_build). An already-stopped sandbox is a no-op. The reply reports the settled state, which is "stopping" if teardown is still finishing.`,
+If an agent is working in the sandbox (a turn in flight, a task run, a project build or interview) this is REJECTED rather than killing that work: wait for it to finish and stop again, or cancel it deliberately first (stop_agent). An already-stopped sandbox is a no-op. The reply reports the settled state, which is "stopping" if teardown is still finishing.`,
       mutating: true,
       input: entityRefArgs,
       handler: async (ref) => {
@@ -288,7 +288,7 @@ The returned "previewUrl" opens the app and requires an Eva login — it is for 
           ctx.runQuery(internal.sandboxIdlePause.getSettingsInternal, {}),
         ]);
         const chatRef = withSelfDefault(ref, credentials);
-        const resolved = await resolveEntityTarget(chatRef, userId);
+        const resolved = await resolveEntityTarget(chatRef, userId, "read");
         if ("content" in resolved) return resolved;
         const { target } = resolved;
         const wakeUrl = wakePreviewUrl(target, idlePause.mode, path);

@@ -2,10 +2,10 @@ import { useState, useEffect } from "react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useChatTurnOpen } from "@/lib/components/chat/useChatTurnOpen";
 import { useChatUnread } from "@/lib/components/sandbox/useChatUnread";
-import { useAction, useMutation } from "convex/react";
+import { useMutation } from "convex/react";
 import { useNavigate } from "@tanstack/react-router";
 import { api } from "@eva/backend";
-import { CenteredSpinner, toast, convexErrorMessage } from "@vvedantb/ui";
+import { CenteredSpinner } from "@vvedantb/ui";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
@@ -19,20 +19,12 @@ import {
 import { useProjectSandbox } from "@/lib/components/projects/useProjectSandbox";
 import { useAgentBrowsingAutoSwitch } from "@/lib/components/sandbox/useSandboxLifecycle";
 import { useSandboxRailWidthPx } from "@/lib/components/sandbox/useSandboxRailLabels";
-import type { SandboxSurface } from "@/lib/components/sandbox/SandboxSurfaceTabs";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
-import { usePrLinkMenuItems } from "@/lib/components/PrLinkMenuItems";
 import { ProjectBreadcrumb } from "./_components/ProjectBreadcrumb";
 import { useEntityDocumentTitle } from "@/lib/hooks/useDocumentTitle";
-import {
-  StopConfirmDialog,
-  ResolveConfirmDialog,
-} from "@/lib/components/tasks/_components/TaskConfirmDialogs";
-import type { TaskRouteSandboxTab } from "@/lib/search-params";
-import type { TaskDetailTab } from "@/lib/components/tasks/_components/task-detail-constants";
 import type { EntityResolveStatus } from "@/lib/numId";
+import type { ProjectSandboxTab } from "@/lib/components/projects/projectSandboxTabs";
 import {
-  getProjectPrFlags,
   isProjectDraftOrFinalized,
   parseProjectSpec,
 } from "./_components/projectDetailHelpers";
@@ -42,63 +34,39 @@ import { ProjectDetailSandboxContent } from "./_components/ProjectDetailSandboxC
 import {
   ProjectInterviewHistoryDialog,
   ProjectPlanDialog,
-  RunEvaDialog,
 } from "./_components/ProjectDetailDialogs";
 
 export function ProjectDetailClient({
   projectId,
   projectNumId,
-  surface,
   sandboxTab,
   selectedTaskId,
   selectedTaskStatus,
-  detailTab,
   mainTab = "work",
 }: {
   projectId: Id<"projects">;
   projectNumId?: number;
-  surface: SandboxSurface;
-  sandboxTab?: TaskRouteSandboxTab;
+  /** The coordinator rail's tab (Tasks on the project index). */
+  sandboxTab: ProjectSandboxTab;
   /** Primary tab. `work` is the index route, so deep links keep working. */
   mainTab?: ProjectMainTab;
   selectedTaskId?: Id<"agentTasks">;
   /** Resolve status of selectedTaskId's numId; undefined when no task is selected. */
   selectedTaskStatus?: EntityResolveStatus;
-  detailTab?: TaskDetailTab;
 }) {
   const navigate = useNavigate();
   const { basePath, repo } = useRepo();
   const simpleView = useSimpleView();
   const sandboxRailWidthPx = useSandboxRailWidthPx();
-  const [isBuildModalOpen, setIsBuildModalOpen] = useState(false);
-  const [isStartingBuild, setIsStartingBuild] = useState(false);
-  const [isStoppingBuild, setIsStoppingBuild] = useState(false);
-  const [showStopBuildConfirm, setShowStopBuildConfirm] = useState(false);
-  const [showResolveConfirm, setShowResolveConfirm] = useState(false);
-  const [isCreatingPr, setIsCreatingPr] = useState(false);
-  const [isResolvingConflicts, setIsResolvingConflicts] = useState(false);
-  const [prError, setPrError] = useState<string | null>(null);
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
-  const cancelBuild = useMutation(api.buildWorkflow.cancelBuild);
-  const resolveProjectConflicts = useMutation(
-    api.projects.resolveProjectConflicts,
-  );
-  const createProjectPrAction = useAction(
-    api.taskWorkflowActions.createProjectPr,
-  );
 
   const project = useQuery(api.projects.get, { id: projectId });
   useEntityDocumentTitle(project?.title);
   const streaming = useQuery(api.streaming.get, { entityId: projectId });
-  const latestDeployment = useQuery(
-    api.agentRuns.getLatestDeploymentByProject,
-    { projectId: projectId },
-  );
 
-  const sandbox = useProjectSandbox(projectId, project?.phase);
+  const sandbox = useProjectSandbox(projectId);
   const {
-    canStartSandbox,
     isSandboxActive,
     isSandboxStarting,
     isSandboxStopping,
@@ -117,8 +85,6 @@ export function ProjectDetailClient({
     if (!isSandboxActive || !projectSandboxId || !chatId) return;
     void prewarmSessionChatDaemon({ chatId });
   }, [chatId, isSandboxActive, projectSandboxId, prewarmSessionChatDaemon]);
-
-  const isSandboxSurface = surface === "sandbox";
 
   const projectPathSegment = entityPathSegment({ numId: projectNumId });
   const [expandRightSignal, setExpandRightSignal] = useState(0);
@@ -174,57 +140,6 @@ export function ProjectDetailClient({
     setExpandRightSignal((n) => n + 1);
   };
 
-  const handleStopBuild = async () => {
-    if (!project) return;
-    setIsStoppingBuild(true);
-    try {
-      await cancelBuild({ projectId: projectId });
-    } catch (err) {
-      console.error("Failed to stop build:", err);
-      toast.error("Could not stop the build. Try again.");
-    }
-    setIsStoppingBuild(false);
-  };
-
-  const handleCreatePr = async () => {
-    setPrError(null);
-    setIsCreatingPr(true);
-    try {
-      await createProjectPrAction({ projectId: projectId });
-    } catch (err) {
-      setPrError(convexErrorMessage(err, "Failed to create PR"));
-    }
-    setIsCreatingPr(false);
-  };
-
-  const { canCreatePr } = getProjectPrFlags(
-    project,
-    latestDeployment,
-  );
-  // Create PR only: the header menu draws the PR rows (`ProjectCardMenuItems`).
-  const prLinks = usePrLinkMenuItems({
-    createPr: {
-      enabled: canCreatePr,
-      isCreating: isCreatingPr,
-      onCreate: handleCreatePr,
-    },
-    prUrl: undefined,
-    hasDeployment: false,
-  });
-
-  const handleResolveConflicts = async () => {
-    setPrError(null);
-    setIsResolvingConflicts(true);
-    try {
-      await resolveProjectConflicts({ projectId: projectId });
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to resolve conflicts";
-      setPrError(message);
-    }
-    setIsResolvingConflicts(false);
-  };
-
   if (project === undefined) {
     return <CenteredSpinner label="Loading project" />;
   }
@@ -244,15 +159,14 @@ export function ProjectDetailClient({
       title={
         <ProjectBreadcrumb projectId={project._id} title={project.title} />
       }
-      /* Overview / Tasks / Sandbox live in the header — replaces the old
-         Project|Sandbox surface switcher and the secondary tab strip. */
+      /* Project / Sandbox (Plan while drafting) live in the header. */
       titleAfter={
         projectPathSegment ? (
           <ProjectMainTabs
             projectHref={`${basePath}/projects/${projectPathSegment}`}
-            activeTab={isSandboxSurface ? "sandbox" : mainTab}
-            workTabLabel={isDraftOrFinalized ? "Plan" : "Tasks"}
-            showSandbox={canStartSandbox && !isDraftOrFinalized}
+            activeTab={mainTab}
+            workTabLabel={isDraftOrFinalized ? "Plan" : "Sandbox"}
+            showSandboxStatus={!isDraftOrFinalized}
             isSandboxActive={isSandboxActive}
             isSandboxStarting={isSandboxStarting}
             isSandboxStopping={isSandboxStopping}
@@ -263,7 +177,7 @@ export function ProjectDetailClient({
       fillHeight
       childPadding={false}
       headerRight={
-        !isDraftOrFinalized ? (
+        isDraftOrFinalized ? null : (
           <ProjectDetailHeaderActions
             projectId={projectId}
             project={project}
@@ -271,34 +185,25 @@ export function ProjectDetailClient({
             sandbox={sandbox}
             chatId={chatId}
             chatTurnOpen={chatTurnOpen}
-            prError={prError}
-            prLinks={prLinks}
             hasPlanContext={hasPlanContext}
-            isResolvingConflicts={isResolvingConflicts}
-            isStoppingBuild={isStoppingBuild}
-            onResolveConflicts={handleResolveConflicts}
-            onStopBuild={handleStopBuild}
-            setShowResolveConfirm={setShowResolveConfirm}
-            setShowStopBuildConfirm={setShowStopBuildConfirm}
             setShowPlanModal={setShowPlanModal}
             setShowChatModal={setShowChatModal}
-            setIsBuildModalOpen={setIsBuildModalOpen}
           />
-        ) : null
+        )
       }
     >
       <ProjectDetailMainContent
         projectId={projectId}
         project={project}
-        isSandboxSurface={isSandboxSurface}
         mainTab={mainTab}
         isDraftOrFinalized={isDraftOrFinalized}
-        sandboxContent={
+        coordinatorContent={
           <ProjectDetailSandboxContent
             projectId={projectId}
             projectNumId={projectNumId}
             project={project}
             repoId={repo._id}
+            basePath={basePath}
             sandboxTab={sandboxTab}
             sandbox={sandbox}
             chatTurnOpen={chatTurnOpen}
@@ -313,31 +218,9 @@ export function ProjectDetailClient({
         sandboxStartupActivity={sandboxStartupActivity}
         basePath={basePath}
         repoId={repo._id}
+        isTaskOpen={selectedTaskStatus !== undefined}
         selectedTaskId={selectedTaskId}
         selectedTaskStatus={selectedTaskStatus}
-        detailTab={detailTab}
-      />
-
-      <RunEvaDialog
-        projectId={projectId}
-        open={isBuildModalOpen}
-        setOpen={setIsBuildModalOpen}
-        isStarting={isStartingBuild}
-        setIsStarting={setIsStartingBuild}
-      />
-
-      <StopConfirmDialog
-        open={showStopBuildConfirm}
-        onOpenChange={setShowStopBuildConfirm}
-        onConfirm={handleStopBuild}
-        isLoading={isStoppingBuild}
-      />
-
-      <ResolveConfirmDialog
-        open={showResolveConfirm}
-        onOpenChange={setShowResolveConfirm}
-        onConfirm={handleResolveConflicts}
-        isLoading={isResolvingConflicts}
       />
 
       {parsedSpec && (

@@ -18,7 +18,8 @@ export function SandboxTabBarTools({
   showLabels,
   onToggleLabels,
 }: {
-  onNewPreview: () => void;
+  /** Absent where the sandbox runs no dev server (a project coordinator). */
+  onNewPreview?: () => void;
   newPreviewDisabled: boolean;
   terminalPanel: TerminalPanelApi;
   /** Desktop rail: tab labels under the icons. */
@@ -29,22 +30,24 @@ export function SandboxTabBarTools({
     <ButtonTrack direction="column" className="md:mt-auto">
       {/* Editor and Computer are first-class tabs on the rail, so `+` is now a
           direct New Preview action rather than a one-item menu. */}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            aria-label="New preview"
-            className={SANDBOX_RAIL_ICON_BUTTON_CLASS}
-            onClick={onNewPreview}
-            disabled={newPreviewDisabled}
-          >
-            <IconPlus className="size-4" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="left" className="text-xs">
-          New preview
-        </TooltipContent>
-      </Tooltip>
+      {onNewPreview ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label="New preview"
+              className={SANDBOX_RAIL_ICON_BUTTON_CLASS}
+              onClick={onNewPreview}
+              disabled={newPreviewDisabled}
+            >
+              <IconPlus className="size-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="left" className="text-xs">
+            New preview
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
       <Tooltip>
         <TooltipTrigger asChild>
           <button

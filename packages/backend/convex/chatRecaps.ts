@@ -7,7 +7,11 @@ import {
   type MutationCtx,
   type QueryCtx,
 } from "./_generated/server";
-import { assertMessageParentAccess, authMutation, authQuery } from "./functions";
+import {
+  assertMessageParentAccess,
+  authMutation,
+  authQuery,
+} from "./functions";
 import {
   chatParentIdValidator,
   chatRecapKindValidator,
@@ -18,6 +22,9 @@ import {
   chatSourceFieldsForEntityId,
   listRowsForChatSource,
 } from "./_chatSource/helpers";
+import { listProjectTasks } from "./_projects/scheduler";
+import { findWorkSession } from "./_sessions/owner";
+import { findMainChat } from "./_sessionChats/helpers";
 
 /**
  * A short recap of a chat, written for one user. Two kinds:
@@ -28,8 +35,9 @@ import {
  * - "full" ("Recap"): the whole chat, from the chat menu (`requestFull`), or
  *   on a reopen after `RECAP_REVISIT_MS` with nothing new.
  * `textGen.generateChatRecap` writes the text. A
- * project's Main chat covers every chat in the project's session, and names
- * its task chats as chips. One row per (user, chat); a new absence replaces
+ * project's coordinator (its Main chat) covers every chat in the project's
+ * session plus each child task's Main chat in the task's own session, and
+ * names the task chats as chips. One row per (user, chat); a new absence replaces
  * it, Dismiss deletes it.
  */
 
@@ -202,7 +210,12 @@ interface RecapChat {
   label: string;
 }
 
-/** The chats a recap covers: a project's Main chat reads the whole project session. */
+/**
+ * The chats a recap covers. A project's coordinator (its Main chat) reads
+ * the project session's chats and each child task's Main chat: every task
+ * owns its own session (`workSessionOwner`); a legacy task chat still in the
+ * project session (`sessionChats.taskId`) is read there instead.
+ */
 async function recapChats(
   ctx: QueryCtx,
   parentId: ChatParentId,
@@ -219,9 +232,12 @@ async function recapChats(
     .collect();
   const chats: RecapChat[] = [];
   const taskIds: Id<"agentTasks">[] = [];
-  for (const row of sessionChats) {
-    if (row.archived === true) continue;
-    const task = row.taskId ? await ctx.db.get(row.taskId) : null;
+  const openChats = sessionChats.filter((row) => row.archived !== true);
+  const rowTasks = await Promise.all(
+    openChats.map((row) => (row.taskId ? ctx.db.get(row.taskId) : null)),
+  );
+  for (const [index, row] of openChats.entries()) {
+    const task = rowTasks[index];
     if (task) {
       taskIds.push(task._id);
       chats.push({ parentId: row._id, label: `@[${task.title}](${task._id})` });
@@ -231,6 +247,24 @@ async function recapChats(
         label: row.isMain ? "Project chat" : row.title,
       });
     }
+  }
+  const childTasks = (
+    await listProjectTasks(ctx.db, session.owner.projectId)
+  ).filter((task) => !taskIds.includes(task._id));
+  const childChats = await Promise.all(
+    childTasks.map(async (task) => {
+      const taskSession = await findWorkSession(ctx.db, task);
+      return taskSession ? findMainChat(ctx.db, taskSession._id) : null;
+    }),
+  );
+  for (const [index, task] of childTasks.entries()) {
+    const taskChat = childChats[index];
+    if (!taskChat) continue;
+    taskIds.push(task._id);
+    chats.push({
+      parentId: taskChat._id,
+      label: `@[${task.title}](${task._id})`,
+    });
   }
   return { chats, taskIds };
 }
@@ -262,12 +296,17 @@ export const recapContext = internalQuery({
     if (!recap) return null;
     const { chats, taskIds } = await recapChats(ctx, recap.parentId);
     const lines: { at: number; text: string }[] = [];
-    for (const chat of chats) {
-      const rows = await ctx.db
-        .query("messages")
-        .withIndex("by_parent", (q) => q.eq("parentId", chat.parentId))
-        .order("desc")
-        .take(MESSAGES_PER_CHAT);
+    const chatRows = await Promise.all(
+      chats.map((chat) =>
+        ctx.db
+          .query("messages")
+          .withIndex("by_parent", (q) => q.eq("parentId", chat.parentId))
+          .order("desc")
+          .take(MESSAGES_PER_CHAT),
+      ),
+    );
+    for (const [index, chat] of chats.entries()) {
+      const rows = chatRows[index] ?? [];
       for (const row of rows) {
         const at = row.finishedAt ?? row.timestamp;
         if (at <= recap.since || row.isSystemAlert === true) continue;

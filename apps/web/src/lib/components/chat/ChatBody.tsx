@@ -1,3 +1,4 @@
+import { cn } from "@eva/ui";
 import {
   ChatDayDivider,
   ChatJumpRail,
@@ -99,6 +100,7 @@ import {
   type ChatParentId,
   findHandoffBoundaryIds,
   findLastUserMessageIndex,
+  findBubbleGroups,
   findLastAssistantMessageId,
   findStreamingTargetMessage,
   findTurnWindowStart,
@@ -313,6 +315,8 @@ interface ChatBodyProps {
   }) => Promise<void>;
   /** Hides the left jump rail (Ave: one endless thread, too many ticks). */
   hideJumpRail?: boolean;
+  /** Eva's replies in a bubble with her mark (the project coordinator). */
+  assistantBubbles?: boolean;
 }
 
 export function ChatBody(props: ChatBodyProps) {
@@ -373,6 +377,7 @@ function ChatBodyInner({
   afterMessage,
   onForkTranscript,
   hideJumpRail = false,
+  assistantBubbles = false,
 }: ChatBodyProps) {
   const citations = usePendingCitations();
   const snapshots = usePendingPreviewSnapshots();
@@ -624,6 +629,14 @@ function ChatBodyInner({
     currentUserId,
   );
   const newBoundaryId = newMessageIds[0];
+  const bubbleGroups = findBubbleGroups(displayMessages, {
+    currentUserId: currentUserId ?? undefined,
+    assistantBubbles,
+    breaksBefore:
+      newBoundaryId === undefined
+        ? dayBoundaryIds
+        : new Set([...dayBoundaryIds, newBoundaryId]),
+  });
   // "Since you've been gone": the server writes it when you return after a
   // long absence; it sits under the newest message, where the chat opens.
   const { recap, dismiss: dismissRecap } = useChatRecap({
@@ -991,14 +1004,21 @@ function ChatBodyInner({
   const renderMessage = (message: ChatBodyMessage, isBacklog = false) => {
     const isStreamingTarget = message._id === streamingTargetId;
     const isOtherUser = isOtherUserChatMessage(message, currentUserId);
+    const joinsPrevious = bubbleGroups.joinsPrevious.has(message._id);
+    const joinsNext = bubbleGroups.joinsNext.has(message._id);
+    // One name over a run of a teammate's bubbles.
     const senderFirstName =
-      isOtherUser && message.userId
+      isOtherUser && message.userId && !joinsPrevious
         ? firstNames.get(message.userId)
         : undefined;
     const precedingUser = precedingUserTurns.get(message._id);
 
     return (
-      <div key={message._id} className="flex flex-col gap-3">
+      <div
+        key={message._id}
+        // A run of one sender's bubbles sits 4px apart, not 12.
+        className={cn("flex flex-col gap-3", joinsPrevious && "-mt-2")}
+      >
         {dayBoundaryIds.has(message._id) ? (
           <ChatDayDivider timestamp={message.timestamp} />
         ) : null}
@@ -1011,7 +1031,9 @@ function ChatBodyInner({
           repo={repo}
           isLatestAssistantTurn={message._id === latestAssistantMessageId}
           showChangedFiles={!simpleView}
-          showTurnMeta={!simpleView}
+          // The run's action row sits under its last bubble only.
+          showTurnMeta={!simpleView && !joinsNext}
+          joinsNext={joinsNext}
           showScopeCheck={showScopeCheck}
           {...(expandedByMessageId[message._id] !== undefined
             ? { changedFilesExpanded: expandedByMessageId[message._id] }
@@ -1019,6 +1041,7 @@ function ChatBodyInner({
           onChangedFilesExpandedChange={setMessageExpanded}
           isOtherUser={isOtherUser}
           senderFirstName={senderFirstName}
+          assistantBubble={assistantBubbles}
           isHandoffBoundary={handoffBoundaryIds.has(message._id)}
           turnModel={precedingUser?.model}
           turnReasoningLevel={precedingUser?.reasoningLevel}

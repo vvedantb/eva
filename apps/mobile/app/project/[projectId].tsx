@@ -1,46 +1,46 @@
-import { api, isProjectBuilding, projectScheduledBuildAt } from "@eva/backend";
-import { BUILDABLE_PROJECT_PHASES, isProjectPlanning } from "@eva/shared";
+import { api } from "@eva/backend";
+import { isProjectPlanning } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { IconCalendarClock, IconHammer, IconLayoutKanban, IconMessage, IconPlayerStop } from "@tabler/icons-react-native";
+import { IconLayoutKanban, IconMessage } from "@tabler/icons-react-native";
 import { goBackOrReplace } from "@vvedantb/native-ui/expo-router";
 import { StackPageHeader } from "@vvedantb/native-ui/layout";
-import { Button, CenteredSpinner, ConfirmDialog, EmptyState } from "@vvedantb/native-ui/primitives";
-import { toast } from "@vvedantb/native-ui/toast";
-import { useMutation, useQuery } from "convex/react";
+import { Button, CenteredSpinner, EmptyState } from "@vvedantb/native-ui/primitives";
+import { useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import dayjs from "dayjs";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useState, type ReactNode } from "react";
-import { Pressable, View } from "react-native";
+import type { ReactNode } from "react";
+import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ProjectDocuments } from "@/projects/ProjectDocuments";
 import { ProjectOverview } from "@/projects/ProjectOverview";
-import { ScheduleSheet } from "@/ui/ScheduleSheet";
 import { ProjectPlan } from "@/projects/ProjectPlan";
 import { ProjectTasks } from "@/projects/ProjectTasks";
 import { useProjectActions } from "@/projects/useProjectActions";
+import { useProjectTaskStatus } from "@/projects/useProjectStatus";
 import { useProjectGitActions } from "@/sandbox/OwnedSandboxActions";
 import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { useScheme } from "@/ui/theme";
 import { HeaderMoreButton } from "@/ui/HeaderRail";
 
-type Tab = "overview" | "work";
-
-/** The web phases with a project sandbox, and so the project chat (`useProjectSandbox`). */
-const SANDBOX_PHASES = ["in_progress", "business_review", "code_review"];
+type Tab = "overview" | "coordinator" | "documents";
 
 /**
  * One project, as the web project page (`ProjectDetailClient`) on a phone:
  * the header (back, the title, the web "…" project menu as a sheet), the
- * web Overview | Tasks switch ("Plan" while drafting) under it, kept in
- * `?tab=` and set in place (no history), and the tab below. The web Sandbox
- * tab's project chat is the phone chat screen (`/chat/<projectId>`):
- * "Chat" in the bottom bar opens it, in the phases the web shows the
- * Sandbox tab, with the web unread dot. "Build" (the web "Build Project",
- * with its "Run Eva" confirm) or, while a build runs, "Stop Build" (with
- * the web stop confirm) sits beside it in thumb reach, with the web's build
- * schedule as a calendar square. The "…" sheet leads with the web's sandbox
- * and git actions (`useProjectGitActions`). Not here from the web: the
- * sandbox preview, files and review panes.
+ * web Overview | Coordinator switch under it with Documents (the web
+ * sandbox Documents and Artifacts tabs, `ProjectDocuments`), kept in
+ * `?tab=` and set in place (no history), Coordinator by default, and the
+ * tab below. An older
+ * project still in planning with an interview or a plan shows "Plan" in
+ * place of Coordinator; a new project has no planning step. Coordinator is
+ * the project's task list (`ProjectTasks`); the coordinator chat itself is
+ * the phone chat screen (`/chat/<projectId>`), as embedding it would fork
+ * the chat screen: "Chat" in the bottom bar opens it, with the web unread
+ * dot; a project has no closed state, so it always shows. The task list's
+ * "+" adds a task to Triage, or starts it now. Outside
+ * planning the "…" sheet is led by the web's sandbox actions
+ * (`useProjectGitActions`); the coordinator starts approved tasks. Not here
+ * from the web: the sandbox preview, files and review panes.
  */
 export default function ProjectScreen() {
   const router = useRouter();
@@ -54,8 +54,8 @@ export default function ProjectScreen() {
   const listed = projects?.find((candidate) => candidate._id === params.projectId);
   const project = useQuery(api.projects.get, listed ? { id: listed._id } : "skip");
   const users = useQuery(api.users.listAll, {});
-  const tab: Tab = params.tab === "overview" ? "overview" : "work";
-  // The web page's sandbox and git actions, leading the "…" sheet.
+  const tab: Tab = params.tab === "overview" || params.tab === "documents" ? params.tab : "coordinator";
+  // The web page's sandbox actions, leading the "…" sheet.
   const git = useProjectGitActions(project);
   const actions = useProjectActions({ repo: repo ?? EMPTY_REPO, users, onDeleted: leave, extraRows: git.rows });
 
@@ -74,6 +74,8 @@ export default function ProjectScreen() {
   }
 
   const planning = isProjectPlanning(project.phase);
+  // Only an older project still planning, with an interview or a plan to show, keeps the Plan view.
+  const showPlan = planning && (project.conversationHistory.length > 0 || project.generatedSpec !== undefined);
   return (
     <Screen
       title={project.title}
@@ -89,23 +91,58 @@ export default function ProjectScreen() {
         <SegmentedTabs
           value={tab}
           options={[
-            { value: "overview", label: "Overview" },
-            { value: "work", label: planning ? "Plan" : "Tasks" },
+            { value: "overview", label: "Project" },
+            { value: "coordinator", label: showPlan ? "Plan" : "Sandbox" },
+            { value: "documents", label: "Documents" },
           ]}
           onChange={(next) => router.setParams({ tab: next })}
         />
       </View>
-      {tab === "overview" ? (
-        <ProjectOverview project={project} repo={repo} users={users} />
-      ) : planning ? (
-        <ProjectPlan project={project} />
-      ) : (
-        <ProjectTasks project={project} repo={repo} users={users} />
-      )}
-      {planning ? null : <ProjectDock project={project} />}
+      <ProjectTab
+        tab={tab}
+        project={project}
+        repo={repo}
+        users={users}
+        showPlan={showPlan}
+      />
+      {showPlan ? null : <ProjectDock project={project} />}
       {actions.dialogs}
       {git.dialogs}
     </Screen>
+  );
+}
+
+type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
+type User = FunctionReturnType<typeof api.users.listAll>[number];
+
+/** The open tab, over the project's child tasks and their derived status (`useProjectTaskStatus`). */
+function ProjectTab({
+  tab,
+  project,
+  repo,
+  users,
+  showPlan,
+}: {
+  tab: Tab;
+  project: Project;
+  repo: Repo;
+  users: User[] | undefined;
+  showPlan: boolean;
+}) {
+  const { tasks, failedTaskIds, status } = useProjectTaskStatus(project._id, repo._id);
+  if (tab === "overview") {
+    return <ProjectOverview project={project} repo={repo} users={users} status={status} />;
+  }
+  if (tab === "documents") return <ProjectDocuments projectId={project._id} repoId={repo._id} tasks={tasks} />;
+  if (showPlan) return <ProjectPlan project={project} />;
+  return (
+    <ProjectTasks
+      project={project}
+      repo={repo}
+      users={users}
+      tasks={tasks}
+      failedTaskIds={failedTaskIds}
+    />
   );
 }
 
@@ -124,10 +161,7 @@ function Screen({ title, onBack, headerRight, children }: { title: string; onBac
 
 type Project = NonNullable<FunctionReturnType<typeof api.projects.get>>;
 
-/**
- * The bottom bar: "Chat" (the project chat, with the unread dot while a
- * reply waits) and the web build button, each behind the web confirm.
- */
+/** The bottom bar: "Chat" (the coordinator chat, with the unread dot while a reply waits). */
 function ProjectDock({ project }: { project: Project }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -136,123 +170,22 @@ function ProjectDock({ project }: { project: Project }) {
   const owned = useQuery(api.sessions.getOwnedWithSeed, { owner: { kind: "project", projectId: project._id } });
   const chatId = owned?.session?.chatId;
   const unread = useQuery(api.chatReads.isUnread, chatId ? { parentId: chatId } : "skip")?.hasUnread === true;
-  const startBuild = useMutation(api.buildWorkflow.startBuild);
-  // The web split Build button's schedule half (`ScheduleBuildPopover`).
-  const scheduleBuild = useMutation(api.buildWorkflow.scheduleBuild);
-  const updateScheduledBuild = useMutation(api.buildWorkflow.updateScheduledBuild);
-  const cancelScheduledBuild = useMutation(api.buildWorkflow.cancelScheduledBuild);
-  const [scheduling, setScheduling] = useState(false);
-  const scheduledBuildAt = projectScheduledBuildAt(project);
-  const cancelBuild = useMutation(api.buildWorkflow.cancelBuild);
-  const [confirm, setConfirm] = useState<"build" | "stop" | null>(null);
-  const [busy, setBusy] = useState(false);
-  const showChat = SANDBOX_PHASES.includes(project.phase);
-  const canBuild = BUILDABLE_PROJECT_PHASES.includes(project.phase);
-  const building = isProjectBuilding(project);
-  if (!showChat && !canBuild) return null;
-
-  const run = async (action: () => Promise<unknown>, success: string | undefined, failure: string) => {
-    setBusy(true);
-    try {
-      await action();
-      if (success) toast.success(success);
-    } catch {
-      toast.error(failure);
-    }
-    setBusy(false);
-  };
 
   return (
     <View className="flex-row gap-2 px-4 pt-2" style={{ paddingBottom: insets.bottom + 12 }}>
-      {showChat ? (
-        <View className="min-w-0 flex-1">
-          <Button
-            variant="secondary"
-            accessibilityLabel={unread ? "Chat, unread reply" : "Chat"}
-            leftIcon={<IconMessage size={16} color={theme.secondaryForeground} />}
-            onPress={() => router.push({ pathname: "/chat/[target]", params: { target: project._id } })}
-          >
-            Chat
-          </Button>
-          {unread ? (
-            <View pointerEvents="none" className="absolute right-3 top-3 size-1.5 rounded-full" style={{ backgroundColor: theme.primary }} />
-          ) : null}
-        </View>
-      ) : null}
-      {canBuild ? (
-        <View className="min-w-0 flex-1">
-          {building ? (
-            <Button
-              variant="destructive"
-              loading={busy}
-              disabled={busy}
-              leftIcon={<IconPlayerStop size={16} color={theme.destructiveForeground} />}
-              onPress={() => setConfirm("stop")}
-            >
-              Stop Build
-            </Button>
-          ) : (
-            <Button
-              loading={busy}
-              disabled={busy}
-              leftIcon={<IconHammer size={16} color={theme.primaryForeground} />}
-              onPress={() => setConfirm("build")}
-            >
-              {scheduledBuildAt !== undefined ? `Build · ${dayjs(scheduledBuildAt).format("MMM D, h:mm A")}` : "Build"}
-            </Button>
-          )}
-        </View>
-      ) : null}
-      {canBuild && !building ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={scheduledBuildAt !== undefined ? "Change or remove the build schedule" : "Schedule build"}
-          onPress={() => setScheduling(true)}
-          className="h-11 w-11 items-center justify-center rounded-xl active:opacity-70"
-          style={{ backgroundColor: theme.secondary }}
+      <View className="min-w-0 flex-1">
+        <Button
+          variant="secondary"
+          accessibilityLabel={unread ? "Chat, unread reply" : "Chat"}
+          leftIcon={<IconMessage size={16} color={theme.secondaryForeground} />}
+          onPress={() => router.push({ pathname: "/chat/[target]", params: { target: project._id } })}
         >
-          <IconCalendarClock size={18} color={scheduledBuildAt !== undefined ? theme.primary : theme.secondaryForeground} />
-        </Pressable>
-      ) : null}
-      <ScheduleSheet
-        open={scheduling}
-        onOpenChange={setScheduling}
-        title="Schedule build"
-        scheduleLabel="Schedule build"
-        scheduledAt={scheduledBuildAt}
-        onSchedule={(at) => {
-          setScheduling(false);
-          void (scheduledBuildAt === undefined
-            ? run(() => scheduleBuild({ projectId: project._id, scheduledAt: at }), "Build scheduled", "Couldn't schedule build")
-            : run(() => updateScheduledBuild({ projectId: project._id, scheduledAt: at }), "Build schedule updated", "Couldn't update build schedule"));
-        }}
-        onRemove={() => {
-          setScheduling(false);
-          void run(() => cancelScheduledBuild({ projectId: project._id }), "Build schedule removed", "Couldn't remove build schedule");
-        }}
-      />
-      {/* The web `RunEvaDialog`. */}
-      <ConfirmDialog
-        open={confirm === "build"}
-        onOpenChange={(open) => setConfirm(open ? "build" : null)}
-        title="Run Eva"
-        description={
-          "This will allow Eva to autonomously work through all tasks in sequence until the project is fully built.\n\n" +
-          "Best suited for projects with well-defined requirements. If Eva makes an error on an earlier task, it may carry forward into subsequent tasks."
-        }
-        confirmLabel="Start cooking"
-        onConfirm={() => void run(() => startBuild({ projectId: project._id }), "Build started", "Couldn't start build")}
-      />
-      {/* The web `StopConfirmDialog`. */}
-      <ConfirmDialog
-        open={confirm === "stop"}
-        onOpenChange={(open) => setConfirm(open ? "stop" : null)}
-        title="Stop Execution"
-        description="This will stop the agent mid-execution. Any uncommitted progress on this run will be lost."
-        confirmLabel="Stop Execution"
-        variant="destructive"
-        onConfirm={() => void run(() => cancelBuild({ projectId: project._id }), undefined, "Could not stop the build. Try again.")}
-      />
+          Chat
+        </Button>
+        {unread ? (
+          <View pointerEvents="none" className="absolute right-3 top-3 size-1.5 rounded-full" style={{ backgroundColor: theme.primary }} />
+        ) : null}
+      </View>
     </View>
   );
 }

@@ -24,7 +24,11 @@ import { userLabel } from "@/quickTasks/QuickTaskListOptions";
 import { statusAppearance } from "@/quickTasks/statusAppearance";
 import { useScheme } from "@/ui/theme";
 
-type QuickTask = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
+/** What the menu reads of a task: a `getAllTasks` row or an `agentTasks.listByProject` row. */
+type QuickTask = Pick<
+  FunctionReturnType<typeof api.agentTasks.getAllTasks>[number],
+  "_id" | "assignedTo" | "numId" | "projectId" | "status" | "title"
+>;
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 type Project = FunctionReturnType<typeof api.projects.list>[number];
@@ -77,7 +81,7 @@ export function useQuickTaskActions({
   const updateStatus = useMutation(api.agentTasks.updateStatus);
   const updateTask = useMutation(api.agentTasks.update);
   const startExecution = useMutation(api.agentTasks.startExecution);
-  const deleteTask = useMutation(api.agentTasks.deleteCascade);
+  const deleteTask = useMutation(api.agentTasks.remove);
 
   const close = () => {
     setTarget(null);

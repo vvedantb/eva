@@ -1,6 +1,12 @@
 import type { Doc } from "@eva/backend";
 import { z } from "zod";
-import { TASK_STATUSES, priorityCompare, type DisplayTaskStatus, type Priority, type TaskStatus } from "./taskMeta";
+import {
+  TASK_STATUSES,
+  priorityCompare,
+  type DisplayTaskStatus,
+  type Priority,
+  type TaskStatus,
+} from "./taskMeta";
 
 /** A project's lifecycle (the backend `projects.phase`). */
 export type ProjectPhase = Doc<"projects">["phase"];
@@ -28,9 +34,6 @@ export const ACTIVE_PROJECT_PHASES: ProjectPhase[] = [
   "cancelled",
 ];
 
-/** Phases where the autonomous "Build Project" workflow can start. */
-export const BUILDABLE_PROJECT_PHASES: ProjectPhase[] = ["in_progress", "business_review", "code_review"];
-
 /** Draft and finalized projects show the plan (interview and spec) in place of tasks. */
 export function isProjectPlanning(phase: ProjectPhase): boolean {
   return phase === "draft" || phase === "finalized";
@@ -40,7 +43,9 @@ export function isProjectPlanning(phase: ProjectPhase): boolean {
  * The list section or kanban column a project shows in. Draft and finalized
  * share "To Do" (a badge tells them apart), like quick tasks and their drafts.
  */
-export type ProjectColumn = "todo" | Exclude<ProjectPhase, "draft" | "finalized">;
+export type ProjectColumn =
+  | "todo"
+  | Exclude<ProjectPhase, "draft" | "finalized">;
 
 /** Every column, in workflow order. */
 export const PROJECT_COLUMNS = [
@@ -68,7 +73,9 @@ export function projectColumn(phase: ProjectPhase): ProjectColumn {
 }
 
 /** The planning phase a To Do card shows as a badge ("draft" or "finalized"), else null. */
-export function projectPlanningPhase(phase: ProjectPhase): "draft" | "finalized" | null {
+export function projectPlanningPhase(
+  phase: ProjectPhase,
+): "draft" | "finalized" | null {
   return phase === "draft" || phase === "finalized" ? phase : null;
 }
 
@@ -113,13 +120,28 @@ export interface FilterableProject {
  */
 export function filterAndSortProjects<T extends FilterableProject>(
   projects: readonly T[],
-  filters: Pick<ProjectListFilters, "q" | "hiddenPhases" | "sortField" | "sortDir">,
+  filters: Pick<
+    ProjectListFilters,
+    "q" | "hiddenPhases" | "sortField" | "sortDir"
+  >,
+): T[] {
+  const hidden = new Set<ProjectColumn>(filters.hiddenPhases);
+  return searchAndSortProjects(
+    projects.filter((project) => !hidden.has(projectColumn(project.phase))),
+    filters,
+  );
+}
+
+/** The projects matching the search in the title, raw input or description, sorted by the sort field. */
+export function searchAndSortProjects<
+  T extends Omit<FilterableProject, "phase">,
+>(
+  projects: readonly T[],
+  filters: Pick<ProjectListFilters, "q" | "sortField" | "sortDir">,
 ): T[] {
   const query = filters.q.toLowerCase().trim();
-  const hidden = new Set<ProjectColumn>(filters.hiddenPhases);
   return projects
     .filter((project) => {
-      if (hidden.has(projectColumn(project.phase))) return false;
       if (!query) return true;
       return (
         project.title.toLowerCase().includes(query) ||
@@ -142,13 +164,16 @@ export function filterAndSortProjects<T extends FilterableProject>(
  * Shows or hides one column in the list. The last visible column stays: the
  * list never hides every column.
  */
-export function toggleHiddenProjectPhase(
-  hiddenPhases: readonly ProjectColumn[],
-  phase: ProjectColumn,
-  allPhases: readonly ProjectColumn[],
-): ProjectColumn[] {
-  if (hiddenPhases.includes(phase)) return hiddenPhases.filter((hidden) => hidden !== phase);
-  const visibleCount = allPhases.filter((candidate) => !hiddenPhases.includes(candidate)).length;
+export function toggleHiddenProjectPhase<C extends string>(
+  hiddenPhases: readonly C[],
+  phase: C,
+  allPhases: readonly C[],
+): C[] {
+  if (hiddenPhases.includes(phase))
+    return hiddenPhases.filter((hidden) => hidden !== phase);
+  const visibleCount = allPhases.filter(
+    (candidate) => !hiddenPhases.includes(candidate),
+  ).length;
   if (visibleCount <= 1) return [...hiddenPhases];
   return [...hiddenPhases, phase];
 }
@@ -156,24 +181,44 @@ export function toggleHiddenProjectPhase(
 export type ProjectFilterKey = "phases" | "sortField" | "sortDir";
 
 /** The "Filtered by" chips, in order: the phase count, a non-default sort field, ascending. */
-export function projectFilterChips(
-  filters: ProjectListFilters,
-  allPhases: readonly ProjectColumn[],
+export function projectFilterChips<C extends string>(
+  filters: Omit<ProjectListFilters, "hiddenPhases"> & {
+    hiddenPhases: readonly C[];
+  },
+  allPhases: readonly C[],
 ): Array<{ key: ProjectFilterKey; label: string }> {
   const chips: Array<{ key: ProjectFilterKey; label: string }> = [];
   if (filters.hiddenPhases.length > 0) {
-    const visible = allPhases.filter((phase) => !filters.hiddenPhases.includes(phase)).length;
-    chips.push({ key: "phases", label: `${visible} Phase${visible !== 1 ? "s" : ""}` });
+    const visible = allPhases.filter(
+      (phase) => !filters.hiddenPhases.includes(phase),
+    ).length;
+    chips.push({
+      key: "phases",
+      label: `${visible} Phase${visible !== 1 ? "s" : ""}`,
+    });
   }
   if (filters.sortField !== "created") {
-    chips.push({ key: "sortField", label: `Sort: ${PROJECT_SORT_FIELD_LABELS[filters.sortField]}` });
+    chips.push({
+      key: "sortField",
+      label: `Sort: ${PROJECT_SORT_FIELD_LABELS[filters.sortField]}`,
+    });
   }
-  if (filters.sortDir !== "desc") chips.push({ key: "sortDir", label: "Ascending" });
+  if (filters.sortDir !== "desc")
+    chips.push({ key: "sortDir", label: "Ascending" });
   return chips;
 }
 
+/** What clearing filters sets: an empty column list fits any column type. */
+export type ClearedProjectFilters = Partial<
+  Pick<ProjectListFilters, "sortField" | "sortDir">
+> & {
+  hiddenPhases?: [];
+};
+
 /** The filters with one chip's filter back at its default. */
-export function clearedProjectFilter(key: ProjectFilterKey): Partial<ProjectListFilters> {
+export function clearedProjectFilter(
+  key: ProjectFilterKey,
+): ClearedProjectFilters {
   switch (key) {
     case "phases":
       return { hiddenPhases: [] };
@@ -185,7 +230,7 @@ export function clearedProjectFilter(key: ProjectFilterKey): Partial<ProjectList
 }
 
 /** The filters "Clear all filters" restores (search stays). */
-export function clearedProjectFilters(): Partial<ProjectListFilters> {
+export function clearedProjectFilters(): ClearedProjectFilters {
   return { hiddenPhases: [], sortField: "created", sortDir: "desc" };
 }
 
@@ -208,17 +253,23 @@ export function projectTaskSections<T extends SectionableProjectTask>(
   const lastRun = (task: T) => task.lastRunStartedAt ?? task.createdAt;
   return TASK_STATUSES.map((status) => {
     const matching = tasks.filter((task) => task.status === status);
-    const sorted = status === "todo" ? matching : matching.sort((a, b) => lastRun(b) - lastRun(a));
+    const sorted =
+      status === "todo"
+        ? matching
+        : matching.sort((a, b) => lastRun(b) - lastRun(a));
     return {
       status,
       tasks: sorted,
-      defaultOpen: sorted.length > 0 && status !== "done" && status !== "cancelled",
+      defaultOpen:
+        sorted.length > 0 && status !== "done" && status !== "cancelled",
     };
   });
 }
 
 /** A project's task counts (`projects.getTaskProgress` and `listTaskProgress`). */
-export type ProjectTaskProgress = Record<DisplayTaskStatus, number> & { total: number };
+export type ProjectTaskProgress = Record<DisplayTaskStatus, number> & {
+  total: number;
+};
 
 /**
  * The progress bar's coloured parts, in workflow order: each non-empty
@@ -228,7 +279,11 @@ export function projectProgressSegments(
   progress: ProjectTaskProgress,
 ): Array<{ status: DisplayTaskStatus; ratio: number; offset: number }> {
   if (progress.total === 0) return [];
-  const segments: Array<{ status: DisplayTaskStatus; ratio: number; offset: number }> = [];
+  const segments: Array<{
+    status: DisplayTaskStatus;
+    ratio: number;
+    offset: number;
+  }> = [];
   let offset = 0;
   for (const status of TASK_STATUSES) {
     const count = progress[status];
@@ -244,11 +299,16 @@ export function projectProgressSegments(
  * Why "Create Project" is off, or undefined when it can run: a project needs
  * a title and a description.
  */
-export function newProjectSubmitBlocker(isLoading: boolean, title: string, description: string): string | undefined {
+export function newProjectSubmitBlocker(
+  isLoading: boolean,
+  title: string,
+  description: string,
+): string | undefined {
   if (isLoading) return "Creating project…";
   const missingTitle = !title.trim();
   const missingDescription = !description.trim();
-  if (missingTitle && missingDescription) return "Enter a project title and description";
+  if (missingTitle && missingDescription)
+    return "Enter a project title and description";
   if (missingTitle) return "Enter a project title";
   if (missingDescription) return "Enter a description";
   return undefined;
@@ -262,7 +322,6 @@ const projectSpecSchema = z.object({
       z.object({
         title: z.string().nullish(),
         description: z.string().nullish(),
-        dependencies: z.array(z.number()).nullish(),
       }),
     )
     .nullish(),
@@ -271,7 +330,6 @@ const projectSpecSchema = z.object({
 export interface ProjectSpecTask {
   title: string;
   description: string;
-  dependencies: number[];
 }
 
 export interface ProjectSpec {
@@ -296,7 +354,6 @@ export function parseProjectSpec(specJson: string): ProjectSpec | null {
     tasks: (parsed.data.tasks ?? []).map((task) => ({
       title: task.title ?? "",
       description: task.description ?? "",
-      dependencies: task.dependencies ?? [],
     })),
   };
 }
@@ -309,7 +366,10 @@ const interviewTransitionSchema = z.union([
   z.object({ interviewComplete: z.literal(true) }),
   z.object({ ready: z.literal(true) }),
 ]);
-const specSummarySchema = z.object({ title: z.string(), tasks: z.array(z.object({}).passthrough()) });
+const specSummarySchema = z.object({
+  title: z.string(),
+  tasks: z.array(z.object({}).passthrough()),
+});
 
 function parseJson(content: string): unknown {
   try {
@@ -320,7 +380,9 @@ function parseJson(content: string): unknown {
 }
 
 /** A planning-interview turn that is a multiple-choice question: its text and options, else null. */
-export function parseInterviewQuestion(content: string): z.infer<typeof interviewQuestionSchema> | null {
+export function parseInterviewQuestion(
+  content: string,
+): z.infer<typeof interviewQuestionSchema> | null {
   const parsed = interviewQuestionSchema.safeParse(parseJson(content));
   return parsed.success ? parsed.data : null;
 }
@@ -349,7 +411,10 @@ export function currentInterviewQuestion(
 }
 
 /** An interview answer as the web sends it: the question, then the answer. */
-export function formatInterviewAnswer(question: string, answer: string): string {
+export function formatInterviewAnswer(
+  question: string,
+  answer: string,
+): string {
   return `Q: ${question}\nA: ${answer}`;
 }
 

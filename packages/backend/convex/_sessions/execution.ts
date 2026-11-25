@@ -6,7 +6,11 @@ import {
   type MutationCtx,
 } from "../_generated/server";
 import { workflow } from "../workflowManager";
-import { authAction, authMutation, hasRepoAccess } from "../functions";
+import {
+  authAction,
+  authMutation,
+  hasRepoAccess,
+} from "../functions";
 import {
   aiModelValidator,
   launchTraitsFromStored,
@@ -29,6 +33,9 @@ import {
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
 import { selectUsageLimitRetryUserMessage } from "./resultTarget";
+import { routePersonChatMessage } from "../_projects/reports";
+import { reviveCoordinatorSession } from "./ownedSession";
+import { sessionAccountHolder } from "../_projects/runSettings";
 import type { Doc, Id } from "../_generated/dataModel";
 import { notifyChatMentions } from "../_mentions/notifyChatMentions";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
@@ -44,6 +51,7 @@ import {
 import { emptyStallRetryPrompt } from "../_chat/stallRetry";
 import {
   getSessionChatOrThrow,
+  getSessionChatWithAccess,
   listLiveSessionChats,
   loadSessionChat,
   sessionChatHasFreeSlot,
@@ -95,13 +103,21 @@ async function stageAndStartChatTurn(
   const [stickyProviderAccountId, user] = await Promise.all([
     resolveTurnProviderAccountId(ctx.db, {
       requestedAccountId: settings.providerAccountId,
-      ownerUserId: session.createdBy ?? session.userId,
+      ownerUserId: await sessionAccountHolder(
+        ctx.db,
+        session,
+        settings.providerAccountId,
+      ),
       model: settings.model,
       changePolicy: "owner-pool",
     }),
     ctx.db.get(params.actingUserId),
   ]);
-  const credentialOwnerUserId = session.createdBy ?? session.userId;
+  const credentialOwnerUserId = await sessionAccountHolder(
+    ctx.db,
+    session,
+    stickyProviderAccountId,
+  );
   const streamingEntityId = sessionChatStreamingEntityId(chat._id);
 
   await clearStreamingActivity(ctx, streamingEntityId);
@@ -214,7 +230,11 @@ async function enqueueChatMessage(
   const { settings } = params;
   const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
     requestedAccountId: settings.providerAccountId,
-    ownerUserId: session.createdBy ?? session.userId,
+    ownerUserId: await sessionAccountHolder(
+      ctx.db,
+      session,
+      settings.providerAccountId,
+    ),
     model: settings.model,
     changePolicy: "owner-pool",
   });
@@ -318,10 +338,12 @@ export const retryLastTurnWithAccount = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const context = await getSessionChatOrThrow(ctx.db, args.chatId);
+    const context = await getSessionChatWithAccess(
+      ctx.db,
+      args.chatId,
+      ctx.userId,
+    );
     const { chat, session } = context;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
-      throw new Error("Not authorized");
     if (
       (await hasOpenChatTurn(ctx.db, chat._id)) ||
       chat.pendingTurn !== undefined
@@ -344,7 +366,11 @@ export const retryLastTurnWithAccount = authMutation({
     if (!repo) throw new Error("Repository not found");
 
     const providerAccountId = args.providerAccountId ?? undefined;
-    const ownerUserId = session.createdBy ?? session.userId;
+    const ownerUserId = await sessionAccountHolder(
+      ctx.db,
+      session,
+      providerAccountId,
+    );
     await ctx.db.patch(userMessage._id, {
       ...(await resolveMessageCredential(
         ctx.db,
@@ -390,10 +416,12 @@ export const startExecute = authMutation({
   },
   returns: v.union(v.literal("started"), v.literal("queued")),
   handler: async (ctx, args) => {
-    const context = await getSessionChatOrThrow(ctx.db, args.chatId);
+    const context = await getSessionChatWithAccess(
+      ctx.db,
+      args.chatId,
+      ctx.userId,
+    );
     const { chat, session } = context;
-    if (!(await hasRepoAccess(ctx.db, session.repoId, ctx.userId)))
-      throw new Error("Not authorized");
     if (chat.archived === true) throw new Error("This chat is closed");
     await touchUserActivity(ctx, sessionActivityRef(session), {
       source: "chat",
@@ -409,6 +437,20 @@ export const startExecute = authMutation({
 
     const repo = await ctx.db.get(session.repoId);
     if (!repo) throw new Error("Repository not found");
+
+    // In a project task waiting on its question, this message is the answer
+    // and starts the task's next run (`routePersonChatMessage`). The user row
+    // is already stored (the client sends addMessage first).
+    if (
+      await routePersonChatMessage(ctx, {
+        context,
+        userId: ctx.userId,
+        message: args.message,
+        insertUserRow: false,
+      })
+    ) {
+      return "started";
+    }
 
     const { chatId, message, sourceProposedPlanId, ...settings } = args;
     void chatId;
@@ -494,7 +536,11 @@ export const prewarmDaemon = authMutation({
     // claimPendingTurn and leaves the chat stuck on Working). The sticky traits
     // must go through `launchTraitsFromStored` — the same normalisation the
     // composer applies — because the send path omits defaults.
-    const credentialOwnerUserId = session.createdBy ?? session.userId;
+    const credentialOwnerUserId = await sessionAccountHolder(
+      ctx.db,
+      session,
+      chat.providerAccountId,
+    );
     const normalizedModel = normalizeAIModel(chat.lastModel);
     await ctx.scheduler.runAfter(0, internal.sandbox.prewarmSessionDaemon, {
       sandboxId,
@@ -588,7 +634,11 @@ export const getDaemonPrewarmData = internalQuery({
       sandboxId: session.sandboxId,
       repoId: session.repoId,
       ownerUserId: session.userId,
-      credentialOwnerUserId: session.createdBy ?? session.userId,
+      credentialOwnerUserId: await sessionAccountHolder(
+        ctx.db,
+        session,
+        chat.providerAccountId,
+      ),
       model: normalizedModel,
       // Normalised here, not in the caller: the traits must be exactly what the
       // composer sends (defaults omitted) or the prewarm's opts sig differs from
@@ -622,9 +672,11 @@ export const enqueueMessage = authMutation({
     if (!content) return null;
     const displayContent = args.displayContent?.trim();
 
-    const context = await getSessionChatOrThrow(ctx.db, args.chatId);
-    if (!(await hasRepoAccess(ctx.db, context.session.repoId, ctx.userId)))
-      throw new Error("Not authorized");
+    const context = await getSessionChatWithAccess(
+      ctx.db,
+      args.chatId,
+      ctx.userId,
+    );
 
     const {
       chatId,
@@ -664,7 +716,9 @@ export async function sendSessionChatMessage(
     sentViaOrchestrator?: boolean;
   },
 ): Promise<void> {
-  const { chat, session } = params.context;
+  const { chat } = params.context;
+  // A person's message reopens a coordinator chat an old phase-based close archived.
+  const session = await reviveCoordinatorSession(ctx, params.context.session);
   await touchUserActivity(ctx, sessionActivityRef(session), {
     source: "chat",
     userId: params.userId,
@@ -674,12 +728,42 @@ export async function sendSessionChatMessage(
     authorUserId: params.userId,
     surface: { kind: "session", session, chat },
   });
+  // A project task waiting on its question takes this as the answer.
+  if (
+    await routePersonChatMessage(ctx, {
+      context: params.context,
+      userId: params.userId,
+      message: params.content,
+      insertUserRow: true,
+    })
+  ) {
+    return;
+  }
   await enqueueChatMessage(ctx, params);
   // Sends at once when the chat is idle. Otherwise the queue waits: behind
   // the running turn, for a usage-limit reset, for a free parallel-chat
   // slot, or for Eva to wake — a sleeping sandbox is woken here and its
   // ready drain sends the message.
   await drainChatQueueQuietly(ctx, chat._id);
+}
+
+/**
+ * Queues a message Eva sends by itself (a project coordinator's wake-up) on
+ * a session chat and drains the queue: it runs at once on an idle chat, after
+ * the running turn otherwise, and a sleeping sandbox wakes for it. No user
+ * activity and no mentions: no person typed it. The caller checks the target.
+ */
+export async function queueSystemChatMessage(
+  ctx: MutationCtx,
+  params: {
+    context: SessionChatContext;
+    userId: Id<"users">;
+    content: string;
+    settings: TurnSettings;
+  },
+): Promise<void> {
+  await enqueueChatMessage(ctx, { ...params, sentViaOrchestrator: true });
+  await drainChatQueueQuietly(ctx, params.context.chat._id);
 }
 
 /**

@@ -7,7 +7,10 @@ import {
   type MutationCtx,
 } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import { authMutation, getSessionWithAccess } from "../functions";
+import {
+  authMutation,
+  getSessionWithAccess,
+} from "../functions";
 import { workflow } from "../workflowManager";
 import { resolveSessionBaseBranch } from "./baseBranch";
 import {
@@ -48,12 +51,8 @@ import {
 import { isEvaOwnedBranch } from "../_sandbox_runtime/divergedPublish";
 import { buildSessionBranchName } from "../_git/branchNames";
 import { errorMessage } from "@vvedantb/server";
-import { sessionOwnerProjectId, sessionOwnerTaskId } from "./owner";
+import { sessionOwnerTaskId } from "./owner";
 import { recordProjectInterviewClaim } from "../_projects/interviewState";
-import {
-  isProjectPreviewAllowed,
-  projectPreviewNotAllowedError,
-} from "../_projects/previewGate";
 import {
   isPreviewSandboxAllowed,
   previewSandboxNotAllowedError,
@@ -102,22 +101,16 @@ export const startSandbox = authMutation({
 });
 
 /**
- * Why an owned session may not boot a sandbox yet, or null. The same gates
- * the owner's own Start had: a todo task that never ran has no branch to
- * preview (its first run boots the sandbox); a project previews only from
- * in_progress to code_review. A task with a VM already may resume it.
+ * Why an owned session may not boot a sandbox yet, or null. A todo task that
+ * never ran has no branch to preview (its first run boots the sandbox); a
+ * task with a VM already may resume it. A project's coordinator always may:
+ * a project has no closed state (decision 19), so its chat stays reachable
+ * whatever its tasks' status.
  */
 async function previewBlockedError(
   db: DatabaseReader,
   session: Doc<"sessions">,
 ): Promise<Error | null> {
-  const projectId = sessionOwnerProjectId(session);
-  const project = projectId ? await db.get(projectId) : null;
-  if (project) {
-    return isProjectPreviewAllowed(project)
-      ? null
-      : projectPreviewNotAllowedError(project);
-  }
   if (session.sandboxId !== undefined) return null;
   const taskId = sessionOwnerTaskId(session);
   const task = taskId ? await db.get(taskId) : null;

@@ -152,9 +152,9 @@ export async function hasOpenChatTurn(
   db: DatabaseReader,
   entityId: Doc<"turns">["entityId"] | Id<"agentTasks"> | Id<"projects">,
 ): Promise<boolean> {
-  // A quick task or a project chats (and runs) through its session: those
-  // turns count too. A project task chats in its own chat of the project's
-  // session: that chat's turn counts.
+  // A task or a project chats (and runs) through its own session: those
+  // turns count too. An old project task may still have a legacy chat in
+  // its project's session (`findProjectTaskChat`): that chat's turn counts.
   const taskId = db.normalizeId("agentTasks", entityId);
   const projectId = db.normalizeId("projects", entityId);
   const task = taskId ? await db.get(taskId) : null;

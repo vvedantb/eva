@@ -3,11 +3,9 @@
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id, SandboxOwner } from "@eva/backend";
-import {
-  isSessionSandboxTab,
-  type SandboxTab,
-  type TaskRouteSandboxTab,
-} from "@/lib/search-params";
+import { IconChecklist } from "@tabler/icons-react";
+import { KeepAlivePane } from "@/lib/components/sandbox/KeepAlivePane";
+import type { SandboxTabDescriptor } from "@/routes/_repo/$owner/$repo/sessions/_components/SandboxTabTrigger";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { entityPathSegment } from "@/lib/numId";
 import { useRepo } from "@/lib/contexts/RepoContext";
@@ -21,7 +19,6 @@ import { useSandboxFileList } from "@/lib/components/sandbox/useSandboxFileList"
 import { withBrowserTab } from "@/lib/components/sandbox/withBrowserTab";
 import { SandboxPanelFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
 import { useSubagentRoster } from "@/lib/components/sandbox/useSubagentRoster";
-import { FilesPanel } from "@/routes/_repo/$owner/$repo/sessions/FilesPanel";
 import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { SimpleViewSandboxRedirect } from "@/lib/components/sandbox/SimpleViewSandboxRedirect";
@@ -38,6 +35,20 @@ import {
   SessionDocumentsPanel,
   useSourceDocuments,
 } from "@/lib/components/docs/SessionDocumentsPanel";
+import { useProjectDocuments } from "./useProjectDocuments";
+import { ProjectTasksPanel } from "./ProjectTasksPanel";
+import { isProjectSandboxTab, type ProjectSandboxTab } from "./projectSandboxTabs";
+import { useProjectTaskStatus } from "./useProjectStatus";
+
+/** Sandbox tabs a task's sandbox has but the coordinator's does not. */
+const COORDINATOR_HIDDEN_TABS: ReadonlySet<string> = new Set([
+  "preview",
+  "browser",
+  "review",
+  "computer",
+  "editor",
+  "files",
+]);
 
 interface ProjectSandboxPanelProps {
   projectId: Id<"projects">;
@@ -53,7 +64,7 @@ interface ProjectSandboxPanelProps {
   owner: SandboxOwner;
   panes: SandboxPanesApi;
   terminalPanel: TerminalPanelApi;
-  sandboxTab: TaskRouteSandboxTab;
+  sandboxTab: ProjectSandboxTab;
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
   /**
@@ -100,7 +111,24 @@ export function ProjectSandboxPanel({
   const viewState = useQuery(api.sandboxPanes.getViewState, { owner });
   const releaseBrowserLock = useMutation(api.sandboxPanes.releaseBrowserLock);
 
-  const activeTab: SandboxTab = sandboxTab;
+  // The coordinator only reads code and delegates: no dev server, no edits,
+  // so no Preview, Browser, Review, Computer, Editor or Files. An old link to one of
+  // those lands on Tasks; a task's own sandbox keeps them all.
+  const activeTab: ProjectSandboxTab = COORDINATOR_HIDDEN_TABS.has(sandboxTab)
+    ? "tasks"
+    : sandboxTab;
+  const projectDocuments = useProjectDocuments(projectId, repoId);
+  const { status: taskStatus } = useProjectTaskStatus(projectId, repoId);
+  const triageCount = taskStatus?.counts.triage ?? 0;
+  // Tasks leads the rail; its badge counts what waits in Triage.
+  const tasksTab: SandboxTabDescriptor = {
+    value: "tasks",
+    label: "Tasks",
+    icon: { kind: "component", Icon: IconChecklist },
+    count: triageCount > 0 ? triageCount : undefined,
+    indicatorLabel:
+      triageCount > 0 ? `${triageCount} tasks in Triage` : undefined,
+  };
 
   // Content-keyed Agents tab, folded from the chat transcript the project's
   // chat panel already subscribes to (same entity ids). Artifacts stay on the
@@ -115,8 +143,8 @@ export function ProjectSandboxPanel({
     sandboxRunning: isActive,
   });
 
-  const navigateToSandboxTab = (tab: SandboxTab) => {
-    if (tab === "prd" || !projectPathSegment) return;
+  const navigateToSandboxTab = (tab: ProjectSandboxTab) => {
+    if (!projectPathSegment) return;
     if (tab === "review") {
       void navigate({
         to: toInternalRepoHref(
@@ -147,11 +175,12 @@ export function ProjectSandboxPanel({
 
   // This surface has no custom tabs, so the tab bar only emits builtin ids.
   const handleTabChange = (tab: string) => {
-    if (!isSessionSandboxTab(tab) || tab === "prd") return;
-    navigateToSandboxTab(tab);
+    if (isProjectSandboxTab(tab)) navigateToSandboxTab(tab);
   };
 
-  const enabledTabs = withBrowserTab(panes.enabledTabs);
+  const enabledTabs = withBrowserTab(panes.enabledTabs).filter(
+    (tab) => !COORDINATOR_HIDDEN_TABS.has(tab),
+  );
   const { owner: ownerParam, repo: repoParam } = useParams({ strict: false });
 
   return (
@@ -177,13 +206,9 @@ export function ProjectSandboxPanel({
             onTabChange={handleTabChange}
             collapsed={collapsed}
             onToggle={onToggle}
-            onNewPreview={() => {
-              panes.handleNewPreview();
-              navigateToSandboxTab("preview");
-            }}
             newPreviewDisabled={panes.newPreviewDisabled}
             enabledTabs={enabledTabs}
-            showFilesTab
+            leadingTabs={[tasksTab]}
             showAgentsTab={hasAgents}
             hasRunningAgents={hasRunningAgents}
             artifactCount={artifactCount}
@@ -196,6 +221,17 @@ export function ProjectSandboxPanel({
         }
       >
         <div className="h-full overflow-hidden">
+          <KeepAlivePane
+            active={activeTab === "tasks"}
+            className="flex h-full min-h-0 flex-col overflow-hidden"
+          >
+            <ProjectTasksPanel
+              projectId={projectId}
+              projectNumId={projectNumId}
+              repoId={repoId}
+              basePath={basePath}
+            />
+          </KeepAlivePane>
           <div
             className={
               activeTab === "artifacts"
@@ -212,19 +248,9 @@ export function ProjectSandboxPanel({
                 : "hidden"
             }
           >
-            <SessionDocumentsPanel source={artifactSource} />
-          </div>
-          <div
-            className={
-              !simpleView && activeTab === "files" ? "h-full min-h-0" : "hidden"
-            }
-          >
-            <FilesPanel
-              sandboxId={sandboxId}
-              repoId={repoId}
-              isActive={isActive}
-              fileList={fileList}
-              wake={{ onStartSandbox, isSandboxStarting }}
+            <SessionDocumentsPanel
+              source={artifactSource}
+              project={projectDocuments}
             />
           </div>
           <div
@@ -234,10 +260,7 @@ export function ProjectSandboxPanel({
                 : "hidden"
             }
           >
-            <SandboxAgentsPanel
-              entity={chatBinding.entity}
-              agents={agents}
-            />
+            <SandboxAgentsPanel entity={chatBinding.entity} agents={agents} />
           </div>
           <ReviewChatTargetProvider value={chatKeys.draftTarget ?? null}>
             <SandboxPaneSlots

@@ -13,15 +13,14 @@ import {
   TASK_CHAT_BUSY_ERROR,
   TASK_CHAT_BUSY_RETRY_MS,
 } from "./recovery";
-import { resolveProjectBranchName } from "../_git/branchNames";
-import { resolveTaskWorkflowBaseBranchForTask } from "./resolveBaseBranch";
+import { resolveTaskWorkflowBaseBranch } from "./resolveBaseBranch";
 import {
   finishTaskRun,
   fireTaskRunSchedule,
   scheduleTaskRun,
 } from "../_agentTasks/runState";
 
-/** Schedules an automatic retry for a failed quick task if the failure looks transient. */
+/** Schedules an automatic retry for a failed task (quick or project) if the failure looks transient. */
 export const maybeScheduleQuickTaskRetry = internalMutation({
   args: {
     taskId: v.id("agentTasks"),
@@ -32,7 +31,7 @@ export const maybeScheduleQuickTaskRetry = internalMutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     const task = await ctx.db.get(args.taskId);
-    if (!task || task.projectId) return null;
+    if (!task) return null;
 
     const run = await ctx.db.get(args.runId);
     if (!run || run.taskId !== args.taskId || run.status !== "error")
@@ -111,8 +110,7 @@ export const executeScheduledTask = internalMutation({
 
     if (task.status !== "todo" || !task.repoId || !task.createdBy) return null;
     if (await hasActiveRun(ctx.db, args.taskId)) return null;
-    // The task's (or its project's) chat is mid-reply on the shared sandbox:
-    // try again shortly instead of failing the schedule (`startTaskRun`
+    // The task's chat is mid-reply on its sandbox: try again shortly instead of failing the schedule (`startTaskRun`
     // refuses a busy chat).
     if (await taskWorkSessionBusy(ctx.db, task)) {
       await scheduleTaskRun(
@@ -127,33 +125,12 @@ export const executeScheduledTask = internalMutation({
     const repo = await ctx.db.get(task.repoId);
     if (!repo) return null;
 
-    const firstOnBranch = await isFirstTaskOnBranch(
-      ctx.db,
-      args.taskId,
-      task.projectId,
-    );
-
-    const branchName = task.projectId
-      ? resolveProjectBranchName(
-          task.projectId,
-          await ctx.db.get(task.projectId),
-        )
-      : undefined;
-
-    const baseBranch = await resolveTaskWorkflowBaseBranchForTask(
-      ctx.db,
-      task,
-      repo,
-    );
-
     const runId = await startTaskRun(ctx, {
       task,
       repo,
       userId: task.createdBy,
-      baseBranch,
-      isFirstTaskOnBranch: firstOnBranch,
-      branchName,
-      projectId: task.projectId,
+      baseBranch: resolveTaskWorkflowBaseBranch(task, repo),
+      isFirstTaskOnBranch: await isFirstTaskOnBranch(ctx.db, args.taskId),
       // Carry through any parked change-request comment so a re-run started via
       // the scheduler is still labelled "made changes" on the timeline.
       triggeringCommentId: task.pendingChangeRequestCommentId,

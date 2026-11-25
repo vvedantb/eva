@@ -6,6 +6,7 @@ import type { TurnState } from "../validators";
 import { closeOpenTurn } from "../_chat/turnStore";
 import { clearTaskRunStreaming } from "./helpers";
 import { finishTaskRun, taskRunWorkflowId } from "../_agentTasks/runState";
+import { recomputeProjectPhase } from "../functions";
 
 const QUICK_TASK_AUTO_RETRY_BASE_DELAY_MS = 20_000;
 const QUICK_TASK_AUTO_RETRY_JITTER_MS = 20_000;
@@ -123,7 +124,6 @@ export async function cleanUpStaleRun(
     runId: Id<"agentRuns">;
     sandboxId?: string;
     repoId?: Id<"githubRepos">;
-    isProjectTask: boolean;
     errorMessage: string;
     exitReason: string;
     /** The workflow the task tracks; cancelled, and the task's run state ended. */
@@ -138,22 +138,20 @@ export async function cleanUpStaleRun(
       sandboxId: params.sandboxId,
       repoId: params.repoId,
     });
-    if (!params.isProjectTask) {
-      // Quick-task sandboxes are persistent: stop (don't delete) so any
-      // uncommitted work or unpushed commits stay recoverable and the next
-      // run resumes the same filesystem. Diagnostics (dmesg OOM lines, done
-      // file, callback log tail) are captured onto the run first, while the
-      // sandbox is still running.
-      await ctx.scheduler.runAfter(
-        0,
-        internal.sandbox.captureDiagnosticsAndStopSandbox,
-        {
-          sandboxId: params.sandboxId,
-          repoId: params.repoId,
-          runId: params.runId,
-        },
-      );
-    }
+    // Task sandboxes are persistent: stop (don't delete) so any uncommitted
+    // work or unpushed commits stay recoverable and the next run resumes the
+    // same filesystem. Diagnostics (dmesg OOM lines, done file, callback log
+    // tail) are captured onto the run first, while the sandbox is still
+    // running.
+    await ctx.scheduler.runAfter(
+      0,
+      internal.sandbox.captureDiagnosticsAndStopSandbox,
+      {
+        sandboxId: params.sandboxId,
+        repoId: params.repoId,
+        runId: params.runId,
+      },
+    );
   }
 
   await ctx.db.patch(params.runId, {
@@ -173,17 +171,20 @@ export async function cleanUpStaleRun(
   // No runId fence: the workflow cancelled above is whichever the task tracks.
   await finishTaskRun(ctx, params.taskId, undefined);
 
-  if (!params.isProjectTask) {
-    await ctx.scheduler.runAfter(
-      0,
-      internal.taskWorkflow.maybeScheduleQuickTaskRetry,
-      {
-        taskId: params.taskId,
-        runId: params.runId,
-        error: params.errorMessage,
-        delayMs: buildQuickTaskRetryDelayMs(),
-      },
-    );
+  await ctx.scheduler.runAfter(
+    0,
+    internal.taskWorkflow.maybeScheduleQuickTaskRetry,
+    {
+      taskId: params.taskId,
+      runId: params.runId,
+      error: params.errorMessage,
+      delayMs: buildQuickTaskRetryDelayMs(),
+    },
+  );
+  // The task left `in_progress`: its project may start the next ones.
+  const task = await ctx.db.get(params.taskId);
+  if (task?.projectId !== undefined) {
+    await recomputeProjectPhase(ctx, task.projectId);
   }
 
   // Every stop path ends here: the old chain, the lease reconciler and the
@@ -255,7 +256,6 @@ export async function finalizeStalledRun(
     runId,
     sandboxId: run.sandboxId ?? stop.sandboxId,
     repoId: run.repoId,
-    isProjectTask: !!task.projectId,
     errorMessage: stop.errorMessage,
     exitReason: stop.exitReason,
     workflowId: taskRunWorkflowId(task),

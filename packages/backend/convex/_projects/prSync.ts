@@ -5,11 +5,6 @@ import { applyPrLifecycleTransition } from "../_pullRequests/store";
 
 type ProjectPhase = Doc<"projects">["phase"];
 
-const REVIEW_PHASES: ReadonlySet<ProjectPhase> = new Set([
-  "business_review",
-  "code_review",
-]);
-
 /**
  * Mirrors quick-task PR sync for a project's PRs: business_review ↔ draft and
  * code_review ↔ ready on the primary PR; cancelling closes every live PR.
@@ -57,21 +52,4 @@ export async function scheduleProjectPrSync(
     { kind: "project", projectId: project._id },
     transition,
   );
-}
-
-/** Maps GitHub PR webhook actions to project review phases (inbound sync). */
-export function deriveProjectPhaseFromPrEvent(
-  action: string,
-  draft: boolean | undefined,
-): ProjectPhase | null {
-  if (action === "converted_to_draft") return "business_review";
-  if (action === "ready_for_review") return "code_review";
-  if (action === "opened" || action === "reopened") {
-    return draft ? "business_review" : "code_review";
-  }
-  return null;
-}
-
-export function isProjectReviewPhase(phase: ProjectPhase): boolean {
-  return REVIEW_PHASES.has(phase);
 }

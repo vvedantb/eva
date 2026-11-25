@@ -19,6 +19,11 @@ import { AwaitingAnswerMark, WorkingMark } from "@/ui/RowStatus";
 import { useScheme, XS_TRACKING } from "@/ui/theme";
 
 type QuickTask = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
+/** What a row reads of a task: a `getAllTasks` row or an `agentTasks.listByProject` row. */
+type QuickTaskRowTask = Pick<
+  QuickTask,
+  "_id" | "repoId" | "title" | "isExecuting" | "hasUnread" | "isAwaitingAnswer" | "numId" | "priority" | "tags" | "createdAt" | "run"
+> & { sandboxStatus?: QuickTask["sandboxStatus"] };
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 
 /** Tags drawn on a card; the rest are a "+N", so a task with a dozen tags keeps one line of them. */
@@ -35,16 +40,23 @@ export const SANDBOX_DOT = {
   closed: { color: undefined, label: "Asleep" },
 };
 
-/** A card's meta badge: the web `Badge variant="secondary"` with a 12 icon (planning mode, Draft, Finalised). */
-export function MetaPill({ icon: Icon, label }: { icon: ComponentType<IconProps>; label: string }) {
+/**
+ * A card's meta badge: the web `Badge variant="secondary"` with a 12 icon
+ * (planning mode, Draft, Finalised).
+ */
+export function MetaPill({ icon: Icon, label }: { icon?: ComponentType<IconProps>; label: string }) {
   const theme = EVA_THEME[useScheme()];
   return (
     <View
-      className="flex-row items-center gap-1 self-start rounded-full border px-2 py-0.5"
+      className="max-w-48 flex-row items-center gap-1 self-start rounded-full border px-2 py-0.5"
       style={{ backgroundColor: theme.secondary, borderColor: theme.border }}
     >
-      <Icon size={12} color={theme.secondaryForeground} />
-      <Text className="font-instrument-sans-medium" style={{ ...META_TEXT, fontWeight: "500", color: theme.secondaryForeground }}>
+      {Icon ? <Icon size={12} color={theme.secondaryForeground} /> : null}
+      <Text
+        numberOfLines={1}
+        className="font-instrument-sans-medium shrink"
+        style={{ ...META_TEXT, fontWeight: "500", color: theme.secondaryForeground }}
+      >
         {label}
       </Text>
     </View>
@@ -74,11 +86,11 @@ export function QuickTaskDraftRow({ draft }: { draft: QuickTaskDraft }) {
         {displayTitle(draft.title)}
       </Text>
       <View className="mt-0.5 flex-row items-center justify-between gap-2 pt-0.5">
-        <MetaPill icon={IconFileText} label="Draft" />
-        <Text className="font-instrument-sans" style={{ ...META_TEXT, color: withAlpha(muted, 0.7), fontVariant: ["tabular-nums"] }}>
-          {timeAgo(draft.updatedAt)}
-        </Text>
-      </View>
+      <MetaPill icon={IconFileText} label="Draft" />
+      <Text className="font-instrument-sans" style={{ ...META_TEXT, color: withAlpha(muted, 0.7), fontVariant: ["tabular-nums"] }}>
+        {timeAgo(draft.updatedAt)}
+      </Text>
+    </View>
     </SurfaceRow>
   );
 }
@@ -98,20 +110,18 @@ export function QuickTaskRow({
   status,
   hasError,
   creator,
-  projectNumId,
   hasDraftComment,
   onLongPress,
   selection,
 }: {
-  task: QuickTask;
+  task: QuickTaskRowTask;
   status: DisplayTaskStatus;
   hasError: boolean;
   creator: User | undefined;
-  /** In a project's task list: the number reads "#project/task", as the web card. */
-  projectNumId?: number;
   /** The user has an unsent comment on this task (`drafts.listMarks`): a "Draft comment" pill after the tags, as the web card. */
   hasDraftComment: boolean;
-  onLongPress: () => void;
+  /** The row menu. */
+  onLongPress?: () => void;
   /** In select mode: a tap or long press ticks the row, and a checkbox leads it, as the inbox. */
   selection?: { checked: boolean; onToggle: () => void };
 }) {
@@ -129,7 +139,7 @@ export function QuickTaskRow({
   const sandbox = task.sandboxStatus ? SANDBOX_DOT[task.sandboxStatus] : undefined;
   const showSandbox = sandbox !== undefined && !simpleView;
   const showUnread = task.hasUnread && !task.isExecuting;
-  const numLabel = formatEntityNumLabel({ numId: task.numId, projectNumId });
+  const numLabel = formatEntityNumLabel({ numId: task.numId });
   const creatorFirstName = creator ? firstNameFromUser(creator) : null;
   const scheduledAt = taskScheduledAt(task);
   const scheduled = scheduledAt
@@ -146,6 +156,11 @@ export function QuickTaskRow({
     .filter(Boolean)
     .join(", ");
   const muted = theme.mutedForeground;
+  const age = (
+    <Text className="font-instrument-sans" style={{ ...META_TEXT, color: withAlpha(muted, 0.7), fontVariant: ["tabular-nums"] }}>
+      {timeAgo(task.createdAt)}
+    </Text>
+  );
 
   return (
     <SurfaceRow
@@ -241,9 +256,7 @@ export function QuickTaskRow({
             </>
           ) : null}
         </View>
-        <Text className="font-instrument-sans" style={{ ...META_TEXT, color: withAlpha(muted, 0.7), fontVariant: ["tabular-nums"] }}>
-          {timeAgo(task.createdAt)}
-        </Text>
+        {age}
       </View>
     </SurfaceRow>
   );

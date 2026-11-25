@@ -19,6 +19,8 @@ import {
   type McpCredentials,
 } from "./toolShared";
 import { defineTool, type EvaTool } from "./registry";
+import { projectCallerOf } from "./projectScope";
+import { siblingRowRefusal } from "./projectTools";
 
 /** The chat arg `chatLog:*` takes, from a resolved target. */
 function chatSourceArg(target: EntityTarget): { [key: string]: JsonValue } {
@@ -69,6 +71,7 @@ export function chatContentTools(
   const tools: EvaTool[] = [];
   const { clerkUserId } = credentials;
   const { resolveChat } = entityAccess(ctx, credentials);
+  const caller = projectCallerOf(credentials.owner);
 
   // ───────────────────────────────────────────────────────────────────────────
   // delete_artifact / delete_eva_doc
@@ -89,6 +92,13 @@ Ask the user in chat before calling, and pass confirmed: true only after they sa
       },
       handler: async ({ artifactId }) => {
         await mcpGetContext(ctx, clerkUserId);
+        const refusal = await siblingRowRefusal(
+          ctx,
+          caller,
+          "artifacts",
+          artifactId,
+        );
+        if (refusal) return refusal;
         await mcpCallAsUser(
           ctx,
           clerkUserId,
@@ -118,6 +128,8 @@ Ask the user in chat before calling, and pass confirmed: true only after they sa
         confirmed: confirmedDeleteArg,
       },
       handler: async ({ docId }) => {
+        const refusal = await siblingRowRefusal(ctx, caller, "docs", docId);
+        if (refusal) return refusal;
         await mcpGetContext(ctx, clerkUserId);
         await mcpCallAsUser(
           ctx,
@@ -396,7 +408,7 @@ Each row has its id, content, authorId, parentId (set on replies) and createdAt.
       mutating: false,
       input: entityRefArgs,
       handler: async (ref) => {
-        const resolved = await resolveChat(ref);
+        const resolved = await resolveChat(ref, "read");
         if ("content" in resolved) return resolved;
         const { target } = resolved;
         if (target.kind !== "task") {
@@ -508,7 +520,7 @@ The Log is append-only: it is how the user catches up on this chat weeks later, 
       mutating: false,
       input: { ...entityRefArgs },
       handler: async (ref) => {
-        const resolved = await resolveChat(ref);
+        const resolved = await resolveChat(ref, "read");
         if ("content" in resolved) return resolved;
         const { target } = resolved;
         const source = chatSourceArg(target);

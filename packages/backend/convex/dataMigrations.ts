@@ -354,3 +354,28 @@ export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionChatBackgroundAgents,
   internal.dataMigrations.pruneSessionBackgroundAgents,
 ]);
+
+/**
+ * Task dependencies are gone: deletes every `taskDependencies` row so the
+ * table can leave the schema.
+ * `npx convex run --prod dataMigrations:run '{fn: "dataMigrations:clearTaskDependencies"}'`
+ */
+export const clearTaskDependencies = dataMigrations.define({
+  table: "taskDependencies",
+  migrateOne: async (ctx, doc) => {
+    await ctx.db.delete(doc._id);
+  },
+});
+
+/**
+ * The project Code Reviewer field is gone: clears `projects.codeReviewer` so
+ * the field can leave the schema.
+ * `npx convex run --prod dataMigrations:run '{fn: "dataMigrations:clearProjectCodeReviewer"}'`
+ */
+export const clearProjectCodeReviewer = dataMigrations.define({
+  table: "projects",
+  migrateOne: async (_ctx, project) => {
+    if (project.codeReviewer === undefined) return;
+    return { codeReviewer: undefined };
+  },
+});

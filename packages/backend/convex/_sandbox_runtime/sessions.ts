@@ -54,6 +54,11 @@ import { resolveVercelConsoleDevCommand } from "./vercelAppPorts";
 import type { GenericActionCtx } from "convex/server";
 import { startDesktopWithChrome } from "./desktop";
 import { sleep } from "../_shared/async";
+import { SANDBOX_GIT_WRITE } from "../githubAuth";
+import {
+  isReadOnlySandboxOwner,
+  sessionSandboxProfile,
+} from "../_sessions/owner";
 
 /**
  * Starts the app server in Preview Console (Vercel tmux) so Console can show
@@ -765,6 +770,10 @@ async function prepareSessionSandboxInternal(
   const launchSession = await ctx.runQuery(internal.sessions.getInternal, {
     id: args.sessionId,
   });
+  // A project coordinator only reads code (`sessionSandboxProfile`).
+  const profile = sessionSandboxProfile(launchSession?.owner);
+  const readOnly =
+    launchSession !== null && isReadOnlySandboxOwner(launchSession.owner);
   completedSteps.push({
     type: "tool",
     label: "Loading repository config...",
@@ -847,6 +856,19 @@ async function prepareSessionSandboxInternal(
           );
           // No setupBranch here: resumeReusedSandbox already owns the branch
           // step, and a `checkout -B` would undo a branch the user switched to.
+          if (!profile.runsServices) {
+            reusedResult = {
+              sandbox: handle,
+              isNew: false,
+              usedSnapshot: false,
+              sandboxDetails,
+              branchName: args.branchName,
+              devPort: undefined,
+              devCommand: undefined,
+              resumeFellBack: false,
+            };
+            return;
+          }
           const services = await runLoggedSessionStep(
             "reuseSessionSandbox.startSessionServices",
             sandboxDetails,
@@ -1097,10 +1119,18 @@ async function prepareSessionSandboxInternal(
         undefined,
         { mode: "none" },
         undefined,
-        false,
+        !profile.runsServices, // skipInstallDeps
         forkFrom,
         undefined, // driveCacheRole
         true, // deferDocker: awaited below, before services need it
+        profile.vcpus,
+        // Its env and clone tokens only read its home repo (decision 6).
+        readOnly
+          ? {
+              kind: "read",
+              repo: { githubId: repo?.githubId, name: args.repoName },
+            }
+          : SANDBOX_GIT_WRITE,
       ),
   );
   // The fork has been taken (or has failed) once this settles: only now is it
@@ -1207,7 +1237,7 @@ async function prepareSessionSandboxInternal(
     // from the snapshot's baked commit, so the common no-dep-change session keeps
     // its fast baked node_modules. Fresh-clone (non-snapshot) sessions already
     // installed inside createSandboxAndPrepareRepo, so this is snapshot-only.
-    if (prepared.usedSnapshot) {
+    if (prepared.usedSnapshot && profile.runsServices) {
       await emitSessionProgress(
         ctx,
         args.sessionId,
@@ -1261,6 +1291,23 @@ async function prepareSessionSandboxInternal(
       await ctx.runMutation(internal.sessions.clearSandboxSetupPending, {
         sessionId: args.sessionId,
       });
+    }
+
+    if (!profile.runsServices) {
+      await completeSessionProgress(ctx, args.sessionId);
+      logSession(
+        `prepareSessionSandboxInternal summary: elapsed=${formatDurationMsShort(Date.now() - startedAt)}, path=new-coordinator, isNew=true, usedSnapshot=${prepared.usedSnapshot} (${sandboxDetails})`,
+      );
+      return {
+        sandbox: handle,
+        isNew: true,
+        usedSnapshot: prepared.usedSnapshot,
+        sandboxDetails,
+        branchName: args.branchName,
+        devPort: undefined,
+        devCommand: undefined,
+        resumeFellBack: reuseId !== undefined,
+      };
     }
 
     await emitSessionProgress(

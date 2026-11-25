@@ -2,13 +2,15 @@ import { v, type Infer } from "convex/values";
 import type { FilterBuilder, NamedTableInfo } from "convex/server";
 import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader } from "../_generated/server";
+import { COORDINATOR_VCPUS } from "../_sandbox/provider";
 
 /**
  * Who a session belongs to. One field, `sessions.owner`, holds it:
  *
  *   standalone   a session the user opened; listed in the sessions sidebar
- *   task         the hidden session behind one quick task (`agentTasks`)
- *   project      the hidden session a project and its tasks share
+ *   task         the hidden session behind one task (`agentTasks`), a quick
+ *                task or a project's child task
+ *   project      the hidden session of a project's coordinator chat
  *
  * The id lives inside its kind, so "task session without a task" cannot be
  * written. The owner is set at insert and never changes: there is no
@@ -54,26 +56,22 @@ export function standaloneOnly(
   return q.eq(q.field("owner.kind"), "standalone");
 }
 
-/** A task: it works on a session it may not own (a project task). */
-type WorkTask = Pick<Doc<"agentTasks">, "_id" | "projectId">;
+/** A task: it always works on its own session. */
+type WorkTask = Pick<Doc<"agentTasks">, "_id">;
 
 /** Anything that works on an owned session: a task, or a loaded owner. */
 export type WorkTarget = WorkTask | OwnerEntity;
 
 /**
  * The one rule for which session something works on (runs, chat, sandbox):
- * a project and all its tasks share the project's session; a quick task
- * owns its own.
+ * every task owns its own session, also when it belongs to a project; a
+ * project owns its coordinator session.
  */
 export function workSessionOwner(target: WorkTarget): OwnedSessionOwner {
-  if ("kind" in target) {
-    return target.kind === "task"
-      ? workSessionOwner(target.task)
-      : { kind: "project", projectId: target.project._id };
-  }
-  return target.projectId !== undefined
-    ? { kind: "project", projectId: target.projectId }
-    : { kind: "task", taskId: target._id };
+  if (!("kind" in target)) return { kind: "task", taskId: target._id };
+  return target.kind === "task"
+    ? { kind: "task", taskId: target.task._id }
+    : { kind: "project", projectId: target.project._id };
 }
 
 /**
@@ -90,8 +88,9 @@ export async function findWorkSession(
 }
 
 /**
- * A project task's own chat in its project's session (`sessionChats.taskId`),
- * if it has one.
+ * A project task's old chat in its project's session (`sessionChats.taskId`),
+ * if it has one. Read-only legacy: new project tasks chat in the Main chat of
+ * their own session. Step 9's migration removes these rows.
  */
 export async function findProjectTaskChat(
   db: DatabaseReader,
@@ -105,8 +104,8 @@ export async function findProjectTaskChat(
 
 /**
  * The session that holds the sandbox of a session, task or project named by
- * a bare id (an MCP token's entity): the session itself, the one a task works
- * on, or a project's. Null for a malformed id or before the session exists.
+ * a bare id (an MCP token's entity): the session itself, a task's own, or a
+ * project's. Null for a malformed id or before the session exists.
  */
 export async function findEntitySession(
   db: DatabaseReader,
@@ -126,6 +125,42 @@ export async function findEntitySession(
   return projectId
     ? await findOwnedSession(db, { kind: "project", projectId })
     : null;
+}
+
+/**
+ * The one rule for a read-only sandbox: a project coordinator's (plan
+ * decision 6). Every GitHub token such a sandbox gets is read-only
+ * (`mintSandboxGitToken`): the env token at create, the clone, the runner's
+ * refresh (its VM token carries `EVA_READ_ONLY_GIT_CLAIM`) and the credential
+ * helper (`sandboxGitCredentials.resolveCredentialRequest`).
+ */
+export function isReadOnlySandboxOwner(owner: SessionOwner): boolean {
+  return owner.kind === "project";
+}
+
+/** How a session's sandbox boots, by its owner. */
+export interface SessionSandboxProfile {
+  /** vCPUs of a new sandbox; undefined takes the app's size setting. */
+  vcpus: number | undefined;
+  /**
+   * Installs dependencies and runs the startup and background commands and
+   * the dev server (the Preview).
+   */
+  runsServices: boolean;
+}
+
+/**
+ * A project coordinator only reads code (plan decision 22): a small sandbox
+ * (`COORDINATOR_VCPUS`), no dependency install, and no dev server,
+ * background or startup commands, so it has no Preview. Every other owner
+ * gets the app's size and its services. Unknown owner: the default.
+ */
+export function sessionSandboxProfile(
+  owner: SessionOwner | undefined,
+): SessionSandboxProfile {
+  return owner !== undefined && isReadOnlySandboxOwner(owner)
+    ? { vcpus: COORDINATOR_VCPUS, runsServices: false }
+    : { vcpus: undefined, runsServices: true };
 }
 
 /** The task a session belongs to, or undefined for any other owner. */
@@ -209,8 +244,9 @@ export type OwnerChat = {
 };
 
 /**
- * Who one chat speaks for: a project task's own chat (`sessionChats.taskId`)
- * for that task, any other chat for its session's owner. Attribution, unread,
+ * Who one chat speaks for: a project task's legacy chat in its project's
+ * session (`sessionChats.taskId`) for that task, any other chat for its
+ * session's owner. Attribution, unread,
  * mentions, watches and the busy light all resolve through here.
  */
 export function chatOwner(
@@ -231,10 +267,5 @@ export function chatOwnerEntityId(
   if (owner.kind === "task") return owner.taskId;
   if (owner.kind === "project") return owner.projectId;
   return undefined;
-}
-
-/** Project phases that retire the project's session. */
-export function isTerminalProjectPhase(phase: Doc<"projects">["phase"]) {
-  return phase === "completed" || phase === "cancelled";
 }
 

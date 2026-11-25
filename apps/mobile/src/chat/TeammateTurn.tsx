@@ -2,6 +2,7 @@ import { EVA_THEME } from "@eva/shared/evaTheme";
 import { MessageContent } from "@vvedantb/native-ui/ai";
 import type { ReactNode } from "react";
 import { Text, View, type ViewStyle } from "react-native";
+import { EvaMark } from "@/ui/EvaMark";
 import { InitialsAvatar } from "@/ui/InitialsAvatar";
 import { useScheme } from "@/ui/theme";
 
@@ -35,17 +36,53 @@ export function TeammateName({ name }: { name: string }) {
  */
 export function TeammateBubble({
   sender,
+  joinsNext,
   children,
 }: {
   /** The sender's profile; undefined while it loads. */
   sender: { firstName?: string; lastName?: string; fullName?: string } | undefined;
+  /** The next row is this sender's bubble too: it takes the avatar (the web `joinsNext`). */
+  joinsNext: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <SideBubble avatar={<InitialsAvatar user={sender} size={16} />} joinsNext={joinsNext}>
+      {children}
+    </SideBubble>
+  );
+}
+
+/** Eva's reply in the project coordinator chat, as the web `assistantBubble`: the teammate bubble with her mark. */
+export function EvaBubble({ joinsNext, children }: { joinsNext: boolean; children: ReactNode }) {
+  return (
+    <SideBubble avatar={<EvaMark size={16} />} joinsNext={joinsNext} className="max-w-[85%]">
+      {children}
+    </SideBubble>
+  );
+}
+
+/** Only a run's last bubble shows the avatar and squares its corner against it; the rest keep its 16 of space. */
+function SideBubble({
+  avatar,
+  joinsNext,
+  className,
+  children,
+}: {
+  avatar: ReactNode;
+  joinsNext: boolean;
+  className?: string;
   children: ReactNode;
 }) {
   const theme = EVA_THEME[useScheme()];
   return (
-    <View className="min-w-0 max-w-full flex-row items-end gap-2">
-      <InitialsAvatar user={sender} size={16} />
-      <MessageContent bubble="tint" className="shrink" style={{ backgroundColor: theme.secondary, borderBottomLeftRadius: 0 }}>
+    <View className={`min-w-0 max-w-full flex-row items-end gap-2 ${className ?? ""}`}>
+      <View className="size-4">{joinsNext ? null : avatar}</View>
+      <MessageContent
+        bubble="tint"
+        // The kit pads only a user message (`px-4 py-3`); Eva's reply needs the same.
+        className="shrink px-4 py-3"
+        style={joinsNext ? { backgroundColor: theme.secondary } : { backgroundColor: theme.secondary, borderBottomLeftRadius: 0 }}
+      >
         {children}
       </MessageContent>
     </View>

@@ -7,6 +7,7 @@ import {
   collectChangedFiles,
   collectQuestionSteps,
   otherUserIdsInChat,
+  readableErrorMessage,
   stripReviewCommentBlocks,
   turnErrorTitle as sharedTurnErrorTitle,
   type ChangedFile,
@@ -20,6 +21,7 @@ export { buildPrecedingUserTurns } from "@eva/shared";
 export { findStreamingTargetMessage } from "@eva/shared";
 // Moved to `@eva/shared` so the mobile chat draws a teammate's turn as the web.
 export {
+  findBubbleGroups,
   firstNameByUserId,
   firstNameFromUser,
   isOtherUserChatMessage,
@@ -143,22 +145,9 @@ export function turnErrorTitle(args: {
   return sharedTurnErrorTitle({ ...args, providerLabel: getProviderLabel });
 }
 
-/**
- * The failure a send threw, as the user should read it. Convex wraps a server
- * error in `[CONVEX …] [Request ID: …] Server Error` plus an `Uncaught Error:`
- * line and a stack, none of which means anything outside the dashboard.
- */
+/** The failure a send threw, as the user should read it (`readableErrorMessage`). */
 export function readableSendError(message: string): string {
-  const cleaned = message
-    .replace(/\s+/g, " ")
-    .replace(/\[CONVEX[^\]]*\]/g, "")
-    .replace(/\[Request ID:[^\]]*\]/g, "")
-    .replace(/\bServer Error\b/g, "")
-    .replace(/\bUncaught [A-Za-z]*Error:?/g, "")
-    // Everything from the first stack frame on is for the logs, not the user.
-    .split(" at ")[0];
-  const trimmed = (cleaned ?? "").trim();
-  return trimmed.length > 0 ? trimmed : "Something went wrong";
+  return readableErrorMessage(message, "Something went wrong");
 }
 
 /** Previously sent user messages as editable display text, newest-first. */

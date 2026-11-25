@@ -13,14 +13,17 @@ import type { DataModel, Doc, Id } from "../_generated/dataModel";
 import {
   projectWithDetailsValidator,
   projectListItemValidator,
-  resolveProjectPlanningMode,
   getProjectDetails,
+  clientProject,
 } from "./helpers";
 import { resolveProjectBranchName } from "../_git/branchNames";
 import { resolveProjectBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { unreadLookupForList } from "../chatReads";
 import { awaitingAnswerEntityIdsForRepo } from "../_chat/turnProjection";
 import { isProjectBuilding } from "./buildState";
+import { projectStatus } from "@eva/shared/projectStatus";
+import { loadProjectTaskFacts } from "./taskTable";
+import { isCoordinatorPaused } from "./coordinatorWake";
 import {
   liveOwnedSessionStatuses,
   projectSandboxStatus,
@@ -36,7 +39,7 @@ async function buildProjectWithDetails(
 ) {
   const details = await getProjectDetails(db, project._id);
   return {
-    ...project,
+    ...clientProject(project),
     conversationHistory: details?.conversationHistory ?? [],
     ...(details?.generatedSpec !== undefined
       ? { generatedSpec: details.generatedSpec }
@@ -88,13 +91,65 @@ export const list = authQuery({
     );
     return await Promise.all(
       projects.map(async (project) => ({
-        ...project,
+        ...clientProject(project),
         // A project's sandbox lives on its session; the row shows that.
         sandboxStatus: await projectSandboxStatus(ctx.db, project),
-        planningMode: await resolveProjectPlanningMode(ctx.db, project),
         hasUnread: await hasUnread(project),
         isAwaitingAnswer: awaitingAnswerIds.has(String(project._id)),
       })),
+    );
+  },
+});
+
+/** A project's tasks by display status (`projectTaskDisplayStatus`). */
+const displayStatusCountsValidator = v.object({
+  triage: v.number(),
+  working: v.number(),
+  blocked: v.number(),
+  idle: v.number(),
+  archived: v.number(),
+});
+
+/**
+ * Every live project of a repo with its derived status, in one call for the
+ * projects list (`projectStatus` over each project's task facts): its stage,
+ * task counts by display status, how many tasks need a person, and whether its
+ * coordinator's automatic turns are paused at the hourly cap (that needs a
+ * person too). Tasks in repos the caller cannot open still count.
+ */
+export const listStatusesForRepo = authQuery({
+  args: { repoId: v.id("githubRepos") },
+  returns: v.array(
+    v.object({
+      projectId: v.id("projects"),
+      stage: v.union(
+        v.literal("done"),
+        v.literal("in_progress"),
+        v.literal("todo"),
+      ),
+      counts: displayStatusCountsValidator,
+      needsYouCount: v.number(),
+      coordinatorPaused: v.boolean(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) return [];
+    const projects = await liveProjectsForRepo(ctx.db, args.repoId);
+    return await Promise.all(
+      projects.map(async (project) => {
+        const [facts, coordinatorPaused] = await Promise.all([
+          loadProjectTaskFacts(ctx.db, project),
+          isCoordinatorPaused(ctx.db, project._id),
+        ]);
+        const status = projectStatus([...facts.values()]);
+        return {
+          projectId: project._id,
+          stage: status.stage,
+          counts: status.counts,
+          needsYouCount: status.needsYou.length,
+          coordinatorPaused,
+        };
+      }),
     );
   },
 });

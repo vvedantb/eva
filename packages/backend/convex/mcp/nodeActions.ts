@@ -46,7 +46,11 @@ import {
   type ChatEntityKind,
 } from "../validators";
 import { mcpPullRequestValidator, type McpLinkedRepo } from "./queries";
-import { chatSourceArg, repoRefLabel } from "./toolShared";
+import {
+  chatSourceArg,
+  repoRefLabel,
+  type McpCredentials,
+} from "./toolShared";
 import {
   customerConvexOrigin,
   resolvePublicConvexCloudUrl,
@@ -750,7 +754,6 @@ const projectDocSchema = z.object({
   _creationTime: z.number(),
   numId: z.number().optional(),
   title: z.string(),
-  phase: z.string(),
   updatedAt: z.number().optional(),
   build: z.object({ state: z.enum(["scheduled", "running"]) }).optional(),
   model: z.string().optional(),
@@ -1159,11 +1162,14 @@ export const orchestratorGetAgentState = internalAction({
 
     if (kind === "project") {
       const project = projectDocSchema.parse(rawDoc);
+      const stage = await ctx.runQuery(internal.mcp.queries.projectStage, {
+        projectId: id,
+      });
       return {
         ...common,
         numId: project.numId,
         title: project.title,
-        status: project.phase,
+        status: stage ?? "todo",
         model: ownChat?.lastModel ?? ownedRead?.chatSeed.model,
         updatedAt: project.updatedAt ?? project._creationTime,
         deploymentUrl: undefined,
@@ -1515,8 +1521,8 @@ export const orchestratorStopAgent = internalAction({
       return { buildRunning: false };
     }
     // The app's chat Stop (`sessions.stopChatTurn`): a task's run and chat,
-    // a project's own chat. A project's running build is its own workflow and
-    // is reported back rather than cancelled (cancel_project_build owns that).
+    // a project's own chat. A legacy project build is its own workflow and is
+    // reported back rather than cancelled; it ends on its own.
     if (kind === "task") {
       await runAsUser("mutation", clerkUserId, "sessions:stopChatTurn", {
         target: { taskId: id },
@@ -1864,12 +1870,20 @@ export const handleMcpRequest = internalAction({
         const server = new McpServer(evaMcpServerInfo(process.env.WEB_APP_URL));
         // Register tools with credentials (including optional scoped repo /
         // session entity for browser tools).
-        const credentials = {
+        const owner =
+          entityId !== undefined || chatId !== undefined
+            ? await ctx.runQuery(
+                internal.mcp.projectQueries.resolveCallerOwner,
+                { entityKind, entityId, chatId },
+              )
+            : null;
+        const credentials: McpCredentials = {
           clerkUserId,
           scopedRepoId,
           entityId,
           entityKind,
           chatId,
+          ...(owner !== null ? { owner } : {}),
         };
         const user = await ctx.runQuery(internal.auth.getUserByClerkId, {
           clerkId: clerkUserId,

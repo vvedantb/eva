@@ -6,15 +6,15 @@ import {
   getProjectWithAccess,
   getSessionWithAccess,
   getTaskWithAccess,
-  hasRepoAccess,
 } from "../functions";
 import { isTaskRunning } from "../_agentTasks/runState";
 import { hasOpenChatTurn } from "../_chat/turnProjection";
 import {
-  getSessionChatOrThrow,
+  getSessionChatWithAccess,
   type SessionChatContext,
 } from "../_sessionChats/helpers";
 import { cancelTaskRun } from "../_taskWorkflow/publicMutations";
+import { findOpenAsk } from "../_projects/reports";
 import { cancelChatExecution } from "./execution";
 import {
   chatOwner,
@@ -41,15 +41,22 @@ import { requestSessionSandboxStop } from "./sandbox";
  */
 
 /**
- * Stops what holds one chat: the owner task's run when one runs, and the
- * chat's own turn. Each half is a no-op when idle. The caller checks access.
+ * Stops what holds one chat: the owner task's run when one runs, or a project
+ * task's wait for the answer to its ask (no run is open then; the stop
+ * closes the ask, rule 7 in `_projects/reports.ts`), and the chat's own turn.
+ * Each half is a no-op when idle. The caller checks access.
  */
 async function stopOwnerTurn(
   ctx: MutationCtx,
   task: Doc<"agentTasks"> | null,
   chat: SessionChatContext | null,
 ): Promise<void> {
-  if (task && isTaskRunning(task)) await cancelTaskRun(ctx, task);
+  if (
+    task &&
+    (isTaskRunning(task) || (await findOpenAsk(ctx.db, task._id)) !== null)
+  ) {
+    await cancelTaskRun(ctx, task);
+  }
   if (chat) await cancelChatExecution(ctx, chat, { holdQueue: true });
 }
 
@@ -89,11 +96,10 @@ export const stopChatTurn = authMutation({
   returns: v.null(),
   handler: async (ctx, { target }) => {
     if ("chatId" in target) {
-      const chat = await getSessionChatOrThrow(ctx.db, target.chatId);
-      if (!(await hasRepoAccess(ctx.db, chat.session.repoId, ctx.userId))) {
-        throw new Error("Not authorized");
-      }
-      await stopChat(ctx, chat);
+      await stopChat(
+        ctx,
+        await getSessionChatWithAccess(ctx.db, target.chatId, ctx.userId),
+      );
       return null;
     }
     await stopTask(

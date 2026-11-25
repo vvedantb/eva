@@ -28,7 +28,6 @@ type TaskStatus = Task["status"];
 
 interface QuickTasksKanbanBoardProps {
   tasks: Task[];
-  projectNames: Map<string, string>;
   isSelecting: boolean;
   selectedIds: Set<Id<"agentTasks">>;
   onToggleSelect: (
@@ -39,7 +38,6 @@ interface QuickTasksKanbanBoardProps {
 
 export function QuickTasksKanbanBoard({
   tasks: externalTasks,
-  projectNames,
   isSelecting,
   selectedIds,
   onToggleSelect,
@@ -49,13 +47,6 @@ export function QuickTasksKanbanBoard({
   const groupedCodebases = useQuery(api.githubRepos.listGroupedByCodebase);
   const users = useQuery(api.users.listAll);
   const projects = useQuery(api.projects.list, { repoId });
-  const projectNumIds = new Map(
-    (projects ?? []).flatMap((project) =>
-      project.numId === undefined
-        ? []
-        : [[project._id, project.numId] as const],
-    ),
-  );
   const updateStatus = useMutation(
     api.agentTasks.updateStatus,
   ).withOptimisticUpdate((localStore, args) => {
@@ -201,9 +192,6 @@ export function QuickTasksKanbanBoard({
             isAwaitingAnswer={task.isAwaitingAnswer}
             priority={task.priority}
             numId={task.numId}
-            projectNumId={
-              task.projectId ? projectNumIds.get(task.projectId) : undefined
-            }
             hasError={errorTaskIdSet.has(task._id)}
             deploymentStatus={deploymentStatusMap.get(task._id)}
             sandboxStatus={task.sandboxStatus}
@@ -211,9 +199,6 @@ export function QuickTasksKanbanBoard({
             tags={task.tags}
             createdByUser={users?.find((u) => u._id === task.createdBy)}
             createdAt={task.createdAt}
-            projectName={
-              task.projectId ? projectNames.get(task.projectId) : undefined
-            }
             href={
               entityPathSegment(task)
                 ? `${basePath}/quick-tasks/${entityPathSegment(task)}`
@@ -258,9 +243,6 @@ export function QuickTasksKanbanBoard({
             isAwaitingAnswer={task.isAwaitingAnswer}
             priority={task.priority}
             numId={task.numId}
-            projectNumId={
-              task.projectId ? projectNumIds.get(task.projectId) : undefined
-            }
             hasError={errorTaskIdSet.has(task._id)}
             deploymentStatus={deploymentStatusMap.get(task._id)}
             sandboxStatus={task.sandboxStatus}
@@ -268,9 +250,6 @@ export function QuickTasksKanbanBoard({
             tags={task.tags}
             createdByUser={users?.find((u) => u._id === task.createdBy)}
             createdAt={task.createdAt}
-            projectName={
-              task.projectId ? projectNames.get(task.projectId) : undefined
-            }
             groupedCodebases={groupedCodebases ?? undefined}
             isSelecting={isSelecting}
             isSelected={selectedIds.has(task._id)}

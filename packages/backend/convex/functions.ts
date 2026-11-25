@@ -19,16 +19,20 @@ import type { ActionCtx, MutationCtx } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { requireCurrentUserId } from "./_auth/currentUser";
 import { assertNotInMaintenance } from "./maintenance";
-import type { DataModel, Doc, Id } from "./_generated/dataModel";
+import type {
+  DataModel,
+  Doc,
+  Id,
+  TableNames,
+} from "./_generated/dataModel";
 import { scheduleProjectPrSync } from "./_projects/prSync";
 import { isEntityDeleted } from "./numId";
-import {
-  buildTaskBranchName,
-  resolveProjectBranchName,
-} from "./_git/branchNames";
+import { taskBranchName } from "./_git/branchNames";
 import { cancelTaskRunSchedule } from "./_agentTasks/runState";
-import { isProjectBuilding } from "./_projects/buildState";
-import { findOwnedSession, isTerminalProjectPhase } from "./_sessions/owner";
+import {
+  projectStatus,
+  type ProjectStage,
+} from "@eva/shared/projectStatus";
 import {
   allPullRequestsTerminal,
   findLivePullRequestOnBranch,
@@ -177,6 +181,30 @@ export async function hasTaskAccess(
   return false;
 }
 
+/**
+ * A project's live tasks the user may know of (no one else's drafts), each
+ * with whether the user can open it (`hasTaskAccess`: a task in a repo they
+ * cannot access is locked). The caller checks access to the project.
+ */
+export async function listProjectTasksForUser(
+  db: GenericDatabaseReader<DataModel>,
+  projectId: Id<"projects">,
+  userId: Id<"users">,
+): Promise<Array<{ task: Doc<"agentTasks">; canAccess: boolean }>> {
+  const tasks = (
+    await db
+      .query("agentTasks")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect()
+  ).filter((task) => !isEntityDeleted(task) && isTaskVisibleTo(task, userId));
+  return Promise.all(
+    tasks.map(async (task) => ({
+      task,
+      canAccess: await hasTaskAccess(db, task, userId),
+    })),
+  );
+}
+
 /** Loads a task and verifies access through its repository or project. */
 export async function getTaskWithAccess(
   db: GenericDatabaseReader<DataModel>,
@@ -245,38 +273,40 @@ export async function assertMessageParentAccess(
   throw new Error("Not authorized");
 }
 
-/** Patches a project's phase and fires PR sync for the transition. */
-async function applyPhaseTransition(
-  ctx: MutationCtx,
-  project: Doc<"projects">,
-  newPhase: Doc<"projects">["phase"],
-): Promise<void> {
-  const previousPhase = project.phase;
-  await ctx.db.patch(project._id, { phase: newPhase });
-  const updated = await ctx.db.get(project._id);
-  if (updated) {
-    await scheduleProjectPrSync(ctx, updated, previousPhase, newPhase);
-  }
-  // A completed / cancelled project retires its session, a reopened one
-  // revives it. Scheduled (this module stays a leaf), and only when the
-  // phase crosses that line and the project has a session to move.
-  if (
-    isTerminalProjectPhase(previousPhase) !==
-      isTerminalProjectPhase(newPhase) &&
-    (await findOwnedSession(ctx.db, {
-      kind: "project",
-      projectId: project._id,
-    })) !== null
-  ) {
-    await ctx.scheduler.runAfter(
-      0,
-      internal._sessions.ownedSession.syncProjectSessionLifecycle,
-      { projectId: project._id },
-    );
+/**
+ * `projects.phase` for a project with no tasks: what `recomputeProjectPhase`
+ * derives for it. The value a new project is inserted with.
+ */
+export const EMPTY_PROJECT_PHASE: Doc<"projects">["phase"] = "business_review";
+
+/**
+ * The stored phase for a derived project stage (`projectStatus`). Only older
+ * phone builds read it; nothing in the backend decides on it.
+ */
+function phaseForStage(stage: ProjectStage): Doc<"projects">["phase"] {
+  switch (stage) {
+    case "done":
+      return "completed";
+    case "in_progress":
+      return "in_progress";
+    case "todo":
+      return EMPTY_PROJECT_PHASE;
   }
 }
 
-/** Recalculates a project's delivery phase from child task statuses. */
+/**
+ * The one writer of `projects.phase` from task state, and the hook every
+ * child task status change, run end and child PR merge calls.
+ *
+ * It schedules the project's next ready tasks (`scheduleReadyTasks`, the
+ * real work), then writes a best-effort phase derived from the shared
+ * `projectStatus` so older phone builds that still read `phase` show
+ * something sensible. The phase is never a source of truth: no gate reads it
+ * (decision 19). Two legacy states are left alone: an old project still in
+ * its interview or spec with no tasks (`draft` / `finalized`), and an old
+ * project whose own PRs all merged or closed (`applyProjectPrEvent` set its
+ * final phase) until one of its tasks runs again.
+ */
 export async function recomputeProjectPhase(
   ctx: MutationCtx,
   projectId: Id<"projects">,
@@ -284,84 +314,55 @@ export async function recomputeProjectPhase(
   const db = ctx.db;
   const project = await db.get(projectId);
   if (!project) return;
-  if (
-    project.phase !== "in_progress" &&
-    project.phase !== "business_review" &&
-    project.phase !== "code_review" &&
-    project.phase !== "completed" &&
-    project.phase !== "finalized" &&
-    project.phase !== "cancelled"
-  ) {
-    return;
-  }
-
-  if (isProjectBuilding(project)) {
-    if (project.phase !== "in_progress") {
-      await applyPhaseTransition(ctx, project, "in_progress");
-    }
-    return;
-  }
-
-  // A merged / closed PR is final on GitHub, so the phase the PR webhook set
-  // is final too: only a new build (above) reopens it. A `completed` reached
-  // from "every task done" while a PR is still open is not — reopening a task
-  // moves the project back to review.
-  if (
-    (project.phase === "completed" || project.phase === "cancelled") &&
-    allPullRequestsTerminal(
-      await listOwnerPullRequests(db, { kind: "project", projectId }),
-    )
-  ) {
-    return;
-  }
-
-  const firstTaskWith = (status: Doc<"agentTasks">["status"]) =>
-    db
+  // Scheduled, as this module stays a leaf; idempotent, so a call with
+  // nothing new starts nothing.
+  await ctx.scheduler.runAfter(0, internal.buildWorkflow.scheduleReadyTasks, {
+    projectId,
+  });
+  const tasks = (
+    await db
       .query("agentTasks")
-      .withIndex("by_project_and_status", (q) =>
-        q.eq("projectId", projectId).eq("status", status),
-      )
-      .first();
-  const businessReviewTask = await firstTaskWith("business_review");
-  if (businessReviewTask) {
-    if (project.phase !== "business_review") {
-      await applyPhaseTransition(ctx, project, "business_review");
-    }
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect()
+  ).filter((task) => !isEntityDeleted(task));
+  if (
+    tasks.length === 0 &&
+    (project.phase === "draft" || project.phase === "finalized")
+  ) {
     return;
   }
-
-  const codeReviewTask = await firstTaskWith("code_review");
-  if (codeReviewTask) {
-    if (project.phase !== "code_review") {
-      await applyPhaseTransition(ctx, project, "code_review");
-    }
-    return;
+  const { stage } = projectStatus(
+    tasks.map((task) => ({
+      id: String(task._id),
+      status: task.status,
+      prState: task.prState,
+      // The stage reads status and PR state only.
+      approved: task.approvedAt !== undefined,
+      usageLimited: false,
+      runPending: false,
+    })),
+  );
+  if (
+    !tasks.some((task) => task.status === "in_progress") &&
+    (project.phase === "completed" || project.phase === "cancelled")
+  ) {
+    const projectPrs = await listOwnerPullRequests(db, {
+      kind: "project",
+      projectId,
+    });
+    if (projectPrs.length > 0 && allPullRequestsTerminal(projectPrs)) return;
   }
-
-  const [draft, cancelled, todo, inProgress, done] = await Promise.all([
-    firstTaskWith("draft"),
-    firstTaskWith("cancelled"),
-    firstTaskWith("todo"),
-    firstTaskWith("in_progress"),
-    firstTaskWith("done"),
-  ]);
-
-  if (!done && !draft && !cancelled) {
-    // Build-only phase: demote stale in_progress when no active build remains.
-    if (project.phase === "in_progress") {
-      await applyPhaseTransition(ctx, project, "business_review");
-    }
-    return;
-  }
-
-  // Completed means every task is done: unstarted or running tasks block it.
-  const allDone = done !== null && !draft && !cancelled && !todo && !inProgress;
-  if (allDone) {
-    await applyPhaseTransition(ctx, project, "completed");
+  const next = phaseForStage(stage);
+  if (next === project.phase) return;
+  await ctx.db.patch(project._id, { phase: next });
+  const updated = await ctx.db.get(project._id);
+  if (updated) {
+    // A legacy project PR follows the review phases (draft / ready).
+    await scheduleProjectPrSync(ctx, updated, project.phase, next);
   }
 }
 
-/** Fetches a project by ID, throwing if not found or the user lacks access. */
+/** Fetches a project by ID, throwing if not found or the user lacks repo access. */
 export async function getProjectWithAccess(
   db: GenericDatabaseReader<DataModel>,
   projectId: Id<"projects">,
@@ -407,6 +408,17 @@ export async function hasActiveRun(
   return (await getActiveTaskRun(db, taskId)) !== null;
 }
 
+/**
+ * A run of the task is queued, running, scheduled or waiting to retry: its
+ * run lifecycle is set (`agentTasks.run`) or an agent run is active.
+ */
+export async function taskRunPending(
+  db: GenericDatabaseReader<DataModel>,
+  task: Pick<Doc<"agentTasks">, "_id" | "run">,
+): Promise<boolean> {
+  return task.run !== undefined || (await hasActiveRun(db, task._id));
+}
+
 /** True when a later-started run exists on the same task (stale workflow completion). */
 export async function isSupersededTaskRun(
   db: GenericDatabaseReader<DataModel>,
@@ -435,28 +447,19 @@ export async function isSupersededTaskRun(
 export async function isFirstTaskOnBranch(
   db: GenericDatabaseReader<DataModel>,
   taskId: Id<"agentTasks">,
-  projectId?: Id<"projects">,
 ): Promise<boolean> {
-  if (projectId) {
-    const project = await db.get(projectId);
-    if (!project) return true;
-    const branch = resolveProjectBranchName(project._id, project);
-    return (
-      (await findLivePullRequestOnBranch(db, project.repoId, branch)) === null
-    );
-  }
   const task = await db.get(taskId);
   if (!task?.repoId) return true;
   return (
     (await findLivePullRequestOnBranch(
       db,
       task.repoId,
-      buildTaskBranchName(taskId),
+      taskBranchName(task),
     )) === null
   );
 }
 
-/** Deletes a task and all its related data (runs, dependencies, scheduled functions). */
+/** Deletes a task and all its related data (runs, activity, scheduled functions). */
 export async function deleteTaskRelatedData(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
@@ -469,20 +472,6 @@ export async function deleteTaskRelatedData(
     .collect();
   for (const run of runs) {
     await ctx.db.delete(run._id);
-  }
-  const dependencies = await ctx.db
-    .query("taskDependencies")
-    .withIndex("by_task", (q) => q.eq("taskId", taskId))
-    .collect();
-  for (const dep of dependencies) {
-    await ctx.db.delete(dep._id);
-  }
-  const dependents = await ctx.db
-    .query("taskDependencies")
-    .withIndex("by_dependency", (q) => q.eq("dependsOnId", taskId))
-    .collect();
-  for (const dep of dependents) {
-    await ctx.db.delete(dep._id);
   }
   const activityEvents = await ctx.db
     .query("taskActivity")
@@ -566,3 +555,18 @@ export const {
   resolveUserId: (ctx) => requireCurrentUserId(ctx),
   resolveActionUserId: (ctx) => resolveActionUserId(ctx),
 });
+
+/**
+ * A string id from outside Convex's validators (an MCP tool's argument),
+ * checked against its table. Throws `${what} not found` when it is not one.
+ */
+export function normalizeIdOrThrow<Table extends TableNames>(
+  db: GenericDatabaseReader<DataModel>,
+  table: Table,
+  id: string,
+  what: string,
+): Id<Table> {
+  const normalized = db.normalizeId(table, id);
+  if (normalized === null) throw new Error(`${what} not found`);
+  return normalized;
+}

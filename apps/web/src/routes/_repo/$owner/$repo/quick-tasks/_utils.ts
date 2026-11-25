@@ -16,7 +16,6 @@ import {
   quickTaskSortDirParser,
   quickTaskSortFieldParser,
   quickTaskTimeRangeParser,
-  quickTaskProjectParser,
   quickTaskUserParser,
   quickTaskAssigneeParser,
   quickTaskTagsParser,
@@ -56,7 +55,6 @@ export function useQuickTaskFilters(): [
 
   const [urlFilters, setUrlFilters] = useQueryStates({
     q: searchParser,
-    project: quickTaskProjectParser,
     user: quickTaskUserParser,
     assignee: quickTaskAssigneeParser,
     tags: quickTaskTagsParser,

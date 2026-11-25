@@ -1,5 +1,6 @@
 import { findPrimaryPullRequest } from "../_pullRequests/store";
-import { v } from "convex/values";
+import { internal } from "../_generated/api";
+import { ConvexError, v } from "convex/values";
 import {
   phaseValidator,
   priorityValidator,
@@ -7,18 +8,18 @@ import {
 } from "../validators";
 import {
   authMutation,
+  EMPTY_PROJECT_PHASE,
   hasRepoAccess,
   getProjectWithAccess,
-  softDeleteAgentTask,
+  taskRunPending,
 } from "../functions";
+import { listProjectTasks, taskLabel } from "./scheduler";
 import { allocateNumId } from "../numId";
 import {
   getProjectConversation,
   setProjectConversation,
   setProjectGeneratedSpec,
-  buildProjectBranchName,
 } from "./helpers";
-import { scheduleProjectPrSync } from "./prSync";
 import {
   mirrorOwnerIntoSession,
   syncProjectSession,
@@ -32,10 +33,14 @@ import {
 } from "../_userProviderAccounts/defaults";
 
 /**
- * Creates a new project. Defaults to `draft` phase with an initial conversation
- * message for the AI interview/plan flow. When `skipPlanning` is true, the
- * project goes straight to `business_review` as a plain tasks-only container —
- * no AI conversation, no generated spec, branch name set immediately.
+ * Creates a new project. It plans in its coordinator chat (decision 1): no
+ * interview, no spec, no project branch. `rawInput` becomes the description:
+ * the project context every coordinator and child task turn carries
+ * (`projectBriefBlock`), so the person need not repeat it. The client opens
+ * the coordinator chat;
+ * nothing is sent for them. `skipPlanning` stays accepted for older clients
+ * and is ignored: every project starts the same way, and nothing starts the
+ * old interview for it.
  */
 export const create = authMutation({
   args: {
@@ -44,6 +49,7 @@ export const create = authMutation({
     rawInput: v.string(),
     baseBranch: v.optional(v.string()),
     priority: v.optional(priorityValidator),
+    /** Ignored; kept for older clients. */
     skipPlanning: v.optional(v.boolean()),
     model: v.optional(aiModelValidator),
     providerAccountId: v.optional(
@@ -55,7 +61,6 @@ export const create = authMutation({
     if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId))) {
       throw new Error("Not authorized");
     }
-    const skipPlanning = args.skipPlanning ?? false;
     const numId = await allocateNumId(ctx.db, args.repoId, "projects");
     const repo = await ctx.db.get(args.repoId);
     const model = args.model ?? repo?.defaultModel;
@@ -67,36 +72,21 @@ export const create = authMutation({
             args.providerAccountId,
             ctx.userId,
           );
-    const projectId = await ctx.db.insert("projects", {
+    const description = args.rawInput.trim();
+    return await ctx.db.insert("projects", {
       repoId: args.repoId,
       userId: ctx.userId,
       title: args.title,
       rawInput: args.rawInput,
-      description: skipPlanning ? args.rawInput : undefined,
+      ...(description ? { description } : {}),
       baseBranch: args.baseBranch,
-      phase: skipPlanning ? "business_review" : "draft",
-      planningMode: skipPlanning ? "tasks_only" : "interview",
+      phase: EMPTY_PROJECT_PHASE,
       projectStartDate: Date.now(),
       priority: args.priority,
       numId,
       model,
       providerAccountId,
     });
-    if (skipPlanning) {
-      await ctx.db.patch(projectId, {
-        branchName: buildProjectBranchName(projectId),
-      });
-      await setProjectConversation(ctx.db, projectId, []);
-    } else {
-      await setProjectConversation(ctx.db, projectId, [
-        {
-          role: "user",
-          content: args.rawInput,
-          userId: ctx.userId,
-        },
-      ]);
-    }
-    return projectId;
   },
 });
 
@@ -108,13 +98,13 @@ export const update = authMutation({
     description: v.optional(v.string()),
     branchName: v.optional(v.string()),
     generatedSpec: v.optional(v.string()),
+    /** Ignored: the phase is derived. Kept for older clients. */
     phase: v.optional(phaseValidator),
     priority: v.optional(v.union(priorityValidator, v.null())),
     projectLead: v.optional(v.union(v.id("users"), v.null())),
     members: v.optional(v.array(v.id("users"))),
     projectStartDate: v.optional(v.number()),
     projectEndDate: v.optional(v.number()),
-    codeReviewer: v.optional(v.union(v.id("users"), v.null())),
     tags: v.optional(v.array(v.string())),
     model: v.optional(v.union(aiModelValidator, v.null())),
     // null = clear to team credentials. undefined = no change.
@@ -124,21 +114,27 @@ export const update = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const project = await getProjectWithAccess(ctx.db, args.id, ctx.userId);
+    const project = await getProjectWithAccess(
+      ctx.db,
+      args.id,
+      ctx.userId,
+    );
     // `id` must be omitted — leaving it in the rest-spread patches a stray
     // `id` field onto the document and breaks projects:list return validation.
+    // `phase` is derived (`recomputeProjectPhase`): an older client's write is
+    // ignored.
     const {
       id: _projectId,
+      phase: _phase,
       generatedSpec,
       projectLead,
       priority,
-      codeReviewer,
       model,
       providerAccountId,
-      phase,
       ...fields
     } = args;
     void _projectId;
+    void _phase;
     const updates: Record<
       string,
       string | number | boolean | Array<string> | undefined
@@ -149,8 +145,6 @@ export const update = authMutation({
     if (projectLead !== undefined)
       updates.projectLead = projectLead ?? undefined;
     if (priority !== undefined) updates.priority = priority ?? undefined;
-    if (codeReviewer !== undefined)
-      updates.codeReviewer = codeReviewer ?? undefined;
     if (model !== undefined) updates.model = model ?? undefined;
     let nextProviderAccountId = project.providerAccountId;
     if (providerAccountId !== undefined) {
@@ -180,17 +174,23 @@ export const update = authMutation({
       );
       updates.providerAccountId = nextProviderAccountId;
     }
-    if (phase !== undefined) updates.phase = phase;
     if (Object.keys(updates).length > 0) {
       await ctx.db.patch(args.id, updates);
     }
-    // The session mirrors the title and base branch, moves to an edited
-    // branch (the one branch writer), and follows the phase.
+    // A new account lifts a usage-limit hold: the scheduler goes on.
+    if (nextProviderAccountId !== project.providerAccountId) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.buildWorkflow.scheduleReadyTasks,
+        { projectId: args.id },
+      );
+    }
+    // The session mirrors the title and base branch, and moves to an edited
+    // branch (the one branch writer).
     const edited = await ctx.db.get(args.id);
     if (edited) {
       await mirrorOwnerIntoSession(ctx, { kind: "project", project: edited });
       await syncProjectSessionBranch(ctx, args.id);
-      await syncProjectSession(ctx, args.id);
     }
     if (args.title !== undefined && args.title !== project.title) {
       const primaryPr = await findPrimaryPullRequest(ctx.db, {
@@ -203,12 +203,6 @@ export const update = authMutation({
           prUrl: primaryPr.prUrl,
           title: args.title,
         });
-      }
-    }
-    if (phase !== undefined && phase !== project.phase) {
-      const updated = await ctx.db.get(args.id);
-      if (updated) {
-        await scheduleProjectPrSync(ctx, updated, project.phase, phase);
       }
     }
     if (generatedSpec !== undefined) {
@@ -245,32 +239,38 @@ export const addMessage = authMutation({
   },
 });
 
-/** Soft-deletes a project (row retained; hidden from lists and direct URLs). */
+/**
+ * Soft-deletes a project (row retained; hidden from lists and direct URLs).
+ * Refused while a child task runs. Its child tasks stay as quick tasks, with
+ * their sessions, branches and PRs: they leave the project and lose what
+ * only a project task has (number, phase label, approval, coordinator
+ * retries).
+ */
 export const remove = authMutation({
   args: { id: v.id("projects") },
   returns: v.null(),
   handler: async (ctx, args) => {
     await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    await ctx.db.patch(args.id, { deletedAt: Date.now() });
-    await syncProjectSession(ctx, args.id);
-    return null;
-  },
-});
-
-/** Soft-deletes a project and all its tasks. */
-export const deleteCascade = authMutation({
-  args: { id: v.id("projects") },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.id, ctx.userId);
-    const tasks = await ctx.db
-      .query("agentTasks")
-      .withIndex("by_project", (q) => q.eq("projectId", args.id))
-      .collect();
+    const tasks = await listProjectTasks(ctx.db, args.id);
     for (const task of tasks) {
-      await softDeleteAgentTask(ctx, task._id);
+      if (task.status === "in_progress" || (await taskRunPending(ctx.db, task))) {
+        throw new ConvexError(
+          `Task ${taskLabel(task)} is running. Stop it or wait for it to end, then delete the project.`,
+        );
+      }
     }
-    await ctx.db.patch(args.id, { deletedAt: Date.now() });
+    const now = Date.now();
+    for (const task of tasks) {
+      await ctx.db.patch(task._id, {
+        projectId: undefined,
+        taskNumber: undefined,
+        phaseLabel: undefined,
+        approvedAt: undefined,
+        coordinatorRetries: undefined,
+        updatedAt: now,
+      });
+    }
+    await ctx.db.patch(args.id, { deletedAt: now });
     await syncProjectSession(ctx, args.id);
     return null;
   },

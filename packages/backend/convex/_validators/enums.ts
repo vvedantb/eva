@@ -256,6 +256,13 @@ export const roleUserValidator = v.union(
 );
 export type RoleUser = Infer<typeof roleUserValidator>;
 
+/**
+ * Where a task came from, when that changes how it shows or runs. Absent: a
+ * person or an agent made it. `feedback`: stored on project tasks filed with
+ * the old Feedback form; nothing writes it now. Add new origins to this union.
+ */
+export const taskOriginValidator = v.union(v.literal("feedback"));
+
 export const snapshotScheduleValidator = v.string();
 
 export const snapshotBuildStatusValidator = v.union(
