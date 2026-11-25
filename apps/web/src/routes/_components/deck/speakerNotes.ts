@@ -697,7 +697,9 @@ Now, the models kept improving this year, but the problems stayed the same.`,
 → Now I can work on several things at the same time and keep going wider: Eva, CarePulse, and these four side projects, which is a huge productivity gain.
 And I've learned a lot about how to stay on top of it from people on X, and from Krzys.
 And I keep experimenting with it: my last few presentations, this one included, were all built with AI.
-That's honestly raised the quality, cos animations I'd never have had time to hand-build, I can now just prompt for, and that's the kind of thing I enjoy doing too.
+That's honestly raised the quality, cos animations I'd never have had time to hand-build, I can now just prompt for.
+And they've been well received: people said they understood what I was showing, they liked how it was presented, and the animations helped get the point across.
+So that's the kind of thing I enjoy doing too.
 → I enjoy coding, but I think I enjoy product building and solving problems through it even more now, and AI's let me push that side to the max.
 I still pick which ideas actually ship, that's what the parked slide was about, but the list doesn't have to shrink any more.
 Hopefully that shows through all of this work.
