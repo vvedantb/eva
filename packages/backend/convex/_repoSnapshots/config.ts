@@ -56,7 +56,6 @@ export const getRepoSnapshot = authQuery({
       _id: v.id("repoSnapshots"),
       _creationTime: v.number(),
       repoId: v.id("githubRepos"),
-      snapshotName: v.optional(v.string()),
       schedule: snapshotScheduleValidator,
       enabled: v.optional(v.boolean()),
       cronJobId: v.optional(v.string()),
