@@ -254,10 +254,17 @@ describe("who starts project tasks", () => {
       expect(triaged.approvedAt).toBeUndefined();
       expect(projectTaskDisplayStatus(await factsOf(f, triageId))).toBe("triage");
 
-      // A person approves it from Triage: it starts.
+      // A person approves it from Triage: it goes to the coordinator, and
+      // only the coordinator starts it.
       await f.asUser.mutation(api.buildWorkflow.approveProjectTasks, {
         projectId: f.projectId,
         taskIds: [triageId],
+      });
+      await schedule(f);
+      expect((await taskDoc(f, triageId)).status).toBe("todo");
+      await f.t.mutation(internal.buildWorkflow.startTaskAsCoordinator, {
+        projectId: f.projectId,
+        taskId: triageId,
       });
       expect((await taskDoc(f, triageId)).status).toBe("in_progress");
     },
@@ -571,3 +578,118 @@ test(
   },
   TIMEOUT_MS,
 );
+
+describe("approved Triage goes to the coordinator", () => {
+  /** A Triage item: a person's task nobody approved yet. */
+  const triageItem = (f: Fixture, title: string) =>
+    f.asUser.mutation(api.agentTasks.createQuickTask, {
+      repoId: f.repoId,
+      projectId: f.projectId,
+      title,
+      approved: false,
+    });
+
+  const wakes = (f: Fixture) =>
+    f.t.run((ctx) => ctx.db.query("projectCoordinatorWakes").collect());
+
+  test(
+    "approval hands the items over with one wake-up and starts nothing",
+    async () => {
+      const f = await fixture(0);
+      const a = await triageItem(f, "Promo box is hard to find");
+      const b = await triageItem(f, "Rename Basket to Cart");
+      await f.asUser.mutation(api.buildWorkflow.approveProjectTasks, {
+        projectId: f.projectId,
+        taskIds: [a, b],
+      });
+      await schedule(f);
+      expect(await statuses(f, [a, b])).toEqual(["todo", "todo"]);
+      const handed = await taskDoc(f, a);
+      expect(handed.approvedAt).toBeDefined();
+      expect(handed.handedToCoordinatorAt).toBeDefined();
+      const facts = await factsOf(f, a);
+      expect(facts.withCoordinator).toBe(true);
+      expect(projectTaskDisplayStatus(facts)).toBe("idle");
+      // It left Triage: nothing waits for a person's approval any more.
+      expect(projectTaskNeedsYou(facts)).toBeUndefined();
+      const rows = await wakes(f);
+      expect(rows.map((row) => row.reason)).toEqual(["triage"]);
+      expect(rows[0]?.text).toContain("Promo box is hard to find");
+      expect(rows[0]?.text).toContain("Rename Basket to Cart");
+
+      // Approving again changes nothing and wakes no one.
+      await f.asUser.mutation(api.buildWorkflow.approveProjectTasks, {
+        projectId: f.projectId,
+        taskIds: [a, b],
+      });
+      expect(await wakes(f)).toHaveLength(1);
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "merge_task_into closes the item as added to an open task, and refuses bad targets",
+    async () => {
+      const f = await fixture(1);
+      const open = f.tasks[0];
+      if (open === undefined) throw new Error("fixture task missing");
+      const item = await triageItem(f, "Copy fix");
+      const other = await triageItem(f, "Another fix");
+      await f.asUser.mutation(api.buildWorkflow.approveProjectTasks, {
+        projectId: f.projectId,
+        taskIds: [item, other],
+      });
+      const merge = (taskId: Id<"agentTasks">, intoTaskId: Id<"agentTasks">) =>
+        f.t.mutation(internal.buildWorkflow.mergeTaskIntoAsCoordinator, {
+          projectId: f.projectId,
+          taskId,
+          intoTaskId,
+        });
+
+      // Not into itself, not into a finished task.
+      await expect(merge(item, item)).rejects.toThrow("into itself");
+      await f.t.run((ctx) => ctx.db.patch(open, { status: "done" }));
+      await expect(merge(item, open)).rejects.toThrow("finished");
+      await f.t.run((ctx) => ctx.db.patch(open, { status: "in_progress" }));
+
+      expect(await merge(item, open)).toEqual({ intoTaskNumber: 1 });
+      const merged = await taskDoc(f, item);
+      expect(merged.status).toBe("cancelled");
+      expect(merged.mergedIntoTaskId).toBe(open);
+      expect(merged.handedToCoordinatorAt).toBeUndefined();
+      // A merged item cannot be merged or started again.
+      await expect(merge(item, open)).rejects.toThrow("not started");
+      // Nor into a merged (cancelled) item.
+      await expect(merge(other, item)).rejects.toThrow("finished");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "the coordinator's tools refuse a task of another project",
+    async () => {
+      const f = await fixture(0);
+      const otherProject = await f.t.run((ctx) =>
+        ctx.db.insert("projects", {
+          repoId: f.repoId,
+          userId: f.userId,
+          title: "Other",
+          rawInput: "Other",
+          numId: 2,
+        }),
+      );
+      const item = await triageItem(f, "Copy fix");
+      await f.asUser.mutation(api.buildWorkflow.approveProjectTasks, {
+        projectId: f.projectId,
+        taskIds: [item],
+      });
+      await expect(
+        f.t.mutation(internal.buildWorkflow.startTaskAsCoordinator, {
+          projectId: otherProject,
+          taskId: item,
+        }),
+      ).rejects.toThrow("not part of this project");
+    },
+    TIMEOUT_MS,
+  );
+});

@@ -72,9 +72,10 @@ function PreviewWake() {
   const targetMissing = target === null;
   const sandboxStatus = target?.status;
 
-  /* eslint-disable no-effect/no-event-handler --
+  /* eslint-disable no-effect/no-event-handler, no-effect/no-external-store-subscription --
      Page-level handshake like /preview-auth: the trigger is landing on the
-     route (plus sign-in settling), not a click. One run per attempt. */
+     route (plus sign-in settling), not a click. One run per attempt;
+     `attempt` is the local retry counter, not an external store. */
   useEffect(() => {
     if (!isLoaded || !isSignedIn || !targetLoaded) return;
     if (targetMissing) {
@@ -196,7 +197,7 @@ function PreviewWake() {
     getPreviewUrl,
     convex,
   ]);
-  /* eslint-enable no-effect/no-event-handler */
+  /* eslint-enable no-effect/no-event-handler, no-effect/no-external-store-subscription */
 
   if (isLoaded && !isSignedIn) {
     return (

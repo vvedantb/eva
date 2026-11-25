@@ -83,6 +83,26 @@ export async function findOpenTurn(
     .first();
 }
 
+/**
+ * The entity's latest no-lane turn: the open one, else the last closed one.
+ * Follow-up rows (alerts, retries, continuations) read it to find their thread.
+ */
+export async function findLatestTurn(
+  ctx: QueryCtx,
+  entityId: TurnEntityId,
+): Promise<Doc<"turns"> | null> {
+  return (
+    (await findOpenTurn(ctx, entityId)) ??
+    (await ctx.db
+      .query("turns")
+      .withIndex("by_entity_open", (q) =>
+        q.eq("entityId", entityId).eq("lane", undefined).eq("open", false),
+      )
+      .order("desc")
+      .first())
+  );
+}
+
 export async function findOpenSessionTurn(
   ctx: QueryCtx,
   sessionId: Id<"sessions">,
@@ -94,6 +114,8 @@ type OpenTurnFields = {
   streamingEntityId: string;
   /** Chat turns only: runs and one-shot agents have no placeholder message. */
   placeholderMessageId?: Id<"messages">;
+  /** Chat turns only: the thread root this turn answers in. */
+  replyTo?: Id<"messages">;
   prompt?: string;
   attachmentStorageIds?: Id<"_storage">[];
   model: Doc<"turns">["model"];
@@ -136,6 +158,7 @@ export async function openTurn(
     }),
     leaseGeneration: 0,
     placeholderMessageId: params.placeholderMessageId,
+    replyTo: params.replyTo,
     prompt: params.prompt,
     attachmentStorageIds: params.attachmentStorageIds,
     model: params.model,

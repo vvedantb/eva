@@ -189,7 +189,7 @@ export function dataMentionItems(
  * and each kind gets a different hover card.
  */
 export function mergeMentionItems(
-  peopleItems: MentionItem<Id<"users">>[],
+  peopleItems: ReadonlyArray<MentionItem>,
   dataItems: MentionItem[],
 ): { items: MentionItem[]; peopleIds: ReadonlySet<string> } {
   const items: MentionItem[] = [...peopleItems, ...dataItems].sort((a, b) => a.label.localeCompare(b.label));

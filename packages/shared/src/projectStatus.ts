@@ -23,6 +23,12 @@ export interface ProjectTaskFacts extends TaskStageFacts {
    */
   approved: boolean;
   /**
+   * A person's Triage approval handed the task to the coordinator
+   * (`agentTasks.handedToCoordinatorAt`) and it has not started: only the
+   * coordinator starts it (or adds it to an open task), never the scheduler.
+   */
+  withCoordinator?: boolean;
+  /**
    * The latest run ended and nothing restarts it by itself: it failed, or a
    * person cancelled it. A usage-limit stop is `usageLimited` instead.
    */
@@ -218,7 +224,8 @@ export function projectStatus(
 
 /**
  * The tasks the scheduler starts now, in `taskNumber` order: every approved
- * `todo` task with no run pending and not halted. No cap on how many run at
+ * `todo` task with no run pending and not halted, except the ones a Triage
+ * approval handed to the coordinator (it starts those itself). No cap on how many run at
  * once (add one only when usage shows a need). Nothing starts while the
  * project's account is at its usage limit.
  */
@@ -229,6 +236,7 @@ export function tasksToStart(tasks: readonly ProjectTaskFacts[]): string[] {
       (task) =>
         task.status === "todo" &&
         task.approved &&
+        task.withCoordinator !== true &&
         task.halted === undefined &&
         !task.runPending,
     )

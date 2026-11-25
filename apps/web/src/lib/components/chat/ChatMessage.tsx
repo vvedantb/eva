@@ -47,8 +47,10 @@ import { SystemAlertMessage } from "@/lib/components/SystemAlertMessage";
 import { UserMessageAttachments } from "@/lib/components/chat/imageAttachments";
 import { ChangedFilesCard } from "@/lib/components/chat/ChangedFilesCard";
 import { EvaIcon } from "@/lib/components/EvaIcon";
+import { EvaTypingLine } from "@/lib/components/chat/TypingIndicator";
 import {
   IconGitFork,
+  IconMessages,
   IconLink,
   IconPlayerStop,
 } from "@tabler/icons-react";
@@ -70,6 +72,8 @@ import { ChatUiPanelTabs } from "@/lib/components/chat/generativeUi/ChatUiPanelT
 import { ScopeCheckChip } from "@/lib/components/chat/_components/ScopeCheckChip";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { TurnErrorNotice } from "@/lib/components/chat/TurnErrorNotice";
+import { ThreadSummary } from "@/lib/components/chat/replies/ThreadSummary";
+import { MessageToolbar } from "@/lib/components/chat/_components/MessageToolbar";
 
 const EVA_ICON = <EvaIcon />;
 
@@ -192,6 +196,12 @@ interface ChatMessageProps {
    */
   onFork?: (messageId: string) => void;
   /**
+   * Reply threads (the coordinator chat): opens this message's thread. Adds
+   * the Reply action and, once it has replies, the "N replies" row under it.
+   * Takes the id so one stable handler serves every row, like `onFork`.
+   */
+  onReply?: (messageId: string) => void;
+  /**
    * Re-sends the turn's prompt. Undefined while a turn is executing or the chat
    * is read-only, which is what hides the Retry action on a failed turn.
    */
@@ -256,6 +266,7 @@ export const ChatMessage = memo(function ChatMessage({
   citeHighlight = false,
   linkHighlight = false,
   onFork,
+  onReply,
   onRetryTurn,
   precedingUser,
   belowContent,
@@ -287,8 +298,43 @@ export const ChatMessage = memo(function ChatMessage({
   const userActions = [
     turnState.isStreamingPlaceholder ? undefined : buildLinkAction(message._id),
     buildForkAction(onFork, message._id),
+    turnState.isStreamingPlaceholder
+      ? undefined
+      : buildReplyAction(onReply, message._id),
   ].filter((action): action is ChatMessageActionItem => action !== undefined);
   const rowActions = [...userActions, ...checkpoint.items];
+  // The coordinator chat swaps the footer row for a floating toolbar and
+  // keeps "N replies" on its own line under the bubble (projects v2, PR D).
+  const toolbarMode = assistantBubble;
+  const toolbar =
+    toolbarMode && !turnState.isStreamingPlaceholder ? (
+      <MessageToolbar
+        onReply={onReply ? () => onReply(message._id) : undefined}
+        copyText={copyPlain}
+        menuItems={rowActions.filter((action) => action.key !== "reply")}
+        rating={
+          message.role === "assistant" && canRate
+            ? {
+                messageId: message._id,
+                sentiment: feedbackSentiment,
+                comment: feedbackComment,
+              }
+            : undefined
+        }
+      />
+    ) : null;
+  const threadControl =
+    onReply && (message.replyCount ?? 0) > 0 ? (
+      <ThreadSummary
+        replyCount={message.replyCount ?? 0}
+        replierIds={message.replierIds ?? []}
+        onOpen={() => onReply(message._id)}
+      />
+    ) : null;
+  // Under the bubble: "N replies", in the coordinator chat (no footer row
+  // there) or wherever the footer row is hidden.
+  const underLine =
+    threadControl && (toolbarMode || !showTurnMeta) ? threadControl : null;
 
   return (
     <>
@@ -319,9 +365,11 @@ export const ChatMessage = memo(function ChatMessage({
                 isHandoffBoundary={isHandoffBoundary}
                 belowContent={belowContent}
                 artifacts={artifacts}
-                showTurnMeta={showTurnMeta}
+                showTurnMeta={showTurnMeta && !toolbarMode}
                 copyPlain={copyPlain}
                 userActions={userActions}
+                threadControl={threadControl}
+                toolbar={toolbar}
               />
             ) : (
               <AssistantTurn
@@ -329,7 +377,7 @@ export const ChatMessage = memo(function ChatMessage({
                 turnState={turnState}
                 isLatestAssistantTurn={isLatestAssistantTurn}
                 showChangedFiles={showChangedFiles}
-                showTurnMeta={showTurnMeta}
+                showTurnMeta={showTurnMeta && !toolbarMode}
                 showScopeCheck={showScopeCheck}
                 bubble={assistantBubble}
                 joinsNext={joinsNext}
@@ -351,12 +399,27 @@ export const ChatMessage = memo(function ChatMessage({
                 artifacts={artifacts}
                 copyPlain={copyPlain}
                 rowActions={rowActions}
+                threadControl={threadControl}
+                toolbar={toolbar}
                 canRate={canRate}
                 feedbackSentiment={feedbackSentiment}
                 feedbackComment={feedbackComment}
               />
             )}
           </AIMessage>
+          {underLine ? (
+            // Under the bubble: "N replies" (see `underLine`).
+            <div
+              className={cn(
+                "mt-1 flex flex-wrap items-center gap-2",
+                message.role === "user" && !isOtherUser
+                  ? "justify-end"
+                  : "justify-start pl-6",
+              )}
+            >
+              {underLine}
+            </div>
+          ) : null}
         </m.div>
       </ChatMessageContextMenu>
       {checkpoint.dialogs}
@@ -379,6 +442,20 @@ function buildForkAction(
         label: "Fork from here",
         icon: <IconGitFork className="size-4" />,
         onClick: () => onFork(messageId),
+      }
+    : undefined;
+}
+
+function buildReplyAction(
+  onReply: ChatMessageProps["onReply"],
+  messageId: ChatBodyMessage["_id"],
+): ChatMessageActionItem | undefined {
+  return onReply
+    ? {
+        key: "reply",
+        label: "Reply in thread",
+        icon: <IconMessages className="size-4" />,
+        onClick: () => onReply(messageId),
       }
     : undefined;
 }
@@ -406,7 +483,13 @@ function UserTurn({
   showTurnMeta,
   copyPlain,
   userActions,
+  threadControl,
+  toolbar,
 }: {
+  /** "N replies", always visible in the footer row. */
+  threadControl: ReactNode;
+  /** The coordinator chat's floating toolbar, on the bubble's top-right. */
+  toolbar?: ReactNode;
   joinsNext: boolean;
   message: ChatBodyMessage;
   repo?: ChatRepo;
@@ -464,6 +547,7 @@ function UserTurn({
         isOtherUser={isOtherUser}
         joinsNext={joinsNext}
         isMcpProvenance={isOrchestratorNotification || sentViaMcp}
+        toolbar={toolbar}
       />
       {isHandoffBoundary && message.model !== undefined ? (
         <HandoffModelChip
@@ -483,6 +567,7 @@ function UserTurn({
           copyPlain={copyPlain}
           actions={userActions}
           timestamp={message.timestamp}
+          threadControl={threadControl}
           className={isOtherUser ? "pl-6" : undefined}
         />
       ) : null}
@@ -496,17 +581,20 @@ function UserTurnBubble({
   isOtherUser,
   joinsNext,
   isMcpProvenance,
+  toolbar,
 }: {
   message: ChatBodyMessage;
   repo?: ChatRepo;
   isOtherUser: boolean;
   joinsNext: boolean;
   isMcpProvenance: boolean;
+  /** The coordinator chat's floating toolbar, on the bubble's top-right. */
+  toolbar?: ReactNode;
 }) {
   // min-w-0 stops the default `min-width: auto` on this flex item from letting
   // one unbreakable token (a JWT, a long URL) stretch the bubble past the
   // message column.
-  return (
+  const bubble = (
     <div className="flex min-w-0 max-w-full items-end gap-2">
       {isOtherUser ? (
         <div className="size-4 shrink-0">
@@ -530,6 +618,35 @@ function UserTurnBubble({
       >
         <UserMessageBody message={message} repo={repo} />
       </MessageContent>
+    </div>
+  );
+  return toolbar ? (
+    <BubbleWithToolbar toolbar={toolbar} timestamp={message.timestamp}>
+      {bubble}
+    </BubbleWithToolbar>
+  ) : (
+    bubble
+  );
+}
+
+/**
+ * The coordinator chat's bubble frame: the floating toolbar sits on its
+ * top-right corner, and the clock time is the bubble's tooltip (the footer
+ * row that showed it is gone there).
+ */
+function BubbleWithToolbar({
+  toolbar,
+  timestamp,
+  children,
+}: {
+  toolbar: ReactNode;
+  timestamp: number;
+  children: ReactNode;
+}) {
+  return (
+    <div className="relative min-w-0 max-w-full" title={formatClockTime(timestamp)}>
+      {children}
+      {toolbar}
     </div>
   );
 }
@@ -561,6 +678,10 @@ interface AssistantTurnProps {
   artifacts?: ReactNode;
   copyPlain?: string;
   rowActions: ChatMessageActionItem[];
+  /** "N replies", always visible in the footer row. */
+  threadControl: ReactNode;
+  /** The coordinator chat's floating toolbar, on the bubble's top-right. */
+  toolbar?: ReactNode;
   canRate: boolean;
   feedbackSentiment?: FeedbackSentiment;
   feedbackComment?: string;
@@ -593,6 +714,8 @@ function AssistantTurn({
   artifacts,
   copyPlain,
   rowActions,
+  threadControl,
+  toolbar,
   canRate,
   feedbackSentiment,
   feedbackComment,
@@ -615,6 +738,7 @@ function AssistantTurn({
       <AssistantTurnContent
         bubble={bubble}
         joinsNext={joinsNext}
+        toolbar={toolbar}
         message={message}
         turnState={turnState}
         isLatestAssistantTurn={isLatestAssistantTurn}
@@ -667,6 +791,7 @@ function AssistantTurn({
             turnCredentialSourceLabel={turnCredentialSourceLabel}
             copyPlain={copyPlain}
             rowActions={rowActions}
+            threadControl={threadControl}
             canRate={canRate && !turnState.isStreamingPlaceholder}
             feedbackSentiment={feedbackSentiment}
             feedbackComment={feedbackComment}
@@ -718,6 +843,7 @@ function AssistantTurnContent({
   panelTabs,
   bubble,
   joinsNext,
+  toolbar,
 }: Omit<
   AssistantTurnProps,
   | "showTurnMeta"
@@ -728,6 +854,7 @@ function AssistantTurnContent({
   | "artifacts"
   | "copyPlain"
   | "rowActions"
+  | "threadControl"
   | "canRate"
   | "feedbackSentiment"
   | "feedbackComment"
@@ -779,7 +906,14 @@ function AssistantTurnContent({
       )}
       style={bubble ? { borderRadius: sideBubbleRadius(joinsNext) } : undefined}
     >
-      {isStreamingPlaceholder ? (
+      {isStreamingPlaceholder && bubble ? (
+        // The coordinator chats like a person: dots while it works, the steps
+        // only on the finished message. A blocking question still shows.
+        <>
+          <EvaTypingLine />
+          <AssistantQuestionCards steps={streamingQuestionSteps} />
+        </>
+      ) : isStreamingPlaceholder ? (
         <>
           <StreamingActivityDisplay
             activity={streamingActivity}
@@ -848,7 +982,13 @@ function AssistantTurnContent({
       <div className="size-4 shrink-0">
         {joinsNext ? null : <EvaIcon size={16} disc={false} />}
       </div>
-      {content}
+      {toolbar ? (
+        <BubbleWithToolbar toolbar={toolbar} timestamp={message.timestamp}>
+          {content}
+        </BubbleWithToolbar>
+      ) : (
+        content
+      )}
     </div>
   ) : (
     content
@@ -946,6 +1086,7 @@ function AssistantTurnMeta({
   turnCredentialSourceLabel,
   copyPlain,
   rowActions,
+  threadControl,
   canRate,
   feedbackSentiment,
   feedbackComment,
@@ -956,47 +1097,54 @@ function AssistantTurnMeta({
   turnCredentialSourceLabel?: string;
   copyPlain?: string;
   rowActions: ChatMessageActionItem[];
+  /** "N replies": always visible, while the rest of the row reveals on hover. */
+  threadControl: ReactNode;
   /** False while the reply still streams: nothing to rate yet. */
   canRate: boolean;
   feedbackSentiment?: FeedbackSentiment;
   feedbackComment?: string;
 }) {
-  if (!(turnModel || copyPlain || rowActions.length > 0)) return null;
+  if (!(turnModel || copyPlain || rowActions.length > 0 || threadControl)) {
+    return null;
+  }
   return (
-    <div className="reveal-on-hover transition-opacity mt-0.5 flex items-center gap-2">
-      {turnModel ? (
-        <MessageModelIcon
-          model={turnModel}
-          reasoningLevel={turnReasoningLevel}
-          credentialSourceLabel={turnCredentialSourceLabel}
-        />
-      ) : null}
-      {copyPlain || rowActions.length > 0 ? (
-        <>
-          <ChatMessageActions
-            copyText={copyPlain}
-            actions={rowActions}
-            className="ml-0.5"
-            revealOnHover={false}
+    <div className="mt-0.5 flex items-center gap-2">
+      {threadControl}
+      <div className="reveal-on-hover transition-opacity flex items-center gap-2">
+        {turnModel ? (
+          <MessageModelIcon
+            model={turnModel}
+            reasoningLevel={turnReasoningLevel}
+            credentialSourceLabel={turnCredentialSourceLabel}
           />
-          {canRate ? (
-            <TurnFeedbackActions
-              messageId={message._id}
-              sentiment={feedbackSentiment}
-              comment={feedbackComment}
+        ) : null}
+        {copyPlain || rowActions.length > 0 ? (
+          <>
+            <ChatMessageActions
+              copyText={copyPlain}
+              actions={rowActions}
+              className="ml-0.5"
+              revealOnHover={false}
             />
-          ) : null}
-          {message.finishedAt && message.timestamp ? (
-            <span className="text-2xs tabular-nums text-muted-foreground/60">
-              {/* The turn's clock time is when Eva finished, not
-                  when it started — the duration next to it already
-                  says how long the reply took. */}
-              {formatClockTime(message.finishedAt)} ·{" "}
-              {formatDuration(message.timestamp, message.finishedAt)}
-            </span>
-          ) : null}
-        </>
-      ) : null}
+            {canRate ? (
+              <TurnFeedbackActions
+                messageId={message._id}
+                sentiment={feedbackSentiment}
+                comment={feedbackComment}
+              />
+            ) : null}
+            {message.finishedAt && message.timestamp ? (
+              <span className="text-2xs tabular-nums text-muted-foreground/60">
+                {/* The turn's clock time is when Eva finished, not
+                    when it started — the duration next to it already
+                    says how long the reply took. */}
+                {formatClockTime(message.finishedAt)} ·{" "}
+                {formatDuration(message.timestamp, message.finishedAt)}
+              </span>
+            ) : null}
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -1054,34 +1202,40 @@ function UserMessageMeta({
   copyPlain,
   actions = [],
   timestamp,
+  threadControl,
   className,
 }: {
   align: "start" | "end";
   copyPlain?: string;
   actions?: ChatMessageActionItem[];
   timestamp?: number;
+  /** "N replies": always visible, while the rest of the row reveals on hover. */
+  threadControl?: ReactNode;
   className?: string;
 }) {
   return (
     <div
       className={cn(
-        "reveal-on-hover transition-opacity flex items-center gap-3",
+        "flex items-center gap-3",
         align === "start" ? "justify-start" : "justify-end",
         className,
       )}
     >
-      {copyPlain || actions.length > 0 ? (
-        <ChatMessageActions
-          copyText={copyPlain}
-          actions={actions}
-          revealOnHover={false}
-        />
-      ) : null}
-      {timestamp ? (
-        <span className="text-2xs text-muted-foreground/60">
-          {formatClockTime(timestamp)}
-        </span>
-      ) : null}
+      {threadControl}
+      <div className="reveal-on-hover transition-opacity flex items-center gap-3">
+        {copyPlain || actions.length > 0 ? (
+          <ChatMessageActions
+            copyText={copyPlain}
+            actions={actions}
+            revealOnHover={false}
+          />
+        ) : null}
+        {timestamp ? (
+          <span className="text-2xs text-muted-foreground/60">
+            {formatClockTime(timestamp)}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }

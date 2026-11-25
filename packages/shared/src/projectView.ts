@@ -73,23 +73,15 @@ export const NEEDS_YOU_LABELS: Record<NeedsYouReason, string> = {
 /** A task that asked its coordinator a question and waits for the answer. */
 export const WAITING_FOR_COORDINATOR_LABEL = "Waiting for coordinator";
 
+/** An approved Triage item the coordinator has not placed yet. */
+export const WITH_COORDINATOR_LABEL = "With Eva";
+
 /**
  * The delete confirm's note: `projects.remove` keeps a project's child tasks
  * as quick tasks (it refuses while one runs, and says so).
  */
 export function projectDeleteNote(count: number): string {
   return `${count === 1 ? "Its" : "Their"} tasks stay as quick tasks.`;
-}
-
-/** The project's coordinator hit its hourly cap of automatic turns. */
-export const COORDINATOR_PAUSED_LABEL = "Coordinator paused";
-
-/**
- * The coordinator chat's one-line notice while the hourly cap holds its
- * wake-ups back. A person's message releases them, so the line asks for one.
- */
-export function coordinatorPausedTitle(maxAutoTurnsPerHour: number): string {
-  return `${COORDINATOR_PAUSED_LABEL} after ${maxAutoTurnsPerHour} automatic turns this hour. Send a message to continue.`;
 }
 
 /** The fields of an `agentTasks.listByProject` row the status rules read. */
@@ -99,6 +91,8 @@ export interface ProjectTaskRow {
   status: Doc<"agentTasks">["status"];
   prState?: Doc<"agentTasks">["prState"];
   approvedAt?: number;
+  /** A Triage approval handed it to the coordinator (`withCoordinator`). */
+  handedToCoordinatorAt?: number;
   run?: Doc<"agentTasks">["run"];
   coordinatorRetries?: number;
   /** A task in a repo the caller cannot access: only status fields are set. */
@@ -128,6 +122,8 @@ export function projectTaskFactsFromRow(
     status: row.status,
     prState: row.prState,
     approved: row.locked === true || row.approvedAt !== undefined,
+    withCoordinator:
+      row.status === "todo" && row.handedToCoordinatorAt !== undefined,
     halted: failed && !runPending ? "failed" : undefined,
     usageLimited: false,
     runPending,
@@ -159,6 +155,7 @@ export function projectTaskView(
     displayStatus: projectTaskDisplayStatus(facts),
     needsYou: projectTaskNeedsYou(facts),
     waitingForCoordinator: projectTaskWaitsForCoordinator(facts),
+    withCoordinator: facts.withCoordinator === true,
   };
 }
 
@@ -167,6 +164,8 @@ export interface ProjectTaskView {
   displayStatus: ProjectTaskDisplayStatus;
   needsYou: NeedsYouReason | undefined;
   waitingForCoordinator: boolean;
+  /** Handed to the coordinator by a Triage approval; not started yet. */
+  withCoordinator?: boolean;
 }
 
 /** What `listTaskReports` returns for one report or ask. */
@@ -205,25 +204,22 @@ export function projectTaskNotesByTask(
 
 /**
  * What the projects list reads for each project (`listStatusesForRepo`):
- * the derived stage and task counts by display status, how many tasks need a
- * person, and whether the coordinator is paused at its hourly cap.
+ * the derived stage and task counts by display status, and how many tasks
+ * need a person.
  */
 export interface ProjectListStatus {
   stage: ProjectStage;
   counts: ProjectStatus["counts"];
   needsYouCount: number;
-  coordinatorPaused: boolean;
 }
 
 /**
  * Why a project on the list needs a person, in a few words, or undefined
- * when it does not. A paused coordinator comes first: nothing moves until a
- * person writes to it.
+ * when it does not.
  */
 export function projectListNeedsYouLabel(
   status: ProjectListStatus,
 ): string | undefined {
-  if (status.coordinatorPaused) return COORDINATOR_PAUSED_LABEL;
   if (status.needsYouCount === 0) return undefined;
   return status.needsYouCount === 1
     ? "1 task needs you"
@@ -276,6 +272,8 @@ export interface SummarizableProjectTaskRow {
   phaseLabel?: string;
   prUrl?: string;
   prState?: Doc<"agentTasks">["prState"];
+  /** The open task the coordinator added this Triage item to. */
+  mergedIntoTaskId?: string;
 }
 
 /** "#9003" from a GitHub PR URL, else the URL's last path part. */
@@ -289,7 +287,12 @@ export function prShortLabel(prUrl: string): string {
 function projectTaskReason(
   row: SummarizableProjectTaskRow,
   view: ProjectTaskView,
-  facts: { ask: string | undefined; failed: boolean; authorName: string | undefined },
+  facts: {
+    ask: string | undefined;
+    failed: boolean;
+    authorName: string | undefined;
+    mergedIntoNumId: number | undefined;
+  },
 ): string {
   switch (view.displayStatus) {
     case "triage":
@@ -301,9 +304,15 @@ function projectTaskReason(
         ? WAITING_FOR_COORDINATOR_LABEL
         : PROJECT_TASK_DISPLAY_STATUS_LABELS.working;
     case "idle":
-      return "Waiting for a free slot";
+      return view.withCoordinator === true
+        ? WITH_COORDINATOR_LABEL
+        : "Waiting for a free slot";
     case "archived":
-      if (row.status === "cancelled") return "Cancelled";
+      if (row.status === "cancelled") {
+        return facts.mergedIntoNumId !== undefined
+          ? `Added to #${facts.mergedIntoNumId}`
+          : "Cancelled";
+      }
       return row.prState === "merged" ? "Merged" : "Done";
     case "blocked":
       break;
@@ -334,6 +343,8 @@ export function projectTaskSummaryLine(
     authorName: string | undefined;
     /** Set only when the task's repo differs from the project's home repo. */
     otherRepoLabel: string | undefined;
+    /** The task number of a task, by id: names a merged item's target. */
+    numIdOf?: (taskId: string) => number | undefined;
   },
 ): string {
   const reports = extra.notes?.reports.length ?? 0;
@@ -343,6 +354,10 @@ export function projectTaskSummaryLine(
       ask: extra.notes?.ask,
       failed: extra.failed,
       authorName: extra.authorName,
+      mergedIntoNumId:
+        row.mergedIntoTaskId !== undefined
+          ? extra.numIdOf?.(row.mergedIntoTaskId)
+          : undefined,
     }),
     extra.otherRepoLabel,
     row.phaseLabel,

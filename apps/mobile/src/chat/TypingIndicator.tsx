@@ -44,3 +44,17 @@ export function TypingIndicator({ users }: { users: readonly TypingUser[] }) {
     </View>
   );
 }
+
+/** The coordinator's live turn in its bubble, as the web `EvaTypingLine`: "Eva is typing…" in muted 12. */
+export function EvaTypingText() {
+  const theme = EVA_THEME[useScheme()];
+  return (
+    <Text
+      accessibilityLiveRegion="polite"
+      className="font-instrument-sans"
+      style={{ fontSize: 12, lineHeight: 16, color: theme.mutedForeground }}
+    >
+      Eva is typing…
+    </Text>
+  );
+}

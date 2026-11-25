@@ -343,6 +343,11 @@ export const turnFields = {
   error: v.optional(v.string()),
   workflowId: v.optional(v.string()),
   placeholderMessageId: v.optional(v.id("messages")),
+  /**
+   * The thread root a chat turn answers in (a reply that @mentioned Eva).
+   * Its retries, alerts and continuations join the same thread.
+   */
+  replyTo: v.optional(v.id("messages")),
   prompt: v.optional(v.string()),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   model: aiModelValidator,
@@ -669,6 +674,18 @@ export const agentTaskFields = {
    * Absent on quick tasks and on project tasks waiting in Triage.
    */
   approvedAt: v.optional(v.number()),
+  /**
+   * When a person's Triage approval handed this task to the coordinator
+   * (v2 PR C). While set, the scheduler never starts the task: the
+   * coordinator starts it (`start_task`) or adds it to an open task
+   * (`merge_task_into`). Cleared when the coordinator starts it.
+   */
+  handedToCoordinatorAt: v.optional(v.number()),
+  /**
+   * The open task the coordinator added this Triage item to
+   * (`merge_task_into`). The item itself is cancelled ("Added to #N").
+   */
+  mergedIntoTaskId: v.optional(v.id("agentTasks")),
   /** Restarts the coordinator spent on this failed task (at most 1). */
   coordinatorRetries: v.optional(v.number()),
   /**
@@ -1438,6 +1455,15 @@ export const messageFields = {
   // what the prompt asked for. Needs beforeSha/afterSha, so it follows the same
   // three chat surfaces; task runs never checkpoint and so never carry one.
   scopeCheck: v.optional(scopeCheckValidator),
+  // Reply threads (coordinator chat): a reply carries its root message's id.
+  // Replies stay in the chat's rows (same `parentId`) so turns, recaps and
+  // watchdogs see them, but the transcript reads only rows without `replyTo`.
+  replyTo: v.optional(v.id("messages")),
+  // Root rows: how many replies, when the last one landed, and up to
+  // `MAX_THREAD_REPLIERS` most recent distinct repliers (the avatars under it).
+  replyCount: v.optional(v.number()),
+  lastReplyAt: v.optional(v.number()),
+  replierIds: v.optional(v.array(v.id("users"))),
 };
 
 /**
@@ -1522,6 +1548,9 @@ export const queuedMessageFields = {
   // over and waits for its ack. A turn that ends first sends it as the next
   // queued turn (the row sits at the front). See `_chat/steer.ts`.
   steer: v.optional(v.union(v.literal("requested"), v.literal("delivering"))),
+  // A reply that @mentioned Eva in a thread: the reply row is already stored,
+  // so the dequeue skips the user row, and Eva's answer joins this thread.
+  replyTo: v.optional(v.id("messages")),
 };
 
 export const taskSandboxEventFields = {
@@ -2243,8 +2272,7 @@ export const projectTaskBatchFields = {
 
 /**
  * One reason to wake a project's coordinator (decision 16). `key` makes a
- * request idempotent; `sentAt` marks it delivered in a turn; `heldAt` marks a
- * request the hourly cap held back (it waits for a person).
+ * request idempotent; `sentAt` marks it delivered in a turn.
  */
 export const projectCoordinatorWakeFields = {
   projectId: v.id("projects"),
@@ -2252,12 +2280,14 @@ export const projectCoordinatorWakeFields = {
     v.literal("ask"),
     v.literal("failed"),
     v.literal("batch_done"),
+    v.literal("triage"),
   ),
   key: v.string(),
   /** One line for the coordinator's wake-up message. */
   text: v.string(),
   createdAt: v.number(),
   sentAt: v.optional(v.number()),
+  /** Legacy: the removed hourly cap. `clearCoordinatorWakeHeldAt` clears it; drop it after that runs. */
   heldAt: v.optional(v.number()),
 };
 

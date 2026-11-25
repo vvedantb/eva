@@ -3,6 +3,7 @@ import { formatClockTime } from "@eva/shared/dayLabel";
 import { formatDuration } from "@eva/shared/duration";
 import { MessageActionsBar, MessageMeta } from "@vvedantb/native-ui/ai";
 import { ProviderIcon } from "@vvedantb/native-ui/brand";
+import type { ReactNode } from "react";
 import { View } from "react-native";
 
 export type Sentiment = "positive" | "negative";
@@ -19,6 +20,7 @@ export function MessageFooter({
   finishedAt,
   turn,
   className,
+  leading,
 }: {
   at: number;
   finishedAt?: number;
@@ -26,10 +28,13 @@ export function MessageFooter({
   turn?: { model?: string; reasoningLevel?: string; credentialSourceLabel?: string };
   /** Extra classes for the row, such as a teammate's inset. */
   className?: string;
+  /** First in the row: a coordinator message's "N replies". */
+  leading?: ReactNode;
 }) {
   const meta = finishedAt ? `${formatClockTime(finishedAt)} · ${formatDuration(at, finishedAt)}` : formatClockTime(at);
   return (
     <MessageActionsBar className={`gap-1.5 ${className ?? ""}`}>
+      {leading}
       {turn?.model ? <ModelIcon {...turn} model={turn.model} /> : null}
       <MessageMeta>{meta}</MessageMeta>
     </MessageActionsBar>

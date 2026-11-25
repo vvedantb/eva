@@ -29,7 +29,10 @@ const queuedMessageValidator = v.object({
   ...queuedMessageFields,
 });
 
-/** Lists queued messages for a parent entity, ordered by run order. */
+/**
+ * Lists queued messages for a parent entity, ordered by run order. Queued
+ * thread replies are left out: they answer in their thread, not the chat.
+ */
 export const listByParent = authQuery({
   args: { parentId: parentIdValidator },
   returns: v.array(queuedMessageValidator),
@@ -44,7 +47,9 @@ export const listByParent = authQuery({
     }
     return await ctx.db
       .query("queuedMessages")
-      .withIndex("by_parent_and_order", (q) => q.eq("parentId", parentId))
+      .withIndex("by_parent_and_reply_to_and_order", (q) =>
+        q.eq("parentId", parentId).eq("replyTo", undefined),
+      )
       .order("asc")
       .collect();
   },

@@ -32,6 +32,10 @@ interface ProjectDetailSandboxContentProps {
   chatTurnOpen: boolean | undefined;
   sandboxRailWidthPx: number;
   expandRightSignal: number;
+  /** Opens a reply thread in the rail's Replies tab (and expands the rail). */
+  onThreadOpen: (messageId: string) => void;
+  /** ✕ on the Replies tab: back to the tab before it. */
+  onCloseThread: () => void;
   openFile: (path: string) => void;
   openDiffs: (repoRelativePath?: string) => void;
   openAgentsTab: () => void;
@@ -48,6 +52,8 @@ export function ProjectDetailSandboxContent({
   chatTurnOpen,
   sandboxRailWidthPx,
   expandRightSignal,
+  onThreadOpen,
+  onCloseThread,
   openFile,
   openDiffs,
   openAgentsTab,
@@ -97,6 +103,7 @@ export function ProjectDetailSandboxContent({
       }
       collapsed={collapsed}
       onToggle={onToggle}
+      onCloseThread={onCloseThread}
     />
   );
 
@@ -124,6 +131,7 @@ export function ProjectDetailSandboxContent({
           onOpenFile={openFile}
           onViewDiff={openDiffs}
           onOpenAgentsTab={openAgentsTab}
+          onThreadOpen={onThreadOpen}
           onSandboxToggle={(action) => {
             if (action === "start") void handleStartSandbox();
             else void handleStopSandbox();

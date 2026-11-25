@@ -70,6 +70,7 @@ interface DataMenuItem {
 
 export function ComposerInputChrome({
   repo,
+  mentionEva,
   mentionRef,
   skillItems,
   plusDataItems,
@@ -91,6 +92,8 @@ export function ComposerInputChrome({
   onDraftChange,
 }: {
   repo?: ChatRepo;
+  /** A project coordinator chat: `@Eva` is in the mention picker. */
+  mentionEva?: boolean;
   mentionRef: RefObject<MentionTextareaHandle | null>;
   skillItems: SlashItem[];
   plusDataItems: DataMenuItem[];
@@ -281,6 +284,7 @@ export function ComposerInputChrome({
               key="composer-editor"
               ref={mentionRef}
               repo={repo}
+              mentionEva={mentionEva}
               skillItems={skillItems}
               placeholder={placeholder}
               initialMentionMap={seedMentionMap}

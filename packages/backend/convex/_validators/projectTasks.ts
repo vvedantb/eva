@@ -16,6 +16,7 @@ export const projectTaskFactsValidator = v.object({
   status: taskStatusValidator,
   prState: v.optional(prStateValidator),
   approved: v.boolean(),
+  withCoordinator: v.optional(v.boolean()),
   halted: v.optional(v.union(v.literal("failed"), v.literal("cancelled"))),
   usageLimited: v.boolean(),
   runPending: v.boolean(),

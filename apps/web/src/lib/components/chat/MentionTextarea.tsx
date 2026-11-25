@@ -30,6 +30,7 @@ import {
   type ComposerPredictionTarget,
 } from "@/lib/hooks/useComposerPrediction";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import { EVA_MENTION_ID, EVA_MENTION_ITEM } from "@eva/shared";
 
 export type MentionTextareaHandle = MentionEditorHandle;
 
@@ -77,6 +78,11 @@ interface MentionTextareaProps {
    * subscribing the whole composer to each keystroke.
    */
   onDraftChange?: (value: string) => void;
+  /**
+   * A project coordinator chat: `@Eva` joins the people in the picker, so a
+   * message can say who it is for (`chatMessageRoute`).
+   */
+  mentionEva?: boolean;
   className?: string;
 }
 
@@ -92,6 +98,7 @@ export const MentionTextarea = forwardRef<
     initialSkillMap,
     history,
     enableAttachmentPaste,
+    mentionEva = false,
     completionContext,
     predictionTarget,
     onBlockedSubmit,
@@ -104,7 +111,8 @@ export const MentionTextarea = forwardRef<
   const controller = usePromptInputController();
   const attachments = usePromptInputAttachments();
   const value = controller.textInput.value;
-  const peopleItems = usePeopleMentionItems(repo?.id);
+  const teammates = usePeopleMentionItems(repo?.id);
+  const peopleItems = mentionEva ? [EVA_MENTION_ITEM, ...teammates] : teammates;
   const dataItems = useDataMentionItems(repo?.id);
   const { items, peopleIds } = mergeMentionItems(peopleItems, dataItems);
   const navigateToData = useDataMentionNavigate(repo?.basePath ?? "", repo?.id);
@@ -206,7 +214,8 @@ export const MentionTextarea = forwardRef<
       initialMentionMap={initialMentionMap}
       initialSkillMap={initialSkillMap}
       renderMentionChipHoverCard={(id) =>
-        peopleIds.has(id) ? (
+        // `@Eva` names no account: no profile card.
+        id === EVA_MENTION_ID ? null : peopleIds.has(id) ? (
           <UserProfileHoverCardBody userId={id} />
         ) : repo ? (
           <DataMentionHoverCardBody entityId={id} repoId={repo.id} />
