@@ -3,18 +3,20 @@
 import { cn } from "@eva/ui";
 import type { FeedbackSentiment } from "@eva/shared/chatFeedback";
 import {
+  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  MessageAction,
   toast,
 } from "@vvedantb/ui";
 import { IconCopy, IconDots, IconMessages } from "@tabler/icons-react";
 import { TurnFeedbackActions } from "@/lib/components/chat/feedback/TurnFeedbackActions";
 import type { ChatMessageActionItem } from "@/lib/components/chat/ChatMessageActions";
 
-const BUTTON_CLASS =
-  "flex size-7 items-center justify-center rounded-control text-muted-foreground transition-colors hover:bg-accent-soft hover:text-foreground";
+/** As `TurnFeedbackActions`' 👍 👎, which sit beside these buttons. */
+const BUTTON_CLASS = "hit-target text-muted-foreground hover:text-foreground";
 
 /**
  * The coordinator chat's message toolbar (Teams / Amp style): a small card on
@@ -66,21 +68,20 @@ export function MessageToolbar({
         </>
       ) : null}
       {onReply ? (
-        <button
-          type="button"
-          aria-label="Reply in thread"
-          title="Reply in thread"
+        <MessageAction
+          tooltip="Reply in thread"
+          size="icon-xs"
           onClick={onReply}
           className={BUTTON_CLASS}
         >
           <IconMessages className="size-4" />
-        </button>
+        </MessageAction>
       ) : null}
       {copyText ? (
-        <button
-          type="button"
-          aria-label="Copy message"
-          title="Copy"
+        <MessageAction
+          tooltip="Copy"
+          label="Copy message"
+          size="icon-xs"
           onClick={() =>
             void navigator.clipboard.writeText(copyText).then(
               () => toast.success("Copied"),
@@ -90,31 +91,31 @@ export function MessageToolbar({
           className={BUTTON_CLASS}
         >
           <IconCopy className="size-4" />
-        </button>
+        </MessageAction>
       ) : null}
       {directItems.map((item) => (
-        <button
+        <MessageAction
           key={item.key}
-          type="button"
-          aria-label={item.label}
-          title={item.label}
+          tooltip={item.label}
+          size="icon-xs"
           disabled={item.disabled}
           onClick={item.onClick}
           className={BUTTON_CLASS}
         >
           {item.icon}
-        </button>
+        </MessageAction>
       ))}
       {hasMenu ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="icon-xs"
               aria-label="More actions"
               className={cn(BUTTON_CLASS, "data-[state=open]:bg-accent-soft")}
             >
               <IconDots className="size-4" />
-            </button>
+            </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {menuItems.map((item) => (

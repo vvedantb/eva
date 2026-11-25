@@ -25,6 +25,7 @@ export function ThreadTurnStatus({
       className="mx-auto flex w-[calc(100%-1.5rem)] min-w-0 items-center gap-1.5 pb-1.5 text-xs text-muted-foreground"
     >
       <span className="shrink-0">{threadTurnStatusText(hasQuestion)}</span>
+      {/* design-check-ignore-next-line — an inline text link inside a status line; Button would add control padding */}
       <button
         type="button"
         onClick={onOpen}

@@ -18,6 +18,7 @@ export function ThreadSummary({
   onOpen: () => void;
 }) {
   return (
+    // design-check-ignore-next-line — avatars and a count in one pill; Button would force control height
     <button
       type="button"
       onClick={onOpen}
