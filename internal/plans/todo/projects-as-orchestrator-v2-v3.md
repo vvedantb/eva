@@ -13,6 +13,7 @@ This file is separate from the v1 plan because the v1 plan moves to `internal/pl
 - **Multi-repo, the rest.** v1 lets each child task target any repo the acting user can access. Left for v2: one task that edits several repos in one sandbox; the coordinator reading extra repos in its own sandbox; adopting sessions that are in a group or have linked repos; detecting that a merged change is deployed.
 
 - **Adopt a session into a project** (moved from v1 on 19 November 2026). Includes "promote a session to a new project" from session 422. Known blockers: `sessions.owner` is written once; the branch name and the PR are tied to the session id; sessions in a group or with linked repos.
+- **Approved Triage items go to the coordinator** (added 25 November 2026). Today "Approve" starts each Triage task alone, so 100 small items mean 100 sandboxes. Instead, approval hands the items to the coordinator, which groups them by area and routes them to open tasks (the rules it already follows for pasted feedback).
 - **Comments that do not wake the coordinator** (moved from v1 on 19 November 2026). Build it together with the message routing check above.
 
 ## v3

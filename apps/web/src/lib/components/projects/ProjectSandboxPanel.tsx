@@ -19,7 +19,6 @@ import { useSandboxFileList } from "@/lib/components/sandbox/useSandboxFileList"
 import { withBrowserTab } from "@/lib/components/sandbox/withBrowserTab";
 import { SandboxPanelFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
 import { useSubagentRoster } from "@/lib/components/sandbox/useSubagentRoster";
-import { FilesPanel } from "@/routes/_repo/$owner/$repo/sessions/FilesPanel";
 import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { SimpleViewSandboxRedirect } from "@/lib/components/sandbox/SimpleViewSandboxRedirect";
@@ -40,6 +39,15 @@ import { useProjectDocuments } from "./useProjectDocuments";
 import { ProjectTasksPanel } from "./ProjectTasksPanel";
 import { isProjectSandboxTab, type ProjectSandboxTab } from "./projectSandboxTabs";
 import { useProjectTaskStatus } from "./useProjectStatus";
+
+/** Sandbox tabs a task's sandbox has but the coordinator's does not. */
+const COORDINATOR_HIDDEN_TABS: ReadonlySet<string> = new Set([
+  "preview",
+  "browser",
+  "review",
+  "computer",
+  "files",
+]);
 
 interface ProjectSandboxPanelProps {
   projectId: Id<"projects">;
@@ -102,10 +110,12 @@ export function ProjectSandboxPanel({
   const viewState = useQuery(api.sandboxPanes.getViewState, { owner });
   const releaseBrowserLock = useMutation(api.sandboxPanes.releaseBrowserLock);
 
-  // The coordinator runs no dev server, so it has no Preview: an old
-  // `/sandbox/preview` link lands on Tasks.
-  const activeTab: ProjectSandboxTab =
-    sandboxTab === "preview" ? "tasks" : sandboxTab;
+  // The coordinator only reads code and delegates: no dev server, no edits,
+  // so no Preview, Browser, Review, Computer or Files. An old link to one of
+  // those lands on Tasks; a task's own sandbox keeps them all.
+  const activeTab: ProjectSandboxTab = COORDINATOR_HIDDEN_TABS.has(sandboxTab)
+    ? "tasks"
+    : sandboxTab;
   const projectDocuments = useProjectDocuments(projectId, repoId);
   const { status: taskStatus } = useProjectTaskStatus(projectId, repoId);
   const triageCount = taskStatus?.counts.triage ?? 0;
@@ -168,7 +178,7 @@ export function ProjectSandboxPanel({
   };
 
   const enabledTabs = withBrowserTab(panes.enabledTabs).filter(
-    (tab) => tab !== "preview",
+    (tab) => !COORDINATOR_HIDDEN_TABS.has(tab),
   );
   const { owner: ownerParam, repo: repoParam } = useParams({ strict: false });
 
@@ -198,7 +208,6 @@ export function ProjectSandboxPanel({
             newPreviewDisabled={panes.newPreviewDisabled}
             enabledTabs={enabledTabs}
             leadingTabs={[tasksTab]}
-            showFilesTab
             showAgentsTab={hasAgents}
             hasRunningAgents={hasRunningAgents}
             artifactCount={artifactCount}
@@ -241,19 +250,6 @@ export function ProjectSandboxPanel({
             <SessionDocumentsPanel
               source={artifactSource}
               project={projectDocuments}
-            />
-          </div>
-          <div
-            className={
-              !simpleView && activeTab === "files" ? "h-full min-h-0" : "hidden"
-            }
-          >
-            <FilesPanel
-              sandboxId={sandboxId}
-              repoId={repoId}
-              isActive={isActive}
-              fileList={fileList}
-              wake={{ onStartSandbox, isSandboxStarting }}
             />
           </div>
           <div
