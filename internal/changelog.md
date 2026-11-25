@@ -6,6 +6,8 @@ Date: 2026-11-25
 
 `buildEditPrompt` takes `followUp`. When an earlier assistant turn in the chat finished and there is no model handoff (`hasDeliveredTurn`), the turn sends the message, branch and commit guard rails, linked repos, custom and repo instructions only. The dev server, preview, browser, recording, runtime, chat log and style sections ride the first turn and stay in the resumed provider session. Measured with the default runtime facts: 12,734 → 705 characters per follow-up (about 3,180 → 175 tokens). After 20 turns the repeated instructions in history drop from about 254,700 to 26,100 characters. `prependModelHandoffContext` now takes the detected handoff, so the history is read once.
 
+Claude chats also get Eva's static chat rules (`CHAT_STATIC_INSTRUCTIONS`: browser, recordings, chat log, panels, reply length, style, visual rules) as the launch-time system prompt (`chatSystemPrompt`), passed by `prewarmSessionDaemon`. Then `buildEditPrompt({ staticInSystemPrompt })` leaves them out of every message, and a fresh provider session still has them. Codex, Cursor and OpenCode prepend `SYSTEM_PROMPT` to each turn, so they keep the first-turn path. The daemon options signature carries a hash of the system prompt, so a daemon started with other text respawns. Claude first turn: 14,175 → 6,033 characters in the message, plus 8,140 cached system-prompt characters. Readable repos go back after the repo system prompt (fixes `readableReposPrompt.test.ts`).
+
 ## Text generation: gpt-5-nano → gpt-6-luna
 
 Date: 2026-11-25

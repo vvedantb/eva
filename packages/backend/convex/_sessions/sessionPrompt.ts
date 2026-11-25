@@ -2,7 +2,7 @@ import type { QueryCtx } from "../_generated/server";
 import type { Doc } from "../_generated/dataModel";
 import { entityVisible } from "../numId";
 import { resolveSessionBaseBranch } from "./baseBranch";
-import { buildEditPrompt } from "./prompts";
+import { buildEditPrompt, chatSystemPrompt } from "./prompts";
 import { resolveMessageTokens } from "../_mentions/resolveMessageTokens";
 import { bareHarnessCommandPrompt } from "../_mentions/bareHarnessCommand";
 import { resolveExperimentalFlags } from "../_auth/experimentalFlags";
@@ -281,6 +281,7 @@ export async function buildSessionPrompt(
     readableRepos,
     linkedRepos,
     followUp,
+    staticInSystemPrompt: chatSystemPrompt(args.model) !== undefined,
     runtime: {
       ownerKey: sandboxOwnerKey({ kind: "session", sessionId: session._id }),
       prUrl: owner.prUrl,
