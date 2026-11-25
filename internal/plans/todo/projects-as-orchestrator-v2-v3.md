@@ -6,6 +6,11 @@
 
 This file is separate from the v1 plan because the v1 plan moves to `internal/plans/implemented/` when it is done. These items must stay in `todo`.
 
+## v1 follow-ups (separate PRs, before v2)
+
+- **PR 2: Inbox.** One place for "Needs you" (questions, PRs to review, Triage, failed tasks) and "Updates" (today's notifications), across projects, quick tasks and sessions. Mockup agreed 24 November 2026.
+- **PR 3: Legacy cleanup.** Delete the old project interview and plan tabs and their code, after `migrations:convertProjects` has run on production.
+
 ## v2
 
 - **Goal with a progress chart.** A project has a stated goal. A chart shows launched, in progress and todo work over time. Reference: the goal and 30-day chart in Amp Spaces (Amp docs, "Spaces", read 19 November 2026).
