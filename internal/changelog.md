@@ -1,5 +1,11 @@
 # Changelog
 
+## Projects: old project PRs become threads
+
+Date: 2026-11-25
+
+`migrations:convertLegacyProjectThreads` (dry run first) finishes the move from the old one-PR projects. A project whose old PR is still open or draft gets one thread, "Earlier work (PR #n)", that takes over the old branch (`agentTasks.branchName`) and the `pullRequests` row (owner moves from the project to the task, so a merge marks the thread done); its old review tasks with no PR of their own are cancelled and listed in the thread's description. A merged old PR marks those tasks done, a closed one cancels them. The coordinator moves to a fresh project branch (`branchVersion` + 1, `syncProjectSessionBranch`) in every case. Draft and todo tasks stay in Triage.
+
 ## Inbox: a project task needs review only with its own open PR
 
 Date: 2026-11-25
