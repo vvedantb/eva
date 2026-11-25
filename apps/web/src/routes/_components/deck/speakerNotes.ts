@@ -702,6 +702,9 @@ And they've been well received: people said they understood what I was showing, 
 So that's the kind of thing I enjoy doing too.
 → I enjoy coding, but I think I enjoy product building and solving problems through it even more now, and AI's let me push that side to the max.
 I still pick which ideas actually ship, that's what the parked slide was about, but the list doesn't have to shrink any more.
+I know "10x engineer" is just a saying for a really productive engineer, but compared to last year, it honestly feels like I've become that.
+Things that used to take me weeks now take days, and I'm putting out far more than I could before.
+So I definitely love AI, and I can't imagine going back.
 Hopefully that shows through all of this work.
 So here's how all of it maps to the framework: senior engineer, mapped.`,
 
