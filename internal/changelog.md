@@ -1,5 +1,11 @@
 # Changelog
 
+## Session follow-ups send only the guard rails
+
+Date: 2026-11-25
+
+`buildEditPrompt` takes `followUp`. When an earlier assistant turn in the chat finished and there is no model handoff (`hasDeliveredTurn`), the turn sends the message, branch and commit guard rails, linked repos, custom and repo instructions only. The dev server, preview, browser, recording, runtime, chat log and style sections ride the first turn and stay in the resumed provider session. Measured with the default runtime facts: 12,734 → 705 characters per follow-up (about 3,180 → 175 tokens). After 20 turns the repeated instructions in history drop from about 254,700 to 26,100 characters. `prependModelHandoffContext` now takes the detected handoff, so the history is read once.
+
 ## Text generation: gpt-5-nano → gpt-6-luna
 
 Date: 2026-11-25

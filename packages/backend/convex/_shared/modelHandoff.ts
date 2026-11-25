@@ -311,20 +311,33 @@ export async function maybeInsertModelHandoffAlert(
   });
 }
 
+/**
+ * Whether an earlier turn of this chat already reached the agent: some
+ * assistant reply before the current user row finished with content. Then the
+ * provider's resumed session already holds that turn's full instructions.
+ */
+export function hasDeliveredTurn(
+  messages: ReadonlyArray<HandoffMessage>,
+): boolean {
+  const currentIndex = currentUserIndex(messages);
+  if (currentIndex < 0) return false;
+  return messages
+    .slice(0, currentIndex)
+    .some(
+      (message) =>
+        message.role === "assistant" &&
+        message.finishedAt !== undefined &&
+        eligibleTranscriptMessage(message),
+    );
+}
+
 /** Prepends the catch-up block to an agent prompt, when this turn is a handoff. */
 export async function prependModelHandoffContext(
   ctx: QueryCtx,
   parentId: HandoffParentId,
-  incomingModel: string,
-  fallbackPreviousProvider: AIProvider | undefined,
+  handoff: ModelHandoff,
   prompt: string,
 ): Promise<string> {
-  const handoff = await detectModelHandoff(
-    ctx,
-    parentId,
-    incomingModel,
-    fallbackPreviousProvider,
-  );
   if (handoff.kind !== "handoff") return prompt;
   // The incoming provider's own session has not seen this chat: give it the
   // Log too, so agreed decisions survive the switch.

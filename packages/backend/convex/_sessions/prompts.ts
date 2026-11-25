@@ -130,6 +130,7 @@ export function buildEditPrompt({
   planContent = "",
   readableRepos = [],
   linkedRepos = [],
+  followUp = false,
   runtime,
 }: {
   repo: { owner: string; name: string; baseBranch?: string };
@@ -142,6 +143,11 @@ export function buildEditPrompt({
   planContent?: string;
   readableRepos?: ReadonlyArray<{ owner: string; name: string }>;
   linkedRepos?: LinkedRepoPromptRow[];
+  /**
+   * The provider session already holds this chat's full instructions from an
+   * earlier turn. Send only the guard rails, so each message stays small.
+   */
+  followUp?: boolean;
   runtime?: ChatRuntimeFacts;
 }): string {
   const commitMessage = message.slice(0, 50).replace(/"/g, '\\"');
@@ -181,15 +187,25 @@ When the user asks for a recording, walkthrough video, or screenshot:
 6. For "each" or "all features" requests, first make a checklist naming every feature, then create one isolated deliverable per checklist item unless the user asks for a combined walkthrough. Do not finish until every checklist item has a non-empty file in the deliverable folder.
 7. A status update such as "recording now" is not a final answer. Finish the captures before replying, then list which attached file demonstrates each feature. If capture is impossible, report the concrete failure instead of promising future work.
 8. To embed a capture in a PR comment or Linear issue (GitHub/Linear cannot see chat attachments): eva MCP \`upload_media\` → curl the file to the returned uploadUrl → \`get_media_url\` for a permanent public link. Captures posted in earlier turns are still on disk under \`.posted/\` — upload those instead of recapturing.`;
+  const guardRails = `Eva session (${repo.owner}/${repo.name}, branch "${branchName}"):
+- Do all work on "${branchName}". Do not commit or push to "${baseBranch}" or main unless the user asks for that explicitly. Fetching/merging/rebasing/pulling from "${baseBranch}" into this branch is allowed when the user asks.
+- If you change code: \`git add -A -- ':!*.png' ... ':!recordings/' ':!plan.md' && git diff --cached --quiet || git commit -m "task: ${commitMessage}"\``;
+  // User- and repo-owned instructions ride every turn; Eva's reference
+  // sections were sent on the first turn and stay in the resumed session.
+  const ownedInstructions = `${buildLinkedReposSection({ owner: repo.owner, name: repo.name, branchName }, linkedRepos, commitMessage)}${customInstructionsBlock}${buildSystemPromptBlock(systemPrompt)}${buildRootDirectoryInstruction(rootDirectory)}`;
+  if (followUp) {
+    return `${message}${planContext}
+
+${guardRails}
+- Never commit images/video or \`plan.md\`. Never run \`gh pr create\` for this branch. The full Eva session instructions from earlier in this conversation still apply.${ownedInstructions}`;
+  }
   const runtimeSection = runtime
     ? buildChatRuntimeSection(runtime, branchName, devPortText)
     : "";
   return `${message}${planContext}${devServerSection}${runtimeSection}${browserSection}
 
-Eva session (${repo.owner}/${repo.name}, branch "${branchName}"):
-- Do all work on "${branchName}". Do not commit or push to "${baseBranch}" or main unless the user asks for that explicitly. Fetching/merging/rebasing/pulling from "${baseBranch}" into this branch is allowed when the user asks.
-- If you change code: \`git add -A -- ':!*.png' ... ':!recordings/' ':!plan.md' && git diff --cached --quiet || git commit -m "task: ${commitMessage}"\`
+${guardRails}
 - Duplicate/extract PR (when the user asks to ship this session's work as a separate PR that merges independently): never push this branch's commits to another ref — identical SHAs make GitHub auto-merge this session's PR. Instead squash onto a fresh side branch, named after this one so Eva links the new PR to this chat: \`git fetch origin && git checkout --no-track -b ${branchName}-<short-slug> origin/${baseBranch} && git merge --squash ${branchName} && git commit -m "<summary>" && git push -u origin refs/heads/${branchName}-<short-slug>:refs/heads/${branchName}-<short-slug> && gh pr create --fill --base ${baseBranch} && git checkout ${branchName}\`. Always push by explicit refspec like that — never \`git push origin HEAD\` or a bare \`git push\`. Resolve squash conflicts if any. After that PR merges, merge the base branch into ${branchName} before continuing.
 - Questions only: answer without unnecessary edits. No build/lint/test unless asked.${runtime?.askTeammatesEnabled === true ? ASK_TEAMMATES_INSTRUCTION : ""}
-- Never commit images/video or \`plan.md\`. Minimal changes.${buildAgentMemoryBlock(runtime?.agentMemoryEnabled)}${buildLinkedReposSection({ owner: repo.owner, name: repo.name, branchName }, linkedRepos, commitMessage)}${CHAT_LOG_INSTRUCTION}${CHAT_UI_INSTRUCTION}${RESPONSE_LENGTH_INSTRUCTION}${COMMUNICATION_STYLE_INSTRUCTION}${VISUAL_CHANGE_INSTRUCTION}${customInstructionsBlock}${buildSystemPromptBlock(systemPrompt)}${buildReadableReposBlock(readableRepos)}${buildRootDirectoryInstruction(rootDirectory)}`;
+- Never commit images/video or \`plan.md\`. Minimal changes.${buildAgentMemoryBlock(runtime?.agentMemoryEnabled)}${CHAT_LOG_INSTRUCTION}${CHAT_UI_INSTRUCTION}${RESPONSE_LENGTH_INSTRUCTION}${COMMUNICATION_STYLE_INSTRUCTION}${VISUAL_CHANGE_INSTRUCTION}${buildReadableReposBlock(readableRepos)}${ownedInstructions}`;
 }

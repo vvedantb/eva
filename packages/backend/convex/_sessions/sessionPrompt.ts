@@ -8,7 +8,12 @@ import { bareHarnessCommandPrompt } from "../_mentions/bareHarnessCommand";
 import { resolveExperimentalFlags } from "../_auth/experimentalFlags";
 import { buildCustomInstructionsBlock } from "../prompts";
 import { listReadableSiblingRepos } from "../_githubRepos/sandboxRead";
-import { prependModelHandoffContext } from "../_shared/modelHandoff";
+import {
+  detectModelHandoffFromMessages,
+  hasDeliveredTurn,
+  prependModelHandoffContext,
+  readHandoffHistory,
+} from "../_shared/modelHandoff";
 import { listLiveSessionChats } from "../_sessionChats/helpers";
 import { buildSessionBranchName } from "../_git/branchNames";
 import { sandboxOwnerKey } from "@eva/shared";
@@ -236,14 +241,23 @@ export async function buildSessionPrompt(
   // Cursor resumes the saved SDK agent; the Eva transcript is not stuffed
   // in as a rotation handoff. Session plan.md / planContent is not injected —
   // that was the old Plan/Build mode contract.
-  const [readableRepos, linkedRepoRows, owner] = await Promise.all([
+  const [readableRepos, linkedRepoRows, owner, history] = await Promise.all([
     listReadableSiblingRepos(ctx.db, session.userId, repo._id),
     ctx.db
       .query("sessionRepos")
       .withIndex("by_session", (q) => q.eq("sessionId", session._id))
       .collect(),
     ownerPromptContext(ctx, session, resolvedMessage),
+    readHandoffHistory(ctx, chat._id),
   ]);
+  const handoff = detectModelHandoffFromMessages(
+    history,
+    args.model,
+    chat.provider,
+  );
+  // A resumed provider session already holds the full instructions from an
+  // earlier turn. Re-sending ~3k tokens each message only slows the reply.
+  const followUp = handoff.kind === "none" && hasDeliveredTurn(history);
   const linkedRepos = linkedRepoRows.map((row) => ({
     owner: row.owner,
     name: row.name,
@@ -266,6 +280,7 @@ export async function buildSessionPrompt(
     devPort: session.devPort ?? repo.devPort,
     readableRepos,
     linkedRepos,
+    followUp,
     runtime: {
       ownerKey: sandboxOwnerKey({ kind: "session", sessionId: session._id }),
       prUrl: owner.prUrl,
@@ -282,12 +297,6 @@ export async function buildSessionPrompt(
     prompt = `${prefixBlock}\n\n${prompt}`;
   }
   // Last, so the catch-up block leads the whole prompt.
-  prompt = await prependModelHandoffContext(
-    ctx,
-    chat._id,
-    args.model,
-    chat.provider,
-    prompt,
-  );
+  prompt = await prependModelHandoffContext(ctx, chat._id, handoff, prompt);
   return { prompt, branchName };
 }
