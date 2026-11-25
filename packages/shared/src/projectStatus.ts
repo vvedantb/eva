@@ -117,7 +117,12 @@ export function projectTaskNeedsYou(
   if (task.status === "todo" || task.status === "draft") {
     return task.approved ? undefined : "approve";
   }
-  return projectTaskStage(task) === "in_review" ? "review" : undefined;
+  // Review needs the task's own open PR. A task from before the coordinator
+  // can sit in review with no PR (its work went into the project's PR):
+  // there is nothing for a person to review there.
+  return projectTaskStage(task) === "in_review" && task.prState === "open"
+    ? "review"
+    : undefined;
 }
 
 /**
