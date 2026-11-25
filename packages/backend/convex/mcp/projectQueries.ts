@@ -8,7 +8,7 @@ import {
   taskRunPending,
 } from "../functions";
 import { chatEntityKindValidator } from "../validators";
-import { chatOwner } from "../_sessions/owner";
+import { sessionOwner } from "../_sessions/owner";
 import { loadSessionChat } from "../_sessionChats/helpers";
 import { isEntityDeleted } from "../numId";
 import { listProjectTasks } from "../_projects/scheduler";
@@ -48,7 +48,7 @@ async function taskOwner(
 }
 
 /**
- * Who a sandbox token speaks for (`chatOwner`): a session chat names its
+ * Who a sandbox token speaks for (`sessionOwner`): a session chat names its
  * session's owner, a task or project token names itself. Null for a
  * standalone session or an unknown id. This is what makes "this project" and
  * "my task" resolve without an id.
@@ -67,7 +67,7 @@ export const resolveCallerOwner = internalQuery({
     if (chatId) {
       const context = await loadSessionChat(ctx.db, chatId);
       if (!context) return null;
-      const owner = chatOwner(context.chat, context.session);
+      const owner = sessionOwner(context.session);
       if (owner.kind === "project") {
         return { kind: "project", projectId: String(owner.projectId) };
       }

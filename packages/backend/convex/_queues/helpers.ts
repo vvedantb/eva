@@ -43,7 +43,7 @@ import {
 import { findOpenChatQuestion } from "../pendingQuestions";
 import { requestSessionSandboxStart } from "../_sessions/sandbox";
 import { buildSessionPrompt } from "../_sessions/sessionPrompt";
-import { chatOwner } from "../_sessions/owner";
+import { sessionOwner } from "../_sessions/owner";
 import {
   buildDaemonPendingTurn,
   scheduleChatDaemonPrewarm,
@@ -754,10 +754,10 @@ const sessionChatQueueConfig: ChatQueueConfig<
     });
     await ctx.db.patch(id, { updatedAt: Date.now() });
   },
-  orchestratorNotifyChild: async (ctx, { chat, session }, id) => {
-    // An owned session's chat reports as its owner (`chatOwner`): the
+  orchestratorNotifyChild: async (ctx, { session }, id) => {
+    // An owned session's chat reports as its owner (`sessionOwner`): the
     // watch lives on the owner.
-    const owner = chatOwner(chat, session);
+    const owner = sessionOwner(session);
     if (owner.kind === "task") {
       const task = await ctx.db.get(owner.taskId);
       return task?.watchedByAve === undefined

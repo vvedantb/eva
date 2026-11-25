@@ -310,7 +310,6 @@ describe("wake-ups and watches", () => {
           repoId: f.repoId,
           userId: f.ownerUserId,
           title: "Billing revamp",
-          phase: "in_progress",
           rawInput: "revamp billing",
           updatedAt: 1,
         }),

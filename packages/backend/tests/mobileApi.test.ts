@@ -95,7 +95,6 @@ async function fixture() {
       repoId,
       userId,
       title: "Billing revamp",
-      phase: "in_progress",
       rawInput: "revamp billing",
       numId: 3,
     });
@@ -796,7 +795,6 @@ describe("mobile api", () => {
       const listed = await asUser.query(api.projects.list, { repoId: ids.repoId });
       const byId = new Map(listed.map((project) => [project._id, project]));
       expect(byId.get(tasksOnly)).toMatchObject({
-        phase: "business_review",
         description: "Keep a draft when the network drops.",
         priority: "high",
         baseBranch: "main",
@@ -804,21 +802,11 @@ describe("mobile api", () => {
       });
       // The description is what the coordinator's first turn carries.
       expect(byId.get(interview)).toMatchObject({
-        phase: "business_review",
         description: "Shorter onboarding copy.",
       });
-      // No project branch and no interview transcript.
+      // No stored phase and no project branch: the status is derived.
+      expect(byId.get(tasksOnly)).not.toHaveProperty("phase");
       expect(byId.get(tasksOnly)).not.toHaveProperty("branchName");
-      const detail = await asUser.query(api.projects.get, { id: interview });
-      expect(detail?.conversationHistory).toEqual([]);
-      // An old phone's Plan tab cannot start the interview for it.
-      await expect(
-        asUser.mutation(api.projectInterviewWorkflow.startInterview, {
-          projectId: interview,
-          featureDescription: "Shorter onboarding copy.",
-          previousAnswers: [],
-        }),
-      ).rejects.toThrow(/coordinator chat/);
       // Each takes the repo's next project number.
       const numbers = await t.run(async (ctx) => [(await ctx.db.get(tasksOnly))?.numId, (await ctx.db.get(interview))?.numId]);
       expect(new Set(numbers).size).toBe(2);

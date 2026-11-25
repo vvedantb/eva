@@ -1,5 +1,43 @@
 # Changelog
 
+## Projects: old project PRs become threads
+
+Date: 2026-11-25
+
+`migrations:convertLegacyProjectThreads` (dry run first) finishes the move from the old one-PR projects. A project whose old PR is still open or draft gets one thread, "Earlier work (PR #n)", that takes over the old branch (`agentTasks.branchName`) and the `pullRequests` row (owner moves from the project to the task, so a merge marks the thread done); its old review tasks with no PR of their own are cancelled and listed in the thread's description. A merged old PR marks those tasks done, a closed one cancels them. The coordinator moves to a fresh project branch (`branchVersion` + 1, `syncProjectSessionBranch`) in every case. Draft and todo tasks stay in Triage.
+
+## Inbox: a project task needs review only with its own open PR
+
+Date: 2026-11-25
+
+`projectTaskNeedsYou` returns `review` only when the task's stage is in review and its own PR is open. Tasks from before the coordinator sit in `code_review` with no PR of their own (their work went into the project PR), so 166 of them filled the Inbox's To review on production; they no longer show there or as "Needs you" in the project task list.
+
+## Mobile: compress native libs in the release APK
+
+Date: 2026-11-25
+
+The sideload APK is smaller because JNI `.so` files are stored zip-compressed instead of page-aligned (legacy packaging). Android extracts them at install; runtime is unchanged.
+
+`expo-build-properties` now sets `android.useLegacyPackaging: true` (maps to Gradle's `jniLibs.useLegacyPackaging`). The existing arm64-only arch, R8 minify and resource shrinking stay as before. `@vvedantb/config` 0.14.2 does not ship a legacy-packaging default yet, so Eva sets it locally.
+
+## Inbox: Needs you and Updates
+
+Date: 2026-11-25
+
+The Inbox (web and phone) opens on "Needs you": what waits for a person, derived from live state, so a row leaves when someone acts on it. Groups: Questions (a project task's ask the coordinator handed to a person; a blocking agent question on an open turn), To review (an open, non-draft PR of a project task, your quick task or your session), Triage (unapproved project tasks), Failed (a project task out of retries; your quick task whose last run failed). Each row has a source chip and one action (Reply, Open PR, Reject/Approve, Retry). "Updates" is the notification feed as before. New `needsYou.list` (optional `repoId`: a repo's inbox shows that repo) and `@eva/shared/needsYou`; web view in the `view` URL param.
+
+## Projects: legacy schema dropped (PR 3b)
+
+Date: 2026-11-25
+
+Drops what the clearing migrations emptied: `projects.phase`, `planningMode`, `build`, `interview`, `lastBuildError`, `codeReviewer`, `sessionChats.taskId`, the `projectDetails` and `taskDependencies` tables, and the `by_repo_and_phase`, `by_repo_and_build_state` and `sessionChats.by_task` indexes; `projectBuildValidator`, `projectInterviewValidator` and `clientProject` go with them. Deletes `clearLegacyProjectFields`, `clearTaskDependencies` and `clearProjectCodeReviewer`. Deploy only after `clearLegacyProjectFields` ran on production.
+
+## Projects: legacy interview, plan and build code removed (PR 3a)
+
+Date: 2026-11-25
+
+Removed the old project interview and spec workflows (`projectInterviewWorkflow`, `_projects/interviewState`), the project build (`_projects/buildState`, the build wrappers in `buildWorkflow`, `executeScheduledBuild`, `releaseProjectSessionForRetire`), the project PR phase sync (`_projects/prSync`, `applyProjectPrEvent`), `projects.startDevelopment`/`addMessage`/`clearMessages`/`updateLastConversationMessage`/`countBuilding`/`getActive`, the legacy task chat in a project session (`findProjectTaskChat`, `chatOwner`'s task branch; callers use `sessionOwner`), `convertProjects` and the old phase/interview migrations. `recomputeProjectPhase` is now `onProjectTasksChanged`: it only schedules ready tasks; nothing writes `projects.phase` (now optional). `projects.get` drops `conversationHistory`/`generatedSpec`; `projects.update` drops `phase`/`generatedSpec`; MCP `stop_agent` and `get_agent_state` drop `buildRunning`. Web and phone: the Plan/Interview views (`ProjectTabs`, `ProjectChatTab`, `ProjectPlanTab`, phone `ProjectPlan`), View Plan / Interview History, the building badge and beam, and every stored-phase badge are gone; projects show the derived stage only. New `dataMigrations:clearLegacyProjectFields` (legacy project fields), `deleteProjectDetails` (every `projectDetails` row) and `clearSessionChatTaskIds` (`sessionChats.taskId` on every chat); PR 3b narrows the schema after it runs on production.
+
 ## Projects: parallel reads on hot project paths
 
 Date: 2026-11-25

@@ -55,8 +55,6 @@ export interface ProjectCardMenuItemsProps {
   branchName?: string;
   /** Project header only: its sandbox and PR commands, above the shared items. */
   leading?: ReactNode;
-  /** Project header only: View Plan and View Interview History, after the PRs. */
-  planItems?: ReactNode;
   onLeadChange: (value: string) => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -73,7 +71,6 @@ export function ProjectCardMenuItems({
   showOpenInNewTab = false,
   branchName,
   leading,
-  planItems,
   onLeadChange,
   onEdit,
   onDelete,
@@ -93,7 +90,7 @@ export function ProjectCardMenuItems({
     variant === "context" ? ContextMenuSeparator : DropdownMenuSeparator;
   const iconSize = variant === "context" ? 16 : 14;
 
-  const hasPrGroup = prs.length > 0 || planItems !== undefined;
+  const hasPrGroup = prs.length > 0;
 
   return (
     <>
@@ -187,7 +184,6 @@ export function ProjectCardMenuItems({
         <>
           <MenuSeparator />
           <PrActionsSubmenus variant={variant} prs={prs} />
-          {planItems}
         </>
       ) : null}
       <MenuSeparator />

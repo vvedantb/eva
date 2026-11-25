@@ -3,8 +3,6 @@ import {
   FALLBACK_GIT_BASE_BRANCH,
   PRIORITY_LABELS,
   PRIORITY_ORDER,
-  PROJECT_PHASE_LABELS,
-  isProjectPlanning,
   projectPickerAccounts,
   toPickerAccounts,
   type Priority,
@@ -25,7 +23,7 @@ import { Pressable, Text, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { FooterSheet, useSimpleView } from "@/chat/ComposerFooter";
 import { ModelChip } from "@/chat/ModelChip";
-import { phaseAppearance, projectStageAppearance } from "@/projects/phaseAppearance";
+import { projectStageAppearance } from "@/projects/phaseAppearance";
 import { ProjectProgress, ProjectStageCounts } from "@/projects/ProjectProgress";
 import { PriorityIcon } from "@/quickTasks/PriorityIcon";
 import { userLabel } from "@/quickTasks/QuickTaskListOptions";
@@ -44,8 +42,7 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
  * (`ProjectSummarySection`: live stage counts and the progress bar from the
  * derived status, then the coordinator's summary document, which opens in
  * full), then the web fields column (`ProjectFieldsPanel`): Properties,
- * Dates, Labels and Created. Status is the derived stage (an older project
- * still planning shows its phase) and reads only. Priority and Project Lead
+ * Dates, Labels and Created. Status is the derived stage and reads only. Priority and Project Lead
  * open a bottom sheet each and write `projects.update`, as the web selects;
  * the model chip (hidden in simple view, as the web) writes the model and,
  * for the project's owner, its account. Field
@@ -97,13 +94,8 @@ export function ProjectOverview({
     provider: getAIModelProvider(model),
     ownerLabel: creator?.firstName?.trim() || creator?.fullName?.trim() || "Personal",
   });
-  // The stage is derived from the child tasks; only an older project still planning shows its stored phase.
-  const planning = isProjectPlanning(project.phase);
-  const stage = planning
-    ? { ...phaseAppearance(project.phase, scheme), label: PROJECT_PHASE_LABELS[project.phase] }
-    : status
-      ? { ...projectStageAppearance(status.stage, scheme), label: PROJECT_STAGE_LABELS[status.stage] }
-      : undefined;
+  // The stage is derived from the child tasks.
+  const stage = status ? { ...projectStageAppearance(status.stage, scheme), label: PROJECT_STAGE_LABELS[status.stage] } : undefined;
   const baseBranch = project.baseBranch ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
   const memberCount = project.members?.length ?? 0;
   const dateRange = [project.projectStartDate, project.projectEndDate]

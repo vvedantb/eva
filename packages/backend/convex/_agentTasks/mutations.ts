@@ -16,8 +16,7 @@ import {
   hasRepoAccess,
   hasTaskAccess,
   softDeleteAgentTask,
-  recomputeProjectPhase,
-  EMPTY_PROJECT_PHASE,
+  onProjectTasksChanged,
 } from "../functions";
 import { allocateNumId } from "../numId";
 import {
@@ -235,7 +234,7 @@ export const updateStatus = authMutation({
       });
     }
     if (task.projectId) {
-      await recomputeProjectPhase(ctx, task.projectId);
+      await onProjectTasksChanged(ctx, task.projectId);
     }
     return null;
   },
@@ -600,7 +599,6 @@ export const createTasksBatch = authMutation({
         userId: ctx.userId,
         title: args.projectTitle,
         rawInput: args.projectTitle,
-        phase: EMPTY_PROJECT_PHASE,
         baseBranch,
         projectStartDate: now,
         numId: projectNumId,
@@ -608,7 +606,7 @@ export const createTasksBatch = authMutation({
       for (const taskId of taskIds) {
         await ctx.db.patch(taskId, { projectId });
       }
-      await recomputeProjectPhase(ctx, projectId);
+      await onProjectTasksChanged(ctx, projectId);
     }
 
     return { taskIds, projectId };

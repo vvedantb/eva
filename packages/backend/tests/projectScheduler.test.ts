@@ -64,7 +64,6 @@ async function fixture(taskCount: number) {
       userId,
       title: "Project",
       rawInput: "Project",
-      phase: "business_review",
       numId: 1,
     });
     const tasks: Id<"agentTasks">[] = [];

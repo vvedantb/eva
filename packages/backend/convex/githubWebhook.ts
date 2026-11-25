@@ -3,14 +3,11 @@ import { v } from "convex/values";
 import { internalMutation, type MutationCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import {
-  notifyProjectSubscribers,
-  notifySubscribers,
-} from "./taskSubscribers";
+import { notifySubscribers } from "./taskSubscribers";
 import { logTaskActivity } from "./taskActivity";
 import { cancelTaskRunSchedule } from "./_agentTasks/runState";
 import { syncOwnedSessionWithTaskStatus } from "./_sessions/ownedSession";
-import { recomputeProjectPhase } from "./functions";
+import { onProjectTasksChanged } from "./functions";
 import { reconcileSessionArchiveState } from "./_sessions/prArchive";
 import {
   allPullRequestsTerminal,
@@ -112,14 +109,14 @@ export const handlePullRequestEvent = internalMutation({
 
     const terminal = nextState === "merged" || nextState === "closed";
     let finished = false;
-    if (owner.kind === "project") {
-      finished = await applyProjectPrEvent(ctx, owner.projectId, row);
-    } else if (terminal) {
+    // A project's own (legacy) PR only keeps its row state: no new work goes
+    // to a project branch, and the project's status is derived from its tasks.
+    if (owner.kind === "task" && terminal) {
       finished = await applyTaskPrClosed(ctx, owner.taskId, row);
       // A merge lets the task's project start the tasks that waited for it.
       const task = await ctx.db.get(owner.taskId);
       if (nextState === "merged" && task?.projectId !== undefined) {
-        await recomputeProjectPhase(ctx, task.projectId);
+        await onProjectTasksChanged(ctx, task.projectId);
       }
     }
     if (terminal) {
@@ -189,60 +186,6 @@ async function attachUntrackedPullRequest(
     baseBranch: args.baseBranch,
     title: args.title,
   });
-}
-
-/**
- * A project's own (legacy) PR, from before child tasks owned their PRs. Once
- * every project PR is terminal, the project's stored phase records the end:
- * completed when one merged, cancelled when all closed unmerged. No new work
- * goes to the project branch. Task statuses are never touched: they are the
- * record of what each task did, and a merge or close can be undone on GitHub.
- */
-async function applyProjectPrEvent(
-  ctx: MutationCtx,
-  projectId: Id<"projects">,
-  row: Doc<"pullRequests">,
-): Promise<boolean> {
-  const project = await ctx.db.get(projectId);
-  if (!project) return false;
-  if (row.state !== "merged" && row.state !== "closed") return false;
-
-  const rows = await listOwnerPullRequests(ctx.db, {
-    kind: "project",
-    projectId,
-  });
-  if (!allPullRequestsTerminal(rows)) return false;
-  const merged = rows.some((pr) => pr.state === "merged");
-  // Legacy: what older phone builds show for a project whose own PR ended.
-  // `recomputeProjectPhase` leaves this final phase until a task runs again.
-  await ctx.db.patch(projectId, { phase: merged ? "completed" : "cancelled" });
-
-  // One notification for the project as a whole, never one per task, and a
-  // single activity entry on the task that opened the PR so the merge/close
-  // still leaves a trace on a timeline.
-  const projectTitle = project.title;
-  await notifyProjectSubscribers(ctx, {
-    projectId,
-    type: merged ? "task_complete" : "system",
-    title: merged
-      ? `PR merged — project "${projectTitle}" moved to Merged`
-      : `PR closed — project "${projectTitle}" moved to Cancelled`,
-    message: merged
-      ? `GitHub merged ${row.prUrl}. The project moved to merged; its tasks kept their status.`
-      : `GitHub closed ${row.prUrl} without merge. The project moved to cancelled; its tasks kept their status.`,
-    repoId: project.repoId,
-  });
-  if (row.owner.kind === "project" && row.owner.taskId !== undefined) {
-    await logTaskActivity(
-      ctx,
-      row.owner.taskId,
-      undefined,
-      "pr",
-      undefined,
-      merged ? "merged" : "closed",
-    );
-  }
-  return true;
 }
 
 /**

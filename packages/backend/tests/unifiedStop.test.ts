@@ -21,8 +21,7 @@ afterEach(() => {
 });
 
 /**
- * A project with an active session, and a project task running, with an old
- * chat of its own in the project's session (`sessionChats.taskId`, legacy).
+ * A project with an active session, and a project task running.
  */
 async function fixture() {
   const t = convexTest(schema, modules);
@@ -38,7 +37,6 @@ async function fixture() {
       repoId,
       userId,
       title: "Billing revamp",
-      phase: "in_progress",
       rawInput: "revamp billing",
       numId: 1,
       updatedAt: 0,
@@ -60,15 +58,6 @@ async function fixture() {
       createdAt: 0,
       updatedAt: 0,
       createdBy: userId,
-    });
-    const taskChatId = await ctx.db.insert("sessionChats", {
-      sessionId,
-      repoId,
-      userId,
-      title: "Split invoices",
-      number: 2,
-      isMain: false,
-      taskId,
     });
     const runId = await ctx.db.insert("agentRuns", {
       taskId,
@@ -95,7 +84,6 @@ async function fixture() {
       projectId,
       sessionId,
       taskId,
-      taskChatId,
       runId,
       quickTaskId,
     };
@@ -103,59 +91,7 @@ async function fixture() {
   return { t, asUser: t.withIdentity({ subject: CLERK_ID }), ...ids };
 }
 
-describe("stopChatTurn", () => {
-  test(
-    "a project task's chat Stop cancels the task's run (mobile used to leave it)",
-    async () => {
-      const f = await fixture();
-      await f.asUser.mutation(api.sessions.stopChatTurn, {
-        target: { chatId: f.taskChatId },
-      });
-      const [task, run] = await f.t.run(async (ctx) => [
-        await ctx.db.get(f.taskId),
-        await ctx.db.get(f.runId),
-      ]);
-      expect(task?.run).toBeUndefined();
-      expect(run?.status).toBe("cancelled");
-    },
-    TIMEOUT_MS,
-  );
-});
-
 describe("stopWorkSandbox", () => {
-  test(
-    "refuses while a build holds the session, then stops once it is idle",
-    async () => {
-      const f = await fixture();
-      // The task run is part of the build here; only the build holds it.
-      await f.t.run(async (ctx) => {
-        await ctx.db.patch(f.taskId, { run: undefined });
-        await ctx.db.patch(f.projectId, {
-          build: { state: "running", workflowId: "wf_build" },
-        });
-      });
-      await expect(
-        f.asUser.mutation(api.sessions.stopWorkSandbox, {
-          target: { projectId: f.projectId },
-        }),
-      ).rejects.toThrow(SANDBOX_HELD_ERROR);
-      const held = await f.t.run(async (ctx) => ctx.db.get(f.sessionId));
-      expect(held?.status).toBe("active");
-
-      await f.t.run(async (ctx) => {
-        await ctx.db.patch(f.projectId, { build: undefined });
-      });
-      expect(
-        await f.asUser.mutation(api.sessions.stopWorkSandbox, {
-          target: { projectId: f.projectId },
-        }),
-      ).toBe(f.sessionId);
-      const stopped = await f.t.run(async (ctx) => ctx.db.get(f.sessionId));
-      expect(stopped?.status).toBe("stopping");
-    },
-    TIMEOUT_MS,
-  );
-
   test(
     "refuses while a task's run has its turn open on the session",
     async () => {

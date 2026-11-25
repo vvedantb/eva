@@ -108,7 +108,6 @@ async function fixture() {
       repoId,
       userId: ownerUserId,
       title: "Billing revamp",
-      phase: "in_progress",
       rawInput: "revamp billing",
       numId: 31,
       updatedAt: now - 3_000,
@@ -376,25 +375,26 @@ describe("start_sandbox and stop_sandbox drive the Eva Start/Stop buttons", () =
     expect(listed?.isExecuting).toBe(true);
   });
 
-  test("a task and a project report their own workflow slots", async () => {
+  test("a task reports its run; a project only its coordinator chat", async () => {
     const f = await fixture();
     await f.t.run(async (ctx) => {
       await ctx.db.patch(f.taskId, {
         run: { state: "running", workflowId: "wf_task_run" },
       });
-      await ctx.db.patch(f.projectId, {
-        build: { state: "running", workflowId: "wf_project_build" },
-      });
     });
 
-    for (const [kind, id] of [
-      ["task", f.taskId],
-      ["project", f.projectId],
-    ] as const) {
-      expect(
-        await f.t.query(internal.mcp.queries.entityIsExecuting, { kind, id }),
-      ).toBe(true);
-    }
+    expect(
+      await f.t.query(internal.mcp.queries.entityIsExecuting, {
+        kind: "task",
+        id: f.taskId,
+      }),
+    ).toBe(true);
+    expect(
+      await f.t.query(internal.mcp.queries.entityIsExecuting, {
+        kind: "project",
+        id: f.projectId,
+      }),
+    ).toBe(false);
   });
 });
 

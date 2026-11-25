@@ -32,6 +32,7 @@
     "./mentionText": "./src/mentionText.ts",
     "./messageLink": "./src/messageLink.ts",
     "./modelPricing": "./src/modelPricing.ts",
+    "./needsYou": "./src/needsYou.ts",
     "./notificationGroups": "./src/notificationGroups.ts",
     "./notificationTitle": "./src/notificationTitle.ts",
     "./parseActivitySteps": "./src/utils/parseActivitySteps.ts",

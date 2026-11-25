@@ -1,74 +1,11 @@
 import { v } from "convex/values";
 import {
   authMutation,
-  EMPTY_PROJECT_PHASE,
-  getProjectWithAccess,
   getRepoWithAccess,
-  recomputeProjectPhase,
+  onProjectTasksChanged,
 } from "../functions";
 import { allocateNumId } from "../numId";
-import { ensureSubscribed } from "../taskSubscribers";
-import { parseSpec, getProjectGeneratedSpec } from "./helpers";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
-import { resolveNewTaskBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
-import { createTaskRunSummary } from "../_agentTasks/runSummary";
-
-/**
- * Old interview projects only: converts a finalized spec into tasks. The
- * tasks wait in Triage for a person's approval; the phase follows
- * from them (`recomputeProjectPhase`). New projects plan in their
- * coordinator chat and never reach `finalized`.
- */
-export const startDevelopment = authMutation({
-  args: {
-    projectId: v.id("projects"),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const project = await getProjectWithAccess(
-      ctx.db,
-      args.projectId,
-      ctx.userId,
-    );
-    if (project.phase !== "finalized") {
-      throw new Error("Project must be finalized before starting development");
-    }
-    const generatedSpec = await getProjectGeneratedSpec(ctx.db, args.projectId);
-    if (!generatedSpec) {
-      throw new Error("Project has no generated spec");
-    }
-    const spec = parseSpec(generatedSpec);
-    // Each child task opens its own PR to the repo default branch.
-    const taskBaseBranch = resolveNewTaskBaseBranch(
-      undefined,
-      await ctx.db.get(project.repoId),
-    );
-    const now = Date.now();
-    for (let i = 0; i < spec.tasks.length; i++) {
-      const task = spec.tasks[i];
-      const taskNumber = i + 1;
-      const numId = await allocateNumId(ctx.db, project.repoId, "agentTasks");
-      const taskId = await ctx.db.insert("agentTasks", {
-        title: task.title,
-        description: task.description,
-        repoId: project.repoId,
-        projectId: args.projectId,
-        taskNumber,
-        status: "todo",
-        createdAt: now,
-        updatedAt: now,
-        createdBy: ctx.userId,
-        baseBranch: taskBaseBranch,
-        numId,
-      });
-      await createTaskRunSummary(ctx, taskId, project.repoId);
-      await ensureSubscribed(ctx, taskId, ctx.userId);
-    }
-    await ctx.db.patch(args.projectId, { description: spec.description });
-    await recomputeProjectPhase(ctx, args.projectId);
-    return null;
-  },
-});
 
 /**
  * Creates a new project from existing tasks, assigning them sequential task
@@ -98,7 +35,6 @@ export const createFromTasks = authMutation({
       userId: ctx.userId,
       title: args.title,
       rawInput: args.title,
-      phase: EMPTY_PROJECT_PHASE,
       baseBranch: repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH,
       projectStartDate: Date.now(),
       numId: projectNumId,
@@ -113,7 +49,7 @@ export const createFromTasks = authMutation({
         });
       }
     }
-    await recomputeProjectPhase(ctx, projectId);
+    await onProjectTasksChanged(ctx, projectId);
     return projectId;
   },
 });

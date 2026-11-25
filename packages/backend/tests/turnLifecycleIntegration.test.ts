@@ -502,7 +502,6 @@ describe("a stale session chat turn torn down by the backstop", () => {
         repoId: session.repoId,
         userId: session.userId,
         title: "Pick",
-        phase: "in_progress",
         rawInput: "pick",
         updatedAt: now,
       });
