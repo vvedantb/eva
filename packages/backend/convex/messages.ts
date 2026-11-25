@@ -16,6 +16,7 @@ import {
 import { trimActivityLogForTranscript } from "./_messages/activityLog";
 import { resolveStorageEntries } from "./_chat/storageUrls";
 import { collectForkPrefix } from "@eva/shared";
+import { MAX_THREAD_REPLIES } from "./_messages/replies";
 
 const parentIdValidator = messageFields.parentId;
 
@@ -96,47 +97,61 @@ function messageRange(args: {
   return tail === undefined ? { kind: "all" } : { kind: "tail", count: tail };
 }
 
+/**
+ * The transcript's rows: a thread reply (`replyTo` set) shows in its thread
+ * panel only, so every range reads `by_parent_and_reply_to` with `replyTo`
+ * unset.
+ */
 async function readMessages(
   db: QueryCtx["db"],
   parentId: typeof parentIdValidator.type,
   range: MessageRange,
 ): Promise<Doc<"messages">[]> {
+  const rows = () => db.query("messages");
   switch (range.kind) {
     case "all":
-      return db
-        .query("messages")
-        .withIndex("by_parent", (q) => q.eq("parentId", parentId))
+      return rows()
+        .withIndex("by_parent_and_reply_to", (q) =>
+          q.eq("parentId", parentId).eq("replyTo", undefined),
+        )
         .collect();
     case "since":
-      return db
-        .query("messages")
-        .withIndex("by_parent", (q) =>
-          q.eq("parentId", parentId).gte("_creationTime", range.creationTime),
+      return rows()
+        .withIndex("by_parent_and_reply_to", (q) =>
+          q
+            .eq("parentId", parentId)
+            .eq("replyTo", undefined)
+            .gte("_creationTime", range.creationTime),
         )
         .collect();
     case "tail":
       return (
-        await db
-          .query("messages")
-          .withIndex("by_parent", (q) => q.eq("parentId", parentId))
+        await rows()
+          .withIndex("by_parent_and_reply_to", (q) =>
+            q.eq("parentId", parentId).eq("replyTo", undefined),
+          )
           .order("desc")
           .take(range.count)
       ).reverse();
     case "before":
       return (
-        await db
-          .query("messages")
-          .withIndex("by_parent", (q) =>
-            q.eq("parentId", parentId).lt("_creationTime", range.creationTime),
+        await rows()
+          .withIndex("by_parent_and_reply_to", (q) =>
+            q
+              .eq("parentId", parentId)
+              .eq("replyTo", undefined)
+              .lt("_creationTime", range.creationTime),
           )
           .order("desc")
           .take(range.count)
       ).reverse();
     case "allBefore":
-      return db
-        .query("messages")
-        .withIndex("by_parent", (q) =>
-          q.eq("parentId", parentId).lt("_creationTime", range.creationTime),
+      return rows()
+        .withIndex("by_parent_and_reply_to", (q) =>
+          q
+            .eq("parentId", parentId)
+            .eq("replyTo", undefined)
+            .lt("_creationTime", range.creationTime),
         )
         .collect();
   }
@@ -238,6 +253,37 @@ export const listByParent = authQuery({
 });
 
 /**
+ * One reply thread: its root message and the replies under it, oldest first
+ * (at most `MAX_THREAD_REPLIES`). Null when the root is gone or the caller
+ * cannot read its chat. Activity payloads ship trimmed, as in `listByParent`.
+ */
+export const listReplies = authQuery({
+  // A plain string: the chat renders optimistic rows under client-minted ids.
+  args: { rootId: v.string() },
+  returns: v.union(
+    v.null(),
+    v.object({ root: messageValidator, replies: v.array(messageValidator) }),
+  ),
+  handler: async (ctx, args) => {
+    const rootId = ctx.db.normalizeId("messages", args.rootId);
+    const root = rootId ? await ctx.db.get(rootId) : null;
+    if (!root || root.replyTo !== undefined) return null;
+    await assertMessageParentAccess(ctx.db, root.parentId, ctx.userId);
+    const replies = await ctx.db
+      .query("messages")
+      .withIndex("by_reply_to", (q) => q.eq("replyTo", root._id))
+      .take(MAX_THREAD_REPLIES);
+    const trim = (message: Doc<"messages">) => {
+      const activityLog = trimActivityLogForTranscript(message.activityLog);
+      return activityLog === message.activityLog
+        ? message
+        : Object.assign({}, message, { activityLog });
+    };
+    return { root: trim(root), replies: replies.map(trim) };
+  },
+});
+
+/**
  * Whether a chat has any message created before `before`: tells the web app
  * if history sits above its live rows. Reads at most one row.
  */
@@ -248,8 +294,11 @@ export const hasMessagesBefore = authQuery({
     await assertMessageParentAccess(ctx.db, args.parentId, ctx.userId);
     const older = await ctx.db
       .query("messages")
-      .withIndex("by_parent", (q) =>
-        q.eq("parentId", args.parentId).lt("_creationTime", args.before),
+      .withIndex("by_parent_and_reply_to", (q) =>
+        q
+          .eq("parentId", args.parentId)
+          .eq("replyTo", undefined)
+          .lt("_creationTime", args.before),
       )
       .first();
     return older !== null;
@@ -288,7 +337,11 @@ export const searchOlderByParent = authQuery({
       .take(SEARCH_HIT_LIMIT);
     let oldest: Doc<"messages"> | undefined;
     for (const hit of hits) {
-      if (hit.isSystemAlert === true || hit._creationTime >= args.before) {
+      if (
+        hit.isSystemAlert === true ||
+        hit.replyTo !== undefined ||
+        hit._creationTime >= args.before
+      ) {
         continue;
       }
       if (!oldest || hit._creationTime < oldest._creationTime) oldest = hit;
@@ -373,7 +426,8 @@ export const listUserMessagesByParent = authQuery({
         q.eq("parentId", args.parentId).eq("role", "user"),
       )
       .collect();
-    return rows.map((row) => ({
+    // Thread replies are not in the transcript, so not in its jump rail either.
+    return rows.filter((row) => row.replyTo === undefined).map((row) => ({
       _id: row._id,
       _creationTime: row._creationTime,
       content: row.content,

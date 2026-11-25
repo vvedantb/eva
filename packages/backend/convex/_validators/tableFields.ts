@@ -1438,6 +1438,15 @@ export const messageFields = {
   // what the prompt asked for. Needs beforeSha/afterSha, so it follows the same
   // three chat surfaces; task runs never checkpoint and so never carry one.
   scopeCheck: v.optional(scopeCheckValidator),
+  // Reply threads (coordinator chat): a reply carries its root message's id.
+  // Replies stay in the chat's rows (same `parentId`) so turns, recaps and
+  // watchdogs see them, but the transcript reads only rows without `replyTo`.
+  replyTo: v.optional(v.id("messages")),
+  // Root rows: how many replies, when the last one landed, and up to
+  // `MAX_THREAD_REPLIERS` most recent distinct repliers (the avatars under it).
+  replyCount: v.optional(v.number()),
+  lastReplyAt: v.optional(v.number()),
+  replierIds: v.optional(v.array(v.id("users"))),
 };
 
 /**
@@ -1522,6 +1531,9 @@ export const queuedMessageFields = {
   // over and waits for its ack. A turn that ends first sends it as the next
   // queued turn (the row sits at the front). See `_chat/steer.ts`.
   steer: v.optional(v.union(v.literal("requested"), v.literal("delivering"))),
+  // A reply that @mentioned Eva in a thread: the reply row is already stored,
+  // so the dequeue skips the user row, and Eva's answer joins this thread.
+  replyTo: v.optional(v.id("messages")),
 };
 
 export const taskSandboxEventFields = {

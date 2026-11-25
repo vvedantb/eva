@@ -317,6 +317,11 @@ interface ChatBodyProps {
   hideJumpRail?: boolean;
   /** Eva's replies in a bubble with her mark (the project coordinator). */
   assistantBubbles?: boolean;
+  /**
+   * Reply threads: opens a message's thread. Rows get the Reply action and the
+   * "N replies" row. Must keep its identity, like the fork handler.
+   */
+  onOpenThread?: (messageId: string) => void;
 }
 
 export function ChatBody(props: ChatBodyProps) {
@@ -378,6 +383,7 @@ function ChatBodyInner({
   onForkTranscript,
   hideJumpRail = false,
   assistantBubbles = false,
+  onOpenThread,
 }: ChatBodyProps) {
   const citations = usePendingCitations();
   const snapshots = usePendingPreviewSnapshots();
@@ -1068,6 +1074,10 @@ function ChatBodyInner({
             onForkTranscript && canForkMessage(message)
               ? setForkThroughId
               : undefined
+          }
+          // System alerts and empty rows have nothing to reply to.
+          onReply={
+            onOpenThread && canForkMessage(message) ? onOpenThread : undefined
           }
           belowContent={renderChatUiPanels(
             panelPlacement.byMessageId.get(message._id) ?? [],

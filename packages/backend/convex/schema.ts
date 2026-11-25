@@ -220,6 +220,10 @@ const schema = defineSchema({
     .index("by_parent", ["parentId"])
     // User rows only: the jump rail and up-arrow recall (listUserMessagesByParent).
     .index("by_parent_and_role", ["parentId", "role"])
+    // The transcript: rows that are not thread replies (`replyTo` unset).
+    .index("by_parent_and_reply_to", ["parentId", "replyTo"])
+    // A thread's replies, oldest first.
+    .index("by_reply_to", ["replyTo"])
     // Find-in-chat above the loaded history (searchOlderByParent).
     .searchIndex("search_content", {
       searchField: "content",

@@ -49,6 +49,7 @@ import { ChangedFilesCard } from "@/lib/components/chat/ChangedFilesCard";
 import { EvaIcon } from "@/lib/components/EvaIcon";
 import {
   IconGitFork,
+  IconMessages,
   IconLink,
   IconPlayerStop,
 } from "@tabler/icons-react";
@@ -70,6 +71,7 @@ import { ChatUiPanelTabs } from "@/lib/components/chat/generativeUi/ChatUiPanelT
 import { ScopeCheckChip } from "@/lib/components/chat/_components/ScopeCheckChip";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { TurnErrorNotice } from "@/lib/components/chat/TurnErrorNotice";
+import { ThreadSummary } from "@/lib/components/chat/replies/ThreadSummary";
 
 const EVA_ICON = <EvaIcon />;
 
@@ -192,6 +194,12 @@ interface ChatMessageProps {
    */
   onFork?: (messageId: string) => void;
   /**
+   * Reply threads (the coordinator chat): opens this message's thread. Adds
+   * the Reply action and, once it has replies, the "N replies" row under it.
+   * Takes the id so one stable handler serves every row, like `onFork`.
+   */
+  onReply?: (messageId: string) => void;
+  /**
    * Re-sends the turn's prompt. Undefined while a turn is executing or the chat
    * is read-only, which is what hides the Retry action on a failed turn.
    */
@@ -256,6 +264,7 @@ export const ChatMessage = memo(function ChatMessage({
   citeHighlight = false,
   linkHighlight = false,
   onFork,
+  onReply,
   onRetryTurn,
   precedingUser,
   belowContent,
@@ -287,6 +296,9 @@ export const ChatMessage = memo(function ChatMessage({
   const userActions = [
     turnState.isStreamingPlaceholder ? undefined : buildLinkAction(message._id),
     buildForkAction(onFork, message._id),
+    turnState.isStreamingPlaceholder
+      ? undefined
+      : buildReplyAction(onReply, message._id),
   ].filter((action): action is ChatMessageActionItem => action !== undefined);
   const rowActions = [...userActions, ...checkpoint.items];
 
@@ -357,6 +369,16 @@ export const ChatMessage = memo(function ChatMessage({
               />
             )}
           </AIMessage>
+          {onReply && (message.replyCount ?? 0) > 0 ? (
+            <ThreadSummary
+              replyCount={message.replyCount ?? 0}
+              replierIds={message.replierIds ?? []}
+              align={
+                message.role === "user" && !isOtherUser ? "end" : "start"
+              }
+              onOpen={() => onReply(message._id)}
+            />
+          ) : null}
         </m.div>
       </ChatMessageContextMenu>
       {checkpoint.dialogs}
@@ -379,6 +401,20 @@ function buildForkAction(
         label: "Fork from here",
         icon: <IconGitFork className="size-4" />,
         onClick: () => onFork(messageId),
+      }
+    : undefined;
+}
+
+function buildReplyAction(
+  onReply: ChatMessageProps["onReply"],
+  messageId: ChatBodyMessage["_id"],
+): ChatMessageActionItem | undefined {
+  return onReply
+    ? {
+        key: "reply",
+        label: "Reply in thread",
+        icon: <IconMessages className="size-4" />,
+        onClick: () => onReply(messageId),
       }
     : undefined;
 }

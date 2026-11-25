@@ -30,6 +30,7 @@ import {
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { turnCheckpoint } from "@eva/shared/turnCheckpoint";
 import { chatTypingRoom } from "@eva/shared/typingPresence";
+import { EVA_MENTION_ITEM } from "@eva/shared/chatMessageRoute";
 import { isUsageLimitFailure } from "@eva/shared/usageLimitRecovery";
 import { messageLinkHref } from "@eva/shared/messageLink";
 import { appendCitationsToPrompt } from "@eva/shared/assistantCitation";
@@ -66,6 +67,7 @@ import { AttachButton } from "@/chat/AttachButton";
 import { formatDuration } from "@eva/shared/duration";
 import { AssistantMessage, LiveAssistantMessage } from "@/chat/AssistantMessage";
 import { DayDivider, NewDivider } from "@/chat/DayDivider";
+import { ThreadSummary } from "@/chat/ThreadSummary";
 import { useAppActive } from "@/ui/appState";
 import { UserMessageText } from "@/chat/MentionChip";
 import { EvaBubble, TEAMMATE_FOOTER_INSET, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
@@ -342,6 +344,11 @@ export default function ChatScreen() {
       );
     };
   };
+  // Reply threads, in the project coordinator chat only (the web `replyThreads`).
+  const canOpenThread = (message: { isSystemAlert?: boolean; content: string }) =>
+    chat.project !== undefined && message.isSystemAlert !== true && message.content.trim() !== "";
+  const openThread = (rootId: string) =>
+    router.push({ pathname: "/chat/[target]/thread/[rootId]", params: { target, rootId } });
   // The message footer's actions, behind a press and hold (user choice): built when a message is held.
   const menuFor = (messageId: string) => {
     const message = visible.find((entry) => entry._id === messageId);
@@ -362,6 +369,7 @@ export default function ChatScreen() {
         message.role === "assistant" && canReply && !pending && !savedQuestion && message.content.trim() !== ""
           ? () => quotes.select(message._id, message.content)
           : undefined,
+      onReply: canOpenThread(message) ? () => openThread(message._id) : undefined,
     });
   };
   // What Find searches, as the web: each message's text as it reads (mention tokens as names), no system rows.
@@ -516,6 +524,7 @@ export default function ChatScreen() {
                 // Only a failed turn gets one, so the rest keep their props (the web `onRetryTurn`).
                 onRetryTurn={message.errorType !== undefined ? retryFor(message._id) : undefined}
                 onOpenWebChat={openWebChat}
+                onOpenThread={chat.project !== undefined ? openThread : undefined}
               />
             );
           }}
@@ -643,7 +652,7 @@ function ChatDock({
       if (tokenized) typing.onActivity();
     },
     // The coordinator chat: `@Eva` says a message is for her (`chatMessageRoute`).
-    chat.project !== undefined,
+    chat.project !== undefined ? [EVA_MENTION_ITEM] : [],
   );
   draft.pull(composer);
   const suggestions = useSkillSuggestions(composer.skills, composer.text);
@@ -864,6 +873,7 @@ function ChatMessageRow({
   onPanelReply,
   onRetryTurn,
   onOpenWebChat,
+  onOpenThread,
   after,
   changes,
 }: {
@@ -898,6 +908,8 @@ function ChatMessageRow({
   /** Sends a panel button's text; undefined disables the buttons. */
   onPanelReply: ((message: string) => void) | undefined;
   onOpenWebChat: () => void;
+  /** The coordinator chat: opens a message's reply thread ("N replies"). */
+  onOpenThread?: (rootId: string) => void;
   /** Under the whole message, as the web `afterMessage`: a proposed plan's card. */
   after?: ReactNode;
   /** A reply that changed code: its Changes chip, over the footer. */
@@ -992,6 +1004,13 @@ function ChatMessageRow({
                       at={message.timestamp}
                       finishedAt={message.role === "assistant" ? message.finishedAt : undefined}
                       turn={turn}
+                    />
+                  ) : null}
+                  {onOpenThread && (message.replyCount ?? 0) > 0 ? (
+                    <ThreadSummary
+                      replyCount={message.replyCount ?? 0}
+                      className={fromTeammate || evaReply ? TEAMMATE_FOOTER_INSET : "self-end"}
+                      onPress={() => onOpenThread(message._id)}
                     />
                   ) : null}
                 </Message>

@@ -1,3 +1,4 @@
+import { bumpThreadRoot } from "../_messages/replies";
 import { v } from "convex/values";
 import {
   queueRuntimeContinue,
@@ -634,6 +635,8 @@ const sessionChatQueueConfig: ChatQueueConfig<
     return { ok: true, data: { repo, model: next.model, providerAccountId } };
   },
   insertUserMessage: async (ctx, id, { session }, next, prepared, now) => {
+    // A thread reply's own row was stored when it was sent (`addReply`).
+    if (next.replyTo !== undefined) return;
     await ctx.db.insert("messages", {
       parentId: id,
       role: "user",
@@ -659,7 +662,12 @@ const sessionChatQueueConfig: ChatQueueConfig<
       content: "",
       timestamp: Date.now(),
       activityLog: "",
+      // Eva answers a thread reply inside that thread.
+      replyTo: next.replyTo,
     });
+    if (next.replyTo !== undefined) {
+      await bumpThreadRoot(ctx, next.replyTo, undefined);
+    }
     const turnId = await openSessionChatTurn(ctx, {
       chatId: id,
       sessionId: session._id,

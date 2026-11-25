@@ -27,6 +27,9 @@ import {
 } from "./sandboxChatSurface";
 import { sandboxChatKeys } from "./sandboxChatTurn";
 import { SubagentThreadLayer } from "./SubagentThreadLayer";
+import { ReplyThreadView } from "./replies/ReplyThreadView";
+import { useQueryState } from "nuqs";
+import { replyThreadParser } from "@/lib/search-params";
 import { useChatQueueGate } from "./useChatQueueGate";
 import { useChatSend } from "./useChatSend";
 import { useSandboxChatDraft } from "./useSandboxChatDraft";
@@ -62,14 +65,18 @@ export function SandboxChatPanel({
   onSandboxToggle,
   preInputBanner,
   assistantBubbles = false,
+  replyThreads = false,
 }: SandboxChatPanelProps & {
   binding: SandboxChatBinding;
   /** Owner-specific notice above the composer (a paused coordinator). */
   preInputBanner?: ReactNode;
   /** Eva's replies in a bubble with her mark (the project coordinator). */
   assistantBubbles?: boolean;
+  /** Messages take replies in threads (the project coordinator). */
+  replyThreads?: boolean;
 }) {
   const { repo, basePath } = useRepo();
+  const [threadId, setThreadId] = useQueryState("thread", replyThreadParser);
   const { entity, doc, model, firstRun, ownerLabel } = binding;
   // All undefined until the owner's session exists: nothing to read yet, and
   // the first send creates it.
@@ -177,6 +184,13 @@ export function SandboxChatPanel({
           (account) => account.id === binding.providerAccountId,
         )?.label ?? "Selected account");
 
+  // The chat's threads in transcript order, for the panel's ↑ and ↓.
+  const threadRoots = chatMessages
+    .filter((message) => (message.replyCount ?? 0) > 0)
+    .map((message) => message._id);
+  const threadRoot = threadId ?? undefined;
+  const threadIndex = threadRoot ? threadRoots.indexOf(threadRoot) : -1;
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
       <SandboxChatHeaderActions
@@ -262,6 +276,9 @@ export function SandboxChatPanel({
           hasPendingContext={hasPendingReviewComments}
           onOpenAgentsTab={onOpenAgentsTab}
           assistantBubbles={assistantBubbles}
+          onOpenThread={
+            replyThreads ? (messageId) => void setThreadId(messageId) : undefined
+          }
           backgroundAgents={doc?.backgroundAgents}
           sandboxRunning={isSandboxActive}
           transcriptTail={sandboxStartupTail(
@@ -271,6 +288,20 @@ export function SandboxChatPanel({
               !isExecuting,
           )}
         />
+        {replyThreads && threadRoot ? (
+          <ReplyThreadView
+            rootId={threadRoot}
+            repo={{ id: repo._id, basePath }}
+            model={model}
+            previousRootId={threadRoots[threadIndex - 1]}
+            nextRootId={
+              threadIndex === -1 ? undefined : threadRoots[threadIndex + 1]
+            }
+            onOpen={(rootId) => void setThreadId(rootId)}
+            // Replace, so Back from the chat does not reopen the thread.
+            onClose={() => void setThreadId(null, { history: "replace" })}
+          />
+        ) : null}
       </SubagentThreadLayer>
       {queueGate.switchDialog}
     </div>

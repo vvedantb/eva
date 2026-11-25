@@ -37,7 +37,15 @@ import { routePersonChatMessage } from "../_projects/reports";
 import { reviveCoordinatorSession } from "./ownedSession";
 import { sessionAccountHolder } from "../_projects/runSettings";
 import type { Doc, Id } from "../_generated/dataModel";
-import { notifyChatMentions } from "../_mentions/notifyChatMentions";
+import {
+  notifyChatMentions,
+  notifyThreadReply,
+} from "../_mentions/notifyChatMentions";
+import {
+  bumpThreadRoot,
+  replyMentionsEva,
+  threadReplyPrompt,
+} from "../_messages/replies";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { composerTraitFields } from "../_shared/composerTraits";
 import { cancelChatTurn } from "../_chat/cancelRace";
@@ -224,6 +232,8 @@ async function enqueueChatMessage(
     displayContent?: string;
     settings: TurnSettings;
     sentViaOrchestrator?: boolean;
+    /** A thread reply for Eva: her answer joins this root's thread. */
+    replyTo?: Id<"messages">;
   },
 ): Promise<void> {
   const { chat, session } = params.context;
@@ -254,6 +264,7 @@ async function enqueueChatMessage(
     providerAccountId,
     attachmentStorageIds: settings.attachmentStorageIds,
     sentViaOrchestrator: params.sentViaOrchestrator,
+    replyTo: params.replyTo,
   });
   await ctx.db.patch(chat._id, {
     lastModel: settings.model,
@@ -701,6 +712,85 @@ export const enqueueMessage = authMutation({
       sentViaOrchestrator,
     });
     return null;
+  },
+});
+
+/**
+ * Replies in a thread on a chat message (projects v2, PR D). The reply is a
+ * row of the same chat with `replyTo` set, so it shows in the thread panel
+ * only. It notifies the thread's people and anyone @-mentioned, and wakes Eva
+ * only when it @mentions her: her answer then lands in this thread.
+ */
+export const addReply = authMutation({
+  args: {
+    // A plain string: the chat renders optimistic rows under client-minted ids.
+    rootId: v.string(),
+    content: v.string(),
+    ...turnSettingsArgs,
+  },
+  returns: v.id("messages"),
+  handler: async (ctx, args) => {
+    const content = args.content.trim();
+    if (!content) throw new Error("A reply needs text");
+    const targetId = ctx.db.normalizeId("messages", args.rootId);
+    const target = targetId ? await ctx.db.get(targetId) : null;
+    if (!target) throw new Error("This message cannot take replies yet");
+    // A reply to a reply joins the same thread.
+    const root =
+      target.replyTo === undefined ? target : await ctx.db.get(target.replyTo);
+    if (!root) throw new Error("Message not found");
+    const chatId = ctx.db.normalizeId("sessionChats", root.parentId);
+    if (!chatId) throw new Error("Replies work in session chats only");
+    const context = await getSessionChatWithAccess(ctx.db, chatId, ctx.userId);
+    const { chat, session } = context;
+    if (chat.archived === true) throw new Error("This chat is closed");
+
+    const replyId = await ctx.db.insert("messages", {
+      parentId: root.parentId,
+      role: "user",
+      content,
+      timestamp: Date.now(),
+      userId: ctx.userId,
+      replyTo: root._id,
+    });
+    await bumpThreadRoot(ctx, root._id, ctx.userId);
+    await touchUserActivity(ctx, sessionActivityRef(session), {
+      source: "chat",
+      userId: ctx.userId,
+    });
+
+    const surface = { kind: "session" as const, session, chat };
+    await notifyChatMentions(ctx, {
+      content,
+      authorUserId: ctx.userId,
+      surface,
+    });
+    await notifyThreadReply(ctx, {
+      content,
+      authorUserId: ctx.userId,
+      participantIds: [
+        ...(root.role === "user" && root.userId ? [root.userId] : []),
+        ...(root.replierIds ?? []),
+      ],
+      surface,
+    });
+
+    if (replyMentionsEva(content)) {
+      const { rootId, content: omitted, ...settings } = args;
+      void rootId;
+      void omitted;
+      await enqueueChatMessage(ctx, {
+        context,
+        userId: ctx.userId,
+        content: threadReplyPrompt(root, content),
+        // The queue panel shows the reply, not the whole thread prompt.
+        displayContent: content,
+        settings,
+        replyTo: root._id,
+      });
+      await drainChatQueueQuietly(ctx, chat._id);
+    }
+    return replyId;
   },
 });
 

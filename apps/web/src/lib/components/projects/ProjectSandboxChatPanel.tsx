@@ -29,6 +29,7 @@ export function ProjectSandboxChatPanel({
       {...panel}
       preInputBanner={<CoordinatorPausedBanner projectId={projectId} />}
       assistantBubbles
+      replyThreads
     />
   );
 }
