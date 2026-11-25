@@ -22,7 +22,10 @@ interface Figure {
   accent?: boolean;
 }
 
-/** The five a non-engineer can weigh, biggest first. */
+/**
+ * The five a non-engineer can weigh, biggest first.
+ * Source: Eva repository, measured 23 September 2026 (all figures here).
+ */
 const HEADLINE: readonly Figure[] = [
   { value: 2936, label: "tracked files", delay: 0.45, accent: true },
   { value: 976, label: "backend functions", delay: 0.58 },

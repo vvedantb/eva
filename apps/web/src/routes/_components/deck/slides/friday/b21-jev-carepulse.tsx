@@ -70,6 +70,10 @@ const FIELDS: readonly Field[] = [
 ];
 
 const TYPED = 1;
+/**
+ * The flag line, 50%, is our own assumption (carepulse-ts pull request 2487,
+ * merged 14 October 2026). Field scores here are illustrative, not real calls.
+ */
 const LINE = 50;
 
 const typedText = FIELDS[TYPED]?.text ?? "";

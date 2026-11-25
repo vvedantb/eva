@@ -59,7 +59,11 @@ interface Benefit {
   label: string;
 }
 
-/** Why a model this size is worth having: the reason it can run on everything. */
+/**
+ * Why a model this size is worth having: the reason it can run on everything.
+ * "Fractions of a penny" is the product owner's own estimate per check, not a
+ * billed figure; "under a second" matches the note in Eva's Jev client.
+ */
 const BENEFITS: readonly Benefit[] = [
   { icon: IconFeather, label: "Very small model" },
   { icon: IconCoin, label: "Fractions of a penny per check" },

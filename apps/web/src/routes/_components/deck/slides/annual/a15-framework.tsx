@@ -12,8 +12,12 @@ import { Sheen } from "../../_components/motion";
 
 /**
  * The framework's three sections, one column each, read top to bottom. Each
- * capability carries two reminders of the slides that showed it; the full
- * mapping, with slide numbers, is in the speaker note.
+ * capability carries reminders of the slides that showed it. Figures come from
+ * those slides and their sources: models (c01-providers, catalogue at
+ * 16 September 2026), workspace start (07-sandbox, July 2026), six phases and
+ * 3 weeks (a09-design, 6 to 29 July 2026), dropped plans (d06-abandoned), write
+ * clashes (c08-occ, 24 August 2026), patches (e03-patch-packages), warnings
+ * (d01-security, audit 8 August 2026), slider (05-simple-mode, 24 August 2026).
  */
 const SECTIONS: readonly {
   heading: string;

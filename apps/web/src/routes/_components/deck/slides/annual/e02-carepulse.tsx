@@ -14,7 +14,10 @@ interface Quarter {
   items: readonly string[];
 }
 
-/** One column per build step. Dates and sources are in the speaker note. */
+/**
+ * One column per build step. Source: carepulse-ts main branch, December 2025
+ * to November 2026, checked 16 November 2026.
+ */
 const QUARTERS: readonly Quarter[] = [
   {
     when: "Dec – Feb",

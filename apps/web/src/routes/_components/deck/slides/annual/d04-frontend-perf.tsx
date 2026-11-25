@@ -27,7 +27,11 @@ interface Drop {
   unit: string;
 }
 
-/** One per build step, in the order they are spoken. */
+/**
+ * One per build step, in the order they are spoken.
+ * Sources: Eva release notes. Build and checker 20 August 2026; landing
+ * page 8 August 2026.
+ */
 const DROPS: readonly Drop[] = [
   {
     label: "Local build",

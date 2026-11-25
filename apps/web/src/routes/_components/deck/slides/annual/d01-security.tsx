@@ -31,6 +31,12 @@ import {
 } from "../../_components/motion";
 import { ProblemFix } from "../_parts/ProblemFix";
 
+/**
+ * Sources: security audit 8 August 2026; production dependency warnings
+ * 2 critical and 48 high to 0 and 2; verified against production data
+ * 19 August 2026 (Eva release notes).
+ */
+
 /** Every surface the August audit read, in the order it read them. */
 const SURFACES: readonly { name: string; icon: Icon }[] = [
   { name: "Codebases", icon: IconFolderCode },

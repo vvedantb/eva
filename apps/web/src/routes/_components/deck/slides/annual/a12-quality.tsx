@@ -24,7 +24,10 @@ interface Stat {
   accent?: boolean;
 }
 
-/** Left to right, biggest number first. */
+/**
+ * Left to right, biggest number first.
+ * Source: Eva repository at 16 September 2026.
+ */
 const STATS: readonly Stat[] = [
   { value: 303, label: "tests", delay: 0.45, accent: true },
   { value: 79, label: "contract tests", delay: 0.6 },

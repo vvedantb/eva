@@ -22,7 +22,11 @@ interface Case {
   fix: string;
 }
 
-/** Newest first, in the order they are spoken: one per build step. */
+/**
+ * Newest first, in the order they are spoken: one per build step.
+ * Sources: Eva release notes, August to September 2026. Closing figures
+ * (65 respawns against 146 launches, 24 hours) from live traffic logs.
+ */
 const CASES: readonly Case[] = [
   {
     date: "10 Sep",

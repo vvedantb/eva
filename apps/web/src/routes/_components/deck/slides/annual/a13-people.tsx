@@ -34,7 +34,10 @@ interface Incident {
   date: string;
 }
 
-/** Left to right, one per build step, in the order they were found. */
+/**
+ * Left to right, one per build step, in the order they were found.
+ * Source: Eva release notes, August and September 2026.
+ */
 const INCIDENTS: readonly Incident[] = [
   { icon: IconAlertCircle, heading: "Two hours, no reply", date: "Aug" },
   { icon: IconMessageOff, heading: "Two messages dropped", date: "Sep" },

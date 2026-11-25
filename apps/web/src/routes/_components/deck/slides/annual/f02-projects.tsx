@@ -17,7 +17,11 @@ interface Recap {
 
 /**
  * One recap per side project: what was built, then what it changed. Step 1
- * shows the build, step 2 the result. Sources are in the speaker notes.
+ * shows the build, step 2 the result. Sources: vmem repository from
+ * 2 December 2025 (GitHub, checked 22 November 2026), 80% is the BSc
+ * final-year project mark; flowtape and Redline on npm from 5 October 2026
+ * (npm, checked 15 November 2026); Bee releases from 26 September 2026
+ * (GitHub, checked 15 November 2026).
  */
 function ProjectRecap({ recap }: { recap: Recap }) {
   const columns = [

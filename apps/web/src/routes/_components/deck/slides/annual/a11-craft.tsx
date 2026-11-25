@@ -40,7 +40,10 @@ interface Result {
   reduction: string;
 }
 
-/** Medians of three runs, before and after the animation performance work. */
+/**
+ * Medians of three runs, before and after the animation performance work.
+ * Source: Eva animation performance write-up, 5 September 2026.
+ */
 const RESULTS: readonly Result[] = [
   {
     label: "Loading shimmer",

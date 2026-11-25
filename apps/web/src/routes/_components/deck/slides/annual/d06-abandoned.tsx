@@ -24,7 +24,11 @@ interface Shelved {
   verdict: string;
 }
 
-/** One per build step, in the order they were closed. */
+/**
+ * One per build step, in the order they were closed.
+ * Source: Eva written plans (seven cancelled in total); replacement mode for
+ * design sessions removed 23 August 2026.
+ */
 const PLANS: readonly Shelved[] = [
   { plan: "Move the workers", verdict: "Not needed" },
   {

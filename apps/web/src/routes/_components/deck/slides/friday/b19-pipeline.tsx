@@ -45,7 +45,11 @@ const GLOW = [
   { x: W / 2, y: 200, size: 900 },
 ];
 
-/** Eva today, CarePulse next: the one line the slide is building to. */
+/**
+ * Eva today, CarePulse next: the one line the slide is building to. Eva
+ * auto-merge landed 3 September 2026; "in minutes" is the CarePulse target,
+ * not a measured time. The board, task and page are an illustration.
+ */
 function Goal() {
   const shown = useDeckStep() >= CLOSING;
   const chip = "flex items-center gap-2 rounded-full px-4 py-2 text-base";

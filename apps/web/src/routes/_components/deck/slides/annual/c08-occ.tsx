@@ -33,6 +33,10 @@ function Beat({ active, children }: { active: boolean; children: ReactNode }) {
   );
 }
 
+/**
+ * Sources: retry counts from three days of live traffic; both fixes landed
+ * 24 August 2026 (Eva release notes).
+ */
 interface Fix {
   label: string;
   before: string;

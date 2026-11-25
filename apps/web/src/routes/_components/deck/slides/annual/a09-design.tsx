@@ -34,7 +34,11 @@ const DESIGN_SHOTS: readonly CameraShot[] = [
   {},
 ];
 
-/** The migration, in the order the phases shipped. */
+/**
+ * The migration, in the order the phases shipped.
+ * Sources: Eva git history and release notes, 6–29 July 2026 (restore figure
+ * from the spike); rejected options 5 September 2026.
+ */
 const PHASES: readonly AnnualPhase[] = [
   { label: "Spike", date: "6 Jul" },
   { label: "Neutral contract", date: "6 Jul" },
