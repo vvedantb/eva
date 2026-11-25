@@ -21,7 +21,8 @@ const BUTTON_CLASS =
  * the bubble's top-right corner, shown on hover or focus only and laid over
  * the bubble, so it takes no space. On Eva's finished replies: 👍 👎 (the
  * footer's `TurnFeedbackActions`, with its comment box), then Reply, Copy, and
- * a ⋯ menu with the rest (link, fork, checkpoints). Stays up while its comment
+ * the rest (Copy link; a ⋯ menu once there are two or more, as fork and
+ * checkpoints elsewhere). Stays up while its comment
  * box or menu is open.
  */
 export function MessageToolbar({
@@ -40,8 +41,11 @@ export function MessageToolbar({
     comment: string | undefined;
   };
 }) {
-  const hasMenu = menuItems.length > 0;
-  if (!rating && !onReply && !copyText && !hasMenu) return null;
+  // One remaining action (Copy link in a project chat) is a direct button;
+  // the ⋯ menu only appears when there are two or more.
+  const hasMenu = menuItems.length > 1;
+  const directItems = hasMenu ? [] : menuItems;
+  if (!rating && !onReply && !copyText && menuItems.length === 0) return null;
   return (
     <div
       className={cn(
@@ -88,6 +92,19 @@ export function MessageToolbar({
           <IconCopy className="size-4" />
         </button>
       ) : null}
+      {directItems.map((item) => (
+        <button
+          key={item.key}
+          type="button"
+          aria-label={item.label}
+          title={item.label}
+          disabled={item.disabled}
+          onClick={item.onClick}
+          className={BUTTON_CLASS}
+        >
+          {item.icon}
+        </button>
+      ))}
       {hasMenu ? (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
