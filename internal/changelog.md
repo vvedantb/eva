@@ -30,6 +30,11 @@ In a project's coordinator chat, a message that `@`-mentions only teammates is a
 Date: 2026-11-25
 
 `COORDINATOR_RULES` ask for 1-3 short plain lines, no headings, lists only for tasks. In the coordinator chat a running turn shows "Eva is typing" with the dots of the teammate `TypingIndicator` inside Eva's bubble (web `EvaTypingLine`, phone `EvaTypingText`) instead of the live activity timeline and streamed text; a blocking question card still shows, and the finished message keeps its steps. Other chats are unchanged.
+## Projects v2 C: approved Triage goes to the coordinator
+
+Date: 2026-11-25
+
+Approving Triage items (web, phone, Inbox) no longer starts them. `approveProjectTasks` stamps `approvedAt` and new `agentTasks.handedToCoordinatorAt`, and requests one coordinator wake (new reason `triage`, delivered at once) listing the items and who added them. The scheduler never starts a handed task (`ProjectTaskFacts.withCoordinator`). New coordinator-only MCP tools: `start_task` (starts a handed item as its own task) and `merge_task_into` (cancels a handed item into an open task of the same project, stored in new `agentTasks.mergedIntoTaskId`; refuses itself, a finished or merged target and other projects). `COORDINATOR_RULES` tell the coordinator to group handed items by area, add each to an open task or start it, and reply with where each went. Task rows show "With Eva" while handed and "Added to #N" once merged.
 
 ## Projects: old project PRs become threads
 

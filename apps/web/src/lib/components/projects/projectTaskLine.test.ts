@@ -88,6 +88,23 @@ describe("projectTaskSummaryLine", () => {
       projectTaskSummaryLine({ status: "cancelled" }, view("archived"), none),
     ).toBe("Cancelled");
   });
+
+  it("names an approved Triage item the coordinator holds, and where it went", () => {
+    expect(
+      projectTaskSummaryLine(
+        task({ numId: 908, status: "todo" }),
+        { ...view("idle"), withCoordinator: true },
+        none,
+      ),
+    ).toBe("#908 · With Eva");
+    expect(
+      projectTaskSummaryLine(
+        task({ numId: 908, status: "cancelled", mergedIntoTaskId: "t4" }),
+        view("archived"),
+        { ...none, numIdOf: (id) => (id === "t4" ? 904 : undefined) },
+      ),
+    ).toBe("#908 · Added to #904");
+  });
 });
 
 describe("project task PRs and counts", () => {

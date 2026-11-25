@@ -101,6 +101,7 @@ export function ProjectTasks({
     router.push({ pathname: "/quick-task/new", params: { repoId: repo._id, projectId: project._id } });
   const reposById = new Map((repos ?? []).map((entry) => [String(entry._id), entry]));
   const toApprove = unapprovedTodoTaskIds(tasks);
+  const numIdById = new Map(tasks.map((task) => [String(task._id), task.numId]));
   const pullRequests = projectTaskPullRequests(tasks);
   const status = projectStatusFromRows(tasks, failedTaskIds);
   const groups = [
@@ -122,6 +123,7 @@ export function ProjectTasks({
       failed: failedTaskIds.has(row._id),
       authorName: row.createdBy !== undefined ? authorNames.get(row.createdBy) : undefined,
       otherRepoLabel: otherRepo ? repoDisplayLabel(otherRepo) : undefined,
+      numIdOf: (taskId) => numIdById.get(taskId),
     });
   };
 
