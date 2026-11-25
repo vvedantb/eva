@@ -20,8 +20,8 @@ export function ProjectSandboxChatPanel({
 }: SandboxChatPanelProps & {
   projectId: Id<"projects">;
   projectSession: OwnedSession;
-  /** A reply thread opened: the page shows it in the side panel. */
-  onThreadOpen?: () => void;
+  /** Opens a reply thread in the rail's Replies tab. */
+  onThreadOpen?: (messageId: string) => void;
 }) {
   const binding = useProjectChatBinding(projectId, projectSession);
   // The coordinator chat only: its paused line, and Eva's replies as

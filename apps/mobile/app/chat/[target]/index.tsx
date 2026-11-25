@@ -966,6 +966,11 @@ function ChatMessageRow({
   );
   // The coordinator chat: Eva's reply in a bubble on the left, as a teammate's.
   const evaReply = evaBubble && !isUser;
+  // "N replies" in the footer line, always shown (the web footer's thread control).
+  const threadControl =
+    onOpenThread && (message.replyCount ?? 0) > 0 ? (
+      <ThreadSummary replyCount={message.replyCount ?? 0} onPress={() => onOpenThread(message._id)} />
+    ) : null;
   return (
               <View className={`gap-3 ${THREAD_INSET}${joinsPrevious ? " -mt-2" : ""}`} style={findBand}>
                 {dayStart ? <DayDivider timestamp={message.timestamp} /> : null}
@@ -1004,14 +1009,11 @@ function ChatMessageRow({
                       at={message.timestamp}
                       finishedAt={message.role === "assistant" ? message.finishedAt : undefined}
                       turn={turn}
+                      leading={threadControl}
                     />
-                  ) : null}
-                  {onOpenThread && (message.replyCount ?? 0) > 0 ? (
-                    <ThreadSummary
-                      replyCount={message.replyCount ?? 0}
-                      className={fromTeammate || evaReply ? TEAMMATE_FOOTER_INSET : "self-end"}
-                      onPress={() => onOpenThread(message._id)}
-                    />
+                  ) : threadControl ? (
+                    // A grouped bubble has no footer: the replies keep their own line.
+                    <View className={fromTeammate || evaReply ? TEAMMATE_FOOTER_INSET : "self-end"}>{threadControl}</View>
                   ) : null}
                 </Message>
                 {after}

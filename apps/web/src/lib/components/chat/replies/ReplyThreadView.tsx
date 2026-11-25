@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import {
@@ -46,6 +46,7 @@ export function ReplyThreadView({
   chatParentId,
   repo,
   model,
+  isOpen,
   onOpen,
   onClose,
 }: {
@@ -55,10 +56,22 @@ export function ReplyThreadView({
   repo: ChatRepo;
   /** The chat's composer model: a reply that wakes Eva runs on it. */
   model: AIModel;
+  /** The panel is on screen: Escape anywhere on the page closes it. */
+  isOpen: boolean;
   onOpen: (rootId: string) => void;
   onClose: () => void;
 }) {
   const thread = useQuery(api.messages.listReplies, { rootId });
+  // Escape from anywhere (focus often stays on the "N replies" link in the
+  // chat), unless something on top already took it (a menu, a dialog).
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, onClose]);
   const currentUserId = useQuery(api.auth.me);
   const roots = useQuery(api.messages.listThreadRoots, {
     parentId: chatParentId,
@@ -69,12 +82,7 @@ export function ReplyThreadView({
     index !== -1 && roots ? roots[index + 1] : undefined;
 
   return (
-    <div
-      className="flex h-full min-h-0 flex-col"
-      onKeyDown={(event) => {
-        if (event.key === "Escape") onClose();
-      }}
-    >
+    <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-10 shrink-0 items-center gap-2 px-3">
         <IconMessages className="size-4 text-muted-foreground" />
         <span className="flex-1 text-sm font-medium">Replies</span>

@@ -5,10 +5,6 @@ import { ProjectSandboxChatPanel } from "@/lib/components/projects/ProjectSandbo
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { SandboxSurfaceProviders } from "@/lib/components/sandbox/SandboxSurfaceProviders";
 import { ProjectTasksPanel } from "@/lib/components/projects/ProjectTasksPanel";
-import {
-  ProjectReplyThreadPanel,
-  useOpenReplyThread,
-} from "@/lib/components/projects/ProjectReplyThreadPanel";
 import type { ProjectSandboxTab } from "@/lib/components/projects/projectSandboxTabs";
 import {
   SandboxWorkspace,
@@ -36,8 +32,10 @@ interface ProjectDetailSandboxContentProps {
   chatTurnOpen: boolean | undefined;
   sandboxRailWidthPx: number;
   expandRightSignal: number;
-  /** A reply thread opened in the chat: expand the right panel that shows it. */
-  onThreadOpen: () => void;
+  /** Opens a reply thread in the rail's Replies tab (and expands the rail). */
+  onThreadOpen: (messageId: string) => void;
+  /** ✕ on the Replies tab: back to the tab before it. */
+  onCloseThread: () => void;
   openFile: (path: string) => void;
   openDiffs: (repoRelativePath?: string) => void;
   openAgentsTab: () => void;
@@ -55,12 +53,11 @@ export function ProjectDetailSandboxContent({
   sandboxRailWidthPx,
   expandRightSignal,
   onThreadOpen,
+  onCloseThread,
   openFile,
   openDiffs,
   openAgentsTab,
 }: ProjectDetailSandboxContentProps) {
-  // An open reply thread takes the right panel, beside the chat (Slack style).
-  const threadId = useOpenReplyThread();
   // The coordinator can always wake: a project has no closed state.
   const {
     isSandboxActive,
@@ -106,6 +103,7 @@ export function ProjectDetailSandboxContent({
       }
       collapsed={collapsed}
       onToggle={onToggle}
+      onCloseThread={onCloseThread}
     />
   );
 
@@ -140,17 +138,7 @@ export function ProjectDetailSandboxContent({
           }}
         />
       )}
-      rightPanel={(ctx) =>
-        threadId ? (
-          <ProjectReplyThreadPanel
-            projectId={projectId}
-            projectSession={sandbox.projectSession}
-            threadId={threadId}
-          />
-        ) : (
-          rightPanel(ctx)
-        )
-      }
+      rightPanel={rightPanel}
     />
   );
 

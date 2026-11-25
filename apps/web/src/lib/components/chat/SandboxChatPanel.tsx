@@ -77,8 +77,11 @@ export function SandboxChatPanel({
    * thread is the `?thread=` param; the page shows it beside the chat.
    */
   replyThreads?: boolean;
-  /** A thread was opened: the page shows its side panel (expands it). */
-  onThreadOpen?: () => void;
+  /**
+   * Opens a thread the page's way (the project rail's Replies tab). Without
+   * it, opening only sets `?thread=`.
+   */
+  onThreadOpen?: (messageId: string) => void;
 }) {
   const { repo, basePath } = useRepo();
   const [, setThreadId] = useQueryState("thread", replyThreadParser);
@@ -277,8 +280,8 @@ export function SandboxChatPanel({
           onOpenThread={
             replyThreads
               ? (messageId) => {
-                  void setThreadId(messageId);
-                  onThreadOpen?.();
+                  if (onThreadOpen) onThreadOpen(messageId);
+                  else void setThreadId(messageId);
                 }
               : undefined
           }

@@ -301,6 +301,14 @@ export const ChatMessage = memo(function ChatMessage({
       : buildReplyAction(onReply, message._id),
   ].filter((action): action is ChatMessageActionItem => action !== undefined);
   const rowActions = [...userActions, ...checkpoint.items];
+  const threadControl =
+    onReply && (message.replyCount ?? 0) > 0 ? (
+      <ThreadSummary
+        replyCount={message.replyCount ?? 0}
+        replierIds={message.replierIds ?? []}
+        onOpen={() => onReply(message._id)}
+      />
+    ) : null;
 
   return (
     <>
@@ -334,6 +342,7 @@ export const ChatMessage = memo(function ChatMessage({
                 showTurnMeta={showTurnMeta}
                 copyPlain={copyPlain}
                 userActions={userActions}
+                threadControl={threadControl}
               />
             ) : (
               <AssistantTurn
@@ -363,21 +372,26 @@ export const ChatMessage = memo(function ChatMessage({
                 artifacts={artifacts}
                 copyPlain={copyPlain}
                 rowActions={rowActions}
+                threadControl={threadControl}
                 canRate={canRate}
                 feedbackSentiment={feedbackSentiment}
                 feedbackComment={feedbackComment}
               />
             )}
           </AIMessage>
-          {onReply && (message.replyCount ?? 0) > 0 ? (
-            <ThreadSummary
-              replyCount={message.replyCount ?? 0}
-              replierIds={message.replierIds ?? []}
-              align={
-                message.role === "user" && !isOtherUser ? "end" : "start"
-              }
-              onOpen={() => onReply(message._id)}
-            />
+          {threadControl && !showTurnMeta ? (
+            // No footer row here (a grouped bubble, simple view): the thread
+            // control keeps its own line so the replies stay reachable.
+            <div
+              className={cn(
+                "mt-1 flex",
+                message.role === "user" && !isOtherUser
+                  ? "justify-end"
+                  : "justify-start pl-6",
+              )}
+            >
+              {threadControl}
+            </div>
           ) : null}
         </m.div>
       </ChatMessageContextMenu>
@@ -442,7 +456,10 @@ function UserTurn({
   showTurnMeta,
   copyPlain,
   userActions,
+  threadControl,
 }: {
+  /** "N replies", always visible in the footer row. */
+  threadControl: ReactNode;
   joinsNext: boolean;
   message: ChatBodyMessage;
   repo?: ChatRepo;
@@ -519,6 +536,7 @@ function UserTurn({
           copyPlain={copyPlain}
           actions={userActions}
           timestamp={message.timestamp}
+          threadControl={threadControl}
           className={isOtherUser ? "pl-6" : undefined}
         />
       ) : null}
@@ -597,6 +615,8 @@ interface AssistantTurnProps {
   artifacts?: ReactNode;
   copyPlain?: string;
   rowActions: ChatMessageActionItem[];
+  /** "N replies", always visible in the footer row. */
+  threadControl: ReactNode;
   canRate: boolean;
   feedbackSentiment?: FeedbackSentiment;
   feedbackComment?: string;
@@ -629,6 +649,7 @@ function AssistantTurn({
   artifacts,
   copyPlain,
   rowActions,
+  threadControl,
   canRate,
   feedbackSentiment,
   feedbackComment,
@@ -703,6 +724,7 @@ function AssistantTurn({
             turnCredentialSourceLabel={turnCredentialSourceLabel}
             copyPlain={copyPlain}
             rowActions={rowActions}
+            threadControl={threadControl}
             canRate={canRate && !turnState.isStreamingPlaceholder}
             feedbackSentiment={feedbackSentiment}
             feedbackComment={feedbackComment}
@@ -764,6 +786,7 @@ function AssistantTurnContent({
   | "artifacts"
   | "copyPlain"
   | "rowActions"
+  | "threadControl"
   | "canRate"
   | "feedbackSentiment"
   | "feedbackComment"
@@ -982,6 +1005,7 @@ function AssistantTurnMeta({
   turnCredentialSourceLabel,
   copyPlain,
   rowActions,
+  threadControl,
   canRate,
   feedbackSentiment,
   feedbackComment,
@@ -992,47 +1016,54 @@ function AssistantTurnMeta({
   turnCredentialSourceLabel?: string;
   copyPlain?: string;
   rowActions: ChatMessageActionItem[];
+  /** "N replies": always visible, while the rest of the row reveals on hover. */
+  threadControl: ReactNode;
   /** False while the reply still streams: nothing to rate yet. */
   canRate: boolean;
   feedbackSentiment?: FeedbackSentiment;
   feedbackComment?: string;
 }) {
-  if (!(turnModel || copyPlain || rowActions.length > 0)) return null;
+  if (!(turnModel || copyPlain || rowActions.length > 0 || threadControl)) {
+    return null;
+  }
   return (
-    <div className="reveal-on-hover transition-opacity mt-0.5 flex items-center gap-2">
-      {turnModel ? (
-        <MessageModelIcon
-          model={turnModel}
-          reasoningLevel={turnReasoningLevel}
-          credentialSourceLabel={turnCredentialSourceLabel}
-        />
-      ) : null}
-      {copyPlain || rowActions.length > 0 ? (
-        <>
-          <ChatMessageActions
-            copyText={copyPlain}
-            actions={rowActions}
-            className="ml-0.5"
-            revealOnHover={false}
+    <div className="mt-0.5 flex items-center gap-2">
+      {threadControl}
+      <div className="reveal-on-hover transition-opacity flex items-center gap-2">
+        {turnModel ? (
+          <MessageModelIcon
+            model={turnModel}
+            reasoningLevel={turnReasoningLevel}
+            credentialSourceLabel={turnCredentialSourceLabel}
           />
-          {canRate ? (
-            <TurnFeedbackActions
-              messageId={message._id}
-              sentiment={feedbackSentiment}
-              comment={feedbackComment}
+        ) : null}
+        {copyPlain || rowActions.length > 0 ? (
+          <>
+            <ChatMessageActions
+              copyText={copyPlain}
+              actions={rowActions}
+              className="ml-0.5"
+              revealOnHover={false}
             />
-          ) : null}
-          {message.finishedAt && message.timestamp ? (
-            <span className="text-2xs tabular-nums text-muted-foreground/60">
-              {/* The turn's clock time is when Eva finished, not
-                  when it started — the duration next to it already
-                  says how long the reply took. */}
-              {formatClockTime(message.finishedAt)} ·{" "}
-              {formatDuration(message.timestamp, message.finishedAt)}
-            </span>
-          ) : null}
-        </>
-      ) : null}
+            {canRate ? (
+              <TurnFeedbackActions
+                messageId={message._id}
+                sentiment={feedbackSentiment}
+                comment={feedbackComment}
+              />
+            ) : null}
+            {message.finishedAt && message.timestamp ? (
+              <span className="text-2xs tabular-nums text-muted-foreground/60">
+                {/* The turn's clock time is when Eva finished, not
+                    when it started — the duration next to it already
+                    says how long the reply took. */}
+                {formatClockTime(message.finishedAt)} ·{" "}
+                {formatDuration(message.timestamp, message.finishedAt)}
+              </span>
+            ) : null}
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -1090,34 +1121,40 @@ function UserMessageMeta({
   copyPlain,
   actions = [],
   timestamp,
+  threadControl,
   className,
 }: {
   align: "start" | "end";
   copyPlain?: string;
   actions?: ChatMessageActionItem[];
   timestamp?: number;
+  /** "N replies": always visible, while the rest of the row reveals on hover. */
+  threadControl?: ReactNode;
   className?: string;
 }) {
   return (
     <div
       className={cn(
-        "reveal-on-hover transition-opacity flex items-center gap-3",
+        "flex items-center gap-3",
         align === "start" ? "justify-start" : "justify-end",
         className,
       )}
     >
-      {copyPlain || actions.length > 0 ? (
-        <ChatMessageActions
-          copyText={copyPlain}
-          actions={actions}
-          revealOnHover={false}
-        />
-      ) : null}
-      {timestamp ? (
-        <span className="text-2xs text-muted-foreground/60">
-          {formatClockTime(timestamp)}
-        </span>
-      ) : null}
+      {threadControl}
+      <div className="reveal-on-hover transition-opacity flex items-center gap-3">
+        {copyPlain || actions.length > 0 ? (
+          <ChatMessageActions
+            copyText={copyPlain}
+            actions={actions}
+            revealOnHover={false}
+          />
+        ) : null}
+        {timestamp ? (
+          <span className="text-2xs text-muted-foreground/60">
+            {formatClockTime(timestamp)}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }
