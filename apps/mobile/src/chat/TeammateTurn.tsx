@@ -53,11 +53,11 @@ export function TeammateBubble({
 
 /**
  * Eva's reply in the project coordinator chat, as the web `assistantBubble`:
- * plain text at most 70% wide, with no bubble, avatar or name, so people's
+ * plain text at full width, with no bubble, avatar or name, so people's
  * bubbles and Eva's answers read apart.
  */
 export function EvaReply({ children }: { children: ReactNode }) {
-  return <View className="min-w-0 max-w-[70%] px-1">{children}</View>;
+  return <View className="min-w-0 max-w-full px-1">{children}</View>;
 }
 
 /** Only a run's last bubble shows the avatar and squares its corner against it; the rest keep its 16 of space. */
