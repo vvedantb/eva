@@ -1,7 +1,10 @@
 import { v } from "convex/values";
 import type { GenericDatabaseReader } from "convex/server";
 import type { DataModel, Id } from "../_generated/dataModel";
-import { quickTaskRunFailedAt } from "../_agentTasks/taskRunStatus";
+import {
+  hasTaskRunTurn,
+  taskRunFailedAt,
+} from "../_agentTasks/taskRunStatus";
 import {
   authQuery,
   hasTaskAccess,
@@ -76,9 +79,10 @@ export const getTaskIdsWithLatestRunError = authQuery({
         if (!(await canReadBatchTask(ctx.db, ctx.userId, args.repoId, taskId)))
           return null;
         const task = await ctx.db.get(taskId);
-        // A quick task runs as task-mode turns in its chat.
-        if (task && task.projectId === undefined) {
-          return (await quickTaskRunFailedAt(ctx.db, task)) !== null
+        // A task runs as task-mode turns in its chat; one that has not since
+        // runs became chat turns is read off its old run below.
+        if (task && (await hasTaskRunTurn(ctx.db, task))) {
+          return (await taskRunFailedAt(ctx.db, task)) !== null
             ? taskId
             : null;
         }

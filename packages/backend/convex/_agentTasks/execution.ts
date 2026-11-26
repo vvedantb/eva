@@ -1,24 +1,21 @@
 import { v, type Infer } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
-import { startTaskRun } from "../_taskWorkflow/startRun";
-import { startQuickTaskRun } from "./taskRunTurn";
-import { hasActiveQuickTaskRun } from "./taskRunStatus";
+import { startTaskRunTurn } from "./taskRunTurn";
+import { hasActiveTaskRun } from "./taskRunStatus";
 import { runModeValidator } from "../validators";
 import {
   assertTaskNotArchived,
   authMutation,
   hasTaskAccess,
   hasActiveRun,
-  isFirstTaskOnBranch,
 } from "../functions";
-import { resolveTaskWorkflowBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
 import { cancelTaskRunSchedule, scheduleTaskRun } from "./runState";
 
 /**
  * Starts a task now. The one start for `startExecution` and "Save and Run" on
- * a new task (`createQuickTask`, `activateDraft`). A quick task runs as a
- * task-mode turn in its chat (`taskRunTurn.ts`); a project task as a run.
+ * a new task (`createQuickTask`, `activateDraft`): a task-mode turn in the
+ * task's chat (`taskRunTurn.ts`).
  */
 export async function startTaskExecution(
   ctx: MutationCtx & { userId: Id<"users"> },
@@ -42,38 +39,16 @@ export async function startTaskExecution(
   if (!repo) {
     throw new Error("Repository not found");
   }
-  if (task.projectId === undefined) {
-    // A pending schedule is replaced by this run.
-    await cancelTaskRunSchedule(ctx, taskId);
-    await startQuickTaskRun(ctx, task, {
-      mode: options.mode,
-      userId: ctx.userId,
-      commentId: options.triggeringCommentId,
-    });
-    return;
-  }
-  // A pending schedule is cancelled when the run starts (`markTaskRunStarted`).
+  // A project run started before runs became chat turns may still be going.
   if (await hasActiveRun(ctx.db, taskId)) {
     throw new Error("Task already has an active execution");
   }
-
-  const firstOnBranch = await isFirstTaskOnBranch(ctx.db, taskId);
-  const baseBranch = resolveTaskWorkflowBaseBranch(task, repo);
-
-  await startTaskRun(ctx, {
-    task,
-    repo,
-    userId: ctx.userId,
-    baseBranch,
-    isFirstTaskOnBranch: firstOnBranch,
+  // A pending schedule is replaced by this run.
+  await cancelTaskRunSchedule(ctx, taskId);
+  await startTaskRunTurn(ctx, task, {
     mode: options.mode,
-    triggeredBy: ctx.userId,
-    // Explicit comment (quick-task "Make changes") wins; otherwise consume any
-    // comment parked on the task by an earlier change request.
-    triggeringCommentId:
-      options.triggeringCommentId ?? task.pendingChangeRequestCommentId,
-    clearPendingChangeRequest: true,
-    rollbackStatus: "todo",
+    userId: ctx.userId,
+    commentId: options.triggeringCommentId,
   });
 }
 
@@ -110,9 +85,8 @@ export const scheduleExecution = authMutation({
       throw new Error("Only todo tasks can be scheduled");
     }
     const running =
-      task.projectId === undefined
-        ? await hasActiveQuickTaskRun(ctx.db, task)
-        : await hasActiveRun(ctx.db, args.id);
+      (await hasActiveTaskRun(ctx.db, task)) ||
+      (await hasActiveRun(ctx.db, args.id));
     if (running) {
       throw new Error("Task already has an active execution");
     }

@@ -138,10 +138,11 @@ export async function findChatByNumber(
  * turn never counts: at send time the new turn supersedes it, and at dequeue
  * time the chat is idle so any open turn of its own is a leftover.
  *
- * A task's run is filed under its session too (a project task's under the
- * project's), and it holds the whole sandbox: while one is open no chat may
- * start, so a message sent mid-run queues behind it (the run's `closeTurn`
- * drains the queue).
+ * A run from before runs became chat turns (`agentRuns`) is filed under its
+ * task's own session, and it holds the whole sandbox: while one is open no
+ * chat may start, so a message sent mid-run queues behind it (the run's
+ * `closeTurn` drains the queue). A task-mode turn is a chat turn and counts
+ * as one.
  */
 export async function sessionChatHasFreeSlot(
   db: DatabaseReader,

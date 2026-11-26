@@ -22,7 +22,7 @@ import {
 import { MENTION_TOKEN_REGEX } from "../convex/_mentions/mentionToken";
 import { SKILL_TOKEN_REGEX } from "../convex/_mentions/skillToken";
 import { openTurn } from "../convex/_chat/turnStore";
-import { hasActiveQuickTaskRun } from "../convex/_agentTasks/taskRunStatus";
+import { hasActiveTaskRun } from "../convex/_agentTasks/taskRunStatus";
 import { modules } from "./_helpers/convexModules";
 
 /**
@@ -648,7 +648,7 @@ describe("mobile api", () => {
       const isRunning = (taskId: Id<"agentTasks">) =>
         t.run(async (ctx) => {
           const task = await ctx.db.get(taskId);
-          return task !== null && (await hasActiveQuickTaskRun(ctx.db, task));
+          return task !== null && (await hasActiveTaskRun(ctx.db, task));
         });
       expect(await isRunning(mine)).toBe(true);
       expect(await isRunning(theirs)).toBe(false);

@@ -15,7 +15,6 @@ import { ensureWorkSession, ownedSessionBusy } from "../_sessions/ownedSession";
 import { TASK_CHAT_BUSY_ERROR } from "./recovery";
 import {
   accountHolder,
-  latestTaskRun,
   projectRunSettings,
   takesProjectSettings,
 } from "../_projects/runSettings";
@@ -45,7 +44,7 @@ async function adoptProjectRunSettings(
   const project = task.projectId ? await ctx.db.get(task.projectId) : null;
   if (!project) return { task, credentialOwnerUserId: task.createdBy };
   let adopted = task;
-  if (takesProjectSettings(await latestTaskRun(ctx.db, task._id))) {
+  if (await takesProjectSettings(ctx.db, task)) {
     const settings = projectRunSettings(project, task);
     await ctx.db.patch(task._id, settings);
     adopted = { ...task, ...settings };

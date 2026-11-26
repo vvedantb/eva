@@ -7,18 +7,18 @@ import {
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader, MutationCtx } from "../_generated/server";
 import { filterUnarchived, isEntityArchived } from "../numId";
-import { isFirstTaskOnBranch } from "../functions";
-import { startTaskRun } from "../_taskWorkflow/startRun";
-import { latestTaskRun } from "./runSettings";
-import { resolveTaskWorkflowBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
+import { startTaskRunTurn } from "../_agentTasks/taskRunTurn";
+import {
+  hasActiveTaskRun,
+  lastTaskRunOutcome,
+} from "../_agentTasks/taskRunStatus";
 import { findOwnedSession, type OwnedSessionOwner } from "../_sessions/owner";
 import {
   ownedSessionBusy,
   syncOwnedSessionWithTaskStatus,
 } from "../_sessions/ownedSession";
 import { requestCoordinatorWake } from "./coordinatorWake";
-import { findOpenAsk } from "./reports";
-import { RUN_WAITING_FOR_ANSWER } from "../_taskWorkflow/helpers";
+import { askFiledDuring, findOpenAsk } from "./reports";
 
 /**
  * The project scheduler: it replaces the old one-at-a-time build. It starts
@@ -90,11 +90,11 @@ function openAskHolder(
 
 /**
  * One child task as the shared rules read it. Only a `todo` task's latest
- * run matters: a failed or cancelled run puts its task back to `todo`. A
- * task with an open ask is waiting, never halted: its run ended on purpose
- * (`RUN_WAITING_FOR_ANSWER`, not an error). A `todo` task whose latest run
- * ended waiting but whose ask is closed was stopped while it waited
- * (`closeTaskReports`): it is halted as stopped, so nothing restarts it.
+ * run matters (`lastTaskRunOutcome`): a failed or stopped run puts its task
+ * back to `todo`. A task with an open ask is waiting, never halted: its run
+ * ended on purpose. A `todo` task whose latest run filed an ask that is now
+ * closed was stopped while it waited (`closeTaskReports`): it is halted as
+ * stopped, so nothing restarts it.
  */
 export async function projectTaskFacts(
   db: DatabaseReader,
@@ -102,30 +102,26 @@ export async function projectTaskFacts(
   task: Doc<"agentTasks">,
 ): Promise<ProjectTaskFacts> {
   const { project, now } = context;
-  const [latest, ask] = await Promise.all([
-    task.status === "todo" ? latestTaskRun(db, task._id) : null,
+  const [latest, ask, active] = await Promise.all([
+    task.status === "todo" ? lastTaskRunOutcome(db, task) : null,
     findOpenAsk(db, task._id),
+    hasActiveTaskRun(db, task),
   ]);
-  const runPending =
-    task.run !== undefined ||
-    latest?.status === "queued" ||
-    latest?.status === "running";
+  // `task.run` also covers a run started before runs became chat turns.
+  const runPending = task.run !== undefined || active;
   // The usage limit holds while its reset is ahead and the task would run
   // on the same account again (it copies the project's at its next start).
   const usageLimited =
-    latest?.errorType === "rate_limit" &&
+    latest?.usageLimited === true &&
     (latest.limitResetAt === undefined || latest.limitResetAt > now) &&
     task.providerAccountId === project.providerAccountId;
   const halted =
-    runPending ||
-    latest === null ||
-    latest.errorType === "rate_limit" ||
-    ask !== null
+    runPending || latest === null || latest.usageLimited || ask !== null
       ? undefined
-      : latest.status === "error"
+      : latest.state === "error"
         ? "failed"
-        : latest.status === "cancelled" ||
-            latest.exitReason === RUN_WAITING_FOR_ANSWER
+        : latest.state === "cancelled" ||
+            (await askFiledDuring(db, task._id, latest.startedAt))
           ? "cancelled"
           : undefined;
   return {
@@ -145,31 +141,17 @@ export async function projectTaskFacts(
 }
 
 /**
- * Starts one child task's run on its own repo (session, branch, GitHub App
- * installation). False when it did not start: a failure here never stops the
- * other tasks. A task whose chat is replying waits for the next event; a
- * workflow that failed to start is marked on its run and shows as failed.
+ * Starts one child task's run: a task-mode turn in its own chat
+ * (`startTaskRunTurn`), which waits behind a turn already running there.
+ * False when it did not start: a failure here never stops the other tasks.
  */
 export async function startProjectTask(
   ctx: MutationCtx,
   task: Doc<"agentTasks">,
   note?: string,
 ): Promise<boolean> {
-  if (task.repoId === undefined) return false;
-  const repo = await ctx.db.get(task.repoId);
-  if (!repo) return false;
   try {
-    await startTaskRun(ctx, {
-      task,
-      repo,
-      userId: task.createdBy,
-      baseBranch: resolveTaskWorkflowBaseBranch(task, repo),
-      isFirstTaskOnBranch: await isFirstTaskOnBranch(ctx.db, task._id),
-      triggeringCommentId: task.pendingChangeRequestCommentId,
-      clearPendingChangeRequest: true,
-      rollbackStatus: "todo",
-      note,
-    });
+    await startTaskRunTurn(ctx, task, { userId: task.createdBy, note });
     return true;
   } catch (error) {
     console.error(
@@ -227,12 +209,12 @@ async function requestEventWakes(
     ) {
       continue;
     }
-    const run = await latestTaskRun(ctx.db, task._id);
+    const run = await lastTaskRunOutcome(ctx.db, task);
     if (!run) continue;
     await requestCoordinatorWake(ctx, {
       projectId,
       reason: "failed",
-      key: `failed:${run._id}`,
+      key: `failed:${run.id}`,
       text: `Task ${taskLabel(task)} failed: ${(run.error ?? "no error text").slice(0, 300)}. You may retry it once with retry_task and a note on what to change.`,
     });
   }
