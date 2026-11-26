@@ -65,6 +65,19 @@ export const KILL_PRIOR_AGENT_PROCESSES_CMD =
 export function workspaceDirShell(): string {
   return `$(if [ -d ${WORKSPACE_DIR} ]; then printf %s ${WORKSPACE_DIR}; elif [ -d ${LEGACY_WORKSPACE_DIR} ]; then printf %s ${LEGACY_WORKSPACE_DIR}; else printf %s ${WORKSPACE_DIR}; fi)`;
 }
+
+/**
+ * First line of every dev-service launch script (dev server, background
+ * commands such as `convex dev`): makes that shell and all its children the
+ * kernel OOM killer's first choice. Eva restarts these services on its own
+ * (preview self-heal, `runBackgroundCommands`' dead-only relaunch), but a
+ * killed agent costs the user the turn. Raising a score needs no privilege.
+ * Kill order: dev services (+500), then agent workers (+300, see
+ * callback-src/providers/opencodeServer.ts), the callback (-600) last.
+ */
+export const PREFER_OOM_KILL_LINE =
+  "echo 500 > /proc/self/oom_score_adj 2>/dev/null || true";
+
 export const DEFAULT_SANDBOX_READY_TIMEOUT_SECONDS = 60;
 export const SNAPSHOT_SANDBOX_READY_TIMEOUT_SECONDS = 30;
 // Restoring an archived sandbox's filesystem can take much longer than a
