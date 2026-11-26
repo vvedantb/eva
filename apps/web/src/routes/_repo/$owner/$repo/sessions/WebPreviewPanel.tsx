@@ -33,7 +33,10 @@ import { messageLinkParser } from "@/lib/search-params";
 import { MESSAGE_LINK_PARAM } from "@eva/shared/messageLink";
 import { PreviewActionBar } from "./_components/PreviewActionBar";
 import { PreviewAnnotationLayer } from "./_components/PreviewAnnotationLayer";
-import { PreviewCommentsDrawer } from "./_components/PreviewCommentsDrawer";
+import {
+  PreviewCommentsDrawer,
+  isResolved,
+} from "./_components/PreviewCommentsDrawer";
 import { PreviewSketchLayer } from "./_components/PreviewSketchLayer";
 import { usePendingPreviewSnapshots } from "@/lib/contexts/PendingPreviewSnapshotsContext";
 import { PreviewDeviceToolbar } from "./_components/PreviewDeviceToolbar";
@@ -366,7 +369,9 @@ export function WebPreviewPanel({
             ? {
                 active: commentsOpen,
                 onToggle: () => setCommentsOpen(!commentsOpen),
-                count: comments.length,
+                // Open only: a resolved comment needs nothing more.
+                count: comments.filter((comment) => !isResolved(comment))
+                  .length,
               }
             : undefined
         }
