@@ -6,7 +6,7 @@ import { internal } from "../_generated/api";
 import { workflow } from "../workflowManager";
 import { normalizeAIModel } from "../validators";
 import { bindTurnWorkflow, closeOpenTurn, openTurn } from "../_chat/turnStore";
-import { getTaskRunStreamingEntityId } from "./helpers";
+import { openRunChatTurn, settleRunChatTurn } from "./runChatTurn";
 import { resolveCredentialSourceLabel } from "../_userProviderAccounts/credentialSource";
 import { setTaskLastRunStartedAt } from "../_agentTasks/runSummary";
 import { markTaskRunStarted } from "../_agentTasks/runState";
@@ -96,6 +96,11 @@ export async function startTaskRun(
     ctx,
     p.task,
   );
+  const isFirstRun =
+    (await ctx.db
+      .query("agentRuns")
+      .withIndex("by_task", (q) => q.eq("taskId", task._id))
+      .first()) === null;
   const startedAt = Date.now();
   const runId = await ctx.db.insert("agentRuns", {
     taskId: task._id,
@@ -122,9 +127,21 @@ export async function startTaskRun(
       : {}),
   });
   // A task runs on its own session's sandbox. Looked up (or created) here so
-  // the run's turn and sandbox writes land on that one session.
-  const ownedSession = (await ensureWorkSession(ctx, { kind: "task", task }))
-    .session;
+  // the run's turn and sandbox writes land on that one session, and its
+  // prompt and reply land in that session's Main chat.
+  const { session: ownedSession, mainChat } = await ensureWorkSession(ctx, {
+    kind: "task",
+    task,
+  });
+  const run = await ctx.db.get(runId);
+  if (!run) throw new Error("Run was not created");
+  const streamingEntityId = await openRunChatTurn(ctx, {
+    run,
+    task,
+    chat: mainChat,
+    userId: p.triggeredBy,
+    isFirstRun,
+  });
   try {
     await startTaskRunWorkflow(ctx, {
       runId,
@@ -141,7 +158,7 @@ export async function startTaskRun(
       credentialOwnerUserId,
       userId: p.userId,
       mode: p.mode,
-    });
+    }, streamingEntityId);
   } catch (error) {
     await ctx.db.patch(runId, {
       status: "error",
@@ -150,6 +167,7 @@ export async function startTaskRun(
       finishedAt: Date.now(),
       exitReason: "workflow_start_failed",
     });
+    await settleRunChatTurn(ctx, task._id, runId);
     await ctx.db.patch(task._id, {
       status: p.rollbackStatus,
       updatedAt: Date.now(),
@@ -174,12 +192,15 @@ export async function startTaskRun(
 async function startTaskRunWorkflow(
   ctx: MutationCtx,
   args: ObjectType<typeof taskExecutionWorkflowArgs>,
+  streamingEntityId: string,
 ): Promise<WorkflowId> {
   const task = await ctx.db.get(args.taskId);
+  const run = await ctx.db.get(args.runId);
   const turnId = await openTurn(ctx, {
     entityId: args.runId,
     sessionId: args.ownedSessionId,
-    streamingEntityId: getTaskRunStreamingEntityId(args.runId),
+    streamingEntityId,
+    placeholderMessageId: run?.replyMessageId,
     model: normalizeAIModel(args.model ?? task?.model),
     repoId: args.repoId,
   });

@@ -4,7 +4,7 @@ import { cancelTrackedWorkflow } from "../workflowManager";
 import type { Id } from "../_generated/dataModel";
 import type { TurnState } from "../validators";
 import { closeOpenTurn } from "../_chat/turnStore";
-import { clearTaskRunStreaming } from "./helpers";
+import { settleRunChatTurn } from "./runChatTurn";
 import { finishTaskRun, taskRunWorkflowId } from "../_agentTasks/runState";
 import { onProjectTasksChanged } from "../functions";
 
@@ -196,9 +196,7 @@ export async function cleanUpStaleRun(
     error: params.errorMessage,
   });
 
-  await clearTaskRunStreaming(ctx, params.taskId, params.runId, {
-    snapshot: true,
-  });
+  await settleRunChatTurn(ctx, params.taskId, params.runId);
 }
 
 /**

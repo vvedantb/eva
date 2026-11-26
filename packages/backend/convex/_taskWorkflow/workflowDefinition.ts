@@ -9,7 +9,6 @@ import {
 } from "../validators";
 import { taskCompleteEvent } from "./events";
 import { buildQuickTaskRetryDelayMs, TASK_CHAT_BUSY_ERROR } from "./recovery";
-import { getTaskRunStreamingEntityId } from "./helpers";
 import { prepareSandboxSteps } from "../_sandbox_runtime/prepareSandboxSteps";
 import { formatDelayedPublishFailureError } from "../_sessions/resultTarget";
 import {
@@ -123,7 +122,7 @@ export const taskExecutionWorkflow = workflow.define({
           ephemeral: false,
           repoId: args.repoId,
           attachRunId: args.runId,
-          streamingEntityId: getTaskRunStreamingEntityId(args.runId),
+          streamingEntityId: data.streamingEntityId,
           baseBranch: args.baseBranch,
           branchName: data.branchName,
           createRetry: { maxAttempts: 3, initialBackoffMs: 2000, base: 2 },
@@ -187,7 +186,7 @@ export const taskExecutionWorkflow = workflow.define({
         fastMode: data.traits.fastMode,
         allowedTools: "Read,Write,Edit,Bash,Glob,Grep",
         repoId: args.repoId,
-        streamingEntityId: getTaskRunStreamingEntityId(args.runId),
+        streamingEntityId: data.streamingEntityId,
         runId: String(args.runId),
         requireTaskCommit: true,
         providerAccountId: args.providerAccountId,

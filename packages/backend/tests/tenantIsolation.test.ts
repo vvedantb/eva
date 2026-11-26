@@ -300,7 +300,6 @@ describe("live agent output follows the entity's read rule", () => {
     async () => {
       const f = await fixture();
       const streamIds = [
-        `task-run-${f.runId}`,
         String(f.projectId),
         String(f.chatId),
         `pr-recap:${f.docId}`,

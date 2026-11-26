@@ -8,7 +8,6 @@ import {
   hasRepoAccess,
   isTaskVisibleTo,
 } from "../functions";
-import { resolveStorageEntries } from "../_chat/storageUrls";
 
 /** Loads a run and its parent task, enforcing task access. Returns null if the run is missing or inaccessible. */
 async function loadAccessibleRun(
@@ -112,60 +111,6 @@ export const getWithDetails = authQuery({
       taskTitle: loaded.task.title,
       taskDescription: loaded.task.description,
     };
-  },
-});
-
-/** Retrieves the activity log text for a specific agent run. */
-export const getActivityLog = authQuery({
-  args: { id: v.id("agentRuns") },
-  returns: v.union(v.string(), v.null()),
-  handler: async (ctx, args) => {
-    const loaded = await loadAccessibleRun(ctx.db, ctx.userId, args.id);
-    if (!loaded) return null;
-
-    const activityLog =
-      (await ctx.db
-        .query("agentRunActivityLogs")
-        .withIndex("by_run_and_type", (q) =>
-          q.eq("runId", args.id).eq("type", "run"),
-        )
-        .first()) ??
-      (await ctx.db
-        .query("agentRunActivityLogs")
-        .withIndex("by_run_and_type", (q) =>
-          q.eq("runId", args.id).eq("type", undefined),
-        )
-        .first());
-    return activityLog?.activityLog ?? null;
-  },
-});
-
-/**
- * Resolves the run's harvested media to URLs, in capture order.
- *
- * Separate from `listByTask` so a run row stays cheap: callers only ask once
- * `mediaStorageIds` on the run says there is something to resolve.
- */
-export const getMedia = authQuery({
-  args: { id: v.id("agentRuns") },
-  returns: v.array(
-    v.object({
-      url: v.union(v.string(), v.null()),
-      contentType: v.union(v.string(), v.null()),
-    }),
-  ),
-  handler: async (ctx, args) => {
-    const loaded = await loadAccessibleRun(ctx.db, ctx.userId, args.id);
-    if (!loaded) return [];
-    const entries = await resolveStorageEntries(
-      (id) => ctx.storage.getUrl(id),
-      (id) => ctx.db.system.get("_storage", id),
-      loaded.run.mediaStorageIds,
-    );
-    return entries.map((entry) => ({
-      url: entry.url,
-      contentType: entry.contentType,
-    }));
   },
 });
 
