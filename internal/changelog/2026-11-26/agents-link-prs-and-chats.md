@@ -4,3 +4,4 @@
 - Every chat agent gets it in the static chat instructions; Manager Ave gets it in its own prompt, and its status table now links each agent.
 - GitHub issue links in chat now get a hover card (state, title, author, comment count). `@eva/shared` `parseGithubItemLink` replaces `parseGithubPrLink` and reads both `/pull/N` and `/issues/N`; the new `github.getIssueCard` action is ActionCache-backed (60s), like `getPullRequestCard`. PR and issue cards share one `GithubCard` layout.
 - New `MANAGER_AVE_INSTRUCTION` tells every chat agent that Manager Ave exists, that a message can come from it, and to point users at it for multi-repo or multi-agent work.
+- Session, quick task and project hover cards (chat links and `@` chips) now use the GitHub card layout: kind pill, `#numId`, age, title, description, creator. `LinkPreviewCard` (`components/mentions`) is the one layout for all of them; `mentions.getEntity` now returns `updatedAt` and `authorName`.
