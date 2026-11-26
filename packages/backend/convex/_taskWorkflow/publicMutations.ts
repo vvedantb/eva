@@ -15,9 +15,9 @@ import {
 import { TURN_FINALIZING_LEASE_MS } from "../_chat/turnLease";
 import { turnCheckpointArgs, turnLeaseFenceArgs } from "../validators";
 import { taskCompleteEvent } from "./events";
+import { settleRunChatTurn } from "./runChatTurn";
 import {
   clearStreamingActivity,
-  getTaskRunStreamingEntityId,
   recordCompletionLog,
   sendCompletionEvent,
 } from "./helpers";
@@ -199,7 +199,8 @@ export async function cancelTaskRun(
       finalizingAt: undefined,
       finishedAt: Date.now(),
     });
-    await clearStreamingActivity(ctx, getTaskRunStreamingEntityId(run._id));
+    // Keeps the steps it streamed and marks the reply Stopped.
+    await settleRunChatTurn(ctx, task._id, run._id);
     // The cancelled status is written here, not through finalizeRunStatus, so
     // this is the one terminal transition that hook cannot see.
     await scheduleTaskOrchestratorNotify(ctx, task._id, "cancelled");

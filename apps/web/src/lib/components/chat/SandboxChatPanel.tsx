@@ -85,7 +85,7 @@ export function SandboxChatPanel({
 }) {
   const { repo, basePath } = useRepo();
   const [, setThreadId] = useQueryState("thread", replyThreadParser);
-  const { entity, doc, model, firstRun, ownerLabel } = binding;
+  const { entity, doc, model, ownerLabel } = binding;
   // All undefined until the owner's session exists: nothing to read yet, and
   // the first send creates it.
   const { parentId, streamingEntityId, draftTarget } = sandboxChatKeys(entity);
@@ -111,12 +111,7 @@ export function SandboxChatPanel({
     api.messages.openThreadTurn,
     replyThreads && parentId ? { parentId } : "skip",
   );
-  // The first run streams to its own row while it owns the bubble.
-  const streaming = threadTurn
-    ? undefined
-    : firstRun?.isInProgress
-      ? firstRun.streaming
-      : chatStreaming;
+  const streaming = threadTurn ? undefined : chatStreaming;
   const openThread = (messageId: string) => {
     if (onThreadOpen) onThreadOpen(messageId);
     else void setThreadId(messageId);
@@ -194,11 +189,7 @@ export function SandboxChatPanel({
       handleSend(command, undefined, { skipReviewComments: true }),
   });
 
-  // The first run opens the chat, so it shows once nothing older is left.
-  const chatMessages = [
-    ...(history.hasOlder ? [] : (firstRun?.turn ?? [])),
-    ...(history.messages ?? []),
-  ];
+  const chatMessages = history.messages ?? [];
   const usageAccountLabel =
     binding.providerAccountId === null
       ? "Team"

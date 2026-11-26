@@ -782,10 +782,15 @@ export const agentRunFields = {
   // this field existed.
   model: v.optional(aiModelValidator),
   // Screenshots and recordings the agent left in the sandbox deliverable
-  // folders, uploaded as the run finishes. A run has no `messages` row to hang
-  // media on — it renders as the quick task's first chat turn or as a timeline
-  // row, both built from this doc — so the ids live here instead.
+  // folders, uploaded before the run completes. Copied onto the run's reply
+  // row (`replyMessageId`) when the run settles (`settleRunChatTurn`).
   mediaStorageIds: v.optional(v.array(v.id("_storage"))),
+  /**
+   * The run's assistant row in its task's Main chat: an empty bubble the run
+   * streams into, settled with its reply on every terminal path
+   * (`_taskWorkflow/runChatTurn.ts`).
+   */
+  replyMessageId: v.optional(v.id("messages")),
   /**
    * The start attempt a quick task run's claim took on its session
    * (`sessions.claimSandboxForTaskRun`), so a cancel before the attach can
@@ -1494,6 +1499,9 @@ export const messageFields = {
   // Convex-side guard only — synthetic continuations are rendered like normal
   // turns; the UI does not read this flag.
   isSyntheticTurn: v.optional(v.boolean()),
+  // The task run that wrote this row: its prompt (user) or its reply
+  // (assistant). Chat-turn helpers that pick rows by recency skip these.
+  runId: v.optional(v.id("agentRuns")),
   // Snapshot of which credential powered this chat turn ("Team" or the
   // account label). Set on user messages at send/dequeue time.
   credentialSourceLabel: v.optional(v.string()),

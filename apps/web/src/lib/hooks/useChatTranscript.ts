@@ -125,8 +125,7 @@ export function useOlderTranscript({
   // kept, so the rows load again on return.
   const heldOlder = useHeldResult(loaded, skipped ? null : parentId);
   const older = skipped ? undefined : heldOlder;
-  // Before any step, one row read says whether there is history at all. A
-  // quick task shows its first run only once nothing older is left.
+  // Before any step, one row read says whether there is history at all.
   const probeArgs =
     skipped || before === undefined || own.steps > 0
       ? "skip"

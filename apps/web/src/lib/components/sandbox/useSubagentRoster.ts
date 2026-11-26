@@ -46,8 +46,6 @@ export function useSubagentRoster({
   const status = useChatTurnStatus(parentId);
 
   // Streaming payloads can outlive their turn; only fold them while one runs.
-  // No first-run input: this stream is the chat's, not a quick task's first
-  // run, so a running first run must not fold it.
   const isExecuting = isChatTurnExecuting({ status, messages });
   const agents = deriveSubagents({
     activityLogs: (messages ?? []).map((message) => message.activityLog),

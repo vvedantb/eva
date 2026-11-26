@@ -39,9 +39,8 @@ export interface ChatRepo {
 /** The id a chat's messages hang off: a session chat, or a pre-chat session. */
 export type ChatParentId = Id<"sessionChats"> | Id<"sessions">;
 
-// `_id` is widened to `string` so callers can prepend client-built synthetic
-// turns (the quick task's first-run activity in the sandbox chat) without
-// forging a branded id. Real docs stay assignable; nothing in the chat tree
+// `_id` is widened to `string` so client-built rows (optimistic sends) fit
+// without forging a branded id. Real docs stay assignable; nothing in the chat tree
 // feeds `_id` back into Convex. `parentId` is dropped so Manager Ave's
 // `aveMessages` rows (keyed by thread, not by chat entity) fit too.
 export type ChatBodyMessage = Omit<Doc<"messages">, "_id" | "parentId"> & {
@@ -215,9 +214,8 @@ type ChatTurnStatus = NonNullable<
  * surface (session, quick task, project) and every reader of it (composer,
  * queue, subagent thread, Agents roster, design panel), so they cannot
  * disagree on the same chat:
- * - a run the surface renders as a turn (a quick task's first run) counts
- *   while it runs;
- * - otherwise the chat's durable turn is canonical, synthetic turns included;
+ * - the chat's durable turn is canonical, synthetic turns included, and so is
+ *   an open task run streaming into the chat (`turns.getChatStatus`);
  * - except when that turn's own reply bubble has finished: the server closes
  *   the turn and finishes its bubble in one mutation, so a finished bubble
  *   proves the turn is over even if the status the client holds is stale
@@ -230,16 +228,12 @@ type ChatTurnStatus = NonNullable<
 export function isChatTurnExecuting({
   status,
   messages,
-  isFirstRunInProgress = false,
 }: {
   /** `api.turns.getChatStatus`: `null` = no open turn, `undefined` = loading. */
   status: ChatTurnStatus | null | undefined;
   /** The chat transcript; `undefined` while it loads. */
   messages: ReadonlyArray<TurnShapeMessage> | undefined;
-  /** A quick task's first run, rendered as this chat's first turn. */
-  isFirstRunInProgress?: boolean;
 }): boolean {
-  if (isFirstRunInProgress) return true;
   if (status === undefined) return isAssistantTurnInProgress(messages ?? []);
   if (status === null) return false;
   if (status.source !== "durable" || status.placeholderMessageId === undefined) {

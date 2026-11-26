@@ -12,14 +12,8 @@ import {
 import { isUsageLimitError, parseUsageLimitResetTime } from "./recovery";
 import { scheduleTaskOrchestratorNotify } from "../orchestratorShared";
 import { deriveLogUsage } from "../_logs/usage";
-import { TASK_RUN_STREAM_PREFIX } from "../_chat/agentStreamIds";
 
 export const llmJson = new LlmJson({ attemptCorrection: true });
-
-/** Returns the streaming entity ID used for a task run's activity stream. */
-export function getTaskRunStreamingEntityId(runId: Id<"agentRuns">): string {
-  return `${TASK_RUN_STREAM_PREFIX}${String(runId)}`;
-}
 
 /** Deletes the streaming activity record for a given entity ID. */
 export async function clearStreamingActivity(
@@ -80,47 +74,18 @@ export async function upsertActivityLog(
   }
 }
 
-/** Copies current streaming activity into a persistent activity log before cleanup. */
-export async function snapshotStreamingActivityToLog(
-  ctx: MutationCtx,
-  entityId: string,
-  runId: Id<"agentRuns">,
-): Promise<void> {
-  const streaming = await ctx.db
-    .query("streamingActivity")
-    .withIndex("by_entity", (q) => q.eq("entityId", entityId))
-    .first();
-  if (streaming?.currentActivity) {
-    await upsertActivityLog(ctx, runId, streaming.currentActivity);
-  }
-}
-
 /**
- * Clears a task run's streaming rows (run stream and task stream), optionally
- * snapshotting the run stream into its activity log first.
+ * The run's reply: the agent's final text, else a stock line for a success.
+ * A failed run keeps its final text too — it is often a question the agent
+ * stopped on (no commit), and the chat shows it above the error.
  */
-export async function clearTaskRunStreaming(
-  ctx: MutationCtx,
-  taskId: Id<"agentTasks">,
-  runId: Id<"agentRuns">,
-  opts?: { snapshot?: boolean },
-): Promise<void> {
-  const entityId = getTaskRunStreamingEntityId(runId);
-  if (opts?.snapshot) {
-    await snapshotStreamingActivityToLog(ctx, entityId, runId);
-  }
-  await clearStreamingActivity(ctx, entityId);
-  await clearStreamingActivity(ctx, String(taskId));
-}
-
-/** Builds a human-readable summary string for a completed run result. */
 export function buildRunResultSummary(
   success: boolean,
   prUrl: string | null,
   claudeResult?: string,
 ): string | undefined {
-  if (!success) return undefined;
   if (claudeResult) return claudeResult;
+  if (!success) return undefined;
   return prUrl ? "Created task PR" : "Pushed commit to task branch";
 }
 

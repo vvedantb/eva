@@ -260,7 +260,7 @@ describe("mobile api", () => {
         await openTurn(ctx, {
           entityId: runId,
           sessionId,
-          streamingEntityId: `task-run-${runId}`,
+          streamingEntityId: String(chatId),
           model: DEFAULT_AI_MODEL,
           repoId: ids.repoId,
         });

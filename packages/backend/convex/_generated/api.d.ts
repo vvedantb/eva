@@ -189,6 +189,7 @@ import type * as _migrations_backfillEvaPrRecapOrigin from "../_migrations/backf
 import type * as _migrations_backfillExperimentalFlags from "../_migrations/backfillExperimentalFlags.js";
 import type * as _migrations_backfillNumIds from "../_migrations/backfillNumIds.js";
 import type * as _migrations_backfillQueuedMessageOrder from "../_migrations/backfillQueuedMessageOrder.js";
+import type * as _migrations_backfillRunChatTurns from "../_migrations/backfillRunChatTurns.js";
 import type * as _migrations_backfillSessionChats from "../_migrations/backfillSessionChats.js";
 import type * as _migrations_backfillTaskSubscribers from "../_migrations/backfillTaskSubscribers.js";
 import type * as _migrations_cleanup from "../_migrations/cleanup.js";
@@ -380,6 +381,7 @@ import type * as _taskWorkflow_publicMutations from "../_taskWorkflow/publicMuta
 import type * as _taskWorkflow_queries from "../_taskWorkflow/queries.js";
 import type * as _taskWorkflow_recovery from "../_taskWorkflow/recovery.js";
 import type * as _taskWorkflow_resolveBaseBranch from "../_taskWorkflow/resolveBaseBranch.js";
+import type * as _taskWorkflow_runChatTurn from "../_taskWorkflow/runChatTurn.js";
 import type * as _taskWorkflow_runLifecycle from "../_taskWorkflow/runLifecycle.js";
 import type * as _taskWorkflow_scheduling from "../_taskWorkflow/scheduling.js";
 import type * as _taskWorkflow_staleness from "../_taskWorkflow/staleness.js";
@@ -788,6 +790,7 @@ declare const fullApi: ApiFromModules<{
   "_migrations/backfillExperimentalFlags": typeof _migrations_backfillExperimentalFlags;
   "_migrations/backfillNumIds": typeof _migrations_backfillNumIds;
   "_migrations/backfillQueuedMessageOrder": typeof _migrations_backfillQueuedMessageOrder;
+  "_migrations/backfillRunChatTurns": typeof _migrations_backfillRunChatTurns;
   "_migrations/backfillSessionChats": typeof _migrations_backfillSessionChats;
   "_migrations/backfillTaskSubscribers": typeof _migrations_backfillTaskSubscribers;
   "_migrations/cleanup": typeof _migrations_cleanup;
@@ -979,6 +982,7 @@ declare const fullApi: ApiFromModules<{
   "_taskWorkflow/queries": typeof _taskWorkflow_queries;
   "_taskWorkflow/recovery": typeof _taskWorkflow_recovery;
   "_taskWorkflow/resolveBaseBranch": typeof _taskWorkflow_resolveBaseBranch;
+  "_taskWorkflow/runChatTurn": typeof _taskWorkflow_runChatTurn;
   "_taskWorkflow/runLifecycle": typeof _taskWorkflow_runLifecycle;
   "_taskWorkflow/scheduling": typeof _taskWorkflow_scheduling;
   "_taskWorkflow/staleness": typeof _taskWorkflow_staleness;
