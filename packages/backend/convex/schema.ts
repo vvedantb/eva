@@ -9,7 +9,6 @@ import {
   automationRunFields,
   changelogVoteFields,
   agentTaskFields,
-  agentRunFields,
   pullRequestFields,
   sessionFields,
   sessionRepoFields,
@@ -129,9 +128,6 @@ const schema = defineSchema({
     .index("by_project", ["projectId"])
     .index("by_project_and_status", ["projectId", "status"])
     .index("by_repo_and_numId", ["repoId", "numId"]),
-
-  // Empty; kept until `deleteRunTurns` has run (see `agentRunFields`).
-  agentRuns: defineTable(agentRunFields),
 
   // Every pull request linked to a session, quick task or project. An owner
   // may hold many; `owner.*` indexes list them, `by_pr_url` resolves webhooks.

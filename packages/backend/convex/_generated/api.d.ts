@@ -194,7 +194,6 @@ import type * as _migrations_backfillQueuedMessageOrder from "../_migrations/bac
 import type * as _migrations_backfillSessionChats from "../_migrations/backfillSessionChats.js";
 import type * as _migrations_backfillTaskSubscribers from "../_migrations/backfillTaskSubscribers.js";
 import type * as _migrations_deleteRepos from "../_migrations/deleteRepos.js";
-import type * as _migrations_deleteRunTurns from "../_migrations/deleteRunTurns.js";
 import type * as _migrations_excludeConvexUrlFromSandbox from "../_migrations/excludeConvexUrlFromSandbox.js";
 import type * as _migrations_handTriageToEva from "../_migrations/handTriageToEva.js";
 import type * as _migrations_legacyProjectThreads from "../_migrations/legacyProjectThreads.js";
@@ -792,7 +791,6 @@ declare const fullApi: ApiFromModules<{
   "_migrations/backfillSessionChats": typeof _migrations_backfillSessionChats;
   "_migrations/backfillTaskSubscribers": typeof _migrations_backfillTaskSubscribers;
   "_migrations/deleteRepos": typeof _migrations_deleteRepos;
-  "_migrations/deleteRunTurns": typeof _migrations_deleteRunTurns;
   "_migrations/excludeConvexUrlFromSandbox": typeof _migrations_excludeConvexUrlFromSandbox;
   "_migrations/handTriageToEva": typeof _migrations_handTriageToEva;
   "_migrations/legacyProjectThreads": typeof _migrations_legacyProjectThreads;
