@@ -1,5 +1,11 @@
 import { api, type Id, type PrOwnerRef } from "@eva/backend";
-import { isLivePrState, orderPrsLiveFirst, prNumberFromGithubUrl, pullRequestsMenuLabel } from "@eva/shared";
+import {
+  isLivePrState,
+  orderPrsLiveFirst,
+  prNumberFromGithubUrl,
+  pullRequestRepoLabel,
+  pullRequestsMenuLabel,
+} from "@eva/shared";
 import { IconExternalLink, IconGitPullRequest, IconGitPullRequestClosed, IconLink, IconStack2 } from "@tabler/icons-react-native";
 import { SheetRow, MenuDivider, MenuSheet, SubmenuRow } from "@vvedantb/native-ui/primitives";
 import { toast } from "@vvedantb/native-ui/toast";
@@ -150,7 +156,7 @@ export function usePullRequestsSheet() {
                 key={pr._id}
                 leading={<StateIcon size={20} color={state.text} />}
                 title={pr.title ?? `Pull request #${pr.prNumber}`}
-                detail={`#${pr.prNumber} · ${state.label}`}
+                detail={[`#${pr.prNumber}`, state.label, pullRequestRepoLabel(pr, prs)].filter(Boolean).join(" · ")}
                 onPress={() => setPickedId(pr._id)}
               />
             );

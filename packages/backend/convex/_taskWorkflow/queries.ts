@@ -18,6 +18,7 @@ import {
 import { resolveMessageTokens } from "../_mentions/resolveMessageTokens";
 import { listReadableSiblingRepos } from "../_githubRepos/sandboxRead";
 import { childTaskProjectBlock } from "../_sessions/sessionPrompt";
+import { buildLinkedReposSection } from "../prompts";
 
 const MONTH_NAMES = [
   "January",
@@ -63,6 +64,18 @@ async function getChangeRequestContents(
     .map((c) => c.content);
 }
 
+/** The linked repos of the task's session (`sessionRepos`); none before it exists. */
+async function listSessionRepos(
+  ctx: QueryCtx,
+  sessionId: Id<"sessions"> | undefined,
+): Promise<Doc<"sessionRepos">[]> {
+  if (sessionId === undefined) return [];
+  return await ctx.db
+    .query("sessionRepos")
+    .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+    .collect();
+}
+
 /** Fetches task and repo config to build the prompt and sandbox parameters for a run. */
 export const getTaskData = internalQuery({
   args: {
@@ -97,9 +110,11 @@ export const getTaskData = internalQuery({
     rootDirectory: v.string(),
     devPort: v.optional(v.number()),
     devCommand: v.optional(v.string()),
+    /** The task's session clones other repos too (`sessionRepos`). */
+    hasLinkedRepos: v.boolean(),
   }),
   handler: async (ctx, args) => {
-    const [task, repo, comments, successfulRuns] = await Promise.all([
+    const [task, repo, comments, successfulRuns, linkedRepoRows] = await Promise.all([
       ctx.db.get(args.taskId),
       ctx.db.get(args.repoId),
       ctx.db
@@ -114,6 +129,7 @@ export const getTaskData = internalQuery({
           q.eq("taskId", args.taskId).eq("status", "success"),
         )
         .collect(),
+      listSessionRepos(ctx, args.ownedSessionId),
     ]);
     if (!task) throw new Error("Task not found");
     if (!repo) throw new Error("Repository not found");
@@ -263,6 +279,17 @@ export const getTaskData = internalQuery({
             previousRunSummary,
             readableRepos,
             repo.agentMemoryEnabled === true,
+          ) +
+          buildLinkedReposSection(
+            { owner: repo.owner, name: repo.name, branchName },
+            linkedRepoRows.map((row) => ({
+              owner: row.owner,
+              name: row.name,
+              path: row.path,
+              branchName: row.branchName,
+              baseBranch: row.baseBranch,
+            })),
+            task.title.slice(0, 50).replace(/"/g, '\\"'),
           );
 
     return {
@@ -285,6 +312,7 @@ export const getTaskData = internalQuery({
       rootDirectory,
       devPort: repo.devPort,
       devCommand: repo.devCommand,
+      hasLinkedRepos: linkedRepoRows.length > 0,
     };
   },
 });

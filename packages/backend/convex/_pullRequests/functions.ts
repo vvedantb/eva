@@ -18,6 +18,7 @@ import {
 import {
   findPullRequestByUrl,
   listOwnerPullRequests,
+  listTaskLinkedPullRequests,
   recordPullRequest,
   ownerRef,
   setPullRequestState,
@@ -45,7 +46,7 @@ const pullRequestListItemValidator = v.object({
   repoId: v.id("githubRepos"),
   repoOwner: v.string(),
   repoName: v.string(),
-  /** True for a multi-repo session's linked-repo PR. */
+  /** True for a multi-repo session's or task's linked-repo PR. */
   linkedRepo: v.boolean(),
   /** The agent is watching it (`watch_pull_request`). */
   watching: v.boolean(),
@@ -72,7 +73,8 @@ async function canReadOwner(
 
 /**
  * Every PR linked to a session, quick task or project, primary first, then
- * newest first. Stored data only — no GitHub calls — so the tab is one
+ * newest first. A multi-repo task's linked repos' PRs are its PRs too.
+ * Stored data only — no GitHub calls — so the tab is one
  * subscription however many PRs the owner holds.
  */
 export const listForOwner = authQuery({
@@ -80,7 +82,17 @@ export const listForOwner = authQuery({
   returns: v.array(pullRequestListItemValidator),
   handler: async (ctx, args) => {
     if (!(await canReadOwner(ctx.db, args.owner, ctx.userId))) return [];
-    const rows = await listOwnerPullRequests(ctx.db, args.owner);
+    const own = await listOwnerPullRequests(ctx.db, args.owner);
+    // A multi-repo task also lists each linked repo's PR, in repos the
+    // reader can open.
+    const linked =
+      args.owner.kind === "task"
+        ? await listTaskLinkedPullRequests(ctx.db, args.owner.taskId)
+        : [];
+    const readable = await Promise.all(
+      linked.map((row) => hasRepoAccess(ctx.db, row.repoId, ctx.userId)),
+    );
+    const rows = [...own, ...linked.filter((_, index) => readable[index])];
     rows.sort((a, b) => Number(b.primary) - Number(a.primary));
     return await Promise.all(
       rows.map(async (row) => {

@@ -23,6 +23,7 @@ import {
   type ChatSettingsSource,
 } from "../_sessionChats/helpers";
 import { resolveSessionBaseBranch } from "./baseBranch";
+import { insertSessionRepos } from "./repos";
 import { archiveSession, isSessionArchived, unarchiveSession } from "./archive";
 import {
   findOwnedSession,
@@ -142,9 +143,35 @@ export async function insertWorkSession(
     ...chatSeedFields(await chatSeedSettings(ctx.db, target)),
     updatedAt: Date.now(),
   });
+  // A multi-repo task's repos, cloned beside its own exactly as a multi-repo
+  // session's are; from here the session path clones, pushes and opens PRs.
+  await insertSessionRepos(
+    ctx,
+    { sessionId, branchName: seed.branchName },
+    await taskLinkedRepos(ctx.db, target, seed.repoId),
+    true,
+  );
   const session = await ctx.db.get(sessionId);
   if (!session) throw new Error("Owned session was not created");
   return session;
+}
+
+/**
+ * The repos a task's session links (`agentTasks.linkedRepoIds`), checked when
+ * the task was created (`createCoordinatorTasks`). A repo deleted since, or
+ * one that became the task's own repo by a move, is left out.
+ */
+async function taskLinkedRepos(
+  db: DatabaseReader,
+  target: OwnerEntity,
+  primaryRepoId: Id<"githubRepos">,
+): Promise<Doc<"githubRepos">[]> {
+  if (target.kind !== "task") return [];
+  const ids = (target.task.linkedRepoIds ?? []).filter(
+    (id) => id !== primaryRepoId,
+  );
+  const repos = await Promise.all(ids.map((id) => db.get(id)));
+  return repos.filter((repo) => repo !== null);
 }
 
 /**

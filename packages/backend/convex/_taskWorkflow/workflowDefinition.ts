@@ -12,6 +12,10 @@ import { buildQuickTaskRetryDelayMs, TASK_CHAT_BUSY_ERROR } from "./recovery";
 import { getTaskRunStreamingEntityId } from "./helpers";
 import { prepareSandboxSteps } from "../_sandbox_runtime/prepareSandboxSteps";
 import { formatDelayedPublishFailureError } from "../_sessions/resultTarget";
+import {
+  prepareLinkedRepoSteps,
+  publishLinkedRepoSteps,
+} from "../_sessions/linkedRepoSteps";
 import { errorMessage } from "@vvedantb/server";
 
 const PR_STEP_RETRY = {
@@ -144,6 +148,16 @@ export const taskExecutionWorkflow = workflow.define({
         sandboxId,
         attempt: sessionClaim.attempt,
       });
+
+      // A multi-repo task: clone (or catch up) its linked repos beside the
+      // home repo before the agent starts, as a multi-repo session's start does.
+      if (data.hasLinkedRepos) {
+        await prepareLinkedRepoSteps(step, {
+          sessionId: args.ownedSessionId,
+          sandboxId,
+          repoId: args.repoId,
+        });
+      }
 
       await step.runMutation(internal.turns.markLaunching, {
         turnId: args.turnId,
@@ -337,6 +351,18 @@ export const taskExecutionWorkflow = workflow.define({
             `PR ${action} failed for run ${args.runId}: ${completionPrError}`,
           );
         }
+      }
+
+      // A multi-repo task: push each linked repo with new commits and open its
+      // draft PR, after the home PR so each body links it. Not gated on the
+      // home push, so a failed home publish never strands linked commits.
+      if (result.success && sandboxId && data.hasLinkedRepos) {
+        await publishLinkedRepoSteps(step, {
+          sessionId: args.ownedSessionId,
+          sandboxId,
+          repoId: args.repoId,
+          alert: { sessionId: args.ownedSessionId },
+        });
       }
 
       // Surface a PR-step failure to the user even though the run is otherwise

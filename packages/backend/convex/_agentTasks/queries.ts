@@ -7,8 +7,13 @@ import {
   NON_DRAFT_TASK_STATUSES,
   OPEN_TASK_STATUSES,
   aiModelValidator,
+  prStateValidator,
   taskStatusValidator,
 } from "../validators";
+import {
+  taskRepoPullRequests,
+  type TaskRepoPullRequest,
+} from "../_pullRequests/store";
 import {
   authQuery,
   hasRepoAccess,
@@ -69,6 +74,19 @@ export const agentTaskWithLastRunValidator = v.object({
    * coordinator retries the row alone does not carry.
    */
   facts: v.optional(projectTaskFactsValidator),
+  /**
+   * `listByProject` only: a multi-repo task's PRs, one per repo
+   * (`taskRepoPullRequests`). Absent for a single-repo task.
+   */
+  repoPrs: v.optional(
+    v.array(
+      v.object({
+        prUrl: v.string(),
+        prState: prStateValidator,
+        repoName: v.string(),
+      }),
+    ),
+  ),
 });
 
 /** A locked `listByProject` row: what derived project status needs, nothing more. */
@@ -278,11 +296,30 @@ export const listByProject = authQuery({
       rows.filter((row) => row.canAccess).map((row) => row.task),
     );
     const enrichedById = new Map(enriched.map((row) => [String(row._id), row]));
+    // Only a multi-repo task reads its PRs per repo.
+    const repoPrsByTask = new Map<string, TaskRepoPullRequest[]>(
+      await Promise.all(
+        rows
+          .filter(
+            ({ task, canAccess }) =>
+              canAccess && (task.linkedRepoIds?.length ?? 0) > 0,
+          )
+          .map(
+            async ({ task }): Promise<[string, TaskRepoPullRequest[]]> => [
+              String(task._id),
+              await taskRepoPullRequests(ctx.db, task._id),
+            ],
+          ),
+      ),
+    );
     return rows.flatMap<Infer<typeof agentTaskWithLastRunValidator>>(
       ({ task, canAccess }) => {
         if (!canAccess) return [withFacts(lockedTaskRow(task))];
         const row = enrichedById.get(String(task._id));
-        return row ? [withFacts(row)] : [];
+        const repoPrs = repoPrsByTask.get(String(task._id));
+        return row
+          ? [withFacts(repoPrs !== undefined ? { ...row, repoPrs } : row)]
+          : [];
       },
     );
   },

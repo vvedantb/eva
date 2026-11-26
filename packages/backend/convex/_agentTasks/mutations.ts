@@ -344,6 +344,8 @@ type NewTodoTask = ObjectType<typeof newTaskFields> & {
   description?: string;
   /** A project task's phase label (`agentTasks.phaseLabel`). */
   phaseLabel?: string;
+  /** Repos besides `repoId` (`agentTasks.linkedRepoIds`); the caller checks access. */
+  linkedRepoIds?: Id<"githubRepos">[];
 };
 
 /**
@@ -391,6 +393,9 @@ export async function createTodoTask(
     title,
     description: args.description,
     repoId: args.repoId,
+    ...(args.linkedRepoIds !== undefined && args.linkedRepoIds.length > 0
+      ? { linkedRepoIds: args.linkedRepoIds }
+      : {}),
     status: "todo",
     createdAt: now,
     updatedAt: now,

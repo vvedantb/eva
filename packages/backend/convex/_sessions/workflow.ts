@@ -5,6 +5,10 @@ import { internal } from "../_generated/api";
 import { defineEvent } from "@convex-dev/workflow";
 import { workflow } from "../workflowManager";
 import { ensureSandboxStartedSteps } from "../_sandbox_runtime/resumeSandboxSteps";
+import {
+  prepareLinkedRepoSteps,
+  publishLinkedRepoSteps,
+} from "./linkedRepoSteps";
 import { authMutation, hasRepoAccess } from "../functions";
 import {
   aiModelValidator,
@@ -186,29 +190,11 @@ export const sessionSandboxStartupWorkflow = workflow.define({
     }
     const sandboxId = session.sandboxId;
 
-    const linkedRepos = await step.runQuery(
-      internal.sessions.listLinkedReposInternal,
-      { sessionId: args.sessionId },
-    );
-
-    for (const linkedRepo of linkedRepos) {
-      try {
-        await step.runAction(internal.sandbox.prepareLinkedRepo, {
-          sessionId: args.sessionId,
-          sessionRepoId: linkedRepo._id,
-          sandboxId,
-          repoId: args.repoId,
-        });
-      } catch (error) {
-        // Keep provisioning the rest — one repo failing to clone must not
-        // strand every other linked repo uncloned too.
-        await step.runMutation(internal.sessionWorkflow.postSystemAlert, {
-          sessionId: args.sessionId,
-          content: `Failed to prepare linked repo ${linkedRepo.name}`,
-          errorDetail: errorMessage(error),
-        });
-      }
-    }
+    await prepareLinkedRepoSteps(step, {
+      sessionId: args.sessionId,
+      sandboxId,
+      repoId: args.repoId,
+    });
 
     await step.runMutation(internal.sessions.clearSandboxSetupPending, {
       sessionId: args.sessionId,
@@ -578,65 +564,30 @@ export const sessionExecuteWorkflow = workflow.define({
       }
     }
 
-    // Multi-repo sessions: one push + one draft PR per linked repo that has
-    // commits. Deliberately here and not in the callback's `persistTurnWork`
-    // (which pushes only WORK_DIR at turn end): PR creation needs the backend
-    // regardless, so keeping both halves of publishing in this workflow means
-    // one publish path to reason about and no `callback-src` rebuild. The
-    // trade-off is the callback's durability window — a linked repo's commits
-    // only reach origin once this step runs, whereas the primary's are pushed
-    // before completion is even posted.
+    // Multi-repo sessions and multi-repo tasks: one push + one draft PR per
+    // linked repo that has commits. Deliberately here and not in the
+    // callback's `persistTurnWork` (which pushes only WORK_DIR at turn end):
+    // PR creation needs the backend regardless, so keeping both halves of
+    // publishing in this workflow means one publish path to reason about and
+    // no `callback-src` rebuild. The trade-off is the callback's durability
+    // window — a linked repo's commits only reach origin once this step
+    // runs, whereas the primary's are pushed before completion is even posted.
     // Not gated on the primary's `pushSucceeded`: a primary that failed to
-    // publish must not strand a linked repo's commits in the sandbox.
+    // publish must not strand a linked repo's commits in the sandbox. A
+    // task's session publishes its linked repos too: the task owns its home
+    // repo's PR, and each linked repo's PR is the session's (by
+    // `sessionRepoId`), which the task's PR state reads.
     if (
       result.success &&
-      data.ownsPullRequests !== false &&
+      (data.ownsPullRequests !== false || data.ownerTaskId !== undefined) &&
       (data.linkedRepoCount ?? 0) > 0
     ) {
-      let linkedPushes: Array<{
-        sessionRepoId: Id<"sessionRepos">;
-        pushed: boolean;
-        published: boolean;
-      }> = [];
-      try {
-        linkedPushes = await step.runAction(
-          internal.sandbox.pushLinkedRepoBranches,
-          { sessionId, sandboxId, repoId: data.repoId },
-        );
-      } catch (error) {
-        const errorDetail =
-          errorMessage(error);
-        console.error(
-          `[sessionWorkflow] pushLinkedRepoBranches failed sessionId=${sessionId}: ${errorDetail}`,
-        );
-        await step.runMutation(internal.sessionWorkflow.postSystemAlert, {
-          chatId: args.chatId,
-          content: "Failed to publish linked repository branches",
-          errorDetail,
-        });
-      }
-      for (const linkedPush of linkedPushes) {
-        // Nothing new on the branch — no PR to open (and none to recover).
-        if (!linkedPush.pushed && !linkedPush.published) continue;
-        try {
-          // Idempotent: returns the existing prUrl when the row already has one.
-          await step.runAction(internal.github.createDraftSessionRepoPr, {
-            sessionRepoId: linkedPush.sessionRepoId,
-          });
-        } catch (error) {
-          // One repo's PR failing must not stop its siblings' PRs.
-          const errorDetail =
-            errorMessage(error);
-          console.error(
-            `[sessionWorkflow] createDraftSessionRepoPr failed sessionRepoId=${linkedPush.sessionRepoId}: ${errorDetail}`,
-          );
-          await step.runMutation(internal.sessionWorkflow.postSystemAlert, {
-            chatId: args.chatId,
-            content: "Failed to create draft PR for a linked repository",
-            errorDetail,
-          });
-        }
-      }
+      await publishLinkedRepoSteps(step, {
+        sessionId,
+        sandboxId,
+        repoId: data.repoId,
+        alert: { chatId: args.chatId },
+      });
     }
   },
 });

@@ -336,6 +336,7 @@ import type * as _sessions_fork from "../_sessions/fork.js";
 import type * as _sessions_groups from "../_sessions/groups.js";
 import type * as _sessions_helpers from "../_sessions/helpers.js";
 import type * as _sessions_internal from "../_sessions/internal.js";
+import type * as _sessions_linkedRepoSteps from "../_sessions/linkedRepoSteps.js";
 import type * as _sessions_mutations from "../_sessions/mutations.js";
 import type * as _sessions_ownedSession from "../_sessions/ownedSession.js";
 import type * as _sessions_owner from "../_sessions/owner.js";
@@ -929,6 +930,7 @@ declare const fullApi: ApiFromModules<{
   "_sessions/groups": typeof _sessions_groups;
   "_sessions/helpers": typeof _sessions_helpers;
   "_sessions/internal": typeof _sessions_internal;
+  "_sessions/linkedRepoSteps": typeof _sessions_linkedRepoSteps;
   "_sessions/mutations": typeof _sessions_mutations;
   "_sessions/ownedSession": typeof _sessions_ownedSession;
   "_sessions/owner": typeof _sessions_owner;

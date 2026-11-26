@@ -166,10 +166,12 @@ export {
   type ChatUserAttribution,
 } from "./teammateMessages";
 export {
+  combineRepoPrStates,
   isLivePrState,
   orderPrsLiveFirst,
   prStateLabel,
   prStateTone,
+  pullRequestRepoLabel,
   pullRequestsMenuLabel,
   type LivePrState,
   type PrState,

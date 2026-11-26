@@ -3,8 +3,14 @@
 import { v } from "convex/values";
 import { action, internalAction, type ActionCtx } from "../_generated/server";
 import { api, internal } from "../_generated/api";
-import { appendRelatedPrsSection, buildPrBody, type SiblingPr } from "../prBody";
-import { buildEvaSessionUrl } from "../_taskWorkflow/urls";
+import {
+  appendRelatedPrsSection,
+  buildPrBody,
+  buildTaskPrSections,
+  type SiblingPr,
+} from "../prBody";
+import { buildEvaSessionUrl, buildEvaTaskUrl } from "../_taskWorkflow/urls";
+import { sessionOwnerTaskId } from "../_sessions/owner";
 import { resolveSessionBaseBranch } from "../_sessions/baseBranch";
 import { extractPrNumber } from "./helpers";
 import { isBranchNotAheadError } from "./prErrors";
@@ -138,22 +144,25 @@ async function createDraftPrOnGitHub(
 
 /**
  * "Related pull requests" entries for a new session PR: every PR the session
- * already holds except the one being opened (`sessionRepoId` names its repo;
- * undefined is the primary repo).
+ * (or, for a task's session, the task) already holds except the one being
+ * opened (`sessionRepoId` names its repo; undefined is the primary repo).
  */
 async function siblingPullRequests(
   ctx: ActionCtx,
   sessionPrs: Doc<"pullRequests">[],
   sessionRepoId: Id<"sessionRepos"> | undefined,
 ): Promise<SiblingPr[]> {
-  const others = sessionPrs.filter(
-    (pr) =>
+  const others = sessionPrs.filter((pr) => {
+    // A multi-repo task's own PRs are all siblings of a linked repo's PR.
+    if (pr.owner.kind === "task") return true;
+    return (
       pr.owner.kind === "session" &&
       !(
         pr.owner.sessionRepoId === sessionRepoId &&
         (sessionRepoId === undefined ? pr.primary : pr.origin === "eva")
-      ),
-  );
+      )
+    );
+  });
   return Promise.all(
     others.map(async (pr): Promise<SiblingPr> => {
       const repo = await ctx.runQuery(internal.githubRepos.getInternal, {
@@ -295,21 +304,48 @@ export const createDraftSessionRepoPr = internalAction({
     });
     if (!primaryRepo) return null;
 
-    // Every sibling PR already known: the primary's, every other linked
-    // repo's, and any side-branch PR, whichever exist at this point.
-    const siblingPrs = await siblingPullRequests(
-      ctx,
-      sessionPrs,
-      linkedRepo._id,
-    );
+    // A multi-repo task's session: the task owns the home repo's PR, and
+    // every linked PR carries the task's description (its merge order) and
+    // links the task, like the home PR's body.
+    const taskId = sessionOwnerTaskId(session);
+    const task = taskId
+      ? await ctx.runQuery(internal.agentTasks.getInternal, { id: taskId })
+      : null;
+    const taskPrs = task
+      ? await ctx.runQuery(internal.pullRequests.listForOwnerInternal, {
+          owner: { kind: "task", taskId: task._id },
+        })
+      : [];
 
-    const evaUrl = buildEvaSessionUrl(
-      primaryRepo.owner,
-      primaryRepo.name,
-      linkedRepo.sessionId,
-      primaryRepo.rootDirectory,
+    // Every sibling PR already known: the primary's (the task's own for a
+    // task), every other linked repo's, and any side-branch PR, whichever
+    // exist at this point.
+    const siblingPrs = [
+      ...(await siblingPullRequests(ctx, taskPrs, undefined)),
+      ...(await siblingPullRequests(ctx, sessionPrs, linkedRepo._id)),
+    ];
+
+    const evaUrl = task
+      ? buildEvaTaskUrl(
+          primaryRepo.owner,
+          primaryRepo.name,
+          task._id,
+          task.projectId,
+          primaryRepo.rootDirectory,
+        )
+      : buildEvaSessionUrl(
+          primaryRepo.owner,
+          primaryRepo.name,
+          linkedRepo.sessionId,
+          primaryRepo.rootDirectory,
+        );
+    const body = appendRelatedPrsSection(
+      buildPrBody(
+        task ? buildTaskPrSections(task.description, []) : [],
+        evaUrl,
+      ),
+      siblingPrs,
     );
-    const body = appendRelatedPrsSection(buildPrBody([], evaUrl), siblingPrs);
 
     let result: string;
     try {

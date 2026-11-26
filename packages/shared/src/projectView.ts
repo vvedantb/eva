@@ -269,6 +269,12 @@ export interface SummarizableProjectTaskRow {
   mergedIntoTaskId?: string;
   /** Archived on its own: listed under Archived (`projectTaskStatusSections`). */
   archivedAt?: number;
+  /** A multi-repo task's PRs, one per repo (`listByProject`). */
+  repoPrs?: ReadonlyArray<{
+    prUrl: string;
+    prState: NonNullable<Doc<"agentTasks">["prState"]>;
+    repoName: string;
+  }>;
 }
 
 /** "#9003" from a GitHub PR URL, else the URL's last path part. */
@@ -366,24 +372,39 @@ export function projectTaskSummaryLine(
     .join(" · ");
 }
 
-/** The tasks that have a PR: the task list's Pull requests group, in list order. */
+/**
+ * The tasks that have a PR: the task list's Pull requests group, in list
+ * order. A multi-repo task is one entry per repo's PR, labelled with its
+ * repo (`repoName`); a single-repo task is one entry, as before.
+ */
 export function projectTaskPullRequests<
   Row extends SummarizableProjectTaskRow & { locked?: boolean },
->(rows: readonly Row[]): Array<Row & { prUrl: string }> {
-  return rows.flatMap((row) =>
-    row.locked !== true && row.prUrl !== undefined
-      ? [{ ...row, prUrl: row.prUrl }]
-      : [],
-  );
+>(rows: readonly Row[]): Array<Row & { prUrl: string; repoName?: string }> {
+  return rows.flatMap((row) => {
+    if (row.locked === true) return [];
+    if (row.repoPrs !== undefined && row.repoPrs.length > 0) {
+      return row.repoPrs.map((pr) => ({
+        ...row,
+        prUrl: pr.prUrl,
+        prState: pr.prState,
+        repoName: pr.repoName,
+      }));
+    }
+    return row.prUrl !== undefined ? [{ ...row, prUrl: row.prUrl }] : [];
+  });
 }
 
-/** A Pull requests row's second line: "#9003 · Open · via #904". */
+/**
+ * A Pull requests row's second line: "#9003 · Open · via #904", with the
+ * repo for a multi-repo task's PR ("#12 · Open · api · via #904").
+ */
 export function projectTaskPrLine(
-  row: SummarizableProjectTaskRow & { prUrl: string },
+  row: SummarizableProjectTaskRow & { prUrl: string; repoName?: string },
 ): string {
   return [
     prShortLabel(row.prUrl),
     prStateLabel(row.prState),
+    row.repoName || undefined,
     row.numId !== undefined ? `via #${row.numId}` : undefined,
   ]
     .filter((part) => part !== undefined)

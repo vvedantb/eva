@@ -9,6 +9,7 @@ import {
   type PrState,
 } from "../_pullRequests/store";
 import { requestSessionSandboxStop } from "./sandbox";
+import { isStandaloneSession } from "./owner";
 
 /**
  * A session auto-archives only once every PR it holds is terminal (merged or
@@ -108,7 +109,9 @@ export async function reconcileSessionArchiveState(
   sessionId: Id<"sessions">,
 ): Promise<void> {
   const session = await ctx.db.get(sessionId);
-  if (!session) return;
+  // A task's or project's session follows its owner (`retireOwnedSession`),
+  // never its linked repos' PRs alone.
+  if (!session || !isStandaloneSession(session)) return;
   const rows = await listOwnerPullRequests(ctx.db, {
     kind: "session",
     sessionId,

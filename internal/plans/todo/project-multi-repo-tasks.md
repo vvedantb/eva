@@ -35,3 +35,14 @@
 
 - Backend tests: a task created with a linked repo gets one `sessionRepos` row; combined PR state (open / merged / closed); the coordinator tool refuses a repo the person cannot access.
 - tsc, lint, web and backend tests; phone screens for the PR list.
+
+## Changes while building (26 November 2026)
+
+- Task runs (`taskExecutionWorkflow`) start the sandbox through `prepareSandboxSteps`, not the session startup workflow, so they cloned no linked repos and published none. They now clone linked repos after the sandbox attaches, get the linked-repo env (`launch` resolves the task's session) and prompt block, and push each linked repo and open its draft PR after the run. Task chat turns were gated to standalone sessions (`ownsPullRequests`); they now publish linked repos too. One helper does both for sessions and tasks (`_sessions/linkedRepoSteps.ts`).
+- Linked PRs stay session-owned (`owner.sessionRepoId`). The task reads them through its session (`listTaskLinkedPullRequests`): its summary, the webhook's done rule, `pullRequests.listForOwner`, and cancel / un-cancel / ready / draft.
+- The combined state keeps draft apart from open (draft while every live PR is a draft), so a single-repo task reads exactly as before and `projectStatus` is unchanged.
+- Merge order: the coordinator writes it in the task description. Every PR body carries that description (the linked PR body now has the task's "Task" section and its Eva link). The task agent is not asked to edit PR bodies: its run prompt forbids `gh pr` commands, and the PRs open after the run.
+- Owned sessions no longer go through the PR auto-archive rule (`reconcileSessionArchiveState`); the task's status retires its session.
+- Phone has no session repo badges, so the phone task header gets none; the phone shows repos in the PR sheet and the Tasks list.
+- Known gaps: the home PR opens before the linked PRs, so its body does not list them (each linked PR links the home PR). Moving a multi-repo task to code review rewrites only the home PR's description, which may drop the merge order there.
+

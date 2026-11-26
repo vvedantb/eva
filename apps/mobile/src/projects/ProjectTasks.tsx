@@ -35,7 +35,7 @@ type Project = NonNullable<FunctionReturnType<typeof api.projects.get>>;
 type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 /** One list row: a task under its display status, or a task's PR. */
-type Item = { kind: "task"; row: ProjectTaskListRow; view: ProjectTaskView } | { kind: "pr"; row: ProjectTaskListRow & { prUrl: string } };
+type Item = { kind: "task"; row: ProjectTaskListRow; view: ProjectTaskView } | { kind: "pr"; row: ProjectTaskListRow & { prUrl: string; repoName?: string } };
 
 /** The Pull requests group's key, beside the display statuses (web `PULL_REQUESTS`). */
 const PULL_REQUESTS = "pull_requests";
@@ -149,7 +149,7 @@ export function ProjectTasks({
           const open = group.defaultOpen !== toggled.has(group.key);
           return { ...group, first: index === 0, count: group.items.length, open, data: open ? group.items : [] };
         })}
-        keyExtractor={(item) => `${item.kind}:${item.row._id}`}
+        keyExtractor={(item) => (item.kind === "pr" ? `pr:${item.row._id}:${item.row.prUrl}` : `task:${item.row._id}`)}
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={
           sections.length > 0 ? (
