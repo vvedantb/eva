@@ -25,7 +25,6 @@ import { clearStreamingActivity } from "../streaming";
 import {
   drainChatQueueQuietly,
   drainSessionChatQueues,
-  dropComposerUserRow,
 } from "../_queues/helpers";
 import { buildSessionPrompt, SESSION_TOOLS } from "./sessionPrompt";
 import {
@@ -56,7 +55,6 @@ import {
   threadReplyPrompt,
 } from "../_messages/replies";
 import { joinThreadOnReply } from "../_messages/threadParticipants";
-import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { composerTraitFields } from "../_shared/composerTraits";
 import { cancelChatTurn } from "../_chat/cancelRace";
 import { isSandboxClosingStatus } from "../_sandbox/closingStatus";
@@ -78,6 +76,7 @@ import {
   sessionChatStreamingEntityId,
   type SessionChatContext,
 } from "../_sessionChats/helpers";
+import { userAuth } from "../_auth/currentUser";
 
 /** Composer settings a turn carries; stored on the chat when it is staged. */
 type TurnSettings = {
@@ -99,6 +98,13 @@ const turnSettingsArgs = {
   providerAccountId: v.optional(v.id("userProviderAccounts")),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
 };
+
+/** What became of a sent message: it started a turn, queued, or was stored as a comment. */
+const sendOutcomeValidator = v.union(
+  v.literal("started"),
+  v.literal("queued"),
+  v.literal("posted"),
+);
 
 /** The idle-pause clock belongs to the sandbox, which every chat of a session shares. */
 function sessionActivityRef(session: Doc<"sessions">) {
@@ -274,7 +280,7 @@ async function enqueueChatMessage(
     /** This message runs the chat's task (`_agentTasks/taskRunTurn.ts`). */
     taskRun?: Doc<"queuedMessages">["taskRun"];
   },
-): Promise<void> {
+): Promise<Id<"queuedMessages">> {
   const { chat, session } = params.context;
   const { settings } = params;
   const providerAccountId = await resolveTurnProviderAccountId(ctx.db, {
@@ -288,7 +294,7 @@ async function enqueueChatMessage(
     changePolicy: "owner-pool",
   });
   const now = Date.now();
-  await ctx.db.insert("queuedMessages", {
+  const queuedId = await ctx.db.insert("queuedMessages", {
     parentId: chat._id,
     content: params.content,
     displayContent: params.displayContent,
@@ -314,6 +320,7 @@ async function enqueueChatMessage(
     updatedAt: now,
   });
   await ctx.db.patch(session._id, { updatedAt: now });
+  return queuedId;
 }
 
 /**
@@ -454,120 +461,6 @@ export const retryLastTurnWithAccount = authMutation({
       `[sessions] retryLastTurnWithAccount chatId=${args.chatId} providerAccountId=${String(args.providerAccountId)}`,
     );
     return null;
-  },
-});
-
-/**
- * MCP's direct send (`mcp/orchestratorDelivery.ts`), after its `addMessage`:
- * starts a chat turn. When the chat is busy or the session already has
- * `MAX_PARALLEL_CHATS` sibling chats running, the message queues on this chat
- * instead; the reply says which happened. The apps send through `chats.send`.
- */
-export const startExecute = authMutation({
-  args: {
-    chatId: v.id("sessionChats"),
-    message: v.string(),
-    ...turnSettingsArgs,
-    sourceProposedPlanId: v.optional(v.id("proposedPlans")),
-  },
-  returns: v.union(
-    v.literal("started"),
-    v.literal("queued"),
-    v.literal("posted"),
-  ),
-  handler: async (ctx, args) => {
-    const context = await getSessionChatWithAccess(
-      ctx.db,
-      args.chatId,
-      ctx.userId,
-    );
-    const { chat, session } = context;
-    if (chat.archived === true) throw new Error("This chat is closed");
-    await touchUserActivity(ctx, sessionActivityRef(session), {
-      source: "chat",
-      userId: ctx.userId,
-    });
-
-    // Notify before the turn runs or queues so a mention fires either way.
-    const mentionedIds = await notifyChatMentions(ctx, {
-      content: args.message,
-      authorUserId: ctx.userId,
-      surface: { kind: "session", session, chat },
-    });
-    // The user row is already stored (the client sends addMessage first).
-    await recordPersonChatPost(ctx, {
-      parentId: chat._id,
-      authorId: ctx.userId,
-      mentionedIds,
-    });
-
-    const repo = await ctx.db.get(session.repoId);
-    if (!repo) throw new Error("Repository not found");
-
-    // In a project task waiting on its question, this message is the answer
-    // and starts the task's next run (`routePersonChatMessage`). The user row
-    // is already stored (the client sends addMessage first).
-    // In a coordinator chat, a message for teammates only is a quiet
-    // comment: stored, no turn ("posted").
-    const routed = await routePersonChatMessage(ctx, {
-      context,
-      userId: ctx.userId,
-      message: args.message,
-    });
-    if (routed === "answered") return "started";
-    if (routed === "posted") return "posted";
-
-    const { chatId, message, sourceProposedPlanId, ...settings } = args;
-    void chatId;
-
-    if (sourceProposedPlanId !== undefined) {
-      const plan = await ctx.db.get(sourceProposedPlanId);
-      if (plan && plan.sessionId === session._id) {
-        const now = Date.now();
-        await ctx.db.patch(sourceProposedPlanId, {
-          implementedAt: now,
-          implementationSessionId: session._id,
-          updatedAt: now,
-        });
-      }
-    }
-
-    // A send that lands behind this chat's own running turn queues too: a
-    // burst of sends can all reach here before the composer sees the first
-    // turn, and starting each one ran two turns at once.
-    const chatBusy =
-      (await hasOpenChatTurn(ctx.db, chat._id)) ||
-      chat.pendingTurn !== undefined;
-    if (chatBusy || !(await sessionChatHasFreeSlot(ctx.db, context))) {
-      await enqueueChatMessage(ctx, {
-        context,
-        userId: ctx.userId,
-        content: message,
-        settings,
-      });
-      await dropComposerUserRow(ctx, chat._id, message);
-      return "queued";
-    }
-
-    // Daemon-pull dispatch: stage the turn for a warm daemon to claim in one
-    // poll instead of waiting on the workflow's durable step queue. The user
-    // row is already stored (the client sends addMessage first), so handoff
-    // detection sees it and posts its alert above the new placeholder.
-    await maybeInsertModelHandoffAlert(
-      ctx,
-      chat._id,
-      settings.model,
-      chat.provider,
-    );
-
-    await stageAndStartChatTurn(ctx, {
-      context,
-      repo,
-      actingUserId: ctx.userId,
-      message,
-      settings,
-    });
-    return "started";
   },
 });
 
@@ -721,54 +614,42 @@ export const getDaemonPrewarmData = internalQuery({
 });
 
 /**
- * MCP's queued send (`mcp/orchestratorDelivery.ts`): the message waits for
- * the chat's current turn. The apps send through `chats.send`.
+ * MCP's send (`send_chat_message`, `send_agent_message`) to the chat it
+ * resolved: the same path as `chats.send`, so the server alone decides
+ * whether it runs now or queues. Internal because MCP names its caller by
+ * Clerk id; the access check is the one `chats.send` makes.
  */
-export const enqueueMessage = authMutation({
+export const sendFromMcp = internalMutation({
   args: {
-    chatId: v.id("sessionChats"),
+    clerkUserId: v.string(),
+    chatId: v.string(),
     message: v.string(),
-    /** Compact chat-display text when `message` is a rich agent prompt. */
-    displayContent: v.optional(v.string()),
-    /** Preview "Select element" sends: where the annotation points. */
-    annotation: v.optional(previewAnnotationValidator),
-    ...turnSettingsArgs,
-    /** Set by MCP send_chat_message / send_agent_message. */
-    sentViaOrchestrator: v.optional(v.boolean()),
+    model: aiModelValidator,
+    /** Absent is Team. */
+    providerAccountId: v.optional(v.id("userProviderAccounts")),
+    /** Stamps the "via MCP" chat badge. */
+    sentViaOrchestrator: v.boolean(),
   },
-  returns: v.null(),
+  returns: sendOutcomeValidator,
   handler: async (ctx, args) => {
     const content = args.message.trim();
-    if (!content) return null;
-    const displayContent = args.displayContent?.trim();
-
-    const context = await getSessionChatWithAccess(
-      ctx.db,
-      args.chatId,
-      ctx.userId,
-    );
-
-    const {
-      chatId,
-      message,
-      displayContent: omittedDisplay,
-      annotation,
-      sentViaOrchestrator,
-      ...settings
-    } = args;
-    void chatId;
-    void message;
-    void omittedDisplay;
-    await sendSessionChatMessage(ctx, {
+    if (!content) throw new Error("The message is empty");
+    const user = await userAuth.getUserByClerkId(ctx, args.clerkUserId);
+    if (!user) throw new Error("User not found");
+    const chatId = ctx.db.normalizeId("sessionChats", args.chatId);
+    if (!chatId) throw new Error("Chat not found");
+    const context = await getSessionChatWithAccess(ctx.db, chatId, user._id);
+    if (context.chat.archived === true) throw new Error("This chat is closed");
+    return await sendSessionChatMessage(ctx, {
       context,
-      userId: ctx.userId,
+      userId: user._id,
       content,
-      displayContent: displayContent || undefined,
-      annotation,
-      settings,
-      sentViaOrchestrator,
+      settings: {
+        model: args.model,
+        providerAccountId: args.providerAccountId,
+      },
+      sentViaOrchestrator: args.sentViaOrchestrator,
     });
-    return null;
   },
 });
 
@@ -866,7 +747,8 @@ export const addReply = authMutation({
 /**
  * Queues a user message on a session chat and sends it at once when the chat
  * is idle. The caller checks repo access. Shared by `chats.send` (both apps)
- * and MCP's `enqueueMessage`.
+ * and MCP's `sendFromMcp`. Returns whether the message started a turn,
+ * queued, or was stored as a comment.
  */
 export async function sendSessionChatMessage(
   ctx: MutationCtx,
@@ -879,7 +761,7 @@ export async function sendSessionChatMessage(
     settings: TurnSettings;
     sentViaOrchestrator?: boolean;
   },
-): Promise<void> {
+): Promise<Infer<typeof sendOutcomeValidator>> {
   const { chat } = params.context;
   // A person's message reopens a coordinator chat an old phase-based close archived.
   const session = await reviveCoordinatorSession(ctx, params.context.session);
@@ -909,13 +791,16 @@ export async function sendSessionChatMessage(
       annotation: params.annotation,
     },
   });
-  if (routed !== "continue") return;
-  await enqueueChatMessage(ctx, params);
+  if (routed === "answered") return "started";
+  if (routed === "posted") return "posted";
+  const queuedId = await enqueueChatMessage(ctx, params);
   // Sends at once when the chat is idle. Otherwise the queue waits: behind
   // the running turn, for a usage-limit reset, for a free parallel-chat
   // slot, or for Eva to wake — a sleeping sandbox is woken here and its
   // ready drain sends the message.
   await drainChatQueueQuietly(ctx, chat._id);
+  // The drain deletes the row it starts; one still there waits in the queue.
+  return (await ctx.db.get(queuedId)) === null ? "started" : "queued";
 }
 
 /** A turn on the chat's sticky model, traits and account. */

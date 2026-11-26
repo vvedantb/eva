@@ -7,7 +7,7 @@ import {
   findUsageLimitHold,
   isHeldByUsageLimit,
   USAGE_LIMIT_QUEUE_RESUME_DELAY_MS,
-} from "../convex/_taskWorkflow/usageLimitReset";
+} from "../convex/_queues/usageLimitReset";
 import { modules } from "./_helpers/convexModules";
 
 /**

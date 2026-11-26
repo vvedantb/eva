@@ -27,7 +27,7 @@ import {
   buildTaskNotificationMessage,
   runTraitFields,
 } from "./helpers";
-import { resolveNewTaskBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
+import { resolveNewTaskBaseBranch } from "../_agentTasks/resolveBaseBranch";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { logTaskActivity } from "../taskActivity";
 import { createTaskRunSummary, moveTaskRunSummary } from "./runSummary";

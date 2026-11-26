@@ -3,7 +3,7 @@ import type { TurnState } from "../_validators/tableFields";
 /**
  * Whether a session is still waiting on a turn no daemon can claim.
  *
- * A cancel arriving while `startExecute` was staging the turn wiped
+ * A cancel arriving while a send was staging the turn wiped
  * `pendingTurn` after the workflow had already begun waiting on
  * `sessionComplete`, so the daemon polled an empty session forever and the chat
  * sat on an open bubble until the stale handler fired. Both recovery paths —

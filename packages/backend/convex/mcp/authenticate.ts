@@ -20,7 +20,8 @@ export type McpPrincipal = {
   clerkUserId: string;
   scopedRepoId?: string;
   entityId?: string;
-  entityKind?: "session" | "task" | "project";
+  /** Launches mint only session tokens (`mintSandboxSessionTokens`). */
+  entityKind?: "session";
   chatId?: string;
 };
 

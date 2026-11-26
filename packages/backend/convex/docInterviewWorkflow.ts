@@ -8,7 +8,8 @@ import { workflow } from "./workflowManager";
 import { authMutation } from "./functions";
 import { getDocWithAccess } from "./_docs/access";
 import { GENERATE_PROMPT, INTERVIEW_PROMPT } from "./prompts";
-import { extractFirstJsonValue, llmJson } from "./_shared/llmJson";
+import { llmJson, parseFirstJsonValue } from "./_shared/llmJson";
+import { jsonValue } from "./_jev/jsonValue";
 import type { AgentJobResult } from "./_agentJobs/completion";
 import { runOneShotAgent } from "./_agentJobs/runOneShotAgent";
 import { startAgentJob } from "./_agentJobs/slot";
@@ -282,7 +283,7 @@ export const saveResult = internalMutation({
 
     const parsed =
       args.success && args.result
-        ? extractFirstJsonValue(args.result)
+        ? parseFirstJsonValue(args.result, jsonValue)
         : undefined;
     const content =
       parsed === undefined

@@ -1798,18 +1798,18 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
   );
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Browser tools (shared desktop Chrome via CDP — session/task/project sandboxes)
+  // Browser tools (shared desktop Chrome via CDP — session sandboxes)
   // ─────────────────────────────────────────────────────────────────────────────
 
-  function requireBrowserEntity():
-    | { entityKind: "session" | "task" | "project"; entityId: string }
+  function requireBrowserSession():
+    | { sessionId: string }
     | ReturnType<typeof toolErrorResult> {
-    if (entityKind === undefined || entityId === undefined) {
+    if (entityKind !== "session" || entityId === undefined) {
       return toolErrorResult(
-        "browser_* tools require a session, task, or project sandbox (token has no entity).",
+        "browser_* tools require a session sandbox (token has no session).",
       );
     }
-    return { entityKind, entityId };
+    return { sessionId: entityId };
   }
 
   tools.push(
@@ -1820,16 +1820,12 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
       mutating: true,
       input: {},
       handler: async () => {
-        const entity = requireBrowserEntity();
-        if ("content" in entity) return entity;
+        const browser = requireBrowserSession();
+        if ("content" in browser) return browser;
 
         const result = await ctx.runAction(
           internal.sandbox.startDesktopForBrowserEntity,
-          {
-            entityKind: entity.entityKind,
-            entityId: entity.entityId,
-            clerkUserId,
-          },
+          { sessionId: browser.sessionId, clerkUserId },
         );
         if (!result.ok) return toolErrorResult(result.message);
         return {
@@ -1847,12 +1843,11 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
       mutating: true,
       input: {},
       handler: async () => {
-        const entity = requireBrowserEntity();
-        if ("content" in entity) return entity;
+        const browser = requireBrowserSession();
+        if ("content" in browser) return browser;
 
         await ctx.runMutation(internal.mcp.browserLock.setAgentBrowsingAt, {
-          entityKind: entity.entityKind,
-          entityId: entity.entityId,
+          sessionId: browser.sessionId,
           locked: true,
         });
         return toolJsonResult({ locked: true });
@@ -1868,12 +1863,11 @@ Do NOT use this instead of leaving files in recordings/ / screenshots/ for chat 
       mutating: true,
       input: {},
       handler: async () => {
-        const entity = requireBrowserEntity();
-        if ("content" in entity) return entity;
+        const browser = requireBrowserSession();
+        if ("content" in browser) return browser;
 
         await ctx.runMutation(internal.mcp.browserLock.setAgentBrowsingAt, {
-          entityKind: entity.entityKind,
-          entityId: entity.entityId,
+          sessionId: browser.sessionId,
           locked: false,
         });
         return toolJsonResult({ locked: false });

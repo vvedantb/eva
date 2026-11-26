@@ -1,8 +1,8 @@
-export { executeScheduledTask } from "./_taskWorkflow/scheduling";
+export { executeScheduledTask } from "./_agentTasks/scheduling";
 
 export {
   getPrEnrichmentData,
   getTaskPrCreationData,
-} from "./_taskWorkflow/queries";
+} from "./_agentTasks/workflowQueries";
 
-export { recordManualTaskPr } from "./_taskWorkflow/taskPr";
+export { recordManualTaskPr } from "./_agentTasks/taskPr";

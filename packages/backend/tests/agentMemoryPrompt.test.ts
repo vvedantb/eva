@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { buildAgentMemoryBlock } from "../convex/prompts";
 import { buildEditPrompt } from "../convex/_sessions/prompts";
-import { buildImplementationPrompt } from "../convex/_taskWorkflow/prompts";
+import { buildImplementationPrompt } from "../convex/_agentTasks/prompts";
 import { MEMORY_DREAMING_PROMPT } from "../convex/_automations/prompts/memoryDreaming";
 
 const HEADING = "## Agent memory (this repo opted in):";

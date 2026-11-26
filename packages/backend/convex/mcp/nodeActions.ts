@@ -32,15 +32,12 @@ import { codeModeTools } from "../_mcp/codeModeTools";
 import { jsonValue, type JsonValue } from "../_jev/jsonValue";
 import {
   awaitSandboxActive,
-  buildChatMessageCalls,
-  resolveAgentDelivery,
+  resolveAgentModel,
   SANDBOX_STOP_SETTLE_TIMEOUT_MS,
   TASK_PREVIEW_SANDBOX_READY_POLL_MS,
-  type AgentDelivery,
   type ChatTargetKind,
 } from "./orchestratorDelivery";
 import {
-  CHAT_ENTITY_KINDS,
   chatEntityKindValidator,
   prStateValidator,
   type ChatEntityKind,
@@ -70,7 +67,8 @@ const internalTokenClaims = z.object({
   aud: z.literal("mcp-internal"),
   repoId: z.string(),
   entityId: z.string().optional(),
-  entityKind: z.enum(CHAT_ENTITY_KINDS).optional(),
+  // Launches mint only session tokens (`mintSandboxSessionTokens`).
+  entityKind: z.literal("session").optional(),
   chatId: z.string().optional(),
 });
 
@@ -119,7 +117,7 @@ export const verifyAccessToken = internalAction({
       clerkUserId: v.string(),
       scopedRepoId: v.optional(v.string()),
       entityId: v.optional(v.string()),
-      entityKind: v.optional(chatEntityKindValidator),
+      entityKind: v.optional(v.literal("session")),
       chatId: v.optional(v.string()),
     }),
     v.null(),
@@ -1270,25 +1268,6 @@ async function ensureSessionSandboxActive(
   });
 }
 
-/**
- * Decides whether a message starts a turn or joins the queue, and which model
- * the turn falls back to. `isExecuting` is `entityIsExecuting` for the
- * delivery chat. A busy answer is always safe — the queue drain starts the
- * message at once when the chat itself is free.
- */
-function chatDelivery(
-  chat: z.infer<typeof deliveryChatSchema>,
-  queuedAhead: number,
-  requestedModel: string | undefined,
-  isExecuting: boolean,
-): AgentDelivery {
-  return resolveAgentDelivery({
-    isBusy: isExecuting || queuedAhead > 0,
-    requestedModel,
-    storedModel: chat.lastModel,
-  });
-}
-
 const ownedSessionRefSchema = z.object({
   sessionId: z.string(),
   chatId: z.string(),
@@ -1383,7 +1362,12 @@ export const orchestratorSendMessage = internalAction({
     account: v.optional(v.string()),
   },
   returns: v.object({
-    delivered: v.union(v.literal("started"), v.literal("queued")),
+    /** The server's pick (`sendSessionChatMessage`); `posted` is a quiet comment, no turn. */
+    delivered: v.union(
+      v.literal("started"),
+      v.literal("queued"),
+      v.literal("posted"),
+    ),
     model: v.string(),
     /** Session only: the chat the message landed in. */
     chat: v.optional(v.object({ title: v.string(), number: v.number() })),
@@ -1402,7 +1386,11 @@ export const orchestratorSendMessage = internalAction({
       sentViaOrchestrator,
       account,
     },
-  ) => {
+  ): Promise<{
+    delivered: "started" | "queued" | "posted";
+    model: string;
+    chat?: { title: string; number: number };
+  }> => {
     // A task or project chats in a chat of its session, so its message is
     // delivered there; the Ave watch below stays on the task or project.
     const delivery = await resolveSessionTarget(clerkUserId, kind, id);
@@ -1434,49 +1422,34 @@ export const orchestratorSendMessage = internalAction({
     }
     const targetId = deliveryChat.chatId;
 
-    // A child with anything already queued is NOT idle, even with no workflow
-    // in flight: a brand-new session parks its first turn in the queue until
-    // its sandbox reports ready. Starting a turn then would run this message
-    // ahead of the one the child was created with (observed live: "probe
-    // second message" answered while "probe first message" sat queued).
-    const queuedAhead = (await listQueuedAsUser(clerkUserId, targetId)).length;
-
-    // For a session this is the named chat's own turn, not any sibling's:
-    // parallel chats run side by side, so a busy sibling must not queue it.
-    const isExecuting: boolean = await ctx.runQuery(
-      internal.mcp.queries.entityIsExecuting,
-      { kind: "session", id: targetId },
-    );
-    const agentDelivery = chatDelivery(
-      deliveryChat,
-      queuedAhead,
-      model,
-      isExecuting,
-    );
+    // The stored model is the fallback when the caller names none.
+    const sendModel = resolveAgentModel(model, deliveryChat.lastModel);
     const resolvedAccount = await ctx.runQuery(
       internal.mcp.queries.resolveMcpProviderAccount,
       {
         account,
-        scope: { kind: "chat", chatId: targetId, model: agentDelivery.model },
+        scope: { kind: "chat", chatId: targetId, model: sendModel },
       },
     );
     if (!resolvedAccount.ok) throw new Error(resolvedAccount.error);
-    for (const call of buildChatMessageCalls({
-      chatId: targetId,
-      message,
-      delivery: agentDelivery,
-      sentViaOrchestrator,
-      providerAccountId: resolvedAccount.providerAccountId,
-    })) {
-      await runAsUser("mutation", clerkUserId, call.fn, call.args);
-    }
+    // The apps' send path: the server decides whether it runs now or queues.
+    const delivered: "started" | "queued" | "posted" = await ctx.runMutation(
+      internal._sessions.execution.sendFromMcp,
+      {
+        clerkUserId,
+        chatId: targetId,
+        message,
+        model: sendModel,
+        // Null is Team, which the send spells as no account.
+        providerAccountId: resolvedAccount.providerAccountId ?? undefined,
+        sentViaOrchestrator,
+      },
+    );
 
     await registerWatchIfAve(clerkUserId, kind, id, aveThreadId);
-    const delivered: "queued" | "started" =
-      agentDelivery.action === "queue" ? "queued" : "started";
     return {
       delivered,
-      model: agentDelivery.model,
+      model: sendModel,
       ...(kind === "session"
         ? { chat: { title: deliveryChat.title, number: deliveryChat.number } }
         : {}),
@@ -1691,12 +1664,13 @@ export const orchestratorCreateSession = internalAction({
       providerAccountId,
     },
   ) => {
-    // No model: `_sessions/mutations:create` resolves `repo.defaultModel`.
-    // Passing normalizeAIModel(undefined) here used to force claude:sonnet on
-    // every MCP-created session regardless of the repo's configured default.
+    // The apps' start (`chats.start`). No model: it resolves
+    // `repo.defaultModel`. Passing normalizeAIModel(undefined) here used to
+    // force claude:sonnet on every MCP-created session regardless of the
+    // repo's configured default.
     const createArgs: Record<string, JsonValue> = {
       repoId,
-      message,
+      prompt: message,
       sentViaOrchestrator: true,
     };
     if (title) createArgs.title = title;
@@ -1717,7 +1691,7 @@ export const orchestratorCreateSession = internalAction({
       await runAsUser(
         "mutation",
         clerkUserId,
-        "_sessions/mutations:create",
+        "chats:start",
         createArgs,
       ),
     );
@@ -1818,7 +1792,7 @@ export const handleMcpRequest = internalAction({
     clerkUserId: v.string(),
     scopedRepoId: v.optional(v.string()),
     entityId: v.optional(v.string()),
-    entityKind: v.optional(chatEntityKindValidator),
+    entityKind: v.optional(v.literal("session")),
     chatId: v.optional(v.string()),
     body: v.string(),
   },
@@ -1841,7 +1815,7 @@ export const handleMcpRequest = internalAction({
           entityId !== undefined || chatId !== undefined
             ? await ctx.runQuery(
                 internal.mcp.projectQueries.resolveCallerOwner,
-                { entityKind, entityId, chatId },
+                { entityId, chatId },
               )
             : null;
         const credentials: McpCredentials = {

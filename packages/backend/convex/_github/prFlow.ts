@@ -11,7 +11,7 @@ import {
   type SiblingPr,
 } from "../prBody";
 import { isLivePrState } from "@eva/shared";
-import { buildEvaSessionUrl, buildEvaTaskUrl } from "../_taskWorkflow/urls";
+import { buildEvaSessionUrl, buildEvaTaskUrl } from "../_env/webAppUrl";
 import { sessionOwnerTaskId } from "../_sessions/owner";
 import { resolveSessionBaseBranch } from "../_sessions/baseBranch";
 import { extractPrNumber } from "./helpers";

@@ -304,15 +304,9 @@ describe("thread participants", () => {
       await reply(f, "Ben", first, "A reply");
       await reply(f, "Ben", second, `${mention(f, "Ana")} a question`);
       // A mention of Ana in the main chat.
-      await f.as("Ben").mutation(api.sessions.addMessage, {
-        chatId: f.chatId,
-        role: "user",
-        content: `${mention(f, "Ana")} main chat`,
-      });
-      await f.as("Ben").mutation(api._sessions.execution.startExecute, {
-        chatId: f.chatId,
+      await f.as("Ben").mutation(api.chats.send, {
+        target: f.chatId,
         message: `${mention(f, "Ana")} main chat`,
-        model: DEFAULT_AI_MODEL,
       });
       const unread = async () =>
         (await inbox(f, "Ana"))
@@ -339,15 +333,9 @@ describe("thread participants", () => {
       expect(await unread()).toEqual([["mention", "main"]]);
 
       // Posting in the main chat answers the main chat's.
-      await f.as("Ana").mutation(api.sessions.addMessage, {
-        chatId: f.chatId,
-        role: "user",
-        content: `${mention(f, "Ben")} done`,
-      });
-      await f.as("Ana").mutation(api._sessions.execution.startExecute, {
-        chatId: f.chatId,
+      await f.as("Ana").mutation(api.chats.send, {
+        target: f.chatId,
         message: `${mention(f, "Ben")} done`,
-        model: DEFAULT_AI_MODEL,
       });
       expect(await unread()).toEqual([]);
     },

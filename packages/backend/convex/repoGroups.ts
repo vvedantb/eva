@@ -365,7 +365,7 @@ export const listForUserInternal = internalQuery({
 });
 
 /**
- * Loads a group for `sessions.create`, throwing unless the caller may use it
+ * Loads a group for `chats.start`, throwing unless the caller may use it
  * with this primary repo. Kept here so the access rule has one home.
  */
 export async function getRepoGroupForSession(

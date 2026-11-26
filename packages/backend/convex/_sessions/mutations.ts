@@ -121,8 +121,8 @@ async function joinSessionGroup(
 
 /**
  * Shared session creation path: insert, branch, sandbox startup workflow, and
- * (optionally) the first queued message. Used by the `create` mutation and by
- * the MCP `create_session` tool.
+ * (optionally) the first queued message. Used by `chats.start` (the apps and
+ * MCP `create_session`), forks and accepted session proposals.
  */
 export async function createSession(
   ctx: AuthMutationCtx,
@@ -274,8 +274,8 @@ export async function createSession(
       // too, so it carries the same badge as anything sent later.
       sentViaOrchestrator: args.sentViaOrchestrator,
     });
-    // The first message queues directly rather than going through
-    // startExecute, so its mentions are notified here instead.
+    // The first message queues directly rather than through
+    // `sendSessionChatMessage`, so its mentions are notified here instead.
     const session = await ctx.db.get(sessionId);
     if (session) {
       const mentionedIds = await notifyChatMentions(ctx, {
@@ -300,16 +300,6 @@ export async function createSession(
   return { sessionId, numId };
 }
 
-/** Creates a new session with a sandbox startup workflow. */
-export const create = authMutation({
-  args: createSessionArgs.fields,
-  returns: v.object({
-    sessionId: v.id("sessions"),
-    numId: v.number(),
-  }),
-  handler: async (ctx, args) => await createSession(ctx, args),
-});
-
 /** Adds a message to one chat of a session. */
 export const addMessage = authMutation({
   args: {
@@ -321,8 +311,6 @@ export const addMessage = authMutation({
     providerAccountId: v.optional(v.id("userProviderAccounts")),
     model: v.optional(aiModelValidator),
     reasoningLevel: v.optional(reasoningLevelValidator),
-    /** Set by MCP send_chat_message / send_agent_message. */
-    sentViaOrchestrator: v.optional(v.boolean()),
     /** Preview "Select element" sends: where the annotation points. */
     annotation: v.optional(previewAnnotationValidator),
   },
@@ -359,7 +347,6 @@ export const addMessage = authMutation({
         ? {
             model: args.model,
             reasoningLevel: args.reasoningLevel,
-            sentViaOrchestrator: args.sentViaOrchestrator,
             annotation: args.annotation,
           }
         : {}),

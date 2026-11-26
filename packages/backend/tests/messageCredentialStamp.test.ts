@@ -2,7 +2,7 @@ import { convexTest } from "convex-test";
 import { describe, expect, test } from "bun:test";
 import schema from "../convex/schema";
 import { resolveMessageCredential } from "../convex/_userProviderAccounts/credentialSource";
-import { findUsageLimitHold } from "../convex/_taskWorkflow/usageLimitReset";
+import { findUsageLimitHold } from "../convex/_queues/usageLimitReset";
 import { modules } from "./_helpers/convexModules";
 
 /**

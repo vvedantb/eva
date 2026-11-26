@@ -1,6 +1,6 @@
 import { convexTest } from "convex-test";
 import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
-import { api } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
 import schema from "../convex/schema";
 import { DEFAULT_AI_MODEL } from "../convex/validators";
 import { openSessionChatTurn } from "../convex/_chat/turnStore";
@@ -147,9 +147,15 @@ describe("quick tasks on sessions", () => {
         }),
       );
 
-      const delivered = await f.asUser.mutation(
-        api._sessions.execution.startExecute,
-        { chatId, message: "follow-up", model: DEFAULT_AI_MODEL },
+      const delivered = await f.t.mutation(
+        internal._sessions.execution.sendFromMcp,
+        {
+          clerkUserId: CLERK_ID,
+          chatId,
+          message: "follow-up",
+          model: DEFAULT_AI_MODEL,
+          sentViaOrchestrator: false,
+        },
       );
       expect(delivered).toBe("queued");
       const queued = await f.t.run((ctx) =>

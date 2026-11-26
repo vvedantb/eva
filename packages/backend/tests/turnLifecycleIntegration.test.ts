@@ -18,7 +18,7 @@ import { loadSessionChat } from "../convex/_sessionChats/helpers";
 import { finalizeStaleChatTurn } from "../convex/_chat/stallWatchdog";
 import { shouldWriteTurnLeaseRenewal } from "../convex/_chat/turnLease";
 import { STALL_ALERT_TEXT } from "../convex/_chat/stallRetry";
-import { RUN_TIMEOUT_MS } from "../convex/_taskWorkflow/staleness";
+import { TURN_BACKSTOP_MS } from "@eva/shared/agentTurnLimits";
 import { rollbackQueuedChatStart } from "../convex/_queues/helpers";
 import {
   appendCurrentTurnLease,
@@ -287,7 +287,7 @@ describe("turn lifecycle integration", () => {
     await t.run(async (ctx) => {
       await ctx.db.patch(turnId, {
         state: "running",
-        turnStartedAt: Date.now() - RUN_TIMEOUT_MS - 1,
+        turnStartedAt: Date.now() - TURN_BACKSTOP_MS - 1,
         leaseExpiresAt: Date.now() - 1,
       });
       const turn = await ctx.db.get(turnId);

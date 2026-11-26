@@ -29,7 +29,7 @@ type PlanSend = (
 export function useSessionPlanImplementation(binding: SandboxChatBinding) {
   const { repo, basePath } = useRepo();
   const navigate = useNavigate();
-  const createSession = useMutation(api.sessions.create);
+  const createSession = useMutation(api.chats.start);
   const markPlanImplemented = useMutation(api.proposedPlans.markImplemented);
   const updatePlanContent = useMutation(api.sessions.updatePlanContent);
 
@@ -54,7 +54,7 @@ export function useSessionPlanImplementation(binding: SandboxChatBinding) {
       const { sessionId: nextSessionId, numId } = await createSession({
         repoId: repo._id,
         title: buildPlanImplementationThreadTitle(planMarkdown),
-        message: buildPlanImplementationPrompt(planMarkdown),
+        prompt: buildPlanImplementationPrompt(planMarkdown),
         ...settings,
       });
       await updatePlanContent({

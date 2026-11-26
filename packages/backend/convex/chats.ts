@@ -35,9 +35,9 @@ import {
  * session chat, quick task or project; see `_mobile/chatTarget.ts`), send,
  * stop, pick a model, start a session and archive one. Each runs its whole
  * decision here, once, so the web and the phone cannot drift. Both apps send,
- * stop and pick models here; the web still opens and starts chats through its
- * own `sessionChats.get` and `sessions.create`. `mobile.*` keeps the old
- * names as aliases for installed APKs.
+ * stop, pick models and start sessions here; the web still opens chats
+ * through its own `sessionChats.get`. `mobile.*` keeps the old names as
+ * aliases for installed APKs.
  */
 
 /** One chat by target, for the chat screen. Null when missing or not allowed. */
@@ -218,10 +218,11 @@ export const stop = authMutation({
 });
 
 /**
- * Starts a session from the phone, as the web sessions landing composer does:
- * `prompt` is the first message. The composer footer's model, traits, account
- * and base branch are optional; each absent one is the default, as on the web.
- * Open the returned `sessionId` as the chat target.
+ * Starts a session with `prompt` as its first message: the sessions landing
+ * composer on the web and the phone, and every "start a session for this"
+ * button. The composer footer's model, traits, account and base branch are
+ * optional; each absent one is the default. MCP `create_session` starts its
+ * sessions here too. Open the returned `sessionId` (or `numId`) as the chat.
  */
 export const start = authMutation({
   args: {
@@ -239,6 +240,16 @@ export const start = authMutation({
     baseBranch: v.optional(v.string()),
     /** "Stack a new session" on a pull request: the session's PR joins that PR's stack, as the web composer sends. */
     stackOnPrNumber: v.optional(v.number()),
+    /** Extra repos cloned beside `repoId` (the web codebases picker). Overrides the group's members. */
+    linkedRepoIds: v.optional(v.array(v.id("githubRepos"))),
+    /** The saved codebase group the selection came from. */
+    repoGroupId: v.optional(v.id("repoGroups")),
+    /** Whether linked repos install dependencies on clone. Default: true. */
+    installDependencies: v.optional(v.boolean()),
+    /** MCP `create_session`: the session whose agent opened this one; both join one linked-session group. */
+    fromSessionId: v.optional(v.id("sessions")),
+    /** MCP `create_session`: the first message carries the "via MCP" badge. */
+    sentViaOrchestrator: v.optional(v.boolean()),
   },
   returns: v.object({ sessionId: v.id("sessions"), numId: v.number() }),
   handler: async (ctx, { prompt: rawPrompt, ...args }) => {

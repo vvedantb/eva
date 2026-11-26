@@ -9,7 +9,7 @@ import { workflow } from "./workflowManager";
 import { authMutation, hasRepoAccess } from "./functions";
 import { llmJson } from "./_shared/llmJson";
 import { buildRootDirectoryInstruction } from "./prompts";
-import { buildEvaArenaUrl } from "./_taskWorkflow/urls";
+import { buildEvaArenaUrl } from "./_env/webAppUrl";
 import { evaluationStatusValidator } from "./validators";
 import {
   browserRunJsonSchema,

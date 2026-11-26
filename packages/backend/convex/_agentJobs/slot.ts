@@ -5,7 +5,7 @@ import { internal } from "../_generated/api";
 import { cancelTrackedWorkflow, isTrackedWorkflowRunning } from "../workflowManager";
 import { closeTurn, findOpenTurn } from "../_chat/turnStore";
 import { clearStreamingActivity } from "../streaming";
-import { RUN_TIMEOUT_MS } from "../_taskWorkflow/staleness";
+import { TURN_BACKSTOP_MS } from "@eva/shared/agentTurnLimits";
 import { resolveSandboxRepoId } from "../_githubRepos/helpers";
 import { scheduleArenaCheckCompletion } from "../_arena/browserRun";
 import { buildStaleDocPatch } from "./staleDoc";
@@ -43,7 +43,7 @@ export async function startAgentJob(
   }
   const workflowId = String(await start());
   await ctx.db.patch(ownerId, { activeWorkflowId: workflowId });
-  await ctx.scheduler.runAfter(RUN_TIMEOUT_MS, internal.agentJobs.handleStale, {
+  await ctx.scheduler.runAfter(TURN_BACKSTOP_MS, internal.agentJobs.handleStale, {
     ownerId,
     workflowId,
   });
@@ -134,7 +134,7 @@ export async function stopAgentJob(
 
 /**
  * Tears down a job that ran too long or stalled, when it still holds the
- * owner's slot, and marks the owner failed. Shared by the `RUN_TIMEOUT_MS`
+ * owner's slot, and marks the owner failed. Shared by the `TURN_BACKSTOP_MS`
  * backstop (`agentJobs.handleStale`) and the turn lease reconciler.
  */
 export async function tearDownStaleAgentJob(

@@ -212,12 +212,8 @@ export const launchChromeInDesktop = action({
  */
 export const startDesktopForBrowserEntity = internalAction({
   args: {
-    entityKind: v.union(
-      v.literal("session"),
-      v.literal("task"),
-      v.literal("project"),
-    ),
-    entityId: v.string(),
+    /** The sandbox token's session (MCP browser tools). */
+    sessionId: v.string(),
     clerkUserId: v.string(),
   },
   returns: v.object({
@@ -225,18 +221,17 @@ export const startDesktopForBrowserEntity = internalAction({
     message: v.string(),
   }),
   handler: async (ctx, args) => {
-    // A task's or project's sandbox is its session's.
     const entity = await ctx.runQuery(internal.sessions.getForEntityInternal, {
-      entityKind: args.entityKind,
-      entityId: args.entityId,
+      entityKind: "session",
+      entityId: args.sessionId,
     });
     if (!entity) {
-      return { ok: false, message: `${args.entityKind} not found.` };
+      return { ok: false, message: "session not found." };
     }
     if (!entity.repoId) {
       return {
         ok: false,
-        message: `No repo on this ${args.entityKind}.`,
+        message: "No repo on this session.",
       };
     }
 
@@ -254,7 +249,7 @@ export const startDesktopForBrowserEntity = internalAction({
     if (!hasAccess) {
       return {
         ok: false,
-        message: `Access denied for this ${args.entityKind}'s repo.`,
+        message: "Access denied for this session's repo.",
       };
     }
 
@@ -262,7 +257,8 @@ export const startDesktopForBrowserEntity = internalAction({
     if (!sandboxId) {
       return {
         ok: false,
-        message: `No sandbox on this ${args.entityKind}. Start the sandbox before using the shared browser.`,
+        message:
+          "No sandbox on this session. Start the sandbox before using the shared browser.",
       };
     }
 

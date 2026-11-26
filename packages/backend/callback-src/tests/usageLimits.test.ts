@@ -270,7 +270,7 @@ test("an unavailable usage read records a refusal instead of staying silent", as
   expect(S.usageLimitSnapshot).toEqual({ completeness: "refused" });
 });
 
-// Every phrase `isUsageLimitError` in convex/_taskWorkflow/usageLimitReset.ts
+// Every phrase `isUsageLimitError` in convex/_queues/usageLimitReset.ts
 // matches. A partial status-only reading patches the row without wiping its
 // last valid windows.
 test.each([

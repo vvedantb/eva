@@ -82,7 +82,7 @@ export function ChatPanel({
   const { repo, basePath } = useRepo();
   const sessionId = session._id;
   const navigate = useNavigate();
-  const createSession = useMutation(api.sessions.create);
+  const createSession = useMutation(api.chats.start);
   const simpleView = useSimpleView();
   const binding = useSessionChatBinding({ session, chat, isRouteActive });
 
@@ -96,7 +96,7 @@ export function ChatPanel({
       const { numId } = await createSession({
         repoId: repo._id,
         title: input.title,
-        message: input.prompt,
+        prompt: input.prompt,
         ...settings,
       });
       await navigate({
@@ -178,7 +178,7 @@ export function ChatPanel({
         )
       }
       // Queued on this chat while the session's run slots are all taken: the
-      // server parked the send instead of starting it (see `startExecute`).
+      // server parked the send instead of starting it (`sendSessionChatMessage`).
       transcriptTail={(state) =>
         waitingForSlotLabel({
           isExecuting: state.isExecuting,

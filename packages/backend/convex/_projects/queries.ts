@@ -14,7 +14,7 @@ import {
   projectListItemValidator,
 } from "./helpers";
 import { resolveProjectBranchName } from "../_git/branchNames";
-import { resolveProjectBaseBranch } from "../_taskWorkflow/resolveBaseBranch";
+import { resolveProjectBaseBranch } from "../_agentTasks/resolveBaseBranch";
 import { unreadLookupForList } from "../chatReads";
 import { awaitingAnswerEntityIdsForRepo } from "../_chat/turnProjection";
 import { projectStatus } from "@eva/shared/projectStatus";

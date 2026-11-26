@@ -17,7 +17,7 @@ export {
   findUsageLimitHold,
   isHeldByUsageLimit,
   parseUsageLimitResetTime,
-} from "./convex/_taskWorkflow/usageLimitReset";
+} from "./convex/_queues/usageLimitReset";
 export { DAILY_STANDUP_KEY } from "./convex/_automations/systemAutomations";
 export {
   DEFAULT_ISSUE_LABEL,

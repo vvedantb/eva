@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { buildReadableReposBlock } from "../convex/prompts";
 import { buildEditPrompt } from "../convex/_sessions/prompts";
-import { buildImplementationPrompt } from "../convex/_taskWorkflow/prompts";
+import { buildImplementationPrompt } from "../convex/_agentTasks/prompts";
 
 const HEADING = "## Other repositories you may use";
 

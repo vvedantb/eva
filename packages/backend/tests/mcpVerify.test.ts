@@ -236,7 +236,7 @@ describe("authenticateMcpToken", () => {
   const sandboxPrincipal: McpPrincipal = {
     clerkUserId: "user_sandbox",
     scopedRepoId: "repo_1",
-    entityKind: "task",
+    entityKind: "session",
   };
 
   test("sandbox tokens skip Clerk and keep their scope", async () => {

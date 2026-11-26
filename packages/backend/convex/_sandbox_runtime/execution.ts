@@ -59,7 +59,7 @@ import {
 } from "./convexLocalBackend";
 import { ensureSwapFile } from "./swap";
 import { restoreSeededRuntimeState as restoreSeededRuntimeStateInSandbox } from "./devServer";
-import { isSandboxNetworkIssue } from "../_taskWorkflow/recovery";
+import { isSandboxNetworkIssue } from "../_sandbox/networkIssue";
 import { assertActionSandboxAccess } from "../functions";
 import { sandboxGitTargetValidator } from "../sandboxGit";
 import {
