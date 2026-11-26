@@ -45,7 +45,6 @@ export function NewSessionComposer() {
   const firstName = user?.firstName?.trim();
   const createSession = useMutation(api.sessions.create);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // Set by "Stack a new session" on a pull request: start from its head branch.
   const [stack] = useQueryStates({
     stackOn: stackOnPrParser,
     stackBase: stackBaseParser,
@@ -54,8 +53,6 @@ export function NewSessionComposer() {
   const { baseBranch, setBaseBranch } = useBaseBranchState(
     stackBase ?? undefined,
   );
-  // Picking another branch abandons the stack: the session's PR would no longer
-  // sit on top of that pull request.
   const stackOnPrNumber =
     stackBase !== null && baseBranch === stackBase ? stack.stackOn : null;
   const codebases = useCodebasesSelection();
@@ -84,8 +81,6 @@ export function NewSessionComposer() {
   const { options: modelOptions } = useAvailableAiModels(repo._id, model);
   const { options: accounts, resolveId: resolveAccountId } =
     useProviderAccounts();
-  // `undefined` = no explicit pick this visit: follow the user's own account
-  // for the model's provider (Team when none), same as quick tasks.
   const [pickedAccountId, setPickedAccountId] = useState<
     string | null | undefined
   >(undefined);
@@ -99,11 +94,7 @@ export function NewSessionComposer() {
     attachmentStorageIds?: Id<"_storage">[],
   ) => {
     setIsSubmitting(true);
-    // Resolved before the try: React Compiler bails on the whole file when a
-    // nullish-coalescing expression sits inside a try/catch.
     const accountId = resolveAccountId(providerAccountId) ?? null;
-    // Only sent when the codebases picker actually links other repos — an
-    // empty array would still be a meaningful signal server-side.
     const linkedCodebases =
       codebases.linkedRepoIds.length > 0
         ? {
@@ -120,8 +111,6 @@ export function NewSessionComposer() {
         model,
         baseBranch,
         ...executionTraits,
-        // Snapshot resolved display traits (including model defaults) so the
-        // new session's sticky Convex fields match the landing composer.
         reasoningLevel: displayTraits.effortLevel,
         thinkingEnabled: displayTraits.thinkingEnabled,
         use1mContext: displayTraits.use1mContext,
@@ -132,12 +121,6 @@ export function NewSessionComposer() {
         ...stackArgs,
       });
       clearDraft();
-      // The codebases selection is query-string state, and this navigation
-      // already drops it. Clearing it here queued a nuqs URL write instead:
-      // nuqs flushes on a later tick, through an adapter that navigates to the
-      // pathname captured when it rendered — the composer's own. That flush
-      // landed after this navigation and replaced the new session's URL with
-      // the composer again, so hitting send looked like it did nothing.
       await navigate({
         to: toInternalRepoHref(`${basePath}/sessions/${numId}`),
       });
@@ -151,8 +134,6 @@ export function NewSessionComposer() {
 
   return (
     <div className="relative isolate flex h-full items-center justify-center p-4 sm:p-6">
-      {/* Own clip box: the blobs drift past the edges, and the content
-          must keep its normal overflow. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"

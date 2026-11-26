@@ -15,15 +15,12 @@ export function SkillRow({ skill }: { skill: Skill }) {
 
   return (
     <>
-      {/* A row inside the skills list section, so the section owns the border. */}
       <div
         className={cn(
           "px-4 py-3 transition-colors hover:bg-muted/40",
           !skill.available && "opacity-60",
         )}
       >
-        {/* Stacks below `sm`: a full-width "View contents" button beside the
-            title leaves the title one word wide on a phone. */}
         <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
           <div className="min-w-0 max-sm:max-w-full">
             <div className="flex min-w-0 flex-wrap items-center gap-2">

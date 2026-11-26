@@ -9,7 +9,6 @@ type TaskConfirmDialogProps = {
   isLoading: boolean;
 };
 
-/** The task and project run actions close the dialog before they start. */
 function closeThen(
   onOpenChange: (open: boolean) => void,
   onConfirm: () => void,

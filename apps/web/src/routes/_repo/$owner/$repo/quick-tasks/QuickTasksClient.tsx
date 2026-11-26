@@ -64,8 +64,6 @@ import { mutationError, mutationSuccess } from "@/lib/utils/mutationToast";
 
 export function QuickTasksClient() {
   const navigate = useNavigate();
-  // The open task (if any) comes from the child route params, read here at the
-  // layout level so the list stays mounted while the detail changes.
   const params = useParams({ strict: false });
   const routeState = useQuickTaskRouteState();
   const numIdParam =
@@ -76,7 +74,6 @@ export function QuickTasksClient() {
     taskResolve.status === "ready"
       ? (taskResolve.convexId ?? undefined)
       : undefined;
-  // Not persisted, as the Sessions sidebar: the page opens on Active.
   const [listMode, setListMode] = useState<ArchiveListMode>("active");
   const isArchivedList = listMode === "archived";
   const liveTasks = useQuery(
@@ -101,7 +98,6 @@ export function QuickTasksClient() {
   const [selectedIds, setSelectedIds] = useState<Set<Id<"agentTasks">>>(
     new Set(),
   );
-  // Where the next shift-click measures from: the last row toggled on its own.
   const [anchorId, setAnchorId] = useState<Id<"agentTasks"> | null>(null);
   const [activeBulkAction, setActiveBulkAction] = useState<BulkAction | null>(
     null,
@@ -129,8 +125,6 @@ export function QuickTasksClient() {
   })();
 
   const quickTasks = useFilteredQuickTasks(tasks);
-  // The user's drafts sit in To Do, so they alone keep the board on screen.
-  // The Archived list shows no drafts.
   const liveTodoDrafts = useQuickTaskTodoDrafts(repo._id);
   const todoDrafts = isArchivedList ? [] : liveTodoDrafts;
   const hasAnyTasks =
@@ -145,7 +139,6 @@ export function QuickTasksClient() {
     return set;
   })();
 
-  // Drop selections for tasks that disappeared (adjust during render).
   if (isSelecting) {
     let needsPrune = false;
     for (const id of selectedIds) {
@@ -169,8 +162,6 @@ export function QuickTasksClient() {
     id: Id<"agentTasks">,
     options?: SelectionToggleOptions<Id<"agentTasks">>,
   ) => {
-    // A range only ever adds: shift-clicking back over a span you just selected
-    // should not punch holes in it.
     if (options?.range) {
       const range = rangeBetween(options.orderedIds ?? [], anchorId, id);
       setSelectedIds((prev) => {
@@ -275,8 +266,6 @@ export function QuickTasksClient() {
     }
   };
 
-  // If the drafts list has loaded and the param points to a non-existent draft
-  // (archived or stale link), clean up the URL.
   useEffect(() => {
     if (
       drafts !== undefined &&
@@ -285,19 +274,13 @@ export function QuickTasksClient() {
     ) {
       clearDraftParam();
     }
-    // clearDraftParam is defined inline each render — only run when these values change.
     // eslint-disable-next-line react/exhaustive-deps
   }, [drafts, draftParam, initialDraft]);
 
-  // Pre-numId link (old notification href, PR body): swap the Convex id in the
-  // path for the task's numId before rendering anything else.
   if (taskResolve.redirectTo !== null) {
     return <Navigate to={taskResolve.redirectTo} search={true} replace />;
   }
 
-  // URL points at a task that is still resolving or no longer exists.
-  // List view never takes this full-page path — it shows loading/not-found
-  // in the detail pane instead so the list itself stays mounted.
   if (
     numIdParam !== undefined &&
     taskResolve.status === "loading" &&
@@ -326,8 +309,6 @@ export function QuickTasksClient() {
     );
   }
 
-  // Kanban and table keep the dedicated full-page detail when a task is open.
-  // List view instead renders the master/detail split further down.
   if (selectedTaskId && routeState && view !== "list") {
     return (
       <QuickTaskDetailShell
@@ -349,11 +330,6 @@ export function QuickTasksClient() {
   return (
     <>
       <PageWrapper
-        // The page header stays the list's own: title, search, filters, view
-        // toggle, New Task. An open task's chrome (surface switcher, actions,
-        // prev/next) belongs to the detail pane, which renders it itself — in
-        // the header it read as a breadcrumb replacing the page title and a
-        // switcher floating over the middle of the list.
         title="Quick Tasks"
         fillHeight
         childPadding={false}
@@ -367,8 +343,6 @@ export function QuickTasksClient() {
             view={view}
             onViewChange={(v: "kanban" | "list") => {
               setParams({ view: v });
-              // Only list view renders an open task inline (master/detail
-              // split); kanban shows the board, so close the task.
               if (selectedTaskId && v !== "list") {
                 navigate({
                   to: toInternalRepoHref(`${basePath}/quick-tasks`),

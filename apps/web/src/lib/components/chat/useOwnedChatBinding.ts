@@ -39,7 +39,6 @@ export function useOwnedChatBinding({
 }: {
   ownedSession: OwnedSession;
   ownerLabel: SandboxChatBinding["ownerLabel"];
-  /** The owner's title; undefined while it loads. */
   title: string | undefined;
   common: OwnedChatBindingCommon;
   stopTarget?: { taskId: Id<"agentTasks"> };
@@ -50,7 +49,6 @@ export function useOwnedChatBinding({
   const ports = useSessionTurnPorts(chatSource, common.accounts);
   const stopChatTurn = useMutation(api.sessions.stopChatTurn);
   const { model, chat } = chatModel;
-  // No chat row yet: show what the backend will seed it with.
   const traits = chat ? chatModel.traits : (chatSeed?.traits ?? {});
   const providerAccountId = chat
     ? (chat.providerAccountId ?? null)
@@ -84,7 +82,6 @@ export function useOwnedChatBinding({
     persistAccount: chatModel.persistProviderAccountId,
     prewarm: chatModel.prewarm,
     ports,
-    // Stopping never creates the session: no chat yet means nothing to stop.
     cancel: () =>
       stopTarget !== undefined
         ? stopChatTurn({ target: stopTarget })

@@ -27,8 +27,6 @@ const TaskReactionsContext = createContext<TaskReactionsContextValue | null>(
   null,
 );
 
-// Stable empty array so targets without reactions don't churn referential
-// identity on every render.
 const EMPTY_GROUPS: ReactionGroup[] = [];
 
 /**

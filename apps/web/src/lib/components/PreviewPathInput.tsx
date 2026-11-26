@@ -32,7 +32,6 @@ export function PreviewPathInput({
   );
   const [focused, setFocused] = useState(false);
   const [listDismissed, setListDismissed] = useState(false);
-  // Like a browser address bar: focus lists the full history; typing filters it.
   const [typedSinceFocus, setTypedSinceFocus] = useState(false);
   const matches = filterPreviewPathHistory(
     history,

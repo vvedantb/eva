@@ -6,21 +6,9 @@ import {
 } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 
-/**
- * Keys a soft keyboard cannot send. Without these a phone can open a terminal
- * but not escape vim, complete a path, recall a command, or interrupt a running
- * process — so the pane looks usable and is not.
- *
- * Ctrl is not a sticky modifier here: holding modifier state and combining it
- * with the next soft-keyboard keypress needs a keydown interception layer, and
- * the combinations that actually matter day to day are few enough to ship
- * literally.
- */
 const TERMINAL_KEYS: ReadonlyArray<{
   label: ReactNode;
-  /** Accessible name — the glyph labels are not spoken usefully. */
   name: string;
-  /** Bytes written to the pty, exactly as the key would send them. */
   data: string;
 }> = [
   { label: "esc", name: "Escape", data: "\x1b" },
@@ -56,8 +44,6 @@ export function TerminalKeyRow({ onKey }: { onKey: (data: string) => void }) {
           key={key.name}
           type="button"
           aria-label={key.name}
-          // `onPointerDown` rather than `onClick`: a click would move focus off
-          // the terminal and close the soft keyboard between every keypress.
           onPointerDown={(event) => {
             event.preventDefault();
             onKey(key.data);

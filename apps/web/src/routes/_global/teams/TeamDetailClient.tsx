@@ -67,9 +67,6 @@ export function TeamDetailClient({
   const logoInputRef = useRef<HTMLInputElement>(null);
   const backgroundInputRef = useRef<HTMLInputElement>(null);
 
-  // `useQuery` is `undefined` while the subscription is still in flight, so a
-  // single `!team` branch flashed "Team not found" on every cold load of a team
-  // that exists. Only `null` is a real miss.
   if (team === undefined) {
     return (
       <PageWrapper title="Team">
@@ -128,7 +125,6 @@ export function TeamDetailClient({
             aria-label={team.logoUrl ? "Change logo" : "Set logo"}
           >
             <IconPhoto size={14} className="sm:mr-1.5" />
-            {/* The label is noise next to the title on a phone. */}
             <span className="hidden sm:inline">
               {team.logoUrl ? "Change logo" : "Set logo"}
             </span>
@@ -179,15 +175,8 @@ export function TeamDetailClient({
         </Tabs>
       }
     >
-      {/* Stacks below `sm`: the copy plus two controls cannot share a phone
-          row without shredding the description into one word per line. */}
       <div className="mb-4 flex flex-col items-start gap-3 rounded-surface bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          {/* `size-10` is unconditional: it is this preview's only size, not a
-              mobile enlargement of a smaller desktop one. Gating it behind
-              `max-sm:` left the box unsized above 640px, and an indefinite
-              parent cannot resolve the `size-full` image inside — the banner
-              rendered at its intrinsic width and blew the row apart (f160d6423). */}
           <div className="relative size-10 shrink-0 overflow-hidden rounded-md border border-border bg-muted">
             {team.backgroundUrl ? (
               <img

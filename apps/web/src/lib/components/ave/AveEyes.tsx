@@ -5,25 +5,13 @@ import { m, useSpring, useTransform } from "motion/react";
 import { cn } from "@eva/ui";
 import type { AveLogoState } from "@/lib/components/ave/aveLogoState";
 
-/** Furthest the eyes travel from rest, in px. */
 const MAX_TRAVEL_PX = 4;
-/** Cursor distance at which the eyes reach full travel. Closer reads as nearer. */
 const FULL_TRAVEL_DISTANCE_PX = 160;
-/** Sideways glances lean the eyes, like the reference's "slant" eyes. */
 const MAX_SKEW_DEG = 14;
-/**
- * Bouncy on purpose: the user's cursor drives this, so overshoot is feedback
- * to their gesture (see `motionSpring` for why non-gesture motion has none).
- */
 const EYE_SPRING = { stiffness: 320, damping: 16, mass: 0.6 };
 
-/** `bg-foreground` turns light in dark themes; zinc-900 vanished on the dark card. */
 const EYE_CLASS = "h-[10px] w-[6px] rounded-full bg-foreground";
 
-/**
- * `ave-blink` closes the eyes twice per period, 44% and 56% of it apart, so a
- * 7–9s period gives irregular 3–5s gaps between blinks.
- */
 function randomBlinkPeriod() {
   return `${7 + Math.random() * 2}s`;
 }
@@ -49,7 +37,6 @@ export function AveEyes({ state }: { state: AveLogoState }) {
     [-MAX_TRAVEL_PX, MAX_TRAVEL_PX],
     [MAX_SKEW_DEG, -MAX_SKEW_DEG],
   );
-  // Fixed per mount: the irregular gaps come from the keyframes.
   const [blinkPeriod] = useState(randomBlinkPeriod);
   const followsCursor = state === "idle";
 
@@ -98,7 +85,6 @@ export function AveEyes({ state }: { state: AveLogoState }) {
             />
           </span>
           {state === "done" && (
-            // Happy squint arcs over the 18×10 eye row, one per eye centre.
             <svg
               viewBox="0 0 18 10"
               className="ave-happy absolute inset-0 size-full overflow-visible"

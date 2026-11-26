@@ -53,12 +53,6 @@ export type LandingPreviewKey =
   | "inbox"
   | "teams";
 
-/**
- * Icon shape a feature tab can render. Deliberately narrower than either source
- * it accepts: the animated nav icons from `@vvedantb/ui` and Tabler's icons
- * both take a superset of `size` and `className`, so this is all the tabs use. Features that exist in the product nav reuse that exact icon so
- * the marketing page and the app agree; the rest fall back to Tabler.
- */
 type LandingIcon = ComponentType<{
   size?: number;
   className?: string;
@@ -73,12 +67,9 @@ export interface LandingFeature {
 }
 
 export interface LandingPillar {
-  /** Anchor target for the nav and for deep links. */
   id: string;
   step: string;
-  /** Short name used by the workflow strip and the section eyebrow. */
   label: string;
-  /** One line describing the stage, shown in the workflow strip. */
   tagline: string;
   heading: string;
   intro: string;
@@ -96,7 +87,6 @@ export const LANDING_NAV_LINKS = [
 export const LANDING_HERO = {
   headline: "Think it. Sleep. Eva gets it done.",
   lede: "Eva gives coding agents a real cloud dev environment — your repository cloned, dependencies installed, a dev server running and a browser they can drive. They run the tests and open the pull request.",
-  /** Short, plain-words lede for the compact page. */
   compactLede:
     "Your AI coworker. Hand off the work, wake up to changes ready to review.",
 } as const;

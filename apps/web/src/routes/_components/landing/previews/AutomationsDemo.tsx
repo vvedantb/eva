@@ -15,24 +15,12 @@ import {
 import { LandingStage, type LandingDemoProps } from "./LandingStage";
 import "./AutomationsDemo.css";
 
-// A scheduled run, told by the system with no cursor. Beats: the clock in the
-// Automations header rolls to Monday 09:00; the dependency sweep starts and a
-// live line under it says what it found; the line moves on to opening pull
-// requests; the run finishes and its result drops into the Inbox beside it
-// (the payoff), the unread count rolling up with it.
-//
-// Real strings: the two pane titles, the clock, two automations with their
-// schedules and modes (fix and report only), the live line, the inbox result.
-
 type Run = "idle" | "running" | "done";
 
 type S = {
-  /** The clock has reached the scheduled time. */
   due: boolean;
   run: Run;
-  /** The live line under the running automation is open. */
   live: boolean;
-  /** Which step the live line says; kept while it closes so it never swaps. */
   step: 0 | 1;
   delivered: boolean;
 };
@@ -75,7 +63,6 @@ async function story(a: Act<S>) {
   await a.wait(2400);
 }
 
-/** Filler inbox items already there before the run: they move down for it. */
 const OLD = [
   { title: 96, subtitle: 150 },
   { title: 120, subtitle: 128 },
@@ -83,7 +70,6 @@ const OLD = [
   { title: 110, subtitle: 136 },
 ];
 
-/** Filler automations under the two the story names. */
 const MORE = [
   { title: 104, subtitle: 142 },
   { title: 88, subtitle: 160 },

@@ -61,11 +61,6 @@ export function sessionMatchesPath(
   });
 }
 
-/**
- * The repo whose URL a row's session lives under. A row shown in this app's
- * sidebar only because the session clones this repo still belongs to the
- * session's primary repo, so its link and selection must resolve there.
- */
 function sessionRowRepo(
   repo: RepoPathParts,
   session: SessionRowRef,

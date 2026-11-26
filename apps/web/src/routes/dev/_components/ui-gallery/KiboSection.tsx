@@ -74,7 +74,6 @@ const LIST_GROUPS = [
   },
 ];
 
-/** Every day of 2025 with a fixed count/level pattern (no randomness). */
 function buildActivity(): ContributionGraphActivity[] {
   const days: ContributionGraphActivity[] = [];
   for (let day = 0; day < 365; day++) {
@@ -89,7 +88,6 @@ function buildActivity(): ContributionGraphActivity[] {
 
 const ACTIVITY = buildActivity();
 
-/** 1×1 transparent GIF: a poster with no network request. */
 const POSTER =
   "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
@@ -241,9 +239,6 @@ export function KiboSection() {
           </div>
         </GalleryItem>
         <GalleryItem label="ThemeSwitcher (value=dark, controlled)">
-          {/* ThemeSwitcher renders `motion.*`, which throws under the app's
-              `<LazyMotion strict>` (MotionProvider). A non-strict LazyMotion
-              scope lets it render; the app itself does not use it yet. */}
           <LazyMotion features={domMax}>
             <div className="w-fit">
               <ThemeSwitcher value="dark" onChange={noop} />

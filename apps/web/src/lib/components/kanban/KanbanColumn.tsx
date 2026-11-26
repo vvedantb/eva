@@ -24,7 +24,6 @@ export const KANBAN_COLUMN_WIDTH_CLASS =
 
 interface ColumnConfig {
   bg: string;
-  /** Kept for callers; columns use a flat muted wash. */
   cardBg?: string;
   text: string;
   label: string;

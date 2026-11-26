@@ -27,7 +27,6 @@ export type FileViewerEditState =
       onSave: () => void;
     };
 
-// The editor's keymap has no save command, so the shortcut is ours to teach.
 const SAVE_SHORTCUT = formatForDisplay("Mod+S");
 
 /**
@@ -43,8 +42,6 @@ export function FileViewerEditControls({
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          {/* A disabled button swallows pointer events, so the tooltip needs a
-              wrapper to hover — otherwise the reason is unreachable. */}
           <span className="shrink-0">
             <Button
               shape="rounded"

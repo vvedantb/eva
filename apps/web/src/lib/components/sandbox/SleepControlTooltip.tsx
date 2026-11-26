@@ -9,8 +9,6 @@ import {
   WAKE_EVA_RETRY_LABEL,
 } from "@eva/shared";
 
-// The wake/sleep vocabulary lives in `@eva/shared` (`sandboxStatus.ts`), so the
-// session, task and project headers and the phone cannot drift apart.
 export { SLEEP_EVA_LABEL, WAKE_EVA_LABEL, WAKE_EVA_RETRY_LABEL };
 
 /**

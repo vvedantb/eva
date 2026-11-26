@@ -4,9 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@vvedantb/ui";
 import type { ReactNode } from "react";
 
 interface ChatUiPanelTabsProps {
-  /** The turn's agent-composed panel(s), shown by default. */
   panel: ReactNode;
-  /** The turn's prose reply, which the panel is a restatement of. */
   text: ReactNode;
 }
 

@@ -15,9 +15,7 @@ import { FIELD_TEXT_CLASS } from "@/lib/components/fields/FieldsSection";
 interface ProjectTagsPopoverProps {
   tags: string[] | undefined;
   onUpdate: (tags: string[]) => void;
-  /** Trigger classes — lets a field-row caller swap the inline bar sizing. */
   className?: string;
-  /** Read-only: the count shows, the popover does not open. */
   disabled?: boolean;
 }
 

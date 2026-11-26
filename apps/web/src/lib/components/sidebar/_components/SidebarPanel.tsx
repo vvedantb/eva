@@ -48,8 +48,6 @@ export function SidebarPanel({
   const { repoBasePath, repoName, appName, isRepoRoute } = route;
   const { showGlobalSessionsPanel, showGlobalAutomationsPanel } = flags;
   return (
-    // No edge line: the panel shares the page tone, and the gap to the
-    // content divides them, as on the rail (docs/eva-ui.md).
     <Sidebar.Panel className="vt-panel bg-sidebar">
       <ContextSidebarHeaderActionProvider key={panelKey}>
         {(headerAction) => (
@@ -68,8 +66,6 @@ export function SidebarPanel({
               onBackToMain={() => setContextSidebarMode("main")}
             />
 
-            {/* `max-md:overscroll-y-contain`: below `md` this is a drawer over
-                the page, and a scroll past its end moved the page behind. */}
             <nav
               ref={scrollRef}
               className={cn(
@@ -97,7 +93,6 @@ export function SidebarPanel({
               </div>
             </nav>
 
-            {/* Footer shows online teammates only. */}
             {showGlobalSessionsPanel ||
             showGlobalAutomationsPanel ||
             (isRepoRoute && repoBasePath) ? (

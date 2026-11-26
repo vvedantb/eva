@@ -42,11 +42,6 @@ import { baseDocEditorExtensions, useDocSync } from "../_utils/useDocSync";
 
 type Doc = NonNullable<FunctionReturnType<typeof api.docs.get>>;
 
-/**
- * How long editing has to stop before a version is snapshotted. Two minutes
- * outlived most editing sessions, so a doc could be closed having never been
- * snapshotted at all.
- */
 const VERSION_IDLE_MS = 15_000;
 
 export function DocContentTab({
@@ -75,15 +70,11 @@ export function DocContentTab({
   const touchDraft = useMutation(api.docVersions.touchDraft);
   const saveVersion = useMutation(api.docVersions.saveVersion);
 
-  // Attribute new suggestions to the current user; a stable ref avoids
-  // recreating the editor when auth resolves.
   const currentUserId = useQuery(api.auth.me);
   const userIdRef = useRef<string | null>(null);
   useEffect(() => {
     userIdRef.current = currentUserId ?? null;
   }, [currentUserId]);
-  // Clicking a highlight routes here; the ref lets the (memoized once) editor
-  // extension reach the latest handler without recreating the editor.
   const anchorClickRef = useRef<(anchorId: string) => void>(() => undefined);
   const extensions = [
     ...baseDocEditorExtensions,
@@ -109,8 +100,6 @@ export function DocContentTab({
     () => new Set(),
   );
 
-  // Cached query (shared with the panel). Open anchors = unresolved thread
-  // roots plus the anchor currently being composed.
   const comments =
     useQuery(api.docComments.listByDoc, { docId: doc._id }) ?? [];
   const openAnchorIds = (() => {
@@ -149,7 +138,6 @@ export function DocContentTab({
     [sync.extension ? "ready" : "loading"],
   );
 
-  // Update editable when mode changes
   useEffect(() => {
     if (editor) {
       editor.setEditable(effectiveMode !== "viewing");
@@ -159,8 +147,6 @@ export function DocContentTab({
   /* eslint-disable no-effect/no-event-handler --
      Reconfigures the TipTap instance, which lives outside React state and is
      only available after it mounts. */
-  // Toggle suggestion tracking with the mode. Editing/Viewing apply edits
-  // directly; Suggesting converts them into tracked-change marks.
   useEffect(() => {
     if (!editor) return;
     if (isPrRecap) {
@@ -172,7 +158,6 @@ export function DocContentTab({
   }, [editor, effectiveMode, isPrRecap]);
   /* eslint-enable no-effect/no-event-handler */
 
-  // Surface the pending-suggestion count so the header toggle can show it.
   const suggestionCount =
     useEditorState({
       editor,
@@ -191,7 +176,6 @@ export function DocContentTab({
      TipTap emits "update" on its own bus and has no immutable snapshot to hand
      useSyncExternalStore; re-serialising markdown per render would be far
      costlier than mirroring it on change. */
-  // Keep the outline in sync with live editor content.
   useEffect(() => {
     if (!editor) return;
 
@@ -207,16 +191,8 @@ export function DocContentTab({
   }, [editor]);
   /* eslint-enable no-effect/no-external-store-subscription */
 
-  /**
-   * Snapshot the current document as a version. Shared by the idle timer and
-   * the status line's Retry, so a failed snapshot is recoverable without
-   * touching the text again.
-   */
   const runSaveVersion = () => {
     if (!editor) return;
-    // Only the edits this snapshot covers are settled by it. Edits typed while
-    // it is in flight stay counted, keep the line on "Unsaved version", and
-    // the idle timer they re-armed saves them next.
     const editsCovered = editCountRef.current;
     setDocSaveState({ status: "saving" });
     saveVersion({
@@ -238,14 +214,11 @@ export function DocContentTab({
       .catch(() => setDocSaveState({ status: "error" }));
   };
 
-  // The transaction listener is registered once per editor; the ref lets it
-  // reach the current save closure without re-registering on every render.
   const saveVersionRef = useRef<() => void>(() => undefined);
   useEffect(() => {
     saveVersionRef.current = runSaveVersion;
   }, [runSaveVersion]);
 
-  // Version snapshot tracking
   useEffect(() => {
     if (!editor) return;
 
@@ -254,12 +227,8 @@ export function DocContentTab({
     }: {
       transaction: Transaction;
     }) => {
-      // Only local edits drive version snapshots; ignore remote (collab) steps
-      // so another user's edits don't trigger or attribute a version here.
       if (transaction.getMeta("collab$")) return;
       editCountRef.current += 1;
-      // Returning `prev` unchanged skips a re-render, so this costs nothing per
-      // keystroke once the status line already says "Unsaved version".
       setDocSaveState((prev) =>
         prev.status === "pending" ? prev : { status: "pending" },
       );
@@ -283,7 +252,6 @@ export function DocContentTab({
     };
   }, [editor, doc._id, touchDraft]);
 
-  // Reflect open/active anchors as highlights in the document.
   useEffect(() => {
     if (!editor) return;
     setCommentHighlightState(editor, { openAnchorIds, activeAnchorId });
@@ -291,7 +259,6 @@ export function DocContentTab({
 
   /* eslint-disable no-effect/no-external-store-subscription --
      Same TipTap event bus as above: no snapshot function to subscribe with. */
-  // Track anchors still present in the doc so deleted ones show as orphaned.
   useEffect(() => {
     if (!editor) return;
     const update = () =>
@@ -307,7 +274,6 @@ export function DocContentTab({
   /* eslint-disable no-effect/no-event-handler --
      Keeps a ref fresh for a callback the TipTap extension calls imperatively
      from a DOM click, outside React's event system. */
-  // Highlight click -> focus its thread in the panel.
   useEffect(() => {
     anchorClickRef.current = (anchorId: string) => {
       setActiveAnchorId(anchorId);
@@ -316,7 +282,6 @@ export function DocContentTab({
   }, [commentsOpen, onToggleComments]);
   /* eslint-enable no-effect/no-event-handler */
 
-  // Panel thread click -> scroll the editor to the anchored text.
   const handleAnchorActivate = (anchorId: string) => {
     setActiveAnchorId(anchorId);
     if (editor) scrollToAnchor(editor, anchorId);
@@ -328,7 +293,6 @@ export function DocContentTab({
     if (from === to) return;
     const text = editor.state.doc.textBetween(from, to, " ");
     const anchorId = nanoid();
-    // Anchor the selection immediately so the pending highlight tracks edits.
     applyCommentAnchor(editor, anchorId);
     setComposingAnchorId(anchorId);
     setComposingAnchorText(text);
@@ -350,8 +314,6 @@ export function DocContentTab({
 
   const handleRestoreVersion = async (pmContent: string) => {
     if (!editor) return;
-    // Snapshot the current state first so the restore is itself reversible
-    // (dedupe in saveVersion makes this free when nothing changed).
     await withMutationToast(
       saveVersion({
         docId: doc._id,
@@ -360,11 +322,8 @@ export function DocContentTab({
       }).then(() => {
         try {
           const json = JSON.parse(pmContent);
-          // Apply with skip meta so the restore is not turned into a tracked
-          // suggestion while in Suggesting mode.
           setContentUntracked(editor, json);
         } catch {
-          // ignore malformed snapshots
         }
         setSelectedVersionId(null);
       }),
@@ -383,14 +342,8 @@ export function DocContentTab({
   }
 
   return (
-    // `relative`: below `md` the comments / history / suggestions panels are
-    // full-width overlays over the editor rather than a 320px column beside it,
-    // and they position against this row.
     <div className="relative flex min-h-0 flex-1 overflow-hidden">
       <div className="flex max-sm:min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
-        {/* This tab has no toolbar of its own, so the version state sits top
-            right above the editor. It renders nothing until there is something
-            to say. */}
         {selectedVersionId ? null : (
           <DocSaveStatus state={docSaveState} onRetry={runSaveVersion} />
         )}
@@ -436,8 +389,6 @@ export function DocContentTab({
               >
                 <EditorContent
                   editor={editor}
-                  // Code fences scroll inside themselves; an unbroken line would
-                  // otherwise widen the whole document past the viewport.
                   className="[&_.tiptap]:min-h-48 [&_.tiptap]:outline-hidden max-sm:[&_pre]:overflow-x-auto"
                 />
                 {editor && (

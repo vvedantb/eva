@@ -25,17 +25,13 @@ export function ShortcutRecorder({
   onRecord,
 }: {
   def: ShortcutDef;
-  /** The combo in force right now, shown while not recording. */
   binding: Hotkey;
-  /** `null` means "clear the override and go back to the default". */
   onRecord: (hotkey: Hotkey | null) => void;
 }) {
   const [rejected, setRejected] = useState<string | null>(null);
 
   const recorder = useHotkeyRecorder({
     onRecord: (hotkey) => {
-      // Slotted shortcuts drive a run of numbered bindings, so the recorded
-      // key has to be the digit the other slots are derived from.
       if (def.slots !== undefined && slotDigitOf(hotkey) === null) {
         setRejected(SLOT_HINT);
         return;

@@ -2,16 +2,6 @@
 
 import { createContext, useContext, useState, type ReactNode } from "react";
 
-/**
- * Two mount points: `actions` in the header's action cluster, `titleAfter`
- * beside the breadcrumb. The task surface switcher is navigation and belongs
- * with the title; everything else in the task header is an action.
- *
- * Each element is its own `useState` rather than one object: the slot refs are
- * re-attached (null, then the element) on every commit, and a single object
- * would take a fresh identity each time, re-render every consumer, and loop.
- * Two element values compare equal and bail out.
- */
 type QuickTaskHeaderActionsSlotContextValue = {
   actionsElement: HTMLDivElement | null;
   titleAfterElement: HTMLDivElement | null;
@@ -58,9 +48,6 @@ export function QuickTaskHeaderActionsSlot() {
     return null;
   }
 
-  // Destructured, not `ref={slot.setActionsElement}`: React Compiler reads a
-  // member expression in a `ref` prop as a ref access during render and bails
-  // the whole file out of memoization.
   const { setActionsElement } = slot;
 
   return (

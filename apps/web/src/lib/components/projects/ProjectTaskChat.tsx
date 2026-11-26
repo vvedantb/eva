@@ -19,9 +19,7 @@ export function ProjectTaskChat({
   onShowReview,
 }: {
   taskId: Id<"agentTasks">;
-  /** The task's own PR. */
   prUrl: string | undefined;
-  /** The task's full page (pre-internal form). */
   fullPageHref: string;
   onShowReview: () => void;
 }) {

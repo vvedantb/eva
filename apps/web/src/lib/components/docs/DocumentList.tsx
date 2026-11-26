@@ -23,7 +23,6 @@ export function DocumentList({
   docs: DocRow[];
   emptyDescription: string;
   onOpen: (docId: string) => void;
-  /** A project's tab: rows a child task made name and link that task. */
   showTaskSource?: boolean;
 }) {
   if (docs.length === 0) {

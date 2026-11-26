@@ -29,7 +29,6 @@ import type { EnvVarSlotEntry } from "@/lib/components/_utils/envVarSlotTypes";
 
 interface EnvVarProviderSlotsProps {
   entries: ReadonlyArray<EnvVarSlotEntry>;
-  /** sandboxExclude passed to onUpsert for new values from paste-in slots. */
   defaultSandboxExclude?: boolean;
   vars: EnvVar[] | undefined;
   onUpsert?: (

@@ -22,16 +22,10 @@ interface CommentMentionInputProps {
   onValueChange: (value: string) => void;
   placeholder?: string;
   className?: string;
-  /** Submit on Enter (Shift+Enter inserts a newline). */
   onEnterSubmit?: () => void;
   initialMentionMap?: Map<string, string>;
   initialSkillMap?: Map<string, string>;
-  /** When true, blocks all input. Used while a draft is loading. */
   disabled?: boolean;
-  /**
-   * Extra people-like items offered first (the coordinator's thread replies
-   * add Eva). Their chips do not navigate and show no profile card.
-   */
   extraPeopleItems?: MentionItem[];
 }
 
@@ -86,8 +80,6 @@ export const CommentMentionInput = forwardRef<
       initialSkillMap={initialSkillMap}
       disabled={disabled}
       className={cn(
-        // Focus stays a single hairline (ring width 1): a 2px ring around an
-        // already-bordered box read as a heavy double edge.
         "min-h-9 max-h-40 overflow-y-auto rounded-control border border-input bg-card px-3 py-2 pr-12 transition-[border-color,box-shadow] focus-visible:border-ring/45 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring/20",
         className,
       )}

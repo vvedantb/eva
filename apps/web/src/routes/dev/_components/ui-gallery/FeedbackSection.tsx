@@ -49,13 +49,11 @@ const STATUS_TONES: StatusTone[] = [
   "neutral",
 ];
 
-/** 1x1 grey PNG so AvatarImage loads without the network. */
 const AVATAR_SRC =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mN8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
 
 const GALLERY_TOASTER = "ui-gallery";
 
-/** Shows a fixed set of toasts once. Fixed ids make the StrictMode re-run a no-op. */
 function useGalleryToasts() {
   useEffect(() => {
     const options = { toasterId: GALLERY_TOASTER, duration: Infinity };
@@ -84,7 +82,6 @@ export function FeedbackSection() {
   const { resolvedTheme } = useThemeMode();
   useGalleryToasts();
   return (
-    // Capped width keeps the specimens clear of the fixed top-right toasts.
     <div className="flex max-w-[960px] flex-col gap-10">
       <SpinnerGroup />
       <GalleryGroup title="StatusDot">

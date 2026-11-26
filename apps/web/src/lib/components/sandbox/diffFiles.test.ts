@@ -62,17 +62,10 @@ function patch(path: string, added: string): string {
 }
 
 interface HunkHeaderCounts {
-  /** `-old,DECLARED +new,DECLARED` as written in the `@@` header. */
   readonly declared: readonly [number, number];
-  /** Old/new line totals counted from the hunk body that follows it. */
   readonly actual: [number, number];
 }
 
-/**
- * Re-derives each hunk's old/new line totals from its body, so a test can
- * assert the re-emitted `@@` header still describes what it precedes — the
- * patch parser rejects a hunk whose counts disagree with its contents.
- */
 function hunkHeaderCounts(patch: string): HunkHeaderCounts[] {
   const headers: HunkHeaderCounts[] = [];
   for (const line of patch.split("\n")) {
@@ -177,9 +170,6 @@ describe("ignoreWhitespaceInPatch", () => {
     expect(entry.deletions).toBe(1);
   });
 
-  // Lines whose own content starts with `-`/`+` used to be misread as the
-  // `---`/`+++` file markers and demoted to context, which deleted the change
-  // from the rendered diff.
   it("keeps a deleted `---` front-matter separator", () => {
     const source = [
       "diff --git a/docs/post.md b/docs/post.md",
@@ -371,7 +361,6 @@ describe("lineRangeCommentTarget", () => {
       startSide: "RIGHT",
       label: "+10 to +11",
     });
-    // Either tap order, and a mixed range drops the marker.
     expect(lineRangeCommentTarget(rows, 4, 1)).toEqual({
       line: 11,
       side: "RIGHT",
@@ -379,7 +368,6 @@ describe("lineRangeCommentTarget", () => {
       startSide: "RIGHT",
       label: "9 to 11",
     });
-    // A removed line to the added line beside it shares a number but not a side.
     expect(lineRangeCommentTarget(rows, 2, 3)).toMatchObject({ line: 10, side: "RIGHT", startLine: 10, startSide: "LEFT" });
     expect(lineRangeCommentTarget(rows, 2, 2)).toEqual({
       line: 10,

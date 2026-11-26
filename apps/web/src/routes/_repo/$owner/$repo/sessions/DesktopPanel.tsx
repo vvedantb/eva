@@ -17,16 +17,9 @@ interface DesktopPanelProps {
   sandboxId: string | undefined;
   isActive: boolean;
   repoId: Id<"githubRepos">;
-  /** Browser tab vs Computer tab — same surface, different idle copy. */
   surface?: "browser" | "desktop";
-  /** When fresh, shows the takeover overlay (session/task/project sandboxes). */
   agentBrowsingAt?: number;
-  /**
-   * Clears the agent-browsing soft lock (session/task/project-specific
-   * mutation, provided by the caller). Takeover overlay only renders when set.
-   */
   onReleaseLock?: () => void;
-  /** Idle pause on: the Eva wake link replaces the raw sandbox URL. */
   externalHref?: string;
   wake?: SandboxWake;
 }
@@ -52,30 +45,15 @@ const SURFACE_COPY = {
   },
 } as const;
 
-/**
- * NoVNC remote-desktop panel. Thin wrapper around `SandboxIframeService` —
- * port 6080, transforms the preview URL into a vnc_lite.html viewer URL, and
- * fires `launchChromeInDesktop` once the viewer is ready.
- *
- * Forwards `__eva_grant` onto noVNC's websockify `path` so the auth proxy can
- * authorize the WebSocket upgrade even when the Partitioned session cookie is
- * missing in a cross-site iframe (Eva app → *.vercel.run).
- *
- * Shared by Browser (first-class) and Computer (`+` menu) tabs — same Chrome.
- */
 function appendNoVncParams(baseUrl: string): string {
   const url = new URL(baseUrl);
   url.pathname = url.pathname.replace(/\/?$/, "/vnc_lite.html");
   url.searchParams.set("autoconnect", "true");
-  // vnc_lite.html reads `scale` (→ rfb.scaleViewport), not the full client's
-  // `resize=scale`. Without this the 1920×1080 desktop renders 1:1 and looks
-  // zoomed/cropped inside the panel; with it, aspect ratio is preserved.
   url.searchParams.set("scale", "true");
   url.searchParams.set("quality", "6");
   url.searchParams.set("compression", "2");
   const grant = url.searchParams.get("__eva_grant");
   if (grant) {
-    // searchParams.set encodes once; do not pre-encode the grant.
     url.searchParams.set("path", "websockify?__eva_grant=" + grant);
   }
   return url.toString();
@@ -114,9 +92,6 @@ export function DesktopPanel({
 
   const isAgentBrowsing = isAgentBrowsingActive(agentBrowsingAt);
 
-  // The agent only takes the browsing lock after `browser_start`, so Chrome is
-  // already up — auto-start (start + readiness poll) instead of asking the user
-  // to press Start for something they can see is running.
   const autoStartKey = isAgentBrowsing ? agentBrowsingAt : undefined;
 
   const showLockOverlay = onReleaseLock !== undefined && isAgentBrowsing;
@@ -156,9 +131,6 @@ export function DesktopPanel({
       />
       {showLockOverlay ? (
         <>
-          {/* Browser pane: the colorful beam circles the "Agent is browsing"
-              pill (below) instead of the iframe. Computer keeps a static
-              ring — same Chrome, different tab. The click layer swallows taps. */}
           <div
             className={cn(
               "absolute inset-0 z-10 cursor-not-allowed",

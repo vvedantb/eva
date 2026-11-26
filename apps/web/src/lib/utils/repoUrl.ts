@@ -1,11 +1,5 @@
 import { repoBasePath } from "@eva/shared";
 
-/**
- * Monorepo apps use one `$repo` path segment internally (`repo--app`). The
- * router rewrite in `main.tsx` maps that to slash URLs in the address bar
- * (`repo/app`) and back again on input.
- */
-
 /** Path segments that are repo sections, not monorepo app names. */
 export const KNOWN_REPO_SUB_PAGES = new Set([
   "projects",
@@ -22,7 +16,6 @@ export const KNOWN_REPO_SUB_PAGES = new Set([
   "drafts",
 ]);
 
-/** Global first segments that are never `/$owner/$repo/...`. */
 const NON_REPO_PATH_PREFIXES = new Set([
   "home",
   "sign-in",
@@ -38,7 +31,6 @@ const NON_REPO_PATH_PREFIXES = new Set([
   "testing",
   "agent-callback",
   "mcp",
-  // Stable preview wake links: `/p/$kind/$id` (routes/p.$kind.$id.tsx).
   "p",
 ]);
 
@@ -139,12 +131,6 @@ export function toDisplayRepoHref(href: string): string {
   return href;
 }
 
-/**
- * Repo sections whose sidebar belongs to a global rail entry (one cross-repo
- * panel) rather than to the app. Clicking an app tile means "show me this app",
- * so these are never carried across — landing on them would leave the same
- * global panel open and never reveal the app sidebar.
- */
 const RAIL_GLOBAL_SECTIONS = new Set(["sessions", "automations"]);
 
 /**

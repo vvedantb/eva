@@ -49,7 +49,6 @@ export function ChatMarkdownLink(props: ComponentProps<typeof MarkdownLink>) {
     return (
       <LinkHoverCard
         link={props}
-        // The mention preview draws its own surface, as on `DataMentionChip`.
         contentClassName="w-auto border-0 bg-transparent p-0 shadow-none backdrop-blur-none"
       >
         <EvaEntityCardBody link={entity} />
@@ -82,7 +81,6 @@ function LinkHoverCard({
   );
 }
 
-/** Mounts only while the card is open, like the PR card below. */
 function EvaEntityCardBody({ link }: { link: EvaEntityLink }) {
   const target = useConvexQuery(api.mentions.getEntityByPath, link);
   if (target === undefined) {
@@ -110,7 +108,6 @@ function EvaEntityCardBody({ link }: { link: EvaEntityLink }) {
 /** Shared by every chat surface that renders markdown. */
 export const CHAT_MARKDOWN_COMPONENTS = { a: ChatMarkdownLink };
 
-/** Mounts only while the card is open, so a link costs nothing until hovered. */
 function PullRequestCardBody({ pr }: { pr: GithubPrLink }) {
   const getCard = useAction(api.github.getPullRequestCard);
   const card = useQuery({

@@ -47,14 +47,12 @@ export function ChatMessageScroll({
   smooth?: boolean;
 }) {
   const { scrollRef, stopScroll } = useStickToBottomContext();
-  // React re-attaches a ref whose callback identity changes; scroll only once.
   const scrolledRef = useRef(false);
 
   const ref = (node: HTMLSpanElement | null) => {
     if (!node || scrolledRef.current) return;
     scrolledRef.current = true;
     stopScroll();
-    // One frame of slack: the rows are still laying out on the first commit.
     requestAnimationFrame(() => {
       scrollRef.current
         ?.querySelector<HTMLElement>(

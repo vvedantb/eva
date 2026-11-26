@@ -5,16 +5,10 @@ import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { openChatTurnOptimistically } from "./useChatTurnOpen";
 
-/**
- * A direct send marks the chat's turn open before the server answers, so a
- * second send in that window queues instead of starting another turn.
- */
-
 const CHAT_ID = z.custom<Id<"sessionChats">>().parse("chat_1");
 
 type ChatStatus = FunctionReturnType<typeof api.turns.getChatStatus> | undefined;
 
-/** One-entry store: `getChatStatus` for one chat, recording every write. */
 function fakeStore(initial: ChatStatus) {
   const writes: ChatStatus[] = [];
   let value = initial;

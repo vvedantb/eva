@@ -26,9 +26,7 @@ export interface ChromeTabEntry {
 interface SessionChromeTabStripProps {
   baseUrl: string;
   groupColor: TabGroupColor;
-  /** Every tab in the group, including the closed ones, in strip order. */
   tabs: ChromeTabEntry[];
-  /** The subset actually drawn: open tabs, or just the selected one. */
   visibleTabs: ChromeTabEntry[];
   onReorder: (orderedSessionIds: string[]) => void;
   onRenameRequest: (session: SessionListItem) => void;
@@ -60,8 +58,6 @@ export function SessionChromeTabStrip({
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    // Ordered over every tab in the group rather than the visible ones, so a
-    // reopened tab returns to the position the user left it in.
     const ids: string[] = tabs.map((tab) => tab.session._id);
     const from = ids.indexOf(String(active.id));
     const to = ids.indexOf(String(over.id));
@@ -83,9 +79,6 @@ export function SessionChromeTabStrip({
           items={visibleTabs.map((tab) => tab.session._id)}
           strategy={horizontalListSortingStrategy}
         >
-          {/* Enter/exit only. Movement belongs to dnd-kit, which runs its own
-              transition on drop — a `layout` animation here would play the same
-              reorder a second time. */}
           <AnimatePresence initial={false}>
             {visibleTabs.map((entry, index) => (
               <m.div

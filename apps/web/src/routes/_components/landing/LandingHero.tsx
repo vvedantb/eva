@@ -5,10 +5,6 @@ import { IconEva, ProductHero, ProductHeroOrbit } from "@vvedantb/ui";
 import { EVA_GITHUB_URL, LANDING_HERO } from "./landingContent";
 
 type LandingHeroProps = {
-  /**
-   * The compact page is a door, not a pitch: a short plain-words lede and
-   * sign-in as the only action, with no sign-up and no link to the repository.
-   */
   compact?: boolean;
 };
 

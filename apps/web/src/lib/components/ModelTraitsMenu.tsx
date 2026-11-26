@@ -11,9 +11,7 @@ import { TraitsPanel } from "@vvedantb/ui";
 
 interface ModelTraitsMenuProps {
   model: AIModel;
-  /** Stored traits; absent fields fall back to the model's own defaults. */
   traits: StoredModelTraits;
-  /** Called with only the trait that changed. */
   onChange: (partial: StoredModelTraits) => void;
   disabled?: boolean;
   className?: string;
@@ -44,8 +42,6 @@ export function ModelTraitsMenu({
       fastMode={display.fastMode}
       getLevelLabel={getReasoningLevelLabel}
       onEffortLevelChange={(level) => {
-        // The menu hands back a plain string; match it against the model's own
-        // levels to narrow it to a ReasoningLevel.
         const match = config.reasoning?.levels.find((entry) => entry === level);
         if (match) onChange({ effortLevel: match });
       }}

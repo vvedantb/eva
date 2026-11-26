@@ -35,9 +35,7 @@ export function SandboxErrorNotice({
   sandboxError,
   onRetry,
 }: {
-  /** Short, user-safe message from the backend (`session.sandboxError`). */
   sandboxError: string;
-  /** Same start the wake control fires. */
   onRetry: () => void;
 }) {
   return (

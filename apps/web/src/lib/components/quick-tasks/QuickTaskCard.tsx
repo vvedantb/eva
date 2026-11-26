@@ -78,20 +78,11 @@ interface QuickTaskCardProps {
   deploymentStatus?: DeploymentStatus;
   sandboxStatus?: SandboxStatus;
   groupedCodebases?: GroupedCodebase[];
-  /**
-   * In-app path for the stretched ListRow link. Plain clicks navigate via the
-   * router; call `event.preventDefault()` from onClick to cancel (selection).
-   */
   href?: string;
-  /**
-   * Plain-click handler. Call `event.preventDefault()` to cancel Link
-   * navigation (selection mode, open dialogs).
-   */
   onClick?: (event: MouseEvent<HTMLElement>) => void;
   isSelecting?: boolean;
   isSelected?: boolean;
   isActive?: boolean;
-  /** `shiftKey` asks the owner for a range selection from its anchor. */
   onToggleSelect?: (event: { shiftKey: boolean }) => void;
   assignedTo?: Id<"users">;
   projectId?: Id<"projects">;
@@ -99,16 +90,9 @@ interface QuickTaskCardProps {
   users?: User[];
   currentUserId?: Id<"users">;
   projects?: Project[];
-  /**
-   * Live chat or main-run workflow. Drives the pixel mark only — kanban column
-   * and status badge stay on `status`.
-   */
   isAgentActive?: boolean;
-  /** Finished chat reply the user has not seen. `isAgentActive` hides it. */
   hasUnread?: boolean;
-  /** A chat turn waits on a blocking question; the "?" mark wins every other mark. */
   isAwaitingAnswer?: boolean;
-  /** In the Archived list: the menu offers Unarchive. */
   archived?: boolean;
 }
 
@@ -146,10 +130,6 @@ export function QuickTaskCard({
   const showError = hasError && status !== "done";
   const statusMeta = statusConfig[status];
   const accentClass = showError ? "bg-destructive" : statusMeta.bar;
-  // Two different signals, two different marks: the beam is the column the task
-  // sits in, so it stays on `status` alone — it used to switch on for any live
-  // workflow, which read as a permanent spinner on cards nobody was working on.
-  // A live turn gets the same pixel grid the session rows use instead.
   const isInProgress = !hasError && status === "in_progress";
   const showAgentPulse = !hasError && !isInProgress && isAgentActive;
   const simpleView = useSimpleView();
@@ -170,7 +150,6 @@ export function QuickTaskCard({
     archived,
   });
 
-  // One cached subscription per repo, shared by every card on the page.
   const draftMarks = useQuery(
     api.drafts.listMarks,
     repoId ? { repoId } : "skip",
@@ -245,10 +224,6 @@ export function QuickTaskCard({
         {isSelecting ? (
           <Checkbox
             checked={isSelected}
-            // One handler, not `onClick` + `onCheckedChange`: Radix composes
-            // its own toggle after ours and skips it once the event is
-            // default-prevented, so this reads the shift modifier without
-            // toggling twice.
             onClick={(event) => {
               event.stopPropagation();
               event.preventDefault();
@@ -275,10 +250,6 @@ export function QuickTaskCard({
               <TooltipContent>{PRIORITY_LABELS[priority]}</TooltipContent>
             </Tooltip>
           ) : null}
-          {/* One mark, never two: a turn in flight already implies an awake
-              sandbox, so the pixel grid stands in for the status dot — the same
-              swap the session rows and the sandbox surface tabs make. A
-              question waiting on the user beats both. */}
           {isAwaitingAnswer ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -318,7 +289,6 @@ export function QuickTaskCard({
               </TooltipContent>
             </Tooltip>
           ) : null}
-          {/* Executing wins: the dot shows once the turn has ended. */}
           <UnreadDot show={hasUnread && !isAgentActive} />
           {scheduledAt ? (
             <Tooltip>

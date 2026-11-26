@@ -30,11 +30,6 @@ function stack(position: number, entries: PrStackEntry[]): PrStack {
   return { number: 7, size: entries.length, position, baseRef: "main", entries };
 }
 
-/**
- * Merging entry N lands every open entry from 1 to N, so a rule that looks only
- * at the pull request on screen merges more than the reader thinks — or offers
- * a merge GitHub will refuse because something lower down is not ready.
- */
 describe("stack merge targets", () => {
   test("counts open entries at and below the current one, not above", () => {
     const s = stack(3, [entry(1), entry(2), entry(3), entry(4)]);

@@ -12,19 +12,10 @@ import { isInternalAppHref } from "@eva/shared/safeUrl";
 import { type RepoWithLogo } from "@/lib/utils/repoGrouping";
 import { repoHref, toInternalRepoHref } from "@/lib/utils/repoUrl";
 
-/**
- * The linked page itself, embedded as a same-origin iframe running the app in
- * chromeless mode (see `lib/embed/embedded.ts`). One iframe persists across
- * selections: once the embedded app announces `eva:embed-ready`, switching
- * notifications posts an `eva:embed-navigate` message and the embedded router
- * navigates in place — no SPA reboot per selection. Until that handshake (or
- * if it never arrives), switches fall back to swapping the iframe src.
- */
 function NotificationPagePreview({ href }: { href: string }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const readyRef = useRef(false);
   const [booted, setBooted] = useState(false);
-  // The src only seeds the first document; later hrefs arrive via postMessage.
   const [initialHref] = useState(href);
 
   /* eslint-disable no-effect/no-event-handler, no-effect/no-adjust-state-on-prop-change --
@@ -108,15 +99,9 @@ export function NotificationDetailPane({
 
   const { subject, event } = splitNotificationTitle(notification);
 
-  // The embed iframe must stay mounted across href switches — a keyed fade
-  // remounts it and drops the `eva:embed-ready` handshake / in-place navigate.
-  // The href becomes an iframe src, so only an app path is ever loaded.
   if (notification.href && isInternalAppHref(notification.href)) {
     return (
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden">
-        {/* The one action the header used to hold, floated over the frame's
-          corner. `bg-background` keeps it legible over whatever the embedded
-          page renders underneath. */}
         <Button
           size="sm"
           variant="outline"
@@ -154,9 +139,6 @@ export function NotificationDetailPane({
             </div>
             {notification.message ? (
               repo && notification.repoId ? (
-                // Repo-scoped messages can carry `@[Label](id)` mention tokens
-                // (comment/mention notifications), so they get the chip-aware
-                // renderer the rest of the app uses for comment bodies.
                 <MarkdownMentionText
                   text={notification.message}
                   repoBasePath={toInternalRepoHref(

@@ -17,11 +17,6 @@ import {
 } from "@vvedantb/ui";
 import { IconUserPlus } from "@tabler/icons-react";
 
-/**
- * `teamMembers.add` throws this when the email belongs to nobody who has ever
- * signed in. "User not found" reads as a bug in Eva rather than as the invite
- * problem it is, so it is the one message rewritten rather than surfaced.
- */
 const NO_SUCH_USER = "User not found";
 const NO_SUCH_USER_COPY =
   "No Eva account uses that email yet. Ask them to sign in to Eva first.";

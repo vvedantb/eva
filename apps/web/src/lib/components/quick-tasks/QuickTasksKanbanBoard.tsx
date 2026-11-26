@@ -34,7 +34,6 @@ interface QuickTasksKanbanBoardProps {
     id: Id<"agentTasks">,
     options?: SelectionToggleOptions<Id<"agentTasks">>,
   ) => void;
-  /** The Archived list: no drafts, no Run All, Unarchive in card menus. */
   archived?: boolean;
 }
 
@@ -70,8 +69,6 @@ export function QuickTasksKanbanBoard({
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const { request: requestConfirm } = useRequestConfirm();
 
-  // Respect the sort order applied by QuickTasksClient (default: updatedAt).
-  // Re-sorting here would override the user's chosen sort.
   const tasks = externalTasks;
 
   const taskIds = tasks.map((t) => t._id);
@@ -95,8 +92,6 @@ export function QuickTasksKanbanBoard({
     deploymentStatusMap.set(entry.taskId, entry.deploymentStatus);
   }
 
-  // Shift-click spans one column. `KanbanBoard` groups by status in `tasks`
-  // order, so grouping the same way here reproduces each column's visible order.
   const idsByStatus = new Map<TaskStatus, Id<"agentTasks">[]>();
   for (const task of tasks) {
     const column = idsByStatus.get(task.status);
@@ -112,7 +107,6 @@ export function QuickTasksKanbanBoard({
   }
 
   const handleStatusChange = async (id: string, status: TaskStatus) => {
-    // An archived task is read-only: a drag does not change it.
     if (archived) return;
     const task = tasks.find((t) => t._id === id);
     if (task) await updateStatus({ id: task._id, status });

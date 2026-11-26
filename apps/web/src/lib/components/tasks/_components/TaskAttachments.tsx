@@ -30,7 +30,6 @@ export function TaskAttachments({
 }) {
   const attachments = useQuery(api.agentTasks.listAttachments, { taskId });
   const removeAttachment = useMutation(api.agentTasks.removeAttachment);
-  // The file awaiting confirmation, held until the user confirms or cancels.
   const [pending, setPending] = useState<{
     storageId: Id<"_storage">;
     label: string;
@@ -43,8 +42,6 @@ export function TaskAttachments({
     label: string;
   }) {
     setIsRemoving(true);
-    // Reset is duplicated into the catch instead of using `finally`: React
-    // Compiler bails on the whole file when it meets a `finally` clause.
     try {
       await withMutationToast(
         removeAttachment({ taskId, storageId: file.storageId }),

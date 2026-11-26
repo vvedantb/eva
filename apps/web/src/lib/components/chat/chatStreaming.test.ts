@@ -6,9 +6,6 @@ import { parseActivityLog } from "@eva/shared/activityTrace";
 import { parseActivitySteps } from "@eva/shared/parseActivitySteps";
 import { sandboxChatKeys } from "./sandboxChatTurn";
 
-// The live turn as the web and the mobile chat both read it: the same row,
-// the same bubble, the same steps.
-
 describe("chatStreamingEntityId", () => {
   test("is the key the web sandbox chat subscribes with", () => {
     const sessionId = z.custom<Id<"sessions">>().parse("session_1");

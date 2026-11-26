@@ -16,8 +16,6 @@ export function DocViewer({
   doc: Doc;
   activeTab: DocViewerTab;
 }) {
-  // Both branches below are a doc detail view, so the tab title is named once
-  // here rather than in each viewer.
   useEntityDocumentTitle(doc.title);
 
   if (doc.kind === "pr-recap") {

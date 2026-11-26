@@ -30,9 +30,7 @@ export function NewDocumentDialog({
   onOpenChange: (open: boolean) => void;
   onCreate: (title: string) => Promise<boolean>;
   placeholder: string;
-  /** Blocks closing while the parent is mid-upload. */
   busy?: boolean;
-  /** Rendered under the title input. */
   extra?: ReactNode;
   alternate?: ReactNode;
 }) {

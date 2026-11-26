@@ -54,13 +54,10 @@ export interface SessionChromeTabProps {
   session: ChromeTabSession;
   href: string;
   isSelected: boolean;
-  /** Chrome draws a hairline only between two adjacent unselected tabs. */
   showSeparator: boolean;
-  /** Group accent, used for the selected tab's stroke and flared shoulders. */
   groupColor: TabGroupColor;
   onRenameRequest: () => void;
   onArchiveRequest: () => void;
-  /** Dismisses the tab locally — the session keeps running. */
   onClose: () => void;
   onForkNavigate: (pathSegment: string) => void;
 }
@@ -93,8 +90,6 @@ export function SessionChromeTab({
   const statusStyle = SANDBOX_STATUS_STYLES[session.status];
   const isRegeneratingTitle = useIsRegeneratingTitle(session);
 
-  // Longer open delay than the house default on purpose: tabs sit shoulder to
-  // shoulder, so the pointer crosses several on its way to the one it wants.
   return (
     <HoverCard openDelay={400}>
       <ContextMenu>
@@ -102,24 +97,15 @@ export function SessionChromeTab({
           <HoverCardTrigger asChild>
             <div
               className={cn(
-                // Width is owned by the motion wrapper in SessionChromeTabGroup
-                // (`flexBasis` + `layout`) so add/close can animate the chip
-                // without resizing the whole strip. min-w-8 is the squeezed floor.
                 "group relative flex h-9 w-full min-w-8 items-center rounded-t-[0.625rem] transition-colors @container",
                 isSelected
-                  ? // Chrome stroke: left/top/right in the group accent — bottom
-                    // stays open so the tab merges into the page; the sides meet
-                    // the group's underline.
+                  ?
                     cn(
                       "z-10 border-2 border-b-0 bg-background text-foreground",
                       groupColor.border,
                     )
                   : "text-muted-foreground hover:bg-foreground/6 hover:text-foreground",
               )}
-              // Middle-click closes the tab, as in every browser. The
-              // matching mouse-down is swallowed because button 1 otherwise
-              // starts the platform's autoscroll, which leaves a scroll cursor
-              // stuck on the page after the tab has gone.
               onMouseDown={(e) => {
                 if (e.button === 1) e.preventDefault();
               }}
@@ -137,19 +123,6 @@ export function SessionChromeTab({
                 />
               ) : null}
               {isSelected ? (
-                // Chrome's flared shoulders: a quarter disc either side of the
-                // tab, sweeping away from it and into the strip. Each shoulder
-                // is one radial gradient — transparent inside the arc so the
-                // strip shows through, then the group accent for 2px so the
-                // tab's side stroke carries on around the curve, then the page
-                // fill. Offset 10px (8px disc + the tab's 2px border) so the
-                // arc starts exactly where the tab's border box ends.
-                //
-                // The shoulder is 10px wide, not 8: the extra 2px reach back
-                // over the tab's own side border, painting the bottom 8px of it
-                // in page fill. Without that the border would run straight down
-                // to the baseline and stop square, and the curve would read as
-                // a hook beside it instead of the outline turning outwards.
                 <>
                   <span
                     aria-hidden
@@ -167,18 +140,10 @@ export function SessionChromeTab({
                   />
                 </>
               ) : null}
-              {/* Press lives on the tab *body*, not the shell: the shell
-                  carries the chrome stroke and the two radial-gradient corner
-                  folds as absolutely-positioned children, and scaling it would
-                  drag those off the tab's edge. Scaling the label region instead
-                  reads as the content answering inside a fixed frame. 0.98 is
-                  the figure `TabsTrigger` already uses. */}
               <DynamicLink
                 to={href}
                 className="motion-press flex h-full min-w-0 flex-1 items-center gap-2.5 pl-3 pr-1 text-[0.8125rem] active:scale-[0.98] [@container(max-width:4.5rem)]:justify-center [@container(max-width:4.5rem)]:px-0"
               >
-                {/* Favicon slot: Drive grid while a turn is in flight; else
-                    sandbox status. Stays visible when the tab is fully squeezed. */}
                 {session.isExecuting === true ? (
                   <span className="flex shrink-0 items-center" title="Working">
                     <LoadingState
@@ -219,20 +184,10 @@ export function SessionChromeTab({
                 aria-label={`Close ${session.title}`}
                 title="Close tab"
                 className={cn(
-                  // `motion-press` rather than the hand-rolled
-                  // `transition-[color,background-color,opacity]`: closing is
-                  // a one-click action on a 24px target, so the press is the
-                  // only acknowledgement it gets before the tab leaves the
-                  // strip. The utility already covers colour, and opacity is in
-                  // its property list too, so the reveal still fades.
                   "max-sm:hit-target motion-press mr-2 flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/10 hover:text-foreground active:scale-[0.92] focus-visible:opacity-100 [@container(max-width:7.5rem)]:hidden",
                   isSelected
                     ? "opacity-100"
-                    : // `reveal-on-hover` rather than a hand-rolled
-                      // `sm:opacity-0 group-hover:opacity-100`: `group-hover:`
-                      // compiles with `@media (hover: hover)` but `sm:opacity-0`
-                      // does not, so the pair leaves the archive control
-                      // permanently invisible on a landscape tablet.
+                    :
                       "reveal-on-hover",
                 )}
                 onClick={(e) => {

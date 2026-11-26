@@ -8,7 +8,6 @@ import {
 
 export const Route = createFileRoute("/_global/teams/$teamId/$teamTab")({
   beforeLoad: ({ params }) => {
-    // Legacy bookmark: /teams/:id/repos → /teams/:id/codebases
     if (params.teamTab === "repos") {
       throw redirect({
         to: "/teams/$teamId/$teamTab",

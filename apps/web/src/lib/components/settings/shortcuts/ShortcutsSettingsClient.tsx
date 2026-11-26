@@ -27,11 +27,6 @@ import {
   withMutationToast,
 } from "@/lib/utils/mutationToast";
 
-/**
- * The other shortcuts bound to the same combo, keyed by id. A warning only:
- * two shortcuts can legitimately share a combo when their scopes never overlap,
- * and blocking duplicates would make a straight swap impossible.
- */
 function findConflicts(
   overrides: Record<string, string>,
 ): Record<string, ShortcutId[]> {
@@ -144,8 +139,6 @@ export function ShortcutsSettingsClient() {
         {EDITING_KEYS.map((entry) => (
           <SettingsToggleRow
             key={entry.keys.join("+")}
-            // Multi-key combos are wide; wrap them under the description on a
-            // phone rather than squeezing the description to one word a line.
             className="max-sm:flex-wrap"
             title={entry.description}
             action={

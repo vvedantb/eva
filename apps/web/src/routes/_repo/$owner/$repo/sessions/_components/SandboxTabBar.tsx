@@ -41,15 +41,8 @@ import {
 import { buildSandboxTabDescriptors } from "./sandboxTabDescriptors";
 import { SandboxTabBarTools } from "./SandboxTabBarTools";
 
-/**
- * Past this many tabs the inactive mobile labels collapse to icon-only (label
- * moves to a tooltip). Desktop is icon-only until the reader turns labels on.
- */
 const MAX_LABELLED_TABS = 6;
 
-// Editor and Computer are appended by `buildSandboxTabDescriptors` when the
-// surface enables them. Browser is first-class (sessions) for watching agent
-// Chrome.
 const allTabs: ReadonlyArray<SandboxCommandTab> = [
   {
     value: "preview",
@@ -62,51 +55,30 @@ const allTabs: ReadonlyArray<SandboxCommandTab> = [
 ];
 
 interface SandboxTabBarProps {
-  /** Builtin tab id (SandboxTab) or a custom tab's name slug. */
   activeTab: string;
   onTabChange: (tab: string) => void;
-  /** Absent where the sandbox runs no dev server (a project coordinator). */
   onNewPreview?: () => void;
   newPreviewDisabled?: boolean;
   showPrdTab?: boolean;
-  /** When true, shows a content indicator on the Plan tab. */
   hasPrdContent?: boolean;
   showDesignsTab?: boolean;
-  /** When true, shows a content indicator on the Designs tab. */
   hasDesignsContent?: boolean;
-  /** Shows the Artifacts tab (session / task / project sandbox chats). */
   showArtifactsTab?: boolean;
-  /** Artifacts in this chat — badged on the tab. Undefined while loading. */
   artifactCount?: number;
-  /** Shows the Documents tab (session / task / project sandbox chats). */
   showDocumentsTab?: boolean;
-  /** Documents in this chat — badged on the tab. Undefined while loading. */
   documentCount?: number;
-  /** Shows the File Viewer tab (sessions only). */
   showFilesTab?: boolean;
-  /** Shows the Agents tab (content-keyed: the entity has spawned sub-agents). */
   showAgentsTab?: boolean;
-  /** True while any sub-agent is running — pulses the Agents tab dot. */
   hasRunningAgents?: boolean;
-  /** Subset of base tabs to render. Defaults to all four. */
   enabledTabs?: ReadonlyArray<SandboxTab>;
-  /** User-defined tabs for this app; expected pre-filtered to enabled ones. */
   customTabs?: ReadonlyArray<Doc<"appTabs">>;
-  /** Owner-only tabs ahead of the sandbox tabs (a project's Tasks). */
   leadingTabs?: ReadonlyArray<SandboxTabDescriptor>;
-  /** When set (and fresh), shows a pulse on the Browser tab. */
   agentBrowsingAt?: number;
-  /** When false, view hotkeys are inert (inactive cached session shells). */
   hotkeysEnabled?: boolean;
-  /**
-   * Extra classes on the bar itself. Sessions pass the chat-header padding so
-   * the two columns share a row height on mobile; desktop rail overrides it.
-   */
   className?: string;
   fileList: SandboxFileListApi;
   consoleDock: ConsoleDockApi;
   terminalPanel: TerminalPanelApi;
-  /** Desktop: content pane is hidden; the rail stays. Ignored below `md`. */
   collapsed?: boolean;
   onToggle?: () => void;
 }
@@ -182,9 +154,7 @@ export function SandboxTabBar({
       customTabs: visibleCustomTabs,
     }),
   ];
-  // Desktop is icon-only unless the reader has asked for the labelled rail.
   const iconOnly = !isMobile && !showLabels;
-  // Phone-only rule: the desktop rail decides its own labels above.
   const collapseLabels = isMobile && tabDescriptors.length > MAX_LABELLED_TABS;
 
   const tabLayout = (value: string): SidePanelTabLayout => {
@@ -195,8 +165,6 @@ export function SandboxTabBar({
   const hotkeyLabel = formatForDisplay(
     useShortcutBinding("toggleSandboxPanel"),
   );
-  // Desktop only: the active tab shows and hides the card (there is no
-  // separate toggle). The phone's pane switcher owns show and hide.
   const onActiveTabClick = isMobile ? undefined : onToggle;
   const activeTabHint = onActiveTabClick
     ? `${collapsed ? "Show" : "Hide"} panel (${hotkeyLabel})`
@@ -279,8 +247,6 @@ export function SandboxTabBar({
               key={tab.value}
               index={index}
               fast
-              /* The stacked chip fills the rail, so its wrapper has to as
-                 well — an `inline-flex` box is content-sized. */
               className={cn(
                 "inline-flex",
                 showLabels ? "md:w-full" : undefined,

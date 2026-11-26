@@ -115,8 +115,6 @@ export function BranchSelect({
           />
           <CommandList
             ref={listRef}
-            // `dvh` cap so the list stays inside the visible area once a phone
-            // keyboard is up over the search field.
             className="max-h-[min(300px,55dvh)]"
             onWheel={(e) => e.stopPropagation()}
           >

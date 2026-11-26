@@ -9,7 +9,6 @@ import { ProjectStageCounts } from "@/lib/components/projects/ProjectStageCounts
 interface TimelineBarProps {
   name: string;
   stage: ProjectStage;
-  /** Task counts by display status (`listStatusesForRepo`). */
   counts?: ProjectStatus["counts"];
 }
 
@@ -30,9 +29,6 @@ export function TimelineBar({ name, stage, counts }: TimelineBarProps) {
       <TooltipTrigger asChild>
         <div className="relative flex h-full w-full items-center gap-1.5 px-2">
           <div className={`absolute inset-0 ${config.bg}`} />
-          {/* Full-width layer scaled from the left edge rather than sized by
-              `width`, which relayouted the row on every frame. Always mounted so
-              the first value scales up from nothing instead of popping in. */}
           <div
             className={`absolute inset-0 origin-left opacity-80 transition-transform duration-[var(--motion-slow)] ${config.bar}`}
             style={{ transform: `scaleX(${pct / 100})` }}

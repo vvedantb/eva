@@ -40,9 +40,6 @@ export function useStopBackgroundAgent(entity: ChatEntityRef | undefined): {
     if (!entity) return;
     const request = stopSessionAgent({ chatId: entity.chatId, toolUseId });
     setIsStopping(true);
-    // Either way the dialog closes: a failure has already toasted. Cleanup is
-    // repeated in the catch instead of `finally`, which the React Compiler
-    // bails on.
     try {
       await catchMutationError(
         request,
@@ -63,7 +60,6 @@ export function useStopBackgroundAgent(entity: ChatEntityRef | undefined): {
     <ConfirmDialog
       size="md"
       open={target !== null}
-      // Cancel, Escape and outside click are ignored while `pending`.
       onOpenChange={(open) => {
         if (!open) setTarget(null);
       }}

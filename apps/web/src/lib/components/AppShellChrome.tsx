@@ -36,27 +36,15 @@ export function AppShellChrome({
       <div className="relative min-h-dvh bg-app-shell">
         <SidebarProvider>
           <PageTitleProvider>
-            {/* Above SearchProvider: its Mod+K registration is a consumer. */}
             <ShortcutsProvider>
               <SearchProvider>
                 <FollowProvider>
-                  {/* Wraps the outlet rather than sitting beside it: the
-                      launcher popover keeps a live chat mounted, so it has to
-                      live above the routed content that comes and goes.
-                      The shell is inside it because below `md` the mobile
-                      header owns Ave's summon button and reads the launcher
-                      state from its context. */}
                   <AveLauncherProvider enabled={!embedded}>
-                    {/* Embedded documents (inbox preview pane) render content
-                        only: the host window already owns the sidebar, search,
-                        follow overlay and toast streams. Providers stay — pages
-                        consume them regardless of where they render. */}
                     {embedded ? children : <Sidebar>{children}</Sidebar>}
                   </AveLauncherProvider>
                   {embedded ? null : (
                     <>
                       <SpotlightSearch />
-                      {/* Inside ShortcutsProvider: it lists that registry. */}
                       <ShortcutsCheatsheet />
                       <FollowOverlay />
                       <NotificationToastStream />

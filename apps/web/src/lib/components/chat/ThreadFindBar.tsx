@@ -32,7 +32,6 @@ function findScope(node: Element | null): ParentNode | null {
   );
 }
 
-/** Opening the bar mounts the input, so mounting is when it takes focus. */
 function focusFindInput(node: HTMLInputElement | null): void {
   if (!node) return;
   node.focus();
@@ -50,50 +49,28 @@ export function ThreadFindBar({
   documents: ReadonlyArray<ThreadFindDocument>;
   defaultOpen?: boolean;
   defaultQuery?: string;
-  /**
-   * Called with each new query, in the same event, so a windowed transcript
-   * can render the rows its matches live in before the bar paints and jumps.
-   */
   onQueryChange?: (query: string) => void;
-  /** Changes when the transcript renders more rows, so highlights repaint. */
   scopeKey?: string;
-  /**
-   * Changes when the rows a query's matches live in render after the query
-   * (loaded from older history), so the bar jumps to the active match again.
-   */
   jumpKey?: number;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const [query, setQuery] = useState(defaultQuery);
   const [activeIndex, setActiveIndex] = useState(0);
   const deferredQuery = useDeferredValue(query);
-  // Plain render-time work: the React Compiler memoises it, which is what the
-  // removed useMemo was doing by hand.
   const matches = findThreadMatches(documents, deferredQuery);
   const matchCount = matches.length;
   const safeIndex =
     matchCount === 0 ? -1 : Math.min(Math.max(activeIndex, 0), matchCount - 1);
   const countLabel = threadFindCountLabel(deferredQuery, matchCount, safeIndex);
 
-  /**
-   * Cmd/Ctrl+F has to beat the browser's native find and Escape has to work
-   * wherever the reader's focus is, so this one listener is genuinely global.
-   * A ref callback on the always-mounted host registers it and returns the
-   * cleanup — the effect-free equivalent of the mount/unmount effect, since
-   * useEffect is banned here.
-   */
   const registerShortcuts = (node: HTMLDivElement | null) => {
     if (!node) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      // A chat hidden under an open subagent thread is inert; its find bar
-      // must not open behind the overlay or swallow the browser's own find.
       if (node.closest("[inert]")) return;
       if (event.key === "Escape") {
         if (!open) return;
         if (!isWithinChatFindScope(event.target)) return;
         setOpen(false);
-        // Swallowed only for the bar's own input. Elsewhere in the pane Escape
-        // still belongs to the composer, dialogs and menus.
         if (
           event.target instanceof Element &&
           event.target.closest("[data-thread-find-bar]")
@@ -109,8 +86,6 @@ export function ThreadFindBar({
       if (!shouldCaptureChatFindShortcutFromTarget(event.target)) return;
       event.preventDefault();
       event.stopPropagation();
-      // Toggles, like every other find bar — pressing it again used to only
-      // re-focus the input.
       if (open) {
         setOpen(false);
         return;
@@ -142,8 +117,6 @@ export function ThreadFindBar({
       ref={registerShortcuts}
       className="pointer-events-none absolute right-3 top-3 z-40"
     >
-      {/* ::highlight() rules cannot be a utility class, and globals.css is not
-          ours to edit — React 19 hoists and de-dupes this by href. */}
       <style href="eva-thread-find" precedence="default">
         {THREAD_FIND_HIGHLIGHT_CSS}
       </style>
@@ -153,12 +126,6 @@ export function ThreadFindBar({
         data-thread-find-bar=""
         className="pointer-events-auto flex w-80 max-w-[calc(100vw-2rem)] flex-col rounded-xl border border-border bg-card shadow-lg"
       >
-        {/* Painting is a DOM side effect, so it hangs off a remount rather than
-            an effect: changing the key re-runs the ref callback, and its
-            cleanup unregisters the highlights when the bar closes. The match
-            count is part of the key because the old effect's deps left out
-            `documents` — a match that streamed in was counted but not painted.
-            `scopeKey` repaints the rows a windowed transcript renders later. */}
         <span
           hidden
           key={`paint:${matchCount}:${safeIndex}:${deferredQuery}:${scopeKey}`}
@@ -169,8 +136,6 @@ export function ThreadFindBar({
             return clearThreadFindHighlights;
           }}
         />
-        {/* Jumping is keyed only on the query and the active match, so a
-            repaint mid-stream cannot yank the reader's scroll position. */}
         <span
           hidden
           key={`jump:${safeIndex}:${deferredQuery}:${jumpKey}`}
@@ -203,8 +168,6 @@ export function ThreadFindBar({
               onQueryChange?.(nextQuery);
             }}
             onKeyDown={(event) => {
-              // Escape is handled by the window listener above so that it also
-              // closes the bar from anywhere else in the pane.
               if (event.key === "Enter") {
                 event.preventDefault();
                 event.stopPropagation();

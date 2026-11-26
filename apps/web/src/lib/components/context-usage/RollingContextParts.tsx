@@ -7,10 +7,6 @@ import {
 import { m } from "motion/react";
 import type { ComponentProps } from "react";
 
-// Eva's versions of the `@vvedantb/ui` ContextUsage parts that show numbers.
-// The library prints plain text, so each figure here goes through
-// `RollingNumber` and rolls when a turn updates it. Formats match the library.
-
 const percentFormat = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 1,
   style: "percent",

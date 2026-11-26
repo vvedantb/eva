@@ -49,9 +49,6 @@ export function RepoTopNav({
   repo,
   onNavigate,
 }: RepoTopNavProps) {
-  // Today only exists while the "Daily standup" system automation is on, so
-  // the entry appears with the install and disappears with the uninstall.
-  // A dot marks a standup the user has not opened yet.
   const standup = useQuery(
     api.today.standupStatus,
     repo ? { repoId: repo._id } : "skip",

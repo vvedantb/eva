@@ -28,10 +28,6 @@ export function AveHeaderButton() {
       onClick={toggle}
       aria-label={isOpen ? "Close Manager Ave" : "Manager Ave"}
       aria-expanded={isOpen}
-      // `relative` anchors the working pip, which hangs off the corner and so
-      // must not be clipped. `[&_svg]:size-5` beats the variant's `size-4`
-      // floor for icon glyphs: the mark is a filled disc, not a stroke icon,
-      // and has to fill the 20px box its wrapper reserves.
       className="relative shrink-0 [&_svg]:size-5"
     >
       <AveMark size={20} />

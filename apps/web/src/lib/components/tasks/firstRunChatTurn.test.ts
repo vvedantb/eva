@@ -5,19 +5,6 @@ import {
 } from "./firstRunChatTurn";
 import { findStreamingTargetMessage } from "@/lib/components/chat/chatBodyUtils";
 
-// Regression guard for commit bc9af1efe.
-//
-// The rule used to pick the earliest run of *any* kind and only then check it
-// for success, so a failed or cancelled first attempt swallowed the slot and
-// the quick task opened with no assistant turn at all. It also had nothing
-// excluding "Make changes" and Resolve Conflicts runs, which belong to their
-// triggering comment / the timeline.
-//
-// Two surfaces read this one function — the task chat binding renders the run
-// it returns as the opening chat turn, TaskDetailInline hides that same run
-// from the activity timeline — so a disagreement here either duplicates the
-// run on both surfaces or drops it from both.
-
 type TestRun = {
   label: string;
   status: "queued" | "running" | "success" | "error" | "cancelled";
@@ -43,7 +30,6 @@ describe("findFirstRunChatTurnRun", () => {
   });
 
   test("picks the earliest run regardless of input order", () => {
-    // listByTask returns newest-first, so the winner is rarely index 0.
     const runs = [
       run("late", { startedAt: 3_000 }),
       run("early", { startedAt: 1_000 }),
@@ -53,8 +39,6 @@ describe("findFirstRunChatTurnRun", () => {
   });
 
   test("an earlier failed attempt does not swallow the slot", () => {
-    // The bug: `error` sorted first, then failed the success check, and the
-    // whole chat turn vanished even though a good run existed.
     const runs = [
       run("failed", {
         status: "error",
@@ -79,7 +63,6 @@ describe("findFirstRunChatTurnRun", () => {
   });
 
   test("a run still in flight owns the chat turn", () => {
-    // Its steps stream into the chat bubble instead of a timeline accordion.
     const runs = [
       run("running", { status: "running", resultSummary: undefined }),
     ];
@@ -114,7 +97,6 @@ describe("findFirstRunChatTurnRun", () => {
   });
 
   test("a success with no resultSummary stays in the timeline", () => {
-    // The chat turn would render an empty assistant reply.
     const runs = [run("summaryless", { resultSummary: undefined })];
     expect(findFirstRunChatTurnRun(runs)).toBeUndefined();
   });
@@ -144,8 +126,6 @@ describe("findFirstRunChatTurnRun", () => {
   });
 
   test("falls back to _creationTime when startedAt is absent", () => {
-    // Runs that never launched have no startedAt; ordering must not collapse
-    // to a single undefined bucket and hand the slot to an arbitrary run.
     const runs = [
       run("newer", { _creationTime: 2_000 }),
       run("older", { _creationTime: 1_000 }),
@@ -162,18 +142,7 @@ describe("findFirstRunChatTurnRun", () => {
   });
 });
 
-/**
- * The in-flight bubble is load-bearing but invisible in types: `ChatBody`
- * streams a run's live steps into the *first* assistant row that is empty and
- * has no `finishedAt` (findStreamingTargetMessage). Give the placeholder a
- * `finishedAt` — or any content — and the quick task simply shows a silent,
- * frozen bubble for the whole run, with nothing failing anywhere. Stamp one
- * onto a settled turn's row and it steals the *next* turn's tokens instead.
- *
- * So assert the shape through the real rule rather than field by field.
- */
 describe("firstRunAssistantContent", () => {
-  /** The row as ChatBody sees it, minus the ids the builder fills in. */
   const asRow = (
     fields: ReturnType<typeof firstRunAssistantContent>,
   ): { role: "assistant"; content: string; finishedAt?: number } => ({
@@ -192,8 +161,6 @@ describe("firstRunAssistantContent", () => {
   });
 
   test("a queued run renders it too", () => {
-    // The bubble appears the moment the task is launched, before the sandbox
-    // has booted — that gap is the longest stretch of an empty chat.
     const fields = firstRunAssistantContent({
       status: "queued",
       activityLog: null,
@@ -219,8 +186,6 @@ describe("firstRunAssistantContent", () => {
   });
 
   test("a settled run with no finishedAt still closes its bubble", () => {
-    // Runs recovered by the watchdog can settle without one; falling back to
-    // startedAt keeps the row out of the streaming slot.
     const fields = firstRunAssistantContent({
       status: "error",
       activityLog: null,
@@ -231,8 +196,6 @@ describe("firstRunAssistantContent", () => {
   });
 
   test("the placeholder does not carry an activity log key", () => {
-    // The log row is only written on completion, so an in-flight run has none;
-    // an empty-string log would also read as "no log" downstream.
     const fields = firstRunAssistantContent({
       status: "running",
       activityLog: "leftover",

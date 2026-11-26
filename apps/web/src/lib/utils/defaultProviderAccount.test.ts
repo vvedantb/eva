@@ -4,14 +4,6 @@ import {
   providerAccountIdForModel,
 } from "./defaultProviderAccount";
 
-/**
- * A teammate's shared account bills its owner, so it may only ever be an
- * explicit pick. New sessions and quick tasks used to auto-default to whichever
- * account matched the model's provider first, which silently spent a
- * teammate's credential the moment they shared one (fix 4b948b101). Own-ness,
- * not sharedness, is the gate: an own account can be shared too.
- */
-
 const OWN_CLAUDE = { id: "own-claude", provider: "claude", isOwn: true };
 const OWN_CODEX = { id: "own-codex", provider: "codex", isOwn: true };
 const TEAMMATE_CLAUDE = {
@@ -31,8 +23,6 @@ describe("defaultProviderAccountId", () => {
     ).toBe("own-codex");
   });
 
-  // The regression: a teammate's share sorted ahead of (or instead of) an own
-  // account must never be auto-selected — Team (null) is the safe default.
   test("never defaults to a teammate's shared account", () => {
     expect(
       defaultProviderAccountId([TEAMMATE_CLAUDE], "claude:opus"),
@@ -52,8 +42,6 @@ describe("defaultProviderAccountId", () => {
     expect(defaultProviderAccountId([], "claude:opus")).toBeNull();
   });
 
-  // An unset model resolves to the claude provider, so the picker still lands
-  // on a real account rather than Team on a first render with no model yet.
   test("treats a missing model as the claude provider", () => {
     expect(defaultProviderAccountId([OWN_CODEX, OWN_CLAUDE], null)).toBe(
       "own-claude",
@@ -75,8 +63,6 @@ describe("providerAccountIdForModel", () => {
     ).toBe("mate-claude");
   });
 
-  // Switching provider cannot carry a credential for the wrong provider, so it
-  // re-defaults — and re-defaulting is own-only, back to Team if need be.
   test("re-defaults when the model changes provider", () => {
     expect(
       providerAccountIdForModel(

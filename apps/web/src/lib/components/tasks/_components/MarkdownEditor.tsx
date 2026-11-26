@@ -37,7 +37,6 @@ interface MarkdownEditorProps {
   placeholder?: string;
   minHeight?: string;
   onBlur?: (markdown: string) => void;
-  /** Called when the document changes so parents can drive submit/button state. */
   onChange?: (markdown: string) => void;
 }
 
@@ -80,7 +79,6 @@ export const MarkdownEditor = forwardRef<
     focus: () => editor?.commands.focus("end"),
   }));
 
-  // Toggle editable state and focus when entering edit mode
   useEffect(() => {
     if (!editor) return;
     editor.setEditable(editable);
@@ -90,11 +88,8 @@ export const MarkdownEditor = forwardRef<
     prevEditable.current = editable;
   }, [editor, editable]);
 
-  // Sync content from external source when not editing or when resetting to empty
   useEffect(() => {
     if (!editor) return;
-    // Always sync when content is reset to empty (for form resets)
-    // Otherwise only sync when not editable (for external content changes)
     const shouldSync = content === "" || !editable;
     if (!shouldSync) return;
     const currentMarkdown = editor.getMarkdown();
@@ -103,7 +98,6 @@ export const MarkdownEditor = forwardRef<
     }
   }, [editor, content, editable]);
 
-  // Build placeholder style — typed via index signature so CSS custom property is allowed.
   const placeholderStyle: CSSProperties & Record<`--${string}`, string> = {};
   if (placeholder) placeholderStyle["--placeholder-text"] = `"${placeholder}"`;
 

@@ -28,7 +28,6 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
 
 const UNKNOWN_WINDOW_TITLE = "Context window unknown for this model";
 
-/** One formatter for every compact token figure rendered below. */
 const compactNumber = new Intl.NumberFormat("en-US", { notation: "compact" });
 const compactFormat = (value: number) => compactNumber.format(value);
 
@@ -45,16 +44,12 @@ export function ContextUsageDisplay({
   const { maxTokens } = aggregated;
   const overloaded =
     contextUsedRatio(aggregated.usedTokens, maxTokens) > CONTEXT_OVERLOAD_RATIO;
-  // Only a known window has a meaningful "left" figure.
   const remainingLabel =
     maxTokens === null
       ? null
       : compactFormat(Math.max(0, maxTokens - aggregated.usedTokens));
   const autoCompact = contextCompactsAutomatically(aggregated.model);
 
-  // `ContextUsage` requires a numeric `maxTokens`, so an unknown window passes the
-  // used tokens as the denominator and suppresses every percentage instead: a
-  // hardcoded 200k denominator is what made this meter lie in the first place.
   return (
     <ContextUsage
       {...(defaultOpen ? { open: true } : {})}
@@ -64,8 +59,6 @@ export function ContextUsageDisplay({
       costs={aggregated.costs}
     >
       {maxTokens === null ? (
-        // `ContextUsageTrigger` only forwards props to its own fallback Button, so
-        // the test id has to ride on the Button we hand it as children.
         <ContextUsageTrigger>
           <Button
             type="button"
@@ -143,7 +136,6 @@ export function ContextUsageDisplay({
 interface EntityContextUsageProps {
   repoId: Id<"githubRepos">;
   entityId: string;
-  /** Demo / screenshot seed — skips the logs query. */
   seedAggregated?: NonNullable<ReturnType<typeof aggregateUsage>>;
   defaultOpen?: boolean;
   onCompact?: () => void;
@@ -177,8 +169,6 @@ interface ProjectContextUsageProps {
   projectId: Id<"projects">;
 }
 
-// Aggregates usage across every log tagged with the projectId — project chats,
-// project tasks, interviews — so the project header reflects total spend.
 export function ProjectContextUsage({
   repoId,
   projectId,

@@ -15,10 +15,6 @@ export type EntityResolveResult<TDoc extends { _id: string }> = {
   doc: TDoc | null;
   convexId: TDoc["_id"] | null;
   numId: number | null;
-  /**
-   * Canonical path when the param holds a legacy Convex id. Status stays
-   * `loading` while this is set — the owning route renders the redirect.
-   */
   redirectTo: string | null;
 };
 

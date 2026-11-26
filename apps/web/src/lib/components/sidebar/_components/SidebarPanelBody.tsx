@@ -11,7 +11,6 @@ import {
   type RepoDoc,
 } from "@/lib/components/sidebar/sidebarPanelState";
 
-/** Panel bodies load on demand so unused modes stay off the shell chunk. */
 const SettingsSidebar = lazy(() =>
   import("@/lib/components/sidebar/SettingsSidebar").then((mod) => ({
     default: mod.SettingsSidebar,

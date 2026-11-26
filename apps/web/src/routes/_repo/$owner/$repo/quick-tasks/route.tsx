@@ -7,14 +7,8 @@ import {
   parseDiffSearchFields,
 } from "@/lib/search-params";
 
-// Layout route for the quick-tasks section. Rendering QuickTasksClient here
-// (rather than per child route) keeps the list mounted while the open task
-// changes, so selecting a task never remounts/scroll-resets the list. The open
-// task is read from the child route params inside QuickTasksClient.
 export const Route = createFileRoute("/_repo/$owner/$repo/quick-tasks")({
   staticData: { title: "Quick Tasks" },
-  // Warms the board's queries on sidebar hover (router intent preload), so the
-  // first open paints from the client cache. Never blocks the navigation.
   loader: ({ params }) => {
     void prefetchQuickTasks(params).catch(() => undefined);
   },
@@ -26,7 +20,6 @@ export const Route = createFileRoute("/_repo/$owner/$repo/quick-tasks")({
   }),
 });
 
-/** Same queries and args as `QuickTasksClient`. */
 async function prefetchQuickTasks(params: { owner: string; repo: string }) {
   const repo = await prefetchRepo(params);
   if (!repo) return;

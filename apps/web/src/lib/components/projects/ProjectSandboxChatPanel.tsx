@@ -19,12 +19,9 @@ export function ProjectSandboxChatPanel({
 }: SandboxChatPanelProps & {
   projectId: Id<"projects">;
   projectSession: OwnedSession;
-  /** Opens a reply thread in the rail's Replies tab. */
   onThreadOpen?: (messageId: string) => void;
 }) {
   const binding = useProjectChatBinding(projectId, projectSession);
-  // The coordinator chat only: Eva's replies as bubbles (it only talks and
-  // delegates, so there are no diffs to frame).
   return (
     <SandboxChatPanel
       binding={binding}

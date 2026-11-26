@@ -17,19 +17,9 @@ import {
 } from "@vvedantb/ui";
 import { IconMoodSmile } from "@tabler/icons-react";
 
-// Fast-path reactions shown above the full searchable grid.
-
-/** How long the search box must sit still before Eva asks Jev about it. */
 const SUGGEST_IDLE_MS = 400;
-/** One letter matches everything; Jev needs a word to read intent from. */
 const SUGGEST_MIN_CHARS = 2;
 
-/**
- * Jev's picks for the search box. frimousse only matches emoji keywords, so
- * "ship it" or "nice work" find nothing; Jev reads what the user meant. Picks
- * are keyed by the query they answer, so they vanish as soon as it changes
- * rather than lingering against text the user has since rewritten.
- */
 function useEmojiSuggestions(): {
   search: string;
   setSearch: (value: string) => void;
@@ -44,7 +34,6 @@ function useEmojiSuggestions(): {
   const schedule = useIdleCallback(SUGGEST_IDLE_MS, (query: string) => {
     void suggest({ query })
       .then((emoji) => setAnswered({ query, emoji }))
-      // Background hint: a failed evaluation just leaves the quick row.
       .catch(() => {});
   });
   const setSearch = (value: string) => {
@@ -57,13 +46,6 @@ function useEmojiSuggestions(): {
   return { search, setSearch, suggestions };
 }
 
-/**
- * Jev's reactions for one comment, fetched the first time the hover strip
- * opens and kept for as long as the text is unchanged. `null` while Jev is
- * answering. Jev drops options it is unsure of, so its picks are padded with
- * the quick reactions to keep the strip a steady six wide; a failed call
- * leaves the quick reactions alone.
- */
 function useCommentEmoji(text: string): {
   emoji: string[] | null;
   request: () => void;
@@ -95,7 +77,6 @@ function useCommentEmoji(text: string): {
   return { emoji: padded, request };
 }
 
-/** A row of one-tap reaction buttons; the popover's quick row and the hover strip. */
 function EmojiRow({
   emoji,
   label,
@@ -130,14 +111,8 @@ function EmojiRow({
 
 interface EmojiReactionPickerProps {
   onSelect: (emoji: string) => void;
-  // When the comment already has reactions the trigger stays visible; otherwise
-  // it only appears on hover/focus of the comment to keep the row uncluttered.
   alwaysVisible?: boolean;
-  // "pill" = bordered chip beside the reaction chips; "ghost" = icon button
-  // matching the comment-header actions (e.g. next to the options menu).
   variant?: "pill" | "ghost";
-  // Comment text: hovering the trigger shows a strip of reactions Jev picked
-  // for it, Teams-style, while a click still opens the full picker.
   hoverSuggestFor?: string;
 }
 
@@ -156,12 +131,10 @@ export function EmojiReactionPicker({
   const [hoverOpen, setHoverOpen] = useState(false);
   const commentEmoji = useCommentEmoji(hoverSuggestFor ?? "");
   const { search, setSearch, suggestions } = useEmojiSuggestions();
-  // Jev's picks take the quick row's place while they answer the search.
   const rowEmoji = suggestions.length > 0 ? suggestions : QUICK_REACTIONS;
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
-    // The picker unmounts on close; a reopened one starts with an empty box.
     if (!next) setSearch("");
   };
 
@@ -176,16 +149,11 @@ export function EmojiReactionPicker({
     if (next) commentEmoji.request();
   };
 
-  // Sizes grow to the 40px tap floor below `sm` instead of taking `hit-target`:
-  // the trigger sits flush against the comment's overflow menu (and, in the
-  // reaction bar, against the chips), where an 8px bleed would overlap them.
   const triggerClassName = cn(
     "flex items-center justify-center text-muted-foreground transition-[opacity,background-color,color] hover:text-foreground focus-visible:opacity-100 data-[state=open]:text-foreground data-[state=open]:opacity-100",
     variant === "ghost"
       ? "size-10 rounded-md hover:bg-muted/60 data-[state=open]:bg-muted sm:size-7"
       : "h-10 rounded-full bg-muted/40 px-2 hover:bg-muted data-[state=open]:bg-muted sm:h-6",
-    // Hover-only reveal is unreachable on touch; `reveal-on-hover` keeps the
-    // quiet pointer behaviour and ships the trigger visible below `sm`.
     !alwaysVisible && "reveal-on-hover",
   );
 
@@ -207,7 +175,6 @@ export function EmojiReactionPicker({
         trigger
       ) : (
         <HoverCard
-          // Gives way to the full picker once it is open.
           open={hoverOpen && !open}
           onOpenChange={handleHoverOpenChange}
           openDelay={250}

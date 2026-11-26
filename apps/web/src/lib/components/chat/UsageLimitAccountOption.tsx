@@ -5,7 +5,6 @@ import { USAGE_TONE_TEXT_CLASS } from "@/lib/components/usage-limits/toneClasses
 import { UsageBar } from "@/lib/components/usage-limits/UsageBar";
 
 interface UsageLimitAccountOptionProps {
-  /** The row's name, ownership and headroom (`usageLimitHeadroom`). */
   headroom: UsageLimitHeadroom;
   isTeam: boolean;
   disabled: boolean;

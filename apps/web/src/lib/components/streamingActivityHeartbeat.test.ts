@@ -64,15 +64,6 @@ describe("visibleActivityKey", () => {
   });
 });
 
-/**
- * Regression guard for commit 7f38b7770.
- *
- * The key used to be `JSON.stringify` of the visible steps, so every streamed
- * token re-encoded every captured command output and edit hunk — a payload
- * capped at 600 KB — purely to answer "did anything change?". That is where the
- * mid-stream freezes came from. Lengths now stand in for the bodies, which only
- * holds if the key both stays small and still moves on real progress.
- */
 describe("visibleActivityKey fingerprints work without re-encoding it", () => {
   const ranCommand = (fields: Record<string, unknown>): string =>
     payload([
@@ -99,8 +90,6 @@ describe("visibleActivityKey fingerprints work without re-encoding it", () => {
   });
 
   it("moves when a tool settles", () => {
-    // Otherwise a long silent tool finishing would not reset the silence clock,
-    // and the "Model is thinking..." heartbeat would keep counting up.
     expect(visibleActivityKey(ranCommand({ status: "active" }))).not.toBe(
       visibleActivityKey(ranCommand({ status: "complete", durationMs: 1_200 })),
     );
@@ -117,7 +106,6 @@ describe("visibleActivityKey fingerprints work without re-encoding it", () => {
   });
 
   it("moves when a todo changes state without changing the list", () => {
-    // Same count, same text — only the statuses move, and that is visible work.
     const todos = (second: string): string =>
       payload([
         {

@@ -31,7 +31,6 @@ export function SettingsSidebar({
 }: SettingsSidebarProps) {
   const baseUrl = `${basePath}/settings`;
 
-  // Simple view redirects out of /settings entirely, so no filtering here.
   const navigationGroups = [
     {
       label: "General",

@@ -1,4 +1,3 @@
-/** Soft-limit so huge doc bodies aren't copied into every hover portal. */
 const PREVIEW_SOFT_MAX = 280;
 
 /** Collapse markdown/noise into a short plain-text hover preview. */

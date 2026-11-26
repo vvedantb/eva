@@ -52,11 +52,8 @@ export function InboxHeader({
   return (
     <PageHeader
       title={
-        // The switch sits right after the title, so it keeps its place when
-        // Updates narrows the header to its list pane.
         <span className="flex items-center gap-3">
           Inbox
-          {/* Segmented, as the other header switchers (projects, quick tasks). */}
           <Tabs
             value={view}
             onValueChange={(value) => {
@@ -75,7 +72,6 @@ export function InboxHeader({
         </span>
       }
       headerRight={
-        // Needs you has no actions; the spacer keeps the row as tall as Updates'.
         view === "needs" ? (
           <div className="h-7" aria-hidden />
         ) : (
@@ -99,7 +95,6 @@ export function InboxHeader({
                     className="h-7 text-xs text-muted-foreground"
                   >
                     <IconChecks size={14} />
-                    {/* The label is noise on narrow screens; the icon carries it. */}
                     <span className="hidden sm:inline">Mark all read</span>
                   </Button>
                 </m.div>

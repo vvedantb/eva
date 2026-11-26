@@ -3,22 +3,13 @@ import { useMatches } from "@tanstack/react-router";
 
 declare module "@tanstack/react-router" {
   interface StaticDataRouteOption {
-    /** Section label for the browser tab, e.g. `"Projects"` → "Projects | Eva". */
     title?: string;
   }
 }
 
-/** Shown on routes that declare no title (landing page, auth callbacks). */
 const FALLBACK_TITLE = "Eva - Your New Coworker";
 
-// Module-level store for the two pieces of tab state that no route owns: the
-// open entity's name (published by whichever detail view is on screen) and the
-// unread count (published by FaviconController, the one place already syncing
-// that number to document-level state). Both are read through
-// `useSyncExternalStore` so a publish re-renders only the title hook.
 let entityTitle: string | null = null;
-// Which publisher owns `entityTitle`, so a late cleanup cannot clear a title
-// that a newer publisher already set (see `useEntityDocumentTitle`).
 let entityOwner: object | null = null;
 let unreadCount = 0;
 const listeners = new Set<() => void>();
@@ -78,14 +69,10 @@ export function composeDocumentTitle({
   entity,
   unread,
 }: {
-  /** Route label from `staticData.title`, e.g. "Sessions". */
   section: string | null;
-  /** Open entity's name, e.g. a session title. */
   entity: string | null;
   unread: number;
 }): string {
-  // Nothing to name: landing page and auth callbacks, where a count would be
-  // meaningless anyway (the query behind it is skipped while signed out).
   if (entity === null && section === null) return FALLBACK_TITLE;
 
   const count = unread > 0 ? `(${unread}) ` : "";

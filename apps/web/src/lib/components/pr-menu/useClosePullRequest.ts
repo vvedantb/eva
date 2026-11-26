@@ -15,7 +15,6 @@ export function useClosePullRequest() {
   const close = async (target: PrCloseTarget): Promise<boolean> => {
     setClosing(true);
     let closed = false;
-    // No `finally` and no value blocks in the try: React Compiler bails on both.
     try {
       await update({
         repoId: target.repoId,

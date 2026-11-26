@@ -8,7 +8,6 @@ import {
 
 interface PendingPullRequestsValue {
   readonly items: ReadonlyArray<PullRequestContext>;
-  /** No-op when a chip for the same URL is already attached. */
   add: (pr: PullRequestContext) => void;
   remove: (url: string) => void;
 }

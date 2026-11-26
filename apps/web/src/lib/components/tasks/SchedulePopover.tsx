@@ -57,7 +57,6 @@ export function SchedulePopover({
       }
       setOpen(false);
     } catch {
-      // error toast already shown
     }
   }
 
@@ -71,7 +70,6 @@ export function SchedulePopover({
       );
       setOpen(false);
     } catch {
-      // error toast already shown
     }
   }
 

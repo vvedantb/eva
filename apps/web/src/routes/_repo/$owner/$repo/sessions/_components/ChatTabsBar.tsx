@@ -21,11 +21,9 @@ import { useSessionChatActions } from "@/lib/components/chat/useSessionChatActio
 interface ChatTabsBarProps {
   chats: Doc<"sessionChats">[];
   activeChatId: Id<"sessionChats">;
-  /** Chats with an open turn right now. */
   runningChatIds: ReadonlySet<string>;
   onSelect: (chat: Doc<"sessionChats">) => void;
   onCreate: () => void;
-  /** Hides `+` while the session is archived or its PR is closed. */
   isReadOnly: boolean;
   isCreating: boolean;
 }
@@ -56,7 +54,6 @@ export function ChatTabsBar({
     null,
   );
   const [isDeleting, setIsDeleting] = useState(false);
-  // Chats closed before tabs became permanent stay hidden.
   const openChats = chats.filter((chat) => chat.archived !== true);
 
   const handleDelete = async (chat: Doc<"sessionChats">) => {
@@ -64,13 +61,11 @@ export function ChatTabsBar({
     try {
       await deleteChat(chat._id);
     } catch {
-      // The toast already explains it; keep the dialog open to retry.
       setIsDeleting(false);
       return;
     }
     setIsDeleting(false);
     setDeleteTarget(null);
-    // The server already falls back to Main; this also clears `?chat=N`.
     const mainChat = openChats.find((c) => c.isMain);
     if (chat._id === activeChatId && mainChat) onSelect(mainChat);
   };
@@ -134,7 +129,6 @@ export function ChatTabsBar({
       <ConfirmDialog
         size="md"
         open={deleteTarget !== null}
-        // Cancel, Escape and outside click are ignored while `pending`.
         onOpenChange={(open) => {
           if (!open) setDeleteTarget(null);
         }}
@@ -162,7 +156,6 @@ export function ChatTabStrip({
   className,
   children,
 }: {
-  /** The tab list's accessible name. */
   label: string;
   className?: string;
   children: ReactNode;
@@ -170,8 +163,6 @@ export function ChatTabStrip({
   return (
     <div
       className={cn(
-        // min-w-0: in a narrow chat column the row scrolls instead of
-        // spilling under the panel beside it.
         "flex min-w-0 max-w-full shrink-0 items-center gap-1 overflow-x-auto px-2 pb-1.5 scrollbar-thin",
         className,
       )}
@@ -203,12 +194,10 @@ export function ChatTab({
   selected: boolean;
   running: boolean;
   label: ReactNode;
-  /** Native tooltip on the tab (a full title the pill truncates). */
   hint?: string;
   onSelect: () => void;
   onClose?: () => void;
   closeLabel?: string;
-  /** A tighter label cap, for tab rows in a narrow column (project task tabs). */
   narrow?: boolean;
 }) {
   return (
@@ -225,12 +214,9 @@ export function ChatTab({
         role="tab"
         aria-selected={selected}
         title={hint}
-        // The selected tab scrolls into view (a tab just opened at the end
-        // of a long row).
         ref={
           selected
             ? (el) => {
-                // The whole pill (label and ✕), not just the label button.
                 el?.parentElement?.scrollIntoView({
                   block: "nearest",
                   inline: "nearest",

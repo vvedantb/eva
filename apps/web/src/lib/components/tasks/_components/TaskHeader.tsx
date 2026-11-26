@@ -92,9 +92,6 @@ export function TaskHeader({
           className="flex-1 text-xl font-semibold h-auto px-1 -mx-1 py-0 border-none shadow-none focus-visible:ring-0 bg-muted/50 rounded"
         />
       ) : canEditTaskText ? (
-        // A real button, not a `<span onClick>`: the title is plain text with
-        // nothing clickable inside it, so there is no reason to hand-roll the
-        // keyboard handling a native control already has.
         <button
           type="button"
           onClick={() => {

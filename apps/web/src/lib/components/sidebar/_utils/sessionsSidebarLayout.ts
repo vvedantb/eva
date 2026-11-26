@@ -1,9 +1,3 @@
-/**
- * One grid for the Sessions sidebar: app headers, session rows and Show more
- * share a left edge and a leading column, so logos, status marks and titles
- * line up down the list. Full class strings, so Tailwind sees them.
- */
-
 /** Horizontal row padding (10px), shared by every row and header. */
 export const SESSIONS_ROW_X = "px-2.5";
 

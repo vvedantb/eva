@@ -59,7 +59,6 @@ interface RepoRailProps {
   showSearch?: boolean;
 }
 
-/** Whether a repo row (root repo or monorepo app) matches the active URL. */
 function isRowActive(
   row: RepoWithLogo,
   owner: string | null,
@@ -73,19 +72,10 @@ function isRowActive(
   return appName === undefined;
 }
 
-/**
- * Cut-out tone for the solid active rail icons: the active pill's fill
- * (`bg-segment`, eva's `--segment-active`), so the cut-out reads as a hole in the icon.
- */
 const CUTOUT_COLOR = "var(--segment)";
 
-/** Green: something is running right now (sessions, sandboxes). */
 const RAIL_BADGE_LIVE_CLASS = cn(CORNER_BADGE_CLASS, "bg-success text-white");
 
-/**
- * What waits for you to act (Inbox → Needs you), not unread notifications:
- * those are often only for information. Shares the Needs you view's query.
- */
 function InboxNeedsYouBadge() {
   return <UnreadCornerBadge count={useQuery(api.needsYou.list, {})?.length} />;
 }
@@ -166,32 +156,23 @@ function RepoRailView({
   const { collapsed, setCollapsed, setSessionsNavMode } = useSidebar();
   const { openSearch } = useSearch();
   const simpleView = useSimpleView();
-  // The Eva tile owns the home panel (Codebases / Teams / Artifacts),
-  // so it stays lit on any of those routes.
   const homeActive =
     pathname === "/" || pathname.startsWith("/setup") || isHomePath(pathname);
   const inboxActive = pathname === "/inbox" || pathname.startsWith("/inbox/");
   const pathParts = pathname.split("/").filter(Boolean);
   const onRepoSessionsPath =
     pathParts.includes("sessions") && pathParts[0] !== "sessions";
-  // Deep session links always belong to the root Sessions rail entry (no
-  // per-app sessions sidebar), so highlight Sessions whenever the path is one.
   const sessionsActive =
     pathname === "/sessions" ||
     pathname.startsWith("/sessions/") ||
     onRepoSessionsPath;
-  // Deep automation links belong to the root Automations rail entry too.
   const automationsActive =
     pathname === "/automations" ||
     pathname.startsWith("/automations/") ||
     (pathParts.includes("automations") && pathParts[0] !== "automations");
   const sessionsLabel = countLabel(activeSessionCount);
   const [renameRepo, setRenameRepo] = useState<RepoWithLogo | null>(null);
-  // Carry the section (Quick Tasks, Projects, …) across an app switch, but not
-  // the entity below it: task 204 belongs to the app you are leaving.
   const currentSection = repoSectionFromPath(pathname);
-  // Plain `string`, not a template-literal type: `<Link to>` is a union of
-  // known route paths and rejects the narrowed form.
   const railHref = (row: RepoWithLogo): string =>
     repoSectionHref(row.owner, row.name, row.rootDirectory, currentSection);
 
@@ -202,8 +183,6 @@ function RepoRailView({
         section={currentSection}
         onNavigate={onNavigate}
       />
-      {/* Three package rail groups: a shared trough each, with one pill that
-          slides to the active tile. The gaps divide them, so there are no rules. */}
       <Sidebar.RailHeader>
         <Sidebar.RailGroup>
           <Sidebar.RailItem
@@ -213,8 +192,6 @@ function RepoRailView({
             active={homeActive}
           >
             <Link to="/home" onClick={onNavigate}>
-              {/* The package app glyph at the rail icon size (22): no disc, so
-                  the group's pill shows behind it when Home is active. */}
               <IconEva size={22} className="shrink-0" />
             </Link>
           </Sidebar.RailItem>
@@ -258,28 +235,18 @@ function RepoRailView({
               />
             </Link>
           </Sidebar.RailItem>
-          {/* Manager Ave used to sit here. It now lives in the floating launcher
-            (`AveLauncherProvider`), which owns the orchestrator query too. */}
         </Sidebar.RailGroup>
       </Sidebar.RailHeader>
-      {/* Drawer below `md`: keep a scroll here off the page behind.
-          `justify-center-safe` centres the repo group, but a list taller than
-          the rail starts at the top so its first tiles stay reachable. */}
       <Sidebar.RailBody className="scrollbar scroll-fade justify-center-safe max-md:overscroll-y-contain">
         {repos.length === 0 ? null : (
           <Sidebar.RailGroup>
             {repos.map((row, index) => {
               const displayName = repoDisplayLabel(row);
-              // Mirrors RailAppHotkeys: only the first nine tiles get a slot.
               const hotkeySlot = index < 9 ? index + 1 : null;
-              // While the global Sessions destination is highlighted, don't also
-              // light up a repo tile — the rail should show one active target.
               const active =
                 !sessionsActive &&
                 !automationsActive &&
                 isRowActive(row, currentOwner, currentName, currentAppName);
-              // Simple view hides keycap hints and the GitHub `owner/repo`
-              // identifier; the hotkeys themselves still work.
               const tooltip = simpleView
                 ? displayName
                 : `${displayName} · ${row.owner}/${row.name}`;
@@ -291,7 +258,6 @@ function RepoRailView({
 
               return (
                 <ContextMenu key={row._id}>
-                  {/* Eva's tooltip, not the tile's: it shows the hotkey keycap. */}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <ContextMenuTrigger asChild>
@@ -306,7 +272,6 @@ function RepoRailView({
                                 } active`
                           }
                           active={active}
-                          // Idle app logos sit further back than the icon tiles.
                           className={active ? undefined : "opacity-50"}
                         >
                           <Link to={railHref(row)} onClick={onNavigate}>
@@ -398,7 +363,6 @@ function RepoRailView({
               className="shrink-0"
             />
           </Sidebar.RailItem>
-          {/* Eva's tooltip, not the tile's: it shows the shortcut keycap. */}
           <Tooltip>
             <TooltipTrigger asChild>
               <Sidebar.RailItem

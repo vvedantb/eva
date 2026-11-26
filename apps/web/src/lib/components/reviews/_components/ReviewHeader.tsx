@@ -40,7 +40,6 @@ export function ReviewHeader({
   overview: PrOverview;
   refreshing: boolean;
   onRefresh: () => void;
-  /** Re-reads the overview after an action changed the pull request on GitHub. */
   onChanged: () => void;
   nav: ReactNode;
 }) {

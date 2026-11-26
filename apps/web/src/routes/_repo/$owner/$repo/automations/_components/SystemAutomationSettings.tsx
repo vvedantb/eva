@@ -121,8 +121,6 @@ export function SystemAutomationSettings({
             }
           />
         ) : null}
-        {/* Event presets post a one-line note per run, so there is no
-            summary worth emailing; the backend never sends one. */}
         {trigger.kind === "cron" ? (
           <EmailSettingsRows automation={automation} commit={commit} />
         ) : null}

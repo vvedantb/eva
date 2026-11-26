@@ -19,7 +19,6 @@ export function SandboxSurfaceProviders({
   children,
 }: {
   onOpenFile?: (path: string) => void;
-  /** Opens the Review diffs; a pending review-comment chip jumps there. */
   onOpenDiffsTab: () => void;
   children: ReactNode;
 }) {

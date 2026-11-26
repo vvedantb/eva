@@ -15,7 +15,6 @@ interface PendingArchive {
 }
 
 export interface ProjectArchiveController {
-  /** Non-null while the confirm dialog is open. */
   target: ProjectArchiveTarget | null;
   isArchiving: boolean;
   close: () => void;

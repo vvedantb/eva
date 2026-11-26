@@ -35,9 +35,7 @@ export function SandboxCommitPushButton({
 }: {
   gitSync: Doc<"sessions">["sandboxGitSync"];
   isSandboxActive: boolean;
-  /** Undefined while a task or project has no session (so no sandbox) yet. */
   target: SandboxGitTarget | undefined;
-  /** Task and project footers run the larger icon button; headers stay compact. */
   size?: "sm" | "default";
 }) {
   const simpleView = useSimpleView();
@@ -46,7 +44,6 @@ export function SandboxCommitPushButton({
 
   const uncommitted = gitSync?.uncommittedFiles ?? 0;
   const unpushed = gitSync?.unpushedCommits ?? 0;
-  // A stopped sandbox has no worktree, so the last report is stale.
   if (
     target === undefined ||
     !isSandboxActive ||

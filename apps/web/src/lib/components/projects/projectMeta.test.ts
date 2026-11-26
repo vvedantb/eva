@@ -10,8 +10,6 @@ import {
 } from "@eva/shared";
 import { PROJECT_STAGES } from "@eva/shared/projectView";
 
-// The project list, task list and new-project helpers the web and the phone share.
-
 const project = (
   title: string,
   created: number,

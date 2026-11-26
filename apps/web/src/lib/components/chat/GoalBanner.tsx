@@ -26,8 +26,6 @@ export function GoalBanner({
 
   const handleClear = (send: (command: string) => Promise<void>) => {
     setIsClearing(true);
-    // The send path already toasts its own failure. Cleanup is duplicated
-    // across `then`/`catch`: React Compiler cannot compile a `finally`.
     void send(CLEAR_GOAL_COMMAND)
       .then(() => setIsClearing(false))
       .catch(() => setIsClearing(false));

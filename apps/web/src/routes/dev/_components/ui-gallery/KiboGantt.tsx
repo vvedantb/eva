@@ -25,12 +25,6 @@ const PLANNED: GanttStatus = {
 const ACTIVE: GanttStatus = { id: "active", name: "Active", color: "#f59e0b" };
 const DONE: GanttStatus = { id: "done", name: "Done", color: "#10b981" };
 
-/**
- * Fixed dates in 2025. GanttProvider builds its timeline from `new Date()`
- * (currentYear - 1 … currentYear + 1), so these bars sit at the left edge
- * of the timeline while the current year is 2026. From 1 January 2027 the
- * timeline starts at 2026 and these bars fall off the left edge.
- */
 const DESIGN: GanttFeature = {
   id: "g-1",
   name: "Design review",

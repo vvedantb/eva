@@ -104,7 +104,6 @@ export function ProjectFieldsPanel({
   return (
     <div className="space-y-4">
       <FieldsSection title="Properties">
-        {/* Stage is derived from the child tasks. */}
         {status ? (
           <div className={FIELD_ROW_CLASS}>
             <ProjectStageBadge stage={status.stage} />

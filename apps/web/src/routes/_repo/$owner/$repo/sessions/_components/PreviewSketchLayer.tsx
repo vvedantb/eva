@@ -1,7 +1,5 @@
 "use client";
 
-// useLayoutEffect: redraws the strokes when they or the iframe box change.
-// useEffect: Escape / ⌘Z keys while the sketch is open.
 import {
   useEffect,
   useLayoutEffect,
@@ -48,12 +46,10 @@ export function PreviewSketchLayer({
   const pending = usePendingPreviewSnapshots();
   const box = useIframeBox(iframeElement);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  // Strokes are plain data: undo and the final image both redraw from them.
   const [strokes, setStrokes] = useState<SketchStroke[]>([]);
   const drawingRef = useRef<SketchStroke | null>(null);
   const [attaching, setAttaching] = useState(false);
 
-  // Redraw on undo / clear / resize. Live drawing paints incrementally.
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
     const context = canvas?.getContext("2d");

@@ -98,7 +98,6 @@ export function SandboxAutoStopSettingsClient() {
       "sandbox-idle-pause",
     );
 
-  /** Minutes inputs save on change; an empty or sub-1 value is left alone. */
   const minutesFromInput = (value: string): number | null => {
     const parsed = Number.parseInt(value, 10);
     return Number.isFinite(parsed) && parsed >= 1 ? parsed : null;

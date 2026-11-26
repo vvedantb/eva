@@ -1,17 +1,3 @@
-/**
- * Ordering and default selection for an automation run's findings.
- *
- * Findings arrive in whatever order the agent emitted them, each carrying the
- * agent's own severity and — once Jev has triaged the run — a `triage` verdict
- * that may disagree and may point at an open task already tracking the work.
- * The list ranks by the triaged severity and pre-selects the findings worth
- * acting on, so the common case is "glance, then click Create".
- *
- * Pure so the selection algebra is testable: the checkbox state is a default
- * set XOR a set of user overrides, which keeps a re-triage from silently
- * unticking a box the user ticked.
- */
-
 import type { Doc } from "@eva/backend";
 
 export type Finding = NonNullable<Doc<"automationRuns">["findings"]>[number];

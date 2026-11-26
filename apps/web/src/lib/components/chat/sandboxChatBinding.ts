@@ -34,16 +34,12 @@ type StreamingRow = FunctionReturnType<typeof api.streaming.get>;
  * panel and annotation send do the rest.
  */
 export interface SandboxChatBinding {
-  /** The owner's chat on its session; undefined until the session exists. */
   entity: ChatEntityRef | undefined;
-  /** What the chat speaks for, for copy. */
   ownerLabel: "task" | "project";
-  /** The entity's live doc; undefined while it loads. */
   doc:
     | (SandboxChatOwnerDoc & { title: string; sandboxBranch?: string })
     | null
     | undefined;
-  /** The branch Eva booted the sandbox on, when the entity pins one. */
   intendedBranch?: string;
   model: AIModel;
   setModel: (model: AIModel) => void;
@@ -51,12 +47,7 @@ export interface SandboxChatBinding {
   displayTraits: NonNullable<ChatModelPicker["displayTraits"]>;
   executionTraits: ModelTraitsExecutionArgs;
   onTraitsChange: (partial: Partial<StoredModelTraits>) => void;
-  /** The sticky account; null = Team. */
   providerAccountId: Id<"userProviderAccounts"> | null;
-  /**
-   * The owner's accounts: the chat runs on the owner's credentials whoever
-   * sends, so any viewer picks from these (as in a session chat).
-   */
   accounts: ReadonlyArray<ModelAccount>;
   resolveAccountId: (
     id: string | null,
@@ -64,9 +55,7 @@ export interface SandboxChatBinding {
   persistAccount: (id: Id<"userProviderAccounts"> | null) => Promise<unknown>;
   prewarm: () => Promise<unknown>;
   ports: SandboxTurnPorts;
-  /** Stops whatever turn owns the chat bubble. */
   cancel: () => Promise<null>;
-  /** A quick task's first run, shown as the chat's opening turn. */
   firstRun?: {
     isInProgress: boolean;
     streaming: StreamingRow | undefined;

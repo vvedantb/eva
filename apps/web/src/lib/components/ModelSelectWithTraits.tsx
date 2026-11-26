@@ -36,8 +36,6 @@ export function ModelSelectWithTraits({
   disabled,
   ...selectProps
 }: ModelSelectWithTraitsProps) {
-  // Simple view keeps the model name only — no reasoning/context/fast controls
-  // and no trailing trait summary on the trigger.
   const simpleView = useSimpleView();
   const traitsUi =
     !simpleView && onTraitsChange !== undefined && traits !== undefined

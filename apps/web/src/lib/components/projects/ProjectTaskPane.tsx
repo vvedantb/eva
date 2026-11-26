@@ -34,7 +34,6 @@ export const PROJECT_TASK_ROUTING: UseTaskDetailRouting = {
   mode: "project-task",
 };
 
-/** The sandbox pane each task tab shows; Details is not a pane. */
 const PANE_TAB: Record<ProjectTaskTab, "preview" | "browser" | "review" | null> =
   {
     "task-details": null,
@@ -53,7 +52,6 @@ export function useProjectTaskExpand({
   prUrl,
   onShowReview,
 }: {
-  /** The task's full page (pre-internal form). */
   fullPageHref: string;
   prUrl: string | undefined;
   onShowReview: () => void;
@@ -87,18 +85,14 @@ export function ProjectTaskPane({
   taskId: Id<"agentTasks">;
   numId: number | undefined;
   title: string;
-  /** The task's own PR; Review shows only with one. */
   prUrl: string | undefined;
   tab: ProjectTaskTab;
-  /** The task's full page (pre-internal form). */
   fullPageHref: string;
   collapsed: boolean;
   onSelectTab: (tab: ProjectTaskTab) => void;
 }) {
   const detail = useTaskDetail(taskId, PROJECT_TASK_ROUTING);
   const paneTab = PANE_TAB[tab];
-  // Mount the sandbox panes on the first visit to one of their tabs, then
-  // keep them while this task stays selected (the parent keys it by task).
   const [panesVisited, setPanesVisited] = useState(paneTab !== null);
   if (paneTab !== null && !panesVisited) setPanesVisited(true);
   const { expand, openDiffs } = useProjectTaskExpand({
@@ -194,10 +188,6 @@ export function ProjectTaskPane({
   );
 }
 
-/**
- * The task sandbox's Preview, Browser and Review panes, keyed by the task's
- * session as on its full page (same pane storage scope).
- */
 function ProjectTaskSandboxPanes({
   taskId,
   owner,
@@ -216,13 +206,11 @@ function ProjectTaskSandboxPanes({
   sandbox: OwnedSandboxFields;
   repoId: Id<"githubRepos">;
   isActive: boolean;
-  /** The pane on screen; null while Details is active. */
   paneTab: "preview" | "browser" | "review" | null;
   prUrl: string | undefined;
   onStartSandbox: (() => void) | undefined;
   isSandboxStarting: boolean;
   autoWakeEligible: boolean;
-  /** False while the panel is collapsed. */
   onScreen: boolean;
 }) {
   const panes = useSandboxPanes({
@@ -262,16 +250,13 @@ function ProjectTaskSandboxPanes({
           prUrl={prUrl}
           agentBrowsingAt={viewState?.agentBrowsingAt}
           onReleaseBrowserLock={() => void releaseBrowserLock({ owner })}
-          // Backend starts the app in the Console tmux session after startup.
           runConsoleDevCommandOnConnect={false}
           onStartSandbox={onStartSandbox}
           isSandboxStarting={isSandboxStarting}
           autoWakeEligible={autoWakeEligible}
           onAnnotationSubmit={submitAnnotation}
-          // Only the pane on screen holds the presence beacon or auto-wakes.
           presenceEnabled={visible}
           onScreen={visible}
-          // The project task's full page has no mini-player either.
           miniPlayer={undefined}
           viewState={viewState}
         />

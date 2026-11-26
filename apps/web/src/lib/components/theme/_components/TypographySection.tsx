@@ -55,8 +55,6 @@ export function TypographySection({
 }) {
   preloadGoogleFontsForPicker();
   return (
-    // Three labelled sub-groups that read as one block, so the spacing lives
-    // here rather than depending on the parent's stack.
     <div className="space-y-5">
       <section>
         <SectionLabel>Border Radius</SectionLabel>

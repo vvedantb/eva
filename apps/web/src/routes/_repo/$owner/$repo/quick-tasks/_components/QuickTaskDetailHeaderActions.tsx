@@ -26,9 +26,6 @@ export function QuickTaskDetailHeaderActions({
     <div className="flex max-sm:min-w-0 max-sm:flex-wrap items-center max-sm:justify-end max-sm:gap-1.5 sm:gap-2">
       <EntityContextUsage repoId={repoId} entityId={taskId} />
       <QuickTaskHeaderActionsSlot />
-      {/* Grown to the 40px floor below `sm` rather than given `hit-target`:
-          the two buttons sit flush, so an 8px bleed each would overlap and one
-          would steal the other's taps. */}
       <div className="flex max-sm:shrink-0 items-center gap-0.5 max-sm:gap-1">
         <button
           type="button"

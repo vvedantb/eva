@@ -36,9 +36,7 @@ export function ProjectTaskView({
   projectId: Id<"projects">;
   repoId: Id<"githubRepos">;
   projectNumId: number | undefined;
-  /** The coordinator's Tasks tab (pre-internal form). */
   coordinatorHref: string;
-  /** The project's Documents tab (pre-internal form), or undefined without a numId. */
   documentsHref: string | undefined;
   taskId: Id<"agentTasks"> | undefined;
   taskStatus: EntityResolveStatus | undefined;

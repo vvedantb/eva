@@ -50,16 +50,12 @@ export interface ProjectCardMenuItemsProps {
   projectLead?: Id<"users">;
   currentUserId?: Id<"users">;
   users?: User[];
-  /** The project page; Copy link copies it. */
   href?: string;
-  /** Cards link elsewhere; the project header already is the project. */
   showOpenInNewTab?: boolean;
   branchName?: string;
-  /** Project header only: its sandbox and PR commands, above the shared items. */
   leading?: ReactNode;
   onLeadChange: (value: string) => void;
   onEdit: () => void;
-  /** An archived project: read-only, so the menu offers Unarchive and no edits. */
   archived?: boolean;
   onArchive: () => void;
   onUnarchive: () => void;

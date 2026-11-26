@@ -8,7 +8,6 @@ import { api } from "@eva/backend";
  * is live, so the app comes back on its own when maintenance ends.
  */
 export function MaintenanceGate({ children }: { children: React.ReactNode }) {
-  // `undefined` while loading: render the app rather than hold first paint.
   const inMaintenance = useQuery(api.maintenance.status);
   return inMaintenance === true ? <MaintenanceScreen /> : children;
 }

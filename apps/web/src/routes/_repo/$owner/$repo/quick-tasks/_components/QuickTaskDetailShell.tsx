@@ -41,8 +41,6 @@ export function QuickTaskDetailShell({
     handleBack,
   } = useQuickTaskNeighbors({ taskId, navSurface, sandboxTab });
 
-  // Names the browser tab. Here rather than in the page contents: this shell
-  // wraps both the detail and sandbox surfaces, so one call covers both.
   useEntityDocumentTitle(selectedTask?.title);
 
   if (tasks === undefined) {
@@ -78,7 +76,6 @@ export function QuickTaskDetailShell({
         fillHeight
         childPadding={false}
       >
-        {/* Detail keeps page gutters; sandbox is flush like sessions/projects. */}
         <div
           className={
             navSurface === "detail"

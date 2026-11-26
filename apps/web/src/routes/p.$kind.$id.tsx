@@ -12,9 +12,7 @@ import {
 } from "@eva/shared";
 import { buildUrlWithPath } from "@/lib/components/PreviewNavBar";
 
-/** Same cadence as the Preview pane's readiness poll (useSandboxPreview). */
 const READY_POLL_MS = 3_000;
-/** Mirrors TASK_PREVIEW_SANDBOX_READY_TIMEOUT_MS on the backend. */
 const WAKE_TIMEOUT_MS = 240_000;
 
 function isWakeKind(value: string): value is PreviewWakeKind {
@@ -62,8 +60,6 @@ function PreviewWake() {
   const [attempt, setAttempt] = useState(0);
   const ran = useRef<number>(-1);
 
-  // Live document for the progress copy and to know whether the link resolves.
-  // The handshake below does NOT depend on it — see the component doc.
   const target = useQuery(
     api.sandboxWake.getWakeTarget,
     isSignedIn ? { kind: wakeKind, id } : "skip",
@@ -94,8 +90,6 @@ function PreviewWake() {
 
     const waitForDevServer = async (): Promise<void> => {
       while (!cancelled && Date.now() < deadline) {
-        // Fresh read each poll: the sandbox id changes if a dead sandbox is
-        // recreated during the wake.
         const fresh = await readTarget();
         if (cancelled) return;
         if (fresh === null) {
@@ -122,8 +116,6 @@ function PreviewWake() {
         if (cancelled) return;
         if (preview.ready && preview.url.length > 0) {
           setPhase({ kind: "serving" });
-          // Cross-origin navigation to the sandbox origin — the full-page
-          // location API, not the SPA router (same as /preview-auth).
           window.location.replace(
             buildUrlWithPath(preview.url, search.path ?? "/"),
           );
@@ -140,11 +132,6 @@ function PreviewWake() {
       }
     };
 
-    // Fast path: a sandbox that is already up needs no wake and no readiness
-    // probe. `getPreviewUrl` without `checkReady` still starts the auth proxy
-    // when it is not running (nothing else does after a resume), then returns
-    // the URL with a fresh grant. If the dev server is down the preview page
-    // says so itself. Retries skip this and run the full wake.
     const openActive = async (): Promise<boolean> => {
       if (attempt > 0) return false;
       const fresh = await readTarget();
@@ -209,8 +196,6 @@ function PreviewWake() {
     );
   }
 
-  // Opening an active sandbox is a quick handoff: keep the page blank. Only a
-  // real wake (seconds to minutes) or an error shows anything.
   if (phase.kind === "opening" || phase.kind === "serving") return null;
 
   const statusText =

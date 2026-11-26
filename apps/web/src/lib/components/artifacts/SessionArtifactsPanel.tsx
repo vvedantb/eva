@@ -37,7 +37,6 @@ export function SessionArtifactsPanel({ source }: { source: ChatSourceArg }) {
     >
       <ArtifactList
         artifacts={artifacts ?? []}
-        // A project rolls up its child tasks' rows: name the task that made each.
         showSource={source.kind === "project" ? "task" : false}
         compact
         onOpen={open}

@@ -29,7 +29,6 @@ function parseSettings(
   return {
     appSortOrder,
     automationSortOrder,
-    // Same 2–10 window as the Sessions sidebar, so both panels clamp alike.
     automationPreviewCount: clampSessionPreviewCount(
       raw.automationPreviewCount,
     ),

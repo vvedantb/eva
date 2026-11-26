@@ -39,12 +39,6 @@ import {
   withMutationToast,
 } from "@/lib/utils/mutationToast";
 
-/** Every command box on this page is a monospace, resizable textarea. */
-
-/**
- * Shown on the Status and Builds tabs when no snapshot config exists yet —
- * both tabs are empty until the Configuration tab has been filled in.
- */
 function NoSnapshotConfigured() {
   return (
     <div className="rounded-surface bg-card">
@@ -100,7 +94,6 @@ export function SnapshotsClient({
   const startBuild = useMutation(api.repoSnapshots.startBuild);
   const cancelBuild = useMutation(api.repoSnapshots.cancelBuild);
 
-  // UI-only state (not data)
   const [building, setBuilding] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [expandedBuild, setExpandedBuild] = useState<string | null>(null);
@@ -115,7 +108,6 @@ export function SnapshotsClient({
         "snapshot-config-delete",
       );
     } catch {
-      // Toast already shown.
     }
   };
 
@@ -125,7 +117,6 @@ export function SnapshotsClient({
     try {
       await startBuild({ repoSnapshotId: snapshot._id, appRepoId: repoId });
     } catch {
-      // Error already shown in UI via build status
     }
     setBuilding(false);
   };
@@ -139,7 +130,6 @@ export function SnapshotsClient({
         "snapshot-build-cancel",
       );
     } catch {
-      // Toast already shown; the build row still shows its live status.
     }
     setCancelling(false);
   };
@@ -215,7 +205,6 @@ export function SnapshotsClient({
   );
 }
 
-/** Configuration tab: schedule, build branch and command boxes, saved on change/blur. */
 function SnapshotConfigurationTab({
   repoId,
   snapshot,
@@ -227,9 +216,7 @@ function SnapshotConfigurationTab({
   const saveRepoSnapshot = useMutation(api.repoSnapshots.saveRepoSnapshot);
   const setSnapshotEnabled = useMutation(api.repoSnapshots.setSnapshotEnabled);
 
-  // Derive values directly from Convex
   const schedule = snapshot?.schedule ?? "manual";
-  // Snapshots build from the repo's default branch (the branch `.eva/` syncs from).
   const buildBranch = repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
   const isEnabled = snapshot?.enabled === true;
 
@@ -290,7 +277,6 @@ function formatBuildDuration(build: Builds[number]) {
   return build.status === "running" ? "Running..." : "-";
 }
 
-/** Builds tab: build history table, or an empty state. */
 function SnapshotBuildsTab({
   snapshot,
   builds,
@@ -309,7 +295,6 @@ function SnapshotBuildsTab({
   return (
     <>
       {snapshot && builds && builds.length > 0 ? (
-        // Rows own their padding so the table spans the card's full width.
         <SettingsSection title="Build History" bodyVariant="list">
           <div className="overflow-x-auto">
             <table className="w-full text-xs sm:min-w-[420px] max-sm:min-w-[620px]">

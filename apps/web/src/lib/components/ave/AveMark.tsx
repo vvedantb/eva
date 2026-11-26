@@ -99,7 +99,6 @@ export function AveMark({
   );
 }
 
-/** A soft white band, clear at both edges, for the shimmer and the sweep. */
 function BandGradient({
   id,
   peakOpacity,

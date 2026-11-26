@@ -79,7 +79,6 @@ export function WelcomeSetupDialog() {
   const previewSearchKey = useDevPreviewSearchKey();
   const isPreview = useDevWelcomeSetupPreview();
   const [stepResetKey, setStepResetKey] = useState(previewSearchKey);
-  // Reset wizard when preview search key changes (no setState-in-effect).
   if (isPreview && previewSearchKey !== stepResetKey) {
     setStepResetKey(previewSearchKey);
     setStep(1);
@@ -158,8 +157,6 @@ export function WelcomeSetupDialog() {
         hideCloseButton
         onInteractOutside={(event) => event.preventDefault()}
         onEscapeKeyDown={(event) => event.preventDefault()}
-        // `dvh`, not `vh`: mobile browser chrome makes `100vh` taller than the
-        // visible area, which would push the footer buttons off screen.
         className="flex h-[min(90dvh,42rem)] max-w-[calc(100vw-2rem)] flex-col sm:max-w-3xl"
       >
         <DialogHeader className="shrink-0">

@@ -19,6 +19,5 @@ export function writeSignedInHint(signedIn: boolean): void {
   try {
     localStorage.setItem(KEY, signedIn ? "1" : "0");
   } catch {
-    // Storage unavailable (private mode etc.) — boot falls back to holding paint.
   }
 }

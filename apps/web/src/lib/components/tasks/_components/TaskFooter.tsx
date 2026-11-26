@@ -42,9 +42,7 @@ type RunDoc = NonNullable<
 interface TaskFooterProps {
   taskId: Id<"agentTasks">;
   task: Doc<"agentTasks"> | undefined;
-  /** The task's chat, once it exists: the header menu's Recap chat. */
   chatId?: Id<"sessionChats">;
-  /** Main run or chat turn: `useTaskAgentActive`. */
   isAgentActive: boolean;
   status: TaskStatus | undefined;
   hasActiveRun: boolean;
@@ -58,7 +56,6 @@ interface TaskFooterProps {
   isSandboxActive: boolean;
   isSandboxStarting: boolean;
   isSandboxStopping: boolean;
-  /** The task's sandbox checkout (a quick task's lives on its session). */
   sandbox: Pick<OwnedSandboxFields, "sandboxGitSync" | "gitTarget">;
   canCreatePr: boolean;
   isCreatingPr: boolean;
@@ -76,8 +73,6 @@ const TASK_FOOTER_LAYOUT = {
     iconSize: 16,
     root: "flex shrink-0 items-center gap-1.5 sm:gap-2",
     row: "flex shrink-0 items-center gap-1.5 sm:gap-2",
-    // The chat header track, as on session and project headers; Run stays
-    // outside it as the filled primary action.
     actions: CHAT_HEADER_ACTIONS_CLASS,
   },
   footer: {
@@ -98,8 +93,6 @@ const TASK_FOOTER_LAYOUT = {
   }
 >;
 
-// `todo` only offers a first run; once it has run, the sandbox toggle takes
-// its place (`canStartSandbox` covers that case).
 function getShowRunButton({
   task,
   status,
@@ -187,15 +180,7 @@ export function TaskFooter({
     hasRuns,
     hasActiveRun,
   });
-  // One control for both directions, on every surface: the sandbox chat header
-  // no longer carries a start/stop pair, so a header that only knew how to stop
-  // left a slept sandbox with no way back. Held open through both transitions
-  // rather than popping out, so the row does not jump while it wakes or sleeps.
   const showSandboxToggle = isSandboxActive || canStartSandbox;
-  // Inert, not hidden, mid-turn — see `SleepControlTooltip`. Gated on the one
-  // "sandbox busy" status (main run or chat turn, synthetic turns included),
-  // not `hasActiveRun`: that also counts *queued* runs, and a task waiting in
-  // the queue is no reason to refuse to sleep it.
   const sleepBlockedMidTurn = isAgentActive;
   const prLinks = usePrLinkMenuItems({
     createPr: {
@@ -342,11 +327,6 @@ function SplitRunButton({
   const isScheduled = scheduledAt !== undefined;
   const iconSize = size === "sm" ? 16 : 18;
 
-  // The two halves cancel their own press (`SPLIT_BUTTON_HALF`) so the wrapper
-  // scales as one unit. `motion-press` owns that: the hand-listed
-  // `transition-[transform,background-color]` it replaces named `transform`,
-  // which never matches the `scale` property Tailwind compiles `scale-[0.96]`
-  // to, so the split button did not press at all.
   return (
     <div className="group/split motion-press flex items-center active:scale-[0.96]">
       <Tooltip>

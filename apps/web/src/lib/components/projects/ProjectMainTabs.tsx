@@ -30,23 +30,16 @@ export function ProjectMainTabs({
   isSandboxStopping = false,
   hasUnread = false,
 }: {
-  /** Project base path, e.g. `/owner/repo/projects/3` (pre-internal form). */
   projectHref: string;
   activeTab: ProjectMainTab;
   isSandboxActive?: boolean;
   isSandboxStarting?: boolean;
   isSandboxStopping?: boolean;
-  /**
-   * The coordinator chat has an unseen reply. The chat lives on the work
-   * tab, so the dot shows only while Project is open.
-   */
   hasUnread?: boolean;
 }) {
   const navigate = useNavigate();
   const simpleView = useSimpleView();
 
-  // `stopping` outranks `starting` outranks `active`: a stale `isSandboxActive`
-  // can still read true while the sandbox is on its way up or down.
   const liveStatus = isSandboxStopping
     ? "stopping"
     : isSandboxStarting && !isSandboxActive
@@ -70,8 +63,6 @@ export function ProjectMainTabs({
         navigate({ to: toInternalRepoHref(href) });
       }}
     >
-      {/* Centred in the page header — segmented so it matches other header
-          switchers (sessions, quick tasks) and needs no hairline of its own. */}
       <TabsList size="sm" className="tabs-segmented" aria-label="Project view">
         <TabsTrigger value="overview">Project</TabsTrigger>
         <TabsTrigger value="work" className="gap-1.5">

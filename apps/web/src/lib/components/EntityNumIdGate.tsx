@@ -19,14 +19,11 @@ export function EntityNumIdGate<TDoc extends { _id: string }>({
   children,
 }: {
   resolve: EntityResolveResult<TDoc>;
-  /** Singular label for not-found copy, e.g. "task", "session". */
   entityLabel: string;
   backTo?: string;
   backLabel?: string;
   children: (doc: TDoc) => ReactNode;
 }) {
-  // A pre-numId link (old notification href, PR body): swap the id for the
-  // canonical numId and replace history so Back does not bounce here again.
   if (resolve.redirectTo !== null) {
     return <Navigate to={resolve.redirectTo} search={true} replace />;
   }

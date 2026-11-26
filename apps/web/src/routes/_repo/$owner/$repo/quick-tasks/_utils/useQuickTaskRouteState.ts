@@ -49,8 +49,6 @@ export function useQuickTaskRouteState(): QuickTaskRouteState | null {
     };
   }
 
-  // Canonical detail URL has `$numId` and no sandbox/detailTab segment.
-  // Legacy `$detailTab` routes redirect away, so treat any open numId as detail.
   if (typeof params.numId === "string") {
     return { surface: "detail", detailTab: "activity" };
   }

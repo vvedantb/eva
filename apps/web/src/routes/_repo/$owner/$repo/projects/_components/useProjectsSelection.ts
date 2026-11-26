@@ -8,7 +8,6 @@ import {
 export interface ProjectsSelection {
   isSelecting: boolean;
   selectedIds: Set<Id<"projects">>;
-  /** Where the next shift-click measures from. */
   anchorId: Id<"projects"> | null;
   toggle: (
     id: Id<"projects">,
@@ -36,7 +35,6 @@ export function useProjectsSelection(
   );
   const [anchorId, setAnchorId] = useState<Id<"projects"> | null>(null);
 
-  // Drop selections for projects that disappeared (adjust during render).
   if (isSelecting) {
     const existing = new Set<string>(existingIds);
     let needsPrune = false;
@@ -59,8 +57,6 @@ export function useProjectsSelection(
     id: Id<"projects">,
     options?: SelectionToggleOptions<Id<"projects">>,
   ) => {
-    // A range only ever adds: shift-clicking back over a span you just selected
-    // should not punch holes in it.
     if (options?.range) {
       const range = rangeBetween(options.orderedIds ?? [], anchorId, id);
       setSelectedIds((prev) => {

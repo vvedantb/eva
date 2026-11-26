@@ -12,13 +12,11 @@ import { hasNewlyMergedPr } from "./prMergeCelebration";
  * a chat opened after the merge stays quiet.
  */
 export function PrMergeConfetti({ owner }: { owner: PrOwnerRef }) {
-  // Same subscription as the PR menu items, so the cache shares it.
   const prs = useQuery(api.pullRequests.listForOwner, { owner });
   const [seen, setSeen] = useState(prs);
   const [burst, setBurst] = useState(0);
   const [anchor, setAnchor] = useState<HTMLSpanElement | null>(null);
 
-  // Compare each new snapshot with the last one this view saw.
   if (prs !== seen) {
     if (seen !== undefined && prs !== undefined && hasNewlyMergedPr(seen, prs)) {
       setBurst((count) => count + 1);
@@ -28,8 +26,6 @@ export function PrMergeConfetti({ owner }: { owner: PrOwnerRef }) {
 
   return (
     <span ref={setAnchor} aria-hidden className="contents">
-      {/* `contents` takes no space in the toolbar row (no extra flex gap),
-          but it also has no box, so the burst starts from the row itself. */}
       {burst > 0 && anchor?.parentElement ? (
         <ConfettiBurst
           key={burst}

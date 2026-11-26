@@ -39,26 +39,17 @@ export function ReviewDetailClient({
     : undefined;
 
   const getHeader = useAction(api.github.getPullRequestHeader);
-  // Cached, so a warmed or revisited PR shows its title on the first paint
-  // instead of a spinner. Rendering `data` ahead of `isError` also means a failed
-  // revalidate keeps the title that is already on screen.
   const headerQuery = useQuery(
     prHeaderQuery(getHeader, repoId, isValidPrNumber ? prNumber : undefined),
   );
   const prHeader = headerQuery.data;
-  // One Refresh for the page, renewing both the title block and the overview.
-  // Handed to the panel so the header's overflow menu is the only place it
-  // appears.
   const { refresh, refreshing } = usePrRefresh(repoId, prNumber);
 
-  // Tab title matches how a PR is named everywhere else: "#123 Fix the thing".
   useEntityDocumentTitle(
     prHeader === undefined ? null : `#${prHeader.number} ${prHeader.title}`,
   );
 
   const goToTab = (nextTab: string) => {
-    // basePath is already the router's internal `--` form on main
-    // (`repoHref`); staging's slash-URL rewrite is not in this slice.
     void navigate({
       to: toInternalRepoHref(`${basePath}/reviews/${prNumber}/${nextTab}`),
       search: (prev) => prev,
@@ -74,8 +65,6 @@ export function ReviewDetailClient({
     );
   }
 
-  // Stands in for the header until the overview lands: the cached title, so a
-  // revisited pull request names itself on the first paint.
   const placeholder =
     prHeader !== undefined ? (
       <h1 className="min-w-0 truncate text-base font-semibold leading-snug">
@@ -95,9 +84,6 @@ export function ReviewDetailClient({
     );
 
   return (
-    // Wraps the whole page (not just Diffs) so drafted comments survive a tab
-    // switch. In the sandbox this provider is hoisted higher still, because the
-    // chat composer reads the same pending comments.
     <PendingReviewCommentsProvider onOpenDiffsTab={() => goToTab("diffs")}>
       <ReviewTabsPanel
         repoId={repoId}

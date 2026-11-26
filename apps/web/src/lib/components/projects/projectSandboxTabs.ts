@@ -3,11 +3,6 @@ import {
   type TaskRouteSandboxTab,
 } from "@/lib/search-params";
 
-/**
- * The panel tabs of the selected task tab (`?task=`), in rail order. Its chat
- * is in the chat column. Prefixed so they never clash with the coordinator's
- * own tabs.
- */
 const PROJECT_TASK_TABS = [
   "task-details",
   "task-preview",

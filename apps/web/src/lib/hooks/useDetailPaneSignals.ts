@@ -21,7 +21,6 @@ import { useState } from "react";
 export function useDetailPaneSignals(selectedId: string | undefined) {
   const [signal, setSignal] = useState(() => ({
     selectedId,
-    // Deep-linking straight to an entity must land on the detail, not the list.
     expand: selectedId === undefined ? 0 : 1,
     collapse: 0,
   }));
@@ -29,9 +28,6 @@ export function useDetailPaneSignals(selectedId: string | undefined) {
     const cleared = selectedId === undefined;
     setSignal({
       selectedId,
-      // Clearing the selection must not expand the (now empty) detail pane; it
-      // sends the phone back to the list instead. Either way the old id is
-      // forgotten, so re-picking that entity counts as a new selection.
       expand: cleared ? signal.expand : signal.expand + 1,
       collapse: cleared ? signal.collapse + 1 : signal.collapse,
     });

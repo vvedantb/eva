@@ -1,6 +1,5 @@
 "use client";
 
-// useEffect: subscribe to the preview iframe's postMessages.
 import { useEffect, useState } from "react";
 import { PREVIEW_FRAME_MESSAGE } from "@eva/shared/previewFrameMessages";
 import { isFromFrame, postToFrame } from "@/lib/utils/frameMessaging";
@@ -23,7 +22,6 @@ export function usePreviewFreeze(iframeElement: HTMLIFrameElement | null) {
       if (type === PREVIEW_FRAME_MESSAGE.annotateFrozen) {
         setFrozen(Reflect.get(data, "frozen") === true);
       }
-      // A reload or navigation brings up a fresh page, which is not frozen.
       if (
         type === PREVIEW_FRAME_MESSAGE.annotateReady ||
         type === PREVIEW_FRAME_MESSAGE.navigation

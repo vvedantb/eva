@@ -8,7 +8,6 @@ import { projectTaskDisplayStatusConfig } from "./ProjectPhaseBadge";
 import { ProjectStageCounts } from "./ProjectStageCounts";
 
 interface ProjectProgressBarProps {
-  /** The project's derived status (`useProjectTaskStatus` / `useProjectListStatuses`). */
   status: Pick<ProjectStatus, "counts"> | undefined;
   className?: string;
 }
@@ -19,8 +18,6 @@ export function ProjectProgressBar({
 }: ProjectProgressBarProps) {
   if (!status) return null;
 
-  // Fills stay at full track width and scale from the left — same compositor
-  // rule as UsageBar. The global `html[data-page-motion=off]` rule snaps it.
   const segments = projectStatusSegments(status);
 
   if (segments.length === 0) {

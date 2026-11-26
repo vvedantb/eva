@@ -22,19 +22,14 @@ export function SandboxChatPreInput({
   afterBanner,
 }: {
   surface: SandboxChatSurface;
-  /** Surface-specific rows above the recovery card. */
   beforeBanner?: ReactNode;
-  /** Surface-specific rows below the recovery card. */
   afterBanner?: ReactNode;
 }) {
   return (
     <>
-      {/* Not gated by simple view: the user set this goal and can clear it. */}
       <GoalBanner goal={surface.goal} sendCommand={surface.sendCommand} />
       {beforeBanner}
-      {/* Renders nothing outside a PendingReviewCommentsProvider. */}
       <PendingReviewCommentChips />
-      {/* Not gated by simple view: recovery is a user action, not internals. */}
       <UsageLimitRecoveryBanner surface={surface} />
       {afterBanner}
       {surface.entity ? <RoutedThreadsBanner entity={surface.entity} /> : null}
@@ -53,12 +48,9 @@ export function SandboxChatStatusChips({
   children,
 }: {
   surface: SandboxChatSurface;
-  /** Surface-specific chips after the agents chip. */
   children?: ReactNode;
 }) {
   const { requestStop, stopDialog } = useStopBackgroundAgent(surface.entity);
-  // Simple view hides agent internals (reasoning, tool detail), and the
-  // subagent chip is that family of machinery.
   const simpleView = useSimpleView();
 
   return (
@@ -71,7 +63,6 @@ export function SandboxChatStatusChips({
         />
       )}
       {children}
-      {/* Outside the chip's popover, which closes when the dialog opens. */}
       {stopDialog}
     </>
   );

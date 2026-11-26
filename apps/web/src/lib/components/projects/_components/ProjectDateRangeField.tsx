@@ -13,7 +13,6 @@ import {
   FIELD_TEXT_CLASS,
 } from "@/lib/components/fields/FieldsSection";
 
-/** One end of the range: its date (or placeholder) behind a calendar popover. */
 function DateEnd({
   value,
   placeholder,

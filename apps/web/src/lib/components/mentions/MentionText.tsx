@@ -17,11 +17,6 @@ interface SkillMatch {
 interface MentionTextProps {
   text: string;
   className?: string;
-  /**
-   * Root element. Defaults to a block `<p>`. Use `"span"` when the text must be
-   * inline single-line content — e.g. inside MarqueeOnHover, whose overflow
-   * measurement and ellipsis only work with inline children, not a block box.
-   */
   as?: "p" | "span";
   renderMention?: (match: MentionMatch, key: number) => ReactNode;
   renderSkill?: (match: SkillMatch, key: number) => ReactNode;

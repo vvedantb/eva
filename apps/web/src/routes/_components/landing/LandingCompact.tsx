@@ -52,11 +52,6 @@ export function LandingCompact() {
       <main className="mx-auto w-full max-w-6xl flex-1 px-5 pb-16 pt-4 sm:px-8 lg:px-10">
         <LandingEyebrow>How it works</LandingEyebrow>
 
-        {/*
-          The whole product, four stages deep, without a single mock panel. One
-          column per stage on a wide screen so the four fit on one row and the
-          page stays roughly a screen tall.
-        */}
         <ol className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {LANDING_PILLARS.map((pillar) => (
             <li key={pillar.id} className={cn(LANDING_CARD, "p-6")}>

@@ -19,12 +19,6 @@ import { EmojiReactionPicker } from "./EmojiReactionPicker";
 import { useReactions } from "./TaskReactionsProvider";
 import { taskTextLockReason } from "@eva/shared/taskDetail";
 
-/**
- * Descriptions are authored and stored as Markdown. Legacy/imported content can
- * carry stray HTML (e.g. `<p>` wrappers from Linear) which Markdown should not
- * contain — strip those tags so they don't render literally, turning block tags
- * into line breaks. Non-tag angle brackets (e.g. `<3`) are preserved.
- */
 function stripHtml(raw: string): string {
   return raw
     .replace(/<\/(p|div|li)>\s*/gi, "\n")
@@ -45,7 +39,6 @@ export function TaskDescription({
   canEditTaskText: boolean;
   hasActiveRun: boolean;
   taskId: Id<"agentTasks">;
-  /** Kept for call-site compatibility; description no longer uses a nested max-height scroll. */
   inline: boolean;
 }) {
   const { repo, basePath } = useRepo();
@@ -91,7 +84,6 @@ export function TaskDescription({
   const desc = stripHtml(description ?? "");
   const [editValue, setEditValue] = useState(desc);
 
-  // Keep the draft synced to the server text while not editing.
   if (!isEditing && editValue !== desc) {
     setEditValue(desc);
   }
@@ -116,12 +108,6 @@ export function TaskDescription({
 
   return (
     <div className="group">
-      {/* The rendered description can contain links and mentions, so the
-          click-to-edit target cannot be a stretched `<button>` overlay the way
-          `<ListRow>` does it — the overlay would swallow every link. The div
-          click stays as a pointer convenience; the keyboard path is the
-          placeholder button below (empty description) or the explicit Edit
-          button in the reaction row (non-empty). */}
       <div
         onClick={isEmptyPlaceholder ? undefined : handleClick}
         title={
@@ -157,8 +143,6 @@ export function TaskDescription({
             className="text-sm text-muted-foreground wrap-break-word [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
           />
         ) : canEditTaskText ? (
-          // Nothing to click through to yet, so the placeholder itself is the
-          // control — a real button, reachable by keyboard and touch.
           <button
             type="button"
             onClick={handleClick}
@@ -171,8 +155,6 @@ export function TaskDescription({
         )}
       </div>
 
-      {/* Reactions live outside the click-to-edit area so toggling a reaction
-          never enters edit mode. Only shown when there's description content. */}
       {!isEditing && desc ? (
         <div className="mt-1.5 max-sm:flex max-sm:flex-wrap max-sm:items-center max-sm:gap-1">
           {groups.length > 0 ? (
@@ -191,9 +173,6 @@ export function TaskDescription({
               variant="ghost"
               onClick={handleClick}
               aria-label="Edit description"
-              // Touch-only: desktop still edits by clicking the description text,
-              // exactly as before, and a hover-revealed pencil there would be new
-              // chrome on a surface this work was not meant to touch.
               className="text-muted-foreground sm:hidden"
             >
               <IconPencil size={14} />

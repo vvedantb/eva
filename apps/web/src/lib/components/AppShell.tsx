@@ -8,12 +8,6 @@ declare module "@tanstack/react-router" {
   }
 }
 
-/**
- * Chrome is a lazy chunk so the entry (which the anonymous landing also
- * loads) stays free of the sidebar, spotlight search, hotkeys and their
- * dependencies. `main.tsx` prefetches it at boot for returning signed-in
- * users, so in practice the Suspense fallback only shows on a cold cache.
- */
 const AppShellChrome = lazy(() =>
   import("@/lib/components/AppShellChrome").then((m) => ({
     default: m.AppShellChrome,
@@ -37,9 +31,6 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <Suspense fallback={<div className="min-h-dvh bg-app-shell" />}>
-      {/* `embedded` is passed from the entry so the lazy chrome chunk does not
-          import `embedded.ts` (which also lives in the entry via `__root`) and
-          create an async-chunk → entry cycle. */}
       <AppShellChrome embedded={IS_EMBEDDED}>{children}</AppShellChrome>
     </Suspense>
   );

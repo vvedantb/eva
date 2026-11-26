@@ -1,7 +1,5 @@
 "use client";
 
-// useEffect: hands queued preview sketches to the composer's attachment
-// store, which lives outside React state (the PromptInput controller).
 import { useEffect } from "react";
 import { usePromptInputController } from "@vvedantb/ui";
 import { usePendingPreviewSnapshots } from "@/lib/contexts/PendingPreviewSnapshotsContext";

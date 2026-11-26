@@ -19,14 +19,8 @@ interface PendingPreviewSnapshotsValue {
   add: (snapshot: PreviewSnapshot) => void;
   remove: (id: string) => void;
   clear: () => void;
-  /** Count of sketches waiting for a composer; a change wakes the drain. */
   readonly sketchCount: number;
-  /** Queues a preview sketch image for the composer's attachments. */
   addSketch: (file: File) => void;
-  /**
-   * Hands over every queued sketch and empties the queue. Only the first
-   * caller gets them, so two mounted composers cannot attach one sketch twice.
-   */
   takeSketches: () => File[];
 }
 
@@ -46,8 +40,6 @@ export function PendingPreviewSnapshotsProvider({
       snapshot,
     })),
   );
-  // A ref, not state: `takeSketches` must empty the queue synchronously so a
-  // second composer in the same commit finds nothing.
   const sketchesRef = useRef<File[]>([]);
   const [sketchCount, setSketchCount] = useState(0);
 

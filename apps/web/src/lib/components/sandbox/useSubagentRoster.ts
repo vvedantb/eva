@@ -13,7 +13,6 @@ import {
 
 interface SubagentRoster {
   agents: SubagentView[];
-  /** Content key for the Agents tab: it appears once agents exist. */
   hasAgents: boolean;
   hasRunningAgents: boolean;
 }
@@ -31,9 +30,7 @@ export function useSubagentRoster({
   backgroundAgents,
   sandboxRunning,
 }: {
-  /** The chat; undefined for a task's or project's chat not created yet. */
   parentId: Id<"sessionChats"> | undefined;
-  /** `api.streaming.get` entity id for that chat's turn. */
   streamingEntityId: string | undefined;
   backgroundAgents: BackgroundAgentEntry[] | undefined;
   sandboxRunning: boolean;
@@ -45,9 +42,6 @@ export function useSubagentRoster({
   );
   const status = useChatTurnStatus(parentId);
 
-  // Streaming payloads can outlive their turn; only fold them while one runs.
-  // No first-run input: this stream is the chat's, not a quick task's first
-  // run, so a running first run must not fold it.
   const isExecuting = isChatTurnExecuting({ status, messages });
   const agents = deriveSubagents({
     activityLogs: (messages ?? []).map((message) => message.activityLog),

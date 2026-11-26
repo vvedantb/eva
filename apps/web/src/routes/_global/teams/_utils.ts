@@ -1,4 +1,3 @@
-/** Top-level global routes, keyed by their first path segment. */
 const GLOBAL_LABELS: Record<string, string> = {
   home: "Home",
   teams: "Teams",
@@ -10,7 +9,6 @@ const GLOBAL_LABELS: Record<string, string> = {
   testing: "Testing",
 };
 
-/** Sections under `/{owner}/{repo}`, keyed by their third path segment. */
 const REPO_SECTION_LABELS: Record<string, string> = {
   automations: "Automations",
   docs: "Docs",
@@ -42,9 +40,6 @@ export function describeLocation(pathname?: string): string | null {
   const global = GLOBAL_LABELS[first];
   if (global !== undefined) return global;
 
-  // Repo routes are `/{owner}/{repo}[/section/...]` or
-  // `/{owner}/{repo}/{app}/[section/...]`. Strip a `repo--app` suffix, or a
-  // slash app segment when the next piece is a known section.
   const second = segments[1];
   if (second === undefined) return first;
 
@@ -56,8 +51,6 @@ export function describeLocation(pathname?: string): string | null {
     segments[3] !== undefined &&
     REPO_SECTION_LABELS[segments[3]] !== undefined
   ) {
-    // /owner/repo/app/section — app is not part of the label noise we strip
-    // from `--`, but we still want the section name.
     sectionKey = segments[3];
   }
   const section =

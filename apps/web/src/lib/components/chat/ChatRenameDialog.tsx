@@ -12,7 +12,6 @@ import {
 } from "@vvedantb/ui";
 
 interface ChatRenameDialogProps {
-  /** The chat being renamed, or null when closed. */
   target: { title: string } | null;
   onClose: () => void;
   onSave: (title: string) => Promise<void>;
@@ -28,7 +27,6 @@ export function ChatRenameDialog({
   onClose,
   onSave,
 }: ChatRenameDialogProps) {
-  // Keyed on the target so the field re-seeds each time a chat is picked.
   const [value, setValue] = useState(target?.title ?? "");
   const [seededFor, setSeededFor] = useState(target);
   if (target !== seededFor) {

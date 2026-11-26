@@ -45,10 +45,6 @@ function parseLinearIdentifiers(text: string): string[] {
   return Array.from(identifiers);
 }
 
-/**
- * The count is only known inside the `try`, and a ternary there bails the React
- * Compiler out of the whole file — a plain call does not. See CLAUDE.md.
- */
 function importedMessage(count: number): string {
   return `Imported ${count} task${count === 1 ? "" : "s"}`;
 }

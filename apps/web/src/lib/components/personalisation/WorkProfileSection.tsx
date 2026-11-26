@@ -52,9 +52,6 @@ export function WorkProfileSection() {
   const [seenSaved, setSeenSaved] = useState(saved);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Adopt a new saved value during render rather than in an effect, and only
-  // when the draft is untouched, so a save from another tab does not wipe
-  // whatever the user is typing.
   if (!sameProfile(saved, seenSaved)) {
     setSeenSaved(saved);
     if (sameProfile(draft, seenSaved)) {
@@ -75,10 +72,7 @@ export function WorkProfileSection() {
         "work-profile",
       );
     } catch {
-      // Toast already shown.
     }
-    // No `finally`: the catch swallows, so this always runs (and `finally`
-    // bails the React Compiler out of the whole file).
     setIsSaving(false);
   };
 

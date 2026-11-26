@@ -36,8 +36,6 @@ export function WhatsNewClient() {
           </EmptyState.Description>
         </EmptyState.Root>
       ) : (
-        // The rail is drawn on the list, not per entry, so it runs unbroken
-        // between cards instead of restarting at each one.
         <ol className="relative space-y-4 border-l border-border pl-6 sm:pl-8">
           {entries.map((entry, index) => (
             <m.li
@@ -87,11 +85,6 @@ type ChangelogFeedback = NonNullable<
   FunctionReturnType<typeof api.changelog.listChangelog>[number]["feedback"]
 >;
 
-/**
- * Email feedback counts for one week, shown to admins only (the query leaves
- * `feedback` out for everyone else): 👍 / 👎 on the top pick and the
- * whole-email rating.
- */
 function ChangelogFeedbackSummary({
   feedback,
 }: {

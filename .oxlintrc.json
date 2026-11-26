@@ -7,7 +7,8 @@
     {
       "name": "no-effect",
       "specifier": "@vvedantb/config/oxlint/no-effect.mjs"
-    }
+    },
+    { "name": "no-comments", "specifier": "./scripts/oxlint/no-comments.mjs" }
   ],
   "categories": {
     "correctness": "error",
@@ -70,7 +71,7 @@
           {
             "name": "react",
             "importNames": ["useEffect"],
-            "message": "Avoid useEffect: derive state inline, use event handlers, or rely on Convex live queries. Justify unavoidable effects with a comment. See CLAUDE.md."
+            "message": "Avoid useEffect: derive state inline, use event handlers, or rely on Convex live queries. Unavoidable effects need a scoped oxlint-disable with a reason. See CLAUDE.md."
           }
         ]
       }
@@ -82,6 +83,7 @@
     {
       "files": ["apps/web/src/**"],
       "rules": {
+        "no-comments/no-comments": "error",
         "vvedantb/no-value-block-in-try": "error",
         "no-restricted-globals": [
           "error",

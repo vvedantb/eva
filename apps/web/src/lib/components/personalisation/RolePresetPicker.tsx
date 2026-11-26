@@ -44,8 +44,6 @@ export function RolePresetPicker({
               aria-pressed={isActive}
               onClick={() => onSelect(isActive ? null : key)}
               className={cn(
-                // Inactive tiles keep a transparent border so selecting one does
-                // not shift the grid.
                 "h-full w-full cursor-pointer rounded-surface border p-3 text-left transition-[background-color,border-color]",
                 isActive
                   ? "border-border bg-accent-soft text-accent-soft-foreground"

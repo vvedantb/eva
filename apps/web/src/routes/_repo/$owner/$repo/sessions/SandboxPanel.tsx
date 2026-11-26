@@ -59,14 +59,9 @@ import { designVariationPrompt } from "./_utils/composerPrompts";
 
 interface SandboxPanelProps {
   sessionId: Id<"sessions">;
-  /** The active chat tab; annotations, plan sends and agent stops route to it. */
   chatId: Id<"sessionChats">;
   sandboxId: string | undefined;
   isActive: boolean;
-  /**
-   * False while another session is shown but this shell stays mounted.
-   * Preview freezes instead of clearing on shared URL search churn.
-   */
   isRouteActive?: boolean;
   repoId: Id<"githubRepos">;
   prUrl?: string;
@@ -77,26 +72,17 @@ interface SandboxPanelProps {
   terminalPanel: TerminalPanelApi;
   planContent?: string;
   messages?: SessionDesignMessage[];
-  /** Sub-agent lifecycle entries from the session doc (Agents tab). */
   backgroundAgents?: BackgroundAgentEntry[];
-  /** Live activity payload for the current turn (Agents tab live steps). */
   streamingActivity?: string;
   isArchived?: boolean;
-  /** Builtin tab id (SandboxTab) or a custom tab's name slug. */
   activeTab: string;
   onTabChange: (tab: string) => void;
   agentBrowsingAt?: number;
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
-  /**
-   * The sandbox is closed and the host would allow a Start: no last-start
-   * error, not read-only, no run or build owning it. Combined in
-   * SandboxPaneSlots with the setting and tab visibility to auto-wake.
-   */
   autoWakeEligible?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
-  /** Lets the visible Preview float into the mini-player (Expand → returnTo). */
   miniPlayer: { returnTo: string; title: string } | undefined;
 }
 export function SandboxPanel({
@@ -160,8 +146,6 @@ export function SandboxPanel({
     isSavingDoc,
   } = useSessionPlanDocument(sessionId);
   const latestVariations = getLatestVariations(messages);
-  // Both tabs are content-keyed: they appear once the session has produced the
-  // artefact they show, whatever prompt or skill produced it.
   const hasPlanContent =
     typeof planContent === "string" && planContent.trim().length > 0;
   const capturedPlan = hasPlanContent
@@ -172,8 +156,6 @@ export function SandboxPanel({
   const artifactSource = { kind: "session" as const, sessionId };
   const { artifactCount } = useSourceArtifacts(artifactSource);
   const { documentCount } = useSourceDocuments(artifactSource);
-  // Same subscription as the chat's `ChatPanel`, so the panel and the
-  // composer read one turn status.
   const turnStatus = useHeldQuery(
     api.turns.getChatStatus,
     isRouteActive ? { entityId: chatId } : "skip",
@@ -182,7 +164,6 @@ export function SandboxPanel({
     status: turnStatus,
     messages,
   });
-  // Streaming payloads can outlive their turn; only fold them in while one runs.
   const agents = deriveSubagents({
     activityLogs: messages.map((m) => m.activityLog),
     streamingActivity: isDesignExecuting ? streamingActivity : undefined,
@@ -193,8 +174,6 @@ export function SandboxPanel({
   const hasRunningAgents = agents.some(
     (agent) => subagentTone(agent.status) === "active",
   );
-  // Sticky Preview path/port + console tail, keyed by the sandbox owner so all
-  // three surfaces read and write this state through the same functions.
   const viewState = useHeldQuery(
     api.sandboxPanes.getViewState,
     isRouteActive ? { owner } : "skip",
@@ -208,8 +187,6 @@ export function SandboxPanel({
     repoId,
     devPort,
   });
-  // Multi-repo sessions: which checkout the Files tab browses. "" is the
-  // primary repo; a linked repo's `sessionRepos.path` otherwise.
   const [filesRoot, setFilesRoot] = useQueryState("filesRoot", filesRootParser);
   const sessionRepos = useHeldQuery(api.sessions.listRepos, { sessionId });
   const fileList = useSandboxFileList({
@@ -218,14 +195,11 @@ export function SandboxPanel({
     isActive,
     rootPath: filesRoot || undefined,
   });
-  // User-defined tabs for this app, in display order, enabled only.
   const allCustomTabs = useHeldQuery(
     api.appTabs.list,
     isRouteActive ? { repoId } : "skip",
   );
   const customTabs = (allCustomTabs ?? []).filter((tab) => tab.enabled);
-  // If the URL points at a custom tab that no longer exists (deleted / disabled /
-  // renamed), fall back to preview. Wait for the query to load before deciding.
   useEffect(() => {
     const tabId = sandboxTabIdFromParam(activeTab);
     if (tabId === "terminal") {
@@ -403,24 +377,17 @@ export function SandboxPanel({
                 "sandbox-browser-unlock",
               )
             }
-            // Backend starts the app in the Console tmux session after startup.
             runConsoleDevCommandOnConnect={false}
             onStartSandbox={onStartSandbox}
             isSandboxStarting={isSandboxStarting}
             onAnnotationSubmit={submitAnnotation}
-            // Only the session on screen holds the idle-pause presence beacon;
-            // cached siblings and a collapsed rail must not keep a VM awake.
             presenceEnabled={isRouteActive && !collapsed}
             onScreen={isRouteActive}
             autoWakeEligible={autoWakeEligible}
-            // Multi-repo sessions run a dev server per repo; the Preview port
-            // control offers each one instead of only the primary's.
             previewPortOptions={previewPortOptions(
               sessionRepos,
               devPort ?? DEFAULT_PREVIEW_PORT,
             )}
-            // Only the session on screen may float; cached siblings and a
-            // collapsed rail keep their preview parked.
             miniPlayer={
               miniPlayer !== undefined && isRouteActive && !collapsed
                 ? { ...miniPlayer, owner: { kind: "session", sessionId } }

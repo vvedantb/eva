@@ -8,8 +8,6 @@ import {
   type SummarizableProjectTaskRow,
 } from "@eva/shared/projectView";
 
-// The project task list's plain-text lines, shared by the web and the phone.
-
 const view = (
   displayStatus: ProjectTaskView["displayStatus"],
   needsYou?: ProjectTaskView["needsYou"],
@@ -20,7 +18,6 @@ const view = (
   waitingForCoordinator: false,
 });
 
-/** A typed row, so literals keep their union types. */
 const task = (row: SummarizableProjectTaskRow & { locked?: boolean }) => row;
 
 const none = {

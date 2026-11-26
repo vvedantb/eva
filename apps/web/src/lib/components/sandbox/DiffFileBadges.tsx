@@ -51,11 +51,6 @@ export function FileStatusChip({ status }: { status: GitStatus }) {
 
 type Block = "added" | "removed" | "neutral";
 
-/**
- * GitHub's five-square change indicator. Squares are proportional once a file
- * has more than five changed lines, and any non-zero side always claims at
- * least one square so a 300/1 change still shows the deletion.
- */
 function diffBlocks(additions: number, deletions: number): Block[] {
   const total = additions + deletions;
   if (total === 0) return Array.from({ length: 5 }, () => "neutral");

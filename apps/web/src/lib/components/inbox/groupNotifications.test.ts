@@ -66,8 +66,6 @@ describe("groupNotifications", () => {
       repoById,
     );
 
-    // "UI" is the custom label, not the GitHub name; group order follows the
-    // newest-first input, so the most recent item leads.
     expect(groups.map((g) => g.label)).toEqual([
       "UI",
       OTHER_REPO_GROUP_LABEL,
@@ -126,8 +124,6 @@ describe("groupNotifications", () => {
   });
 
   test("urgency buckets an unrouted notification as FYI", () => {
-    // Undefined means routing has not landed (or the row predates urgency);
-    // the backend treats that as normal, so the inbox must too.
     const groups = groupNotifications(
       [notification("a"), notification("b", { urgency: "normal" })],
       "urgency",
@@ -149,8 +145,6 @@ describe("groupNotifications", () => {
       repoById,
     );
 
-    // A mention that wants an answer leads its day even when it is the oldest
-    // of the three; equal urgencies keep the newest-first order they came in.
     expect(groups[0]?.items.map((n) => n.title)).toEqual(["c", "b", "a"]);
   });
 });

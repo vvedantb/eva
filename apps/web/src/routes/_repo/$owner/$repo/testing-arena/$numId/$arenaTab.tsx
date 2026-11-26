@@ -27,10 +27,6 @@ export const Route = createFileRoute(
   component: TestingArenaDetailRoute,
 });
 
-/**
- * Primary arena tabs, in their on-screen order (the content slides by it).
- * Unknown path segments fall back to `code`.
- */
 const ARENA_TABS = ["code", "browser"] as const;
 type ArenaTab = (typeof ARENA_TABS)[number];
 
@@ -38,7 +34,6 @@ function toArenaTab(value: string): ArenaTab {
   return value === "browser" ? "browser" : "code";
 }
 
-/** Non-null doc shape the detail body works with, once the gate has resolved it. */
 type ArenaDoc = NonNullable<FunctionReturnType<typeof api.docs.getByNumId>>;
 
 function TestingArenaDetailRoute() {
@@ -67,7 +62,6 @@ function TestingArenaDetail({ doc, tab }: { doc: ArenaDoc; tab: ArenaTab }) {
   const scenarios = useQuery(api.arenaScenarios.listByDoc, {
     docId: doc._id,
   });
-  // Reports from before browser runs existed have no kind: they are code runs.
   const codeReports = reports?.filter((r) => (r.kind ?? "code") === "code");
   const browserReports = reports?.filter((r) => r.kind === "browser");
   const tabReports = tab === "code" ? codeReports : browserReports;
@@ -84,7 +78,6 @@ function TestingArenaDetail({ doc, tab }: { doc: ArenaDoc; tab: ArenaTab }) {
   const [isStarting, setIsStarting] = useState(false);
   const [branch, setBranch] = useQueryState("branch", branchParser);
 
-  // PR runs do not block a manual run, so only manual runs count here.
   const hasActiveRun =
     tabReports?.some(
       (r) =>
@@ -101,8 +94,6 @@ function TestingArenaDetail({ doc, tab }: { doc: ArenaDoc; tab: ArenaTab }) {
 
   const handleRunTest = async () => {
     setIsStarting(true);
-    // Resolved before the try: React Compiler bails on the whole file when a
-    // conditional expression sits inside a try/catch.
     const args = {
       docId: doc._id,
       repoId: repo._id,
@@ -152,8 +143,6 @@ function TestingArenaDetail({ doc, tab }: { doc: ArenaDoc; tab: ArenaTab }) {
           <BranchSelect
             value={branch}
             onValueChange={setBranch}
-            // `shrink-0` + a wider floor below `sm`: as a flex child next to
-            // "Run Test" it otherwise shrank until the branch read as one letter.
             className="h-7 w-24 text-xs max-sm:h-10 max-sm:w-32 max-sm:shrink-0 sm:w-36"
           />
           <Button

@@ -12,7 +12,6 @@ interface InboxBulkBarProps {
   isSelecting: boolean;
   selectedCount: number;
   totalCount: number;
-  /** Viewing the archived list, so the archive action runs the other way. */
   viewingArchived: boolean;
   onExitSelect: () => void;
   onSelectAll: () => void;

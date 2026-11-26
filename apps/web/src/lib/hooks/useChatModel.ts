@@ -37,21 +37,16 @@ export function useChatModel(
   defaultModel: AIModel,
   active = true,
 ): {
-  /** The live chat row; undefined while it loads or before it exists. */
   chat: Doc<"sessionChats"> | null | undefined;
   model: AIModel;
   setModel: (model: AIModel) => void;
-  /** Sticky traits from Convex; undefined fields use model defaults. */
   traits: StoredModelTraits;
   setTraits: (partial: Partial<StoredModelTraits>) => void;
-  /** undefined while the chat is loading — treat as Team until the query lands. */
   providerAccountId: Id<"userProviderAccounts"> | null | undefined;
-  /** Resolves once the replacement daemon is warm. */
   setProviderAccountId: (
     providerAccountId: Id<"userProviderAccounts"> | null,
   ) => Promise<void>;
   isSwitchingAccount: boolean;
-  /** The raw account write and daemon warm-up, for a caller's own handoff. */
   persistProviderAccountId: (
     providerAccountId: Id<"userProviderAccounts"> | null,
   ) => Promise<null>;

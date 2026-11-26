@@ -28,13 +28,6 @@ function check(partial: Partial<PrCheck>): PrCheck {
   return { ...BASE_CHECK, ...partial };
 }
 
-/**
- * The review header, the merge button's tooltip and the Checks tab all read
- * their verdict from here, so a wrong branch shows the reader a remedy for a
- * problem they do not have — or hides the one they do. Commit 796b4087 was this
- * class of bug from the other direction: an action gated on the pull request
- * still being open, which quietly removed it the moment the branch merged.
- */
 describe("mergeBlocker", () => {
   test("a clean open pull request has nothing in the way", () => {
     expect(mergeBlocker(overview({}))).toBeNull();
@@ -45,9 +38,6 @@ describe("mergeBlocker", () => {
   test.each(FINISHED_STATUSES)(
     "a %s pull request reports no blocker at all",
     (status) => {
-      // Nothing can be done about a branch that is no longer merging, so the
-      // header must not offer conflict remedies on it. Every field below still
-      // says "conflicted" — only the lifecycle has moved on.
       expect(
         mergeBlocker(
           overview({ status, mergeable: false, mergeableState: "dirty" }),
@@ -57,8 +47,6 @@ describe("mergeBlocker", () => {
   );
 
   test("a draft outranks the conflicts underneath it", () => {
-    // Both are true at once on a conflicted draft. Leading with conflicts would
-    // send the reader into a rebase session for a branch nobody can merge yet.
     const blocker = mergeBlocker(
       overview({ draft: true, mergeable: false, mergeableState: "dirty" }),
     );
@@ -67,8 +55,6 @@ describe("mergeBlocker", () => {
   });
 
   test("unknown mergeability is reported as pending, never as a conflict", () => {
-    // GitHub answers `null` for a second or two after every push. Treating that
-    // as unmergeable flashes a false "cannot merge" on healthy branches.
     const blocker = mergeBlocker(
       overview({ mergeable: null, mergeableState: "unknown" }),
     );
@@ -91,8 +77,6 @@ describe("mergeBlocker", () => {
   });
 
   test("an unmergeable branch with no known cause offers no remedy", () => {
-    // A session cannot fix what GitHub has not named, and offering one anyway
-    // spends a sandbox to reach the same dead end.
     const blocker = mergeBlocker(
       overview({ mergeable: false, mergeableState: "unstable" }),
     );
@@ -119,8 +103,6 @@ describe("headerBlocker", () => {
   test.each(["draft", "checking"])(
     "%s stays out of the header",
     (hiddenKind) => {
-      // The lifecycle pill already says "Draft", and mergeability bookkeeping is
-      // not something the reader can act on.
       const source =
         hiddenKind === "draft"
           ? overview({ draft: true })
@@ -166,8 +148,6 @@ describe("check roll-up", () => {
   });
 
   test("the worst outcome wins over any number of better ones", () => {
-    // Summarising twenty green checks and one red one as "success" is how a
-    // broken branch reads as ready to merge.
     expect(
       checksOverallTone(
         countChecks([
@@ -208,11 +188,6 @@ describe("check roll-up", () => {
   });
 });
 
-/**
- * The merge button and the review Submit on both apps are gated here. The
- * phone's review has no line comments, so its only way to a comment review
- * is a summary.
- */
 describe("action gates", () => {
   test("merge is live only on an open, ready, mergeable pull request", () => {
     expect(canMergePr(overview({}))).toBe(true);

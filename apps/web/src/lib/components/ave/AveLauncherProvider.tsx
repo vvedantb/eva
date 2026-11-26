@@ -5,19 +5,10 @@ import { useRouterState } from "@tanstack/react-router";
 import { AveLauncherProviderContext } from "@/lib/components/ave/AveLauncherContext";
 import { AveLauncherSurface } from "@/lib/components/ave/AveLauncherSurface";
 
-/**
- * `closed` has never been opened, so nothing chat-related exists yet;
- * `minimized` is mounted but hidden, which is the whole point — the popover has
- * to survive being dismissed and re-summoned with its conversation intact.
- */
 type AvePanelState = "closed" | "open" | "minimized";
 
 interface AveLauncherProviderProps {
   children: ReactNode;
-  /**
-   * Embedded documents (the inbox preview pane) render content only — the host
-   * window already owns the launcher.
-   */
   enabled: boolean;
 }
 
@@ -38,9 +29,6 @@ export function AveLauncherProvider({
   enabled,
 }: AveLauncherProviderProps) {
   const [panel, setPanel] = useState<AvePanelState>("closed");
-  // Ave's own page already is the chat, so the launcher would be a second copy
-  // of it floating over itself. Hide both, but do not unmount the popover —
-  // coming back from `/ave` should find it as it was left.
   const onAveRoute = useRouterState({
     select: (s) =>
       s.location.pathname === "/ave" || s.location.pathname.startsWith("/ave/"),

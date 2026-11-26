@@ -4,30 +4,15 @@ import {
 } from "@eva/shared/parseActivitySteps";
 import type { ActivityStep } from "@vvedantb/ui";
 
-/** How often the simple-view thinking heartbeat reprints. */
 const THINKING_HEARTBEAT_INTERVAL_SECONDS = 30;
 
-/**
- * Steps that simple view never surfaces. Updating only these is still
- * "no output" — the user cannot see reasoning tokens, so a long think
- * looks hung unless we heartbeat.
- */
 function isHiddenThinkingStep(step: ActivityStep): boolean {
   return step.type === "reasoning" || step.type === "thinking";
 }
 
-/** Separators no step field can contain, so fields cannot alias into a key. */
 const FIELD_SEP = "\u0001";
 const STEP_SEP = "\u0000";
 
-/**
- * One step's contribution to the fingerprint: only the scalars that move while
- * a tool runs, never the bodies. Serialising the steps themselves re-encoded
- * every captured command output and edit hunk — a payload capped at 600 KB —
- * on every streamed token, purely to answer "did anything change?". Lengths
- * stand in for the bodies: a body cannot change size without changing, and a
- * same-length rewrite only delays the clock reset until the next real change.
- */
 function fingerprintStep(step: ActivityStep): string {
   return [
     step.type,
