@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AssistantMessage, LiveAssistantMessage } from "@/chat/AssistantMessage";
 import { MentionMenu } from "@/chat/MentionMenu";
 import { UserMessageText } from "@/chat/MentionChip";
-import { EvaBubble, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
+import { EvaReply, TEAMMATE_SIDE, TeammateBubble, TeammateName } from "@/chat/TeammateTurn";
 import { useMentionComposer } from "@/chat/useMentionComposer";
 
 /**
@@ -102,7 +102,7 @@ export default function ReplyThreadScreen() {
           if (message.role === "assistant") {
             return (
               <View key={message._id} style={TEAMMATE_SIDE}>
-                <EvaBubble joinsNext={false}>
+                <EvaReply>
                   {message._id === liveId && streamingEntityId ? (
                     <LiveAssistantMessage streamingEntityId={streamingEntityId} messageId={message._id} />
                   ) : (
@@ -114,7 +114,7 @@ export default function ReplyThreadScreen() {
                       hideTrace
                     />
                   )}
-                </EvaBubble>
+                </EvaReply>
               </View>
             );
           }
