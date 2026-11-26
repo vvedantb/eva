@@ -7,8 +7,10 @@ import {
   appendRelatedPrsSection,
   buildPrBody,
   buildTaskPrSections,
+  upsertRelatedPrsBlock,
   type SiblingPr,
 } from "../prBody";
+import { isLivePrState } from "@eva/shared";
 import { buildEvaSessionUrl, buildEvaTaskUrl } from "../_taskWorkflow/urls";
 import { sessionOwnerTaskId } from "../_sessions/owner";
 import { resolveSessionBaseBranch } from "../_sessions/baseBranch";
@@ -21,6 +23,7 @@ import { getInstallationOctokit } from "../githubAuth";
 import { addPullRequestToStack } from "./prStack";
 import { invalidatePrOverviewCache } from "./prOverview";
 import { sessionPullRequestLabels } from "./prLabels";
+import { getPullRequest, patchPullRequest } from "./pullRequestWrite";
 import { errorMessage } from "@vvedantb/server";
 
 /**
@@ -383,9 +386,51 @@ export const createDraftSessionRepoPr = internalAction({
       `[github] Created draft PR for sessionRepo ${args.sessionRepoId}: ${result}`,
     );
 
+    // The task's own PR opened before this one: list it there now too.
+    const taskPr = taskPrs.find((pr) => pr.primary && isLivePrState(pr.state));
+    if (task && taskPr) {
+      await patchTaskPrRelatedPrs(ctx, task._id, taskPr);
+    }
+
     return result;
   },
 });
+
+/**
+ * Rewrites the "Related pull requests" block of a multi-repo task's own PR
+ * (`upsertRelatedPrsBlock`) from its linked repos' PRs. Best-effort: a
+ * failure is logged and the next body refresh writes the block again.
+ */
+async function patchTaskPrRelatedPrs(
+  ctx: ActionCtx,
+  taskId: Id<"agentTasks">,
+  taskPr: Doc<"pullRequests">,
+): Promise<void> {
+  try {
+    const [repo, relatedPrs] = await Promise.all([
+      ctx.runQuery(internal.githubRepos.getInternal, { id: taskPr.repoId }),
+      ctx.runQuery(internal.pullRequests.taskRelatedPrLinksInternal, {
+        taskId,
+      }),
+    ]);
+    if (!repo) return;
+    const octokit = await getInstallationOctokit(repo.installationId);
+    const target = {
+      owner: repo.owner,
+      repo: repo.name,
+      pull_number: taskPr.prNumber,
+    };
+    const current = await getPullRequest(octokit, target);
+    const body = upsertRelatedPrsBlock(current.body ?? "", relatedPrs);
+    if (body !== (current.body ?? "")) {
+      await patchPullRequest(octokit, target, { body });
+    }
+  } catch (error) {
+    console.error(
+      `[github] Failed to list related PRs on task PR ${taskPr.prUrl}: ${errorMessage(error)}`,
+    );
+  }
+}
 
 /**
  * Joins a stacked session's new PR to the GitHub stack of the PR it was started

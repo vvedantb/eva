@@ -23,8 +23,10 @@ import {
   ownerRef,
   setPullRequestState,
   setPullRequestWatch,
+  taskRelatedPrLinks,
   type PrOwnerRef,
 } from "./store";
+import { siblingPrValidator } from "../prBody";
 
 const pullRequestValidator = v.object({
   _id: v.id("pullRequests"),
@@ -143,6 +145,13 @@ export const listForOwnerInternal = internalQuery({
   args: { owner: prOwnerRefValidator },
   returns: v.array(pullRequestValidator),
   handler: async (ctx, args) => await listOwnerPullRequests(ctx.db, args.owner),
+});
+
+/** A multi-repo task's "Related pull requests" links (`taskRelatedPrLinks`). */
+export const taskRelatedPrLinksInternal = internalQuery({
+  args: { taskId: v.id("agentTasks") },
+  returns: v.array(siblingPrValidator),
+  handler: async (ctx, args) => await taskRelatedPrLinks(ctx.db, args.taskId),
 });
 
 export const getByUrlInternal = internalQuery({

@@ -3,7 +3,11 @@ import { internalQuery } from "../_generated/server";
 import type { QueryCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { taskBranchName } from "../_git/branchNames";
-import { findLivePullRequestOnBranch } from "../_pullRequests/store";
+import {
+  findLivePullRequestOnBranch,
+  taskRelatedPrLinks,
+} from "../_pullRequests/store";
+import { siblingPrValidator } from "../prBody";
 import { taskStatusValidator } from "../_validators/enums";
 import {
   buildTraitsExecutionPayload,
@@ -340,15 +344,17 @@ export const getTaskPrCreationData = internalQuery({
     latestRunId: v.union(v.id("agentRuns"), v.null()),
     existingPrUrl: v.union(v.string(), v.null()),
     changeRequests: v.array(v.string()),
+    relatedPrs: v.array(siblingPrValidator),
   }),
   handler: async (ctx, args) => {
-    const [task, runs, changeRequests] = await Promise.all([
+    const [task, runs, changeRequests, relatedPrs] = await Promise.all([
       ctx.db.get(args.taskId),
       ctx.db
         .query("agentRuns")
         .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
         .collect(),
       getChangeRequestContents(ctx, args.taskId),
+      taskRelatedPrLinks(ctx.db, args.taskId),
     ]);
     if (!task) throw new Error("Task not found");
     if (!task.repoId) throw new Error("Task has no repository");
@@ -386,21 +392,25 @@ export const getTaskPrCreationData = internalQuery({
       latestRunId: latestRun ? latestRun._id : null,
       existingPrUrl: livePr?.prUrl ?? null,
       changeRequests,
+      relatedPrs,
     };
   },
 });
 
-/** Fetches task comments for enriching PR descriptions. */
+/** Fetches task comments and a multi-repo task's linked PRs for the PR body. */
 export const getPrEnrichmentData = internalQuery({
   args: {
     taskId: v.id("agentTasks"),
   },
   returns: v.object({
     changeRequests: v.array(v.string()),
+    relatedPrs: v.array(siblingPrValidator),
   }),
   handler: async (ctx, args) => {
-    const changeRequests = await getChangeRequestContents(ctx, args.taskId);
-
-    return { changeRequests };
+    const [changeRequests, relatedPrs] = await Promise.all([
+      getChangeRequestContents(ctx, args.taskId),
+      taskRelatedPrLinks(ctx.db, args.taskId),
+    ]);
+    return { changeRequests, relatedPrs };
   },
 });

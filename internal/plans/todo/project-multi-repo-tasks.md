@@ -44,5 +44,6 @@
 - Merge order: the coordinator writes it in the task description. Every PR body carries that description (the linked PR body now has the task's "Task" section and its Eva link). The task agent is not asked to edit PR bodies: its run prompt forbids `gh pr` commands, and the PRs open after the run.
 - Owned sessions no longer go through the PR auto-archive rule (`reconcileSessionArchiveState`); the task's status retires its session.
 - Phone has no session repo badges, so the phone task header gets none; the phone shows repos in the PR sheet and the Tasks list.
-- Known gaps: the home PR opens before the linked PRs, so its body does not list them (each linked PR links the home PR). Moving a multi-repo task to code review rewrites only the home PR's description, which may drop the merge order there.
+- The home PR opens before the linked PRs, so its body did not list them. Now `buildTaskPullRequestBody` adds a marked "Related pull requests" block from `taskRelatedPrLinks` (the linked rows of the combined state), and `createDraftSessionRepoPr` patches that block into the task PR after each linked PR opens (best-effort). The description rewrite leaves the block alone.
+- Known gap: moving a multi-repo task to code review rewrites only the home PR's description, which may drop the merge order there.
 

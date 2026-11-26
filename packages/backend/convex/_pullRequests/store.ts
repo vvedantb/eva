@@ -26,6 +26,7 @@ import {
 } from "../_github/prLifecycleActions";
 import { CHAT_ENTITY_KINDS, type ChatEntityKind } from "../_validators/enums";
 import { findOwnedSession, sessionOwnerTaskId } from "../_sessions/owner";
+import type { SiblingPr } from "../prBody";
 
 /**
  * The one module that writes `pullRequests`. Every PR Eva tracks — the draft a
@@ -228,6 +229,27 @@ export async function listTaskLinkedPullRequests(
   return rows.filter(
     (row) =>
       row.owner.kind === "session" && row.owner.sessionRepoId !== undefined,
+  );
+}
+
+/**
+ * A multi-repo task's linked repos' PRs (`listTaskLinkedPullRequests`) as the
+ * "Related pull requests" links of its own PR body. Empty for a single-repo
+ * task.
+ */
+export async function taskRelatedPrLinks(
+  db: DatabaseReader,
+  taskId: Id<"agentTasks">,
+): Promise<SiblingPr[]> {
+  const rows = await listTaskLinkedPullRequests(db, taskId);
+  return Promise.all(
+    rows.map(async (row) => {
+      const repo = await db.get(row.repoId);
+      return {
+        label: repo ? `${repo.owner}/${repo.name}` : `#${row.prNumber}`,
+        url: row.prUrl,
+      };
+    }),
   );
 }
 

@@ -269,12 +269,14 @@ export const taskExecutionWorkflow = workflow.define({
         const createPrAsDraft = true;
         try {
           let changeRequests: PrEnrichmentData["changeRequests"] = [];
+          let relatedPrs: PrEnrichmentData["relatedPrs"] = [];
           try {
             const enrichment = await step.runQuery(
               internal.taskWorkflow.getPrEnrichmentData,
               { taskId: args.taskId },
             );
             changeRequests = enrichment.changeRequests;
+            relatedPrs = enrichment.relatedPrs;
           } catch (enrichmentError) {
             console.error(
               `[task-workflow] run=${args.runId} PR enrichment failed; creating PR with base body: ${errorMessage(enrichmentError)}`,
@@ -302,6 +304,7 @@ export const taskExecutionWorkflow = workflow.define({
             taskDescription: data.taskDescription,
             rootDirectory: data.rootDirectory,
             changeRequests,
+            relatedPrs,
             draft: createPrAsDraft,
           };
           if (args.isFirstTaskOnBranch) {
@@ -330,6 +333,7 @@ export const taskExecutionWorkflow = workflow.define({
                   taskDescription: data.taskDescription,
                   rootDirectory: data.rootDirectory,
                   changeRequests,
+                  relatedPrs,
                 },
                 PR_STEP_RETRY,
               );
