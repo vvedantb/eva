@@ -201,7 +201,7 @@ describe("projectTaskFacts", () => {
       repos,
       [pr("r1", "web", 12), pr("r2", "api", 7)],
     );
-    expect(facts.text).toBe("Blocked · Docs site");
+    expect(facts.text).toBe("In review · Docs site");
     expect(facts.prs.map((row) => row.label)).toEqual(["web #12", "api #7"]);
   });
 
