@@ -1,22 +1,66 @@
-import { ActivityQuestionCard } from "@vvedantb/ui";
+import { useState } from "react";
+import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
+import { ActivityQuestionCard, Button } from "@vvedantb/ui";
 import type { ActivityStep } from "@vvedantb/ui";
 
 /**
- * Read-only record of the AskUserQuestion prompts this turn asked, and what the
- * user chose. Rendered in the message body (not the activity fold) because the
- * options and the answer are user-facing content, not tooling detail.
+ * Read-only record of one AskUserQuestion prompt and what the user chose. A
+ * prompt with several questions shows one at a time, paged with back / next
+ * arrows and an "n/total" count, like the live dock.
+ */
+export function AssistantQuestionRecord({ step }: { step: ActivityStep }) {
+  const questions = step.questions ?? [];
+  const [index, setIndex] = useState(0);
+  const current = questions[index];
+  if (!current) return null;
+  const total = questions.length;
+  return (
+    <div className="my-2 rounded-surface bg-card">
+      <ActivityQuestionCard
+        questions={[current]}
+        {...(step.answers ? { answers: step.answers } : {})}
+      />
+      {total > 1 ? (
+        <div className="flex items-center justify-end gap-1 px-3 pb-2">
+          <span className="mr-1 text-2xs font-medium tabular-nums text-muted-foreground">
+            {index + 1}/{total}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Previous question"
+            disabled={index === 0}
+            onClick={() => setIndex(index - 1)}
+          >
+            <IconChevronLeft size={14} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Next question"
+            disabled={index === total - 1}
+            onClick={() => setIndex(index + 1)}
+          >
+            <IconChevronRight size={14} />
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Every answered prompt of a turn, for surfaces with no step timeline to
+ * place them in (the coordinator bubble, simple view). Rendered in the
+ * message body because the options and answer are user-facing content.
  */
 export function AssistantQuestionCards({ steps }: { steps: ActivityStep[] }) {
   if (steps.length === 0) return null;
   return (
-    <div className="my-2 space-y-2">
+    <>
       {steps.map((step, index) => (
-        <ActivityQuestionCard
-          key={step.toolUseId ?? index}
-          questions={step.questions ?? []}
-          {...(step.answers ? { answers: step.answers } : {})}
-        />
+        <AssistantQuestionRecord key={step.toolUseId ?? index} step={step} />
       ))}
-    </div>
+    </>
   );
 }

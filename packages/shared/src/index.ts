@@ -454,5 +454,7 @@ export {
   collectQuestionSteps,
   getSessionReadOnlyMessage,
   isSandboxLifecycleAlert,
+  splitStepsAtQuestions,
   visibleChatMessages,
 } from "./chatRows";
+export type { QuestionSplitChunk } from "./chatRows";
