@@ -17,7 +17,9 @@ import { authQuery, authMutation } from "./functions";
 import { schedulePush } from "./push";
 import {
   notificationEmail,
+  notificationEmailFor,
   notificationPushes,
+  resolveNotificationPrefs,
   type RoutableNotification,
 } from "@eva/shared/notificationRouting";
 
@@ -189,15 +191,35 @@ export async function createNotification(
   // Instant-email types get one after a debounce. The send is skipped if the
   // user reads it in-app first (see notificationEmail.ts).
   if (notificationEmail(routable) === "instant") {
-    await ctx.scheduler.runAfter(
+    await scheduleInstantEmail(
+      ctx,
+      params.userId,
       params.urgency === "high"
         ? HIGH_URGENCY_EMAIL_DELAY_MS
         : EMAIL_SEND_DELAY_MS,
-      internal.notificationEmail.sendUnreadForUser,
-      { userId: params.userId },
     );
   }
   return notificationId;
+}
+
+/**
+ * Queues the instant email sweep, unless the person chose the digest or no
+ * email. The sweep checks the choice again at send time.
+ */
+async function scheduleInstantEmail(
+  ctx: MutationCtx,
+  userId: Id<"users">,
+  delayMs: number,
+): Promise<void> {
+  const user = await ctx.db.get(userId);
+  if (!resolveNotificationPrefs(user?.notificationPrefs).email) {
+    return;
+  }
+  await ctx.scheduler.runAfter(
+    delayMs,
+    internal.notificationEmail.sendUnreadForUser,
+    { userId },
+  );
 }
 
 /** Pushes one notification row to the user's phone, opening its chat or the screen its link names. */
@@ -333,10 +355,10 @@ async function deliverRoutedMention(
     await pushNotification(ctx, notification._id);
   }
   if (notificationEmail(routed) === "instant") {
-    await ctx.scheduler.runAfter(
+    await scheduleInstantEmail(
+      ctx,
+      notification.userId,
       HIGH_URGENCY_EMAIL_DELAY_MS,
-      internal.notificationEmail.sendUnreadForUser,
-      { userId: notification.userId },
     );
   }
 }
@@ -541,10 +563,10 @@ export const unarchiveMany = authMutation({
 });
 
 /**
- * Gathers digest recipients for the daily email: every user with an email address
- * and at least one unread, not yet emailed notification created since `since`
- * (`digestWindowStart`), along with up to DIGEST_NOTIFICATION_LIMIT of those
- * notifications. Internal use only (daily cron).
+ * Gathers digest recipients for the daily email: every user with an email
+ * address, email not turned off, and at least one unread, not yet emailed
+ * notification created since `since` (`digestWindowStart`), along with up to
+ * DIGEST_NOTIFICATION_LIMIT of those notifications. Internal use only (daily cron).
  */
 export const getDigestRecipients = internalQuery({
   args: { since: v.number() },
@@ -570,7 +592,8 @@ export const getDigestRecipients = internalQuery({
     const recipients = [];
     for (const user of users) {
       if (!user.email) continue;
-      if (user.emailNotificationsEnabled !== true) continue;
+      const { email } = resolveNotificationPrefs(user.notificationPrefs);
+      if (!email) continue;
       const unread = await ctx.db
         .query("notifications")
         .withIndex("by_user_and_read", (q) =>
@@ -583,7 +606,7 @@ export const getDigestRecipients = internalQuery({
           (n) =>
             n.createdAt >= args.since &&
             n.emailedAt === undefined &&
-            notificationEmail(n) !== "none",
+            notificationEmailFor(n, email) !== "none",
         )
         .slice(0, DIGEST_NOTIFICATION_LIMIT);
       if (relevant.length === 0) continue;
@@ -607,9 +630,9 @@ export const getDigestRecipients = internalQuery({
 
 /**
  * For an instant notification email: returns the user's unread, not-yet-emailed,
- * high-signal notifications (or null if there is nothing to send — user opted
- * out, has no email, or has already read/been emailed everything). Sweeping all
- * pending items lets a burst within the debounce window collapse into one email.
+ * high-signal notifications (or null if there is nothing to send — the user
+ * chose the digest or no email, has no address, or has read or been emailed
+ * everything). Sweeping all pending items lets a burst within the debounce window collapse into one email.
  * Internal use only (notificationEmail.sendUnreadForUser).
  */
 export const getUnreadEmailableForUser = internalQuery({
@@ -635,7 +658,7 @@ export const getUnreadEmailableForUser = internalQuery({
   handler: async (ctx, args) => {
     const user = await ctx.db.get(args.userId);
     if (!user || !user.email) return null;
-    if (user.emailNotificationsEnabled !== true) return null;
+    const { email } = resolveNotificationPrefs(user.notificationPrefs);
 
     const unread = await ctx.db
       .query("notifications")
@@ -647,7 +670,8 @@ export const getUnreadEmailableForUser = internalQuery({
     // A digested row carries `emailedAt` too, so it is never sent again here.
     const relevant = unread.filter(
       (n) =>
-        n.emailedAt === undefined && notificationEmail(n) === "instant",
+        n.emailedAt === undefined &&
+        notificationEmailFor(n, email) === "instant",
     );
     if (relevant.length === 0) return null;
 

@@ -37,7 +37,6 @@ async function fixture() {
       clerkId: CLERK_ID,
       email: "ada@example.com",
       fullName: "Ada Lovelace",
-      emailNotificationsEnabled: true,
     });
     const mention = (title: string, urgency: Urgency | undefined) =>
       ctx.db.insert("notifications", {

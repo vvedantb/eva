@@ -465,6 +465,19 @@ export const notificationUrgencyValidator = v.union(
   v.literal("high"),
 );
 
+/** A person's notification channels. Sparse: a missing key is the default. */
+export const notificationPrefsValidator = v.object({
+  /**
+   * Notification email: urgent ones at once, the rest in the daily digest.
+   * Unset means on.
+   */
+  email: v.optional(v.boolean()),
+  /** Phone push. Unset means on. */
+  push: v.optional(v.boolean()),
+  /** "What's new in Eva" changelog emails. Opt-in: unset means off. */
+  productUpdates: v.optional(v.boolean()),
+});
+
 export const presentationStatusValidator = v.union(
   v.literal("live"),
   v.literal("ended"),

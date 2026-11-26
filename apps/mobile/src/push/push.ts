@@ -1,6 +1,8 @@
 import { api } from "@eva/backend";
 import { getExpoPushToken, useExpoPushRegistration } from "@vvedantb/native-ui/push";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
+import { setBadgeCountAsync } from "expo-notifications";
+import { useEffect } from "react";
 import { openAppLink } from "@/push/openLink";
 
 /** The Expo push token for this device, or null when push is not possible. */
@@ -32,4 +34,21 @@ export function usePush() {
       });
     },
   });
+}
+
+/**
+ * The app-icon badge is the Needs you count, as the web tab and favicon
+ * (`needsYou.list`). An effect, because the badge is outside React. It
+ * updates while the app runs; some Android launchers show no number.
+ */
+export function useAppBadge() {
+  const count = useQuery(api.needsYou.list, {})?.length;
+  useEffect(() => {
+    if (count !== undefined) void setBadgeCountAsync(count);
+  }, [count]);
+}
+
+/** Clears the badge on sign-out, so the next account does not see this one's count. */
+export async function clearAppBadge(): Promise<void> {
+  await setBadgeCountAsync(0);
 }

@@ -163,6 +163,44 @@ export function notificationEmail(
   return NOTIFICATION_ROUTES[notification.type].email;
 }
 
+type StoredNotificationPrefs = Doc<"users">["notificationPrefs"];
+
+/** A person's notification channels with the defaults filled in. */
+export type NotificationPrefs = {
+  /** Notification email on (urgent at once, the rest in the digest). */
+  email: boolean;
+  push: boolean;
+  /** The changelog broadcast, apart from notifications: opt-in. */
+  productUpdates: boolean;
+};
+
+/**
+ * The stored choices with defaults: notification email on (decision 3, plan
+ * `notifications-v2-5.md`), push on, product updates off (opt-in: product
+ * news, not your own work). Desktop pop-ups are per device
+ * (web `desktopNotifications.ts`), not stored here.
+ */
+export function resolveNotificationPrefs(
+  prefs: StoredNotificationPrefs,
+): NotificationPrefs {
+  return {
+    email: prefs?.email ?? true,
+    push: prefs?.push ?? true,
+    productUpdates: prefs?.productUpdates ?? false,
+  };
+}
+
+/**
+ * How a notification is emailed to a person: as its route says (at once or
+ * in the digest) with notification email on, never with it off.
+ */
+export function notificationEmailFor(
+  notification: RoutableNotification,
+  emailOn: boolean,
+): NotificationEmail {
+  return emailOn ? notificationEmail(notification) : "none";
+}
+
 /**
  * Whether an unread, unarchived row is an Inbox → Needs you question: a
  * mention or routed question, or an agent message (`notify_user`) about a
