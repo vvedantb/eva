@@ -170,7 +170,9 @@ export function ChatTabStrip({
   return (
     <div
       className={cn(
-        "flex shrink-0 items-center gap-1 overflow-x-auto px-2 pb-1.5 scrollbar-thin",
+        // min-w-0: in a narrow chat column the row scrolls instead of
+        // spilling under the panel beside it.
+        "flex min-w-0 max-w-full shrink-0 items-center gap-1 overflow-x-auto px-2 pb-1.5 scrollbar-thin",
         className,
       )}
       role="tablist"
@@ -220,6 +222,15 @@ export function ChatTab({
         role="tab"
         aria-selected={selected}
         title={hint}
+        // The selected tab scrolls into view (a tab just opened at the end
+        // of a long row).
+        ref={
+          selected
+            ? (el) => {
+                el?.scrollIntoView({ block: "nearest", inline: "nearest" });
+              }
+            : undefined
+        }
         className={cn(
           "motion-press flex h-full min-w-20 max-w-48 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium active:scale-[0.96]",
           onClose ? "pr-1" : undefined,
