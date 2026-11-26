@@ -26,11 +26,9 @@ import {
   ProjectSelectField,
   ReviewerSelectField,
   StatusSelectField,
+  type TaskDeploymentStatus,
 } from "./StatusFieldsControls";
 
-type RunDoc = NonNullable<
-  FunctionReturnType<typeof api.agentRuns.listByTask>
->[number];
 
 interface StatusFieldsSectionProps {
   taskId: Id<"agentTasks">;
@@ -41,7 +39,7 @@ interface StatusFieldsSectionProps {
   /** Derived from the task row, not mirrored state — see `useTaskDetail`. */
   baseBranch: string;
   /** Status row is shown behind the `viewVercelDeployment` experimental flag. */
-  latestDeployment: RunDoc | undefined;
+  deploymentStatus: TaskDeploymentStatus;
   /** Locks the model picker — the model that ran must stay on the record. */
   hasRuns: boolean;
   /** Only the task owner can move it onto their own provider account. */
@@ -58,7 +56,7 @@ export function StatusFieldsSection({
   users,
   projects,
   baseBranch,
-  latestDeployment,
+  deploymentStatus,
   hasRuns,
   isOwner,
   allTags,
@@ -192,7 +190,7 @@ export function StatusFieldsSection({
 
         <DeploymentRow
           viewVercelDeployment={viewVercelDeployment}
-          latestDeployment={latestDeployment}
+          deploymentStatus={deploymentStatus}
         />
       </FieldsSection>
 

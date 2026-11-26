@@ -192,12 +192,12 @@ function TaskOverview({
 }) {
   const users = useQuery(api.users.listAll, {});
   const projects = useQuery(api.projects.list, { repoId: repo._id });
-  const runs = useQuery(api.agentRuns.listByTask, { taskId: task._id });
-  const hasActiveRun =
-    runs?.some((run) => run.status === "queued" || run.status === "running") ??
-    false;
+  // One read for both task kinds, as on the web (`useTaskDetail`).
+  const runFacts = useQuery(api.agentTasks.getRunFacts, { taskId: task._id });
+  const hasActiveRun = runFacts?.hasActiveRun ?? false;
+  const hasRuns = runFacts?.hasRuns ?? false;
   // The web page's sandbox and git actions, leading the "…" sheet.
-  const git = useTaskGitActions({ task, runCount: runs?.length ?? 0, hasActiveRun });
+  const git = useTaskGitActions({ task, hasRuns, hasActiveRun });
   // A project archives with its tasks, so its task is read-only too.
   const project = useQuery(api.projects.get, task.projectId ? { id: task.projectId } : "skip");
   const archived = task.archivedAt !== undefined;
@@ -218,7 +218,7 @@ function TaskOverview({
   const updateTask = useMutation(api.agentTasks.update);
   const reactionsFor = useTaskReactions(task._id, users, currentUserId);
 
-  const editable = !readOnly && runs !== undefined && canEditTaskText(task.status, hasActiveRun);
+  const editable = !readOnly && runFacts !== undefined && canEditTaskText(task.status, hasActiveRun);
   const update: UpdateTask = (fields, failure) => {
     updateTask({ id: task._id, ...fields }).catch(() => toast.error(failure));
   };
@@ -268,7 +268,7 @@ function TaskOverview({
           title={task.title}
           editable={editable}
           lockReason={
-            runs === undefined
+            runFacts === undefined
               ? undefined
               : taskTextLockReason(hasActiveRun, "Title")
           }
@@ -380,7 +380,7 @@ function TaskOverview({
         }
         onRemove={() => writeSchedule(cancelSchedule({ id: task._id }), "Schedule removed", "Couldn't remove schedule")}
       />
-      <TaskDock onSchedule={() => setScheduling(true)} task={task} runs={runs} hasActiveRun={hasActiveRun} />
+      <TaskDock onSchedule={() => setScheduling(true)} task={task} hasRuns={runFacts?.hasRuns} hasActiveRun={hasActiveRun} />
 
       {actions.dialogs}
       {git.dialogs}
@@ -889,14 +889,15 @@ function CommentComposer({
  */
 function TaskDock({
   task,
-  runs,
+  hasRuns,
   hasActiveRun,
   onSchedule,
 }: {
   /** The web Run button's schedule half: pick a time for the run instead. */
   onSchedule: () => void;
   task: QuickTask;
-  runs: FunctionReturnType<typeof api.agentRuns.listByTask> | undefined;
+  /** Undefined while the run facts load. */
+  hasRuns: boolean | undefined;
   hasActiveRun: boolean;
 }) {
   const router = useRouter();
@@ -907,8 +908,8 @@ function TaskDock({
   const canRun =
     task.projectId === undefined &&
     task.archivedAt === undefined &&
-    runs !== undefined &&
-    ((task.status === "todo" && runs.length === 0) ||
+    hasRuns !== undefined &&
+    ((task.status === "todo" && !hasRuns) ||
       (task.status === "in_progress" && !hasActiveRun));
   const unread = task.hasUnread && !task.isExecuting;
   const run = async () => {

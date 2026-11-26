@@ -7,7 +7,9 @@ import type { Id } from "../convex/_generated/dataModel";
 import { modules } from "./_helpers/convexModules";
 
 /**
- * A task run is a turn in its task's Main chat (`_taskWorkflow/runChatTurn.ts`):
+ * A project task's run is a turn in its task's Main chat
+ * (`_taskWorkflow/runChatTurn.ts`; a quick task's run is a task-mode chat
+ * turn instead, `quickTaskRun.test.ts`):
  * starting it writes the prompt and an empty reply, the chat reports it as
  * its open turn, and every terminal path settles the reply once. Fake timers
  * keep the run's workflow and sandbox steps queued.
@@ -29,8 +31,17 @@ async function fixture() {
       installationId: 1,
       connectedBy: userId,
     });
+    const projectId = await ctx.db.insert("projects", {
+      repoId,
+      userId,
+      title: "Flags",
+      rawInput: "Flags",
+      numId: 1,
+    });
     const taskId = await ctx.db.insert("agentTasks", {
       repoId,
+      projectId,
+      taskNumber: 1,
       title: "Clean up the flag",
       description: "Remove the never events flag.",
       status: "todo",
@@ -75,7 +86,7 @@ async function fixture() {
   return { t, ids, asUser, startRun, rows };
 }
 
-describe("a task run is a turn in its task's chat", () => {
+describe("a project task's run is a turn in its task's chat", () => {
   beforeEach(() => {
     vi.useFakeTimers();
   });

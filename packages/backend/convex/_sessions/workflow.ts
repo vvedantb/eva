@@ -314,6 +314,15 @@ export const sessionExecuteWorkflow = workflow.define({
         sandboxId,
         branchName: data.branchName,
       });
+      // A sandbox made here skipped the startup workflow, which clones the
+      // linked repos (a task's first run can land here).
+      if ((data.linkedRepoCount ?? 0) > 0) {
+        await prepareLinkedRepoSteps(step, {
+          sessionId,
+          sandboxId,
+          repoId: data.repoId,
+        });
+      }
     }
 
     if (sandboxId === null) {

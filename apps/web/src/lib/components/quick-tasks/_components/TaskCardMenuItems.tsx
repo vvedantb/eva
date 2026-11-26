@@ -134,10 +134,11 @@ export function TaskCardMenuItems({
   );
   const startExecution = useMutation(api.agentTasks.startExecution);
 
-  // A card only needs runs and PRs once the menu is open — Radix mounts menu
-  // content on demand, so these stay per opened menu rather than per card on
-  // the board. PRs come primary first; a project task links its project's.
-  const runs = useQuery(api.agentRuns.listByTask, { taskId: id });
+  // A card only needs run facts and PRs once the menu is open — Radix mounts
+  // menu content on demand, so these stay per opened menu rather than per
+  // card on the board. PRs come primary first; a project task links its
+  // project's.
+  const runFacts = useQuery(api.agentTasks.getRunFacts, { taskId: id });
   const taskPrs = useOwnerPullRequests({ kind: "task", taskId: id });
   // A project task without PRs of its own links its project's, which is a bare
   // URL here: the project's rows are not loaded on a task card.
@@ -150,7 +151,7 @@ export function TaskCardMenuItems({
 
   // Mirrors `showRunButton` in `TaskFooter`: `todo` only offers a first run.
   const canRun =
-    (status === "todo" && runs !== undefined && runs.length === 0) ||
+    (status === "todo" && runFacts?.hasRuns === false) ||
     status === "in_progress";
   const StatusIcon = statusConfig[status].icon;
 

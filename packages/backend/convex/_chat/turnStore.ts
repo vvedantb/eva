@@ -1,3 +1,7 @@
+import {
+  onTaskRunTurnClosed,
+  onTaskRunTurnOpened,
+} from "../_agentTasks/taskRunStatus";
 import { TURN_BACKSTOP_ERROR } from "@eva/shared/agentTurnLimits";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -137,6 +141,8 @@ type OpenTurnFields = {
   placeholderMessageId?: Id<"messages">;
   /** Chat turns only: the thread root this turn answers in. */
   replyTo?: Id<"messages">;
+  /** Chat turns only: this turn runs its task (`taskRunTurn.ts`). */
+  taskRun?: Doc<"turns">["taskRun"];
   prompt?: string;
   attachmentStorageIds?: Id<"_storage">[];
   model: Doc<"turns">["model"];
@@ -185,6 +191,7 @@ export async function openTurn(
     model: params.model,
     sandboxId: params.sandboxId,
     repoId: params.repoId,
+    taskRun: params.taskRun,
   });
 }
 
@@ -201,7 +208,10 @@ export async function openSessionChatTurn(
   },
 ): Promise<Id<"turns">> {
   const { chatId, sessionId, ...turn } = params;
-  return await openTurn(ctx, { ...turn, entityId: chatId, sessionId });
+  const turnId = await openTurn(ctx, { ...turn, entityId: chatId, sessionId });
+  // A quick task's run moves its card when its turn starts, as when it ends.
+  if (turn.taskRun !== undefined) await onTaskRunTurnOpened(ctx, sessionId);
+  return turnId;
 }
 
 /**
@@ -472,6 +482,10 @@ export async function closeTurn(
     finishedAt,
     ...(patch.error !== undefined ? { error: patch.error } : {}),
   });
+  // A quick task's run moves its card when its turn ends, however it ends.
+  if (current.taskRun !== undefined) {
+    await onTaskRunTurnClosed(ctx, current, state);
+  }
   // The unread watermark read by `chatReads.ts`: chat turns, and task runs,
   // which reply in the chat they stream into. One-shot lanes (summary,
   // interview) are not replies, and their owner rows have no such field.

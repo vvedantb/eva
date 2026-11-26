@@ -1,5 +1,17 @@
 import type { Id } from "../_generated/dataModel";
-import type { MutationCtx } from "../_generated/server";
+import type { DatabaseReader, MutationCtx } from "../_generated/server";
+
+/** Whether the task has ever run: its summary records every run's start. */
+export async function taskHasRun(
+  db: DatabaseReader,
+  taskId: Id<"agentTasks">,
+): Promise<boolean> {
+  const summary = await db
+    .query("agentTaskRunSummaries")
+    .withIndex("by_task", (q) => q.eq("taskId", taskId))
+    .unique();
+  return summary?.lastRunStartedAt !== undefined;
+}
 
 /** Inserts the no-runs sentinel row for a newly created task. */
 export async function createTaskRunSummary(

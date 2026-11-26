@@ -666,6 +666,7 @@ const sessionChatQueueConfig: ChatQueueConfig<
       reasoningLevel: next.reasoningLevel,
       orchestratorNotification: next.orchestratorNotification,
       sentViaOrchestrator: next.sentViaOrchestrator,
+      taskRun: next.taskRun,
     });
   },
   startWorkflow: async (ctx, id, { session, chat }, next, prepared) => {
@@ -692,6 +693,7 @@ const sessionChatQueueConfig: ChatQueueConfig<
       sandboxId: session.sandboxId,
       repoId: session.repoId,
       replyTo: next.replyTo,
+      taskRun: next.taskRun,
     });
     // Normalised, not forwarded raw: the composer enqueues model defaults
     // explicitly (e.g. reasoning "high"), and the workflow feeds these

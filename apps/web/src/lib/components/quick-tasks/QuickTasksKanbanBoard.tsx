@@ -80,20 +80,6 @@ export function QuickTasksKanbanBoard({
     taskIds,
   });
   const errorTaskIdSet = new Set(errorTaskIds ?? []);
-  const deploymentStatuses = useQuery(
-    api.agentRuns.getLatestDeploymentStatuses,
-    {
-      repoId,
-      taskIds,
-    },
-  );
-  const deploymentStatusMap = new Map<
-    string,
-    "queued" | "building" | "deployed" | "error"
-  >();
-  for (const entry of deploymentStatuses ?? []) {
-    deploymentStatusMap.set(entry.taskId, entry.deploymentStatus);
-  }
 
   // Shift-click spans one column. `KanbanBoard` groups by status in `tasks`
   // order, so grouping the same way here reproduces each column's visible order.
@@ -200,7 +186,6 @@ export function QuickTasksKanbanBoard({
             priority={task.priority}
             numId={task.numId}
             hasError={errorTaskIdSet.has(task._id)}
-            deploymentStatus={deploymentStatusMap.get(task._id)}
             sandboxStatus={task.sandboxStatus}
             scheduledAt={taskScheduledAt(task)}
             tags={task.tags}
@@ -252,7 +237,6 @@ export function QuickTasksKanbanBoard({
             priority={task.priority}
             numId={task.numId}
             hasError={errorTaskIdSet.has(task._id)}
-            deploymentStatus={deploymentStatusMap.get(task._id)}
             sandboxStatus={task.sandboxStatus}
             scheduledAt={taskScheduledAt(task)}
             tags={task.tags}

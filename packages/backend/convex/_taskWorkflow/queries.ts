@@ -81,6 +81,146 @@ async function listSessionRepos(
     .collect();
 }
 
+/** Resolves `@` mention tokens in text an agent prompt carries. */
+async function resolveTextForPrompt(
+  ctx: QueryCtx,
+  text: string | undefined,
+  repoId: Id<"githubRepos">,
+): Promise<string | undefined> {
+  const trimmed = text?.trim();
+  if (!trimmed) return undefined;
+  const { resolvedMessage, prefixBlock } = await resolveMessageTokens(
+    ctx,
+    trimmed,
+    repoId,
+  );
+  return prefixBlock ? `${prefixBlock}\n\n${resolvedMessage}` : resolvedMessage;
+}
+
+/**
+ * The agent prompt for a task run: the implementation steps with the
+ * reviewer comments added after `commentsSince`, or the merge-conflict
+ * steps. Shared by a project task's run (`getTaskData`) and a quick task's
+ * task-mode chat turn (`_agentTasks/taskRunTurn.ts`), so both get the same
+ * instructions.
+ */
+export async function buildTaskRunPrompt(
+  ctx: QueryCtx,
+  p: {
+    task: Doc<"agentTasks">;
+    repo: Doc<"githubRepos">;
+    mode: Doc<"agentRuns">["mode"];
+    branchName: string;
+    /** Comments before this were handled by an earlier run. */
+    commentsSince: number | undefined;
+    previousRunSummary?: string;
+    projectContext?: { title: string; description?: string };
+    linkedRepoRows: ReadonlyArray<Doc<"sessionRepos">>;
+  },
+): Promise<{ prompt: string; resolvedTaskDescription: string | undefined }> {
+  const { task, repo, branchName } = p;
+  const rootDirectory = repo.rootDirectory ?? "";
+  const resolvedTaskDescription = await resolveTextForPrompt(
+    ctx,
+    task.description ?? undefined,
+    repo._id,
+  );
+  if (p.mode === "resolve_conflicts") {
+    return {
+      prompt: buildConflictResolutionPrompt(
+        branchName,
+        resolveTaskWorkflowBaseBranch(task, repo),
+        rootDirectory,
+        repo.owner,
+        repo.name,
+        repo.systemPrompt,
+      ),
+      resolvedTaskDescription,
+    };
+  }
+  const comments = await ctx.db
+    .query("taskComments")
+    .withIndex("by_task", (q) => q.eq("taskId", task._id))
+    .collect();
+  const commentsSince = p.commentsSince;
+  const sortedComments = comments
+    .filter((c) => commentsSince === undefined || c.createdAt > commentsSince)
+    .sort((a, b) => a.createdAt - b.createdAt);
+
+  // Resolve author names once for the comments we are about to surface.
+  const uniqueAuthorIds = [
+    ...new Set(
+      sortedComments
+        .map((c) => c.authorId)
+        .filter((id): id is Id<"users"> => id !== undefined),
+    ),
+  ];
+  const authors = await Promise.all(
+    uniqueAuthorIds.map((id) => ctx.db.get(id)),
+  );
+  const authorNameById = new Map<string, string>();
+  uniqueAuthorIds.forEach((id, index) => {
+    authorNameById.set(id, userDisplayName(authors[index]));
+  });
+
+  // Resolve any `@` mention tokens (matching how the task description is
+  // prepared), then keep the raw resolved text for the commit subject
+  // separate from the author/date-annotated text shown to the agent — the
+  // annotation must not leak into the edit commit message.
+  const changeRequests = await Promise.all(
+    sortedComments.map(async (c) => {
+      const author = c.authorId
+        ? (authorNameById.get(c.authorId) ?? "Reviewer")
+        : "Reviewer";
+      const resolved =
+        (await resolveTextForPrompt(ctx, c.content, repo._id)) ?? c.content;
+      return {
+        commitText: resolved,
+        promptText: `[${author} · ${formatCommentDate(c.createdAt)}] ${resolved}`,
+      };
+    }),
+  );
+
+  // Sibling repositories this sandbox's git credentials can read (owner is
+  // the task owner, whose access the credential helper mints tokens against).
+  const readableRepos = await listReadableSiblingRepos(
+    ctx.db,
+    task.createdBy,
+    repo._id,
+  );
+  const prompt =
+    buildImplementationPrompt(
+      {
+        title: task.title,
+        description: resolvedTaskDescription,
+        taskNumber: task.taskNumber,
+      },
+      branchName,
+      task.projectId === undefined,
+      rootDirectory,
+      repo.owner,
+      repo.name,
+      changeRequests.length > 0 ? changeRequests : undefined,
+      p.projectContext,
+      repo.systemPrompt,
+      p.previousRunSummary,
+      readableRepos,
+      repo.agentMemoryEnabled === true,
+    ) +
+    buildLinkedReposSection(
+      { owner: repo.owner, name: repo.name, branchName },
+      p.linkedRepoRows.map((row) => ({
+        owner: row.owner,
+        name: row.name,
+        path: row.path,
+        branchName: row.branchName,
+        baseBranch: row.baseBranch,
+      })),
+      task.title.slice(0, 50).replace(/"/g, '\\"'),
+    );
+  return { prompt, resolvedTaskDescription };
+}
+
 /** Fetches task and repo config to build the prompt and sandbox parameters for a run. */
 export const getTaskData = internalQuery({
   args: {
@@ -121,13 +261,9 @@ export const getTaskData = internalQuery({
     hasLinkedRepos: v.boolean(),
   }),
   handler: async (ctx, args) => {
-    const [task, repo, comments, successfulRuns, linkedRepoRows] = await Promise.all([
+    const [task, repo, successfulRuns, linkedRepoRows] = await Promise.all([
       ctx.db.get(args.taskId),
       ctx.db.get(args.repoId),
-      ctx.db
-        .query("taskComments")
-        .withIndex("by_task", (q) => q.eq("taskId", args.taskId))
-        .collect(),
       // Only surface comments the last successful run hasn't already
       // addressed (see the cutoff below).
       ctx.db
@@ -141,22 +277,6 @@ export const getTaskData = internalQuery({
     if (!task) throw new Error("Task not found");
     if (!repo) throw new Error("Repository not found");
 
-    const resolveDescriptionForPrompt = async (
-      text: string | undefined,
-    ): Promise<string | undefined> => {
-      const trimmed = text?.trim();
-      if (!trimmed) return undefined;
-      const { resolvedMessage, prefixBlock } = await resolveMessageTokens(
-        ctx,
-        trimmed,
-        args.repoId,
-      );
-      if (prefixBlock) {
-        return `${prefixBlock}\n\n${resolvedMessage}`;
-      }
-      return resolvedMessage;
-    };
-
     let projectContext: { title: string; description?: string } | undefined;
     // A child task's run carries the same project half its chat turns do:
     // its place in the project and the brief.
@@ -166,8 +286,10 @@ export const getTaskData = internalQuery({
       if (project) {
         projectContext = {
           title: project.title,
-          description: await resolveDescriptionForPrompt(
+          description: await resolveTextForPrompt(
+            ctx,
             project.description ?? undefined,
+            args.repoId,
           ),
         };
         projectBlock = await childTaskProjectBlock(ctx, project);
@@ -179,10 +301,6 @@ export const getTaskData = internalQuery({
     // The run streams into its chat turn (`openRunChatTurn`).
     const streamingEntityId = run && (await runStreamingEntityId(ctx.db, run));
     if (!streamingEntityId) throw new Error("Task run has no chat turn");
-
-    const resolvedTaskDescription = await resolveDescriptionForPrompt(
-      task.description ?? undefined,
-    );
 
     // Only surface comments the last successful run hasn't already addressed,
     // so subsequent "Make changes" runs focus on NEW feedback. Cutoff is the
@@ -203,105 +321,20 @@ export const getTaskData = internalQuery({
       },
       null,
     );
-    const latestSuccessStartedAt = latestSuccessfulRun?.startedAt;
-    // Surface what the last successful run accomplished so a "Make changes"
-    // re-run has continuity instead of rediscovering prior work from scratch.
-    const previousRunSummary =
-      latestSuccessfulRun?.resultSummary?.trim() || undefined;
-    const relevantComments =
-      latestSuccessStartedAt !== undefined
-        ? comments.filter((c) => c.createdAt > latestSuccessStartedAt)
-        : comments;
-
-    const sortedComments = relevantComments.sort(
-      (a, b) => a.createdAt - b.createdAt,
-    );
-
-    // Resolve author names once for the comments we are about to surface.
-    const uniqueAuthorIds = [
-      ...new Set(
-        sortedComments
-          .map((c) => c.authorId)
-          .filter((id): id is Id<"users"> => id !== undefined),
-      ),
-    ];
-    const authors = await Promise.all(
-      uniqueAuthorIds.map((id) => ctx.db.get(id)),
-    );
-    const authorNameById = new Map<string, string>();
-    uniqueAuthorIds.forEach((id, index) => {
-      authorNameById.set(id, userDisplayName(authors[index]));
-    });
-
-    // Resolve any `@` mention tokens (matching how the task description is
-    // prepared), then keep the raw resolved text for the commit subject
-    // separate from the author/date-annotated text shown to the agent — the
-    // annotation must not leak into the edit commit message.
-    const changeRequests = await Promise.all(
-      sortedComments.map(async (c) => {
-        const author = c.authorId
-          ? (authorNameById.get(c.authorId) ?? "Reviewer")
-          : "Reviewer";
-        const resolved =
-          (await resolveDescriptionForPrompt(c.content)) ?? c.content;
-        return {
-          commitText: resolved,
-          promptText: `[${author} · ${formatCommentDate(c.createdAt)}] ${resolved}`,
-        };
-      }),
-    );
-
     const branchName = args.branchName || taskBranchName(task);
-
     const rootDirectory = repo.rootDirectory ?? "";
-
-    // Sibling repositories this sandbox's git credentials can read (owner is
-    // the task owner, whose access the credential helper mints tokens against).
-    const readableRepos = await listReadableSiblingRepos(
-      ctx.db,
-      task.createdBy,
-      repo._id,
-    );
-
-    const prompt =
-      args.mode === "resolve_conflicts"
-        ? buildConflictResolutionPrompt(
-            branchName,
-            resolveTaskWorkflowBaseBranch(task, repo),
-            rootDirectory,
-            repo.owner,
-            repo.name,
-            repo.systemPrompt,
-          )
-        : buildImplementationPrompt(
-            {
-              title: task.title,
-              description: resolvedTaskDescription,
-              taskNumber: task.taskNumber,
-            },
-            branchName,
-            !args.projectId,
-            rootDirectory,
-            repo.owner,
-            repo.name,
-            changeRequests.length > 0 ? changeRequests : undefined,
-            projectContext,
-            repo.systemPrompt,
-            previousRunSummary,
-            readableRepos,
-            repo.agentMemoryEnabled === true,
-          ) +
-          buildLinkedReposSection(
-            { owner: repo.owner, name: repo.name, branchName },
-            linkedRepoRows.map((row) => ({
-              owner: row.owner,
-              name: row.name,
-              path: row.path,
-              branchName: row.branchName,
-              baseBranch: row.baseBranch,
-            })),
-            task.title.slice(0, 50).replace(/"/g, '\\"'),
-          );
+    const { prompt, resolvedTaskDescription } = await buildTaskRunPrompt(ctx, {
+      task,
+      repo,
+      mode: args.mode,
+      branchName,
+      commentsSince: latestSuccessfulRun?.startedAt,
+      // Continuity for a "Make changes" re-run: what the last success did.
+      previousRunSummary:
+        latestSuccessfulRun?.resultSummary?.trim() || undefined,
+      projectContext,
+      linkedRepoRows,
+    });
 
     return {
       prompt: [prompt, projectBlock, runNote]
@@ -397,7 +430,9 @@ export const getTaskPrCreationData = internalQuery({
       projectId: task.projectId,
       isQuickTask: task.projectId === undefined,
       taskStatus: task.status,
-      latestRunId: latestRun ? latestRun._id : null,
+      // A quick task's runs are chat turns: its PR names no run.
+      latestRunId:
+        latestRun && task.projectId !== undefined ? latestRun._id : null,
       existingPrUrl: livePr?.prUrl ?? null,
       changeRequests,
       relatedPrs,

@@ -115,14 +115,27 @@ describe("needsYou.list", () => {
         numId: 3,
         createdBy: userId,
       });
-      await ctx.db.insert("agentRuns", {
-        taskId: failedId,
+      // Its run is a task-mode turn in its own session's chat.
+      const failedSessionId = await ctx.db.insert("sessions", {
+        owner: { kind: "task", taskId: failedId },
         repoId,
-        status: "error",
-        logs: [],
-        startedAt: 1,
+        userId,
+        title: "Seed script",
+        status: "closed",
+      });
+      await ctx.db.insert("turns", {
+        entityId: failedSessionId,
+        sessionId: failedSessionId,
+        streamingEntityId: String(failedSessionId),
+        state: "error",
+        open: false,
+        turnStartedAt: 1,
         finishedAt: 2,
-        error: "Tests failed",
+        leaseExpiresAt: 2,
+        leaseGeneration: 1,
+        model: "claude:opus",
+        repoId,
+        taskRun: { mode: "implementation" },
       });
       // Someone else's quick task with an open PR: not the caller's to review.
       await ctx.db.insert("agentTasks", {

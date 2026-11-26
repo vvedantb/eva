@@ -61,7 +61,6 @@ type GroupedCodebase = FunctionReturnType<
 type User = FunctionReturnType<typeof api.users.listAll>[number];
 type Project = FunctionReturnType<typeof api.projects.list>[number];
 
-type DeploymentStatus = "queued" | "building" | "deployed" | "error";
 
 interface QuickTaskCardProps {
   id: Id<"agentTasks">;
@@ -75,7 +74,6 @@ interface QuickTaskCardProps {
   createdByUser?: User;
   createdAt: number;
   hasError?: boolean;
-  deploymentStatus?: DeploymentStatus;
   sandboxStatus?: SandboxStatus;
   groupedCodebases?: GroupedCodebase[];
   /**
@@ -123,7 +121,6 @@ export function QuickTaskCard({
   createdByUser,
   createdAt,
   hasError = false,
-  deploymentStatus: _deploymentStatus,
   sandboxStatus,
   groupedCodebases,
   href,
