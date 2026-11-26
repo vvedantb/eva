@@ -92,14 +92,13 @@ export const LANDING_NAV_LINKS = [
   { label: "Open source", href: "#open-source" },
 ] as const;
 
-/**
- * Hero copy shared by the full and compact pages. The headline is split so the
- * second half can carry the display treatment without parsing a string.
- */
+/** Hero copy shared by the full and compact pages. */
 export const LANDING_HERO = {
-  headlineLead: "Your AI coworker",
-  headlineTail: "ships pull requests.",
+  headline: "Think it. Sleep. Eva gets it done.",
   lede: "Eva gives coding agents a real cloud dev environment — your repository cloned, dependencies installed, a dev server running and a browser they can drive. They run the tests and open the pull request.",
+  /** Short, plain-words lede for the compact page. */
+  compactLede:
+    "Your AI coworker. Hand off the work, wake up to changes ready to review.",
 } as const;
 
 /** Agent CLIs preinstalled in every sandbox, mirroring `LANDING_SANDBOX_SPEC`. */
@@ -108,16 +107,6 @@ export const LANDING_AGENTS = [
   "Codex",
   "opencode",
   "Cursor",
-] as const;
-
-/** Verbs an agent can actually perform in a sandbox — shown under the hero. */
-export const LANDING_HERO_CAPABILITIES = [
-  "run shell commands",
-  "install dependencies",
-  "execute tests",
-  "build and preview",
-  "drive a browser",
-  "open pull requests",
 ] as const;
 
 export const LANDING_PILLARS: readonly LandingPillar[] = [
