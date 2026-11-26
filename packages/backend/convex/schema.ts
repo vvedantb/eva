@@ -76,6 +76,7 @@ import {
   workProfileFields,
   projectTaskReportFields,
   projectTaskBatchFields,
+  projectChatTaskLinkFields,
   projectCoordinatorWakeFields,
   notificationFields,
   repoEnvVarFields,
@@ -213,6 +214,10 @@ const schema = defineSchema({
   projectTaskBatches: defineTable(projectTaskBatchFields).index("by_project", [
     "projectId",
   ]),
+  projectChatTaskLinks: defineTable(projectChatTaskLinkFields).index(
+    "by_project_and_message",
+    ["projectId", "messageId"],
+  ),
   projectCoordinatorWakes: defineTable(projectCoordinatorWakeFields)
     .index("by_project_and_key", ["projectId", "key"])
     .index("by_project_and_sent", ["projectId", "sentAt"]),

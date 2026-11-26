@@ -1,7 +1,7 @@
 # Project task chats as tabs
 
 **Date:** 26 November 2026
-**Status:** TODO, one PR (web only).
+**Status:** Built (#1518, 26 November 2026).
 **Supersedes:** how `project-task-in-panel.md` (#1513) opens a task. The panel's task Chat tab goes; the task's chat moves to the chat column.
 **Mock:** agreed with the user in chat on 26 November 2026 (four steps: Eva tab → open #903 as a tab → open #907 too → back to Eva).
 

@@ -1,5 +1,6 @@
 "use client";
 
+import type { ProjectChatTaskCards } from "@/lib/components/projects/ProjectChatTaskCard";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
@@ -46,6 +47,8 @@ export interface SandboxChatPanelProps {
   onViewDiff?: (repoRelativePath?: string) => void;
   /** Opens the Agents sandbox tab (used by the sub-agent CTA row in the chat). */
   onOpenAgentsTab?: () => void;
+  /** A project's coordinator chat: task cards under Eva's replies (`ChatBody`). */
+  projectTaskCards?: ProjectChatTaskCards;
   onSandboxToggle?: (action: "start" | "stop") => void;
   /** The task or project is archived: the chat is read-only (no composer). */
   isArchived?: boolean;
@@ -64,6 +67,7 @@ export function SandboxChatPanel({
   onOpenFile,
   onViewDiff,
   onOpenAgentsTab,
+  projectTaskCards,
   onSandboxToggle,
   isArchived = false,
   assistantBubbles = false,
@@ -295,6 +299,7 @@ export function SandboxChatPanel({
           onViewDiff={onViewDiff}
           hasPendingContext={hasPendingReviewComments}
           onOpenAgentsTab={onOpenAgentsTab}
+          projectTaskCards={projectTaskCards}
           assistantBubbles={assistantBubbles}
           onOpenThread={replyThreads ? openThread : undefined}
           backgroundAgents={doc?.backgroundAgents}

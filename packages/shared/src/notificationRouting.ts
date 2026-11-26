@@ -2,7 +2,7 @@ import type { Doc } from "@eva/backend";
 
 /**
  * Where each notification type is delivered: the one routing table
- * (`internal/plans/todo/notifications-v2-5.md`, "Proposed design"). The
+ * (`internal/plans/implemented/notifications-v2-5.md`, "Proposed design"). The
  * backend reads it to push and to pick the instant email or the daily digest;
  * the web reads it to toast and raise desktop pop-ups; Inbox → Needs you reads
  * it for its question rows.

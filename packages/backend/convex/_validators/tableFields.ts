@@ -2386,6 +2386,18 @@ export const projectTaskBatchFields = {
 };
 
 /**
+ * An open task the coordinator acted on in one turn (started, gave work to,
+ * retried), for the task card under that reply. Tasks it created come from
+ * `projectTaskBatches`. `messageId` is the coordinator turn.
+ */
+export const projectChatTaskLinkFields = {
+  projectId: v.id("projects"),
+  messageId: v.id("messages"),
+  taskId: v.id("agentTasks"),
+  createdAt: v.number(),
+};
+
+/**
  * One reason to wake a project's coordinator (decision 16). `key` makes a
  * request idempotent; `sentAt` marks it delivered in a turn.
  */

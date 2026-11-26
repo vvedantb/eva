@@ -1180,6 +1180,10 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
                 "A person already answered this task's question, and the task went on with that answer. Your message was not sent. Send it again only if it adds something.",
               );
             }
+            await ctx.runMutation(
+              internal._projects.chatTaskCards.linkTaskToTurn,
+              { projectId: caller.projectId, taskId: target.targetId },
+            );
             return toolJsonResult({
               ...entitySummary(target),
               delivered: "started",
@@ -1220,6 +1224,14 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
             sentViaOrchestrator: true,
           },
         );
+
+        // The coordinator gave one of its tasks work: a card under its reply.
+        if (caller?.role === "coordinator") {
+          await ctx.runMutation(
+            internal._projects.chatTaskCards.linkTaskToTurn,
+            { projectId: caller.projectId, taskId: target.targetId },
+          );
+        }
 
         return toolJsonResult({
           ...entitySummary(target),
