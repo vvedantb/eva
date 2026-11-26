@@ -3,6 +3,7 @@ import { internalMutation, internalQuery } from "../_generated/server";
 import type { DatabaseReader } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import {
+  assertTaskNotArchived,
   getProjectWithAccess,
   normalizeIdOrThrow,
   taskRunPending,
@@ -212,6 +213,7 @@ export const editTaskAsCoordinator = internalMutation({
       args.taskId,
       "change",
     );
+    await assertTaskNotArchived(ctx.db, task);
     if (args.phaseLabel !== undefined) {
       await ctx.db.patch(task._id, {
         phaseLabel: args.phaseLabel.trim() || undefined,

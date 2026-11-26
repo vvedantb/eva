@@ -88,8 +88,10 @@ export function RowAge({
 /**
  * One flat row of a project's task list: the display status icon, the
  * title, and `line` (`projectTaskSummaryLine`). A Triage row shows Reject
- * and Approve in place of its age on hover. Right-click opens the task menu.
- * A task in a repo the reader cannot open is a locked row with no link.
+ * and Approve in place of its age on hover. Right-click opens the task menu
+ * (Unarchive on a task archived on its own). A read-only (archived) project's
+ * row has neither. A task in a repo the reader cannot open is a locked row
+ * with no link.
  */
 export function ProjectTaskRow({
   task,
@@ -97,12 +99,14 @@ export function ProjectTaskRow({
   line,
   onSelectTask,
   basePath,
+  readOnly,
 }: {
   task: ProjectTaskListRow;
   view: ProjectTaskView;
   line: string;
   onSelectTask: (id: Id<"agentTasks">) => void;
   basePath: string;
+  readOnly: boolean;
 }) {
   const config = projectTaskDisplayStatusConfig[view.displayStatus];
   const StatusIcon = config.icon;
@@ -120,6 +124,7 @@ export function ProjectTaskRow({
     assignedTo: task.assignedTo,
     projectId: task.projectId,
     repoId: task.repoId,
+    archived: task.archivedAt !== undefined,
   });
   if (task.locked === true) {
     return (
@@ -144,46 +149,48 @@ export function ProjectTaskRow({
     );
   }
   const triageProjectId =
-    view.displayStatus === "triage" && isUnapprovedTodoTask(task)
+    !readOnly && view.displayStatus === "triage" && isUnapprovedTodoTask(task)
       ? task.projectId
       : undefined;
+  const row = (
+    <ListRow
+      link={<DynamicLink to={toInternalRepoHref(href)} search={true} />}
+      onClick={(event) => {
+        event.preventDefault();
+        if (!hasDialogOpen) onSelectTask(task._id);
+      }}
+      aria-label={task.title}
+      className={FLAT_ROW_CLASS}
+      contentClassName={FLAT_ROW_CONTENT_CLASS}
+    >
+      <ProjectFlatRowBody
+        icon={icon}
+        title={task.title}
+        line={line}
+        trailing={
+          triageProjectId !== undefined ? (
+            <>
+              <RowAge
+                at={task.updatedAt}
+                className="group-hover:hidden group-focus-within:hidden"
+              />
+              <TriageButtons
+                projectId={triageProjectId}
+                taskId={task._id}
+              />
+            </>
+          ) : (
+            <RowAge at={task.updatedAt} />
+          )
+        }
+      />
+    </ListRow>
+  );
+  if (readOnly) return row;
   return (
     <>
       <ContextMenu>
-        <ContextMenuTrigger asChild>
-          <ListRow
-            link={<DynamicLink to={toInternalRepoHref(href)} search={true} />}
-            onClick={(event) => {
-              event.preventDefault();
-              if (!hasDialogOpen) onSelectTask(task._id);
-            }}
-            aria-label={task.title}
-            className={FLAT_ROW_CLASS}
-            contentClassName={FLAT_ROW_CONTENT_CLASS}
-          >
-            <ProjectFlatRowBody
-              icon={icon}
-              title={task.title}
-              line={line}
-              trailing={
-                triageProjectId !== undefined ? (
-                  <>
-                    <RowAge
-                      at={task.updatedAt}
-                      className="group-hover:hidden group-focus-within:hidden"
-                    />
-                    <TriageButtons
-                      projectId={triageProjectId}
-                      taskId={task._id}
-                    />
-                  </>
-                ) : (
-                  <RowAge at={task.updatedAt} />
-                )
-              }
-            />
-          </ListRow>
-        </ContextMenuTrigger>
+        <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
         <ContextMenuContent onClick={(event) => event.stopPropagation()}>
           <TaskCardMenuItems variant="context" {...menuProps} />
         </ContextMenuContent>

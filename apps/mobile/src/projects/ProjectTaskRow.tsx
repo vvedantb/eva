@@ -69,8 +69,9 @@ function FlatRow({
  * One flat row of a project's task list, as the web `ProjectTaskRow`: the
  * display status icon in its colour, the title, and `line`
  * (`projectTaskSummaryLine`), with the age at the end. A Triage row keeps
- * Reject and Approve visible beside it (the phone has no hover). A tap opens
- * the task; a long press opens the task menu (`onLongPress`). A task in a
+ * Reject and Approve visible beside it (the phone has no hover), unless the
+ * project is archived (`readOnly`). A tap opens the task; a long press opens
+ * the task menu (`onLongPress`). A task in a
  * repo the reader cannot open is a locked row with no link.
  */
 export function ProjectTaskRow({
@@ -78,12 +79,14 @@ export function ProjectTaskRow({
   view,
   line,
   projectId,
+  readOnly,
   onLongPress,
 }: {
   task: ProjectTaskListRow;
   view: ProjectTaskView;
   line: string;
   projectId: Id<"projects">;
+  readOnly: boolean;
   onLongPress?: () => void;
 }) {
   const router = useRouter();
@@ -104,7 +107,7 @@ export function ProjectTaskRow({
       />
     );
   }
-  const canTriage = view.displayStatus === "triage" && isUnapprovedTodoTask(task);
+  const canTriage = !readOnly && view.displayStatus === "triage" && isUnapprovedTodoTask(task);
   return (
     <View className="flex-row items-center gap-1">
       <View className="min-w-0 flex-1">

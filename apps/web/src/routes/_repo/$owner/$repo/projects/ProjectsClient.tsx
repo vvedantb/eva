@@ -62,7 +62,6 @@ import { ProjectsSelectButton } from "./_components/ProjectsSelectButton";
 import { ProjectsBulkBar } from "./_components/ProjectsBulkBar";
 import { useProjectsSelection } from "./_components/useProjectsSelection";
 import { useProjectArchive } from "./_components/useProjectArchive";
-import { useProjectUnarchive } from "@/lib/components/projects/useProjectUnarchive";
 import { ListModeTabs } from "@/lib/components/ListModeTabs";
 import { ActiveFiltersBar } from "./_components/ActiveFiltersBar";
 import { useProjectFilters, type ProjectView } from "./_utils";
@@ -105,16 +104,29 @@ export function ProjectsClient() {
     isArchivedList ? { repoId: repo._id } : "skip",
   );
   const projects = isArchivedList ? archivedProjects : liveProjects;
-  const unarchiveProjects = useProjectUnarchive(repo._id);
   // Each project's stage is derived from its child tasks, never stored.
   const statuses = useProjectListStatuses(repo._id, isArchivedList);
   const stageOf = (projectId: string): ProjectStage =>
     statuses?.get(projectId)?.stage ?? "todo";
   const [isCreating, setIsCreating] = useState(false);
   const [
-    { q, view, hiddenPhases, sortField, sortDir, timelineRange, timelineZoom },
+    {
+      q,
+      view: savedView,
+      hiddenPhases,
+      sortField,
+      sortDir,
+      timelineRange,
+      timelineZoom,
+    },
     setParams,
   ] = useProjectFilters();
+  // The Archived list has no Timeline: an archived project's dates are
+  // read-only, and the timeline drags them. It shows the list instead.
+  const view = isArchivedList && savedView === "timeline" ? "list" : savedView;
+  const viewOptions = isArchivedList
+    ? VIEW_OPTIONS.filter((opt) => opt.key !== "timeline")
+    : VIEW_OPTIONS;
   const searchQuery = q;
   // Derive the visible set from the persisted blocklist so new columns show
   // by default and "all visible" is independent of how many columns exist.
@@ -202,7 +214,7 @@ export function ProjectsClient() {
           {/* Taller below `sm` so the icon-only triggers clear the tap floor;
               `hit-target` is no use inside the list's own overflow clip. */}
           <TabsList className="tabs-segmented h-8 max-sm:h-10">
-            {VIEW_OPTIONS.map((opt) => (
+            {viewOptions.map((opt) => (
               <Tooltip key={opt.key}>
                 <TooltipTrigger asChild>
                   <TabsTrigger
@@ -219,9 +231,15 @@ export function ProjectsClient() {
           </TabsList>
         </Tabs>
       )}
-      {/* The timeline has no rows to check, so selection is not offered there. */}
+      {/* The timeline has no rows to check, so selection is not offered there;
+          the Archived list has none, as quick tasks (row Unarchive only). */}
       <ProjectsSelectButton
-        visible={hasProjects && view !== "timeline" && !selection.isSelecting}
+        visible={
+          hasProjects &&
+          view !== "timeline" &&
+          !selection.isSelecting &&
+          !isArchivedList
+        }
         onClick={selection.enter}
       />
       {hasProjects && (
@@ -438,7 +456,7 @@ export function ProjectsClient() {
               )}
             </TabsTransition>
           )}
-          {hasProjects && (
+          {hasProjects && !isArchivedList && (
             <ProjectsBulkBar
               isSelecting={selection.isSelecting}
               selectedCount={selection.selectedIds.size}
@@ -448,15 +466,9 @@ export function ProjectsClient() {
                 selection.selectAll(filteredSorted.map((p) => p._id))
               }
               onClearSelection={selection.clear}
-              archived={isArchivedList}
               onArchive={() =>
                 projectArchive.requestBulk([...selection.selectedIds])
               }
-              onUnarchive={() => {
-                void unarchiveProjects([...selection.selectedIds]).then(
-                  exitSelectMode,
-                );
-              }}
             />
           )}
         </div>

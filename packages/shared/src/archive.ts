@@ -47,5 +47,9 @@ export function archiveCopy(kind: ArchivableKind, count = 1) {
     archiveFailed: `Couldn't archive ${plural}`,
     unarchiveFailed: `Couldn't unarchive ${plural}`,
     emptyArchived: `No archived ${kind}s`,
+    /** The server's refusal to edit an archived item, and its UI hint. */
+    unarchiveFirst: `Unarchive the ${kind} first`,
+    /** The phone composer's line on an archived item's chat. */
+    readOnly: `This ${kind} is archived and read-only`,
   };
 }

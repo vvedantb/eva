@@ -42,9 +42,15 @@ export const mobileChatValidator = v.object({
   target: v.string(),
   /**
    * True when the app can reply (see `target`). False for an archived
-   * session or session chat (read-only, as the web) or a deleted task / project.
+   * session or session chat (read-only, as the web) or an archived task /
+   * project (`archived`).
    */
   canReply: v.boolean(),
+  /**
+   * What archive closes the chat: the task itself, or its (or this) project.
+   * The composer says so in place of "This chat is closed."
+   */
+  archived: v.optional(v.union(v.literal("task"), v.literal("project"))),
   /**
    * The chat's model, which a reply uses: as the web composer reads it (the
    * chat's sticky `lastModel`; a task's or project's chat falls back to its
@@ -195,8 +201,12 @@ export async function resolveMobileChat(
     const repo = repoId ? await db.get(repoId) : null;
     if (!task || !repo) return null;
     // An archived task, or a task of an archived project, opens read-only.
-    const taskLive =
-      task.archivedAt === undefined && project?.archivedAt === undefined;
+    const archived =
+      task.archivedAt !== undefined
+        ? "task"
+        : project?.archivedAt !== undefined
+          ? "project"
+          : undefined;
     const base = repoBasePath(repo);
     const taskWebPath =
       project?.numId !== undefined
@@ -222,7 +232,8 @@ export async function resolveMobileChat(
           repoId: repo._id,
           parentId: chat._id,
           target: chat._id,
-          canReply: taskLive && chat.archived !== true,
+          canReply: archived === undefined && chat.archived !== true,
+          archived,
           model: chat.lastModel ?? seed.model,
           providerAccountId: chat.providerAccountId,
           accountOwnerId: task.createdBy,
@@ -249,7 +260,8 @@ export async function resolveMobileChat(
         repoLabel: repoLabel(repo),
         repoId: repo._id,
         target: task._id,
-        canReply: taskLive,
+        canReply: archived === undefined,
+        archived,
         // What the first send's chat starts on.
         model: seed.model,
         providerAccountId: seed.providerAccountId,
@@ -289,6 +301,7 @@ export async function resolveMobileChat(
           parentId: chat._id,
           target: chat._id,
           canReply: project.archivedAt === undefined && chat.archived !== true,
+          archived: project.archivedAt === undefined ? undefined : "project",
           model: chat.lastModel ?? seed.model,
           providerAccountId: chat.providerAccountId,
           accountOwnerId: project.userId,
@@ -314,6 +327,7 @@ export async function resolveMobileChat(
         repoId: repo._id,
         target: project._id,
         canReply: project.archivedAt === undefined,
+        archived: project.archivedAt === undefined ? undefined : "project",
         // What the first send's chat starts on.
         model: seed.model,
         providerAccountId: seed.providerAccountId,

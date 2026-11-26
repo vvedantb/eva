@@ -7,6 +7,8 @@ import {
 import { createAuthFunctions } from "@vvedantb/server";
 import type { GenericDatabaseReader } from "convex/server";
 import { makeFunctionReference } from "convex/server";
+import { ConvexError } from "convex/values";
+import { archiveCopy } from "@eva/shared";
 import {
   query,
   mutation,
@@ -175,19 +177,24 @@ export async function hasTaskAccess(
 /**
  * A project's live tasks the user may know of (no one else's drafts), each
  * with whether the user can open it (`hasTaskAccess`: a task in a repo they
- * cannot access is locked). The caller checks access to the project.
+ * cannot access is locked). With `archived`, the tasks archived on their own
+ * instead. The caller checks access to the project.
  */
 export async function listProjectTasksForUser(
   db: GenericDatabaseReader<DataModel>,
   projectId: Id<"projects">,
   userId: Id<"users">,
+  archived = false,
 ): Promise<Array<{ task: Doc<"agentTasks">; canAccess: boolean }>> {
   const tasks = (
     await db
       .query("agentTasks")
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
       .collect()
-  ).filter((task) => !isEntityArchived(task) && isTaskVisibleTo(task, userId));
+  ).filter(
+    (task) =>
+      isEntityArchived(task) === archived && isTaskVisibleTo(task, userId),
+  );
   return Promise.all(
     tasks.map(async (task) => ({
       task,
@@ -278,6 +285,31 @@ export async function onProjectTasksChanged(
   await ctx.scheduler.runAfter(0, internal.buildWorkflow.scheduleReadyTasks, {
     projectId,
   });
+}
+
+/**
+ * Refuses an edit to an archived project: it is read-only until unarchived.
+ * Every mutation that edits a project (or approves its tasks) calls this.
+ */
+export function assertProjectNotArchived(project: { archivedAt?: number }): void {
+  if (isEntityArchived(project)) {
+    throw new ConvexError(archiveCopy("project").unarchiveFirst);
+  }
+}
+
+/**
+ * Refuses an edit to an archived task, or to a task of an archived project
+ * (a project archives as one unit). Every mutation that edits a task calls this.
+ */
+export async function assertTaskNotArchived(
+  db: GenericDatabaseReader<DataModel>,
+  task: Pick<Doc<"agentTasks">, "archivedAt" | "projectId">,
+): Promise<void> {
+  if (isEntityArchived(task)) {
+    throw new ConvexError(archiveCopy("task").unarchiveFirst);
+  }
+  const project = task.projectId ? await db.get(task.projectId) : null;
+  if (project) assertProjectNotArchived(project);
 }
 
 /** Fetches a project by ID, throwing if not found or the user lacks repo access. */

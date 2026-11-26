@@ -16,12 +16,15 @@ export function ProjectOverviewTab({
   title,
   description,
   documentsHref,
+  readOnly,
 }: {
   projectId: Id<"projects">;
   repoId: Id<"githubRepos">;
   title: string;
   description: string | undefined;
   documentsHref: string | undefined;
+  /** An archived project: the context and every field are read-only. */
+  readOnly: boolean;
 }) {
   const { status } = useProjectTaskStatus(projectId, repoId);
   return (
@@ -36,6 +39,7 @@ export function ProjectOverviewTab({
             projectId={projectId}
             className="px-0 pt-0 pb-0"
             clamp={false}
+            readOnly={readOnly}
           />
           <ProjectSummarySection
             projectId={projectId}

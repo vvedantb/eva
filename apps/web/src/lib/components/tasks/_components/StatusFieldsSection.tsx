@@ -9,6 +9,7 @@ import type { FunctionReturnType } from "convex/server";
 import type { TaskStatus } from "../TaskStatusBadge";
 import { FieldsSection } from "@/lib/components/fields/FieldsSection";
 import { canEditTaskModel } from "@eva/shared/taskDetail";
+import { archiveCopy } from "@eva/shared";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   useAvailableAiModels,
@@ -46,6 +47,8 @@ interface StatusFieldsSectionProps {
   /** Only the task owner can move it onto their own provider account. */
   isOwner: boolean;
   allTags: string[];
+  /** An archived task (or one in an archived project): every field is disabled. */
+  readOnly: boolean;
 }
 
 export function StatusFieldsSection({
@@ -59,6 +62,7 @@ export function StatusFieldsSection({
   hasRuns,
   isOwner,
   allTags,
+  readOnly,
 }: StatusFieldsSectionProps) {
   const simpleView = useSimpleView();
   const viewVercelDeployment = useViewVercelDeployment();
@@ -130,7 +134,9 @@ export function StatusFieldsSection({
   );
   const { options: accounts, resolveId: resolveAccountId } =
     useTaskOwnerProviderAccounts(taskId);
-  const modelLockReason = hasRuns
+  const modelLockReason = readOnly
+    ? archiveCopy("task").unarchiveFirst
+    : hasRuns
     ? "Cannot be changed after the task has run"
     : !canEditTaskModel(status)
       ? "Locked when the task is done or cancelled"
@@ -143,12 +149,14 @@ export function StatusFieldsSection({
           taskId={taskId}
           status={status}
           updateStatus={updateStatus}
+          disabled={readOnly}
         />
 
         <PrioritySelectField
           taskId={taskId}
           priority={task?.priority}
           updateTask={updateTask}
+          disabled={readOnly}
         />
 
         <ReviewerSelectField
@@ -156,6 +164,7 @@ export function StatusFieldsSection({
           assignedTo={task?.assignedTo}
           users={users}
           updateTask={updateTask}
+          disabled={readOnly}
         />
 
         {simpleView ? null : (
@@ -178,6 +187,7 @@ export function StatusFieldsSection({
           status={status}
           baseBranch={baseBranch}
           updateTask={updateTask}
+          disabled={readOnly}
         />
 
         <DeploymentRow
@@ -191,6 +201,7 @@ export function StatusFieldsSection({
           tags={task?.tags}
           allTags={allTags}
           onChange={(tags) => updateTask({ id: taskId, tags })}
+          disabled={readOnly}
         />
       </FieldsSection>
 
@@ -201,6 +212,7 @@ export function StatusFieldsSection({
           projectOptions={projectOptions}
           onCreateProject={() => setIsCreatingProject(true)}
           updateTask={updateTask}
+          disabled={readOnly}
         />
         <NewProjectModal
           isOpen={isCreatingProject}

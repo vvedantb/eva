@@ -1,4 +1,4 @@
-import { v, type ObjectType } from "convex/values";
+import { ConvexError, v, type ObjectType } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
@@ -10,6 +10,8 @@ import {
 import { createNotification } from "../notifications";
 import { ensureSubscribed, notifySubscribers } from "../taskSubscribers";
 import {
+  assertProjectNotArchived,
+  assertTaskNotArchived,
   authMutation,
   getProjectWithAccess,
   getRepoWithAccess,
@@ -77,15 +79,14 @@ export const update = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
+    await assertTaskNotArchived(ctx.db, task);
     // Moving a task needs access to where it lands, not only where it is.
     if (args.repoId !== undefined && args.repoId !== task.repoId) {
       await getRepoWithAccess(ctx.db, args.repoId, ctx.userId);
     }
     if (args.projectId && args.projectId !== task.projectId) {
-      await getProjectWithAccess(
-        ctx.db,
-        args.projectId,
-        ctx.userId,
+      assertProjectNotArchived(
+        await getProjectWithAccess(ctx.db, args.projectId, ctx.userId),
       );
     }
     const updates = await buildTaskUpdates(ctx, task, args);
@@ -119,6 +120,7 @@ export const updateStatus = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
+    await assertTaskNotArchived(ctx.db, task);
     // Only a todo task runs from a schedule, so leaving todo drops it.
     if (args.status !== "todo") await cancelTaskRunSchedule(ctx, args.id);
     const previousStatus = task.status;
@@ -252,6 +254,7 @@ export const removeAttachment = authMutation({
     const task = await ctx.db.get(args.taskId);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
+    await assertTaskNotArchived(ctx.db, task);
     const remaining = (task.attachmentStorageIds ?? []).filter(
       (storageId) => storageId !== args.storageId,
     );
@@ -277,6 +280,8 @@ export const archive = authMutation({
     const task = await ctx.db.get(args.id);
     if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
       throw new Error("Task not found");
+    // A draft is unsent text: `deleteDraft` deletes it.
+    if (task.status === "draft") throw new ConvexError("Delete the draft instead");
     await archiveAgentTask(ctx, args.id);
     await retireOwnedSession(ctx, { kind: "task", taskId: args.id });
     if (task.projectId) await onProjectTasksChanged(ctx, task.projectId);
@@ -499,7 +504,9 @@ export const assignToProject = authMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await getProjectWithAccess(ctx.db, args.projectId, ctx.userId);
+    assertProjectNotArchived(
+      await getProjectWithAccess(ctx.db, args.projectId, ctx.userId),
+    );
     if (args.taskIds.length === 0) {
       throw new Error("At least one task is required");
     }
@@ -521,6 +528,7 @@ export const assignToProject = authMutation({
       const task = await ctx.db.get(taskId);
       if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
         throw new Error(`Task ${taskId} not found`);
+      await assertTaskNotArchived(ctx.db, task);
       assigned++;
       await ctx.db.patch(taskId, {
         projectId: args.projectId,

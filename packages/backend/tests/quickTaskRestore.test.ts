@@ -106,3 +106,29 @@ describe("unarchiving a quick task", () => {
     TIMEOUT_MS,
   );
 });
+
+describe("an archived task", () => {
+  test(
+    "refuses edits until it is unarchived",
+    async () => {
+      const f = await fixture();
+      await f.asUser.mutation(api.agentTasks.archive, { id: f.taskId });
+      await expect(
+        f.asUser.mutation(api.agentTasks.updateStatus, {
+          id: f.taskId,
+          status: "done",
+        }),
+      ).rejects.toThrow("Unarchive the task first");
+      await expect(
+        f.asUser.mutation(api.agentTasks.update, {
+          id: f.taskId,
+          title: "Renamed",
+        }),
+      ).rejects.toThrow("Unarchive the task first");
+      const row = await f.t.run((ctx) => ctx.db.get(f.taskId));
+      expect(row?.status).toBe("todo");
+      expect(row?.title).toBe("Archived by mistake");
+    },
+    TIMEOUT_MS,
+  );
+});

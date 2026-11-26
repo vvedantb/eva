@@ -53,7 +53,7 @@ import { ModelSelectWithTraits } from "@/lib/components/ModelSelectWithTraits";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   IconFileText,
-  IconArchive,
+  IconTrash,
   IconGitBranch,
   IconTag,
   IconCheck,
@@ -83,10 +83,9 @@ import { TaskFilesSection } from "./_components/TaskFilesSection";
 import { useTaskAttachments } from "./useTaskAttachments";
 import { QUICK_TASK_OPTION_BADGE_CLASS } from "./_utils/optionBadge";
 import {
-  draftCountAfterArchive,
-  draftsAfterArchive,
+  draftCountAfterRemove,
+  draftsAfterRemove,
   toRunTraitArgs,
-  visibleDrafts,
 } from "@eva/shared";
 import {
   catchMutationError,
@@ -136,30 +135,27 @@ function initialDescriptionMaps(initialDraft: QuickTaskDraft | undefined) {
       };
 }
 
-/** The repo's saved drafts, and an archive that drops them optimistically. */
+/** The repo's saved drafts, and a delete that drops them optimistically. */
 function useQuickTaskDrafts(repoId: Repo["_id"]) {
-  const archiveDraft = useMutation(api.agentTasks.archive).withOptimisticUpdate(
+  const removeDraft = useMutation(api.agentTasks.deleteDraft).withOptimisticUpdate(
     (localStore, args) => {
       const draftArgs = { repoId };
       patchLoadedQuery(
         localStore,
         api.agentTasks.listDrafts,
         draftArgs,
-        (cur) => draftsAfterArchive(cur, args.id),
+        (cur) => draftsAfterRemove(cur, args.id),
       );
       patchLoadedQuery(
         localStore,
         api.agentTasks.countDrafts,
         draftArgs,
-        draftCountAfterArchive,
+        draftCountAfterRemove,
       );
     },
   );
-  const draftRows = useQuery(api.agentTasks.listDrafts, { repoId });
-  // `archive` only sets `archivedAt`; filter here too so an archived row in
-  // a stale result cannot ride back in.
-  const drafts = draftRows === undefined ? undefined : visibleDrafts(draftRows);
-  return { archiveDraft, drafts };
+  const drafts = useQuery(api.agentTasks.listDrafts, { repoId });
+  return { removeDraft, drafts };
 }
 
 /**
@@ -464,47 +460,48 @@ function TagsPicker({
 
 function DraftRow({
   draft,
-  confirmingArchive,
+  confirmingDelete,
   requestConfirm,
-  setConfirmArchiveId,
+  setConfirmDeleteId,
   loadDraft,
-  handleArchiveDraft,
+  handleDeleteDraft,
 }: {
   draft: QuickTaskDraft;
-  confirmingArchive: boolean;
+  confirmingDelete: boolean;
   requestConfirm: RequestConfirm;
-  setConfirmArchiveId: (id: Id<"agentTasks"> | null) => void;
+  setConfirmDeleteId: (id: Id<"agentTasks"> | null) => void;
   loadDraft: (draft: QuickTaskDraft) => void;
-  handleArchiveDraft: (draftId: Id<"agentTasks">) => Promise<void>;
+  handleDeleteDraft: (draftId: Id<"agentTasks">) => Promise<void>;
 }) {
-  if (confirmingArchive) {
+  if (confirmingDelete) {
     return (
-      <div className="flex items-center justify-between gap-2 px-3 py-2 text-sm bg-muted">
-        <span className="truncate">Archive draft?</span>
+      <div className="flex items-center justify-between gap-2 px-3 py-2 text-sm bg-destructive/5">
+        <span className="text-destructive truncate">Delete draft?</span>
         <div className="flex gap-1 shrink-0">
           <Button
             variant="ghost"
             size="sm"
             className="h-6 px-2 text-xs"
-            onClick={() => setConfirmArchiveId(null)}
+            onClick={() => setConfirmDeleteId(null)}
           >
             Cancel
           </Button>
           <Button
+            variant="destructive"
             size="sm"
             className="h-6 px-2 text-xs"
-            onClick={() => handleArchiveDraft(draft._id)}
+            onClick={() => handleDeleteDraft(draft._id)}
           >
-            Archive
+            Delete
           </Button>
         </div>
       </div>
     );
   }
-  // A row with its own archive control cannot be one big `<button>`, and
+  // A row with its own delete control cannot be one big `<button>`, and
   // `role="button"` on a div means hand-rolled key handling — so this follows
   // `<ListRow>`: a stretched native button supplies the role and the keyboard,
-  // and the archive control sits above it.
+  // and the delete control sits above it.
   return (
     <div className="group relative flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-muted">
       <button
@@ -520,19 +517,19 @@ function DraftRow({
       </span>
       <button
         type="button"
-        aria-label={`Archive draft ${draft.title || "Untitled"}`}
-        title={skipConfirmTitle("Archive draft")}
-        className="reveal-on-hover max-sm:hit-target relative z-2 shrink-0 rounded p-0.5 hover:bg-default"
+        aria-label={`Delete draft ${draft.title || "Untitled"}`}
+        title={skipConfirmTitle("Delete draft")}
+        className="reveal-on-hover max-sm:hit-target relative z-2 shrink-0 rounded p-0.5 hover:bg-destructive/10 hover:text-destructive"
         onClick={() =>
           requestConfirm(
-            () => setConfirmArchiveId(draft._id),
+            () => setConfirmDeleteId(draft._id),
             () => {
-              void handleArchiveDraft(draft._id);
+              void handleDeleteDraft(draft._id);
             },
           )
         }
       >
-        <IconArchive size={14} />
+        <IconTrash size={14} />
       </button>
     </div>
   );
@@ -540,15 +537,15 @@ function DraftRow({
 
 function DraftsMenu({
   drafts,
-  confirmArchiveId,
+  confirmDeleteId,
   ...rowProps
 }: {
   drafts: QuickTaskDraft[] | undefined;
-  confirmArchiveId: Id<"agentTasks"> | null;
+  confirmDeleteId: Id<"agentTasks"> | null;
   requestConfirm: RequestConfirm;
-  setConfirmArchiveId: (id: Id<"agentTasks"> | null) => void;
+  setConfirmDeleteId: (id: Id<"agentTasks"> | null) => void;
   loadDraft: (draft: QuickTaskDraft) => void;
-  handleArchiveDraft: (draftId: Id<"agentTasks">) => Promise<void>;
+  handleDeleteDraft: (draftId: Id<"agentTasks">) => Promise<void>;
 }) {
   if (!drafts || drafts.length === 0) return null;
   return (
@@ -568,7 +565,7 @@ function DraftsMenu({
             <div key={draft._id}>
               <DraftRow
                 draft={draft}
-                confirmingArchive={confirmArchiveId === draft._id}
+                confirmingDelete={confirmDeleteId === draft._id}
                 {...rowProps}
               />
             </div>
@@ -605,7 +602,7 @@ export function QuickTaskModal({
   const [activeDraftId, setActiveDraftId] = useState<Id<"agentTasks"> | null>(
     initialDraft?._id ?? null,
   );
-  const [confirmArchiveId, setConfirmArchiveId] =
+  const [confirmDeleteId, setConfirmDeleteId] =
     useState<Id<"agentTasks"> | null>(null);
   const { request: requestConfirm } = useRequestConfirm();
   const [selectedProjectId, setSelectedProjectId] = useState<
@@ -640,7 +637,7 @@ export function QuickTaskModal({
   const createQuickTask = useMutation(api.agentTasks.createQuickTask);
   const saveDraft = useMutation(api.agentTasks.saveDraft);
   const activateDraft = useMutation(api.agentTasks.activateDraft);
-  const { archiveDraft, drafts } = useQuickTaskDrafts(repo._id);
+  const { removeDraft, drafts } = useQuickTaskDrafts(repo._id);
 
   const attachments = useTaskAttachments();
   const setHydratedDraftId = useDraftAttachmentHydration(
@@ -792,15 +789,15 @@ export function QuickTaskModal({
     readiness.reset();
   };
 
-  const handleArchiveDraft = async (draftId: Id<"agentTasks">) => {
+  const handleDeleteDraft = async (draftId: Id<"agentTasks">) => {
     try {
       await withMutationToast(
-        archiveDraft({ id: draftId }),
-        "Draft archived",
-        "Couldn't archive draft",
-        "draft-archive",
+        removeDraft({ id: draftId }),
+        "Draft deleted",
+        "Couldn't delete draft",
+        "draft-delete",
       );
-      setConfirmArchiveId(null);
+      setConfirmDeleteId(null);
       if (activeDraftId === draftId) {
         resetForm();
       }
@@ -996,11 +993,11 @@ export function QuickTaskModal({
             <div>
               <DraftsMenu
                 drafts={drafts}
-                confirmArchiveId={confirmArchiveId}
+                confirmDeleteId={confirmDeleteId}
                 requestConfirm={requestConfirm}
-                setConfirmArchiveId={setConfirmArchiveId}
+                setConfirmDeleteId={setConfirmDeleteId}
                 loadDraft={loadDraft}
-                handleArchiveDraft={handleArchiveDraft}
+                handleDeleteDraft={handleDeleteDraft}
               />
             </div>
             <div className="flex items-center gap-2">

@@ -1,5 +1,5 @@
 import { BulkActionBar, type BulkBarAction } from "@vvedantb/ui";
-import { IconArchive, IconArchiveOff } from "@tabler/icons-react";
+import { IconArchive } from "@tabler/icons-react";
 
 interface ProjectsBulkBarProps {
   isSelecting: boolean;
@@ -8,17 +8,14 @@ interface ProjectsBulkBarProps {
   onExitSelect: () => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
-  /** The Archived list: the one action is Unarchive. */
-  archived: boolean;
   /** Runs the archive flow, which owns its own confirm and Alt-to-skip. */
   onArchive: () => void;
-  onUnarchive: () => void;
 }
 
 /**
  * The projects board's selection bar. Same shell as quick tasks; the one
- * action projects have is archive, or unarchive in the Archived list (a
- * project's stage is derived from its tasks, so there is no phase to set).
+ * action projects have is archive (a project's stage is derived from its
+ * tasks, so there is no phase to set). The Archived list has no select mode.
  */
 export function ProjectsBulkBar({
   isSelecting,
@@ -27,26 +24,16 @@ export function ProjectsBulkBar({
   onExitSelect,
   onSelectAll,
   onClearSelection,
-  archived,
   onArchive,
-  onUnarchive,
 }: ProjectsBulkBarProps) {
-  const action: BulkBarAction = archived
-    ? {
-        key: "unarchive",
-        label: "Unarchive All",
-        shortLabel: "Unarchive",
-        icon: IconArchiveOff,
-        onClick: onUnarchive,
-      }
-    : {
-        key: "archive",
-        label: "Archive All",
-        shortLabel: "Archive",
-        icon: IconArchive,
-        showSkipHint: true,
-        onClick: onArchive,
-      };
+  const archiveAction: BulkBarAction = {
+    key: "archive",
+    label: "Archive All",
+    shortLabel: "Archive",
+    icon: IconArchive,
+    showSkipHint: true,
+    onClick: onArchive,
+  };
 
   return (
     <BulkActionBar
@@ -58,7 +45,7 @@ export function ProjectsBulkBar({
       onSelectAll={onSelectAll}
       onClearSelection={onClearSelection}
       primaryActions={[]}
-      destructiveAction={action}
+      destructiveAction={archiveAction}
     />
   );
 }

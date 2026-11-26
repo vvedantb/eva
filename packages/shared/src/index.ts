@@ -179,11 +179,7 @@ export {
   sessionMenuActions,
   type SessionMenuAction,
 } from "./sessionMenu";
-export {
-  draftCountAfterArchive,
-  draftsAfterArchive,
-  visibleDrafts,
-} from "./draftVisibility";
+export { draftCountAfterRemove, draftsAfterRemove } from "./draftVisibility";
 export {
   ARCHIVE_LABEL,
   ARCHIVE_LIST_MODES,

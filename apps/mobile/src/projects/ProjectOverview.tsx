@@ -46,8 +46,8 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
  * open a bottom sheet each and write `projects.update`, as the web selects;
  * the model chip (hidden in simple view, as the web) writes the model and,
  * for the project's owner, its account. Field
- * rows are 48 high (web 40). Not here from the web: the
- * members, dates and labels pickers.
+ * rows are 48 high (web 40). An archived project reads only: no edits.
+ * Not here from the web: the members, dates and labels pickers.
  */
 export function ProjectOverview({
   project,
@@ -71,7 +71,8 @@ export function ProjectOverview({
   const updateProject = useMutation(api.projects.update);
   const [editingContext, setEditingContext] = useState(false);
   const [sheet, setSheet] = useState<"priority" | "lead" | null>(null);
-  const openSheet = (next: "priority" | "lead") => () => setSheet(next);
+  const readOnly = project.archivedAt !== undefined;
+  const openSheet = (next: "priority" | "lead") => (readOnly ? undefined : () => setSheet(next));
   const saveContext = (value: string) => {
     setEditingContext(false);
     const description = value.trim();
@@ -128,7 +129,13 @@ export function ProjectOverview({
             onEndEditing={(event) => saveContext(event.nativeEvent.text)}
           />
         ) : (
-          <Pressable accessibilityRole="button" accessibilityLabel="Edit project context" onPress={() => setEditingContext(true)} className="active:opacity-70">
+          <Pressable
+            accessibilityRole={readOnly ? "text" : "button"}
+            accessibilityLabel={readOnly ? "Project context" : "Edit project context"}
+            disabled={readOnly}
+            onPress={() => setEditingContext(true)}
+            className="active:opacity-70"
+          >
             {project.description ? (
               <Markdown>{project.description}</Markdown>
             ) : (
@@ -193,7 +200,7 @@ export function ProjectOverview({
           color={memberCount > 0 ? undefined : muted}
         />
         {simpleView ? null : (
-          <View className="min-h-12 flex-row items-center">
+          <View className="min-h-12 flex-row items-center" pointerEvents={readOnly ? "none" : "auto"}>
             <ModelChip
               repoId={project.repoId}
               model={model}

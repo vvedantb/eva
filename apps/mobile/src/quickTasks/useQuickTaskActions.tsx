@@ -48,7 +48,8 @@ function taskWebPath(repo: Repo, task: QuickTask): string {
  * Progress), Status, Code Reviewer, Project and Move to codebase, then Copy
  * title, Copy task link and Archive. Move and Archive ask first, with the web
  * dialogs; the rest act at once. An archived task offers only Select, the
- * copies and Unarchive. Writes are the web mutations. Render `dialogs` once. Not here from the web menu: Open in new tab, the PR
+ * copies and Unarchive; a task of an archived project (`readOnly`) only the
+ * copies. Writes are the web mutations. Render `dialogs` once. Not here from the web menu: Open in new tab, the PR
  * submenus and Model.
  */
 export function useQuickTaskActions({
@@ -58,6 +59,7 @@ export function useQuickTaskActions({
   onArchived,
   extraRows,
   onSelect,
+  readOnly = false,
 }: {
   /** Rows that lead the menu (the overview's sandbox and git actions); given the menu's `close`. */
   extraRows?: (close: () => void) => ReactNode;
@@ -68,6 +70,8 @@ export function useQuickTaskActions({
   onArchived?: () => void;
   /** The list's select mode, starting with this task ticked: "Select" leads the menu when set. */
   onSelect?: (task: QuickTask) => void;
+  /** The task's project is archived: the task is read-only, with no edits. */
+  readOnly?: boolean;
 }) {
   const scheme = useScheme();
   const theme = EVA_THEME[scheme];
@@ -151,7 +155,7 @@ export function useQuickTaskActions({
     const canRun = (task.status === "todo" && runs !== undefined && runs.length === 0) || task.status === "in_progress";
     switch (page) {
       case "root":
-        if (task.archivedAt !== undefined) {
+        if (task.archivedAt !== undefined || readOnly) {
           return (
             <>
               {onSelect ? (
@@ -168,15 +172,19 @@ export function useQuickTaskActions({
                 </>
               ) : null}
               {copyRows(task)}
-              <MenuDivider />
-              <SheetRow
-                icon={IconArchiveOff}
-                title={UNARCHIVE_LABEL}
-                onPress={() => {
-                  close();
-                  unarchive(task._id);
-                }}
-              />
+              {task.archivedAt !== undefined ? (
+                <>
+                  <MenuDivider />
+                  <SheetRow
+                    icon={IconArchiveOff}
+                    title={UNARCHIVE_LABEL}
+                    onPress={() => {
+                      close();
+                      unarchive(task._id);
+                    }}
+                  />
+                </>
+              ) : null}
             </>
           );
         }

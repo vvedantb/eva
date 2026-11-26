@@ -33,6 +33,7 @@ export {
   countDrafts,
   saveDraft,
   activateDraft,
+  deleteDraft,
 } from "./_agentTasks/drafts";
 
 export {

@@ -6,6 +6,7 @@ import {
   aiModelValidator,
 } from "../validators";
 import {
+  assertProjectNotArchived,
   authMutation,
   hasRepoAccess,
   getProjectWithAccess,
@@ -109,6 +110,7 @@ export const update = authMutation({
       args.id,
       ctx.userId,
     );
+    assertProjectNotArchived(project);
     // `id` must be omitted — leaving it in the rest-spread patches a stray
     // `id` field onto the document and breaks projects:list return validation.
     const {

@@ -244,17 +244,23 @@ async function enrichTasksWithLastRun(
 /**
  * Lists all tasks for a project in `taskNumber` order, enriched with latest
  * run time. A task in a repo the caller cannot access is a locked row
- * (`lockedTaskRow`).
+ * (`lockedTaskRow`). With `archived`, only the tasks archived on their own
+ * (the task list's Archived group); they never count in the project's status.
  */
 export const listByProject = authQuery({
-  args: { projectId: v.id("projects") },
+  args: { projectId: v.id("projects"), archived: v.optional(v.boolean()) },
   returns: v.array(agentTaskWithLastRunValidator),
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.projectId);
     if (!project || !(await hasRepoAccess(ctx.db, project.repoId, ctx.userId)))
       return [];
     const [listed, factsById] = await Promise.all([
-      listProjectTasksForUser(ctx.db, args.projectId, ctx.userId),
+      listProjectTasksForUser(
+        ctx.db,
+        args.projectId,
+        ctx.userId,
+        args.archived === true,
+      ),
       loadProjectTaskFacts(ctx.db, project),
     ]);
     const withFacts = (

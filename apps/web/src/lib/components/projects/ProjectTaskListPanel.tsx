@@ -55,6 +55,8 @@ interface RowContext {
   authorNames: ReadonlyMap<string, string>;
   /** Task numbers by task id: names where a merged Triage item went. */
   numIdOf: (taskId: string) => number | undefined;
+  /** An archived project: no triage buttons, no row menu. */
+  readOnly: boolean;
 }
 
 function ProjectTaskRowFor({
@@ -84,6 +86,7 @@ function ProjectTaskRowFor({
       })}
       onSelectTask={context.onSelectTask}
       basePath={context.basePath}
+      readOnly={context.readOnly}
     />
   );
 }
@@ -128,6 +131,10 @@ function GroupHeader({
 interface ProjectTaskListPanelProps {
   projectId: Id<"projects">;
   tasks: Task[];
+  /** Tasks archived on their own: listed under Archived, with Unarchive. */
+  archivedTasks: Task[];
+  /** An archived project: no Approve all, triage buttons or row menu. */
+  readOnly: boolean;
   /** Tasks whose latest run failed (`useProjectTaskStatus`). */
   failedTaskIds: ReadonlySet<string>;
   onSelectTask: (id: Id<"agentTasks">) => void;
@@ -143,6 +150,8 @@ interface ProjectTaskListPanelProps {
 export function ProjectTaskListPanel({
   projectId,
   tasks,
+  archivedTasks,
+  readOnly,
   failedTaskIds,
   onSelectTask,
   homeRepoId,
@@ -159,8 +168,14 @@ export function ProjectTaskListPanel({
   );
 
   const notesByTask = useProjectTaskNotes(projectId);
-  const numIdById = new Map(tasks.map((task) => [String(task._id), task.numId]));
-  const sections = projectTaskStatusSections(tasks, failedTaskIds);
+  const numIdById = new Map(
+    [...tasks, ...archivedTasks].map((task) => [String(task._id), task.numId]),
+  );
+  const sections = projectTaskStatusSections(
+    tasks,
+    failedTaskIds,
+    archivedTasks,
+  );
   const pullRequests = projectTaskPullRequests(tasks);
   const toApprove = unapprovedTodoTaskIds(tasks);
   const triageAuthorIds = [
@@ -226,12 +241,13 @@ export function ProjectTaskListPanel({
     reposById,
     authorNames: firstNameByUserId(authors ?? []),
     numIdOf: (taskId) => numIdById.get(taskId),
+    readOnly,
   };
 
   // Tasks added without "Start now" wait in Triage: its header approves them
   // all.
   const triageActions =
-    toApprove.length > 0 ? (
+    !readOnly && toApprove.length > 0 ? (
       <Button
         size="xs"
         variant="ghost"

@@ -12,7 +12,6 @@ import {
   quickTaskTodoDrafts,
   runAllPlan,
   startAll,
-  visibleDrafts,
   type ArchiveListMode,
   type DisplayTaskStatus,
   type QuickTaskListFilters,
@@ -185,8 +184,7 @@ function QuickTaskModeList({ repo, mode }: { repo: Repo; mode: ArchiveListMode }
   };
   const changeFilters = (patch: Partial<QuickTaskListFilters>) => setFilters({ ...filters, ...patch });
   const shown = applyQuickTaskFilters(tasks, filters);
-  // `archive` keeps the row: an archived draft stays until the list drops it.
-  const liveDrafts = visibleDrafts(drafts ?? []);
+  const liveDrafts = drafts ?? [];
   const shownDrafts = quickTaskTodoDrafts(liveDrafts, filters);
   // The web tag list: the stock tags and every tag on the repo's tasks. `sort` on a fresh array; Hermes lacks `toSorted`.
   const allTags = [...new Set([...TASK_TAGS, ...tasks.flatMap((task) => task.tags ?? [])])].sort();

@@ -26,6 +26,7 @@ import {
   visibleChatMessages,
   findBubbleGroups,
   EVA_MENTION_ITEM,
+  archiveCopy,
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
 import { turnCheckpoint } from "@eva/shared/turnCheckpoint";
@@ -241,10 +242,12 @@ export default function ChatScreen() {
         : SANDBOX_CHAT_COPY.asleepTitle;
   // Waking or sleeping is the whole story; awake, the web line teaches desktop drop, so the phone keeps the title.
   const emptyDescription = sandboxAwake || sandbox.isToggling ? "" : SANDBOX_CHAT_COPY.asleepDescription;
-  // Why a closed session takes no message: its PR merged or closed, or it was archived (the web banner).
-  const closedReason = chat.session
-    ? getSessionReadOnlyMessage({ isArchived: chat.session.archived, prState: sessionRow?.prState })
-    : undefined;
+  // Why a closed chat takes no message: its task or project is archived, or its session's PR merged or closed, or it was archived (the web banner).
+  const closedReason = chat.archived
+    ? archiveCopy(chat.archived).readOnly
+    : chat.session
+      ? getSessionReadOnlyMessage({ isArchived: chat.session.archived, prState: sessionRow?.prState })
+      : undefined;
   const streamingEntityId = parentId && !threadTurn ? chatStreamingEntityId(parentId) : undefined;
   const dayStarts = findDayBoundaryIds(visible);
   const newBoundaryId = findNewMessageIds(visible, newSinceAt, me ?? undefined)[0];
@@ -621,7 +624,7 @@ function ChatDock({
   messagesNewestFirst: ChatMessage[];
   /** The chat takes a message (`chat.canReply`). */
   canReply: boolean;
-  /** A closed session's reason (`getSessionReadOnlyMessage`), in place of "This chat is closed." */
+  /** Why the chat is closed (an archived task or project, `getSessionReadOnlyMessage`), in place of "This chat is closed." */
   closedReason: string | undefined;
   onStop: () => void;
   /** The `/goal` and publish recovery banners, above the usage-limit card, as the web `SandboxChatPreInput`. */

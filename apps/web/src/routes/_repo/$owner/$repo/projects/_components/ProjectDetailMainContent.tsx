@@ -63,6 +63,7 @@ export function ProjectDetailMainContent({
             repoId={project.repoId}
             title={project.title}
             description={project.description}
+            readOnly={project.archivedAt !== undefined}
             documentsHref={
               projectSegment
                 ? `${projectHref}/sandbox/documents`

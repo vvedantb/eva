@@ -1,6 +1,7 @@
 import type { Doc } from "@eva/backend";
 import { prStateLabel } from "./prState";
 import { prNumberFromGithubUrl } from "./prReview";
+import { ARCHIVE_LIST_MODE_LABELS } from "./archive";
 import {
   projectStatus,
   projectTaskDisplayStatus,
@@ -266,6 +267,8 @@ export interface SummarizableProjectTaskRow {
   prState?: Doc<"agentTasks">["prState"];
   /** The open task the coordinator added this Triage item to. */
   mergedIntoTaskId?: string;
+  /** Archived on its own: listed under Archived (`projectTaskStatusSections`). */
+  archivedAt?: number;
 }
 
 /** "#9003" from a GitHub PR URL, else the URL's last path part. */
@@ -300,6 +303,7 @@ function projectTaskReason(
         ? WITH_COORDINATOR_LABEL
         : "Waiting for a free slot";
     case "archived":
+      if (row.archivedAt !== undefined) return ARCHIVE_LIST_MODE_LABELS.archived;
       if (row.status === "cancelled") {
         return facts.mergedIntoNumId !== undefined
           ? `Added to #${facts.mergedIntoNumId}`
@@ -426,27 +430,42 @@ export interface SectionableProjectTaskRow extends ProjectTaskRow {
   lastRunStartedAt?: number;
 }
 
+/** A task archived on its own: Archived, waiting for no one. */
+function archivedTaskView(row: ProjectTaskRow): ProjectTaskView {
+  return {
+    ...projectTaskView(row, false),
+    displayStatus: "archived",
+    needsYou: undefined,
+    waitingForCoordinator: false,
+  };
+}
+
 /**
  * A project's task list: one section per display status that has tasks
- * (Triage, Working, Blocked, Idle, Archived), each row with its view. Idle
- * keeps the project's order (`taskNumber`); every other section puts the
- * latest run first, else the newest task. Every section but Archived starts
- * open.
+ * (Triage, Working, Blocked, Idle, Archived), each row with its view. Tasks
+ * archived on their own (`archivedRows`, `listByProject` with `archived`)
+ * join Archived beside the done and cancelled tasks. Idle keeps the
+ * project's order (`taskNumber`); every other section puts the latest run
+ * first, else the newest task. Every section but Archived starts open.
  */
 export function projectTaskStatusSections<
   Row extends SectionableProjectTaskRow,
 >(
   rows: readonly Row[],
   failedTaskIds: ReadonlySet<string>,
+  archivedRows: readonly Row[] = [],
 ): Array<{
   status: ProjectTaskDisplayStatus;
   tasks: Array<{ row: Row; view: ProjectTaskView }>;
   defaultOpen: boolean;
 }> {
-  const viewed = rows.map((row) => ({
-    row,
-    view: projectTaskView(row, failedTaskIds.has(row._id)),
-  }));
+  const viewed = [
+    ...rows.map((row) => ({
+      row,
+      view: projectTaskView(row, failedTaskIds.has(row._id)),
+    })),
+    ...archivedRows.map((row) => ({ row, view: archivedTaskView(row) })),
+  ];
   const lastRun = (row: Row) => row.lastRunStartedAt ?? row.createdAt;
   return PROJECT_TASK_DISPLAY_STATUSES.flatMap((status) => {
     const matching = viewed.filter(

@@ -26,6 +26,8 @@ interface LabelsFieldProps {
   /** Every label already used in this repo — the pick list. */
   allTags: string[];
   onChange: (tags: string[]) => void;
+  /** Read-only: the labels show, the picker does not open. */
+  disabled?: boolean;
 }
 
 /**
@@ -33,7 +35,12 @@ interface LabelsFieldProps {
  * affordance when there are none. Clicking the row opens one picker that both
  * adds and removes, so there is no per-badge remove button to aim at.
  */
-export function LabelsField({ tags, allTags, onChange }: LabelsFieldProps) {
+export function LabelsField({
+  tags,
+  allTags,
+  onChange,
+  disabled = false,
+}: LabelsFieldProps) {
   const [search, setSearch] = useState("");
   const current = tags ?? [];
   const selected = new Set(current);
@@ -66,6 +73,7 @@ export function LabelsField({ tags, allTags, onChange }: LabelsFieldProps) {
       <PopoverTrigger asChild>
         <button
           type="button"
+          disabled={disabled}
           aria-label="Change or add labels"
           className={`${FIELD_ROW_CLASS} w-full flex-wrap gap-1 text-left ${FIELD_TEXT_CLASS}`}
         >
