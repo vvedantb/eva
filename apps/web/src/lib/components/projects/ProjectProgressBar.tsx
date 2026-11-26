@@ -20,8 +20,7 @@ export function ProjectProgressBar({
   if (!status) return null;
 
   // Fills stay at full track width and scale from the left — same compositor
-  // rule as UsageBar. `.project-progress-fill` is the hook for
-  // `html[data-page-motion=off]` (do not add that rule here).
+  // rule as UsageBar. The global `html[data-page-motion=off]` rule snaps it.
   const segments = projectStatusSegments(status);
 
   if (segments.length === 0) {
