@@ -157,7 +157,7 @@ export function NewSessionComposer() {
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
       >
-        <div className="eva-gradient eva-gradient-drift absolute inset-0" />
+        <div className="eva-gradient eva-gradient-drift absolute inset-0 [--eva-gradient-strength:2]" />
       </div>
       <div className="flex w-full max-w-2xl flex-col gap-3">
         <EvaSetupCard />

@@ -249,22 +249,23 @@
   @apply eva-gradient;
 }
 
-/* Eva's brand wash: accent from the top, chart tones at the sides. */
+/* Eva's brand wash: accent from the top, chart tones at the sides.
+ * `--eva-gradient-strength` scales every tone (default 1). */
 @utility eva-gradient {
   background-image:
     radial-gradient(
       ellipse 70% 50% at 50% -8%,
-      color-mix(in oklab, var(--accent) 16%, transparent),
+      color-mix(in oklab, var(--accent) calc(16% * var(--eva-gradient-strength, 1)), transparent),
       transparent 62%
     ),
     radial-gradient(
       ellipse 40% 40% at 88% 18%,
-      color-mix(in oklab, var(--chart-2) 8%, transparent),
+      color-mix(in oklab, var(--chart-2) calc(8% * var(--eva-gradient-strength, 1)), transparent),
       transparent 60%
     ),
     radial-gradient(
       ellipse 40% 40% at 10% 30%,
-      color-mix(in oklab, var(--chart-3) 7%, transparent),
+      color-mix(in oklab, var(--chart-3) calc(7% * var(--eva-gradient-strength, 1)), transparent),
       transparent 60%
     );
 
@@ -272,38 +273,39 @@
     background-image:
       radial-gradient(
         ellipse 70% 50% at 50% -8%,
-        color-mix(in oklab, var(--accent) 12%, transparent),
+        color-mix(in oklab, var(--accent) calc(12% * var(--eva-gradient-strength, 1)), transparent),
         transparent 62%
       ),
       radial-gradient(
         ellipse 40% 40% at 88% 18%,
-        color-mix(in oklab, var(--chart-2) 6%, transparent),
+        color-mix(in oklab, var(--chart-2) calc(6% * var(--eva-gradient-strength, 1)), transparent),
         transparent 60%
       ),
       radial-gradient(
         ellipse 40% 40% at 10% 30%,
-        color-mix(in oklab, var(--chart-3) 5%, transparent),
+        color-mix(in oklab, var(--chart-3) calc(5% * var(--eva-gradient-strength, 1)), transparent),
         transparent 60%
       );
   }
 }
 
 /* Slow drift for an `eva-gradient` layer. Transform only, so it stays on the
- * compositor. "Disable page animations" stops it. */
+ * compositor. Travel stays under (scale - 1) / 2, so no layer edge shows.
+ * "Disable page animations" stops it. */
 @utility eva-gradient-drift {
-  animation: eva-gradient-drift 24s ease-in-out infinite alternate;
+  animation: eva-gradient-drift 14s ease-in-out infinite alternate;
   will-change: transform;
 }
 
 @keyframes eva-gradient-drift {
   from {
-    transform: translate3d(-4%, -2%, 0) scale(1.05);
+    transform: translate3d(-8%, -5%, 0) scale(1.2);
   }
   50% {
-    transform: translate3d(3%, 1%, 0) scale(1.12) rotate(2deg);
+    transform: translate3d(8%, 4%, 0) scale(1.25);
   }
   to {
-    transform: translate3d(-1%, 3%, 0) scale(1.08) rotate(-2deg);
+    transform: translate3d(-3%, 8%, 0) scale(1.2);
   }
 }
 
