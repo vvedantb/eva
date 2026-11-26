@@ -1,7 +1,7 @@
 # Project tasks across several repos
 
 **Date:** 26 November 2026
-**Status:** TODO (v3, first item). Open questions below.
+**Status:** TODO (v3, first item). Decisions settled 26 November 2026.
 **Example:** one change that needs `evalucom/carepulse_v2` (API) and `evalucom/carepulse-ts` (client).
 
 ## Today
@@ -23,11 +23,13 @@
 - The coordinator's own sandbox gets no linked repos (it can already read sibling repos under the same owner).
 - Apps of the same repo (`carepulse-ts` `apps/web` and `apps/eprocurement`) are one git repo: a task in that repo already sees both.
 
-## Open questions
+## Decisions (user, 26 November 2026)
 
-1. Who decides a task needs several repos: Eva on her own when the change spans them (recommended), or only when a person asks?
-2. Done rule: all PRs merged (recommended), or the home repo's PR merged?
-3. Merge order: Eva writes it in the PR bodies only (recommended), or she also keeps the second PR a draft until the first merges?
+| # | Decision |
+|---|---|
+| 1 | Eva decides: a change that must land in several repos together is one task with all of them; unrelated work stays one repo per task. |
+| 2 | Done when all the task's PRs are merged; in review while any is open. |
+| 3 | Merge order is written in every PR body; no PR is held back as a draft. |
 
 ## Checks
 
