@@ -113,14 +113,18 @@ export async function clearTaskRunStreaming(
   await clearStreamingActivity(ctx, String(taskId));
 }
 
-/** Builds a human-readable summary string for a completed run result. */
+/**
+ * The run's reply: the agent's final text, else a stock line for a success.
+ * A failed run keeps its final text too — it is often a question the agent
+ * stopped on (no commit), and the chat shows it above the error.
+ */
 export function buildRunResultSummary(
   success: boolean,
   prUrl: string | null,
   claudeResult?: string,
 ): string | undefined {
-  if (!success) return undefined;
   if (claudeResult) return claudeResult;
+  if (!success) return undefined;
   return prUrl ? "Created task PR" : "Pushed commit to task branch";
 }
 

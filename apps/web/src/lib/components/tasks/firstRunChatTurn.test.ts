@@ -78,6 +78,32 @@ describe("findFirstRunChatTurnRun", () => {
     expect(findFirstRunChatTurnRun(runs)?.label).toBe("succeeded");
   });
 
+  test("with no good run, the latest failed attempt owns the chat turn", () => {
+    // Task timelines show no runs, so skipping it left the chat empty.
+    const runs = [
+      run("older-failure", {
+        status: "error",
+        resultSummary: undefined,
+        startedAt: 1_000,
+      }),
+      run("newer-failure", { status: "cancelled", startedAt: 2_000 }),
+      run("make-changes", {
+        status: "error",
+        triggeringCommentId: "comment-1",
+        startedAt: 3_000,
+      }),
+    ];
+    expect(findFirstRunChatTurnRun(runs)?.label).toBe("newer-failure");
+  });
+
+  test("a failed run with a summary never outranks a later success", () => {
+    const runs = [
+      run("failed", { status: "error", startedAt: 1_000 }),
+      run("succeeded", { startedAt: 2_000 }),
+    ];
+    expect(findFirstRunChatTurnRun(runs)?.label).toBe("succeeded");
+  });
+
   test("a run still in flight owns the chat turn", () => {
     // Its steps stream into the chat bubble instead of a timeline accordion.
     const runs = [
@@ -228,6 +254,30 @@ describe("firstRunAssistantContent", () => {
     });
     expect(fields.finishedAt).toBe(1_000);
     expect(findStreamingTargetMessage([asRow(fields)])).toBeUndefined();
+  });
+
+  test("a failed run replies with its last text, then the error", () => {
+    const fields = firstRunAssistantContent({
+      status: "error",
+      resultSummary: "Which flag do you mean?",
+      error: "Agent finished without creating a new git commit.",
+      finishedAt: 2_000,
+      activityLog: null,
+      startedAt: 1_000,
+    });
+    expect(fields.content).toBe(
+      "Which flag do you mean?\n\nError: Agent finished without creating a new git commit.",
+    );
+  });
+
+  test("a cancelled run is marked stopped", () => {
+    const fields = firstRunAssistantContent({
+      status: "cancelled",
+      finishedAt: 2_000,
+      activityLog: null,
+      startedAt: 1_000,
+    });
+    expect(fields).toEqual({ content: "", finishedAt: 2_000, stopped: true });
   });
 
   test("the placeholder does not carry an activity log key", () => {

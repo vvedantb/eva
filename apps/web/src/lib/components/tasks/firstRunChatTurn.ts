@@ -34,32 +34,44 @@ export function taskRunStreamingEntityId(runId: string): string {
   return `task-run-${runId}`;
 }
 
+/** A run that ended without a reply: its turn shows the error instead. */
+function isRunFailed(status: AgentRun["status"]): boolean {
+  return status === "error" || status === "cancelled";
+}
+
+const runStart = (run: ChatTurnRunFields): number =>
+  run.startedAt ?? run._creationTime;
+
 /**
  * The run that renders as the opening assistant turn of the sandbox chat. It
  * is the earliest initial run that is either still in flight (its live
  * activity streams into the chat bubble) or a settled success with a
  * `resultSummary` (its activity log and reply render as a finished turn).
  *
- * Failed or cancelled attempts, a success with no `resultSummary` (the turn
- * would have no reply text), "Make changes" runs and Resolve Conflicts runs
- * are skipped. Task overview timelines show no runs at all.
+ * When no run qualifies, the latest failed or cancelled initial run renders
+ * instead, with its error as the reply: task timelines show no runs, so this
+ * turn is the only place a failed first run can surface. "Make changes" runs,
+ * Resolve Conflicts runs and a success with no `resultSummary` (the turn would
+ * have no reply text) are always skipped.
  */
 export function findFirstRunChatTurnRun<Run extends ChatTurnRunFields>(
   runs: readonly Run[] | undefined,
 ): Run | undefined {
   let first: Run | undefined;
+  let latestFailed: Run | undefined;
   for (const run of runs ?? []) {
-    if (!isRunInProgress(run.status)) {
-      if (run.status !== "success" || !run.resultSummary) continue;
-    }
     if (run.triggeringCommentId !== undefined) continue;
     if (run.mode === "resolve_conflicts") continue;
-    const startedAt = run.startedAt ?? run._creationTime;
-    if (!first || startedAt < (first.startedAt ?? first._creationTime)) {
-      first = run;
+    if (isRunFailed(run.status)) {
+      if (!latestFailed || runStart(run) > runStart(latestFailed)) {
+        latestFailed = run;
+      }
+      continue;
     }
+    if (!isRunInProgress(run.status) && !run.resultSummary) continue;
+    if (!first || runStart(run) < runStart(first)) first = run;
   }
-  return first;
+  return first ?? latestFailed;
 }
 
 /**
@@ -75,23 +87,47 @@ export function findFirstRunChatTurnRun<Run extends ChatTurnRunFields>(
 export function firstRunAssistantContent({
   status,
   resultSummary,
+  error,
   finishedAt,
   activityLog,
   startedAt,
 }: {
   status: AgentRun["status"];
   resultSummary?: string;
+  /** The run's failure, shown as the reply when it ended in error. */
+  error?: string;
   finishedAt?: number;
   /** Resolved log for the run — `null` when it has none. */
   activityLog: string | null;
   startedAt: number;
-}): { content: string; activityLog?: string; finishedAt?: number } {
+}): {
+  content: string;
+  activityLog?: string;
+  finishedAt?: number;
+  stopped?: true;
+} {
   if (isRunInProgress(status)) return { content: "" };
   return {
-    content: resultSummary ?? "",
+    content: [resultSummary, failedRunError(status, error)]
+      .filter(Boolean)
+      .join("\n\n"),
     ...(activityLog !== null ? { activityLog } : {}),
     finishedAt: finishedAt ?? startedAt,
+    ...(status === "cancelled" ? { stopped: true } : {}),
   };
+}
+
+/**
+ * A failed run's error line, worded like a failed session turn
+ * (`assistantReplyContent` on the server). A cancelled run has no error text;
+ * its `stopped` flag says what happened.
+ */
+function failedRunError(
+  status: AgentRun["status"],
+  error?: string,
+): string | undefined {
+  if (status !== "error") return undefined;
+  return `Error: ${error || "Unknown error during execution."}`;
 }
 
 /**
@@ -159,6 +195,7 @@ export function buildFirstRunChatTurn({
         ...(run.resultSummary !== undefined
           ? { resultSummary: run.resultSummary }
           : {}),
+        ...(run.error !== undefined ? { error: run.error } : {}),
         ...(run.finishedAt !== undefined ? { finishedAt: run.finishedAt } : {}),
         activityLog,
         startedAt,
