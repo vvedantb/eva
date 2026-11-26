@@ -70,13 +70,35 @@ import { shortcutOverridesValidator } from "./shortcuts";
 import { recapWalkthroughStepValidator } from "../_prRecapWorkflow/walkthrough";
 import { sessionOwnerValidator } from "../_sessions/owner";
 
-/** Where the user was in Eva when they messaged Manager Ave. */
-export const avePageContextValidator = v.object({
-  /** Path plus search, e.g. `/acme/web/sessions/abc?tab=diff`. */
+/** Where the user was in Eva when they messaged Manager Ave, as the web app sends it. */
+const avePageContextArgFields = {
+  /** Path plus search, e.g. `/acme/web/sessions/12?tab=diff`. */
   path: v.string(),
   title: v.string(),
   /** IANA zone, e.g. `Europe/London`. */
   timeZone: v.string(),
+  /** Text the user last selected on that page, if any. */
+  selection: v.optional(v.string()),
+};
+export const avePageContextArgValidator = v.object(avePageContextArgFields);
+
+/** The session, quick task, project or doc the page shows (`_ave/pageEntity.ts`). */
+export const avePageEntityValidator = v.object({
+  kind: v.union(
+    v.literal("session"),
+    v.literal("quick task"),
+    v.literal("project"),
+    v.literal("doc"),
+  ),
+  title: v.string(),
+  /** Sessions and quick tasks only: projects and docs have no status. */
+  status: v.optional(v.string()),
+});
+
+/** Stored on the user's Ave row: what the client sent plus what the server found at that path. */
+export const avePageContextValidator = v.object({
+  ...avePageContextArgFields,
+  entity: v.optional(avePageEntityValidator),
 });
 
 export const userFields = {

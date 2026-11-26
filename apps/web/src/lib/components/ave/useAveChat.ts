@@ -13,6 +13,7 @@ import {
 import type { LocalChatDraft } from "@/lib/components/chat/ChatComposer";
 import { tokenizedToEditable } from "@/lib/components/mentions";
 import { splitAveFollowUps } from "@/lib/components/ave/aveFollowUps";
+import { takePageSelection } from "@/lib/components/ave/pageSelection";
 import { catchMutationError } from "@/lib/utils/mutationToast";
 
 /** One Manager Ave per user, so one draft per browser. */
@@ -114,6 +115,7 @@ export function useAveChat() {
             path: `${window.location.pathname}${window.location.search}`,
             title: document.title,
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            selection: takePageSelection(),
           },
         }),
         "Couldn't send to Manager Ave",

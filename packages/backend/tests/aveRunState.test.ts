@@ -44,6 +44,7 @@ async function fixture() {
       userId: ownerUserId,
       title: "Fix the login bug",
       status: "active",
+      numId: 7,
     });
     return { ownerUserId, strangerUserId, repoId, sessionId };
   });
@@ -76,6 +77,53 @@ async function rows(f: Awaited<ReturnType<typeof fixture>>) {
       .collect(),
   );
 }
+
+describe("Manager Ave page context", () => {
+  test(
+    "a send names the entity on the page and keeps the selection",
+    async () => {
+      const f = await fixture();
+      await f.owner.mutation(api.ave.send, {
+        content: "why does this fail?",
+        clientId: "c1",
+        pageContext: {
+          ...PAGE,
+          path: "/vvedantb/eva/sessions/7?tab=diff",
+          selection: "  TypeError: x is undefined  ",
+        },
+      });
+      const [row] = await rows(f);
+      expect(row?.pageContext?.entity).toEqual({
+        kind: "session",
+        title: "Fix the login bug",
+        status: "active",
+      });
+      expect(row?.pageContext?.selection).toBe("TypeError: x is undefined");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
+    "a user without repo access gets no entity for the path",
+    async () => {
+      const f = await fixture();
+      await f.stranger.mutation(api.ave.send, {
+        content: "what is this?",
+        clientId: "c1",
+        pageContext: { ...PAGE, path: "/vvedantb/eva/sessions/7" },
+      });
+      const message = await f.t.run(async (ctx) =>
+        ctx.db
+          .query("aveMessages")
+          .filter((q) => q.eq(q.field("userId"), f.strangerUserId))
+          .first(),
+      );
+      expect(message?.pageContext?.path).toBe("/vvedantb/eva/sessions/7");
+      expect(message?.pageContext?.entity).toBeUndefined();
+    },
+    TIMEOUT_MS,
+  );
+});
 
 describe("Manager Ave run state", () => {
   test(
