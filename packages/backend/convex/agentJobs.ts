@@ -6,7 +6,7 @@ import { authMutation, hasRepoAccess } from "./functions";
 import { completionCallbackArgs, turnLeaseFenceArgs } from "./validators";
 import { toWorkflowId, workflow } from "./workflowManager";
 import { settleAgentTurnCompletion } from "./_chat/turnStore";
-import { clearStreamingActivity } from "./_taskWorkflow/helpers";
+import { clearStreamingActivity } from "./streaming";
 import { resolveAutomationDoc } from "./_automations/systemAutomations";
 import {
   agentJobCompleteEvent,

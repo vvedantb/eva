@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildStaleDocPatch } from "../convex/_prRecapWorkflow/staleDoc";
+import { buildStaleDocPatch } from "../convex/_agentJobs/staleDoc";
 
 const NOW = 1_800_000_000_000;
 

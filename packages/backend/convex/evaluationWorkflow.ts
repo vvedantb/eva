@@ -5,7 +5,7 @@ import { internal } from "./_generated/api";
 import { workflow } from "./workflowManager";
 import { EVA_BRANCH_PREFIX } from "./_git/branchNames";
 import { authMutation, hasRepoAccess } from "./functions";
-import { llmJson } from "./_taskWorkflow/helpers";
+import { llmJson } from "./_shared/llmJson";
 import { buildPrBody } from "./prBody";
 import { FALLBACK_GIT_BASE_BRANCH } from "@eva/shared";
 import { buildRootDirectoryInstruction } from "./prompts";

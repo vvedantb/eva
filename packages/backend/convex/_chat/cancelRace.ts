@@ -1,8 +1,10 @@
 import type { MutationCtx } from "../_generated/server";
 import type { Id } from "../_generated/dataModel";
 import { cancelTrackedWorkflow } from "../workflowManager";
-import { finalizeCancelledAssistantMessage } from "../streaming";
-import { clearStreamingActivity } from "../_taskWorkflow/helpers";
+import {
+  clearStreamingActivity,
+  finalizeCancelledAssistantMessage,
+} from "../streaming";
 import { finalizeOpenSyntheticTurnOnCancel } from "./chatResult";
 import {
   closeOpenTurn,

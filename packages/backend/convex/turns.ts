@@ -20,8 +20,11 @@ import {
   type ChatAlert,
 } from "./_chat/surfaceAdapters";
 import { tearDownStaleAgentJob } from "./_agentJobs/slot";
-import { clearStreamingActivity } from "./_taskWorkflow/helpers";
-import { touchStreamingEntity, upsertStreamingActivity } from "./streaming";
+import {
+  clearStreamingActivity,
+  touchStreamingEntity,
+  upsertStreamingActivity,
+} from "./streaming";
 import {
   authMutation,
   authQuery,

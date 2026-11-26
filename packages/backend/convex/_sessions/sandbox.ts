@@ -18,8 +18,10 @@ import {
   clearSandboxStartupActivity,
 } from "../_sandbox/startupActivity";
 import { markAllRunningExited } from "../backgroundProcesses";
-import { clearStreamingActivity } from "../_taskWorkflow/helpers";
-import { finalizeCancelledAssistantMessage } from "../streaming";
+import {
+  clearStreamingActivity,
+  finalizeCancelledAssistantMessage,
+} from "../streaming";
 import { detachPendingQuestions } from "../pendingQuestions";
 import { clearPreviewToolCallsForParent } from "../_previewToolCalls/calls";
 import { settleOrphanedBackgroundAgents } from "./backgroundAgents";

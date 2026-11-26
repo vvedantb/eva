@@ -29,7 +29,7 @@ import { resolveMessageCredential } from "../_userProviderAccounts/credentialSou
 import { sessionAccountHolder } from "../_projects/projectAccount";
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
-import { clearStreamingActivity } from "../_taskWorkflow/helpers";
+import { clearStreamingActivity } from "../streaming";
 import { hasOpenChatTurn } from "../_chat/turnProjection";
 import {
   activityRefForParentId,

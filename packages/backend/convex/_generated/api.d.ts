@@ -12,6 +12,7 @@ import type * as _agentJobs_completion from "../_agentJobs/completion.js";
 import type * as _agentJobs_owner from "../_agentJobs/owner.js";
 import type * as _agentJobs_runOneShotAgent from "../_agentJobs/runOneShotAgent.js";
 import type * as _agentJobs_slot from "../_agentJobs/slot.js";
+import type * as _agentJobs_staleDoc from "../_agentJobs/staleDoc.js";
 import type * as _agentTasks_drafts from "../_agentTasks/drafts.js";
 import type * as _agentTasks_execution from "../_agentTasks/execution.js";
 import type * as _agentTasks_helpers from "../_agentTasks/helpers.js";
@@ -215,7 +216,6 @@ import type * as _notifications_digestWindow from "../_notifications/digestWindo
 import type * as _prRecapWorkflow_finalizeOutcome from "../_prRecapWorkflow/finalizeOutcome.js";
 import type * as _prRecapWorkflow_prompts from "../_prRecapWorkflow/prompts.js";
 import type * as _prRecapWorkflow_recapState from "../_prRecapWorkflow/recapState.js";
-import type * as _prRecapWorkflow_staleDoc from "../_prRecapWorkflow/staleDoc.js";
 import type * as _prRecapWorkflow_start from "../_prRecapWorkflow/start.js";
 import type * as _prRecapWorkflow_walkthrough from "../_prRecapWorkflow/walkthrough.js";
 import type * as _previewToolCalls_calls from "../_previewToolCalls/calls.js";
@@ -368,6 +368,7 @@ import type * as _shared_async from "../_shared/async.js";
 import type * as _shared_commentAnchor from "../_shared/commentAnchor.js";
 import type * as _shared_composerTraits from "../_shared/composerTraits.js";
 import type * as _shared_hmac from "../_shared/hmac.js";
+import type * as _shared_llmJson from "../_shared/llmJson.js";
 import type * as _shared_modelHandoff from "../_shared/modelHandoff.js";
 import type * as _shared_ownerTitle from "../_shared/ownerTitle.js";
 import type * as _skillSuggestions_rank from "../_skillSuggestions/rank.js";
@@ -381,7 +382,6 @@ import type * as _systemSkills_evaResolveConflicts from "../_systemSkills/evaRes
 import type * as _systemSkills_evaSetup from "../_systemSkills/evaSetup.js";
 import type * as _systemSkills_registry from "../_systemSkills/registry.js";
 import type * as _taskWorkflow_deploymentHelpers from "../_taskWorkflow/deploymentHelpers.js";
-import type * as _taskWorkflow_helpers from "../_taskWorkflow/helpers.js";
 import type * as _taskWorkflow_prompts from "../_taskWorkflow/prompts.js";
 import type * as _taskWorkflow_queries from "../_taskWorkflow/queries.js";
 import type * as _taskWorkflow_recovery from "../_taskWorkflow/recovery.js";
@@ -614,6 +614,7 @@ declare const fullApi: ApiFromModules<{
   "_agentJobs/owner": typeof _agentJobs_owner;
   "_agentJobs/runOneShotAgent": typeof _agentJobs_runOneShotAgent;
   "_agentJobs/slot": typeof _agentJobs_slot;
+  "_agentJobs/staleDoc": typeof _agentJobs_staleDoc;
   "_agentTasks/drafts": typeof _agentTasks_drafts;
   "_agentTasks/execution": typeof _agentTasks_execution;
   "_agentTasks/helpers": typeof _agentTasks_helpers;
@@ -817,7 +818,6 @@ declare const fullApi: ApiFromModules<{
   "_prRecapWorkflow/finalizeOutcome": typeof _prRecapWorkflow_finalizeOutcome;
   "_prRecapWorkflow/prompts": typeof _prRecapWorkflow_prompts;
   "_prRecapWorkflow/recapState": typeof _prRecapWorkflow_recapState;
-  "_prRecapWorkflow/staleDoc": typeof _prRecapWorkflow_staleDoc;
   "_prRecapWorkflow/start": typeof _prRecapWorkflow_start;
   "_prRecapWorkflow/walkthrough": typeof _prRecapWorkflow_walkthrough;
   "_previewToolCalls/calls": typeof _previewToolCalls_calls;
@@ -970,6 +970,7 @@ declare const fullApi: ApiFromModules<{
   "_shared/commentAnchor": typeof _shared_commentAnchor;
   "_shared/composerTraits": typeof _shared_composerTraits;
   "_shared/hmac": typeof _shared_hmac;
+  "_shared/llmJson": typeof _shared_llmJson;
   "_shared/modelHandoff": typeof _shared_modelHandoff;
   "_shared/ownerTitle": typeof _shared_ownerTitle;
   "_skillSuggestions/rank": typeof _skillSuggestions_rank;
@@ -983,7 +984,6 @@ declare const fullApi: ApiFromModules<{
   "_systemSkills/evaSetup": typeof _systemSkills_evaSetup;
   "_systemSkills/registry": typeof _systemSkills_registry;
   "_taskWorkflow/deploymentHelpers": typeof _taskWorkflow_deploymentHelpers;
-  "_taskWorkflow/helpers": typeof _taskWorkflow_helpers;
   "_taskWorkflow/prompts": typeof _taskWorkflow_prompts;
   "_taskWorkflow/queries": typeof _taskWorkflow_queries;
   "_taskWorkflow/recovery": typeof _taskWorkflow_recovery;

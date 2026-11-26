@@ -23,10 +23,7 @@ import {
   daemonClaimResultValidator,
 } from "../validators";
 import { resolveSessionBaseBranch } from "./baseBranch";
-import {
-  clearStreamingActivity,
-  extractFirstJsonValue,
-} from "../_taskWorkflow/helpers";
+import { extractFirstJsonValue } from "../_shared/llmJson";
 import { recordCompletionLog } from "../_agentJobs/completion";
 import {
   drainSessionChatQueues,
@@ -53,7 +50,10 @@ import {
 import type { MutationCtx } from "../_generated/server";
 import type { Doc, Id } from "../_generated/dataModel";
 import { notifyThreadAnswer } from "../_mentions/notifyChatMentions";
-import { finalizeCancelledAssistantMessage } from "../streaming";
+import {
+  clearStreamingActivity,
+  finalizeCancelledAssistantMessage,
+} from "../streaming";
 import { backgroundAgentEntryValidator } from "../_validators/tableFields";
 import { mergeBackgroundAgents } from "./backgroundAgents";
 import { agentGoalArg, agentGoalPatch } from "../_chat/agentGoal";

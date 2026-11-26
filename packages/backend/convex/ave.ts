@@ -5,7 +5,7 @@ import {
   avePageContextArgValidator,
 } from "./_validators/tableFields";
 import { resolvePageEntity } from "./_ave/pageEntity";
-import { clearStreamingActivity } from "./_taskWorkflow/helpers";
+import { clearStreamingActivity } from "./streaming";
 import {
   findLiveThread,
   getOrCreateLiveThread,
