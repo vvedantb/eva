@@ -26,7 +26,7 @@ import {
 import type { BackgroundAgentEntry } from "../_validators/tableFields";
 import { trackSessionChatWorkflow } from "../_chat/surfaceAdapters";
 import { resolveMessageCredential } from "../_userProviderAccounts/credentialSource";
-import { sessionAccountHolder } from "../_projects/runSettings";
+import { sessionAccountHolder } from "../_projects/projectAccount";
 import { resolveTurnProviderAccountId } from "../_userProviderAccounts/defaults";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { clearStreamingActivity } from "../_taskWorkflow/helpers";

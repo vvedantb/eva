@@ -129,7 +129,7 @@ export const backfillSessionStep = internalMutation({
     if (!session) return true;
     const chat =
       (await findMainChat(ctx.db, session._id)) ??
-      (await insertMainChat(ctx, session));
+      (await insertMainChat(ctx, session, {}));
     if (!(await moveLegacyTranscriptPage(ctx, session._id, chat._id))) {
       return false;
     }

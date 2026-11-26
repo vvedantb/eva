@@ -9,10 +9,7 @@ import { closeTaskReports, findOpenAsk } from "../_projects/reports";
 import { queueTaskRunMessage } from "../_sessions/execution";
 import { taskBranchName } from "../_git/branchNames";
 import { buildTaskRunPrompt } from "../_taskWorkflow/queries";
-import {
-  projectRunSettings,
-  takesProjectSettings,
-} from "../_projects/runSettings";
+import { evaChatSettings, takesEvaSettings } from "../_projects/projectAccount";
 import { setTaskLastRunStartedAt } from "./runSummary";
 import { hasActiveTaskRun } from "./taskRunStatus";
 
@@ -90,17 +87,20 @@ export async function startTaskRunTurn(
     : undefined;
   const context = await ensureWorkSession(ctx, { kind: "task", task });
   let chat = context.mainChat;
-  // A project task runs on its project's model and account (decision 20).
+  // The run uses the task chat's own picks. A project task stopped by a
+  // usage limit takes Eva's model and account again, so a changed account
+  // takes over.
   const project =
     task.projectId !== undefined ? await ctx.db.get(task.projectId) : null;
-  if (project && (await takesProjectSettings(ctx.db, task))) {
-    const settings = projectRunSettings(project, task);
-    await ctx.db.patch(task._id, settings);
-    await ctx.db.patch(chat._id, {
-      lastModel: settings.model ?? chat.lastModel,
-      providerAccountId: settings.providerAccountId,
-    });
-    chat = (await ctx.db.get(chat._id)) ?? chat;
+  if (project && (await takesEvaSettings(ctx.db, task))) {
+    const eva = await evaChatSettings(ctx.db, project);
+    if (eva?.lastModel !== undefined) {
+      await ctx.db.patch(chat._id, {
+        lastModel: eva.lastModel,
+        providerAccountId: eva.providerAccountId,
+      });
+      chat = (await ctx.db.get(chat._id)) ?? chat;
+    }
   }
   // The project block rides every turn of a project task's chat
   // (`ownerPromptContext`), so the task prompt leaves it out.

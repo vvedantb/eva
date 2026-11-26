@@ -26,10 +26,8 @@ type TaskDetailsData = Pick<
   | "users"
   | "creatorUser"
   | "projects"
-  | "isOwner"
   | "hasActiveRun"
   | "isArchived"
-  | "hasRuns"
   | "canEditTaskText"
   | "baseBranch"
   | "deploymentStatus"
@@ -62,10 +60,8 @@ export function TaskDetailsPane({
     users,
     creatorUser,
     projects,
-    isOwner,
     hasActiveRun,
     isArchived,
-    hasRuns,
     canEditTaskText: canEditText,
     baseBranch,
     deploymentStatus,
@@ -176,8 +172,6 @@ export function TaskDetailsPane({
                 projects={projects}
                 baseBranch={baseBranch}
                 deploymentStatus={deploymentStatus}
-                hasRuns={hasRuns}
-                isOwner={isOwner}
                 allTags={allTags ?? []}
                 readOnly={isArchived}
               />

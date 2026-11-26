@@ -206,7 +206,6 @@ type SourceRecord = {
   numId: number | undefined;
   title: string;
   ownerUserId: Id<"users">;
-  lastModel: Doc<"sessions">["lastModel"];
   deleted: boolean;
   archived: boolean;
 };
@@ -229,7 +228,6 @@ async function loadSource(
       numId: session.numId,
       title: session.title,
       ownerUserId: session.userId,
-      lastModel: session.lastModel,
       deleted: isEntityDeleted(session),
       archived: isSessionArchived(session),
     };
@@ -253,7 +251,6 @@ async function loadSource(
       numId: task.numId,
       title: task.title,
       ownerUserId: task.createdBy,
-      lastModel: undefined,
       deleted: false,
       archived: isEntityArchived(task),
     };
@@ -270,7 +267,6 @@ async function loadSource(
     numId: project.numId,
     title: project.title,
     ownerUserId: project.userId,
-    lastModel: undefined,
     deleted: false,
     archived: isEntityArchived(project),
   };
@@ -383,15 +379,14 @@ function notifyEntityArgs(
 /**
  * Where a source's transcript and queue live: a session's Main chat (created
  * for a pre-chat legacy session), or the chat a task or project talks in
- * (`ensureOwnerChat`, created on first need). `model` falls back to the
- * source's last model while the chat has none. Undefined when the source is
- * gone.
+ * (`ensureOwnerChat`, created on first need), with the chat's model.
+ * Undefined when the source is gone.
  */
 async function transcriptParent(
   ctx: MutationCtx,
   source: SourceRecord,
 ): Promise<
-  | { context: SessionChatContext; model: Doc<"sessions">["lastModel"] }
+  | { context: SessionChatContext; model: Doc<"sessionChats">["lastModel"] }
   | undefined
 > {
   if (source.ref.kind === "session") {
@@ -400,7 +395,7 @@ async function transcriptParent(
     const chat = await ensureMainChat(ctx, session);
     return {
       context: { session, chat },
-      model: chat.lastModel ?? source.lastModel,
+      model: chat.lastModel,
     };
   }
   const entity = await loadOwnerEntity(
@@ -411,7 +406,7 @@ async function transcriptParent(
   );
   if (!entity) return undefined;
   const context = await ensureOwnerChat(ctx, entity);
-  return { context, model: context.chat.lastModel ?? source.lastModel };
+  return { context, model: context.chat.lastModel };
 }
 
 async function insertSystemAlert(

@@ -31,7 +31,6 @@ export function TaskHeader({
         priority,
         projectId,
         assignedTo,
-        providerAccountId,
         ...safeFields
       } = args;
       patchLoadedQuery(
@@ -50,9 +49,6 @@ export function TaskHeader({
               : {}),
             ...(assignedTo !== undefined
               ? { assignedTo: assignedTo ?? undefined }
-              : {}),
-            ...(providerAccountId !== undefined
-              ? { providerAccountId: providerAccountId ?? undefined }
               : {}),
           },
       );

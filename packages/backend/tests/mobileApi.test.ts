@@ -23,6 +23,7 @@ import { MENTION_TOKEN_REGEX } from "../convex/_mentions/mentionToken";
 import { SKILL_TOKEN_REGEX } from "../convex/_mentions/skillToken";
 import { openSessionChatTurn } from "../convex/_chat/turnStore";
 import { hasActiveTaskRun } from "../convex/_agentTasks/taskRunStatus";
+import { ensureWorkSession } from "../convex/_sessions/ownedSession";
 import { modules } from "./_helpers/convexModules";
 
 /**
@@ -88,9 +89,10 @@ async function fixture() {
       createdAt: now,
       updatedAt: now,
       createdBy: userId,
-      // The run's model; the task's session chat starts from it.
-      model: "claude:opus",
     });
+    // The task's model lives on its chat.
+    const task = await ctx.db.get(taskId);
+    if (task) await ensureWorkSession(ctx, { kind: "task", task }, { lastModel: "claude:opus" });
     const projectId = await ctx.db.insert("projects", {
       repoId,
       userId,
@@ -464,8 +466,6 @@ describe("mobile api", () => {
         model: "claude:sonnet",
         traits: { effortLevel: "low" },
       });
-      // The run's model on the task row is untouched.
-      expect((await t.run((ctx) => ctx.db.get(ids.taskId)))?.model).toBe("claude:opus");
       await asUser.mutation(api.chats.send, { target: ids.taskId, message: "hi" });
       expect(await sent(t, chatId)).toEqual([{ content: "hi", model: "claude:sonnet", userId: ids.userId }]);
     },
@@ -536,9 +536,11 @@ describe("mobile api", () => {
         baseBranch: "staging",
       });
       const session = await t.run((ctx) => ctx.db.get(sessionId));
-      expect(session).toMatchObject({ baseBranch: "staging", lastModel: "claude:opus", lastReasoningLevel: "low" });
+      expect(session).toMatchObject({ baseBranch: "staging" });
       const chat = await asUser.query(api.chats.get, { target: sessionId });
       if (!chat) throw new Error("no chat");
+      // The picks live on the session's Main chat.
+      expect(chat).toMatchObject({ model: "claude:opus", traits: { effortLevel: "low" } });
       expect(await sent(t, chat.parentId)).toEqual([
         { content: "Add dark mode", model: "claude:opus", userId: ids.userId },
       ]);
@@ -596,12 +598,15 @@ describe("mobile api", () => {
         title: "Fix the footer",
         status: "todo",
         baseBranch: "staging",
-        model: "claude:opus",
-        reasoningLevel: "low",
         priority: "high",
         tags: ["frontend"],
       });
       expect(task?.run).toBeUndefined();
+      // The form's picks go on the task's chat.
+      expect(await asUser.query(api.chats.get, { target: taskId })).toMatchObject({
+        model: "claude:opus",
+        traits: { effortLevel: "low" },
+      });
       // A task in a project is not in the list the web opens with.
       await asUser.mutation(api.agentTasks.createQuickTask, {
         repoId: ids.repoId,

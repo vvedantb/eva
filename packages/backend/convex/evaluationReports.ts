@@ -107,7 +107,6 @@ export const createTasksFromIssues = authMutation({
         updatedAt: now,
         createdBy: ctx.userId,
         baseBranch: repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH,
-        model: repo.defaultModel,
         numId: await allocateNumId(ctx.db, report.repoId, "agentTasks"),
       });
       await createTaskRunSummary(ctx, taskId, report.repoId);

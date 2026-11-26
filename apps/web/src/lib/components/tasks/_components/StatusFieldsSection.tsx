@@ -2,25 +2,18 @@
 
 import { useState } from "react";
 import { useMutation } from "convex/react";
-import { api, normalizeAIModel } from "@eva/backend";
+import { api } from "@eva/backend";
 import type { Doc, Id } from "@eva/backend";
 import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
 import type { TaskStatus } from "../TaskStatusBadge";
 import { FieldsSection } from "@/lib/components/fields/FieldsSection";
-import { taskModelLockReason } from "@eva/shared/taskDetail";
-import { useSimpleView } from "@/lib/hooks/useSimpleView";
-import {
-  useAvailableAiModels,
-  useTaskOwnerProviderAccounts,
-} from "@/lib/hooks/useAvailableAiModels";
 import { LabelsField } from "@/lib/components/labels/LabelsField";
 import { NewProjectModal } from "@/lib/components/projects/NewProjectModal";
 import { useViewVercelDeployment } from "@/lib/hooks/useViewVercelDeployment";
 import {
   BaseBranchRow,
   DeploymentRow,
-  ModelField,
   PrioritySelectField,
   ProjectSelectField,
   ReviewerSelectField,
@@ -39,10 +32,6 @@ interface StatusFieldsSectionProps {
   baseBranch: string;
   /** Status row is shown behind the `viewVercelDeployment` experimental flag. */
   deploymentStatus: TaskDeploymentStatus;
-  /** Locks the model picker — the model that ran must stay on the record. */
-  hasRuns: boolean;
-  /** Only the task owner can move it onto their own provider account. */
-  isOwner: boolean;
   allTags: string[];
   /** An archived task (or one in an archived project): every field is disabled. */
   readOnly: boolean;
@@ -56,8 +45,6 @@ export function StatusFieldsSection({
   projects,
   baseBranch,
   deploymentStatus,
-  hasRuns,
-  isOwner,
   allTags,
   readOnly,
 }: StatusFieldsSectionProps) {
@@ -110,14 +97,7 @@ export function StatusFieldsSection({
           disabled={readOnly}
         />
 
-        <TaskModelRow
-          taskId={taskId}
-          task={task}
-          status={status}
-          hasRuns={hasRuns}
-          isOwner={isOwner}
-          readOnly={readOnly}
-        />
+        {/* No model row: a task runs on the model in its chat's composer. */}
 
         <BaseBranchRow
           taskId={taskId}
@@ -176,7 +156,6 @@ function useTaskUpdate(task: Doc<"agentTasks"> | undefined) {
         priority,
         projectId,
         assignedTo,
-        providerAccountId,
         ...safeFields
       } = args;
       const nullSafe = {
@@ -187,9 +166,6 @@ function useTaskUpdate(task: Doc<"agentTasks"> | undefined) {
           : {}),
         ...(assignedTo !== undefined
           ? { assignedTo: assignedTo ?? undefined }
-          : {}),
-        ...(providerAccountId !== undefined
-          ? { providerAccountId: providerAccountId ?? undefined }
           : {}),
       };
       patchLoadedQuery(
@@ -206,50 +182,5 @@ function useTaskUpdate(task: Doc<"agentTasks"> | undefined) {
         (cached) => cached && { ...cached, ...nullSafe },
       );
     },
-  );
-}
-
-/**
- * A task's model and its account. Hidden in simple view. Locked once the
- * task ran, once it is done or cancelled, and while it is archived.
- */
-function TaskModelRow({
-  taskId,
-  task,
-  status,
-  hasRuns,
-  isOwner,
-  readOnly,
-}: {
-  taskId: Id<"agentTasks">;
-  task: Doc<"agentTasks"> | undefined;
-  status: TaskStatus | undefined;
-  hasRuns: boolean;
-  isOwner: boolean;
-  readOnly: boolean;
-}) {
-  const simpleView = useSimpleView();
-  const updateTask = useTaskUpdate(task);
-  const currentModel = normalizeAIModel(task?.model);
-  const { options: modelOptions } = useAvailableAiModels(
-    task?.repoId,
-    currentModel,
-  );
-  const { options: accounts, resolveId: resolveAccountId } =
-    useTaskOwnerProviderAccounts(taskId);
-  if (simpleView) return null;
-  const modelLockReason = taskModelLockReason({ status, hasRuns, readOnly });
-  return (
-    <ModelField
-      taskId={taskId}
-      task={task}
-      currentModel={currentModel}
-      modelOptions={modelOptions}
-      accounts={accounts}
-      resolveAccountId={resolveAccountId}
-      modelLockReason={modelLockReason}
-      isOwner={isOwner}
-      updateTask={updateTask}
-    />
   );
 }

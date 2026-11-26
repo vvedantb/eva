@@ -60,7 +60,6 @@ export function TaskDescription({
         priority,
         projectId,
         assignedTo,
-        providerAccountId,
         ...safeFields
       } = args;
       patchLoadedQuery(
@@ -79,9 +78,6 @@ export function TaskDescription({
               : {}),
             ...(assignedTo !== undefined
               ? { assignedTo: assignedTo ?? undefined }
-              : {}),
-            ...(providerAccountId !== undefined
-              ? { providerAccountId: providerAccountId ?? undefined }
               : {}),
           },
       );

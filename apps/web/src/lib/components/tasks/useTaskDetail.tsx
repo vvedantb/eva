@@ -50,8 +50,6 @@ function useTaskDetailQueries(taskId: Id<"agentTasks">) {
   const taskResult = useQuery(api.agentTasks.get, { id: taskId });
   const task = taskResult === null ? null : (taskResult ?? undefined);
   const taskSession = useTaskSession(taskId, task);
-  const currentUserId = useQuery(api.auth.me);
-  const isOwner = currentUserId === task?.createdBy;
   // One read for both task kinds: the server knows how each one runs.
   const runFacts = useQuery(api.agentTasks.getRunFacts, { taskId });
   const hasActiveRun = runFacts?.hasActiveRun ?? false;
@@ -80,7 +78,6 @@ function useTaskDetailQueries(taskId: Id<"agentTasks">) {
     isLoading: taskResult === undefined,
     isNotFound: taskResult === null,
     task,
-    isOwner,
     runFacts,
     hasActiveRun,
     hasRuns,

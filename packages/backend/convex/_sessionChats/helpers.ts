@@ -348,12 +348,14 @@ export async function moveLegacyTranscriptPage(
 }
 
 /**
- * Inserts the Main chat row for a session, carrying the session's composer
- * settings over. Does not touch the transcript; see `ensureMainChat`.
+ * Inserts the Main chat row for a session, starting on `settings` (the
+ * composer picks the session was made with). Does not touch the transcript;
+ * see `ensureMainChat`.
  */
 export async function insertMainChat(
   ctx: MutationCtx,
   session: Doc<"sessions">,
+  settings: ChatSettingsSource,
 ): Promise<Doc<"sessionChats">> {
   const chatId = await ctx.db.insert("sessionChats", {
     sessionId: session._id,
@@ -365,9 +367,9 @@ export async function insertMainChat(
     createdBy: session.createdBy ?? session.userId,
     updatedAt: session.updatedAt ?? Date.now(),
     claudePersistenceSeed: session._id,
-    ...copyChatSettings(session),
-    ...(session.lastModel !== undefined && session.provider === undefined
-      ? { provider: getAIModelProvider(session.lastModel) }
+    ...copyChatSettings(settings),
+    ...(settings.lastModel !== undefined && settings.provider === undefined
+      ? { provider: getAIModelProvider(settings.lastModel) }
       : {}),
     backgroundAgents: session.backgroundAgents,
   });
@@ -389,11 +391,13 @@ export async function insertMainChat(
 export async function ensureMainChat(
   ctx: MutationCtx,
   session: Doc<"sessions">,
+  /** A new Main chat's picks; absent (a session predating chats): none, so the repo default applies. */
+  settings: ChatSettingsSource = {},
 ): Promise<Doc<"sessionChats">> {
   const existing = await findMainChat(ctx.db, session._id);
   if (existing) return existing;
 
-  const chat = await insertMainChat(ctx, session);
+  const chat = await insertMainChat(ctx, session, settings);
   const moved = await moveLegacyTranscriptPage(ctx, session._id, chat._id);
   if (!moved) {
     await ctx.scheduler.runAfter(
@@ -408,8 +412,8 @@ export async function ensureMainChat(
 /**
  * Opens another chat in a session. Settings are inherited from `inheritFrom`
  * (the chat the user pressed `+` on) so the new tab starts on the model and
- * account they were already using; the session's own settings are the
- * fallback for server callers with no active chat.
+ * account they were already using; the session's Main chat is the fallback
+ * for server callers with no active chat.
  */
 export async function createSessionChat(
   ctx: MutationCtx,
@@ -425,7 +429,8 @@ export async function createSessionChat(
   // `number` stays unique for `?chat=N` links; the default title reuses the
   // lowest label no open tab holds, so open/close/open reads "Chat 2" again.
   const number = chats.reduce((max, chat) => Math.max(max, chat.number), 0) + 1;
-  const source: ChatSettingsSource = params.inheritFrom ?? session;
+  const source: ChatSettingsSource =
+    params.inheritFrom ?? chats.find((chat) => chat.isMain) ?? {};
   const openTitles = new Set(
     chats.filter((chat) => chat.archived !== true).map((chat) => chat.title),
   );
