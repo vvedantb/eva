@@ -28,8 +28,8 @@ import { RUN_WAITING_FOR_ANSWER } from "../_taskWorkflow/helpers";
  * shared ones (`@eva/shared/projectStatus`); this module only loads the facts
  * and starts runs.
  *
- * It runs on these events: the coordinator creates tasks, a person approves
- * or creates one, a child task's status changes (`onProjectTasksChanged`),
+ * It runs on these events: the coordinator creates or starts tasks, a
+ * person runs one, a child task's status changes (`onProjectTasksChanged`),
  * and a child PR merges (the PR webhook). It is
  * idempotent: a second call on the same state starts nothing.
  */
@@ -281,18 +281,21 @@ export function isBatchFinished(tasks: readonly ProjectTaskFacts[]): boolean {
 }
 
 /**
- * A person approves `taskIds` (todo tasks of this project waiting in Triage)
- * and hands them to the coordinator (decision 4, v2): each is approved and
- * marked `handedToCoordinatorAt`, so the scheduler never starts it; one
- * coordinator wake lists the handed tasks, and the coordinator starts each
- * (`start_task`) or adds it to an open task (`merge_task_into`). Tasks
- * already approved keep their state. Refuses a task of another project.
- * Returns the tasks it handed over.
+ * Hands people's asks to the coordinator (Eva): every `todo` task of
+ * `taskIds` nobody approved yet is approved and marked
+ * `handedToCoordinatorAt`, so the scheduler never starts it, and one
+ * coordinator wake lists them. The coordinator starts each (`start_task`) or
+ * adds it to an open task (`merge_task_into`). Every project task a person,
+ * an agent outside the coordinator or feedback adds comes here at once:
+ * nothing waits for an approval. Tasks already approved keep their state.
+ * Refuses a task of another project. `key` makes the wake idempotent
+ * (default: the handed task ids). Returns the tasks it handed over.
  */
-export async function approveTasks(
+export async function handTasksToCoordinator(
   ctx: MutationCtx,
   projectId: Id<"projects">,
   taskIds: readonly Id<"agentTasks">[],
+  key?: string,
 ): Promise<Doc<"agentTasks">[]> {
   const now = Date.now();
   const tasks = await Promise.all(taskIds.map((taskId) => ctx.db.get(taskId)));
@@ -317,13 +320,13 @@ export async function approveTasks(
   const lines = handed.map((task, index) => {
     const author = authors[index];
     const by = author?.firstName ?? author?.fullName;
-    return `- ${taskLabel(task)}${by ? ` (added by ${by})` : ""}`;
+    return `- ${taskLabel(task)} (${task._id})${by ? ` (added by ${by})` : ""}`;
   });
   await requestCoordinatorWake(ctx, {
     projectId,
     reason: "triage",
-    key: `triage:${now}:${handed.map((task) => task._id).join(",")}`,
-    text: `A person approved ${handed.length === 1 ? "this Triage item" : `these ${handed.length} Triage items`} and handed ${handed.length === 1 ? "it" : "them"} to you. Group them by area: add each to an open task that covers its area (send_chat_message to that task, then merge_task_into), or start it as its own task (start_task). Then reply with where each one went.\n${lines.join("\n")}`,
+    key: key ?? `handed:${handed.map((task) => task._id).join(",")}`,
+    text: `${handed.length === 1 ? "A new ask was" : `${handed.length} new asks were`} handed to you. Group related asks into one task: add each to an open task that covers its area (send_chat_message to that task, then merge_task_into), or start it as its own task (start_task). Then reply with where each one went.\n${lines.join("\n")}`,
   });
   return handed;
 }
@@ -340,14 +343,14 @@ async function coordinatorTodoTask(
   }
   if (task.status !== "todo" || task.approvedAt === undefined) {
     throw new Error(
-      "Only an approved task that has not started yet can be started or merged.",
+      "Only a task that has not started yet can be started or merged.",
     );
   }
   return task;
 }
 
 /**
- * The coordinator starts a Triage item a person handed to it (`start_task`):
+ * The coordinator starts a task handed to it (`start_task`):
  * it stops being held, so the scheduler starts it like any approved task.
  */
 export async function startHandedTask(
@@ -366,7 +369,7 @@ export async function startHandedTask(
 }
 
 /**
- * The coordinator adds a handed Triage item to an open task of the same
+ * The coordinator adds a handed task to an open task of the same
  * project (`merge_task_into`): the item is cancelled and remembers the task
  * it went to ("Added to #N"). The coordinator gives the target task the item
  * itself (`send_chat_message`). Refuses a finished, cancelled or merged

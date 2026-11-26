@@ -56,7 +56,6 @@ function useTaskDetailQueries(taskId: Id<"agentTasks">) {
   const runFacts = useQuery(api.agentTasks.getRunFacts, { taskId });
   const hasActiveRun = runFacts?.hasActiveRun ?? false;
   const hasRuns = runFacts?.hasRuns ?? false;
-  const isProjectTask = task?.projectId !== undefined;
   const users = useQuery(api.users.listAll);
   const projects = useQuery(
     api.projects.list,
@@ -85,7 +84,6 @@ function useTaskDetailQueries(taskId: Id<"agentTasks">) {
     runFacts,
     hasActiveRun,
     hasRuns,
-    isProjectTask,
     isArchived,
     users,
     projects,

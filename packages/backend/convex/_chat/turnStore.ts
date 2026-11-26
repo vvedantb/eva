@@ -21,9 +21,7 @@ import {
   touchAgentFinished,
 } from "../_sandbox/activity";
 import { chatParentIdOf } from "./chatParent";
-import {
-  sessionOwnerEntityId,
-} from "../_sessions/owner";
+import { stampChatActivity } from "../chatReads";
 
 export type TurnLeaseIdentity = {
   turnId: Id<"turns">;
@@ -141,6 +139,8 @@ type OpenTurnFields = {
   placeholderMessageId?: Id<"messages">;
   /** Chat turns only: the thread root this turn answers in. */
   replyTo?: Id<"messages">;
+  /** Thread turns only: who asked; Eva's answer notifies them. */
+  askedBy?: Id<"users">;
   /** Chat turns only: this turn runs its task (`taskRunTurn.ts`). */
   taskRun?: Doc<"turns">["taskRun"];
   prompt?: string;
@@ -186,6 +186,7 @@ export async function openTurn(
     leaseGeneration: 0,
     placeholderMessageId: params.placeholderMessageId,
     replyTo: params.replyTo,
+    askedBy: params.replyTo === undefined ? undefined : params.askedBy,
     prompt: params.prompt,
     attachmentStorageIds: params.attachmentStorageIds,
     model: params.model,
@@ -486,12 +487,11 @@ export async function closeTurn(
   if (current.taskRun !== undefined) {
     await onTaskRunTurnClosed(ctx, current, state);
   }
-  // The unread watermark read by `chatReads.ts`: chat turns, and task runs,
+  // The unread clock read by `chatReads.ts`: chat turns, and task runs,
   // which reply in the chat they stream into. One-shot lanes (summary,
-  // interview) are not replies, and their owner rows have no such field.
-  // Lease sweeps can close a turn after its chat was hard-deleted, and
-  // `patch` throws then. A session chat's turn stamps both the chat and its
-  // session, since the sidebar reads unread per session.
+  // interview) are not replies. `stampChatActivity` stamps the chat, its
+  // session and the session's task or project, and skips a chat that lease
+  // sweeps found hard-deleted.
   const runId = ctx.db.normalizeId("agentRuns", turn.entityId);
   const chatParentId =
     turn.lane === undefined
@@ -500,21 +500,13 @@ export async function closeTurn(
           runId ? turn.streamingEntityId : turn.entityId,
         )
       : null;
-  if (chatParentId && (await ctx.db.get(chatParentId))) {
-    await ctx.db.patch(chatParentId, { lastTurnFinishedAt: finishedAt });
+  if (chatParentId) {
+    await stampChatActivity(ctx, chatParentId, {
+      lastTurnFinishedAt: finishedAt,
+    });
   }
   const session =
     turn.sessionId !== undefined ? await ctx.db.get(turn.sessionId) : null;
-  if (session && chatParentId) {
-    await ctx.db.patch(session._id, { lastTurnFinishedAt: finishedAt });
-    // A task's or project's session reads unread on its owner's card, so the
-    // owner gets the watermark too (`chatReads.markRead` reads it with the
-    // chat).
-    const ownerId = sessionOwnerEntityId(session);
-    if (ownerId && (await ctx.db.get(ownerId))) {
-      await ctx.db.patch(ownerId, { lastTurnFinishedAt: finishedAt });
-    }
-  }
   if (session && runId) {
     // A task's run held its session's chats (`sessionChatHasFreeSlot`):
     // offer them their queued messages now. Scheduled, since the queue

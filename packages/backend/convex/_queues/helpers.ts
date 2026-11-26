@@ -693,6 +693,7 @@ const sessionChatQueueConfig: ChatQueueConfig<
       sandboxId: session.sandboxId,
       repoId: session.repoId,
       replyTo: next.replyTo,
+      askedBy: next.userId,
       taskRun: next.taskRun,
     });
     // Normalised, not forwarded raw: the composer enqueues model defaults

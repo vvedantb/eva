@@ -132,7 +132,7 @@ describe("convertLegacyProjectThreads", () => {
 
     expect(await statusOf(f.t, f.reviewA)).toBe("cancelled");
     expect(await statusOf(f.t, f.reviewB)).toBe("cancelled");
-    // Draft work stays in Triage for a person.
+    // Draft work stays as it is.
     expect(await statusOf(f.t, f.draft)).toBe("draft");
 
     // A second run changes nothing.

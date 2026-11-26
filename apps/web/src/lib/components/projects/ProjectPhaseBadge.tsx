@@ -15,7 +15,6 @@ import {
   IconClock,
   IconCircleCheck,
   IconCircleX,
-  IconInbox,
 } from "@tabler/icons-react";
 
 export interface PhaseStyle {
@@ -50,17 +49,6 @@ const inProgressStyle: PhaseStyle = {
   icon: IconClock,
 };
 
-/** The code-review purple, for Triage. */
-const triageStyle: PhaseStyle = {
-  bg: "bg-status-code-review-bg",
-  cardBg: "bg-status-code-review-subtle/40",
-  bar: "bg-status-code-review-bar",
-  barColor: "var(--status-code-review-bar)",
-  text: "text-status-code-review",
-  label: PROJECT_TASK_DISPLAY_STATUS_LABELS.triage,
-  icon: IconInbox,
-};
-
 const doneStyle: PhaseStyle = {
   bg: "bg-status-done-bg",
   cardBg: "bg-status-done-subtle/40",
@@ -83,15 +71,14 @@ const cancelledStyle: PhaseStyle = {
 
 /**
  * A child task's display status (`projectTaskDisplayStatus`): the task list
- * groups and rows, and a project's task counts and progress bar. Triage
- * takes the code-review purple, Working looks as In Progress, Blocked as the
- * needs-you warning, Idle as To Do, Archived as cancelled.
+ * groups and rows, and a project's task counts and progress bar. Working
+ * looks as In Progress, Needs you (`blocked`) as the warning, Idle as To Do,
+ * Archived as cancelled.
  */
 export const projectTaskDisplayStatusConfig: Record<
   ProjectTaskDisplayStatus,
   PhaseStyle
 > = {
-  triage: triageStyle,
   working: {
     ...inProgressStyle,
     label: PROJECT_TASK_DISPLAY_STATUS_LABELS.working,

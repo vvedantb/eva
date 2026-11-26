@@ -104,6 +104,19 @@ export async function startTaskRun(
       .query("agentRuns")
       .withIndex("by_task", (q) => q.eq("taskId", task._id))
       .first()) === null;
+  // A task runs on its own session's sandbox. Looked up (or created) here so
+  // the run's turn and sandbox writes land on that one session, and its
+  // prompt and reply land in that session's Main chat.
+  const { session: ownedSession, mainChat } = await ensureWorkSession(ctx, {
+    kind: "task",
+    task,
+  });
+  // A project task has no model setting of its own: the model picked in its
+  // chat's composer wins. A quick task keeps its Model property.
+  const model =
+    (task.projectId !== undefined ? mainChat.lastModel : undefined) ??
+    task.model ??
+    repo.defaultModel;
   const startedAt = Date.now();
   const runId = await ctx.db.insert("agentRuns", {
     taskId: task._id,
@@ -119,7 +132,7 @@ export async function startTaskRun(
       task.providerAccountId,
       credentialOwnerUserId,
     ),
-    model: normalizeAIModel(task.model),
+    model: normalizeAIModel(model),
   });
   await setTaskLastRunStartedAt(ctx, task._id, repo._id, startedAt);
   await ctx.db.patch(task._id, {
@@ -128,13 +141,6 @@ export async function startTaskRun(
     ...(p.clearPendingChangeRequest
       ? { pendingChangeRequestCommentId: undefined }
       : {}),
-  });
-  // A task runs on its own session's sandbox. Looked up (or created) here so
-  // the run's turn and sandbox writes land on that one session, and its
-  // prompt and reply land in that session's Main chat.
-  const { session: ownedSession, mainChat } = await ensureWorkSession(ctx, {
-    kind: "task",
-    task,
   });
   const run = await ctx.db.get(runId);
   if (!run) throw new Error("Run was not created");
@@ -156,7 +162,7 @@ export async function startTaskRun(
       ownedSessionId: ownedSession._id,
       baseBranch: p.baseBranch,
       isFirstTaskOnBranch: p.isFirstTaskOnBranch,
-      model: task.model ?? repo.defaultModel,
+      model,
       providerAccountId: task.providerAccountId,
       credentialOwnerUserId,
       userId: p.userId,

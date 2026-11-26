@@ -30,13 +30,13 @@ export function PreviewCommentCard({
   return (
     <div
       className={cn(
-        "rounded-lg bg-card p-2.5 smooth-shadow-ring",
+        "rounded-surface bg-card p-2.5 smooth-shadow-ring",
         // Done, but still readable: the reader may want to reopen it.
         resolved && "opacity-70",
       )}
     >
       <div className="mb-1.5 flex items-center gap-1.5 text-2xs text-muted-foreground">
-        <span className="min-w-0 truncate rounded-md border border-border bg-background px-1.5 py-0.5 font-mono text-foreground">
+        <span className="min-w-0 truncate rounded-control border border-border bg-background px-1.5 py-0.5 font-mono text-foreground">
           {comment.element}
         </span>
         <span className="ml-auto shrink-0 tabular-nums">
@@ -94,7 +94,7 @@ export function PreviewCommentCard({
 function CommentReply({ comment }: { comment: PreviewComment }) {
   if (comment.kind === "queued") {
     return (
-      <p className="mt-2 rounded-md bg-muted px-2 py-1.5 text-xs text-warning">
+      <p className="mt-2 rounded-control bg-muted px-2 py-1.5 text-xs text-warning">
         Queued, sends when Eva finishes
       </p>
     );
@@ -105,7 +105,7 @@ function CommentReply({ comment }: { comment: PreviewComment }) {
     return null;
   }
   return (
-    <div className="mt-2 rounded-md bg-muted px-2 py-1.5 text-xs text-muted-foreground">
+    <div className="mt-2 rounded-control bg-muted px-2 py-1.5 text-xs text-muted-foreground">
       <p className="mb-0.5 font-medium text-foreground">Eva</p>
       {reply.status === "working" ? (
         <p className="flex items-center gap-1.5">

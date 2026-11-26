@@ -6,6 +6,7 @@ import {
   ensureDockerDaemon,
   execHandle,
   bootstrapVercelDocker,
+  PREFER_OOM_KILL_LINE,
   workspaceDirShell,
 } from "./helpers";
 import { writeSandboxFile } from "./sandboxFiles";
@@ -330,6 +331,7 @@ export async function launchDevServerInBackground(
   const script = [
     "#!/usr/bin/env bash",
     "set -euo pipefail",
+    PREFER_OOM_KILL_LINE,
     EVA_ENV_SOURCE_CMD,
     `WORKSPACE_DIR=${workspaceDirShell()}`,
     'cd "$WORKSPACE_DIR"',

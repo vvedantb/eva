@@ -664,10 +664,11 @@ export async function launchScript(
     // dying silently under memory pressure while dev servers survived. Lower
     // it here via sudo instead. The opencode server subtree is re-raised to
     // 300 at spawn (callback-src/providers/opencodeServer.ts) — the only agent
-    // process the callback still spawns — so the kernel kill order becomes:
-    // dev servers and agent work first (both recover — preview self-heal and
-    // turn error reporting), the heartbeat/reporting callback last. Fail open
-    // on images without passwordless sudo.
+    // process the callback still spawns — and dev services start at 500
+    // (PREFER_OOM_KILL_LINE in helpers.ts), so the kernel kill order becomes:
+    // dev services first (preview self-heal restarts them), then agent work
+    // (turn error reporting), the heartbeat/reporting callback last. Fail
+    // open on images without passwordless sudo.
     'echo -600 | sudo -n tee "/proc/$(cat /tmp/run-design.pid)/oom_score_adj" >/dev/null 2>&1 || true',
   ].join("\n");
   await writeSandboxFile(

@@ -25,6 +25,7 @@ import {
   taskCommentFields,
   taskReactionFields,
   taskSubscriberFields,
+  threadParticipantFields,
   chatReadFields,
   standupReadFields,
   chatRecapFields,
@@ -75,6 +76,7 @@ import {
   workProfileFields,
   projectTaskReportFields,
   projectTaskBatchFields,
+  projectChatTaskLinkFields,
   projectCoordinatorWakeFields,
   notificationFields,
   repoEnvVarFields,
@@ -190,6 +192,10 @@ const schema = defineSchema({
     .index("by_task", ["taskId"])
     .index("by_task_and_user", ["taskId", "userId"]),
 
+  threadParticipants: defineTable(threadParticipantFields)
+    .index("by_root", ["rootId"])
+    .index("by_user_and_root", ["userId", "rootId"]),
+
   chatReads: defineTable(chatReadFields)
     .index("by_user_parent", ["userId", "parentId"])
     .index("by_user_repo", ["userId", "repoId"]),
@@ -208,6 +214,10 @@ const schema = defineSchema({
   projectTaskBatches: defineTable(projectTaskBatchFields).index("by_project", [
     "projectId",
   ]),
+  projectChatTaskLinks: defineTable(projectChatTaskLinkFields).index(
+    "by_project_and_message",
+    ["projectId", "messageId"],
+  ),
   projectCoordinatorWakes: defineTable(projectCoordinatorWakeFields)
     .index("by_project_and_key", ["projectId", "key"])
     .index("by_project_and_sent", ["projectId", "sentAt"]),
@@ -447,6 +457,12 @@ const schema = defineSchema({
   notifications: defineTable(notificationFields)
     .index("by_user", ["userId"])
     .index("by_user_and_read", ["userId", "read"])
+    // A thread's unread rows for one person: opening the thread reads them.
+    .index("by_user_and_thread_root_and_read", [
+      "userId",
+      "threadRootId",
+      "read",
+    ])
     .index("by_repo", ["repoId"]),
   // Expo push tokens for the mobile app (see push.ts). One row per device.
   pushTokens: defineTable({

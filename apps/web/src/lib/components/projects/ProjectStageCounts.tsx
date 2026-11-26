@@ -4,7 +4,7 @@ import { PROJECT_TASK_DISPLAY_STATUSES } from "@eva/shared/projectView";
 import { projectTaskDisplayStatusConfig } from "./ProjectPhaseBadge";
 
 /**
- * The project's task counts by display status ("2 Working · 1 Blocked"),
+ * The project's task counts by display status ("1 Needs you · 2 Working"),
  * from live data, in the task list groups' looks. Empty statuses are left
  * out; nothing renders without tasks.
  */

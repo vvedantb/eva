@@ -51,7 +51,6 @@ async function fixture() {
         clerkId,
         fullName,
         email: `${clerkId.split("|")[1]}@example.com`,
-        emailNotificationsEnabled: true,
       });
     const authorId = await user(AUTHOR_CLERK, "Grace Hopper");
     const adaId = await user("clerk|delivery-ada", "Ada Lovelace");

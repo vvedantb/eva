@@ -1,5 +1,6 @@
 "use client";
 
+import type { ProjectChatTaskCards } from "@/lib/components/projects/ProjectChatTaskCard";
 import { useQuery } from "convex-helpers/react/cache/hooks";
 import { useMutation } from "convex/react";
 import { api } from "@eva/backend";
@@ -27,6 +28,7 @@ import {
 import { sandboxChatKeys } from "./sandboxChatTurn";
 import { SubagentThreadLayer } from "./SubagentThreadLayer";
 import { useQueryState } from "nuqs";
+import type { ReactNode } from "react";
 import { replyThreadParser } from "@/lib/search-params";
 import { ThreadTurnStatus } from "@/lib/components/chat/replies/ThreadTurnStatus";
 import { useChatQueueGate } from "./useChatQueueGate";
@@ -45,6 +47,8 @@ export interface SandboxChatPanelProps {
   onViewDiff?: (repoRelativePath?: string) => void;
   /** Opens the Agents sandbox tab (used by the sub-agent CTA row in the chat). */
   onOpenAgentsTab?: () => void;
+  /** A project's coordinator chat: task cards under Eva's replies (`ChatBody`). */
+  projectTaskCards?: ProjectChatTaskCards;
   onSandboxToggle?: (action: "start" | "stop") => void;
   /** The task or project is archived: the chat is read-only (no composer). */
   isArchived?: boolean;
@@ -63,11 +67,13 @@ export function SandboxChatPanel({
   onOpenFile,
   onViewDiff,
   onOpenAgentsTab,
+  projectTaskCards,
   onSandboxToggle,
   isArchived = false,
   assistantBubbles = false,
   replyThreads = false,
   onThreadOpen,
+  emptyState,
 }: SandboxChatPanelProps & {
   binding: SandboxChatBinding;
   /** Eva's replies in a bubble with her mark (the project coordinator). */
@@ -82,6 +88,8 @@ export function SandboxChatPanel({
    * it, opening only sets `?thread=`.
    */
   onThreadOpen?: (messageId: string) => void;
+  /** In place of the empty chat (`ChatBody` `emptyState`). */
+  emptyState?: ReactNode;
 }) {
   const { repo, basePath } = useRepo();
   const [, setThreadId] = useQueryState("thread", replyThreadParser);
@@ -218,7 +226,8 @@ export function SandboxChatPanel({
           conversationId={parentId ?? `${ownerLabel}-chat`}
           chatParentId={parentId}
           messages={chatMessages}
-          isLoadingMessages={messages === undefined}
+          // No chat yet (the first send or run creates it): nothing loads.
+          isLoadingMessages={parentId !== undefined && messages === undefined}
           hasOlderHistory={history.hasOlder}
           onLoadOlderHistory={history.loadOlder}
           onReachHistory={history.reach}
@@ -245,6 +254,7 @@ export function SandboxChatPanel({
               ? SANDBOX_CHAT_COPY.activeDescription
               : SANDBOX_CHAT_COPY.asleepDescription
           }
+          emptyState={emptyState}
           disabledReason={composer.disabledReason}
           onStartSandbox={startSandboxHandler(
             isSandboxActive,
@@ -289,6 +299,7 @@ export function SandboxChatPanel({
           onViewDiff={onViewDiff}
           hasPendingContext={hasPendingReviewComments}
           onOpenAgentsTab={onOpenAgentsTab}
+          projectTaskCards={projectTaskCards}
           assistantBubbles={assistantBubbles}
           onOpenThread={replyThreads ? openThread : undefined}
           backgroundAgents={doc?.backgroundAgents}

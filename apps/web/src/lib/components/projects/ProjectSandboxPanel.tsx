@@ -42,6 +42,7 @@ import { useProjectDocuments } from "./useProjectDocuments";
 import { ProjectTasksPanel } from "./ProjectTasksPanel";
 import {
   isProjectSandboxTab,
+  defaultProjectTaskTab,
   isProjectTaskTab,
   visibleProjectTaskTabs,
   type ProjectSandboxTab,
@@ -110,6 +111,8 @@ interface ProjectSandboxPanelProps {
   openTaskIds: ReadonlySet<string>;
   /** Opens a task as a chat tab (a Tasks tab row). */
   onOpenTask: (taskNumId: number) => void;
+  /** The Tasks tab's "+": Eva's tab with her composer focused. */
+  onAskEva: () => void;
 }
 
 export function ProjectSandboxPanel({
@@ -137,6 +140,7 @@ export function ProjectSandboxPanel({
   selectedTaskLoading,
   openTaskIds,
   onOpenTask,
+  onAskEva,
 }: ProjectSandboxPanelProps) {
   // An open reply thread adds the Replies tab (projects v2, PR D).
   const [threadId, setThreadId] = useQueryState("thread", replyThreadParser);
@@ -156,8 +160,9 @@ export function ProjectSandboxPanel({
     projectId,
     repoId,
   );
-  // A selected task tab shows its own tabs only (Details first); one that
-  // lost its content (the sandbox stopped) falls back to Details.
+  // A selected task tab shows its own tabs only: Review, else Preview, by
+  // default (`defaultProjectTaskTab`). A task with none (it has not run, its
+  // sandbox sleeps and it has no PR) shows the coordinator's Tasks.
   const taskSelected = selectedTask !== undefined || selectedTaskLoading;
   const taskTabs = selectedTask ? visibleProjectTaskTabs(selectedTask) : [];
   // The coordinator only reads code and delegates: no dev server, no edits,
@@ -168,21 +173,25 @@ export function ProjectSandboxPanel({
   const activeTab: ProjectSandboxTab = taskSelected
     ? isProjectTaskTab(sandboxTab) && taskTabs.includes(sandboxTab)
       ? sandboxTab
-      : "task-details"
+      : selectedTask
+        ? defaultProjectTaskTab(selectedTask)
+        : "tasks"
     : COORDINATOR_HIDDEN_TABS.has(sandboxTab) ||
         isProjectTaskTab(sandboxTab) ||
         (sandboxTab === "replies" && !threadId)
       ? "tasks"
       : sandboxTab;
-  const triageCount = taskStatus?.counts.triage ?? 0;
-  // Tasks leads the rail; its badge counts what waits in Triage.
+  const needsYouCount = taskStatus?.counts.blocked ?? 0;
+  // Tasks leads the rail; its badge counts its Needs you group.
   const tasksTab: SandboxTabDescriptor = {
     value: "tasks",
     label: "Tasks",
     icon: { kind: "component", Icon: IconChecklist },
-    count: triageCount > 0 ? triageCount : undefined,
+    count: needsYouCount > 0 ? needsYouCount : undefined,
     indicatorLabel:
-      triageCount > 0 ? `${triageCount} tasks in Triage` : undefined,
+      needsYouCount > 0
+        ? `${needsYouCount} ${needsYouCount === 1 ? "task needs" : "tasks need"} you`
+        : undefined,
   };
 
   // Content-keyed Agents tab, folded from the chat transcript the project's
@@ -265,9 +274,11 @@ export function ProjectSandboxPanel({
             // A task tab's rail holds its own tabs only.
             enabledTabs={taskSelected ? [] : enabledTabs}
             leadingTabs={
-              taskSelected
+              taskTabs.length > 0
                 ? projectTaskRailTabs(taskTabs)
-                : threadId
+                : taskSelected
+                  ? [tasksTab]
+                  : threadId
                   ? [tasksTab, REPLIES_TAB]
                   : [tasksTab]
             }
@@ -296,15 +307,13 @@ export function ProjectSandboxPanel({
               basePath={basePath}
               openTaskIds={openTaskIds}
               onOpenTask={onOpenTask}
+              onAskEva={onAskEva}
             />
           </KeepAlivePane>
           {selectedTask && projectPathSegment && isProjectTaskTab(activeTab) ? (
             <ProjectTaskPane
               key={selectedTask._id}
-              taskId={selectedTask._id}
-              numId={selectedTask.numId}
-              title={selectedTask.title}
-              prUrl={selectedTask.prUrl}
+              row={selectedTask}
               tab={activeTab}
               fullPageHref={`${basePath}/projects/${projectPathSegment}/${selectedTask.numId}`}
               collapsed={collapsed}

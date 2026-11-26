@@ -14,7 +14,7 @@ function shownStatuses(status: Pick<ProjectStatus, "counts">) {
 /**
  * The web `ProjectProgressBar`: a round track with one coloured part per
  * task display status (`projectStatusSegments`), in each status's stripe
- * colour. The web hover tooltip ("2 Working, 1 Blocked", or "No tasks
+ * colour. The web hover tooltip ("1 Needs you, 2 Working", or "No tasks
  * yet") is the bar's spoken label here. `thin` is the list row's 4 high bar;
  * the Overview's is 6.
  */
@@ -53,7 +53,7 @@ export function ProjectProgress({ status, thin = false }: { status: Pick<Project
 
 /**
  * The web `ProjectStageCounts`: the task counts by display status ("2
- * Working · 1 Blocked"), each in its task list group's icon and colour, from
+ * Working · 1 Needs you"), each in its task list group's icon and colour, from
  * live data. Nothing renders without tasks.
  */
 export function ProjectStageCounts({ status }: { status: Pick<ProjectStatus, "counts"> }) {

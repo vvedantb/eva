@@ -79,3 +79,5 @@ export {
   type ShortcutDef,
   type ShortcutId,
 } from "./convex/validators";
+export { buildAutomationEmailHtml } from "./convex/emailTemplates";
+// Release trigger: rebuilds the APK once CI is green again (design-check fixed).

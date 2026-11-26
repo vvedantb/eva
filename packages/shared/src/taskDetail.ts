@@ -1,5 +1,6 @@
 import type { api, Id } from "@eva/backend";
 import type { FunctionReturnType } from "convex/server";
+import { archiveCopy } from "./archive";
 import { PRIORITY_LABELS, TASK_STATUS_LABELS, type TaskStatus } from "./taskMeta";
 
 /**
@@ -41,9 +42,22 @@ export function taskTextLockReason(hasActiveRun: boolean, field: "Title" | "Desc
     : `${field} can only be edited in To Do or Business Review`;
 }
 
-/** A model can change on any active task; only terminal statuses lock it. */
-export function canEditTaskModel(status: TaskStatus | undefined): boolean {
-  return status !== "done" && status !== "cancelled";
+/**
+ * Why a task's model is locked, or undefined while it can change: an
+ * archived task (or one in an archived project), a task that already ran
+ * (the model that ran stays on the record), and a done or cancelled task.
+ */
+export function taskModelLockReason(task: {
+  status: TaskStatus | undefined;
+  hasRuns: boolean;
+  readOnly: boolean;
+}): string | undefined {
+  if (task.readOnly) return archiveCopy("task").unarchiveFirst;
+  if (task.hasRuns) return "Cannot be changed after the task has run";
+  if (task.status === "done" || task.status === "cancelled") {
+    return "Locked when the task is done or cancelled";
+  }
+  return undefined;
 }
 
 export function getUserDisplayName(user: UserNameFields): string {

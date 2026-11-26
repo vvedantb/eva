@@ -1,7 +1,6 @@
 import { Migrations } from "@convex-dev/migrations";
-import { parseAnnotationDisplay } from "@eva/shared/previewAnnotationDisplay";
 import { components, internal } from "./_generated/api";
-import type { DataModel } from "./_generated/dataModel";
+import type { DataModel, Id } from "./_generated/dataModel";
 import schema from "./schema";
 import { deriveLogUsage } from "./_logs/usage";
 import { archiveSessionDoc } from "./_sessions/mutations";
@@ -15,6 +14,10 @@ import { recordPullRequest } from "./_pullRequests/store";
 import { recordRunPullRequest } from "./_taskWorkflow/helpers";
 import { pruneSettledBackgroundAgents } from "./_sessions/backgroundAgents";
 import type { BackgroundAgentEntry } from "./_validators/tableFields";
+import { MAX_THREAD_REPLIES } from "./_messages/replies";
+import { joinThread } from "./_messages/threadParticipants";
+import { teamMentionRecipients } from "./_mentions/mentionRecipients";
+import { handProjectTriageToEva } from "./_migrations/handTriageToEva";
 
 /**
  * Convex Migrations component — batched online migrations with progress,
@@ -349,23 +352,64 @@ export const pruneBackgroundAgents = dataMigrations.runner([
   internal.dataMigrations.pruneSessionBackgroundAgents,
 ]);
 
+/** Few chats per batch: one chat reads all its threads and their replies. */
+const THREAD_PARTICIPANTS_BATCH = 5;
+
 /**
- * Fills `annotation` on preview-annotation rows sent before the field
- * existed, read back from their `[Annotated <el> on /path]` chat text, so the
- * preview comments drawer lists them too. A row that does not parse is left
- * alone. Small batches: assistant rows can carry large activity logs.
+ * Reply threads from before `threadParticipants` (notifications v2.5, part
+ * A): each thread's root author, repliers and the people either mentions
+ * become following participants, read up to now so no old thread shows
+ * "N new". Idempotent: an existing row keeps its follow choice.
  *
- * `npx convex run dataMigrations:run '{fn:"dataMigrations:backfillPreviewAnnotations"}'`
+ * `npx convex run --prod dataMigrations:backfillThreadParticipants`
  */
-export const backfillPreviewAnnotations = dataMigrations.define({
-  table: "messages",
-  batchSize: 50,
-  migrateOne: (_ctx, doc) => {
-    if (doc.role !== "user" || doc.annotation !== undefined) return;
-    const parsed = parseAnnotationDisplay(doc.content);
-    if (!parsed) return;
-    return {
-      annotation: { pagePath: parsed.pagePath, element: parsed.element },
-    };
+export const backfillThreadParticipants = dataMigrations.define({
+  table: "sessionChats",
+  batchSize: THREAD_PARTICIPANTS_BATCH,
+  migrateOne: async (ctx, chat) => {
+    const roots = await ctx.db
+      .query("messages")
+      .withIndex("by_parent_and_last_reply_at", (q) =>
+        q.eq("parentId", chat._id).gt("lastReplyAt", 0),
+      )
+      .take(MAX_THREAD_REPLIES);
+    const now = Date.now();
+    for (const root of roots) {
+      const replies = await ctx.db
+        .query("messages")
+        .withIndex("by_reply_to", (q) => q.eq("replyTo", root._id))
+        .take(MAX_THREAD_REPLIES);
+      const people = new Set<Id<"users">>();
+      for (const message of [root, ...replies]) {
+        if (message.role === "user" && message.userId !== undefined) {
+          people.add(message.userId);
+        }
+        for (const userId of await teamMentionRecipients(
+          ctx,
+          message.content,
+          chat.repoId,
+          new Set(),
+        )) {
+          people.add(userId);
+        }
+      }
+      for (const userId of people) {
+        await joinThread(ctx, root._id, userId, now);
+      }
+    }
+  },
+});
+
+/**
+ * Projects have no Triage any more: every project task still waiting there
+ * goes to the project's coordinator (Eva), which groups or starts it. One
+ * wake per project; safe to re-run. Run once after the deploy:
+ *
+ *   npx convex run dataMigrations:handTriageToEva --prod
+ */
+export const handTriageToEva = dataMigrations.define({
+  table: "projects",
+  migrateOne: async (ctx, project) => {
+    await handProjectTriageToEva(ctx, project);
   },
 });

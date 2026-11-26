@@ -114,6 +114,10 @@ import {
   type ChatRepo,
 } from "@/lib/components/chat/chatBodyUtils";
 import { findDayBoundaryIds } from "@eva/shared/dayLabel";
+import {
+  ProjectChatTaskCard,
+  type ProjectChatTaskCards,
+} from "@/lib/components/projects/ProjectChatTaskCard";
 import { parsePendingQuestion } from "@eva/shared/pendingQuestion";
 
 import {
@@ -232,6 +236,11 @@ interface ChatBodyProps {
    */
   emptyStateDescription?: string;
   /**
+   * Shown in place of the empty state (title, description, wake button): a
+   * project task's prompt before its first run.
+   */
+  emptyState?: React.ReactNode;
+  /**
    * Why the composer will not send, shown when the user presses Enter on a
    * disabled composer instead of swallowing the keystroke.
    */
@@ -298,6 +307,11 @@ interface ChatBodyProps {
    * hides the sub-agent CTA row under assistant turns.
    */
   onOpenAgentsTab?: () => void;
+  /**
+   * A project's coordinator chat: the task cards under Eva's replies
+   * (`projects.listChatTaskCards`); a card opens its task's chat tab.
+   */
+  projectTaskCards?: ProjectChatTaskCards;
   /** Entity-wide sub-agent lifecycle entries, for the CTA row's live status. */
   backgroundAgents?: ReadonlyArray<BackgroundAgentEntry>;
   /** False lets stranded "running" sub-agents read as stale, not live. */
@@ -358,6 +372,7 @@ function ChatBodyInner({
   placeholder,
   emptyStateTitle,
   emptyStateDescription = "",
+  emptyState,
   disabledReason = SANDBOX_CHAT_COPY.asleepDisabledReason,
   onStartSandbox,
   modelPicker,
@@ -374,6 +389,7 @@ function ChatBodyInner({
   onViewDiff,
   hasPendingContext,
   onOpenAgentsTab,
+  projectTaskCards,
   backgroundAgents,
   sandboxRunning,
   turnCheckpoint,
@@ -896,6 +912,26 @@ function ChatBodyInner({
     api.docs.listForChat,
     chatParentId ? { parentId: chatParentId } : "skip",
   );
+  const chatTaskCards = useQuery(
+    api.projects.listChatTaskCards,
+    projectTaskCards ? { projectId: projectTaskCards.projectId } : "skip",
+  );
+  const taskCardOutputs = projectTaskCards
+    ? (chatTaskCards ?? []).map((card) => ({
+        _id: card.key,
+        messageId: card.messageId,
+        createdAt: card.createdAt,
+        node: (
+          <ProjectChatTaskCard
+            key={card.key}
+            taskId={card.taskId}
+            projectId={projectTaskCards.projectId}
+            repoId={projectTaskCards.repoId}
+            onOpenTask={projectTaskCards.onOpenTask}
+          />
+        ),
+      }))
+    : [];
   // Thumbs on turns and the agent's reports.
   const chatFeedback = useQuery(
     api.feedback.listForChat,
@@ -916,6 +952,7 @@ function ChatBodyInner({
         createdAt: doc.createdAt,
         node: <ChatDocCard key={doc._id} doc={doc} basePath={repo?.basePath} />,
       })),
+      ...taskCardOutputs,
       ...feedback.agentReports.map((report) => ({
         _id: report._id,
         messageId: report.messageId,
@@ -1138,6 +1175,8 @@ function ChatBodyInner({
               </div>
             ) : isLoadingMessages ? (
               <ChatTranscriptLoading />
+            ) : emptyState ? (
+              emptyState
             ) : (
               <ChatEmptyState
                 title={emptyStateTitle}

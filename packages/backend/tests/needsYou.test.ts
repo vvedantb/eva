@@ -13,9 +13,9 @@ import { modules } from "./_helpers/convexModules";
 
 /**
  * The Inbox's Needs you view: the shared rules that place a row in a group,
- * and `needsYou.list` over real rows (a project's Triage task, a quick task's
- * PR to review, a failed quick task, and someone else's quick task that must
- * not show).
+ * and `needsYou.list` over real rows (a project's todo task, which waits for
+ * no one, a quick task's PR to review, a failed quick task, and someone
+ * else's quick task that must not show).
  */
 
 const CLERK_ID = "clerk|needs-you";
@@ -25,7 +25,6 @@ describe("Needs you rules", () => {
   test("a project task lands in its group; the rest stay on the project", () => {
     expect(needsYouGroupForProjectTask("question")).toBe("question");
     expect(needsYouGroupForProjectTask("review")).toBe("review");
-    expect(needsYouGroupForProjectTask("approve")).toBe("triage");
     expect(needsYouGroupForProjectTask("failed")).toBe("failed");
     expect(needsYouGroupForProjectTask("stopped")).toBeUndefined();
     expect(needsYouGroupForProjectTask(undefined)).toBeUndefined();
@@ -87,7 +86,8 @@ describe("needsYou.list", () => {
         createdAt: 0,
         updatedAt: 0,
       };
-      // A person's project task, not approved: Triage.
+      // A person's project task, not approved: it waits for no one (the
+      // coordinator places it).
       await ctx.db.insert("agentTasks", {
         ...task,
         projectId,
@@ -154,8 +154,7 @@ describe("needsYou.list", () => {
       .withIdentity({ subject: CLERK_ID })
       .query(api.needsYou.list, {});
     const byTitle = new Map(rows.map((row) => [row.title, row]));
-    expect(byTitle.get("Promo code box")?.group).toBe("triage");
-    expect(byTitle.get("Promo code box")?.projectTitle).toBe("Checkout");
+    expect(byTitle.has("Promo code box")).toBe(false);
     expect(byTitle.get("Fix login test")?.group).toBe("review");
     expect(byTitle.get("Fix login test")?.detail).toBe("PR #1466");
     expect(byTitle.get("Seed script")?.group).toBe("failed");

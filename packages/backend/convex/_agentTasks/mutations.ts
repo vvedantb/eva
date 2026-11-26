@@ -61,6 +61,7 @@ import {
   updateTaskArgs,
 } from "./updateTask";
 import { closeTaskReports } from "../_projects/reports";
+import { handTasksToCoordinator } from "../_projects/scheduler";
 import { initialTitle, scheduleGeneratedTitle } from "../_shared/ownerTitle";
 import { startTaskExecution } from "./execution";
 
@@ -106,6 +107,10 @@ export const update = authMutation({
     if (args.repoId !== undefined && args.repoId !== task.repoId) {
       await moveTaskRunSummary(ctx, args.id, args.repoId);
     }
+    // A task moved into a project goes to its coordinator, unless it started.
+    if (args.projectId && args.projectId !== task.projectId) {
+      await handTasksToCoordinator(ctx, args.projectId, [task._id]);
+    }
     await logTaskUpdateActivity(ctx, task, args);
     await notifyTaskAssignee(ctx, task, args);
     return null;
@@ -131,6 +136,10 @@ export const updateStatus = authMutation({
       status: args.status,
       updatedAt: Date.now(),
     });
+    // A project task back in todo that nobody approved goes to the coordinator.
+    if (task.projectId !== undefined && args.status === "todo") {
+      await handTasksToCoordinator(ctx, task.projectId, [task._id]);
+    }
 
     if (previousStatus !== args.status) {
       await logTaskActivity(
@@ -352,14 +361,17 @@ type NewTodoTask = ObjectType<typeof newTaskFields> & {
  * Creates one `todo` task, in a project when `projectId` is set (next
  * `taskNumber`; the repo may be any the user can access).
  * The one insert for `createQuickTask`, agents' `create_task` and the
- * coordinator's tasks (`_projects/batches.ts`).
+ * coordinator's tasks (`_projects/batches.ts`). A project task either starts
+ * (`start`: approved, the scheduler runs it) or goes to the project's
+ * coordinator at once (`handTasksToCoordinator`), which starts it or adds it
+ * to an open task.
  */
 export async function createTodoTask(
   ctx: MutationCtx & { userId: Id<"users"> },
   args: NewTodoTask,
   options: {
-    /** A project task is approved at creation: the scheduler may start it. */
-    approved: boolean;
+    /** A project task starts at once; else it is handed to the coordinator. */
+    start: boolean;
   },
 ): Promise<Id<"agentTasks">> {
   if (!(await hasRepoAccess(ctx.db, args.repoId, ctx.userId)))
@@ -416,7 +428,7 @@ export async function createTodoTask(
     phaseLabel:
       args.projectId !== undefined ? args.phaseLabel?.trim() || undefined : undefined,
     approvedAt:
-      args.projectId !== undefined && options.approved ? now : undefined,
+      args.projectId !== undefined && options.start ? now : undefined,
     numId,
   });
   await createTaskRunSummary(ctx, taskId, args.repoId);
@@ -429,13 +441,16 @@ export async function createTodoTask(
       title,
     );
   }
-  // Creating an approved project task approves it: the scheduler may start it.
-  if (args.projectId !== undefined && options.approved) {
-    await ctx.scheduler.runAfter(
-      0,
-      internal.buildWorkflow.scheduleReadyTasks,
-      { projectId: args.projectId },
-    );
+  if (args.projectId !== undefined) {
+    if (options.start) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.buildWorkflow.scheduleReadyTasks,
+        { projectId: args.projectId },
+      );
+    } else {
+      await handTasksToCoordinator(ctx, args.projectId, [taskId]);
+    }
   }
   await ctx.scheduler.runAfter(0, internal.textGen.generateTaskTags, {
     taskId,
@@ -465,9 +480,9 @@ export async function createTodoTask(
 
 /**
  * Creates a task from a person's prompt; the title comes from it. "Save"
- * files it in To Do, or a project's Triage. "Save and Run" (`run`) starts
- * it: a project task is approved, so the project's scheduler runs it; any
- * other task starts now.
+ * files it in To Do, or hands a project task to the project's coordinator.
+ * "Save and Run" (`run`) starts it: a project task is approved, so the
+ * project's scheduler runs it; any other task starts now.
  */
 export const createQuickTask = authMutation({
   args: {
@@ -479,7 +494,7 @@ export const createQuickTask = authMutation({
   handler: async (ctx, args) => {
     const { run, ...fields } = args;
     const taskId = await createTodoTask(ctx, fields, {
-      approved: run === true,
+      start: run === true,
     });
     if (run && args.projectId === undefined) {
       await startTaskExecution(ctx, taskId);
@@ -491,11 +506,13 @@ export const createQuickTask = authMutation({
 /**
  * An agent's `create_task` / `create_and_run_task` outside a project's
  * coordinator (`mcp/tools.ts`): as `createQuickTask`, with the agent's own
- * title when it gives one. A project task waits in Triage for a person.
+ * title when it gives one. A project task starts when `run` (its project's
+ * scheduler runs it), else it goes to the project's coordinator.
  */
 export const createAgentTask = internalMutation({
   args: {
     userId: v.string(),
+    run: v.boolean(),
     repoId: v.string(),
     projectId: v.optional(v.string()),
     title: v.optional(v.string()),
@@ -519,7 +536,7 @@ export const createAgentTask = internalMutation({
         baseBranch: args.baseBranch,
         phaseLabel: args.phaseLabel,
       },
-      { approved: false },
+      { start: args.run },
     );
   },
 });
@@ -595,20 +612,22 @@ export const assignToProject = authMutation({
         maxTaskNumber = t.taskNumber;
       }
     }
-    let assigned = 0;
+    const moved: Id<"agentTasks">[] = [];
     for (const taskId of args.taskIds) {
       if (existingProjectTaskIds.has(taskId)) continue;
       const task = await ctx.db.get(taskId);
       if (!task || !(await hasTaskAccess(ctx.db, task, ctx.userId)))
         throw new Error(`Task ${taskId} not found`);
       await assertTaskNotArchived(ctx.db, task);
-      assigned++;
+      moved.push(taskId);
       await ctx.db.patch(taskId, {
         projectId: args.projectId,
-        taskNumber: maxTaskNumber + assigned,
+        taskNumber: maxTaskNumber + moved.length,
         updatedAt: Date.now(),
       });
     }
+    // A moved task that has not started goes to the coordinator at once.
+    await handTasksToCoordinator(ctx, args.projectId, moved);
     return null;
   },
 });
@@ -696,6 +715,7 @@ export const createTasksBatch = authMutation({
       for (const taskId of taskIds) {
         await ctx.db.patch(taskId, { projectId });
       }
+      await handTasksToCoordinator(ctx, projectId, taskIds);
       await onProjectTasksChanged(ctx, projectId);
     }
 

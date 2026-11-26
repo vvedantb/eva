@@ -19,6 +19,7 @@ import {
   evalFixStatusValidator,
   notificationTypeValidator,
   notificationUrgencyValidator,
+  notificationPrefsValidator,
   evaluationKindValidator,
   evaluationTriggerValidator,
   prRecapOriginValidator,
@@ -118,7 +119,10 @@ export const userFields = {
   lastSeenPath: v.optional(v.string()),
   lastChangelogDismissedAt: v.optional(v.number()),
   onboardingCompletedAt: v.optional(v.number()),
-  emailNotificationsEnabled: v.optional(v.boolean()),
+  // emailNotificationsEnabled removed: `notificationPrefs` replaced it.
+  // schema-narrowing-ok: migrateNotificationPrefs
+  /** Email and push choices (settings → Notifications). Sparse: missing = default. */
+  notificationPrefs: v.optional(notificationPrefsValidator),
   /** Opt-in experimental features (settings → Experimental). */
   experimentalFlags: v.optional(experimentalFlagsValidator),
   /** Rebound keyboard shortcuts (settings → Shortcuts). Sparse: missing = default. */
@@ -389,6 +393,8 @@ export const turnFields = {
    * Its retries, alerts and continuations join the same thread.
    */
   replyTo: v.optional(v.id("messages")),
+  /** A thread turn: the person whose @Eva reply woke her; her answer notifies them. */
+  askedBy: v.optional(v.id("users")),
   prompt: v.optional(v.string()),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
   model: aiModelValidator,
@@ -610,6 +616,8 @@ export const sessionChatFields = {
   // `activeWorkflowId` removed. schema-narrowing-ok: clearSessionWorkflowSlots
   /** Unread watermark, set when one of this chat's turns closes (see chatReads). */
   lastTurnFinishedAt: v.optional(v.number()),
+  /** When a person last posted in this chat's main transcript; the other unread watermark (see chatReads). */
+  lastPersonMessageAt: v.optional(v.number()),
   // Composer settings, sticky per chat (see the matching session comments
   // for each field's contract).
   providerAccountId: v.optional(v.id("userProviderAccounts")),
@@ -714,27 +722,29 @@ export const agentTaskFields = {
   pendingChangeRequestCommentId: v.optional(v.id("taskComments")),
   /** Stamped by `closeTurn` when a durable chat turn ends; the unread watermark (see chatReads.ts). */
   lastTurnFinishedAt: v.optional(v.number()),
+  /** Stamped when a person posts in its chat's main transcript; the other unread watermark (see chatReads.ts). */
+  lastPersonMessageAt: v.optional(v.number()),
   /** @deprecated Pre-rebuild watch pointer; cleared by migration. Use `watchedByAve`. */
   watchedByOrchestrator: v.optional(v.id("sessions")),
   // Manager Ave thread watching this task for completion notifications
   // (mirrors sessions.watchedByAve).
   watchedByAve: v.optional(v.id("aveThreads")),
   /**
-   * When this project task was approved to run: at creation for the
-   * coordinator's tasks, from Triage by a person for feedback. The project
-   * scheduler (`scheduleReadyTasks`) starts only approved `todo` tasks.
-   * Absent on quick tasks and on project tasks waiting in Triage.
+   * When this project task was approved to run: every project task is, at
+   * creation (a person's is handed to the coordinator at the same time,
+   * `handTasksToCoordinator`). The project scheduler (`scheduleReadyTasks`)
+   * starts only approved `todo` tasks. Absent on quick tasks and drafts.
    */
   approvedAt: v.optional(v.number()),
   /**
-   * When a person's Triage approval handed this task to the coordinator
-   * (v2 PR C). While set, the scheduler never starts the task: the
+   * When this task, added by a person, an agent or feedback, was handed to
+   * the coordinator (`handTasksToCoordinator`). While set, the scheduler never starts the task: the
    * coordinator starts it (`start_task`) or adds it to an open task
    * (`merge_task_into`). Cleared when the coordinator starts it.
    */
   handedToCoordinatorAt: v.optional(v.number()),
   /**
-   * The open task the coordinator added this Triage item to
+   * The open task the coordinator added this handed task to
    * (`merge_task_into`). The item itself is cancelled ("Added to #N").
    */
   mergedIntoTaskId: v.optional(v.id("agentTasks")),
@@ -911,6 +921,8 @@ export const sessionFields = {
   ...chatDaemonEntityFields,
   /** Stamped by `closeTurn` when a durable chat turn ends; the unread watermark (see chatReads.ts). */
   lastTurnFinishedAt: v.optional(v.number()),
+  /** Stamped when a person posts in its chat's main transcript; the other unread watermark (see chatReads.ts). */
+  lastPersonMessageAt: v.optional(v.number()),
   // Soft UX lock while the agent drives the shared desktop Chrome via
   agentBrowsingAt: v.optional(v.number()),
   // True while a new session's sandbox finishes pulling the latest base branch
@@ -1277,6 +1289,8 @@ export const projectFields = {
   providerAccountId: v.optional(v.id("userProviderAccounts")),
   /** Stamped by `closeTurn` when a durable chat turn ends; the unread watermark (see chatReads.ts). */
   lastTurnFinishedAt: v.optional(v.number()),
+  /** Stamped when a person posts in its chat's main transcript; the other unread watermark (see chatReads.ts). */
+  lastPersonMessageAt: v.optional(v.number()),
   /** @deprecated Pre-rebuild watch pointer; cleared by migration. Use `watchedByAve`. */
   watchedByOrchestrator: v.optional(v.id("sessions")),
   // Manager Ave thread watching this project's chat for completion
@@ -1699,6 +1713,18 @@ export const taskSubscriberFields = {
   subscribed: v.boolean(),
   createdAt: v.number(),
   updatedAt: v.number(),
+};
+
+// One row per (person, reply thread): who takes part and hears about replies
+// (plan `notifications-v2-5.md`, part A). Created automatically for the
+// root's author, repliers, people mentioned in the thread and the person Eva
+// answers. `following: false` is an Unfollow and stays: joining again does
+// not undo it. `lastReadAt` drives the thread's "N new" and "New" line.
+export const threadParticipantFields = {
+  rootId: v.id("messages"),
+  userId: v.id("users"),
+  following: v.boolean(),
+  lastReadAt: v.optional(v.number()),
 };
 
 // One row per (user, chat): when the user last saw it. "Read" is per user, so
@@ -2374,6 +2400,18 @@ export const projectTaskBatchFields = {
 };
 
 /**
+ * An open task the coordinator acted on in one turn (started, gave work to,
+ * retried), for the task card under that reply. Tasks it created come from
+ * `projectTaskBatches`. `messageId` is the coordinator turn.
+ */
+export const projectChatTaskLinkFields = {
+  projectId: v.id("projects"),
+  messageId: v.id("messages"),
+  taskId: v.id("agentTasks"),
+  createdAt: v.number(),
+};
+
+/**
  * One reason to wake a project's coordinator (decision 16). `key` makes a
  * request idempotent; `sentAt` marks it delivered in a turn.
  */
@@ -2427,6 +2465,9 @@ export const notificationFields = {
   // The chat this notification is about (session, quick task or project id),
   // so the mobile inbox can open it without parsing `href`.
   chatTarget: v.optional(v.string()),
+  // The reply thread it is about: the phone opens that thread, opening it
+  // reads the notification, and posting in it answers its mentions.
+  threadRootId: v.optional(v.id("messages")),
 };
 
 export const repoEnvVarFields = {

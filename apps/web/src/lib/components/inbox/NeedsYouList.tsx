@@ -20,8 +20,8 @@ import { hrefToNavigateOptions } from "@/lib/utils/repoUrl";
 export type NeedsYouRow = FunctionReturnType<typeof api.needsYou.list>[number];
 
 /**
- * The Inbox's "Needs you" list: questions, PRs to review, Triage and failed
- * runs, grouped in that order (`@eva/shared/needsYou`). A row leaves when
+ * The Inbox's "Needs you" list: questions, PRs to review and failed runs,
+ * grouped in that order (`@eva/shared/needsYou`). A row leaves when
  * someone acts on it, so there is no read state and no detail pane: the row
  * opens its page, and its one action button does the work in place.
  */
@@ -92,7 +92,7 @@ function NeedsYouRowItem({ row }: { row: NeedsYouRow }) {
   );
 }
 
-/** The row's one action, by group: Reply, Open PR, Reject + Approve, Retry. */
+/** The row's one action, by group: Reply, Open PR, Retry. */
 function NeedsYouAction({
   row,
   onReply,
@@ -100,8 +100,6 @@ function NeedsYouAction({
   row: NeedsYouRow;
   onReply: () => void;
 }) {
-  const approve = useMutation(api.buildWorkflow.approveProjectTasks);
-  const archive = useMutation(api.agentTasks.archive);
   const retry = useMutation(api.agentTasks.startExecution);
   const buttonClass = "h-7 shrink-0 text-xs";
 
@@ -126,43 +124,8 @@ function NeedsYouAction({
       </Button>
     ) : null;
   }
-  const { taskId, projectId } = row;
+  const { taskId } = row;
   if (taskId === undefined) return null;
-  if (row.group === "triage") {
-    return (
-      <span className="flex shrink-0 gap-1.5">
-        <Button
-          size="sm"
-          variant="outline"
-          className={buttonClass}
-          onClick={() =>
-            void catchMutationError(
-              archive({ id: taskId }),
-              "Couldn't reject the task",
-              "needs-you-reject",
-            )
-          }
-        >
-          Reject
-        </Button>
-        {projectId !== undefined ? (
-          <Button
-            size="sm"
-            className={buttonClass}
-            onClick={() =>
-              void catchMutationError(
-                approve({ projectId, taskIds: [taskId] }),
-                "Couldn't approve the task",
-                "needs-you-approve",
-              )
-            }
-          >
-            Approve
-          </Button>
-        ) : null}
-      </span>
-    );
-  }
   return (
     <Button
       size="sm"

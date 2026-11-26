@@ -20,8 +20,8 @@ import { useScheme, XS_TRACKING } from "@/ui/theme";
 type NeedsYouRow = FunctionReturnType<typeof api.needsYou.list>[number];
 
 /**
- * The web `NeedsYouList` at phone width: questions, PRs to review, Triage and
- * failed runs, grouped in that order (`@eva/shared/needsYou`), sticky group
+ * The web `NeedsYouList` at phone width: questions, PRs to review and failed
+ * runs, grouped in that order (`@eva/shared/needsYou`), sticky group
  * headers with counts. A row opens its chat; its one button acts in place.
  * No read state: a row leaves once someone acts on it.
  */
@@ -71,7 +71,8 @@ export function NeedsYouList({ rows }: { rows: NeedsYouRow[] | undefined }) {
 function NeedsYouRowItem({ row }: { row: NeedsYouRow }) {
   const scheme = useScheme();
   const muted = EVA_THEME[scheme].mutedForeground;
-  const open = () => openAppLink({ chatTarget: row.chatTarget, href: row.href, repoId: row.repoId });
+  const open = () =>
+    openAppLink({ chatTarget: row.chatTarget, threadRootId: row.threadRootId, href: row.href, repoId: row.repoId });
   return (
     <View className="flex-row items-center gap-3 px-4">
       <Pressable
@@ -113,10 +114,8 @@ function NeedsYouRowItem({ row }: { row: NeedsYouRow }) {
   );
 }
 
-/** The web row action, by group: Reply, Open PR, Reject + Approve, Retry. */
+/** The web row action, by group: Reply, Open PR, Retry. */
 function NeedsYouAction({ row, onReply }: { row: NeedsYouRow; onReply: () => void }) {
-  const approve = useMutation(api.buildWorkflow.approveProjectTasks);
-  const archive = useMutation(api.agentTasks.archive);
   const retry = useMutation(api.agentTasks.startExecution);
   if (row.group === "question") {
     return (
@@ -133,35 +132,8 @@ function NeedsYouAction({ row, onReply }: { row: NeedsYouRow; onReply: () => voi
       </Button>
     ) : null;
   }
-  const { taskId, projectId } = row;
+  const { taskId } = row;
   if (taskId === undefined) return null;
-  if (row.group === "triage") {
-    return (
-      <View className="flex-row gap-1.5">
-        <Button
-          size="sm"
-          variant="outline"
-          fullWidth={false}
-          onPress={() => archive({ id: taskId }).catch(() => toast.error("Couldn't reject the task", { id: "needs-you-reject" }))}
-        >
-          Reject
-        </Button>
-        {projectId !== undefined ? (
-          <Button
-            size="sm"
-            fullWidth={false}
-            onPress={() =>
-              approve({ projectId, taskIds: [taskId] }).catch(() =>
-                toast.error("Couldn't approve the task", { id: "needs-you-approve" }),
-              )
-            }
-          >
-            Approve
-          </Button>
-        ) : null}
-      </View>
-    );
-  }
   return (
     <Button
       size="sm"

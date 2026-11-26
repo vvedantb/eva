@@ -39,6 +39,7 @@ import {
   selectUsageLimitRetryUserMessage,
 } from "./resultTarget";
 import { routePersonChatMessage } from "../_projects/reports";
+import { recordPersonChatPost } from "../chatReads";
 import {
   ensureOwnerChat,
   reviveCoordinatorSession,
@@ -54,6 +55,7 @@ import {
   bumpThreadRoot,
   threadReplyPrompt,
 } from "../_messages/replies";
+import { joinThreadOnReply } from "../_messages/threadParticipants";
 import { maybeInsertModelHandoffAlert } from "../_shared/modelHandoff";
 import { composerTraitFields } from "../_shared/composerTraits";
 import { cancelChatTurn } from "../_chat/cancelRace";
@@ -182,6 +184,7 @@ async function stageAndStartChatTurn(
     streamingEntityId,
     placeholderMessageId,
     replyTo: params.replyTo,
+    askedBy: params.actingUserId,
     prompt,
     attachmentStorageIds: settings.attachmentStorageIds,
     model: normalizedModel,
@@ -486,10 +489,16 @@ export const startExecute = authMutation({
     });
 
     // Notify before the turn runs or queues so a mention fires either way.
-    await notifyChatMentions(ctx, {
+    const mentionedIds = await notifyChatMentions(ctx, {
       content: args.message,
       authorUserId: ctx.userId,
       surface: { kind: "session", session, chat },
+    });
+    // The user row is already stored (the client sends addMessage first).
+    await recordPersonChatPost(ctx, {
+      parentId: chat._id,
+      authorId: ctx.userId,
+      mentionedIds,
     });
 
     const repo = await ctx.db.get(session.repoId);
@@ -806,18 +815,28 @@ export const addReply = authMutation({
     });
 
     const surface = { kind: "session" as const, session, chat };
-    await notifyChatMentions(ctx, {
+    // The mentioned hear of it as a mention; the thread's followers as a
+    // reply. Posting reads this thread for the author.
+    const mentionedIds = await notifyChatMentions(ctx, {
       content,
       authorUserId: ctx.userId,
       surface,
+      threadRoot: root,
+    });
+    const reply = await ctx.db.get(replyId);
+    if (!reply) throw new Error("Reply not stored");
+    await joinThreadOnReply(ctx, {
+      root,
+      reply,
+      replierId: ctx.userId,
+      mentionedIds,
+      repoId: session.repoId,
     });
     await notifyThreadReply(ctx, {
       content,
       authorUserId: ctx.userId,
-      participantIds: [
-        ...(root.role === "user" && root.userId ? [root.userId] : []),
-        ...(root.replierIds ?? []),
-      ],
+      rootId: root._id,
+      mentionedIds,
       surface,
     });
 
@@ -866,10 +885,15 @@ export async function sendSessionChatMessage(
     source: "chat",
     userId: params.userId,
   });
-  await notifyChatMentions(ctx, {
+  const mentionedIds = await notifyChatMentions(ctx, {
     content: params.displayContent ?? params.content,
     authorUserId: params.userId,
     surface: { kind: "session", session, chat },
+  });
+  await recordPersonChatPost(ctx, {
+    parentId: chat._id,
+    authorId: params.userId,
+    mentionedIds,
   });
   // A project task waiting on its question takes this as the answer; a
   // coordinator-chat message for teammates only is stored as a quiet comment.

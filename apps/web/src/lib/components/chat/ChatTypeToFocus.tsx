@@ -5,6 +5,7 @@ import { usePromptInputController } from "@vvedantb/ui";
 import { isEditorValueEmpty } from "@/lib/components/mentions";
 import type { MentionTextareaHandle } from "@/lib/components/chat/MentionTextarea";
 import { isComposerVisible } from "@/lib/components/chat/_components/composerVisibility";
+import { COMPOSER_FOCUS_EVENT } from "@/lib/components/chat/composerFocusRequest";
 
 interface ChatTypeToFocusProps {
   /** Ref to the mention editor so a stray keystroke can focus it. */
@@ -30,6 +31,9 @@ interface ChatTypeToFocusProps {
  * ChatDraftSync then persisted each of them. The handler asks
  * `isComposerVisible` whether this editor is the one on screen before it writes
  * anything, and a backgrounded tab owns no composer at all.
+ *
+ * It also answers a focus request (`requestComposerFocus`, the project's
+ * "+"), with the same visibility check.
  *
  * Deliberately not gated on the composer's send-disabled state: the editor stays
  * contentEditable while a sandbox is stopped, so drafting must keep working
@@ -74,8 +78,19 @@ export function ChatTypeToFocus({ mentionRef }: ChatTypeToFocusProps) {
       mentionRef.current?.focus();
     };
 
+    // A focus request (`requestComposerFocus`): the composer on screen takes it.
+    const handleFocusRequest = () => {
+      if (isComposerVisible(mentionRef.current?.getElement())) {
+        mentionRef.current?.focus();
+      }
+    };
+
     document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener(COMPOSER_FOCUS_EVENT, handleFocusRequest);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener(COMPOSER_FOCUS_EVENT, handleFocusRequest);
+    };
   }, [setInput, mentionRef]);
 
   return null;

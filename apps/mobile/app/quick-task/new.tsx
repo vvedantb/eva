@@ -40,7 +40,7 @@ type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
  * and traits, base branch (locked to the project's when a project is
  * picked), tags and project. "Save" and "Save and Run" sit at the bottom in
  * thumb reach and call the web's `agentTasks.createQuickTask`: "Save" files
- * the task in To Do (a project task waits in Triage), "Save and Run" (`run`)
+ * the task in To Do (a project task goes to the project's coordinator), "Save and Run" (`run`)
  * starts it (a project task is approved, so the project's scheduler runs
  * it). The screen then goes back to the list, as the dialog closes (to Quick
  * Tasks after a deep link). Files attach with the chat's picker
@@ -61,7 +61,7 @@ type Repo = FunctionReturnType<typeof api.githubRepos.list>[number];
  */
 export default function NewQuickTaskScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ repoId?: string; projectId?: string; draftId?: string }>();
+  const params = useLocalSearchParams<{ repoId?: string; draftId?: string }>();
   const leave = () => goBackOrReplace(router, "/sessions?section=quick-tasks");
   const repos = useQuery(api.githubRepos.list, {});
   const lastRepoId = useLastRepoId();
@@ -80,24 +80,21 @@ export default function NewQuickTaskScreen() {
       </Screen>
     );
   }
-  return <NewQuickTaskForm repos={repos} initialRepo={first} projectParam={params.projectId} initialDraft={initialDraft} onLeave={leave} />;
+  return <NewQuickTaskForm repos={repos} initialRepo={first} initialDraft={initialDraft} onLeave={leave} />;
 }
 
 /**
  * The form, once the repos are in: the screen's repo starts as the link's
- * (else the first), and the project as the link's (a project's To Do "+").
- * With `initialDraft` the form starts with that draft loaded (`loadDraft`).
+ * (else the first). With `initialDraft` the form starts with that draft loaded (`loadDraft`).
  */
 function NewQuickTaskForm({
   repos,
   initialRepo,
-  projectParam,
   initialDraft,
   onLeave: leave,
 }: {
   repos: Repo[];
   initialRepo: Repo;
-  projectParam: string | undefined;
   initialDraft: QuickTaskDraft | undefined;
   onLeave: () => void;
 }) {
@@ -123,12 +120,7 @@ function NewQuickTaskForm({
   const [assignedTo, setAssignedTo] = useState<Id<"users"> | undefined>(undefined);
   const [tags, setTags] = useState<string[]>(initialDraft?.tags ?? []);
   const attachments = useAttachments();
-  // A pick wins; until then, the link's project once the repo's projects resolve it (route params are strings).
-  const [pickedProject, setPickedProject] = useState<{ id: Id<"projects"> | undefined } | null>(
-    initialDraft ? { id: initialDraft.projectId } : null,
-  );
-  const projectId = pickedProject ? pickedProject.id : projects?.find((candidate) => candidate._id === projectParam)?._id;
-  const setProjectId = (id: Id<"projects"> | undefined) => setPickedProject({ id });
+  const [projectId, setProjectId] = useState<Id<"projects"> | undefined>(initialDraft?.projectId);
   // As the new-session screen: model and traits start from the repo defaults
   // and a pick overrides them; the base branch is kept with its repo.
   const [pickedModel, setPickedModel] = useState<AIModel | null>(null);

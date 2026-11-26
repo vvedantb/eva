@@ -1,7 +1,10 @@
 "use node";
 
 import type { SandboxHandle } from "../_sandbox/provider";
-import { workspaceDirShell } from "../_sandbox_runtime/helpers";
+import {
+  PREFER_OOM_KILL_LINE,
+  workspaceDirShell,
+} from "../_sandbox_runtime/helpers";
 import { writeSandboxFile } from "../_sandbox_runtime/sandboxFiles";
 import { ensureSwapFile } from "../_sandbox_runtime/swap";
 import {
@@ -78,6 +81,7 @@ export async function launchDevServerInVercelConsole(
   const script = [
     "#!/usr/bin/env bash",
     "set -euo pipefail",
+    PREFER_OOM_KILL_LINE,
     EVA_ENV_SOURCE_CMD,
     `cd ${workspace} 2>/dev/null || cd /vercel/sandbox || cd /tmp/repo || true`,
     `export INIT_CWD="$(pwd)"`,

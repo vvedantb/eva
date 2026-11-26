@@ -1,33 +1,28 @@
 "use client";
 
-import { useState } from "react";
-import type { Id } from "@eva/backend";
 import { formatEntityNumLabel } from "@eva/shared";
 import {
   ChatTab,
   ChatTabAddButton,
   ChatTabStrip,
 } from "@/routes/_repo/$owner/$repo/sessions/_components/ChatTabsBar";
-import { ProjectNewTaskModal } from "./ProjectNewTaskModal";
 import type { ProjectTaskTabRow } from "./useProjectTaskTabs";
 
 /**
  * The project's chat tabs, as a session's: Eva (the coordinator) first and
  * never closed, then the open task tabs, each with ✕ and the running mark
- * while its task works, then `+` (New task). An archived project has no `+`.
+ * while its task works, then `+` (New task: Eva's tab with her composer
+ * focused, `onAskEva`). An archived project has no `+`.
  */
 export function ProjectChatTabs({
-  projectId,
-  repoId,
   rows,
   selected,
   evaRunning,
   isArchived,
   onSelect,
   onClose,
+  onAskEva,
 }: {
-  projectId: Id<"projects">;
-  repoId: Id<"githubRepos">;
   rows: ReadonlyArray<ProjectTaskTabRow>;
   /** The selected task tab's numId; null for Eva. */
   selected: number | null;
@@ -35,8 +30,8 @@ export function ProjectChatTabs({
   isArchived: boolean;
   onSelect: (numId: number | null) => void;
   onClose: (numId: number) => void;
+  onAskEva: () => void;
 }) {
-  const [createTaskOpen, setCreateTaskOpen] = useState(false);
   return (
     <>
       {/* Eva stays pinned on the left; only the task tabs scroll. */}
@@ -77,17 +72,11 @@ export function ProjectChatTabs({
             <ChatTabAddButton
               label="New task"
               tooltip="New task"
-              onClick={() => setCreateTaskOpen(true)}
+              onClick={onAskEva}
             />
           )}
         </ChatTabStrip>
       </div>
-      <ProjectNewTaskModal
-        projectId={projectId}
-        repoId={repoId}
-        isOpen={createTaskOpen}
-        onClose={() => setCreateTaskOpen(false)}
-      />
     </>
   );
 }

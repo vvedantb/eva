@@ -8,7 +8,7 @@ import {
 } from "../functions";
 import { validateRepoGroupMembers } from "../_repoGroups/validate";
 import { createTodoTask } from "../_agentTasks/mutations";
-import { latestChatMessageId, resolveChatParent } from "../_chat/chatParent";
+import { coordinatorTurnMessageId } from "./chatTaskCards";
 
 /**
  * The tasks a project's coordinator creates (`create_task`,
@@ -124,14 +124,11 @@ export async function createCoordinatorTasks(
           phaseLabel: task.phaseLabel,
           linkedRepoIds: task.linkedRepoIds,
         },
-        { approved: true },
+        { start: true },
       ),
     );
   }
-  const parentId = await resolveChatParent(ctx.db, "project", projectId);
-  const messageId = parentId
-    ? await latestChatMessageId(ctx.db, parentId)
-    : undefined;
+  const messageId = await coordinatorTurnMessageId(ctx.db, projectId);
   const batchId = await ctx.db.insert("projectTaskBatches", {
     projectId,
     ...(messageId ? { messageId } : {}),

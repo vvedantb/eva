@@ -93,7 +93,7 @@ async function taskRow(
     title: task.title,
     status: task.status,
     stage: projectTaskStage(facts),
-    approved: facts.approved,
+    withCoordinator: facts.withCoordinator === true,
     phaseLabel: task.phaseLabel,
     repoId: task.repoId,
     repo: repo ? `${repo.owner}/${repo.name}` : undefined,
@@ -150,9 +150,9 @@ function formatRow(row: ProjectTaskRow): string {
     ? "waiting for you (it asked)"
     : row.needsYou
       ? `${row.stage}, needs a person: ${row.needsYou}`
-      : row.approved || row.stage !== "todo"
-        ? row.stage
-        : "todo, in Triage (a person approves it)";
+      : row.withCoordinator
+        ? "todo, handed to you (start_task or merge_task_into)"
+        : row.stage;
   const notes = [
     row.openAsk ? `asks: ${row.openAsk}` : "",
     ...row.newReports.map((text) => `report: ${text}`),

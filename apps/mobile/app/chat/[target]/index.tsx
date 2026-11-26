@@ -33,6 +33,7 @@ import { turnCheckpoint } from "@eva/shared/turnCheckpoint";
 import { chatTypingRoom } from "@eva/shared/typingPresence";
 import { isUsageLimitFailure } from "@eva/shared/usageLimitRecovery";
 import { messageLinkHref } from "@eva/shared/messageLink";
+import { showsProjectTaskPrompt } from "@eva/shared/projectView";
 import { appendCitationsToPrompt } from "@eva/shared/assistantCitation";
 import { formatQuestionAnswers, type ParsedQuestion, parsePendingQuestion } from "@eva/shared/pendingQuestion";
 import { collectThreadFindDocuments } from "@eva/shared/threadFind";
@@ -113,6 +114,8 @@ import { WEB_URL } from "@/config";
 import { useSessionActions } from "@/sessions/useSessionActions";
 import { textColor, useScheme } from "@/ui/theme";
 import { useChatTranscript } from "@/chat/useChatTranscript";
+import { ProjectTaskFacts, useProjectTaskRow } from "@/projects/ProjectTaskFacts";
+import { ProjectTaskPromptCard } from "@/projects/ProjectTaskPromptCard";
 
 /** The agent's open question in the chat (`pendingQuestions.getActive`). */
 type PendingQuestion = NonNullable<FunctionReturnType<typeof api.pendingQuestions.getActive>>;
@@ -122,7 +125,9 @@ type PendingQuestion = NonNullable<FunctionReturnType<typeof api.pendingQuestion
 const HEADER_HIDDEN_ACTIONS: ReadonlySet<SessionMenuAction> = new Set(["copyLink"]);
 
 /**
- * One chat (session, quick task or project): the transcript with the web
+ * One chat (session, quick task, project task or project; a project task's
+ * chat is the task, with its status and PR line under the title and, before
+ * its first run, its prompt card in place of the empty chat): the transcript with the web
  * message actions (a teammate's turn on the left with their avatar and first
  * name, as the web), the agent's question when it asks one, and the composer
  * (attachments, Stop beside Send while the agent works, the web `@` / `/`
@@ -196,7 +201,9 @@ export default function ChatScreen() {
         message._id === liveReplyId,
   );
   const { mineByMessageId: mine, agentReports } = groupChatFeedback(feedbackRows ?? [], me ?? undefined);
-  const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder);
+  // A project's coordinator chat: cards for the tasks Eva created or gave work to.
+  const chatProject = chat?.project ? { projectId: chat.project.id, repoId: chat.repoId } : undefined;
+  const { cards, outputs } = useChatCards(parentId, visible, agentReports, transcript.hasOlder, chatProject);
   // The agent's proposed plans, each under the message that proposed it (session chats only, as the web).
   const planAfter = useProposedPlans(chat, sessionRow?.planContent);
   // Rows seen on screen, so an agent page mounts its WebView only once its row shows.
@@ -212,6 +219,8 @@ export default function ChatScreen() {
   const findOpen = find !== null && find.target === target;
   const findActiveId = findOpen ? find.activeId : null;
   const requestRecap = useMutation(api.chatRecaps.requestFull);
+  // A project task's chat is the task: its status and PR line under the title, and its prompt before its first run.
+  const projectTask = useProjectTaskRow(chat?.task?.id);
 
   if (chat === undefined || chat === null) {
     return (
@@ -410,6 +419,7 @@ export default function ChatScreen() {
         leadingItems={leadingMenu}
         usage={<UsageButton chat={chat} />}
         sandbox={<SandboxControl sandbox={sandbox} working={working} />}
+        subtitle={projectTask ? <ProjectTaskFacts task={projectTask} /> : undefined}
         sessionMenu={
           sessionTarget
             ? {
@@ -455,10 +465,17 @@ export default function ChatScreen() {
             ) : null
           }
           ListEmptyComponent={
-            messages === undefined ? (
+            // A task or project that has not chatted yet has no chat to load (`parentId`).
+            messages === undefined && parentId !== undefined ? (
               <CenteredSpinner label="Loading messages" />
-            ) : messages.length === 0 ? (
-              <ConversationEmptyState icon={IconMessageCircle} title={emptyTitle} description={emptyDescription} />
+            ) : (messages?.length ?? 0) === 0 ? (
+              projectTask && showsProjectTaskPrompt(projectTask) ? (
+                <View className={`pt-3 ${THREAD_INSET}`}>
+                  <ProjectTaskPromptCard task={projectTask} repoId={chat.repoId} readOnly={chat.archived !== undefined} />
+                </View>
+              ) : (
+                <ConversationEmptyState icon={IconMessageCircle} title={emptyTitle} description={emptyDescription} />
+              )
             ) : null
           }
           ListHeaderComponent={
@@ -974,7 +991,7 @@ function ChatMessageRow({
   // "N replies" in the footer line, always shown (the web footer's thread control).
   const threadControl =
     onOpenThread && (message.replyCount ?? 0) > 0 ? (
-      <ThreadSummary replyCount={message.replyCount ?? 0} onPress={() => onOpenThread(message._id)} />
+      <ThreadSummary rootId={message._id} replyCount={message.replyCount ?? 0} onPress={() => onOpenThread(message._id)} />
     ) : null;
   return (
               <View className={`gap-3 ${THREAD_INSET}${joinsPrevious ? " -mt-2" : ""}`} style={findBand}>

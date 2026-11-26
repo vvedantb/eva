@@ -8,8 +8,7 @@ import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
 import type { TaskStatus } from "../TaskStatusBadge";
 import { FieldsSection } from "@/lib/components/fields/FieldsSection";
-import { canEditTaskModel } from "@eva/shared/taskDetail";
-import { archiveCopy } from "@eva/shared";
+import { taskModelLockReason } from "@eva/shared/taskDetail";
 import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import {
   useAvailableAiModels,
@@ -62,48 +61,8 @@ export function StatusFieldsSection({
   allTags,
   readOnly,
 }: StatusFieldsSectionProps) {
-  const simpleView = useSimpleView();
   const viewVercelDeployment = useViewVercelDeployment();
-  const updateTask = useMutation(api.agentTasks.update).withOptimisticUpdate(
-    (localStore, args) => {
-      if (!task?.repoId) return;
-      const {
-        id: _id,
-        repoId: _repoId,
-        priority,
-        projectId,
-        assignedTo,
-        providerAccountId,
-        ...safeFields
-      } = args;
-      const nullSafe = {
-        ...safeFields,
-        ...(priority !== undefined ? { priority: priority ?? undefined } : {}),
-        ...(projectId !== undefined
-          ? { projectId: projectId ?? undefined }
-          : {}),
-        ...(assignedTo !== undefined
-          ? { assignedTo: assignedTo ?? undefined }
-          : {}),
-        ...(providerAccountId !== undefined
-          ? { providerAccountId: providerAccountId ?? undefined }
-          : {}),
-      };
-      patchLoadedQuery(
-        localStore,
-        api.agentTasks.getAllTasks,
-        { repoId: task.repoId },
-        (list) =>
-          list.map((t) => (t._id === args.id ? { ...t, ...nullSafe } : t)),
-      );
-      patchLoadedQuery(
-        localStore,
-        api.agentTasks.get,
-        { id: args.id },
-        (cached) => cached && { ...cached, ...nullSafe },
-      );
-    },
-  );
+  const updateTask = useTaskUpdate(task);
   const updateStatus = useMutation(
     api.agentTasks.updateStatus,
   ).withOptimisticUpdate((localStore, args) => {
@@ -125,20 +84,6 @@ export function StatusFieldsSection({
   const [isCreatingProject, setIsCreatingProject] = useState(false);
 
   const projectOptions = projects ?? [];
-  const currentModel = normalizeAIModel(task?.model);
-  const { options: modelOptions } = useAvailableAiModels(
-    task?.repoId,
-    currentModel,
-  );
-  const { options: accounts, resolveId: resolveAccountId } =
-    useTaskOwnerProviderAccounts(taskId);
-  const modelLockReason = readOnly
-    ? archiveCopy("task").unarchiveFirst
-    : hasRuns
-    ? "Cannot be changed after the task has run"
-    : !canEditTaskModel(status)
-      ? "Locked when the task is done or cancelled"
-      : undefined;
 
   return (
     <div className="space-y-4">
@@ -165,19 +110,14 @@ export function StatusFieldsSection({
           disabled={readOnly}
         />
 
-        {simpleView ? null : (
-          <ModelField
-            taskId={taskId}
-            task={task}
-            currentModel={currentModel}
-            modelOptions={modelOptions}
-            accounts={accounts}
-            resolveAccountId={resolveAccountId}
-            modelLockReason={modelLockReason}
-            isOwner={isOwner}
-            updateTask={updateTask}
-          />
-        )}
+        <TaskModelRow
+          taskId={taskId}
+          task={task}
+          status={status}
+          hasRuns={hasRuns}
+          isOwner={isOwner}
+          readOnly={readOnly}
+        />
 
         <BaseBranchRow
           taskId={taskId}
@@ -219,5 +159,97 @@ export function StatusFieldsSection({
         />
       </FieldsSection>
     </div>
+  );
+}
+
+/**
+ * `agentTasks.update`, shown at once in the repo's task list and the task
+ * itself before the server confirms it.
+ */
+function useTaskUpdate(task: Doc<"agentTasks"> | undefined) {
+  return useMutation(api.agentTasks.update).withOptimisticUpdate(
+    (localStore, args) => {
+      if (!task?.repoId) return;
+      const {
+        id: _id,
+        repoId: _repoId,
+        priority,
+        projectId,
+        assignedTo,
+        providerAccountId,
+        ...safeFields
+      } = args;
+      const nullSafe = {
+        ...safeFields,
+        ...(priority !== undefined ? { priority: priority ?? undefined } : {}),
+        ...(projectId !== undefined
+          ? { projectId: projectId ?? undefined }
+          : {}),
+        ...(assignedTo !== undefined
+          ? { assignedTo: assignedTo ?? undefined }
+          : {}),
+        ...(providerAccountId !== undefined
+          ? { providerAccountId: providerAccountId ?? undefined }
+          : {}),
+      };
+      patchLoadedQuery(
+        localStore,
+        api.agentTasks.getAllTasks,
+        { repoId: task.repoId },
+        (list) =>
+          list.map((t) => (t._id === args.id ? { ...t, ...nullSafe } : t)),
+      );
+      patchLoadedQuery(
+        localStore,
+        api.agentTasks.get,
+        { id: args.id },
+        (cached) => cached && { ...cached, ...nullSafe },
+      );
+    },
+  );
+}
+
+/**
+ * A task's model and its account. Hidden in simple view. Locked once the
+ * task ran, once it is done or cancelled, and while it is archived.
+ */
+function TaskModelRow({
+  taskId,
+  task,
+  status,
+  hasRuns,
+  isOwner,
+  readOnly,
+}: {
+  taskId: Id<"agentTasks">;
+  task: Doc<"agentTasks"> | undefined;
+  status: TaskStatus | undefined;
+  hasRuns: boolean;
+  isOwner: boolean;
+  readOnly: boolean;
+}) {
+  const simpleView = useSimpleView();
+  const updateTask = useTaskUpdate(task);
+  const currentModel = normalizeAIModel(task?.model);
+  const { options: modelOptions } = useAvailableAiModels(
+    task?.repoId,
+    currentModel,
+  );
+  const { options: accounts, resolveId: resolveAccountId } =
+    useTaskOwnerProviderAccounts(taskId);
+  if (simpleView) return null;
+  const modelLockReason = taskModelLockReason({ status, hasRuns, readOnly });
+  return (
+    <ModelField
+      taskId={taskId}
+      task={task}
+      currentModel={currentModel}
+      modelOptions={modelOptions}
+      accounts={accounts}
+      resolveAccountId={resolveAccountId}
+      modelLockReason={modelLockReason}
+      isOwner={isOwner}
+      updateTask={updateTask}
+    />
   );
 }

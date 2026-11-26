@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "fs";
 import { dirname } from "path";
 import type {
   CanUseTool,
+  HookCallback,
   Options,
   Query,
   SDKUserMessage,
@@ -33,6 +34,7 @@ import {
   trimBufferHead,
 } from "../runtime/buffers.js";
 import { buildCanUseTool } from "../runtime/pendingQuestion.js";
+import { lowMemoryNotice } from "../runtime/vmMemory.js";
 import { callbackState as S } from "../runtime/state.js";
 import {
   startClaudeUsageReport,
@@ -506,8 +508,27 @@ function buildSdkOptionsFromParts(
       : {}),
     ...effortOption,
     ...thinkingOption,
+    hooks: { PreToolUse: [{ matcher: "Bash", hooks: [warnOnLowMemory] }] },
   };
 }
+
+/**
+ * Tells the agent, before each shell command, when the VM is low on memory.
+ * A full `tsc` on a VM already deep in swap froze session 1054's daemon until
+ * the watchdog ended the turn (2026-11-26). The command still runs; the note
+ * only steers the agent to a lighter one.
+ */
+const warnOnLowMemory: HookCallback = async () => {
+  const notice = lowMemoryNotice();
+  return notice === null
+    ? {}
+    : {
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          additionalContext: notice,
+        },
+      };
+};
 
 /**
  * Runs one Claude turn via the Agent SDK (`query()`).

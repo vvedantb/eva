@@ -825,6 +825,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
   async function createTaskForRepo(
     input: TaskInput,
     userId: string,
+    run: boolean,
   ): Promise<
     | { taskId: string; repoFullName: string }
     | ReturnType<typeof toolErrorResult>
@@ -840,12 +841,13 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
     // behind them fall back to `repo.defaultModel`, and that per-repo choice
     // (provider, cost, plan limits) is the one the MCP surface must not
     // override. Per-turn sends (orchestratorSendMessage) keep their override.
-    // A project task from an agent outside the coordinator waits in Triage
-    // for a person's approval (`createAgentTask`).
+    // A project task from an agent outside the coordinator goes to the
+    // project's coordinator, or starts when `run` (`createAgentTask`).
     const taskId = await ctx.runMutation(
       internal._agentTasks.mutations.createAgentTask,
       {
         userId,
+        run,
         repoId: repo.id,
         title: input.title,
         description: input.description,
@@ -876,19 +878,22 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
             "linkedRepoNames works only with create_task or create_tasks_batch in a project coordinator chat.",
           );
         }
-        const result = await createTaskForRepo(input, userId);
+        const result = await createTaskForRepo(input, userId, true);
         if ("content" in result) return result;
 
-        await mcpCallAsUser(
-          ctx,
-          clerkUserId,
-          {
-            type: "mutation",
-            path: "_agentTasks/execution:startExecution",
-            args: { id: result.taskId },
-          },
-          jsonValue,
-        );
+        // A project's scheduler starts its task (`createAgentTask`).
+        if (input.projectId === undefined) {
+          await mcpCallAsUser(
+            ctx,
+            clerkUserId,
+            {
+              type: "mutation",
+              path: "_agentTasks/execution:startExecution",
+              args: { id: result.taskId },
+            },
+            jsonValue,
+          );
+        }
 
         return toolJsonResult({
           taskId: result.taskId,
@@ -929,7 +934,7 @@ For schema discovery, query information_schema (e.g. "SELECT table_name FROM inf
             },
           ]);
         }
-        const result = await createTaskForRepo(input, userId);
+        const result = await createTaskForRepo(input, userId, false);
         if ("content" in result) return result;
 
         return toolJsonResult({
@@ -1175,6 +1180,10 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
                 "A person already answered this task's question, and the task went on with that answer. Your message was not sent. Send it again only if it adds something.",
               );
             }
+            await ctx.runMutation(
+              internal._projects.chatTaskCards.linkTaskToTurn,
+              { projectId: caller.projectId, taskId: target.targetId },
+            );
             return toolJsonResult({
               ...entitySummary(target),
               delivered: "started",
@@ -1215,6 +1224,14 @@ Sending wakes the chat's preview sandbox. Call stop_sandbox once you are done wi
             sentViaOrchestrator: true,
           },
         );
+
+        // The coordinator gave one of its tasks work: a card under its reply.
+        if (caller?.role === "coordinator") {
+          await ctx.runMutation(
+            internal._projects.chatTaskCards.linkTaskToTurn,
+            { projectId: caller.projectId, taskId: target.targetId },
+          );
+        }
 
         return toolJsonResult({
           ...entitySummary(target),

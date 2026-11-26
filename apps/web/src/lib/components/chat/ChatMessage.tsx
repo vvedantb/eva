@@ -322,6 +322,7 @@ export const ChatMessage = memo(function ChatMessage({
   const threadControl =
     onReply && (message.replyCount ?? 0) > 0 ? (
       <ThreadSummary
+        rootId={message._id}
         replyCount={message.replyCount ?? 0}
         replierIds={message.replierIds ?? []}
         onOpen={() => onReply(message._id)}
