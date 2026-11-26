@@ -20,8 +20,8 @@ import { getCurrentUserId } from "./_auth/currentUser";
 /**
  * Phone push for the Eva mobile app (apps/mobile), sent through the Expo Push
  * API by `@vvedantb/server`. Only two events push: an agent asking a blocking
- * question, and the notification types in `PUSH_NOTIFICATION_TYPES` (see
- * notifications.ts). Pass the chat id the mobile route opens as
+ * question, and the notifications the routing table pushes
+ * (`@eva/shared/notificationRouting`, read by notifications.ts). Pass the chat id the mobile route opens as
  * `data: { target }`. The `pushTokens` table is defined in schema.ts.
  */
 export const { register, unregister, listTokensForUser, removeTokens, send, checkReceipts, schedulePush } =

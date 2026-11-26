@@ -7,6 +7,7 @@ import { authorDisplayName, teamMentionRecipients } from "./mentionRecipients";
 import { stripMentionTokens } from "./resolveDocMentions";
 import { stripSkillTokens } from "./skillToken";
 import { sessionOwner } from "../_sessions/owner";
+import { isNeedsYouNotification } from "@eva/shared/notificationRouting";
 
 /**
  * Which chat a message was posted in. Carries the whole document because the
@@ -93,9 +94,10 @@ async function ownerSurface(
 const OWN_MENTIONS_SCAN = 100;
 
 /**
- * Posting in a chat answers the mentions you had there: your unread
- * `mention` notifications for this chat are marked read, so they leave
- * Inbox → Needs you (plan `projects-v2-chat.md`, decision 3). The chat id is
+ * Posting in a chat answers what asked for you there: your unread Needs you
+ * notifications for this chat (mentions, routed questions, agent messages)
+ * are marked read, so they leave Inbox → Needs you (plan
+ * `projects-v2-chat.md`, decision 3). The chat id is
  * the one `createNotification` stores (`chatTarget`: task, else session,
  * else project).
  */
@@ -112,7 +114,7 @@ async function answerOwnChatMentions(
       )
       .order("desc")
       .take(OWN_MENTIONS_SCAN)
-  ).filter((row) => row.type === "mention" && row.chatTarget !== undefined);
+  ).filter(isNeedsYouNotification);
   if (unread.length === 0) return;
   const target = notificationTarget(await ownerSurface(ctx, surface));
   const chatTarget = target.taskId ?? target.sessionId ?? target.projectId;

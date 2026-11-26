@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 import { createNotification, truncateNotificationText } from "./notifications";
 import { ensureSubscribed, notifySubscribers } from "./taskSubscribers";
 import {
@@ -12,6 +13,7 @@ import {
   authorDisplayName,
   teamMentionRecipients,
 } from "./_mentions/mentionRecipients";
+import { extractMentionedUserIds } from "./_mentions/extractMentionedUserIds";
 import { taskCommentFields } from "./validators";
 import { deleteDraftForTarget } from "./_drafts/helpers";
 
@@ -40,6 +42,45 @@ function commentNotificationMessage(
   return summary
     ? `New comment on this ${scopeLabel}: "${summary}"`
     : `New comment added on this ${scopeLabel}.`;
+}
+
+/**
+ * Notifies the teammates `@`-mentioned in a task comment, except those in
+ * `skip`, and subscribes them to the task. Adds each one to `skip`. A comment
+ * mention is not judged by routing: it toasts, pushes and emails at once
+ * (`@eva/shared/notificationRouting`).
+ */
+async function notifyCommentMentions(
+  ctx: MutationCtx,
+  args: {
+    task: Doc<"agentTasks">;
+    commentId: Id<"taskComments">;
+    content: string;
+    authorName: string;
+    skip: Set<string>;
+  },
+): Promise<void> {
+  const { task } = args;
+  for (const mentionedUserId of await teamMentionRecipients(
+    ctx,
+    args.content,
+    task.repoId,
+    args.skip,
+  )) {
+    await createNotification(ctx, {
+      userId: mentionedUserId,
+      type: "mention",
+      title: `${args.authorName} mentioned you in a comment`,
+      repoId: task.repoId,
+      projectId: task.projectId,
+      taskId: task._id,
+      commentId: args.commentId,
+      message: commentNotificationMessage(false, task.projectId, args.content),
+      urgency: "normal",
+    });
+    args.skip.add(mentionedUserId);
+    await ensureSubscribed(ctx, task._id, mentionedUserId);
+  }
 }
 
 /** Lists all comments for a task, sorted oldest first. */
@@ -132,25 +173,13 @@ export const create = authMutation({
       await ensureSubscribed(ctx, args.taskId, parent.authorId);
     }
 
-    for (const mentionedUserId of await teamMentionRecipients(
-      ctx,
-      args.content,
-      task.repoId,
-      notifiedUserIds,
-    )) {
-      await createNotification(ctx, {
-        userId: mentionedUserId,
-        type: "mention",
-        title: `${authorName} mentioned you in a comment`,
-        repoId: task.repoId,
-        projectId: task.projectId,
-        taskId: args.taskId,
-        commentId,
-        message: commentMessage,
-      });
-      notifiedUserIds.add(mentionedUserId);
-      await ensureSubscribed(ctx, args.taskId, mentionedUserId);
-    }
+    await notifyCommentMentions(ctx, {
+      task,
+      commentId,
+      content: args.content,
+      authorName,
+      skip: notifiedUserIds,
+    });
 
     // Broadcast to the rest of the subscriber set (creator, assignee, followers).
     // Mention/reply recipients are already in notifiedUserIds, so they keep their
@@ -178,7 +207,10 @@ export const create = authMutation({
   },
 });
 
-/** Updates a task comment. Only the original author may edit. */
+/**
+ * Updates a task comment. Only the original author may edit. People the edit
+ * newly `@`-mentions are notified; those the comment already named are not.
+ */
 export const update = authMutation({
   args: {
     id: v.id("taskComments"),
@@ -202,6 +234,16 @@ export const update = authMutation({
     }
     await assertTaskNotArchived(ctx.db, task);
     await ctx.db.patch(args.id, { content: args.content });
+    await notifyCommentMentions(ctx, {
+      task,
+      commentId: args.id,
+      content: args.content,
+      authorName: await authorDisplayName(ctx, ctx.userId),
+      skip: new Set([
+        ctx.userId,
+        ...extractMentionedUserIds(ctx, comment.content),
+      ]),
+    });
     return null;
   },
 });

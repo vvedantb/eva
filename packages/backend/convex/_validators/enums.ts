@@ -194,8 +194,6 @@ export const priorityValidator = v.union(
 );
 
 export const notificationTypeValidator = v.union(
-  v.literal("routine_complete"),
-  v.literal("export_ready"),
   v.literal("task_complete"),
   v.literal("task_assigned"),
   v.literal("status_changed"),
@@ -203,14 +201,16 @@ export const notificationTypeValidator = v.union(
   v.literal("changes_requested"),
   v.literal("comment_reply"),
   v.literal("mention"),
-  v.literal("run_completed"),
-  v.literal("run_failed"),
-  v.literal("rate_limit"),
   v.literal("system"),
   // Inbox-only: session auto-archived because its GitHub PR closed or merged.
   v.literal("session_archived"),
   // Eva routed a clarification to a teammate (answered in Manager Ave).
   v.literal("routed_question"),
+  // Legacy: no code creates these. `dataMigrations:deleteDeadNotifications`
+  // deletes their rows; drop them once it has run on prod.
+  v.literal("routine_complete"),
+  v.literal("run_completed"),
+  v.literal("run_failed"),
 );
 
 /** The chat surfaces: a session, a quick task or a project. */
