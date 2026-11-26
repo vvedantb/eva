@@ -22,7 +22,7 @@ export function LandingHero({ compact = false }: LandingHeroProps) {
 
   return (
     <ProductHero
-      title={`${LANDING_HERO.headlineLead} ${LANDING_HERO.headlineTail}`}
+      title={LANDING_HERO.headline}
       tagline={compact ? LANDING_HERO.compactLede : LANDING_HERO.lede}
       primaryCta={
         compact

@@ -92,16 +92,13 @@ export const LANDING_NAV_LINKS = [
   { label: "Open source", href: "#open-source" },
 ] as const;
 
-/**
- * Hero copy shared by the full and compact pages. The headline is split so the
- * second half can carry the display treatment without parsing a string.
- */
+/** Hero copy shared by the full and compact pages. */
 export const LANDING_HERO = {
-  headlineLead: "Your AI coworker",
-  headlineTail: "ships pull requests.",
+  headline: "Think it. Sleep. Eva gets it done.",
   lede: "Eva gives coding agents a real cloud dev environment — your repository cloned, dependencies installed, a dev server running and a browser they can drive. They run the tests and open the pull request.",
   /** Short, plain-words lede for the compact page. */
-  compactLede: "Hand off the work. Get back changes ready to review.",
+  compactLede:
+    "Your AI coworker. Hand off the work, wake up to changes ready to review.",
 } as const;
 
 /** Agent CLIs preinstalled in every sandbox, mirroring `LANDING_SANDBOX_SPEC`. */
