@@ -48,8 +48,8 @@ export async function deliverPendingCoordinatorWakes(
     userId: project.userId,
     content: coordinatorWakeMessage(pending),
     // Eva runs on her chat's model and account, the ones picked in her
-    // composer, so a wake runs on the same model as a turn you start. The
-    // project's model is for its tasks (`runSettings.ts`).
+    // composer, so a wake runs on the same model as a turn you start. Her
+    // tasks take the same model (`runSettings.ts`).
     settings:
       context.chat.lastModel !== undefined
         ? {

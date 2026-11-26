@@ -97,7 +97,7 @@ export async function listSelectableAccountsFor(
 type AccountListItem = Awaited<ReturnType<typeof listAccountsFor>>[number];
 
 /**
- * A project's child tasks run on the project's account
+ * A project's child tasks can run on the project's account
  * (`projects.providerAccountId`, checked against the project owner),
  * so a picker for them lists it first, even when the pool owner (a child
  * task's creator) could not pick it. Unchanged without a project account.

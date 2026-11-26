@@ -1,6 +1,6 @@
-# Projects: Eva and her tasks have separate models
+# Projects: one model, picked in Eva's chat
 
-- Eva always runs on the model and account picked in her chat's composer, also when she wakes on her own (`coordinatorWakeDelivery.ts`). Before, a wake ran on the project's model.
-- The project's model row now reads "Tasks" (web and phone): it sets the model and account the project's tasks run on (`runSettings.ts`, unchanged).
-- A new Eva chat still starts on the project's model; after that it keeps its own pick.
+- Eva and every task she runs use the model and account picked in Eva's chat composer. A wake used the project's model before; a task copied the project's model at its first run.
+- A task takes Eva's model when it starts (and again after a usage limit stops it), as it took the project's before (`projectRunSettings`). A pick in the task's own chat after that stays the task's.
+- The Project page (web and phone) no longer has a model row. `projects.model` only seeds Eva's chat when it is first made.
 - Filters and labels on the Tasks list moved to v4 in the orchestrator plan.

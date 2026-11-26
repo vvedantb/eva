@@ -1,23 +1,22 @@
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DatabaseReader } from "../_generated/server";
 import { lastTaskRunOutcome } from "../_agentTasks/taskRunStatus";
+import { findWorkChat } from "../_sessions/ownerState";
 import {
   sessionOwnerProjectId,
   sessionOwnerTaskId,
 } from "../_sessions/owner";
 
 /**
- * A project's child tasks run on the project's model and account
- * (`projects.model`, `projects.providerAccountId`; none is the team
- * credential). Eva, the coordinator, runs on her own chat's model instead
- * (`coordinatorWakeDelivery.ts`). The rules here
- * are shared by a child task's runs (`startTaskRun`) and by every chat turn a
- * person starts in the child task's own session, so both paths pick and
- * unlock the same account.
+ * One model for a whole project: Eva and every child task run on the model
+ * and account picked in Eva's chat composer (her Main chat's `lastModel` and
+ * `providerAccountId`). `projects.model` only seeds that chat. The rules here
+ * are shared by a child task's runs (`startTaskRunTurn`) and by every chat
+ * turn a person starts in the child task's own session, so both paths pick
+ * and unlock the same account.
  */
 
 type ProjectAccount = Pick<Doc<"projects">, "userId" | "providerAccountId">;
-type ProjectRunSource = ProjectAccount & Pick<Doc<"projects">, "model">;
 type RunSettings = Pick<Doc<"agentTasks">, "model" | "providerAccountId">;
 
 /**
@@ -34,11 +33,19 @@ export async function takesProjectSettings(
   return last === null || last.usageLimited;
 }
 
-/** The model and account a project task copies from its project. */
-export function projectRunSettings(
-  project: ProjectRunSource,
+/**
+ * The model and account a project task copies from Eva's chat, or from the
+ * project when that chat has no pick yet.
+ */
+export async function projectRunSettings(
+  db: DatabaseReader,
+  project: Doc<"projects">,
   task: RunSettings,
-): RunSettings {
+): Promise<RunSettings> {
+  const chat = (await findWorkChat(db, { kind: "project", project }))?.chat;
+  if (chat?.lastModel !== undefined) {
+    return { model: chat.lastModel, providerAccountId: chat.providerAccountId };
+  }
   return {
     model: project.model ?? task.model,
     providerAccountId: project.providerAccountId,
@@ -47,7 +54,7 @@ export function projectRunSettings(
 
 /**
  * The model and account a task runs (and its chat starts) on now: its
- * project's while it takes them (`takesProjectSettings`), else its own.
+ * project's (Eva's chat) while it takes them (`takesProjectSettings`), else its own.
  */
 export async function taskRunSettings(
   db: DatabaseReader,
@@ -56,7 +63,7 @@ export async function taskRunSettings(
   const project =
     task.projectId !== undefined ? await db.get(task.projectId) : null;
   if (project && (await takesProjectSettings(db, task))) {
-    return projectRunSettings(project, task);
+    return await projectRunSettings(db, project, task);
   }
   return { model: task.model, providerAccountId: task.providerAccountId };
 }

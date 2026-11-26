@@ -1,10 +1,8 @@
-import { api, getAIModelProvider, normalizeAIModel, type Id } from "@eva/backend";
+import { api, type Id } from "@eva/backend";
 import {
   FALLBACK_GIT_BASE_BRANCH,
   PRIORITY_LABELS,
   PRIORITY_ORDER,
-  projectPickerAccounts,
-  toPickerAccounts,
   type Priority,
 } from "@eva/shared";
 import { EVA_THEME } from "@eva/shared/evaTheme";
@@ -21,8 +19,7 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
-import { FooterSheet, useSimpleView } from "@/chat/ComposerFooter";
-import { ModelChip } from "@/chat/ModelChip";
+import { FooterSheet } from "@/chat/ComposerFooter";
 import { projectStageAppearance } from "@/projects/phaseAppearance";
 import { ProjectProgress, ProjectStageCounts } from "@/projects/ProjectProgress";
 import { PriorityIcon } from "@/quickTasks/PriorityIcon";
@@ -44,9 +41,7 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
  * full), then the web fields column (`ProjectFieldsPanel`): Properties,
  * Dates, Labels and Created. Status is the derived stage and reads only. Priority and Project Lead
  * open a bottom sheet each and write `projects.update`, as the web selects;
- * the Tasks model chip (hidden in simple view, as the web) writes the model
- * its child tasks run on (Eva runs on her chat's own model) and,
- * for the project's owner, its account. Field
+ * no model row (Eva and her tasks run on the model in Eva's chat composer). Field
  * rows are 48 high (web 40). An archived project reads only: no edits.
  * Not here from the web: the members, dates and labels pickers.
  */
@@ -67,8 +62,6 @@ export function ProjectOverview({
   const router = useRouter();
   const summaryDoc = useQuery(api.projects.getSummaryDoc, { projectId: project._id });
   const currentUserId = useQuery(api.auth.me, {});
-  const ownAccounts = useQuery(api.userProviderAccounts.listSelectable, {});
-  const simpleView = useSimpleView();
   const updateProject = useMutation(api.projects.update);
   const [editingContext, setEditingContext] = useState(false);
   const [sheet, setSheet] = useState<"priority" | "lead" | null>(null);
@@ -87,15 +80,6 @@ export function ProjectOverview({
   const userById = (id: Id<"users"> | undefined) => (id ? users?.find((user) => user._id === id) : undefined);
   const lead = userById(project.projectLead);
   const creator = userById(project.userId);
-  const model = normalizeAIModel(project.model);
-  // As the web field: only the owner changes the account; anyone else sees the owner's.
-  const isOwner = currentUserId !== undefined && currentUserId === project.userId;
-  const accounts = projectPickerAccounts(toPickerAccounts(ownAccounts ?? []), {
-    isOwner,
-    providerAccountId: project.providerAccountId,
-    provider: getAIModelProvider(model),
-    ownerLabel: creator?.firstName?.trim() || creator?.fullName?.trim() || "Personal",
-  });
   // The stage is derived from the child tasks.
   const stage = status ? { ...projectStageAppearance(status.stage, scheme), label: PROJECT_STAGE_LABELS[status.stage] } : undefined;
   const baseBranch = project.baseBranch ?? repo.defaultBaseBranch ?? FALLBACK_GIT_BASE_BRANCH;
@@ -200,26 +184,7 @@ export function ProjectOverview({
           value={memberCount > 0 ? `${memberCount} member${memberCount > 1 ? "s" : ""}` : "Members"}
           color={memberCount > 0 ? undefined : muted}
         />
-        {simpleView ? null : (
-          // The tasks' model: Eva herself runs on the model in her chat's composer.
-          <View className="min-h-12 flex-row items-center gap-2" pointerEvents={readOnly ? "none" : "auto"}>
-            <Text className="text-sm" style={{ color: muted }}>
-              Tasks
-            </Text>
-            <ModelChip
-              repoId={project.repoId}
-              model={model}
-              onModelChange={(next) => update({ model: next }, "Couldn't change the model")}
-              account={{
-                accounts,
-                value: project.providerAccountId ?? null,
-                onChange: (providerAccountId) => {
-                  if (isOwner) update({ providerAccountId }, "Couldn't change the account");
-                },
-              }}
-            />
-          </View>
-        )}
+        {/* No model row: Eva and her tasks run on the model in Eva's chat composer. */}
         <FieldRow label="Base branch for all tasks in this project" icon={<IconGitBranch size={16} color={muted} />} value={baseBranch} />
       </FieldGroup>
       <FieldGroup title="Dates">
