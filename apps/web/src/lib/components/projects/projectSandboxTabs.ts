@@ -22,13 +22,18 @@ export function isProjectTaskTab(value: string): value is ProjectTaskTab {
 
 /**
  * The tab a project task opens on, in the panel and on its full page: a task
- * that has never run opens on Details (its prompt, status and properties);
- * one that has run opens on Chat.
+ * that has not run, or has no chat yet, opens on Details (its prompt, status
+ * and properties); one with a chat from a run opens on Chat. Both facts are
+ * checked: a run summary can outlive its run, and a chat alone says nothing
+ * ran.
  */
 export function defaultProjectTaskTab(task: {
   lastRunStartedAt?: number;
+  sessionChatId?: string;
 }): "task-details" | "task-chat" {
-  return task.lastRunStartedAt === undefined ? "task-details" : "task-chat";
+  return task.lastRunStartedAt === undefined || task.sessionChatId === undefined
+    ? "task-details"
+    : "task-chat";
 }
 
 /**
