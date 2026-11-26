@@ -204,7 +204,7 @@ describe("tasks cannot cross into another tenant", () => {
       await expect(
         f.owner.mutation(api.agentTasks.createQuickTask, {
           repoId: f.repoId,
-          title: "Inject",
+          description: "Inject",
           projectId: f.strangerProjectId,
         }),
       ).rejects.toThrow("Not authorized");

@@ -17,7 +17,8 @@ import { latestChatMessageId, resolveChatParent } from "../_chat/chatParent";
  */
 
 const coordinatorTaskInput = v.object({
-  title: v.string(),
+  /** Absent: titled from the description (`initialTitle`). */
+  title: v.optional(v.string()),
   description: v.optional(v.string()),
   /** Any repo the acting user can access; absent is the home repo. */
   repoId: v.optional(v.id("githubRepos")),
@@ -45,7 +46,7 @@ export async function createCoordinatorTasks(
   for (const [index, task] of tasks.entries()) {
     if (!access[index]) {
       throw new ConvexError(
-        `Cannot create "${task.title}": the user has no access to its repository. Pick a repository they can access, or leave it out to use the project's home repository.`,
+        `Cannot create "${task.title ?? task.description?.slice(0, 60) ?? "a task"}": the user has no access to its repository. Pick a repository they can access, or leave it out to use the project's home repository.`,
       );
     }
   }

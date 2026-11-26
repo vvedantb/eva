@@ -1,5 +1,4 @@
 import { v } from "convex/values";
-import type { Doc } from "./_generated/dataModel";
 import {
   authMutation,
   authQuery,
@@ -8,11 +7,13 @@ import {
 } from "./functions";
 import { assertStandaloneSession } from "./_sessions/owner";
 import { stopChat, stopTask } from "./_sessions/stop";
-import type { SessionChatContext } from "./_sessionChats/helpers";
 import { ensureOwnerChat } from "./_sessions/ownedSession";
 import { findWorkChat } from "./_sessions/ownerState";
 import { mobileChatValidator, resolveMobileChat } from "./_mobile/chatTarget";
-import { sendSessionChatMessage } from "./_sessions/execution";
+import {
+  sendOwnerChatMessage,
+  sendStickyChatMessage,
+} from "./_sessions/execution";
 import {
   createSession,
   stopAndArchiveSession,
@@ -24,7 +25,6 @@ import {
 } from "./_sessionChats/mutations";
 import {
   aiModelValidator,
-  launchTraitsFromStored,
   normalizeAIModel,
   reasoningLevelValidator,
 } from "./validators";
@@ -60,25 +60,6 @@ async function resolveWritableChat(ctx: AuthMutationCtx, target: string) {
   return resolved;
 }
 
-/** The sticky composer traits a phone reply carries (the app has no traits menu). */
-function storedTraits(
-  model: string,
-  row: Pick<
-    Doc<"sessionChats">,
-    | "lastReasoningLevel"
-    | "lastThinkingEnabled"
-    | "lastUse1mContext"
-    | "lastFastMode"
-  >,
-) {
-  return launchTraitsFromStored(model, {
-    reasoningLevel: row.lastReasoningLevel,
-    thinkingEnabled: row.lastThinkingEnabled,
-    use1mContext: row.lastUse1mContext,
-    fastMode: row.lastFastMode,
-  });
-}
-
 /**
  * Replies in any chat the app opens (session chat, quick task, project) with
  * the chat's sticky model and traits. Sends at once when the chat is idle and
@@ -97,39 +78,29 @@ export const send = authMutation({
     if (!message) return null;
     const { chat, entity } = await resolveWritableChat(ctx, args.target);
     if (!chat.canReply) throw new Error("This chat is closed");
-    const model = normalizeAIModel(chat.model);
     const { attachmentStorageIds } = args;
-    // A reply in a session chat runs on that chat's sticky picks.
-    const sendToSessionChat = (
-      context: SessionChatContext,
-      chatModel: typeof model,
-    ) =>
-      sendSessionChatMessage(ctx, {
-        context,
-        userId: ctx.userId,
-        content: message,
-        settings: {
-          model: chatModel,
-          ...storedTraits(chatModel, context.chat),
-          providerAccountId: context.chat.providerAccountId,
-          attachmentStorageIds,
-        },
-      });
     switch (entity.kind) {
       case "session":
-        await sendToSessionChat(entity.context, model);
+        // A reply in a session chat runs on that chat's sticky picks.
+        await sendStickyChatMessage(ctx, {
+          context: entity.context,
+          model: normalizeAIModel(chat.model),
+          userId: ctx.userId,
+          content: message,
+          attachmentStorageIds,
+        });
         return null;
       case "task":
-      case "project": {
+      case "project":
         // A task's or project's first send creates its session chat; later
         // sends resolve as that session chat directly (`resolveMobileChat`).
-        const context = await ensureOwnerChat(ctx, entity);
-        await sendToSessionChat(
-          context,
-          normalizeAIModel(context.chat.lastModel),
-        );
+        await sendOwnerChatMessage(ctx, {
+          entity,
+          userId: ctx.userId,
+          content: message,
+          attachmentStorageIds,
+        });
         return null;
-      }
     }
   },
 });

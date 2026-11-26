@@ -6,8 +6,6 @@ import {
   DialogContent,
   DialogFooter,
   Button,
-  Checkbox,
-  Input,
   Spinner,
   Popover,
   PopoverTrigger,
@@ -84,6 +82,7 @@ import { useTaskAttachments } from "./useTaskAttachments";
 import { QUICK_TASK_OPTION_BADGE_CLASS } from "./_utils/optionBadge";
 import {
   draftCountAfterRemove,
+  draftPrompt,
   draftsAfterRemove,
   toRunTraitArgs,
 } from "@eva/shared";
@@ -123,12 +122,12 @@ type Repo = ReturnType<typeof useRepo>["repo"];
 type RequestConfirm = ReturnType<typeof useRequestConfirm>["request"];
 
 /**
- * Seed the mention/skill maps from the initial draft's tokenized description
+ * Seed the mention/skill maps from the initial draft's tokenized prompt
  * so that @-mention and /skill chips render correctly on deep-link open.
  */
 function initialDescriptionMaps(initialDraft: QuickTaskDraft | undefined) {
   return initialDraft
-    ? tokenizedToEditable(initialDraft.description ?? "")
+    ? tokenizedToEditable(draftPrompt(initialDraft))
     : {
         mentionMap: new Map<string, string>(),
         skillMap: new Map<string, string>(),
@@ -592,11 +591,10 @@ export function QuickTaskModal({
     setBaseBranch,
     repoDefaultBranch: defaultBranch,
   } = useBaseBranchState(initialDraft?.baseBranch);
-  const [title, setTitle] = useState(initialDraft?.title ?? "");
+  // The one prompt: the task's description, and its title once the server
+  // takes the first line (`createQuickTask`).
   const [description, setDescription] = useState(() =>
-    initialDraft
-      ? tokenizedToEditable(initialDraft.description ?? "").displayText
-      : "",
+    initialDraft ? tokenizedToEditable(draftPrompt(initialDraft)).displayText : "",
   );
   const [isLoading, setIsLoading] = useState(false);
   const [activeDraftId, setActiveDraftId] = useState<Id<"agentTasks"> | null>(
@@ -616,8 +614,6 @@ export function QuickTaskModal({
   );
   const [tagSearch, setTagSearch] = useState("");
   const [priority, setPriority] = useState<Priority | undefined>(undefined);
-  // A project task waits in Triage unless the person starts it now.
-  const [startNow, setStartNow] = useState(false);
   const [isCreatingProject, setIsCreatingProject] = useState(false);
   const [projectPickerOpen, setProjectPickerOpen] = useState(false);
 
@@ -675,7 +671,6 @@ export function QuickTaskModal({
   };
 
   const resetForm = () => {
-    setTitle("");
     setDescription("");
     setBaseBranch(defaultBranch);
     setPickedModel(null);
@@ -688,7 +683,6 @@ export function QuickTaskModal({
     setSelectedTags([]);
     setTagSearch("");
     setPriority(undefined);
-    setStartNow(false);
     setHydratedDraftId(null);
     attachments.reset();
     readiness.reset();
@@ -696,12 +690,11 @@ export function QuickTaskModal({
 
   const handleClose = async () => {
     const desc = getDescription();
-    if (title.trim() || desc || attachments.attachments.length > 0) {
+    if (desc || attachments.attachments.length > 0) {
       const attachmentStorageIds = await attachments.upload();
       await saveDraft({
         id: activeDraftId ?? undefined,
         repoId: repo._id,
-        title: title.trim() || undefined,
         description: desc || undefined,
         baseBranch: branchLockedToProject ? undefined : baseBranch,
         projectId: selectedProjectId,
@@ -713,15 +706,18 @@ export function QuickTaskModal({
     onClose();
   };
 
-  const handleSubmit = async () => {
-    if (!title.trim() || !displayBaseBranch) return;
+  /**
+   * "Save" files the task in To Do (a project's Triage); "Save and Run"
+   * (`run`) starts it, or approves a project task for its scheduler.
+   */
+  const handleSubmit = async (run: boolean) => {
+    if (!canSubmit) return;
 
-    const desc = getDescription();
+    const taskDescription = getDescription();
     const taskBaseBranch = branchLockedToProject ? undefined : baseBranch;
     // Built before the try, and the post-await one via undefinedIfEmpty: React
     // Compiler bails on the whole file when a conditional, logical or
     // nullish-coalescing expression sits inside a try/catch.
-    const taskDescription = desc || undefined;
     const taskAccountId = resolveAccountId(providerAccountId) ?? null;
     const taskTags = undefinedIfEmpty(selectedTags);
     const taskTraits = toRunTraitArgs(traits);
@@ -733,7 +729,6 @@ export function QuickTaskModal({
         await catchMutationError(
           activateDraft({
             id: activeDraftId,
-            title: title.trim(),
             description: taskDescription,
             baseBranch: taskBaseBranch,
             model,
@@ -742,7 +737,7 @@ export function QuickTaskModal({
             tags: taskTags,
             assignedTo,
             attachmentStorageIds: taskAttachmentIds,
-            approved: startNow,
+            run,
           }),
           "Couldn't create task",
           "task-create",
@@ -751,7 +746,6 @@ export function QuickTaskModal({
         await catchMutationError(
           createQuickTask({
             repoId: repo._id,
-            title: title.trim(),
             description: taskDescription,
             baseBranch: taskBaseBranch,
             model,
@@ -762,7 +756,7 @@ export function QuickTaskModal({
             assignedTo,
             priority,
             attachmentStorageIds: taskAttachmentIds,
-            approved: startNow,
+            run,
           }),
           "Couldn't create task",
           "task-create",
@@ -778,8 +772,7 @@ export function QuickTaskModal({
   };
 
   const loadDraft = (draft: QuickTaskDraft) => {
-    setTitle(draft.title ?? "");
-    setDescription(draft.description ?? "");
+    setDescription(draftPrompt(draft));
     setBaseBranch(draft.baseBranch ?? defaultBranch);
     setActiveDraftId(draft._id);
     setSelectedProjectId(draft.projectId ?? projectId);
@@ -819,15 +812,13 @@ export function QuickTaskModal({
     setTagSearch("");
   };
 
-  const canSubmit = !isLoading && !!title.trim() && !!displayBaseBranch;
+  const canSubmit = !isLoading && !!description.trim() && !!displayBaseBranch;
 
   useShortcut(
     "submitComposerForm",
     (e) => {
       e.preventDefault();
-      if (canSubmit) {
-        handleSubmit();
-      }
+      void handleSubmit(true);
     },
     { enabled: isOpen },
   );
@@ -841,18 +832,8 @@ export function QuickTaskModal({
         }}
       >
         <DialogContent className="max-w-3xl gap-0 p-0">
-          <div className="px-5 pt-5 pb-1">
-            <Input
-              placeholder="Task title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              autoFocus
-              className="border-0 shadow-none bg-transparent px-0 text-base font-medium focus-visible:ring-0 placeholder:text-muted-foreground/60"
-            />
-          </div>
-
           <div
-            className={`transition-colors duration-[var(--motion-fast)] ${
+            className={`pt-5 transition-colors duration-[var(--motion-fast)] ${
               isDragOver ? "bg-primary/5" : ""
             }`}
             onDragEnter={(e) => {
@@ -883,14 +864,16 @@ export function QuickTaskModal({
                 value={description}
                 onValueChange={(next) => {
                   setDescription(next);
-                  readiness.noteChange(next, title);
+                  readiness.noteChange(next);
                 }}
-                placeholder="Add description... @ for data, / for skills."
+                placeholder="Describe the task… @ for data, / for skills."
+                ariaLabel="Describe the task"
                 minHeight="min-h-[160px]"
                 className="rounded-none border-0 px-0 py-2 shadow-none focus-visible:ring-0"
                 initialMentionMap={initialDescMaps.mentionMap}
                 initialSkillMap={initialDescMaps.skillMap}
-                completionContext={`the description of a coding task for the repository ${repo.owner}/${repo.name}${title ? `, titled "${title}"` : ""}`}
+                completionContext={`the description of a coding task for the repository ${repo.owner}/${repo.name}`}
+                onEnterSubmit={() => void handleSubmit(true)}
                 onImageFiles={attachments.add}
                 onLargeTextPaste={(text) =>
                   attachPastedTextIfLarge(
@@ -1001,21 +984,19 @@ export function QuickTaskModal({
               />
             </div>
             <div className="flex items-center gap-2">
-              {selectedProjectId ? (
-                <label className="mr-1 flex items-center gap-2 text-sm text-muted-foreground">
-                  <Checkbox
-                    checked={startNow}
-                    onCheckedChange={(checked) => setStartNow(checked === true)}
-                  />
-                  Start now
-                </label>
-              ) : null}
-              <Button variant="secondary" onClick={handleClose}>
-                Cancel
+              <Button
+                variant="secondary"
+                onClick={() => void handleSubmit(false)}
+                disabled={!canSubmit}
+              >
+                Save
               </Button>
-              <Button onClick={handleSubmit} disabled={!canSubmit}>
+              <Button
+                onClick={() => void handleSubmit(true)}
+                disabled={!canSubmit}
+              >
                 {isLoading && <Spinner size="sm" />}
-                Create Task
+                Save and Run
                 <ShortcutKbd
                   id="submitComposerForm"
                   className="ml-1.5 border-0 bg-transparent p-0 text-current opacity-60"

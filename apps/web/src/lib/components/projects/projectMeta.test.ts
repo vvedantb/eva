@@ -79,9 +79,9 @@ describe("project meta", () => {
     ]);
   });
 
-  it("says why Create Project is off", () => {
-    expect(newProjectSubmitBlocker(false, " ", "")).toBe("Enter a project title and description");
-    expect(newProjectSubmitBlocker(false, "Title", " ")).toBe("Enter a description");
-    expect(newProjectSubmitBlocker(false, "Title", "Body")).toBeUndefined();
+  it("says why Save is off", () => {
+    expect(newProjectSubmitBlocker(false, " ")).toBe("Describe the project");
+    expect(newProjectSubmitBlocker(true, "Body")).toBe("Creating project…");
+    expect(newProjectSubmitBlocker(false, "Body")).toBeUndefined();
   });
 });

@@ -13,6 +13,11 @@ Read-only is enforced: the server refuses edits to an archived task, a task of a
 Date: 2026-11-26
 
 The hover toolbar moves from 16px to 24px above the bubble's top edge (`MessageToolbar`), so it sits in the 20px message gap and covers only the bubble's top padding, not its first line of text.
+## New project and quick task: one prompt, Save / Save and Run
+
+Date: 2026-11-26
+
+The New project and New quick task forms (web and phone) have one prompt in place of the title and description, and two buttons: "Save" and "Save and Run" (Enter on web; Shift+Enter is a newline). Save creates the project, or files the task in To Do (a project task waits in Triage). Save and Run also sends the project's prompt as the first coordinator chat message, or starts the task (a project task is approved). The server titles both from the prompt's first line (`titleFromPrompt`), then a generated title (`textGen.generateOwnerTitle`) replaces it while nobody has renamed it. API: `projects.create`, `agentTasks.createQuickTask`, `saveDraft` and `activateDraft` lose `title` (and `skipPlanning` / `approved`) and take `run`; agents' MCP task tools keep an optional `title`. Old phone builds break until the next release.
 
 ## Schema: drop projectCoordinatorWakes.heldAt
 

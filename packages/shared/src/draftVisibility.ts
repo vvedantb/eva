@@ -21,3 +21,14 @@ export function draftsAfterRemove<T extends { _id: string }>(
 export function draftCountAfterRemove(count: number): number {
   return Math.max(0, count - 1);
 }
+
+/**
+ * A draft's prompt: the one field the new-task forms edit. A draft saved
+ * before the forms had one prompt may hold only a title.
+ */
+export function draftPrompt(draft: {
+  title: string;
+  description?: string;
+}): string {
+  return draft.description || draft.title;
+}
