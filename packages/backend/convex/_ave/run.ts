@@ -1,8 +1,10 @@
 import { v } from "convex/values";
 import type { Id } from "../_generated/dataModel";
 import { internalMutation, type MutationCtx } from "../_generated/server";
-import { upsertStreamingActivity } from "../streaming";
-import { clearStreamingActivity } from "../_taskWorkflow/helpers";
+import {
+  clearStreamingActivity,
+  upsertStreamingActivity,
+} from "../streaming";
 import { AVE_CONTEXT_ROWS, type AveContextRow } from "./context";
 import { buildAveInstructions } from "./prompt";
 import { avePageContextValidator } from "../_validators/tableFields";

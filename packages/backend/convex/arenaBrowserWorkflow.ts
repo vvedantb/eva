@@ -7,7 +7,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { workflow } from "./workflowManager";
 import { authMutation, hasRepoAccess } from "./functions";
-import { llmJson } from "./_taskWorkflow/helpers";
+import { llmJson } from "./_shared/llmJson";
 import { buildRootDirectoryInstruction } from "./prompts";
 import { buildEvaArenaUrl } from "./_taskWorkflow/urls";
 import { evaluationStatusValidator } from "./validators";

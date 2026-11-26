@@ -21,7 +21,7 @@ import {
   usesChatDaemon,
 } from "../validators";
 import { trackSessionChatWorkflow } from "../workflowWatchdog";
-import { clearStreamingActivity } from "../_taskWorkflow/helpers";
+import { clearStreamingActivity } from "../streaming";
 import {
   drainChatQueueQuietly,
   drainSessionChatQueues,

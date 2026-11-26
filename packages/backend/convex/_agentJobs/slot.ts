@@ -4,11 +4,11 @@ import type { MutationCtx } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { cancelTrackedWorkflow, isTrackedWorkflowRunning } from "../workflowManager";
 import { closeTurn, findOpenTurn } from "../_chat/turnStore";
-import { clearStreamingActivity } from "../_taskWorkflow/helpers";
+import { clearStreamingActivity } from "../streaming";
 import { RUN_TIMEOUT_MS } from "../_taskWorkflow/staleness";
 import { resolveSandboxRepoId } from "../_githubRepos/helpers";
 import { scheduleArenaCheckCompletion } from "../_arena/browserRun";
-import { buildStaleDocPatch } from "../_prRecapWorkflow/staleDoc";
+import { buildStaleDocPatch } from "./staleDoc";
 import {
   agentJobOwner,
   agentJobStreamingEntityIds,

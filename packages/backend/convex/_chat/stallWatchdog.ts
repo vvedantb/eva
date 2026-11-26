@@ -2,8 +2,10 @@ import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { cancelTrackedWorkflow } from "../workflowManager";
-import { clearStreamingActivity } from "../_taskWorkflow/helpers";
-import { finalizeCancelledAssistantMessage } from "../streaming";
+import {
+  clearStreamingActivity,
+  finalizeCancelledAssistantMessage,
+} from "../streaming";
 import type { ChatAlert, ChatSurfaceAdapter } from "./surfaceAdapters";
 import { closeTurnForWorkflow } from "./turnStore";
 import { insertTurnFollowUp } from "../_messages/replies";
