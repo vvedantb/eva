@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { cn } from "@eva/ui";
 import { Button, CrossfadeIconSlot, Spinner } from "@vvedantb/ui";
 import { IconPlayerPlay, IconPlayerStop } from "@tabler/icons-react";
@@ -107,26 +108,36 @@ export function SandboxStartStopButton({
  * chat header. Collapse lives on the sandbox rail.
  */
 export function SandboxChatHeaderActions({
+  left,
   repoId,
   model,
   providerAccountId,
   usageAccountLabel,
 }: {
+  /** On the left of the same row (a project's chat tabs); the chip stays right. */
+  left?: ReactNode;
   repoId: Id<"githubRepos">;
   model: string | null | undefined;
   providerAccountId: Id<"userProviderAccounts"> | null | undefined;
   usageAccountLabel: string;
 }) {
+  const actions = (
+    <div className={CHAT_HEADER_ACTIONS_CLASS}>
+      <UsageLimitsIndicator
+        repoId={repoId}
+        model={model}
+        providerAccountId={providerAccountId}
+        accountLabel={usageAccountLabel}
+      />
+    </div>
+  );
+  if (left === undefined) {
+    return <div className="flex shrink-0 justify-end px-2 py-1">{actions}</div>;
+  }
   return (
-    <div className="flex shrink-0 justify-end px-2 py-1">
-      <div className={CHAT_HEADER_ACTIONS_CLASS}>
-        <UsageLimitsIndicator
-          repoId={repoId}
-          model={model}
-          providerAccountId={providerAccountId}
-          accountLabel={usageAccountLabel}
-        />
-      </div>
+    <div className="flex min-w-0 shrink-0 items-center gap-2 pr-2">
+      <div className="min-w-0 flex-1">{left}</div>
+      <div className="shrink-0">{actions}</div>
     </div>
   );
 }
