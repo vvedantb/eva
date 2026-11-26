@@ -79,3 +79,4 @@ export {
   type ShortcutDef,
   type ShortcutId,
 } from "./convex/validators";
+export { buildAutomationEmailHtml } from "./convex/emailTemplates";
