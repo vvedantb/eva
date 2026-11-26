@@ -17,7 +17,10 @@ import { SandboxPanelFrame } from "@/lib/components/sandbox/SandboxPanelFrame";
 import { useSubagentRoster } from "@/lib/components/sandbox/useSubagentRoster";
 import { FilesPanel } from "@/routes/_repo/$owner/$repo/sessions/FilesPanel";
 import { SandboxAgentsPanel } from "@/lib/components/sandbox/SandboxAgentsPanel";
-import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import {
+  useIsHiddenSandboxTab,
+  useSimpleView,
+} from "@/lib/hooks/useSimpleView";
 import { useSandboxAnnotationSend } from "@/lib/components/chat/sandboxChatBinding";
 import { sandboxChatKeys } from "@/lib/components/chat/sandboxChatTurn";
 import { useTaskChatBinding } from "./TaskSandboxChatPanel";
@@ -100,6 +103,7 @@ export function TaskSandboxPanel({
   details,
 }: TaskSandboxPanelProps) {
   const simpleView = useSimpleView();
+  const isHiddenTab = useIsHiddenSandboxTab();
   const chatBinding = useTaskChatBinding(taskId);
   const submitAnnotation = useSandboxAnnotationSend(chatBinding);
   const chatKeys = sandboxChatKeys(chatBinding.entity);
@@ -211,7 +215,7 @@ export function TaskSandboxPanel({
         </div>
         <div
           className={
-            !simpleView && tabBarValue === "files" ? "h-full min-h-0" : "hidden"
+            !isHiddenTab("files") && tabBarValue === "files" ? "h-full min-h-0" : "hidden"
           }
         >
           <FilesPanel
