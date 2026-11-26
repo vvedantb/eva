@@ -298,9 +298,7 @@ describe("a run that ended on its ask", () => {
 
       // A person stops the waiting task: the ask closes and the task halts
       // as stopped, so the scheduler does not restart it.
-      await f.asUser.mutation(api.sessions.stopChatTurn, {
-        target: { taskId: f.a },
-      });
+      await f.asUser.mutation(api.chats.stop, { target: f.a });
       const stopped = await factsOf(f, f.a);
       expect(stopped?.status).toBe("todo");
       expect(stopped?.halted).toBe("cancelled");

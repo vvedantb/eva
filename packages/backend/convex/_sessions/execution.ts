@@ -458,10 +458,10 @@ export const retryLastTurnWithAccount = authMutation({
 });
 
 /**
- * Frontend trigger to start a chat turn. When the session already has
+ * MCP's direct send (`mcp/orchestratorDelivery.ts`), after its `addMessage`:
+ * starts a chat turn. When the chat is busy or the session already has
  * `MAX_PARALLEL_CHATS` sibling chats running, the message queues on this chat
- * instead and starts when a sibling finishes; the reply says which happened
- * so the composer can show "waiting for a free slot".
+ * instead; the reply says which happened. The apps send through `chats.send`.
  */
 export const startExecute = authMutation({
   args: {
@@ -513,7 +513,6 @@ export const startExecute = authMutation({
       context,
       userId: ctx.userId,
       message: args.message,
-      insertUserRow: false,
     });
     if (routed === "answered") return "started";
     if (routed === "posted") return "posted";
@@ -721,7 +720,10 @@ export const getDaemonPrewarmData = internalQuery({
   },
 });
 
-/** Queues a message to be processed after the chat's current turn finishes. */
+/**
+ * MCP's queued send (`mcp/orchestratorDelivery.ts`): the message waits for
+ * the chat's current turn. The apps send through `chats.send`.
+ */
 export const enqueueMessage = authMutation({
   args: {
     chatId: v.id("sessionChats"),
@@ -863,8 +865,8 @@ export const addReply = authMutation({
 
 /**
  * Queues a user message on a session chat and sends it at once when the chat
- * is idle. The caller checks repo access. Shared by `enqueueMessage` and the
- * mobile app (`mobile.sendMessage`).
+ * is idle. The caller checks repo access. Shared by `chats.send` (both apps)
+ * and MCP's `enqueueMessage`.
  */
 export async function sendSessionChatMessage(
   ctx: MutationCtx,
@@ -901,7 +903,11 @@ export async function sendSessionChatMessage(
     context: params.context,
     userId: params.userId,
     message: params.content,
-    insertUserRow: true,
+    userRow: {
+      content: params.displayContent ?? params.content,
+      attachmentStorageIds: params.settings.attachmentStorageIds,
+      annotation: params.annotation,
+    },
   });
   if (routed !== "continue") return;
   await enqueueChatMessage(ctx, params);
@@ -910,33 +916,6 @@ export async function sendSessionChatMessage(
   // slot, or for Eva to wake — a sleeping sandbox is woken here and its
   // ready drain sends the message.
   await drainChatQueueQuietly(ctx, chat._id);
-}
-
-/**
- * A person's message in a session chat on the chat's sticky model, traits
- * and account (the phone reply, `chats.send`, and a new project's first
- * message). The caller checks access.
- */
-export async function sendStickyChatMessage(
-  ctx: MutationCtx,
-  params: {
-    context: SessionChatContext;
-    model: Doc<"turns">["model"];
-    userId: Id<"users">;
-    content: string;
-    attachmentStorageIds?: Id<"_storage">[];
-  },
-): Promise<void> {
-  await sendSessionChatMessage(ctx, {
-    context: params.context,
-    userId: params.userId,
-    content: params.content,
-    settings: stickyTurnSettings(
-      params.context.chat,
-      params.model,
-      params.attachmentStorageIds,
-    ),
-  });
 }
 
 /** A turn on the chat's sticky model, traits and account. */
@@ -995,9 +974,10 @@ export async function queueTaskRunMessage(
 }
 
 /**
- * A person's message to a task's or project's chat: its first send creates
- * the owner's session chat (`ensureOwnerChat`), then it runs on that chat's
- * sticky picks. The caller checks access.
+ * A person's message to a task's or project's chat (a new project's first
+ * message): its first send creates the owner's session chat
+ * (`ensureOwnerChat`), then it runs on that chat's sticky picks. The caller
+ * checks access.
  */
 export async function sendOwnerChatMessage(
   ctx: MutationCtx,
@@ -1005,16 +985,17 @@ export async function sendOwnerChatMessage(
     entity: OwnerEntity;
     userId: Id<"users">;
     content: string;
-    attachmentStorageIds?: Id<"_storage">[];
   },
 ): Promise<void> {
   const context = await ensureOwnerChat(ctx, params.entity);
-  await sendStickyChatMessage(ctx, {
+  await sendSessionChatMessage(ctx, {
     context,
-    model: normalizeAIModel(context.chat.lastModel),
     userId: params.userId,
     content: params.content,
-    attachmentStorageIds: params.attachmentStorageIds,
+    settings: stickyTurnSettings(
+      context.chat,
+      normalizeAIModel(context.chat.lastModel),
+    ),
   });
 }
 

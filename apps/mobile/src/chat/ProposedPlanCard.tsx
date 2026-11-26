@@ -76,8 +76,8 @@ export function useProposedPlans(chat: Chat | null | undefined, planContent: str
   const markdownOf = (plan: ProposedPlanRow) => (edited !== undefined && plan._id === newest._id ? edited : plan.planMarkdown);
 
   const implement = (plan: ProposedPlanRow) => {
-    send({ target: chat.target, message: buildPlanImplementationPrompt(markdownOf(plan)) })
-      .then(() => markImplemented({ planId: plan._id }))
+    // The send marks the plan implemented, as the web's (`sourceProposedPlanId`).
+    send({ target: chat.target, message: buildPlanImplementationPrompt(markdownOf(plan)), sourceProposedPlanId: plan._id })
       .catch(() => toast.error("Couldn't send your message"));
   };
 

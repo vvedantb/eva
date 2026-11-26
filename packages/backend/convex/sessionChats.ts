@@ -11,7 +11,5 @@ export {
   create,
   rename,
   remove,
-  setModel,
   setProviderAccountId,
-  setTraits,
 } from "./_sessionChats/mutations";

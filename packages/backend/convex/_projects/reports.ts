@@ -223,7 +223,8 @@ export type PersonChatRoute = "answered" | "posted" | "continue";
  * open ask, the message is the answer: the ask closes and the task's next run
  * starts with it. In a coordinator's chat, a message for teammates only stays
  * a quiet comment (`chatMessageRoute`); any other message wakes Eva.
- * `insertUserRow`: the caller has not stored the message.
+ * `userRow`: what the chat shows for the message, when the caller has not
+ * stored it (`chats.send`); absent when the caller already stored it.
  */
 export async function routePersonChatMessage(
   ctx: MutationCtx,
@@ -231,17 +232,20 @@ export async function routePersonChatMessage(
     context: SessionChatContext;
     userId: Id<"users">;
     message: string;
-    insertUserRow: boolean;
+    userRow?: Pick<
+      Doc<"messages">,
+      "content" | "attachmentStorageIds" | "annotation"
+    >;
   },
 ): Promise<PersonChatRoute> {
   const { chat, session } = params.context;
   const owner = sessionOwner(session);
   const insertUserRow = async () => {
-    if (!params.insertUserRow) return;
+    if (!params.userRow) return;
     await ctx.db.insert("messages", {
       parentId: chat._id,
       role: "user",
-      content: params.message,
+      ...params.userRow,
       timestamp: Date.now(),
       userId: params.userId,
     });
@@ -269,7 +273,7 @@ export async function routePersonChatMessage(
   await answerOpenAsk(ctx, task._id, params.userId);
   // The answer is the run's own chat message: the composer's stored row goes,
   // as for any queued send, and the queue writes it back when the run starts.
-  if (!params.insertUserRow) {
+  if (!params.userRow) {
     await dropComposerUserRow(ctx, chat._id, params.message);
   }
   await resumeWithAnswer(ctx, task, {

@@ -5,7 +5,6 @@ import type { Id } from "../_generated/dataModel";
 import { authMutation, getSessionWithAccess } from "../functions";
 import {
   aiModelValidator,
-  reasoningLevelValidator,
   type ReasoningLevel,
 } from "../validators";
 import {
@@ -164,36 +163,14 @@ export const remove = authMutation({
 });
 
 /**
- * Sets the sticky composer model for a chat. `lastModel` is the single source
- * of truth for the picker, so this is called directly on change (with a
- * client-side optimistic update) rather than only when a message is sent. Does
- * not touch `updatedAt` — changing the model is not conversation activity.
- * Any visible model is allowed, including one from another provider: the
- * sticky account is reconciled to the new model's provider here, and that
- * provider's CLI is caught up on the conversation so far (see
- * `_shared/modelHandoff.ts`).
- */
-export const setModel = authMutation({
-  args: {
-    chatId: v.id("sessionChats"),
-    model: aiModelValidator,
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const context = await getSessionChatWithAccess(
-      ctx.db,
-      args.chatId,
-      ctx.userId,
-    );
-    await setSessionChatModel(ctx, context, args.model);
-    return null;
-  },
-});
-
-/**
- * The write behind `setModel`, shared with `mobile.setChatModel`: the sticky
- * model, and the sticky account reconciled to its provider. The caller checks
- * access.
+ * The model write behind the picker (`chats.setModel`). `lastModel` is the
+ * single source of truth for the picker, so the pick is written on change
+ * (with a client-side optimistic update), not only when a message is sent.
+ * Does not touch `updatedAt`: changing the model is not conversation
+ * activity. Any visible model is allowed, including one from another
+ * provider: the sticky account is reconciled to the new model's provider
+ * here, and that provider's CLI is caught up on the conversation so far (see
+ * `_shared/modelHandoff.ts`). The caller checks access.
  */
 export async function setSessionChatModel(
   ctx: MutationCtx,
@@ -228,7 +205,7 @@ async function onChatAccountChanged(
 }
 
 /**
- * Sets the sticky provider account for a chat. Same contract as `setModel`:
+ * Sets the sticky provider account for a chat. Same contract as `setSessionChatModel`:
  * write on change (optimistic on the client), do not bump `updatedAt`. Pass
  * `null` to clear back to Team.
  *
@@ -265,30 +242,10 @@ export const setProviderAccountId = authMutation({
 });
 
 /**
- * Sets sticky composer traits for a chat (effort / thinking / 1M / Fast). Same
- * contract as `setModel`: write on change (optimistic on the client), do not
- * bump `updatedAt`. Only provided fields are patched.
- */
-export const setTraits = authMutation({
-  args: {
-    chatId: v.id("sessionChats"),
-    reasoningLevel: v.optional(reasoningLevelValidator),
-    thinkingEnabled: v.optional(v.boolean()),
-    use1mContext: v.optional(v.boolean()),
-    fastMode: v.optional(v.boolean()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const { chatId, ...traits } = args;
-    const { chat } = await getSessionChatWithAccess(ctx.db, chatId, ctx.userId);
-    await setSessionChatTraits(ctx, chat._id, traits);
-    return null;
-  },
-});
-
-/**
- * The write behind `setTraits`, shared with `mobile.setChatModel`: patches
- * only the given traits. The caller checks access.
+ * The traits write behind the picker (`chats.setModel`): effort / thinking /
+ * 1M / Fast. Same contract as `setSessionChatModel`: written on change, no
+ * `updatedAt` bump. Only the given traits are patched. The caller checks
+ * access.
  */
 export async function setSessionChatTraits(
   ctx: MutationCtx,

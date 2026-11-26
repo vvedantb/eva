@@ -309,7 +309,7 @@ describe("thread participants", () => {
         role: "user",
         content: `${mention(f, "Ana")} main chat`,
       });
-      await f.as("Ben").mutation(api.sessionWorkflow.startExecute, {
+      await f.as("Ben").mutation(api._sessions.execution.startExecute, {
         chatId: f.chatId,
         message: `${mention(f, "Ana")} main chat`,
         model: DEFAULT_AI_MODEL,
@@ -344,7 +344,7 @@ describe("thread participants", () => {
         role: "user",
         content: `${mention(f, "Ben")} done`,
       });
-      await f.as("Ana").mutation(api.sessionWorkflow.startExecute, {
+      await f.as("Ana").mutation(api._sessions.execution.startExecute, {
         chatId: f.chatId,
         message: `${mention(f, "Ben")} done`,
         model: DEFAULT_AI_MODEL,

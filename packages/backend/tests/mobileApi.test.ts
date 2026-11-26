@@ -328,6 +328,39 @@ describe("mobile api", () => {
   );
 
   test(
+    "stop in a project's session stops the chat it names, not the Main chat",
+    async () => {
+      const { t, ids, asUser } = await fixture();
+      const requestedAt = Date.now();
+      const { sessionId, chatId: mainChatId } = await asUser.mutation(api.sessions.ensureOwned, {
+        owner: { kind: "project", projectId: ids.projectId },
+      });
+      const otherChatId = await t.run(async (ctx) => {
+        await ctx.db.patch(mainChatId, { pendingTurn: { prompt: "main", requestedAt } });
+        return await ctx.db.insert("sessionChats", {
+          sessionId,
+          repoId: ids.repoId,
+          userId: ids.userId,
+          title: "Chat 2",
+          number: 2,
+          isMain: false,
+          createdBy: ids.userId,
+          updatedAt: requestedAt,
+          pendingTurn: { prompt: "other", requestedAt },
+        });
+      });
+      await asUser.mutation(api.chats.stop, { target: otherChatId });
+      const [main, other] = await t.run(async (ctx) => [
+        await ctx.db.get(mainChatId),
+        await ctx.db.get(otherChatId),
+      ]);
+      expect(other?.pendingTurn).toBeUndefined();
+      expect(main?.pendingTurn?.prompt).toBe("main");
+    },
+    TIMEOUT_MS,
+  );
+
+  test(
     "startSession creates a session whose Main chat holds the prompt",
     async () => {
       const { t, ids, asUser } = await fixture();

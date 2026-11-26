@@ -10,43 +10,38 @@ import { insertSentTurnOptimistically } from "@/lib/components/chat/useChatSend"
 import { openChatTurnOptimistically } from "@/lib/components/chat/useChatTurnOpen";
 
 /**
- * One session chat tab's turn mutations, bound to the tab. `startExecute`
- * itself decides whether the message runs now or waits for a free
- * parallel-chat slot, so the composer never has to know the session-wide cap.
- * `accounts` labels the optimistic user bubble's credential. A quick task's
- * chat passes a resolver until its session exists (`useTaskSession`).
+ * One session chat's send, bound to the chat. Sends go through `chats.send`,
+ * as on the phone: the server decides whether the message runs now or waits
+ * (a running turn, a free parallel-chat slot, a usage limit, Eva asleep), so
+ * the composer never has to know the session-wide cap. A send the client
+ * expects to start paints the user bubble and opens the turn at once; the
+ * server's rows replace that paint when the mutation lands. `accounts` labels
+ * the optimistic user bubble's credential. A quick task's chat passes a
+ * resolver until its session exists (`useTaskSession`).
  */
 export function useSessionTurnPorts(
   chat: SessionChatSource,
   accounts: ReadonlyArray<ModelAccount>,
 ): SandboxTurnPorts {
-  const addMessage = useMutation(api.sessions.addMessage).withOptimisticUpdate(
-    (localStore, args) =>
-      insertSentTurnOptimistically(localStore, args.chatId, args, accounts),
-  );
-  const startExecution = useMutation(
-    api.sessionWorkflow.startExecute,
-  ).withOptimisticUpdate((localStore, args) =>
-    openChatTurnOptimistically(localStore, args.chatId),
-  );
-  const enqueueMessage = useMutation(api.sessionWorkflow.enqueueMessage);
+  const send = useMutation(api.chats.send);
+  const addMessage = useMutation(api.sessions.addMessage);
   return {
-    add: (args) =>
+    send: (args, expected) =>
+      withSessionChat(chat, (chatId) => {
+        const sendToChat =
+          expected === "start"
+            ? send.withOptimisticUpdate((localStore) => {
+                insertSentTurnOptimistically(localStore, chatId, args, accounts);
+                // A second send before the server answers then queues behind
+                // this one instead of racing it.
+                openChatTurnOptimistically(localStore, chatId);
+              })
+            : send;
+        return sendToChat({ target: chatId, ...args });
+      }),
+    postError: (content) =>
       withSessionChat(chat, (chatId) =>
-        addMessage({ chatId, ...args, role: args.role ?? "user" }),
+        addMessage({ chatId, role: "assistant", content }),
       ),
-    start: (args, { attachmentStorageIds, sourceProposedPlanId }) =>
-      withSessionChat(chat, (chatId) =>
-        startExecution({
-          chatId,
-          ...args,
-          attachmentStorageIds,
-          ...(sourceProposedPlanId !== undefined
-            ? { sourceProposedPlanId }
-            : {}),
-        }),
-      ),
-    enqueue: (args) =>
-      withSessionChat(chat, (chatId) => enqueueMessage({ chatId, ...args })),
   };
 }
