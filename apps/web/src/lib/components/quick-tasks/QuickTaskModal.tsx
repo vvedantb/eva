@@ -881,7 +881,6 @@ export function QuickTaskModal({
                 initialMentionMap={initialDescMaps.mentionMap}
                 initialSkillMap={initialDescMaps.skillMap}
                 completionContext={`the description of a coding task for the repository ${repo.owner}/${repo.name}`}
-                onEnterSubmit={() => void handleSubmit(true)}
                 onImageFiles={attachments.add}
                 onLargeTextPaste={(text) =>
                   attachPastedTextIfLarge(

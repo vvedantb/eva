@@ -45,7 +45,7 @@ interface NewProjectModalProps {
  * A new project from one prompt, as a new session starts: the prompt is the
  * project's brief, and the server titles the project from it. A project has
  * no interview or plan step: it opens on its coordinator chat. "Save" sends
- * nothing; "Save and Run" (Enter) also sends the prompt as the coordinator
+ * nothing; "Save and Run" (Ctrl/⌘+Enter; Enter is a newline) also sends the prompt as the coordinator
  * chat's first message (`projects.create` `run`).
  */
 export function NewProjectModal({
@@ -155,7 +155,6 @@ export function NewProjectModal({
             minHeight="min-h-[160px]"
             className="rounded-none border-0 px-0 py-2 shadow-none focus-visible:ring-0"
             completionContext={`the brief of a coding project for the repository ${repo.owner}/${repo.name}`}
-            onEnterSubmit={() => void handleSubmit(true)}
           />
         </div>
 
