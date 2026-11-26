@@ -24,18 +24,21 @@ const BUTTON_CLASS = "hit-target text-muted-foreground hover:text-foreground";
  * the bubble, so it takes no space. On Eva's finished replies: 👍 👎 (the
  * footer's `TurnFeedbackActions`, with its comment box), then Reply, Copy, and
  * the rest (Copy link; a ⋯ menu once there are two or more, as fork and
- * checkpoints elsewhere). Stays up while its comment
+ * checkpoints elsewhere), then the time (and how long Eva took). Stays up while its comment
  * box or menu is open.
  */
 export function MessageToolbar({
   onReply,
   copyText,
   menuItems,
+  time,
   rating,
 }: {
   onReply?: () => void;
   copyText?: string;
   menuItems: ChatMessageActionItem[];
+  /** "10:17 PM", or "10:17 PM · 2m" on Eva's finished replies. */
+  time: string;
   /** Eva's finished turns: the rating buttons and their saved state. */
   rating?: {
     messageId: string;
@@ -47,11 +50,12 @@ export function MessageToolbar({
   // the ⋯ menu only appears when there are two or more.
   const hasMenu = menuItems.length > 1;
   const directItems = hasMenu ? [] : menuItems;
-  if (!rating && !onReply && !copyText && menuItems.length === 0) return null;
   return (
     <div
       className={cn(
-        "absolute -top-4 right-2 z-10 flex items-center gap-0.5 rounded-control bg-popover p-0.5 smooth-shadow-ring-md",
+        // 24px up: the 28px card sits in the 20px gap above the bubble and
+        // overlaps only its top padding, never the first line of text.
+        "absolute -top-6 right-2 z-10 flex items-center gap-0.5 rounded-control bg-popover p-0.5 smooth-shadow-ring-md",
         // Hover or keyboard focus on the message shows it; an open comment
         // box or menu keeps it up while the pointer is inside the popup.
         "pointer-events-none opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100",
@@ -131,6 +135,9 @@ export function MessageToolbar({
           </DropdownMenuContent>
         </DropdownMenu>
       ) : null}
+      <span className="whitespace-nowrap px-1.5 text-2xs tabular-nums text-muted-foreground">
+        {time}
+      </span>
     </div>
   );
 }

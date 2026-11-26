@@ -8,6 +8,12 @@ Quick tasks and projects are never deleted now: Archive hides them, and an Activ
 
 Read-only is enforced: the server refuses edits to an archived task, a task of an archived project, or an archived project (`assertTaskNotArchived` / `assertProjectNotArchived`: status, fields, dates, attachments, runs and schedules, approve, assign to project) with "Unarchive the task first" / "Unarchive the project first". Web disables the task Properties, files, project fields, context and dates, hides Triage Reject / Approve, Approve all and the row menu of an archived project, and the Archived projects list has no Timeline view. Phone matches: read-only task and project fields, no Reject / Approve, and the chat composer says "This task (project) is archived and read-only". A project task archived on its own shows under its project's Archived group (`listByProject` with `archived`) with Unarchive in its menu, and its phone page opens. Drafts are deleted, not archived: `agentTasks.deleteDraft` deletes the row ("Delete draft?" again), `archive` refuses a draft, and the migration deletes old soft-deleted drafts. The Archived projects list lost select mode and "Unarchive All", as quick tasks (row Unarchive stays).
 
+## Coordinator chat: toolbar sits above the bubble
+
+Date: 2026-11-26
+
+The hover toolbar moves from 16px to 24px above the bubble's top edge (`MessageToolbar`), so it sits in the 20px message gap and covers only the bubble's top padding, not its first line of text.
+
 ## Schema: drop projectCoordinatorWakes.heldAt
 
 Date: 2026-11-25
@@ -21,6 +27,11 @@ Date: 2026-11-25
 The "Changed files" card under an agent reply is gone on web and phone, everywhere: the PR, Diffs tab and Review pane already show what changed. Removed with it: web and phone `ChangedFilesCard`, `useChangedFilesExpansion` (its localStorage state), `findLastAssistantMessageId`, the `showChangedFiles` / `isLatestAssistantTurn` / `onOpenDiff` props, and the shared `collectChangedFiles` and its grouping helpers. The path helpers stay, renamed `@eva/shared` `sandboxFilePath.ts`. The phone diff screen stays (the hold menu and the branch row open it).
 
 In the coordinator chat (Eva's bubbles, main chat and reply threads, web and phone) a finished reply shows its text only, with no "Worked for" fold of steps.
+## Coordinator chat: narrower bubbles, more space, time in the toolbar
+
+Date: 2026-11-26
+
+Coordinator chat bubbles (Eva, you and teammates; main chat and threads) are at most 70% of the column, not 85% (web `COORDINATOR_BUBBLE_MAX_WIDTH`; phone `EvaBubble` and the person rows). On web, messages there sit 20px apart, not 12, so the hover toolbar on a bubble's top edge does not crowd the message above; a run of one sender's bubbles stays 4px apart. The toolbar ends with the time: "10:17 PM", or "10:17 PM · 2m" (finish time and duration) on Eva's replies; the bubble's time tooltip is gone. The phone keeps its 12px gap (no hover toolbar there).
 
 ## Session follow-ups send only the guard rails
 
