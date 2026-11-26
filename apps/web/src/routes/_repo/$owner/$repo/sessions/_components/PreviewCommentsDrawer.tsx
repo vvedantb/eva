@@ -26,6 +26,14 @@ export function previewCommentsDrawerWidth(box: IframeBox): number {
   return Math.min(DRAWER_MAX_WIDTH, Math.round(box.width * DRAWER_MAX_SHARE));
 }
 
+/** Gap between the floating drawer and the preview's edges. */
+const DRAWER_INSET = 8;
+
+/** The preview width the drawer covers, gap included; the action bar centres beside it. */
+export function previewCommentsDrawerSpace(box: IframeBox): number {
+  return previewCommentsDrawerWidth(box) + DRAWER_INSET;
+}
+
 /** Path only: `/a/?x=1#y` and `/a` are the same page. */
 function pagePathname(path: string): string {
   const pathname = path.split(/[?#]/)[0] ?? "/";
@@ -124,12 +132,14 @@ function DrawerPanel({
   return createPortal(
     <div
       data-testid="preview-comments-drawer"
-      className="fixed z-50 flex flex-col bg-background smooth-shadow-ring-lg"
+      // Floats inside the preview with a gap, rounded like the other preview
+      // overlays, so the page's corners stay visible around it.
+      className="fixed z-50 flex flex-col overflow-hidden rounded-surface bg-background smooth-shadow-ring-lg"
       style={{
-        left: box.left + box.width - width,
-        top: box.top,
+        left: box.left + box.width - width - DRAWER_INSET,
+        top: box.top + DRAWER_INSET,
         width,
-        height: box.height,
+        height: box.height - DRAWER_INSET * 2,
       }}
       // Only while focus is in the drawer: keys typed into the preview go to
       // the iframe's own document.
