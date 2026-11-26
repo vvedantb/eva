@@ -119,6 +119,3 @@ export function findBubbleGroups<TId extends string>(
   }
   return { joinsPrevious, joinsNext };
 }
-
-/** The name over Eva's replies in the coordinator chat, as a teammate's first name. */
-export const EVA_SENDER_NAME = "Eva";

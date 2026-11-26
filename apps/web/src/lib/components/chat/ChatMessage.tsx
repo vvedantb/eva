@@ -10,7 +10,6 @@ import {
   TooltipContent,
   TooltipTrigger,
   Markdown,
-  IconEva,
 } from "@vvedantb/ui";
 import { memo, type ReactNode } from "react";
 import { AnimatePresence, m } from "motion/react";
@@ -375,8 +374,6 @@ export const ChatMessage = memo(function ChatMessage({
                 showTurnMeta={showTurnMeta && !toolbarMode}
                 showScopeCheck={showScopeCheck}
                 bubble={assistantBubble}
-                joinsNext={joinsNext}
-                senderName={senderFirstName}
                 turnModel={turnModel}
                 turnReasoningLevel={turnReasoningLevel}
                 turnCredentialSourceLabel={turnCredentialSourceLabel}
@@ -649,13 +646,10 @@ function BubbleWithToolbar({
 
 interface AssistantTurnProps {
   message: ChatBodyMessage;
-  /** "Eva" over the first bubble of a run of her replies (the coordinator chat). */
-  senderName?: string;
   turnState: ReturnType<typeof getAssistantTurnState>;
   showTurnMeta: boolean;
   showScopeCheck: boolean;
   bubble: boolean;
-  joinsNext: boolean;
   turnModel?: string;
   turnReasoningLevel?: string;
   turnCredentialSourceLabel?: string;
@@ -687,8 +681,6 @@ function AssistantTurn({
   showTurnMeta,
   showScopeCheck,
   bubble,
-  joinsNext,
-  senderName,
   turnModel,
   turnReasoningLevel,
   turnCredentialSourceLabel,
@@ -729,8 +721,6 @@ function AssistantTurn({
     <>
       <AssistantTurnContent
         bubble={bubble}
-        joinsNext={joinsNext}
-        senderName={senderName}
         toolbar={toolbar}
         message={message}
         turnState={turnState}
@@ -746,60 +736,43 @@ function AssistantTurn({
         turnErrorTitle={turnErrorTitle}
         panelTabs={panelTabs}
       />
-      <BubbleIndent bubble={bubble}>
-        {artifacts ? (
-          <div className="mt-1 flex flex-col gap-2">{artifacts}</div>
-        ) : null}
-        {/* Sits above `belowContent` so agent-composed panels keep
-            their promised slot directly over the meta row. Shown in
-            simple view too: the verdict is a safety signal, and simple
-            view hiding it is exactly the reader who needs it. The hover card's per-hunk rows only
-            link out when the diff surface exists — simple view bounces
-            away from that tab, so they degrade to plain rows there. */}
-        {showScopeCheck && message.scopeCheck ? (
-          <div className="mt-1">
-            <ScopeCheckChip
-              check={message.scopeCheck}
-              {...(!simpleView && onViewDiff ? { onViewDiff } : {})}
-            />
-          </div>
-        ) : null}
-        {/* Only the panels the tab strip did not claim — a still-
-            streaming or failed turn has no prose to trade places with. */}
-        {belowContent && !panelTabs ? (
-          <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
-        ) : null}
-        {showTurnMeta ? (
-          <AssistantTurnMeta
-            message={message}
-            turnModel={turnModel}
-            turnReasoningLevel={turnReasoningLevel}
-            turnCredentialSourceLabel={turnCredentialSourceLabel}
-            copyPlain={copyPlain}
-            rowActions={rowActions}
-            threadControl={threadControl}
-            canRate={canRate && !turnState.isStreamingPlaceholder}
-            feedbackSentiment={feedbackSentiment}
-            feedbackComment={feedbackComment}
+      {artifacts ? (
+        <div className="mt-1 flex flex-col gap-2">{artifacts}</div>
+      ) : null}
+      {/* Sits above `belowContent` so agent-composed panels keep
+          their promised slot directly over the meta row. Shown in
+          simple view too: the verdict is a safety signal, and simple
+          view hiding it is exactly the reader who needs it. The hover card's per-hunk rows only
+          link out when the diff surface exists — simple view bounces
+          away from that tab, so they degrade to plain rows there. */}
+      {showScopeCheck && message.scopeCheck ? (
+        <div className="mt-1">
+          <ScopeCheckChip
+            check={message.scopeCheck}
+            {...(!simpleView && onViewDiff ? { onViewDiff } : {})}
           />
-        ) : null}
-      </BubbleIndent>
+        </div>
+      ) : null}
+      {/* Only the panels the tab strip did not claim — a still-
+          streaming or failed turn has no prose to trade places with. */}
+      {belowContent && !panelTabs ? (
+        <div className="mt-2 flex flex-col gap-2">{belowContent}</div>
+      ) : null}
+      {showTurnMeta ? (
+        <AssistantTurnMeta
+          message={message}
+          turnModel={turnModel}
+          turnReasoningLevel={turnReasoningLevel}
+          turnCredentialSourceLabel={turnCredentialSourceLabel}
+          copyPlain={copyPlain}
+          rowActions={rowActions}
+          threadControl={threadControl}
+          canRate={canRate && !turnState.isStreamingPlaceholder}
+          feedbackSentiment={feedbackSentiment}
+          feedbackComment={feedbackComment}
+        />
+      ) : null}
     </>
-  );
-}
-
-/** Lines the rows under a bubbled reply up with the bubble, past Eva's mark. */
-function BubbleIndent({
-  bubble,
-  children,
-}: {
-  bubble: boolean;
-  children: ReactNode;
-}) {
-  return bubble ? (
-    <div className="flex flex-col pl-6">{children}</div>
-  ) : (
-    <>{children}</>
   );
 }
 
@@ -823,8 +796,6 @@ function AssistantTurnContent({
   turnErrorTitle,
   panelTabs,
   bubble,
-  joinsNext,
-  senderName,
   toolbar,
 }: Omit<
   AssistantTurnProps,
@@ -877,16 +848,9 @@ function AssistantTurnContent({
 
   const content = (
     <MessageContent
-      className={cn(
-        "py-2",
-        // The teammate bubble, mirrored onto Eva's side.
-        // `group-[.is-assistant]:w-fit` outranks the kit's own
-        // `group-[.is-assistant]:w-full`; a plain `w-fit` loses to it.
-        bubble
-          ? "min-w-0 bg-secondary px-3 text-foreground group-[.is-assistant]:w-fit"
-          : "px-1",
-      )}
-      style={bubble ? { borderRadius: sideBubbleRadius(joinsNext) } : undefined}
+      // The coordinator's replies are plain text (no bubble, avatar or
+      // name), so people's bubbles and Eva's answers read apart at a glance.
+      className="px-1 py-2"
     >
       {isStreamingPlaceholder && bubble ? (
         // The coordinator chats like a person: dots while it works, the steps
@@ -950,29 +914,12 @@ function AssistantTurnContent({
   );
 
   return bubble ? (
-    <div
-      className={cn(
-        "flex min-w-0 flex-col items-start gap-0.5",
-        COORDINATOR_BUBBLE_MAX_WIDTH,
+    <div className={cn("min-w-0", COORDINATOR_BUBBLE_MAX_WIDTH)}>
+      {toolbar ? (
+        <BubbleWithToolbar toolbar={toolbar}>{content}</BubbleWithToolbar>
+      ) : (
+        content
       )}
-    >
-      {senderName ? (
-        // As a teammate's name: avatar (16) + gap (8) + bubble px-3 (12).
-        <span className="pl-9 text-2xs font-medium text-muted-foreground">
-          {senderName}
-        </span>
-      ) : null}
-      <div className="flex min-w-0 max-w-full items-end gap-2">
-        {/* The rail's Eva mark. */}
-        <div className="size-4 shrink-0 text-foreground">
-          {joinsNext ? null : <IconEva size={16} />}
-        </div>
-        {toolbar ? (
-          <BubbleWithToolbar toolbar={toolbar}>{content}</BubbleWithToolbar>
-        ) : (
-          content
-        )}
-      </div>
     </div>
   ) : (
     content
