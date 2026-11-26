@@ -30,7 +30,7 @@ Monorepo "apps" (`rootDirectory`, `parentRepoId`) are not multi-repo — sibling
 
 | Table / field | Purpose |
 |---|---|
-| `sessionRepos` (new) | One row per linked repo per session: `sessionId`, `repoId`, `owner`, `name`, `installationId`, `path`, `branchName`, `baseBranch`, `installDependencies`, `clonedAt`, `devPort`, `devCommand`. Indexes `by_session`, `by_repo`. Its PR is a `pullRequests` row with `owner.sessionRepoId`; the old `prUrl`/`prState` fields are deprecated and cleared by `backfillPullRequests`. |
+| `sessionRepos` (new) | One row per linked repo per session: `sessionId`, `repoId`, `owner`, `name`, `installationId`, `path`, `branchName`, `baseBranch`, `installDependencies`, `clonedAt`, `devPort`, `devCommand`. Indexes `by_session`, `by_repo`. Its PR is a `pullRequests` row with `owner.sessionRepoId`. |
 | `repoGroups` (new) | Saved selection: `name`, `createdBy`, `teamId`, `primaryRepoId`, `linkedRepoIds`, `installDependencies`, `seededSnapshotName`, `seededFingerprint`, `createdAt`, `updatedAt`. Indexes `by_created_by`, `by_team`. |
 | `sessions.repoGroupId` | Provenance only. `sessionRepos` rows are the source of truth, so editing a group later never rewrites an existing session. |
 | `sessions.linkedRepoCount` | Denormalised count, so sidebar rows and resume paths detect a multi-repo session without a join. |

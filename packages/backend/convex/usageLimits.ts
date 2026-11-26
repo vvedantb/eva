@@ -49,12 +49,11 @@ export type UsageLimitCompleteness = NonNullable<
 
 /**
  * The reading itself, with every field that is row identity rather than reading
- * removed: which credential a reading belongs to is the caller's own question,
- * and the legacy `repoId` is nobody's. Taken apart from the schema fields rather
- * than restated, so a new reading field reaches the wire on its own.
+ * removed: which credential a reading belongs to is the caller's own question.
+ * Taken apart from the schema fields rather than restated, so a new reading
+ * field reaches the wire on its own.
  */
 const {
-  repoId: _legacyRepoId,
   providerAccountId: _accountIsRowIdentity,
   teamId: _teamIsRowIdentity,
   ...usageLimitReadingFields

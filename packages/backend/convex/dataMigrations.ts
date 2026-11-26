@@ -3,12 +3,6 @@ import { components, internal } from "./_generated/api";
 import type { DataModel, Id } from "./_generated/dataModel";
 import schema from "./schema";
 import { deriveLogUsage } from "./_logs/usage";
-import type { MutationCtx } from "./_generated/server";
-import {
-  buildProjectBranchName,
-  buildSessionBranchName,
-} from "./_git/branchNames";
-import { recordPullRequest } from "./_pullRequests/store";
 import { pruneSettledBackgroundAgents } from "./_sessions/backgroundAgents";
 import type { BackgroundAgentEntry } from "./_validators/tableFields";
 import { MAX_THREAD_REPLIES } from "./_messages/replies";
@@ -93,109 +87,6 @@ export const backfillLogUsageFields = dataMigrations.define({
     const usage = deriveLogUsage(entry.rawResultEvent);
     if (usage.costUsd === undefined) return;
     return usage;
-  },
-});
-
-/**
- * `backfillPullRequests`: moves every PR link into the `pullRequests` table.
- * Run once per deployment, straight after the deploy that adds the table:
- *
- *   npx convex run dataMigrations:backfillPullRequests
- *
- * Until it runs, owners keep showing the PR their old summary fields hold, but
- * nothing else (Pull requests tab, linked-repo PRs, MCP PR lookups) sees it.
- * Each step is idempotent by PR URL. Old runs never recorded a PR's state, so
- * rows start from an inferred state and a scheduled `refreshFromGitHub` reads
- * the real one. The deprecated source fields are cleared as each row moves;
- * dropping them from the schema is a follow-up once this has run everywhere.
- */
-export const backfillPullRequests = dataMigrations.runner([
-  internal.dataMigrations.backfillSessionPullRequests,
-  internal.dataMigrations.backfillSessionRepoPullRequests,
-  internal.dataMigrations.backfillProjectPullRequests,
-]);
-
-async function scheduleGitHubRefresh(
-  ctx: MutationCtx,
-  prUrl: string,
-): Promise<void> {
-  await ctx.scheduler.runAfter(
-    0,
-    internal._pullRequests.refresh.refreshFromGitHub,
-    { prUrl },
-  );
-}
-
-export const backfillSessionPullRequests = dataMigrations.define({
-  table: "sessions",
-  migrateOne: async (ctx, session) => {
-    if (session.prUrl !== undefined) {
-      const row = await recordPullRequest(ctx, {
-        owner: { kind: "session", sessionId: session._id },
-        repoId: session.repoId,
-        prUrl: session.prUrl,
-        state: session.prState ?? "open",
-        primary: true,
-        origin: "eva",
-        headBranch: session.branchName ?? buildSessionBranchName(session._id),
-        baseBranch: session.baseBranch,
-        title: session.title,
-      });
-      if (row && session.prStateOnArchive !== undefined) {
-        await ctx.db.patch(row._id, { stateOnArchive: session.prStateOnArchive });
-      }
-      if (row) await scheduleGitHubRefresh(ctx, row.prUrl);
-    }
-    if (session.prStateOnArchive !== undefined) {
-      await ctx.db.patch(session._id, { prStateOnArchive: undefined });
-    }
-  },
-});
-
-export const backfillSessionRepoPullRequests = dataMigrations.define({
-  table: "sessionRepos",
-  migrateOne: async (ctx, link) => {
-    if (link.prUrl === undefined && link.prState === undefined) return;
-    if (link.prUrl !== undefined) {
-      const row = await recordPullRequest(ctx, {
-        owner: {
-          kind: "session",
-          sessionId: link.sessionId,
-          sessionRepoId: link._id,
-        },
-        repoId: link.repoId,
-        prUrl: link.prUrl,
-        state: link.prState ?? "open",
-        primary: false,
-        origin: "eva",
-        headBranch: link.branchName,
-        baseBranch: link.baseBranch,
-      });
-      if (row) await scheduleGitHubRefresh(ctx, row.prUrl);
-    }
-    return { prUrl: undefined, prState: undefined };
-  },
-});
-
-export const backfillProjectPullRequests = dataMigrations.define({
-  table: "projects",
-  migrateOne: async (ctx, project) => {
-    if (project.prUrl === undefined || project.prCount !== undefined) return;
-    // The stored phase is gone; the GitHub refresh below sets the real state.
-    const row = await recordPullRequest(ctx, {
-      owner: { kind: "project", projectId: project._id },
-      repoId: project.repoId,
-      prUrl: project.prUrl,
-      state: "open",
-      primary: true,
-      origin: "eva",
-      headBranch:
-        project.branchName ??
-        buildProjectBranchName(project._id, project.branchVersion),
-      baseBranch: project.baseBranch,
-      title: project.title,
-    });
-    if (row) await scheduleGitHubRefresh(ctx, row.prUrl);
   },
 });
 

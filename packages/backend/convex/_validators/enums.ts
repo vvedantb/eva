@@ -382,14 +382,6 @@ export const findingSeverityValidator = v.union(
 );
 export type FindingSeverity = Infer<typeof findingSeverityValidator>;
 
-export const taskSandboxEventValidator = v.union(
-  v.literal("started"),
-  v.literal("reconnected"),
-  v.literal("stopped"),
-  v.literal("stop_failed"),
-  v.literal("failed"),
-);
-
 export const taskActivityFieldValidator = v.union(
   v.literal("status"),
   v.literal("assignee"),

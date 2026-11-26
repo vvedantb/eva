@@ -41,7 +41,6 @@ import {
   snapshotScheduleValidator,
   taskActivityFieldValidator,
   taskOriginValidator,
-  taskSandboxEventValidator,
   taskStatusValidator,
   teamMemberRoleValidator,
   themeValidator,
@@ -126,8 +125,7 @@ export const userFields = {
   experimentalFlags: v.optional(experimentalFlagsValidator),
   /** Rebound keyboard shortcuts (settings → Shortcuts). Sparse: missing = default. */
   shortcutOverrides: v.optional(shortcutOverridesValidator),
-  /** @deprecated Pre-rebuild Manager Ave session pointer; cleared by clearLegacyFields. */
-  orchestratorSessionId: v.optional(v.id("sessions")),
+  // orchestratorSessionId removed. schema-narrowing-ok: clearLegacyFields
   /** Grok Bot routine webhook (Settings → Grok Bot). Host is allowlisted. */
   grokBotWebhookUrl: v.optional(v.string()),
   /** AES-GCM ciphertext of the routine bearer key (`enc:…`). Never returned. */
@@ -337,8 +335,8 @@ export const chatReadParentIdValidator = v.union(
  * rows the one-shot agents work on (automation runs, docs, evaluation
  * reports).
  */
-// Task chat turns removed (moved to session chats in 1b/2); a project keeps
-// its interview lane turns. schema-narrowing-ok: clearLegacyOwnerChatFields
+// Task chat turns removed (moved to session chats in 1b/2).
+// schema-narrowing-ok: clearLegacyOwnerChatFields
 export const turnEntityIdValidator = v.union(
   v.id("sessionChats"),
   v.id("sessions"),
@@ -349,15 +347,8 @@ export const turnEntityIdValidator = v.union(
   v.id("evaluationReports"),
 );
 
-/**
- * Legacy: the retired project interview's turn on a session row, kept apart
- * from the chat's turns. No writer any more; old rows may still hold it, and
- * readers skip any turn that has a lane.
- */
 // Session summary turns removed. schema-narrowing-ok: retireSessionSummaries
-export const turnLaneValidator = v.literal("interview");
-
-export type TurnLane = Infer<typeof turnLaneValidator>;
+// Interview `lane` turns removed; 0 prod rows held it. schema-narrowing-ok: clearLegacyFields
 
 /** Durable ownership record for one agent turn: a chat turn (a task's run included) or a one-shot agent. */
 /**
@@ -370,7 +361,6 @@ export const taskRunMarkerValidator = v.object({ mode: runModeValidator });
 export const turnFields = {
   // `surface` removed; 0 prod rows held it on 2026-10-07. schema-narrowing-ok: clearTurnSurface
   entityId: turnEntityIdValidator,
-  lane: v.optional(turnLaneValidator),
   // The session a chat turn belongs to, so one indexed scan answers "how many
   // chats of this session are running" (the parallel-chat cap) and "is any
   // chat of this session executing" (the sidebar).
@@ -418,24 +408,6 @@ export const pendingTurnFields = {
 };
 
 export const pendingTurnValidator = v.optional(v.object(pendingTurnFields));
-
-/** @deprecated Pre-chat daemon-poll mirror; rows deleted by clearLegacyFields. */
-export const sessionDaemonStateFields = {
-  sessionId: v.id("sessions"),
-  repoId: v.id("githubRepos"),
-  userId: v.id("users"),
-  pendingTurn: pendingTurnValidator,
-  pendingTaskStops: v.optional(v.array(v.string())),
-  cancelRequestedAt: v.optional(v.number()),
-  sandboxSetupPending: v.optional(v.boolean()),
-  // Level-triggered: the usage chip asks the live Claude daemon to report
-  // plan windows via the Agent SDK. claimPendingTurn returns it without
-  // clearing; the refresh action clears it when it stops waiting.
-  usageRefreshRequestedAt: v.optional(v.number()),
-  // Mirrors sessions.claimPausedUntil — the prewarm kill fence is read off
-  // this compact row on the 50ms claim poll.
-  claimPausedUntil: v.optional(v.number()),
-};
 
 // Task and project chat fields (`chatTurnLifecycleVersion`, the sandbox and
 // chat-daemon fields, `lastChatModel` and traits) removed: their chats and
@@ -636,23 +608,16 @@ export const sessionChatFields = {
 };
 
 /**
- * A task's own run: waiting on a scheduled job, or running a workflow.
- * Transitions live in `_agentTasks/runState.ts`.
+ * A task's scheduled run, waiting on its job. Transitions live in
+ * `_agentTasks/runState.ts`.
  */
-export const taskRunValidator = v.union(
-  v.object({
-    state: v.literal("scheduled"),
-    at: v.number(),
-    jobId: v.id("_scheduled_functions"),
-  }),
-  /** @deprecated Behaves like `scheduled`; cleared by clearLegacyFields. */
-  v.object({
-    state: v.literal("retry_pending"),
-    at: v.number(),
-    jobId: v.id("_scheduled_functions"),
-  }),
-  // `running` went with run rows. schema-narrowing-ok: removeAgentRuns
-);
+// `running` went with run rows. schema-narrowing-ok: removeAgentRuns
+// `retry_pending` removed. schema-narrowing-ok: clearLegacyFields
+export const taskRunValidator = v.object({
+  state: v.literal("scheduled"),
+  at: v.number(),
+  jobId: v.id("_scheduled_functions"),
+});
 
 export const agentTaskFields = {
   ...entityNumIdFields,
@@ -716,8 +681,7 @@ export const agentTaskFields = {
   lastTurnFinishedAt: v.optional(v.number()),
   /** Stamped when a person posts in its chat's main transcript; the other unread watermark (see chatReads.ts). */
   lastPersonMessageAt: v.optional(v.number()),
-  /** @deprecated Pre-rebuild watch pointer; cleared by clearLegacyFields. Use `watchedByAve`. */
-  watchedByOrchestrator: v.optional(v.id("sessions")),
+  // watchedByOrchestrator removed. schema-narrowing-ok: clearLegacyFields
   // Manager Ave thread watching this task for completion notifications
   // (mirrors sessions.watchedByAve).
   watchedByAve: v.optional(v.id("aveThreads")),
@@ -775,8 +739,8 @@ export const sessionFields = {
   prUrl: v.optional(v.string()),
   prState: v.optional(prStateValidator),
   prCount: v.optional(v.number()),
-  /** @deprecated Moved to `pullRequests.stateOnArchive`; cleared by `backfillPullRequests`. */
-  prStateOnArchive: v.optional(v.union(v.literal("draft"), v.literal("open"))),
+  // prStateOnArchive moved to `pullRequests.stateOnArchive`.
+  // schema-narrowing-ok: backfillSessionPullRequests
   sandboxId: v.optional(v.string()),
   /**
    * Short, user-safe reason the last wake attempt failed (≤200 chars, stack and
@@ -869,10 +833,7 @@ export const sessionFields = {
   // background heal so it never relaunches daemons the lifecycle is about to
   // launch itself (double launch orphaned children and truncated logs).
   sandboxServicesPending: v.optional(v.boolean()),
-  /** @deprecated Pre-rebuild Manager Ave flag; cleared by clearLegacyFields. */
-  isOrchestrator: v.optional(v.boolean()),
-  /** @deprecated Pre-rebuild watch pointer; cleared by clearLegacyFields. Use `watchedByAve`. */
-  watchedByOrchestrator: v.optional(v.id("sessions")),
+  // isOrchestrator / watchedByOrchestrator removed. schema-narrowing-ok: clearLegacyFields
   // Manager Ave thread watching this session for completion notifications. Set
   // implicitly when Ave touches this session (send/create) or via watch_agent;
   // cleared by unwatch_agent or when the thread is reset.
@@ -946,10 +907,8 @@ export const sessionRepoFields = {
   /** The session branch, identical to the primary's `eva/session-<id>`. */
   branchName: v.string(),
   baseBranch: v.string(),
-  /** @deprecated Moved to `pullRequests` (`owner.sessionRepoId`); cleared by `backfillPullRequests`. */
-  prUrl: v.optional(v.string()),
-  /** @deprecated See `prUrl`. */
-  prState: v.optional(prStateValidator),
+  // prUrl / prState moved to `pullRequests` (`owner.sessionRepoId`).
+  // schema-narrowing-ok: backfillSessionRepoPullRequests
   installDependencies: v.boolean(),
   /** Set once the sandbox has finished cloning this repo. */
   clonedAt: v.optional(v.number()),
@@ -1225,8 +1184,7 @@ export const projectFields = {
   lastTurnFinishedAt: v.optional(v.number()),
   /** Stamped when a person posts in its chat's main transcript; the other unread watermark (see chatReads.ts). */
   lastPersonMessageAt: v.optional(v.number()),
-  /** @deprecated Pre-rebuild watch pointer; cleared by clearLegacyFields. Use `watchedByAve`. */
-  watchedByOrchestrator: v.optional(v.id("sessions")),
+  // watchedByOrchestrator removed. schema-narrowing-ok: clearLegacyFields
   // Manager Ave thread watching this project's chat for completion
   // notifications (mirrors sessions.watchedByAve).
   watchedByAve: v.optional(v.id("aveThreads")),
@@ -1580,11 +1538,10 @@ export const queuedMessageFields = {
   interactionMode: v.optional(interactionModeValidator),
   // Carried from the composer through the queue to the started user message.
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-  /** @deprecated Pre-rebuild Ave wake-up queued while busy; cleared by clearLegacyFields. */
-  orchestratorNotification: v.optional(v.boolean()),
-  // Same idea for a message the orchestrator sent to a BUSY child: without it
-  // the "via orchestrator" badge was lost on exactly the messages that had to
-  // queue (mirrors messageFields.sentViaOrchestrator).
+  // orchestratorNotification removed. schema-narrowing-ok: clearLegacyFields
+  // A message the orchestrator sent to a BUSY child: without it the "via
+  // orchestrator" badge was lost on exactly the messages that had to queue
+  // (mirrors messageFields.sentViaOrchestrator).
   sentViaOrchestrator: v.optional(v.boolean()),
   // The user pressed Steer and the running daemon injects this message into
   // its live turn: "requested" waits for the daemon, "delivering" is handed
@@ -1596,14 +1553,6 @@ export const queuedMessageFields = {
   replyTo: v.optional(v.id("messages")),
   // A queued task run (`taskRunMarkerValidator`); its turn carries it on.
   taskRun: v.optional(taskRunMarkerValidator),
-};
-
-/** @deprecated Never written; rows deleted by clearLegacyFields. */
-export const taskSandboxEventFields = {
-  taskId: v.id("agentTasks"),
-  event: taskSandboxEventValidator,
-  errorDetail: v.optional(v.string()),
-  createdAt: v.number(),
 };
 
 export const taskActivityFields = {
@@ -1737,13 +1686,8 @@ export const appSettingsFields = {
   sandboxIdlePauseMode: v.optional(sandboxIdlePauseModeValidator),
   sandboxIdleAfterAgentMinutes: v.optional(v.number()),
   sandboxIdleAfterInteractionMinutes: v.optional(v.number()),
-  /**
-   * @deprecated Settings of the earlier idle-stop sweep (2026-10-05). Nothing
-   * reads them; cleared by clearLegacyFields, which copies them into the
-   * `sandboxIdlePause*` fields first.
-   */
-  sandboxIdleStopEnabled: v.optional(v.boolean()),
-  sandboxIdleStopMinutes: v.optional(v.number()),
+  // sandboxIdleStopEnabled / sandboxIdleStopMinutes removed.
+  // schema-narrowing-ok: clearLegacyFields
 };
 
 /** What reset the idle clock last (shown in the sandbox panel and sweep logs). */
@@ -2127,11 +2071,7 @@ export const backgroundProcessFields = {
  * belong here — its spend is the per-turn cost gauge's business.
  */
 export const agentUsageLimitFields = {
-  /**
-   * @deprecated Readings used to be keyed per repo; new rows never set it.
-   * clearLegacyFields deletes the rows that still carry it.
-   */
-  repoId: v.optional(v.id("githubRepos")),
+  // Per-repo repoId removed. schema-narrowing-ok: clearLegacyFields
   provider: usageLimitProviderValidator,
   /**
    * The connected account the run authenticated as. Plan limits are per
@@ -2502,6 +2442,5 @@ export const routedMessageFields = {
   context: v.optional(v.string()),
   createdAt: v.number(),
   attachmentStorageIds: v.optional(v.array(v.id("_storage"))),
-  /** @deprecated Never written; cleared by clearLegacyFields. */
-  mirroredMessageId: v.optional(v.id("messages")),
+  // mirroredMessageId removed. schema-narrowing-ok: clearLegacyFields
 };

@@ -24,23 +24,17 @@ export type TaskRunOutcome = {
   limitResetAt?: number;
 };
 
-/** The task's own session's closed reply turns (no side lanes), newest first. */
-async function* closedReplyTurns(
-  db: DatabaseReader,
-  sessionId: Id<"sessions">,
-): AsyncGenerator<Doc<"turns">> {
-  const turns = db
+/** The task's own session's closed reply turns, newest first. */
+function closedReplyTurns(db: DatabaseReader, sessionId: Id<"sessions">) {
+  return db
     .query("turns")
     .withIndex("by_session_open", (q) =>
       q.eq("sessionId", sessionId).eq("open", false),
     )
     .order("desc");
-  for await (const turn of turns) {
-    if (turn.lane === undefined) yield turn;
-  }
 }
 
-/** Whether the session has an open reply turn (summary and interview lanes are side jobs). */
+/** Whether the session has an open reply turn. */
 async function hasOpenReplyTurn(
   db: DatabaseReader,
   sessionId: Id<"sessions">,
@@ -50,8 +44,8 @@ async function hasOpenReplyTurn(
     .withIndex("by_session_open", (q) =>
       q.eq("sessionId", sessionId).eq("open", true),
     )
-    .collect();
-  return open.some((turn) => turn.lane === undefined);
+    .first();
+  return open !== null;
 }
 
 /** A closed task-mode turn as an outcome; its reply carries the usage limit. */

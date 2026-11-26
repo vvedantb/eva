@@ -9,14 +9,12 @@ import {
   openSessionChatTurn,
   openTurn,
   renewTurnLease,
-  findOpenTurn,
 } from "../convex/_chat/turnStore";
 import {
   sessionChatAdapter,
   turnAdapterForEntity,
 } from "../convex/_chat/surfaceAdapters";
 import { loadSessionChat } from "../convex/_sessionChats/helpers";
-import { hasOpenChatTurn } from "../convex/_chat/turnProjection";
 import { finalizeStaleChatTurn } from "../convex/_chat/stallWatchdog";
 import { shouldWriteTurnLeaseRenewal } from "../convex/_chat/turnLease";
 import { STALL_ALERT_TEXT } from "../convex/_chat/stallRetry";
@@ -508,31 +506,17 @@ describe("a stale session chat turn torn down by the backstop", () => {
         chat: (adapter: { kind: string }) => adapter.kind,
         agent: (owner: { kind: string }) => owner.kind,
       };
-      return [
-        ...[f.chatId, taskId, projectId, "not-an-id"].map((entityId) =>
-          turnAdapterForEntity(ctx.db, { entityId }, visit),
-        ),
-        turnAdapterForEntity(
-          ctx.db,
-          { entityId: f.sessionId, lane: "interview" },
-          visit,
-        ),
-        turnAdapterForEntity(
-          ctx.db,
-          { entityId: projectId, lane: "interview" },
-          visit,
-        ),
-      ];
+      return [f.chatId, taskId, projectId, "not-an-id"].map((entityId) =>
+        turnAdapterForEntity(ctx.db, { entityId }, visit),
+      );
     });
-    // A task or project id is no chat: their chats are session chats. A
-    // legacy lane turn (the retired interview) has no owner: the reconciler
-    // closes it.
-    expect(kinds).toEqual(["sessionChat", null, null, null, null, null]);
+    // A task or project id is no chat: their chats are session chats.
+    expect(kinds).toEqual(["sessionChat", null, null, null]);
   });
 });
 
 describe("expired turns with no owning surface", () => {
-  test("a lane-less turn keyed by a session id is closed", async () => {
+  test("a turn keyed by a session id is closed", async () => {
     vi.useFakeTimers();
     try {
       const { t, sessionId } = await createSessionFixture();
@@ -558,40 +542,6 @@ describe("expired turns with no owning surface", () => {
     } finally {
       vi.useRealTimers();
     }
-  });
-});
-
-/**
- * A legacy lane turn (the retired project interview) on a session row never
- * reads as, or is superseded by, the chat's turn.
- */
-describe("lane turns stay apart from chat turns", () => {
-  test("a legacy interview turn is not the session's chat turn", async () => {
-    const { t, sessionId, chatId } = await createSessionFixture();
-    const result = await t.run(async (ctx) => {
-      const session = await ctx.db.get(sessionId);
-      if (!session) throw new Error("missing session");
-      const chatTurn = await findOpenTurn(ctx, chatId);
-      const laneTurnId = await openTurn(ctx, {
-        entityId: sessionId,
-        streamingEntityId: String(sessionId),
-        model: "claude:sonnet",
-        repoId: session.repoId,
-      });
-      await ctx.db.patch(laneTurnId, { lane: "interview" });
-      return {
-        chatTurnId: chatTurn?._id,
-        chatTurnAfter: (await findOpenTurn(ctx, chatId))?._id,
-        laneTurn: await findOpenTurn(ctx, sessionId, "interview"),
-        laneTurnId,
-        hasChatTurn: await hasOpenChatTurn(ctx.db, sessionId),
-      };
-    });
-    // Opening the lane turn did not supersede the chat turn.
-    expect(result.chatTurnAfter).toBe(result.chatTurnId);
-    expect(result.laneTurn?._id).toBe(result.laneTurnId);
-    expect(result.laneTurn?.lane).toBe("interview");
-    expect(result.hasChatTurn).toBe(result.chatTurnId !== undefined);
   });
 });
 

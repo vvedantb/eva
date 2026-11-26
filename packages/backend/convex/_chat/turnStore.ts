@@ -6,7 +6,7 @@ import { TURN_BACKSTOP_ERROR } from "@eva/shared/agentTurnLimits";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
-import type { TurnLane, TurnState } from "../validators";
+import type { TurnState } from "../validators";
 import {
   canTransitionTurn,
   isTerminalTurnState,
@@ -68,25 +68,21 @@ export async function listOpenSessionTurns(
     .collect();
 }
 
-/**
- * The entity's open turn in one lane. Every turn opened now has no lane; a
- * legacy row may still carry one (the retired summary and interview turns).
- */
+/** The entity's open turn. */
 export async function findOpenTurn(
   ctx: QueryCtx,
   entityId: TurnEntityId,
-  lane?: TurnLane,
 ): Promise<Doc<"turns"> | null> {
   return await ctx.db
     .query("turns")
     .withIndex("by_entity_open", (q) =>
-      q.eq("entityId", entityId).eq("lane", lane).eq("open", true),
+      q.eq("entityId", entityId).eq("open", true),
     )
     .first();
 }
 
 /**
- * The entity's latest no-lane turn: the open one, else the last closed one.
+ * The entity's latest turn: the open one, else the last closed one.
  * Follow-up rows (alerts, retries, continuations) read it to find their thread.
  */
 export async function findLatestTurn(
@@ -98,7 +94,7 @@ export async function findLatestTurn(
     (await ctx.db
       .query("turns")
       .withIndex("by_entity_open", (q) =>
-        q.eq("entityId", entityId).eq("lane", undefined).eq("open", false),
+        q.eq("entityId", entityId).eq("open", false),
       )
       .order("desc")
       .first())
@@ -306,7 +302,7 @@ export async function renewTurnLease(
   if (turn.leaseGeneration !== params.leaseGeneration) {
     return { status: "terminal", reason: "superseded" };
   }
-  const current = await findOpenTurn(ctx, turn.entityId, turn.lane);
+  const current = await findOpenTurn(ctx, turn.entityId);
   if (!current || current._id !== turn._id) {
     return { status: "terminal", reason: "superseded" };
   }
@@ -464,11 +460,10 @@ export async function closeTurn(
     await onTaskRunTurnClosed(ctx, current, state);
   }
   // The unread clock read by `chatReads.ts`: chat turns, a task's runs
-  // included. A legacy lane turn (summary, interview) is not a reply.
-  // `stampChatActivity` stamps the chat, its session and the session's task
+  // included. `stampChatActivity` stamps the chat, its session and the session's task
   // or project, and skips a chat that lease sweeps found hard-deleted.
   const chatParentId =
-    turn.lane === undefined ? chatParentIdOf(ctx.db, turn.entityId) : null;
+    chatParentIdOf(ctx.db, turn.entityId);
   if (chatParentId) {
     await stampChatActivity(ctx, chatParentId, {
       lastTurnFinishedAt: finishedAt,
