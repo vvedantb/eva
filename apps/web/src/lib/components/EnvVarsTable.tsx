@@ -3,7 +3,6 @@
 import { useState } from "react";
 import {
   Button,
-  CrossfadeIcon,
   Dialog,
   DialogContent,
   DialogHeader,
@@ -28,9 +27,6 @@ import {
   IconCamera,
   IconCheck,
   IconClipboard,
-  IconCopy,
-  IconEye,
-  IconEyeOff,
   IconKey,
   IconLock,
   IconLockOpen,
@@ -40,6 +36,14 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { EnvVarProviderSlots } from "@/lib/components/EnvVarProviderSlots";
+import {
+  EnvironmentVariableCopyButton,
+  EnvironmentVariableRevealButton,
+  EnvironmentVariableValue,
+  EnvironmentVariables,
+  EnvironmentVariablesToggle,
+  useEnvironmentVariables,
+} from "@/lib/components/EnvironmentVariables";
 import { parseEnvVars } from "./_utils/parseEnvVars";
 import {
   KNOWN_ENV_VARS,
@@ -117,11 +121,7 @@ export function EnvVarsTable({
   const [deleteKey, setDeleteKey] = useState<string | null>(null);
   const { request: requestConfirm } = useRequestConfirm();
 
-  const [revealedValues, setRevealedValues] = useState<Record<string, string>>(
-    {},
-  );
-  const [revealingKey, setRevealingKey] = useState<string | null>(null);
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const env = useEnvironmentVariables(onReveal);
 
   const [showBulkPaste, setShowBulkPaste] = useState(false);
   const [bulkText, setBulkText] = useState("");
@@ -186,11 +186,7 @@ export function EnvVarsTable({
       );
       setEditingKey(null);
       setEditValue("");
-      setRevealedValues((prev) => {
-        const next = { ...prev };
-        delete next[editingKey];
-        return next;
-      });
+      env.forget(editingKey);
     } catch {
       // Toast already shown.
     }
@@ -206,46 +202,11 @@ export function EnvVarsTable({
         "Couldn't delete variable",
         "env-var-delete",
       );
-      setRevealedValues((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
+      env.forget(key);
       setDeleteKey(null);
     } catch {
       // Toast already shown.
     }
-  };
-
-  const toggleReveal = async (key: string) => {
-    if (!onReveal) return;
-    if (revealedValues[key] !== undefined) {
-      setRevealedValues((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-      return;
-    }
-    setRevealingKey(key);
-    const value = await onReveal(key);
-    if (value !== null) {
-      setRevealedValues((prev) => ({ ...prev, [key]: value }));
-    }
-    setRevealingKey(null);
-  };
-
-  const copyValue = async (key: string) => {
-    if (!onReveal) return;
-    let value = revealedValues[key];
-    if (value === undefined) {
-      const result = await onReveal(key);
-      if (result === null) return;
-      value = result;
-    }
-    await navigator.clipboard.writeText(value);
-    setCopiedKey(key);
-    setTimeout(() => setCopiedKey(null), 1500);
   };
 
   const handleKeyInputPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
@@ -327,9 +288,7 @@ export function EnvVarsTable({
             }}
           />
         ) : (
-          <span className="font-mono text-xs text-muted-foreground">
-            {revealedValues[v.key] ?? v.value}
-          </span>
+          <EnvironmentVariableValue name={v.key} masked={v.value} />
         )}
       </TableCell>
       <TableCell className="px-2.5 py-2.5 text-right sm:px-4">
@@ -359,45 +318,14 @@ export function EnvVarsTable({
           </div>
         ) : (
           <div className="flex items-center justify-end gap-1">
-            <Button
-              shape="rounded"
-              size="icon-sm"
-              variant="ghost"
+            <EnvironmentVariableRevealButton
+              name={v.key}
               className="hit-target"
-              onClick={() => toggleReveal(v.key)}
-              disabled={revealingKey === v.key}
-              title={
-                revealedValues[v.key] !== undefined
-                  ? "Hide value"
-                  : "Reveal value"
-              }
-            >
-              <CrossfadeIcon
-                show={revealedValues[v.key] !== undefined}
-                trueKey="hide"
-                falseKey="reveal"
-                className="relative flex size-3.5 items-center justify-center"
-                whenTrue={<IconEyeOff size={14} />}
-                whenFalse={<IconEye size={14} />}
-              />
-            </Button>
-            <Button
-              shape="rounded"
-              size="icon-sm"
-              variant="ghost"
+            />
+            <EnvironmentVariableCopyButton
+              name={v.key}
               className="hit-target"
-              onClick={() => copyValue(v.key)}
-              title={copiedKey === v.key ? "Copied!" : "Copy value"}
-            >
-              <CrossfadeIcon
-                show={copiedKey === v.key}
-                trueKey="copied"
-                falseKey="copy"
-                className="relative flex size-3.5 items-center justify-center"
-                whenTrue={<IconCheck size={14} className="text-primary" />}
-                whenFalse={<IconCopy size={14} />}
-              />
-            </Button>
+            />
             {!readOnly && (
               <>
                 {onToggleSandboxExclude && (
@@ -559,259 +487,260 @@ export function EnvVarsTable({
   );
 
   return (
-    <div className="space-y-8">
-      <p className="text-xs leading-relaxed text-muted-foreground">
-        {description}
-      </p>
-      {vars !== undefined && (
-        <>
-          <SettingsSection title="Coding agents">
-            <EnvVarProviderSlots
-              entries={agentSlots}
-              vars={vars}
-              onUpsert={onUpsert}
-              onReveal={onReveal}
-              onRemove={onRemove}
-              readOnly={readOnly}
-            />
-          </SettingsSection>
-          <SettingsSection
-            title="Connections"
-          >
-            <EnvVarProviderSlots
-              entries={connectorSlots}
-              vars={vars}
-              onUpsert={onUpsert}
-              onReveal={onReveal}
-              onRemove={onRemove}
-              readOnly={readOnly}
-              removeDialogDescription="Agents fall back to this key until someone connects Linear or Figma in Settings → Connections."
-            />
-          </SettingsSection>
-          <SettingsSection title="Infrastructure">
-            <EnvVarProviderSlots
-              entries={infraSlots}
-              defaultSandboxExclude
-              vars={vars}
-              onUpsert={onUpsert}
-              onReveal={onReveal}
-              onRemove={onRemove}
-              readOnly={readOnly}
-              removeDialogDescription="Sandbox provisioning may fail until you paste it again."
-            />
-          </SettingsSection>
-          <SettingsSection title="Convex">
-            <EnvVarProviderSlots
-              entries={convexSlots}
-              vars={vars}
-              onUpsert={onUpsert}
-              onReveal={onReveal}
-              onRemove={onRemove}
-              readOnly={readOnly}
-              removeDialogDescription="The sandboxed app may lose access to its Convex backend until you paste it again."
-            />
-          </SettingsSection>
-        </>
-      )}
-      {vars === undefined ? (
-        <div className="flex items-center justify-center py-12">
-          <Spinner size="lg" />
+    <EnvironmentVariables value={env}>
+      <div className="space-y-8">
+        <div className="flex items-start justify-between gap-4">
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {description}
+          </p>
+          {vars !== undefined && vars.length > 0 && (
+            <EnvironmentVariablesToggle keys={vars.map((v) => v.key)} />
+          )}
         </div>
-      ) : (
-        <>
-          {/* The table owns the card's full width, so the body carries no padding. */}
-          <SettingsSection
-            title="Sandbox variables"
-            action={freeformActions}
-            bodyVariant="list"
-          >
-            {showTable ? (
-              <div className="overflow-x-auto">
-                <Table className="min-w-[360px]">
-                  {tableHeader}
-                  <TableBody>
-                    {addingTo === "sandbox" && addingRow}
-                    {sandboxVars.map(renderRow)}
-                    {sandboxVars.length === 0 && addingTo !== "sandbox" && (
-                      <TableRow className="hover:bg-transparent">
-                        <TableCell
-                          colSpan={3}
-                          className="px-4 py-6 text-center text-xs text-muted-foreground"
-                        >
-                          No sandbox variables
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <SettingsEmptyState
-                icon={IconKey}
-                title="No sandbox variables"
+        {vars !== undefined && (
+          <>
+            <SettingsSection title="Coding agents">
+              <EnvVarProviderSlots
+                entries={agentSlots}
+                vars={vars}
+                onUpsert={onUpsert}
+                onRemove={onRemove}
+                readOnly={readOnly}
               />
-            )}
-          </SettingsSection>
-
-          {(seedOnlyVars.length > 0 || canAddSeedVars) && (
+            </SettingsSection>
+            <SettingsSection title="Connections">
+              <EnvVarProviderSlots
+                entries={connectorSlots}
+                vars={vars}
+                onUpsert={onUpsert}
+                onRemove={onRemove}
+                readOnly={readOnly}
+                removeDialogDescription="Agents fall back to this key until someone connects Linear or Figma in Settings → Connections."
+              />
+            </SettingsSection>
+            <SettingsSection title="Infrastructure">
+              <EnvVarProviderSlots
+                entries={infraSlots}
+                defaultSandboxExclude
+                vars={vars}
+                onUpsert={onUpsert}
+                onRemove={onRemove}
+                readOnly={readOnly}
+                removeDialogDescription="Sandbox provisioning may fail until you paste it again."
+              />
+            </SettingsSection>
+            <SettingsSection title="Convex">
+              <EnvVarProviderSlots
+                entries={convexSlots}
+                vars={vars}
+                onUpsert={onUpsert}
+                onRemove={onRemove}
+                readOnly={readOnly}
+                removeDialogDescription="The sandboxed app may lose access to its Convex backend until you paste it again."
+              />
+            </SettingsSection>
+          </>
+        )}
+        {vars === undefined ? (
+          <div className="flex items-center justify-center py-12">
+            <Spinner size="lg" />
+          </div>
+        ) : (
+          <>
+            {/* The table owns the card's full width, so the body carries no padding. */}
             <SettingsSection
-              title={
-                <span className="flex items-center gap-1.5">
-                  <IconCamera size={14} className="text-warning" />
-                  Snapshot builds only
-                </span>
-              }
-              description="Given to snapshot seed runs only — never injected into a session sandbox. Reference them in seed commands as $NAME."
-              action={
-                canAddSeedVars ? (
-                  <Button
-                    size="sm"
-                    onClick={() => startAdd("seed")}
-                    disabled={adding}
-                  >
-                    <IconPlus size={14} />
-                    Add Seed Variable
-                  </Button>
-                ) : undefined
-              }
+              title="Sandbox variables"
+              action={freeformActions}
               bodyVariant="list"
             >
-              {seedOnlyVars.length > 0 || addingTo === "seed" ? (
+              {showTable ? (
                 <div className="overflow-x-auto">
                   <Table className="min-w-[360px]">
                     {tableHeader}
                     <TableBody>
-                      {addingTo === "seed" && addingRow}
-                      {seedOnlyVars.map(renderRow)}
+                      {addingTo === "sandbox" && addingRow}
+                      {sandboxVars.map(renderRow)}
+                      {sandboxVars.length === 0 && addingTo !== "sandbox" && (
+                        <TableRow className="hover:bg-transparent">
+                          <TableCell
+                            colSpan={3}
+                            className="px-4 py-6 text-center text-xs text-muted-foreground"
+                          >
+                            No sandbox variables
+                          </TableCell>
+                        </TableRow>
+                      )}
                     </TableBody>
                   </Table>
                 </div>
               ) : (
                 <SettingsEmptyState
-                  icon={IconCamera}
-                  title="No seed variables"
+                  icon={IconKey}
+                  title="No sandbox variables"
                 />
               )}
             </SettingsSection>
-          )}
 
-          {excludedVars.length > 0 && (
-            <SettingsSection
-              title={
-                <span className="flex items-center gap-1.5">
-                  <IconLock size={14} className="text-warning" />
-                  Excluded from Sandbox
-                </span>
-              }
-              description="Held for the platform only — these are never injected into a sandbox."
-              bodyVariant="list"
-            >
-              <div className="overflow-x-auto">
-                <Table className="min-w-[360px]">
-                  {tableHeader}
-                  <TableBody>{excludedVars.map(renderRow)}</TableBody>
-                </Table>
-              </div>
-            </SettingsSection>
-          )}
-        </>
-      )}
-
-      <Dialog
-        open={showBulkPaste}
-        onOpenChange={(open) => {
-          if (!open) {
-            setShowBulkPaste(false);
-            setBulkText("");
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Paste Environment Variables</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">
-              Paste your variables in{" "}
-              <span className="font-mono">KEY=VALUE</span> format, one per line.
-              Lines starting with <span className="font-mono">#</span> are
-              ignored.
-            </p>
-            <Textarea
-              value={bulkText}
-              onChange={(e) => setBulkText(e.target.value)}
-              placeholder={"API_KEY=abc123\nDATABASE_URL=postgres://..."}
-              className="h-40 font-mono text-xs"
-              autoFocus
-            />
-            {parsedPreview.length > 0 && (
-              <p className="text-xs text-muted-foreground">
-                {parsedPreview.length} variable
-                {parsedPreview.length !== 1 ? "s" : ""} detected
-              </p>
+            {(seedOnlyVars.length > 0 || canAddSeedVars) && (
+              <SettingsSection
+                title={
+                  <span className="flex items-center gap-1.5">
+                    <IconCamera size={14} className="text-warning" />
+                    Snapshot builds only
+                  </span>
+                }
+                description="Given to snapshot seed runs only — never injected into a session sandbox. Reference them in seed commands as $NAME."
+                action={
+                  canAddSeedVars ? (
+                    <Button
+                      size="sm"
+                      onClick={() => startAdd("seed")}
+                      disabled={adding}
+                    >
+                      <IconPlus size={14} />
+                      Add Seed Variable
+                    </Button>
+                  ) : undefined
+                }
+                bodyVariant="list"
+              >
+                {seedOnlyVars.length > 0 || addingTo === "seed" ? (
+                  <div className="overflow-x-auto">
+                    <Table className="min-w-[360px]">
+                      {tableHeader}
+                      <TableBody>
+                        {addingTo === "seed" && addingRow}
+                        {seedOnlyVars.map(renderRow)}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <SettingsEmptyState
+                    icon={IconCamera}
+                    title="No seed variables"
+                  />
+                )}
+              </SettingsSection>
             )}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setShowBulkPaste(false);
-                setBulkText("");
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleBulkImport}
-              disabled={parsedPreview.length === 0 || bulkSaving}
-            >
-              {bulkSaving && <Spinner size="sm" className="mr-1.5" />}
-              Import{" "}
-              {parsedPreview.length > 0
-                ? `${parsedPreview.length} Variable${parsedPreview.length !== 1 ? "s" : ""}`
-                : ""}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
-      <Dialog
-        open={deleteKey !== null}
-        onOpenChange={(open) => {
-          if (!open) setDeleteKey(null);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Variable</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Are you sure you want to delete{" "}
-            <span className="font-mono font-medium text-foreground">
-              {deleteKey}
-            </span>
-            ? This cannot be undone.
-          </p>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setDeleteKey(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={() => void confirmDelete()}
-            >
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
+            {excludedVars.length > 0 && (
+              <SettingsSection
+                title={
+                  <span className="flex items-center gap-1.5">
+                    <IconLock size={14} className="text-warning" />
+                    Excluded from Sandbox
+                  </span>
+                }
+                description="Held for the platform only — these are never injected into a sandbox."
+                bodyVariant="list"
+              >
+                <div className="overflow-x-auto">
+                  <Table className="min-w-[360px]">
+                    {tableHeader}
+                    <TableBody>{excludedVars.map(renderRow)}</TableBody>
+                  </Table>
+                </div>
+              </SettingsSection>
+            )}
+          </>
+        )}
+
+        <Dialog
+          open={showBulkPaste}
+          onOpenChange={(open) => {
+            if (!open) {
+              setShowBulkPaste(false);
+              setBulkText("");
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Paste Environment Variables</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Paste your variables in{" "}
+                <span className="font-mono">KEY=VALUE</span> format, one per
+                line. Lines starting with <span className="font-mono">#</span>{" "}
+                are ignored.
+              </p>
+              <Textarea
+                value={bulkText}
+                onChange={(e) => setBulkText(e.target.value)}
+                placeholder={"API_KEY=abc123\nDATABASE_URL=postgres://..."}
+                className="h-40 font-mono text-xs"
+                autoFocus
+              />
+              {parsedPreview.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {parsedPreview.length} variable
+                  {parsedPreview.length !== 1 ? "s" : ""} detected
+                </p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowBulkPaste(false);
+                  setBulkText("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleBulkImport}
+                disabled={parsedPreview.length === 0 || bulkSaving}
+              >
+                {bulkSaving && <Spinner size="sm" className="mr-1.5" />}
+                Import{" "}
+                {parsedPreview.length > 0
+                  ? `${parsedPreview.length} Variable${parsedPreview.length !== 1 ? "s" : ""}`
+                  : ""}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={deleteKey !== null}
+          onOpenChange={(open) => {
+            if (!open) setDeleteKey(null);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete Variable</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to delete{" "}
+              <span className="font-mono font-medium text-foreground">
+                {deleteKey}
+              </span>
+              ? This cannot be undone.
+            </p>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setDeleteKey(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => void confirmDelete()}
+              >
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </EnvironmentVariables>
   );
 }

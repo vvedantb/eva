@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
   Badge,
   Button,
-  CrossfadeIcon,
   Dialog,
   DialogContent,
   DialogFooter,
@@ -15,16 +14,13 @@ import {
   skipConfirmTitle,
   useRequestConfirm,
 } from "@vvedantb/ui";
-import {
-  IconCheck,
-  IconCopy,
-  IconEye,
-  IconEyeOff,
-  IconPencil,
-  IconTrash,
-  IconX,
-} from "@tabler/icons-react";
+import { IconCheck, IconPencil, IconTrash, IconX } from "@tabler/icons-react";
 import type { EnvVar } from "@/lib/components/EnvVarsTable";
+import {
+  EnvironmentVariableCopyButton,
+  EnvironmentVariableRevealButton,
+  useEnvironmentVariablesContext,
+} from "@/lib/components/EnvironmentVariables";
 import type { EnvVarSlotEntry } from "@/lib/components/_utils/envVarSlotTypes";
 
 interface EnvVarProviderSlotsProps {
@@ -37,7 +33,6 @@ interface EnvVarProviderSlotsProps {
     value: string,
     sandboxExclude: boolean,
   ) => Promise<void>;
-  onReveal?: (key: string) => Promise<string | null>;
   onRemove?: (key: string) => Promise<void>;
   readOnly?: boolean;
   removeDialogDescription?: string;
@@ -46,14 +41,14 @@ interface EnvVarProviderSlotsProps {
 /**
  * Dedicated paste-in slots for known env vars (coding agents, infrastructure).
  * Each slot writes to the same free-form store as the table below via the shared
- * onUpsert/onReveal/onRemove callbacks — no extra backend surface.
+ * onUpsert/onRemove callbacks — no extra backend surface. Reveal and copy come
+ * from the enclosing <EnvironmentVariables>.
  */
 export function EnvVarProviderSlots({
   entries,
   defaultSandboxExclude = false,
   vars,
   onUpsert,
-  onReveal,
   onRemove,
   readOnly = false,
   removeDialogDescription = "The agent it enables will stop working until you paste it again.",
@@ -62,9 +57,7 @@ export function EnvVarProviderSlots({
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
-  const [revealed, setRevealed] = useState<Record<string, string>>({});
-  const [revealingKey, setRevealingKey] = useState<string | null>(null);
-  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const { revealed, forget } = useEnvironmentVariablesContext();
   const [deleteKey, setDeleteKey] = useState<string | null>(null);
   const { request: requestConfirm } = useRequestConfirm();
 
@@ -94,50 +87,13 @@ export function EnvVarProviderSlots({
     setSavingId(null);
     setEditingId(null);
     setEditValue("");
-    setRevealed((prev) => {
-      const next = { ...prev };
-      delete next[matched.key];
-      return next;
-    });
-  };
-
-  const toggleReveal = async (key: string) => {
-    if (!onReveal) return;
-    if (revealed[key] !== undefined) {
-      setRevealed((prev) => {
-        const next = { ...prev };
-        delete next[key];
-        return next;
-      });
-      return;
-    }
-    setRevealingKey(key);
-    const value = await onReveal(key);
-    if (value !== null) setRevealed((prev) => ({ ...prev, [key]: value }));
-    setRevealingKey(null);
-  };
-
-  const copyValue = async (key: string) => {
-    if (!onReveal) return;
-    let value = revealed[key];
-    if (value === undefined) {
-      const result = await onReveal(key);
-      if (result === null) return;
-      value = result;
-    }
-    await navigator.clipboard.writeText(value);
-    setCopiedKey(key);
-    setTimeout(() => setCopiedKey(null), 1500);
+    forget(matched.key);
   };
 
   const confirmDelete = async (key: string | null = deleteKey) => {
     if (!key || !onRemove) return;
     await onRemove(key);
-    setRevealed((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
+    forget(key);
     setDeleteKey(null);
   };
 
@@ -282,47 +238,14 @@ export function EnvVarProviderSlots({
 
               {configured && matched && !isEditing && (
                 <div className="flex shrink-0 items-center gap-0.5">
-                  <Button
-                    shape="rounded"
-                    size="icon-sm"
-                    variant="ghost"
+                  <EnvironmentVariableRevealButton
+                    name={matched.key}
                     className="max-sm:hit-target"
-                    onClick={() => toggleReveal(matched.key)}
-                    disabled={revealingKey === matched.key}
-                    title={
-                      revealed[matched.key] !== undefined
-                        ? "Hide value"
-                        : "Reveal value"
-                    }
-                  >
-                    <CrossfadeIcon
-                      show={revealed[matched.key] !== undefined}
-                      trueKey="hide"
-                      falseKey="reveal"
-                      className="relative flex size-3.5 items-center justify-center"
-                      whenTrue={<IconEyeOff size={14} />}
-                      whenFalse={<IconEye size={14} />}
-                    />
-                  </Button>
-                  <Button
-                    shape="rounded"
-                    size="icon-sm"
-                    variant="ghost"
+                  />
+                  <EnvironmentVariableCopyButton
+                    name={matched.key}
                     className="max-sm:hit-target"
-                    onClick={() => copyValue(matched.key)}
-                    title={copiedKey === matched.key ? "Copied!" : "Copy value"}
-                  >
-                    <CrossfadeIcon
-                      show={copiedKey === matched.key}
-                      trueKey="copied"
-                      falseKey="copy"
-                      className="relative flex size-3.5 items-center justify-center"
-                      whenTrue={
-                        <IconCheck size={14} className="text-primary" />
-                      }
-                      whenFalse={<IconCopy size={14} />}
-                    />
-                  </Button>
+                  />
                   {!readOnly && (
                     <>
                       <Button
