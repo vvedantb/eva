@@ -4,7 +4,12 @@ import { useQuery } from "convex-helpers/react/cache/hooks";
 import { api } from "@eva/backend";
 import type { Id } from "@eva/backend";
 import { Spinner } from "@vvedantb/ui";
-import { MentionContentPreview } from "./MentionContentPreview";
+import {
+  MENTION_PREVIEW_SURFACE_CLASS,
+  MentionContentPreview,
+} from "./MentionContentPreview";
+import { LinkPreviewCard } from "./LinkPreviewCard";
+import { MentionKindIcon } from "./MentionRow";
 
 interface DataMentionHoverCardBodyProps {
   entityId: string;
@@ -12,8 +17,8 @@ interface DataMentionHoverCardBodyProps {
 }
 
 /**
- * Hover preview for Data `@` chips. Documents show content; other kinds show
- * title + type badge (+ short description when present).
+ * Hover preview for Data `@` chips and Eva links in chat. Documents show
+ * content; sessions, quick tasks and projects use the GitHub link card layout.
  */
 export function DataMentionHoverCardBody({
   entityId,
@@ -50,13 +55,23 @@ export function DataMentionHoverCardBody({
   }
 
   return (
-    <MentionContentPreview title={entity.label}>
-      <p className="text-xs text-muted-foreground">{entity.badge}</p>
-      {entity.description ? (
-        <p className="mt-1 text-xs leading-relaxed text-foreground">
-          {entity.description}
-        </p>
-      ) : null}
-    </MentionContentPreview>
+    <div className={`${MENTION_PREVIEW_SURFACE_CLASS} w-80`}>
+      <LinkPreviewCard
+        pill={{
+          label: entity.badge,
+          className: "bg-muted/60 text-muted-foreground",
+          icon: <MentionKindIcon kind={entity.kind} size={12} />,
+        }}
+        reference={entity.numId !== undefined ? `#${entity.numId}` : null}
+        updatedAt={entity.updatedAt ?? null}
+        title={entity.label}
+        description={entity.description}
+        author={
+          entity.authorName !== undefined
+            ? { name: entity.authorName, avatarUrl: null }
+            : null
+        }
+      />
+    </div>
   );
 }

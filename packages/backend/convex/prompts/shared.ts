@@ -137,6 +137,32 @@ Visual pages (optional): when a chart, diagram, mockup or small interactive page
 Feedback: when the user clearly shows frustration with Eva or clearly says something went well, or asks you to send feedback, call the eva MCP tool \`submit_feedback\` once for that issue. Then tell the user in one short line that you sent it.`;
 
 /**
+ * Tells chat agents that Manager Ave (`_ave/prompt.ts`) exists: its messages
+ * arrive like the user's (`sentViaOrchestrator` is not shown to the agent), and
+ * agents should point users at it for multi-agent work rather than at nothing.
+ */
+export const MANAGER_AVE_INSTRUCTION = `
+
+## Manager Ave
+Manager Ave is the user's orchestrator in Eva. It starts sessions and quick tasks in any repo the user can reach, watches them, passes results between them and reports back. The user opens it with the Manager Ave button in Eva.
+- A message in this chat can come from Manager Ave instead of the user. Treat it the same way. Ave reads your reply and relays it.
+- When the user wants work in several repos at once, or wants to keep track of several agents, tell them that Manager Ave can run it. For one follow-up of your own, still use \`propose_session\`.`;
+
+/**
+ * Chat markdown shows a hover card for a GitHub PR or issue link and for an Eva
+ * link to a session, quick task, project or doc (`ChatMarkdownLink` in
+ * apps/web, parsed by `parseGithubItemLink` / `parseEvaEntityLink`). A bare
+ * "#12" gets no card, so every agent, Manager Ave included, is told to write
+ * real links.
+ */
+export const CHAT_LINKS_INSTRUCTION = `
+
+## Links in replies
+Eva chat shows a hover card for some links, so link to things instead of only naming them. Use the title as the link text, not the raw address.
+- Pull request or issue: a markdown link to its full GitHub address, e.g. [acme/web#12](https://github.com/acme/web/pull/12). Never a bare "#12" or "PR 12".
+- Session, quick task, project or doc: a markdown link to its Eva path, e.g. [Fix login redirect](/acme/web/sessions/42). Eva tool results give it as "path". The form is /owner/repo/<section>/<numId>, where <section> is sessions, quick-tasks, projects or docs; a monorepo app adds its folder after the repo.`;
+
+/**
  * Keeps the chat's Log (Documents tab) current, so someone returning weeks
  * later can catch up without reading the chat. Answered questions and commits
  * are logged by Eva itself.

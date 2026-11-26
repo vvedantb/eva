@@ -20,16 +20,22 @@ const KIND_ICON_CLASS = "shrink-0 text-muted-foreground";
 /** Reuses the sidebar nav glyphs so a session in the picker reads like the
  *  Sessions nav item. Their hover animations are gated on `.group:hover`, so
  *  they stay still here. */
-function MentionKindIcon({ kind }: { kind: MentionKind }) {
+export function MentionKindIcon({
+  kind,
+  size = 16,
+}: {
+  kind: MentionKind;
+  size?: number;
+}) {
   switch (kind) {
     case "document":
-      return <DocumentIcon size={16} className={KIND_ICON_CLASS} />;
+      return <DocumentIcon size={size} className={KIND_ICON_CLASS} />;
     case "session":
-      return <TerminalIcon size={16} className={KIND_ICON_CLASS} />;
+      return <TerminalIcon size={size} className={KIND_ICON_CLASS} />;
     case "project":
-      return <BoardIcon size={16} className={KIND_ICON_CLASS} />;
+      return <BoardIcon size={size} className={KIND_ICON_CLASS} />;
     case "quickTask":
-      return <ChecklistIcon size={16} className={KIND_ICON_CLASS} />;
+      return <ChecklistIcon size={size} className={KIND_ICON_CLASS} />;
   }
 }
 
