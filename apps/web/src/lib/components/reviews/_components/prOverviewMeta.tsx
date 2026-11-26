@@ -35,6 +35,14 @@ export type PrCommit = PrOverview["commits"][number];
 export type PrComment = PrOverview["comments"][number];
 export type PrLabel = PrOverview["labels"][number];
 
+/** The text colour of a tone's words: the merge blocker, its fix link, the stack verdict. */
+export const TONE_TEXT_CLASS: Record<StatusTone, string> = {
+  success: "text-emerald-700 dark:text-emerald-300",
+  failure: "text-destructive",
+  pending: "text-muted-foreground",
+  neutral: "text-muted-foreground",
+};
+
 export function ToneIcon({
   tone,
   size = 14,

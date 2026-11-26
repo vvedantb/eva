@@ -1,4 +1,5 @@
 import type { NeedsYouReason } from "./projectStatus";
+import { ownerLabel } from "./chatSourceLabel";
 
 /**
  * The Inbox's "Needs you" view: work that waits for a person, across
@@ -77,7 +78,7 @@ export function needsYouSourceLabel(row: {
   if (row.source === "project") {
     return row.projectTitle ? `Project · ${row.projectTitle}` : "Project";
   }
-  return row.source === "quick_task" ? "Quick task" : "Session";
+  return ownerLabel(row.source);
 }
 
 /**

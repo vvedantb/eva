@@ -1,18 +1,14 @@
 "use client";
 
 import { useQuery } from "convex-helpers/react/cache/hooks";
-import { useMutation } from "convex/react";
 import { api, taskScheduledAt } from "@eva/backend";
-import { runAllPlan, startAll } from "@eva/shared";
 import type { Id } from "@eva/backend";
-import { patchLoadedQuery } from "@vvedantb/server";
 import type { FunctionReturnType } from "convex/server";
-import { useState } from "react";
 import { KanbanBoard } from "@/lib/components/kanban/KanbanBoard";
 import { QuickTaskCard } from "./QuickTaskCard";
 import type { SelectionToggleOptions } from "./selectionRange";
 import { RunAllDialog } from "./RunAllDialog";
-import { Button, Spinner, toast, ConfirmSkipHint, skipConfirmTitle, useRequestConfirm } from "@vvedantb/ui";
+import { Button, Spinner, ConfirmSkipHint, skipConfirmTitle } from "@vvedantb/ui";
 import { IconPlayerPlay } from "@tabler/icons-react";
 import { useRepo } from "@/lib/contexts/RepoContext";
 import { entityPathSegment } from "@/lib/numId";
@@ -21,6 +17,7 @@ import {
   useQuickTaskTodoDrafts,
 } from "@/routes/_repo/$owner/$repo/quick-tasks/_utils";
 import { QuickTaskDraftRow } from "./QuickTaskDraftRow";
+import { useQuickTaskBoardActions } from "./useQuickTaskBoardActions";
 import type { DisplayTaskStatus } from "@/lib/components/tasks/TaskStatusBadge";
 
 type Task = FunctionReturnType<typeof api.agentTasks.getAllTasks>[number];
@@ -46,40 +43,26 @@ export function QuickTasksKanbanBoard({
   archived = false,
 }: QuickTasksKanbanBoardProps) {
   const { repoId, basePath } = useRepo();
-  const currentUserId = useQuery(api.auth.me);
   const groupedCodebases = useQuery(api.githubRepos.listGroupedByCodebase);
   const users = useQuery(api.users.listAll);
   const projects = useQuery(api.projects.list, { repoId });
-  const updateStatus = useMutation(
-    api.agentTasks.updateStatus,
-  ).withOptimisticUpdate((localStore, args) => {
-    patchLoadedQuery(localStore, api.agentTasks.getAllTasks, { repoId }, (cur) =>
-      cur.map((task) =>
-        task._id === args.id
-          ? { ...task, status: args.status, updatedAt: Date.now() }
-          : task,
-      ),
-    );
-  });
-  const startExecution = useMutation(api.agentTasks.startExecution);
   const [{ statuses }] = useQuickTaskFilters();
   const liveTodoDrafts = useQuickTaskTodoDrafts(repoId);
   const todoDrafts = archived ? [] : liveTodoDrafts;
   const visibleStatuses = new Set<DisplayTaskStatus>(statuses);
-  const [isRunningAll, setIsRunningAll] = useState(false);
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-  const { request: requestConfirm } = useRequestConfirm();
 
   // Respect the sort order applied by QuickTasksClient (default: updatedAt).
   // Re-sorting here would override the user's chosen sort.
   const tasks = externalTasks;
-
-  const taskIds = tasks.map((t) => t._id);
-  const errorTaskIds = useQuery(api.agentTasks.getTaskIdsWithFailedRun, {
-    repoId,
-    taskIds,
-  });
-  const errorTaskIdSet = new Set(errorTaskIds ?? []);
+  const {
+    currentUserId,
+    errorTaskIdSet,
+    changeStatus,
+    showRunAll,
+    isRunningAll,
+    requestRunAll,
+    runAllDialog,
+  } = useQuickTaskBoardActions(tasks, archived);
 
   // Shift-click spans one column. `KanbanBoard` groups by status in `tasks`
   // order, so grouping the same way here reproduces each column's visible order.
@@ -98,33 +81,8 @@ export function QuickTasksKanbanBoard({
   }
 
   const handleStatusChange = async (id: string, status: TaskStatus) => {
-    // An archived task is read-only: a drag does not change it.
-    if (archived) return;
     const task = tasks.find((t) => t._id === id);
-    if (task) await updateStatus({ id: task._id, status });
-  };
-
-  const todoTasks = tasks.filter((t) => t.status === "todo");
-  const { owned: ownedTodoTasks, skippedCount } = runAllPlan(
-    tasks,
-    currentUserId,
-  );
-
-  const handleRunAll = async () => {
-    if (ownedTodoTasks.length === 0) return;
-    setIsRunningAll(true);
-    const failedCount = await startAll(ownedTodoTasks, (task) =>
-      startExecution({ id: task._id }),
-    );
-    if (failedCount > 0) {
-      console.error(
-        `Run All started ${ownedTodoTasks.length - failedCount} of ${ownedTodoTasks.length} tasks`,
-      );
-      toast.error(
-        `Could not start ${failedCount} of ${ownedTodoTasks.length} tasks.`,
-      );
-    }
-    setIsRunningAll(false);
+    if (task) await changeStatus(task._id, status);
   };
 
   return (
@@ -148,19 +106,11 @@ export function QuickTasksKanbanBoard({
             : []
         }
         columnExtra={(status) =>
-          status === "todo" && todoTasks.length > 0 && !archived ? (
+          status === "todo" && showRunAll ? (
             <Button
               size="sm"
               title={skipConfirmTitle("Run All")}
-              onClick={(event) =>
-                requestConfirm(
-                  () => setIsConfirmOpen(true),
-                  () => {
-                    void handleRunAll();
-                  },
-                  event,
-                )
-              }
+              onClick={requestRunAll}
               disabled={isRunningAll}
             >
               {isRunningAll ? (
@@ -254,14 +204,7 @@ export function QuickTasksKanbanBoard({
           />
         )}
       />
-      <RunAllDialog
-        isOpen={isConfirmOpen}
-        onOpenChange={setIsConfirmOpen}
-        ownedCount={ownedTodoTasks.length}
-        skippedCount={skippedCount}
-        onConfirm={handleRunAll}
-        isLoading={isRunningAll}
-      />
+      <RunAllDialog {...runAllDialog} />
     </>
   );
 }
