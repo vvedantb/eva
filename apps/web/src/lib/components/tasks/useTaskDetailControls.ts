@@ -199,21 +199,15 @@ export function useTaskSandboxControls({
   taskSession,
   hasRuns,
   routing,
-  setExecutionError,
 }: {
   taskId: Id<"agentTasks">;
   task: TaskDetailTask;
   taskSession: TaskSession;
   hasRuns: boolean;
   routing: UseTaskDetailRouting | undefined;
-  setExecutionError: (message: string | null) => void;
 }) {
   const startSessionSandbox = useMutation(api.sessions.startSandbox);
   const stopWorkSandbox = useMutation(api.sessions.stopWorkSandbox);
-  const runSessionDevServer = useMutation(api.sessions.runDevServer);
-  const runSessionBackgroundCommands = useMutation(
-    api.sessions.runBackgroundCommands,
-  );
   const { sandbox } = taskSession;
   // Every action targets the session; a running sandbox implies it exists,
   // so `ensure` only reads it there.
@@ -225,15 +219,9 @@ export function useTaskSandboxControls({
     };
   const startSandbox = onSession(startSessionSandbox);
   const stopSandbox = () => stopWorkSandbox({ target: { taskId } });
-  const runDevServerMutation = onSession(runSessionDevServer);
-  const runBackgroundCommandsMutation = onSession(runSessionBackgroundCommands);
 
   const [embeddedShowSandbox, setEmbeddedShowSandbox] = useState(false);
   const lifecycle = useSandboxLifecycle(sandbox.status);
-  const [isRunningDevServer, setIsRunningDevServer] = useState(false);
-  const [isRunningBackgroundCommands, setIsRunningBackgroundCommands] =
-    useState(false);
-  const [showRunDevServerConfirm, setShowRunDevServerConfirm] = useState(false);
 
   const flags = deriveSandboxFlags(task, sandbox, hasRuns);
   const sandboxStartupStreaming = useQuery(
@@ -272,36 +260,7 @@ export function useTaskSandboxControls({
       }
     });
 
-  const handleRunDevServer = async () => {
-    setIsRunningDevServer(true);
-    try {
-      await runDevServerMutation();
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to run dev server";
-      setExecutionError(message);
-    }
-    setIsRunningDevServer(false);
-  };
-
-  const handleRunBackgroundCommands = async () => {
-    setIsRunningBackgroundCommands(true);
-    try {
-      await runBackgroundCommandsMutation();
-    } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Failed to run background commands";
-      setExecutionError(message);
-    }
-    setIsRunningBackgroundCommands(false);
-  };
-
   return {
-    showRunDevServerConfirm,
-    setShowRunDevServerConfirm,
-
     canStartSandbox: flags.canStartSandbox,
     canViewSandbox: flags.canViewSandbox,
     showSandbox: resolveShowSandbox(routing, embeddedShowSandbox),
@@ -312,9 +271,5 @@ export function useTaskSandboxControls({
     handleStartSandbox,
     handleStopSandbox,
     handleSelectSurface: createSurfaceSelector(routing, setEmbeddedShowSandbox),
-    handleRunDevServer,
-    isRunningDevServer,
-    handleRunBackgroundCommands,
-    isRunningBackgroundCommands,
   };
 }
