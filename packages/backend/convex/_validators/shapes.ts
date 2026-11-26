@@ -315,6 +315,7 @@ export const experimentalFlagKeyValidator = v.union(
   v.literal("prWatch"),
   v.literal("draftReadiness"),
   v.literal("skillSuggestions"),
+  v.literal("workspaceTabs"),
 );
 
 /**
@@ -349,6 +350,7 @@ export const experimentalFlagsFields = {
   prWatch: v.optional(v.boolean()),
   draftReadiness: v.optional(v.boolean()),
   skillSuggestions: v.optional(v.boolean()),
+  workspaceTabs: v.optional(v.boolean()),
 };
 
 export const experimentalFlagsValidator = v.object(experimentalFlagsFields);
@@ -374,6 +376,7 @@ export const resolvedExperimentalFlagsValidator = v.object({
   prWatch: v.boolean(),
   draftReadiness: v.boolean(),
   skillSuggestions: v.boolean(),
+  workspaceTabs: v.boolean(),
 });
 
 /**

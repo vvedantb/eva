@@ -26,7 +26,7 @@ import type { SandboxPreviewApi } from "./useSandboxPreview";
 import type { PreviewMiniPlayerSource } from "./previewMiniPlayerStore";
 import type { AnnotationSubmit } from "./annotationSend";
 import {
-  isSimpleViewHiddenSandboxTab,
+  useIsHiddenSandboxTab,
   useSimpleView,
 } from "@/lib/hooks/useSimpleView";
 import { useUserEngaged } from "@/lib/hooks/useUserEngaged";
@@ -171,10 +171,8 @@ export function SandboxPaneSlots({
 }: SandboxPaneSlotsProps) {
   const simpleView = useSimpleView();
   const wake = { onStartSandbox, isSandboxStarting };
-  const resolvedTab =
-    simpleView && isSimpleViewHiddenSandboxTab(activeTab)
-      ? "preview"
-      : activeTab;
+  const isHiddenTab = useIsHiddenSandboxTab();
+  const resolvedTab = isHiddenTab(activeTab) ? "preview" : activeTab;
   const entityId = sandboxOwnerParentId(owner);
   // Idle pause: a VM tab in the foreground AND in use keeps the sandbox awake
   // (presence beacon, always on). With the setting fully on, the same tab

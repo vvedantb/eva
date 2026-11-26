@@ -47,7 +47,10 @@ import {
 import type { UseTaskDetailRouting } from "./useTaskDetailControls";
 import { useQuickTaskHeaderActionsSlot } from "@/lib/components/quick-tasks/QuickTaskHeaderActionsSlot";
 import { EntityNotFound } from "@/lib/components/EntityNotFound";
-import { useSimpleView } from "@/lib/hooks/useSimpleView";
+import {
+  useIsHiddenSandboxTab,
+  useSimpleView,
+} from "@/lib/hooks/useSimpleView";
 import { useRepo } from "@/lib/contexts/RepoContext";
 
 interface TaskDetailInlineProps {
@@ -77,6 +80,7 @@ export function TaskDetailInline({
   const { diffFile } = useDiffSearchParams();
   const quickTaskHeaderActionsSlot = useQuickTaskHeaderActionsSlot();
   const simpleView = useSimpleView();
+  const isHiddenTab = useIsHiddenSandboxTab();
   // Embedded (non quick-sandbox) tab: the URL's `?file=` / `?diffFile=` own
   // it, so a reload lands back on Files / Review. A tab the user picks
   // afterwards overrides that for this mount. A project task that has never
@@ -93,7 +97,7 @@ export function TaskDetailInline({
   );
   const urlSandboxTab: SandboxTab = simpleView
     ? "preview"
-    : fileViewerPath
+    : fileViewerPath && !isHiddenTab("files")
       ? "files"
       : diffFile
         ? "review"
@@ -158,7 +162,7 @@ export function TaskDetailInline({
   // Chat file chips → Files tab + `?file=` (same pattern as sessions).
   // Must stay above early returns so hooks order is stable.
   const openFile = (path: string) => {
-    if (simpleView) return;
+    if (isHiddenTab("files")) return;
     if (routing?.mode === "quick-sandbox") {
       routing.quick.onOpenFile(path);
       return;
