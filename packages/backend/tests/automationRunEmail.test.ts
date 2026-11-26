@@ -48,7 +48,7 @@ async function succeededRun(
     const optedOutId = await ctx.db.insert("users", {
       clerkId: "clerk|opted-out",
       email: "opted-out@example.com",
-      notificationPrefs: { email: "off" },
+      notificationPrefs: { email: false },
     });
     // Product updates on, but on another tenant's team.
     await ctx.db.insert("users", {

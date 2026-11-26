@@ -4,13 +4,13 @@ import { useQuery } from "convex/react";
 import { api } from "@eva/backend";
 import { Button, Spinner } from "@vvedantb/ui";
 import { IconArrowRight, IconMail } from "@tabler/icons-react";
-import { EmailPreferenceTabs } from "@/lib/components/notifications/EmailPreferenceTabs";
+import { EmailNotificationsSwitch } from "@/lib/components/notifications/EmailNotificationsSwitch";
 
 interface WelcomeSetupNotificationsStepProps {
   onOpenNotificationSettings: () => void;
 }
 
-/** The email choice (`users.notificationPrefs.email`), Instant until changed. */
+/** Notification email (`users.notificationPrefs.email`), on until turned off. */
 export function WelcomeSetupNotificationsStep({
   onOpenNotificationSettings,
 }: WelcomeSetupNotificationsStepProps) {
@@ -31,7 +31,7 @@ export function WelcomeSetupNotificationsStep({
           <IconMail size={14} className="text-primary" />
           <h3 className="text-sm font-medium">Email</h3>
         </div>
-        <EmailPreferenceTabs email={prefs.email} />
+        <EmailNotificationsSwitch email={prefs.email} />
       </div>
 
       <Button

@@ -16,9 +16,9 @@ import {
   useDesktopNotifications,
 } from "@/lib/components/notifications/desktopNotifications";
 import {
-  EmailPreferenceTabs,
+  EmailNotificationsSwitch,
   useSetNotificationPrefs,
-} from "@/lib/components/notifications/EmailPreferenceTabs";
+} from "@/lib/components/notifications/EmailNotificationsSwitch";
 
 /**
  * Email is stored per person (`users.notificationPrefs`); desktop pop-ups are
@@ -57,8 +57,8 @@ export function NotificationsSettingsClient() {
     <SettingsPage title="Notifications">
       <SettingsSection title="Email" bodyVariant="list">
         <SettingsToggleRow
-          title="Delivery"
-          action={<EmailPreferenceTabs email={prefs.email} />}
+          title="Notifications"
+          action={<EmailNotificationsSwitch email={prefs.email} />}
         />
         {/* The changelog broadcast: opt-in, apart from notification email. */}
         <SettingsToggleRow

@@ -1,6 +1,5 @@
 import { api } from "@eva/backend";
 import { EVA_THEME } from "@eva/shared/evaTheme";
-import { EMAIL_PREFERENCE_OPTIONS } from "@eva/shared/notificationRouting";
 import { useAuth, useUser } from "@clerk/expo";
 import { Button } from "@vvedantb/native-ui/button";
 import { PageHeader, ScreenContainer, SettingsSection, SettingsToggleRow } from "@vvedantb/native-ui/layout";
@@ -11,7 +10,6 @@ import { useState } from "react";
 import { View } from "react-native";
 import { clearAppBadge, getPushToken } from "@/push/push";
 import { AppearanceTiles } from "@/settings/AppearanceTiles";
-import { SegmentedTabs } from "@/ui/SegmentedTabs";
 import { TabScreen } from "@/ui/TabScreen";
 import { useScheme } from "@/ui/theme";
 
@@ -31,6 +29,8 @@ export default function SettingsScreen() {
   });
   const pushOn = prefs?.push ?? true;
   const togglePush = (push: boolean) => void setPrefs({ push });
+  const emailOn = prefs?.email ?? true;
+  const toggleEmail = (email: boolean) => void setPrefs({ email });
   const productUpdatesOn = prefs?.productUpdates ?? false;
   const toggleProductUpdates = (productUpdates: boolean) => void setPrefs({ productUpdates });
   const [confirmSignOut, setConfirmSignOut] = useState(false);
@@ -54,17 +54,27 @@ export default function SettingsScreen() {
           <SettingsSection title="Appearance" description="Choose light, neutral, dark, or system.">
             <AppearanceTiles />
           </SettingsSection>
-          <SettingsSection title="Email">
-            <SegmentedTabs
-              value={prefs?.email ?? "instant"}
-              options={EMAIL_PREFERENCE_OPTIONS}
-              onChange={(email) => void setPrefs({ email })}
+          <SettingsSection title="Email" bodyVariant="list">
+            {/* Urgent ones at once, the rest in the daily digest (as the web). */}
+            <SettingsToggleRow
+              title="Notifications"
+              checked={emailOn}
+              disabled={prefs === undefined}
+              onCheckedChange={toggleEmail}
+              action={
+                <Switch
+                  size="md"
+                  checked={emailOn}
+                  disabled={prefs === undefined}
+                  onCheckedChange={toggleEmail}
+                  offColor={EVA_THEME[scheme].muted}
+                  thumbStyle={{ backgroundColor: emailOn ? EVA_THEME[scheme].primaryForeground : tokens.color.white }}
+                />
+              }
             />
-          </SettingsSection>
-          <SettingsSection title="Product updates" bodyVariant="list">
             {/* The changelog broadcast: opt-in, apart from notification email (as the web). */}
             <SettingsToggleRow
-              title="Email"
+              title="Product updates"
               checked={productUpdatesOn}
               disabled={prefs === undefined}
               onCheckedChange={toggleProductUpdates}

@@ -212,7 +212,7 @@ async function scheduleInstantEmail(
   delayMs: number,
 ): Promise<void> {
   const user = await ctx.db.get(userId);
-  if (resolveNotificationPrefs(user?.notificationPrefs).email !== "instant") {
+  if (!resolveNotificationPrefs(user?.notificationPrefs).email) {
     return;
   }
   await ctx.scheduler.runAfter(
@@ -593,7 +593,7 @@ export const getDigestRecipients = internalQuery({
     for (const user of users) {
       if (!user.email) continue;
       const { email } = resolveNotificationPrefs(user.notificationPrefs);
-      if (email === "off") continue;
+      if (!email) continue;
       const unread = await ctx.db
         .query("notifications")
         .withIndex("by_user_and_read", (q) =>

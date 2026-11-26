@@ -82,7 +82,7 @@ type EmailRecipient = { userId: Id<"users">; email: string; name?: string };
  */
 function toEmailRecipient(user: Doc<"users"> | null): EmailRecipient | null {
   if (!user?.email) return null;
-  if (resolveNotificationPrefs(user.notificationPrefs).email === "off") {
+  if (!resolveNotificationPrefs(user.notificationPrefs).email) {
     return null;
   }
   return {

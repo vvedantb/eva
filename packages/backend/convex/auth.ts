@@ -2,7 +2,6 @@ import { mutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import {
   themeValidator,
-  emailPreferenceValidator,
   roleUserValidator,
   customThemeValidator,
   userFields,
@@ -201,7 +200,7 @@ export const setTheme = authMutation({
 export const getNotificationPrefs = authQuery({
   args: {},
   returns: v.object({
-    email: emailPreferenceValidator,
+    email: v.boolean(),
     push: v.boolean(),
     productUpdates: v.boolean(),
   }),
@@ -214,7 +213,7 @@ export const getNotificationPrefs = authQuery({
 /** Sets the given notification choices; a missing key keeps its value. */
 export const setNotificationPrefs = authMutation({
   args: {
-    email: v.optional(emailPreferenceValidator),
+    email: v.optional(v.boolean()),
     push: v.optional(v.boolean()),
     productUpdates: v.optional(v.boolean()),
   },

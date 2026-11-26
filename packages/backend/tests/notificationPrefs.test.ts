@@ -9,8 +9,8 @@ import { modules } from "./_helpers/convexModules";
 
 /**
  * The email and push choices (plan `notifications-v2-5.md`, part D): unset
- * email is instant, "digest" holds instant types for the digest, "off" sends
- * nothing, push off never pushes, and the migration maps the old opt-in.
+ * email is on (urgent at once, the rest in the digest), off sends nothing,
+ * push off never pushes, and the migration maps the old opt-in.
  */
 
 const TIMEOUT_MS = 30_000;
@@ -78,23 +78,9 @@ describe("notification preferences", () => {
   );
 
   test(
-    "digest: no instant email, everything waits for the digest",
-    async () => {
-      const f = await fixture({ email: "digest" });
-      expect(await f.instantEmails()).toBe(0);
-      expect(await f.instantSweep()).toBeNull();
-      expect((await f.digestTitles()).toSorted()).toEqual([
-        "Assigned to you",
-        "Task done",
-      ]);
-    },
-    TIMEOUT_MS,
-  );
-
-  test(
     "off: no instant email and no digest",
     async () => {
-      const f = await fixture({ email: "off" });
+      const f = await fixture({ email: false });
       expect(await f.instantEmails()).toBe(0);
       expect(await f.instantSweep()).toBeNull();
       expect(await f.digestTitles()).toEqual([]);
@@ -136,11 +122,11 @@ describe("migrateNotificationPrefs", () => {
           return ctx.db.get(id);
         };
         const cases: Array<[Doc<"users"> | null, Prefs]> = [
-          [await user(true), { email: "instant", productUpdates: true }],
-          [await user(false), { email: "off" }],
+          [await user(true), { email: true, productUpdates: true }],
+          [await user(false), { email: false }],
           [await user(undefined), undefined],
           // A choice made since the deploy wins.
-          [await user(false, { email: "digest" }), { email: "digest" }],
+          [await user(false, { email: true }), { email: true }],
         ];
         for (const [migrated, expected] of cases) {
           expect(migrated?.notificationPrefs).toEqual(expected);
