@@ -507,11 +507,11 @@ export async function closeTurnForWorkflow(
 }
 
 /**
- * The fence check every one-shot agent completion runs first. False: the
- * completion holds no current lease, so the caller drops it. True: the caller
- * handles it; the turn is closed here, since
- * the agent's work is over once it reports (the workflow's own steps after
- * that are covered by the `TURN_BACKSTOP_MS` backstop, as before).
+ * The fence check every one-shot agent completion runs first. Null: the
+ * completion holds no current lease, so the caller drops it. A turn: the
+ * caller handles it; the turn is closed here, since the agent's work is over
+ * once it reports (the workflow's own steps after that are covered by the
+ * `TURN_BACKSTOP_MS` backstop).
  */
 export async function settleAgentTurnCompletion(
   ctx: MutationCtx,
@@ -522,15 +522,15 @@ export async function settleAgentTurnCompletion(
     success: boolean;
     error: string | null;
   },
-): Promise<boolean> {
+): Promise<Doc<"turns"> | null> {
   // Every one-shot agent launches under a turn and always sends its lease.
   const resolution = await resolveCompletionTurn(ctx, params);
-  if (resolution.status !== "current") return false;
+  if (resolution.status !== "current") return null;
   await closeTurn(
     ctx,
     resolution.turn,
     params.success ? "done" : "error",
     params.success ? {} : { error: params.error ?? "Agent failed" },
   );
-  return true;
+  return resolution.turn;
 }

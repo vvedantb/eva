@@ -111,7 +111,7 @@ describe("appendTurnCheckpoint", () => {
   test("skips entity kinds with no persistence path", () => {
     // Nothing downstream of these reads the shas, so they are left off the
     // payload rather than written and ignored.
-    for (const entityIdField of ["docId", "reportId", "automationRunId"]) {
+    for (const entityIdField of ["entityId"]) {
       workspace.entityIdField = entityIdField;
       mockConfig();
       commit("start " + entityIdField);

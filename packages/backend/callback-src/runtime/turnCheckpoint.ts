@@ -54,8 +54,8 @@ export function resetTurnCheckpoint(): void {
  *
  * Chat turns only (`chatId`): session, quick-task and project chats persist
  * the shas onto the assistant message, task runs included (a task run is a
- * chat turn). Every other entity kind (`docId`, `reportId`,
- * `automationRunId`) is excluded — untested here, and some never run on an
+ * chat turn). Every other entity kind (the one-shot agents, which launch
+ * with `entityId`) is excluded — untested here, and some never run on an
  * `eva/` branch at all. Every completion receiver spreads
  * `turnCheckpointArgs`, so another surface would be accepted but would drop
  * the shas; it should only stamp once its persistence path is in place.

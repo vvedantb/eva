@@ -19,11 +19,7 @@ import {
   type ChatSurfaceAdapter,
   type ChatAlert,
 } from "./_chat/surfaceAdapters";
-import {
-  tearDownStaleDocWorkflow,
-  tearDownStaleEvaluationWorkflow,
-} from "./workflowWatchdog";
-import { tearDownStaleAutomationRun } from "./_automations/runs";
+import { tearDownStaleAgentJob } from "./_agentJobs/slot";
 import { clearStreamingActivity } from "./_taskWorkflow/helpers";
 import { touchStreamingEntity, upsertStreamingActivity } from "./streaming";
 import {
@@ -461,9 +457,8 @@ async function finalizeExpiredChatTurn<TId extends ChatEntityId, TEntity>(
 }
 
 /**
- * Finalises one expired agent turn (a quick-task run or a one-shot agent)
- * through that agent's own stall teardown: the run's `cleanUpStaleRun`, or the
- * teardown the `TURN_BACKSTOP_MS` backstop uses for the others.
+ * Finalises one expired one-shot agent turn through the same teardown the
+ * `TURN_BACKSTOP_MS` backstop uses (`tearDownStaleAgentJob`).
  */
 async function finalizeExpiredAgentTurn(
   ctx: MutationCtx,
@@ -480,29 +475,8 @@ async function finalizeExpiredAgentTurn(
   console.log(
     `[watchdog][lease-reconcile] agent=${owner.kind} id=${owner.id} turnId=${turn._id} cause=${cause}`,
   );
-  const workflowId = turn.workflowId;
-  switch (owner.kind) {
-    case "automation":
-      if (workflowId !== undefined) {
-        await tearDownStaleAutomationRun(
-          ctx,
-          owner.id,
-          workflowId,
-          { sandboxId: turn.sandboxId, repoId: turn.repoId },
-          error,
-        );
-      }
-      break;
-    case "doc":
-      if (workflowId !== undefined) {
-        await tearDownStaleDocWorkflow(ctx, owner.id, workflowId);
-      }
-      break;
-    case "evaluation":
-      if (workflowId !== undefined) {
-        await tearDownStaleEvaluationWorkflow(ctx, owner.id, workflowId);
-      }
-      break;
+  if (turn.workflowId !== undefined) {
+    await tearDownStaleAgentJob(ctx, owner, turn.workflowId, error);
   }
   await clearStreamingActivity(ctx, turn.streamingEntityId);
   await closeTurn(ctx, turn, "error", { error });
