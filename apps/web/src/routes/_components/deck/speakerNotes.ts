@@ -25,8 +25,7 @@ So by the end of the summer, a session was a proper place to work.`,
   "05-simple-mode": `So for non-engineers, the answer was to take machinery away, not add more explanation.
 Simple Mode's just a setting, not a separate product, and it hides the files, consoles, settings and meters, so you're left with the conversation.
 The picker on the right is the real component we ship.
-→ The long model list became one five-step slider: cheaper, faster models on the left, the strongest on the right, and nothing else to configure.
-Simple Mode landed on 14 August, and the slider replaced the list on 24 August.`,
+→ The long model list became one five-step slider: cheaper, faster models on the left, the strongest on the right, and nothing else to configure.`,
 
   "friday-b24-abstracted": `In Simple Mode, the only things that matter are what you ask for and what you get back. Everything in between is Eva's job.
 → Step 1: the machinery is tucked away. Which model to use, how hard it should think, its thinking, how much it can hold in memory at once, which connected tools it can reach, and which skills to load: all of it goes inside Eva.
@@ -397,7 +396,6 @@ Bee's still in progress, but what do we think — would you use Bee?
   // ---------------------------------------------------------------------------
   "a01-title": `So this is my annual CDM review.
 Most of it's Eva, which I've been building since January, plus CarePulse and four side projects: vmem, flowtape, Redline and Bee.
-Everything in here comes from the code history or Eva's own records, so you can check any of it.
 And at the end I'll map it all back to the senior engineer framework.
 So let's start with Eva, cos it's the biggest bit.`,
 
@@ -451,7 +449,7 @@ So all the tooling was in service of this work, not instead of it.`,
 
   "a09-design": `So the biggest change of the year was swapping the engine every workspace runs on, and I designed it on paper first.
 Ripping it out in one go would've left everyone stuck mid-job if it went wrong.
-→ So it went in six phases, all in July: a spike, then a neutral contract with nothing using it yet, then the old provider behind it, then the new one, the switch-over on 25 July, and the old code deleted on 29 July.
+→ So it went in six phases over July: a spike, a neutral contract, the old provider behind it, the new one, the switch-over, then the old code deleted, with nobody stuck mid-job.
 → And this is the number the spike was written to test: a 6GB workspace restores in about a third of a second, where before it took minutes.
 It was an explicit go or no-go, and the answer was go.
 → And the options I didn't take are kept too: seven shelved plans still written up, and two rejected animation options with the measurement that ruled them out, one 11% worse and one doing five times more painting.
@@ -459,12 +457,12 @@ I also wrote down at the time that the terminal, desktop and named volumes were 
 But design cuts down faults, it doesn't remove them, so here's what I do when something breaks.`,
 
   "a10-debugging": `So three real production faults, and the same rule each time: symptom, actual cause, then a test so it can't quietly come back.
-10 September: you signed out, and you were still signed in.
+First: you signed out, and you were still signed in.
 Two cookies with the same name, cos under the newer rules a partitioned and an unpartitioned one count as two, and the browser sent both, so the fix deletes the old one first.
-→ 2 September: a colleague's messages went unanswered for two hours.
+→ Then a colleague's messages went unanswered for two hours.
 That was three defects: a liveness check that matched its own wrapper, a kill that left a stuck process holding a file lock, and a launch racing its own ready marker.
 So three defects, three tests, each with its own name.
-→ 24 August: a three-minute wait, even though the workspace itself resumed in eight seconds.
+→ Then a three-minute wait, even though the workspace itself resumed in eight seconds.
 It was a warm-up on a stale model setting holding the launch lock, so now anything waiting just waits, re-checks and restarts.
 → And nobody reported this last one: 65 restarts against 146 launches in 24 hours, which I found by searching live traffic.
 And that same habit turned up a bigger problem in the database.`,
@@ -626,8 +624,7 @@ And the system includes the packages we depend on.`,
 
   "annual-g10-repos": `So Eva isn't just used to build Eva.
 → Every codebase we work on is set up in it: Eva itself, CarePulse v3, CarePulse v2, eProcurement, and the cost model.
-So anyone can open a session or a quick task on any of them, and the setup's already done.
-I checked that list on 22 November.`,
+So anyone can open a session or a quick task on any of them, and the setup's already done.`,
 
   "annual-g11-configurable": `So unlike Amp or Cursor, Eva's audience isn't only developers, so it had to be simple by default and configurable for the people who want more.
 → First, what's done for you: one checkbox to record proof, audits in the background, pull requests that open themselves and keep their status up to date, and titles, tags and PR descriptions written for you.
@@ -657,24 +654,22 @@ Identifying work: critical warnings from 2 to 0 and high from 48 to 2, and next,
 Collaboration: demoing Eva at every dev stand-up for the first two quarters, daily summaries and a weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, Zuza's idea too.
 Buy-in for Vercel Sandbox for Eva and Claude usage for Bee, and setting everyone up on Eva and answering their quick task, session and MCP questions.`,
 
-  "annual-b01-day-one": `So this is day one, 11 January.
-→ These are the first three commits: the first one, the projects and tasks schema, then the queries behind it.
-First commit at 16:36, schema at 20:15 the same evening.
-The hashes are up there so you can check them.
-→ And the point is that foundation still holds.
-That same schema, extended loads of times since, still stores every session, quick task and project, and nothing since has made me unpick it.`,
+  "annual-b01-day-one": `So the data model I set up on day one is still what Eva runs on.
+→ Projects, tasks and the queries behind them were all in on the first evening.
+→ And ten months later, nothing's made me unpick it: every session, quick task and project still sits on that same foundation, just extended.
+So getting that right early is a big part of why we could move this fast later.`,
 
   "annual-b02-first-week": `So the whole product rests on two ideas, and both turned up in the first four days.
-→ Quick tasks landed on 12 January, one day after the first commit.
-→ Then sessions on 14 January.
+→ Quick tasks first.
+→ Then sessions, a couple of days later.
 Projects and automations came later, but they're built out of quick tasks and sessions, not alongside them.
 So we've never needed a third idea, and everything since has built on these two.`,
 
   "annual-b05-q2": `So chapter two was the quietest quarter, but not a slow one.
 It's when Eva stopped being single-player.
-→ Documents on 10 June: comments on a passage, suggested edits and version history, all three the same day.
-→ Then on 17 June, the projects roadmap, so a sequence of work becomes one thing you can see.
-→ And the same day, Testing Arena opened up to everyone, so trying out a change stopped being a developer-only thing.
+→ Documents got comments, suggested edits and version history, so people could work on the same thing together.
+→ Then the projects roadmap, so a sequence of work becomes one thing you can see.
+→ And Testing Arena opened up to everyone, so trying out a change stopped being a developer-only thing.
 So the call that quarter was making what existed solid and shared, rather than piling on new things.`,
 
   "annual-b06-q3": `So chapter three, July to September, was dependability: the same product, made safe to rely on.
@@ -690,7 +685,7 @@ In August I audited everything, and ownership was checked unevenly across codeba
 → So the checks moved into shared helpers, one guard on every door, and any new screen gets it for free.
 → And production dependency warnings went from 2 critical and 48 high down to 0 critical and 2 high.
 I hardened sign-in too, like explicit consent and tying refresh tokens to the app they were issued to.
-→ Then on 19 August I checked it all against real production data, not just tests.
+→ Then I checked it all against real production data, not just tests.
 And all of this rests on measuring things, which is the skill I've built most this year outside programming.`,
 
   "annual-d02-design-system": `So without a shared component set, every new screen turns into a fresh argument about how things should look.
@@ -719,8 +714,8 @@ And at this size, what you stop matters as much as what you build.`,
 
   "annual-d06-abandoned": `So deciding not to do something is design work too, but it only counts if it's written down.
 Moving the background workers to another host got dropped cos the new architecture just removed the problem, which is the cheapest kind of cancellation.
-→ The new framework I formally assessed on 17 July, and the verdict's written down word for word: do not adopt.
-→ And this is the honest one: unifying design sessions was cancelled on 29 July and replaced by a mode that was itself removed on 23 August.
+→ The new framework I formally assessed, and the verdict's written down word for word: do not adopt.
+→ And this is the honest one: unifying design sessions was cancelled, replaced by a mode, and then that mode got removed a month later.
 So that's the same question answered, reversed, and reversed again, and owning that is what makes the other two believable.
 → All seven cancelled plans are kept in full, so nobody has to re-argue them from memory.`,
 
@@ -745,7 +740,6 @@ The debugging slide chased the symptom case by case, and this fixes the cause on
 → So here the same turn gets interrupted at the same point, and this time it survives and finishes.
 Every turn now saves its place as it goes, instead of living in one process's memory.
 And it's fenced, so an old turn can't come back and write over the one that replaced it.
-That went in on 19 August, and the remaining gaps were closed on 23 August.
 → So interrupted doesn't mean lost any more.
 But things still go wrong sometimes, so the question is what you see when they do.`,
 
@@ -765,7 +759,6 @@ Each provider keeps its own private transcript, so before this, switching halfwa
 → Now the whole conversation moves across word for word, here from Claude to Cursor, with a handed-over badge.
 Every reply's stamped with the model that wrote it, and on a switch only the turns the new provider hasn't seen get passed across, capped in size and clearly marked.
 And the badge keeps the transcript honest about who wrote what.
-That landed on 24 August.
 Now, provider capacity's paid for per person, so the next question is whether you can share it.`,
 
   "annual-c04-accounts": `So the answer's yes, in two steps.
@@ -773,7 +766,6 @@ Now, provider capacity's paid for per person, so the next question is whether yo
 → Then an owner can share their account with the team, so capacity's pooled, not bought twice.
 Sharing's a deliberate choice by the owner, so a new session won't quietly start using a teammate's account.
 And if you switch account mid-conversation, you keep the conversation, and the next reply's charged to the right place.
-Own accounts landed on 17 July, and sharing on 7 August.
 Now, people aren't the only ones who use Eva.`,
 
   "annual-c05-mcp": `So other tools and agents can drive Eva too, through MCP.
@@ -804,7 +796,7 @@ So that's what was built, and now I'll show you how the decisions were made, sta
 The obvious move would've been a bigger database, but the system was arguing with itself.
 → Three days of live traffic showed almost all the load was writes colliding, not expensive reads, and these bars are the OCC retries.
 → The cause: two parts of the system writing the same row at the same moment, so each made the other retry.
-→ So the fix comes down to two figures, both landed on 24 August.
+→ So the fix comes down to two figures.
 Lease renewals went from about 6.7 writes a second while streaming to roughly one a minute, cos they now only write when something changes or less than half the lease is left.
 And live cursor writes went from 20 a second to at most 6.7, cos they're throttled and ignore movement too small to see.
 And under a lot of the "it's stuck" reports there was one more structural fault.`,
