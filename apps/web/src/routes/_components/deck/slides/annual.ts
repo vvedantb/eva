@@ -48,7 +48,6 @@ import { AnnualUsers } from "./annual/a14-users";
 import { AnnualAhead } from "./annual/a08-ahead";
 import { AnnualFramework } from "./annual/a15-framework";
 import { Slide15Closing } from "./15-closing";
-import { AnnualDayOne } from "./annual/b01-day-one";
 import { AnnualFirstWeek } from "./annual/b02-first-week";
 import { AnnualQ2 } from "./annual/b05-q2";
 import { AnnualQ3 } from "./annual/b06-q3";
@@ -62,7 +61,6 @@ import { AnnualOcc } from "./annual/c08-occ";
 import { AnnualSecurity } from "./annual/d01-security";
 import { AnnualDesignSystem } from "./annual/d02-design-system";
 import { AnnualFrontendPerf } from "./annual/d04-frontend-perf";
-import { AnnualScale } from "./annual/d05-scale";
 import { AnnualAbandoned } from "./annual/d06-abandoned";
 import { AnnualLessons } from "./annual/d07-lessons";
 import { AnnualDurable } from "./annual/d08-durable";
@@ -89,12 +87,6 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     title: "Eva",
     Component: SectionEva,
     steps: 0,
-  },
-  {
-    id: "annual-b01-day-one",
-    title: "Day one",
-    Component: AnnualDayOne,
-    steps: 2,
   },
   {
     id: "annual-b02-first-week",
@@ -263,12 +255,6 @@ export const ANNUAL_SLIDES: DeckSlide[] = [
     id: "a12-quality",
     title: "The bar is enforced",
     Component: AnnualQuality,
-    steps: 2,
-  },
-  {
-    id: "annual-d05-scale",
-    title: "A product, not a prototype",
-    Component: AnnualScale,
     steps: 2,
   },
   {

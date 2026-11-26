@@ -207,7 +207,8 @@ Look at this first card: before, a dead agent would sit there showing Working fo
 → Now a watchdog closes the turn within minutes and keeps whatever was already written.
 → If a turn stalls before it's written anything, it tries once more on its own before anyone's told.
 → And if you hit your usage limit, the chat says so, says when it resets, and lets you switch to a teammate's shared account in one click.
-That came to sessions first, then quick tasks and projects.
+Under all of it, a turn's lifecycle is a state machine, so it can't end up in an invalid state, which is exactly what kept happening before the Q3 clean-up.
+So the work went into making errors preventable, and when you do hit one, you can carry on.
 So reliability's one kind of trust, and the other is who can see what.`,
 
   "friday-b14-mobile": `Work gets raised when you think of it, which is usually not at a desk.
@@ -480,8 +481,7 @@ These are from the repo in mid-September: 303 test files, 79 contract tests, 46 
 The contract tests matter most, cos they fail when two parts of the system drift apart, and one of them checks that the three chat surfaces stay the same.
 The custom rules only exist where an off-the-shelf rule couldn't say what I wanted, like no unchecked JSON parsing and no double casts.
 → And the written rules: unsafe type shortcuts and certain React patterns are banned, data's checked at the edge, and every change needs a type check and release notes.
-→ So a test that's permanently red is a broken test, cos once people stop reading the results, the tests protect nothing.
-And enforcement matters cos of the size of what it now protects.`,
+→ So a test that's permanently red is a broken test, cos once people stop reading the results, the tests protect nothing.`,
 
   "a13-people": `So every incident here was found by a colleague, not by a test, and each one changed how I work.
 In August a colleague's session sat on Working for two hours with their messages unanswered.
@@ -654,30 +654,24 @@ Identifying work: critical warnings from 2 to 0 and high from 48 to 2, and next,
 Collaboration: demoing Eva at every dev stand-up for the first two quarters, daily summaries and a weekly changelog for non-engineers, and plans logged in Eva with specs saved in the codebase, Zuza's idea too.
 Buy-in for Vercel Sandbox for Eva and Claude usage for Bee, and setting everyone up on Eva and answering their quick task, session and MCP questions.`,
 
-  "annual-b01-day-one": `So the data model I set up on day one is still what Eva runs on.
-→ Projects, tasks and the queries behind them were all in on the first evening.
-→ And ten months later, nothing's made me unpick it: every session, quick task and project still sits on that same foundation, just extended.
-So getting that right early is a big part of why we could move this fast later.`,
-
   "annual-b02-first-week": `So the whole product rests on two ideas, and both turned up in the first four days.
 → Quick tasks first.
 → Then sessions, a couple of days later.
 Projects and automations came later, but they're built out of quick tasks and sessions, not alongside them.
 So we've never needed a third idea, and everything since has built on these two.`,
 
-  "annual-b05-q2": `So chapter two was the quietest quarter, but not a slow one.
-It's when Eva stopped being single-player.
+  "annual-b05-q2": `So chapter two is where a lot of extra features got bolted on, to make Eva multi-player.
 → Documents got comments, suggested edits and version history, so people could work on the same thing together.
 → Then the projects roadmap, so a sequence of work becomes one thing you can see.
 → And Testing Arena opened up to everyone, so trying out a change stopped being a developer-only thing.
-So the call that quarter was making what existed solid and shared, rather than piling on new things.`,
+Some of that was bolted on fast, and chapter three is where that bill came due.`,
 
-  "annual-b06-q3": `So chapter three, July to September, was dependability: the same product, made safe to rely on.
+  "annual-b06-q3": `So chapter three, July to September, was the clean-up: finding the slop that had piled up and making the product dependable.
 → July was almost all the sandbox cutover.
 That's the cloud move from the start, every job in its own workspace, and we swapped the engine under all of them, which I'll take apart phase by phase later.
 → August: durable turns, so a long run survives an interruption instead of stalling, plus security work and the design system the interface now sits on.
 → And September: multi-repo sessions, and decision models for classifying work at scale.
-So none of it adds a new thing to do, it just makes the existing things safe to depend on.`,
+So a lot of this quarter was identifying slop and clearing it, not adding new things.`,
 
   "annual-d01-security": `So signing in was never the problem; knowing whose data you were seeing once you were in was.
 The earlier security slide built a new interface locked down, and this one's hardening the old ones.
@@ -704,13 +698,6 @@ But a house style only lasts if a machine enforces it.`,
 Cos a checker nobody reads is a checker that isn't running.
 There were smaller savings too, like 489 kB of icons, but these are the three that count.
 So speed's one kind of polish, and looking the same everywhere is another.`,
-
-  "annual-d05-scale": `So this is the size of what exists now, measured in September.
-2,936 tracked files, 976 backend functions, 363 screens, 71 data tables and 9,854 lines of release notes.
-The release notes matter cos they were written at the time, so every other figure here can be checked.
-→ And under that, 2,151 TypeScript files, and 18,197 lines in the shared component library alone.
-→ So ten months in, it's still one codebase, and one person directing the work.
-And at this size, what you stop matters as much as what you build.`,
 
   "annual-d06-abandoned": `So deciding not to do something is design work too, but it only counts if it's written down.
 Moving the background workers to another host got dropped cos the new architecture just removed the problem, which is the cheapest kind of cancellation.
@@ -756,6 +743,7 @@ But having a choice is only worth it if you can change your mind halfway through
 
   "annual-c03-handoff": `So switching provider's only useful if you don't have to start again.
 Each provider keeps its own private transcript, so before this, switching halfway through meant the new one started blind.
+We hit this for real: we wanted to move a job from Claude to Cursor models halfway through.
 → Now the whole conversation moves across word for word, here from Claude to Cursor, with a handed-over badge.
 Every reply's stamped with the model that wrote it, and on a switch only the turns the new provider hasn't seen get passed across, capped in size and clearly marked.
 And the badge keeps the transcript honest about who wrote what.
@@ -764,6 +752,7 @@ Now, provider capacity's paid for per person, so the next question is whether yo
   "annual-c04-accounts": `So the answer's yes, in two steps.
 → First, each colleague attaches their own provider account once, and their work spends their own allowance.
 → Then an owner can share their account with the team, so capacity's pooled, not bought twice.
+And it means the team's work doesn't drain my usage any more.
 Sharing's a deliberate choice by the owner, so a new session won't quietly start using a teammate's account.
 And if you switch account mid-conversation, you keep the conversation, and the next reply's charged to the right place.
 Now, people aren't the only ones who use Eva.`,
