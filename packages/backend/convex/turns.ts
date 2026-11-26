@@ -167,7 +167,6 @@ export const listSessionChatStatuses = authQuery({
     const turns = await listOpenSessionTurns(ctx, args.sessionId);
     const statuses = [];
     for (const turn of turns) {
-      if (turn.lane !== undefined) continue;
       const chatId = ctx.db.normalizeId("sessionChats", turn.entityId);
       if (!chatId) continue;
       statuses.push({ chatId, turnId: turn._id, state: turn.state });

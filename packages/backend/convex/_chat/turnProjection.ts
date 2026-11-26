@@ -74,16 +74,15 @@ async function awaitingAnswerIdsOf(
   );
 }
 
-/** Open chat turns in one repo. A legacy lane turn (summary, interview) is not a chat turn. */
+/** Open chat turns in one repo. */
 async function openChatTurnsForRepo(
   db: DatabaseReader,
   repoId: Id<"githubRepos">,
 ): Promise<Doc<"turns">[]> {
-  const turns = await db
+  return await db
     .query("turns")
     .withIndex("by_repo_open", (q) => q.eq("repoId", repoId).eq("open", true))
     .collect();
-  return turns.filter((turn) => turn.lane === undefined);
 }
 
 /**
@@ -158,7 +157,7 @@ export async function hasOpenChatTurn(
   const turn = await db
     .query("turns")
     .withIndex("by_entity_open", (q) =>
-      q.eq("entityId", turnEntityId).eq("lane", undefined).eq("open", true),
+      q.eq("entityId", turnEntityId).eq("open", true),
     )
     .first();
   return turn !== null;

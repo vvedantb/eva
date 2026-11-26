@@ -357,8 +357,8 @@ export async function syncOwnerPrSummary(
   if (
     doc === null ||
     // Never synced (`prCount` unset) and no rows yet: a pre-`pullRequests`
-    // owner whose summary still holds its only PR record until
-    // `backfillPullRequests` runs. Clearing it would drop that link.
+    // owner whose summary holds its only PR record. Clearing it would drop
+    // that link.
     (rows.length + linked.length === 0 && doc.prCount === undefined) ||
     (doc.prUrl === summary.prUrl &&
       doc.prState === summary.prState &&

@@ -41,4 +41,4 @@ The sandbox Review pane has a Pull requests tab (`…/review/prs`) on all three 
 
 ## Migration
 
-`npx convex run dataMigrations:backfillPullRequests` moves the old fields (`sessions.prUrl`, `sessionRepos.prUrl`, `projects.prUrl`, `agentRuns.prUrl`) into rows and asks GitHub for each PR's real state. Run it once per deployment, straight after the deploy. The deprecated source fields (`sessions.prStateOnArchive`, `sessionRepos.prUrl/prState`, `agentRuns.prUrl`) are cleared as rows move; dropping them from the schema is a follow-up once the backfill has run everywhere.
+`backfillPullRequests` moved the old PR fields into rows. It has run in prod, so it and the old fields (`sessions.prStateOnArchive`, `sessionRepos.prUrl/prState`) are gone.

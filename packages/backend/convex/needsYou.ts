@@ -415,7 +415,7 @@ async function questionRows(
         q.eq("repoId", repo._id).eq("open", true),
       )
       .collect()
-  ).filter((turn) => turn.lane === undefined && turn.sessionId !== undefined);
+  ).filter((turn) => turn.sessionId !== undefined);
   const base = repoBasePath(repo);
   const perTurn = await Promise.all(
     turns.map(async (turn): Promise<NeedsYouRow | null> => {

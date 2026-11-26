@@ -17,7 +17,6 @@ import type { WorkflowId } from "@convex-dev/workflow";
 import { STALL_ALERT_TEXT } from "./stallRetry";
 import { agentJobOwner, type AgentJobOwner } from "../_agentJobs/owner";
 import { markAllRunningExited } from "../backgroundProcesses";
-import type { TurnLane } from "../validators";
 import {
   loadSessionChat,
   sessionChatStreamingEntityId,
@@ -235,18 +234,15 @@ export type TurnAdapterVisitor<R> = {
 };
 
 /**
- * Picks the adapter for a durable turn by its `entityId` table and lane, then
+ * Picks the adapter for a durable turn by its `entityId` table, then
  * hands it and the parsed id to the matching handler. Null when no turn owner
  * table holds the id.
  */
 export function turnAdapterForEntity<R>(
   db: DatabaseReader,
-  turn: { entityId: string; lane?: TurnLane },
+  turn: { entityId: string },
   visit: TurnAdapterVisitor<R>,
 ): R | null {
-  // A legacy lane turn (the retired summary and interview) has no owner now:
-  // the caller closes it.
-  if (turn.lane !== undefined) return null;
   const chatId = sessionChatAdapter.parseId(db, turn.entityId);
   if (chatId) return visit.chat(sessionChatAdapter, chatId);
   const owner = agentJobOwner(db, turn.entityId);

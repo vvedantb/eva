@@ -18,7 +18,6 @@ import {
   teamFields,
   projectFields,
   queuedMessageFields,
-  taskSandboxEventFields,
   taskActivityFields,
   taskCommentFields,
   taskReactionFields,
@@ -59,7 +58,6 @@ import {
   appTabFields,
   backgroundProcessFields,
   snapshotBuildFields,
-  sessionDaemonStateFields,
   sessionChatFields,
   turnFields,
   chatUiPanelFields,
@@ -206,10 +204,7 @@ const schema = defineSchema({
     .index("by_project_and_key", ["projectId", "key"])
     .index("by_project_and_sent", ["projectId", "sentAt"]),
   // taskDependencies table removed. schema-narrowing-ok: clearTaskDependencies
-  /** @deprecated Never written; rows deleted by clearLegacyFields. */
-  taskSandboxEvents: defineTable(taskSandboxEventFields).index("by_task", [
-    "taskId",
-  ]),
+  // taskSandboxEvents table removed. schema-narrowing-ok: clearLegacyFields
   taskActivity: defineTable(taskActivityFields).index("by_task", ["taskId"]),
   messages: defineTable(messageFields)
     .index("by_parent", ["parentId"])
@@ -268,14 +263,7 @@ const schema = defineSchema({
     .index("by_session", ["sessionId"])
     .index("by_session_and_number", ["sessionId", "number"])
     .index("by_repo", ["repoId"]),
-  /**
-   * @deprecated Legacy daemon-poll mirror. Chat daemons poll their
-   * `sessionChats` row directly; rows deleted by clearLegacyFields.
-   */
-  sessionDaemonStates: defineTable(sessionDaemonStateFields).index(
-    "by_session",
-    ["sessionId"],
-  ),
+  // sessionDaemonStates table removed. schema-narrowing-ok: clearLegacyFields
   // Extra repos cloned into a session's sandbox beside the primary (which stays
   // on `sessions.repoId`). One row per linked repo per session.
   sessionRepos: defineTable(sessionRepoFields)
@@ -288,7 +276,7 @@ const schema = defineSchema({
     .index("by_created_by", ["createdBy"])
     .index("by_team", ["teamId"]),
   turns: defineTable(turnFields)
-    .index("by_entity_open", ["entityId", "lane", "open"])
+    .index("by_entity_open", ["entityId", "open"])
     .index("by_session_open", ["sessionId", "open"])
     .index("by_repo_open", ["repoId", "open"])
     .index("by_open_lease", ["open", "leaseExpiresAt"])
