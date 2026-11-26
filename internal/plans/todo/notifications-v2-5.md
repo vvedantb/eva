@@ -1,7 +1,7 @@
 # v2.5 — Notifications for chats, threads and comments
 
 **Date:** 26 November 2026
-**Status:** C built (26 November 2026). A built (26 November 2026; mock `notifications-v2-5-threads-mock.html`). D built (26 November 2026). B TODO. Decisions settled 26 November 2026. Build order: C, A, B, D.
+**Status:** C built (26 November 2026). A built (26 November 2026; mock `notifications-v2-5-threads-mock.html`). B built (26 November 2026). D built (26 November 2026). Decisions settled 26 November 2026. Build order: C, A, B, D.
 **Why now:** v2 made project chats team chats (quiet comments, @mentions, reply threads). People now talk to each other in Eva, but the notification system was built for "Eva finished a turn" and task comments. Several paths are silent or inconsistent.
 
 ## Today (inventory, origin/main, 26 November 2026)
