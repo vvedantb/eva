@@ -90,7 +90,7 @@ export async function startTaskRunTurn(
     : undefined;
   const context = await ensureWorkSession(ctx, { kind: "task", task });
   let chat = context.mainChat;
-  // A project task runs on its project's model and account (decision 20).
+  // A project task runs on its project's model and account (`runSettings.ts`).
   const project =
     task.projectId !== undefined ? await ctx.db.get(task.projectId) : null;
   if (project && (await takesProjectSettings(ctx.db, task))) {

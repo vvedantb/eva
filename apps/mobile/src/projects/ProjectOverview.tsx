@@ -44,7 +44,8 @@ type User = FunctionReturnType<typeof api.users.listAll>[number];
  * full), then the web fields column (`ProjectFieldsPanel`): Properties,
  * Dates, Labels and Created. Status is the derived stage and reads only. Priority and Project Lead
  * open a bottom sheet each and write `projects.update`, as the web selects;
- * the model chip (hidden in simple view, as the web) writes the model and,
+ * the Tasks model chip (hidden in simple view, as the web) writes the model
+ * its child tasks run on (Eva runs on her chat's own model) and,
  * for the project's owner, its account. Field
  * rows are 48 high (web 40). An archived project reads only: no edits.
  * Not here from the web: the members, dates and labels pickers.
@@ -200,7 +201,11 @@ export function ProjectOverview({
           color={memberCount > 0 ? undefined : muted}
         />
         {simpleView ? null : (
-          <View className="min-h-12 flex-row items-center" pointerEvents={readOnly ? "none" : "auto"}>
+          // The tasks' model: Eva herself runs on the model in her chat's composer.
+          <View className="min-h-12 flex-row items-center gap-2" pointerEvents={readOnly ? "none" : "auto"}>
+            <Text className="text-sm" style={{ color: muted }}>
+              Tasks
+            </Text>
             <ModelChip
               repoId={project.repoId}
               model={model}

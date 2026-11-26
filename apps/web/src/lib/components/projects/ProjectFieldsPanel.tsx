@@ -206,7 +206,11 @@ export function ProjectFieldsPanel({
         </DropdownMenu>
 
         {simpleView ? null : (
-          <div className={FIELD_ROW_CLASS}>
+          // The tasks' model: Eva herself runs on the model in her chat's composer.
+          <div className={`${FIELD_ROW_CLASS} gap-2`}>
+            <span className={`shrink-0 text-muted-foreground ${FIELD_TEXT_CLASS}`}>
+              Tasks
+            </span>
             <ModelSelectWithTraits
               value={currentModel}
               options={modelOptions}

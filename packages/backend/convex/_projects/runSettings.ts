@@ -7,9 +7,10 @@ import {
 } from "../_sessions/owner";
 
 /**
- * Decision 20: a project's coordinator and every child task run on the
- * project's one model and account (`projects.model`,
- * `projects.providerAccountId`; none is the team credential). The rules here
+ * A project's child tasks run on the project's model and account
+ * (`projects.model`, `projects.providerAccountId`; none is the team
+ * credential). Eva, the coordinator, runs on her own chat's model instead
+ * (`coordinatorWakeDelivery.ts`). The rules here
  * are shared by a child task's runs (`startTaskRun`) and by every chat turn a
  * person starts in the child task's own session, so both paths pick and
  * unlock the same account.

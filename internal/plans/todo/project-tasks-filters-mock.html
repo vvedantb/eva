@@ -1,0 +1,142 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Project Tasks: filters and labels</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:13px/1.45 Inter,system-ui,sans-serif;background:#18191c;color:#e6e7e9;padding:20px;width:1240px}
+h1{font-size:18px;font-weight:600;margin-bottom:4px}
+.lead{color:#a7aab0;margin-bottom:18px;max-width:1060px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.step{background:#1f2023;border:1px solid #2c2d32;border-radius:14px;padding:14px}
+.sh{display:flex;gap:10px;align-items:flex-start;margin-bottom:10px}
+.num{width:24px;height:24px;border-radius:12px;background:#f0b35a;color:#1a1a1a;font-weight:700;display:grid;place-items:center;flex:none}
+.do{font-weight:600}.see{color:#a7aab0;font-size:12.5px;margin-top:2px}
+.ui{display:flex;height:390px;border-radius:10px;overflow:hidden;border:1px solid #2e2f34;background:#1c1d20;position:relative}
+.chat{width:190px;padding:10px;font-size:11px;color:#c9cbcf;display:flex;flex-direction:column;gap:7px;flex:none}
+.card{background:#2a2b30;border-radius:8px;padding:5px 7px;display:flex;gap:6px;align-items:center;font-size:10.5px}
+.card .s{margin-left:auto;color:#8b8f96;font-size:9.5px}
+.pane{flex:1;background:#242529;border-radius:10px;margin:6px;display:flex;flex-direction:column;min-width:0;position:relative}
+.ph{display:flex;align-items:center;gap:8px;padding:10px 12px 4px;font-weight:600;font-size:13px}
+.ph .sp{flex:1}.ic{color:#8b8f96;font-weight:400;font-size:13px;padding:0 3px;border-radius:5px;position:relative}
+.bar{height:3px;margin:6px 12px 4px;border-radius:2px;background:linear-gradient(90deg,#e0a800 0 30%,#7c7f86 30% 92%,#4a4c52 92%)}
+.cnt{color:#8b8f96;font-size:10.5px;padding:0 12px 6px}
+.chips{display:flex;gap:6px;align-items:center;padding:0 12px 8px;font-size:10.5px;color:#8b8f96;flex-wrap:wrap}
+.chip{background:#33343a;color:#e6e7e9;border-radius:99px;padding:1px 8px;display:flex;gap:5px;align-items:center}
+.chip .x{color:#8b8f96}
+.gh{background:#2a2b30;border-radius:6px;padding:3px 8px;margin:4px 8px 2px;color:#c9cbcf;font-size:11px}
+.gh span{color:#8b8f96;margin-left:3px}
+.r{display:flex;gap:8px;padding:5px 10px;margin:0 4px;font-size:11.5px;border-radius:7px}
+.r .d{width:10px;height:10px;border-radius:5px;border:1.5px solid #8b8f96;flex:none;margin-top:3px}
+.r .d.w{border-color:#e0a800}
+.r .t{font-weight:600}
+.r .f{color:#8b8f96;font-size:10.5px}
+.lab{color:#a7aab0}
+.menu{position:absolute;top:34px;right:34px;width:200px;background:#2a2b30;border:1px solid #3a3b41;border-radius:10px;padding:5px;font-size:11.5px;box-shadow:0 10px 30px #0009;z-index:4}
+.mi{display:flex;align-items:center;padding:5px 8px;border-radius:6px;gap:7px}
+.mi .c{margin-left:auto;color:#8b8f96;font-size:10.5px}
+.mi.on{background:#34353b}
+.sub{position:absolute;top:118px;right:238px;width:170px;background:#2a2b30;border:1px solid #3a3b41;border-radius:10px;padding:5px;font-size:11.5px;box-shadow:0 10px 30px #0009;z-index:5}
+.cb{width:12px;height:12px;border-radius:3px;border:1.5px solid #8b8f96;flex:none}
+.cb.on{background:#e6e7e9;border-color:#e6e7e9}
+.sep{height:1px;background:#3a3b41;margin:4px 2px}
+.hit{outline:2px solid #f0b35a;outline-offset:2px}
+.tag{position:absolute;background:#f0b35a;color:#1a1a1a;font-size:10px;font-weight:700;border-radius:5px;padding:1px 5px;white-space:nowrap;z-index:6}
+.gone{opacity:.3}
+.note{margin-top:10px;font-size:12px;color:#c9cbcf}
+.note b{color:#f0b35a;font-weight:600}
+.task{flex:1;padding:12px;display:flex;flex-direction:column;gap:8px;font-size:11.5px}
+.kv{display:flex;gap:10px;align-items:center}
+.kv .k{color:#8b8f96;width:60px}
+.pill{background:#33343a;border-radius:99px;padding:1px 8px;font-size:10.5px}
+.pill.add{background:none;border:1px dashed #4a4c52;color:#8b8f96}
+.key{display:flex;gap:18px;margin-top:20px;font-size:12px;color:#a7aab0;flex-wrap:wrap}
+.key b{color:#e6e7e9}
+</style></head><body>
+<h1>Project Tasks: filters and labels</h1>
+<p class="lead">Eva creates every task now, so the Tasks list grows fast. Labels say what a task is about (ui, checkout, copy); Eva adds them when she creates or groups a task, and you can change them. A filter menu narrows the list by Label, Repo, Phase or Added by. Same pattern as the Quick Tasks list ("Filtered by" chips).</p>
+<div class="grid">
+
+<div class="step">
+  <div class="sh"><div class="num">1</div><div><div class="do">Eva starts a task and labels it.</div><div class="see">In the Tasks list, its labels sit at the end of the line under the title.</div></div></div>
+  <div class="ui">
+    <div class="chat">
+      <div>Started #908 for the promo box. Added the rename to #904.</div>
+      <div class="card">◐ #908 Promo box above total<span class="s">Working</span></div>
+      <div class="card">◐ #904 Wire the summary<span class="s">Working</span></div>
+    </div>
+    <div class="pane">
+      <div class="ph">Tasks<span class="sp"></span><span class="ic">☰</span><span class="ic">+</span></div>
+      <div class="bar"></div><div class="cnt">2 needs you · 2 working · 3 idle</div>
+      <div class="gh">Working<span>2</span></div>
+      <div class="r"><span class="d w"></span><div><div class="t">Move the promo box above the total</div><div class="f">#908 · Phase 1 · <span class="lab">ui, checkout</span></div></div></div>
+      <div class="r"><span class="d w"></span><div><div class="t">Wire the order summary into checkout</div><div class="f">#904 · Phase 1 · <span class="lab">checkout, copy</span></div></div></div>
+      <div class="gh">Idle<span>3</span></div>
+      <div class="r"><span class="d"></span><div><div class="t">Load-test the new checkout flow</div><div class="f">#905 · Phase 2 · <span class="lab">perf</span></div></div></div>
+      <div class="r"><span class="d"></span><div><div class="t">Remove the legacy checkout route</div><div class="f">#906 · Phase 2 · <span class="lab">cleanup</span></div></div></div>
+      <div class="r"><span class="d"></span><div><div class="t">Cache the tax lookup</div><div class="f">#909 · carepulse-v2 · <span class="lab">perf</span></div></div></div>
+    </div>
+  </div>
+  <div class="note"><b>New:</b> labels on project tasks. Eva picks from the labels the project already uses before she makes a new one, so they stay few.</div>
+</div>
+
+<div class="step">
+  <div class="sh"><div class="num">2</div><div><div class="do">Click the filter icon, then Label.</div><div class="see">The menu lists Label, Repo, Phase and Added by, each with how many tasks match. Label opens a list with check boxes.</div></div></div>
+  <div class="ui">
+    <div class="chat gone"><div>Started #908 for the promo box…</div></div>
+    <div class="pane">
+      <div class="ph">Tasks<span class="sp"></span><span class="ic hit">☰<span class="tag" style="top:-14px;right:-10px">click</span></span><span class="ic">+</span></div>
+      <div class="bar"></div><div class="cnt">2 needs you · 2 working · 3 idle</div>
+      <div class="gh">Working<span>2</span></div>
+      <div class="r"><span class="d w"></span><div><div class="t">Move the promo box above the total</div><div class="f">#908 · Phase 1 · <span class="lab">ui, checkout</span></div></div></div>
+      <div class="menu">
+        <div class="mi on">Label<span class="c">5 ›</span></div>
+        <div class="mi">Repo<span class="c">2 ›</span></div>
+        <div class="mi">Phase<span class="c">2 ›</span></div>
+        <div class="mi">Added by<span class="c">2 ›</span></div>
+      </div>
+      <div class="sub">
+        <div class="mi"><span class="cb on"></span>checkout<span class="c">3</span></div>
+        <div class="mi"><span class="cb"></span>perf<span class="c">2</span></div>
+        <div class="mi"><span class="cb"></span>ui<span class="c">1</span></div>
+        <div class="mi"><span class="cb"></span>copy<span class="c">1</span></div>
+        <div class="mi"><span class="cb"></span>cleanup<span class="c">1</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="note">Repo shows only when the project has tasks in more than one repo. Added by: You, Eva, and each teammate.</div>
+</div>
+
+<div class="step">
+  <div class="sh"><div class="num">3</div><div><div class="do">The list shows only "checkout" tasks.</div><div class="see">A "Filtered by" line holds one chip per filter; ✕ removes it. Groups and the counts line follow the filter.</div></div></div>
+  <div class="ui">
+    <div class="chat gone"><div>Started #908 for the promo box…</div></div>
+    <div class="pane">
+      <div class="ph">Tasks<span class="sp"></span><span class="ic">☰</span><span class="ic">+</span></div>
+      <div class="bar" style="background:linear-gradient(90deg,#e0a800 0 34%,#7c7f86 34%)"></div><div class="cnt">1 needs you · 2 working</div>
+      <div class="chips">Filtered by<span class="chip">Label: checkout <span class="x">✕</span></span></div>
+      <div class="gh">Needs you<span>1</span></div>
+      <div class="r"><span class="d w"></span><div><div class="t">New order summary component</div><div class="f">#903 · review PR #9003 · <span class="lab">checkout, ui</span></div></div></div>
+      <div class="gh">Working<span>2</span></div>
+      <div class="r"><span class="d w"></span><div><div class="t">Move the promo box above the total</div><div class="f">#908 · Phase 1 · <span class="lab">ui, checkout</span></div></div></div>
+      <div class="r"><span class="d w"></span><div><div class="t">Wire the order summary into checkout</div><div class="f">#904 · Phase 1 · <span class="lab">checkout, copy</span></div></div></div>
+    </div>
+  </div>
+  <div class="note">The filter lives in the page link (like Quick Tasks), so a shared link opens the same view. The phone gets the same menu and chips.</div>
+</div>
+
+<div class="step">
+  <div class="sh"><div class="num">4</div><div><div class="do">Fix a label: open the task, change it in the header.</div><div class="see">The task tab's header shows its labels; click to add or remove. Or tell Eva ("label #905 as checkout").</div></div></div>
+  <div class="ui">
+    <div class="pane" style="margin:6px">
+      <div class="ph" style="flex-direction:column;align-items:flex-start;gap:2px"><span>#905 Load-test the new checkout flow</span><span style="font-weight:400;color:#8b8f96;font-size:11px">Idle · Phase 2</span></div>
+      <div class="task">
+        <div class="kv"><span class="k">Labels</span><span class="pill">perf</span><span class="pill hit" style="position:relative">checkout<span class="tag" style="top:-14px;right:-8px">added</span></span><span class="pill add">+ Add</span></div>
+        <div style="color:#8b8f96;margin-top:8px">Task chat…</div>
+      </div>
+    </div>
+  </div>
+  <div class="note">Uses the label picker the Quick Task page already has (<b>LabelsField</b>). No new settings page: a label exists while a task uses it.</div>
+</div>
+
+</div>
+<div class="key"><span><b>Label</b> = short topic tag on a task, set by Eva or you</span><span><b>Filter menu</b> = Label · Repo · Phase · Added by</span><span><b>Chips</b> = active filters, ✕ to remove</span></div>
+</body></html>
