@@ -109,7 +109,7 @@ describe("unarchiving a quick task", () => {
 
 describe("an archived task", () => {
   test(
-    "refuses edits until it is unarchived",
+    "refuses edits and comments until it is unarchived",
     async () => {
       const f = await fixture();
       await f.asUser.mutation(api.agentTasks.archive, { id: f.taskId });
@@ -123,6 +123,12 @@ describe("an archived task", () => {
         f.asUser.mutation(api.agentTasks.update, {
           id: f.taskId,
           title: "Renamed",
+        }),
+      ).rejects.toThrow("Unarchive the task first");
+      await expect(
+        f.asUser.mutation(api.taskComments.create, {
+          taskId: f.taskId,
+          content: "One more thing",
         }),
       ).rejects.toThrow("Unarchive the task first");
       const row = await f.t.run((ctx) => ctx.db.get(f.taskId));
