@@ -5,28 +5,33 @@ import { queueTaskRunMessage } from "../_sessions/execution";
 import { taskBranchName } from "../_git/branchNames";
 import { runChatPrompt } from "../_taskWorkflow/runChatTurn";
 import { buildTaskRunPrompt } from "../_taskWorkflow/queries";
+import {
+  projectRunSettings,
+  takesProjectSettings,
+} from "../_projects/runSettings";
 import { setTaskLastRunStartedAt } from "./runSummary";
-import { hasActiveQuickTaskRun } from "./taskRunStatus";
+import { hasActiveTaskRun } from "./taskRunStatus";
 
 /**
- * A quick task's run is a turn in its own session's Main chat, carried by the
- * session chat workflow like any message. It is marked `taskRun` from the
- * queue to the turn; that marker is what moves the task card: `in_progress`
- * when the run is asked for, then Review or To Do when its turn closes. A
- * plain chat message in the same chat never changes the status. Project
- * tasks still run on `agentRuns` (`_taskWorkflow/startRun.ts`).
+ * A task's run is a turn in its own session's Main chat, carried by the
+ * session chat workflow like any message, for quick and project tasks alike.
+ * It is marked `taskRun` from the queue to the turn; that marker is what
+ * moves the task card (`taskRunStatus.ts`): In Progress when the run is
+ * asked for, then Review or To Do when its turn closes. A plain chat message
+ * in the same chat never changes the status.
  */
 
 type TaskRunMode = NonNullable<Doc<"agentRuns">["mode"]>;
 
 /**
- * Runs a quick task now: queues its run as a task-mode message in the task's
- * chat. It starts at once on an idle chat, after the running turn otherwise,
- * and a sleeping sandbox wakes for it. The one start for quick tasks: Run,
- * Resolve Conflicts, a schedule firing and an auto-start. The caller checks
- * access.
+ * Runs a task now: queues its run as a task-mode message in the task's chat.
+ * It starts at once on an idle chat, after the running turn otherwise, and a
+ * sleeping sandbox wakes for it. The one start for every run: Run, Resolve
+ * Conflicts, a schedule firing, an auto-start, the project scheduler, the
+ * coordinator's retry and an answer to the task's question. The caller
+ * checks access.
  */
-export async function startQuickTaskRun(
+export async function startTaskRunTurn(
   ctx: MutationCtx,
   task: Doc<"agentTasks">,
   p: {
@@ -34,12 +39,15 @@ export async function startQuickTaskRun(
     userId: Id<"users"> | undefined;
     /** A change request to act on; else the one parked on the task. */
     commentId?: Id<"taskComments">;
+    /** Text for the agent after the task prompt: a retry note or an answer. */
+    note?: string;
+    /** What the chat shows, when it is not the task (an answer). */
+    displayContent?: string;
+    /** The coordinator sent it (an answer to the task's question). */
+    sentViaOrchestrator?: boolean;
   },
 ): Promise<void> {
-  if (task.projectId !== undefined) {
-    throw new Error("A project task runs through its project");
-  }
-  if (await hasActiveQuickTaskRun(ctx.db, task)) {
+  if (await hasActiveTaskRun(ctx.db, task)) {
     throw new Error("Task already has an active execution");
   }
   const repoId = task.repoId;
@@ -58,6 +66,21 @@ export async function startQuickTaskRun(
     ? (await ctx.db.get(commentId))?.content
     : undefined;
   const context = await ensureWorkSession(ctx, { kind: "task", task });
+  let chat = context.mainChat;
+  // A project task runs on its project's model and account (decision 20).
+  const project =
+    task.projectId !== undefined ? await ctx.db.get(task.projectId) : null;
+  if (project && (await takesProjectSettings(ctx.db, task))) {
+    const settings = projectRunSettings(project, task);
+    await ctx.db.patch(task._id, settings);
+    await ctx.db.patch(chat._id, {
+      lastModel: settings.model ?? chat.lastModel,
+      providerAccountId: settings.providerAccountId,
+    });
+    chat = (await ctx.db.get(chat._id)) ?? chat;
+  }
+  // The project block rides every turn of a project task's chat
+  // (`ownerPromptContext`), so the task prompt leaves it out.
   const { prompt } = await buildTaskRunPrompt(ctx, {
     task,
     repo,
@@ -69,6 +92,7 @@ export async function startQuickTaskRun(
       .withIndex("by_session", (q) => q.eq("sessionId", context.session._id))
       .collect(),
   });
+  const note = p.note?.trim() || undefined;
   const isFirstRun = previousRunStartedAt === undefined;
   const now = Date.now();
   await setTaskLastRunStartedAt(ctx, task._id, repoId, now);
@@ -78,29 +102,26 @@ export async function startQuickTaskRun(
     updatedAt: now,
   });
   await queueTaskRunMessage(ctx, {
-    context: { session: context.session, chat: context.mainChat },
+    context: { session: context.session, chat },
     userId: p.userId ?? task.createdBy,
-    content: prompt,
-    displayContent: runChatPrompt({
-      task,
-      mode,
-      isFirstRun,
-      comment,
-      note: undefined,
-    }),
+    content: note ? `${prompt}\n\n${note}` : prompt,
+    displayContent:
+      p.displayContent ??
+      runChatPrompt({ task, mode, isFirstRun, comment, note }),
     taskRun: { mode },
     attachmentStorageIds: isFirstRun ? task.attachmentStorageIds : undefined,
+    sentViaOrchestrator: p.sentViaOrchestrator,
   });
 }
 
 /** Runs a task an automation or evaluation created, unless it already runs. */
-export async function autoStartQuickTask(
+export async function autoStartTaskRun(
   ctx: MutationCtx,
   taskId: Id<"agentTasks">,
   userId: Id<"users">,
 ): Promise<void> {
   const task = await ctx.db.get(taskId);
   if (!task) throw new Error("Task not found");
-  if (await hasActiveQuickTaskRun(ctx.db, task)) return;
-  await startQuickTaskRun(ctx, task, { userId });
+  if (await hasActiveTaskRun(ctx.db, task)) return;
+  await startTaskRunTurn(ctx, task, { userId });
 }

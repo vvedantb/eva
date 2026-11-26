@@ -973,6 +973,8 @@ export async function queueTaskRunMessage(
     displayContent: string;
     taskRun: NonNullable<Doc<"queuedMessages">["taskRun"]>;
     attachmentStorageIds?: Id<"_storage">[];
+    /** The project coordinator sent it (an answer to the task's question). */
+    sentViaOrchestrator?: boolean;
   },
 ): Promise<void> {
   const { chat } = params.context;
@@ -982,6 +984,7 @@ export async function queueTaskRunMessage(
     content: params.content,
     displayContent: params.displayContent,
     taskRun: params.taskRun,
+    sentViaOrchestrator: params.sentViaOrchestrator,
     settings: stickyTurnSettings(
       chat,
       normalizeAIModel(chat.lastModel),

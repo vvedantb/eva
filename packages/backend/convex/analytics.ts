@@ -1,3 +1,4 @@
+import { listFinishedTaskRuns } from "./_agentTasks/taskRunStatus";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { internalQuery } from "./_generated/server";
@@ -154,8 +155,8 @@ export const getImpactStats = authQuery({
             )
             .collect();
 
-    // Runs are only consulted for tasks that can appear in either the current
-    // or previous window. Skip older tasks' runs — agentRuns carry large logs.
+    // Runs (task-mode chat turns) are only read for tasks that can appear in
+    // either the current or previous window.
     const tasksNeedingRuns = allTasks.filter((task) => task.status !== "draft");
     const runsByTaskId = new Map<
       string,
@@ -169,10 +170,7 @@ export const getImpactStats = authQuery({
     await Promise.all(
       tasksNeedingRuns.map(async (task) => {
         const [runs, prs] = await Promise.all([
-          ctx.db
-            .query("agentRuns")
-            .withIndex("by_task", (q) => q.eq("taskId", task._id))
-            .collect(),
+          listFinishedTaskRuns(ctx.db, task),
           ctx.db
             .query("pullRequests")
             .withIndex("by_task", (q) => q.eq("owner.taskId", task._id))
@@ -444,16 +442,11 @@ export const getActivityTimeline = authQuery({
       }
     }
     const allTaskRuns = await Promise.all(
-      tasks.map((task) =>
-        ctx.db
-          .query("agentRuns")
-          .withIndex("by_task", (q) => q.eq("taskId", task._id))
-          .collect(),
-      ),
+      tasks.map((task) => listFinishedTaskRuns(ctx.db, task)),
     );
     for (const runs of allTaskRuns) {
       for (const run of runs) {
-        if (run.startedAt && run.startedAt >= args.startTime) {
+        if (run.startedAt >= args.startTime) {
           const bucket = getBucket(run.startedAt);
           if (buckets[bucket]) buckets[bucket].runs++;
         }
@@ -582,20 +575,11 @@ export const getActivityHeatmap = authQuery({
     }
 
     const runs = await Promise.all(
-      tasks.map((task) =>
-        ctx.db
-          .query("agentRuns")
-          .withIndex("by_task", (q) => q.eq("taskId", task._id))
-          .collect(),
-      ),
+      tasks.map((task) => listFinishedTaskRuns(ctx.db, task)),
     );
     for (const taskRuns of runs) {
       for (const run of taskRuns) {
-        if (
-          run.status === "success" &&
-          run.finishedAt &&
-          run.finishedAt >= cutoff
-        ) {
+        if (run.succeeded && run.finishedAt >= cutoff) {
           const day = new Date(run.finishedAt).toISOString().slice(0, 10);
           dailyCounts.set(day, (dailyCounts.get(day) ?? 0) + 1);
         }

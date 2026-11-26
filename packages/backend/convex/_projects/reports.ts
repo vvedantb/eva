@@ -15,11 +15,12 @@ import {
 import { projectTaskReportFields } from "../validators";
 import { isEntityArchived } from "../numId";
 import { sessionOwner, findOwnedSession } from "../_sessions/owner";
-import { ensureTaskChat } from "../_sessions/ownedSession";
 import type { SessionChatContext } from "../_sessionChats/helpers";
 import { requestCoordinatorWake } from "./coordinatorWake";
-import { startProjectTask, taskLabel } from "./scheduler";
-import { taskWorkSessionBusy } from "../_taskWorkflow/startRun";
+import { taskLabel } from "./scheduler";
+import { startTaskRunTurn } from "../_agentTasks/taskRunTurn";
+import { hasActiveTaskRun } from "../_agentTasks/taskRunStatus";
+import { dropComposerUserRow } from "../_queues/helpers";
 import { chatMessageRoute, mentionsEva } from "@eva/shared";
 import { extractMentionedUserIds } from "../_mentions/extractMentionedUserIds";
 
@@ -31,15 +32,13 @@ import { extractMentionedUserIds } from "../_mentions/extractMentionedUserIds";
  *
  * The ask rules:
  * 1. The task's turn ends (the tool tells the agent to stop). A run that
- *    ended on its ask (`runEndedOnAsk`) is a normal outcome, never an error:
- *    the completion is taken as a success whatever the agent reported (the
- *    commit gate fails a turn that only asked), and the run is recorded with
- *    `RUN_WAITING_FOR_ANSWER`. The task stays `in_progress` and keeps its
- *    parallel slot (`completeRun`), and reads as waiting, not failed.
+ *    ended on its ask is a normal outcome, never an error: the task stays
+ *    `in_progress` (`onTaskRunTurnClosed`) and reads as waiting, not failed
+ *    (`projectTaskFacts`).
  * 2. An ask wakes the coordinator at once (`requestCoordinatorWake`).
  * 3. The coordinator answers with `send_chat_message`
- *    (`answerAskAsCoordinator`), which starts the task's next run with the
- *    answer in its prompt. If it cannot answer, the task shows "needs you"
+ *    (`answerAskAsCoordinator`): the answer is the task's next run's chat
+ *    message (`resumeWithAnswer`), and the agent gets it in its prompt. If it cannot answer, the task shows "needs you"
  *    once its turn ended (`openAskHolder` in the scheduler) and a person
  *    answers. An answer is taken only when the run can start, so a refused
  *    answer leaves the ask open.
@@ -67,6 +66,22 @@ export async function findOpenAsk(
     )
     .collect();
   return open.find((row) => row.kind === "ask") ?? null;
+}
+
+/**
+ * Whether the task filed an ask (open, answered or closed) at or after
+ * `since`, a run's start: that run ended on its question.
+ */
+export async function askFiledDuring(
+  db: DatabaseReader,
+  taskId: Id<"agentTasks">,
+  since: number,
+): Promise<boolean> {
+  const rows = await db
+    .query("projectTaskReports")
+    .withIndex("by_task_and_state", (q) => q.eq("taskId", taskId))
+    .collect();
+  return rows.some((row) => row.kind === "ask" && row.createdAt >= since);
 }
 
 /**
@@ -165,17 +180,48 @@ function answerNote(
 }
 
 /**
- * Whether the task's next run can start now: the task is live and nothing
- * holds its session. Checked before an answer is taken, so a refused answer
- * changes nothing.
+ * Whether the task's next run can be asked for now: the task is live and no
+ * run is going or queued. A chat turn still replying just runs first: the
+ * run waits behind it in the queue. Checked before an answer is taken, so a
+ * refused answer changes nothing.
  */
 async function canResumeAskingTask(
   ctx: MutationCtx,
   task: Doc<"agentTasks">,
 ): Promise<boolean> {
   if (isEntityArchived(task) || task.status === "cancelled") return false;
+  // A run started before runs became chat turns may still be going.
   if (await hasActiveRun(ctx.db, task._id)) return false;
-  return !(await taskWorkSessionBusy(ctx.db, task));
+  return !(await hasActiveTaskRun(ctx.db, task));
+}
+
+/**
+ * Starts the task's next run with an answer: the answer is the run's chat
+ * message, and the agent gets the task prompt with the answer note. A start
+ * that fails is logged; the ask stays answered and a person can run the task.
+ */
+async function resumeWithAnswer(
+  ctx: MutationCtx,
+  task: Doc<"agentTasks">,
+  p: {
+    userId: Id<"users">;
+    answer: string;
+    note: string;
+    sentViaOrchestrator?: boolean;
+  },
+): Promise<void> {
+  try {
+    await startTaskRunTurn(ctx, task, {
+      userId: p.userId,
+      note: p.note,
+      displayContent: p.answer,
+      sentViaOrchestrator: p.sentViaOrchestrator,
+    });
+  } catch (error) {
+    console.error(
+      `[project-reports] task=${task._id} did not resume: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }
 
 /**
@@ -237,9 +283,16 @@ export async function routePersonChatMessage(
   const ask = await findOpenAsk(ctx.db, task._id);
   if (!ask || !(await canResumeAskingTask(ctx, task))) return "continue";
   await answerOpenAsk(ctx, task._id, params.userId);
-  await insertUserRow();
-  // A failed start shows on the task as a failed run (`startTaskRun`).
-  await startProjectTask(ctx, task, answerNote(ask, "a person", params.message));
+  // The answer is the run's own chat message: the composer's stored row goes,
+  // as for any queued send, and the queue writes it back when the run starts.
+  if (!params.insertUserRow) {
+    await dropComposerUserRow(ctx, chat._id, params.message);
+  }
+  await resumeWithAnswer(ctx, task, {
+    userId: params.userId,
+    answer: params.message,
+    note: answerNote(ask, "a person", params.message),
+  });
   return "answered";
 }
 
@@ -279,20 +332,12 @@ export const answerAskAsCoordinator = internalMutation({
     }
     const ask = open ? await answerOpenAsk(ctx, task._id, "coordinator") : null;
     if (ask) {
-      const { chat } = await ensureTaskChat(ctx, task);
-      await ctx.db.insert("messages", {
-        parentId: chat._id,
-        role: "user",
-        content: args.message,
-        timestamp: Date.now(),
+      await resumeWithAnswer(ctx, task, {
         userId,
+        answer: args.message,
+        note: answerNote(ask, "the project coordinator", args.message),
         sentViaOrchestrator: true,
       });
-      await startProjectTask(
-        ctx,
-        task,
-        answerNote(ask, "the project coordinator", args.message),
-      );
       return "answered";
     }
     const latestAsk = (

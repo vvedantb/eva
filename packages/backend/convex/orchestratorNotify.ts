@@ -59,8 +59,7 @@ async function loadChildSummary(
   }
   const task = await ctx.db.get(child.taskId);
   if (!task || task.watchedByAve === undefined) return null;
-  // A task chats in its session chat (a project task's: its own chat in the
-  // project's session).
+  // Every task, quick or in a project, chats in its own session's Main chat.
   const owned = await findWorkChat(ctx.db, { kind: "task", task });
   return {
     threadId: task.watchedByAve,

@@ -11,6 +11,8 @@ import {
 import { sessionSandboxProfile } from "../convex/_sessions/owner";
 import { COORDINATOR_VCPUS } from "../convex/_sandbox/provider";
 import { modules } from "./_helpers/convexModules";
+import { closeTurn, openSessionChatTurn } from "../convex/_chat/turnStore";
+import { ensureWorkSession } from "../convex/_sessions/ownedSession";
 import { handProjectTriageToEva } from "../convex/_migrations/handTriageToEva";
 
 /**
@@ -115,30 +117,54 @@ const factsOf = async (f: Fixture, taskId: Id<"agentTasks">) => {
   return facts;
 };
 
+/**
+ * Ends the task's run as a task-mode turn would: any queued run message goes,
+ * and a closed task-mode turn in `state` goes through the real `closeTurn`
+ * (which moves the task's status). Returns the turn's id.
+ */
+async function endRun(
+  f: Fixture,
+  taskId: Id<"agentTasks">,
+  state: "done" | "error",
+): Promise<Id<"turns">> {
+  return f.t.run(async (ctx) => {
+    const task = await ctx.db.get(taskId);
+    if (!task) throw new Error("task missing");
+    const { session, mainChat } = await ensureWorkSession(ctx, {
+      kind: "task",
+      task,
+    });
+    for (const row of await ctx.db
+      .query("queuedMessages")
+      .withIndex("by_parent_and_order", (q) => q.eq("parentId", mainChat._id))
+      .collect()) {
+      await ctx.db.delete(row._id);
+    }
+    const turnId = await openSessionChatTurn(ctx, {
+      chatId: mainChat._id,
+      sessionId: session._id,
+      streamingEntityId: String(mainChat._id),
+      model: "claude:opus",
+      repoId: f.repoId,
+      taskRun: { mode: "implementation" },
+    });
+    const turn = await ctx.db.get(turnId);
+    if (!turn) throw new Error("turn missing");
+    await closeTurn(
+      ctx,
+      turn,
+      state,
+      state === "error" ? { error: "Tests failed" } : {},
+    );
+    return turnId;
+  });
+}
+
 /** The task's latest run ended in an error and it went back to todo. */
 async function failLatestRun(f: Fixture, taskId: Id<"agentTasks">) {
-  return f.t.run(async (ctx) => {
-    const runs = await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", taskId))
-      .collect();
-    let runId = runs.at(-1)?._id;
-    if (runId === undefined) {
-      runId = await ctx.db.insert("agentRuns", {
-        taskId,
-        repoId: f.repoId,
-        status: "error",
-        logs: [],
-        startedAt: Date.now() - 1_000,
-        error: "Tests failed",
-      });
-    }
-    for (const run of runs) {
-      await ctx.db.patch(run._id, { status: "error", error: "Tests failed" });
-    }
-    await ctx.db.patch(taskId, { status: "todo", run: undefined });
-    return runId;
-  });
+  const turnId = await endRun(f, taskId, "error");
+  await f.t.run((ctx) => ctx.db.patch(taskId, { status: "todo", run: undefined }));
+  return turnId;
 }
 
 /** The run ended and the task sits done with its PR in `prState`. */
@@ -147,15 +173,10 @@ async function finishTask(
   taskId: Id<"agentTasks">,
   prState: "open" | "merged",
 ) {
-  await f.t.run(async (ctx) => {
-    await ctx.db.patch(taskId, { status: "done", prState, run: undefined });
-    for (const run of await ctx.db
-      .query("agentRuns")
-      .withIndex("by_task", (q) => q.eq("taskId", taskId))
-      .collect()) {
-      await ctx.db.patch(run._id, { status: "success" });
-    }
-  });
+  await endRun(f, taskId, "done");
+  await f.t.run((ctx) =>
+    ctx.db.patch(taskId, { status: "done", prState, run: undefined }),
+  );
 }
 
 describe("project scheduler", () => {
