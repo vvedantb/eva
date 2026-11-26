@@ -26,14 +26,16 @@ import { useSandboxAnnotationSend } from "@/lib/components/chat/sandboxChatBindi
 import { sandboxChatKeys } from "@/lib/components/chat/sandboxChatTurn";
 import { ReviewChatTargetProvider } from "@/lib/contexts/ReviewChatTargetContext";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
+import { TaskDetailsPane } from "@/lib/components/tasks/TaskDetailsPane";
 import type { ProjectTaskTab } from "./projectSandboxTabs";
 
 /** The task's own chat and sandbox, as on its full page. */
 const PROJECT_TASK_ROUTING: UseTaskDetailRouting = { mode: "project-task" };
 
-/** The sandbox pane each task tab shows; Chat is not a sandbox pane. */
+/** The sandbox pane each task tab shows; Details and Chat are not panes. */
 const PANE_TAB: Record<ProjectTaskTab, "preview" | "browser" | "review" | null> =
   {
+    "task-details": null,
     "task-chat": null,
     "task-preview": "preview",
     "task-browser": "browser",
@@ -42,8 +44,9 @@ const PANE_TAB: Record<ProjectTaskTab, "preview" | "browser" | "review" | null> 
 
 /**
  * A project task opened in the coordinator's panel (`?task=`): a header with
- * its number and title, Expand (its full page) and ✕, then its own chat and
- * its Preview, Browser and Review panes. An archived task is read-only, as on
+ * its number and title, Expand (its full page) and ✕, then its Details (the
+ * quick task's overview), its own chat and its Preview, Browser and Review
+ * panes. An archived task is read-only, as on
  * its full page. Files, Agents and the terminal live on the full page:
  * opening them from the chat expands to it.
  */
@@ -144,6 +147,14 @@ export function ProjectTaskPane({
           onOpenDiffsTab={openDiffs}
         >
           <div className="min-h-0 flex-1 overflow-hidden">
+            {task ? (
+              <KeepAlivePane
+                active={tab === "task-details"}
+                className="flex h-full min-h-0 flex-col overflow-hidden"
+              >
+                <TaskDetailsPane taskId={taskId} task={task} detail={detail} />
+              </KeepAlivePane>
+            ) : null}
             <KeepAlivePane
               active={tab === "task-chat"}
               className="flex h-full min-h-0 flex-col overflow-hidden"
@@ -222,7 +233,10 @@ function ProjectTaskSandboxPanes({
   sandbox: OwnedSandboxFields;
   repoId: Id<"githubRepos">;
   isActive: boolean;
-  /** The pane on screen; null while Chat or a coordinator tab is active. */
+  /**
+   * The pane on screen; null while Details, Chat or a coordinator tab is
+   * active.
+   */
   paneTab: "preview" | "browser" | "review" | null;
   prUrl: string | undefined;
   onStartSandbox: (() => void) | undefined;

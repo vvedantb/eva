@@ -44,6 +44,7 @@ import {
   isProjectSandboxTab,
   isProjectTaskTab,
   type ProjectSandboxTab,
+  type ProjectTaskTab,
 } from "./projectSandboxTabs";
 import { useProjectTaskStatus } from "./useProjectStatus";
 import { ProjectTaskPane } from "./ProjectTaskPane";
@@ -95,8 +96,8 @@ interface ProjectSandboxPanelProps {
   title: string;
   /** ✕ on the Replies tab: drops the tab and returns to the tab before it. */
   onCloseThread: () => void;
-  /** Opens a task in this panel (`?task=`), on its Chat tab. */
-  onOpenTask: (taskNumId: number) => void;
+  /** Opens a task in this panel (`?task=`), on `tab`. */
+  onOpenTask: (taskNumId: number, tab: ProjectTaskTab) => void;
   /** ✕ on an open task: drops its tabs and returns to Tasks. */
   onCloseTask: () => void;
 }

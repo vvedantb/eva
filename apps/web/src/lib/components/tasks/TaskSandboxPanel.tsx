@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@eva/backend";
 import type { Id, SandboxOwner } from "@eva/backend";
@@ -21,6 +21,8 @@ import { useSimpleView } from "@/lib/hooks/useSimpleView";
 import { useSandboxAnnotationSend } from "@/lib/components/chat/sandboxChatBinding";
 import { sandboxChatKeys } from "@/lib/components/chat/sandboxChatTurn";
 import { useTaskChatBinding } from "./TaskSandboxChatPanel";
+import { KeepAlivePane } from "@/lib/components/sandbox/KeepAlivePane";
+import { TASK_DETAILS_TAB, type TaskDetailsTab } from "./TaskDetailsPane";
 import {
   SessionArtifactsPanel,
   useSourceArtifacts,
@@ -50,8 +52,10 @@ interface TaskSandboxPanelProps {
   panes: SandboxPanesApi;
   terminalPanel: TerminalPanelApi;
   prUrl?: string;
-  activeTab: SandboxTab;
-  onTabChange: (tab: SandboxTab) => void;
+  activeTab: SandboxTab | TaskDetailsTab;
+  onTabChange: (tab: SandboxTab | TaskDetailsTab) => void;
+  /** A project task's Details tab body; leads the rail when set. */
+  details?: ReactNode;
   onStartSandbox?: () => void;
   isSandboxStarting?: boolean;
   /**
@@ -93,6 +97,7 @@ export function TaskSandboxPanel({
   collapsed = false,
   onToggle,
   miniPlayer,
+  details,
 }: TaskSandboxPanelProps) {
   const simpleView = useSimpleView();
   const chatBinding = useTaskChatBinding(taskId);
@@ -136,8 +141,13 @@ export function TaskSandboxPanel({
 
   const tabBarValue = activeTab === "prd" ? "preview" : activeTab;
 
-  // This surface has no custom tabs, so the tab bar only emits builtin ids.
+  // This surface has no custom tabs, so the tab bar only emits builtin ids
+  // (and Details for a project task).
   const handleTabChange = (tab: string) => {
+    if (details !== undefined && tab === TASK_DETAILS_TAB.value) {
+      onTabChange(TASK_DETAILS_TAB.value);
+      return;
+    }
     if (!isSessionSandboxTab(tab) || tab === "prd") return;
     onTabChange(tab);
   };
@@ -159,6 +169,7 @@ export function TaskSandboxPanel({
           }}
           newPreviewDisabled={panes.newPreviewDisabled}
           enabledTabs={enabledTabs}
+          leadingTabs={details === undefined ? undefined : [TASK_DETAILS_TAB]}
           showFilesTab
           showAgentsTab={hasAgents}
           hasRunningAgents={hasRunningAgents}
@@ -172,6 +183,14 @@ export function TaskSandboxPanel({
       }
     >
       <div className="h-full overflow-hidden">
+        {details === undefined ? null : (
+          <KeepAlivePane
+            active={tabBarValue === TASK_DETAILS_TAB.value}
+            className="flex h-full min-h-0 flex-col overflow-hidden"
+          >
+            {details}
+          </KeepAlivePane>
+        )}
         <div
           className={
             tabBarValue === "artifacts"

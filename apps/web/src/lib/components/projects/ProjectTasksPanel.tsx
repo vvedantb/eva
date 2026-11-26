@@ -14,6 +14,10 @@ import { QuickTaskModal } from "../quick-tasks/QuickTaskModal";
 import { ProjectProgressBar } from "./ProjectProgressBar";
 import { ProjectTaskListPanel } from "./ProjectTaskListPanel";
 import { useProjectTaskStatus } from "./useProjectStatus";
+import {
+  defaultProjectTaskTab,
+  type ProjectTaskTab,
+} from "./projectSandboxTabs";
 
 /**
  * The coordinator rail's Tasks tab: the title with "+" (a new task, to Triage
@@ -38,8 +42,8 @@ export function ProjectTasksPanel({
   basePath: string;
   /** The task open in the panel (`?task=`); its row is marked. */
   openTaskId?: Id<"agentTasks">;
-  /** Opens a task in the panel; without it a row opens the full page. */
-  onOpenTask?: (taskNumId: number) => void;
+  /** Opens a task in the panel on `tab`; without it a row opens its page. */
+  onOpenTask?: (taskNumId: number, tab: ProjectTaskTab) => void;
 }) {
   const navigate = useNavigate();
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
@@ -63,7 +67,7 @@ export function ProjectTasksPanel({
       (row) => row._id === taskId,
     );
     if (onOpenTask && task?.numId !== undefined) {
-      onOpenTask(task.numId);
+      onOpenTask(task.numId, defaultProjectTaskTab(task));
       return;
     }
     const taskSegment = task ? entityPathSegment(task) : null;

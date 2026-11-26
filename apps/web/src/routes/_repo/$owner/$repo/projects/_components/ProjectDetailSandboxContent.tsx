@@ -5,7 +5,10 @@ import { ProjectSandboxChatPanel } from "@/lib/components/projects/ProjectSandbo
 import { ResizablePanelLayout } from "@/lib/components/ResizablePanelLayout";
 import { SandboxSurfaceProviders } from "@/lib/components/sandbox/SandboxSurfaceProviders";
 import { ProjectTasksPanel } from "@/lib/components/projects/ProjectTasksPanel";
-import type { ProjectSandboxTab } from "@/lib/components/projects/projectSandboxTabs";
+import type {
+  ProjectSandboxTab,
+  ProjectTaskTab,
+} from "@/lib/components/projects/projectSandboxTabs";
 import {
   SandboxWorkspace,
   type TerminalPanelApi,
@@ -36,8 +39,8 @@ interface ProjectDetailSandboxContentProps {
   onThreadOpen: (messageId: string) => void;
   /** ✕ on the Replies tab: back to the tab before it. */
   onCloseThread: () => void;
-  /** Opens a task in the rail (`?task=`), on its Chat tab. */
-  onOpenTask: (taskNumId: number) => void;
+  /** Opens a task in the rail (`?task=`), on `tab`. */
+  onOpenTask: (taskNumId: number, tab: ProjectTaskTab) => void;
   /** ✕ on the open task: back to Tasks. */
   onCloseTask: () => void;
   openFile: (path: string) => void;

@@ -12,13 +12,16 @@ import { TaskDetailInline } from "@/lib/components/tasks/TaskDetailInline";
 import type { EntityResolveStatus } from "@/lib/numId";
 import { toInternalRepoHref } from "@/lib/utils/repoUrl";
 import { ProjectSummaryDocLink } from "./ProjectSummarySection";
+import { defaultProjectTaskTab } from "./projectSandboxTabs";
 import { useProjectTaskStatus } from "./useProjectStatus";
 
 /**
  * One project task in place of the coordinator: a back link to the
  * coordinator's Tasks tab and a link to the project's summary doc, then the
  * task's own chat and sandbox (the quick task's sandbox view,
- * `TaskDetailInline` in `project-task` mode). No properties column. A task of another project, or one the reader cannot
+ * `TaskDetailInline` in `project-task` mode), with Details (its prompt,
+ * status, properties and activity) first on the rail. A task that has never
+ * run opens on Details. A task of another project, or one the reader cannot
  * open, is not found.
  */
 export function ProjectTaskView({
@@ -96,6 +99,7 @@ export function ProjectTaskView({
           void navigate({ to: toInternalRepoHref(coordinatorHref) })
         }
         routing={{ mode: "project-task" }}
+        openOnDetails={defaultProjectTaskTab(task) === "task-details"}
       />
     </div>
   );

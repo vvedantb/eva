@@ -21,9 +21,13 @@ import {
   type ProjectTaskTab,
 } from "./projectSandboxTabs";
 import type { ProjectTaskListRow } from "./useProjectStatus";
+import { TASK_DETAILS_TAB } from "@/lib/components/tasks/TaskDetailsPane";
 
 /** The open task's rail tabs: the same icons as the sandbox tabs they show. */
-const TASK_TAB_DESCRIPTORS: Record<ProjectTaskTab, SandboxTabDescriptor> = {
+const TASK_TAB_DESCRIPTORS: {
+  [Tab in ProjectTaskTab]: SandboxTabDescriptor & { value: Tab };
+} = {
+  "task-details": TASK_DETAILS_TAB,
   "task-chat": {
     value: "task-chat",
     label: "Chat",
