@@ -34,6 +34,7 @@ import {
   usableExpandedPanelSize,
   usePersistentPanelSize,
 } from "@/lib/hooks/usePersistentPanelSize";
+import { useEmbedChatOnly } from "@/lib/embed/embedded";
 import {
   motionEase,
   popOutSidePanel,
@@ -97,6 +98,11 @@ interface ResizablePanelLayoutProps {
    * `NaN` and leaves that session's panel broken until remount.
    */
   hotkeyEnabled?: boolean;
+  /**
+   * The pane that holds the chat. In the Inbox's chat-only embed
+   * (`useEmbedChatOnly`) only this pane shows, at full width.
+   */
+  chatPane?: "left" | "right";
 }
 
 const DEFAULT_RIGHT_PANEL_SIZE = "60%";
@@ -120,8 +126,10 @@ export function ResizablePanelLayout({
   collapseRightSignal,
   mobilePaneLabels = DEFAULT_MOBILE_PANE_LABELS,
   hotkeyEnabled = true,
+  chatPane,
 }: ResizablePanelLayoutProps) {
   "use no memo";
+  const chatOnly = useEmbedChatOnly();
   const rightPanelRef = usePanelRef();
   const rightPanelElementRef = useRef<HTMLDivElement>(null);
   const groupElementRef = useRef<HTMLDivElement>(null);
@@ -324,6 +332,14 @@ export function ResizablePanelLayout({
     rightPanelCollapsed: rightCollapsed,
     onToggleRightPanel: handleToggle,
   };
+
+  if (chatOnly && chatPane) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        {chatPane === "left" ? leftPanel(ctx) : rightPanel(ctx)}
+      </div>
+    );
+  }
 
   if (isMobile) {
     const panelTransition = { duration: 0.22, ease: motionEase };

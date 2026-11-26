@@ -198,6 +198,7 @@ export function ProjectDetailSandboxContent({
       // Remount per project: the open flag is read once at mount.
       key={projectId}
       storageKey="project-sandbox-panel"
+      chatPane="left"
       collapsedStorageKey={`project-sandbox-panel:${projectId}`}
       leftDefaultSize="40%"
       leftMinWidthPx={350}

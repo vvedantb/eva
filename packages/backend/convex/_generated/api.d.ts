@@ -473,6 +473,7 @@ import type * as grokBot from "../grokBot.js";
 import type * as grokBotActions from "../grokBotActions.js";
 import type * as harnessSkills from "../harnessSkills.js";
 import type * as http from "../http.js";
+import type * as inbox from "../inbox.js";
 import type * as legacyIds from "../legacyIds.js";
 import type * as linearActions from "../linearActions.js";
 import type * as logs from "../logs.js";
@@ -1080,6 +1081,7 @@ declare const fullApi: ApiFromModules<{
   grokBotActions: typeof grokBotActions;
   harnessSkills: typeof harnessSkills;
   http: typeof http;
+  inbox: typeof inbox;
   legacyIds: typeof legacyIds;
   linearActions: typeof linearActions;
   logs: typeof logs;

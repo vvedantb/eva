@@ -7,10 +7,10 @@ import { modules } from "./_helpers/convexModules";
 
 /**
  * Inbox archive (2026-09-16) is a soft state, not a delete: `archivedAt` moves
- * the row out of the inbox list, out of the unread badge and into the Archived
- * view, and unarchiving puts it back. Four separate functions have to agree on
- * that one field — `list`, `countUnread`, `markAllAsRead` and the bulk
- * mutations — so the invariants live here rather than in any one of them.
+ * the row out of the notification list and the unread badge (Done in the
+ * Inbox archives a notification), and unarchiving puts it back. `list`,
+ * `countUnread` and the bulk mutations have to agree on that one field, so
+ * the invariants live here rather than in any one of them.
  *
  * The bulk mutations also take caller-supplied ids. Those are guessable from
  * another user's inbox, so an id the caller does not own must be skipped
@@ -65,11 +65,6 @@ describe("inbox archive", () => {
       const inbox = await f.asUser.query(api.notifications.list, {});
       expect(inbox.map((n) => n._id)).toEqual([f.alsoMine]);
 
-      const archived = await f.asUser.query(api.notifications.list, {
-        archived: true,
-      });
-      expect(archived.map((n) => n._id)).toEqual([f.mine]);
-
       // Archiving marks read, so an archived row can never sit behind the badge.
       expect(await f.asUser.query(api.notifications.countUnread, {})).toBe(1);
       const row = await f.t.run((ctx) => ctx.db.get(f.mine));
@@ -92,10 +87,6 @@ describe("inbox archive", () => {
 
       const inbox = await f.asUser.query(api.notifications.list, {});
       expect(inbox.map((n) => n._id)).toContain(f.mine);
-      const stillArchived = await f.asUser.query(api.notifications.list, {
-        archived: true,
-      });
-      expect(stillArchived).toEqual([]);
       // The field has to be removed, not set to a falsy stamp: "not archived"
       // is the absence of `archivedAt`.
       const row = await f.t.run((ctx) => ctx.db.get(f.mine));
@@ -107,12 +98,12 @@ describe("inbox archive", () => {
   );
 
   test(
-    "an archived row still stored unread stays out of the badge and of Mark all read",
+    "an archived row still stored unread stays out of the badge",
     async () => {
       const f = await fixture();
       // Archived *and* unread cannot be reached through `archiveMany` (which
-      // marks read), but it is the state both guards exist for.
-      const archivedUnread = await f.t.run((ctx) =>
+      // marks read), but it is the state the badge's guard exists for.
+      await f.t.run((ctx) =>
         ctx.db.insert("notifications", {
           userId: f.userId,
           type: "system",
@@ -124,11 +115,6 @@ describe("inbox archive", () => {
       );
 
       expect(await f.asUser.query(api.notifications.countUnread, {})).toBe(2);
-
-      await f.asUser.mutation(api.notifications.markAllAsRead, {});
-      const row = await f.t.run((ctx) => ctx.db.get(archivedUnread));
-      expect(row?.read).toBe(false);
-      expect(row?.archivedAt).toBeTypeOf("number");
     },
     TIMEOUT_MS,
   );
@@ -137,11 +123,8 @@ describe("inbox archive", () => {
     "bulk mutations skip ids the caller does not own instead of failing",
     async () => {
       const f = await fixture();
-      await f.asUser.mutation(api.notifications.markManyAsRead, {
-        ids: [f.mine, f.theirs],
-      });
       await f.asUser.mutation(api.notifications.archiveMany, {
-        ids: [f.theirs],
+        ids: [f.mine, f.theirs],
       });
 
       expect((await f.t.run((ctx) => ctx.db.get(f.mine)))?.read).toBe(true);
@@ -157,7 +140,7 @@ describe("inbox archive", () => {
     async () => {
       const f = await fixture();
       await expect(
-        f.asUser.mutation(api.notifications.markManyAsRead, {
+        f.asUser.mutation(api.notifications.archiveMany, {
           ids: Array.from({ length: 101 }, () => f.mine),
         }),
       ).rejects.toThrow(/Too many notifications/);

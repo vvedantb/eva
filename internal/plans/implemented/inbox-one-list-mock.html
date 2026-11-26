@@ -1,0 +1,180 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Inbox, step by step</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:13px/1.45 Inter,system-ui,sans-serif;background:#18191c;color:#e6e7e9;padding:20px;width:1280px}
+h1{font-size:18px;font-weight:600;margin-bottom:4px}
+.lead{color:#a7aab0;margin-bottom:18px;max-width:1080px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.step{background:#1f2023;border:1px solid #2c2d32;border-radius:14px;padding:14px}
+.sh{display:flex;gap:10px;align-items:flex-start;margin-bottom:10px}
+.num{width:24px;height:24px;border-radius:12px;background:#f0b35a;color:#1a1a1a;font-weight:700;display:grid;place-items:center;flex:none}
+.do{font-weight:600}.see{color:#a7aab0;font-size:12.5px;margin-top:2px}
+.ui{display:flex;height:400px;border-radius:10px;overflow:hidden;border:1px solid #2e2f34;background:#1c1d20;position:relative}
+.list{width:250px;display:flex;flex-direction:column;border-right:1px solid #2e2f34;flex:none}
+.lh{display:flex;align-items:center;padding:10px 10px 8px;font-weight:600;font-size:13px}
+.lh .sp{flex:1}.lh .f{color:#8b8f96;font-size:11px;font-weight:500}
+.gh{background:#25262a;border-radius:6px;padding:3px 8px;margin:6px 6px 2px;color:#c9cbcf;font-size:11px;font-weight:500}
+.gh span{color:#8b8f96;margin-left:3px}
+.r{padding:6px 10px;margin:1px 6px;border-radius:8px;font-size:11px;display:flex;flex-direction:column;gap:1px;position:relative}
+.r.on{background:#2a2b30}
+.r .top{display:flex;align-items:center;gap:5px;color:#8b8f96;font-size:10px}
+.r .top .t{margin-left:auto}
+.r .ti{font-weight:600;color:#e6e7e9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r .pv{color:#a7aab0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;gap:5px;align-items:center}
+.r .pv .x{overflow:hidden;text-overflow:ellipsis;flex:1}
+.ct{background:#33343a;border-radius:5px;padding:0 4px;font-size:9.5px;color:#c9cbcf;flex:none}
+.ct.q{background:#4a3a1a;color:#f0c674}
+.dotb{width:6px;height:6px;border-radius:3px;background:#3b82f6;position:absolute;left:2px;top:12px}
+.src{width:12px;height:12px;border-radius:3px;display:inline-block;flex:none}
+.pane{flex:1;display:flex;flex-direction:column;min-width:0;background:#202125}
+.ph{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid #2e2f34;font-size:12px}
+.ph .ti{font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ph .o{color:#8b8f96;font-size:11px}
+.pb{flex:1;padding:10px 14px;display:flex;flex-direction:column;gap:9px;font-size:11.5px;overflow:hidden}
+.me{align-self:flex-end;background:#2f2a4a;border-radius:11px;padding:6px 9px;max-width:75%}
+.eva{color:#e6e7e9}
+.who{font-size:10px;color:#8b8f96;margin-bottom:-6px}
+.div{display:flex;align-items:center;gap:8px;color:#3b82f6;font-size:10px;font-weight:600}
+.div:before,.div:after{content:"";flex:1;height:1px;background:#3b82f655}
+.qc{background:#2a2b30;border-radius:10px;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.qc .q{font-weight:600}
+.opt{display:flex;gap:6px}
+.opt span{background:#33343a;border-radius:7px;padding:3px 8px;font-size:11px}
+.opt span.pick{background:#e6e7e9;color:#18191c;font-weight:600}
+.bar{display:flex;gap:6px;padding:8px 10px;border-top:1px solid #2e2f34;align-items:center}
+.btn{background:#2a2b30;border-radius:8px;padding:4px 9px;font-size:11px;color:#c9cbcf;display:flex;gap:5px;align-items:center}
+.btn.pri{background:#e6e7e9;color:#18191c;font-weight:600}
+.k{background:#3a3b41;border-radius:4px;padding:0 4px;font-size:9.5px;color:#a7aab0}
+.comp{flex:1;background:#26272b;border-radius:9px;padding:6px 9px;color:#6b6f76;font-size:11px}
+.comp.focus{box-shadow:0 0 0 2px #7c5cf0;color:#c9cbcf}
+.card{background:#2a2b30;border-radius:8px;padding:5px 8px;display:flex;gap:7px;align-items:center;font-size:11px}
+.card .s{margin-left:auto;color:#8b8f96;font-size:10px}
+.hit{outline:2px solid #f0b35a;outline-offset:2px}
+.tag{position:absolute;background:#f0b35a;color:#1a1a1a;font-size:10px;font-weight:700;border-radius:5px;padding:1px 5px;white-space:nowrap;z-index:3}
+.gone{opacity:.35;text-decoration:line-through}
+.note{margin-top:10px;font-size:12px;color:#c9cbcf}
+.note b{color:#f0b35a;font-weight:600}
+.toast{position:absolute;bottom:52px;left:50%;transform:translateX(-50%);background:#2a2b30;border:1px solid #3a3b41;border-radius:9px;padding:5px 10px;font-size:11px}
+.empty{flex:1;display:grid;place-items:center;color:#8b8f96;font-size:11.5px}
+.phone{width:210px;margin:0 auto;border:1px solid #2e2f34;border-radius:18px;background:#141517;display:flex;flex-direction:column;overflow:hidden}
+.key{display:flex;gap:18px;margin-top:20px;font-size:12px;color:#a7aab0;flex-wrap:wrap}
+.key b{color:#e6e7e9}
+</style></head><body>
+<h1>Inbox: one list, the chat beside it, act without leaving</h1>
+<p class="lead">Today the Inbox has two tabs that work differently (Needs you opens pages; Updates lists notifications with an iframe). Below, one list grouped by how urgent it is, one row per chat, and the chat itself on the right with a reply box.</p>
+<div class="grid">
+
+<!-- 1 -->
+<div class="step">
+  <div class="sh"><div class="num">1</div><div><div class="do">Open Inbox.</div><div class="see">One list, three groups. Each row is one chat (project, quick task or session): where it is from, the title, the latest line, and counts. The first row is selected.</div></div></div>
+  <div class="ui">
+    <div class="list">
+      <div class="lh">Inbox<span class="sp"></span><span class="f">All repos ▾</span></div>
+      <div class="gh">Holding up work<span>2</span></div>
+      <div class="r on"><span class="dotb"></span><div class="top"><span class="src" style="background:#7c5cf0"></span>Checkout v2 · #902<span class="t">3:10</span></div><div class="ti">Cache the shipping quote lookup</div><div class="pv"><span class="x">Asks: should the cache key include the postcode?</span><span class="ct q">? 1</span></div></div>
+      <div class="r"><div class="top"><span class="src" style="background:#22c55e"></span>Quick task #88<span class="t">1:40</span></div><div class="ti">Fix flaky login test</div><div class="pv"><span class="x">Failed: tests timed out after 10 min</span></div></div>
+      <div class="gh">Waiting on you<span>1</span></div>
+      <div class="r"><div class="top"><span class="src" style="background:#7c5cf0"></span>Checkout v2 · #903<span class="t">12:19</span></div><div class="ti">New order summary component</div><div class="pv"><span class="x">PR #9003 is ready for review</span><span class="ct">PR</span></div></div>
+      <div class="gh">New since you looked<span>2</span></div>
+      <div class="r"><span class="dotb"></span><div class="top"><span class="src" style="background:#7c5cf0"></span>Checkout v2 · Eva<span class="t">2:26</span></div><div class="ti">Checkout v2</div><div class="pv"><span class="x">Started #908 for the promo box…</span><span class="ct">3 new</span></div></div>
+      <div class="r"><span class="dotb"></span><div class="top"><span class="src" style="background:#e0a800"></span>Session #412<span class="t">2:16</span></div><div class="ti">Spaces share dialog</div><div class="pv"><span class="x">Merged (#4016). Deploy is green.</span></div></div>
+    </div>
+    <div class="pane">
+      <div class="ph"><span class="ti">#902 Cache the shipping quote lookup</span><span class="o">Open ↗</span></div>
+      <div class="pb">
+        <div class="me">Cache the quote lookup; it is slow on every page view.</div>
+        <div class="eva">Added a 10 min cache around <code>getQuote()</code>.</div>
+        <div class="div">New since you looked</div>
+        <div class="qc"><div class="q">Should the cache key include the delivery postcode?</div><div class="opt"><span>Yes</span><span>No, country only</span><span>Other…</span></div></div>
+      </div>
+      <div class="bar"><span class="btn">↩ Reply <span class="k">R</span></span><span class="btn">? 1 open question <span class="k">Q</span></span><span style="flex:1"></span><span class="btn">Done <span class="k">E</span></span></div>
+    </div>
+  </div>
+  <div class="note"><b>New:</b> Needs you and Updates become one list. "Updates" rows that are only for information fold into "New since you looked".</div>
+</div>
+
+<!-- 2 -->
+<div class="step">
+  <div class="sh"><div class="num">2</div><div><div class="do">Answer the question right there: click "Yes".</div><div class="see">The answer goes to #902 and it starts working again. The row leaves "Holding up work"; the next row is selected.</div></div></div>
+  <div class="ui">
+    <div class="list">
+      <div class="lh">Inbox<span class="sp"></span><span class="f">All repos ▾</span></div>
+      <div class="gh">Holding up work<span>1</span></div>
+      <div class="r gone"><div class="top"><span class="src" style="background:#7c5cf0"></span>Checkout v2 · #902</div><div class="ti">Cache the shipping quote lookup</div></div>
+      <div class="r on"><div class="top"><span class="src" style="background:#22c55e"></span>Quick task #88<span class="t">1:40</span></div><div class="ti">Fix flaky login test</div><div class="pv"><span class="x">Failed: tests timed out after 10 min</span></div></div>
+      <div class="gh">Waiting on you<span>1</span></div>
+      <div class="r"><div class="top"><span class="src" style="background:#7c5cf0"></span>Checkout v2 · #903<span class="t">12:19</span></div><div class="ti">New order summary component</div><div class="pv"><span class="x">PR #9003 is ready for review</span><span class="ct">PR</span></div></div>
+      <div class="gh">New since you looked<span>2</span></div>
+      <div class="r"><span class="dotb"></span><div class="top"><span class="src" style="background:#7c5cf0"></span>Checkout v2 · Eva<span class="t">2:26</span></div><div class="ti">Checkout v2</div><div class="pv"><span class="x">Started #908 for the promo box…</span></div></div>
+    </div>
+    <div class="pane">
+      <div class="ph"><span class="ti">Quick task #88 Fix flaky login test</span><span class="o">Open ↗</span></div>
+      <div class="pb">
+        <div class="me">The login test fails about 1 run in 5. Find out why.</div>
+        <div class="eva">Ran it 40 times. It waits for a fixed 2 s; the auth mock sometimes takes longer.</div>
+        <div class="div">New since you looked</div>
+        <div class="eva" style="color:#e5767a">Run failed: tests timed out after 10 min.</div>
+      </div>
+      <div class="bar"><span class="btn pri">Retry</span><span class="btn">↩ Reply <span class="k">R</span></span><span style="flex:1"></span><span class="btn">Done <span class="k">E</span></span></div>
+      <div class="toast">Answer sent to #902 · Undo</div>
+    </div>
+  </div>
+  <div class="note">The bottom bar holds the row's one action (Answer, Review PR, Retry), as the Needs you buttons do today, plus Reply.</div>
+</div>
+
+<!-- 3 -->
+<div class="step">
+  <div class="sh"><div class="num">3</div><div><div class="do">Press ↓ to a "New since you looked" row, then R to reply.</div><div class="see">The pane shows the chat from the "New" line. R puts the cursor in the reply box. Opening the row marks it read.</div></div></div>
+  <div class="ui">
+    <div class="list">
+      <div class="lh">Inbox<span class="sp"></span><span class="f">All repos ▾</span></div>
+      <div class="gh">Holding up work<span>1</span></div>
+      <div class="r"><div class="top"><span class="src" style="background:#22c55e"></span>Quick task #88<span class="t">1:40</span></div><div class="ti">Fix flaky login test</div><div class="pv"><span class="x">Failed: tests timed out after 10 min</span></div></div>
+      <div class="gh">Waiting on you<span>1</span></div>
+      <div class="r"><div class="top"><span class="src" style="background:#7c5cf0"></span>Checkout v2 · #903<span class="t">12:19</span></div><div class="ti">New order summary component</div><div class="pv"><span class="x">PR #9003 is ready for review</span><span class="ct">PR</span></div></div>
+      <div class="gh">New since you looked<span>2</span></div>
+      <div class="r on hit"><div class="top"><span class="src" style="background:#7c5cf0"></span>Checkout v2 · Eva<span class="t">2:26</span></div><div class="ti">Checkout v2</div><div class="pv"><span class="x">Started #908 for the promo box…</span></div><span class="tag" style="top:-9px;right:-4px">↓</span></div>
+      <div class="r"><span class="dotb"></span><div class="top"><span class="src" style="background:#e0a800"></span>Session #412<span class="t">2:16</span></div><div class="ti">Spaces share dialog</div><div class="pv"><span class="x">Merged (#4016). Deploy is green.</span></div></div>
+    </div>
+    <div class="pane">
+      <div class="ph"><span class="ti">Checkout v2 · Eva</span><span class="o">Open ↗</span></div>
+      <div class="pb">
+        <div class="who">Priya</div><div class="me" style="align-self:flex-start;background:#2c2d32">The promo box is hard to find on mobile. Also rename "Basket" to "Cart".</div>
+        <div class="div">New since you looked</div>
+        <div class="eva">Started #908 for the promo box. Added the rename to #904.</div>
+        <div class="card"><span style="color:#7c5cf0">◐</span>#908 Move the promo box above the total<span class="s">Working</span></div>
+        <div class="card"><span style="color:#7c5cf0">◐</span>#904 Wire the summary<span class="s">Working</span></div>
+      </div>
+      <div class="bar"><span class="comp focus">Message Eva…|</span></div>
+    </div>
+  </div>
+  <div class="note"><b>New:</b> one row per chat, not per notification: five updates on one task are one row with "5 new". Task cards open the task tab on the project page.</div>
+</div>
+
+<!-- 4 -->
+<div class="step">
+  <div class="sh"><div class="num">4</div><div><div class="do">Press E (Done) or empty the list.</div><div class="see">Done hides a row until something new happens in that chat. Holding-up and Waiting rows leave on their own when acted on. The phone shows the same list; tap opens the chat screen.</div></div></div>
+  <div class="ui">
+    <div class="list">
+      <div class="lh">Inbox<span class="sp"></span><span class="f">All repos ▾</span></div>
+      <div class="gh">Waiting on you<span>1</span></div>
+      <div class="r"><div class="top"><span class="src" style="background:#7c5cf0"></span>Checkout v2 · #903<span class="t">12:19</span></div><div class="ti">New order summary component</div><div class="pv"><span class="x">PR #9003 is ready for review</span><span class="ct">PR</span></div></div>
+      <div class="empty" style="flex:1">Nothing new since you looked</div>
+    </div>
+    <div class="pane" style="background:#1c1d20;justify-content:center;align-items:center">
+      <div class="phone" style="height:330px">
+        <div style="padding:10px 12px 4px;font-weight:600">Inbox</div>
+        <div class="gh">Waiting on you<span>1</span></div>
+        <div class="r"><div class="top"><span class="src" style="background:#7c5cf0"></span>Checkout v2 · #903</div><div class="ti">New order summary component</div><div class="pv"><span class="x">PR #9003 is ready for review</span></div></div>
+        <div style="flex:1"></div>
+        <div style="color:#8b8f96;font-size:10px;padding:8px 12px">Tap → the chat screen, with the same Answer / Review / Retry bar.</div>
+      </div>
+    </div>
+  </div>
+  <div class="note">The rail badge counts Holding up work + Waiting on you, as today. "New since you looked" shows a dot only.</div>
+</div>
+
+</div>
+<div class="key"><span><b>Holding up work</b> = a question or a failed run that stops a task</span><span><b>Waiting on you</b> = PR to review, @mention, Eva's answer to you</span><span><b>New since you looked</b> = chats you started, follow or were in, with new replies</span><span><b>Keys</b>: ↑↓ move · R reply · Q question · E done · Enter open</span></div>
+</body></html>

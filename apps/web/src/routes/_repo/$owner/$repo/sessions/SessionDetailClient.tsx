@@ -341,6 +341,7 @@ export function SessionDetailClient({
       >
         {(panes, owner, terminalPanel) => (
           <ResizablePanelLayout
+            chatPane="left"
             leftPanel={() => chatPanel}
             rightPanel={({ rightPanelCollapsed, onToggleRightPanel }) => (
               <SandboxPanel
