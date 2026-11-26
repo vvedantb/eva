@@ -8,7 +8,7 @@
  * the last human interaction — and nothing is busy or present right now.
  */
 
-export type SandboxIdlePauseMode = "off" | "dry-run" | "on";
+export type SandboxIdlePauseMode = "off" | "on";
 
 /**
  * Defaults when nothing is saved. `on` at 60 minutes matches the idle-stop

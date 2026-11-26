@@ -1657,12 +1657,11 @@ export const chatRecapFields = {
 // `sandboxAutoStop` cron stops every active sandbox so none are left running
 // overnight. `sandboxAutoStopLastRunDate` is the once-per-day dedup guard
 // (the local date "YYYY-MM-DD" of the last occurrence that was swept).
-// Idle pause (`sandboxIdlePause` cron): `off` is today's behaviour, `dry-run`
-// only logs which sandboxes would pause, `on` pauses them. All three fields are
+// Idle pause (`sandboxIdlePause` cron): `off` does nothing, `on` pauses idle
+// sandboxes. All three fields are
 // optional so existing rows need no migration; readers default to off / 5 / 20.
 export const sandboxIdlePauseModeValidator = v.union(
   v.literal("off"),
-  v.literal("dry-run"),
   v.literal("on"),
 );
 
